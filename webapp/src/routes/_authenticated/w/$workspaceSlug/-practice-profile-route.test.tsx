@@ -1726,14 +1726,14 @@ describe("practice profile pattern label and folds", () => {
 	};
 	const groupPage = `${PAGE}?detail=${encodeURIComponent(JSON.stringify([group]))}`;
 
-	it("folds a practice that never applied under its group's table", async () => {
+	it("folds a practice that never applied under its group's table, with no standing yet", async () => {
 		server.use(
 			http.get("*/workspaces/:workspaceSlug/practices/standings", () =>
 				HttpResponse.json(withNeverApplied),
 			),
 		);
 		const openNeverApplied = { name: `Open practice ${neverApplied.name}` };
-		const fold = { name: "Does not apply to your work yet" };
+		const fold = { name: "Practices with no standing yet" };
 
 		renderRouteAtWithRouter(groupPage);
 		const folded = await screen.findByRole("button", fold, ROUTE_RENDER_WAIT);
@@ -1741,16 +1741,17 @@ describe("practice profile pattern label and folds", () => {
 		expect(screen.queryByRole("button", openNeverApplied)).toBeNull();
 		cleanup();
 
-		// Its own level says it does not apply, in place of "Nothing to report yet".
+		// Its own level says the same, in place of "Nothing to report yet"; why stays behind the badge.
 		renderRouteAtWithRouter(
 			`${PAGE}?detail=${encodeURIComponent(JSON.stringify([group, `practice:${neverApplied.slug}`]))}`,
 		);
 		await expect(
-			screen.findAllByText("Does not apply to your work yet", {}, ROUTE_RENDER_WAIT),
+			screen.findAllByRole("button", { name: "No standing yet" }, ROUTE_RENDER_WAIT),
 		).resolves.not.toHaveLength(0);
+		expect(screen.queryByText("Does not apply to your work yet")).toBeNull();
 	});
 
-	it("names a group whose every practice never applied as its folded row does", async () => {
+	it("names a group whose every practice never applied as having no standing yet", async () => {
 		server.use(
 			http.get("*/workspaces/:workspaceSlug/practices/standings", () =>
 				HttpResponse.json(packagingNeverApplied),
@@ -1761,13 +1762,10 @@ describe("practice profile pattern label and folds", () => {
 		);
 		renderRouteAtWithRouter(groupPage);
 		await expect(
-			screen.findAllByRole(
-				"button",
-				{ name: "Does not apply to your work yet" },
-				ROUTE_RENDER_WAIT,
-			),
+			screen.findAllByRole("button", { name: "No standing yet" }, ROUTE_RENDER_WAIT),
 		).resolves.not.toHaveLength(0);
 		expect(screen.queryByText("Nothing to report yet")).toBeNull();
+		expect(screen.queryByText("Does not apply to your work yet")).toBeNull();
 	});
 
 	it("shows the pattern as a plain label in the group's table", async () => {

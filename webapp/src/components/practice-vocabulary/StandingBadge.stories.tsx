@@ -41,7 +41,7 @@ export const Default: Story = {
 export const PracticeNotReviewed: Story = {
 	args: { standing: "NOT_OBSERVED", scope: "practice" },
 	play: async ({ canvas }) => {
-		await userEvent.hover(canvas.getByRole("button", { name: "Not reviewed" }));
+		await userEvent.hover(canvas.getByRole("button", { name: "No standing yet" }));
 		const tooltip = await settledPopup();
 		await expect(tooltip).toHaveTextContent(
 			"No review has looked at this practice in your work yet.",
@@ -171,7 +171,10 @@ export const NotSettled: Story = {
 	},
 };
 
-/** Every standing at once, which is where two entries sharing an icon would show. */
+/**
+ * Every standing at once, which is where two entries sharing an icon would show. The two unsettled
+ * standings share one name, No standing yet, and keep their own icons.
+ */
 export const EveryStanding: Story = {
 	render: (args) => (
 		<div className="flex flex-wrap gap-2">
@@ -181,8 +184,15 @@ export const EveryStanding: Story = {
 		</div>
 	),
 	play: async ({ canvas }) => {
-		for (const standing of statusValues(PRACTICE_GROUP_STANDING_DEFS)) {
-			canvas.getByRole("button", { name: PRACTICE_GROUP_STANDING_DEFS[standing].label });
-		}
+		const names = canvas.getAllByRole("button").map((badge) => badge.textContent);
+		await expect(names).toStrictEqual(
+			statusValues(PRACTICE_GROUP_STANDING_DEFS).map(
+				(standing) => PRACTICE_GROUP_STANDING_DEFS[standing].label,
+			),
+		);
+		const icons = canvas
+			.getAllByRole("button")
+			.map((badge) => badge.querySelector("svg")?.outerHTML);
+		await expect(new Set(icons).size).toBe(icons.length);
 	},
 };

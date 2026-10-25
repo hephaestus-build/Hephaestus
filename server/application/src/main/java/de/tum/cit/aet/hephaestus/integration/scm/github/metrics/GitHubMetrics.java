@@ -12,6 +12,8 @@ public final class GitHubMetrics {
             "github.graphql.ratelimit.seconds_until_reset";
     public static final String GITHUB_GRAPHQL_RATELIMIT_USED = "github.graphql.ratelimit.used";
     public static final String GITHUB_SYNC_ERRORS_TOTAL = "github.sync.errors.total";
+    public static final String GITHUB_WEBHOOK_REDELIVERY = "github.webhook.redelivery";
+    public static final String GITHUB_WEBHOOK_UNRECOVERED = "github.webhook.unrecovered";
 
     private GitHubMetrics() {}
 }

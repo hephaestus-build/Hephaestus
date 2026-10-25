@@ -1,6 +1,6 @@
 # ADR 0041: Compose for 1.x; Kubernetes only for 2.0
 
-**Status:** Accepted (amended 2026-10-09 — debug transcripts; 2026-10-09 — Heph host, [ADR 0057](0057-one-heph-conversation-per-developer.md); 2026-10-25 — § Releases and support superseded by [ADR 0058](0058-the-helm-chart-is-the-only-supported-deployment-from-1-0.md))
+**Status:** Accepted (amended 2026-10-09 — debug transcripts; 2026-10-09 — Heph host, [ADR 0057](0057-one-heph-conversation-per-developer.md); 2026-10-25 — Helm chart support and 1.x security fixes; 2026-10-25 — § Releases and support superseded by [ADR 0058](0058-the-helm-chart-is-the-only-supported-deployment-from-1-0.md))
 **Date:** 2026-09-03
 **Authors:** Hephaestus maintainers
 **Amends:** [ADR 0005](0005-two-role-runtime-via-conditional-on-property.md),
@@ -57,7 +57,7 @@ newer bytes.
 
 ### Releases and support
 
-Docker Compose with the Docker driver on one supported Linux host is the only supported 1.x install.
+Docker Compose with the Docker driver on one supported Linux host is a supported install for all of 1.x. The Helm chart is supported beside it from the first release that publishes it ([updated 2026-10-25](#update--2026-10-25-helm-chart-support-and-1x-security-fixes)).
 The `v1.0.0` scope includes the complete substrate-neutral architecture described below. During the
 single, scope-named **1.x — Kubernetes in parallel** milestone, one Helm chart and the Kubernetes Job
 driver ship beside Compose and must pass the same driver conformance suite. There is no separate
@@ -383,9 +383,21 @@ session from PostgreSQL. Gateway capability 4 is now the Heph host's command cha
 interactive frames. WSS carries no mentor frames. Heph no longer needs the Agent Sandbox CRD or its
 warm pools.
 
+## Update — 2026-10-25: Helm chart support and 1.x security fixes
+
+The maintainers changed the support promise in [Releases and support](#releases-and-support).
+The Helm chart becomes a supported install beside Compose, from the first release that publishes it.
+Its values join the public contract under Semantic Versioning.
+Compose stays supported for all of 1.x.
+After 2.0.0, the last 1.x minor release gets a fixed period of security fixes.
+The [compatibility policy](../admin/compatibility-policy.mdx#support-for-1x) owns the terms.
+2.0 stays Kubernetes only.
+
 ## Update — 2026-10-25 (Kubernetes from 1.0, [ADR 0058](0058-the-helm-chart-is-the-only-supported-deployment-from-1-0.md))
 
 ADR 0058 supersedes § Releases and support. ADR 0058 § Supported deployment owns the supported deployment from 1.0.
+It also supersedes the Compose part of the update above: Compose is not a supported 1.x deployment.
+The 1.x support terms of that update stay with the chart, and the [compatibility policy](../admin/compatibility-policy.mdx#supported-deployment) owns them.
 There is no 1.x milestone with two supported deployments.
 
 The migration of a Compose install moves from 2.0 to the time before 1.0.

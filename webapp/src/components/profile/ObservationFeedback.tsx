@@ -39,7 +39,6 @@ const FEEDBACK_BOX = "rounded-xl border border-foreground/15 bg-background p-3 s
 /**
  * The delivered feedback an observation gave, one box each: where it went (on the work, on the
  * practice page, in the conversation with Heph), when it was delivered, and the way to read it there.
- * The caller passes delivered feedback only.
  * Nothing here answers it: the reader responds where the feedback is. An observation has no rating
  * of its own (the server records responses per piece of feedback only). A response already given is
  * said in one read-only line.

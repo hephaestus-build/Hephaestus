@@ -13,7 +13,7 @@ import {
 	ALL_PRACTICE_GROUPS,
 	NO_PRACTICE_GROUPS,
 } from "@/components/practice-profile/practice-profile-search";
-import { getGroupVisual } from "@/components/practice-vocabulary/group-visuals";
+import { GROUP_COLORS_NOTE, getGroupVisual } from "@/components/practice-vocabulary/group-visuals";
 import { GroupName } from "@/components/practice-vocabulary/GroupName";
 import {
 	EARLIER_REVIEWS_COUNTED,
@@ -141,6 +141,12 @@ export function PracticesAcrossTheWorkspacePage({
 							openGroupSlug={openGroupSlug}
 							onOpenGroup={onOpenGroup}
 						/>
+						{/* Only where colored group names are on the page. */}
+						{(overview?.groups.length ?? 0) > 0 && (
+							<p data-group-colors-note="" className="text-xs text-muted-foreground">
+								{GROUP_COLORS_NOTE}
+							</p>
+						)}
 						{focusFooter}
 					</Section>
 				</>

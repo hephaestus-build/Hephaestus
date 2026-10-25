@@ -38,6 +38,7 @@ import { REVIEW_FILTER_MAX_LENGTH } from "@/components/practice-trace/trace-form
 import { isOpenFeedback } from "@/components/practice-vocabulary/feedback-state-defs";
 import { getGroupVisual, groupMark } from "@/components/practice-vocabulary/group-visuals";
 import { OUTCOME_DEFS } from "@/components/practice-vocabulary/outcome-defs";
+import { isSettledStanding } from "@/components/practice-vocabulary/practice-group-standing-defs";
 import {
 	type FeedbackRatingProps,
 	PracticeFeedbackCard,
@@ -70,7 +71,7 @@ import { problemStatusOf } from "@/lib/problem-detail";
 import { nonEmpty } from "@/lib/search-params";
 import { hasText } from "@/lib/text";
 
-import { NeverAppliedBadge } from "./FoldedPractices";
+import { NoStandingYetBadge } from "./FoldedPractices";
 import {
 	carriesObservation,
 	changedObservationFilter,
@@ -82,7 +83,7 @@ import {
 	shownObservations,
 } from "./observation-filter";
 import { newestFirst } from "./practice-feedback-cards";
-import { NEVER_APPLIED } from "./practice-folds";
+import { NEVER_APPLIED, practiceNoStandingYetReason } from "./practice-folds";
 import { FeedbackEmpty, LabelledBlock } from "./practice-profile-blocks";
 import {
 	ALL_TIME,
@@ -93,6 +94,18 @@ import {
 	reviewRangeStart,
 } from "./practice-profile-search";
 import { requestedReviewNote } from "./requested-review-note";
+
+/**
+ * What each tab holds, said in a line under the tab bar for the open tab, so a panel starts with
+ * its content rather than a heading that repeats the tab's name.
+ */
+const TAB_DESCRIPTIONS: Record<PracticeTab, string> = {
+	feedback:
+		"Feedback about patterns in your work: the open card, then the ones that resolved, newest first.",
+	results:
+		"Reviews of your work that reached this practice, newest first. Open one to see its problems, each with its next step.",
+	guide: "Why this practice matters, what good looks like, and how to do it.",
+};
 
 const TAB_LABELS: Record<PracticeTab, string> = {
 	feedback: "Feedback",
@@ -328,9 +341,13 @@ export function PracticeDetailLevel({
 						</div>
 					)}
 				</PracticeTabsRail>
+				{/* What the open tab holds, as a line anyone can read, touch included: the panel has no
+				    heading repeating the tab's name. */}
+				<p className="max-w-2xl text-sm text-muted-foreground">{TAB_DESCRIPTIONS[shownTab]}</p>
 				<TabsContent value="feedback" className="min-w-0">
 					<PracticeFeedbackSection
 						feedback={feedback}
+						onShowAllTime={showAllTimeOf(feedback, observationFilter, onObservationFilterChange)}
 						ratingProps={ratingProps}
 						onOpenGroup={onOpenGroup}
 						markedFeedbackId={markedFeedbackId}
@@ -338,11 +355,7 @@ export function PracticeDetailLevel({
 					/>
 				</TabsContent>
 				<TabsContent value="results" className="min-w-0">
-					<Section
-						size="lg"
-						title="Observations"
-						description="Reviews of your work that reached this practice, newest first. Open one to see its problems, each with its next step."
-					>
+					<div className="flex min-w-0 flex-col gap-4">
 						{hasText(requestedNote) && <p className="max-w-2xl text-sm">{requestedNote}</p>}
 						<ObservationHistory
 							feed={feed}
@@ -354,7 +367,7 @@ export function PracticeDetailLevel({
 							skeletonRows={skeletonRows}
 							responses={responses}
 						/>
-					</Section>
+					</div>
 				</TabsContent>
 				{hasGuide && (
 					<TabsContent value="guide" className="min-w-0">
@@ -417,39 +430,43 @@ export function PracticeDetailLevel({
 						}
 					/>
 				}
-				chips={
-					practice && <PracticeStandingChips practice={practice} neverApplied={neverApplied} />
-				}
+				chips={practice && <PracticeStandingChips practice={practice} />}
 			/>
 			<DrawerBody className="flex flex-col gap-6 pt-2">{body}</DrawerBody>
 		</>
 	);
 }
 
-/** Where the reader stands on the practice, under the level's title. */
-function PracticeStandingChips({
-	practice,
-	neverApplied,
-}: {
-	practice: PracticeStanding;
-	neverApplied: boolean;
-}) {
-	// A practice that never applied has no trend, as its folded row shows.
-	if (neverApplied) {
-		return <NeverAppliedBadge scope="practice" />;
+/**
+ * Where the reader stands on the practice, under the level's title. A practice with no standing yet,
+ * whether it never applied, nobody reviewed it or there was nothing to report, reads as its folded row
+ * does: one "No standing yet", with why behind it and no trend.
+ */
+function PracticeStandingChips({ practice }: { practice: PracticeStanding }) {
+	if (!isSettledStanding(practice.standing)) {
+		// With no standing there is nothing to compare, and the trend chip says so with its sentence.
+		return (
+			<span className="inline-flex flex-wrap items-center gap-x-5 gap-y-2">
+				<NoStandingYetBadge reason={practiceNoStandingYetReason(practice)} />
+				<TrendNote scope="practice" />
+			</span>
+		);
 	}
 	return (
 		<>
-			<StandingBadge
-				standing={practice.standing}
-				scope="practice"
-				support={practice.trendSupport ?? undefined}
-			/>
-			<TrendNote
-				direction={practice.direction ?? undefined}
-				support={practice.trendSupport ?? undefined}
-				scope="practice"
-			/>
+			{/* A little more room between the standing and its trend, so they read as two facts. */}
+			<span className="inline-flex flex-wrap items-center gap-x-5 gap-y-2">
+				<StandingBadge
+					standing={practice.standing}
+					scope="practice"
+					support={practice.trendSupport ?? undefined}
+				/>
+				<TrendNote
+					direction={practice.direction ?? undefined}
+					support={practice.trendSupport ?? undefined}
+					scope="practice"
+				/>
+			</span>
 			<StandingBasisNote basis={practice.basis} />
 		</>
 	);
@@ -484,15 +501,21 @@ function PracticeGuidance({
 	);
 }
 
-/** The Feedback tab: the practice's one open card, then the cards the work resolved. */
+/**
+ * The Feedback tab: the practice's one open card, then the cards the work resolved. Its tab says
+ * what it holds, so the panel has no heading of its own.
+ */
 function PracticeFeedbackSection({
 	feedback,
 	ratingProps,
 	onOpenGroup,
 	markedFeedbackId,
 	onFeedbackArrivalShown,
+	onShowAllTime,
 }: {
-	feedback: ReturnType<typeof feedbackCardsOf>;
+	feedback: TimeframedFeedback;
+	/** Set when the timeframe hid every card: the empty tab then offers all time. */
+	onShowAllTime?: () => void;
 	ratingProps?: (feedbackId: string) => FeedbackRatingProps;
 	onOpenGroup?: () => void;
 	markedFeedbackId?: string;
@@ -541,11 +564,7 @@ function PracticeFeedbackSection({
 		);
 	};
 	return (
-		<Section
-			size="lg"
-			title="Feedback"
-			description="Feedback about patterns in your work: the open card, then the ones that resolved, newest first."
-		>
+		<div className="flex min-w-0 flex-col gap-4">
 			{arriving !== undefined &&
 				feedback.open?.feedbackId !== arriving &&
 				!feedback.resolved.some((card) => card.feedbackId === arriving) && (
@@ -557,7 +576,7 @@ function PracticeFeedbackSection({
 					</p>
 				)}
 			{feedback.open === undefined && feedback.resolved.length === 0 ? (
-				<FeedbackEmpty description="Feedback appears here once a review sees the same pattern in your work more than once. Feedback posted on a single piece of work stays there. Open its observation to find recorded comment links." />
+				<NoFeedbackShown onShowAllTime={onShowAllTime} />
 			) : (
 				<div className="flex flex-col gap-6">
 					{feedback.open && (
@@ -572,7 +591,7 @@ function PracticeFeedbackSection({
 					)}
 				</div>
 			)}
-		</Section>
+		</div>
 	);
 }
 
@@ -829,22 +848,63 @@ function useKeptCard(markedFeedbackId: string | undefined): string | undefined {
 }
 
 /**
- * The cards the level's timeframe keeps: a card by the time it shows (when it was created or last
- * moved), and the card a link arrived at whatever its time, so the arrival always lands.
+ * The cards the level's timeframe keeps: the open card always, as it is the one the reader can
+ * act on now; a resolved card by the time it shows (when it was created or last moved); and the
+ * card a link arrived at whatever its time, so the arrival always lands.
  */
 function withinTimeframe(
 	feedback: ReturnType<typeof feedbackCardsOf>,
 	since: Date | undefined,
 	arrivedAt: string | undefined,
-): ReturnType<typeof feedbackCardsOf> {
+): TimeframedFeedback {
 	if (since === undefined) {
-		return feedback;
+		return { ...feedback, hiddenByTime: false };
 	}
 	const keeps = (card: PracticeFeedbackCardEntry) =>
 		card.feedbackId === arrivedAt || card.timestamp.getTime() >= since.getTime();
+	const resolved = feedback.resolved.filter(keeps);
 	return {
 		...feedback,
-		open: feedback.open !== undefined && keeps(feedback.open) ? feedback.open : undefined,
-		resolved: feedback.resolved.filter(keeps),
+		resolved,
+		hiddenByTime:
+			feedback.open === undefined && resolved.length === 0 && feedback.resolved.length > 0,
 	};
+}
+
+/** The cards the timeframe keeps, and whether it hid every card the practice has. */
+type TimeframedFeedback = ReturnType<typeof feedbackCardsOf> & { hiddenByTime: boolean };
+
+/** The way back to every card, where the timeframe hid them all and the reader may change it. */
+function showAllTimeOf(
+	feedback: TimeframedFeedback,
+	filter: ObservationFilter,
+	onFilterChange: ((filter: ObservationFilter) => void) | undefined,
+): (() => void) | undefined {
+	if (!feedback.hiddenByTime || onFilterChange === undefined) {
+		return undefined;
+	}
+	return () => onFilterChange(changedObservationFilter(filter, { since: undefined }));
+}
+
+/**
+ * The Feedback tab with no card to show: "No feedback yet", or, where the timeframe hid every card,
+ * that none falls in it, with a way back to all time.
+ */
+function NoFeedbackShown({ onShowAllTime }: { onShowAllTime?: () => void }) {
+	if (onShowAllTime === undefined) {
+		return (
+			<FeedbackEmpty description="Feedback appears here once a review sees the same pattern in your work more than once. Feedback posted on a single piece of work stays there. Open its observation to find recorded comment links." />
+		);
+	}
+	return (
+		<FeedbackEmpty
+			title="No feedback in this timeframe"
+			description="None falls in this timeframe. Choose a longer one to see earlier feedback."
+			action={
+				<Button variant="outline" size="sm" onClick={onShowAllTime}>
+					Show all time
+				</Button>
+			}
+		/>
+	);
 }

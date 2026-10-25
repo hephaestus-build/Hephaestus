@@ -16,6 +16,7 @@
 
 ADR 0041 made Docker Compose the only supported 1.x installation.
 A Helm chart and the Kubernetes Job driver were to ship beside Compose during one 1.x milestone.
+An update of ADR 0041 on 2026-10-25 made the chart a second supported 1.x install, beside Compose.
 Version 2.0 was to remove Compose and to own the migration.
 Thus, every 1.x release had to qualify two deployments, and the migration moved to the time with the most operators.
 
@@ -142,7 +143,7 @@ The old host stays unchanged, and it is the rollback.
 | --- | --- |
 | PostgreSQL | Restore the pgBackRest backup from the off-host repository into the bundled PostgreSQL 18. Recover to a time after the writers stopped. Without pgBackRest, use `pg_dump -Fc` and `pg_restore`. |
 | JetStream | Follow ADR 0041: stop ingress, drain to zero pending messages, verify the outcomes, and start with empty streams. |
-| Webhooks during the move | GitHub does not redeliver a failed delivery [G1]. Redeliver the failed App deliveries, then sync each workspace. |
+| Webhooks during the move | GitHub does not redeliver a failed delivery itself [G1]. The server asks GitHub to redeliver the failed App deliveries of the past hour. Redeliver older ones by hand, then sync each workspace. |
 | Secrets and configuration | Map each known `.env` key into one Secret and `site.yaml`. Stop on an unknown key. Keep the encryption keys. A script can do this mapping, but the guide does not require it. |
 | Cut-over | Move DNS. Run one practice review and one Heph turn. Until the new host admits writes, a rollback moves DNS back. |
 

@@ -6,7 +6,7 @@ import { type StatusDef, statusToneClass } from "@/components/common/status-def"
 
 import type { StandingScope } from "./practice-group-standing-defs";
 import { PRACTICE_TREND_DEFS, type TrendDirection } from "./practice-trend-defs";
-import { formatTrendProvenance } from "./practice-trend-presentation";
+import { formatTrendProvenance, TREND_EXPLAINED } from "./practice-trend-presentation";
 import { StatusTooltip } from "./StatusTooltip";
 
 const TREND_CLASS = "flex w-fit flex-wrap items-center gap-x-1 rounded-sm text-sm";
@@ -45,7 +45,9 @@ export function PracticeTrendChip({
 	className,
 }: PracticeTrendChipProps) {
 	const def = PRACTICE_TREND_DEFS[direction];
-	const sentence = support ? formatTrendProvenance(support, direction, scope) : def.description;
+	const evidence = support ? formatTrendProvenance(support, direction, scope) : def.description;
+	// What a trend compares comes first, then this one's evidence.
+	const sentence = `${TREND_EXPLAINED} ${evidence}`;
 	return (
 		<StatusTooltip
 			openOnTap

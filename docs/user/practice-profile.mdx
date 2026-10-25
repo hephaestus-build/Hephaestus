@@ -46,8 +46,8 @@ A ring counts your practices by standing:
 - **Going well**
 - **Mixed feedback**
 - **Needs attention**
-- **Nothing to report yet**
-- **Not reviewed**
+- **No standing yet**: no review has given the practice a standing yet.
+  It did not apply to your work, could not be judged, or no review has looked at it.
 
 **See all practice groups** opens the table of practice groups.
 [Your feedback](#your-feedback) follows the header.
@@ -233,18 +233,22 @@ These filters apply to the table:
 
 **See all practice groups** opens the **All practice groups** panel.
 Each row shows a workspace practice group, its standing, and a ring that splits its practices by standing.
+A practice group is a named set of related practices.
+The (i) beside the **Practice group** heading says so.
+
 A sentence describes what changed since the previous review.
 New feedback has no sentence here, because its card says it.
 The rows appear by standing, with groups that need attention first.
 
 1. To reverse the order, select the **Standing** heading.
 
-Some practices and groups have nothing to report yet.
-They fold into lines at the end of their table, so that they do not read as a gap:
+Some practices and groups have no standing yet.
+They fold into one line at the end of their table, so that they do not read as a gap.
+The line reads **Practices with no standing yet** or **Practice groups with no standing yet**.
 
-- **Does not apply to your work yet**: every review in the last 90 days found that they do not apply.
-- **Practices not reviewed** and **Practice groups not reviewed**: no review in the last 90 days has reviewed them.
-  A group also folds here when none of its practices applies or was reviewed.
+- A practice folds here when no review in the last 90 days gave it a standing.
+  The reviews found that it does not apply, could not judge it, or did not look at it.
+- A group folds here when none of its practices has a standing yet.
   A group with no practice to review also folds here.
   That is a group with no practices, with all of them switched off, or with only practices that people review.
   A group that your workspace hides from developers is not listed.
@@ -252,7 +256,11 @@ They fold into lines at the end of their table, so that they do not read as a ga
 To see the rows of a fold, select its line.
 The rows open in the table above it.
 Select a row to open the practice or the group.
-A practice or group that does not apply to your work yet says so in its row and in its own panel.
+
+Each folded row reads **No standing yet**.
+To see why, point at the label or select it.
+A practice reads **No standing yet** in its own panel too.
+If it does not apply to your work yet, its **Guide** tab says so.
 
 ## Opening a group and a practice
 
@@ -285,8 +293,11 @@ The timeframe stays as you chose it.
 
 The timeframe in the tab row, right of **Guide**, shows the last 7, 30 or 90 days, or **All time**, the initial value.
 It narrows both the feedback cards and the observations.
-A feedback card falls in the timeframe by the time it shows.
+Your open feedback card always shows, whatever the timeframe.
+A resolved card falls in the timeframe by the time it shows.
 An observation or card that you arrive at by a link shows even when it lies outside the timeframe.
+When the timeframe hides every card, the **Feedback** tab says so and offers **Show all time**.
+
 The number beside **Feedback** and **Observations** counts what each tab shows, with the timeframe and the tab's filters applied.
 
 The **Guide** tab starts with an introduction:
@@ -334,7 +345,9 @@ A standing is read from your newest reviewed work, up to four pieces for each pr
 Your latest work counts most, and older work counts less.
 
 To see how much work a standing rests on, point at its badge, move to it with the keyboard, or tap it.
-The trend beside the badge opens its own sentence in the same way.
+The trend beside the badge, such as *More positive recently*, opens its own sentence in the same way.
+That sentence says what a trend compares: your latest reviewed work with the work before it, in the last 90 days.
+A practice or group with no standing yet shows **Not enough to compare yet** as its trend.
 A tap opens the sentence, not the row.
 To close the sentence, press Escape or select a different part of the page.
 
@@ -347,10 +360,11 @@ Eligible decided observations provide the evidence for these counts.
 Your standing uses automatic reviews first.
 Requested reviews contribute where those reviews establish no standing.
 
-A practice or group marked **Based on earlier reviews** includes historical assessments.
+A practice or group marked **Based on earlier reviews, the criteria might have changed** includes historical assessments.
 Those assessments do not show whether the current criteria are met.
 They contribute no trend or feedback quotes.
-**Based on earlier reviews, criteria unknown** means that the original criterion version is unavailable.
+The mark reads the same when the original criterion version is unavailable.
+Only its icon differs.
 
 A group counts each piece of work once, even when several of its practices judged it.
 
@@ -404,12 +418,13 @@ The **You** bracket spans the part you are in, but only when the bar counts you.
 It marks the part, not a point within it.
 The bars show standings now, so the time range does not change them.
 
+The colors of the group names only tell the groups apart, here and in **All practice groups** of your profile. They are not a rating.
+
 A practice that is reviewed only by people, or by nobody, has no standing and is not on the page.
 Turning feedback off does not remove the practice's standing.
 
 If some standings include earlier assessments, the page says so.
-When your standing includes them, your own row carries **Based on earlier reviews**, as your profile does.
-If the original criterion version is unavailable, the mark reads **Based on earlier reviews, criteria unknown**.
+When your standing includes them, your own row carries **Based on earlier reviews, the criteria might have changed**, as your profile does.
 
 ### Small counts
 
@@ -433,7 +448,7 @@ At the end of the page, **See your own standing** opens **All practice groups** 
 
 ## When nothing has been reviewed yet
 
-Before the first review, each practice counts as **Not reviewed**.
+Before the first review, each practice counts as **No standing yet**.
 The chip reads **No review yet** and no feedback appears.
 The first review with a recorded observation fills the page.
 To request a review of eligible work, use **Request review** on [Activity](./activity.mdx#request-a-review).

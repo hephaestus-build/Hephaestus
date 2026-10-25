@@ -124,6 +124,19 @@ groups:
           severity: warning
         annotations:
           summary: A scraped webhook receiver exports no stream poll age
+      - alert: HephaestusWebhookPublishFailing
+        expr: sum(increase(webhook_publish_total{job="hephaestus",outcome="failure"}[10m])) > 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: The webhook receiver cannot store deliveries on the broker
+      - alert: HephaestusWebhookEventsUnrecovered
+        expr: max(github_webhook_unrecovered{job="hephaestus"}) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: GitHub events failed every delivery attempt and were not received
       - alert: HephaestusBudgetExhausted
         expr: sum(increase(llm_budget_exhausted_total{job="hephaestus"}[10m])) > 0
         labels:

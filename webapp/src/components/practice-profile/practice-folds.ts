@@ -1,62 +1,64 @@
-// The words and the arithmetic behind the folds of the Practice profile: practices and groups that
-// never applied to the developer's work, and the ones no review has reviewed yet. Each reads only
-// what the developer's own page already holds. Nothing here names another developer.
+// The words and the arithmetic behind the fold of the Practice profile: practices and groups with no
+// standing yet, because they never applied to the developer's work or no review has reviewed them.
+// Each reads only what the developer's own page already holds. Nothing here names another developer.
 
 import { CircleDashedIcon } from "lucide-react";
 
 import type { PracticeStanding } from "@/api/types.gen";
 import type { StatusDef } from "@/components/common/status-def";
-import { STANDING_LOOKBACK_DAYS } from "@/components/practice-vocabulary/practice-trend-presentation";
+import {
+	isSettledStanding,
+	standingDefs,
+} from "@/components/practice-vocabulary/practice-group-standing-defs";
+import { LOOKBACK_DAYS } from "@/components/practice-vocabulary/practice-trend-presentation";
 
 // The server reads only this window, so every sentence names it: older evidence does not count.
-const WINDOW = `in the last ${STANDING_LOOKBACK_DAYS} days`;
+const WINDOW = `in the last ${LOOKBACK_DAYS} days`;
 
 export const NEVER_APPLIED = {
-	label: "Does not apply to your work yet",
 	description: `Every review ${WINDOW} found that this practice did not apply to your work. This is not a gap: it gets a standing once a piece of work calls for it.`,
-	groupDescription: `Every review ${WINDOW} found that the practices in these groups did not apply to your work. This is not a gap.`,
 	/** The sentence behind one folded group's badge. */
 	oneGroupDescription: `Every review ${WINDOW} found that the practices of this group did not apply to your work. This is not a gap.`,
 } as const;
 
-/** The standing a practice shows when it never applied, in place of "Nothing to report yet". */
-export const NEVER_APPLIED_DEF: StatusDef = {
-	label: NEVER_APPLIED.label,
+/**
+ * The one fold of practices or groups without a standing, in the reader's words. A developer does
+ * not need to tell "did not apply" from "not reviewed yet": both mean no review has settled a
+ * standing, so both read "No standing yet", as the page's counts say it. The badge's sentence keeps
+ * why, for a reader who asks. Admin surfaces keep both.
+ */
+export const NO_STANDING_YET = {
+	label: "No standing yet",
+	practiceLabel: "Practices with no standing yet",
+	groupLabel: "Practice groups with no standing yet",
+	practiceDescription: `No review ${WINDOW} has given these practices a standing in your work. This is not a gap.`,
+	groupDescription: `No review ${WINDOW} has given a practice of these groups a standing in your work. This is not a gap: open a group to see why.`,
+	/** The sentence behind one group's badge when none of its practices has a standing. */
+	oneGroupDescription: `No review ${WINDOW} has given a practice of this group a standing in your work. This is not a gap.`,
+} as const;
+
+/** The badge of a practice or group without a standing; its sentence says why, per row. */
+export const NO_STANDING_YET_DEF: StatusDef = {
+	label: NO_STANDING_YET.label,
 	icon: CircleDashedIcon,
 	badgeVariant: "outline",
-	description: NEVER_APPLIED.description,
+	description: NO_STANDING_YET.practiceDescription,
 };
-
-/**
- * The fold of practices or groups that no review has reviewed in the reader's work yet. Its words
- * are the standing's: the badge and a count say "Not reviewed", and the fold and its sentence say
- * "not reviewed" and "no review … in the last 90 days", so one phrase names the one state.
- */
-export const NOT_REVIEWED_YET = {
-	practiceLabel: "Practices not reviewed",
-	groupLabel: "Practice groups not reviewed",
-	practiceDescription: `No review ${WINDOW} has looked at these practices in your work. Each gets a standing once a review does.`,
-	groupDescription: `No review ${WINDOW} has looked at a practice of these groups in your work, or the practice did not apply to it. Open a group to see why.`,
-} as const;
 
 export const isNeverApplied = (practice: PracticeStanding): boolean =>
 	practice.standing === "NO_OPPORTUNITY" && practice.doesNotApplyOnly;
 
-/** No review has reviewed the practice in the reader's work yet. */
-export const isNotReviewedYet = (practice: PracticeStanding): boolean =>
-	practice.standing === "NOT_OBSERVED";
+/** No review has settled a standing on the practice: it did not apply, or nobody reviewed it. */
+export const hasNoStandingYet = (practice: Pick<PracticeStanding, "standing">): boolean =>
+	!isSettledStanding(practice.standing);
 
-/**
- * The practices split three ways: the ones the table lists, the ones that never applied, and the
- * ones no review has reviewed yet. Each of the last two folds into one line under the table.
- */
+/** The ones the table lists, and the ones with no standing yet, which fold into one line under it. */
 export function splitFoldedPractices<T extends PracticeStanding>(
 	practices: readonly T[],
-): { shown: T[]; neverApplied: T[]; notReviewed: T[] } {
+): { shown: T[]; noStandingYet: T[] } {
 	return {
-		shown: practices.filter((practice) => !isNeverApplied(practice) && !isNotReviewedYet(practice)),
-		neverApplied: practices.filter(isNeverApplied),
-		notReviewed: practices.filter(isNotReviewedYet),
+		shown: practices.filter((practice) => !hasNoStandingYet(practice)),
+		noStandingYet: practices.filter(hasNoStandingYet),
 	};
 }
 
@@ -64,11 +66,35 @@ export function splitFoldedPractices<T extends PracticeStanding>(
 export const groupNeverApplied = (practices: readonly PracticeStanding[]): boolean =>
 	practices.length > 0 && practices.every(isNeverApplied);
 
+/** A group in which no practice has a standing yet, whatever the reason for each. */
+export const groupHasNoStandingYet = (practices: readonly PracticeStanding[]): boolean =>
+	practices.length > 0 && practices.every(hasNoStandingYet);
+
 /**
- * A group in which no review has reviewed any practice in the reader's work yet. A practice that
- * never applied counts the same, so a group that mixes the two folds here too, as its own level
- * then shows nothing but folds. A group whose every practice never applied has its own fold.
+ * Why a practice has no standing yet: the sentence behind its "No standing yet" badge. A practice
+ * that never applied says so; otherwise the standing's own sentence does.
  */
-export const groupNotReviewedYet = (practices: readonly PracticeStanding[]): boolean =>
-	practices.some(isNotReviewedYet) &&
-	practices.every((practice) => isNotReviewedYet(practice) || isNeverApplied(practice));
+export function practiceNoStandingYetReason(practice: PracticeStanding): string {
+	return isNeverApplied(practice)
+		? NEVER_APPLIED.description
+		: standingDefs("practice")[practice.standing].description;
+}
+
+/**
+ * Why a group has no standing yet, from the same practices that fold it: every practice never
+ * applied, or none has a standing. Only a group whose practices have a standing but whose own
+ * standing does not falls back to the group standing's sentence, so the sentence never praises or
+ * blames work the badge says has no standing.
+ */
+export function groupNoStandingYetReason(
+	practices: readonly PracticeStanding[],
+	standing: PracticeStanding["standing"] | undefined,
+): string {
+	if (groupNeverApplied(practices)) {
+		return NEVER_APPLIED.oneGroupDescription;
+	}
+	if (groupHasNoStandingYet(practices) || standing === undefined || isSettledStanding(standing)) {
+		return NO_STANDING_YET.oneGroupDescription;
+	}
+	return standingDefs("group")[standing].description;
+}

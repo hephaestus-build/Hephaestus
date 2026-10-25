@@ -57,6 +57,7 @@ const groupsSection = (canvas: {
 	getByRole: (role: "heading", options: { level: number; name: string }) => HTMLElement;
 }) => canvas.getByRole("heading", { level: 2, name: "All practice groups" }).closest("section");
 
+/** The note's title as it renders, with its period, so its absence is checked on the real words. */
 const EARLIER_NOTE = `${EARLIER_REVIEWS_COUNTED.title}.`;
 
 /** Presses an (i) and returns its panel, which opens in a portal outside the canvas. */
@@ -108,6 +109,12 @@ export const Default: Story = {
 		await expect(canvas.getByText("pieces open now")).toBeVisible();
 		// Every standing here is current, so the page says nothing about earlier reviews.
 		await expect(canvas.queryByText(EARLIER_NOTE)).toBeNull();
+		// Under the groups, one quiet line says that a group's color carries no rating.
+		const colorsNote = canvas.getByText(
+			"The colors of the group names only tell the groups apart. They are not a rating.",
+		);
+		await expect(colorsNote).toBeVisible();
+		await expect(groupsSection(canvas)).toContainElement(colorsNote);
 		await userEvent.click(
 			table.getByRole("button", { name: "Open group Packaging work for review" }),
 		);
@@ -172,21 +179,28 @@ export const ReaderNotCounted: Story = {
 
 /**
  * Some counted standings rest on earlier reviews: the page says so once, and the reader's own row
- * carries the same mark as their Practice profile, criteria unknown included.
+ * carries the same words as their Practice profile.
  */
 export const EarlierReviews: Story = {
 	args: { state: { status: "ready", overview: EARLIER_REVIEWS_WORKSPACE } },
 	play: async ({ canvas }) => {
+		// One quiet line, not an alert: nothing is wrong, so a screen reader is not interrupted.
 		await expect(canvas.getByText(EARLIER_NOTE)).toBeVisible();
-		const mark = groupsTable(canvas).getByRole("button", {
-			name: "Based on earlier reviews, criteria unknown",
-		});
-		await expect(mark).toBeVisible();
-		// Earlier assessments do not establish whether the current criteria are met.
-		await expect(mark).toHaveAccessibleDescription(
-			/They do not show whether the current criteria are met\./u,
+		await expect(canvas.queryByRole("alert")).toBeNull();
+		// Earlier assessments do not establish whether the current criteria are met; the words say so.
+		const mark = groupsTable(canvas).getByText(
+			"Based on earlier reviews, the criteria might have changed",
 		);
+		await expect(mark).toBeVisible();
+		// The words are the whole message, so none of them is cut off.
+		await expect(mark.scrollWidth).toBeLessThanOrEqual(mark.clientWidth);
 	},
+};
+
+/** On a phone, the mark still reads in full. */
+export const EarlierReviewsPhone: Story = {
+	...EarlierReviews,
+	globals: { viewport: { value: "phone390" } },
 };
 
 /** Nobody has a standing yet: no tile has a range, and no bar counts anybody. */
@@ -231,6 +245,8 @@ export const Empty: Story = {
 	args: { state: { status: "ready", overview: EMPTY_WORKSPACE } },
 	play: async ({ canvas }) => {
 		await expect(canvas.getByText("No practices set up yet")).toBeVisible();
+		// No group, no colors to explain.
+		await expect(canvas.queryByText(/colors of the group names/u)).toBeNull();
 	},
 };
 

@@ -21,6 +21,7 @@ Semantic versioning applies to the surfaces an operator or API consumer depends 
 | **Configuration keys**       | Environment variables and `hephaestus.*` properties listed in the [Configuration reference](./configuration-reference). Renames and removals are breaking changes.                                                                                                                     |
 | **Docker Compose interface** | Service names, image names, the signed release-lock contract, and required environment variables of the published Compose files. This includes the self-hosted stack (`docker/self-host/compose.yaml`, see the [Install guide](./install.mdx)). It also includes the [reference deployment](./reference-deployment) (`docker/compose.app.yaml`, `docker/compose.core.yaml`, `docker/compose.proxy.yaml`). Deprecated in 0.95.0. See [Supported deployment](#supported-deployment). |
 | **REST API**                 | The endpoints described by the published [OpenAPI specification](https://github.com/hephaestus-build/Hephaestus/blob/main/server/openapi.yaml).                                                                                                                                                                                                                                 |
+| **Helm chart values** | The values of the Helm chart, from the first release that publishes the chart. Removing or renaming a value, or changing its meaning, is a breaking change. A new optional value is a minor change. |
 
 Other surfaces can change in any release without notice:
 
@@ -113,17 +114,30 @@ Docker Compose stays for local development only.
 
 The Docker Compose deployment is deprecated in 0.95.0.
 It stays supported for the rest of the 0.x releases.
-In 1.0.0, the Helm values interface replaces the Docker Compose interface in the public contract.
+In 1.0.0, the Docker Compose interface leaves the [public contract](#the-public-contract), and the Helm chart values stay in it.
 A Compose file that is still in the repository after 1.0.0 is not supported.
 Before 1.0.0, a migration guide describes how to move a Compose install to the chart.
 [ADR 0058](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0058-the-helm-chart-is-the-only-supported-deployment-from-1-0.md) records the decision.
 
 ## Support statement
 
-**We support the latest release only.** Fixes ship as new releases on top of the current version. There are
+**Before 1.0.0, we support the latest release only.** [Support for 1.x](#support-for-1x) gives the rules from 1.0.0. Fixes ship as new releases on top of the current version. There are
 no backport branches. If you hit a bug on an older version, upgrade to the latest release before reporting
 it. This mirrors comparable self-hosted products — for example, [Sentry](https://develop.sentry.dev/self-hosted/support/)
 provides no dedicated self-hosted support and expects operators to upgrade regularly.
+
+### Support for 1.x
+
+From 1.0.0, these rules apply to the Helm chart, the only supported deployment ([Supported deployment](#supported-deployment)).
+
+The [upgrade guarantee](#upgrade-guarantee) lets you move from any 1.x to the latest 1.y.
+Thus, the latest 1.x release is the supported one, and fixes ship on it.
+
+When 2.0.0 is released, the last 1.x minor release gets security fixes for 12 months.
+It is the only older release that gets fixes.
+Those fixes ship as patch releases of that minor release.
+That minor release gets no new features and no other fixes.
+After the 12 months, 1.x is unsupported.
 
 ## Docker image tags
 
