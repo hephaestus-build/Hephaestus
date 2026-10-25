@@ -1,6 +1,7 @@
 import java.time.Duration
 import net.ltgt.gradle.errorprone.errorprone
 import org.gradle.testing.jacoco.plugins.JacocoTaskExtension
+import org.gradle.testing.jacoco.tasks.JacocoReportBase
 
 plugins {
     java
@@ -202,6 +203,7 @@ require(!providers.gradleProperty("testSelection").isPresent) {
 
 val testJvmArgs = providers.gradleProperty("testJvmArgs").orElse("")
 val integrationShard = providers.environmentVariable("HEPHAESTUS_INTEGRATION_SHARD").orElse("")
+val testPostgresImage = providers.environmentVariable("HEPHAESTUS_TEST_POSTGRES_IMAGE").orElse("")
 val packagedServer = providers.gradleProperty("packagedServer").map(String::toBoolean).orElse(false)
 // Stable catalogue case IDs for live checks and their credential-free staging proof.
 val criteriaCases = providers.gradleProperty("criteriaCases")
@@ -243,6 +245,7 @@ tasks.withType<Test>().configureEach {
     timeout.set(Duration.ofMinutes(20))
     systemProperty("spring.profiles.active", "test")
     systemProperty("file.encoding", "UTF-8")
+    systemProperty("hephaestus.test.postgres-image", testPostgresImage.get())
     // The launcher selects Node through PATH. Track it when the test configuration is cached.
     environment("PATH", providers.environmentVariable("PATH").get())
     environment("MANAGEMENT_PORT", "0")
@@ -535,7 +538,7 @@ for ((taskName, command) in
 
 // Consumer jobs execute the package job's compiled test artifact; no compilation is scheduled.
 if (packagedServer.get()) {
-    tasks.named<Test>("databaseTest") {
+    tasks.withType<Test>().configureEach {
         testClassesDirs = files(layout.buildDirectory.dir("classes/java/test"))
         classpath =
             files(
@@ -544,6 +547,11 @@ if (packagedServer.get()) {
                 layout.buildDirectory.dir("resources/test"),
                 configurations.testRuntimeClasspath.get().files,
             )
+    }
+    // The coverage floors read the restored main classes; the default source set output would
+    // schedule compileJava.
+    tasks.withType<JacocoReportBase>().configureEach {
+        classDirectories.setFrom(layout.buildDirectory.dir("classes/java/main"))
     }
 }
 

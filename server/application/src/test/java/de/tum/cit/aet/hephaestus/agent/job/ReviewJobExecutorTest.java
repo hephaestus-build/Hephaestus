@@ -33,6 +33,9 @@ import de.tum.cit.aet.hephaestus.agent.runtime.PiResultParser;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerCapacityState;
 import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerProperties;
+import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxProperties;
+import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxTestLimits;
+import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ResourceLimits;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxManager;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxResult;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxSpec;
@@ -93,6 +96,7 @@ class ReviewJobExecutorTest extends BaseUnitTest {
     private final WorkerJwtIssuer jwtIssuer = mock(WorkerJwtIssuer.class);
     private Optional<WorkerCapacityState> capacity = Optional.empty();
     private WorkerProperties worker = workerNamed("worker-1");
+    private SandboxProperties sandboxProperties = SandboxTestLimits.PROPERTIES;
     private final SimpleMeterRegistry meters = new SimpleMeterRegistry();
     private final PracticeScriptRunRecorder practiceScriptRuns = mock(PracticeScriptRunRecorder.class);
     private final LlmUsageRecorder usageRecorder = mock(LlmUsageRecorder.class);
@@ -136,6 +140,7 @@ class ReviewJobExecutorTest extends BaseUnitTest {
                 practiceAgent,
                 jwtIssuer,
                 sandbox,
+                sandboxProperties,
                 pool,
                 transactions,
                 new JsonMapper(),
@@ -434,9 +439,11 @@ class ReviewJobExecutorTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldGiveTheCredentialAndSandboxTheSameDeadlineWhenPreparingAnAttempt() {
+    void shouldGiveTheSandboxTheConfiguredLimitsAndTheCredentialsDeadlineWhenPreparingAnAttempt() {
         var job = configuredJob();
         job.setAttempt(2);
+        sandboxProperties = new SandboxProperties(
+                5, 10, 60, new SandboxProperties.DefaultResourceLimits(3L * 1024 * 1024 * 1024, 1.5, 300));
         var snapshot = ConfigSnapshot.fromJson(job.getConfigSnapshot(), new JsonMapper());
         when(jobs.findByIdQueuedForUpdateSkipLocked(any(), any())).thenReturn(Optional.of(job));
         when(jobs.findById(job.getId())).thenReturn(Optional.of(job));
@@ -452,14 +459,7 @@ class ReviewJobExecutorTest extends BaseUnitTest {
                 .thenReturn("issued-job-token");
         when(practiceAgent.buildSandboxSpec(any()))
                 .thenReturn(new PracticeSandboxSpec(
-                        "practice-runtime",
-                        List.of(),
-                        Map.of(),
-                        Map.of(),
-                        SandboxLayout.OUTPUT_PATH,
-                        null,
-                        null,
-                        null));
+                        "practice-runtime", List.of(), Map.of(), Map.of(), "issued-job-token", null));
         when(jobs.updateCapture(any(), anyLong(), any(), anyInt(), any())).thenReturn(1);
         when(jobs.markExecutionStarted(eq(job.getId()), eq("worker-1"), any())).thenReturn(1);
         var result = new SandboxResult(0, Map.of(), "", false, Duration.ZERO);
@@ -490,14 +490,15 @@ class ReviewJobExecutorTest extends BaseUnitTest {
         var execution = ArgumentCaptor.forClass(SandboxSpec.class);
         verify(sandbox).execute(execution.capture());
         var spec = execution.getValue();
-        var sandboxDeadline = Instant.ofEpochMilli(
-                Long.parseLong(Objects.requireNonNull(spec.environment().get("SANDBOX_WORK_DEADLINE_MS"))));
+        var sandboxDeadline = Objects.requireNonNull(spec.workDeadline());
         assertThat(issuedDeadline.getValue()).isEqualTo(sandboxDeadline);
         assertThat(issuedExpiry.getValue()).isEqualTo(sandboxDeadline.plus(SandboxLayout.RESULT_UPLOAD_GRACE));
         assertThat(request.getValue().jobToken()).isEqualTo("issued-job-token");
         assertThat(spec.jobId()).isEqualTo(job.getId());
         assertThat(spec.attempt()).isEqualTo(2);
-        assertThat(spec.resourceLimits().maxRuntime()).isEqualTo(Duration.ofSeconds(snapshot.timeoutSeconds()));
+        assertThat(spec.resourceLimits())
+                .isEqualTo(new ResourceLimits(
+                        3L * 1024 * 1024 * 1024, 1.5, 300, Duration.ofSeconds(snapshot.timeoutSeconds())));
     }
 
     private static byte[] scriptReport() {

@@ -25,7 +25,7 @@ export const STAGE_HEADERS: Record<StageKey, { label: string; icon: LucideIcon; 
 		holds: "how it ran, with queue and run times",
 	},
 	results: {
-		label: "Results",
+		label: "Observations",
 		icon: ListChecksIcon,
 		holds: "what the review observed",
 	},

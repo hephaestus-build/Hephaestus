@@ -73,7 +73,7 @@ export function practiceTotalsNotes(totals: PracticeTotals): string[] {
 	const notes: string[] = [];
 	if (totals.hidden.practices > 0) {
 		notes.push(
-			`The totals include ${plural(totals.hidden.practices, "practice", "practices")} that the filters hide, with ${plural(totals.hidden.results, "result", "results")}.`,
+			`The totals include ${plural(totals.hidden.practices, "practice", "practices")} that the filters hide, with ${plural(totals.hidden.results, "observation", "observations")}.`,
 		);
 	}
 	if (totals.feedbackDeliveredInRows !== totals.feedbackDelivered) {

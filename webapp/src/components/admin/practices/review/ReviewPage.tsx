@@ -42,11 +42,13 @@ export function ReviewPage({ section, onSectionChange, readiness, sections }: Re
 				}}
 				className="gap-6"
 			>
-				{/* `h-auto` and wrapping: the labels do not fit on one narrow line, and a tab list that
-				    overflows drags the whole page sideways rather than scrolling. */}
-				<TabsList className="h-auto w-full flex-wrap justify-start sm:w-fit">
+				{/* Wrapping: the labels do not fit on one narrow line, and a tab list that overflows drags
+				    the whole page sideways rather than scrolling. `h-auto` is restated under the
+				    orientation variant, which otherwise wins with its `h-8`; the triggers keep the
+				    primitive's height, so the active one sits inside the track like every other tab list. */}
+				<TabsList className="w-full flex-wrap justify-start group-data-[orientation=horizontal]/tabs:h-auto sm:w-fit">
 					{REVIEW_SECTIONS.map((candidate) => (
-						<TabsTrigger key={candidate.id} value={candidate.id} className="h-8 flex-none px-3">
+						<TabsTrigger key={candidate.id} value={candidate.id} className="flex-none px-3">
 							{candidate.label}
 						</TabsTrigger>
 					))}

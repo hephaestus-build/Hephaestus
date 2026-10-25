@@ -42,10 +42,27 @@ async function expectFigureAtTextSize(canvas: StoryCanvas) {
 	}
 }
 
+/** The colour a utility class paints, read from a probe element inside the story. */
+function colorOf(root: HTMLElement, className: string) {
+	const probe = document.createElement("span");
+	probe.className = className;
+	root.append(probe);
+	try {
+		return getComputedStyle(probe).color;
+	} finally {
+		probe.remove();
+	}
+}
+
 /** The bundled guide, with its figure drawn where the Markdown names it. */
 export const Default: Story = {
-	play: async ({ canvas }) => {
+	play: async ({ canvas, canvasElement }) => {
 		await expectFigureAtTextSize(canvas);
+		// The bullet markers take the muted foreground of the bullets in the profile's tables.
+		const item = canvasElement.querySelector("ul > li");
+		await expect(item === null ? "" : getComputedStyle(item, "::marker").color).toBe(
+			colorOf(canvasElement, "text-muted-foreground"),
+		);
 	},
 };
 
@@ -58,5 +75,22 @@ export const MobileReflow: Story = {
 		await expectFigureAtTextSize(canvas);
 		const root = canvasElement.firstElementChild ?? canvasElement;
 		await expect(root.scrollWidth).toBeLessThanOrEqual(root.clientWidth);
+	},
+};
+
+/** A link to a source outside the app says that it leaves: the icon and the new-tab text, in the text colour at rest. */
+export const ExternalSourceLink: Story = {
+	args: {
+		guide: {
+			...bundledGuidance.guide,
+			markdown: `${bundledGuidance.guide.markdown}\n\nRead more in [the Git book](https://git-scm.com/book).`,
+		},
+	},
+	play: async ({ canvas, canvasElement }) => {
+		const link = canvas.getByRole("link", { name: "the Git book (opens in a new tab)" });
+		await expect(link).toHaveAttribute("target", "_blank");
+		await expect(link).toHaveAttribute("rel", "noopener noreferrer");
+		await expect(link.querySelector("svg")).not.toBeNull();
+		await expect(getComputedStyle(link).color).toBe(colorOf(canvasElement, "text-foreground"));
 	},
 };

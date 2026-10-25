@@ -480,8 +480,9 @@ services:
       SANDBOX_API_REQUESTS_PER_MINUTE: ${SANDBOX_API_REQUESTS_PER_MINUTE:-120}
       SANDBOX_DOCKER_CONTAINER_RUNTIME: ${SANDBOX_DOCKER_CONTAINER_RUNTIME:-}
       SANDBOX_MAX_CONCURRENT: ${SANDBOX_MAX_CONCURRENT:-5}
-      SANDBOX_MEMORY_BYTES: ${SANDBOX_MEMORY_BYTES:-4294967296}
-      SANDBOX_CPUS: ${SANDBOX_CPUS:-2.0}
+      SANDBOX_MEMORY_BYTES: ${SANDBOX_MEMORY_BYTES:-3221225472}
+      SANDBOX_CPUS: ${SANDBOX_CPUS:-1.0}
+      SANDBOX_PIDS_LIMIT: ${SANDBOX_PIDS_LIMIT:-256}
       # SSRF guard for the in-process LLM proxy. Must match application-server's value: that pod
       # decides whether a loopback provider URL may be SAVED, this one whether it may be DIALLED, and
       # a split between them shows up as connections that save fine and then fail at call time.

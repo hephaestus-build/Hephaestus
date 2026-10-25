@@ -156,7 +156,7 @@ export const Running: Story = {
 		const dialog = within(await screen.findByRole("alertdialog"));
 		await expectSettledVisible(
 			dialog.getByText(
-				"The scan stops and cannot be resumed. Its report keeps the results already recorded.",
+				"The scan stops and cannot be resumed. Its report keeps the observations already recorded.",
 			),
 		);
 		await expect(args.cancel.onRun).not.toHaveBeenCalled();
@@ -261,7 +261,9 @@ export const PartialWithheldNoProblems: Story = {
 	},
 	play: async ({ canvas }) => {
 		await expect(
-			canvas.getByText("These counts cover only the work it reached. Its results were withheld."),
+			canvas.getByText(
+				"These counts cover only the work it reached. Its candidate observations were withheld.",
+			),
 		).toBeVisible();
 		await expect(
 			canvas.getByRole("heading", { name: "No problems recorded in the work it reached" }),
@@ -353,7 +355,7 @@ export const WithheldNoProblems: Story = {
 		await expect(canvas.queryByText(/SOMETHING_NEW/u)).not.toBeInTheDocument();
 		await expect(
 			canvas.getByText(
-				"That does not mean every practice is met: 4 practice and file pairs have no result in this scan.",
+				"That does not mean every practice is met: 4 practice and file pairs have no observation in this scan.",
 			),
 		).toBeVisible();
 	},

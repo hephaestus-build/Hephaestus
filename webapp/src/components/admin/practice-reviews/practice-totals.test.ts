@@ -64,7 +64,7 @@ describe("practiceTotals", () => {
 		expect(totals.hidden).toStrictEqual({ practices: 1, results: 33 });
 		expect(totals.results).toBe(tileFigures().results);
 		expect(practiceTotalsNotes(totals)[0]).toBe(
-			"The totals include 1 practice that the filters hide, with 33 results.",
+			"The totals include 1 practice that the filters hide, with 33 observations.",
 		);
 	});
 

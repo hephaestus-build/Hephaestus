@@ -32,7 +32,7 @@ function cell(value: number | null): string {
 	return value === null ? "n/a" : value.toFixed(1);
 }
 
-function historyMarkdown(summaries: TestSummary[]): string {
+function historyMarkdown(shard: string, summaries: TestSummary[]): string {
 	const usable = summaries.filter((summary) => summary.performance !== undefined).slice(-8);
 	const rows = [
 		...metrics.map((metric) => [metric.name, metric.unit, usable.map(metric.value)] as const),
@@ -53,7 +53,7 @@ function historyMarkdown(summaries: TestSummary[]): string {
 		] as const,
 	];
 	return `${[
-		"## Server integration profile baseline",
+		`## Server integration profile baseline (${shard})`,
 		"",
 		`Profiles: **${usable.length}/8**`,
 		"",
@@ -73,10 +73,24 @@ function baselineMedian(values: readonly number[]): number {
 	return value;
 }
 
+/** The shard a profile measured; each shard has its own baseline, and the whole tier has none. */
+function shardOf(summary: TestSummary): string {
+	if (summary.shard === undefined || summary.shard === "") {
+		throw new Error("A profile must name the integration shard it measured");
+	}
+	return summary.shard;
+}
+
 export function regressions(current: TestSummary, history: TestSummary[]): string[] {
 	validateProfile(current);
+	const shard = shardOf(current);
 	for (const previous of history) {
 		validateProfile(previous);
+		if (shardOf(previous) !== shard) {
+			throw new Error(
+				`A profile of shard ${shardOf(previous)} cannot be a baseline for shard ${shard}`,
+			);
+		}
 	}
 	const failures: string[] = [];
 	const usable = history.filter((summary) => summary.performance !== undefined).slice(-7);
@@ -115,15 +129,17 @@ export function parseSummary(json: string): TestSummary {
 	const value: unknown = JSON.parse(json);
 	if (
 		!isRecord(value) ||
-		value.schemaVersion !== 3 ||
+		value.schemaVersion !== 4 ||
 		typeof value.name !== "string" ||
+		typeof value.shard !== "string" ||
 		!isRecord(value.performance)
 	) {
 		throw new Error("Invalid CI metrics summary");
 	}
 	const summary: TestSummary = {
-		schemaVersion: 3,
+		schemaVersion: 4,
 		name: value.name,
+		shard: value.shard,
 		files: metricField(value, "files"),
 		tests: metricField(value, "tests"),
 		failures: metricField(value, "failures"),
@@ -173,7 +189,7 @@ async function main(): Promise<void> {
 	);
 	const failures = regressions(current, history);
 	const status = verdict(history.length, failures.length);
-	const rendered = `${historyMarkdown([...history, current])}\nStatus: **${status}** (advisory).\n\n${failures.map((failure) => `- ${failure}\n`).join("")}\nCompare retained JFR and Gradle profiles before attributing a change to code; shared-runner variation and suite growth can affect these measurements.\n`;
+	const rendered = `${historyMarkdown(shardOf(current), [...history, current])}\nStatus: **${status}** (advisory).\n\n${failures.map((failure) => `- ${failure}\n`).join("")}\nCompare retained JFR and Gradle profiles before attributing a change to code; shared-runner variation and suite growth can affect these measurements.\n`;
 	process.stdout.write(rendered);
 	if (process.env.GITHUB_STEP_SUMMARY !== undefined) {
 		await appendFile(process.env.GITHUB_STEP_SUMMARY, rendered);

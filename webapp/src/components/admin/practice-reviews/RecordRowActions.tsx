@@ -7,25 +7,38 @@ import { DetailStackLink } from "@/components/layout/detail-drawer/DetailStackLi
 import type { RecordTableColumn } from "@/components/practice-vocabulary/RecordTable";
 import { buttonVariants } from "@/components/ui/button";
 
-import { RequestReviewAction, type RowReviewRequest } from "./RequestReviewAction";
+import {
+	RequestReviewIcon,
+	RequestReviewAction,
+	type RowReviewRequest,
+} from "./RequestReviewAction";
 import { type RecordRef, recordSelection, traceLevel } from "./review-layers";
 import { selectionSearch } from "./review-selection";
-import { ReviewSelectToggle } from "./ReviewSelectToggle";
+import { ReviewSelectToggle, TrackIcon } from "./ReviewSelectToggle";
 
-/** What each of a row's controls does, one line each, under the actions column's (i). */
+/** Trace's icon, on the row's button and in front of Trace's line under the (i). */
+const TraceIcon = RouteIcon;
+
+/**
+ * What each of a row's controls does, one line each, under the actions column's (i). Each line leads
+ * with its button's icon, so the reader sees which button it explains.
+ */
 const ROW_ACTION_LINES: readonly InfoLine[] = [
 	{
 		term: "Track",
+		icon: TrackIcon,
 		text: "narrows every tab to the records of this record’s review or work, and highlights its row. Press it again to clear it.",
 	},
 	{
 		term: "Trace",
+		icon: TraceIcon,
 		text: "shows how this record came about, from the work through the review to the feedback.",
 	},
 ];
 
 const REQUEST_REVIEW_LINE: InfoLine = {
 	term: "Request review",
+	icon: RequestReviewIcon,
 	text: "asks for a new review of the row’s work now. It asks you to confirm first.",
 };
 
@@ -97,7 +110,7 @@ export function RecordRowActions({
 				title="Trace"
 				className={cn(buttonVariants({ variant: "outline", size: "icon" }), ROW_CONTROL_FOCUS)}
 			>
-				<RouteIcon aria-hidden />
+				<TraceIcon aria-hidden />
 			</DetailStackLink>
 			{request !== undefined && <RequestReviewAction request={request} />}
 		</span>

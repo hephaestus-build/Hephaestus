@@ -108,7 +108,7 @@ At high volume, the byte bound recycles the stream much earlier.
 Neither limit shows your actual retention.
 Read `webhook.stream.oldest.message.age` for your deployment to get that value.
 
-Nightly reconciliation fetches the last `MONITORING_TIMEFRAME` days from the provider API again.
+Scheduled sync (`MONITORING_SYNC_CRON`, hourly by default in production) fetches the last `MONITORING_TIMEFRAME` days from the provider API again.
 Other means can recover a delivery removed inside that window.
 Nothing can recover one removed outside it.
 

@@ -23,11 +23,9 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
-@Import(ReviewIntegrationData.class)
 class ReviewTimingFactsIntegrationTest extends BaseIntegrationTest {
     @Autowired
     ReviewIntegrationData data;

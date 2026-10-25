@@ -12,7 +12,9 @@ This runbook is for the **instance operator**.
 2. Keep credentials and feedback bodies out of tickets.
 
 :::caution CAUTION: Before broad or unattended delivery
-The operator must execute and sign off the three drills below on isolated, representative infrastructure.
+The operator must execute and sign off three drills on isolated, representative infrastructure.
+The [failed-migration drill](./upgrade#if-migration-fails) is on the Upgrade page.
+The broker and un-delivery drills are below.
 An operator-owned silent run requires the silent deployment checklist first.
 :::
 
@@ -75,8 +77,8 @@ Turning silent mode off affects all workspaces and never flushes suppressed feed
 10. Verify the off-host copy.
 11. Record the recovery point and permitted outage/data loss.
 
-12. **Validate then deploy**. Complete the staging migration below.
-13. [Prepare the tested release](./install#upgrades).
+12. **Validate then deploy**. Complete the [staging migration](./upgrade#validate-the-actual-production-data).
+13. [Prepare the tested release](./upgrade#upgrade-the-host).
 14. Keep `AGENT_ENABLED=false` on server and worker roles.
 15. Keep Slack disabled and public ingress blocked.
 16. From `/opt/hephaestus/docker/self-host`, run the startup command below.
@@ -119,75 +121,12 @@ Turning silent mode off affects all workspaces and never flushes suppressed feed
 
 ## Upgrade and failed-migration recovery
 
-### Validate the actual production data
+<a id="validate-the-actual-production-data"></a>
+<a id="production-upgrade"></a>
+<a id="if-migration-fails"></a>
 
-Use a restricted staging copy of production with the backup's access and retention rules.
-Starting the target release's application server with the production profile runs Spring Boot's Liquibase update against staging.
-The update must use that exact release's changelog, contexts, PostgreSQL image/extensions, secrets, and role configuration.
-
-1. Apply pre-boot isolation below **before** restoring secrets or starting application code.
-2. When crossing the v0.77.4 baseline, complete the [baseline synchronization prerequisites](./liquibase-baseline-runbook#before-deployment) before candidate startup.
-3. When crossing that baseline, rehearse synchronization on this same isolated copy.
-4. Run Liquibase **update**, not just `validate` or SQL generation.
-5. Keep ingress, workers, and sandbox execution disabled.
-6. Keep external destinations denied.
-7. Do not use a test/specs profile, Hibernate `ddl-auto`, or an empty database as this proof.
-8. Record migration duration, errors, free disk/WAL growth, and locks.
-9. Record before/after checks for representative workspace relationships and encrypted-credential readability.
-10. Record before/after checks for the practice catalog and ledger row counts.
-11. Check `databasechangelog` for the expected target changesets.
-12. Check `databasechangeloglock` for a released lock.
-13. Verify application readiness.
-14. Verify authenticated reads.
-15. Set an outage budget.
-16. If the rehearsal exceeds it, abort.
-17. After fixing a migration failure, repeat against a fresh copy.
-
-[CI migration checks](/contributor/database-migration#ci-validation) cover empty and seeded databases,
-not your production data. They do not replace this staging update.
-
-### Production upgrade
-
-[Install → Upgrades](./install#upgrades) prepares the release. The silent checklist above owns startup.
-Follow the [compatibility policy](./compatibility-policy#upgrade-guarantee) for skip-version support and
-read intervening release notes. PostgreSQL 18 and the
-[baseline synchronization](./liquibase-baseline-runbook) are required when crossing the v0.77.4 cut-point.
-In-place downgrades are unsupported.
-
-1. Before manual changes, [pause reconciliation](./pull-based-deployment#operating-it).
-2. Wait for any active service run to finish.
-3. Before resuming, make sure the channel matches the recovered release or is frozen.
-
-Otherwise, the next tick can reapply the failed upgrade.
-
-### If migration fails
-
-:::caution CAUTION: Failed migration
-Do not clear checksums, edit released changelogs, or mark the changeset as run.
-Do not run an older binary against the partly migrated database.
-Do not release a Liquibase lock until you prove that no migrator is alive.
-Removal of a stale lock does not repair a failed migration.
-:::
-
-1. Keep ingress and all application writers stopped.
-2. Preserve the error and failed changeset identity.
-3. Preserve `databasechangelog`/lock diagnostics and the target image lock.
-4. If feasible, preserve a forensic snapshot.
-5. Follow [Backup & restore](./backup-restore) to restore the pre-upgrade backup into a fresh database.
-6. Use matching PostgreSQL version/extensions, encryption keys, and the **previous signed release lock**.
-7. Before consumers boot, reset/quarantine divergent JetStream state with the next section.
-8. Boot only under pre-boot isolation.
-9. Read back silent mode, and turn it on if it is off.
-10. Verify the restored schema, representative data, and readiness.
-11. Complete **Prove silence**, **Inspect and decide**, and **Turn off silent mode deliberately** in the silent checklist.
-12. Report actual recovery point/time and any lost writes.
-13. Preserve the failed database until investigation/retention permits removal.
-
-**Drill**
-
-1. Introduce a controlled migration failure only in a disposable rehearsal.
-2. Restore the old backup/release pair.
-3. Prove old-version readiness and data integrity without any provider write.
+[Upgrade](./upgrade) owns the staging rehearsal, the upgrade, and [failed-migration recovery](./upgrade#if-migration-fails).
+The silent deployment checklist above owns startup.
 
 ## Backup, restore and PostgreSQL × JetStream
 

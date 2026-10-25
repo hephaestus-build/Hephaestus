@@ -153,7 +153,7 @@ export const UnassignedAndOff: Story = {
 		await expect(screen.getByText("Off")).toBeVisible();
 		await expect(
 			screen.getByText(
-				"Off keeps results and stops feedback on the work, on practice pages, and in conversation.",
+				"Off keeps observations and stops feedback on the work, on practice pages, and in conversation.",
 			),
 		).toBeVisible();
 	},

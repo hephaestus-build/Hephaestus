@@ -2,15 +2,15 @@ import { describe, expect, it } from "vitest";
 
 import { type ReviewSaw, reviewLead, reviewReach } from "./review-saw";
 
-describe("recorded result totals", () => {
-	it("counts sibling outcomes as results", () => {
+describe("recorded outcome totals", () => {
+	it("counts sibling outcomes as practices", () => {
 		expect(
 			reviewReach({
 				status: "PARTIAL",
 				results: { met: 2, notMet: 1, doesNotApply: 0, couldNotDetermine: 0 },
 				notMetPractices: [],
 			}),
-		).toBe("two results met");
+		).toBe("two practices met");
 	});
 });
 

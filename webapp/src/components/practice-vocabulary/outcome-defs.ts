@@ -33,7 +33,7 @@ export const OUTCOME_DEFS: StatusDefs<Outcome> = {
 
 export function outcomeCountNoun(outcome: Outcome, count: number): string {
 	const label = OUTCOME_DEFS[outcome].label.toLowerCase();
-	return `${label} ${count === 1 ? "result" : "results"}`;
+	return `${label} ${count === 1 ? "observation" : "observations"}`;
 }
 
 export function problemCount(count: number): string {

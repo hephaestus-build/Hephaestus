@@ -13,10 +13,8 @@ import java.util.Objects;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Import;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
-@Import(ReviewIntegrationData.class)
 class ConversationFeedbackErasureIntegrationTest extends BaseIntegrationTest {
     @Autowired
     ReviewIntegrationData data;

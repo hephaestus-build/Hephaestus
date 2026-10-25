@@ -34,13 +34,17 @@ flowchart TD
 
 ## Release flow
 
-Every push to `main` builds and attests multi-architecture images for that commit and maintains the
+Every push to `main` publishes signed multi-architecture images for that commit and maintains the
 Version PR. Merging the Version PR cuts a release that promotes those images by digest —
-[Release management](./release-management.mdx). Pull requests and merge groups build `linux/amd64`
-only. A merge group has its own SHA, so its images are never the ones a release promotes.
+[Release management](./release-management.mdx). A pull request builds `linux/amd64` only, so a
+push to it does not pay for a second architecture. A merge group builds `linux/amd64` and
+`linux/arm64`, so an arm64 build failure or finding is found once per merge, before `main`.
+The merge queue squashes, so a merge group's SHA is the commit its push to `main` carries.
+That push reuses the images the merge group built and tested instead of building them again —
+[Merge-queue image reuse](#merge-queue-image-reuse).
 
 The Version PR's branch is the exception.
-Every run builds every release image on both architectures, regardless of its start event.
+Every run builds every release image itself on both architectures, regardless of its start event.
 The branch's release evidence preflight requires each image on both published platforms.
 It can capture evidence only for images that its run published.
 
@@ -62,8 +66,8 @@ It can capture evidence only for images that its run published.
 | Build → Webapp: E2E                                                     | Playwright against the packaged JAR                                                                                                                                                                       | `vp run --filter webapp test:e2e`                                        |
 | Build → Extension: E2E                                                  | Playwright with the extension's `e2e` build — not the production zip — against the packaged JAR                                                                                                           | `vp run test:extension:e2e`                                              |
 | Build → App Server image                                                | `pack build` from the packaged JAR, signed, attested and policy-scanned                                                                                                                                   | —                                                                        |
-| Test → App Server: Unit and architecture, App Server: Integration       | compiled from source                                                                                                                                                                                      | `vp run test:server:verification`, `test:server:integration`             |
-| Dependency review → New dependency risk                                          | informational dependency review. Pull requests only. Independent of CI Status Gate                                                                                                                                                                     | —                                                                        |
+| Test → App Server: Unit and architecture, App Server: Integration       | the package job's compiled classes, without compiling again                                                                                                                                               | `vp run test:server:verification`, `test:server:integration`             |
+| Dependency review → New dependency risk                                          | informational dependency review. Pull requests that change a dependency input. Independent of CI Status Gate                                                                                                                                                           | —                                                                        |
 | Security → Dependencies, secrets, and policy                            | Trivy filesystem scan, dependency vulnerability gate, TruffleHog, `security.txt` expiry, changelog immutability guard, legacy-reference guards                                                            | —                                                                        |
 | Changesets → Verify changesets                                          | policy tests, verified-revert detection, release-note presence, `MIGRATION.md` freeze                                                                                                                     | `vp run gate:changesets`                                                 |
 | Compose → Render compose stacks                                         | the self-hosted, preview and reference stacks render                                                                                                                                                      | `vp run gate:preview-stack`                                              |
@@ -71,6 +75,9 @@ It can capture evidence only for images that its run published.
 | Supported-host boot smoke                                               | `docker/self-host/setup.sh`, then PostgreSQL, NATS and the application server from this run's own images, waiting for the application to report healthy                                                   | —                                                                        |
 | Actionlint, Zizmor                                                      | workflow lint with ShellCheck warnings. Zizmor at medium confidence                                                                                                                                       | —                                                                        |
 | PR → Validate PR                                                        | Conventional Commit title. Every commit’s primary author resolves to the PR author’s GitHub account (including bot accounts) or a listed review-policy maintainer. The PR body follows attribution policy | —                                                                        |
+
+`Build → App Server: Database`, the PostgreSQL drills, both E2E rows and the integration shards are
+the queue tier ([Two verification tiers](#two-verification-tiers)).
 
 The browser jobs retain `webapp-e2e-results` and `extension-e2e-results`, each including
 `e2e-server.log`, for seven days on success as well as failure. Inspect server startup and shutdown output even when browser assertions
@@ -202,10 +209,10 @@ changesets rather than adding one. [Release management](./release-management.mdx
 | Control                               | Timing                                                                       | Enforcement                                                                                                             | Destination                                 |
 | ------------------------------------- | ---------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
 | Dependency vulnerability gate         | Security workflow                                                            | owns the dependency verdict. Blocks fixable high or critical findings in every dependency the checkout resolves         | required Security workflow                  |
-| GitHub dependency review              | pull requests                                                                | reports the advisories a pull request introduces, with their patched versions. Holds no verdict                         | Independent dependency-review summary       |
+| GitHub dependency review              | pull requests that change a dependency input                                 | reports the advisories a pull request introduces, with their patched versions. Holds no verdict                         | Independent dependency-review summary       |
 | TruffleHog and GitHub push protection | pull requests and pushes                                                     | block verified secrets                                                                                                  | Security workflow and repository protection |
 | Trivy filesystem scan                 | Security workflow                                                            | a scanner error blocks. Findings of every severity are report-only                                                      | code scanning                               |
-| Semgrep TLS policy                    | pull requests, merge groups, and `main` pushes                               | fails on a rule violation or a scanner error                                                                            | code scanning and a run artifact            |
+| Semgrep TLS policy                    | pull requests and `main` pushes                                              | fails on a rule violation or a scanner error                                                                            | code scanning and a run artifact            |
 | Image vulnerability policy            | image build and release                                                      | blocks fixable high or critical findings                                                                                | build summary and release evidence          |
 | Weekly image rescans                  | `rescan-main-images.yml`, `rescan-release-images.yml`                        | the `main` rescan upserts one tracking issue. The release rescan fails and comments on the vulnerability response issue | issues and run artifacts                    |
 | OpenSSF Scorecard                     | `main` pushes, branch-protection changes, and weekly. Never on pull requests | reports                                                                                                                 | code scanning and a run artifact            |
@@ -235,8 +242,13 @@ the code-scanning dashboard. It applies the [vulnerability remediation](./vulner
 Dependency review compares the base and head dependency graphs, so it cannot hold that verdict. It
 reports what the pull request introduces in the independent `dependency-review.yml` workflow.
 Asynchronous snapshots can keep this report pending, but it does not delay `CI Status Gate`,
-CI/CD completion, or release qualification. Documentation-only Markdown, MDX, and changeset prose
-skip this comparison through native path filters.
+CI/CD completion, or release qualification.
+
+The comparison runs only when a pull request changes a file that the dependency graph reads.
+These files are package manifests and lockfiles, workflows and actions, and the Gradle build
+scripts, lockfiles and version catalog. Any other change has an empty comparison.
+`dependency-graph.yml` uses the same pull-request filter. Thus, the head snapshot that the review
+waits for exists whenever the review runs. `scripts/ci-contract.test.ts` holds both filters to one list.
 
 Those filters use GitHub's bounded changed-file
 diff. A very large mixed change can omit this informational report. The required full-checkout
@@ -436,6 +448,13 @@ change its score.
 | Staging           | qualified commits of `main`                 | automatic promotion policy        | none              |
 | Production        | a published release                         | manual promotion                  | required reviewer |
 
+After each successful `main` push, `continuous-staging.yml` dispatches one automatic **Promote** run for Staging and ends.
+That run decides, signs, publishes and observes the promotion in one job, so a promotion waits for one runner.
+Its conclusion and the Staging deployment record report the outcome.
+GitHub notifies nobody of a run that `GITHUB_TOKEN` dispatched.
+Thus, a failed automatic promotion opens the **Staging did not follow main** issue, or comments on it while it is open.
+Close it after triage.
+
 ### GitHub environment setup
 
 1. **Settings → Environments → New environment**
@@ -476,7 +495,9 @@ Its `Tag unchanged images` job aliases the base commit's verified digests for th
 Thus, every image exists at the head SHA.
 
 An alias serves a preview, never release evidence.
-If the base commit's image is still publishing, it uses the merged pull request's candidate, which carries only `linux/amd64`. That is why the Version PR's branch builds every image itself instead.
+If the base commit's image is still publishing, it uses the merged pull request's candidate, which carries only `linux/amd64`.
+Either way, the alias is an image that another commit's run built.
+That is why the Version PR's branch builds every image itself instead.
 
 A draft deploys like any other pull request.
 Unfinished work commonly needs review, so the label is the sole opt-in.
@@ -577,19 +598,19 @@ Why the label is the authority, and which alternatives were priced and declined,
 
 | Workflow                              | Trigger                                                                       | Purpose                                                                                                                                                                                                                          |
 | ------------------------------------- | ----------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `cicd.yml`                            | PR, merge group, push to main, manual                                         | Validates changes before merge and builds final-SHA images after merge. The release evidence gate runs over the images the run built on the Version PR's branch, and wherever the `release-preflight` dispatch input asks for it |
+| `cicd.yml`                            | PR, merge group, push to main, manual                                         | Validates changes before merge and publishes final-SHA images after merge. The release evidence gate runs over the images the run built on the Version PR's branch, and wherever the `release-preflight` dispatch input asks for it |
 | `review-policy.yml`                   | PR opened, reopened, synchronized, ready for review, edited                   | Approves a listed maintainer's pull request so the ruleset's required approval is met. Does nothing for anyone else                                                                                                              |
 | `pull-request.yml`                    | PR opened, edited, synchronized, reopened, ready for review                   | Validates the title against the exported policy in `commitlint.config.ts`, without installing the workspace. Applies the commit identity policy in the checks table above. Assigns the author when the pull request opens        |
 | `ci-quality-gates.yml`                | Called by cicd.yml                                                            | Selects quality legs, clean-install verification and story tests                                                                                                                                                                 |
 | `ci-quality-leg.yml`                  | Called by ci-quality-gates.yml                                                | Shared formatting, lint, type-check and unit-test execution for each selected task-graph leg                                                                                                                                     |
 | `cache-toolchain.yml`                 | Main push changing install inputs or setup                                    | Seeds trusted Linux and Windows install caches without repeating quality gates                                                                                                                                                   |
 | `ci-build.yml`                        | Called by cicd.yml                                                            | Runs the OpenAPI, schema, database and browser E2E gates against the server artifact packaged by cicd.yml                                                                                                                        |
-| `ci-tests.yml`                        | Called by cicd.yml                                                            | The server unit, architecture and integration suites, compiled from source                                                                                                                                                       |
+| `ci-tests.yml`                        | Called by cicd.yml                                                            | The server unit, architecture and integration suites, on the package job's compiled classes                                                                                                                                     |
 | `ci-docker-build.yml`                 | Called by cicd.yml                                                            | Dockerfile image builds (webapp, agent, PostgreSQL) and aliases for unchanged images                                                                                                                                             |
-| `reusable-docker-build.yml`           | Called by cicd.yml and ci-docker-build.yml                                    | Builds, signs, attests, and blocks on the release vulnerability policy for the `linux/amd64` image                                                                                                                               |
+| `reusable-docker-build.yml`           | Called by cicd.yml and ci-docker-build.yml                                    | Builds each requested platform natively, merges the index, signs, attests, and blocks on the release vulnerability policy for each platform                                                                                       |
 | `ci-security-scan.yml`                | Called by cicd.yml                                                            | Trivy dependency scan, secret detection and repository policy checks                                                                                                                                                             |
-| `dependency-review.yml`               | Pull requests except documentation and release-note prose                     | Reports introduced dependency advisories independently of the required CI verdict                                                                                                                                                |
-| `dependency-graph.yml`                | PR, push to main                                                              | Resolves and uploads the verified Gradle dependency graph with read-only permissions                                                                                                                                             |
+| `dependency-review.yml`               | PR changing a dependency input                                                | Reports introduced dependency advisories independently of the required CI verdict                                                                                                                                                |
+| `dependency-graph.yml`                | PR changing a dependency input, push to main                                  | Resolves and uploads the verified Gradle dependency graph with read-only permissions                                                                                                                                             |
 | `submit-dependency-graph.yml`         | Successful dependency-graph workflow                                          | Submits snapshot data without executing code from the originating run                                                                                                                                                            |
 | `verify-changesets.yml`               | Called by cicd.yml                                                            | Tests changeset and version-sync policy and enforces release-note presence                                                                                                                                                       |
 | `ci-compose-validate.yml`             | Called by cicd.yml                                                            | Validates rendered reference and self-hosted Compose stacks                                                                                                                                                                      |
@@ -597,7 +618,7 @@ Why the label is the authority, and which alternatives were priced and declined,
 | `security-mutation.yml`               | PR touching the suite's inputs, manual                                        | Runs the security mutation suite                                                                                                                                                                                                 |
 | `practice-guidance-links.yml`         | PR touching practice guidance, weekly, manual                                 | Checks the web links in bundled practice guides                                                                                                                                                                                  |
 | `scorecard.yml`                       | Push to main, branch-protection change, weekly                                | Publishes the OpenSSF Scorecard                                                                                                                                                                                                  |
-| `semgrep.yml`                         | Pull request, push to main, merge group                                       | Tests and scans the repository's own TLS rule pack                                                                                                                                                                               |
+| `semgrep.yml`                         | Pull request, push to main                                                    | Tests and scans the repository's own TLS rule pack                                                                                                                                                                               |
 | `rescan-main-images.yml`              | Weekly, manual                                                                | Rescans main's published images against the release vulnerability policy and keeps one tracking issue in step with the findings                                                                                                  |
 | `rescan-release-images.yml`           | Weekly, manual                                                                | Rescans the latest published release's images and reports drift on the vulnerability response issue                                                                                                                              |
 | `ci-diagnostics.yml`                  | Completed CI/CD runs                                                          | Reports exact-attempt job and step timings without changing the required CI verdict                                                                                                                                              |
@@ -661,10 +682,9 @@ Commit, branch and pull request image tags are published only after their immuta
 signature and provenance verification. Index assembly uses a run-specific staging tag. Final tag
 publication preserves the verified digest.
 
-Image verification stays beside publishing. The single-platform step signs and verifies one image.
-The merge job signs recursively, then verifies the index. The alias job verifies each immutable
-subject before moving its tags. Merge and alias jobs need no checkout or repository toolchain just
-to verify registry evidence.
+Image verification stays beside publishing. The merge job signs recursively, then verifies the
+index. The alias job verifies each immutable subject before moving its tags. Merge and alias jobs
+need no checkout or repository toolchain just to verify registry evidence.
 Provenance verification reads attestation bundles from the image registry and keeps the existing
 identity and predicate policy.
 
@@ -724,6 +744,73 @@ exact-match cache cannot refresh build outputs after source-only changes. Config
 reuse remains within a job: no encryption key is configured, so the
 action does not persist configuration-cache entries across jobs.
 
+## Two verification tiers
+
+A pull request runs the **fast tier**. A merge group, a push and a dispatch also run the **queue tier**.
+`detect-changes` publishes the decision once as `queue-tier`, and each queue-tier job adds it to its path condition.
+
+| Tier | Jobs |
+| --- | --- |
+| Fast (pull request and queue) | Detect changes, the quality legs, unit and architecture tests, packaging, generated-artifact drift, the images, Security, Changesets, Compose, Actionlint, Zizmor |
+| Queue (merge group, push, dispatch) | the integration shards, the database contract tests, the PostgreSQL drills, webapp and extension E2E |
+
+Path filters and the main-push rules in [Path filters](#path-filters) still select within each tier.
+The supported-host boot smoke stays on same-repository pull requests, because it boots the preview images.
+
+Main changes only through the merge queue, and the queue runs the required checks on the merged result
+([GitHub: managing a merge queue](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/configuring-pull-request-merges/managing-a-merge-queue)).
+bors and Prow's Tide apply the same rule. They test the merge candidate and advance the branch only when it passes
+([Rust forge: bors and rollups](https://forge.rust-lang.org/release/rollups.html),
+[Tide](https://docs.prow.k8s.io/docs/components/core/tide/maintainers/)).
+Thus, the queue tier guards main for every change, and a pull request does not repeat it.
+
+Google's presubmit applies the same split. It runs only fast, reliable tests before submission and the larger tests after
+([Software Engineering at Google, ch. 23](https://abseil.io/resources/swe-book/html/ch23.html)).
+
+When both tiers ran on each pull request, a merged change paid for the queue tier twice.
+The queue tier is most of a run's runner time, and GitHub's runner concurrency limit is shared by the queue and every pull request.
+
+A queue-tier failure removes the entry from the queue, and the failure comment links the run.
+Fix the failure and queue the pull request again.
+
+A draft pull request runs the fast tier and builds no image. So it gets no host smoke and no image
+scan. The `preview` label still builds its images, and a release candidate always builds its evidence.
+
+For a draft, the automatic queue tier for the tier's own inputs is off, but `ci:full` still opts in.
+`CI Status Gate` still reports, so required checks resolve on a draft.
+Marking the pull request ready for review (`ready_for_review`) starts an ordinary pull-request run,
+with its images. That run is never skipped as a duplicate of the draft's run.
+A re-run replays the event of its run, so a re-run of a draft's run builds no image, even after
+the pull request is ready. Re-run the ready run instead.
+
+A pull request that is not a draft also runs the queue tier when it changes the tier's own inputs.
+These inputs are the workflows and actions that define the tier and the database migrations.
+They also include the server build script, which defines the shards and test tasks, and the browser
+suites' specs and configuration. A changed integration test or server class is not such an input, so its integration
+tests first run in the merge queue.
+
+To get the queue tier for any other change before you queue it, add the `ci:full` label to the pull request.
+Then push, or use **Re-run all jobs** on the latest CI/CD run.
+**Re-run failed jobs** keeps the earlier `Detect changes` result, so it does not see the label.
+`Detect changes` reads the label from the pull request when it runs, not from the event.
+A label read that fails runs the queue tier.
+
+There is no `labeled` trigger, because a label event would cancel the running CI.
+A run whose jobs all skip would also report **CI Status Gate** as passed on the head commit.
+That report would replace the verdict of the run that it cancelled.
+Locally, these commands run the queue tier's suites:
+
+- `vp run test:server:integration` for the integration shards.
+- The database contract tests: from `server/`, `./gradlew :application:databaseTest` with the `SPRING_DATASOURCE_*` settings of a running PostgreSQL (`server/AGENTS.md` § Test tiers).
+- `vp run test:postgres-restore` and `vp run test:postgres-pitr` for the drills.
+- `vp run --filter webapp test:e2e` and `vp run test:extension:e2e` for the browser suites.
+
+**Revert criterion.** [`report:ci-latency`](#full-verification-latency) reports the share of merge
+groups in the last 14 days in which a queue-tier job failed. It counts the groups in which only
+fast-tier jobs failed apart, and it gives no share for fewer than 20 groups. If the queue-tier share exceeds 10 %, the queue tier is catching too much that a pull request
+should have caught. Then run the queue tier on pull requests again: change `queue-tier` in
+`detect-changes` to `true` for every event.
+
 ## Path filters
 
 `detect-changes` in `cicd.yml` selects legs from changed paths for two diff events.
@@ -736,7 +823,7 @@ Ordinary main pushes omit Quality, Test, Security, Actionlint, Zizmor, and Compo
 They skip API, schema, database, and browser jobs inside `Build`.
 
 Release-version pushes repeat those checks. Main still packages and publishes images.
-Same-repository pull requests also run `Build` and `Docker` regardless of paths, because
+Same-repository pull requests, except drafts without the `preview` label, also run `Build` and `Docker` regardless of paths, because
 previews need every image at the head SHA. No other event has a preview.
 
 | Selects                    | Paths                                                                                                                                                                                                                                                                                                                                                                                                                             |
@@ -756,9 +843,11 @@ previews need every image at the head SHA. No other event has a preview.
 
 ## Docker layer caching
 
-Dockerfile builds import `<image>:cache-main-<platform>` from `ghcr.io` and write it, with every
-intermediate layer, only on pushes to `main`, so a pull request reuses `main`'s layers and writes
-nothing. amd64 builds on `ubuntu-24.04`, arm64 on `ubuntu-24.04-arm`. No emulation. The buildpacks
+Dockerfile builds import `<image>:cache-main-<platform>` from `ghcr.io`.
+Only pushes to `main` and merge groups write it, with every intermediate layer.
+A pull request reuses those layers and writes nothing.
+
+amd64 builds on `ubuntu-24.04`, arm64 on `ubuntu-24.04-arm`. No emulation. The buildpacks
 path (`App Server image`) does not use this cache. Dockerfile builds always bypass the cache for
 the `os-packages` and exported `runtime` stages. [OS package updates](vulnerability-remediation.mdx#os-package-updates-in-first-party-images)
 owns that contract and the local build commands.
@@ -780,8 +869,15 @@ When release preflight is required, it owns image vulnerability scanning for bot
 The image-build workflows omit their duplicate scans. Other published builds scan every platform
 they built. Each platform retains its own report and policy result. The final gate rejects a required preflight that is skipped, canceled or unsuccessful.
 
-The build scan starts from its platform's build digest artifact without waiting for manifest signing.
-Before publishing verified tags, the manifest job checks that both final index leaves equal the scan subjects.
+Each platform's build job scans the digest it pushed, on its own runner, before it hands that digest to the manifest job.
+The manifest job needs every build, so only scanned digests reach an index.
+Before publishing verified tags, it checks that the final index leaves equal those scanned subjects.
+A scan therefore costs no job and no runner queue wait of its own.
+It does not run in the manifest job, because that job holds the signing token and runs no repository code.
+
+The build matrix does not fail fast, so one platform's refusal keeps the other platform's scan and evidence.
+A broken build thus lets its sibling finish, which costs a runner for that time.
+
 The scan resolves the immutable image reference through
 `scripts/resolve-image-scan-subject.ts`, using the same platform resolver in `scripts/lib/image-scan.ts` as scheduled rescans. An index must
 contain the requested platform. A missing platform or malformed index fails instead of falling back
@@ -793,11 +889,12 @@ that same immutable reference.
 Every consumer resolves an image through its build commit.
 `reusable-docker-build.yml` publishes exactly that tag for the run's start event.
 Pushes, dispatches, and merge groups use `github.sha`.
+A push that reuses its merge group's image publishes the same digest under that tag.
 Pull requests use their head SHA because `github.sha` is a merge commit with no image tag.
 
 Within a run, the vulnerability scan ignores tags.
-It reads the captured single-architecture build output or its own platform build digest artifact.
-Thus, a scan-only rerun scans that build's artifact.
+It reads the digest that its own build job exported.
+Re-running a failed build job builds and scans the platform again, and the manifest job reads that new digest.
 
 `ci-contract.test.ts` asserts the whole contract.
 The build must publish every consumer-resolved tag for that consumer's event.
@@ -807,10 +904,16 @@ gives the retried job a new attempt number.
 ## Build once
 
 `App Server: Package` in `cicd.yml` packages the server once and uploads its JARs, compiled tests and resources. OpenAPI and
-browser checks boot that executable JAR. Buildpacks consume it without another build. Schema gates
-and database contract tests use the restored classes with `-PpackagedServer=true`, which bypasses
-compilation. Unit, architecture and integration suites compile from source in `Test` without
-waiting for packaging. Their outputs do not ship.
+browser checks boot that executable JAR. Buildpacks consume it without another build. Schema gates,
+database contract tests and the `Test` suites use the restored classes with `-PpackagedServer=true`,
+which bypasses compilation. `ci-tests.yml` sets it as `ORG_GRADLE_PROJECT_packagedServer`, because
+its commands are `vp run` tasks. Thus, every server suite tests the classes that the JAR ships.
+
+The suites never compile. Test compilation is the slowest server build step, and it is rarely a
+cache hit. A change alters the test sources or the main classes they compile against.
+So the suites wait for packaging rather than compile the same sources in each of their jobs.
+The package artifact is kept for one day, so a failed job re-run after that day fails on its download.
+Re-run all jobs instead.
 
 The PostgreSQL backup-restore and PITR drills apply the migrations from that same executable JAR.
 Spring Boot's launcher runs the Liquibase bundled in the JAR against the changelog in the JAR, from an empty directory and with a minimal environment.
@@ -829,15 +932,44 @@ final CI gate still requires all of them. An early image verdict cannot approve 
 
 A default-branch push reuses the packaged server when a successful merge group
 validated the exact same commit. The source must be this repository's `cicd.yml` run, with successful
-artifact gates, tests, security checks, the AMD64 server build and final gate. ARM64 image builds
-and release preflight do not change the packaged Java artifact, so their absence in ordinary merge
-groups does not force a rebuild. Main still validates both image platforms. Release candidates
-still require release preflight.
+artifact gates, tests, security checks, both server image builds and final gate. Release preflight
+does not change the packaged Java artifact, so its absence in ordinary merge groups does not force
+a rebuild. Release candidates still require release preflight.
+
+The latest attempt of each job counts, so an arm64 server image build that flaked and passed on a
+re-run does not block reuse. A queue run whose arm64 build stays failed fails its gate, so its
+commit does not merge. `main` packages the server again when the merge group did not rebuild the
+server image, because that queue run has no server image builds.
 
 The immutable artifact ID and its SHA-256 digest bind the download to that run. Missing, expired or
 unavailable source evidence falls back to packaging. A corrupt download fails rather than being used.
-Main still runs its own validation and publishes its images, including main-only tags and source maps.
+Main still runs its own validation and publishes its images under main-only tags.
 Release publication still generates fresh vulnerability evidence and signatures.
+
+### Merge-queue image reuse
+
+A default-branch push reuses each image that its successful merge group published for the same commit.
+`detect-changes` resolves that run with `scripts/resolve-queue-run.ts`.
+The run must have a successful `CI Status Gate`, which covers its image builds and per-platform scans.
+The `reuse` job in `reusable-docker-build.yml` accepts the image at `<image>:<commit>` only when all these checks pass:
+
+- Its platform leaves are exactly the platforms that the push requests.
+- Its cosign signature comes from `reusable-docker-build.yml` on the queue branch, with the `merge_group` trigger, at this commit.
+- Its build provenance attestation names this commit and was made by that queue run.
+
+The push then signs the index and each leaf again, verifies them, and moves the `main` tags.
+It does not rebuild, re-attest, or rescan the image.
+The release verifier accepts only the default-branch signing identity, so the push signs the image again.
+The provenance stays the queue run's, because that run built the image.
+A missing or unverifiable image is built and scanned as before.
+Examples are a direct push, an image that the merge group did not rebuild, and a lookup that failed.
+
+A merge group adds one arm64 build job, which also scans that platform, for each image that it rebuilds.
+That is four jobs when it rebuilds all images.
+The push reuses those images and no longer builds or scans them on either architecture.
+It still builds and scans both platforms of each image that the merge group did not rebuild, as before.
+The webapp records its branch at build time, so a merge group builds it with the default branch's name.
+Merge groups also write the Dockerfile layer cache, because the push no longer refreshes it for reused images.
 
 An unchanged pull-request image is not rebuilt.
 `Tag unchanged images` verifies an earlier run's published digest and retags it to this run's head SHA. It aliases from the nearest default-branch commit found through the chain of bases.
@@ -847,7 +979,7 @@ If no such default-branch commit exists, the run builds every image itself. `det
 
 ## Parallelism and concurrency
 
-- `Quality` legs and `Test` suites start from source. `Build` gates start when `App Server: Package`
+- `Quality` legs start from source. `Test` suites and `Build` gates start when `App Server: Package`
   uploads its artifact.
 - `App Server: Integration` has four shards.
   `providers` selects the `integration` package.
@@ -861,11 +993,12 @@ If no such default-branch commit exists, the run builds every image itself. `det
   the tier. `vp run test:server:selection` checks coverage through JUnit dry-run reports before
   unit/architecture verification. Discovery reports stay separate from execution results.
   All shards use `fail-fast: false`. `CI Status Gate` requires their aggregate result. Locally
-  the tier runs whole.
-- Pull requests and merge groups build `linux/amd64`. Pushes to `main`, and every run on the Version
-  PR's branch, build both architectures. Pull requests and merge groups build only changed images and alias the rest.
-  The Version PR's branch builds them all. `detect-changes` decides both once, as `single-arch` and `all-images`, and hands them to
-  every image build in the run.
+  the tier runs whole. The weekly [server profiles](#server-profiles) run the same shards.
+- Pull requests build `linux/amd64`. Merge groups, pushes to `main`, dispatches, and every run on
+  the Version PR's branch build `linux/amd64` and `linux/arm64`. Both lists take the same build,
+  merge, signing, attestation and per-platform scan path. Pull requests and merge groups build only
+  changed images and alias the rest. The Version PR's branch builds them all. `detect-changes`
+  decides both once, as `platforms` and `all-images`, and hands them to every image build in the run.
 - Action and composite setup steps run sequentially within each job. The runner writes the shared
   event file before each action. The action SDK reads that file. Concurrent action starts can expose
   incomplete event data. Jobs and matrix entries still run independently. Standalone shell work
@@ -875,7 +1008,31 @@ If no such default-branch commit exists, the run builds every image itself. `det
   snapshot, so only it waits for `Image advisory database`.
 - Quality legs run independently. The image matrix in `reusable-docker-build.yml` uses
   `fail-fast: true`.
-- Pull-request runs cancel superseded runs. `release.yml` never cancels. The same-repository
+- A push to a pull request cancels the earlier runs of that pull request, and no other runs.
+  A superseded run validates a commit that nobody merges, and it holds runners that other pull requests wait for.
+  Each workflow that runs on `pull_request` or `pull_request_target` declares this at the top level:
+
+  ```yaml
+  concurrency:
+    group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+    cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  ```
+
+  Equivalent groups are permitted. A `pull_request_target` run has the base branch as its ref, so its group must name the pull request number, as in `pull-request.yml`.
+  A group must not use the head branch name alone, because two forks can push branches with the same name.
+  A reusable workflow declares no lane of its own.
+  In a called workflow, `github.workflow` is the caller's name, so a group there would join the caller's lane.
+  The caller's lane covers the jobs that it calls.
+
+  Some workflows do not cancel, because a run cancelled halfway leaves state that no later run replaces.
+  That state is a deploy, a teardown, a commit, or an approval.
+  A sticky comment that the next run rewrites is not such state, so `pull-request.yml` cancels.
+  `UNCANCELLED_PULL_REQUEST_RUNS` in `scripts/ci-contract.test.ts` lists the workflows that do not cancel, with their reasons.
+
+  The test evaluates each group. It fails when a workflow lacks the rule or when one pull request cancels another.
+  It also fails when a run can cancel a run on `main` or in the merge queue.
+  It also fails when a workflow-level or job-level lane of a listed workflow cancels a pull-request run.
+- `release.yml` never cancels. The same-repository
   Version PR shares a concurrency lane with a dispatch on its branch. A racing trigger replaces redundant validation. Either survivor must pass release preflight. The merge queue separately validates
   the final merge tree. Ordinary PRs, forks, main pushes and merge groups retain separate lanes.
 - A run on `main` that leaves a per-commit record — `semgrep.yml`, `scorecard.yml`,
@@ -933,15 +1090,22 @@ Missing timestamps remain unavailable.
 A reporting failure cannot change CI, Version PR maintenance, or release eligibility.
 JUnit results appear as `Test Results - …` check runs.
 
-### Pull-request latency
+### Full-verification latency
 
 The full-verification target is a six-minute median and a seven-minute p90, measured from workflow
-creation to completion of **CI Status Gate**. On the default branch, `CI profile` examines the latest 100 completed PR runs created in the last 28 days.
+creation to completion of **CI Status Gate**. A merge group always runs both
+[verification tiers](#two-verification-tiers), so the sample is merge groups.
+On the default branch, `CI profile` lists every completed merge-group run created in the last 28 days.
 It selects the ten most recent successful first-attempt runs with full server and browser verification.
+Lightweight changes and release-candidate groups, which also generate release evidence, cannot
+satisfy this cohort.
 
-Lightweight changes and Version-PR runs cannot satisfy this
-cohort. Failed and canceled counts describe the bounded listing, not a repository-wide failure
-rate. Budget misses produce warnings and a job summary, not workflow failures. Fewer than ten
+The report also selects the ten most recent successful first-attempt pull-request runs of the fast
+tier: the server suites ran, and no queue-tier job ran. It reports their median and p90 as an
+observation, with no target. It counts the merge groups of the last 14 days in which a queue-tier
+job failed, for the [revert criterion](#two-verification-tiers).
+
+Budget misses produce warnings and a job summary, not workflow failures. Fewer than ten
 qualifying runs produces an insufficient-data notice, not a pass or a regression.
 
 All observations
@@ -981,22 +1145,46 @@ retain the original run creation time and must not enter first-attempt percentil
 gate's in-flight summary, this report uses its completed verdict and rejects incomplete job lists
 or mixed attempts. Keep raw API evidence under `tmp/`, not in committed performance snapshots.
 
+### Flaky tests
+
+`Flaky test report` runs every Monday and on dispatch.
+It covers the CI/CD runs of the last 14 days.
+It lists the jobs and tests that failed in one attempt of a run and then passed in a later attempt.
+
+A test that fails again in the run's last attempt is a real failure, so the report leaves it out.
+If a job that never passed does not fail again in the last attempt's own rerun, the run's tests stay unknown.
+
+The report reads run attempts and the retained JUnit reports, and it retains `flakes.json` for 90 days.
+Reproduce it with an authenticated GitHub CLI:
+
+```bash
+GITHUB_REPOSITORY=owner/repository vp run report:flakes
+```
+
+[Testing Guide § Flaky tests](testing.mdx#flaky-tests) has the policy.
+
 ### Server profiles
 
-Normal PR test jobs retain JUnit XML reports for 14 days, separately for each suite, shard and
-attempt. Use those reports and GitHub's step timings before rerunning tests with instrumentation.
+PR and merge-queue test jobs retain JUnit XML reports for 14 days, separately for each suite,
+shard and attempt. Use those reports and GitHub's step timings before rerunning tests with instrumentation.
 Deep profiling stays in the manual/weekly workflow, not on the PR critical path. Select
 `integration`, `verification` (unit and architecture, including coverage), or `all` when dispatching
 `CI profile`. Weekly runs profile both tiers sequentially so diagnostics do not occupy two heavy
 runners at once.
+
+The integration tier is profiled one shard at a time, with the shards that
+[Parallelism and concurrency](#parallelism-and-concurrency) defines.
+A run of the whole tier no longer fits in one test task's timeout.
+The shard list is mirrored in both weekly workflows and pinned to the CI matrix by `scripts/ci-contract.test.ts`.
 
 Each tier retains its JFR recording, Gradle task profile, resource usage and JUnit
 results for 14 days. Verification profiles are diagnostic artifacts, not integration-history samples.
 
 Profile invocations use a single-use Gradle process (`--no-daemon`) for repeatable JVM startup.
 Gradle streams test output only in these profiles so Spring context diagnostics reach the retained log.
-History uses the `ci-profile-history-gradle-jfr` artifact and compares wall time, test time and context
-measurements.
+History uses one `ci-profile-history-gradle-jfr-<shard>` artifact for each shard and compares wall time,
+test time and context measurements. Each sample names its shard. A baseline accepts only samples of the
+same shard, so the earlier whole-tier history is not used.
 
 GNU time's CPU/RSS accounting does not reliably include Gradle's detached JVMs, so those
 values are not reported as suite metrics or compared against budgets. Inspect the retained JFR recordings
@@ -1007,7 +1195,7 @@ Ubuntu 24.04 x64 and ARM64 runners, one job at a time. Preparation is a separate
 and compilation caches are not mistaken for test execution speed. Each sample retains runner hardware,
 JUnit results and Gradle task profiles. Compare actual job ordering, test counts and execution time as
 well as end-to-end latency. Matrix declaration order is not a scheduling guarantee. These samples do
-not enter full-suite JFR history and do not change the runners used for required CI.
+not enter profile history and do not change the runners used for required CI.
 
 The integration profile also records Spring context-cache metrics. It warns about
 a sustained regression after three consecutive profiles exceed variance limits against five earlier
@@ -1021,7 +1209,7 @@ Without seven earlier
 profiles, the sustained-regression check has no verdict. Branch dispatches produce diagnostic
 artifacts without changing or comparing against the baseline.
 
-The workflow's `Run integration suite with JFR` step owns the invocation. Additional test-JVM flags
+The workflow's `Run integration shard with JFR` step owns the invocation. Additional test-JVM flags
 use `-PtestJvmArgs=...`. Gradle composes them with the configured memory limits and JaCoCo agent.
 `-PprofileTests=true` writes a separate JFR recording for each test task, so unit and architecture
 recordings never overwrite each other.
@@ -1032,11 +1220,14 @@ Spring-context measurements. Unit/architecture profiles do not require a Spring 
 
 For local shard profiling, use the same `HEPHAESTUS_INTEGRATION_SHARD` selector as the CI matrix
 and the Java version pinned in `.java-version`. Compare the same suite, runtime and cache state.
-The weekly whole-tier baseline is not comparable to one shard.
+Compare a local shard only with the weekly history of the same shard.
 
 `SpringTestContextArchitectureTest` enforces the reviewed Spring context keys. The weekly
-**Server Phase Reference** workflow profiles generation, compilation and test execution with the
-build cache disabled, and compares two clean generated-client JARs.
+**Server Phase Reference** workflow profiles generation, compilation, and unit and architecture execution
+in one job, with the build cache disabled. It compares two clean generated-client JARs.
+When that job ends, each integration shard runs in a separate job, one at a time.
+Each shard job compiles from source with the build cache disabled.
+The Gradle profile (`--profile`) of each job is the phase breakdown: it lists the time of every task.
 
 ## Running CI locally
 

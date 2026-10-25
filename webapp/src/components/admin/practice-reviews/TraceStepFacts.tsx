@@ -177,7 +177,7 @@ function ItemFacts({ item }: { item: ItemRef }) {
 function StageLine({ records }: { records: LineageRecords }) {
 	const counts = stageCounts(records);
 	const stages = [
-		countOf(counts.results, "listed result", "listed results"),
+		countOf(counts.results, "listed observation", "listed observations"),
 		countOf(counts.feedback, "listed piece of feedback", "listed pieces of feedback"),
 		`${counts.reached} reached the developer`,
 	];

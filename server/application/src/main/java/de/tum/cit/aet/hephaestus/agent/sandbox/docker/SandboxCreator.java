@@ -20,7 +20,7 @@ import org.slf4j.LoggerFactory;
  * hostname; it is also the one container {@link SandboxNetworkManager} joins to a sandbox network. A
  * process outside any container records no creator and joins no network, and automatic cleanup never
  * removes what it creates. A process in a container that it cannot identify starts no Heph host
- * ({@link DockerHostSandbox}).
+ * ({@link DockerSandboxBackend}).
  */
 public class SandboxCreator {
 

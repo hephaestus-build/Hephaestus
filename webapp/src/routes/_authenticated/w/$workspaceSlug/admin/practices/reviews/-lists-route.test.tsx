@@ -178,7 +178,7 @@ describe("practice review list routes", () => {
 		renderRouteAtWithRouter(
 			'/w/acme/admin/practices/reviews/results?order=ACTIONABILITY&severity=["MAJOR"]',
 		);
-		await screen.findByText("No results match these filters", undefined, ROUTE_RENDER_WAIT);
+		await screen.findByText("No observations match these filters", undefined, ROUTE_RENDER_WAIT);
 
 		const requested = resultUrls.at(-1);
 		expect(requested?.searchParams.get("sort")).toBe("ACTIONABILITY");
@@ -230,7 +230,7 @@ describe("practice review list routes", () => {
 
 		const tabs = screen.getByRole("navigation", { name: "Practice review sections" });
 		for (const [tab, urls] of [
-			["Results", resultUrls],
+			["Observations", resultUrls],
 			["Problems", problemUrls],
 			["Reviews", reviewUrls],
 		] as const) {
@@ -255,7 +255,7 @@ describe("practice review list routes", () => {
 		renderRouteAtWithRouter(
 			"/w/acme/admin/practices/reviews/results?developerId=7&order=ACTIONABILITY",
 		);
-		await screen.findByText("No results match these filters", undefined, ROUTE_RENDER_WAIT);
+		await screen.findByText("No observations match these filters", undefined, ROUTE_RENDER_WAIT);
 		const scope = screen.getByRole("group", { name: "Applies to every tab" });
 		expect(within(scope).getByRole("combobox", { name: "Sort" }).textContent).toContain(
 			"Most actionable first",
@@ -283,7 +283,7 @@ describe("practice review list routes", () => {
 		const { resultUrls } = recordRequests();
 
 		renderRouteAtWithRouter("/w/acme/admin/practices/reviews/results");
-		await screen.findByText("No results yet", undefined, ROUTE_RENDER_WAIT);
+		await screen.findByText("No observations yet", undefined, ROUTE_RENDER_WAIT);
 
 		expect(resultUrls.at(-1)?.searchParams.get("sort")).toBeNull();
 	});
@@ -307,7 +307,7 @@ describe("practice review list routes", () => {
 		renderRouteAtWithRouter(
 			'/w/acme/admin/practices/reviews/results?outcome=["NOT_MET"]&markedIncorrect=true',
 		);
-		await screen.findByText("No results match these filters", undefined, ROUTE_RENDER_WAIT);
+		await screen.findByText("No observations match these filters", undefined, ROUTE_RENDER_WAIT);
 
 		const requested = resultUrls.at(-1);
 		expect(values(requested, "outcome")).toStrictEqual(["NOT_MET"]);
@@ -542,7 +542,7 @@ describe("practice review list routes", () => {
 		const { router } = renderRouteAtWithRouter(
 			'/w/acme/admin/practices/reviews/results?developerId=7&outcome=["NOT_MET"]',
 		);
-		await screen.findByText("No results match these filters", undefined, ROUTE_RENDER_WAIT);
+		await screen.findByText("No observations match these filters", undefined, ROUTE_RENDER_WAIT);
 		await userEvent.click(screen.getByRole("button", { name: "Reset" }));
 
 		await waitFor(() => expect(values(resultUrls.at(-1), "outcome")).toStrictEqual([]));
@@ -581,7 +581,7 @@ describe("practice review list routes", () => {
 	 * would stop after its first page and show no total, which hides most of the history.
 	 */
 	it.each([
-		["results", "results", reviewResults, "3 results."],
+		["results", "observations", reviewResults, "3 observations."],
 		["problems", "problems", reviewProblems, "3 problems."],
 		["feedback", "feedback", reviewFeedback, "3 pieces of feedback."],
 	] as const)(

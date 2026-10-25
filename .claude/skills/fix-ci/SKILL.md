@@ -23,6 +23,11 @@ Follow the [writing standard](../../../docs/contributor/simplified-technical-eng
 
 Diagnose every failing check in one pass.
 Then push once.
+
+A queue-tier failure (integration, database, drills, browser suites) first shows as a removal from
+the merge queue, with a comment that links the failed run. Read that run like a pull-request run.
+To reproduce it on the pull request, add the `ci:full` label
+([Two verification tiers](../../../docs/contributor/ci-cd.mdx#two-verification-tiers)).
 If you fix only 2 of 5 failures, you waste a push cycle and a full CI run.
 
 ## 1. Wait for the run to finish

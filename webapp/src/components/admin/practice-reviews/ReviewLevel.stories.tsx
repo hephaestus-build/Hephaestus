@@ -163,7 +163,7 @@ if (firstPractice === undefined || secondPractice === undefined) {
 }
 
 /**
- * Each finished practice's counts open the Results tab at exactly that practice's results of this
+ * Each finished practice's counts open the Observations tab at exactly that practice's observations of this
  * review and that outcome, and its problems where it has a Not met result. Each link is named for
  * its practice too, since the same count can stand on several rows.
  */
@@ -258,7 +258,7 @@ export const ResultsRecordedWhileReady: Story = {
 		if (!(recorded instanceof HTMLElement) || !(captured instanceof HTMLElement)) {
 			throw new Error("Both practices must remain Ready");
 		}
-		await expect(recorded).toHaveTextContent("Results recorded so far");
+		await expect(recorded).toHaveTextContent("Observations recorded so far");
 		await expect(recorded).toHaveTextContent("Ready");
 		for (const [name, outcome] of [
 			["1 met", "MET"],
@@ -284,7 +284,7 @@ export const ResultsRecordedWhileReady: Story = {
 		});
 		await expect(captured).toHaveTextContent("Everything it reads was captured.");
 		await expect(within(captured).queryByRole("link")).toBeNull();
-		await expect(captured).not.toHaveTextContent("Results recorded so far");
+		await expect(captured).not.toHaveTextContent("Observations recorded so far");
 		await expect(list).not.toHaveTextContent(/It runs next|Done/u);
 		const withheld = list.querySelector('[data-practice-status="WITHHELD"]');
 		await expect(withheld).toHaveTextContent(/provider did not return them/u);
@@ -323,7 +323,7 @@ export const ActiveUsageNotRecordedYet: Story = {
 
 /**
  * The review's feedback counts open the Feedback tab at exactly this review's feedback in that
- * delivery family, as its result counts open the Results tab. Each count carries its family's mark.
+ * delivery family, as its observation counts open the Observations tab. Each count carries its family's mark.
  */
 export const FeedbackCountsOpenTheirFeedback: Story = {
 	args: {
@@ -534,7 +534,7 @@ export const ScanWithManyRuns: Story = {
 		const panel = within(await settledDrawerPanel());
 		panel.getByText("Scan");
 		await expect(panel.queryByText("Feedback", { exact: true })).not.toBeInTheDocument();
-		await expect(panel.queryByText(/results and feedback/u)).not.toBeInTheDocument();
+		await expect(panel.queryByText(/observations and feedback/u)).not.toBeInTheDocument();
 		await expect(panel.getByRole("link", { name: "Open the scan report" })).toHaveAttribute(
 			"href",
 			expect.stringContaining(`/admin/practices/scans/${reviewDetailScanManyJobs.id}`),
@@ -558,7 +558,7 @@ export const PartialScan: Story = {
 	},
 	play: async () => {
 		const panel = within(await settledDrawerPanel());
-		await expect(panel.getByText("Its results cover only the work it reached.")).toBeVisible();
+		await expect(panel.getByText("Its observations cover only the work it reached.")).toBeVisible();
 		await expect(panel.getByText("Files: 3 reviewed, 1 reused, 4 listed")).toBeVisible();
 		await expect(panel.queryByText("Feedback", { exact: true })).not.toBeInTheDocument();
 	},
@@ -616,8 +616,8 @@ export const TimedOutAfterSomeResults: Story = {
 		within(panel.getByRole("list", { name: "History" })).getByText(
 			"It ran past the time it is allowed and was stopped.",
 		);
-		panel.getByText("Results recorded before it stopped remain in this review.");
-		await expect(factValue(panelElement, "Results")).toHaveTextContent(
+		panel.getByText("Observations recorded before it stopped remain in this review.");
+		await expect(factValue(panelElement, "Observations")).toHaveTextContent(
 			"1 met, 1 not met · View problems",
 		);
 	},
@@ -633,7 +633,7 @@ export const FailedInPreparation: Story = {
 	play: async () => {
 		const panelElement = await settledDrawerPanel();
 		const panel = within(panelElement);
-		await expect(factValue(panelElement, "Results")).toHaveTextContent(/^None available$/u);
+		await expect(factValue(panelElement, "Observations")).toHaveTextContent(/^None available$/u);
 		await expect(factValue(panelElement, "Feedback")).toHaveTextContent(/^None available$/u);
 		await expect(panel.queryByText(/before it stopped/u)).toBeNull();
 		// One label in the whole sheet, and it is in Technical, not with the primary facts.
@@ -783,7 +783,7 @@ export const ReadyAfterItsScriptRan: Story = {
 		await expect(row).not.toBeNull();
 		await expect(row).toHaveTextContent("Ready");
 		await expect(row).not.toHaveTextContent(/It runs next/u);
-		await expect(row).toHaveTextContent(/returned a result/u);
+		await expect(row).toHaveTextContent(/returned a candidate observation/u);
 	},
 };
 
@@ -929,14 +929,16 @@ export const AmbiguousHistoricalResults: Story = {
 		await expect(list.getByText("Withheld")).toBeVisible();
 		await expect(
 			list.getByText(
-				"This review keeps several historical results for the same practice and work without choosing one as its answer.",
+				"This review keeps several historical observations for the same practice and work without choosing one as its answer.",
 			),
 		).toBeVisible();
 		await expect(list.queryByText("LEGACY_AMBIGUOUS_RESULTS")).toBeNull();
 		// Partial is not an early stop: the History says why, and the sentence states only scope.
-		within(panel.getByRole("list", { name: "History" })).getByText("Its results were withheld.");
+		within(panel.getByRole("list", { name: "History" })).getByText(
+			"Its candidate observations were withheld.",
+		);
 		await expect(
-			panel.getByText("Its results and feedback cover only the practices it reviewed."),
+			panel.getByText("Its observations and feedback cover only the practices it reviewed."),
 		).toBeVisible();
 		await expect(panel.queryByText(/ended early/u)).toBeNull();
 	},

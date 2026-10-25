@@ -38,7 +38,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;
-import org.springframework.context.annotation.Import;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -51,7 +50,6 @@ import tools.jackson.databind.json.JsonMapper;
  * The release, removal and closure paths against the real schema and SQL: tenancy, consent identity,
  * legacy history, sentinel text and the protected mapping's lifecycle.
  */
-@Import(ReviewIntegrationData.class)
 class ResearchDisclosureIntegrationTest extends BaseIntegrationTest {
 
     private static final List<String> SENTINELS = List.of(

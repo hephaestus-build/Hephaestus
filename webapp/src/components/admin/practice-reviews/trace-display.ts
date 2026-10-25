@@ -36,12 +36,12 @@ export const TRACE_DISPLAY_PARTS: readonly {
 	{
 		part: "siblings",
 		label: "Siblings",
-		hint: "The other results and feedback of the record you started from, not one line",
+		hint: "The other observations and feedback of the record you started from, not one line",
 	},
 	{
 		part: "connections",
 		label: "Connections",
-		hint: "Lines from each result to the feedback written from it, as the From column says",
+		hint: "Lines from each observation to the feedback written from it, as the From column says",
 	},
 ];
 

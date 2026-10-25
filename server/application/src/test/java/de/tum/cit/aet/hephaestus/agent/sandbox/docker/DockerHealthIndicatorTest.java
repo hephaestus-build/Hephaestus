@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxProperties;
+import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxTestLimits;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
@@ -21,7 +22,7 @@ class DockerHealthIndicatorTest extends BaseUnitTest {
 
     @BeforeEach
     void setUp() {
-        SandboxProperties properties = new SandboxProperties(5, 10, 60, null);
+        SandboxProperties properties = new SandboxProperties(5, 10, 60, SandboxTestLimits.REVIEW);
         var dockerProperties = new DockerSandboxProperties("unix:///var/run/docker.sock", false, null, null, "default");
         indicator = new DockerHealthIndicator(containerManager, properties, dockerProperties);
     }

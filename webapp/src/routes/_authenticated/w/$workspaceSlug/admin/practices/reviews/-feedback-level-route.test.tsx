@@ -701,11 +701,11 @@ describe("what feedback is based on", () => {
 		const [first] = entries;
 		assert(first);
 		expect(first.textContent).toContain(
-			`${basis.result.practiceName} · One problem of this result`,
+			`${basis.result.practiceName} · One problem of this observation`,
 		);
 		// Each basis opens in the feedback's place: its result, and the problem it rests on.
 		const problemLink = within(first).getByRole("link", {
-			name: `One problem of this result: ${summary}`,
+			name: `One problem of this observation: ${summary}`,
 		});
 		expect(problemLink.getAttribute("href")).toContain(`problem:${basis.problemId}`);
 		await userEvent.click(within(first).getByRole("link", { name: summary }));

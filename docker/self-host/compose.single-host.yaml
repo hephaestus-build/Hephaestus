@@ -106,7 +106,7 @@ services:
       APPLICATION_HOST_URL: https://${APP_HOSTNAME:?Set APP_HOSTNAME in .env}
       HEPHAESTUS_TRUSTED_PROXIES: ${HEPHAESTUS_TRUSTED_PROXIES:-172\.29\.47\.2}
       HEPHAESTUS_WORKER_REGISTRATION_TOKEN: ${HEPHAESTUS_WORKER_REGISTRATION_TOKEN:?Run setup.sh or set HEPHAESTUS_WORKER_REGISTRATION_TOKEN in .env}
-      # One concurrent agent sandbox (up to ~4 GiB) by default; size the host from
+      # One concurrent agent sandbox (up to the 3 GiB SANDBOX_MEMORY_BYTES default); size the host from
       # the install guide. The reference defaults to 5 across dedicated machines.
       SANDBOX_MAX_CONCURRENT: ${SANDBOX_MAX_CONCURRENT:-1}
 

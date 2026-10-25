@@ -4,6 +4,7 @@ import {
 	chmodSync,
 	mkdirSync,
 	mkdtempSync,
+	readdirSync,
 	readFileSync,
 	rmSync,
 	symlinkSync,
@@ -18,8 +19,10 @@ import { isMap, isSeq, parseDocument } from "yaml";
 
 const amd64 = `sha256:${"a".repeat(64)}`;
 const arm64 = `sha256:${"b".repeat(64)}`;
-const index = `sha256:${"c".repeat(64)}`;
-const reference = `ghcr.io/example/webapp@${index}`;
+const artifact = "c".repeat(64);
+const index = `sha256:${artifact}`;
+const repository = "ghcr.io/example/webapp";
+const reference = `${repository}@${index}`;
 const checker = path.join(import.meta.dirname, "resolve-image-scan-subject.ts");
 
 // The CLI is used only by the Linux image-scan job. Its Docker process boundary uses a POSIX
@@ -66,12 +69,6 @@ for (const scenario of [
 		noInspect: true,
 	},
 	{
-		name: "resolves a single manifest through the original immutable reference",
-		raw: { config: {}, layers: [] },
-		expected: index,
-		formatLookup: true,
-	},
-	{
 		name: "rejects a missing platform instead of scanning the index",
 		raw: { manifests: [{ digest: arm64, platform: { os: "linux", architecture: "arm64" } }] },
 	},
@@ -89,9 +86,9 @@ for (const scenario of [
 	{ name: "rejects malformed registry JSON", rawText: "{" },
 	{ name: "propagates registry failure", raw: { config: {}, layers: [] }, dockerExit: "7" },
 	{
-		name: "rejects mutable references before inspecting them",
+		name: "rejects a repository that already names a digest before inspecting it",
 		raw: {},
-		imageRef: "ghcr.io/example/webapp:main",
+		imageRepository: `ghcr.io/example/webapp@${amd64}`,
 		noInspect: true,
 	},
 	{
@@ -101,9 +98,9 @@ for (const scenario of [
 		noInspect: true,
 	},
 	{
-		name: "rejects a trailing newline in the reference before inspection",
+		name: "rejects a trailing newline in the repository before inspection",
 		raw: {},
-		imageRef: `${reference}\n`,
+		imageRepository: "ghcr.io/example/webapp\n",
 		noInspect: true,
 	},
 	{
@@ -113,14 +110,7 @@ for (const scenario of [
 		noInspect: true,
 	},
 	{
-		name: "resolves the immutable build artifact before the final index exists",
-		artifactNames: ["c".repeat(64)],
-		raw: { manifests: [{ digest: amd64, platform: { os: "linux", architecture: "amd64" } }] },
-		expected: amd64,
-	},
-	{
 		name: "resolves a Buildpacks leaf from its own platform artifact",
-		artifactNames: ["c".repeat(64)],
 		raw: { config: {}, layers: [] },
 		expected: index,
 		formatLookup: true,
@@ -145,13 +135,7 @@ for (const scenario of [
 		raw: {},
 		noInspect: true,
 	},
-	{
-		name: "rejects ambiguous artifact and image inputs",
-		artifactNames: ["c".repeat(64)],
-		imageRef: reference,
-		raw: {},
-		noInspect: true,
-	},
+	{ name: "requires the build digest artifact", noDirectory: true, raw: {}, noInspect: true },
 ] as const) {
 	void test(scenario.name, { skip: process.platform === "win32" }, (t) => {
 		const directory = mkdtempSync(path.join(tmpdir(), "image-scan-subject-"));
@@ -173,8 +157,10 @@ process.stdout.write(args.includes('--raw') ? process.env.RAW : process.env.SING
 		writeFileSync(output, "");
 		writeFileSync(callLog, "");
 		const artifactDirectory = path.join(directory, "digest");
-		const artifactNames = "artifactNames" in scenario ? scenario.artifactNames : undefined;
-		if (artifactNames !== undefined) {
+		const artifactNames = ("artifactNames" in scenario ? scenario.artifactNames : undefined) ?? [
+			artifact,
+		];
+		if (!("noDirectory" in scenario)) {
 			mkdirSync(artifactDirectory);
 			for (const name of artifactNames) {
 				if ("artifactSymlink" in scenario) {
@@ -184,16 +170,14 @@ process.stdout.write(args.includes('--raw') ? process.env.RAW : process.env.SING
 				}
 			}
 		}
-		const imageRef = "imageRef" in scenario ? scenario.imageRef : reference;
 		const platform = ("platform" in scenario ? scenario.platform : undefined) ?? "linux/amd64";
 		const result = spawnSync(process.execPath, [checker], {
 			encoding: "utf8",
 			env: {
 				...process.env,
 				PATH: `${directory}${path.delimiter}${process.env.PATH ?? ""}`,
-				IMAGE_REF: artifactNames === undefined || "imageRef" in scenario ? imageRef : "",
-				DIGEST_DIRECTORY: artifactNames === undefined ? "" : artifactDirectory,
-				IMAGE_REPOSITORY: "ghcr.io/example/webapp",
+				DIGEST_DIRECTORY: "noDirectory" in scenario ? "" : artifactDirectory,
+				IMAGE_REPOSITORY: "imageRepository" in scenario ? scenario.imageRepository : repository,
 				SCAN_PLATFORM: platform,
 				INPUT_IMAGE_NAME: "imageName" in scenario ? scenario.imageName : "example/webapp",
 				GITHUB_OUTPUT: output,
@@ -218,7 +202,7 @@ process.stdout.write(args.includes('--raw') ? process.env.RAW : process.env.SING
 		if ("noInspect" in scenario) {
 			assert.equal(calls, "");
 		} else {
-			const expectedCalls = [["buildx", "imagetools", "inspect", imageRef, "--raw"]];
+			const expectedCalls = [["buildx", "imagetools", "inspect", reference, "--raw"]];
 			if ("formatLookup" in scenario) {
 				expectedCalls.push([
 					"buildx",
@@ -226,7 +210,7 @@ process.stdout.write(args.includes('--raw') ? process.env.RAW : process.env.SING
 					"inspect",
 					"--format",
 					"{{.Manifest.Digest}}",
-					imageRef,
+					reference,
 				]);
 			}
 			assert.equal(calls, expectedCalls.map((args) => `${JSON.stringify(args)}\n`).join(""));
@@ -255,6 +239,9 @@ for (const stalledLookup of ["raw", "fallback"] as const) {
 			const deadlineCalls = path.join(directory, "deadlines");
 			const outputFile = path.join(directory, "output");
 			const preload = path.join(directory, "deadline.mjs");
+			const artifactDirectory = path.join(directory, "digest");
+			mkdirSync(artifactDirectory);
+			writeFileSync(path.join(artifactDirectory, artifact), "");
 			writeFileSync(outputFile, "");
 			writeFileSync(
 				docker,
@@ -299,8 +286,8 @@ mock.method(AbortSignal, 'timeout', (milliseconds) => {
 				env: {
 					...process.env,
 					PATH: `${directory}${path.delimiter}${process.env.PATH ?? ""}`,
-					IMAGE_REF: reference,
-					DIGEST_DIRECTORY: "",
+					DIGEST_DIRECTORY: artifactDirectory,
+					IMAGE_REPOSITORY: repository,
 					SCAN_PLATFORM: "linux/amd64",
 					INPUT_IMAGE_NAME: "example/webapp",
 					GITHUB_OUTPUT: outputFile,
@@ -360,39 +347,77 @@ void test("the image workflow shares the resolver and retains its immutable subj
 	const workflow = parseDocument(
 		readFileSync(".github/workflows/reusable-docker-build.yml", "utf8"),
 	);
-	const steps = workflow.getIn(["jobs", "scan", "steps"]);
+	const steps = workflow.getIn(["jobs", "build", "steps"]);
 	assert.ok(isSeq(steps));
-	assert.equal(workflow.getIn(["jobs", "scan", "env", "SCAN_PLATFORM"]), `\${{ matrix.platform }}`);
 	const subject = steps.items.find((item) => isMap(item) && item.get("id") === "subject");
 	assert.ok(isMap(subject));
+	assert.equal(subject.getIn(["env", "SCAN_PLATFORM"]), `\${{ matrix.platform }}`);
 	assert.equal(subject.get("run"), "node scripts/resolve-image-scan-subject.ts");
 	assert.equal(subject.getIn(["env", "INPUT_IMAGE_NAME"]), `\${{ inputs.image-name }}`);
 	assert.equal(
-		subject.getIn(["env", "IMAGE_REF"]),
-		`\${{ inputs.single-arch && format('{0}/{1}@{2}', inputs.registry, inputs.image-name, needs.build.outputs.manifest-digest) || '' }}`,
+		subject.getIn(["env", "DIGEST_DIRECTORY"]),
+		`\${{ runner.temp }}/digests/\${{ steps.prep.outputs.platform_pair }}`,
+	);
+	assert.equal(
+		subject.getIn(["env", "IMAGE_REPOSITORY"]),
+		`\${{ inputs.registry }}/\${{ inputs.image-name }}`,
 	);
 });
 
-void test("platform scans read their exact build artifact while merge retains platform directories", () => {
+void test("every digest artifact carries its platform directory, however many a download matches", () => {
 	const workflow = parseDocument(
 		readFileSync(".github/workflows/reusable-docker-build.yml", "utf8"),
 	);
-	assert.equal(workflow.getIn(["jobs", "scan", "needs"]), "build");
-	for (const job of ["scan", "merge"]) {
+	// A download extracts a single matched artifact straight into its path and several into one
+	// subdirectory each, so a layout that depended on the count broke the one-platform merge.
+	const step = (job: string, name: string) => {
 		const steps = workflow.getIn(["jobs", job, "steps"]);
 		assert.ok(isSeq(steps));
-		const download = steps.items.find(
-			(item) =>
-				isMap(item) &&
-				item.get("name") === (job === "scan" ? "Download platform digest" : "Download digests"),
+		const found: unknown = steps.items.find((item) => isMap(item) && item.get("name") === name);
+		assert.ok(isMap(found), `${job}: ${name}`);
+		return found;
+	};
+	const directory = mkdtempSync(path.join(tmpdir(), "digest-artifact-"));
+	try {
+		const exported = spawnSync(
+			"bash",
+			["-e", "-c", String(step("build", "Export digest").get("run"))],
+			{
+				encoding: "utf8",
+				env: {
+					...process.env,
+					RUNNER_TEMP: directory,
+					PLATFORM_PAIR: "linux-arm64",
+					DOCKERFILE_DIGEST: `sha256:${artifact}`,
+					BUILDPACKS_DIGEST: "",
+				},
+			},
 		);
-		assert.ok(isMap(download));
-		assert.notEqual(download.getIn(["with", "merge-multiple"]), true);
-		if (job === "scan") {
-			assert.equal(
-				download.getIn(["with", "name"]),
-				`digests-\${{ steps.prep.outputs.image_name }}-\${{ steps.prep.outputs.platform_pair }}`,
-			);
-		}
+		assert.equal(exported.status, 0, exported.stderr);
+		const entries = readdirSync(path.join(directory, "digests"), {
+			encoding: "utf8",
+			recursive: true,
+		});
+		assert.deepEqual(
+			entries.toSorted((left, right) => left.localeCompare(right)),
+			["linux-arm64", path.join("linux-arm64", artifact)],
+		);
+	} finally {
+		rmSync(directory, { recursive: true, force: true });
 	}
+	// The upload's root is the digests directory, so the artifact holds `<platform>/<digest>`.
+	assert.equal(
+		step("build", "Upload digest").getIn(["with", "path"]),
+		`\${{ runner.temp }}/digests`,
+	);
+	assert.equal(step("merge", "Download digests").getIn(["with", "merge-multiple"]), true);
+	assert.match(
+		String(step("merge", "Create manifest and push").get("run")),
+		/files=\("linux-\$arch"\/\*\)/u,
+	);
+	// The scan reads the same platform directory in the job that exported it.
+	assert.equal(
+		step("build", "Resolve the platform subject").getIn(["env", "DIGEST_DIRECTORY"]),
+		`\${{ runner.temp }}/digests/\${{ steps.prep.outputs.platform_pair }}`,
+	);
 });

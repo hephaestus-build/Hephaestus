@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatNullPointerException;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxTestLimits;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Duration;
 import java.util.List;
@@ -16,38 +17,41 @@ class SandboxSpecTest extends BaseUnitTest {
 
     @Test
     void shouldRejectBlankImage() {
-        assertThatThrownBy(() -> new SandboxSpec(
-                        UUID.randomUUID(),
-                        "  ",
-                        List.of(),
-                        Map.of(),
-                        null,
-                        ResourceLimits.DEFAULT,
-                        SecurityProfile.DEFAULT,
-                        Map.of(),
-                        "/workspace/out"))
+        assertThatThrownBy(() -> spec("  ", "token"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("blank");
     }
 
     @Test
+    void shouldRequireAGatewayCredential() {
+        assertThatThrownBy(() -> spec("alpine:latest", " "))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Gateway credential required");
+    }
+
+    @Test
     void shouldAcceptValidSpec() {
-        // networkPolicy, securityProfile can be null
-        // command, environment, inputFiles are defaulted to empty collections
-        var spec = new SandboxSpec(
-                UUID.randomUUID(),
-                "alpine:latest",
-                null,
-                null,
-                null,
-                ResourceLimits.DEFAULT,
-                null,
-                null,
-                "/workspace/out");
+        var spec = spec("alpine:latest", "token");
         assertThat(spec.jobId()).isNotNull();
         assertThat(spec.command()).isEmpty();
         assertThat(spec.environment()).isEmpty();
         assertThat(spec.inputFiles()).isEmpty();
+        assertThat(spec.workDeadline()).isNull();
+    }
+
+    private static SandboxSpec spec(String image, String token) {
+        return new SandboxSpec(
+                UUID.randomUUID(),
+                null,
+                image,
+                List.of(),
+                Map.of(),
+                token,
+                SandboxTestLimits.ATTEMPT,
+                null,
+                Map.of(),
+                Map.of(),
+                List.of());
     }
 
     @Nested
@@ -90,10 +94,10 @@ class SandboxSpecTest extends BaseUnitTest {
 
         @Test
         void shouldAcceptDefaults() {
-            assertThat(ResourceLimits.DEFAULT.memoryBytes()).isEqualTo(4L * 1024 * 1024 * 1024);
-            assertThat(ResourceLimits.DEFAULT.cpus()).isEqualTo(2.0);
-            assertThat(ResourceLimits.DEFAULT.pidsLimit()).isEqualTo(512);
-            assertThat(ResourceLimits.DEFAULT.maxRuntime()).isEqualTo(Duration.ofMinutes(10));
+            assertThat(SandboxTestLimits.ATTEMPT.memoryBytes()).isEqualTo(4L * 1024 * 1024 * 1024);
+            assertThat(SandboxTestLimits.ATTEMPT.cpus()).isEqualTo(2.0);
+            assertThat(SandboxTestLimits.ATTEMPT.pidsLimit()).isEqualTo(512);
+            assertThat(SandboxTestLimits.ATTEMPT.maxRuntime()).isEqualTo(Duration.ofMinutes(10));
         }
 
         @Test

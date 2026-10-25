@@ -80,7 +80,7 @@ export function ResultList({ results, onRetry }: ResultListProps) {
 	} else if (results.data.rows.length === 0) {
 		body = (
 			<p className={cn(INDENT, "py-1.5 text-sm text-muted-foreground")}>
-				No results about your work here.
+				No observations about your work here.
 			</p>
 		);
 	} else {
@@ -102,7 +102,7 @@ export function ResultList({ results, onRetry }: ResultListProps) {
 				id={heading}
 				className={cn(INDENT, "pt-2 pb-0.5 text-xs font-semibold text-muted-foreground")}
 			>
-				Your results
+				Your observations
 			</h3>
 			{body}
 		</section>

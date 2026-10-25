@@ -322,7 +322,7 @@ public class DockerClientOperations
     }
 
     @Override
-    public String getLogs(String containerId, int tailLines) {
+    public String getLogs(String containerId) {
         // Best-effort log collection: an error returns nothing, and a timeout says so in the transcript.
         try {
             // Synchronised inside: onNext is called from a Docker callback thread.
@@ -343,7 +343,6 @@ public class DockerClientOperations
                         .withStdOut(true)
                         .withStdErr(true)
                         .withFollowStream(false)
-                        .withTail(tailLines > 0 ? tailLines : Integer.MAX_VALUE)
                         .exec(callback)
                         .awaitCompletion(LOG_COLLECTION_TIMEOUT_SECONDS, TimeUnit.SECONDS);
             } finally {

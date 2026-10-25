@@ -1,9 +1,12 @@
 package de.tum.cit.aet.hephaestus.agent.sandbox;
 
+import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ResourceLimits;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
-import org.jspecify.annotations.Nullable;
+import java.time.Duration;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.bind.DefaultValue;
 import org.springframework.validation.annotation.Validated;
@@ -16,7 +19,7 @@ import org.springframework.validation.annotation.Validated;
  * @param maxConcurrentContainers upper bound on simultaneous sandbox containers
  * @param containerStopTimeoutSeconds SIGTERM → SIGKILL grace period
  * @param reconciliationIntervalSeconds interval between orphan cleanup sweeps
- * @param defaultResourceLimits default resource constraints for containers
+ * @param defaultResourceLimits the limits of each review sandbox; the Heph host and turn sandboxes have their own
  */
 @Validated
 @ConfigurationProperties(prefix = "hephaestus.sandbox")
@@ -24,22 +27,29 @@ public record SandboxProperties(
         @DefaultValue("5") @Min(1) int maxConcurrentContainers,
         @DefaultValue("10") @Min(1) int containerStopTimeoutSeconds,
         @DefaultValue("60") @Min(10) int reconciliationIntervalSeconds,
-        @Nullable @Valid DefaultResourceLimits defaultResourceLimits) {
-    public SandboxProperties {
-        if (defaultResourceLimits == null) {
-            defaultResourceLimits = new DefaultResourceLimits(4L * 1024 * 1024 * 1024, 2.0, 512);
-        }
-    }
+        @DefaultValue @Valid DefaultResourceLimits defaultResourceLimits) {
 
     /**
-     * Default resource limits for agent containers.
+     * The resource limits of a review sandbox: its initializer and then its runtime. The defaults and the review usage
+     * they rest on are in docs/admin/sizing.mdx § Review sandbox limits.
      *
-     * @param memoryBytes maximum memory in bytes (includes tmpfs)
-     * @param cpus CPU limit
+     * @param memoryBytes maximum memory in bytes, tmpfs pages included
+     * @param cpus CPU limit: a share of CPU time the sandbox may use, not a reservation
      * @param pidsLimit maximum process count
      */
     public record DefaultResourceLimits(
-            @DefaultValue("4294967296") @Min(1) long memoryBytes,
-            @DefaultValue("2.0") @DecimalMin("0.01") double cpus,
-            @DefaultValue("512") @Min(1) int pidsLimit) {}
+            @DefaultValue("3221225472") @Min(1) @Max(ResourceLimits.MAX_MEMORY_BYTES)
+            long memoryBytes,
+
+            @DefaultValue("1.0") @DecimalMin("0.01") @DecimalMax(ResourceLimits.MAX_CPUS_TEXT)
+            double cpus,
+
+            @DefaultValue("256") @Min(1) @Max(ResourceLimits.MAX_PIDS)
+            int pidsLimit) {
+
+        /** The limits of one review attempt, which runs until its work deadline. */
+        public ResourceLimits forAttempt(Duration maxRuntime) {
+            return new ResourceLimits(memoryBytes, cpus, pidsLimit, maxRuntime);
+        }
+    }
 }

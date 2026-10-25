@@ -10,6 +10,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxProperties;
+import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxTestLimits;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxException;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Duration;
@@ -39,7 +40,7 @@ class SandboxContainerManagerTest extends BaseUnitTest {
 
     @BeforeEach
     void setUp() {
-        properties = new SandboxProperties(5, 10, 60, null);
+        properties = new SandboxProperties(5, 10, 60, SandboxTestLimits.REVIEW);
         executor = Executors.newSingleThreadExecutor();
         manager = new SandboxContainerManager(
                 containerOps, image -> {}, properties, "default", executor, Duration.ofMillis(20));
@@ -201,18 +202,18 @@ class SandboxContainerManagerTest extends BaseUnitTest {
 
         @Test
         void shouldReturnLogs() {
-            when(containerOps.getLogs(CONTAINER_ID, 100)).thenReturn("test output\n");
+            when(containerOps.getLogs(CONTAINER_ID)).thenReturn("test output\n");
 
-            String logs = manager.getLogs(CONTAINER_ID, 100);
+            String logs = manager.getLogs(CONTAINER_ID);
 
             assertThat(logs).isEqualTo("test output\n");
         }
 
         @Test
         void shouldReturnEmptyOnFailure() {
-            when(containerOps.getLogs(CONTAINER_ID, 100)).thenThrow(new RuntimeException("Docker error"));
+            when(containerOps.getLogs(CONTAINER_ID)).thenThrow(new RuntimeException("Docker error"));
 
-            String logs = manager.getLogs(CONTAINER_ID, 100);
+            String logs = manager.getLogs(CONTAINER_ID);
 
             assertThat(logs).isEmpty();
         }

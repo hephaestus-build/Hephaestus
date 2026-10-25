@@ -1,8 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.sandbox.docker;
 
-import de.tum.cit.aet.hephaestus.agent.sandbox.spi.NetworkPolicy;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ResourceLimits;
-import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SecurityProfile;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -22,14 +20,38 @@ public class ContainerSecurityPolicy {
 
     private static final Set<String> ALLOWED_IPC_MODES = Set.of("none", "private");
 
+    private static final long TMP_BYTES = 1024L * 1024 * 1024;
+    private static final long RUN_BYTES = 64L * 1024 * 1024;
+    private static final long AGENT_LOCAL_BYTES = 1024L * 1024 * 1024;
+
     private static final Map<String, String> MANDATORY_TMPFS = Map.of(
             "/tmp",
-            "rw,noexec,nosuid,nodev,size=1073741824",
+            "rw,noexec,nosuid,nodev,size=" + TMP_BYTES,
             "/run",
-            "rw,noexec,nosuid,nodev,size=67108864",
+            "rw,noexec,nosuid,nodev,size=" + RUN_BYTES,
             // Native addons extracted by the runtime require executable mappings here.
             "/home/agent/.local",
-            "rw,exec,nosuid,nodev,size=1073741824");
+            "rw,exec,nosuid,nodev,size=" + AGENT_LOCAL_BYTES);
+
+    /** The most the mandatory tmpfs mounts hold. Their pages count against the container's memory limit. */
+    public static final long MANDATORY_TMPFS_BYTES = TMP_BYTES + RUN_BYTES + AGENT_LOCAL_BYTES;
+
+    /** The memory a review sandbox keeps for its processes when every mandatory tmpfs mount is full. */
+    public static final long MIN_PROCESS_BYTES = 512L * 1024 * 1024;
+
+    /**
+     * Refuses a review memory limit that a full {@code /tmp} could exhaust: the kernel would then kill the review
+     * for files the agent wrote, not for what its processes use.
+     */
+    public static void requireRoomBesideTmpfs(long memoryBytes) {
+        long floor = MANDATORY_TMPFS_BYTES + MIN_PROCESS_BYTES;
+        if (memoryBytes < floor) {
+            throw new IllegalStateException(
+                    "SANDBOX_MEMORY_BYTES is " + memoryBytes + "; a review sandbox needs at least "
+                            + floor + ": " + MANDATORY_TMPFS_BYTES + " for its tmpfs mounts and " + MIN_PROCESS_BYTES
+                            + " for its processes");
+        }
+    }
 
     private final DockerSandboxProperties properties;
     private final @Nullable String seccompProfileJson;
@@ -39,8 +61,9 @@ public class ContainerSecurityPolicy {
         this.seccompProfileJson = seccompProfileJson;
     }
 
+    /** @param internetAccess whether the container's network has a route out: only a Heph host's outside Docker */
     public DockerOperations.HostConfigSpec buildHostConfig(
-            SecurityProfile security, ResourceLimits resources, @Nullable NetworkPolicy networkPolicy) {
+            SecurityProfile security, ResourceLimits resources, boolean internetAccess) {
         List<String> securityOpts = new ArrayList<>();
         securityOpts.add("no-new-privileges");
 
@@ -50,7 +73,7 @@ public class ContainerSecurityPolicy {
 
         // DNS: block all DNS when internet is disabled (prevents DNS exfiltration, CVE-2024-29018)
         List<String> dns = new ArrayList<>();
-        if (networkPolicy == null || !networkPolicy.internetAccess()) {
+        if (!internetAccess) {
             dns.add("0.0.0.0");
         }
 

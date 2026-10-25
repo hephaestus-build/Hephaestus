@@ -179,7 +179,7 @@ export const Nested: Story = {
 			],
 			onClose: fn(),
 		},
-		current: "Result",
+		current: "Observation",
 		title: "Controllers stay thin",
 	},
 	play: async () => {
@@ -187,7 +187,7 @@ export const Nested: Story = {
 		const panel = within(await settledDrawerPanel());
 		await expectSettledVisible(panel.getByRole("button", { name: "Back" }));
 		await expect(panel.getByRole("list", { name: "Path" })).toHaveTextContent(
-			/Practice reviews.*Review.*Result/u,
+			/Practice reviews.*Review.*Observation/u,
 		);
 	},
 };

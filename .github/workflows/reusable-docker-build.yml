@@ -62,15 +62,20 @@ on:
         type: boolean
         required: true
         description: "Publish, attest, sign, and scan the image; false builds it locally without registry writes"
-      single-arch:
-        type: boolean
+      platforms:
+        # No default, for the same reason as publish: cicd.yml decides it once for every image build.
+        type: string
+        required: true
+        description: 'JSON list of the platforms to build, merge into the index, and scan, such as ["linux/amd64"]'
+      reuse-run:
+        type: string
         required: false
-        default: false
-        description: "Build only linux/amd64 instead of the supported multi-architecture set."
+        default: ""
+        description: "Successful merge-queue run whose verified image of this commit a push reuses instead of building"
     outputs:
       manifest-digest:
-        description: "Published image digest; an index digest for multi-architecture builds."
-        value: ${{ inputs.single-arch && jobs.build.outputs.manifest-digest || jobs.merge.outputs.manifest-digest }}
+        description: "Published image index digest"
+        value: ${{ jobs.merge.outputs.manifest-digest }}
 
 permissions: {}
 
@@ -87,21 +92,86 @@ env:
     type=raw,value=${{ format('pr-{0}', github.event.number) }},enable=${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # The merge queue squashes, so a push to the default branch carries the commit its merge group
+  # already built, signed, attested and scanned. That image is the one that was tested, so it ships
+  # once its signature and provenance prove the successful queue run built it for this commit and
+  # these platforms. Anything less leaves the digest empty, and the image is built instead.
+  reuse:
+    name: Reuse merge-queue image
+    if: inputs.publish && inputs.reuse-run != ''
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    permissions:
+      attestations: read
+      contents: read
+      packages: read
+    outputs:
+      digest: ${{ steps.verify.outputs.digest }}
+    steps:
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@af595e623eec1ede52d6322f53b635d5def0a95a
+        with:
+          cosign-release: v3.1.4
+
+      # Caller-selected registry, not GHCR-only; see ci-cd.mdx § Shared setup actions.
+      - name: Log in to Container Registry
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ${{ inputs.registry }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify the merge-queue image
+        id: verify
+        continue-on-error: true
+        env:
+          IMAGE: ${{ inputs.registry }}/${{ inputs.image-name }}
+          COMMIT: ${{ github.sha }}
+          QUEUE_RUN: ${{ inputs.reuse-run }}
+          PLATFORMS: ${{ inputs.platforms }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          [[ "$QUEUE_RUN" =~ ^[0-9]+$ ]]
+          digest=$(docker buildx imagetools inspect --format '{{json .Manifest}}' "$IMAGE:$COMMIT" | jq -er .digest)
+          [[ "$digest" =~ ^sha256:[a-f0-9]{64}$ ]]
+          reference="$IMAGE@$digest"
+          docker buildx imagetools inspect "$reference" --raw |
+            jq -e --argjson platforms "$PLATFORMS" '
+              [.manifests[] | select(.platform.os != "unknown" or .platform.architecture != "unknown")
+                | .platform.os + "/" + .platform.architecture] | sort == ($platforms | sort)' >/dev/null
+          cosign verify "$reference" \
+            --certificate-identity-regexp "^https://github\\.com/${{ github.repository }}/\\.github/workflows/reusable-docker-build\\.yml@refs/heads/gh-readonly-queue/$DEFAULT_BRANCH/" \
+            --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
+            --certificate-github-workflow-repository "${{ github.repository }}" \
+            --certificate-github-workflow-trigger merge_group \
+            --certificate-github-workflow-sha "$COMMIT" \
+            > /dev/null
+          gh attestation verify "oci://$reference" --bundle-from-oci --owner "${{ github.repository_owner }}" \
+            --signer-workflow "${{ github.repository }}/.github/workflows/reusable-docker-build.yml" \
+            --source-digest "$COMMIT" --format json |
+            jq -e --arg run "${{ github.server_url }}/${{ github.repository }}/actions/runs/$QUEUE_RUN/" '
+              length > 0 and all(.[]; .verificationResult.signature.certificate.runInvocationURI | startswith($run))' >/dev/null
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+
   build:
     name: Build ${{ matrix.platform }} Docker Image
-    outputs:
-      manifest-digest: ${{ steps.single-digest.outputs.manifest-digest }}
+    needs: reuse
+    if: ${{ !cancelled() && needs.reuse.outputs.digest == '' }}
     strategy:
-      fail-fast: true
-      matrix: ${{ fromJSON(inputs.single-arch && '{"include":[{"platform":"linux/amd64","runner":"ubuntu-24.04"}]}' || '{"include":[{"platform":"linux/amd64","runner":"ubuntu-24.04"},{"platform":"linux/arm64","runner":"ubuntu-24.04-arm"}]}') }}
+      # Each platform scans in its own build, so one platform's refusal must not cancel the other's
+      # scan and evidence. A broken build therefore lets its sibling finish; the merge still waits
+      # for every build to succeed.
+      fail-fast: false
+      matrix:
+        platform: ${{ fromJSON(inputs.platforms) }}
     timeout-minutes: 45
-    runs-on: ${{ matrix.runner }}
+    # Each platform builds natively on its own runner; no emulation.
+    runs-on: ${{ matrix.platform == 'linux/arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
     permissions:
       contents: read
       packages: write
-      id-token: write
-      attestations: write
-      artifact-metadata: write
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -128,7 +198,8 @@ jobs:
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
           images: ${{ inputs.registry }}/${{ inputs.image-name }}
-          tags: ${{ inputs.single-arch && env.STANDARD_IMAGE_TAGS || '' }}
+          # Only the version label reads it: the commit, which a merge group and its push share.
+          tags: type=raw,value=${{ github.event.pull_request.head.sha || github.sha }}
           labels: ${{ inputs.labels }}
 
       - name: Prepare platform pair
@@ -154,17 +225,14 @@ jobs:
           platforms: ${{ matrix.platform }}
           build-args: ${{ inputs.build-args }}
           labels: ${{ steps.meta.outputs.labels }}
-          tags: ${{ !inputs.publish && inputs.single-arch && steps.meta.outputs.tags || '' }}
           push: ${{ inputs.publish }}
-          # A local build is only tagged on the single-architecture path, and loading an untagged
-          # image into the daemon leaves something nothing can name.
-          load: ${{ !inputs.publish && inputs.single-arch }}
           outputs: ${{ inputs.publish && format('type=image,"name={0}/{1}",push-by-digest=true,name-canonical=true,push=true', inputs.registry, inputs.image-name) || '' }}
           # A refreshed package stage does not invalidate cached descendants in BuildKit.
           no-cache-filters: os-packages,runtime
           cache-from: |
             type=registry,ref=${{ inputs.registry }}/${{ inputs.image-name }}:cache-main-${{ steps.prep.outputs.platform_pair }}
-          cache-to: ${{ github.ref == 'refs/heads/main' && format('type=registry,ref={0}/{1}:cache-main-{2},mode=max', inputs.registry, inputs.image-name, steps.prep.outputs.platform_pair) || '' }}
+          # A push reuses the images its merge group built, so the merge group keeps the cache warm.
+          cache-to: ${{ (github.ref == 'refs/heads/main' || github.event_name == 'merge_group') && format('type=registry,ref={0}/{1}:cache-main-{2},mode=max', inputs.registry, inputs.image-name, steps.prep.outputs.platform_pair) || '' }}
 
       - name: Set up pack
         if: inputs.use-buildpacks
@@ -181,7 +249,7 @@ jobs:
           path: ${{ runner.temp }}/application
 
       - uses: ./.github/actions/setup-toolchain
-        if: inputs.use-buildpacks
+        if: inputs.use-buildpacks || (inputs.publish && inputs.scan-images)
         with:
           install: "none"
 
@@ -206,11 +274,9 @@ jobs:
           (( ${#jars[@]} == 1 ))
           PER_ARCH_TAG="$INPUT_REGISTRY/$INPUT_IMAGE_NAME:ci-$GITHUB_RUN_ID-$PLATFORM_PAIR"
           if [ "$PUBLISH" != true ]; then
-            # A local build has no registry to read a manifest back from, and nothing downstream of
-            # a fork build consumes the digest, so the daemon's image ID is what it can report.
+            # Nothing downstream of a build without registry writes reads a digest.
             pack build "$PER_ARCH_TAG" --path "${jars[0]}" --descriptor "$PROJECT_DESCRIPTOR" \
               --run-image "$RUN_IMAGE" --platform "$MATRIX_PLATFORM" --trust-builder 2>&1 | node scripts/summarize-buildpack-log.ts "$RUNNER_TEMP/buildpacks.log"
-            echo "digest=$(docker image inspect --format '{{.Id}}' "$PER_ARCH_TAG")" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           pack build "$PER_ARCH_TAG" --path "${jars[0]}" --descriptor "$PROJECT_DESCRIPTOR" \
@@ -240,101 +306,83 @@ jobs:
           retention-days: 14
           if-no-files-found: warn
 
+      # The artifact carries its platform directory, because a download extracts one matched
+      # artifact into its path but several into one subdirectory each.
       - name: Export digest
+        if: inputs.publish
         env:
           DOCKERFILE_DIGEST: ${{ steps.build.outputs.digest }}
           BUILDPACKS_DIGEST: ${{ steps.build-buildpacks.outputs.digest }}
+          PLATFORM_PAIR: ${{ steps.prep.outputs.platform_pair }}
         run: |
-          mkdir -p ${{ runner.temp }}/digests
+          mkdir -p "$RUNNER_TEMP/digests/$PLATFORM_PAIR"
           digest="${BUILDPACKS_DIGEST:-$DOCKERFILE_DIGEST}"
           if [ -z "$digest" ]; then
             echo "::error::No digest produced by either build path"
             exit 1
           fi
-          if [ "${{ inputs.single-arch }}" = "true" ]; then
-            echo "manifest-digest=$digest" >> "$GITHUB_OUTPUT"
-          else
-            touch "${{ runner.temp }}/digests/${digest#sha256:}"
-          fi
+          touch "$RUNNER_TEMP/digests/$PLATFORM_PAIR/${digest#sha256:}"
 
-      - name: Prepare single-architecture buildpack index
-        if: inputs.publish && inputs.single-arch && inputs.use-buildpacks
-        env:
-          SOURCE_IMAGE: ${{ inputs.registry }}/${{ inputs.image-name }}@${{ steps.build-buildpacks.outputs.digest }}
-          STAGING_IMAGE: ${{ inputs.registry }}/${{ inputs.image-name }}:ci-${{ github.run_id }}-${{ github.run_attempt }}-single
-        run: |
-          docker buildx imagetools create --tag "$STAGING_IMAGE" \
-            --metadata-file "$RUNNER_TEMP/single-image.json" "$SOURCE_IMAGE"
+      # The scan runs on the runner that built the platform, before its digest reaches the merge, so
+      # a refused image never enters an index. Re-running the job scans a fresh build of the platform.
+      - uses: ./.github/actions/setup-release-security-tools
+        if: inputs.publish && inputs.scan-images
+        with:
+          install-syft: "true"
 
-      - name: Capture single-architecture digest
-        id: single-digest
-        if: inputs.publish && inputs.single-arch
+      - name: Resolve the platform subject
+        id: subject
+        if: inputs.publish && inputs.scan-images
         env:
-          DOCKERFILE_DIGEST: ${{ steps.build.outputs.digest }}
-          USE_BUILDPACKS: ${{ inputs.use-buildpacks }}
+          DIGEST_DIRECTORY: ${{ runner.temp }}/digests/${{ steps.prep.outputs.platform_pair }}
+          IMAGE_REPOSITORY: ${{ inputs.registry }}/${{ inputs.image-name }}
+          INPUT_IMAGE_NAME: ${{ inputs.image-name }}
+          SCAN_PLATFORM: ${{ matrix.platform }}
+        run: node scripts/resolve-image-scan-subject.ts
+
+      # A blocking gate inherits Trivy's database availability as a hard dependency, so the
+      # retries and the mirror fallback live in one action rather than in each caller.
+      - uses: ./.github/actions/download-trivy-db
+        if: inputs.publish && inputs.scan-images
+        with:
+          database-artifact: ${{ inputs.database-artifact }}
+
+      # Trivy and Syft pull through the job's registry login, so the package-writing token is not
+      # also handed to them as environment variables.
+      - name: Enforce the release vulnerability policy
+        if: inputs.publish && inputs.scan-images
+        env:
+          IMAGE: ${{ steps.subject.outputs.image }}
+          REPOSITORY: ${{ inputs.registry }}/${{ inputs.image-name }}
+          SCAN_PLATFORM: ${{ matrix.platform }}
+          SUBJECT_DIGEST: ${{ steps.subject.outputs.digest }}
+          REPORT_STEM: ${{ steps.subject.outputs.report-stem }}
         run: |
           set -euo pipefail
-          DIGEST="$DOCKERFILE_DIGEST"
-          if [ "$USE_BUILDPACKS" = true ]; then
-            DIGEST=$(jq -er '."containerimage.descriptor".digest' "$RUNNER_TEMP/single-image.json")
-          fi
-          if [[ ! "$DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]]; then
-            echo "::error::Refusing to publish: image digest is invalid (got: ${DIGEST:-<empty>})"
-            exit 1
-          fi
-          echo "manifest-digest=$DIGEST" >> "$GITHUB_OUTPUT"
+          mkdir -p reports
+          trivy image --skip-db-update --scanners vuln --format json \
+            --output "reports/$REPORT_STEM.json" "$REPOSITORY@$SUBJECT_DIGEST"
+          node scripts/check-release-vulnerabilities.ts "$IMAGE" "$SCAN_PLATFORM" "$SUBJECT_DIGEST" \
+            "$REPOSITORY" "reports/$REPORT_STEM.json" security/vulnerability-policy.json \
+            "reports/$REPORT_STEM.policy.json"
 
-      - name: Generate build provenance attestation
-        if: inputs.publish && inputs.single-arch
-        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
-        env:
-          NODE_OPTIONS: "--max-http-header-size=32768"
+      # The policy result names the CVEs; the gate's exit status alone cannot.
+      - name: Upload the vulnerability policy result
+        if: ${{ !cancelled() && steps.subject.outcome == 'success' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          subject-name: ${{ inputs.registry }}/${{ inputs.image-name }}
-          subject-digest: ${{ steps.single-digest.outputs.manifest-digest }}
-          push-to-registry: true
-
-      - name: Install Cosign
-        if: inputs.publish && inputs.single-arch
-        uses: sigstore/cosign-installer@af595e623eec1ede52d6322f53b635d5def0a95a
-        with:
-          cosign-release: v3.1.4
-
-      # Signing stays in this workflow; ci-cd.mdx § Shared setup actions owns its identity boundary.
-      - name: Sign and verify image
-        if: inputs.publish && inputs.single-arch
-        env:
-          IMAGE_REF: ${{ inputs.registry }}/${{ inputs.image-name }}@${{ steps.single-digest.outputs.manifest-digest }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          cosign sign --yes "$IMAGE_REF"
-          cosign verify "$IMAGE_REF" \
-            --certificate-identity-regexp '^https://github\.com/${{ github.repository }}/\.github/workflows/reusable-docker-build\.yml@' \
-            --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
-            --certificate-github-workflow-repository "${{ github.repository }}" \
-            > /dev/null
-          gh attestation verify "oci://$IMAGE_REF" --bundle-from-oci --owner "${{ github.repository_owner }}"
-
-      - name: Publish verified image tags
-        if: inputs.publish && inputs.single-arch
-        env:
-          IMAGE_REF: ${{ inputs.registry }}/${{ inputs.image-name }}@${{ steps.single-digest.outputs.manifest-digest }}
-        run: |
-          set -euo pipefail
-          tags=$(jq -er '.tags[]' <<< "$DOCKER_METADATA_OUTPUT_JSON")
-          args=()
-          while IFS= read -r tag; do args+=(--tag "$tag"); done <<< "$tags"
-          docker buildx imagetools create --prefer-index=false "${args[@]}" \
-            --metadata-file "$RUNNER_TEMP/published-image.json" "$IMAGE_REF"
-          PUBLISHED_DIGEST=$(jq -er '."containerimage.descriptor".digest' "$RUNNER_TEMP/published-image.json")
-          [[ "$PUBLISHED_DIGEST" = "${IMAGE_REF##*@}" ]]
+          # Per attempt, so re-running a refused build can record its result again.
+          name: vulnerability-policy-${{ steps.subject.outputs.report-stem }}-${{ github.run_attempt }}
+          path: reports
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Upload digest
-        if: ${{ inputs.publish && !inputs.single-arch }}
+        if: inputs.publish
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: digests-${{ steps.prep.outputs.image_name }}-${{ steps.prep.outputs.platform_pair }}
-          path: ${{ runner.temp }}/digests/*
+          path: ${{ runner.temp }}/digests
           if-no-files-found: error
           retention-days: 1
 
@@ -342,8 +390,8 @@ jobs:
     name: Create manifest
     timeout-minutes: 30
     runs-on: ubuntu-latest
-    needs: build
-    if: ${{ inputs.publish && !inputs.single-arch }}
+    needs: [reuse, build]
+    if: ${{ inputs.publish && !cancelled() && (needs.reuse.outputs.digest != '' || needs.build.result == 'success') }}
     permissions:
       packages: write
       id-token: write
@@ -361,10 +409,12 @@ jobs:
           INPUTS_IMAGE_NAME: ${{ inputs.image-name }}
 
       - name: Download digests
+        if: needs.reuse.outputs.digest == ''
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           path: ${{ runner.temp }}/digests
           pattern: digests-${{ steps.prep.outputs.image_name }}-*
+          merge-multiple: true
 
       # Caller-selected registry, not GHCR-only; see ci-cd.mdx § Shared setup actions.
       - name: Log in to Container Registry
@@ -388,16 +438,19 @@ jobs:
           labels: ${{ inputs.labels }}
 
       - name: Create manifest and push
+        if: needs.reuse.outputs.digest == ''
         working-directory: ${{ runner.temp }}/digests
         run: |
           set -euo pipefail
+          mapfile -t platforms < <(jq -er '.[]' <<< "$PLATFORMS")
           entries=(*)
-          (( ${#entries[@]} == 2 )) || exit 1
+          (( ${#platforms[@]} > 0 && ${#entries[@]} == ${#platforms[@]} )) || exit 1
           args=(--tag "$STAGING_IMAGE" --metadata-file "$RUNNER_TEMP/merged-image.json")
           expected='[]'
-          image_pair="${INPUTS_IMAGE_NAME//\//-}"
-          for arch in amd64 arm64; do
-            files=("digests-$image_pair-linux-$arch"/*)
+          for platform in "${platforms[@]}"; do
+            [[ "$platform" =~ ^linux/(amd64|arm64)$ ]] || exit 1
+            arch="${platform#linux/}"
+            files=("linux-$arch"/*)
             (( ${#files[@]} == 1 )) || exit 1
             [[ -f "${files[0]}" && ! -L "${files[0]}" ]] || exit 1
             digest="${files[0]##*/}"
@@ -417,8 +470,8 @@ jobs:
           docker buildx imagetools create "${args[@]}"
           merged=$(jq -er '."containerimage.descriptor".digest' "$RUNNER_TEMP/merged-image.json")
           [[ "$merged" =~ ^sha256:[a-f0-9]{64}$ ]] || exit 1
-          # The scans use these build artifacts while this job assembles and verifies the index.
-          # Refuse publication if its real platform leaves differ from the scanned subjects.
+          # Each build scanned the digest it handed over in these artifacts.
+          # Refuse publication if the index's real platform leaves differ from those scanned subjects.
           docker buildx imagetools inspect "$INPUTS_REGISTRY/$INPUTS_IMAGE_NAME@$merged" --raw |
             jq -e --argjson expected "$expected" '
               [.manifests[] | select(.platform.os != "unknown" or .platform.architecture != "unknown")
@@ -427,13 +480,19 @@ jobs:
         env:
           INPUTS_REGISTRY: ${{ inputs.registry }}
           INPUTS_IMAGE_NAME: ${{ inputs.image-name }}
+          PLATFORMS: ${{ inputs.platforms }}
           STAGING_IMAGE: ${{ inputs.registry }}/${{ inputs.image-name }}:ci-${{ github.run_id }}-${{ github.run_attempt }}-index
 
       - name: Capture manifest digest
         id: digest
+        env:
+          REUSED_DIGEST: ${{ needs.reuse.outputs.digest }}
         run: |
           set -euo pipefail
-          DIGEST=$(jq -er '."containerimage.descriptor".digest' "$RUNNER_TEMP/merged-image.json")
+          DIGEST="${REUSED_DIGEST:-}"
+          if [ -z "$DIGEST" ]; then
+            DIGEST=$(jq -er '."containerimage.descriptor".digest' "$RUNNER_TEMP/merged-image.json")
+          fi
           if [[ ! "$DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]]; then
             echo "::error::Refusing to publish: manifest digest is not a sha256:<64 lowercase hex> value (got: ${DIGEST:-<empty>})"
             exit 1
@@ -441,7 +500,9 @@ jobs:
           echo "manifest-digest=$DIGEST" >> "$GITHUB_OUTPUT"
           echo "Multi-arch manifest digest: $DIGEST"
 
+      # A reused image keeps the provenance of the queue run that built it.
       - name: Generate build provenance attestation
+        if: needs.reuse.outputs.digest == ''
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         env:
           NODE_OPTIONS: "--max-http-header-size=32768"
@@ -455,7 +516,8 @@ jobs:
         with:
           cosign-release: v3.1.4
 
-      # --recursive: sign each child manifest so per-platform verify works.
+      # --recursive: sign each child manifest so per-platform verify works. A reused image is signed
+      # again here, because the release accepts only this workflow's default-branch identity.
       - name: Sign image with cosign
         env:
           IMAGE_REF: ${{ inputs.registry }}/${{ inputs.image-name }}@${{ steps.digest.outputs.manifest-digest }}
@@ -487,99 +549,3 @@ jobs:
             --metadata-file "$RUNNER_TEMP/published-image.json" "$IMAGE_REF"
           PUBLISHED_DIGEST=$(jq -er '."containerimage.descriptor".digest' "$RUNNER_TEMP/published-image.json")
           [[ "$PUBLISHED_DIGEST" = "${IMAGE_REF##*@}" ]]
-
-  scan:
-    name: Scan ${{ matrix.platform }} Image
-    needs: build
-    if: ${{ inputs.scan-images && inputs.publish && !cancelled() && needs.build.result == 'success' }}
-    strategy:
-      fail-fast: false
-      matrix:
-        platform: ${{ fromJSON(inputs.single-arch && '["linux/amd64"]' || '["linux/amd64","linux/arm64"]') }}
-    timeout-minutes: 20
-    runs-on: ubuntu-24.04
-    env:
-      SCAN_PLATFORM: ${{ matrix.platform }}
-    permissions:
-      contents: read
-      packages: read
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 1
-          persist-credentials: false
-
-      - uses: ./.github/actions/setup-toolchain
-        with:
-          install: "none"
-
-      - uses: ./.github/actions/setup-release-security-tools
-        with:
-          install-syft: "true"
-
-      # Caller-selected registry, not GHCR-only; see ci-cd.mdx § Shared setup actions.
-      - name: Log in to Container Registry
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
-        with:
-          registry: ${{ inputs.registry }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Prepare digest artifact name
-        id: prep
-        if: ${{ !inputs.single-arch }}
-        env:
-          INPUT_IMAGE_NAME: ${{ inputs.image-name }}
-        run: |
-          echo "image_name=${INPUT_IMAGE_NAME//\//-}" >> "$GITHUB_OUTPUT"
-          echo "platform_pair=${SCAN_PLATFORM//\//-}" >> "$GITHUB_OUTPUT"
-
-      - name: Download platform digest
-        if: ${{ !inputs.single-arch }}
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: digests-${{ steps.prep.outputs.image_name }}-${{ steps.prep.outputs.platform_pair }}
-          path: ${{ runner.temp }}/scan-digest
-
-      - name: Resolve the platform subject
-        id: subject
-        env:
-          IMAGE_REF: ${{ inputs.single-arch && format('{0}/{1}@{2}', inputs.registry, inputs.image-name, needs.build.outputs.manifest-digest) || '' }}
-          DIGEST_DIRECTORY: ${{ !inputs.single-arch && format('{0}/scan-digest', runner.temp) || '' }}
-          IMAGE_REPOSITORY: ${{ inputs.registry }}/${{ inputs.image-name }}
-          INPUT_IMAGE_NAME: ${{ inputs.image-name }}
-        run: node scripts/resolve-image-scan-subject.ts
-
-      # A blocking gate inherits Trivy's database availability as a hard dependency, so the
-      # retries and the mirror fallback live in one action rather than in each caller.
-      - uses: ./.github/actions/download-trivy-db
-        with:
-          database-artifact: ${{ inputs.database-artifact }}
-
-      - name: Enforce the release vulnerability policy
-        env:
-          IMAGE: ${{ steps.subject.outputs.image }}
-          REPOSITORY: ${{ inputs.registry }}/${{ inputs.image-name }}
-          SUBJECT_DIGEST: ${{ steps.subject.outputs.digest }}
-          REPORT_STEM: ${{ steps.subject.outputs.report-stem }}
-          TRIVY_USERNAME: ${{ github.actor }}
-          TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-          mkdir -p reports
-          trivy image --skip-db-update --scanners vuln --format json \
-            --output "reports/$REPORT_STEM.json" "$REPOSITORY@$SUBJECT_DIGEST"
-          node scripts/check-release-vulnerabilities.ts "$IMAGE" "$SCAN_PLATFORM" "$SUBJECT_DIGEST" \
-            "$REPOSITORY" "reports/$REPORT_STEM.json" security/vulnerability-policy.json \
-            "reports/$REPORT_STEM.policy.json"
-
-      # The policy result names the CVEs; the gate's exit status alone cannot.
-      - name: Upload the vulnerability policy result
-        if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: vulnerability-policy-${{ steps.subject.outputs.report-stem }}
-          path: reports
-          if-no-files-found: warn
-          retention-days: 7

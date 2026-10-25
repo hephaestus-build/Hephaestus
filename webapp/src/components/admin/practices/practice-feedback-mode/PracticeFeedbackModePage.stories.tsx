@@ -526,7 +526,7 @@ export const OffDirectAndInherited: Story = {
 	play: async ({ canvas, userEvent }) => {
 		await userEvent.click(canvas.getByRole("button", { name: /^Testing\b/u }));
 		const off =
-			"Off keeps results and stops feedback on the work, on practice pages, and in conversation.";
+			"Off keeps observations and stops feedback on the work, on practice pages, and in conversation.";
 		const inherited = canvas.getByText("Covers the new branch").closest("li");
 		const direct = canvas.getByText("Names what it asserts").closest("li");
 		if (!(inherited instanceof HTMLElement) || !(direct instanceof HTMLElement)) {

@@ -146,7 +146,7 @@ async function pickFacet(
 
 export const Default: Story = {
 	play: async ({ canvas }) => {
-		await canvas.findByText("16 results.");
+		await canvas.findByText("16 observations.");
 		for (const name of ["Group", "Practice", "Outcome", "Severity"]) {
 			canvas.getByRole("combobox", { name });
 		}
@@ -162,9 +162,9 @@ export const Default: Story = {
 export const FilterToOneSeverity: Story = {
 	parameters: { chromatic: { viewports: [1440] } },
 	play: async ({ canvas, userEvent }) => {
-		await canvas.findByText("16 results.");
+		await canvas.findByText("16 observations.");
 		await pickFacet(canvas, userEvent, "Severity", /Major/u);
-		await canvas.findByText("3 results match your filters.");
+		await canvas.findByText("3 observations match your filters.");
 		await expect(canvas.queryByText(/leaks the ledger’s table name/u)).not.toBeInTheDocument();
 	},
 };
@@ -172,12 +172,12 @@ export const FilterToOneSeverity: Story = {
 export const FilterToOnePerson: Story = {
 	parameters: { chromatic: { viewports: [1440] } },
 	play: async ({ canvas, userEvent }) => {
-		await canvas.findByText("16 results.");
+		await canvas.findByText("16 observations.");
 		await userEvent.click(canvas.getByRole("combobox", { name: "Developer" }));
 		const listbox = await screen.findByRole("listbox");
 		await userEvent.click(await within(listbox).findByRole("option", { name: /Grace Hopper/u }));
 		await canvas.findByRole("combobox", { name: "Developer: Grace Hopper" });
-		await canvas.findByText("3 results match your filters.");
+		await canvas.findByText("3 observations match your filters.");
 	},
 };
 
@@ -199,7 +199,7 @@ export const NarrowedToTheSelectedResult: Story = {
 	play: async ({ canvas }) => {
 		await expect(canvas.queryByRole("button", { name: /^Select/u })).not.toBeInTheDocument();
 		await expect(
-			within(canvas.getByRole("table", { name: "Results" }))
+			within(canvas.getByRole("table", { name: "Observations" }))
 				.getAllByRole("row")
 				.filter((row) => within(row).queryAllByRole("cell").length > 0),
 		).toHaveLength(4);
@@ -209,13 +209,13 @@ export const NarrowedToTheSelectedResult: Story = {
 export const FilteredToNothing: Story = {
 	parameters: { chromatic: { viewports: [1440] } },
 	play: async ({ canvas, userEvent }) => {
-		await canvas.findByText("16 results.");
+		await canvas.findByText("16 observations.");
 		await pickFacet(canvas, userEvent, "Severity", /Critical/u);
 		await pickFacet(canvas, userEvent, "Outcome", /Met/u);
-		await canvas.findByText("No results match these filters");
+		await canvas.findByText("No observations match these filters");
 		canvas.getByRole("button", { name: "Reset" });
 		await userEvent.click(canvas.getByRole("button", { name: "Clear all filters" }));
-		await canvas.findByText("16 results.");
+		await canvas.findByText("16 observations.");
 	},
 };
 
@@ -223,13 +223,13 @@ export const FilteredToNothing: Story = {
 export const SortByActionability: Story = {
 	parameters: { chromatic: { viewports: [1440] } },
 	play: async ({ args, canvas, userEvent }) => {
-		await canvas.findByText("16 results.");
+		await canvas.findByText("16 observations.");
 		await userEvent.click(canvas.getByRole("combobox", { name: /Sort/u }));
 		await userEvent.click(await screen.findByRole("option", { name: "Most actionable first" }));
 		await expect(args.onSearchChange).toHaveBeenLastCalledWith(
 			expect.objectContaining({ order: "ACTIONABILITY" }),
 		);
-		const table = canvas.getByRole("table", { name: "Results" });
+		const table = canvas.getByRole("table", { name: "Observations" });
 		await waitFor(async () =>
 			expect(
 				[...table.querySelectorAll("th[scope=rowgroup]")].map((heading) => heading.textContent),
@@ -257,12 +257,12 @@ export const MobileAppliedFilters: Story = {
 		viewport: { defaultViewport: "reflow" },
 	},
 	play: async ({ canvas, userEvent }) => {
-		await canvas.findByText("16 results.");
+		await canvas.findByText("16 observations.");
 		await pickFacet(canvas, userEvent, "Severity", /Major/u);
-		await canvas.findByText("3 results match your filters.");
+		await canvas.findByText("3 observations match your filters.");
 		await canvas.findByTitle("Severity: Major");
 		await userEvent.click(canvas.getByLabelText("Clear severity filter (Major)"));
-		await canvas.findByText("16 results.");
+		await canvas.findByText("16 observations.");
 		await expectNoPageOverflow();
 	},
 };
@@ -270,7 +270,7 @@ export const MobileAppliedFilters: Story = {
 export const PickADateRange: Story = {
 	parameters: { chromatic: { disableSnapshot: true } },
 	play: async ({ canvas, userEvent }) => {
-		await canvas.findByText("16 results.");
+		await canvas.findByText("16 observations.");
 		await userEvent.click(canvas.getByRole("button", { name: "Recorded" }));
 		const dialog = await screen.findByRole("dialog");
 		// Testing Library exposes calendar td elements as cells even inside a grid.
@@ -300,8 +300,8 @@ export const LoadsMoreAtTheEnd: Story = {
 	args: { results: pool(manyResults(64), { onLoadMore: loadMoreResults }) },
 	parameters: { chromatic: { viewports: [1440] } },
 	play: async ({ canvas }) => {
-		await canvas.findByText("64 results.");
-		const more = canvas.getByRole("button", { name: "Show more results" });
+		await canvas.findByText("64 observations.");
+		const more = canvas.getByRole("button", { name: "Show more observations" });
 		more.scrollIntoView();
 		await waitFor(async () => expect(loadMoreResults).toHaveBeenCalled());
 	},
@@ -312,7 +312,7 @@ export const LoadingMore: Story = {
 	args: { results: pool(reviewResults, { hasMore: true, isLoadingMore: true }) },
 	parameters: { chromatic: { viewports: [1440] } },
 	play: async ({ canvas, canvasElement }) => {
-		await expectPlaceholderRows(canvasElement, canvas.getByRole("table", { name: "Results" }));
+		await expectPlaceholderRows(canvasElement, canvas.getByRole("table", { name: "Observations" }));
 	},
 };
 
@@ -324,7 +324,7 @@ export const LoadingMoreByActionability: Story = {
 	},
 	parameters: { chromatic: { viewports: [1440] } },
 	play: async ({ canvas, canvasElement }) => {
-		await expectPlaceholderRows(canvasElement, canvas.getByRole("table", { name: "Results" }));
+		await expectPlaceholderRows(canvasElement, canvas.getByRole("table", { name: "Observations" }));
 	},
 };
 
@@ -334,7 +334,7 @@ export const Mobile: Story = {
 		viewport: { defaultViewport: "reflow" },
 	},
 	play: async ({ canvas }) => {
-		await canvas.findByText("16 results.");
+		await canvas.findByText("16 observations.");
 		await expectNoPageOverflow();
 	},
 };
@@ -345,7 +345,7 @@ export const LoadFailed: Story = {
 		results: { status: "error", error: { status: 500 }, onRetry: fn() },
 	},
 	play: async ({ canvas }) => {
-		await canvas.findByText("We could not load results");
+		await canvas.findByText("We could not load observations");
 	},
 };
 
@@ -353,7 +353,7 @@ export const Loading: Story = {
 	parameters: { chromatic: { viewports: [1440] } },
 	args: { results: { status: "loading" } },
 	play: async ({ canvas }) => {
-		await expect(await canvas.findByRole("table", { name: "Results" })).toHaveAttribute(
+		await expect(await canvas.findByRole("table", { name: "Observations" })).toHaveAttribute(
 			"aria-busy",
 			"true",
 		);
@@ -365,9 +365,9 @@ export const NoResultsYet: Story = {
 	parameters: { chromatic: { viewports: [1440] } },
 	args: { results: pool([]) },
 	play: async ({ canvas }) => {
-		await canvas.findByText("No results yet");
+		await canvas.findByText("No observations yet");
 		await expect(
-			canvas.getByText("Results appear after a practice review completes."),
+			canvas.getByText("Observations appear after a practice review completes."),
 		).toBeVisible();
 	},
 };
@@ -379,7 +379,7 @@ export const RefreshFailed: Story = {
 		}),
 	},
 	play: async ({ canvas }) => {
-		await expect(await canvas.findByText("We could not refresh results")).toBeVisible();
+		await expect(await canvas.findByText("We could not refresh observations")).toBeVisible();
 		await expect(canvas.getByRole("button", { name: "Retry" })).toBeEnabled();
 	},
 };

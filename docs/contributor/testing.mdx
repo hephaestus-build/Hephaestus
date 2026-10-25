@@ -144,6 +144,22 @@ Generation and compilation dependencies are automatic. Test tasks always execute
 Compilation remains incremental and cacheable. `--no-build-cache` prevents output restoration.
 Combine it with `clean` when measuring a cold build.
 
+The shared integration PostgreSQL container runs the `docker/postgres` image.
+Locally, each test JVM builds that image from its Dockerfile.
+CI integration jobs instead pull the image that CI published for the commit their images alias from.
+They name it in `HEPHAESTUS_TEST_POSTGRES_IMAGE`.
+When a change edits the image, or no published image exists, CI builds the Dockerfile once per job before the tests start.
+That build downloads packages, as a local build does.
+
+Contexts built on `BaseIntegrationTest` reach GitHub's GraphQL endpoint through `ScriptedGitHub`.
+The application's own client, senders, schedulers and listeners run unchanged, and only the HTTP exchange answers from the script.
+A test reads what the application posted from `ScriptedGitHub.threads()`, keyed by repository and number.
+A GitHub document that the script does not answer fails as a GraphQL error.
+Live tests keep the real network.
+
+The test database starts with silent mode engaged, as a new instance does.
+A test that asserts a posted copy turns silent mode off and restores it afterwards.
+
 The shared integration PostgreSQL container keeps its ephemeral data directory on tmpfs. Database
 cleanup still truncates every application table transactionally. SQL constraints and isolation checks
 remain enabled. This container does not prove storage durability across container restarts.
@@ -157,6 +173,29 @@ only to `application/build/test-selection/`, leaving execution reports and cover
 Those discovery reports are not evidence that tests passed.
 Execution tasks do not accept the removed `-PtestSelection` property.
 Use the selection command for discovery.
+
+## Flaky tests
+
+A flaky test fails and then passes on the same commit.
+CI does not retry Gradle or Vitest tests.
+Playwright retries a failed test once to record a trace, and then it fails the run as flaky.
+You can rerun a failed job, but the rerun does not hide the flake.
+The weekly [flaky test report](ci-cd.mdx#flaky-tests) lists every job that passed only on a rerun.
+Maintainers read it each week.
+
+When a test flakes:
+
+1. Open an issue for the test and assign an owner.
+2. The owner finds the cause and fixes it, or deletes a test that asserts nothing new.
+   Do not add a retry, a longer timeout, or a sleep to hide it.
+3. Quarantine the test only while the flake blocks merges and the cause is not fixed yet.
+   The skip names the issue, the owner's GitHub login and an end date at most 14 days ahead.
+   In Java, write `@Disabled("quarantine #123 @owner until 2026-11-07: free-port race")`.
+   In TypeScript, put `// quarantine #123 @owner until 2026-11-07: free-port race` on the line directly above `it.skip(`.
+4. On the end date, the owner fixes or deletes the test.
+
+`vp run check` fails on a skip that names no issue, owner and end date, and on an expired quarantine.
+A skip that depends on the environment, such as missing live credentials, is not a quarantine.
 
 ## Live external-service tests
 
@@ -249,8 +288,9 @@ HEPHAESTUS_LIVE_LLM_BASE_URL=... HEPHAESTUS_LIVE_LLM_API_KEY=... HEPHAESTUS_LIVE
   ./gradlew :application:liveTest --tests HephTurnLiveTest
 ```
 
-The host reaches the test's sandbox gateway at `host.docker.internal`. If a host firewall admits containers to
-one port only, set `SANDBOX_API_PORT` to that port.
+The host reaches the test's sandbox gateway at `host.docker.internal`. The gateway binds a free port unless
+`SANDBOX_API_PORT` names one. If a host firewall admits containers to one port only, set `SANDBOX_API_PORT` to
+that port.
 
 ### Live models for practice scripts
 

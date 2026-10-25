@@ -3,17 +3,19 @@ package de.tum.cit.aet.hephaestus.agent.sandbox.docker;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
-import de.tum.cit.aet.hephaestus.agent.sandbox.spi.NetworkPolicy;
-import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ResourceLimits;
+import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxAttemptRunner;
+import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxTestLimits;
+import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxWorkspaceManager;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxSpec;
-import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SecurityProfile;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.io.ByteArrayInputStream;
@@ -55,27 +57,29 @@ class DockerGatewayTransportTest extends BaseUnitTest {
 
     private final SandboxGatewaySessions sessions = new SandboxGatewaySessions();
     private final List<DockerOperations.ContainerSpec> created = new ArrayList<>();
+    private final List<DockerOperations.VolumeInfo> volumesCreated = new ArrayList<>();
     private final UUID jobId = UUID.randomUUID();
-    private DockerSandboxAdapter adapter;
+
+    @Mock
+    private SandboxCreator creator;
+
+    private SandboxAttemptRunner adapter;
 
     @BeforeEach
     void setUp() {
-        adapter = new DockerSandboxAdapter(
-                network,
+        var meters = new SimpleMeterRegistry();
+        adapter = new SandboxAttemptRunner(
+                new DockerSandboxBackend(network, containers, security, volumes, creator, "default", () -> 8081),
                 new SandboxWorkspaceManager(),
-                containers,
-                security,
-                8081,
-                new SimpleMeterRegistry(),
                 sessions,
-                volumes);
+                meters);
     }
 
     private void execution(int initializerExit) throws Exception {
-        when(network.createJobNetwork(jobId, false, Map.of(SandboxLabels.JOB_ID, jobId.toString())))
-                .thenReturn("network");
+        Map<String, String> labels = Map.of(SandboxLabels.OWNER, "default", SandboxLabels.JOB_ID, jobId.toString());
+        when(network.createJobNetwork(jobId, false, labels)).thenReturn("network");
         when(network.connectAppServer("network")).thenReturn("172.18.0.2");
-        when(security.buildHostConfig(any(), any(), any()))
+        when(security.buildHostConfig(any(), any(), anyBoolean()))
                 .thenReturn(new DockerOperations.HostConfigSpec(
                         1024,
                         1024,
@@ -92,12 +96,25 @@ class DockerGatewayTransportTest extends BaseUnitTest {
                         null,
                         Map.of(),
                         List.of()));
-        when(security.buildLabels(jobId)).thenReturn(Map.of(SandboxLabels.JOB_ID, jobId.toString()));
+        when(security.buildLabels(jobId)).thenReturn(labels);
+        // The removal finds the sandbox's volumes and containers by their labels, as the daemon lists them.
+        doAnswer(invocation -> {
+                    volumesCreated.add(
+                            new DockerOperations.VolumeInfo(invocation.getArgument(0), invocation.getArgument(1)));
+                    return null;
+                })
+                .when(volumes)
+                .createVolume(anyString(), anyMap());
+        when(volumes.listVolumes(anyMap())).thenAnswer(invocation -> List.copyOf(volumesCreated));
+        when(containers.listManagedContainers())
+                .thenAnswer(invocation -> created.size() < 2
+                        ? List.of()
+                        : List.of(new DockerOperations.ContainerInfo("runtime", "runtime", labels, "exited", null)));
         when(containers.createContainer(any())).thenAnswer(invocation -> {
             created.add(invocation.getArgument(0));
             return created.size() == 1 ? "initializer" : "runtime";
         });
-        when(containers.getLogs(anyString(), anyInt())).thenReturn("");
+        when(containers.getLogs(anyString())).thenReturn("");
         when(containers.waitForCompletion(anyString(), any())).thenAnswer(invocation -> {
             var spec = created.getLast();
             String url = spec.environment().get("SANDBOX_RUNTIME_URL");
@@ -127,15 +144,16 @@ class DockerGatewayTransportTest extends BaseUnitTest {
     private SandboxSpec spec(Map<String, Path> onDisk) {
         return new SandboxSpec(
                 jobId,
+                null,
                 "pi:locked",
                 List.of("sh", "-c", "run-review"),
                 Map.of(),
-                new NetworkPolicy(false, null, "token"),
-                ResourceLimits.DEFAULT,
-                SecurityProfile.DEFAULT,
+                "token",
+                SandboxTestLimits.ATTEMPT,
+                null,
                 Map.of("task.json", "{}".getBytes(StandardCharsets.UTF_8)),
                 onDisk,
-                "/workspace/out");
+                List.of());
     }
 
     @Test

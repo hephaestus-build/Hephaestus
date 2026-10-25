@@ -42,40 +42,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  automatic:
-    if: ${{ inputs.automatic }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    permissions:
-      # Lists CI/CD runs on main to find a later qualified build of the requested commit.
-      actions: read
-      contents: read
-    outputs:
-      apply: ${{ steps.policy.outputs.apply }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: deploy-state
-          path: deploy-state
-          persist-credentials: false
-      - uses: ./.github/actions/setup-toolchain
-        with:
-          install: "none"
-      # The workflow lock covers this read through publication, including manually requested holds.
-      - name: Check automatic promotion
-        id: policy
-        env:
-          GH_TOKEN: ${{ github.token }}
-          COMMIT: ${{ inputs.commit }}
-          CHANNEL: ${{ inputs.environment }}
-        run: node scripts/automatic-promotion.ts
-
   promote:
-    needs: automatic
-    if: ${{ !cancelled() && !failure() && (!inputs.automatic || needs.automatic.outputs.apply == 'true') }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     environment:
@@ -83,6 +50,8 @@ jobs:
       # Required reviewers still gate the job; scripts/record-deployment.ts says why.
       deployment: false
     permissions:
+      # Lists CI/CD runs on main to find a later qualified build of an automatic request.
+      actions: read
       contents: write
       deployments: write
       id-token: write
@@ -106,13 +75,25 @@ jobs:
         with:
           install: "none"
 
+      # The workflow lock covers this read through publication, including manually requested holds.
+      # A skipped request leaves every later step skipped, so it publishes and records nothing.
+      - name: Check automatic promotion
+        id: policy
+        if: ${{ inputs.automatic }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          COMMIT: ${{ inputs.commit }}
+          CHANNEL: ${{ inputs.environment }}
+        run: node scripts/automatic-promotion.ts
+
       - uses: sigstore/cosign-installer@af595e623eec1ede52d6322f53b635d5def0a95a
+        if: ${{ steps.policy.outputs.apply != 'false' }}
         with:
           cosign-release: v3.1.4
 
       # Unlike tooling, upstream image pins must come from the deployment target.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        if: ${{ inputs.commit != '' }}
+        if: ${{ steps.policy.outputs.apply != 'false' && inputs.commit != '' }}
         with:
           ref: ${{ inputs.commit }}
           path: .promotion-inventory
@@ -121,6 +102,7 @@ jobs:
 
       - name: Resolve the release to promote and write the channel
         id: release
+        if: ${{ steps.policy.outputs.apply != 'false' }}
         env:
           GH_TOKEN: ${{ github.token }}
           CHANNEL: ${{ inputs.environment }}
@@ -135,6 +117,7 @@ jobs:
       # The signed channel is the authority, so the record must never stop a deploy or a rollback.
       - name: Record the deployment
         id: deployment
+        if: ${{ steps.policy.outputs.apply != 'false' }}
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
@@ -144,6 +127,7 @@ jobs:
         run: node scripts/record-deployment.ts start
 
       - name: Sign the channel
+        if: ${{ steps.policy.outputs.apply != 'false' }}
         working-directory: deploy-state
         env:
           CHANNEL_FILE: ${{ steps.release.outputs.channel }}
@@ -151,6 +135,7 @@ jobs:
 
       - name: Publish the channel
         id: publish-channel
+        if: ${{ steps.policy.outputs.apply != 'false' }}
         working-directory: deploy-state
         env:
           GH_TOKEN: ${{ github.token }}
@@ -164,7 +149,7 @@ jobs:
 
       - name: Verify the public webapp version
         id: webapp-version
-        if: ${{ !inputs.freeze }}
+        if: ${{ steps.policy.outputs.apply != 'false' && !inputs.freeze }}
         env:
           EXPECTED: ${{ steps.release.outputs.version }}
           HOSTNAME: ${{ vars.APP_HOSTNAME }}
@@ -203,3 +188,28 @@ jobs:
           FROZEN: ${{ inputs.freeze }}
           WEBAPP_OUTCOME: ${{ steps.webapp-version.outcome }}
         run: node scripts/report-promotion-coverage.ts
+
+  # Continuous staging dispatches with GITHUB_TOKEN, so GitHub notifies nobody of a failed run.
+  report-failure:
+    needs: promote
+    if: ${{ failure() && inputs.automatic }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup-toolchain
+        with:
+          install: "none"
+
+      - name: Report the failure on the tracking issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          COMMIT: ${{ inputs.commit }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}/attempts/${{ github.run_attempt }}
+        run: node scripts/report-staging-promotion-failure.ts

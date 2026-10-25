@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.gateway;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.tum.cit.aet.hephaestus.core.auth.ratelimit.AuthRateLimitConfig;
 import de.tum.cit.aet.hephaestus.core.auth.ratelimit.AuthRateLimitProperties;
@@ -9,6 +10,7 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.github.bucket4j.BucketConfiguration;
 import java.io.IOException;
 import java.net.InetAddress;
+import java.net.Socket;
 import java.time.Duration;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.env.YamlPropertySourceLoader;
@@ -28,8 +30,10 @@ class SandboxGatewayConfigurationTest extends BaseUnitTest {
         var factory = new TomcatServletWebServerFactory();
         factory.setAddress(InetAddress.getLoopbackAddress());
 
-        new SandboxGatewayConfiguration()
-                .sandboxGatewayConnector(new SandboxGatewayProperties(9081, 1024, 60))
+        var configuration = new SandboxGatewayConfiguration();
+        configuration
+                .sandboxGatewayConnectorCustomizer(
+                        configuration.sandboxGatewayConnector(new SandboxGatewayProperties(9081, 1024, 60)))
                 .customize(factory);
 
         assertThat(factory.getAdditionalConnectors()).singleElement().satisfies(connector -> {
@@ -37,6 +41,25 @@ class SandboxGatewayConfigurationTest extends BaseUnitTest {
             assertThat(connector.getProperty("address")).isNull();
         });
         assertThat(factory.getAddress()).isEqualTo(InetAddress.getLoopbackAddress());
+    }
+
+    @Test
+    void shouldReportTheBoundPortWhenTheGatewayBindsAFreePort() throws IOException {
+        var factory = new TomcatServletWebServerFactory(0);
+        factory.setAddress(InetAddress.getLoopbackAddress());
+        var configuration = new SandboxGatewayConfiguration();
+        var gateway = configuration.sandboxGatewayConnector(new SandboxGatewayProperties(0, 1024, 60));
+        configuration.sandboxGatewayConnectorCustomizer(gateway).customize(factory);
+
+        assertThatThrownBy(gateway::port).isInstanceOf(IllegalStateException.class);
+        var server = factory.getWebServer();
+        server.start();
+        try (var socket = new Socket(InetAddress.getLoopbackAddress(), gateway.port())) {
+            assertThat(socket.isConnected()).isTrue();
+            assertThat(gateway.port()).isNotEqualTo(server.getPort());
+        } finally {
+            server.stop();
+        }
     }
 
     @Test

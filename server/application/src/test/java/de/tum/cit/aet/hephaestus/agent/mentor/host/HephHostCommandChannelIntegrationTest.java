@@ -8,6 +8,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayConfiguration;
+import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayConnector;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.proxy.ProxyAccounting;
@@ -20,8 +21,6 @@ import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtInvalidException
 import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtVerifier;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import io.github.bucket4j.Bucket;
-import java.io.IOException;
-import java.net.ServerSocket;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.WebSocket;
@@ -95,7 +94,6 @@ class HephHostCommandChannelIntegrationTest {
     @Test
     @Timeout(120)
     void shouldCarryCommandsToTheHostWhenItDialsTheGatewayWithItsSessionToken() throws Exception {
-        int gatewayPort = freePort();
         var application = new SpringApplication(
                 ChannelApplication.class,
                 Class.forName("de.tum.cit.aet.hephaestus.agent.proxy.LlmProxySecurityConfig"));
@@ -104,7 +102,8 @@ class HephHostCommandChannelIntegrationTest {
                 "--spring.main.banner-mode=off",
                 // The test JVM turns the worker role off; the gateway is a worker capability.
                 "--" + RuntimeRole.WORKER_PROPERTY + "=true",
-                "--hephaestus.sandbox.gateway.port=" + gatewayPort)) {
+                "--hephaestus.sandbox.gateway.port=0")) {
+            int gatewayPort = context.getBean(SandboxGatewayConnector.class).port();
             HephHost host = context.getBean(HephHost.class);
             FakeSandbox sandbox = context.getBean(FakeSandbox.class);
             CompletableFuture<Boolean> ready = CompletableFuture.supplyAsync(() -> host.awaitReady(READY));
@@ -155,12 +154,6 @@ class HephHostCommandChannelIntegrationTest {
         return ((WebSocketHandshakeException) Objects.requireNonNull(refused.getCause()))
                 .getResponse()
                 .statusCode();
-    }
-
-    private static int freePort() throws IOException {
-        try (var socket = new ServerSocket(0)) {
-            return socket.getLocalPort();
-        }
     }
 
     @TestConfiguration(proxyBeanMethods = false)

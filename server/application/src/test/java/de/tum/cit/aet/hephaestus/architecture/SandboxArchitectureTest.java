@@ -72,6 +72,18 @@ class SandboxArchitectureTest extends HephaestusArchitectureTest {
         }
 
         @Test
+        void attemptRunnerIsBackendNeutral() {
+            noClasses()
+                    .that()
+                    .resideInAPackage("..agent.sandbox")
+                    .should()
+                    .dependOnClassesThat()
+                    .resideInAPackage("..agent.sandbox.docker..")
+                    .because("The attempt runner drives every backend through SandboxBackend")
+                    .check(classes);
+        }
+
+        @Test
         void dockerClientOnlyInDockerPackage() {
             noClasses()
                     .that()

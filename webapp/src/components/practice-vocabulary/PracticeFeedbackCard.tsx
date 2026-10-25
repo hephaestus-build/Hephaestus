@@ -585,7 +585,7 @@ export function PracticeFeedbackCard({
 						label="What is wrong in this feedback?"
 						placeholder="One or two sentences on what is wrong"
 						required
-						audience="Workspace admins read your sentence, not the card, and can correct its results or withdraw it. The card stays open until then."
+						audience="Workspace admins read your sentence, not the card, and can correct its observations or withdraw it. The card stays open until then."
 						isPending={isPending}
 						sending={saving === "send"}
 						onSend={onSendDisagreement}

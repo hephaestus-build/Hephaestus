@@ -67,6 +67,8 @@ sequenceDiagram
    It can capture evidence only for images published by its own run.
 
 3. **The merge is checked again.** The merge commit's push runs CI/CD in full.
+   It reuses the verified images that its merge group built for the same commit, and builds any that are missing.
+   See [Merge-queue image reuse](./ci-cd.mdx#merge-queue-image-reuse).
    A `main` push repeats source-validation legs only when it changes the version.
    CI compares the version with the tip that the push replaced.
    Later commits in the same push cannot hide the bump.
@@ -199,7 +201,7 @@ which performs every check except signature verification.
 | Syft, SPDX and CycloneDX describe the same subject and the same packages         | No — the preflight generates the triple and validates it                                                                                                                                                                                           |
 | Trivy licence report is bound to its subject                                     | No — the preflight generates and validates it                                                                                                                                                                                                      |
 | Vulnerability policy, `linux/amd64`                                              | No — also the build gate in `reusable-docker-build.yml` and, for the pinned upstream digests, `Pinned upstream images`                                                                                                                             |
-| Vulnerability policy, `linux/arm64`                                              | No — `Pinned upstream images` for the pinned upstream digests, and the preflight for the images we build, which nothing else scans on this platform                                                                                                |
+| Vulnerability policy, `linux/arm64`                                              | No — the build gate in `reusable-docker-build.yml` on every merge group and on a `main` push that builds the image, and, for the pinned upstream digests, `Pinned upstream images`                                                                 |
 | Each platform digest is a member of its published index                          | No — the preflight resolves and checks index membership over the images its own run pushed                                                                                                                                                         |
 | The validation documents re-derive unchanged                                     | No — the preflight verifies twice, the second time comparing rather than writing                                                                                                                                                                   |
 | SBOM attestation matches the durable evidence                                    | **Yes, structurally.** `cosign attest` creates the attestation during the release. There is nothing to verify before it exists                                                                                                                     |

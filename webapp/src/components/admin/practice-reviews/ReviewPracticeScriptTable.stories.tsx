@@ -93,20 +93,18 @@ export const EveryResult: Story = {
 			within(table)
 				.getAllByRole("columnheader")
 				.map((head) => head.textContent),
-		).toEqual(["Practice", "Result", "Review calls", "Script models", "Script calls", "Time"]);
+		).toEqual(["Practice", "Run", "Review calls", "Script models", "Script calls", "Time"]);
 		for (const column of ["Review calls", "Script calls", "Time"]) {
 			const head = within(table).getByRole("columnheader", { name: column });
 			await expect(getComputedStyle(head).textAlign).toBe("right");
 		}
 		const rows = within(table).getAllByRole("row").slice(1);
 		await expect(
-			rows.map(
-				(row) => cellUnder(table, within(row), "Result").firstChild?.firstChild?.textContent,
-			),
+			rows.map((row) => cellUnder(table, within(row), "Run").firstChild?.firstChild?.textContent),
 		).toEqual([
-			"Returned a result",
-			"Returned a result",
-			"Returned a result",
+			"Returned a candidate observation",
+			"Returned a candidate observation",
+			"Returned a candidate observation",
 			"Withheld",
 			"Failed: error",
 			"Failed: ran out of time",
@@ -121,7 +119,7 @@ export const ResultFromCode: Story = {
 	play: async ({ canvas }) => {
 		const table = canvas.getByRole("table");
 		const row = scriptRow(table, "Thin controllers");
-		await expect(row.getByText("Returned a result")).toBeVisible();
+		await expect(row.getByText("Returned a candidate observation")).toBeVisible();
 		await expect(row.getByText("Decision model")).toBeVisible();
 		await expect(row.getByText("Cloud")).toHaveClass("sr-only");
 		await expect(cellUnder(table, row, "Script calls")).toHaveTextContent(/^12$/u);
@@ -180,7 +178,7 @@ export const FailedWithError: Story = {
 		await expect(cellUnder(table, row, "Time")).toHaveTextContent(/^< 0\.1 s$/u);
 		const error = row.getByText(/^TypeError: change\.files is not iterable/u);
 		await expect(error).toBeVisible();
-		await expect(error.closest("td")).toBe(cellUnder(table, row, "Result"));
+		await expect(error.closest("td")).toBe(cellUnder(table, row, "Run"));
 		const edit = row.getByRole("link", { name: "Edit the script for Tests name the behaviour" });
 		await expect(edit.getAttribute("href")).toMatch(/^\/w\/demo\/admin\/practices\?/u);
 		await expect(levelsOpenedBy(edit)).toStrictEqual(["practice-edit:tests-name-the-behaviour"]);
@@ -237,7 +235,7 @@ export const ReviewCallsNotRecorded: Story = {
 	play: async ({ canvas }) => {
 		const table = canvas.getByRole("table");
 		const row = scriptRow(table, "The change explains itself");
-		await expect(row.getByText("Failed: no accepted result")).toBeVisible();
+		await expect(row.getByText("Failed: no accepted candidate observation")).toBeVisible();
 		await expect(cellUnder(table, row, "Review calls")).toHaveTextContent(/^Not recorded$/u);
 	},
 };
@@ -247,7 +245,7 @@ export const BuiltInReview: Story = {
 	play: async ({ canvas }) => {
 		const table = canvas.getByRole("table");
 		const row = scriptRow(table, "The change explains itself");
-		await expect(row.getByText("Returned a result")).toBeVisible();
+		await expect(row.getByText("Returned a candidate observation")).toBeVisible();
 		await expect(cellUnder(table, row, "Script models")).toHaveTextContent("—none");
 		await expect(cellUnder(table, row, "Review calls")).toHaveTextContent(/^4$/u);
 		await expect(row.queryByRole("link", { name: /Edit the script/u })).not.toBeInTheDocument();

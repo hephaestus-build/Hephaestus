@@ -353,7 +353,7 @@ function resultVerdict(records: LineageRecords, result: LineageResult): TraceVer
 	if (written.length > 0) {
 		const fates = written.map((entry) => feedbackFate(entry, records.item));
 		return {
-			sentence: `This result led to ${countOf(written.length, "piece", "pieces")} of feedback; ${fatesClause(fates)}.`,
+			sentence: `This observation led to ${countOf(written.length, "piece", "pieces")} of feedback; ${fatesClause(fates)}.`,
 			end: endOfMany(fates),
 		};
 	}
@@ -362,39 +362,41 @@ function resultVerdict(records: LineageRecords, result: LineageResult): TraceVer
 		case "NOT_MET": {
 			if (isRunning(review)) {
 				return {
-					sentence: "This result has led to no feedback yet, and the review remains open.",
+					sentence: "This observation has led to no feedback yet, and the review remains open.",
 					end: end("open", "the review remains open", { since: review?.createdAt }),
 				};
 			}
 			if (review?.status === "FAILED" || review?.status === "CANCELLED") {
 				return {
 					sentence:
-						"This result led to no feedback, because the review stopped before it composed any.",
+						"This observation led to no feedback, because the review stopped before it composed any.",
 					end: end("lost", "the review stopped before it composed feedback", {
 						at: review.completedAt ?? undefined,
 					}),
 				};
 			}
 			return {
-				sentence: "This result was not met but led to no feedback, so the developer was not told.",
+				sentence:
+					"The practice was not met, but no feedback was written, so the developer was not told.",
 				end: end("lost", "no feedback was written from it"),
 			};
 		}
 		case "MET": {
 			return {
-				sentence: "This result was met and led to no feedback.",
+				sentence: "The practice was met, so no feedback was written.",
 				end: end("none", "it was met, so nothing had to be sent"),
 			};
 		}
 		case "DOES_NOT_APPLY": {
 			return {
-				sentence: "This practice did not apply to the work, so the result led to no feedback.",
+				sentence: "The practice did not apply to the work, so no feedback was written.",
 				end: end("none", "the practice did not apply"),
 			};
 		}
 		case "COULD_NOT_DETERMINE": {
 			return {
-				sentence: "This result could not be determined, so it led to no feedback.",
+				sentence:
+					"The review could not determine whether the practice was met, so no feedback was written.",
 				end: end("none", "the review could not tell"),
 			};
 		}
@@ -428,7 +430,7 @@ function reviewVerdict(records: LineageRecords): TraceVerdict {
 	const recordedIds = new Set(results.map((entry) => entry.id));
 	const own = records.feedback.filter((entry) => entry.basis.some((id) => recordedIds.has(id)));
 	const fates = own.map((entry) => feedbackFate(entry, records.item));
-	const recorded = countOf(results.length, "result", "results");
+	const recorded = countOf(results.length, "observation", "observations");
 	const took =
 		review.completedAt === null ? undefined : durationBetween(review.createdAt, review.completedAt);
 
@@ -442,7 +444,7 @@ function reviewVerdict(records: LineageRecords): TraceVerdict {
 		return {
 			sentence:
 				results.length === 0
-					? "This review remains open and has recorded no result yet."
+					? "This review remains open and has recorded no observation yet."
 					: `This review remains open and has recorded ${recorded} so far.`,
 			end: end("open", "the review remains open", { since: review.createdAt }),
 		};
@@ -470,8 +472,8 @@ function reviewVerdict(records: LineageRecords): TraceVerdict {
 	const ran = review.status === "PARTIAL" ? `closed as partial${after}` : `completed${after}`;
 	if (results.length === 0) {
 		return {
-			sentence: `This review ${ran} and recorded no result.`,
-			end: end("none", "the review recorded no result"),
+			sentence: `This review ${ran} and recorded no observation.`,
+			end: end("none", "the review recorded no observation"),
 		};
 	}
 	if (own.length === 0) {
@@ -482,7 +484,7 @@ function reviewVerdict(records: LineageRecords): TraceVerdict {
 				silent > 0
 					? end(
 							"lost",
-							`${countOf(silent, "not-met result", "not-met results")} led to no feedback`,
+							`${countOf(silent, "not-met observation", "not-met observations")} led to no feedback`,
 						)
 					: end("none", "no feedback was composed"),
 		};

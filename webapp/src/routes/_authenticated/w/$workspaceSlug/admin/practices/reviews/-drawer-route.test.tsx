@@ -120,7 +120,7 @@ describe("practice review levels", () => {
 		const { router } = renderRouteAtWithRouter(`${REVIEWS}/results?severity=["MAJOR"]`);
 
 		await userEvent.click(
-			await screen.findByRole("link", openRow("result", result.summary), ROUTE_RENDER_WAIT),
+			await screen.findByRole("link", openRow("observation", result.summary), ROUTE_RENDER_WAIT),
 		);
 
 		const level = await screen.findByRole("dialog", { name: result.summary }, ROUTE_RENDER_WAIT);
@@ -136,7 +136,7 @@ describe("practice review levels", () => {
 		expect(router.state.location.pathname).toBe(`${REVIEWS}/results`);
 		expect(router.state.location.searchStr).toBe("?severity=MAJOR");
 		await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-		screen.getByRole("link", openRow("result", result.summary));
+		screen.getByRole("link", openRow("observation", result.summary));
 	});
 
 	/**
@@ -212,7 +212,7 @@ describe("practice review levels", () => {
 				).toBe(`result:${problem.resultId}`),
 			ROUTE_RENDER_WAIT,
 		);
-		within(sheet).getByText(/The trace of the result that records this problem\./u);
+		within(sheet).getByText(/The trace of the observation that records this problem\./u);
 	});
 
 	it("opens a review's results by outcome and its problems from the review's sheet", async () => {
@@ -255,7 +255,7 @@ describe("practice review levels", () => {
 		assert(sheet);
 		const listed = await waitFor(() => {
 			const found = within(sheet)
-				.getAllByRole("list", { name: /^Problems of result \d+$/u })
+				.getAllByRole("list", { name: /^Problems of observation \d+$/u })
 				.find((list) => list.textContent.includes(problem.summary));
 			assert(found);
 			return found;
@@ -277,7 +277,7 @@ describe("practice review levels", () => {
 		renderRouteAtWithRouter(`${REVIEWS}/results`);
 		const row = await screen.findByRole(
 			"link",
-			openRow("result", result.summary),
+			openRow("observation", result.summary),
 			ROUTE_RENDER_WAIT,
 		);
 
@@ -290,7 +290,7 @@ describe("practice review levels", () => {
 		await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull(), ROUTE_RENDER_WAIT);
 		await waitFor(() =>
 			expect(document.activeElement).toBe(
-				screen.getByRole("link", openRow("result", result.summary)),
+				screen.getByRole("link", openRow("observation", result.summary)),
 			),
 		);
 	});
@@ -632,7 +632,7 @@ it("keeps hidden result facts and navigation without restoring its text", async 
 	const { router } = renderRouteAtWithRouter(`${REVIEWS}/results?detail=result:${detail.id}`);
 	const heading = await screen.findByRole(
 		"heading",
-		{ name: "Result text unavailable", level: 2 },
+		{ name: "Observation text unavailable", level: 2 },
 		ROUTE_RENDER_WAIT,
 	);
 	const dialog = heading.closest<HTMLElement>('[role="dialog"]');
