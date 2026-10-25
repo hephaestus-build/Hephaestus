@@ -5,7 +5,6 @@ import type { OwnFeedbackRef } from "@/api/types.gen";
 import { InlineLink } from "@/components/common/InlineLink";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { useNow } from "@/components/common/use-now";
-import { DELIVERY_STATE_DEFS } from "@/components/practice-vocabulary/delivery-state-defs";
 import { FEEDBACK_DESTINATION_DEFS } from "@/components/practice-vocabulary/feedback-destination-defs";
 import { FEEDBACK_RESOLUTION_DEFS } from "@/components/practice-vocabulary/feedback-resolution-defs";
 import { FEEDBACK_USEFULNESS_DEFS } from "@/components/practice-vocabulary/feedback-usefulness-defs";
@@ -38,15 +37,16 @@ const LINK_AT_REST = "text-mentor underline";
 const FEEDBACK_BOX = "rounded-xl border border-foreground/15 bg-background p-3 shadow-sm";
 
 /**
- * The feedback an observation gave, one box each: where it went (on the work, on the practice page,
- * in the conversation with Heph), its delivery state as every feedback surface names it, and the way
- * to read it there once it was delivered.
+ * The delivered feedback an observation gave, one box each: where it went (on the work, on the
+ * practice page, in the conversation with Heph), when it was delivered, and the way to read it there.
+ * The caller passes delivered feedback only.
  * Nothing here answers it: the reader responds where the feedback is. An observation has no rating
  * of its own (the server records responses per piece of feedback only). A response already given is
  * said in one read-only line.
  */
-export function ObservationFeedback({ feedback, links }: ObservationFeedbackProps) {
+export function ObservationFeedback({ feedback: given, links }: ObservationFeedbackProps) {
 	const today = new Date(useNow());
+	const feedback = deliveredOnly(given);
 	if (feedback.length === 0) {
 		return null;
 	}
@@ -68,10 +68,11 @@ export function ObservationFeedback({ feedback, links }: ObservationFeedbackProp
 							{index + 1}
 						</span>
 						<StatusBadge def={FEEDBACK_DESTINATION_DEFS[piece.destination]} />
-						<StatusBadge def={DELIVERY_STATE_DEFS[piece.state]} />
-						{piece.state === "DELIVERED" && piece.deliveredAt !== null && (
+						{/* Only delivered feedback reaches this block, so a state label would say nothing:
+						    the time it was delivered does. */}
+						{piece.deliveredAt !== null && (
 							<time dateTime={piece.deliveredAt.toISOString()} className="text-muted-foreground">
-								{formatDayTime(piece.deliveredAt, today)}
+								Delivered {formatDayTime(piece.deliveredAt, today)}
 							</time>
 						)}
 					</p>
@@ -81,6 +82,11 @@ export function ObservationFeedback({ feedback, links }: ObservationFeedbackProp
 			))}
 		</ul>
 	);
+}
+
+/** The feedback that reached the developer: the only feedback the developer pages name. */
+export function deliveredOnly(feedback: OwnFeedbackRef[]): OwnFeedbackRef[] {
+	return feedback.filter((piece) => piece.state === "DELIVERED");
 }
 
 /** The way to the feedback where it lives: its comment on the work, or its place in Hephaestus. */
