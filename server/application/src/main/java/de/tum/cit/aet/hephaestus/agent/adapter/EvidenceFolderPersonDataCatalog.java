@@ -823,6 +823,33 @@ public class EvidenceFolderPersonDataCatalog implements PersonEvidenceErasure, W
                         "job_id", rs.getString(1), "copy_id", rs.getString(2), "workspace_id", rs.getString(3)))));
     }
 
+    /**
+     * Retires the receipts of review jobs that retention deleted. Once the job row is gone, no result reaches its
+     * receipt (the review item's job reference is cleared), so the receipt vouches for nothing and keeps identities
+     * without a purpose. A receipt that still names people asks its store to remove the copy, as a workspace purge
+     * does, so a store that is offline keeps them until it returns and confirms. A receipt whose removal is confirmed
+     * and whose identities are cleared is deleted. A receipt that an erasure is processing is left to the erasure.
+     *
+     * @return the receipts changed or deleted, at most twice {@code batchSize}
+     */
+    public int retireReceiptsOfDeletedJobs(int batchSize) {
+        int requested = jdbc.update("""
+            UPDATE person_evidence_copy SET state='PURGE_REQUESTED' WHERE id IN (
+              SELECT c.id FROM person_evidence_copy c
+              WHERE c.state IN ('CAPTURING','READY')
+                AND NOT EXISTS(SELECT 1 FROM review_job j WHERE j.id=c.job_id AND j.workspace_id=c.workspace_id)
+              LIMIT ?)
+            """, batchSize);
+        int deleted = jdbc.update("""
+            DELETE FROM person_evidence_copy WHERE id IN (
+              SELECT c.id FROM person_evidence_copy c
+              WHERE c.state='ERASED' AND c.payload='{}'::jsonb
+                AND NOT EXISTS(SELECT 1 FROM review_job j WHERE j.id=c.job_id AND j.workspace_id=c.workspace_id)
+              LIMIT ?)
+            """, batchSize);
+        return requested + deleted;
+    }
+
     /** Queue removal in the workspace transaction; workers can acknowledge only after it commits. */
     @Override
     public void deleteWorkspaceData(Long workspaceId) {

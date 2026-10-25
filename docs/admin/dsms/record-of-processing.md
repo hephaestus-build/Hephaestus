@@ -337,12 +337,12 @@ Pending delivery blocks both passes. Row deletion sets the job reference of a re
 
 Evidence-copy receipts (`person_evidence_copy`)
 
-A receipt records the copy of review inputs that one attempt made on a worker volume. It names the provider identities and repositories that the copy contains, and the earlier jobs whose words it copied. The receipt outlives the copy. Hephaestus uses it for two purposes:
+A receipt records the copy of review inputs that one attempt made on a worker volume. It names the provider identities and repositories that the copy contains, and the earlier jobs whose words it copied. The receipt outlives the copy. While its review job row is retained, Hephaestus uses it for two purposes:
 
 - Person erasure finds the copies and the copied words of the erased person.
-- A later review can copy an earlier review's words only while the earlier job's receipt vouches for them. An erased or purged receipt keeps refusing those words.
+- A later review can copy the job's words only while the receipt vouches for them. An erased or purged receipt keeps refusing those words.
 
-Receipts have no time-based expiry. Person erasure clears the identities of the receipts that name the person. Workspace purge clears them after each worker volume confirms that it deleted its copies. The cleared receipt keeps only technical coordinates and its state.
+When retention deletes the review job row, 90 days after the job ends (`AGENT_ROW_RETENTION`), neither purpose remains: no result reaches the receipt any more. The next retention run asks the worker volume that holds the copy to confirm its removal. The worker then clears the identities, and the following run deletes the receipt. A worker volume that is offline keeps the identities until it returns and confirms. Before that, person erasure clears the identities of the receipts that name the person, and workspace purge clears all receipts of the workspace.
 
 Source evidence retention
 
@@ -757,7 +757,7 @@ and inline provider comments are not recalled. This is correction and delivery c
 Slack channel retention defaults to 30 days, configurable per connection with a 180-day ceiling.
 Eligibility is measured from a thread's last message, so an active thread can contain much older
 messages. This is not a maximum age for each message and does not apply to Heph DMs. Daily cleanup
-and failures can delay removal. Contributor profiles, conversations, practice results, feedback, consent records, evidence-copy receipts, and several operational stores have no independent time-based expiry.
+and failures can delay removal. Contributor profiles, conversations, practice results, feedback, consent records, and several operational stores have no independent time-based expiry.
 
 1. Choose a necessity review and deletion trigger.
 2. Document them.

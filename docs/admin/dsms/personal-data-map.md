@@ -343,8 +343,8 @@ exported as an unfiltered Git object archive.
 Workspace purge queues removal of all mounted attempt copies before deleting job rows. The request
 commits with the workspace purge. It does not wait for a worker inside that database transaction.
 An offline mounted store keeps its receipt and exact identity keys until it returns and confirms
-folder deletion. After that confirmation, purged-workspace receipts keep only technical coordinates and
-the deletion state. Person erasure still waits for every selected store to acknowledge deletion.
+folder deletion. After that confirmation, the next review job retention run deletes the receipts of the
+purged workspace. Person erasure still waits for every selected store to acknowledge deletion.
 
 ### Copied evidence and secondary subjects
 
