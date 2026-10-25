@@ -25,10 +25,12 @@ import de.tum.cit.aet.hephaestus.integration.scm.sync.status.ScmResourceCountRea
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.time.ZoneId;
-import java.time.ZonedDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -47,6 +49,12 @@ class GitLabConnectionSyncStateProviderTest extends BaseUnitTest {
 
     private static final long WORKSPACE_ID = 7L;
     private static final long CONNECTION_ID = 70L;
+    private static final Clock NOON = Clock.fixed(Instant.parse("2026-07-01T12:00:00Z"), ZoneOffset.UTC);
+
+    /** {@code localTime} in the zone the server schedules in. */
+    private static Instant scheduled(String localTime) {
+        return LocalDateTime.parse(localTime).atZone(ZoneId.systemDefault()).toInstant();
+    }
 
     @Mock
     private ConnectionService connectionService;
@@ -67,11 +75,12 @@ class GitLabConnectionSyncStateProviderTest extends BaseUnitTest {
     private ScmResourceCountReader countReader;
 
     private GitLabConnectionSyncStateProvider provider;
+    private SyncSchedulerProperties syncProps;
     private IntegrationRef ref;
 
     @BeforeEach
     void setUp() {
-        SyncSchedulerProperties syncProps = new SyncSchedulerProperties(
+        syncProps = new SyncSchedulerProperties(
                 true,
                 7,
                 "0 0 3 * * *",
@@ -80,15 +89,20 @@ class GitLabConnectionSyncStateProviderTest extends BaseUnitTest {
                 new SyncSchedulerProperties.FilterProperties(Set.of(), Set.of(), Set.of()),
                 new SyncSchedulerProperties.DiscussionsProperties(false),
                 new SyncSchedulerProperties.ProjectsProperties(false));
-        provider = new GitLabConnectionSyncStateProvider(
-                connectionService,
-                rateLimitTrackerProvider,
-                syncProps,
-                repositoryToMonitorRepository,
-                repositoryRepository,
-                countReader);
+        provider = provider(syncProps, NOON);
         ref = new IntegrationRef(IntegrationKind.GITLAB, WORKSPACE_ID, "gitlab.com:1");
         lenient().when(rateLimitTrackerProvider.getIfAvailable()).thenReturn(rateLimitTracker);
+    }
+
+    private GitLabConnectionSyncStateProvider provider(SyncSchedulerProperties properties, Clock clock) {
+        return new GitLabConnectionSyncStateProvider(
+                connectionService,
+                rateLimitTrackerProvider,
+                properties,
+                repositoryToMonitorRepository,
+                repositoryRepository,
+                countReader,
+                clock);
     }
 
     @Nested
@@ -144,30 +158,20 @@ class GitLabConnectionSyncStateProviderTest extends BaseUnitTest {
         }
 
         @Test
-        void shouldComputeNextScheduledSyncAtFromCron() {
+        void shouldReportTheCronsNextRunAfterTheClock() {
             when(connectionService.findActiveGitLabConfig(WORKSPACE_ID)).thenReturn(Optional.empty());
-            Instant before = Instant.now();
+            Clock clock = Clock.fixed(scheduled("2026-10-24T03:34"), ZoneOffset.UTC);
 
-            ConnectionSyncDetails details = provider.describe(ref, CONNECTION_ID);
+            Instant next =
+                    provider(syncProps, clock).describe(ref, CONNECTION_ID).nextScheduledSyncAt();
 
-            // The configured cron fires daily at 03:00: assert the actual next occurrence, not merely
-            // "in the future" (which any future instant, e.g. now+1s, would satisfy).
-            Instant next = details.nextScheduledSyncAt();
-            assertThat(next).isNotNull();
-            ZonedDateTime fire = next.atZone(ZoneId.systemDefault());
-            assertThat(fire.getHour()).isEqualTo(3);
-            assertThat(fire.getMinute()).isZero();
-            assertThat(fire.getSecond()).isZero();
-            // 25h, not 24h: on the DST fall-back day the gap to the next 03:00 fire stretches to 25h.
-            assertThat(next).isAfter(before).isBeforeOrEqualTo(before.plus(Duration.ofHours(25)));
+            assertThat(next).isEqualTo(scheduled("2026-10-25T03:00"));
         }
 
         @Test
         void shouldYieldNullNextScheduledSyncAtForAnInvalidCron() {
             when(connectionService.findActiveGitLabConfig(WORKSPACE_ID)).thenReturn(Optional.empty());
-            GitLabConnectionSyncStateProvider brokenCron = new GitLabConnectionSyncStateProvider(
-                    connectionService,
-                    rateLimitTrackerProvider,
+            GitLabConnectionSyncStateProvider brokenCron = provider(
                     new SyncSchedulerProperties(
                             true,
                             7,
@@ -177,9 +181,7 @@ class GitLabConnectionSyncStateProviderTest extends BaseUnitTest {
                             new SyncSchedulerProperties.FilterProperties(Set.of(), Set.of(), Set.of()),
                             new SyncSchedulerProperties.DiscussionsProperties(false),
                             new SyncSchedulerProperties.ProjectsProperties(false)),
-                    repositoryToMonitorRepository,
-                    repositoryRepository,
-                    countReader);
+                    NOON);
 
             assertThat(brokenCron.describe(ref, CONNECTION_ID).nextScheduledSyncAt())
                     .isNull();
@@ -266,14 +268,10 @@ class GitLabConnectionSyncStateProviderTest extends BaseUnitTest {
         }
 
         private GitLabConnectionSyncStateProvider backfillEnabledProvider() {
-            return new GitLabConnectionSyncStateProvider(
-                    connectionService,
-                    rateLimitTrackerProvider,
+            return provider(
                     new SyncSchedulerProperties(
                             true, 7, "0 0 3 * * *", 15, new BackfillProperties(true, 50, 100, 60), null, null, null),
-                    repositoryToMonitorRepository,
-                    repositoryRepository,
-                    countReader);
+                    NOON);
         }
 
         private RepositoryToMonitor monitor(long id, String nameWithOwner) {
