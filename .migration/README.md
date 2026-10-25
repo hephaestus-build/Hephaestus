@@ -8,3 +8,7 @@ heading below the unchanged `### Next release` anchor, and then removes them.
 
 For changes to current instructions outside version history, see
 [Current migration-guide instructions](https://docs.hephaestus.build/contributor/release-management#current-migration-guide-instructions).
+
+If old and new runtime roles cannot use the database together, start the heading with `#### 🔴 Stop every role`.
+The changelog compatibility guard and the upgrade test read that heading: see
+[Expand and contract](https://docs.hephaestus.build/contributor/database-migration#expand-and-contract).

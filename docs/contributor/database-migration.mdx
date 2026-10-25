@@ -109,28 +109,80 @@ if history never changes underneath an instance that already ran part of it.
    New changelogs go at the end. The maintainer-approved v0.77.4 cut-point guard is a
    changelog-level precondition at the head, not a change to released changesets. It protects
    both startup and `changeLogSyncToTag` without changing checksums or include order.
-3. **Destructive changes follow deprecate-then-remove across two releases.** Renaming or
-   dropping a released table or column happens in two steps.
-   Release *N* stops reads and writes, and migrates data if necessary.
-   Release *N+1* drops it. A single
+3. **Release *N* runs correctly on the schema of release *N+1*.** A single
    release must stay bootable against the schema left behind by the previous one.
-   The previous release must also stay correct against the new schema.
    The [migrate run mode](../admin/runtime-roles#database-migrations) migrates before the rollout, so the old roles run on the new schema until they stop.
+   After a rollback or a failed migration, the previous release also runs on that schema.
+   [Expand and contract](#expand-and-contract) gives the rules.
    An ADR can grant an exception: see [Practice model cutover](#practice-model-cutover)
    and [Heph conversation ledger](#heph-conversation-ledger).
-   Such a release ships a `.migration` fragment that tells operators to stop every role before the migration.
 
-CI enforces 1 and 2 mechanically (see below). 3 is a review responsibility. The sole archival
+CI enforces rules 1 and 2.
+For rule 3, the compatibility guard rejects the change sets that [Expand and contract](#expand-and-contract) lists.
+The seeded release upgrade also runs the previous release on the new schema.
+[CI validation](#ci-validation) describes both checks. Review covers what neither checks.
+
+The sole archival
 transition is the verified v0.77.4 baseline: archived files remain byte-identical and test-only.
 The baseline and subsequent migrations follow the same immutability policy. Existing installations
 must follow the [baseline synchronization runbook](../admin/liquibase-baseline-runbook).
 
+### Expand and contract
+
+A change that the previous release cannot run beside takes two releases.
+Release *N* stops reads and writes, and migrates data if necessary.
+It adds the object to the [pending contractions](#pending-contractions).
+A later release drops the object.
+To rename a table or column, add the new one, copy the data, and drop the old one later.
+
+The changelog compatibility guard checks each changelog that the latest release tag does not have.
+It rejects these change sets and files:
+
+- A `dropTable` or `dropColumn`, unless the latest release lists the object in its pending contractions.
+- A `renameTable`, `renameColumn` or `modifyDataType`.
+- An `addNotNullConstraint` on a column of the previous release. That release can write NULL into it.
+- A new NOT NULL column without a default value. The inserts of the previous release do not set it.
+- An `addUniqueConstraint`, `addForeignKeyConstraint` or unique `createIndex` on a table of the previous release.
+  The same applies to a unique or foreign-key constraint inside the `<column>` of an `addColumn`.
+- A foreign key without `onDelete` `CASCADE` or `SET NULL`, also on a new table, if it references a table of the previous release.
+  That release can delete a referenced row.
+- A `dropIndex` or `dropUniqueConstraint` on a table of the previous release. Its upserts can need the index.
+- Raw `<sql>` with `DROP TABLE`, `DROP COLUMN`, `ALTER TABLE … RENAME`, `ALTER … TYPE` or `SET NOT NULL`.
+- Raw `<sql>` with `ADD [COLUMN] … NOT NULL` and no `DEFAULT`.
+- A `<sqlFile>`, and a changelog file that is not XML. The guard cannot read them.
+
+Except for the foreign-key delete rule, these rules do not apply to a table that a new changelog creates.
+The constraint rules also do not apply to new columns without a default value, because the previous release leaves them NULL.
+The guard reads each change set alone, not the order of change sets.
+
+Liquibase 5.0.x has no `addCheckConstraint` change type. Review a raw `CHECK` constraint.
+The guard also does not read a raw `CREATE UNIQUE INDEX` or `ADD CONSTRAINT`. Review these too.
+Write a contraction with a Liquibase change type, so that the guard can read the object.
+
+A change set that fails rolls back.
+Thus, a failed migration stops at a change set boundary between the two releases.
+Each change set obeys the rules, so the previous release also runs on that partial schema.
+
+Liquibase 5.0.x commits a change set before it writes its history row.
+If the process stops between the two, the next run applies that change set again.
+A change set with `runInTransaction="false"` also leaves its completed statements when it fails.
+Where you can, write a change set so that it can run again, for example with `IF NOT EXISTS`.
+
+A release that cannot obey these rules ships a `.migration` fragment whose heading starts with `#### 🔴 Stop every role`.
+The waiver covers the whole release.
+The guard then permits all its change sets.
+The [seeded release upgrade](#ci-validation) then does not start the previous release on the new schema.
+Both print a warning that names the entries and says that this coverage is off for the release.
+[Rollouts and rollback](../admin/runtime-roles#rollouts-and-rollback) gives the operator procedure for such a release.
+
 ### Pending contractions
 
-Objects the application stopped writing, to be dropped in the release after the one that shipped
+Objects the application stopped writing, to be dropped in a release after the one that shipped
 the listed changelog. Each is excluded from the
-drift gate in `--exclude-objects` (`server/application/build.gradle.kts`, `liquibaseDiff`). The
-changeset that drops the object also removes its exclusion.
+drift gate in `--exclude-objects` (`server/application/build.gradle.kts`, `liquibaseDiff`).
+The compatibility guard reads this table from the latest release tag.
+Thus, it permits a drop only after a release has listed the object.
+The changeset that drops the object also removes its row and its exclusion.
 
 | Object                                                                           | Changelog that stopped writing it | Exclusion to remove               |
 | -------------------------------------------------------------------------------- | --------------------------------- | --------------------------------- |
@@ -153,13 +205,18 @@ changeset that drops the object also removes its exclusion.
    No existing `<include>` in `master.xml` can have a removal, order change, or attribute change.
    Either prohibited change fails the check. The v0.77.4 transition also requires the
    pinned original master and byte-identical archives. It is not a general squash bypass.
-3. **Seeded release upgrade** — `release-upgrade.yml` runs three independent paths.
+3. **Changelog compatibility** — Security workflow, same job, step *Changelog compatibility guard*.
+   `scripts/check-changelog-compatibility.ts` applies [Expand and contract](#expand-and-contract).
+   It checks the changelogs that the latest release tag does not have.
+   It reads the tags, so the job checks out the full history.
+4. **Seeded release upgrade** — `release-upgrade.yml` runs three independent paths.
    One upgrades the previous stable release.
    One follows pinned v0.77.4 → baseline synchronization → target release.
    One follows pinned v0.76.0 → expected refusal. Successful upgrades check readiness, seeded relationships, the practice
    catalog and authenticated reads. The refusal path checks both startup and `changeLogSyncToTag`.
    It checks the required v0.77.4 message, unchanged data and history, and a released lock. Release publication
    depends on every path. The same matrix also runs weekly.
+   [Previous release on the new schema](#previous-release-on-the-new-schema) describes the other checks of the first path.
 
 The empty-database replay sets no context filter. It evaluates the full chain, but preconditions can
 skip changesets. A successful replay does not prove that every change ran. It also does not reproduce
@@ -170,6 +227,51 @@ Empty-database replay cannot prove that existing rows satisfy a new `NOT NULL` o
 and it does not exercise rollback. Preconditions run during replay, but only against the states that
 replay reaches. The JPA diff cannot establish equivalence for objects Hibernate does not model, such
 as triggers, partitioning and partial-index predicates. Verify those through database-level tests.
+
+### Previous release on the new schema
+
+After the upgrade from the previous stable release, the driver runs the previous release in three ways:
+
+1. **Server and worker roles on the new schema.** The previous release starts while the candidate runs.
+   It runs both roles in one process, with the Docker sandbox and its own agent image.
+   The e2e profile validates every entity against the schema at start.
+   The previous release then passes readiness and the authenticated reads, and creates a workspace.
+   Its worker claims a queued review through the native claim queries and writes the job back.
+2. **Server and worker roles on a partial schema.** An event trigger stops the candidate's migration of a copy at a DDL statement.
+   The migration stops after about half of the new change sets.
+   The previous release passes the same checks on that copy, including the claim.
+   Then the migration runs again and must complete.
+   If no later change set runs DDL, the migration completes.
+   The log then says that no partial schema exists.
+3. **Webhook role.** The webhook receivers of both releases publish the same GitHub and GitLab delivery to NATS.
+   Apart from the delivery id, the two stream messages must have the same subject and body.
+   The candidate must keep each header of the previous release with its value. It can add a header.
+
+The webhook receiver reads the database only for an Outline connection, through an entity that step 1 validates.
+Its risk is the NATS contract with the server of the other release.
+Each release tests its own receiver against its own consumer.
+Thus, the server of the previous release reads the messages of the candidate's receiver.
+The test does not prove that the candidate's server reads a message without a header that the candidate added.
+
+Hibernate does not validate native queries, such as the claim queries of the review queue.
+Thus, the driver queues one review the way the candidate's enqueue path writes it.
+The review comes from the candidate's `practice-native/result-parent.sql` fixture.
+The practice pins a review method with every model slot, and the job freezes the bound model with its price.
+The review item points at the job.
+If the fixture does not fit a partial schema, the error says so.
+
+The previous release creates the AI model, its price and the workspace binding through its own API.
+The model points at an endpoint that nothing answers.
+The worker claims the job, sets itself as its owner and starts it.
+The attempt then fails while it captures the reviewed source, which is the expected end.
+Heph turns are not claimed.
+
+Only the container of the previous release gets the Docker socket.
+The driver labels each sandbox resource that this container starts, and removes them all at the end.
+
+If the candidate adds fewer than two change sets, no partial schema exists, and the log says so.
+If a migration guide entry of the candidate stops every role, the previous release does not start.
+The log names the entry in a warning.
 
 ## Baseline release gates
 

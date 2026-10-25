@@ -26,6 +26,48 @@ export function migrationGuideSections(migration: string) {
 	});
 }
 
+/**
+ * A migration-guide entry with this heading says that its release cannot run beside the previous one.
+ * The upgrade test and the changelog compatibility guard read it; `database-migration.mdx` § Expand and contract owns the rule.
+ */
+export const STOP_EVERY_ROLE_HEADING = "#### 🔴 Stop every role";
+
+const releaseVersion = (heading: string): readonly number[] | undefined =>
+	/^### v(?<version>\d+\.\d+\.\d+)$/u.exec(heading)?.groups?.version?.split(".").map(Number);
+
+function newer(version: readonly number[], than: readonly number[]): boolean {
+	const index = version.findIndex((part, position) => part !== than[position]);
+	return index !== -1 && (version[index] ?? 0) > (than[index] ?? 0);
+}
+
+/**
+ * The stop-every-role headings of the entries that an upgrade from `previousVersion` (X.Y.Z) runs: pending
+ * `.migration` fragments, and the MIGRATION.md entries of later versions. `release:version` moves the fragments of a
+ * release into MIGRATION.md, so the tree of a release carries them there.
+ */
+export function stopEveryRoleEntries(
+	migration: string,
+	fragments: readonly string[],
+	previousVersion: string,
+): string[] {
+	const previous = releaseVersion(`### v${previousVersion}`);
+	if (previous === undefined) {
+		throw new Error(`migration-guide: ${previousVersion} is not an X.Y.Z version`);
+	}
+	const upgrade = migrationGuideSections(migration)
+		.filter((section) => {
+			const version = releaseVersion(section.heading);
+			return (
+				section.heading === "### Next release" ||
+				(version !== undefined && newer(version, previous))
+			);
+		})
+		.map((section) => section.content);
+	return [...upgrade, ...fragments].flatMap((entry) =>
+		entry.split("\n").filter((line) => line.startsWith(STOP_EVERY_ROLE_HEADING)),
+	);
+}
+
 export function renderMigrationGuide(migration: string): string {
 	const sections = migrationGuideSections(migration);
 	const starts = sections.filter((section) => section.heading === "### Next release");

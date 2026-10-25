@@ -1,17 +1,20 @@
 import { spawnSync } from "node:child_process";
-import { randomUUID } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { createHmac, randomUUID } from "node:crypto";
+import { appendFileSync, readFileSync, readdirSync, statSync } from "node:fs";
 import process from "node:process";
 import { setTimeout as sleep } from "node:timers/promises";
 
-import { asArray, asRecord, asString } from "./lib/json.ts";
+import { asArray, asRecord, asString, parseJson } from "./lib/json.ts";
 import { CAPTURE_LIMIT_BYTES } from "./lib/process.ts";
 import {
+	deliveryDifference,
 	PEOPLE_LAYOUT_SQL,
+	partialMigration,
 	peopleLayout,
 	preservationSql,
 	type PeopleLayout,
 	type PreservedPeopleIds,
+	type StoredDelivery,
 } from "./lib/release-upgrade-fingerprint.ts";
 import { researchConsentFields } from "./lib/research-consent.ts";
 
@@ -52,11 +55,43 @@ if (requiredSeeds.size > 0 && upgradePath !== "latest") {
 	throw new Error("--require-seed applies only to the latest upgrade path");
 }
 
+// The latest path also starts the previous release on the candidate's schema, unless the candidate's migration
+// guide entries say that its release stops every role. Those entries come after the previous version.
+const previousVersion = process.env.PREVIOUS_VERSION ?? "";
+const previousAgentImage = process.env.PREVIOUS_AGENT_IMAGE ?? "";
+if (upgradePath === "latest" && !/^\d+\.\d+\.\d+$/u.test(previousVersion)) {
+	throw new Error("The latest path needs PREVIOUS_VERSION, the previous release as X.Y.Z");
+}
+if (upgradePath === "latest" && previousAgentImage === "") {
+	throw new Error(
+		"The latest path needs PREVIOUS_AGENT_IMAGE, the agent image of the previous release",
+	);
+}
+let stopEveryRole: string[] = [];
+if (upgradePath === "latest") {
+	// Only this path needs the installed dependencies, so the pinned paths run without an install.
+	const { stopEveryRoleEntries } = await import("./lib/migration-guide.ts");
+	const fragmentDirectory = new URL("../.migration/", import.meta.url);
+	stopEveryRole = stopEveryRoleEntries(
+		readFileSync(new URL("../MIGRATION.md", import.meta.url), "utf8"),
+		readdirSync(fragmentDirectory)
+			.filter((file) => file.endsWith(".md") && file !== "README.md")
+			.map((file) => readFileSync(new URL(file, fragmentDirectory), "utf8")),
+		previousVersion,
+	);
+}
+
 const CUT_POINT_MESSAGE =
 	"install v0.77.4 and start it once, then follow the baseline synchronization runbook";
 
 const WORKSPACE_SLUG = "upgrade-fixture";
 const ADOPTION_WORKSPACE_SLUG = "upgrade-adoption-fixture";
+const PREVIOUS_RELEASE_WORKSPACE_SLUG = "upgrade-previous-fixture";
+// A copy of the seeded database that the partial migration runs on.
+const PARTIAL_DATABASE = "hephaestus_partial";
+const MIGRATION_STOP_MESSAGE = "the upgrade test stops the migration here";
+const WEBHOOK_SECRET = "upgrade-test-webhook-secret";
+const QUEUED_REVIEW_JOB = "00000000-0000-0000-0000-000000978041";
 const HTTP_TIMEOUT_MS = 30_000;
 const READINESS_TIMEOUT_MS = 2000;
 
@@ -122,11 +157,50 @@ function migrateCandidate(image: string, database = "hephaestus"): void {
 	}
 }
 
+/** The previous release's agent image, which its worker pulls and checks at start. */
+interface Worker {
+	readonly agentImage: string;
+}
+
+/** A role set of server and worker in one JVM, which claims queued reviews through the Docker sandbox backend. */
+function workerEnvironment(worker: Worker | undefined): string[] {
+	if (worker === undefined) {
+		// Exercise the server/database upgrade without optional worker infrastructure.
+		return ["--env", "HEPHAESTUS_RUNTIME_WORKER_ENABLED=false", "--env", "AGENT_ENABLED=false"];
+	}
+	const socket = "/var/run/docker.sock";
+	return [
+		"--volume",
+		`${socket}:${socket}`,
+		"--group-add",
+		String(statSync(socket).gid),
+		"--env",
+		"HEPHAESTUS_RUNTIME_WORKER_ENABLED=true",
+		"--env",
+		"AGENT_ENABLED=true",
+		"--env",
+		`HEPHAESTUS_AGENT_IMAGE_REFERENCE=${worker.agentImage}`,
+		// Labels every sandbox resource the worker starts, so the sweep finds them.
+		"--env",
+		`SANDBOX_DOCKER_OWNER=${runId}`,
+		// Readiness reports practice review down without Git checkout.
+		"--env",
+		"GIT_CHECKOUT_ENABLED=true",
+		"--env",
+		"HEPHAESTUS_FABRIC_ROOT=/tmp/hephaestus-git",
+
+		// The buildpack's 10M direct-memory default is too small for the Docker client.
+		"--env",
+		"JAVA_TOOL_OPTIONS=-XX:MaxDirectMemorySize=128M",
+	];
+}
+
 function startApplication(
 	name: string,
 	image: string,
 	database = "hephaestus",
 	migratesAtStart = true,
+	worker?: Worker,
 ): number {
 	docker(
 		"run",
@@ -144,13 +218,9 @@ function startApplication(
 		...databaseEnvironment(database),
 		"--env",
 		"HEPHAESTUS_SYNC_NATS_ENABLED=false",
-		"--env",
-		// Exercise the server/database upgrade without optional worker infrastructure.
-		"HEPHAESTUS_RUNTIME_WORKER_ENABLED=false",
+		...workerEnvironment(worker),
 		"--env",
 		"HEPHAESTUS_RUNTIME_WEBHOOK_ENABLED=false",
-		"--env",
-		"AGENT_ENABLED=false",
 		"--env",
 		"HEPHAESTUS_WORKSPACE_INIT_DEFAULT=false",
 		"--env",
@@ -162,8 +232,8 @@ function startApplication(
 	return publishedPort(name);
 }
 
-function publishedPort(name: string): number {
-	const mapping = docker("port", name, "8080/tcp");
+function publishedPort(name: string, containerPort = "8080/tcp"): number {
+	const mapping = docker("port", name, containerPort);
 	const port = Number(mapping.slice(mapping.lastIndexOf(":") + 1));
 	if (!Number.isInteger(port)) {
 		throw new TypeError(`Could not parse application port from ${mapping}`);
@@ -492,8 +562,9 @@ function preservedPeople(layout: PeopleLayout): PreservedPeopleIds {
 }
 
 function executeFixture(
-	name: "released-seed.sql" | "assert-migrated.sql" | "assert-upgraded.sql",
-	directory: "practice-cutover" | "heph-upgrade" = "practice-cutover",
+	name: "released-seed.sql" | "assert-migrated.sql" | "assert-upgraded.sql" | "result-parent.sql",
+	directory: "practice-cutover" | "heph-upgrade" | "practice-native" = "practice-cutover",
+	database = "hephaestus",
 ): void {
 	const input = readFileSync(
 		new URL(`../server/application/src/test/resources/db/${directory}/${name}`, import.meta.url),
@@ -507,7 +578,7 @@ function executeFixture(
 			postgres,
 			"psql",
 			"--username=root",
-			"--dbname=hephaestus",
+			`--dbname=${database}`,
 			"--set=ON_ERROR_STOP=1",
 			"--single-transaction",
 			"--file=-",
@@ -519,13 +590,13 @@ function executeFixture(
 	}
 }
 
-function count(sql: string): number {
+function count(sql: string, database = "hephaestus"): number {
 	const value = docker(
 		"exec",
 		postgres,
 		"psql",
 		"--username=root",
-		"--dbname=hephaestus",
+		`--dbname=${database}`,
 		"--tuples-only",
 		"--no-align",
 		"--command",
@@ -609,8 +680,8 @@ async function assertFreshSchemaEqualsUpgraded(image: string): Promise<void> {
 	console.log(`Fresh and upgraded schemas match (${upgraded.length} facts).`);
 }
 
-function appliedChangeCount(): number {
-	return count("SELECT count(*) FROM databasechangelog;");
+function appliedChangeCount(database = "hephaestus"): number {
+	return count("SELECT count(*) FROM databasechangelog;", database);
 }
 
 // Use the target image's bundled Liquibase and resources, not a separately versioned CLI.
@@ -731,6 +802,504 @@ function synchronizeBaseline(image: string): void {
 	}
 }
 
+/** A check that passed without testing anything: a warning in the log and a line in the job summary. */
+function summarize(line: string): void {
+	console.log(`::warning::${line}`);
+	const summary = process.env.GITHUB_STEP_SUMMARY;
+	if (summary !== undefined && summary !== "") {
+		appendFileSync(summary, `- ${line}\n`);
+	}
+}
+
+/** Removes the sandbox containers, networks and volumes that the previous release's worker started. */
+function sweepSandboxes(): void {
+	const filter = `label=hephaestus.sandbox-owner=${runId}`;
+	for (const kind of ["container", "network", "volume"] as const) {
+		const listed = spawnSync(
+			"docker",
+			kind === "container"
+				? ["ps", "--all", "--quiet", "--filter", filter]
+				: [kind, "ls", "--quiet", "--filter", filter],
+			{ encoding: "utf8" },
+		);
+		// A docker that cannot start leaves nothing to sweep, and must not hide the error that ended the run.
+		if (listed.error !== undefined) {
+			continue;
+		}
+		const ids = listed.stdout.split("\n").filter(Boolean);
+		if (ids.length > 0) {
+			spawnSync("docker", kind === "container" ? ["rm", "--force", ...ids] : [kind, "rm", ...ids], {
+				stdio: "ignore",
+			});
+		}
+	}
+}
+
+function printLogs(name: string): void {
+	try {
+		console.error(`\n--- ${name} logs ---\n${docker("logs", name)}`);
+	} catch {
+		// Preserve the upgrade failure if diagnostic collection also fails.
+	}
+}
+
+/**
+ * Starts the previous release on a schema that is ahead of it, as a rollout or a rollback does, and smokes it:
+ * readiness, the core reads, and a new workspace, which writes the workspace and its practice catalog. The e2e
+ * profile validates every entity against the schema at start. Its own migration finds nothing to apply.
+ */
+async function assertPreviousReleaseRuns(database: string, schema: string): Promise<void> {
+	const name = `${runId}-previous-on-${database}`;
+	try {
+		withFixture(database, () => seedReview(database));
+		const port = startApplication(name, previousImage, database, true, {
+			agentImage: previousAgentImage,
+		});
+		await waitUntilReady(name, port, ["/readyz", "/actuator/health/readiness"]);
+		const session = await login(port, "alice");
+		await completeTransparencyNotice(port, session);
+		await assertCoreReads(port, session);
+		await seedWorkspace(port, session, PREVIOUS_RELEASE_WORKSPACE_SLUG);
+		const modelId = await bindReviewModel(port, session);
+		withFixture(database, () => queueReview(database, modelId));
+		console.log(
+			`The previous release claimed the queued review on ${schema}: ${await claimedReview(database)}.`,
+		);
+	} catch (error) {
+		printLogs(name);
+		throw error;
+	} finally {
+		spawnSync("docker", ["rm", "--force", name], { stdio: "ignore" });
+		sweepSandboxes();
+	}
+	console.log(`The previous release runs on ${schema}.`);
+}
+
+const REVIEW_ID = "00000000-0000-0000-0000-000000978011";
+const REVIEW_WORKSPACE = "native-results";
+
+/** Runs the candidate's own fixture SQL, which fits the candidate's full schema, on `database`. */
+function withFixture(database: string, seed: () => void): void {
+	try {
+		seed();
+	} catch (error) {
+		throw new Error(
+			`The candidate's review fixture does not fit the schema of ${database}. Fix the fixture, not the release: ${error instanceof Error ? error.message : String(error)}`,
+			{ cause: error },
+		);
+	}
+}
+
+/**
+ * Seeds a review of a pull request with one practice, from the candidate's own fixture for that graph
+ * (`practice-native/result-parent.sql`). Alice administers its workspace, so she can bind the review model.
+ */
+function seedReview(database: string): void {
+	executeFixture("result-parent.sql", "practice-native", database);
+	query(
+		`UPDATE review_item SET detail = '{"developerId":978003}' WHERE review_id = '${REVIEW_ID}';
+		INSERT INTO membership (workspace_id, account_id, role)
+		SELECT 978001, id, 'ADMIN' FROM account WHERE primary_email = 'alice@dev.invalid'`,
+		database,
+	);
+}
+
+async function write(
+	port: number,
+	session: Session,
+	method: "POST" | "PUT" | "PATCH",
+	path: string,
+	body: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+	const response = await fetchWithTimeout(`http://127.0.0.1:${port}${path}`, {
+		method,
+		headers: {
+			"content-type": "application/json",
+			cookie: session.cookie,
+			...session.writeHeaders,
+		},
+		body: JSON.stringify(body),
+	});
+	const text = await response.text();
+	if (!response.ok) {
+		throw new Error(`${method} ${path} returned ${response.status}: ${text}`);
+	}
+	return text === "" ? {} : asRecord(parseJson(text), `${method} ${path}`);
+}
+
+/**
+ * Creates an AI model on a connection that nothing answers, and binds it to practice reviews in the review's
+ * workspace, through the previous release's own API. Returns the model id.
+ */
+async function bindReviewModel(port: number, alice: Session): Promise<number> {
+	const root = await login(port, "root");
+	await completeTransparencyNotice(port, root);
+	const connection = await write(port, root, "POST", "/admin/llm/connections", {
+		displayName: "Upgrade test",
+		baseUrl: "http://127.0.0.1:9/v1",
+		apiProtocol: "openai-completions",
+		apiKey: "upgrade-test-key",
+		enabled: true,
+	});
+	const model = await write(
+		port,
+		root,
+		"POST",
+		`/admin/llm/connections/${String(connection.id)}/models`,
+		{ displayName: "Upgrade model", upstreamModelId: "upgrade-model" },
+	);
+	const modelId = Number(model.id);
+	await write(port, root, "PUT", `/admin/llm/models/${modelId}/price`, {
+		pricingMode: "NO_CHARGE",
+		note: "Self-hosted test model",
+	});
+	await write(port, root, "PATCH", `/admin/llm/models/${modelId}`, { enabled: true });
+	await write(port, root, "PUT", `/admin/llm/models/${modelId}/sharing`, { visibility: "PUBLIC" });
+	await write(port, alice, "PUT", `/workspaces/${REVIEW_WORKSPACE}/agents/PRACTICE_REVIEW`, {
+		instanceModelId: modelId,
+		maxConcurrentJobs: 1,
+		enabled: true,
+	});
+	return modelId;
+}
+
+/**
+ * Queues the review as the candidate's enqueue path (`ReviewJobService.enqueue`) writes it. The practice pins the
+ * review method with every model slot (`ReviewModelBindingsAdapter`): `review` and `chat` hold the bound model, the
+ * other slots hold none. The job freezes that model with its NO_CHARGE price, and also as the `CHAT` practice-script
+ * model. The review item points at the job. The previous release's worker must admit all of it.
+ */
+function queueReview(database: string, modelId: number): void {
+	const frozen = `jsonb_build_object('modelId', 'instance:' || m.id, 'providerProtocol', 'openai-completions',
+		'providerModelId', 'upgrade-model', 'reasoningEffort', null, 'options', jsonb_build_object(
+			'practiceModelCalls', 12, 'practiceOutputTokens', 16000,
+			'directModelTokensPerAttempt', 200000, 'directModelSearchUnitsPerAttempt', 1000))`;
+	const runtime = `jsonb_build_object('apiProtocol', 'openai-completions', 'baseUrl', 'http://127.0.0.1:9/v1',
+		'upstreamModelId', 'upgrade-model', 'connectionScope', 'INSTANCE', 'connectionId', m.connection_id,
+		'modelId', m.id, 'workspaceId', b.workspace_id, 'dataHandlingTier', b.data_handling_tier,
+		'reasoningEffort', null, 'priceSnapshot', jsonb_build_object('fundingSource', 'INSTANCE',
+			'pricingState', 'NO_CHARGE', 'appliedPriceId', p.id, 'appliedWorkspaceModelId', null,
+			'per1mInputUsd', p.per_1m_input_usd, 'per1mOutputUsd', p.per_1m_output_usd,
+			'per1mCacheReadUsd', p.per_1m_cache_read_usd, 'per1mCacheWriteUsd', p.per_1m_cache_write_usd))`;
+	const bound = `FROM llm_model m
+		JOIN llm_model_price p ON p.model_id = m.id AND p.effective_to IS NULL
+		JOIN workspace_agent_binding b ON b.instance_model_id = m.id AND b.workspace_id = 978001
+			AND b.purpose = 'PRACTICE_REVIEW'
+		WHERE m.id = ${modelId}`;
+	query(
+		`WITH method AS (SELECT jsonb_build_array(
+				jsonb_build_object('slot', 'chat', 'kind', 'CHAT', 'model', ${frozen}),
+				jsonb_build_object('slot', 'decision', 'kind', 'DECISION', 'model', null),
+				jsonb_build_object('slot', 'embedding', 'kind', 'EMBEDDING', 'model', null),
+				jsonb_build_object('slot', 'reranking', 'kind', 'RERANKING', 'model', null),
+				jsonb_build_object('slot', 'review', 'kind', 'CHAT', 'model', ${frozen})) AS models
+			${bound})
+		UPDATE review_practice SET method = jsonb_build_object('epoch', 1, 'models', method.models,
+			'modelDigest', review_model_digest(method.models))
+		FROM method WHERE review_id = '${REVIEW_ID}';
+		WITH snapshot AS (SELECT ${runtime} AS model, b.timeout_seconds ${bound})
+		INSERT INTO review_job (id,review_id,workspace_id,submitted_at,status,processing_status,trace_id,input,config_snapshot)
+		SELECT '${QUEUED_REVIEW_JOB}','${REVIEW_ID}',978001,now(),'QUEUED','NONE','00000000000000000000000000000001',
+			'{"itemId":978006,"assignments":[{"reviewId":"${REVIEW_ID}","practiceId":978004,"itemId":978006}]}',
+			jsonb_build_object('schemaVersion', 8, 'model', model, 'contextWindow', null, 'maxOutputTokens', null,
+				'timeoutSeconds', timeout_seconds, 'allowInternet', false,
+				'practiceScript', jsonb_build_object('CHAT', model))
+		FROM snapshot;
+		UPDATE review_item SET job_id = '${QUEUED_REVIEW_JOB}' WHERE review_id = '${REVIEW_ID}'`,
+		database,
+	);
+	if (count(`SELECT count(*) FROM review_job WHERE id = '${QUEUED_REVIEW_JOB}'`, database) !== 1) {
+		throw new Error(
+			"The queued review job was not written: the model, its price or its binding is missing",
+		);
+	}
+}
+
+/**
+ * Waits until the previous release's worker claims the queued review through its native claim queries: the job is
+ * started under this worker. The attempt fails afterwards, as it cannot capture the fixture's pull request.
+ */
+async function claimedReview(database: string): Promise<string> {
+	const deadline = Date.now() + 120_000;
+	let job = "";
+	while (Date.now() < deadline) {
+		const row = query(
+			`SELECT attempt || '|' || (worker_id IS NOT NULL AND started_at IS NOT NULL) || '|' || status || '|'
+				|| concat_ws(' ', 'status=' || status, 'attempt=' || attempt, 'worker=' || worker_id,
+					'started=' || started_at, 'completed=' || completed_at, 'reason=' || cancellation_reason,
+					'error=' || left(error_message, 120))
+			FROM review_job WHERE id='${QUEUED_REVIEW_JOB}'`,
+			database,
+		);
+		const [attempt = "", running = "", status = "", ...summary] = row.split("|");
+		job = summary.join("|");
+		// A failed attempt can be requeued as an orphan between two reads: it then has no worker, but a higher attempt.
+		if (running === "true" || Number(attempt) > 0) {
+			return job;
+		}
+		if (row !== "" && status !== "QUEUED" && status !== "RUNNING") {
+			throw new Error(`The previous release ended the queued review without running it: ${job}`);
+		}
+		await sleep(2000);
+	}
+	throw new Error(
+		`The previous release did not claim the queued review within 120 seconds: ${job}`,
+	);
+}
+
+/**
+ * Stops the candidate's migration after about half of its new change sets, as a failed change set stops it: the failed
+ * change set rolls back. The stop is an event trigger on the next change set's first DDL statement, so a change set
+ * without DDL can pass it. A trigger on the history insert would not do: Liquibase 5.0.x commits a change set before
+ * its history row. The previous release must run on that prefix, and the migration must complete when it runs again.
+ * `database` is a copy of the seeded database from before the upgrade.
+ */
+async function assertPartialMigration(
+	database: string,
+	before: number,
+	pending: number,
+): Promise<void> {
+	if (pending < 2) {
+		summarize(
+			`The candidate adds ${pending} change sets to the previous release, so no partial schema lies between them.`,
+		);
+		return;
+	}
+	const applied = Math.floor(pending / 2);
+	query(
+		`CREATE FUNCTION stop_upgrade_test_migration() RETURNS event_trigger LANGUAGE plpgsql AS $$
+		BEGIN
+			IF (SELECT count(*) FROM databasechangelog) >= ${before + applied} THEN
+				RAISE EXCEPTION '${MIGRATION_STOP_MESSAGE}';
+			END IF;
+		END $$;
+		CREATE EVENT TRIGGER stop_upgrade_test_migration ON ddl_command_start
+			EXECUTE FUNCTION stop_upgrade_test_migration();`,
+		database,
+	);
+	let stopped: ReturnType<typeof migrate>;
+	try {
+		stopped = migrate(candidateImage, database);
+	} finally {
+		query(
+			"DROP EVENT TRIGGER stop_upgrade_test_migration; DROP FUNCTION stop_upgrade_test_migration();",
+			database,
+		);
+	}
+	const output = `${stopped.stdout}${stopped.stderr}`;
+	const outcome = partialMigration(
+		stopped.status,
+		output.includes(MIGRATION_STOP_MESSAGE),
+		appliedChangeCount(database) - before,
+		applied,
+		pending,
+	);
+	if (outcome.kind === "failed") {
+		throw new Error(`The candidate's stopped migration is wrong: ${outcome.reason}:\n${output}`);
+	}
+	if (outcome.kind === "complete") {
+		summarize(
+			`No change set after ${applied} runs DDL, so no partial prefix exists. The migration completed.`,
+		);
+		return;
+	}
+	console.log(
+		`The candidate's migration stopped after ${outcome.reached} of ${pending} new change sets.`,
+	);
+	if (stopEveryRole.length === 0) {
+		await assertPreviousReleaseRuns(database, `the partly migrated schema`);
+	}
+	migrateCandidate(candidateImage, database);
+	const completed = appliedChangeCount(database) - before;
+	if (completed !== pending) {
+		throw new Error(`The repeated migration applied ${completed} of ${pending} new change sets`);
+	}
+	console.log("The candidate's migration completed when it ran again.");
+}
+
+function startWebhookReceiver(name: string, image: string): number {
+	docker(
+		"run",
+		"--detach",
+		"--name",
+		name,
+		"--network",
+		network,
+		"--publish",
+		"127.0.0.1::8080",
+		"--env",
+		"SPRING_PROFILES_ACTIVE=e2e,webhook",
+		...databaseEnvironment("hephaestus"),
+		"--env",
+		"HEPHAESTUS_SYNC_NATS_SERVER=nats://nats:4222",
+		"--env",
+		`WEBHOOK_SECRET=${WEBHOOK_SECRET}`,
+		// The defaults reserve more broker storage than a runner has. A stream must hold four maximal payloads.
+		"--env",
+		"HEPHAESTUS_WEBHOOK_STREAM_MAX_BYTES=128MB",
+		"--env",
+		"HEPHAESTUS_WEBHOOK_STREAM_MAX_BYTES_GITHUB=128MB",
+		"--env",
+		"HEPHAESTUS_WEBHOOK_STREAM_STORAGE_BUDGET=512MB",
+		"--env",
+		"HEPHAESTUS_SECURITY_ENCRYPTION_KEY=upgradeTestEncryptionKey01234567",
+		image,
+	);
+	return publishedPort(name);
+}
+
+/** One delivery for each provider whose receiver needs no stored connection. */
+const WEBHOOK_DELIVERIES = [
+	{
+		stream: "github",
+		body: JSON.stringify({
+			action: "opened",
+			repository: { name: "upgrade-repository", owner: { login: WORKSPACE_SLUG } },
+		}),
+		headers: (delivery: string, body: string): Record<string, string> => ({
+			"x-github-event": "issues",
+			"x-github-delivery": delivery,
+			"x-hub-signature-256": `sha256=${createHmac("sha256", WEBHOOK_SECRET).update(body).digest("hex")}`,
+		}),
+	},
+	{
+		stream: "gitlab",
+		body: JSON.stringify({
+			object_kind: "issue",
+			project: { path_with_namespace: `${WORKSPACE_SLUG}/upgrade-repository` },
+		}),
+		headers: (delivery: string): Record<string, string> => ({
+			"x-gitlab-event": "Issue Hook",
+			"x-gitlab-event-uuid": delivery,
+			"x-gitlab-token": WEBHOOK_SECRET,
+			"x-gitlab-webhook-uuid": "upgrade-test-hook",
+		}),
+	},
+] as const;
+
+/**
+ * The webhook receivers of both releases publish the same deliveries. Apart from the delivery id, each pair of stream
+ * messages must have the same subject and body, and the candidate must keep every header of the previous release. It
+ * may add one. Each release tests its own receiver against its own consumer, so the server of either release reads
+ * the messages of the other receiver, unless the candidate's server needs a header it added. The previous receiver
+ * also starts on the candidate's schema.
+ */
+async function assertWebhookContract(): Promise<void> {
+	const nats = `${runId}-nats`;
+	const receivers = [`${runId}-webhook-previous`, `${runId}-webhook-candidate`] as const;
+	const release = asArray(
+		asRecord(
+			parseJson(readFileSync(new URL("../security/release-images.json", import.meta.url), "utf8")),
+			"release-images.json",
+		).upstream,
+		"release-images.json upstream",
+	)
+		.map((entry) => asRecord(entry, "release image"))
+		.find((entry) => entry.name === "nats");
+	if (release === undefined) {
+		throw new Error("security/release-images.json pins no nats image");
+	}
+	const [{ connect }, { jetstreamManager }] = await Promise.all([
+		import("@nats-io/transport-node"),
+		import("@nats-io/jetstream"),
+	]);
+	const natsImage = `${asString(release.repository, "nats repository")}:${asString(release.tag, "nats tag")}@${asString(release.digest, "nats digest")}`;
+	try {
+		docker(
+			"run",
+			"--detach",
+			"--name",
+			nats,
+			"--network",
+			network,
+			"--network-alias",
+			"nats",
+			"--publish",
+			"127.0.0.1::4222",
+			natsImage,
+			"nats-server",
+			"--jetstream",
+		);
+		// In stream order: the previous receiver publishes first.
+		const targets = [
+			{ name: receivers[0], port: startWebhookReceiver(receivers[0], previousImage) },
+			{ name: receivers[1], port: startWebhookReceiver(receivers[1], candidateImage) },
+		].map((target) => ({ ...target, delivery: randomUUID() }));
+		await Promise.all(
+			targets.map(async ({ name, port }) =>
+				waitUntilReady(name, port, ["/readyz", "/actuator/health/readiness"]),
+			),
+		);
+		for (const delivery of WEBHOOK_DELIVERIES) {
+			for (const target of targets) {
+				const response = await fetchWithTimeout(
+					`http://127.0.0.1:${target.port}/webhooks/${delivery.stream}`,
+					{
+						method: "POST",
+						headers: {
+							"content-type": "application/json",
+							...delivery.headers(target.delivery, delivery.body),
+						},
+						body: delivery.body,
+					},
+				);
+				const answer = await response.text();
+				if (response.status !== 202 || !answer.includes('"ok"')) {
+					throw new Error(
+						`${target.name} answered a ${delivery.stream} delivery with ${response.status}: ${answer}`,
+					);
+				}
+			}
+		}
+		const port = publishedPort(nats, "4222/tcp");
+		const connection = await connect({ servers: `127.0.0.1:${port}` });
+		try {
+			const manager = await jetstreamManager(connection);
+			for (const delivery of WEBHOOK_DELIVERIES) {
+				const [previous, candidate] = await Promise.all(
+					targets.map(async ({ delivery: id }, index): Promise<StoredDelivery> => {
+						const message = await manager.streams.getMessage(delivery.stream, {
+							seq: index + 1,
+						});
+						if (message === null) {
+							throw new Error(`The ${delivery.stream} stream has no message ${index + 1}`);
+						}
+						return {
+							subject: message.subject,
+							headers: message.header
+								.keys()
+								.toSorted()
+								.map((key) => `${key}: ${message.header.get(key).replaceAll(id, "<delivery>")}`),
+							body: message.string(),
+						};
+					}),
+				);
+				if (previous === undefined || candidate === undefined) {
+					throw new Error(`The ${delivery.stream} stream lacks a delivery`);
+				}
+				const difference = deliveryDifference(previous, candidate);
+				if (difference !== undefined) {
+					throw new Error(
+						`The server of the previous release cannot read the candidate's ${delivery.stream} delivery: ${difference}.\n- previous: ${JSON.stringify(previous)}\n- candidate: ${JSON.stringify(candidate)}`,
+					);
+				}
+				console.log(
+					`The previous release reads the candidate's ${delivery.stream} delivery: ${JSON.stringify(candidate)}.`,
+				);
+			}
+		} finally {
+			await connection.close();
+		}
+	} catch (error) {
+		for (const name of [...receivers, nats]) {
+			printLogs(name);
+		}
+		throw error;
+	} finally {
+		spawnSync("docker", ["rm", "--force", ...receivers, nats], { stdio: "ignore" });
+	}
+}
+
 try {
 	docker("network", "create", network);
 	docker(
@@ -819,6 +1388,21 @@ try {
 			throw new Error("Pinned v0.77.4 fixture already has a baseline tag");
 		}
 		synchronizeBaseline(candidateImage);
+		if (upgradePath === "latest") {
+			// The template must have no other session.
+			query(
+				"SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = 'hephaestus' AND pid <> pg_backend_pid()",
+				"postgres",
+			);
+			docker(
+				"exec",
+				postgres,
+				"createdb",
+				"--username=root",
+				"--template=hephaestus",
+				PARTIAL_DATABASE,
+			);
+		}
 		migrateCandidate(candidateImage);
 		application = `${runId}-candidate`;
 		port = startApplication(application, candidateImage, "hephaestus", false);
@@ -866,6 +1450,20 @@ try {
 		}
 
 		if (upgradePath === "latest") {
+			if (stopEveryRole.length === 0) {
+				docker("pull", "--quiet", previousAgentImage);
+				await assertPreviousReleaseRuns("hephaestus", "the candidate's schema");
+				await assertWebhookContract();
+			} else {
+				summarize(
+					`Mechanical N-on-N+1 coverage is off for this release, because it stops every role: ${stopEveryRole.join("; ")}`,
+				);
+			}
+			await assertPartialMigration(
+				PARTIAL_DATABASE,
+				previousChanges,
+				candidateChanges - previousChanges,
+			);
 			await assertFreshSchemaEqualsUpgraded(candidateImage);
 		}
 		console.log(
@@ -874,14 +1472,11 @@ try {
 	}
 } catch (error) {
 	for (const name of [application, postgres]) {
-		try {
-			console.error(`\n--- ${name} logs ---\n${docker("logs", name)}`);
-		} catch {
-			// Preserve the upgrade failure if diagnostic collection also fails.
-		}
+		printLogs(name);
 	}
 	throw error;
 } finally {
+	sweepSandboxes();
 	// --volumes removes only these containers' anonymous volumes, such as PostgreSQL's data.
 	spawnSync("docker", ["rm", "--force", "--volumes", application, `${runId}-sync`, postgres], {
 		stdio: "ignore",

@@ -5,6 +5,7 @@ import process from "node:process";
 import { currentReleaseIdentity, releaseIdentityFor } from "./lib/release-identities.ts";
 
 import { isSet, requiredEnv } from "./lib/env.ts";
+import { previousReleaseOf } from "./lib/previous-release.ts";
 import { CAPTURE_LIMIT_BYTES } from "./lib/process.ts";
 
 // The candidate is built by this repository's CI, so it lives in the current
@@ -55,9 +56,17 @@ function immutable(reference: string, repository: string): string {
 function previousApplicationReference(version: string): {
 	reference: string;
 	repository: string;
+	version: string;
+	agentRepository: string;
 } {
-	const repository = `${releaseIdentityFor(version).namespace}/application-server`;
-	return { reference: `${repository}:${version}`, repository };
+	const { namespace } = releaseIdentityFor(version);
+	const repository = `${namespace}/application-server`;
+	return {
+		reference: `${repository}:${version}`,
+		repository,
+		version,
+		agentRepository: `${namespace}/agent-pi`,
+	};
 }
 
 const upgradePath = process.env.UPGRADE_PATH ?? "latest";
@@ -82,7 +91,7 @@ if (supplied.some(Boolean) && !supplied.every(Boolean)) {
 	);
 }
 
-let previousApplication: { reference: string; repository: string };
+let previousApplication: ReturnType<typeof previousApplicationReference>;
 const suppliedPreviousVersion = nonEmpty(supplied[0]);
 let candidateApplication = nonEmpty(supplied[1]);
 let postgres = nonEmpty(supplied[2]);
@@ -96,21 +105,10 @@ if (
 	}
 	previousApplication = previousApplicationReference(pinnedVersion ?? suppliedPreviousVersion);
 } else {
-	const repository = requiredEnv(process.env, "GITHUB_REPOSITORY");
 	const requestedPrevious =
 		pinnedVersion === undefined ? nonEmpty(process.env.REQUESTED_PREVIOUS) : `v${pinnedVersion}`;
-	const previous =
-		requestedPrevious ??
-		command("gh", [
-			"release",
-			"view",
-			"--repo",
-			repository,
-			"--json",
-			"tagName",
-			"--jq",
-			".tagName",
-		]);
+	// The changelog compatibility guard judges the same baseline.
+	const previous = requestedPrevious ?? previousReleaseOf("HEAD") ?? "";
 	if (!/^v[0-9]+\.[0-9]+\.[0-9]+$/u.test(previous)) {
 		throw new Error("Previous release must be a stable vX.Y.Z tag");
 	}
@@ -128,6 +126,8 @@ appendFileSync(
 	output,
 	[
 		`previous-app=${immutable(previousApplication.reference, previousApplication.repository)}`,
+		`previous-version=${previousApplication.version}`,
+		`previous-agent=${immutable(`${previousApplication.agentRepository}:${previousApplication.version}`, previousApplication.agentRepository)}`,
 		`candidate-app=${immutable(candidateApplication, applicationRepository)}`,
 		`postgres=${immutable(postgres, postgresRepository)}`,
 		"",
