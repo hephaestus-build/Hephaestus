@@ -69,21 +69,20 @@ public abstract class AbstractWorkspaceIntegrationTest extends BaseIntegrationTe
     }
 
     protected void connectActivitySource(Workspace workspace, IdentityProvider provider) {
-        ConnectionConfig config =
-                switch (provider.getType()) {
-                    case GITHUB ->
-                        new ConnectionConfig.GitHubAppConfig(
-                                workspace.getId(), workspace.getAccountLogin(), provider.getServerUrl(), Set.of());
-                    case GITLAB ->
-                        new ConnectionConfig.GitLabConfig(
-                                provider.getServerUrl(),
-                                null,
-                                null,
-                                ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT,
-                                Set.of(),
-                                null);
-                    default -> throw new IllegalArgumentException("Activity source must be GitHub or GitLab");
-                };
+        ConnectionConfig config = switch (provider.getType()) {
+            case GITHUB ->
+                new ConnectionConfig.GitHubAppConfig(
+                        workspace.getId(), workspace.getAccountLogin(), provider.getServerUrl(), Set.of());
+            case GITLAB ->
+                new ConnectionConfig.GitLabConfig(
+                        provider.getServerUrl(),
+                        null,
+                        null,
+                        ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT,
+                        Set.of(),
+                        null);
+            default -> throw new IllegalArgumentException("Activity source must be GitHub or GitLab");
+        };
         IntegrationKind kind =
                 provider.getType() == IdentityProviderType.GITLAB ? IntegrationKind.GITLAB : IntegrationKind.GITHUB;
         Connection connection = activityConnections.saveAndFlush(

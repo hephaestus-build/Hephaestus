@@ -222,18 +222,16 @@ public class ScmContextLoader implements ContextLoader {
             String base = defaultBranch == null || defaultBranch.equals(ref) ? null : defaultBranch;
             checkout = checkouts.checkout(workspaceId, parsed.repository(), ref, base, abandoned);
         } catch (RepositoryCheckoutException refused) {
-            ContextLoadException.Code code =
-                    switch (refused.code()) {
-                        case REPOSITORY_NOT_VISIBLE -> ContextLoadException.Code.NOT_VISIBLE;
-                        case REF_NOT_FOUND -> ContextLoadException.Code.REF_NOT_FOUND;
-                        case MIRROR_UNAVAILABLE -> ContextLoadException.Code.UNAVAILABLE;
-                    };
-            String text =
-                    switch (code) {
-                        case NOT_VISIBLE -> notVisibleText(path);
-                        case REF_NOT_FOUND -> "No commit for " + ref + " in " + parsed.folderPath() + ".";
-                        case UNAVAILABLE -> "The repository cannot be loaded now. Do not retry in this answer.";
-                    };
+            ContextLoadException.Code code = switch (refused.code()) {
+                case REPOSITORY_NOT_VISIBLE -> ContextLoadException.Code.NOT_VISIBLE;
+                case REF_NOT_FOUND -> ContextLoadException.Code.REF_NOT_FOUND;
+                case MIRROR_UNAVAILABLE -> ContextLoadException.Code.UNAVAILABLE;
+            };
+            String text = switch (code) {
+                case NOT_VISIBLE -> notVisibleText(path);
+                case REF_NOT_FOUND -> "No commit for " + ref + " in " + parsed.folderPath() + ".";
+                case UNAVAILABLE -> "The repository cannot be loaded now. Do not retry in this answer.";
+            };
             throw new ContextLoadException(code, text, refused);
         }
         String sha = checkout.head();

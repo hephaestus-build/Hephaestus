@@ -298,13 +298,12 @@ public class SlackChannelConsentService {
 
     /** Transition guard. The same-state case ({@code from == target}) is already handled as an idempotent no-op by callers. */
     private static void requireAllowed(ConsentState from, ConsentState target, String slackChannelId) {
-        boolean allowed =
-                switch (from) {
-                    case PENDING -> target == ConsentState.ACTIVE || target == ConsentState.REVOKED;
-                    case ACTIVE -> target == ConsentState.PAUSED || target == ConsentState.REVOKED;
-                    case PAUSED -> target == ConsentState.ACTIVE || target == ConsentState.REVOKED;
-                    case REVOKED -> false; // only register() may start a fresh setup
-                };
+        boolean allowed = switch (from) {
+            case PENDING -> target == ConsentState.ACTIVE || target == ConsentState.REVOKED;
+            case ACTIVE -> target == ConsentState.PAUSED || target == ConsentState.REVOKED;
+            case PAUSED -> target == ConsentState.ACTIVE || target == ConsentState.REVOKED;
+            case REVOKED -> false; // only register() may start a fresh setup
+        };
         if (!allowed) {
             throw new SlackChannelConsentViolationException("The Slack channel " + slackChannelId
                     + " cannot change its consent state from " + from + " to " + target + ".");

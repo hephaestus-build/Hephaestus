@@ -70,19 +70,18 @@ public class ItemEventReviewListener {
                     .build());
             decide(recorded, state, ItemEventState.STARTED, null);
         } catch (ReviewRequestRejected refusal) {
-            ReviewRequestReason reason =
-                    switch (refusal.reason()) {
-                        case WORKSPACE_INACTIVE -> ReviewRequestReason.WORKSPACE_INACTIVE;
-                        case BUDGET_UNAVAILABLE -> ReviewRequestReason.BUDGET_EXHAUSTED;
-                        case MODEL_UNAVAILABLE -> ReviewRequestReason.MODEL_UNAVAILABLE;
-                        case SOURCE_UNAVAILABLE ->
-                            throw new IllegalStateException("Only a scan can lack a default branch", refusal);
-                        case ITEM_INELIGIBLE ->
-                            Objects.requireNonNullElse(refusal.eventReason(), ReviewRequestReason.NO_ACTIVE_PRACTICE);
-                        case REQUEST_CONFLICT -> ReviewRequestReason.VERSION_SUPERSEDED;
-                        case SCAN_ACTIVE, REF_UNSUPPORTED, VERSION_CHANGED ->
-                            throw new IllegalStateException("An item review cannot compete with a scan", refusal);
-                    };
+            ReviewRequestReason reason = switch (refusal.reason()) {
+                case WORKSPACE_INACTIVE -> ReviewRequestReason.WORKSPACE_INACTIVE;
+                case BUDGET_UNAVAILABLE -> ReviewRequestReason.BUDGET_EXHAUSTED;
+                case MODEL_UNAVAILABLE -> ReviewRequestReason.MODEL_UNAVAILABLE;
+                case SOURCE_UNAVAILABLE ->
+                    throw new IllegalStateException("Only a scan can lack a default branch", refusal);
+                case ITEM_INELIGIBLE ->
+                    Objects.requireNonNullElse(refusal.eventReason(), ReviewRequestReason.NO_ACTIVE_PRACTICE);
+                case REQUEST_CONFLICT -> ReviewRequestReason.VERSION_SUPERSEDED;
+                case SCAN_ACTIVE, REF_UNSUPPORTED, VERSION_CHANGED ->
+                    throw new IllegalStateException("An item review cannot compete with a scan", refusal);
+            };
             boolean retry = refusal.reason().transientReason();
             decide(recorded, state, retry ? ItemEventState.WAITING : ItemEventState.WITHHELD, reason);
         }

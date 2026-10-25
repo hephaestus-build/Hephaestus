@@ -60,14 +60,13 @@ public class ResultQueriesImpl implements ResultQueries {
             long workspaceId, ResultQueryFilter filter, ResultSort sort, boolean displayableOnly, Pageable page) {
         var selection = selection(workspaceId, filter);
         String where = selection.where() + (displayableOnly ? " AND r.outcome <> 'DOES_NOT_APPLY'" : "");
-        String order =
-                switch (sort) {
-                    case ACTIONABILITY ->
-                        "CASE r.severity WHEN 'CRITICAL' THEN 0 WHEN 'MAJOR' THEN 1 WHEN 'MINOR' THEN 2 WHEN 'TRIVIAL'"
-                                + " THEN 3 ELSE 4 END,r.recorded_at DESC,r.id::text DESC";
-                    case OLDEST -> "r.recorded_at ASC,r.id::text ASC";
-                    case NEWEST -> "r.recorded_at DESC,r.id::text DESC";
-                };
+        String order = switch (sort) {
+            case ACTIONABILITY ->
+                "CASE r.severity WHEN 'CRITICAL' THEN 0 WHEN 'MAJOR' THEN 1 WHEN 'MINOR' THEN 2 WHEN 'TRIVIAL'"
+                        + " THEN 3 ELSE 4 END,r.recorded_at DESC,r.id::text DESC";
+            case OLDEST -> "r.recorded_at ASC,r.id::text ASC";
+            case NEWEST -> "r.recorded_at DESC,r.id::text DESC";
+        };
         long total = session()
                 .createNativeQuery("SELECT count(*)" + JOIN + where, Long.class)
                 .setProperties(selection.params())

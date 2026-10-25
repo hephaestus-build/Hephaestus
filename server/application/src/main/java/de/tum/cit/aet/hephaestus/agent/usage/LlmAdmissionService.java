@@ -93,11 +93,10 @@ public class LlmAdmissionService {
         if (ref.scope() == null || ref.modelId() == null || ref.workspaceId() == null) {
             throw modelUnavailable();
         }
-        LlmPriceSnapshot price =
-                switch (ref.scope()) {
-                    case INSTANCE -> instancePrice(ref.modelId());
-                    case WORKSPACE -> workspacePrice(ref.modelId(), ref.workspaceId());
-                };
+        LlmPriceSnapshot price = switch (ref.scope()) {
+            case INSTANCE -> instancePrice(ref.modelId());
+            case WORKSPACE -> workspacePrice(ref.modelId(), ref.workspaceId());
+        };
         return new AdmittedLlmModel(resolved, ref, price);
     }
 
@@ -158,12 +157,11 @@ public class LlmAdmissionService {
             @Nullable BigDecimal output,
             @Nullable BigDecimal cacheRead,
             @Nullable BigDecimal cacheWrite) {
-        UsagePricingState state =
-                switch (mode) {
-                    case PRICED -> UsagePricingState.PRICED;
-                    case NO_CHARGE -> UsagePricingState.NO_CHARGE;
-                    case UNPRICED -> throw new LlmModelUnavailableException("The configured model has no usable price");
-                };
+        UsagePricingState state = switch (mode) {
+            case PRICED -> UsagePricingState.PRICED;
+            case NO_CHARGE -> UsagePricingState.NO_CHARGE;
+            case UNPRICED -> throw new LlmModelUnavailableException("The configured model has no usable price");
+        };
         return new LlmPriceSnapshot(source, state, priceId, workspaceModelId, input, output, cacheRead, cacheWrite);
     }
 }

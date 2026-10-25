@@ -1371,13 +1371,12 @@ class RepositoryProviderScopeIntegrationTest extends AbstractWorkspaceIntegratio
         assertThat(blockerIds(sharedBlocked)).containsExactly(blocked.getId());
 
         // GitLab later drops A#1's link to A#5 and still reports B#5, or reports no links, or answers without a body.
-        String links =
-                switch (answer) {
-                    case "REPORTED" -> "[{\"iid\":5,\"project_id\":8202,\"link_type\":\"is_blocked_by\"}]";
-                    case "EMPTY" -> "[]";
-                    case "NO_BODY" -> null;
-                    default -> throw new IllegalArgumentException(answer);
-                };
+        String links = switch (answer) {
+            case "REPORTED" -> "[{\"iid\":5,\"project_id\":8202,\"link_type\":\"is_blocked_by\"}]";
+            case "EMPTY" -> "[]";
+            case "NO_BODY" -> null;
+            default -> throw new IllegalArgumentException(answer);
+        };
         dependencyLinks(tokens, 8201L, links)
                 .syncDependenciesForRepository(
                         own.getId(),
@@ -1387,13 +1386,11 @@ class RepositoryProviderScopeIntegrationTest extends AbstractWorkspaceIntegratio
 
         // No body says nothing, so both edges stay. A workspace that may not refer to B cannot tell whether B's edge
         // is gone, so it stays; one that may, and every stale in-scope edge, follow GitLab.
-        List<Long> expected =
-                switch (answer) {
-                    case "NO_BODY" -> List.of(sharedBlocker.getId(), ownBlocker.getId());
-                    case "EMPTY" ->
-                        selection == RepositorySelection.SELECTED ? List.of(sharedBlocker.getId()) : List.of();
-                    default -> List.of(sharedBlocker.getId());
-                };
+        List<Long> expected = switch (answer) {
+            case "NO_BODY" -> List.of(sharedBlocker.getId(), ownBlocker.getId());
+            case "EMPTY" -> selection == RepositorySelection.SELECTED ? List.of(sharedBlocker.getId()) : List.of();
+            default -> List.of(sharedBlocker.getId());
+        };
         assertSoftly(softly -> {
             softly.assertThat(blockerIds(blocked)).containsExactlyInAnyOrderElementsOf(expected);
             softly.assertThat(blockerIds(sharedBlocked)).containsExactly(blocked.getId());

@@ -1229,12 +1229,11 @@ public class ReviewJobExecutor {
             String failureMessage = sandboxResult.exitCode() == 0
                     ? "The runner did not return a valid result."
                     : "The container exited with code " + sandboxResult.exitCode() + ".";
-            String errorMessage =
-                    switch (terminalStatus) {
-                        case TIMED_OUT -> "The container timed out.";
-                        case FAILED -> storable ? failureMessage : UNSTORABLE_RESULT_MESSAGE;
-                        default -> null;
-                    };
+            String errorMessage = switch (terminalStatus) {
+                case TIMED_OUT -> "The container timed out.";
+                case FAILED -> storable ? failureMessage : UNSTORABLE_RESULT_MESSAGE;
+                default -> null;
+            };
             Instant finishedAt = Instant.now();
             int updated = transitionTerminal(jobId, attempt, terminalStatus, finishedAt, errorMessage);
             if (updated == 0) {

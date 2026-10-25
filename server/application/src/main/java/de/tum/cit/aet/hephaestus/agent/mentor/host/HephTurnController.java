@@ -224,12 +224,11 @@ public class HephTurnController {
             @PathVariable UUID turnId, @Valid @RequestBody EndRequest request, Authentication authentication) {
         TurnJwt turn = turn(turnId, authentication);
         List<JsonNode> entries = validated(request.entries());
-        MentorTurn.Status outcome =
-                switch (request.outcome()) {
-                    case DONE -> MentorTurn.Status.DONE;
-                    case STOPPED -> MentorTurn.Status.STOPPED;
-                    case FAILED -> MentorTurn.Status.FAILED;
-                };
+        MentorTurn.Status outcome = switch (request.outcome()) {
+            case DONE -> MentorTurn.Status.DONE;
+            case STOPPED -> MentorTurn.Status.STOPPED;
+            case FAILED -> MentorTurn.Status.FAILED;
+        };
         FailureReason reason = request.reason() == null ? FailureReason.ERROR : request.reason();
         String error = outcome != MentorTurn.Status.FAILED
                 ? null

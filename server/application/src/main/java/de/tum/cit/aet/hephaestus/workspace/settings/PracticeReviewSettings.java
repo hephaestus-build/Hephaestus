@@ -105,26 +105,25 @@ public class PracticeReviewSettings {
             // Switch EXPRESSION, not statement: the compiler then forces every constant to be
             // handled
             // here. The yielded value is unused; the exhaustiveness check is the point.
-            boolean ignored =
-                    switch (field) {
-                        case DELIVER_TO_MERGED -> {
-                            this.deliverToMerged = null;
-                            yield true;
-                        }
-                        case COOLDOWN_MINUTES -> {
-                            this.cooldownMinutes = null;
-                            yield true;
-                        }
-                        case REVIEW_SCOPE -> {
-                            this.reviewScopeRepositories = ReviewScopeMode.ALL;
-                            this.reviewScopePeople = ReviewScopeMode.ALL;
-                            yield true;
-                        }
-                        case DEFAULT_FEEDBACK_MODE -> {
-                            this.defaultFeedbackMode = null;
-                            yield true;
-                        }
-                    };
+            boolean ignored = switch (field) {
+                case DELIVER_TO_MERGED -> {
+                    this.deliverToMerged = null;
+                    yield true;
+                }
+                case COOLDOWN_MINUTES -> {
+                    this.cooldownMinutes = null;
+                    yield true;
+                }
+                case REVIEW_SCOPE -> {
+                    this.reviewScopeRepositories = ReviewScopeMode.ALL;
+                    this.reviewScopePeople = ReviewScopeMode.ALL;
+                    yield true;
+                }
+                case DEFAULT_FEEDBACK_MODE -> {
+                    this.defaultFeedbackMode = null;
+                    yield true;
+                }
+            };
         }
     }
 }

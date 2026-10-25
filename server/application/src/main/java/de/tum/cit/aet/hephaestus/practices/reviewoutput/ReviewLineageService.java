@@ -57,14 +57,13 @@ public class ReviewLineageService {
                         .filter(Objects::nonNull)
                         .count()
                 != 1) throw new IllegalArgumentException("Select exactly one lineage record.");
-        Object root =
-                switch (kind) {
-                    case ITEM -> itemId;
-                    case REVIEW -> reviewId;
-                    case RESULT -> resultId;
-                    case PROBLEM -> problemId;
-                    case FEEDBACK -> feedbackId;
-                };
+        Object root = switch (kind) {
+            case ITEM -> itemId;
+            case REVIEW -> reviewId;
+            case RESULT -> resultId;
+            case PROBLEM -> problemId;
+            case FEEDBACK -> feedbackId;
+        };
         if (root == null) throw new IllegalArgumentException("The selected id must match the lineage kind.");
         var nodes = new LinkedHashMap<String, ReviewLineageNodeDTO>();
         var edges = new ArrayList<ReviewLineageEdgeDTO>();

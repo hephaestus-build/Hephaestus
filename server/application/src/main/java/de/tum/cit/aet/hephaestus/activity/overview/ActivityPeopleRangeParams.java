@@ -29,26 +29,25 @@ public record ActivityPeopleRangeParams(
     public TimeRange resolve(Clock clock, Supplier<@Nullable Instant> historyStart) {
         Instant end = to == null ? clock.instant() : to;
         String preset = range == null ? (from == null ? "90d" : "custom") : range;
-        Instant start =
-                switch (preset) {
-                    case "30d" -> end.minus(Duration.ofDays(30));
-                    case "90d" -> end.minus(Duration.ofDays(90));
-                    case "1y" -> end.minus(Duration.ofDays(365));
-                    case "all" -> {
-                        if (from != null) {
-                            throw invalid("Use a custom range with a start date.");
-                        }
-                        Instant earliest = historyStart.get();
-                        yield earliest != null && earliest.isBefore(end) ? earliest : end;
-                    }
-                    case "custom" -> {
-                        if (from == null) {
-                            throw invalid("A custom range needs a start date.");
-                        }
-                        yield from;
-                    }
-                    default -> throw invalid("Select 30d, 90d, 1y, all, or custom.");
-                };
+        Instant start = switch (preset) {
+            case "30d" -> end.minus(Duration.ofDays(30));
+            case "90d" -> end.minus(Duration.ofDays(90));
+            case "1y" -> end.minus(Duration.ofDays(365));
+            case "all" -> {
+                if (from != null) {
+                    throw invalid("Use a custom range with a start date.");
+                }
+                Instant earliest = historyStart.get();
+                yield earliest != null && earliest.isBefore(end) ? earliest : end;
+            }
+            case "custom" -> {
+                if (from == null) {
+                    throw invalid("A custom range needs a start date.");
+                }
+                yield from;
+            }
+            default -> throw invalid("Select 30d, 90d, 1y, all, or custom.");
+        };
         if (from != null && !preset.equals("custom")) {
             throw invalid("Use a custom range with a start date.");
         }
