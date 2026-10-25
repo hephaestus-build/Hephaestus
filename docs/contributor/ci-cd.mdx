@@ -977,6 +977,10 @@ The provenance stays the queue run's, because that run built the image.
 A missing or unverifiable image is built and scanned as before.
 Examples are a direct push, an image that the merge group did not rebuild, and a lookup that failed.
 
+`resolve-queue-run.ts` also lists the images whose `Create manifest` job succeeded in the queue run.
+The push runs the `reuse` job only for those images.
+For any other image, the build starts at once, without a job that waits for a runner only to find nothing to reuse.
+
 A merge group adds one arm64 build job, which also scans that platform, for each image that it rebuilds.
 That is four jobs when it rebuilds all images.
 The push reuses those images and no longer builds or scans them on either architecture.

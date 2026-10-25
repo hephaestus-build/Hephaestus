@@ -30,6 +30,11 @@ on:
         required: false
         type: string
         default: ""
+      reuse_images:
+        description: "JSON list of the images reuse_run published; only these are reused"
+        required: false
+        type: string
+        default: "[]"
       webapp_changed:
         description: "Whether webapp files changed (or should build for other reasons)"
         required: false
@@ -82,7 +87,7 @@ jobs:
         COOLIFY_BRANCH=${{ github.head_ref || (github.event_name == 'merge_group' && github.event.repository.default_branch) || github.ref_name }}
       publish: ${{ inputs.publish }}
       platforms: ${{ inputs.platforms }}
-      reuse-run: ${{ inputs.reuse_run }}
+      reuse-run: ${{ contains(fromJSON(inputs.reuse_images), 'webapp') && inputs.reuse_run || '' }}
       scan-images: ${{ inputs.scan-images }}
       labels: |
         org.opencontainers.image.title=Hephaestus Webapp
@@ -109,7 +114,7 @@ jobs:
       registry: "ghcr.io"
       publish: ${{ inputs.publish }}
       platforms: ${{ inputs.platforms }}
-      reuse-run: ${{ inputs.reuse_run }}
+      reuse-run: ${{ contains(fromJSON(inputs.reuse_images), 'agent-pi') && inputs.reuse_run || '' }}
       scan-images: ${{ inputs.scan-images }}
       labels: |
         org.opencontainers.image.title=Hephaestus Agent - Pi
@@ -136,7 +141,7 @@ jobs:
       registry: "ghcr.io"
       publish: ${{ inputs.publish }}
       platforms: ${{ inputs.platforms }}
-      reuse-run: ${{ inputs.reuse_run }}
+      reuse-run: ${{ contains(fromJSON(inputs.reuse_images), 'postgres') && inputs.reuse_run || '' }}
       scan-images: ${{ inputs.scan-images }}
       labels: |
         org.opencontainers.image.title=Hephaestus Postgres
