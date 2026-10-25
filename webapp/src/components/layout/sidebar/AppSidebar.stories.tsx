@@ -263,10 +263,10 @@ export const InstanceAdministrationUnavailable: Story = {
 		administrationWorkspaceError: { error: { status: 503 }, onRetry: fn() },
 	},
 	play: async ({ canvas }) => {
-		const alert = canvas.getByRole("alert");
-		await expect(alert).toHaveTextContent("We could not load the workspace details");
-		await expect(alert).toHaveTextContent("The server had a problem. Try again in a moment.");
-		await expect(within(alert).getByRole("button", { name: "Retry" })).toBeEnabled();
+		// The page announces the failure; the sidebar says why its links are missing, without an alert.
+		await expect(canvas.queryByRole("alert")).not.toBeInTheDocument();
+		await expect(canvas.getByText("We could not load the workspace details")).toBeVisible();
+		await expect(canvas.getByRole("button", { name: "Retry" })).toBeEnabled();
 		await expect(canvas.getByRole("link", { name: "Back to instance workspaces" })).toBeVisible();
 		await expect(canvas.queryByText("AET")).not.toBeInTheDocument();
 		await expect(canvas.queryByText("No workspace")).not.toBeInTheDocument();
@@ -280,8 +280,7 @@ export const InstanceAdministrationRefused: Story = {
 		administrationWorkspaceError: { error: { status: 403 }, onRetry: fn() },
 	},
 	play: async ({ canvas }) => {
-		const alert = canvas.getByRole("alert");
-		await expect(alert).toHaveTextContent("You do not have access to the workspace details");
-		await expect(within(alert).queryByRole("button")).not.toBeInTheDocument();
+		await expect(canvas.getByText("You do not have access to the workspace details")).toBeVisible();
+		await expect(canvas.queryByRole("button", { name: "Retry" })).not.toBeInTheDocument();
 	},
 };

@@ -107,7 +107,7 @@ describe("the page a comment on the work links to", () => {
 			),
 		);
 		renderRouteAt("/w/acme/feedback/scm.pull_request/902");
-		await screen.findByText(/not found/iu, undefined, ROUTE_RENDER_WAIT);
+		await screen.findByRole("heading", { name: "We could not find this page" }, ROUTE_RENDER_WAIT);
 		expect(reads).toHaveLength(0);
 	});
 
@@ -115,7 +115,11 @@ describe("the page a comment on the work links to", () => {
 		"refuses unsupported legacy address %s",
 		async (tail) => {
 			renderRouteAt(`/w/acme/feedback/${tail}`);
-			await screen.findByText(/not found/iu, undefined, ROUTE_RENDER_WAIT);
+			await screen.findByRole(
+				"heading",
+				{ name: "We could not find this page" },
+				ROUTE_RENDER_WAIT,
+			);
 			expect(reads).toHaveLength(0);
 		},
 	);
@@ -206,7 +210,7 @@ describe("the page a comment on the work links to", () => {
 	it("does not ask for anything when the address names no item", async () => {
 		renderRouteAt("/w/acme/feedback/not-a-number");
 
-		await screen.findByText(/not found/iu, undefined, ROUTE_RENDER_WAIT);
+		await screen.findByRole("heading", { name: "We could not find this page" }, ROUTE_RENDER_WAIT);
 		expect(reads).toHaveLength(0);
 	});
 });
