@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { cpSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { after, test } from "node:test";
 
+import { namesAnotherDispatcher } from "./enable-hooks.ts";
 import { environmentForGitFixture } from "./lib/git-environment.ts";
 import { CAPTURE_LIMIT_BYTES, repositoryCli } from "./lib/process.ts";
 
@@ -101,6 +102,61 @@ void test("an install leaves a contributor's custom hooks directory intact", () 
 	});
 	assert.equal(result.status, 0, `${result.stdout}${result.stderr}`);
 	assert.equal(git("config", "core.hooksPath"), ".custom-hooks");
+});
+
+void test("an install replaces an absolute dispatcher path with the one each worktree resolves", () => {
+	const { repository, git } = clone();
+	git("config", "core.hooksPath", "/elsewhere/main-checkout/.vite-hooks/_");
+	const result = spawnSync("node", [SCRIPT], {
+		cwd: repository,
+		encoding: "utf8",
+		env: hookFreeEnv(),
+	});
+	assert.equal(result.status, 0, `${result.stdout}${result.stderr}`);
+	assert.equal(git("config", "core.hooksPath"), ".vite-hooks/_");
+});
+
+function installIn(directory: string): void {
+	const result = spawnSync("node", [SCRIPT], {
+		cwd: directory,
+		encoding: "utf8",
+		env: hookFreeEnv(),
+	});
+	assert.equal(result.status, 0, `${result.stdout}${result.stderr}`);
+}
+
+void test("an install keeps hooks disabled when it drops an absolute dispatcher path", () => {
+	const { repository, git } = clone();
+	git("config", "vp.hooks.disabled", "true");
+	git("config", "core.hooksPath", "/elsewhere/main-checkout/.vite-hooks/_");
+	installIn(repository);
+	assert.ok(!git("config", "--local", "--list").includes("core.hookspath="));
+	assert.equal(git("config", "--type=bool", "vp.hooks.disabled"), "true");
+});
+
+void test("every worktree's install creates the dispatcher that its own hooks run through", () => {
+	const { repository, git } = clone();
+	git("add", "--all");
+	git("config", "user.name", "Hooks Test");
+	git("config", "user.email", "test@example.invalid");
+	git("-c", "commit.gpgsign=false", "commit", "--quiet", "--message", "hooks");
+	installIn(repository);
+	const worktree = path.join(mkdtempSync(path.join(tmpdir(), "enable-hooks-worktree-")), "second");
+	temporaries.push(path.dirname(worktree));
+	git("worktree", "add", "--quiet", worktree);
+	// Before its own install, the second worktree has no dispatcher, so Git runs no hook there.
+	assert.ok(!existsSync(path.join(worktree, ".vite-hooks", "_", "h")));
+	installIn(worktree);
+	assert.ok(existsSync(path.join(worktree, ".vite-hooks", "_", "h")));
+	assert.equal(git("config", "core.hooksPath"), ".vite-hooks/_");
+});
+
+void test("only an absolute path to a dispatcher counts as another checkout's", () => {
+	assert.ok(namesAnotherDispatcher("/Users/someone/Hephaestus/.vite-hooks/_"));
+	assert.ok(namesAnotherDispatcher(String.raw`C:\work\Hephaestus\.vite-hooks\_`));
+	assert.ok(!namesAnotherDispatcher(".vite-hooks/_"));
+	assert.ok(!namesAnotherDispatcher("/Users/someone/.custom-hooks"));
+	assert.ok(!namesAnotherDispatcher(""));
 });
 
 void test("a source archive installs without Git configuration or signing advice", () => {
