@@ -482,7 +482,8 @@ Preview environments do not need to be created in advance. The preview workflow 
 Add the `preview` label to a same-repository pull request. Every push redeploys when its CI/CD run
 completes, whether the tests passed or not. The published images decide, not the test verdict.
 
-CI builds a pull request's images only when the run needs them: for the `preview` label, for the supported-host boot smoke, or for release evidence.
+CI builds a pull request's images only when the run needs them.
+The `preview` label, the supported-host boot smoke, the Kubernetes cluster jobs and release evidence need them.
 The merge group builds every other changed image before it lands.
 `Detect changes` reads the label live, as for `ci:full` ([Two verification tiers](#two-verification-tiers)).
 If it cannot read the label, a pull request that is not a draft builds its images.

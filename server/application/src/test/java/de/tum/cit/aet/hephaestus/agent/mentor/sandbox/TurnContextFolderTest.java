@@ -390,6 +390,69 @@ class TurnContextFolderTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldRemoveTheSandboxAndStageANewOneWhenACommandsRunFails() {
+        sandboxAnswers("0 0 0 0\n");
+        TurnJwt turn = turn(Duration.ofMinutes(5));
+        folder.read(turn, turn.expiresAt(), documents(), "INDEX.md", null, null);
+        var answers = runtime.answer;
+        runtime.answer = command -> {
+            if (command.argv().get(2).equals(TurnContextFolder.EXEC_SCRIPT)) {
+                // What the runtime says when it cannot tell whether the command started: it may start later.
+                throw new SandboxException(
+                        "A turn sandbox command did not open before its deadline and may still start");
+            }
+            return answers.apply(command);
+        };
+
+        ObjectNode failed = folder.exec(turn, turn.expiresAt(), documents(), "true", null);
+
+        assertThat(failed.path("error").asString()).isEqualTo("UNAVAILABLE");
+        await().atMost(Duration.ofSeconds(5)).until(() -> runtime.removed.contains("container-1"));
+        runtime.answer = answers;
+        staged.clear();
+        assertThat(folder.exec(turn, turn.expiresAt(), documents(), "true", null)
+                        .path("ok")
+                        .asBoolean())
+                .isTrue();
+        assertThat(runtime.createdCount())
+                .as("the next command runs in a new sandbox, which a late start of the failed one cannot reach")
+                .isEqualTo(2);
+        assertThat(staged.getFirst()).as("and the documents are staged again").contains("INDEX.md");
+    }
+
+    @Test
+    void shouldRemoveTheSandboxWhenTheCancellationOfATimedOutCommandFails() {
+        sandboxAnswers("0 0 0 0\n");
+        TurnJwt turn = turn(Duration.ofMinutes(5));
+        folder.read(turn, turn.expiresAt(), documents(), "INDEX.md", null, null);
+        var answers = runtime.answer;
+        runtime.answer = command -> {
+            if (command.argv().get(2).equals(TurnContextFolder.EXEC_SCRIPT)) {
+                // The command outlives its timeout, and the runtime then cannot reach the sandbox to end it.
+                runtime.running.remove("container-1");
+                return new ExecSandboxes.Execution(null, new byte[0], new byte[0], false);
+            }
+            return answers.apply(command);
+        };
+
+        ObjectNode failed = folder.exec(turn, turn.expiresAt(), documents(), "sleep 100", 1000);
+
+        assertThat(failed.path("error").asString()).isEqualTo("UNAVAILABLE");
+        assertThat(runtime.cancelled).as("no cancellation was confirmed").isEmpty();
+        await().atMost(Duration.ofSeconds(5)).until(() -> runtime.removed.contains("container-1"));
+        runtime.answer = answers;
+        staged.clear();
+        assertThat(folder.exec(turn, turn.expiresAt(), documents(), "true", null)
+                        .path("ok")
+                        .asBoolean())
+                .isTrue();
+        assertThat(runtime.createdCount())
+                .as("a late kill of the first sandbox reaches no later command")
+                .isEqualTo(2);
+        assertThat(staged.getFirst()).as("and the documents are staged again").contains("INDEX.md");
+    }
+
+    @Test
     void shouldStageALoadOnlyWhenNoCommandRunsInTheFolder() throws Exception {
         sandboxAnswers("0 0 0 0\n");
         Path checkout = Files.createDirectories(temp.resolve("checkout"));

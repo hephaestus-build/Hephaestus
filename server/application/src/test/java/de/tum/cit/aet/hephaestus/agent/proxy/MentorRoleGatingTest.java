@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.proxy;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.DockerSandboxConfiguration;
+import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.util.Objects;
@@ -25,8 +26,10 @@ class MentorRoleGatingTest extends BaseUnitTest {
     }
 
     private void assertWorkerRoleCondition(Class<?> type) {
-        ConditionalOnProperty condition =
-                Objects.requireNonNull(AnnotatedElementUtils.findMergedAnnotation(type, ConditionalOnProperty.class));
+        ConditionalOnWorkerRole workerRole =
+                Objects.requireNonNull(AnnotatedElementUtils.findMergedAnnotation(type, ConditionalOnWorkerRole.class));
+        ConditionalOnProperty condition = Objects.requireNonNull(
+                AnnotatedElementUtils.findMergedAnnotation(workerRole.annotationType(), ConditionalOnProperty.class));
         assertThat(condition.name()).containsExactly(RuntimeRole.WORKER_PROPERTY);
         assertThat(condition.havingValue()).isEqualTo("true");
         assertThat(condition.matchIfMissing()).isTrue();

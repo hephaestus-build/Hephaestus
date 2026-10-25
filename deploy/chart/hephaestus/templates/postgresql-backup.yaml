@@ -1,0 +1,178 @@
+{{- /*
+pgBackRest for the bundled PostgreSQL, as the Compose backup overlay runs it
+(docs/admin/backup-restore.mdx): one S3-compatible repository, encrypted, with full and
+differential backups. PostgreSQL pushes its WAL from its own Pod. The backups run in Jobs that read
+the data directory through the pgBackRest TLS server beside PostgreSQL, so that no Pod but
+PostgreSQL's mounts its volume. Mutual TLS binds that server to the backup certificate.
+*/}}
+{{- $backup := .Values.postgresql.backup }}
+{{- if $backup.enabled }}
+{{- if not .Values.postgresql.bundled }}
+{{- fail "postgresql.backup.enabled needs postgresql.bundled: an external PostgreSQL has its operator's backups" }}
+{{- end }}
+{{- $_ := required "postgresql.backup.s3.bucket is required" $backup.s3.bucket }}
+{{- $_ := required "postgresql.backup.s3.endpoint is required" $backup.s3.endpoint }}
+{{- $_ := required "postgresql.backup.s3.region is required" $backup.s3.region }}
+{{- $name := include "hephaestus.name" (dict "root" . "component" "postgresql-backup") }}
+{{- $postgresql := include "hephaestus.name" (dict "root" . "component" "postgresql") }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "hephaestus.labels" (dict "root" . "component" "postgresql-backup") | nindent 4 }}
+data:
+  # PostgreSQL's side: the archive push and the TLS server. The credentials come from the
+  # environment, never from this file.
+  server.conf: |
+    [global]
+    {{- include "hephaestus.backup.repository" . | nindent 4 }}
+    tls-server-address=*
+    tls-server-cert-file=/etc/postgresql/tls/tls.crt
+    tls-server-key-file=/etc/postgresql/tls/tls.key
+    tls-server-ca-file=/etc/postgresql/tls/ca.crt
+    tls-server-auth=hephaestus-backup=hephaestus
+
+    [hephaestus]
+    pg1-path=/var/lib/postgresql/18/docker
+  # The backup Jobs' side: the repository, and PostgreSQL through its TLS server.
+  client.conf: |
+    [global]
+    {{- include "hephaestus.backup.repository" . | nindent 4 }}
+
+    [hephaestus]
+    pg1-host={{ printf "%s.%s.svc" $postgresql .Release.Namespace }}
+    pg1-host-type=tls
+    pg1-host-cert-file=/etc/pgbackrest/tls/backup.crt
+    pg1-host-key-file=/etc/pgbackrest/tls/backup.key
+    pg1-host-ca-file=/etc/pgbackrest/tls/ca.crt
+    pg1-path=/var/lib/postgresql/18/docker
+{{- if ne (include "hephaestus.restoring" .) "true" }}
+---
+# Creates the repository's stanza once per release, so that the WAL archive works from the start and
+# not from the first scheduled backup. The command is idempotent.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ printf "%s-stanza-%d" $name .Release.Revision }}
+  labels:
+    {{- include "hephaestus.labels" (dict "root" . "component" "postgresql-backup") | nindent 4 }}
+spec:
+  backoffLimit: 6
+  ttlSecondsAfterFinished: 86400
+  template:
+    {{- include "hephaestus.backup.pod" (dict "root" . "command" "pgbackrest --stanza=hephaestus stanza-create && pgbackrest --stanza=hephaestus check") | nindent 4 }}
+{{- end }}
+{{- if eq (include "hephaestus.restoring" .) "true" }}
+---
+# The restore: PostgreSQL and every database role are stopped while it is enabled, so this Job alone
+# mounts the volume. --delta keeps the files that match the backup and replaces the rest.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ printf "%s-restore-%d" $name .Release.Revision }}
+  labels:
+    {{- include "hephaestus.labels" (dict "root" . "component" "postgresql-backup") | nindent 4 }}
+spec:
+  # pgBackRest refuses to restore while PostgreSQL still shuts down; the retries, ten seconds and then
+  # longer apart, outlast its fast shutdown.
+  backoffLimit: 6
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels:
+        {{- include "hephaestus.labels" (dict "root" . "component" "postgresql-backup") | nindent 8 }}
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext:
+        {{- include "hephaestus.podSecurityContext" (dict "user" 999 "group" 999) | nindent 8 }}
+      containers:
+        - name: restore
+          image: {{ include "hephaestus.image" (dict "root" . "name" "postgres") | quote }}
+          imagePullPolicy: IfNotPresent
+          command:
+            - sh
+            - -c
+            - >-
+              if [ -n "$RESTORE_TIME" ]; then
+              exec pgbackrest --stanza=hephaestus --delta --type=time --target="$RESTORE_TIME" --target-action=promote restore;
+              fi;
+              exec pgbackrest --stanza=hephaestus --delta restore
+          env:
+            - name: RESTORE_TIME
+              value: {{ $backup.restore.time | quote }}
+            {{- include "hephaestus.backup.serverEnv" . | nindent 12 }}
+          resources:
+            {{- toYaml $backup.resources | nindent 12 }}
+          securityContext:
+            {{- include "hephaestus.containerSecurityContext" . | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql
+            - name: tmp
+              mountPath: /tmp
+            - name: config
+              mountPath: /etc/pgbackrest/server.conf
+              subPath: server.conf
+              readOnly: true
+            {{- include "hephaestus.backup.caMount" . | nindent 12 }}
+      volumes:
+        # The volume that the PostgreSQL StatefulSet's claim template made for its one Pod.
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ printf "data-%s-0" $postgresql }}
+        - name: tmp
+          emptyDir:
+            sizeLimit: 1Gi
+        - name: config
+          configMap:
+            name: {{ $name }}
+        {{- include "hephaestus.backup.caVolume" . | nindent 8 }}
+{{- end }}
+{{- range $type, $schedule := dict "full" $backup.schedule.full "diff" $backup.schedule.differential }}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ printf "%s-%s" $name $type }}
+  labels:
+    {{- include "hephaestus.labels" (dict "root" $ "component" "postgresql-backup") | nindent 4 }}
+spec:
+  schedule: {{ $schedule | quote }}
+  timeZone: Etc/UTC
+  # No backup while a restore owns the volume.
+  suspend: {{ eq (include "hephaestus.restoring" $) "true" }}
+  # One backup at a time: pgBackRest refuses a second one on the same stanza anyway.
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 3600
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      template:
+        {{- include "hephaestus.backup.pod" (dict "root" $ "command" (printf "pgbackrest --stanza=hephaestus --type=%s backup" $type)) | nindent 8 }}
+{{- end }}
+---
+# The backup Jobs reach PostgreSQL's TLS server and the repository, and nothing else.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "hephaestus.labels" (dict "root" . "component" "network") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "hephaestus.selectorLabels" (dict "root" . "component" "postgresql-backup") | nindent 6 }}
+  policyTypes: ["Ingress", "Egress"]
+  egress:
+    - to:
+        {{- include "hephaestus.componentPeer" (dict "root" . "component" "postgresql") | nindent 8 }}
+      ports:
+        - port: 8432
+          protocol: TCP
+    {{- include "hephaestus.policy.backupEgress" . | nindent 4 }}
+{{- end }}

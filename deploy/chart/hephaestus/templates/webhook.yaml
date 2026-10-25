@@ -1,0 +1,124 @@
+{{- $name := include "hephaestus.name" (dict "root" . "component" "webhook") }}
+{{- $stream := .Values.webhook.stream }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "hephaestus.labels" (dict "root" . "component" "webhook") | nindent 4 }}
+automountServiceAccountToken: false
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "hephaestus.labels" (dict "root" . "component" "webhook") | nindent 4 }}
+spec:
+  selector:
+    {{- include "hephaestus.selectorLabels" (dict "root" . "component" "webhook") | nindent 4 }}
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "hephaestus.labels" (dict "root" . "component" "webhook") | nindent 4 }}
+spec:
+  # 0 stops the receiver for database maintenance. Deliveries in that time reach no receiver.
+  replicas: {{ include "hephaestus.replicas" (dict "root" . "replicas" .Values.webhook.replicas) }}
+  # Push events on GitHub and GitLab are not manually redeliverable: start the new receiver before
+  # the old one stops.
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      {{- include "hephaestus.selectorLabels" (dict "root" . "component" "webhook") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "hephaestus.labels" (dict "root" . "component" "webhook") | nindent 8 }}
+    spec:
+      serviceAccountName: {{ $name }}
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext:
+        {{- include "hephaestus.podSecurityContext" (dict "user" 1002 "group" 1001) | nindent 8 }}
+      # The preStop pause (5 s), then Spring drains HTTP (20 s), then the receiver drains NATS (up to
+      # 15 s).
+      terminationGracePeriodSeconds: 45
+      containers:
+        - name: webhook
+          image: {{ include "hephaestus.image" (dict "root" . "name" "application-server") | quote }}
+          imagePullPolicy: IfNotPresent
+          env:
+            {{- include "hephaestus.env.pod" . | nindent 12 }}
+            {{- include "hephaestus.env.release" . | nindent 12 }}
+            {{- include "hephaestus.env.shared" . | nindent 12 }}
+            {{- include "hephaestus.env.ingestion" . | nindent 12 }}
+            - name: SPRING_PROFILES_ACTIVE
+              value: prod,webhook
+            - name: HEPHAESTUS_RUNTIME_WEBHOOK_ENABLED
+              value: "true"
+            - name: HEPHAESTUS_RUNTIME_SERVER_ENABLED
+              value: "false"
+            - name: HEPHAESTUS_RUNTIME_WORKER_ENABLED
+              value: "false"
+            # The migration Job is the only migration owner.
+            - name: SPRING_LIQUIBASE_ENABLED
+              value: "false"
+            - name: HEPHAESTUS_SYNC_NATS_ENABLED
+              value: "true"
+            - name: HEPHAESTUS_SYNC_NATS_SERVER
+              value: {{ include "hephaestus.natsUrl" . | quote }}
+            # Stream bounds belong on this role: the beans that read them are gated on it.
+            - name: HEPHAESTUS_WEBHOOK_STREAM_MAX_AGE
+              value: {{ $stream.maxAge | quote }}
+            - name: HEPHAESTUS_WEBHOOK_STREAM_MAX_BYTES
+              value: {{ $stream.maxBytes | quote }}
+            - name: HEPHAESTUS_WEBHOOK_STREAM_MAX_BYTES_GITHUB
+              value: {{ $stream.maxBytesGithub | quote }}
+            # Startup refuses stream bounds that sum above the broker's max_file.
+            - name: HEPHAESTUS_WEBHOOK_STREAM_STORAGE_BUDGET
+              value: {{ int64 .Values.nats.jetstream.maxFileBytes | quote }}
+          ports:
+            - name: http
+              containerPort: 8080
+            - name: management
+              containerPort: 9090
+          {{- include "hephaestus.probes" (dict "startupFailures" 30) | nindent 10 }}
+          {{- include "hephaestus.preStop" . | nindent 10 }}
+          resources:
+            {{- toYaml .Values.webhook.resources | nindent 12 }}
+          securityContext:
+            {{- include "hephaestus.containerSecurityContext" . | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            {{- include "hephaestus.postgresqlCaMount" . | nindent 12 }}
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 256Mi
+        {{- include "hephaestus.postgresqlCaVolume" . | nindent 8 }}
+{{- if gt (int .Values.webhook.replicas) 1 }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "hephaestus.labels" (dict "root" . "component" "webhook") | nindent 4 }}
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      {{- include "hephaestus.selectorLabels" (dict "root" . "component" "webhook") | nindent 6 }}
+{{- end }}

@@ -1,4 +1,4 @@
-package de.tum.cit.aet.hephaestus.agent.sandbox.docker;
+package de.tum.cit.aet.hephaestus.agent.sandbox;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
@@ -7,8 +7,6 @@ import static org.mockito.Mockito.verifyNoInteractions;
 
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
-import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxProperties;
-import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxReconciler;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxBackend;
 import de.tum.cit.aet.hephaestus.core.runtime.ServerSchedulingConfig;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -92,7 +90,7 @@ class SandboxMaintenanceConfigurationTest extends BaseUnitTest {
 
     @ParameterizedTest
     @ValueSource(strings = {"specs", "cds-training"})
-    void shouldNotAccessDockerOrTheDatabaseInBuildOnlyProfiles(String profile) {
+    void shouldNotAccessTheRuntimeOrTheDatabaseInBuildOnlyProfiles(String profile) {
         runner.withPropertyValues("spring.profiles.active=" + profile).run(context -> {
             assertThat(context).hasNotFailed().doesNotHaveBean(ScheduledTaskRegistrar.class);
             context.publishEvent(new ApplicationReadyEvent(

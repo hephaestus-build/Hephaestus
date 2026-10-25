@@ -94,6 +94,42 @@ class SandboxArchitectureTest extends HephaestusArchitectureTest {
                     .because("Docker SDK access must be confined to the docker subpackage")
                     .check(classes);
         }
+
+        @Test
+        void kubernetesClientOnlyInKubernetesPackage() {
+            noClasses()
+                    .that()
+                    .resideOutsideOfPackage("..agent.sandbox.kubernetes..")
+                    .should()
+                    .dependOnClassesThat()
+                    .resideInAPackage("io.fabric8..")
+                    .because("Kubernetes API access must be confined to the kubernetes subpackage")
+                    .check(classes);
+        }
+
+        @Test
+        void kubernetesImplNotImportedOutside() {
+            noClasses()
+                    .that()
+                    .resideOutsideOfPackage("..agent.sandbox..")
+                    .should()
+                    .dependOnClassesThat()
+                    .resideInAPackage("..agent.sandbox.kubernetes..")
+                    .because("Only the SPI should be used outside the sandbox package")
+                    .check(classes);
+        }
+
+        @Test
+        void kubernetesRuntimeUsesNoDockerClient() {
+            noClasses()
+                    .that()
+                    .resideInAPackage("..agent.sandbox.kubernetes..")
+                    .should()
+                    .dependOnClassesThat()
+                    .resideInAPackage("com.github.dockerjava..")
+                    .because("The Kubernetes runtime must not reach a Docker daemon")
+                    .check(classes);
+        }
     }
 
     /**

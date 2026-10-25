@@ -72,14 +72,29 @@ await test("verification identity is the release's own: run context now, the map
 	const rescan = readFileSync(".github/workflows/rescan-release-images.yml", "utf8");
 	const rescanSource = readFileSync("scripts/rescan-release-images.ts", "utf8");
 	const prepareLock = readFileSync("scripts/prepare-release-lock.ts", "utf8");
+	const releaseChart = readFileSync("scripts/release-chart.ts", "utf8");
 	const derivedIdentity =
 		/\$\{\{ github\.server_url \}\}\/\$\{\{ github\.repository \}\}\/\.github\/workflows\/release\.yml@refs\/heads\/main/u;
 
 	assert.match(release, derivedIdentity);
 	assert.match(rescanSource, /releaseCertificateIdentity\(release, process\.env\)/u);
-	assert.match(prepareLock, /releaseCertificateIdentity\(release, process\.env\)/u);
-	assert.match(prepareLock, /releaseRepository\(release, process\.env\)/u);
-	for (const contents of [release, reconciler, rescan, rescanSource, prepareLock]) {
+	// prepare-release-lock takes its environment as a dependency so its tests can run without CI
+	// variables. The command itself is given the process environment, so the signer and the
+	// repository still follow the run context now and the history map for earlier releases.
+	assert.match(
+		prepareLock,
+		/const defaults: PrepareDependencies = \{\n\tenvironment: process\.env,/u,
+	);
+	assert.match(prepareLock, /releaseCertificateIdentity\(release, environment\)/u);
+	assert.match(prepareLock, /releaseRepository\(release, environment\)/u);
+	assert.match(
+		prepareLock,
+		/verifyReleaseChart\(\n\t+lock,\n\t+path\.join\(directory, signature\),\n\t+chartTempDirectory,\n\t+environment,/u,
+	);
+	// The chart package is verified with the same identity as the lock it is named in.
+	assert.match(releaseChart, /releaseCertificateIdentity\(lock\.release, environment\)/u);
+	assert.match(releaseChart, /signature,\n\t+destination,\n\t+process\.env,\n/u);
+	for (const contents of [release, reconciler, rescan, rescanSource, prepareLock, releaseChart]) {
 		assert.doesNotMatch(contents, /certificate-identity[^\n]*\n?[^\n]*ls1intum\/Hephaestus/u);
 		assert.doesNotMatch(
 			contents,

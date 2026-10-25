@@ -52,6 +52,7 @@ jobs:
       agent-images: ${{ steps.filter.outputs.agent-images }}
       postgres-image: ${{ steps.filter.outputs.postgres-image }}
       supported-host-smoke: ${{ steps.filter.outputs.supported-host-smoke }}
+      kubernetes: ${{ steps.filter.outputs.kubernetes }}
       docs: ${{ steps.filter.outputs.docs }}
       ci-config: ${{ steps.filter.outputs.ci-config }}
       quality-config: ${{ steps.filter.outputs.quality-config }}
@@ -98,13 +99,14 @@ jobs:
       # ready starts the ordinary run. ci-cd.mdx § Two verification tiers.
       draft: ${{ github.event_name == 'pull_request' && github.event.pull_request.draft == true && steps.opt_in.outputs.preview != 'true' && steps.release_candidate.outputs.release-candidate != 'true' }}
       publishable: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
-      # A same-repository pull request needs every image at its head tag for its preview or the host
-      # boot smoke. An unreadable `preview` label counts as present, except on a draft.
-      head-images: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && (steps.opt_in.outputs.preview == 'true' || (github.event.pull_request.draft != true && (steps.opt_in.outputs.preview != 'false' || steps.filter.outputs.supported-host-smoke == 'true'))) }}
+      # A same-repository pull request needs every image at its head tag for its preview, the host
+      # boot smoke or the Kubernetes cluster jobs. An unreadable `preview` label counts as present,
+      # except on a draft.
+      head-images: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && (steps.opt_in.outputs.preview == 'true' || (github.event.pull_request.draft != true && (steps.opt_in.outputs.preview != 'false' || steps.filter.outputs.supported-host-smoke == 'true' || steps.filter.outputs.kubernetes == 'true'))) }}
       # Whether this run builds images at all: every event except a pull request, unless that pull
       # request is a release candidate or needs head images. The merge group builds every other
       # changed image before it lands. ci-cd.mdx § Preview deployments.
-      images: ${{ github.event_name != 'pull_request' || steps.release_candidate.outputs.release-candidate == 'true' || (github.event.pull_request.head.repo.full_name == github.repository && (steps.opt_in.outputs.preview == 'true' || (github.event.pull_request.draft != true && (steps.opt_in.outputs.preview != 'false' || steps.filter.outputs.supported-host-smoke == 'true')))) }}
+      images: ${{ github.event_name != 'pull_request' || steps.release_candidate.outputs.release-candidate == 'true' || (github.event.pull_request.head.repo.full_name == github.repository && (steps.opt_in.outputs.preview == 'true' || (github.event.pull_request.draft != true && (steps.opt_in.outputs.preview != 'false' || steps.filter.outputs.supported-host-smoke == 'true' || steps.filter.outputs.kubernetes == 'true')))) }}
       # A skipped duplicate would skip the image builds the release evidence preflight needs, and
       # the gate refuses to pass the Version PR without one.
       # A re-run after `ci:full` was added repeats a tree whose fast tier already passed, so only a
@@ -332,6 +334,8 @@ jobs:
               - 'scripts/**'
               - 'security/semgrep/**'
               - 'docker/agents/**'
+              # test:tooling renders this chart with the real Helm CLI on this leg and on Windows.
+              - 'deploy/chart/**'
               # format:load:check and test:load:syntax run on this leg.
               - 'load-tests/**'
               # The catalog and guidance tests in scripts/ judge these bundled server resources.
@@ -470,6 +474,19 @@ jobs:
               - 'server/application/src/main/java/**/Application.java'
               - '.github/workflows/cicd.yml'
               - '.github/workflows/ci-build.yml'
+            # What a cluster install of the chart exercises: the chart, its script, the worker's
+            # sandbox runtime and what it binds, and the agent image that its sandboxes run.
+            kubernetes:
+              - 'deploy/chart/**'
+              - 'scripts/kubernetes-cluster.ts'
+              - 'scripts/resolve-release-images.ts'
+              - 'server/application/src/main/java/**/agent/sandbox/**'
+              - 'server/application/src/main/java/**/agent/gateway/**'
+              - 'server/application/src/main/resources/application*.yml'
+              - 'docker/agents/**'
+              - 'docker/postgres/**'
+              - '.github/workflows/ci-kubernetes.yml'
+              - '.github/actions/setup-kubernetes-tools/**'
             docs:
               - 'docs/**'
             # Changes the queue tier judges best before the queue: migrations, which the database
@@ -498,6 +515,7 @@ jobs:
               - '.github/actions/setup-toolchain/**'
               - '.github/actions/setup-caches/**'
               - '.github/actions/setup-browsers/**'
+              - '.github/actions/setup-helm/**'
             build-config:
               - '.github/workflows/cicd.yml'
               - '.java-version'
@@ -1041,6 +1059,25 @@ jobs:
             --wait-timeout 600 postgres nats-server application-server application-worker
           node ../../scripts/sandbox-isolation-probe.ts --env-file .env --env-file smoke-lock.env
 
+  # The chart on real clusters with this run's images, when the chart or the sandbox runtime changed,
+  # and on every main commit. `Docker` puts every image under the head commit's tag, by building it or
+  # by aliasing the base image; a fork publishes none, so there is nothing to install.
+  Kubernetes:
+    needs: [detect-changes, application-server-image, Docker]
+    if: >-
+      !cancelled() && needs.Docker.result == 'success' &&
+      (needs.application-server-image.result == 'success' || needs.application-server-image.result == 'skipped') &&
+      needs.detect-changes.outputs.should_skip != 'true' &&
+      needs.detect-changes.outputs.publishable == 'true' &&
+      (github.event_name == 'push' || needs.detect-changes.outputs.kubernetes == 'true')
+    uses: ./.github/workflows/ci-kubernetes.yml
+    permissions:
+      contents: read
+    with:
+      commit: ${{ github.event.pull_request.head.sha || github.sha }}
+      # The arm64 clusters run on main only, which has the arm64 images of its merge group.
+      arm64: ${{ github.event_name == 'push' && contains(needs.detect-changes.outputs.platforms, 'linux/arm64') }}
+
   # Validate the built images before release; signatures and attestations are added at publication.
   # Every release candidate needs evidence for its own tree, including a merge group's aggregate.
   # release-management.mdx owns the evidence contract.
@@ -1132,6 +1169,7 @@ jobs:
         Compose,
         Docker,
         Supported-host-smoke,
+        Kubernetes,
         Release-preflight,
       ]
     if: always()
@@ -1155,6 +1193,7 @@ jobs:
           echo "Compose:        ${{ needs.Compose.result }}"
           echo "Docker:         ${{ needs.Docker.result }}"
           echo "Host smoke:     ${{ needs.Supported-host-smoke.result }}"
+          echo "Kubernetes:     ${{ needs.Kubernetes.result }}"
           echo "Preflight:      ${{ needs.Release-preflight.result }}"
           echo "Release candidate: ${{ needs.detect-changes.outputs.release-candidate == 'true' }}"
 

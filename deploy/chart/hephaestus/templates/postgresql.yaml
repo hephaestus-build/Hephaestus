@@ -1,0 +1,204 @@
+{{- if .Values.postgresql.bundled }}
+{{- $name := include "hephaestus.name" (dict "root" . "component" "postgresql") }}
+{{- $backup := .Values.postgresql.backup.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "hephaestus.labels" (dict "root" . "component" "postgresql") | nindent 4 }}
+spec:
+  selector:
+    {{- include "hephaestus.selectorLabels" (dict "root" . "component" "postgresql") | nindent 4 }}
+  ports:
+    - name: postgresql
+      port: 5432
+      targetPort: postgresql
+    {{- if $backup }}
+    # pgBackRest's TLS server, for the backup Jobs.
+    - name: pgbackrest
+      port: 8432
+      targetPort: pgbackrest
+    {{- end }}
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "hephaestus.labels" (dict "root" . "component" "postgresql") | nindent 4 }}
+spec:
+  replicas: {{ include "hephaestus.replicas" (dict "root" . "replicas" 1) }}
+  serviceName: {{ $name }}
+  selector:
+    matchLabels:
+      {{- include "hephaestus.selectorLabels" (dict "root" . "component" "postgresql") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "hephaestus.labels" (dict "root" . "component" "postgresql") | nindent 8 }}
+      {{- if $backup }}
+      # The backup configuration is a file of the Pod: a change restarts PostgreSQL with it.
+      annotations:
+        checksum/backup: {{ include "hephaestus.backup.repository" . | sha256sum }}
+      {{- end }}
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      # The image's postgres user. Started as that user, the entrypoint skips its root-only
+      # ownership fix and initializes the volume directly.
+      securityContext:
+        {{- include "hephaestus.podSecurityContext" (dict "user" 999 "group" 999) | nindent 8 }}
+      containers:
+        - name: postgresql
+          image: {{ include "hephaestus.image" (dict "root" . "name" "postgres") | quote }}
+          imagePullPolicy: IfNotPresent
+          # Arguments only: the image's entrypoint still runs and starts postgres with them.
+          args:
+            - -c
+            - ssl=on
+            - -c
+            - ssl_cert_file=/etc/postgresql/tls/tls.crt
+            - -c
+            - ssl_key_file=/etc/postgresql/tls/tls.key
+            {{- if $backup }}
+            - -c
+            - archive_mode=on
+            - -c
+            - archive_timeout=60s
+            - -c
+            - archive_command=pgbackrest --stanza=hephaestus archive-push %p
+            {{- end }}
+          env:
+            {{- include "hephaestus.secretEnv" (dict "root" . "env" "POSTGRES_USER" "key" "DATABASE_USERNAME") | nindent 12 }}
+            {{- include "hephaestus.secretEnv" (dict "root" . "env" "POSTGRES_PASSWORD" "key" "DATABASE_PASSWORD") | nindent 12 }}
+            - name: POSTGRES_DB
+              value: {{ .Values.postgresql.database | quote }}
+            {{- if $backup }}
+            {{- include "hephaestus.backup.serverEnv" . | nindent 12 }}
+            {{- end }}
+          ports:
+            - name: postgresql
+              containerPort: 5432
+          startupProbe:
+            exec:
+              command: ["sh", "-c", 'pg_isready -h 127.0.0.1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"']
+            periodSeconds: 5
+            failureThreshold: 120
+          livenessProbe:
+            exec:
+              command: ["sh", "-c", 'pg_isready -h 127.0.0.1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"']
+            periodSeconds: 15
+            timeoutSeconds: 10
+            failureThreshold: 6
+          readinessProbe:
+            exec:
+              command: ["sh", "-c", 'pg_isready -h 127.0.0.1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"']
+            periodSeconds: 5
+            timeoutSeconds: 10
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.postgresql.resources | nindent 12 }}
+          securityContext:
+            {{- include "hephaestus.containerSecurityContext" . | nindent 12 }}
+          # ADR 0038 mounts persistence at /var/lib/postgresql. The image keeps its own versioned
+          # PGDATA below it (/var/lib/postgresql/18/docker, as docker/self-host/pgbackrest.conf
+          # names it), so the chart sets no PGDATA.
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql
+            - name: run
+              mountPath: /var/run/postgresql
+            - name: tmp
+              mountPath: /tmp
+            # A directory mount, not subPath, so that the kubelet updates the files when the Secret
+            # changes. PostgreSQL reads them again only on a reload or a restart.
+            - name: tls
+              mountPath: /etc/postgresql/tls
+              readOnly: true
+            {{- if $backup }}
+            - name: backup-config
+              mountPath: /etc/pgbackrest/server.conf
+              subPath: server.conf
+              readOnly: true
+            {{- include "hephaestus.backup.caMount" . | nindent 12 }}
+            {{- end }}
+        {{- if $backup }}
+        # pgBackRest's TLS server: the backup Jobs read the data directory through it, and only with
+        # the backup client certificate.
+        - name: pgbackrest
+          image: {{ include "hephaestus.image" (dict "root" . "name" "postgres") | quote }}
+          imagePullPolicy: IfNotPresent
+          command: ["pgbackrest", "server"]
+          env:
+            {{- include "hephaestus.secretEnv" (dict "root" . "env" "POSTGRES_USER" "key" "DATABASE_USERNAME") | nindent 12 }}
+            {{- include "hephaestus.backup.serverEnv" . | nindent 12 }}
+          ports:
+            - name: pgbackrest
+              containerPort: 8432
+          resources:
+            {{- toYaml .Values.postgresql.backup.resources | nindent 12 }}
+          securityContext:
+            {{- include "hephaestus.containerSecurityContext" . | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql
+            - name: run
+              mountPath: /var/run/postgresql
+            - name: tmp
+              mountPath: /tmp
+            - name: tls
+              mountPath: /etc/postgresql/tls
+              readOnly: true
+            - name: backup-config
+              mountPath: /etc/pgbackrest/server.conf
+              subPath: server.conf
+              readOnly: true
+            {{- include "hephaestus.backup.caMount" . | nindent 12 }}
+        {{- end }}
+      # Fast shutdown checkpoints before exit. Kubernetes' 30 s default can cut a large checkpoint.
+      terminationGracePeriodSeconds: 120
+      volumes:
+        - name: run
+          emptyDir:
+            sizeLimit: 16Mi
+        - name: tmp
+          emptyDir:
+            sizeLimit: 256Mi
+        # The certificate and key; clients sign in with a password, not a certificate. With backups,
+        # the CA too: pgBackRest's TLS server checks the backup client's certificate with it. The
+        # files belong to root and the fsGroup 999. PostgreSQL accepts a root-owned key that its
+        # group can read and no other user can.
+        - name: tls
+          secret:
+            secretName: {{ include "hephaestus.postgresqlTlsSecret" . }}
+            items:
+              - key: tls.crt
+                path: tls.crt
+              - key: tls.key
+                path: tls.key
+              {{- if $backup }}
+              - key: ca.crt
+                path: ca.crt
+              {{- end }}
+            defaultMode: 288 # 0440
+        {{- if $backup }}
+        - name: backup-config
+          configMap:
+            name: {{ include "hephaestus.name" (dict "root" . "component" "postgresql-backup") }}
+        {{- include "hephaestus.backup.caVolume" . | nindent 8 }}
+        {{- end }}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        labels:
+          {{- include "hephaestus.selectorLabels" (dict "root" . "component" "postgresql") | nindent 10 }}
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        {{- with .Values.postgresql.persistence.storageClassName }}
+        storageClassName: {{ . }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.postgresql.persistence.size }}
+{{- end }}

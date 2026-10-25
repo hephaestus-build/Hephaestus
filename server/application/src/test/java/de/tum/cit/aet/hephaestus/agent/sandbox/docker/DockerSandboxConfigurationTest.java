@@ -9,7 +9,6 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.ImagePullPolicy;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ResourceLimits;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-import java.time.Clock;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -27,7 +26,7 @@ class DockerSandboxConfigurationTest extends BaseUnitTest {
         }
         var registry = new SimpleMeterRegistry();
         try {
-            var guard = new DockerSandboxConfiguration(Clock.systemUTC(), new MockEnvironment())
+            var guard = new DockerSandboxConfiguration(new MockEnvironment())
                     .sandboxImageGuard(
                             operations, new AgentImageProperties("test-image", ImagePullPolicy.ALWAYS), registry);
             assertThat(registry.getMeters()).isEmpty();
