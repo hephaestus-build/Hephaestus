@@ -4,13 +4,15 @@ import { expect } from "storybook/test";
 import { RouteError } from "./RouteError";
 
 /**
- * What a route shows when its loader or component fails. Retry runs the route again; the route test
- * owns that a page that recovers replaces this one.
+ * What a route shows when its `beforeLoad`, loader or component throws. The error's status picks the
+ * state, and `PageError` owns how each one looks. An error with no status has an unknown cause, so
+ * Retry is offered.
  */
 const meta = {
 	component: RouteError,
 	parameters: { layout: "fullscreen" },
 	tags: ["autodocs"],
+	args: { error: new Error("render failed") },
 } satisfies Meta<typeof RouteError>;
 
 export default meta;
@@ -21,12 +23,6 @@ export const Default: Story = {
 		const alert = canvas.getByRole("alert");
 		await expect(alert).toHaveTextContent("We could not load this page");
 		await expect(canvas.getByRole("button", { name: "Retry" })).toBeEnabled();
-	},
-};
-
-export const OnAPhone: Story = {
-	parameters: { viewport: { defaultViewport: "reflow" }, chromatic: { viewports: [320] } },
-	play: async ({ canvasElement }) => {
-		await expect(canvasElement.scrollWidth).toBeLessThanOrEqual(canvasElement.clientWidth);
+		await expect(alert).not.toHaveTextContent("render failed");
 	},
 };

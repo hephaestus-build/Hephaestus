@@ -5,7 +5,7 @@ import {
 	createRouter,
 	RouterProvider,
 } from "@tanstack/react-router";
-import { render, screen } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { StrictMode } from "react";
 import { expect, it, vi } from "vitest";
@@ -62,4 +62,53 @@ it("runs a failed route again on retry and shows the page once it renders", asyn
 	for (const [caught] of onCaughtError.mock.calls) {
 		expect(caught).toBe(error);
 	}
+});
+
+function renderGuardedRoute(status: number) {
+	const rootRoute = createRootRoute();
+	const route = createRoute({
+		getParentRoute: () => rootRoute,
+		path: "/",
+		beforeLoad: () => {
+			throw Object.assign(new Error("private detail"), { status });
+		},
+		component: () => <h1>Guarded page</h1>,
+	});
+	const router = createRouter({
+		...ROUTER_SEARCH,
+		routeTree: rootRoute.addChildren([route]),
+		history: createMemoryHistory({ initialEntries: ["/"] }),
+		defaultErrorComponent: RouteError,
+	});
+	render(<RouterProvider router={router} />);
+}
+
+it.each([
+	[404, "We could not find this page"],
+	[403, "You do not have access to this page"],
+])("names a %i from beforeLoad and offers the way home, not a retry", async (status, title) => {
+	renderGuardedRoute(status);
+
+	const heading = await screen.findByRole("heading", { level: 1 });
+	expect(heading.textContent).toBe(title);
+	expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
+	expect(screen.getByRole("link", { name: "Go to the home page" }).getAttribute("href")).toBe("/");
+	expect(document.body.textContent).not.toContain("private detail");
+});
+
+it("announces a refusal as an alert and a missing page as a page", async () => {
+	renderGuardedRoute(403);
+	await screen.findByRole("alert");
+	cleanup();
+
+	renderGuardedRoute(404);
+	await screen.findByRole("heading", { level: 1 });
+	expect(screen.queryByRole("alert")).toBeNull();
+});
+
+it("offers no retry for a request the server refused, which would be refused again", async () => {
+	renderGuardedRoute(400);
+
+	await screen.findByRole("alert");
+	expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
 });

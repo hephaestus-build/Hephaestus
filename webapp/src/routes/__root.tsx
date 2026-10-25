@@ -38,7 +38,7 @@ import type { SurveyInvitation } from "@/api/types.gen";
 import { UserViewBanner } from "@/components/admin/users/UserViewBanner";
 import { ConfirmAccessDialog } from "@/components/auth/ConfirmAccessDialog";
 import { LoginDialog } from "@/components/auth/LoginDialog";
-import { NotFoundPage } from "@/components/common/NotFoundPage";
+import { PageError } from "@/components/common/PageError";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import Footer from "@/components/layout/Footer";
 import Header from "@/components/layout/Header";
@@ -88,6 +88,7 @@ import { useProviderColors } from "@/runtime/theme/provider-colors";
 import { exitUserView } from "@/runtime/user-view/session";
 import { workspaceAddressConfig, publicHref } from "@/runtime/workspace-address";
 import { isHephPanelExcludedRoute } from "./-heph-panel-route";
+import { showHephUnavailable } from "./-heph-unavailable";
 
 const GlobalHephPanel = lazy(async () => import("./-GlobalHephPanel"));
 
@@ -185,7 +186,11 @@ function RootLayout() {
 			<PublicLoginOverlay />
 			{userView && <UserViewConfirmAccess />}
 			{showHephPanel && (
-				<CatchBoundary getResetKey={() => 0} errorComponent={HephPanelUnavailable}>
+				<CatchBoundary
+					getResetKey={() => 0}
+					onCatch={() => showHephUnavailable({ again: false })}
+					errorComponent={HephPanelUnavailable}
+				>
 					<Suspense fallback={null}>
 						<GlobalHephPanel />
 					</Suspense>
@@ -196,7 +201,11 @@ function RootLayout() {
 	);
 }
 
-/** The page works without Heph, so a failed Heph panel renders nothing until the next load. */
+/**
+ * The panel's code did not load, often a file replaced by a deploy. `React.lazy` keeps that failure,
+ * so the toast from `onCatch` offers a page load, not a retry. A panel that fails after it loaded
+ * has its own boundary, in `-GlobalHephPanel.tsx`.
+ */
 function HephPanelUnavailable() {
 	return null;
 }
@@ -377,8 +386,12 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 	head: () => ({ meta: [{ title: "Hephaestus" }] }),
 	component: RootRoute,
 	// An address no route matches is `routes/$.tsx`, which sets a title; this serves a thrown `notFound()`.
-	notFoundComponent: NotFoundPage,
+	notFoundComponent: NotFound,
 });
+
+function NotFound() {
+	return <PageError cause="not-found" />;
+}
 
 function HeaderContainer() {
 	const openLogin = useLoginNavigation();
@@ -605,6 +618,11 @@ function AppSidebarContainer() {
 			activeWorkspace={chromeWorkspace}
 			administrationWorkspace={administrationWorkspace}
 			administrationWorkspaceSlug={administrationWorkspaceSlug}
+			administrationWorkspaceError={
+				administrationWorkspaceSlug !== undefined && workspaceAccess.error !== undefined
+					? { error: workspaceAccess.error, onRetry: workspaceAccess.refetch }
+					: undefined
+			}
 			onWorkspaceChange={handleWorkspaceChange}
 			onAddWorkspace={handleAddWorkspace}
 			workspacesLoading={workspaceAccess.isLoading}

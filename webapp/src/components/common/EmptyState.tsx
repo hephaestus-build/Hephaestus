@@ -18,6 +18,8 @@ export interface EmptyStateProps {
 	headingLevel: 1 | 2 | 3;
 	description?: string;
 	action?: ReactElement;
+	/** `outlined` marks an empty region inside a page; `plain` fills a page or a panel that has its own edge. */
+	variant?: "outlined" | "plain";
 	className?: string;
 }
 
@@ -27,10 +29,11 @@ export function EmptyState({
 	headingLevel,
 	description,
 	action,
+	variant = "outlined",
 	className,
 }: EmptyStateProps) {
 	return (
-		<Empty variant="outlined" className={cn("min-h-60", className)}>
+		<Empty variant={variant} className={cn(variant === "outlined" && "min-h-60", className)}>
 			<EmptyHeader>
 				<EmptyMedia variant="icon">{icon}</EmptyMedia>
 				<EmptyTitle role="heading" aria-level={headingLevel}>
