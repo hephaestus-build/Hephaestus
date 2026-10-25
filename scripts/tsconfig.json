@@ -7,7 +7,7 @@
 		// ESNext, not ES2023: Array.fromAsync ships in Node 24 but only lib.esnext types it.
 		"lib": ["ESNext", "DOM", "DOM.Iterable"],
 		"strict": true,
-		// The workflows import preview-controller.ts through actions/github-script, which runs on
+		// Workflows import some of these scripts through actions/github-script, which runs on
 		// Node type stripping rather than a transpiler; syntax that needs a transform would fail there at
 		// runtime with no local signal.
 		"erasableSyntaxOnly": true,

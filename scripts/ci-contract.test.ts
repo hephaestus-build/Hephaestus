@@ -4210,10 +4210,6 @@ void test("a workflow triggered by main does not cancel the run main is judged b
 const UNCANCELLED_PULL_REQUEST_RUNS: Record<string, string> = {
 	".github/workflows/cd-docs-teardown.yml":
 		"It deletes the docs and Storybook previews; a teardown cancelled halfway leaves them published.",
-	".github/workflows/cleanup-preview.yml":
-		"A teardown cancelled halfway leaves preview resources behind.",
-	".github/workflows/deploy-preview.yml":
-		"A deploy cancelled halfway leaves a partly replaced preview.",
 	".github/workflows/openapi-autocommit.yml":
 		"Any label starts it, so an unrelated label would cancel the run that commits the regeneration.",
 	".github/workflows/review-policy.yml":

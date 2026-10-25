@@ -38,11 +38,7 @@ await test("DNS credential values stay outside Compose and only the proxy mounts
 	assert.doesNotMatch(proxy, /env_file:/u);
 	assert.match(proxy, /:\/run\/secrets\/dns:ro/u);
 	assert.match(start, /export "\$variable=\/run\/secrets\/dns\/token"/u);
-	for (const file of [
-		"docker/compose.app.yaml",
-		"docker/compose.core.yaml",
-		"docker/preview/compose.app.yaml",
-	]) {
+	for (const file of ["docker/compose.app.yaml", "docker/compose.core.yaml"]) {
 		assert.doesNotMatch(read(file), /CF_DNS_API_TOKEN|TRAEFIK_DNS_CREDENTIAL/u);
 	}
 	assert.match(read("webapp/docker/security-headers.conf"), /connect-src 'self' https:/u);

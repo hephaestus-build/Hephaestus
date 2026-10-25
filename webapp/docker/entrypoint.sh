@@ -38,7 +38,7 @@ extract_env_vars() {
 
 main() {
   # Recover git metadata from build-time variables if runtime vars are empty/missing
-  # Coolify tends to inject empty GIT_COMMIT/SOURCE_COMMIT at runtime, overriding baked ENV vars.
+  # An empty runtime GIT_COMMIT or GIT_BRANCH would otherwise override the baked values.
   if [[ -z "${GIT_COMMIT:-}" && -n "${BUILD_GIT_COMMIT:-}" ]]; then
     export GIT_COMMIT="$BUILD_GIT_COMMIT"
     log "Restored GIT_COMMIT from build artifact: $GIT_COMMIT"
@@ -51,39 +51,6 @@ main() {
     # Prefer specific branch from build if runtime says generic "main"
     export GIT_BRANCH="$BUILD_GIT_BRANCH"
     log "Restored specific GIT_BRANCH from build artifact: $GIT_BRANCH"
-  fi
-
-  # Heuristic to detect PR deployment and fix GIT_BRANCH if it defaulted to "main"
-  # Coolify PR deployments often report branch as "main" (target) instead of source.
-  if [[ "${GIT_BRANCH:-}" == "main" && -n "${SERVICE_FQDN_WEBAPP:-}" ]]; then
-    # Match pattern like pr622. or pr-622. (Coolify default usually pr<id>.)
-    if [[ "$SERVICE_FQDN_WEBAPP" =~ ^pr-?([0-9]+) ]]; then
-       local pr_id="${BASH_REMATCH[1]}"
-       local detected_branch="PR-${pr_id}"
-
-       # Try to resolve actual branch name via GitHub API if token is available
-       if [[ -n "${GH_AUTH_TOKEN:-}" ]]; then
-         local api_url="https://api.github.com/repos/hephaestus-build/Hephaestus/pulls/${pr_id}"
-         local pr_json
-         if pr_json=$(curl --connect-timeout 5 --max-time 10 -sS -H "Authorization: Bearer $GH_AUTH_TOKEN" "$api_url"); then
-           # Extract head.ref safely using grep/sed (no jq in image)
-           # JSON format: "head": { ... "ref": "branch-name", ... }
-           local branch_ref
-           branch_ref=$(echo "$pr_json" | sed -n '/"head": {/,/}/p' | grep '"ref":' | head -1 | sed -E 's/.*"ref": "([^"]+)".*/\1/')
-           if [[ -n "$branch_ref" ]]; then
-             detected_branch="$branch_ref"
-             log "Resolved real branch from GitHub API: $detected_branch"
-           else
-             log "WARNING: Failed to parse branch from GitHub API response"
-           fi
-         else
-           log "WARNING: Failed to fetch PR details from GitHub API"
-         fi
-       fi
-
-       export GIT_BRANCH="$detected_branch"
-       log "Detected PR deployment from FQDN. Overriding GIT_BRANCH to: $GIT_BRANCH"
-    fi
   fi
 
   log "Generating runtime config..."

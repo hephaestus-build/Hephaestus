@@ -310,6 +310,6 @@ await test("the image builds receive the queue run a default-branch push resolve
 	// The webapp records its branch at build time, and the merge group's build is the one that ships.
 	assert.match(
 		String(docker.getIn(["jobs", "webapp-build", "with", "build-args"])),
-		/COOLIFY_BRANCH=\$\{\{ github\.head_ref \|\| \(github\.event_name == 'merge_group' && github\.event\.repository\.default_branch\) \|\| github\.ref_name \}\}/u,
+		/SOURCE_BRANCH=\$\{\{ github\.head_ref \|\| \(github\.event_name == 'merge_group' && github\.event\.repository\.default_branch\) \|\| github\.ref_name \}\}/u,
 	);
 });

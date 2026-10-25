@@ -342,7 +342,7 @@ A removed consumer is recreated at new messages only.
 It skips messages that arrived while the deployment was gone.
 
 1. On disposable stacks that share a broker, set a much shorter value (`72h`).
-   This includes preview environments and temporary test stacks.
+   This includes temporary test stacks.
 2. If an offline deployment must resume after the threshold exactly where it stopped, set `0s` to disable removal.
 
 `0s` preserves the consumer's *position*, not its *messages*.
