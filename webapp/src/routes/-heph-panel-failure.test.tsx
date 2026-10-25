@@ -7,6 +7,7 @@ import type { WorkspaceOnboarding } from "@/api/types.gen";
 import { workspaceOnboarding } from "@/mocks/fixtures/onboarding";
 import { ownMembership, workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
+import { sleep } from "@/test/async";
 import { MentorFake } from "@/test/mentor-server";
 import { renderRouteAtWithRouter, ROUTE_RENDER_WAIT } from "@/test/router-harness";
 
@@ -21,11 +22,16 @@ vi.mock("./-HephConversationView", () => ({
 	ThreadConversation: () => null,
 }));
 
-/** The toast that holds this text: the page under it has a Retry of its own. */
+/**
+ * The toast that holds this text: the page under it has a Retry of its own. Sonner removes a
+ * dismissed toast a few frames late, so the toast must still be there well after those frames.
+ */
 async function toastSaying(text: string): Promise<HTMLElement> {
-	const message = await screen.findByText(text, undefined, ROUTE_RENDER_WAIT);
-	const toast = message.closest<HTMLElement>("[data-sonner-toast]");
+	await screen.findByText(text, undefined, ROUTE_RENDER_WAIT);
+	await sleep(500);
+	const toast = screen.getByText(text).closest<HTMLElement>("[data-sonner-toast]");
 	assert(toast !== null, `"${text}" is not in a toast.`);
+	expect(toast.dataset.removed).not.toBe("true");
 	return toast;
 }
 
