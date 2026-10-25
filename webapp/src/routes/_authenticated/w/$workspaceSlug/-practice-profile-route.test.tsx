@@ -840,7 +840,11 @@ describe("a met result", () => {
 		expect(router.state.location.search.observationQuery).toBe(MET.item.label);
 		// It narrows to that one work by id, so "#15" never also keeps "#150".
 		expect(router.state.location.search.observationWork).toBe(MET.item.id);
-		const search = await screen.findByRole("searchbox", { name: "Search" }, SETTLE_WAIT);
+		const search = await screen.findByRole(
+			"searchbox",
+			{ name: "Search observations" },
+			SETTLE_WAIT,
+		);
 		assert(search instanceof HTMLInputElement);
 		expect(search.value).toBe(MET.item.label);
 		await screen.findByText(
@@ -1081,7 +1085,11 @@ describe("complete practice observations", () => {
 			),
 		);
 		const { router } = renderRouteAtWithRouter(observationPage());
-		const search = await screen.findByRole("searchbox", { name: "Search" }, ROUTE_RENDER_WAIT);
+		const search = await screen.findByRole(
+			"searchbox",
+			{ name: "Search observations" },
+			ROUTE_RENDER_WAIT,
+		);
 		fireEvent.change(search, { target: { value: "#1" } });
 		await waitFor(() => expect(router.state.location.search.observationQuery).toBe("#1"));
 		expect(router.state.location.search.observation).toBeUndefined();

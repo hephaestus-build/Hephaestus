@@ -157,7 +157,7 @@ export interface PracticeGroupDetailSelection {
 	/** The Observations tab's text filter: words, work (such as "#15") and problems. */
 	observationQuery?: string;
 	/** The Observations tab's outcome filter. */
-	observationOutcome?: Outcome;
+	observationOutcome?: Outcome[];
 	/** How far back the Observations tab reaches; absent is every observation. */
 	observationSince?: ReviewTimeframe;
 	/** The feedback card a link asked for on the Feedback tab, by its feedback id: shown and marked. */
@@ -212,7 +212,9 @@ const practiceProfileFilterSchema = z.object({
 	practiceTab: z.enum(PRACTICE_TABS).default(DEFAULT_PRACTICE_TAB).catch(DEFAULT_PRACTICE_TAB),
 	observation: z.uuid().optional().catch(undefined),
 	observationQuery: z.string().min(1).max(REVIEW_FILTER_MAX_LENGTH).optional().catch(undefined),
-	observationOutcome: z.enum(statusValues(OUTCOME_DEFS)).optional().catch(undefined),
+	observationOutcome: multiValue.transform((values) =>
+		narrowToEnum(values, statusValues(OUTCOME_DEFS)),
+	),
 	observationSince: z.enum(REVIEW_TIMEFRAMES).optional().catch(undefined),
 	feedbackCard: z.uuid().optional().catch(undefined),
 	observationWork: itemIdSchema.optional().catch(undefined),
