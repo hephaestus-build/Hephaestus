@@ -1,5 +1,5 @@
 /**
- * Reports the four delivery metrics from GitHub's own records: merged pull requests, published
+ * Reports the DORA delivery metrics from GitHub's own records: merged pull requests, published
  * releases and the deployments that `promote.yml` records for each environment. Commit order comes
  * from the local first-parent history of the default branch.
  */
@@ -89,9 +89,10 @@ export function isRevert(title: string): boolean {
 export type Verdict = "success" | "failed" | "repeat" | "undecided";
 
 /**
- * Walks one environment's deployments in order. A deployment of what already runs is a repeat: it
- * moves nothing, so it is neither a deployment nor a failure. A deployment failed when its record
- * says so, or when the next deployment that moved the environment went back on main's history.
+ * Walks one environment's deployments in order. A deployment failed when its record says so, or when
+ * the next deployment that moved the environment went back on main's history; a failure counts
+ * whatever it deployed. A successful or undecided deployment of what already runs is a repeat: it
+ * moves nothing, so it is neither a deployment nor a failure.
  */
 export function classify(
 	deployments: readonly Deployment[],
@@ -102,16 +103,19 @@ export function classify(
 	let running: string | undefined;
 	let previous: Deployment | undefined;
 	for (const deployment of ordered) {
+		// A failure counts whatever it deployed. Afterwards, what runs is unknown, so deploying the
+		// last good build again is a recovery.
+		if (deployment.outcome === "failure" || deployment.outcome === "error") {
+			verdicts.set(deployment, "failed");
+			running = undefined;
+			continue;
+		}
 		if (deployment.sha === running) {
 			verdicts.set(deployment, "repeat");
 			continue;
 		}
-		if (deployment.outcome !== "success") {
-			verdicts.set(deployment, deployment.outcome === undefined ? "undecided" : "failed");
-			// After a failure, what runs is unknown, so deploying the last good build again is a recovery.
-			if (deployment.outcome !== undefined) {
-				running = undefined;
-			}
+		if (deployment.outcome === undefined) {
+			verdicts.set(deployment, "undecided");
 			continue;
 		}
 		const from = previous === undefined ? undefined : position.get(previous.sha);
@@ -258,6 +262,7 @@ export function deliveryMetrics(
 			// A deployment that ended an incident was made to fix one, not planned.
 			reworkRate: decided.length === 0 ? null : recoveries.length / decided.length,
 			unplaced: current.filter((deployment) => !position.has(deployment.sha)).length,
+			undecided: current.filter((deployment) => verdict(deployment) === "undecided").length,
 		};
 	});
 
@@ -370,6 +375,12 @@ export function renderDeliveryMetrics(title: string, metrics: Metrics): string {
 		),
 		"",
 		`Reverted changes: ${metrics.changes.reverts} of ${metrics.changes.merged} (${percent(metrics.changes.revertRate)}).`,
+		...metrics.environments
+			.filter(({ undecided }) => undecided > 0)
+			.map(
+				({ environment, undecided }) =>
+					`${undecided} ${environment} deployments have no final status yet and are not counted.`,
+			),
 		"",
 	].join("\n");
 }
@@ -403,6 +414,14 @@ function pushStages(node: Record<string, unknown>) {
 	const suites = isRecord(commit.checkSuites)
 		? asArray(commit.checkSuites.nodes, "check suites")
 		: [];
+	if (
+		isRecord(commit.checkSuites) &&
+		at(commit.checkSuites, ["pageInfo", "hasNextPage"], "check suites") === true
+	) {
+		throw new Error(
+			`pull request ${String(node.number)} has more check suites than one page lists`,
+		);
+	}
 	const entries = asArray(asRecord(node.timelineItems, "timeline").nodes, "queue entries").map(
 		(entry) => time(asRecord(entry, "queue entry").createdAt, "queue entry createdAt"),
 	);
@@ -465,7 +484,10 @@ const PULLS_QUERY = `query($q: String!, $endCursor: String) {
       commits(first: 1) { nodes { commit { authoredDate } } }
       head: commits(last: 1) { nodes { commit {
         status { contexts { context state createdAt } }
-        checkSuites(first: 50) { nodes { workflowRun { event createdAt workflow { name } } } }
+        checkSuites(first: 50) {
+          pageInfo { hasNextPage }
+          nodes { workflowRun { event createdAt workflow { name } } }
+        }
       } } }
       timelineItems(itemTypes: [ADDED_TO_MERGE_QUEUE_EVENT], last: 20) {
         nodes { ... on AddedToMergeQueueEvent { createdAt } }

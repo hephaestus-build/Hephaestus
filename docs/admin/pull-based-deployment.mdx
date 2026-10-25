@@ -29,6 +29,7 @@ It restarts nothing.
 If its own request is not applied yet, for example after a failed apply, the host tries it again.
 Each promotion signs again, so a promotion of the target that already runs applies again.
 A frozen promotion of the target that already runs is the exception: it restarts nothing, unless it also asks for **refresh-database-image**.
+A frozen promotion that does not ask for it also replaces a request for that target that the host has not applied yet.
 
 `applied.json` records the last-applied request as `channelIdentity`.
 A record without `channelIdentity` was written by an earlier release.
@@ -65,7 +66,7 @@ Thus, one promotion moves Staging to a release or commit and keeps it there.
 Only Staging follows `main`, so only Staging can be frozen.
 A host that runs tooling from before this rule ignores a frozen channel.
 On such a host, a frozen promotion to a new target fails its version check.
-Promote that host once without **freeze** first.
+Promote that host once without **freeze** first, to a commit that includes this rule.
 
 An automatic promotion that would advance the channel checks the most recent successful CI/CD run of a push to `main` in the same repository.
 If that run's commit strictly descends from the requested commit, the promotion is skipped.
