@@ -194,8 +194,9 @@ Configuration binds to
 
 - **Production runs it in its own `webhook-server` container** — the same image as `application-server`
   with `SPRING_PROFILES_ACTIVE=prod,webhook` — so an app-server deploy does not interrupt reception.
-  Push events on GitHub and GitLab are **not manually redeliverable**.
-  Thus, a webhook missed during a restart is lost.
+  GitHub never retries a failed delivery itself. `GitHubWebhookRedelivery` asks it to redeliver failed
+  GitHub App deliveries of the past hour. A GitLab webhook missed during a restart is lost. Reconciliation
+  recovers its effect.
 - **Subject grammar**: `github.<owner>.<repo>.<event>`. Registered GitLab group hooks use
   `gitlab.?connection.<connectionId>.<event>` from `GitLabSubjectKeyDeriver.deriveConnectionSubject`,
   after the connection endpoint verifies the route credential. Operator-created GitLab hooks on
