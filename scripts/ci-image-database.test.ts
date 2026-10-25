@@ -134,6 +134,23 @@ void test("one advisory snapshot is selected for every image-policy consumer, no
 	assert.equal(evaluates(serverImage, serverOnly), "true");
 	assert.equal(evaluates(dockerfileImages, serverOnly), "false");
 	assert.ok(!runs("Docker", serverOnly, { "server-package": "skipped" }));
+	// A push whose merge group published every image builds and scans nothing: no package, no
+	// advisory snapshot, and the image job still re-signs and tags the reused server image.
+	const reusing = { ...serverOnly, "queue-images-complete": "true" };
+	assert.ok(!runs("vulnerability-database", { ...reusing, publishable: "true" }));
+	assert.ok(runs("vulnerability-database", { ...serverOnly, publishable: "true" }));
+	const packaged = { "any-code": "true", "server-tests": "true" };
+	assert.ok(runs("server-package", packaged));
+	assert.ok(!runs("server-package", { ...packaged, "queue-images-complete": "true" }));
+	assert.ok(runs("Docker", reusing, { "server-package": "skipped" }));
+	assert.equal(evaluates(serverImage, reusing, { "server-package": "skipped" }), "true");
+	assert.equal(evaluates(serverImage, reusing, { "server-package": "failure" }), "false");
+	// `resolve-queue-run.ts` decides completeness from its own image list; a version bump runs the
+	// suites and the release checks, which need both.
+	assert.equal(
+		main.getIn(["jobs", "detect-changes", "outputs", "queue-images-complete"]),
+		`\${{ steps.queue_run.outputs.complete == 'true' && steps.version_bump.outputs.changed != 'true' }}`,
+	);
 	assert.ok(runs("Release-preflight", { "release-preflight": "true" }));
 	assert.ok(!runs("Release-preflight", { "release-preflight": "false" }));
 	assert.ok(

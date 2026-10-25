@@ -875,7 +875,7 @@ Release publication still generates fresh vulnerability evidence and signatures.
 A default-branch push reuses each image that its successful merge group published for the same commit.
 `detect-changes` resolves that run with `scripts/resolve-queue-run.ts`.
 The run must have a successful `CI Status Gate`, which covers its image builds and per-platform scans.
-The `reuse` job in `reusable-docker-build.yml` accepts the image at `<image>:<commit>` only when all these checks pass:
+The `Create manifests` job in `reusable-docker-build.yml` accepts the image at `<image>:<commit>` only when all these checks pass:
 
 - Its platform leaves are exactly the platforms that the push requests.
 - Its cosign signature comes from `reusable-docker-build.yml` on the queue branch, with the `merge_group` trigger, at this commit.
@@ -885,12 +885,18 @@ The push then signs the index and each leaf again, verifies them, and moves the 
 It does not rebuild, re-attest, or rescan the image.
 The release verifier accepts only the default-branch signing identity, so the push signs the image again.
 The provenance stays the queue run's, because that run built the image.
-A missing or unverifiable image is built and scanned as before.
+
+An image that the queue run did not publish is built and scanned as before.
 Examples are a direct push, an image that the merge group did not rebuild, and a lookup that failed.
+An image that the queue run published but that fails a check fails the push, which then publishes no image.
+Thus, `main` never ships a different image in place of one that its merge group built and tested.
 
 `resolve-queue-run.ts` also lists the images whose attestation step succeeded in the queue run's `Create manifests` job.
-The push's `reuse` job checks only those images.
-When there are none, the build starts at once, without a job that waits for a runner only to find nothing to reuse.
+The push reuses only those images, and its build jobs build the rest at once.
+When the queue run published every image, a push that is not a version bump builds and scans nothing.
+It then skips `App Server: Package` and `Image advisory database`.
+It runs `Detect changes`, `Docker / Images / Create manifests` and `CI Status Gate`.
+Thus, it holds few of the runners that a waiting merge group needs.
 
 A merge group adds one arm64 build job, which builds and scans that platform for every image that it rebuilds.
 The push reuses those images and no longer builds or scans them on either architecture.

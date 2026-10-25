@@ -621,19 +621,19 @@ const queueRun = "4242";
 const pushCommit = "e".repeat(40);
 for (const scenario of [
 	{ name: "reuses the image its successful queue run built for this commit" },
-	{ name: "builds when the commit has no queue image", missingTag: true },
-	{ name: "builds when the queue image lacks a requested platform", leaves: ["amd64"] },
+	{ name: "refuses when the commit has no queue image", missingTag: true },
+	{ name: "refuses when the queue image lacks a requested platform", leaves: ["amd64"] },
 	{
-		name: "builds when the queue image carries an unrequested platform",
+		name: "refuses when the queue image carries an unrequested platform",
 		leaves: ["amd64", "arm64", "386"],
 	},
-	{ name: "builds when the signature is not the queue's", signature: false },
+	{ name: "refuses when the signature is not the queue's", signature: false },
 	{
-		name: "builds when another run attested the image",
+		name: "refuses when another run attested the image",
 		run: "https://github.com/hephaestus-build/Hephaestus/actions/runs/1/attempts/1",
 	},
-	{ name: "builds when no attestation names the commit", attestations: [] },
-	{ name: "builds when the run is not an identifier", queue: "4242/../1" },
+	{ name: "refuses when no attestation names the commit", attestations: [] },
+	{ name: "refuses when the run is not an identifier", queue: "4242/../1" },
 ] as const) {
 	void test(
 		`merge-queue reuse: ${scenario.name}`,
@@ -642,13 +642,12 @@ for (const scenario of [
 			const workflow = parseDocument(
 				await readFile(".github/workflows/reusable-docker-build.yml", "utf8"),
 			);
-			const reuseSteps = workflow.getIn(["jobs", "reuse", "steps"]);
-			assert.ok(isSeq(reuseSteps));
-			const step: unknown = reuseSteps.items.find(
+			const mergeSteps = workflow.getIn(["jobs", "merge", "steps"]);
+			assert.ok(isSeq(mergeSteps));
+			const step: unknown = mergeSteps.items.find(
 				(item) => isMap(item) && item.get("name") === "Verify the merge-queue images",
 			);
 			assert.ok(isMap(step));
-			const select = String(workflow.getIn(["env", "SELECT_IMAGES"]));
 			const verify = String(step.get("run"))
 				.replaceAll(`\${{ github.repository }}`, repository)
 				.replaceAll(`\${{ github.repository_owner }}`, owner)
@@ -704,12 +703,7 @@ if (tool === 'docker' && args.includes('--format')) {
 					PATH: `${directory}${path.delimiter}${process.env.PATH ?? ""}`,
 					CALL_LOG: log,
 					GITHUB_OUTPUT: output,
-					SELECT_IMAGES: select,
-					SELECTED_SERVER: "false",
-					SELECTED_WEBAPP: "true",
-					SELECTED_PI: "false",
-					SELECTED_POSTGRES: "false",
-					REUSE_IMAGES: JSON.stringify(["webapp", "postgres"]),
+					REUSED: JSON.stringify(["webapp"]),
 					REGISTRY: "ghcr.io",
 					COMMIT: pushCommit,
 					QUEUE_RUN: "queue" in scenario ? scenario.queue : queueRun,
@@ -727,12 +721,13 @@ if (tool === 'docker' && args.includes('--format')) {
 					}),
 				},
 			});
-			// An image that fails any check is not an error: the run builds it instead.
+			// An image that fails any check fails the push, which then publishes nothing: `main` never
+			// ships an image the merge group did not test, and does not rebuild it either.
 			const reused = Object.keys(scenario).length === 1;
-			assert.equal(result.status, 0, result.stderr);
+			assert.equal(result.status === 0, reused, result.stderr);
 			assert.equal(
 				await readFile(output, "utf8"),
-				reused ? `digests={"webapp":"${digest}"}\nbuild=[]\n` : `digests={}\nbuild=["webapp"]\n`,
+				reused ? `digests={"webapp":"${digest}"}\n` : "",
 			);
 			if (reused) {
 				const recorded = await readFile(log, "utf8");
@@ -768,49 +763,44 @@ void test("a reused image skips only building, merging and attesting", async () 
 	const workflow = parseDocument(
 		await readFile(".github/workflows/reusable-docker-build.yml", "utf8"),
 	);
-	assert.equal(
-		workflow.getIn(["jobs", "reuse", "if"]),
-		"inputs.publish && inputs.reuse-run != '' && inputs.reuse-images != '[]'",
-	);
-	// The step verifies each image on its own; an unverified one is left for the build.
-	const reuse = workflow.getIn(["jobs", "reuse", "steps"]);
-	assert.ok(isSeq(reuse));
-	const verify = reuse.items.find(
-		(item) => isMap(item) && item.get("name") === "Verify the merge-queue images",
-	);
-	assert.ok(isMap(verify));
-	assert.equal(verify.get("continue-on-error"), undefined);
-	assert.equal(
-		workflow.getIn(["jobs", "reuse", "outputs", "digests"]),
-		`\${{ steps.verify.outputs.digests }}`,
-	);
-	assert.equal(
-		workflow.getIn(["jobs", "reuse", "outputs", "build"]),
-		`\${{ steps.verify.outputs.build }}`,
-	);
-	assert.equal(workflow.getIn(["jobs", "build", "needs"]), "reuse");
-	// A reuse job that did not succeed reuses nothing: every selected image is built.
-	assert.equal(
-		workflow.getIn(["jobs", "build", "if"]),
-		`\${{ !cancelled() && (inputs.application-server || inputs.webapp || inputs.agent-pi || inputs.postgres) && (needs.reuse.result != 'success' || needs.reuse.outputs.build != '[]') }}`,
-	);
+	// The manifest job verifies the reused images itself; no job waits for a runner only to check.
+	assert.equal(workflow.hasIn(["jobs", "reuse"]), false);
+	assert.equal(workflow.hasIn(["jobs", "build", "needs"]), false);
+	const buildCondition = String(workflow.getIn(["jobs", "build", "if"]));
+	for (const name of ["application-server", "webapp", "agent-pi", "postgres"]) {
+		assert.ok(
+			buildCondition.includes(
+				`(inputs.${name} && !contains(fromJSON(inputs.reuse-images), '${name}'))`,
+			),
+			name,
+		);
+	}
+	assert.equal(workflow.getIn(["jobs", "merge", "needs"]), "build");
 	assert.equal(
 		workflow.getIn(["jobs", "merge", "if"]),
-		`\${{ inputs.publish && !cancelled() && (needs.build.result == 'success' || (needs.build.result == 'skipped' && needs.reuse.result == 'success' && needs.reuse.outputs.build == '[]')) }}`,
-	);
-	assert.equal(
-		workflow.getIn(["jobs", "merge", "env", "REUSED_DIGESTS"]),
-		`\${{ needs.reuse.result == 'success' && needs.reuse.outputs.digests || '{}' }}`,
+		`\${{ inputs.publish && !cancelled() && (needs.build.result == 'success' || needs.build.result == 'skipped') }}`,
 	);
 	// The queue run already scanned the image it built, in the build this skips, and its verdict
 	// gated the merge.
 	assert.equal(workflow.hasIn(["jobs", "scan"]), false);
 	const steps = workflow.getIn(["jobs", "merge", "steps"]);
 	assert.ok(isSeq(steps));
-	const conditions = Object.fromEntries(
-		asArray(steps.toJSON(), "steps")
-			.map((step) => asRecord(step, "step"))
-			.map((step) => [String(step.name), step.if]),
+	const values = asArray(steps.toJSON(), "steps").map((step) => asRecord(step, "step"));
+	const conditions = Object.fromEntries(values.map((step) => [String(step.name), step.if]));
+	assert.equal(conditions["Verify the merge-queue images"], "steps.prep.outputs.reused != '[]'");
+	// Verification comes before any index is created, any digest captured, and anything signed or tagged.
+	const at = (name: string) => values.findIndex((step) => step.name === name);
+	for (const later of [
+		"Create manifests and push",
+		"Capture manifest digests",
+		"Sign images with cosign",
+		"Publish verified image tags",
+	]) {
+		assert.ok(at("Verify the merge-queue images") < at(later), later);
+	}
+	assert.equal(
+		asRecord(values[at("Capture manifest digests")]?.env, "capture environment").REUSED_DIGESTS,
+		`\${{ steps.reuse.outputs.digests || '{}' }}`,
 	);
 	for (const skipped of ["Download digests", "Create manifests and push"]) {
 		assert.equal(conditions[skipped], "steps.prep.outputs.built != '[]'", skipped);
@@ -831,3 +821,80 @@ void test("a reused image skips only building, merging and attesting", async () 
 		assert.equal(conditions[always], undefined, always);
 	}
 });
+
+void test(
+	"one reused image that fails verification publishes no reused image",
+	{ skip: process.platform === "win32" },
+	async (t) => {
+		const workflow = parseDocument(
+			await readFile(".github/workflows/reusable-docker-build.yml", "utf8"),
+		);
+		const steps = workflow.getIn(["jobs", "merge", "steps"]);
+		assert.ok(isSeq(steps));
+		const step: unknown = steps.items.find(
+			(item) => isMap(item) && item.get("name") === "Verify the merge-queue images",
+		);
+		assert.ok(isMap(step));
+		const verify = String(step.get("run"))
+			.replaceAll(`\${{ github.repository }}`, repository)
+			.replaceAll(`\${{ github.repository_owner }}`, owner)
+			.replaceAll(`\${{ github.server_url }}`, "https://github.com");
+		const directory = await mkdtemp(path.join(tmpdir(), "queue-reuse-pair-"));
+		t.after(async () => rm(directory, { recursive: true, force: true }));
+		// The second image has no queue tag; the first verifies.
+		for (const tool of ["cosign", "gh", "docker"]) {
+			const file = path.join(directory, tool);
+			await writeFile(
+				file,
+				`#!/usr/bin/env node
+const tool = require('node:path').basename(process.argv[1]);
+const args = process.argv.slice(2);
+if (tool === 'docker' && args.includes('--format')) {
+  if (args.at(-1).includes('/postgres:')) process.exit(1);
+  process.stdout.write(JSON.stringify({ digest: process.env.DIGEST }));
+} else if (tool === 'docker') {
+  process.stdout.write(process.env.RAW);
+} else if (tool === 'gh') {
+  process.stdout.write(process.env.ATTESTATIONS);
+}
+`,
+			);
+			await chmod(file, 0o755);
+		}
+		const output = path.join(directory, "output");
+		await writeFile(output, "");
+		const result = spawnSync("bash", ["-e", "-c", verify], {
+			encoding: "utf8",
+			env: {
+				...process.env,
+				PATH: `${directory}${path.delimiter}${process.env.PATH ?? ""}`,
+				GITHUB_OUTPUT: output,
+				REUSED: JSON.stringify(["webapp", "postgres"]),
+				REGISTRY: "ghcr.io",
+				COMMIT: pushCommit,
+				QUEUE_RUN: queueRun,
+				PLATFORMS: JSON.stringify(["linux/amd64"]),
+				DEFAULT_BRANCH: "main",
+				DIGEST: digest,
+				RAW: JSON.stringify({ manifests: [platformLeaf("amd64", armLeaf)] }),
+				ATTESTATIONS: JSON.stringify([
+					{
+						verificationResult: {
+							signature: {
+								certificate: {
+									runInvocationURI: `https://github.com/${repository}/actions/runs/${queueRun}/attempts/1`,
+								},
+							},
+						},
+					},
+				]),
+			},
+		});
+		assert.notEqual(result.status, 0);
+		// The first image verified; the second is the one refused.
+		assert.match(result.stdout, /postgres: the merge-queue image did not verify/u);
+		assert.doesNotMatch(result.stdout, /webapp: the merge-queue image did not verify/u);
+		// Nothing reaches the outputs, so no digest of the verified first image is published either.
+		assert.equal(await readFile(output, "utf8"), "");
+	},
+);

@@ -76,9 +76,11 @@ jobs:
       # The successful merge-queue run of a default-branch push's exact commit, whose images the push
       # reuses instead of rebuilding; empty after a direct push, which builds every image.
       queue-run: ${{ steps.queue_run.outputs.run-id }}
-      # The images that run published. The push builds any other image at once, without a reuse job
-      # that would find nothing: the queue run did not build it.
+      # The images that run published. The push builds any other image; the queue run did not build it.
       queue-images: ${{ steps.queue_run.outputs.images || '[]' }}
+      # The queue run published every image, so a push that is no version bump builds and scans
+      # nothing: it needs neither the packaged server nor an advisory snapshot.
+      queue-images-complete: ${{ steps.queue_run.outputs.complete == 'true' && steps.version_bump.outputs.changed != 'true' }}
       # The commit an unchanged image is aliased from; scripts/resolve-alias-base.ts says how it is
       # found and docs/contributor/ci-cd.mdx the rule.
       alias-base: ${{ steps.alias_base.outputs.commit }}
@@ -688,7 +690,7 @@ jobs:
     name: "App Server: Package"
     needs: [detect-changes]
     if: |
-      needs.detect-changes.outputs.should_skip != 'true' && (
+      needs.detect-changes.outputs.should_skip != 'true' && needs.detect-changes.outputs.queue-images-complete != 'true' && (
         needs.detect-changes.outputs.unfiltered == 'true' ||
         needs.detect-changes.outputs.head-images == 'true' ||
         needs.detect-changes.outputs.any-code == 'true' ||
@@ -772,7 +774,8 @@ jobs:
     name: "Image advisory database"
     needs: [detect-changes]
     if: |
-      needs.detect-changes.outputs.should_skip != 'true' && needs.detect-changes.outputs.draft != 'true' && (
+      needs.detect-changes.outputs.should_skip != 'true' && needs.detect-changes.outputs.draft != 'true' &&
+      needs.detect-changes.outputs.queue-images-complete != 'true' && (
         needs.detect-changes.outputs.release-preflight == 'true' ||
         needs.detect-changes.outputs.release-images == 'true' ||
         (needs.detect-changes.outputs.publishable == 'true' && needs.detect-changes.outputs.images == 'true' && (
@@ -934,7 +937,7 @@ jobs:
     if: |
       !cancelled() && needs.detect-changes.result == 'success' && (needs.vulnerability-database.result == 'success' || needs.vulnerability-database.result == 'skipped') && (
         (needs.detect-changes.outputs.should_skip != 'true' && needs.detect-changes.outputs.draft != 'true' && needs.detect-changes.outputs.images == 'true' && (needs.detect-changes.outputs.unfiltered == 'true' || needs.detect-changes.outputs.head-images == 'true' || needs.detect-changes.outputs.any-code == 'true' || needs.detect-changes.outputs.ci-config == 'true')) ||
-        (needs.detect-changes.outputs.draft != 'true' && needs.server-package.result == 'success' && needs.detect-changes.outputs.images == 'true' && (needs.detect-changes.outputs.application-server-image == 'true' || needs.detect-changes.outputs.supported-host-smoke == 'true' || needs.detect-changes.outputs.all-images == 'true'))
+        (needs.detect-changes.outputs.draft != 'true' && (needs.server-package.result == 'success' || (needs.server-package.result == 'skipped' && needs.detect-changes.outputs.queue-images-complete == 'true')) && needs.detect-changes.outputs.images == 'true' && (needs.detect-changes.outputs.application-server-image == 'true' || needs.detect-changes.outputs.supported-host-smoke == 'true' || needs.detect-changes.outputs.all-images == 'true'))
       )
     permissions:
       contents: read
@@ -956,7 +959,7 @@ jobs:
       postgres_image_changed: ${{ (needs.detect-changes.outputs.postgres-image == 'true' || needs.detect-changes.outputs.docker-config == 'true' || needs.detect-changes.outputs.all-images == 'true') && 'true' || 'false' }}
       alias_base: ${{ needs.detect-changes.outputs.alias-base }}
       dockerfile_images: ${{ (needs.detect-changes.outputs.should_skip != 'true' && needs.detect-changes.outputs.draft != 'true' && needs.detect-changes.outputs.images == 'true' && (needs.detect-changes.outputs.unfiltered == 'true' || needs.detect-changes.outputs.head-images == 'true' || needs.detect-changes.outputs.any-code == 'true' || needs.detect-changes.outputs.ci-config == 'true')) && 'true' || 'false' }}
-      application_server_image: ${{ (needs.detect-changes.outputs.draft != 'true' && needs.server-package.result == 'success' && needs.detect-changes.outputs.images == 'true' && (needs.detect-changes.outputs.application-server-image == 'true' || needs.detect-changes.outputs.supported-host-smoke == 'true' || needs.detect-changes.outputs.all-images == 'true')) && 'true' || 'false' }}
+      application_server_image: ${{ (needs.detect-changes.outputs.draft != 'true' && (needs.server-package.result == 'success' || (needs.server-package.result == 'skipped' && needs.detect-changes.outputs.queue-images-complete == 'true')) && needs.detect-changes.outputs.images == 'true' && (needs.detect-changes.outputs.application-server-image == 'true' || needs.detect-changes.outputs.supported-host-smoke == 'true' || needs.detect-changes.outputs.all-images == 'true')) && 'true' || 'false' }}
       application-artifact: server-build-${{ github.run_id }}
       project-descriptor: "server/application/project.toml"
       # renovate: datasource=docker depName=paketobuildpacks/ubuntu-noble-run-tiny

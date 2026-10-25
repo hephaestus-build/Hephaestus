@@ -325,6 +325,16 @@ await test("the image builds receive the queue run a default-branch push resolve
 		imageManifestJob,
 		`Docker / ${String(docker.getIn(["jobs", "images", "name"]))} / ${String(build.getIn(["jobs", "merge", "name"]))}`,
 	);
+	// One image list: the attestation steps the lookup reads are the images the workflow can select,
+	// so `complete` cannot call a run complete that left out an image CI builds.
+	assert.deepEqual(
+		Object.keys(imageAttestations),
+		[
+			...String(build.getIn(["env", "SELECT_IMAGES"])).matchAll(
+				/then "(?<image>[a-z-]+)" else empty end/gu,
+			),
+		].map((match) => match.groups?.image),
+	);
 	const mergeSteps = build.getIn(["jobs", "merge", "steps"]);
 	assert.ok(isSeq(mergeSteps));
 	for (const [image, step] of Object.entries(imageAttestations)) {

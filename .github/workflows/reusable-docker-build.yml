@@ -110,94 +110,15 @@ env:
     type=raw,value=${{ format('pr-{0}', github.event.number) }},enable=${{ github.event_name == 'pull_request' }}
 
 jobs:
-  # The merge queue squashes, so a push to the default branch carries the commit its merge group
-  # already built, signed, attested and scanned. Such an image is the one that was tested, so it
-  # ships once its signature and provenance prove the successful queue run built it for this commit
-  # and these platforms. An image that fails any check is built instead.
-  reuse:
-    name: Reuse merge-queue images
-    if: inputs.publish && inputs.reuse-run != '' && inputs.reuse-images != '[]'
-    timeout-minutes: 15
-    runs-on: ubuntu-latest
-    permissions:
-      attestations: read
-      contents: read
-      packages: read
-    outputs:
-      # Image name to verified index digest.
-      digests: ${{ steps.verify.outputs.digests }}
-      # The images that this run still builds.
-      build: ${{ steps.verify.outputs.build }}
-    steps:
-      - name: Install Cosign
-        uses: sigstore/cosign-installer@af595e623eec1ede52d6322f53b635d5def0a95a
-        with:
-          cosign-release: v3.1.4
-
-      # Caller-selected registry, not GHCR-only; see ci-cd.mdx § Shared setup actions.
-      - name: Log in to Container Registry
-        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
-        with:
-          registry: ${{ inputs.registry }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Verify the merge-queue images
-        id: verify
-        env:
-          REUSE_IMAGES: ${{ inputs.reuse-images }}
-          REGISTRY: ${{ inputs.registry }}
-          COMMIT: ${{ github.sha }}
-          QUEUE_RUN: ${{ inputs.reuse-run }}
-          PLATFORMS: ${{ inputs.platforms }}
-          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-          IMAGES=$(jq -cn --argjson server "$SELECTED_SERVER" --argjson webapp "$SELECTED_WEBAPP" \
-            --argjson pi "$SELECTED_PI" --argjson postgres "$SELECTED_POSTGRES" "$SELECT_IMAGES")
-          # Called as an `if` condition, where bash ignores `set -e`, so every check returns on its own.
-          verify() {
-            local image="$REGISTRY/hephaestus-build/$1" digest reference
-            [[ "$QUEUE_RUN" =~ ^[0-9]+$ ]] || return 1
-            digest=$(docker buildx imagetools inspect --format '{{json .Manifest}}' "$image:$COMMIT" | jq -er .digest) || return 1
-            [[ "$digest" =~ ^sha256:[a-f0-9]{64}$ ]] || return 1
-            reference="$image@$digest"
-            docker buildx imagetools inspect "$reference" --raw |
-              jq -e --argjson platforms "$PLATFORMS" '
-                [.manifests[] | select(.platform.os != "unknown" or .platform.architecture != "unknown")
-                  | .platform.os + "/" + .platform.architecture] | sort == ($platforms | sort)' >/dev/null || return 1
-            cosign verify "$reference" \
-              --certificate-identity-regexp "^https://github\\.com/${{ github.repository }}/\\.github/workflows/reusable-docker-build\\.yml@refs/heads/gh-readonly-queue/$DEFAULT_BRANCH/" \
-              --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
-              --certificate-github-workflow-repository "${{ github.repository }}" \
-              --certificate-github-workflow-trigger merge_group \
-              --certificate-github-workflow-sha "$COMMIT" \
-              > /dev/null || return 1
-            gh attestation verify "oci://$reference" --bundle-from-oci --owner "${{ github.repository_owner }}" \
-              --signer-workflow "${{ github.repository }}/.github/workflows/reusable-docker-build.yml" \
-              --source-digest "$COMMIT" --format json |
-              jq -e --arg run "${{ github.server_url }}/${{ github.repository }}/actions/runs/$QUEUE_RUN/" '
-                length > 0 and all(.[]; .verificationResult.signature.certificate.runInvocationURI | startswith($run))' >/dev/null || return 1
-            echo "$digest"
-          }
-          digests='{}'
-          for name in $(jq -r --argjson reuse "$REUSE_IMAGES" '.[] | select(. as $image | $reuse | index($image))' <<< "$IMAGES"); do
-            [[ "$name" =~ ^(application-server|webapp|agent-pi|postgres)$ ]]
-            if digest=$(verify "$name"); then
-              digests=$(jq -c --arg name "$name" --arg digest "$digest" '. + {($name): $digest}' <<< "$digests")
-            else
-              echo "::warning::$name: the merge-queue image did not verify, so this run builds it"
-            fi
-          done
-          echo "digests=$digests" >> "$GITHUB_OUTPUT"
-          echo "build=$(jq -c --argjson reused "$digests" '[.[] | select(. as $image | $reused | has($image) | not)]' <<< "$IMAGES")" >> "$GITHUB_OUTPUT"
-
   build:
     name: Build ${{ matrix.platform }} images
-    needs: reuse
-    # A reuse job that did not succeed reuses nothing, so every selected image is built.
-    if: ${{ !cancelled() && (inputs.application-server || inputs.webapp || inputs.agent-pi || inputs.postgres) && (needs.reuse.result != 'success' || needs.reuse.outputs.build != '[]') }}
+    # Builds every selected image that the push does not reuse from the merge queue.
+    if: >-
+      ${{ !cancelled() && (
+        (inputs.application-server && !contains(fromJSON(inputs.reuse-images), 'application-server')) ||
+        (inputs.webapp && !contains(fromJSON(inputs.reuse-images), 'webapp')) ||
+        (inputs.agent-pi && !contains(fromJSON(inputs.reuse-images), 'agent-pi')) ||
+        (inputs.postgres && !contains(fromJSON(inputs.reuse-images), 'postgres'))) }}
     strategy:
       # Each platform scans in its own build, so one platform's refusal must not cancel the other's
       # scan and evidence. A broken build therefore lets its sibling finish; the merge still waits
@@ -233,18 +154,19 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # The images this job builds: every selected one, less those the push reused.
+      # The images this job builds: every selected one, less those the push reuses.
       - name: Plan the build
         id: prep
         env:
           MATRIX_PLATFORM: ${{ matrix.platform }}
-          REUSE_BUILD: ${{ needs.reuse.result == 'success' && needs.reuse.outputs.build || '' }}
+          REUSE_IMAGES: ${{ inputs.reuse-images }}
         run: |
           set -euo pipefail
           platform=$MATRIX_PLATFORM
           echo "platform_pair=${platform//\//-}" >> "$GITHUB_OUTPUT"
-          images=${REUSE_BUILD:-$(jq -cn --argjson server "$SELECTED_SERVER" --argjson webapp "$SELECTED_WEBAPP" \
-            --argjson pi "$SELECTED_PI" --argjson postgres "$SELECTED_POSTGRES" "$SELECT_IMAGES")}
+          images=$(jq -cn --argjson server "$SELECTED_SERVER" --argjson webapp "$SELECTED_WEBAPP" \
+            --argjson pi "$SELECTED_PI" --argjson postgres "$SELECTED_POSTGRES" "$SELECT_IMAGES" |
+            jq -c --argjson reuse "$REUSE_IMAGES" '[.[] | select(. as $image | $reuse | index($image) | not)]')
           jq -e 'type == "array" and length > 0 and all(.[]; IN("application-server", "webapp", "agent-pi", "postgres"))' <<< "$images" >/dev/null
           echo "images=$images" >> "$GITHUB_OUTPUT"
           echo "bake-targets=$(jq -r '[.[] | select(. != "application-server")] | join(",")' <<< "$images")" >> "$GITHUB_OUTPUT"
@@ -474,15 +396,15 @@ jobs:
     name: Create manifests
     timeout-minutes: 30
     runs-on: ubuntu-latest
-    needs: [reuse, build]
-    if: ${{ inputs.publish && !cancelled() && (needs.build.result == 'success' || (needs.build.result == 'skipped' && needs.reuse.result == 'success' && needs.reuse.outputs.build == '[]')) }}
+    needs: build
+    # A skipped build means the push reuses every selected image from the merge queue.
+    if: ${{ inputs.publish && !cancelled() && (needs.build.result == 'success' || needs.build.result == 'skipped') }}
     permissions:
       packages: write
       id-token: write
       attestations: write
       artifact-metadata: write
     env:
-      REUSED_DIGESTS: ${{ needs.reuse.result == 'success' && needs.reuse.outputs.digests || '{}' }}
       INPUTS_REGISTRY: ${{ inputs.registry }}
     outputs:
       application-server-digest: ${{ steps.digest.outputs.application-server }}
@@ -490,21 +412,25 @@ jobs:
       agent-pi-digest: ${{ steps.digest.outputs.agent-pi }}
       postgres-digest: ${{ steps.digest.outputs.postgres }}
     steps:
-      # IMAGES: every selected image. BUILT: those this run built; the push reused the rest.
+      # IMAGES: every selected image. BUILT: those this run built. REUSED: those the push reuses.
       - name: Select the images
         id: prep
         env:
-          REUSE_BUILD: ${{ needs.reuse.result == 'success' && needs.reuse.outputs.build || '' }}
+          REUSE_IMAGES: ${{ inputs.reuse-images }}
         run: |
           set -euo pipefail
           images=$(jq -cn --argjson server "$SELECTED_SERVER" --argjson webapp "$SELECTED_WEBAPP" \
             --argjson pi "$SELECTED_PI" --argjson postgres "$SELECTED_POSTGRES" "$SELECT_IMAGES")
           jq -e 'length > 0' <<< "$images" >/dev/null
+          built=$(jq -c --argjson reuse "$REUSE_IMAGES" '[.[] | select(. as $image | $reuse | index($image) | not)]' <<< "$images")
+          reused=$(jq -c --argjson reuse "$REUSE_IMAGES" '[.[] | select(. as $image | $reuse | index($image))]' <<< "$images")
           {
             echo "IMAGES=$images"
-            echo "BUILT=${REUSE_BUILD:-$images}"
+            echo "BUILT=$built"
+            echo "REUSED=$reused"
           } >> "$GITHUB_ENV"
-          echo "built=${REUSE_BUILD:-$images}" >> "$GITHUB_OUTPUT"
+          echo "built=$built" >> "$GITHUB_OUTPUT"
+          echo "reused=$reused" >> "$GITHUB_OUTPUT"
 
       - name: Download digests
         if: steps.prep.outputs.built != '[]'
@@ -526,6 +452,63 @@ jobs:
         uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
         with:
           driver: docker
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@af595e623eec1ede52d6322f53b635d5def0a95a
+        with:
+          cosign-release: v3.1.4
+
+      # The merge queue squashes, so a push to the default branch carries the commit its merge group
+      # already built, signed, attested and scanned. That image is the one that was tested, so it
+      # ships only once its signature and provenance prove the successful queue run built it for this
+      # commit and these platforms. An image that fails any check fails the push: `main` never ships
+      # an image the merge group did not test.
+      - name: Verify the merge-queue images
+        id: reuse
+        if: steps.prep.outputs.reused != '[]'
+        env:
+          REGISTRY: ${{ inputs.registry }}
+          COMMIT: ${{ github.sha }}
+          QUEUE_RUN: ${{ inputs.reuse-run }}
+          PLATFORMS: ${{ inputs.platforms }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          # Called in a command substitution, which does not inherit `set -e`, so every check returns.
+          verify() {
+            local image="$REGISTRY/hephaestus-build/$1" digest reference
+            [[ "$QUEUE_RUN" =~ ^[0-9]+$ ]] || return 1
+            digest=$(docker buildx imagetools inspect --format '{{json .Manifest}}' "$image:$COMMIT" | jq -er .digest) || return 1
+            [[ "$digest" =~ ^sha256:[a-f0-9]{64}$ ]] || return 1
+            reference="$image@$digest"
+            docker buildx imagetools inspect "$reference" --raw |
+              jq -e --argjson platforms "$PLATFORMS" '
+                [.manifests[] | select(.platform.os != "unknown" or .platform.architecture != "unknown")
+                  | .platform.os + "/" + .platform.architecture] | sort == ($platforms | sort)' >/dev/null || return 1
+            cosign verify "$reference" \
+              --certificate-identity-regexp "^https://github\\.com/${{ github.repository }}/\\.github/workflows/reusable-docker-build\\.yml@refs/heads/gh-readonly-queue/$DEFAULT_BRANCH/" \
+              --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
+              --certificate-github-workflow-repository "${{ github.repository }}" \
+              --certificate-github-workflow-trigger merge_group \
+              --certificate-github-workflow-sha "$COMMIT" \
+              > /dev/null || return 1
+            gh attestation verify "oci://$reference" --bundle-from-oci --owner "${{ github.repository_owner }}" \
+              --signer-workflow "${{ github.repository }}/.github/workflows/reusable-docker-build.yml" \
+              --source-digest "$COMMIT" --format json |
+              jq -e --arg run "${{ github.server_url }}/${{ github.repository }}/actions/runs/$QUEUE_RUN/" '
+                length > 0 and all(.[]; .verificationResult.signature.certificate.runInvocationURI | startswith($run))' >/dev/null || return 1
+            echo "$digest"
+          }
+          digests='{}'
+          for name in $(jq -r '.[]' <<< "$REUSED"); do
+            if ! digest=$(verify "$name"); then
+              echo "::error::$name: the merge-queue image did not verify, so this push publishes nothing"
+              exit 1
+            fi
+            digests=$(jq -c --arg name "$name" --arg digest "$digest" '. + {($name): $digest}' <<< "$digests")
+          done
+          echo "digests=$digests" >> "$GITHUB_OUTPUT"
 
       # One tag set per repository; the publish step selects each image's own tags.
       - name: Extract metadata
@@ -589,6 +572,8 @@ jobs:
 
       - name: Capture manifest digests
         id: digest
+        env:
+          REUSED_DIGESTS: ${{ steps.reuse.outputs.digests || '{}' }}
         run: |
           set -euo pipefail
           for name in $(jq -r '.[]' <<< "$IMAGES"); do
@@ -645,11 +630,6 @@ jobs:
           subject-name: ${{ inputs.registry }}/hephaestus-build/postgres
           subject-digest: ${{ steps.digest.outputs.postgres }}
           push-to-registry: true
-
-      - name: Install Cosign
-        uses: sigstore/cosign-installer@af595e623eec1ede52d6322f53b635d5def0a95a
-        with:
-          cosign-release: v3.1.4
 
       # --recursive: sign each child manifest so per-platform verify works. A reused image is signed
       # again here, because the release accepts only this workflow's default-branch identity.

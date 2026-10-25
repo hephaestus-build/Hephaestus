@@ -1326,7 +1326,7 @@ void describe("CI contract", () => {
 		const reusable = parseDocument(
 			await readFile(".github/workflows/reusable-docker-build.yml", "utf8"),
 		);
-		for (const name of ["reuse", "build", "merge"]) {
+		for (const name of ["build", "merge"]) {
 			const registry = step(reusable, ["jobs", name], "docker/login-action");
 			assert.equal(registry.get("registry"), `\${{ inputs.registry }}`);
 		}
@@ -2550,9 +2550,7 @@ void describe("CI contract", () => {
 		assert.equal(workflow.hasIn(["jobs", "scan"]), false);
 		// One platform's refusal must not cancel the other's scan or its evidence.
 		assert.equal(workflow.getIn(["jobs", "build", "strategy", "fail-fast"]), false);
-		const needs = workflow.getIn(["jobs", "merge", "needs"]);
-		assert.ok(isSeq(needs));
-		assert.deepEqual(needs.toJSON(), ["reuse", "build"]);
+		assert.equal(workflow.getIn(["jobs", "merge", "needs"]), "build");
 		const build = ["jobs", "build"];
 		const steps = workflow.getIn([...build, "steps"]);
 		assert.ok(isSeq(steps));
