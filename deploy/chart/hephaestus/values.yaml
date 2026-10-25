@@ -38,6 +38,9 @@ networkPolicy:
   gateway:
     namespace: ""
     podLabels: {}
+  # Optional. The container ports of the `gateway` Pods that the worker may reach, for a model
+  # endpoint that this cluster's own Gateway serves. Empty allows none.
+  workerGatewayPorts: []
   # The metrics scraper that may read the management port. An empty namespace admits no scraper.
   # A namespace needs at least one pod label.
   metrics:

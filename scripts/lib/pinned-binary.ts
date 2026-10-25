@@ -48,17 +48,20 @@ export async function installPinnedBinary(options: {
 	asset: PinnedAsset;
 	/** The release download directory, with a trailing `/`. */
 	url: string;
-	/** The archive member to install, such as `vale.exe`. */
+	/** The installed file, such as `vale.exe`. */
 	executable: string;
+	/** The archive member of the executable, when it is not `executable`. */
+	member?: string;
 }): Promise<string> {
 	const { cache, version, asset, url, executable } = options;
+	const member = options.member ?? executable;
 	const directory = path.join(cache, `${path.parse(executable).name}-${version}-${asset.sha256}`);
 	const binary = path.join(directory, executable);
 	const archive = path.join(directory, asset.name);
 	const verifyInstallation = async () => {
 		const bytes = await readFile(archive);
 		verifyArchive(bytes, asset);
-		const expected = executableFromArchive(bytes, asset.name, executable);
+		const expected = executableFromArchive(bytes, asset.name, member);
 		const installed = await readFile(binary);
 		if (!installed.equals(expected)) {
 			throw new Error(
@@ -86,7 +89,7 @@ export async function installPinnedBinary(options: {
 	}
 	const bytes = new Uint8Array(await response.arrayBuffer());
 	verifyArchive(bytes, asset);
-	const contents = executableFromArchive(bytes, asset.name, executable);
+	const contents = executableFromArchive(bytes, asset.name, member);
 	await mkdir(cache, { recursive: true });
 	const temporary = await mkdtemp(path.join(cache, "install-"));
 	try {

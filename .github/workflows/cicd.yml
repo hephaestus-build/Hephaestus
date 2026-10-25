@@ -351,6 +351,9 @@ jobs:
               - 'docker/agents/**'
               # test:tooling renders this chart with the real Helm CLI on this leg and on Windows.
               - 'deploy/chart/**'
+              # k3s-platform.test.ts renders the chart with these values and reads these files, and
+              # gate:config-format and gate:shell check them.
+              - 'deploy/platform/**'
               # format:load:check and test:load:syntax run on this leg.
               - 'load-tests/**'
               # test:alerts runs promtool on these rules on this leg.
@@ -491,10 +494,13 @@ jobs:
               - 'server/application/src/main/java/**/Application.java'
               - '.github/workflows/cicd.yml'
               - '.github/workflows/ci-build.yml'
-            # What a cluster install of the chart exercises: the chart, its script, the worker's
-            # sandbox runtime and what it binds, and the agent image that its sandboxes run.
+            # What a cluster install of the chart exercises: the chart, its script, the worker's sandbox
+            # runtime and what it binds, and the agent image that its sandboxes run. A change to the
+            # one-host platform files runs it too; the k3s smoke itself runs only at a release or by
+            # dispatch.
             kubernetes:
               - 'deploy/chart/**'
+              - 'deploy/platform/**'
               - 'scripts/kubernetes-cluster.ts'
               - 'scripts/resolve-release-images.ts'
               - 'server/application/src/main/java/**/agent/sandbox/**'

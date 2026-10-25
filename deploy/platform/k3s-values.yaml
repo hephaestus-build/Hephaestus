@@ -1,0 +1,35 @@
+# The chart values that bind a release to the one-host k3s platform: k3s-platform.yaml and
+# k3s-certificates.yaml. docs/admin/kubernetes.mdx § Install on one host (k3s): k3s-install.sh
+# installs the release `hephaestus` in the namespace `hephaestus` with these values, after the
+# chart's small profile and before site.yaml, which adds the host, the API endpoint and the login.
+
+# The Secret that k3s-install.sh keeps, and the certificate that k3s-certificates.yaml issues for
+# hephaestus-postgresql.hephaestus.svc.
+secret:
+  name: hephaestus-app
+postgresql:
+  tls:
+    existingSecret: hephaestus-postgresql-tls
+
+# The HTTPS listener of the Gateway that the pinned Traefik runs.
+route:
+  parentRefs:
+    - name: traefik-gateway
+      namespace: traefik
+      sectionName: websecure
+networkPolicy:
+  gateway:
+    namespace: traefik
+    podLabels:
+      app.kubernetes.io/name: traefik
+      app.kubernetes.io/instance: traefik-traefik
+# The Traefik Pod, in the default Pod CIDR of k3s, 10.42.0.0/16.
+trustedProxies: 10\.42\.\d{1,3}\.\d{1,3}
+
+worker:
+  sandbox:
+    namespace: hephaestus-sandboxes
+
+# Reviews check out the repository they review. The chart's default is off.
+config:
+  gitCheckoutEnabled: true

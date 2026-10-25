@@ -9,6 +9,7 @@ description: Install Hephaestus on a Kubernetes cluster with its Helm chart, and
 The Helm chart installs Hephaestus on a Kubernetes cluster.
 From 1.0, the chart is the supported deployment: [ADR 0058](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0058-the-helm-chart-is-the-only-supported-deployment-from-1-0.md) records the decision, and the [compatibility policy](./compatibility-policy#support-for-1x) gives the terms.
 The worker runs practice reviews and Heph turns. The `small.yaml` profile enables it, and [Install](#install) ends when it is ready.
+On one host, k3s runs the cluster: [Install on one host (k3s)](#install-on-one-host-k3s) gives the complete procedure.
 
 Each release publishes the chart as a signed OCI artifact, `oci://ghcr.io/hephaestus-build/charts/hephaestus`.
 The chart source is in `deploy/chart/hephaestus/` of the repository.
@@ -31,6 +32,7 @@ Each commit to `main` runs both on `amd64` and on `arm64`.
 One more run uses three nodes, Calico for network policy, and an external PostgreSQL.
 Each run starts two workers, and each worker passes its isolation probe on that cluster.
 On the latest minor version, the `amd64` run also backs up to an S3 server and restores to a point in time, as [Backup and restore](#backup-and-restore) describes.
+[Install on one host (k3s)](#install-on-one-host-k3s) states what the release workflow tests before it publishes a release.
 When a Kubernetes minor version reaches its end of life upstream, the next Hephaestus release can drop it.
 
 ## What the chart runs
@@ -216,6 +218,7 @@ The chart then opens only these paths:
 | `server`, if `config.email.host` is set | `networkPolicy.externalEgress` | `config.email.port` |
 | `worker` | `server` | 8080 |
 | `worker` | The Kubernetes API, `networkPolicy.kubernetesApi` | Its port |
+| `worker`, if `networkPolicy.workerGatewayPorts` is set | `networkPolicy.gateway` pods | `networkPolicy.workerGatewayPorts` |
 | Review sandboxes and Heph hosts | `worker` | 8081, the sandbox gateway |
 | PostgreSQL and the backup Jobs, with backups on | `postgresql.backup.s3`, or `networkPolicy.externalEgress` | `postgresql.backup.s3.port` |
 | The backup Jobs, with backups on | PostgreSQL | 8432, the pgBackRest TLS server |
@@ -224,6 +227,10 @@ The chart then opens only these paths:
 
 Sandboxes are in the sandbox namespace, where every pod also starts with no ingress and no egress.
 Turn sandboxes get no other path.
+
+A model endpoint that this cluster's own Gateway serves resolves to a public address, but the connection ends at a Gateway Pod.
+That private address is outside `networkPolicy.externalEgress`, so the worker cannot reach the endpoint.
+Set `networkPolicy.workerGatewayPorts` to the container ports of the Gateway Pods, for example `[8443, 8000]` for the Traefik of the one-host platform.
 
 `networkPolicy.gateway` must name the namespace and at least one pod label of the Gateway data plane.
 A namespace without labels would admit every pod in it, so the chart refuses it.
@@ -395,7 +402,192 @@ The bundled broker stays inside the release namespace, and network policy admits
 The application has no setting for the stream replica count.
 A three-server JetStream cluster therefore keeps one replica of each stream.
 
+## Install on one host (k3s)
+
+This procedure installs Hephaestus on one Linux host with [k3s](https://docs.k3s.io/) and the Helm chart.
+One command, `k3s-install.sh`, does the install.
+It checks the host, installs the pinned k3s and the platform, and keeps the release Secret.
+Then it verifies the release chart and installs it.
+It uses the `small.yaml` profile, the bundled PostgreSQL and NATS, and one worker that runs reviews.
+
+A second run of the same release changes nothing that the first run made.
+A run with the files of a newer release upgrades the host.
+
+Before it publishes a release, the release workflow runs `k3s-install.sh` on Ubuntu 24.04 on `amd64` and on `arm64`.
+It runs the command twice, then an upgrade that restarts every role.
+That run differs from your install in these points:
+
+- A local CA issues the Gateway certificate, because `Let's Encrypt` cannot reach a CI runner. CI does not test the HTTP-01 challenge of the `Let's Encrypt` issuer.
+- It skips the DNS check, because a runner has no public host name.
+- It skips the clock check: a hosted runner takes its time from the hypervisor and can report no NTP sync.
+- A runner has 16 GiB of memory, so the installer adds the `small-16gib.yaml` profile.
+- It checks the shutdown settings that the kubelet and logind use. It does not reboot the host.
+
+### The platform files
+
+Each release publishes the files of the one-host install as signed assets.
+
+| Asset | What it is |
+| --- | --- |
+| `k3s-install.sh` | The installer. It is a POSIX shell script, and it needs no Node.js and no checkout of the repository. |
+| `k3s-platform.yaml` | The pins and the platform add-ons. It goes to the k3s manifests directory. |
+| `k3s-certificates.yaml` | The `Let's Encrypt` issuer, the Gateway certificate, and the PostgreSQL CA and server certificate. The installer writes your host name and address into it. |
+| `k3s-config.yaml` | The k3s configuration: the kubelet configuration file, and no bundled Traefik. |
+| `k3s-kubelet.yaml` | A limit of 4096 processes for each Pod, and the shutdown grace period. |
+| `k3s-logind.conf` | How long logind lets the kubelet hold a shutdown. |
+| `k3s-values.yaml` | The chart values of every one-host install: the Gateway, the Traefik Pods, the Secret names, the sandbox namespace, and reviews with repository checkouts. |
+
+`k3s-platform.yaml` contains these add-ons:
+
+- Traefik as the Gateway controller on the host's ports 80 and 443. Its chart creates the Gateway `traefik/traefik-gateway` and a redirect from HTTP to HTTPS.
+- cert-manager, with Gateway API support.
+
+The `pin: k3s` line of `k3s-platform.yaml` sets the k3s release, and its two `HelmChart` objects set the versions of Traefik and cert-manager.
+The file pins each chart by version and each image by digest.
+The Gateway API resource definitions come from the `gateway-api-crd` chart that k3s includes, so no second owner installs them.
+k3s deploys each file in `/var/lib/rancher/k3s/server/manifests/`, and it applies a file again every 15 seconds until the apply succeeds.
+Thus, cert-manager and the Gateway start some minutes after k3s.
+
+The installer does not run the application itself as a k3s `HelmChart`.
+The k3s Helm controller does not wait for the migration Job, and it does not roll back a failed upgrade.
+
+The limit of 4096 processes applies to each Pod on the host, the server and the worker included.
+On Compose, the server and the worker had a limit of 512 each, so a lower limit for every Pod could stop them.
+CI's clusters run with the same 4096.
+
+When the host shuts down, the kubelet stops the Pods first.
+The configured budget is 5 minutes: 4 minutes for the application Pods, then 1 minute for Traefik and CoreDNS.
+PostgreSQL stops within its termination grace period of 120 seconds, inside the first 4 minutes.
+Ubuntu sets the logind limit to 30 seconds, so `k3s-logind.conf` raises it to 5 minutes.
+At the end of the budget, a worker stops the reviews that it runs. They run again after the start.
+
+### Requirements
+
+- A host of 4 vCPU, 32 GiB of memory, and 150 GiB of disk, as [Profiles](#profiles) gives for `small.yaml`.
+  On a host of 16 GiB, the installer adds `small-16gib.yaml`, and each upgrade stops reviews and Heph for a while.
+- Ubuntu 24.04 on `amd64` or `arm64`. k3s supports other distributions, but no job tests them.
+- A DNS A record for your host name that points to the public address of the host.
+- Ports 80 and 443 open from the internet, for `Let's Encrypt`, OAuth callbacks, and provider webhooks. Keep port 6443, the Kubernetes API, and port 10250, the kubelet, closed to the internet.
+- If `ufw` is active, rules that let in ports 80 and 443 and the k3s networks: `sudo ufw allow 80,443/tcp`, `sudo ufw allow from 10.42.0.0/16`, and `sudo ufw allow from 10.43.0.0/16`.
+- Outbound HTTPS to the destinations in [Network egress](./network-egress#one-host-on-k3s).
+- `curl`, `jq`, `openssl`, `python3`, Cosign, and the Helm CLI, as [Verify the release chart](#verify-the-release-chart) describes. Ubuntu includes `python3`.
+- A clock that NTP keeps synchronized, as [Clocks](./install#clocks) describes.
+- A GitHub OAuth app for sign-in, as [Configure a login provider](./install#3-configure-a-login-provider) describes. Its callback URL is `https://<host>/api/login/oauth2/code/github`.
+
+### What the installer checks
+
+The installer stops before it changes the host when one of these checks fails. Each message tells you what to change.
+
+| Check | Condition |
+| --- | --- |
+| Input | The host name, the address, the OAuth client ID, and the admin list have a strict format. |
+| Size | The host has 4 CPUs and at least 15 GiB of memory. Below 30 GiB, the installer adds the `small-16gib.yaml` profile. |
+| Clock | NTP synchronizes the clock. |
+| Ports | No other program listens on port 80 or 443. The installer checks this before k3s runs. |
+| Host firewall | If `ufw` is active, it allows `80/tcp` and `443/tcp` by a port rule or by the `Nginx`, `Apache`, or `WWW` profile. If `firewalld` is active, the zone of the default route allows `http` and `https`, or ports 80 and 443. Otherwise the installer stops and gives the command to run. |
+| DNS | The host name resolves to this host. Before k3s runs, the installer serves a random token on port 80 for a moment, and it fetches the token through the host name. |
+
+The DNS check proves only that the host name leads to this host.
+The request can stay on the host, so it does not prove that the internet reaches port 80.
+A cloud firewall or a security group of your provider is yours to open, and the installer cannot check it.
+
+cert-manager needs port 80 from the internet to get the certificate.
+The installer waits for the certificate for 10 minutes, and then it stops with the command that shows the reason.
+If your network cannot reach its own public address, the DNS check fails. Then run the installer with `--skip-check dns`.
+
+### 1. Get the release files
+
+1. Make a directory for the release files. The installer keeps its state there: `site.yaml`, the verified chart, and a `kubeconfig` file.
+
+   ```bash
+   VERSION=0.95.0   # the release, without the leading "v"
+   mkdir -p ~/hephaestus && cd ~/hephaestus
+   ```
+
+2. Download each asset and its signature, and verify the signature. Cosign stops with an error if a file does not come from the release workflow:
+
+   ```bash
+   release="https://github.com/hephaestus-build/Hephaestus/releases/download/v$VERSION"
+   for file in k3s-install.sh k3s-platform.yaml k3s-certificates.yaml k3s-config.yaml k3s-kubelet.yaml k3s-logind.conf k3s-values.yaml; do
+     curl -fsSLO "$release/$file"
+     curl -fsSLO "$release/$file.sigstore.json"
+     cosign verify-blob --bundle "$file.sigstore.json" \
+       --certificate-identity https://github.com/hephaestus-build/Hephaestus/.github/workflows/release.yml@refs/heads/main \
+       --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+       "$file"
+   done
+   ```
+
+### 2. Run the installer
+
+1. Type the client secret of your GitHub OAuth app. The shell does not show it:
+
+   ```bash
+   read -rs GITHUB_OAUTH_CLIENT_SECRET && export GITHUB_OAUTH_CLIENT_SECRET
+   ```
+
+2. Run the installer. Give your host name, and the address that gets the expiry notices of `Let's Encrypt`. Also give your OAuth client ID and your numeric GitHub user ID:
+
+   ```bash
+   sh k3s-install.sh --version "$VERSION" --host hephaestus.example.com --email ops@example.com \
+     --github-client-id <the client ID of your OAuth app> --bootstrap-admins github:<your numeric GitHub user ID>
+   ```
+
+   For a first try, add `--staging`: the `Let's Encrypt` staging service has higher rate limits, and no browser trusts its certificate.
+   Later, run the installer again without `--staging`, and delete the Secret `traefik/hephaestus-tls` to get a trusted certificate.
+   [First admin](./install#4-first-admin--before-first-boot) explains the admin list.
+
+3. Keep the required keys of the release Secret outside the host, as [Keep the required keys outside the cluster](./secret-custody#keep-the-required-keys-outside-the-cluster) describes. For `kubectl` on this host, run `export KUBECONFIG=~/hephaestus/kubeconfig` first.
+
+4. Open `https://<host>` and sign in as the bootstrap admin.
+5. Continue with [Connect repository data](./install#6-connect-repository-data).
+
+The installer keeps every key of the release Secret `hephaestus-app` and generates only the keys that it lacks.
+It generates each key as [Secret custody and rotation](./secret-custody#generation-and-rotation) gives it.
+If the PostgreSQL volume exists and the Secret lacks the database login or an encryption key, the installer stops: restore the Secret from your backup.
+
+The installer writes `site.yaml` only when the file does not exist.
+It holds the host name, the Kubernetes API endpoint, the OAuth client ID, the admin list, and `config.gitCheckoutEnabled: true`.
+Change the file to change these values, and run the installer again.
+A new `GITHUB_OAUTH_CLIENT_SECRET` replaces the stored one and restarts the server.
+
+### Certificate renewal
+
+cert-manager renews the Gateway certificate and the PostgreSQL certificates before they expire.
+Traefik reads the renewed Gateway certificate without a restart.
+The PostgreSQL server certificate is valid for one year, and cert-manager renews it 30 days before it expires.
+PostgreSQL reads it only when it starts, as [TLS certificates](./secret-custody#tls-certificates) describes.
+The CA of the PostgreSQL certificate is valid for ten years.
+
+1. Find the time of the next renewal:
+
+   ```bash
+   kubectl --namespace hephaestus get certificate hephaestus-postgresql-tls -o jsonpath='{.status.renewalTime}'
+   ```
+
+2. After that time, restart PostgreSQL:
+
+   ```bash
+   kubectl --namespace hephaestus rollout restart statefulset/hephaestus-postgresql
+   ```
+
+### Upgrade the host
+
+1. Get the files of the new release into the same directory, as [Get the release files](#1-get-the-release-files) describes.
+2. Run the installer of the new release with the same arguments. It installs a new k3s pin, replaces the platform files, and runs the upgrade that [Upgrades](#upgrades) describes.
+
+### Known limits of the one-host platform
+
+- Traefik has no request body limit on this platform. Its default idle timeout is 180 seconds.
+- The k3s default Pod network is `10.42.0.0/16`. `trustedProxies` in `k3s-values.yaml` matches it. If you change the network of k3s, change `trustedProxies` too.
+- The bundled PostgreSQL backups need a client certificate in the PostgreSQL TLS Secret. `k3s-certificates.yaml` does not issue it. [Backup and restore](#backup-and-restore) describes it.
+- If the model endpoint resolves to this host's own Gateway, set `networkPolicy.workerGatewayPorts: [8443, 8000]` in `site.yaml`, as [Network policy](#network-policy) describes.
+- CI's clusters run no cert-manager. Only the release workflow's install tests the cert-manager pin.
+
 ## Install
+
+This procedure installs the chart on a cluster that you operate.
+For one host, use [Install on one host (k3s)](#install-on-one-host-k3s).
 
 1. Create the release namespace and the sandbox namespace, and label both with the Restricted Pod Security level.
    Use the sandbox namespace for this release alone.

@@ -1,0 +1,12 @@
+# The kubelet configuration of a one-host install: /etc/rancher/k3s/kubelet.yaml, which
+# k3s-config.yaml names. docs/admin/kubernetes.mdx § Install on one host (k3s).
+apiVersion: kubelet.config.k8s.io/v1beta1
+kind: KubeletConfiguration
+# A bound on the processes of each Pod. The worker's isolation probe records it.
+podPidsLimit: 4096
+# On a shutdown or a reboot, the kubelet stops the Pods before the host stops. Of the 5 minutes, the
+# critical Pods (Traefik, CoreDNS) get the last minute, and the other Pods get the first 4, more
+# than PostgreSQL's termination grace period of 120 seconds. k3s-logind.conf lets logind wait that
+# long.
+shutdownGracePeriod: 5m
+shutdownGracePeriodCriticalPods: 1m

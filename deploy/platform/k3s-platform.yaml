@@ -1,0 +1,144 @@
+# The platform of a one-host install on k3s: docs/admin/kubernetes.mdx § Install on one host (k3s).
+#
+# k3s-install.sh puts this file in /var/lib/rancher/k3s/server/manifests/. k3s applies each file
+# there, and applies it again every 15 seconds until the apply succeeds. A changed file is applied
+# again. The Gateway API resource definitions come from k3s itself: its bundled gateway-api-crd
+# chart owns them, so no other owner installs them. k3s-config.yaml turns off the Traefik that k3s
+# bundles, so that this file pins Traefik as it pins cert-manager.
+#
+# Every version of the platform is set in this file and nowhere else:
+#   - The pin line below: the k3s release and the SHA-256 of its install script. k3s-install.sh
+#     reads it. That k3s release also sets the Gateway API definitions (v1.6.1 for v1.37.1+k3s1).
+#   - cert-manager and Traefik: the chart versions and the image digests in their HelmCharts below.
+#
+# pin: k3s v1.37.1+k3s1 ed01f89fd977bf20ac1516bbebf8370bf3ddbaa55dac8aba610956a4c78cc00b
+---
+# cert-manager issues the Gateway certificate and the PostgreSQL certificates, and renews them.
+# Its Gateway API support lets an ACME issuer answer HTTP-01 challenges through the Gateway. Until
+# k3s has installed the Gateway API definitions, its controller stops at its start and restarts.
+apiVersion: helm.cattle.io/v1
+kind: HelmChart
+metadata:
+  name: cert-manager
+  namespace: kube-system
+spec:
+  repo: https://charts.jetstack.io
+  chart: cert-manager
+  version: v1.21.3
+  targetNamespace: cert-manager
+  createNamespace: true
+  valuesContent: |-
+    crds:
+      enabled: true
+      keep: true
+    config:
+      apiVersion: controller.config.cert-manager.io/v1alpha1
+      kind: ControllerConfiguration
+      gatewayAPI:
+        enabled: true
+    # The image indexes of v1.21.3 on quay.io/jetstack, for every architecture.
+    image:
+      digest: sha256:9f4f96a33c7774cef24466fcd85031997531a03a8d117f151126baa8d1290dcc
+    webhook:
+      image:
+        digest: sha256:055ac8e9de6a0ba6763794838fe38944acc650f68ebe1b01dd8be079e580f458
+    cainjector:
+      image:
+        digest: sha256:083d0e906f8eb44e255fe4ff817ae54e49f9ed82e22f1011bb4e9e4f4b8a641f
+    acmesolver:
+      image:
+        digest: sha256:c8c1225bb2fe8ab37a330b77f0d8c2ee6a41210fcb54fc07ca606ab9a022b8b7
+    startupapicheck:
+      image:
+        digest: sha256:1c519d4afca1413d1e4ccd78bdc756184418ab55a34569a3b3de39d32f9974e1
+---
+# Traefik as the Gateway controller, on the host's ports 80 and 443. Its chart creates the
+# GatewayClass `traefik` and the Gateway `traefik/traefik-gateway`: plain HTTP on the `web` listener
+# and HTTPS on `websecure`, with the certificate in the Secret `traefik/hephaestus-tls`.
+apiVersion: helm.cattle.io/v1
+kind: HelmChart
+metadata:
+  name: traefik
+  namespace: kube-system
+spec:
+  repo: https://traefik.github.io/charts
+  chart: traefik
+  version: 42.1.3
+  targetNamespace: traefik
+  createNamespace: true
+  # Until k3s has installed the Gateway API definitions, the install fails, and the Helm controller's
+  # Job runs it again.
+  valuesContent: |-
+    # The image index of v3.7.16 on docker.io, for every architecture.
+    image:
+      digest: sha256:c8a121e4bb1347e8fd52657fab12f2cb70b68f8a018895e2068f92c9e519b9c2
+    versionOverride: v3.7.16
+    deployment:
+      replicas: 1
+    # Two Pods cannot hold the same host port: the old Pod stops before the new one starts.
+    updateStrategy:
+      type: RollingUpdate
+      rollingUpdate:
+        maxUnavailable: 1
+        maxSurge: 0
+    # A critical Pod: at a shutdown, the kubelet stops it in the last minute (k3s-kubelet.yaml).
+    priorityClassName: system-cluster-critical
+    providers:
+      kubernetesGateway:
+        enabled: true
+      kubernetesIngress:
+        enabled: false
+      kubernetesCRD:
+        enabled: true
+    gatewayClass:
+      enabled: true
+      name: traefik
+    ingressClass:
+      enabled: false
+    gateway:
+      listeners:
+        # Only the redirect below and cert-manager's HTTP-01 challenge routes, both in this namespace.
+        web:
+          port: 8000
+          protocol: HTTP
+          namespacePolicy:
+            from: Same
+        websecure:
+          port: 8443
+          protocol: HTTPS
+          namespacePolicy:
+            from: All
+          certificateRefs:
+            - name: hephaestus-tls
+    ports:
+      web:
+        port: 8000
+        hostPort: 80
+        exposedPort: 80
+      websecure:
+        port: 8443
+        hostPort: 443
+        exposedPort: 443
+    service:
+      type: ClusterIP
+    resources:
+      requests: { cpu: 100m, memory: 128Mi }
+      limits: { cpu: "1", memory: 512Mi }
+    extraObjects:
+      # Every plain HTTP request moves to HTTPS. A challenge route matches its exact path, so it
+      # takes precedence over this prefix match.
+      - apiVersion: gateway.networking.k8s.io/v1
+        kind: HTTPRoute
+        metadata:
+          name: https-redirect
+          namespace: traefik
+        spec:
+          parentRefs:
+            - name: traefik-gateway
+              sectionName: web
+          rules:
+            - filters:
+                - type: RequestRedirect
+                  requestRedirect:
+                    scheme: https
+                    statusCode: 301

@@ -11,13 +11,17 @@
  *   backup-drill  pgBackRest to a throwaway S3 server, then a point-in-time restore
  *   render   the manifests of those values for synthetic images, with backups on and with an external
  *            PostgreSQL, for a schema check without a cluster
+ *   release-smoke  the one-host install of docs/admin/kubernetes.mdx § Install on one host (k3s) on
+ *            this machine: the release's k3s-install.sh, then every role ready, reviews on, the
+ *            shutdown budget, requests through the Gateway, a second run and an upgrade
  *   dev      a local k3d cluster with a registry, this checkout's images built and pushed, the three
  *            steps above, and a Gateway on https://hephaestus.localhost; a second run reuses the cluster
  *   down     stops the dev cluster and keeps its data
  *   reset    deletes the dev cluster, its data, its registry and the work directory
  *
- * The cluster is the caller's: the script creates none, except `dev`. Every generated value stays
- * in the work directory, which only the user can read; the script prints no secret value.
+ * The cluster is the caller's: the script creates none, except `dev` and `release-smoke`. Every
+ * generated value stays in the work directory, which only the user can read; the script prints no
+ * secret value.
  */
 import { createHash, randomBytes } from "node:crypto";
 import { once } from "node:events";
@@ -30,7 +34,7 @@ import { parseArgs } from "node:util";
 
 import { readInventory } from "./commit-image-lock.ts";
 import type { ChartImage } from "./kubernetes-chart.ts";
-import { asRecord, asString, isRecord, parseJson } from "./lib/json.ts";
+import { asArray, asRecord, asString, isRecord, parseJson } from "./lib/json.ts";
 import { output, run, succeeds } from "./lib/process.ts";
 import { parseResolvedImages } from "./resolve-release-images.ts";
 
@@ -199,8 +203,8 @@ export function applicationSecret(): Record<string, string> {
 	return {
 		DATABASE_USERNAME: "hephaestus",
 		DATABASE_PASSWORD: secretValue(16),
-		NATS_USERNAME: `nats${secretValue(8)}`,
-		NATS_PASSWORD: secretValue(16),
+		NATS_USERNAME: `heph${secretValue(16)}`,
+		NATS_PASSWORD: `heph${secretValue(16)}`,
 		HEPHAESTUS_SECURITY_ENCRYPTION_KEY: key,
 		HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY: key,
 		HEPHAESTUS_AUTH_STATE_COOKIE_KEY: randomBytes(32).toString("base64"),
@@ -680,7 +684,8 @@ export async function install(work: string, extra: readonly string[] = []): Prom
 	]);
 }
 
-export async function verify(): Promise<void> {
+/** Every workload ready and each worker's isolation probe passed; the number of those workers. */
+export async function verify(): Promise<number> {
 	for (const kind of ["deployment", "statefulset"]) {
 		const listed = await kubectl(["-n", NAMESPACE, "get", kind, "-o", "name"]);
 		const names = listed.split("\n").filter(Boolean);
@@ -733,6 +738,7 @@ export async function verify(): Promise<void> {
 	process.stdout.write(
 		`${workers.length} workers passed the isolation probe; every workload is ready\n`,
 	);
+	return workers.length;
 }
 
 const STORAGE_NAMESPACE = "backup-storage";
@@ -1019,6 +1025,411 @@ export async function backupDrill(work: string, podCidr: string): Promise<void> 
 	}
 	process.stdout.write("backup drill: both rows are back, and the dropped table is restored\n");
 	await verify();
+}
+
+/** The release and host of the release smoke. The release name is the one the platform files name. */
+const ONE_HOST_RELEASE = "hephaestus";
+export const SMOKE_HOST = "hephaestus-smoke.invalid";
+
+/**
+ * The namespace and Secret of the Gateway's certificate, as the certificates asset names them: the
+ * smoke reads the CA of its local issuer from there.
+ */
+export async function gatewayCertificate(
+	source: string,
+): Promise<{ namespace: string; secretName: string }> {
+	const { parseAllDocuments } = await import("yaml");
+	for (const document of parseAllDocuments(source)) {
+		const resource: unknown = document.toJS();
+		if (
+			isRecord(resource) &&
+			resource.kind === "Certificate" &&
+			isRecord(resource.metadata) &&
+			resource.metadata.name === "hephaestus-tls" &&
+			isRecord(resource.spec)
+		) {
+			return {
+				namespace: asString(resource.metadata.namespace, "Certificate namespace"),
+				secretName: asString(resource.spec.secretName, "Certificate secretName"),
+			};
+		}
+	}
+	throw new Error("the certificates file has no Certificate hephaestus-tls");
+}
+
+/** A YAML document that starts with its own `---` marker, so that documents can be concatenated. */
+const marked = (text: string) => (text.startsWith("---") ? text : `---\n${text}`);
+
+/**
+ * The certificates asset as the release smoke installs it: the smoke's host name, and a local CA as
+ * the issuer `gateway`, because Let's Encrypt cannot reach a runner. Every other document stays as
+ * the operator's copy has it.
+ */
+export async function smokeCertificates(source: string, host: string): Promise<string> {
+	// Imported here: only the release smoke installs the repository's packages. The cluster jobs run
+	// the other commands of this script with Node alone.
+	const { parseAllDocuments, stringify } = await import("yaml");
+	const documents = parseAllDocuments(source.replaceAll("hephaestus.example.com", host));
+	if (!Array.isArray(documents) || documents.some((document) => document.errors.length > 0)) {
+		throw new Error("the certificates file is not valid YAML");
+	}
+	const kept = documents.filter((document) => document.get("kind") !== "ClusterIssuer");
+	if (kept.length !== documents.length - 1) {
+		throw new Error("the certificates file names more or less than one ClusterIssuer");
+	}
+	const root = {
+		apiVersion: "cert-manager.io/v1",
+		kind: "ClusterIssuer",
+		metadata: { name: "smoke-root" },
+		spec: { selfSigned: {} },
+	};
+	const ca = {
+		apiVersion: "cert-manager.io/v1",
+		kind: "Certificate",
+		metadata: { name: "smoke-ca", namespace: "cert-manager" },
+		spec: {
+			isCA: true,
+			commonName: "Hephaestus release smoke CA",
+			secretName: "smoke-ca",
+			issuerRef: { kind: "ClusterIssuer", name: "smoke-root" },
+		},
+	};
+	const issuer = {
+		apiVersion: "cert-manager.io/v1",
+		kind: "ClusterIssuer",
+		metadata: { name: "gateway" },
+		spec: { ca: { secretName: "smoke-ca" } },
+	};
+	return [
+		...[root, ca, issuer].map((document) => marked(stringify(document))),
+		...kept.map((document) => marked(document.toString())),
+	].join("");
+}
+
+const UNIT_SECONDS: Readonly<Record<string, number>> = { h: 3600, m: 60, s: 1 };
+
+/** Seconds of a Go duration such as `5m`, `5m0s` or `1h2m3s`. */
+export function durationSeconds(duration: string): number {
+	const parts = [...duration.matchAll(/(?<value>\d+)(?<unit>[hms])/gu)];
+	if (parts.length === 0 || parts.map((part) => part[0]).join("") !== duration) {
+		throw new Error(`not a duration of hours, minutes and seconds: ${duration}`);
+	}
+	return parts.reduce(
+		(sum, { groups }) => sum + Number(groups?.value) * (UNIT_SECONDS[groups?.unit ?? ""] ?? 0),
+		0,
+	);
+}
+
+/**
+ * The shutdown budget that the kubelet and logind run with, against the assets: the kubelet's live
+ * configuration has the asset's grace periods, and logind lets a shutdown wait at least that long.
+ * No reboot happens here.
+ */
+async function shutdownBudget(node: string, assets: string): Promise<void> {
+	const { parse } = await import("yaml");
+	const wanted = asRecord(
+		parse(await readFile(path.join(assets, "k3s-kubelet.yaml"), "utf8")),
+		"kubelet asset",
+	);
+	const live = asRecord(
+		asRecord(
+			parseJson(await kubectl(["get", "--raw", `/api/v1/nodes/${node}/proxy/configz`])),
+			"configz",
+		).kubeletconfig,
+		"kubelet configuration",
+	);
+	for (const key of ["shutdownGracePeriod", "shutdownGracePeriodCriticalPods"]) {
+		const configured = durationSeconds(asString(wanted[key], key));
+		const running = durationSeconds(asString(live[key], key));
+		if (configured !== running) {
+			throw new Error(
+				`the kubelet runs with ${key} ${running}s, not the configured ${configured}s`,
+			);
+		}
+	}
+	if (live.podPidsLimit !== wanted.podPidsLimit) {
+		throw new Error(`the kubelet runs with podPidsLimit ${String(live.podPidsLimit)}`);
+	}
+	const delay = await output("busctl", [
+		"get-property",
+		"org.freedesktop.login1",
+		"/org/freedesktop/login1",
+		"org.freedesktop.login1.Manager",
+		"InhibitDelayMaxUSec",
+	]);
+	const seconds = Number(/^t (?<usec>\d+)$/u.exec(delay.trim())?.groups?.usec) / 1_000_000;
+	const grace = durationSeconds(asString(wanted.shutdownGracePeriod, "shutdownGracePeriod"));
+	if (!(seconds >= grace)) {
+		throw new Error(
+			`logind lets a shutdown wait ${seconds}s, less than the ${grace}s grace period`,
+		);
+	}
+	process.stdout.write(
+		`the kubelet holds a shutdown for ${grace}s, and logind allows ${seconds}s\n`,
+	);
+}
+
+/** One request through the Gateway at the node's address: the status code and the redirect target. */
+async function gatewayAnswer(
+	url: string,
+	node: string,
+	ca: string,
+): Promise<{ code: number; location: string }> {
+	const written = await output("curl", [
+		"--silent",
+		"--show-error",
+		"--max-time",
+		"10",
+		"--noproxy",
+		"*",
+		"--cacert",
+		ca,
+		"--resolve",
+		`${SMOKE_HOST}:80:${node}`,
+		"--resolve",
+		`${SMOKE_HOST}:443:${node}`,
+		"--output",
+		"/dev/null",
+		"--write-out",
+		"%{http_code} %{redirect_url}",
+		url,
+	]);
+	const [code = "", location = ""] = written.trim().split(" ");
+	return { code: Number(code), location };
+}
+
+/**
+ * The routes of docs/admin/kubernetes.mdx § Gateway routes, through Traefik: the redirect to HTTPS,
+ * the webapp, the server behind the `/api` rewrite, and the webhook role, over TLS that the
+ * certificate of the Gateway's listener carries.
+ */
+async function gatewayRequests(
+	work: string,
+	node: string,
+	tlsSecret: { namespace: string; secretName: string },
+): Promise<void> {
+	const tls = asRecord(
+		asRecord(
+			parseJson(
+				await kubectl([
+					"-n",
+					tlsSecret.namespace,
+					"get",
+					"secret",
+					tlsSecret.secretName,
+					"-o",
+					"json",
+				]),
+			),
+			"Secret",
+		).data,
+		"Secret data",
+	);
+	const ca = path.join(work, "gateway-ca.crt");
+	await writeFile(ca, Buffer.from(asString(tls["ca.crt"], "ca.crt"), "base64"));
+	const origin = `https://${SMOKE_HOST}`;
+	const checks = [
+		{
+			url: `http://${SMOKE_HOST}/`,
+			passes: (answer: { code: number; location: string }) =>
+				answer.code === 301 && [`${origin}/`, `${origin}:443/`].includes(answer.location),
+		},
+		{ url: `${origin}/`, passes: (answer: { code: number }) => answer.code === 200 },
+		{
+			url: `${origin}/api/auth/client/configuration`,
+			passes: (answer: { code: number }) => answer.code === 200,
+		},
+		// The webhook role answers a GET without a delivery; a status of 500 or more is the Gateway's.
+		{
+			url: `${origin}/webhooks/github`,
+			passes: (answer: { code: number }) => answer.code > 0 && answer.code < 500,
+		},
+	];
+	for (const check of checks) {
+		let last = "no answer";
+		// Traefik applies a route a few seconds after the Gateway accepts it.
+		for (let attempt = 0; attempt < 30; attempt += 1) {
+			try {
+				const answer = await gatewayAnswer(check.url, node, ca);
+				if (check.passes(answer)) {
+					process.stdout.write(`${check.url}: ${answer.code}\n`);
+					last = "";
+					break;
+				}
+				last = `${answer.code} ${answer.location}`.trim();
+			} catch (error) {
+				last = error instanceof Error ? error.message : String(error);
+			}
+			await sleep(2000);
+		}
+		if (last !== "") {
+			throw new Error(`${check.url} through the Gateway: ${last}`);
+		}
+	}
+}
+
+interface SmokeOptions {
+	work: string;
+	/** The directory of the release's k3s-* assets, after their signature checks. */
+	assets: string;
+	/** The joint lock of the release, downloaded: a draft release's assets need a token. */
+	lock: string;
+	release: string;
+	/** The architecture of this runner, which the node must report: amd64 or arm64. */
+	architecture: string;
+}
+
+/** A digest of the release Secret's data, so that two runs compare it without printing a value. */
+async function secretDigest(): Promise<string> {
+	const data = asRecord(
+		asRecord(
+			parseJson(
+				await kubectl(["-n", NAMESPACE, "get", "secret", `${ONE_HOST_RELEASE}-app`, "-o", "json"]),
+			),
+			"Secret",
+		).data,
+		"Secret data",
+	);
+	const sorted = Object.keys(data)
+		.toSorted()
+		.map((key) => [key, data[key]]);
+	return createHash("sha256").update(JSON.stringify(sorted)).digest("hex");
+}
+
+/** Every current worker is Ready and runs reviews with repository checkouts. */
+async function reviewsOn(): Promise<void> {
+	const pods = asArray(
+		asRecord(
+			parseJson(
+				await kubectl([
+					"-n",
+					NAMESPACE,
+					"get",
+					"pods",
+					"-l",
+					"app.kubernetes.io/component=worker",
+					"-o",
+					"json",
+				]),
+			),
+			"Pod list",
+		).items,
+		"Pods",
+	)
+		.map((pod) => asRecord(pod, "Pod"))
+		.filter((pod) => asRecord(pod.metadata, "Pod metadata").deletionTimestamp === undefined);
+	for (const pod of pods) {
+		const name = asString(asRecord(pod.metadata, "Pod metadata").name, "Pod name");
+		const ready = asArray(asRecord(pod.status, "Pod status").conditions, "conditions")
+			.map((condition) => asRecord(condition, "condition"))
+			.some((condition) => condition.type === "Ready" && condition.status === "True");
+		const env = asArray(asRecord(pod.spec, "Pod spec").containers, "containers")
+			.flatMap((container) => asArray(asRecord(container, "container").env ?? [], "env"))
+			.map((variable) => asRecord(variable, "env variable"));
+		const checkout = env.find((variable) => variable.name === "GIT_CHECKOUT_ENABLED")?.value;
+		if (!ready || checkout !== "true") {
+			throw new Error(
+				`worker ${name}: Ready ${String(ready)}, GIT_CHECKOUT_ENABLED ${String(checkout)}`,
+			);
+		}
+	}
+	process.stdout.write(`${pods.length} workers are Ready and check out repositories for reviews\n`);
+}
+
+/**
+ * The one-host install as docs/admin/kubernetes.mdx § Install on one host (k3s) runs it: the
+ * release's k3s-install.sh, with a local CA in place of Let's Encrypt, and without the DNS and
+ * clock checks that a runner cannot pass. A runner of 16 GiB installs with the small-16gib profile. Then the checks around it, a second run that must change
+ * nothing, and an upgrade that rolls every role.
+ */
+export async function releaseSmoke(options: SmokeOptions): Promise<void> {
+	await mkdir(options.work, { recursive: true, mode: 0o700 });
+	await chmod(options.work, 0o700);
+	const version = options.release.replace(/^v/u, "");
+	const certificatesSource = await readFile(
+		path.join(options.assets, "k3s-certificates.yaml"),
+		"utf8",
+	);
+	const gatewayTls = await gatewayCertificate(certificatesSource);
+	const certificatesFile = path.join(options.work, "smoke-certificates.yaml");
+	await writeFile(certificatesFile, await smokeCertificates(certificatesSource, SMOKE_HOST));
+	const installer = [
+		path.join(options.assets, "k3s-install.sh"),
+		"--version",
+		version,
+		"--host",
+		SMOKE_HOST,
+		"--certificates",
+		certificatesFile,
+		"--lock",
+		options.lock,
+		"--skip-check",
+		"dns",
+		// Hosted runners take their time from the hypervisor and may not report an NTP sync. The
+		// check stays strict for operators.
+		"--skip-check",
+		"clock",
+	];
+	await run("sh", installer);
+	process.env.KUBECONFIG = path.join(options.assets, "kubeconfig");
+	const workers = await verify();
+	await reviewsOn();
+
+	const node = asRecord(
+		asArray(
+			asRecord(parseJson(await kubectl(["get", "nodes", "-o", "json"])), "Node list").items,
+			"nodes",
+		)[0],
+		"Node",
+	);
+	const status = asRecord(node.status, "Node status");
+	const info = asRecord(status.nodeInfo, "Node info");
+	const architecture = asString(info.architecture, "Node architecture");
+	if (architecture !== options.architecture) {
+		throw new Error(`expected a native ${options.architecture} node, not ${architecture}`);
+	}
+	await shutdownBudget(
+		asString(asRecord(node.metadata, "Node metadata").name, "Node name"),
+		options.assets,
+	);
+	const address = asArray(status.addresses, "Node addresses")
+		.map((entry) => asRecord(entry, "Node address"))
+		.find((entry) => entry.type === "InternalIP");
+	const nodeAddress = asString(address?.address, "Node InternalIP");
+	await gatewayRequests(options.work, nodeAddress, gatewayTls);
+
+	// The same command again: it keeps every key of the Secret, and the release stays ready.
+	const secretBefore = await secretDigest();
+	await run("sh", installer);
+	if ((await secretDigest()) !== secretBefore) {
+		throw new Error("a second run of k3s-install.sh changed the release Secret");
+	}
+	await verify();
+	process.stdout.write("a second run of k3s-install.sh kept the Secret and every workload\n");
+
+	// An upgrade that rolls every role, with a new migration Job: new workers prove the cluster with
+	// the isolation probe before an old worker drains.
+	await run("helm", [
+		"upgrade",
+		ONE_HOST_RELEASE,
+		path.join(options.assets, `chart-${version}`, "hephaestus"),
+		"--namespace",
+		NAMESPACE,
+		"--reuse-values",
+		"--set",
+		`release.version=${options.release}-smoke`,
+		"--wait=watcher",
+		"--wait-for-jobs",
+		"--timeout",
+		"20m",
+	]);
+	await verify();
+	await reviewsOn();
+	await gatewayRequests(options.work, nodeAddress, gatewayTls);
+
+	process.stdout.write(
+		`k3s ${asString(info.kubeletVersion, "kubelet version")} on ${architecture}: the release ${options.release} serves through the Gateway after an install, a second run and an upgrade; ${workers} workers passed the isolation probe\n`,
+	);
 }
 
 /** Every manifest that the cluster jobs install, for synthetic images: no cluster, no registry. */
@@ -1658,6 +2069,10 @@ if (import.meta.main) {
 			"pod-cidr": { type: "string" },
 			gateway: { type: "boolean", default: false },
 			set: { type: "string", multiple: true, default: [] },
+			assets: { type: "string" },
+			lock: { type: "string" },
+			release: { type: "string" },
+			architecture: { type: "string" },
 		},
 	});
 	const [command = ""] = positionals;
@@ -1731,9 +2146,24 @@ if (import.meta.main) {
 			process.stdout.write(await render());
 			break;
 		}
+		case "release-smoke": {
+			const { assets, lock, release, architecture } = values;
+			if (
+				assets === undefined ||
+				lock === undefined ||
+				release === undefined ||
+				architecture === undefined
+			) {
+				throw new Error(
+					"release-smoke needs --assets <directory of k3s-* assets> --lock <joint lock> --release <vX.Y.Z> --architecture <amd64|arm64>",
+				);
+			}
+			await releaseSmoke({ work, assets, lock, release, architecture });
+			break;
+		}
 		default: {
 			throw new Error(
-				"usage: kubernetes-cluster <prepare|gateway|install|verify|request|backup-drill|render|dev|down|reset> [--work dir]",
+				"usage: kubernetes-cluster <prepare|gateway|install|verify|request|backup-drill|render|dev|down|reset|release-smoke> [--work dir]",
 			);
 		}
 	}

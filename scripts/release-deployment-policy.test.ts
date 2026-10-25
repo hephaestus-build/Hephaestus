@@ -38,7 +38,7 @@ const upgrade = readFileSync(".github/workflows/release-upgrade.yml", "utf8");
 await test("release publication requires the seeded upgrade gate", () => {
 	assert.match(
 		release,
-		/publish-release:\n\s+needs: \[release, tag-images, upgrade-test, supported-host-smoke\]/u,
+		/publish-release:\n\s+needs: \[release, tag-images, upgrade-test, supported-host-smoke, k3s-host-smoke\]/u,
 	);
 	assert.match(release, /previous-version: \$\{\{ needs\.release\.outputs\.previous_version \}\}/u);
 	assert.match(upgrade, /INPUT_PREVIOUS_VERSION: \$\{\{ inputs\.previous-version \}\}/u);
