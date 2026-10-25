@@ -537,16 +537,22 @@ classpaths are separate from the application runtime. Restore your usual Gradle 
 
 Gradle does not remove the verification entry of a version that no build downloads any more.
 OSV Scanner reports such an entry as a dependency — [Gradle dependency inventory](ci-cd.mdx#gradle-dependency-inventory-and-the-vulnerabilities-exclusion).
-After an update that replaces versions, remove those entries:
+After an update that replaces versions, run:
 
-1. Set `GRADLE_USER_HOME` to an empty temporary directory.
-2. Run `dependencies buildEnvironment :generated-clients:jar` and the tasks of the `Build what the server jobs restore` step in `.github/workflows/cache-gradle.yml`.
-   Use `--no-configuration-cache`.
-3. Delete each `<component>` that is not in `caches/modules-2/files-2.1` of that home.
-   Keep `org.gradle:github-dependency-graph-gradle-plugin`.
-   The dependency-graph workflows inject it through `gradle/actions`, so a local build does not download it.
-4. Run the verification run above.
-   A deletion trusts no new artifact, but the verification run fails if a build still needs the entry.
+```sh
+node scripts/check-gradle-verification-metadata.ts --write
+```
+
+It resolves every server dependency in an empty Gradle home with strict verification.
+Then it deletes each component that the resolution did not download.
+The deletion adds no checksum to trust.
+If a CI task reads a reported component, add that task to the script instead of deleting the entry.
+Without `--write`, the command fails on such a component, as Quality → App Server does on a pull request.
+
+Run `--write` on Linux, as CI does.
+Another operating system can resolve a different set of components.
+The script compares whole components.
+It does not report an unused artifact inside a component that the build still downloads, such as the native JAR of another platform.
 
 For a Gradle wrapper update, also run the build with `--warning-mode all` and review plugin
 compatibility before accepting a new major. Do not suppress upstream deprecations to make the
