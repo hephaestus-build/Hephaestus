@@ -12,7 +12,7 @@
 
 ADR 0035 deployed each labelled pull request as a Compose stack on Coolify, on the staging VM.
 The Coolify path is off, and [ADR 0058](0058-the-helm-chart-is-the-only-supported-deployment-from-1-0.md) deletes it.
-The staging host moves to k3s and installs the same Helm chart as every other deployment.
+The staging host moves to k3s. There it will install the Helm chart of ADR 0058, which is not on `main` yet ([#3139](https://github.com/hephaestus-build/Hephaestus/pull/3139)).
 A preview on that host must do five things:
 
 1. List the open pull requests with the label `preview`.
@@ -53,7 +53,7 @@ Flux Operator alone covers the list, the Secret copy, the limit, and the removal
 ### The shape of a preview
 
 A preview is the namespace `pr-<n>` on the staging k3s.
-The namespace holds one release of the chart with the `preview` profile.
+The namespace holds one release of the chart with the `preview` profile that the chart must provide.
 Its address is `https://pr-<n>.preview.hephaestus.build`.
 
 ### The reconciler
@@ -76,18 +76,21 @@ The chart and the preview values come from `main`.
 Only the application images come from the head commit of the pull request.
 Thus, a pull request changes the application code of its preview, and nothing else.
 
-- The `application-server` and `webapp` images have the 40-hex commit tag of the head.
-- NATS and PostgreSQL use the images that the chart pins.
-- The preview has no worker and no webhook server. Thus, a preview runs no practice review and no Heph turn.
+The chart must meet these requirements for previews:
 
-The chart schema refuses every image tag today, and its preview profile runs a webhook server.
-A chart change for previews makes three changes.
-Only the preview profile accepts a commit tag.
-The preview profile has no webhook server, and its size is about 3.5 GiB.
+- The chart accepts a 40-hex commit tag for the `application-server` and `webapp` images, and only in the preview profile.
+- NATS and PostgreSQL use the images that the chart pins.
+- The preview profile has no worker and no webhook server. Thus, a preview runs no practice review and no Heph turn.
+- The preview profile needs about 3.5 GiB.
+- The preview profile bundles a PostgreSQL with its own volume.
+- The preview profile keeps the NetworkPolicies of the chart on.
 
 ### Data and sign-in
 
-Each preview has its own PostgreSQL: the bundled StatefulSet of the chart, with a volume that Flux deletes with the namespace.
+Each preview has its own PostgreSQL. Flux deletes its volume with the namespace.
+CloudNativePG was rejected, because nothing else uses that operator before the 1.0 release.
+A schema in staging's database and a clone of staging were rejected, because a preview never reads staging's data.
+
 A synthetic demo seed fills it: a Liquibase changeset with the context `demo` [L1].
 The migration Job runs that context only when the profile adds `demo` to the context filter.
 Liquibase runs every context when the filter is empty.
@@ -105,14 +108,15 @@ Workspace subdomains are off in previews.
 
 - **Namespace.** The `ResourceSet` owns the namespace, so the pull request cannot change its labels. It enforces the Restricted Pod Security level [K1].
 - **Secrets.** One source Secret in the `previews` namespace holds the preview OAuth client, the keys, and the passwords. Flux copies it into each namespace [F2]. Its values protect only demo data, and no staging value enters it. Each database is separate, so a shared password reaches no other data.
-- **Resources.** Each namespace has a `ResourceQuota` and a `LimitRange`. The chart's NetworkPolicies stay on, and the staging NetworkPolicies admit no preview Pod.
+- **Resources.** Each namespace has a `ResourceQuota` (4 GiB of memory, 6 GiB of storage, and 10 Pods) and a `LimitRange`. The staging NetworkPolicies admit no preview Pod.
 - **Route.** The staging Gateway has a listener for `*.preview.hephaestus.build` that admits only namespaces with the preview label. One DNS-only wildcard record points to it. cert-manager issues one wildcard certificate through DNS-01, with the zone-scoped token that [ADR 0053](0053-workspace-addresses-are-a-presentation-origin.md) already uses.
 - **Origins.** ADR 0053 reserves the name `preview`, and it trusts only one label under the base domain. Thus, no staging CORS rule trusts a preview origin, and the `__Host-` cookies do not cross hosts.
-- **Cap.** At most three previews run. A label workflow refuses the fourth label and names the pull requests that hold the slots. The `filter.limit: 3` of the input provider is the backstop.
+- **Cap.** At most three previews run. A label workflow refuses the fourth label and names the pull requests that hold the slots. The `filter.limit: 3` of the input provider is the backstop. The cap is a value in the Flux objects.
 
 ### Lifecycle
 
 1. An author adds the label `preview`. The label workflow refuses a fork pull request and checks the cap. Then it posts the address, or it removes the label and says why.
+   § What stays from ADR 0035 gives the second layer of fork protection.
 2. CI publishes the head images, as it does today for a labelled pull request.
 3. Flux renders the namespace, the quota, the Secret, the certificate, and the `HelmRelease`. It retries until the images exist.
 4. Each push changes the head commit. Flux upgrades the release in place.
@@ -126,15 +130,14 @@ The label workflow uses `pull_request_target` with only `GITHUB_TOKEN`, and it c
 
 - The label `preview` is the opt-in. A person with push access adds it, and that is the whole authorization.
 - The label is a switch, not a security boundary [GH1].
-- Fork pull requests never get a preview.
-- No workflow that holds a secret checks out or runs pull request code.
+- Fork pull requests never get a preview. Two layers enforce this. A fork pull request never publishes images (`publishable` in `cicd.yml`). No workflow that holds a secret checks out or runs pull request code.
 - At the cap, the newcomer is refused at once, and the refusal names the holders.
 - A pull request can preview whatever branch it targets, so each labelled layer of a stack gets its own preview.
 - A preview runs no agent, as the 2026-09-03 update of ADR 0035 requires for a preview without fixture workspaces.
 
 ### What changes from ADR 0035
 
-- **Drafts.** A draft no longer keeps a preview. The daily workflow removes its label, because a draft holds one of three slots.
+- **Drafts.** A draft no longer keeps a preview. The daily workflow removes its label, because a draft holds one of three slots. When the mechanism ships, the draft rules of [CI/CD § Preview deployments](../contributor/ci-cd.mdx#preview-deployments) change with it.
 - **Rechecks.** The author-association check and the label and head rechecks before a deploy go. Flux reads the list of labelled pull requests at each poll. A pull request that loses the label leaves the list, and the next poll removes its preview.
 - **Image verification.** The build attestation check goes. Flux pulls the commit tag, and nothing verifies the attestation before the pull. A check in the cluster needs an admission controller, such as the Sigstore policy controller. That is one more component.
 - **The publish window.** ADR 0035 kept the previous preview live until CI published the new images. Flux upgrades at once and retries until the images exist. Thus, a preview can be unavailable while CI publishes.
@@ -144,7 +147,7 @@ The label workflow uses `pull_request_target` with only `GITHUB_TOKEN`, and it c
 - No preview reads staging's data. Reviewers see the demo seed, not real work. The copy, its silencing, and the `preview_seed` role go.
 - A preview runs no practice review. A preview with agent execution needs its own decision, under the bounds of ADR 0041.
 - The protected-path check and the Compose render check of ADR 0035 go. The pull request no longer supplies a stack file, so nothing is left for them to check.
-- No check binds the commit tag to a build of this repository. Only this repository's workflows push these tags, and CI writes a commit tag once. A person with push access can change those workflows, but that person can already run CI with the repository secrets. This gap is wider than the verify-then-pull gap of ADR 0035.
+- GHCR tags are mutable, and nothing binds a commit tag to a build. Only this repository's workflows push these tags. A person with push access can change those workflows, but that person can already run CI with the repository secrets. Flux pulls only the two application images by commit tag, and the rest come from the chart. This gap is wider than the verify-then-pull gap of ADR 0035.
 - The Coolify preview scripts, workflows, and stack go: about 7,000 lines.
 - The staging cluster runs one more controller, from one vendor.
 - Three previews need about 10.5 GiB beside staging. The cap depends on the measured size of the staging host, and on a 16 GiB host it is one.

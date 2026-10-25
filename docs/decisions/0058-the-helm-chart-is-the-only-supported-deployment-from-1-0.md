@@ -234,6 +234,4 @@ Fetched 2026-10-25.
 
 ## Update — 2026-10-25: previews ([ADR 0059](0059-previews-run-on-the-staging-cluster.md))
 
-ADR 0059 names the mechanism that § Previews leaves open.
-Flux Operator on the staging k3s installs one namespace for each labelled pull request.
-The chart and its preview values come from `main`, and each preview has its own demo database.
+ADR 0059 owns the mechanism that § Previews leaves open.

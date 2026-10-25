@@ -291,10 +291,4 @@ These parts no longer apply: the Coolify deployment, the synthetic webhook, the 
 The mechanism parts of the updates of 2026-09-17, 2026-10-16, and 2026-10-18 also no longer apply.
 ADR 0059 § What changes from ADR 0035 lists the policy changes: drafts lose their preview, and a push can make a preview unavailable while CI publishes.
 
-This decision keeps its label policy.
-The label `preview` is the opt-in and the whole authorization, and it is not a security boundary.
-Fork pull requests never get a preview.
-No workflow that holds a secret runs pull request code.
-At the cap, the newcomer is refused at once, and the refusal names the holders.
-A pull request can preview whatever branch it targets.
-The limits on agent execution of the 2026-09-03 update stay.
+This decision keeps its label policy. ADR 0059 § What stays from ADR 0035 owns the kept policy.
