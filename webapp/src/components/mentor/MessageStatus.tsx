@@ -1,6 +1,7 @@
 import { CircleAlertIcon, CircleStopIcon, ClockIcon, RotateCcwIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
+import { statusToneClass } from "@/components/common/status-def";
 import { Button } from "@/components/ui/button";
 import { Marker, MarkerContent, MarkerIcon } from "@/components/ui/marker";
 
@@ -21,18 +22,28 @@ export type MessageState =
 	| { kind: "failed"; reason: string; onTryAgain?: () => void }
 	| { kind: "notSent"; reason: string; onRetry?: () => void };
 
+/**
+ * One status line. A line that needs the developer to act, an answer that failed or a message that
+ * was not sent, takes the `destructive` icon from the status registry's tones, so it stands out from
+ * the lines that only report, such as Queued and Stopped. The words keep the line's muted colour: a
+ * status colour reaches the icon, never the prose.
+ */
 function Line({
 	icon,
 	children,
 	action,
+	needsAction = false,
 }: {
 	icon: ReactNode;
 	children: ReactNode;
 	action?: ReactNode;
+	needsAction?: boolean;
 }) {
 	return (
 		<Marker>
-			<MarkerIcon>{icon}</MarkerIcon>
+			<MarkerIcon className={needsAction ? statusToneClass("destructive") : undefined}>
+				{icon}
+			</MarkerIcon>
 			<MarkerContent>{children}</MarkerContent>
 			{action}
 		</Marker>
@@ -50,8 +61,10 @@ function ActionButton({
 	subject: string;
 	children: ReactNode;
 }) {
+	// On a line of its own, not inside a sentence, so the target is 24 px tall (WCAG 2.5.8), as the
+	// running turn's Stop is.
 	return (
-		<Button variant="link" size="inline" aria-label={`${label} (${subject})`} onClick={onClick}>
+		<Button variant="outline" size="xs" aria-label={`${label} (${subject})`} onClick={onClick}>
 			{children}
 		</Button>
 	);
@@ -95,6 +108,7 @@ export function MessageStatus({ state, subject }: MessageStatusProps) {
 		case "failed": {
 			return (
 				<Line
+					needsAction
 					icon={<CircleAlertIcon />}
 					action={
 						state.onTryAgain && (
@@ -112,6 +126,7 @@ export function MessageStatus({ state, subject }: MessageStatusProps) {
 		case "notSent": {
 			return (
 				<Line
+					needsAction
 					icon={<CircleAlertIcon />}
 					action={
 						state.onRetry && (

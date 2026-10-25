@@ -52,8 +52,10 @@ function ThreadSummary({
 	return (
 		<Button
 			variant="link"
-			size="inline"
-			className="self-start"
+			size="xs"
+			// On a line of its own, so 24 px tall (WCAG 2.5.8); the negative margin lines its words up
+			// with the message's.
+			className="-ml-2 self-start"
 			aria-label={`${shown} (${subject})`}
 			aria-expanded={open}
 			aria-controls={open ? panelId : undefined}
@@ -151,7 +153,8 @@ export function HephTimelineRow({
 	nextDay: Date | undefined;
 	/** As `MessageActions` takes it. */
 	subject: string;
-	stopLabel: string;
+	/** Names the running answer's Stop on its status line. Absent where the composer offers Stop. */
+	stopLabel: string | undefined;
 	props: RowProps;
 	onDelete: (entry: MentorEntry) => void;
 }) {
@@ -254,7 +257,11 @@ export function HephTimelineRow({
 			return (
 				<HephTurnStatus
 					turn={turn}
-					stop={actions && { label: stopLabel, onStop: () => actions.onStop(turn.id) }}
+					stop={
+						actions && stopLabel !== undefined
+							? { label: stopLabel, onStop: () => actions.onStop(turn.id) }
+							: undefined
+					}
 				/>
 			);
 		}

@@ -1,7 +1,8 @@
 import type { Decorator, Meta, StoryObj } from "@storybook/react-vite";
-import { expect, fn } from "storybook/test";
+import { expect, fn, screen } from "storybook/test";
 
 import { RemovableToken } from "@/components/common/RemovableToken";
+import { expectSettledVisible } from "@/stories/overlay";
 
 import { HephComposer } from "./HephComposer";
 
@@ -35,6 +36,7 @@ function oneLineHeight(field: HTMLElement): number {
 /**
  * Enter sends; Shift+Enter starts a new line; an empty message does not send. Empty, the field is
  * one line tall; it grows with each line written, and is one line again once the message is sent.
+ * On a touch screen, whose keyboard has no Shift, Return starts a new line and Send sends.
  */
 export const Default: Story = {
 	play: async ({ args, canvas, userEvent }) => {
@@ -54,7 +56,8 @@ export const Default: Story = {
 
 /**
  * Heph is answering. Send stays: a message written now waits as a follow-up. Stop sits beside it
- * rather than replacing it, so stopping and asking are never the same press.
+ * rather than replacing it, so stopping and asking are never the same press. It is the one Stop
+ * while Heph answers, and an icon, so a pointer that rests on it reads its name.
  */
 export const Busy: Story = {
 	args: { stop: { label: "Stop Heph", onStop: fn() } },
@@ -64,7 +67,12 @@ export const Busy: Story = {
 			"And one more{Enter}",
 		);
 		await expect(args.onSend).toHaveBeenCalledWith("And one more");
-		await userEvent.click(canvas.getByRole("button", { name: "Stop Heph" }));
+		const stop = canvas.getByRole("button", { name: "Stop Heph" });
+		await userEvent.hover(stop);
+		await expectSettledVisible(
+			await screen.findByText("Stop Heph", { selector: "[data-slot=tooltip-content]" }),
+		);
+		await userEvent.click(stop);
 		await expect(args.stop?.onStop).toHaveBeenCalledOnce();
 	},
 };

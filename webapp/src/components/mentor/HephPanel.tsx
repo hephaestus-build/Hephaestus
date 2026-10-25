@@ -29,7 +29,7 @@ export interface HephPanelProps {
 	/** Whether the panel is open, for a caller that closes it itself; left out, the panel keeps its own. */
 	open?: boolean;
 	onOpenChange?: (open: boolean) => void;
-	/** Set while a thread is pushed over the conversation. */
+	/** Set while a thread is pushed over the conversation. Escape then goes back, not out. */
 	thread?: {
 		onBack: () => void;
 		/** Moves focus to the title, for a thread opened to read rather than to reply in. */
@@ -60,14 +60,27 @@ export function HephPanel({
 		}
 	}, [focusTitle]);
 	return (
-		<Drawer swipeDirection="right" open={open} onOpenChange={onOpenChange}>
+		<Drawer
+			swipeDirection="right"
+			open={open}
+			onOpenChange={(next, details) => {
+				// One level per Escape, as a stack of detail drawers closes: out of a pushed thread to
+				// the conversation first, and only then out of the panel.
+				if (!next && thread && details.reason === "escape-key") {
+					details.cancel();
+					thread.onBack();
+					return;
+				}
+				onOpenChange?.(next);
+			}}
+		>
 			<div className={cn("fixed right-6 bottom-6 z-50", className)}>
 				<DrawerTrigger
 					render={
 						<Button
 							shape="pill"
 							size="icon"
-							className="relative size-16 shadow-lg transition-all duration-200 hover:shadow-xl active:scale-95"
+							className="relative size-16 shadow-lg transition-all duration-200 hover:shadow-xl motion-safe:active:scale-95"
 							aria-label={unread ? "Open Heph, AI mentor, new answer" : "Open Heph, AI mentor"}
 						/>
 					}
