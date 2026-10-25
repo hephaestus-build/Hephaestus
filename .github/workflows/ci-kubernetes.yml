@@ -96,6 +96,8 @@ jobs:
           node scripts/kubernetes-cluster.ts prepare --work "$work" --images release-images.tsv --commit "$COMMIT"
           node scripts/kubernetes-cluster.ts install --work "$work"
           node scripts/kubernetes-cluster.ts verify
+          # A second prepare keeps the Secrets that the database started with, as a second dev run does.
+          node scripts/kubernetes-cluster.ts prepare --work "$work" --images release-images.tsv --commit "$COMMIT"
           # A changed release identity rolls every role: new workers prove the cluster before an old one drains.
           node scripts/kubernetes-cluster.ts install --work "$work" --set "release.version=v0.0.1-cluster"
           node scripts/kubernetes-cluster.ts verify
@@ -170,6 +172,8 @@ jobs:
             --external-postgresql-cidr "$POD_CIDR"
           node scripts/kubernetes-cluster.ts install --work "$work"
           node scripts/kubernetes-cluster.ts verify
+          node scripts/kubernetes-cluster.ts prepare --work "$work" --images release-images.tsv --commit "$COMMIT" \
+            --external-postgresql-cidr "$POD_CIDR"
           node scripts/kubernetes-cluster.ts install --work "$work" --set "release.version=v0.0.1-cluster"
           node scripts/kubernetes-cluster.ts verify
       - name: Record the cluster state

@@ -12,6 +12,13 @@ import {
 	apiEndpoint,
 	applicationSecret,
 	chartImagesFrom,
+	clusterState,
+	DEV_CLUSTER,
+	DEV_HOST,
+	DEV_MEMORY,
+	devProblems,
+	devSignIn,
+	devSummary,
 	NAMESPACE,
 	operatorValues,
 	RELEASE,
@@ -134,4 +141,134 @@ await test("the prepared values install two workers on the dev profile, with the
 		),
 		false,
 	);
+});
+
+await test("the dev values route the dev host through Traefik, and pass the GitHub OAuth app and first admins", () => {
+	const resources = render(
+		operatorValues({
+			images,
+			commit: "c".repeat(40),
+			api: { address: "172.18.0.3", port: 6443 },
+			gateway: {
+				host: DEV_HOST,
+				namespace: "kube-system",
+				podLabels: { "app.kubernetes.io/name": "traefik" },
+			},
+			signIn: { clientId: "Iv1.client", bootstrapAdmins: "github:@octocat" },
+		}),
+	);
+	const spec = (kind: string, name: string) => {
+		const resource = resources.find(
+			(candidate) =>
+				candidate.kind === kind && isRecord(candidate.metadata) && candidate.metadata.name === name,
+		);
+		assert.ok(isRecord(resource) && isRecord(resource.spec), `${kind} ${name}`);
+		return resource.spec;
+	};
+	assert.deepEqual(spec("HTTPRoute", `${RELEASE}-route`).hostnames, [DEV_HOST]);
+	const { ingress } = spec("NetworkPolicy", `${RELEASE}-server`);
+	assert.ok(Array.isArray(ingress) && isRecord(ingress[0]) && Array.isArray(ingress[0].from));
+	assert.deepEqual(ingress[0].from[0], {
+		namespaceSelector: { matchLabels: { "kubernetes.io/metadata.name": "kube-system" } },
+		podSelector: { matchLabels: { "app.kubernetes.io/name": "traefik" } },
+	});
+	const { template } = spec("Deployment", `${RELEASE}-server`);
+	assert.ok(
+		isRecord(template) && isRecord(template.spec) && Array.isArray(template.spec.containers),
+	);
+	const server: unknown = template.spec.containers[0];
+	assert.ok(isRecord(server) && Array.isArray(server.env));
+	const environment = new Map(
+		server.env.filter(isRecord).map((variable) => [variable.name, variable.value]),
+	);
+	assert.equal(environment.get("GITHUB_OAUTH_CLIENT_ID"), "Iv1.client");
+	assert.equal(environment.get("HEPHAESTUS_AUTH_BOOTSTRAP_ADMINS"), "github:@octocat");
+	assert.equal(environment.get("HEPHAESTUS_AUTH_ISSUER"), `https://${DEV_HOST}`);
+});
+
+await test("dev names every missing tool and each Docker problem, and nothing when all is in place", () => {
+	const ready = { missing: [], dockerMemory: DEV_MEMORY, helmVersion: "v4.3.1" };
+	assert.deepEqual(devProblems(ready), []);
+	const missing = devProblems({ ...ready, missing: ["pack", "k3d"] });
+	assert.deepEqual(
+		missing.map((line) => line.split(" ")[0]).toSorted((a, b) => (a ?? "").localeCompare(b ?? "")),
+		["k3d", "pack"],
+	);
+	assert.ok(missing.some((line) => line.includes("Install it from https://k3d.io")));
+	assert.deepEqual(
+		devProblems({ ...ready, missing: ["docker"], dockerMemory: undefined }).map(
+			(line) => line.split(" ")[0],
+		),
+		["docker"],
+	);
+	for (const dockerMemory of [undefined, Number.NaN]) {
+		assert.match(devProblems({ ...ready, dockerMemory })[0] ?? "", /Docker does not answer/u);
+	}
+	// Docker Desktop reports about 97 % of its setting.
+	assert.deepEqual(devProblems({ ...ready, dockerMemory: 0.97 * 10 * 1024 ** 3 }), []);
+	assert.match(
+		devProblems({ ...ready, dockerMemory: 0.97 * 8 * 1024 ** 3 })[0] ?? "",
+		/Docker has 7\.8 GiB of memory; the cluster and a practice review need 10 GiB/u,
+	);
+	assert.match(devProblems({ ...ready, helmVersion: "v3.19.0" })[0] ?? "", /needs Helm 4/u);
+	assert.match(
+		devProblems({ ...ready, unusedNetworks: 25 })[0] ?? "",
+		/no address pool left .* 25 networks have no container, .* Run docker network prune/u,
+	);
+});
+
+/** A `k3d cluster list -o json` with another cluster and the dev cluster. */
+const listed = (serversRunning: number, ports: Record<string, unknown> | null) => [
+	{ name: "other", serversRunning: 1, nodes: [] },
+	{
+		name: DEV_CLUSTER,
+		serversRunning,
+		nodes: [
+			{ role: "loadbalancer", portMappings: { "6443/tcp": [{}], ...ports } },
+			{ role: "server", portMappings: null },
+		],
+	},
+];
+
+await test("the dev cluster is absent, stopped, running, or from a run that published no HTTPS port", () => {
+	assert.equal(clusterState([]), "absent");
+	assert.equal(clusterState(listed(1, null)), "without-port");
+	assert.equal(clusterState(listed(0, { "443/tcp": [{}] })), "stopped");
+	assert.equal(clusterState(listed(1, { "443/tcp": [{}] })), "running");
+});
+
+await test("sign-in takes the OAuth app from the shell, else keeps an earlier run's, and refuses half an app", () => {
+	const app = { GITHUB_OAUTH_CLIENT_ID: "Iv1.client", GITHUB_OAUTH_CLIENT_SECRET: "secret" };
+	assert.equal(devSignIn({}, undefined), undefined);
+	assert.deepEqual(devSignIn(app, undefined), {
+		clientId: "Iv1.client",
+		clientSecret: "secret",
+		bootstrapAdmins: "",
+	});
+	const saved = { clientId: "Iv1.saved", bootstrapAdmins: "github:@octocat" };
+	assert.deepEqual(devSignIn({}, saved), saved);
+	assert.deepEqual(devSignIn({ HEPHAESTUS_AUTH_BOOTSTRAP_ADMINS: "github:@hubot" }, saved), {
+		clientId: "Iv1.saved",
+		bootstrapAdmins: "github:@hubot",
+	});
+	assert.deepEqual(devSignIn(app, saved), {
+		clientId: "Iv1.client",
+		clientSecret: "secret",
+		bootstrapAdmins: "github:@octocat",
+	});
+	assert.throws(() => devSignIn({ GITHUB_OAUTH_CLIENT_ID: "Iv1.client" }, saved), /set both/u);
+	assert.throws(() => devSignIn({ GITHUB_OAUTH_CLIENT_SECRET: "secret" }, undefined), /set both/u);
+});
+
+await test("the summary gives the address, the CA, and the OAuth app steps until the app is set", () => {
+	const without = devSummary({ host: DEV_HOST, ca: "/work/ca.crt", signIn: false });
+	assert.match(without, new RegExp(`Hephaestus runs at https://${DEV_HOST}\\n`, "u"));
+	assert.match(
+		without,
+		new RegExp(`callback https://${DEV_HOST}/api/login/oauth2/code/github`, "u"),
+	);
+	assert.match(without, /\/work\/ca\.crt/u);
+	const signedIn = devSummary({ host: DEV_HOST, ca: "/work/ca.crt", signIn: true });
+	assert.match(signedIn, /Sign in with GitHub\./u);
+	assert.doesNotMatch(signedIn, /callback/u);
 });
