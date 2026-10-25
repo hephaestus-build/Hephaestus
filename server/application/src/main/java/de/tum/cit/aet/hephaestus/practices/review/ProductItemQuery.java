@@ -8,7 +8,10 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ItemSnapshot;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemSource;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemUrlResolver;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemVersion;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -30,6 +33,16 @@ public class ProductItemQuery {
 
     public Optional<ItemRef> find(long workspaceId, long itemId) {
         return rows.activeItem(workspaceId, itemId).map(row -> row.ref(workspaceId));
+    }
+
+    /** {@link #find} for many items, keyed by item id; an item that is gone or elsewhere is absent. */
+    public Map<Long, ItemRef> findAll(long workspaceId, Collection<Long> itemIds) {
+        if (itemIds.isEmpty()) return Map.of();
+        Map<Long, ItemRef> refs = new HashMap<>();
+        rows.items(workspaceId, itemIds).stream()
+                .filter(row -> row.getRemovedAt() == null)
+                .forEach(row -> refs.put(row.getId(), row.ref(workspaceId)));
+        return refs;
     }
 
     public ItemRef require(long workspaceId, long itemId) {

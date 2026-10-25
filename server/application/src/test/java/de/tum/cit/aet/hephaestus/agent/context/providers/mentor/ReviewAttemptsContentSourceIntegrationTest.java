@@ -46,6 +46,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewOrigin;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStopReason;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import de.tum.cit.aet.hephaestus.testconfig.SqlReadMeasurement;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import java.time.Instant;
@@ -54,6 +55,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.IntConsumer;
 import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
@@ -397,6 +399,71 @@ class ReviewAttemptsContentSourceIntegrationTest extends BaseIntegrationTest {
         }
         assertThat(rows).as("the run is listed once").hasSize(1);
         return rows.getFirst();
+    }
+
+    @Autowired
+    SqlReadMeasurement reads;
+
+    @Test
+    void shouldReadTheDevelopersAttemptsInAFixedNumberOfStatementsHoweverManyRunsTheWorkspaceRetains() {
+        long colleague = Objects.requireNonNull(data.member(workspace()).getId());
+        Runnable runs = () -> {
+            for (int run = 0; run < 3; run++) {
+                var own = retainedReview(null);
+                retainedRun(UUID.randomUUID(), own.reviewId(), List.of(own));
+                var theirs = retainedReview(null, json.createObjectNode().put("developerId", colleague));
+                retainedRun(UUID.randomUUID(), theirs.reviewId(), List.of(theirs));
+            }
+        };
+        runs.run();
+        var few = reads.measure(() -> attempts.overview(workspace(), developerId));
+        runs.run();
+        runs.run();
+        var many = reads.measure(() -> attempts.overview(workspace(), developerId));
+
+        assertThat(few.value().path("attempts")).hasSize(3);
+        assertThat(many.value().path("attempts")).hasSize(9);
+        assertThat(many.value().path("coverage").path("attributionComplete").asBoolean())
+                .isTrue();
+        assertThat(many.cost().statements()).isEqualTo(few.cost().statements());
+    }
+
+    @Test
+    void shouldReadAScanRunsOwnFileRowsWhateverTheFileListOfItsScan() {
+        var scan = scans.scenario();
+        var review = scans.scan(scan, ReviewStatus.COMPLETE, Instant.now());
+        long ws = scan.owner().workspace().getId();
+        long requester = Objects.requireNonNull(scan.owner().account().getId());
+        var run = new ReviewAssignmentId(
+                review.getId(), scan.owner().practice().getId(), scan.file().getId());
+        var job = UUID.randomUUID();
+        jdbc.sql("""
+            INSERT INTO review_job(id,review_id,workspace_id,status,attempt,processing_status,trace_id,input,config_snapshot,
+                submitted_at,available_at,started_at,completed_at)
+            VALUES(:job,:review,:ws,'COMPLETED',1,'DONE',:trace,CAST(:input AS jsonb),'{}'::jsonb,now(),now(),now(),now())
+            """)
+                .param("job", job)
+                .param("review", review.getId())
+                .param("ws", ws)
+                .param("trace", job.toString().replace("-", ""))
+                .param(
+                        "input",
+                        json.writeValueAsString(json.createObjectNode()
+                                .put("itemId", run.itemId())
+                                .set("assignments", json.valueToTree(List.of(run)))))
+                .update();
+        IntConsumer listFiles = count -> {
+            for (int file = 0; file < count; file++)
+                scanMember(scan, review, scanFile(scan, "src/Listed" + UUID.randomUUID() + ".java"));
+        };
+        listFiles.accept(2);
+        var few = reads.measure(() -> attempts.overview(ws, requester));
+        listFiles.accept(27);
+        var many = reads.measure(() -> attempts.overview(ws, requester));
+
+        assertThat(many.value().path("coverage").path("attributionComplete").asBoolean())
+                .isTrue();
+        assertThat(many.cost()).isEqualTo(few.cost());
     }
 
     @Test

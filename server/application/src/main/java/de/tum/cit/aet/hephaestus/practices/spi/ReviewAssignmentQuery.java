@@ -30,6 +30,15 @@ public interface ReviewAssignmentQuery {
      */
     List<Retained> retained(long workspaceId, UUID reviewId, UUID jobId, Collection<ReviewAssignmentId> ids);
 
+    /** One retained run to attribute: a job of a review and the assignments its input froze. */
+    record RetainedRun(UUID reviewId, UUID jobId, Collection<ReviewAssignmentId> ids) {}
+
+    /**
+     * {@link #retained} for many runs of the workspace, keyed by job id, read in a fixed number of queries. A run
+     * that {@link #retained} would leave unattributed has no assignments here either.
+     */
+    Map<UUID, List<Retained>> retained(long workspaceId, Collection<RetainedRun> runs);
+
     /** One review's reviewed item. */
     record ReviewedItem(UUID reviewId, long itemId) {}
 
