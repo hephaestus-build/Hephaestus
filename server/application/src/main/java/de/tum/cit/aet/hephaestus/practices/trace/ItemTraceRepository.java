@@ -24,8 +24,9 @@ public interface ItemTraceRepository extends Repository<Review, UUID> {
     Optional<EventRow> event(long ws, UUID id);
 
     @Query(value = """
-        SELECT q.* FROM review q WHERE q.workspace_id=:ws AND (q.item_id=:item OR EXISTS(
-          SELECT 1 FROM review_item m WHERE m.workspace_id=q.workspace_id AND m.review_id=q.id AND m.item_id=:item))
+        SELECT q.* FROM review q WHERE q.workspace_id=:ws AND q.id IN (
+          SELECT r.id FROM review r WHERE r.workspace_id=:ws AND r.item_id=:item
+          UNION SELECT m.review_id FROM review_item m WHERE m.workspace_id=:ws AND m.item_id=:item)
         ORDER BY q.ordered_at DESC,q.id::text DESC LIMIT 100
         """, nativeQuery = true)
     List<Review> reviewsForItem(long ws, long item);

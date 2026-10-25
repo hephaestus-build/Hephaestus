@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1792928799325-1" author="hephaestus" runInTransaction="false">
+        <sql>DROP INDEX CONCURRENTLY IF EXISTS idx_review_job_completion; CREATE INDEX CONCURRENTLY idx_review_job_completion ON review_job (completed_at, id) WHERE status NOT IN ('QUEUED', 'RUNNING') AND processing_status IN ('NONE', 'PENDING')</sql>
+        <rollback><sql>DROP INDEX CONCURRENTLY IF EXISTS idx_review_job_completion</sql></rollback>
+    </changeSet>
+    <changeSet id="1792928799325-2" author="hephaestus" runInTransaction="false">
+        <sql>DROP INDEX CONCURRENTLY IF EXISTS idx_review_job_processing</sql>
+        <rollback><sql>CREATE INDEX CONCURRENTLY idx_review_job_processing ON review_job (processing_status, completed_at, id) WHERE processing_status = 'PENDING'</sql></rollback>
+    </changeSet>
+    <changeSet id="1792928799325-3" author="hephaestus" runInTransaction="false">
+        <sql>DROP INDEX CONCURRENTLY IF EXISTS idx_result_developer; CREATE INDEX CONCURRENTLY idx_result_developer ON result (workspace_id, developer_id, recorded_at DESC, id DESC)</sql>
+        <rollback><sql>DROP INDEX CONCURRENTLY IF EXISTS idx_result_developer</sql></rollback>
+    </changeSet>
+    <changeSet id="1792928799325-4" author="hephaestus" runInTransaction="false">
+        <sql>DROP INDEX CONCURRENTLY IF EXISTS idx_review_item_item; CREATE INDEX CONCURRENTLY idx_review_item_item ON review_item (workspace_id, item_id, review_id)</sql>
+        <rollback><sql>DROP INDEX CONCURRENTLY IF EXISTS idx_review_item_item</sql></rollback>
+    </changeSet>
+    <changeSet id="1792928799325-5" author="hephaestus" runInTransaction="false">
+        <sql>DROP INDEX CONCURRENTLY IF EXISTS idx_activity_event_workspace_time</sql>
+        <rollback><sql>CREATE INDEX CONCURRENTLY idx_activity_event_workspace_time ON activity_event (workspace_id, occurred_at)</sql></rollback>
+    </changeSet>
+    <changeSet id="1792928799325-6" author="hephaestus" runInTransaction="false">
+        <sql>DROP INDEX CONCURRENTLY IF EXISTS idx_activity_event_actor_time</sql>
+        <rollback><sql>CREATE INDEX CONCURRENTLY idx_activity_event_actor_time ON activity_event (actor_id, occurred_at)</sql></rollback>
+    </changeSet>
+</databaseChangeLog>
