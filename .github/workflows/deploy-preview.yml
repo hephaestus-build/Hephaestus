@@ -139,9 +139,9 @@ jobs:
           message: |
             ## ⏳ App Preview
 
-            CI has not published images for [`${{ steps.context.outputs.head_sha }}`](${{ github.server_url }}/${{ github.repository }}/commit/${{ steps.context.outputs.head_sha }}). If this commit's CI run is still in progress, the preview deploys when it finishes.
+            CI has not published images for [`${{ steps.context.outputs.head_sha }}`](${{ github.server_url }}/${{ github.repository }}/commit/${{ steps.context.outputs.head_sha }}). If this commit's CI run started after the label was added, the preview deploys when it finishes.
 
-            <sub>If that run already finished without images, re-run it. Remove the `preview` label to opt out.</sub>
+            <sub>CI builds preview images only for a run that starts with the `preview` label. If that run started earlier, use Re-run all jobs on it, or push a commit. Remove the `preview` label to opt out.</sub>
 
       - name: Open the native GitHub deployment
         id: github_deployment

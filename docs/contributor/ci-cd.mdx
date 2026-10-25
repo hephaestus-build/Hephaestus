@@ -483,8 +483,16 @@ Preview environments do not need to be created in advance. The preview workflow 
 
 Add the `preview` label to a same-repository pull request. Every push redeploys when its CI/CD run
 completes, whether the tests passed or not. The published images decide, not the test verdict.
+
+CI builds a pull request's images only when the run needs them: for the `preview` label, for the supported-host boot smoke, or for release evidence.
+The merge group builds every other changed image before it lands.
+`Detect changes` reads the label live, as for `ci:full` ([Two verification tiers](#two-verification-tiers)).
+If it cannot read the label, a pull request that is not a draft builds its images.
+
 A label added after CI published the head's images deploys at once.
-If the label comes earlier, the comment says that the preview waits for CI, and the completion of that run deploys it.
+If the label comes before the run starts, the comment says that the preview waits for CI, and the completion of that run deploys it.
+If the label comes after the run started, use **Re-run all jobs** on that run, or push a commit.
+**Re-run failed jobs** keeps the earlier `Detect changes` result, so it does not see the label.
 
 This is later than a deploy as soon as the images are ready.
 A push previews only when its slowest CI job ends, tests included.
@@ -569,7 +577,7 @@ redeploy preserves an already-seeded database — and configure its AI access ag
 | Comment says                                      | What to do                                                                                                                                      |
 | ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
 | does not carry the `preview` label                | Add the label                                                                                                                                   |
-| CI has not published images for …                 | If that commit's CI run is still in progress, nothing: the preview deploys when it finishes. If the run already finished without images, re-run it |
+| CI has not published images for …                 | If that commit's CI run started after the label was added, nothing: the preview deploys when it finishes. Otherwise, use **Re-run all jobs** on that run, or push a commit |
 | is behind `main` on schema                        | Merge `main` in. The next push previews automatically                                                                                           |
 | comes from a fork                                 | Push the branch to this repository                                                                                                              |
 | was opened by a … , not a repository collaborator | Nothing. Previews need push access                                                                                                              |
@@ -765,11 +773,11 @@ A pull request runs the **fast tier**. A merge group, a push and a dispatch also
 
 | Tier | Jobs |
 | --- | --- |
-| Fast (pull request and queue) | Detect changes, the quality legs, unit and architecture tests, packaging, generated-artifact drift, the images, Security, Changesets, Compose, Actionlint, Zizmor |
+| Fast (pull request and queue) | Detect changes, the quality legs, unit and architecture tests, packaging, generated-artifact drift, [the images it needs](#preview-deployments), Security, Changesets, Compose, Actionlint, Zizmor |
 | Queue (merge group, push, dispatch) | the integration shards, the database contract tests, the PostgreSQL drills, webapp and extension E2E |
 
 Path filters and the main-push rules in [Path filters](#path-filters) still select within each tier.
-The supported-host boot smoke stays on same-repository pull requests, because it boots the preview images.
+The supported-host boot smoke stays on same-repository pull requests, because it boots this run's own images. A draft does not select it.
 
 Main changes only through the merge queue, and the queue runs the required checks on the merged result
 ([GitHub: managing a merge queue](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/configuring-pull-request-merges/managing-a-merge-queue)).
@@ -785,6 +793,7 @@ When both tiers ran on each pull request, a merged change paid for the queue tie
 The queue tier is most of a run's runner time, and GitHub's runner concurrency limit is shared by the queue and every pull request.
 
 A queue-tier failure removes the entry from the queue, and the failure comment links the run.
+So does an image build or scan failure, because a pull request builds images only for a preview, the boot smoke or release evidence.
 Fix the failure and queue the pull request again.
 
 A draft pull request runs the fast tier and builds no image. So it gets no host smoke and no image
@@ -793,7 +802,7 @@ scan. The `preview` label still builds its images, and a release candidate alway
 For a draft, the automatic queue tier for the tier's own inputs is off, but `ci:full` still opts in.
 `CI Status Gate` still reports, so required checks resolve on a draft.
 Marking the pull request ready for review (`ready_for_review`) starts an ordinary pull-request run,
-with its images. That run is never skipped as a duplicate of the draft's run.
+with the images that such a run builds ([Preview deployments](#preview-deployments)). That run is never skipped as a duplicate of the draft's run.
 A re-run replays the event of its run, so a re-run of a draft's run builds no image, even after
 the pull request is ready. Re-run the ready run instead.
 
@@ -837,8 +846,10 @@ Ordinary main pushes omit Quality, Test, Security, Actionlint, Zizmor, and Compo
 They skip API, schema, database, and browser jobs inside `Build`.
 
 Release-version pushes repeat those checks. Main still packages and publishes images.
-Same-repository pull requests, except drafts without the `preview` label, also run `Build` and `Docker` regardless of paths, because
-previews need every image at the head SHA. No other event has a preview.
+
+A same-repository pull request with the `preview` label, or with the supported-host boot smoke, also runs `Build` and `Docker` regardless of paths.
+A preview and the smoke need every image at the head SHA. No other event has a preview.
+Any other pull request builds no image. The merge group builds every changed image before it lands.
 
 | Selects                    | Paths                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
