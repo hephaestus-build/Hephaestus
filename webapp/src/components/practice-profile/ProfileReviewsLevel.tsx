@@ -240,15 +240,35 @@ export function ProfileReviewsLevel({
 				    the timeframe as Practices across the workspace picks it, the sort, Reset, and the
 				    count. */}
 				<div role="group" aria-label="Filters" className="space-y-2">
+					{/* The first row holds only what is always there: the facets and the sort on the left,
+					    the timeframe on the right. What a filter adds (the tracked work, Reset) and the count
+					    sit in the row below, so the timeframe never moves. */}
+					<div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+						<div className="flex min-w-0 flex-wrap items-center gap-2">
+							{kindFacet.control}
+							{onStatusChange !== undefined && statusFacet.control}
+							{onOrderChange !== undefined && (
+								<ReviewSortSelect
+									items={ORDER_ITEMS}
+									value={order ?? NEWEST}
+									onChange={(next) => onOrderChange(next === "OLDEST" ? "OLDEST" : undefined)}
+								/>
+							)}
+						</div>
+						<FilterToggle
+							label="Timeframe"
+							options={TIMEFRAME_OPTIONS}
+							value={since ?? ALL_TIME}
+							onChange={(next) => onSinceChange(next === ALL_TIME ? undefined : next)}
+						/>
+					</div>
 					<div className="flex flex-wrap items-center gap-2">
-						{kindFacet.control}
-						{onStatusChange !== undefined && statusFacet.control}
-
-						{onOrderChange !== undefined && (
-							<ReviewSortSelect
-								items={ORDER_ITEMS}
-								value={order ?? NEWEST}
-								onChange={(next) => onOrderChange(next === "OLDEST" ? "OLDEST" : undefined)}
+						{hasText(trackedItemId) && onTrack !== undefined && (
+							// The admin lists' tracking bar: what the list is narrowed to, and one press to stop.
+							<ReviewSelectionBar
+								kind="item"
+								name={trackedName(trackedItem, feed.status === "loading")}
+								onClear={() => onTrack(undefined)}
 							/>
 						)}
 						{filtered && (
@@ -267,29 +287,12 @@ export function ProfileReviewsLevel({
 								<XIcon aria-hidden data-icon="inline-end" />
 							</Button>
 						)}
-						{/* On the right, the span the list covers, then how many reviews it keeps. */}
-						<div className="flex basis-full flex-wrap items-center gap-3 sm:ml-auto sm:basis-auto">
-							<FilterToggle
-								label="Timeframe"
-								options={TIMEFRAME_OPTIONS}
-								value={since ?? ALL_TIME}
-								onChange={(next) => onSinceChange(next === ALL_TIME ? undefined : next)}
-							/>
-							<ResultCount total={total} noun={["review", "reviews"]} hasFilter={filtered} />
-						</div>
+						<ResultCount total={total} noun={["review", "reviews"]} hasFilter={filtered} />
 					</div>
 					<div className="flex flex-wrap gap-2 empty:hidden">
 						<AppliedFacetPills pills={[...kindFacet.pills, ...statusFacet.pills]} />
 					</div>
 				</div>
-				{hasText(trackedItemId) && onTrack !== undefined && (
-					// The admin lists' tracking bar: what the list is narrowed to, and one press to stop.
-					<ReviewSelectionBar
-						kind="item"
-						name={trackedName(trackedItem, feed.status === "loading")}
-						onClear={() => onTrack(undefined)}
-					/>
-				)}
 				{requestOutcome}
 				{body}
 			</DrawerBody>
