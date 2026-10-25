@@ -19,7 +19,7 @@ Semantic versioning applies to the surfaces an operator or API consumer depends 
 | **Database migration chain** | Liquibase applies changesets in changelog order. A newer release builds on the previous schema. Follow the [database migration instructions](#database-migrations) before an upgrade.                                                                                                                                                                                |
 | **Runtime prerequisites**    | The minimum PostgreSQL major version, the required outbound network destinations, and any required external services. Adding one is a breaking change.                                                                                                                                                                                                                          |
 | **Configuration keys**       | Environment variables and `hephaestus.*` properties listed in the [Configuration reference](./configuration-reference). Renames and removals are breaking changes.                                                                                                                     |
-| **Docker Compose interface** | Service names, image names, the signed release-lock contract, and required environment variables of the published Compose files. This includes the self-hosted stack (`docker/self-host/compose.yaml`, see the [Install guide](./install.mdx)). It also includes the [reference deployment](./reference-deployment) (`docker/compose.app.yaml`, `docker/compose.core.yaml`, `docker/compose.proxy.yaml`). |
+| **Docker Compose interface** | Service names, image names, the signed release-lock contract, and required environment variables of the published Compose files. This includes the self-hosted stack (`docker/self-host/compose.yaml`, see the [Install guide](./install.mdx)). It also includes the [reference deployment](./reference-deployment) (`docker/compose.app.yaml`, `docker/compose.core.yaml`, `docker/compose.proxy.yaml`). Deprecated in 0.95.0. See [Supported deployment](#supported-deployment). |
 | **REST API**                 | The endpoints described by the published [OpenAPI specification](https://github.com/hephaestus-build/Hephaestus/blob/main/server/openapi.yaml).                                                                                                                                                                                                                                 |
 
 Other surfaces can change in any release without notice:
@@ -63,7 +63,7 @@ That procedure owns the requirements to stop writers, verify the backup, apply t
 ## Upgrade guarantee
 
 **From 1.0 onward, any 1.x can be upgraded to any later 1.y without intermediate releases.** Use the
-target release's Compose files and images. Follow the [database migration instructions](#database-migrations) for its supported database baseline.
+target release's Helm chart. Follow the [database migration instructions](#database-migrations) for its supported database baseline.
 
 **Before 1.0, do not assume an arbitrary older release can upgrade directly.** Read the target release's
 migration instructions first: they may require an intermediate release or manual preparation. Existing
@@ -103,6 +103,20 @@ before upgrading. Downgrades are not supported.
 The release notes announce functionality to remove at least one minor release before its removal.
 That functionality continues to work until the removal release.
 After 1.0.0, removals occur only in major releases.
+
+## Supported deployment
+
+From 1.0.0, the Helm chart is the only supported production deployment.
+A Kubernetes cluster and a single host use the same chart.
+A single host runs k3s.
+Docker Compose stays for local development only.
+
+The Docker Compose deployment is deprecated in 0.95.0.
+It stays supported for the rest of the 0.x releases.
+In 1.0.0, the Helm values interface replaces the Docker Compose interface in the public contract.
+A Compose file that is still in the repository after 1.0.0 is not supported.
+Before 1.0.0, a migration guide describes how to move a Compose install to the chart.
+[ADR 0058](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0058-the-helm-chart-is-the-only-supported-deployment-from-1-0.md) records the decision.
 
 ## Support statement
 

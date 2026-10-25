@@ -5,6 +5,8 @@ There is exactly **one supported install**: the Docker Compose stack in
 The [installation requirements](https://docs.hephaestus.build/admin/install#requirements)
 describe the supported hosts and capacity guidance.
 Other setups may work but are unsupported.
+The Compose stack is deprecated. From 1.0.0, the Helm chart is the only supported production deployment.
+The [compatibility policy](https://docs.hephaestus.build/admin/compatibility-policy#supported-deployment) says what this means for your install.
 
 **→ Follow the install guide: <https://docs.hephaestus.build/admin/install>**
 

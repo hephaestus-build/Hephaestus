@@ -1,12 +1,12 @@
 ---
 id: install
 title: Install (Self-Hosted)
-description: The one supported way to run your own Hephaestus — Docker Compose on a single host.
+description: The supported 0.x install of Hephaestus — Docker Compose on a single host.
 ---
 
-This is the **only supported install path**: the Docker Compose stack in
+Until 1.0.0, this is the **only supported install path**: the Docker Compose stack in
 [`docker/self-host/`](https://github.com/hephaestus-build/Hephaestus/tree/main/docker/self-host)
-on one Linux host. Other setups (own reverse proxy, external database, Kubernetes, Podman)
+on one Linux host. Other setups (own reverse proxy, external database, Podman)
 can work but are unsupported.
 
 The stack you get:
@@ -21,14 +21,10 @@ The stack you get:
 | `postgres`           | PostgreSQL 18 + pg_partman (custom image — vanilla `postgres:18` is **not** a drop-in)       |
 | `nats-server`        | NATS JetStream event buffer                                                                  |
 
-Docker Compose on one Linux host supports all 1.x releases.
-**Hephaestus 2.0 runs on Kubernetes only**.
-It includes one Helm chart and removes the Compose stack described here.
-The 2.0 release includes a migration guide for your database, event buffer, and secrets.
-You lose none of your current configuration.
-See
-[ADR 0041](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0041-compose-1x-kubernetes-2.md)
-for the decision and the conditions that would reverse it.
+:::caution CAUTION: Docker Compose is deprecated
+From 1.0.0, the Helm chart is the only supported production deployment.
+The [compatibility policy](./compatibility-policy#supported-deployment) states what this means for your install.
+:::
 
 ## Requirements
 

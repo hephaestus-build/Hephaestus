@@ -1,6 +1,6 @@
 # ADR 0041: Compose for 1.x; Kubernetes only for 2.0
 
-**Status:** Accepted (amended 2026-10-09 — debug transcripts; 2026-10-09 — Heph host, [ADR 0057](0057-one-heph-conversation-per-developer.md))
+**Status:** Accepted (amended 2026-10-09 — debug transcripts; 2026-10-09 — Heph host, [ADR 0057](0057-one-heph-conversation-per-developer.md); 2026-10-25 — § Releases and support superseded by [ADR 0058](0058-the-helm-chart-is-the-only-supported-deployment-from-1-0.md))
 **Date:** 2026-09-03
 **Authors:** Hephaestus maintainers
 **Amends:** [ADR 0005](0005-two-role-runtime-via-conditional-on-property.md),
@@ -382,3 +382,26 @@ session from PostgreSQL. Gateway capability 4 is now the Heph host's command cha
 (`/internal/llm/runtime/{hostId}/commands`) and its turn endpoints (`/internal/llm/turn/{id}/…`), not
 interactive frames. WSS carries no mentor frames. Heph no longer needs the Agent Sandbox CRD or its
 warm pools.
+
+## Update — 2026-10-25 (Kubernetes from 1.0, [ADR 0058](0058-the-helm-chart-is-the-only-supported-deployment-from-1-0.md))
+
+ADR 0058 supersedes § Releases and support.
+From 1.0.0, the Helm chart is the only supported production deployment.
+A single host runs k3s and the same `helm upgrade --install`.
+Compose stays for local development only.
+There is no 1.x milestone with two supported deployments.
+In 1.0.0, the Helm values interface replaces the Docker Compose interface in the public contract.
+
+The migration of a Compose install moves from 2.0 to the time before 1.0.
+ADR 0058 § Migration of a Compose install owns its state table.
+The JetStream drain rule of this decision stays in that table.
+
+These parts of this decision change with it:
+
+- **§ The rule for a substrate split.** The Docker driver stays as the driver for development and for the live suites. It passes the same conformance suite. A decision after 1.0 removes it or keeps it.
+- **§ Roles, control channel, and previews.** Previews move to the staging k3s before 2.0.
+- **§ Rejected alternatives**, row "Keep a Compose floor after 2.0". The row now applies from 1.0. ADR 0058 § Revisit trigger owns the reversal trigger.
+- **§ Consequences**, the bullets about the 1.x milestone and about 2.0. Kubernetes is an operator prerequisite from 1.0.
+- **§ Revisit triggers**, the Kubernetes-only product decision. ADR 0058 § Revisit trigger replaces it.
+
+The architecture of this decision stays: state and storage, the job folder, the Sandbox Gateway, evidence admission, the sandbox boundary, the Kubernetes execution model, and the three runtime roles.
