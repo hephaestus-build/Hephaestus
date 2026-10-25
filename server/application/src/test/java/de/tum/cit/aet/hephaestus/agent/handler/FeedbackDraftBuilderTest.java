@@ -298,29 +298,26 @@ class FeedbackDraftBuilderTest extends BaseUnitTest {
                             field.equals("body") ? words : "Two handlers drop the cause.",
                             field.equals("nextStep") ? words : "Rethrow the failure with its cause.")
                     : null;
-            var copy =
-                    switch (destination) {
-                        case ON_WORK ->
-                            field.equals("note")
-                                    ? new FeedbackCompositionTrace.CopySupport(
-                                            FeedbackCopyKind.LINE_NOTE,
-                                            0,
-                                            List.of(new FeedbackCompositionTrace.Support(resultId, problemId)))
-                                    : new FeedbackCompositionTrace.CopySupport(
-                                            FeedbackCopyKind.SUMMARY,
-                                            0,
-                                            List.of(new FeedbackCompositionTrace.Support(resultId, null)));
-                        case CONVERSATION ->
-                            new FeedbackCompositionTrace.CopySupport(
-                                    FeedbackCopyKind.CHAT_TURN,
+            var copy = switch (destination) {
+                case ON_WORK ->
+                    field.equals("note")
+                            ? new FeedbackCompositionTrace.CopySupport(
+                                    FeedbackCopyKind.LINE_NOTE,
                                     0,
-                                    List.of(new FeedbackCompositionTrace.Support(resultId, null)));
-                        case PRACTICE_PAGE ->
-                            new FeedbackCompositionTrace.CopySupport(
+                                    List.of(new FeedbackCompositionTrace.Support(resultId, problemId)))
+                            : new FeedbackCompositionTrace.CopySupport(
                                     FeedbackCopyKind.SUMMARY,
                                     0,
                                     List.of(new FeedbackCompositionTrace.Support(resultId, null)));
-                    };
+                case CONVERSATION ->
+                    new FeedbackCompositionTrace.CopySupport(
+                            FeedbackCopyKind.CHAT_TURN,
+                            0,
+                            List.of(new FeedbackCompositionTrace.Support(resultId, null)));
+                case PRACTICE_PAGE ->
+                    new FeedbackCompositionTrace.CopySupport(
+                            FeedbackCopyKind.SUMMARY, 0, List.of(new FeedbackCompositionTrace.Support(resultId, null)));
+            };
             var piece = new ComposedFeedback(
                     destination,
                     List.of(resultId),
