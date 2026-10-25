@@ -6,10 +6,11 @@ import { cn } from "cn";
 /**
  * ⚠️ Diverges from the shadcn registry — `shadcn add tabs` drops the following; re-apply it.
  *
- * 1. `TabsContent` draws a focus ring. Base UI makes a panel with nothing tabbable inside a tab stop
- *    of its own, which upstream's bare `outline-none` leaves with no sign that it has focus
- *    (WCAG 2.2 SC 2.4.7). Upstream report:
- *    https://github.com/shadcn-ui/ui/issues/7128
+ * 1. `TabsContent` draws a focus ring: the half-transparent ring and a solid 1 px outline in the
+ *    ring colour. Base UI makes a panel with nothing tabbable inside a tab stop of its own, which
+ *    upstream's bare `outline-none` leaves with no sign that it has focus (WCAG 2.2 SC 2.4.7). The
+ *    `outline-none` goes too: it sets the outline style to `none`, which voids `outline-1`.
+ *    Upstream report: https://github.com/shadcn-ui/ui/issues/7128
  */
 function Tabs({ className, orientation = "horizontal", ...props }: TabsPrimitive.Root.Props) {
 	return (
@@ -76,7 +77,7 @@ function TabsContent({ className, ...props }: TabsPrimitive.Panel.Props) {
 		<TabsPrimitive.Panel
 			data-slot="tabs-content"
 			className={cn(
-				"flex-1 rounded-lg text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+				"flex-1 rounded-lg text-sm focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-1 focus-visible:outline-ring",
 				className,
 			)}
 			{...props}

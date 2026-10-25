@@ -193,7 +193,9 @@ function EventNode({
 				// one. Hidden on the first node of a band, so the line never dangles.
 				railed &&
 					"before:absolute before:top-5 before:right-1/2 before:-left-1/2 before:mr-4 before:ml-4 before:h-px before:bg-border first:before:hidden",
-				"rounded-md has-[:focus-visible]:ring-3 has-[:focus-visible]:ring-ring/50",
+				// `FOCUS_RING` keys on the focused element itself; here the focus is on the hidden checkbox
+				// inside, so the label spells the same ring with `has-[:focus-visible]`.
+				"rounded-md has-[:focus-visible]:ring-3 has-[:focus-visible]:ring-ring/50 has-[:focus-visible]:outline-1 has-[:focus-visible]:outline-ring",
 				disabled ? "cursor-not-allowed" : "cursor-pointer",
 			)}
 		>

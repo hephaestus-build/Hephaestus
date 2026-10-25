@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from "@storybook/react";
 import { expect, userEvent } from "storybook/test";
 
 import { Tabs, TabsContent } from "@/components/ui/tabs";
+import { expectSolidFocusLine } from "@/stories/focus";
 import { expectNoPageOverflow } from "@/stories/reflow";
 
 import {
@@ -77,6 +78,7 @@ export const KeyboardReachesThePanel: Story = {
 		const panel = canvas.getByRole("tabpanel");
 		await expect(panel).toHaveFocus();
 		await expect(getComputedStyle(panel).boxShadow).not.toBe("none");
+		await expectSolidFocusLine(panel);
 	},
 };
 
