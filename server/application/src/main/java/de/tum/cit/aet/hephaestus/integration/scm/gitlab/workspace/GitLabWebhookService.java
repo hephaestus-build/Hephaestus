@@ -22,6 +22,7 @@ import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
 import java.util.function.UnaryOperator;
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -439,6 +440,7 @@ public class GitLabWebhookService {
      * Runs every 6 hours. Non-fatal: errors are logged but don't affect other operations.
      */
     @Scheduled(cron = "0 0 */6 * * *")
+    @SchedulerLock(name = "gitlab-webhook-health", lockAtMostFor = "PT30M", lockAtLeastFor = "PT5M")
     public void checkWebhookHealth() {
         var client = webhookClientProvider.getIfAvailable();
         if (client == null || !webhookProperties.isConfigured()) {

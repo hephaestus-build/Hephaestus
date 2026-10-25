@@ -9,47 +9,26 @@ on:
 
 permissions: {}
 
-concurrency:
-  # Let the current run finish observing the promotion it dispatched.
-  group: continuous-staging
-  cancel-in-progress: false
-
 jobs:
   follow-main:
     if: >-
       ${{ github.event.workflow_run.conclusion == 'success'
         && github.event.workflow_run.event == 'push' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 5
     permissions:
       actions: write # dispatch the promotion workflow
     steps:
+      # The promotion run owns the outcome: its result, its deployment record and the host metrics.
+      # Watching it here would hold a runner for the whole promotion.
       - name: Follow this commit on staging
         env:
           GH_TOKEN: ${{ github.token }}
           COMMIT: ${{ github.event.workflow_run.head_sha }}
         run: |
           set -euo pipefail
-          run=$(gh api --method POST "repos/$GITHUB_REPOSITORY/actions/workflows/promote.yml/dispatches" \
+          url=$(gh api --method POST "repos/$GITHUB_REPOSITORY/actions/workflows/promote.yml/dispatches" \
             -f ref=main -f 'inputs[environment]=Staging' -f "inputs[commit]=$COMMIT" \
-            -f 'inputs[automatic]=true' -F return_run_details=true --jq '.workflow_run_id')
-          [[ "$run" =~ ^[1-9][0-9]*$ ]] || { echo "::error::Dispatch returned no run ID"; exit 1; }
-          # Dispatch can return before this run's jobs endpoint becomes visible to the watcher.
-          error="$RUNNER_TEMP/promotion-jobs-$run.err"
-          trap 'rm -f "$error"' EXIT
-          for attempt in {1..12}; do
-            if gh api --silent "repos/$GITHUB_REPOSITORY/actions/runs/$run/jobs?per_page=1" 2>"$error"; then
-              break
-            fi
-            if ! grep -Eq 'HTTP 404([^0-9]|$)' "$error"; then
-              cat "$error" >&2
-              exit 1
-            fi
-            if [[ "$attempt" -eq 12 ]]; then
-              cat "$error" >&2
-              echo "::error::Dispatched promotion $run did not become visible after 12 checks"
-              exit 1
-            fi
-            sleep 5
-          done
-          gh run watch "$run" --repo "$GITHUB_REPOSITORY" --exit-status
+            -f 'inputs[automatic]=true' -F return_run_details=true --jq '.html_url')
+          [[ "$url" == https://* ]] || { echo "::error::Dispatch returned no run URL"; exit 1; }
+          echo "Promotion of $COMMIT: $url" | tee -a "$GITHUB_STEP_SUMMARY"

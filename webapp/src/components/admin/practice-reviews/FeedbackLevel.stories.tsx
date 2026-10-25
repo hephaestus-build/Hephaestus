@@ -360,7 +360,9 @@ export const DeliveredSummaryComment: Story = {
 		await expect(rendered.textContent).toContain("The description needs its purpose and coverage.");
 		await expect(rendered.textContent).not.toMatch(/<!--|<sub>/u);
 		await expect(
-			within(rendered).getByRole("link", { name: "Why you see this and how to stop it" }),
+			within(rendered).getByRole("link", {
+				name: "Why you see this and how to stop it (opens in a new tab)",
+			}),
 		).toBeVisible();
 	},
 };

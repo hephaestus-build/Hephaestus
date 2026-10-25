@@ -66,7 +66,7 @@ It can capture evidence only for images that its run published.
 | Build → Webapp: E2E                                                     | Playwright against the packaged JAR                                                                                                                                                                       | `vp run --filter webapp test:e2e`                                        |
 | Build → Extension: E2E                                                  | Playwright with the extension's `e2e` build — not the production zip — against the packaged JAR                                                                                                           | `vp run test:extension:e2e`                                              |
 | Build → App Server image                                                | `pack build` from the packaged JAR, signed, attested and policy-scanned                                                                                                                                   | —                                                                        |
-| Test → App Server: Unit and architecture, App Server: Integration       | compiled from source                                                                                                                                                                                      | `vp run test:server:verification`, `test:server:integration`             |
+| Test → App Server: Unit and architecture, App Server: Integration       | the package job's compiled classes, without compiling again                                                                                                                                               | `vp run test:server:verification`, `test:server:integration`             |
 | Dependency review → New dependency risk                                          | informational dependency review. Pull requests that change a dependency input. Independent of CI Status Gate                                                                                                                                                           | —                                                                        |
 | Security → Dependencies, secrets, and policy                            | Trivy filesystem scan, dependency vulnerability gate, TruffleHog, `security.txt` expiry, changelog immutability guard, legacy-reference guards                                                            | —                                                                        |
 | Changesets → Verify changesets                                          | policy tests, verified-revert detection, release-note presence, `MIGRATION.md` freeze                                                                                                                     | `vp run gate:changesets`                                                 |
@@ -75,6 +75,9 @@ It can capture evidence only for images that its run published.
 | Supported-host boot smoke                                               | `docker/self-host/setup.sh`, then PostgreSQL, NATS and the application server from this run's own images, waiting for the application to report healthy                                                   | —                                                                        |
 | Actionlint, Zizmor                                                      | workflow lint with ShellCheck warnings. Zizmor at medium confidence                                                                                                                                       | —                                                                        |
 | PR → Validate PR                                                        | Conventional Commit title. Every commit’s primary author resolves to the PR author’s GitHub account (including bot accounts) or a listed review-policy maintainer. The PR body follows attribution policy | —                                                                        |
+
+`Build → App Server: Database`, the PostgreSQL drills, both E2E rows and the integration shards are
+the queue tier ([Two verification tiers](#two-verification-tiers)).
 
 The browser jobs retain `webapp-e2e-results` and `extension-e2e-results`, each including
 `e2e-server.log`, for seven days on success as well as failure. Inspect server startup and shutdown output even when browser assertions
@@ -445,6 +448,13 @@ change its score.
 | Staging           | qualified commits of `main`                 | automatic promotion policy        | none              |
 | Production        | a published release                         | manual promotion                  | required reviewer |
 
+After each successful `main` push, `continuous-staging.yml` dispatches one automatic **Promote** run for Staging and ends.
+That run decides, signs, publishes and observes the promotion in one job, so a promotion waits for one runner.
+Its conclusion and the Staging deployment record report the outcome.
+GitHub notifies nobody of a run that `GITHUB_TOKEN` dispatched.
+Thus, a failed automatic promotion opens the **Staging did not follow main** issue, or comments on it while it is open.
+Close it after triage.
+
 ### GitHub environment setup
 
 1. **Settings → Environments → New environment**
@@ -594,8 +604,9 @@ Why the label is the authority, and which alternatives were priced and declined,
 | `ci-quality-gates.yml`                | Called by cicd.yml                                                            | Selects quality legs, clean-install verification and story tests                                                                                                                                                                 |
 | `ci-quality-leg.yml`                  | Called by ci-quality-gates.yml                                                | Shared formatting, lint, type-check and unit-test execution for each selected task-graph leg                                                                                                                                     |
 | `cache-toolchain.yml`                 | Main push changing install inputs or setup                                    | Seeds trusted Linux and Windows install caches without repeating quality gates                                                                                                                                                   |
+| `cache-gradle.yml`                    | Main push changing Gradle inputs, or dispatch                                 | The only Gradle cache producer: builds what the server jobs restore                                                                                                                                                              |
 | `ci-build.yml`                        | Called by cicd.yml                                                            | Runs the OpenAPI, schema, database and browser E2E gates against the server artifact packaged by cicd.yml                                                                                                                        |
-| `ci-tests.yml`                        | Called by cicd.yml                                                            | The server unit, architecture and integration suites, compiled from source                                                                                                                                                       |
+| `ci-tests.yml`                        | Called by cicd.yml                                                            | The server unit, architecture and integration suites, on the package job's compiled classes                                                                                                                                     |
 | `ci-docker-build.yml`                 | Called by cicd.yml                                                            | Dockerfile image builds (webapp, agent, PostgreSQL) and aliases for unchanged images                                                                                                                                             |
 | `reusable-docker-build.yml`           | Called by cicd.yml and ci-docker-build.yml                                    | Builds each requested platform natively, merges the index, signs, attests, and blocks on the release vulnerability policy for each platform                                                                                       |
 | `ci-security-scan.yml`                | Called by cicd.yml                                                            | Trivy dependency scan, secret detection and repository policy checks                                                                                                                                                             |
@@ -686,11 +697,23 @@ attestation verification, including rejection before alias publication. Signing 
 ### Caches
 
 A run restores caches from its own branch and from `main`, never from a sibling branch. Task-cache
-entries are content-addressed, so a pull request saves them for its own reruns. Gradle caches are
-published only by the server package job on trusted default-branch push, schedule and dispatch runs.
-Other jobs are read-only consumers.
-The Gradle action prefers an older same-job cache to a newer producer cache.
-Thus, consumers must not publish snapshots that become stale between their main-branch runs.
+entries are content-addressed, so a pull request saves them for its own reruns.
+
+`cache-gradle.yml` is the only Gradle cache producer. Every other job is a read-only consumer.
+The producer runs after a main push changes a Gradle input. The inputs are the build scripts, the
+lockfiles, the version catalog, the wrapper, the generated-client sources and the JDK pin.
+
+The producer resolves every dependency configuration of the server build. It also runs the Gradle work of the
+server jobs: packaging, the test classes, Spotless, PMD and a test inventory that does not execute tests.
+The Gradle action keeps only what a job used, so this producer uses everything a consumer can need.
+
+A main push does not build the server, because it reuses the merge group's packaged server (§ Build once).
+Thus, without this producer, nothing would refresh the dependencies that consumers restore.
+Consumers would download them from Maven Central in every job.
+
+The Gradle action prefers an older entry of the same job to a newer entry of another job
+([restore order](https://github.com/gradle/actions/blob/v6.3.0/docs/setup-gradle.md#finding-a-matching-cache-entry)).
+Thus, a second writer would pin consumers to its stale snapshot, even if it writes only when reuse fails.
 
 The pnpm executable cache also saves only from `main`. The JDK is pinned once, in `.java-version`.
 
@@ -734,6 +757,73 @@ exact-match cache cannot refresh build outputs after source-only changes. Config
 reuse remains within a job: no encryption key is configured, so the
 action does not persist configuration-cache entries across jobs.
 
+## Two verification tiers
+
+A pull request runs the **fast tier**. A merge group, a push and a dispatch also run the **queue tier**.
+`detect-changes` publishes the decision once as `queue-tier`, and each queue-tier job adds it to its path condition.
+
+| Tier | Jobs |
+| --- | --- |
+| Fast (pull request and queue) | Detect changes, the quality legs, unit and architecture tests, packaging, generated-artifact drift, the images, Security, Changesets, Compose, Actionlint, Zizmor |
+| Queue (merge group, push, dispatch) | the integration shards, the database contract tests, the PostgreSQL drills, webapp and extension E2E |
+
+Path filters and the main-push rules in [Path filters](#path-filters) still select within each tier.
+The supported-host boot smoke stays on same-repository pull requests, because it boots the preview images.
+
+Main changes only through the merge queue, and the queue runs the required checks on the merged result
+([GitHub: managing a merge queue](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/configuring-pull-request-merges/managing-a-merge-queue)).
+bors and Prow's Tide apply the same rule. They test the merge candidate and advance the branch only when it passes
+([Rust forge: bors and rollups](https://forge.rust-lang.org/release/rollups.html),
+[Tide](https://docs.prow.k8s.io/docs/components/core/tide/maintainers/)).
+Thus, the queue tier guards main for every change, and a pull request does not repeat it.
+
+Google's presubmit applies the same split. It runs only fast, reliable tests before submission and the larger tests after
+([Software Engineering at Google, ch. 23](https://abseil.io/resources/swe-book/html/ch23.html)).
+
+When both tiers ran on each pull request, a merged change paid for the queue tier twice.
+The queue tier is most of a run's runner time, and GitHub's runner concurrency limit is shared by the queue and every pull request.
+
+A queue-tier failure removes the entry from the queue, and the failure comment links the run.
+Fix the failure and queue the pull request again.
+
+A draft pull request runs the fast tier and builds no image. So it gets no host smoke and no image
+scan. The `preview` label still builds its images, and a release candidate always builds its evidence.
+
+For a draft, the automatic queue tier for the tier's own inputs is off, but `ci:full` still opts in.
+`CI Status Gate` still reports, so required checks resolve on a draft.
+Marking the pull request ready for review (`ready_for_review`) starts an ordinary pull-request run,
+with its images. That run is never skipped as a duplicate of the draft's run.
+A re-run replays the event of its run, so a re-run of a draft's run builds no image, even after
+the pull request is ready. Re-run the ready run instead.
+
+A pull request that is not a draft also runs the queue tier when it changes the tier's own inputs.
+These inputs are the workflows and actions that define the tier and the database migrations.
+They also include the server build script, which defines the shards and test tasks, and the browser
+suites' specs and configuration. A changed integration test or server class is not such an input, so its integration
+tests first run in the merge queue.
+
+To get the queue tier for any other change before you queue it, add the `ci:full` label to the pull request.
+Then push, or use **Re-run all jobs** on the latest CI/CD run.
+**Re-run failed jobs** keeps the earlier `Detect changes` result, so it does not see the label.
+`Detect changes` reads the label from the pull request when it runs, not from the event.
+A label read that fails runs the queue tier.
+
+There is no `labeled` trigger, because a label event would cancel the running CI.
+A run whose jobs all skip would also report **CI Status Gate** as passed on the head commit.
+That report would replace the verdict of the run that it cancelled.
+Locally, these commands run the queue tier's suites:
+
+- `vp run test:server:integration` for the integration shards.
+- The database contract tests: from `server/`, `./gradlew :application:databaseTest` with the `SPRING_DATASOURCE_*` settings of a running PostgreSQL (`server/AGENTS.md` § Test tiers).
+- `vp run test:postgres-restore` and `vp run test:postgres-pitr` for the drills.
+- `vp run --filter webapp test:e2e` and `vp run test:extension:e2e` for the browser suites.
+
+**Revert criterion.** [`report:ci-latency`](#full-verification-latency) reports the share of merge
+groups in the last 14 days in which a queue-tier job failed. It counts the groups in which only
+fast-tier jobs failed apart, and it gives no share for fewer than 20 groups. If the queue-tier share exceeds 10 %, the queue tier is catching too much that a pull request
+should have caught. Then run the queue tier on pull requests again: change `queue-tier` in
+`detect-changes` to `true` for every event.
+
 ## Path filters
 
 `detect-changes` in `cicd.yml` selects legs from changed paths for two diff events.
@@ -746,7 +836,7 @@ Ordinary main pushes omit Quality, Test, Security, Actionlint, Zizmor, and Compo
 They skip API, schema, database, and browser jobs inside `Build`.
 
 Release-version pushes repeat those checks. Main still packages and publishes images.
-Same-repository pull requests also run `Build` and `Docker` regardless of paths, because
+Same-repository pull requests, except drafts without the `preview` label, also run `Build` and `Docker` regardless of paths, because
 previews need every image at the head SHA. No other event has a preview.
 
 | Selects                    | Paths                                                                                                                                                                                                                                                                                                                                                                                                                             |
@@ -792,8 +882,15 @@ When release preflight is required, it owns image vulnerability scanning for bot
 The image-build workflows omit their duplicate scans. Other published builds scan every platform
 they built. Each platform retains its own report and policy result. The final gate rejects a required preflight that is skipped, canceled or unsuccessful.
 
-The build scan starts from its platform's build digest artifact without waiting for manifest signing.
-Before publishing verified tags, the manifest job checks that both final index leaves equal the scan subjects.
+Each platform's build job scans the digest it pushed, on its own runner, before it hands that digest to the manifest job.
+The manifest job needs every build, so only scanned digests reach an index.
+Before publishing verified tags, it checks that the final index leaves equal those scanned subjects.
+A scan therefore costs no job and no runner queue wait of its own.
+It does not run in the manifest job, because that job holds the signing token and runs no repository code.
+
+The build matrix does not fail fast, so one platform's refusal keeps the other platform's scan and evidence.
+A broken build thus lets its sibling finish, which costs a runner for that time.
+
 The scan resolves the immutable image reference through
 `scripts/resolve-image-scan-subject.ts`, using the same platform resolver in `scripts/lib/image-scan.ts` as scheduled rescans. An index must
 contain the requested platform. A missing platform or malformed index fails instead of falling back
@@ -809,8 +906,8 @@ A push that reuses its merge group's image publishes the same digest under that 
 Pull requests use their head SHA because `github.sha` is a merge commit with no image tag.
 
 Within a run, the vulnerability scan ignores tags.
-It reads its own platform build digest artifact.
-Thus, a scan-only rerun scans that build's artifact.
+It reads the digest that its own build job exported.
+Re-running a failed build job builds and scans the platform again, and the manifest job reads that new digest.
 
 `ci-contract.test.ts` asserts the whole contract.
 The build must publish every consumer-resolved tag for that consumer's event.
@@ -820,10 +917,16 @@ gives the retried job a new attempt number.
 ## Build once
 
 `App Server: Package` in `cicd.yml` packages the server once and uploads its JARs, compiled tests and resources. OpenAPI and
-browser checks boot that executable JAR. Buildpacks consume it without another build. Schema gates
-and database contract tests use the restored classes with `-PpackagedServer=true`, which bypasses
-compilation. Unit, architecture and integration suites compile from source in `Test` without
-waiting for packaging. Their outputs do not ship.
+browser checks boot that executable JAR. Buildpacks consume it without another build. Schema gates,
+database contract tests and the `Test` suites use the restored classes with `-PpackagedServer=true`,
+which bypasses compilation. `ci-tests.yml` sets it as `ORG_GRADLE_PROJECT_packagedServer`, because
+its commands are `vp run` tasks. Thus, every server suite tests the classes that the JAR ships.
+
+The suites never compile. Test compilation is the slowest server build step, and it is rarely a
+cache hit. A change alters the test sources or the main classes they compile against.
+So the suites wait for packaging rather than compile the same sources in each of their jobs.
+The package artifact is kept for one day, so a failed job re-run after that day fails on its download.
+Re-run all jobs instead.
 
 The PostgreSQL backup-restore and PITR drills apply the migrations from that same executable JAR.
 Spring Boot's launcher runs the Liquibase bundled in the JAR against the changelog in the JAR, from an empty directory and with a minimal environment.
@@ -874,8 +977,10 @@ The provenance stays the queue run's, because that run built the image.
 A missing or unverifiable image is built and scanned as before.
 Examples are a direct push, an image that the merge group did not rebuild, and a lookup that failed.
 
-A merge group adds one arm64 build job per image that it rebuilds, which is four when it rebuilds all images.
-A push no longer rebuilds those images on either architecture, which more than offsets that cost.
+A merge group adds one arm64 build job, which also scans that platform, for each image that it rebuilds.
+That is four jobs when it rebuilds all images.
+The push reuses those images and no longer builds or scans them on either architecture.
+It still builds and scans both platforms of each image that the merge group did not rebuild, as before.
 The webapp records its branch at build time, so a merge group builds it with the default branch's name.
 Merge groups also write the Dockerfile layer cache, because the push no longer refreshes it for reused images.
 
@@ -887,7 +992,7 @@ If no such default-branch commit exists, the run builds every image itself. `det
 
 ## Parallelism and concurrency
 
-- `Quality` legs and `Test` suites start from source. `Build` gates start when `App Server: Package`
+- `Quality` legs start from source. `Test` suites and `Build` gates start when `App Server: Package`
   uploads its artifact.
 - `App Server: Integration` has four shards.
   `providers` selects the `integration` package.
@@ -998,15 +1103,22 @@ Missing timestamps remain unavailable.
 A reporting failure cannot change CI, Version PR maintenance, or release eligibility.
 JUnit results appear as `Test Results - …` check runs.
 
-### Pull-request latency
+### Full-verification latency
 
 The full-verification target is a six-minute median and a seven-minute p90, measured from workflow
-creation to completion of **CI Status Gate**. On the default branch, `CI profile` examines the latest 100 completed PR runs created in the last 28 days.
+creation to completion of **CI Status Gate**. A merge group always runs both
+[verification tiers](#two-verification-tiers), so the sample is merge groups.
+On the default branch, `CI profile` lists every completed merge-group run created in the last 28 days.
 It selects the ten most recent successful first-attempt runs with full server and browser verification.
+Lightweight changes and release-candidate groups, which also generate release evidence, cannot
+satisfy this cohort.
 
-Lightweight changes and Version-PR runs cannot satisfy this
-cohort. Failed and canceled counts describe the bounded listing, not a repository-wide failure
-rate. Budget misses produce warnings and a job summary, not workflow failures. Fewer than ten
+The report also selects the ten most recent successful first-attempt pull-request runs of the fast
+tier: the server suites ran, and no queue-tier job ran. It reports their median and p90 as an
+observation, with no target. It counts the merge groups of the last 14 days in which a queue-tier
+job failed, for the [revert criterion](#two-verification-tiers).
+
+Budget misses produce warnings and a job summary, not workflow failures. Fewer than ten
 qualifying runs produces an insufficient-data notice, not a pass or a regression.
 
 All observations
@@ -1046,10 +1158,28 @@ retain the original run creation time and must not enter first-attempt percentil
 gate's in-flight summary, this report uses its completed verdict and rejects incomplete job lists
 or mixed attempts. Keep raw API evidence under `tmp/`, not in committed performance snapshots.
 
+### Flaky tests
+
+`Flaky test report` runs every Monday and on dispatch.
+It covers the CI/CD runs of the last 14 days.
+It lists the jobs and tests that failed in one attempt of a run and then passed in a later attempt.
+
+A test that fails again in the run's last attempt is a real failure, so the report leaves it out.
+If a job that never passed does not fail again in the last attempt's own rerun, the run's tests stay unknown.
+
+The report reads run attempts and the retained JUnit reports, and it retains `flakes.json` for 90 days.
+Reproduce it with an authenticated GitHub CLI:
+
+```bash
+GITHUB_REPOSITORY=owner/repository vp run report:flakes
+```
+
+[Testing Guide § Flaky tests](testing.mdx#flaky-tests) has the policy.
+
 ### Server profiles
 
-Normal PR test jobs retain JUnit XML reports for 14 days, separately for each suite, shard and
-attempt. Use those reports and GitHub's step timings before rerunning tests with instrumentation.
+PR and merge-queue test jobs retain JUnit XML reports for 14 days, separately for each suite,
+shard and attempt. Use those reports and GitHub's step timings before rerunning tests with instrumentation.
 Deep profiling stays in the manual/weekly workflow, not on the PR critical path. Select
 `integration`, `verification` (unit and architecture, including coverage), or `all` when dispatching
 `CI profile`. Weekly runs profile both tiers sequentially so diagnostics do not occupy two heavy

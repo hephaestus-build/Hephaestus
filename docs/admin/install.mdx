@@ -56,7 +56,7 @@ A version that no job runs is not in the table.
 | --- | --- | --- |
 | Docker Engine | 28 or newer | Release qualification refuses an older engine on both matrix cells. It records the engine that it ran in the release assets `host-smoke-amd64.json` and `host-smoke-arm64.json`. No job runs version 28.0.0 itself. |
 | Docker Compose | 2.24.4 or newer | Release qualification refuses an older Compose and records the version that it ran in the same assets. Every pull request checks that the Compose files render. No job runs version 2.24.4 itself. |
-| PostgreSQL | 18, the release image with `pg_partman` | Every pull request runs the integration tests against an image built from the same Dockerfile. |
+| PostgreSQL | 18, the release image with `pg_partman` | The merge queue runs the integration tests against an image built from the same Dockerfile before every change merges. |
 | NATS server | The version that `security/release-images.json` pins | Release qualification boots it. The integration tests use NATS 2.10. |
 | Traefik | The version that `security/release-images.json` pins | Release qualification sends a request through it. |
 | Java | 21 | CI builds and tests with Java 21. The server image runs the Java 21 runtime of its buildpack. |
@@ -76,6 +76,9 @@ To see which Docker Engine and Docker Compose a release ran, download the `host-
   - Images: `ghcr.io` and `docker.io`.
   - Release lock: `github.com` and `api.github.com`.
   - Keyless signature verification: `fulcio.sigstore.dev`, `rekor.sigstore.dev`, and `tuf-repo-cdn.sigstore.dev`.
+
+  Database migrations do not fetch or send Liquibase usage analytics.
+  Set `LIQUIBASE_ANALYTICS_ENABLED=true` to send them.
 - The [Node.js](https://nodejs.org/en/download) version pinned in `package.json#devEngines.runtime`
   and [Cosign](https://docs.sigstore.dev/cosign/system_config/installation/) for release-lock
   verification.

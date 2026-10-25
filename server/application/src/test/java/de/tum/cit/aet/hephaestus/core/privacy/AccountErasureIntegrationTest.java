@@ -1205,7 +1205,7 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
         MentorTurnUsageAccumulator accumulator = mentorAccumulator(meters);
         var call = new ProxyRouting.BilledAttempt(
                 UsageSourceType.MENTOR_TURN, turn.getId(), turn.getAttempt(), BigDecimal.ZERO, worker);
-        transactions.executeWithoutResult(tx -> accumulator.accumulate(call, new ProxyTokenUsage(100_000, 0, 0, 0, 0)));
+        accumulator.accumulate(call, new ProxyTokenUsage(100_000, 0, 0, 0, 0));
 
         personData.requestErasure(requestId, administratorId, false);
         // A registration that starts after the suppression is refused under the person-data write fence.
@@ -1292,7 +1292,7 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
         MentorTurnUsageAccumulator accumulator = mentorAccumulator(meters);
         var call = new ProxyRouting.BilledAttempt(
                 UsageSourceType.MENTOR_TURN, turn.getId(), turn.getAttempt(), BigDecimal.ZERO, worker);
-        transactions.executeWithoutResult(tx -> accumulator.accumulate(call, new ProxyTokenUsage(100_000, 0, 0, 0, 0)));
+        accumulator.accumulate(call, new ProxyTokenUsage(100_000, 0, 0, 0, 0));
 
         // The take-back commits and dates the attempt; the billing of the lost attempt has not run yet.
         MentorTurnService.LostAttempt lost = Objects.requireNonNull(
@@ -1342,9 +1342,9 @@ class AccountErasureIntegrationTest extends BaseIntegrationTest {
     private MentorTurnUsageAccumulator mentorAccumulator(SimpleMeterRegistry meters)
             throws ReflectiveOperationException {
         var constructor = MentorTurnUsageAccumulator.class.getDeclaredConstructor(
-                MentorAttemptUsageService.class, MeterRegistry.class);
+                MentorAttemptUsageService.class, PlatformTransactionManager.class, MeterRegistry.class);
         constructor.setAccessible(true);
-        return constructor.newInstance(mentorAttemptUsage, meters);
+        return constructor.newInstance(mentorAttemptUsage, transactionManager, meters);
     }
 
     private void link(Account account, IdentityProvider provider, String subject, @Nullable String team) {

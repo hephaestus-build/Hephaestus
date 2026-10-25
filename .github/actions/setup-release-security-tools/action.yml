@@ -30,9 +30,15 @@ runs:
         TRIVY_VERSION: 0.74.0
       run: |
         set -euo pipefail
+        # Image builds scan on the runner of the platform they built, so the tools follow its CPU.
+        case "$RUNNER_ARCH" in
+          X64) syft_arch=amd64 trivy_arch=64bit ;;
+          ARM64) syft_arch=arm64 trivy_arch=ARM64 ;;
+          *) echo "::error::No release security tools for runner architecture $RUNNER_ARCH"; exit 1 ;;
+        esac
         curl_args=(-fsSL --proto '=https' --retry 5 --retry-all-errors --retry-delay 2 --retry-max-time 300 --connect-timeout 15 --max-time 120)
         if [ "$INSTALL_SYFT" = true ]; then
-          syft_archive="syft_${SYFT_VERSION}_linux_amd64.tar.gz"
+          syft_archive="syft_${SYFT_VERSION}_linux_${syft_arch}.tar.gz"
           syft_base="https://github.com/anchore/syft/releases/download/v${SYFT_VERSION}"
           curl "${curl_args[@]}" -o "/tmp/$syft_archive" "$syft_base/$syft_archive"
           curl "${curl_args[@]}" -o /tmp/syft-checksums "$syft_base/syft_${SYFT_VERSION}_checksums.txt"
@@ -40,7 +46,7 @@ runs:
           tar -xzf "/tmp/$syft_archive" -C /usr/local/bin syft
           syft version
         fi
-        trivy_archive="trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
+        trivy_archive="trivy_${TRIVY_VERSION}_Linux-${trivy_arch}.tar.gz"
         trivy_base="https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}"
         curl "${curl_args[@]}" -o "/tmp/$trivy_archive" "$trivy_base/$trivy_archive"
         curl "${curl_args[@]}" -o /tmp/trivy-checksums "$trivy_base/trivy_${TRIVY_VERSION}_checksums.txt"

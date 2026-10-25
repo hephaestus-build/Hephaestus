@@ -160,7 +160,7 @@ void test("every CI image scan receives the producer's immutable artifact ID acr
 				);
 			}
 		} else {
-			const steps = workflow.getIn(["jobs", "scan", "steps"]);
+			const steps = workflow.getIn(["jobs", "build", "steps"]);
 			assert.ok(isSeq(steps));
 			const restore = steps.items.find(
 				(step) => isMap(step) && step.get("uses") === "./.github/actions/download-trivy-db",

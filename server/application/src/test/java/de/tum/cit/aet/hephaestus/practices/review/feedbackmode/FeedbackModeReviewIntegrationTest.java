@@ -38,10 +38,8 @@ import java.util.Optional;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Import;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
-@Import({ReviewIntegrationData.class, ReviewAdmissionData.class})
 class FeedbackModeReviewIntegrationTest extends AbstractWorkspaceIntegrationTest {
     @Autowired
     ReviewIntegrationData data;

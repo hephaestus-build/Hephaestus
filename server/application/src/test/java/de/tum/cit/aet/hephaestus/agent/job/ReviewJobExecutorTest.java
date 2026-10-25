@@ -35,6 +35,8 @@ import de.tum.cit.aet.hephaestus.agent.runtime.PiResultParser;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerCapacityState;
 import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerProperties;
+import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxProperties;
+import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxTestLimits;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ResourceLimits;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxInfrastructureException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxManager;
@@ -98,6 +100,7 @@ class ReviewJobExecutorTest extends BaseUnitTest {
     private final WorkerJwtIssuer jwtIssuer = mock(WorkerJwtIssuer.class);
     private Optional<WorkerCapacityState> capacity = Optional.empty();
     private Optional<WorkerProperties> worker = Optional.empty();
+    private SandboxProperties sandboxProperties = SandboxTestLimits.PROPERTIES;
     private final SimpleMeterRegistry meters = new SimpleMeterRegistry();
     private final PracticeScriptRunRecorder practiceScriptRuns = mock(PracticeScriptRunRecorder.class);
     private final LlmUsageRecorder usageRecorder = mock(LlmUsageRecorder.class);
@@ -141,6 +144,7 @@ class ReviewJobExecutorTest extends BaseUnitTest {
                 practiceAgent,
                 jwtIssuer,
                 sandbox,
+                sandboxProperties,
                 pool,
                 transactions,
                 new JsonMapper(),
@@ -368,7 +372,7 @@ class ReviewJobExecutorTest extends BaseUnitTest {
                 List.of("run"),
                 Map.of("PI_COMPOSITION_PHASES", "PRIVATE_FEEDBACK"),
                 "review-token",
-                ResourceLimits.DEFAULT,
+                SandboxTestLimits.ATTEMPT,
                 Instant.now().plusSeconds(600),
                 Map.of(
                         SandboxLayout.FEEDBACK_COMPOSITION_PATH,
@@ -614,9 +618,11 @@ class ReviewJobExecutorTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldGiveTheCredentialAndSandboxTheSameDeadlineWhenPreparingAnAttempt() {
+    void shouldGiveTheSandboxTheConfiguredLimitsAndTheCredentialsDeadlineWhenPreparingAnAttempt() {
         var job = configuredJob();
         job.setAttempt(2);
+        sandboxProperties = new SandboxProperties(
+                5, 10, 60, new SandboxProperties.DefaultResourceLimits(3L * 1024 * 1024 * 1024, 1.5, 300));
         var snapshot = ConfigSnapshot.fromJson(job.getConfigSnapshot(), new JsonMapper());
         when(jobs.findByIdQueuedForUpdateSkipLocked(any(), any())).thenReturn(Optional.of(job));
         when(jobs.findById(job.getId())).thenReturn(Optional.of(job));
@@ -671,7 +677,9 @@ class ReviewJobExecutorTest extends BaseUnitTest {
         assertThat(request.getValue().jobToken()).isEqualTo("issued-job-token");
         assertThat(spec.jobId()).isEqualTo(job.getId());
         assertThat(spec.attempt()).isEqualTo(2);
-        assertThat(spec.resourceLimits().maxRuntime()).isEqualTo(Duration.ofSeconds(snapshot.timeoutSeconds()));
+        assertThat(spec.resourceLimits())
+                .isEqualTo(new ResourceLimits(
+                        3L * 1024 * 1024 * 1024, 1.5, 300, Duration.ofSeconds(snapshot.timeoutSeconds())));
     }
 
     private static byte[] scriptReport() {

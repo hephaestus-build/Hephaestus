@@ -14,7 +14,9 @@ export default defineConfig({
 	fullyParallel: false,
 	workers: 1,
 	forbidOnly: onCI,
+	// Retry for diagnostics, but fail CI on flaky tests.
 	retries: onCI ? 1 : 0,
+	failOnFlakyTests: onCI,
 	timeout: 60_000,
 	expect: { timeout: 15_000 },
 	reporter: onCI ? [["github"], ["list"]] : [["list"]],

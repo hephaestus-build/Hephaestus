@@ -11,6 +11,8 @@ on:
     branches: ["main"]
   pull_request:
     branches: ["**"]
+    # The default types plus the end of a draft, which starts the run a draft skipped.
+    types: [opened, synchronize, reopened, ready_for_review]
   merge_group:
 
 # The Version PR has two possible triggers but one pre-merge verdict. Forks, ordinary PRs,
@@ -40,6 +42,8 @@ jobs:
       webapp-image: ${{ steps.filter.outputs.webapp-image }}
       extension: ${{ steps.filter.outputs.extension }}
       application-server: ${{ steps.filter.outputs.application-server }}
+      # Whether the server suites run. The package job reads it too, because the suites run its classes.
+      server-tests: ${{ steps.filter.outputs.application-server == 'true' || steps.filter.outputs.test-config == 'true' || github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
       tooling: ${{ steps.filter.outputs.tooling }}
       application-server-image: ${{ steps.filter.outputs.application-server-image == 'true' || steps.filter.outputs.docker-config == 'true' || steps.filter.outputs.build-config == 'true' }}
       e2e: ${{ steps.filter.outputs.e2e }}
@@ -81,11 +85,23 @@ jobs:
       # diff, which paths-filter reads for a group from `merge_group.base_sha..head_sha` without
       # being told.
       unfiltered: ${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
+      # A pull request runs the fast tier unless it carries `ci:full` or changes the queue tier's own
+      # inputs. A merge group, a push and a dispatch also run the queue tier: integration shards,
+      # database tests, PostgreSQL drills and browser suites. An unreadable label runs it too.
+      # ci-cd.mdx § Two verification tiers says why.
+      queue-tier: ${{ github.event_name != 'pull_request' || steps.opt_in.outputs.full != 'false' || (github.event.pull_request.draft != true && (steps.filter.outputs.queue-tier-inputs == 'true' || steps.filter.outputs.test-config == 'true' || steps.filter.outputs.build-config == 'true')) }}
+      # A draft runs the fast tier and builds no image: no preview, no host smoke, no image scan,
+      # unless it carries `preview`. A release candidate always builds its evidence. Marking it
+      # ready starts the ordinary run. ci-cd.mdx § Two verification tiers.
+      draft: ${{ github.event_name == 'pull_request' && github.event.pull_request.draft == true && steps.opt_in.outputs.preview != 'true' && steps.release_candidate.outputs.release-candidate != 'true' }}
       publishable: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
-      previews: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository }}
+      previews: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && (github.event.pull_request.draft != true || steps.opt_in.outputs.preview == 'true') }}
       # A skipped duplicate would skip the image builds the release evidence preflight needs, and
       # the gate refuses to pass the Version PR without one.
-      should_skip: ${{ steps.skip_check.outputs.should_skip == 'true' && steps.release_candidate.outputs.release-candidate != 'true' }}
+      # A re-run after `ci:full` was added repeats a tree whose fast tier already passed, so only a
+      # run without the opt-in may be skipped as a duplicate.
+      # A pull request marked ready repeats the draft's tree but builds what the draft skipped.
+      should_skip: ${{ steps.skip_check.outputs.should_skip == 'true' && steps.release_candidate.outputs.release-candidate != 'true' && steps.opt_in.outputs.full == 'false' && github.event.action != 'ready_for_review' }}
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -116,6 +132,20 @@ jobs:
             [ "$base_version" = "$current_version" ] || release_candidate=true
           fi
           echo "release-candidate=$release_candidate" >> "$GITHUB_OUTPUT"
+
+      # Read from the pull request rather than the event payload, so a re-run after a label was
+      # added sees it. A `labeled` trigger would let any label cancel the running CI.
+      - name: Read the opt-in labels
+        id: opt_in
+        if: github.event_name == 'pull_request'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          labels=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER" --jq '[.labels[].name]')
+          echo "full=$(jq -r 'any(. == "ci:full")' <<< "$labels")" >> "$GITHUB_OUTPUT"
+          echo "preview=$(jq -r 'any(. == "preview")' <<< "$labels")" >> "$GITHUB_OUTPUT"
 
       - id: skip_check
         if: github.event_name == 'pull_request' && steps.release_candidate.outputs.release-candidate != 'true'
@@ -423,6 +453,17 @@ jobs:
               - '.github/workflows/ci-build.yml'
             docs:
               - 'docs/**'
+            # Changes the queue tier judges best before the queue: migrations, which the database
+            # tests and drills replay, the integration shards and test tasks the build script
+            # defines, and the browser suites' own specs and configuration. The workflows and
+            # actions that define the tier are `test-config` and `build-config`.
+            queue-tier-inputs:
+              - 'server/application/build.gradle.kts'
+              - 'server/application/src/main/resources/db/**'
+              - 'webapp/e2e/**'
+              - 'webapp/playwright.config.ts'
+              - 'extension/e2e/**'
+              - 'extension/playwright.config.ts'
             ci-config:
               - '.github/workflows/**'
               - '.github/actions/**'
@@ -626,9 +667,10 @@ jobs:
         needs.detect-changes.outputs.unfiltered == 'true' ||
         needs.detect-changes.outputs.previews == 'true' ||
         needs.detect-changes.outputs.any-code == 'true' ||
-        needs.detect-changes.outputs.build-config == 'true'
+        needs.detect-changes.outputs.build-config == 'true' ||
+        needs.detect-changes.outputs.test-config == 'true'
       ) && (
-        needs.detect-changes.outputs.application-server == 'true' || needs.detect-changes.outputs.e2e == 'true' || needs.detect-changes.outputs.extension-e2e == 'true' || needs.detect-changes.outputs.api-clients == 'true' || needs.detect-changes.outputs.postgres-image == 'true' || needs.detect-changes.outputs.build-config == 'true' || needs.detect-changes.outputs.application-server-image == 'true' || needs.detect-changes.outputs.supported-host-smoke == 'true' || needs.detect-changes.outputs.all-images == 'true'
+        needs.detect-changes.outputs.server-tests == 'true' || (needs.detect-changes.outputs.queue-tier == 'true' && (needs.detect-changes.outputs.e2e == 'true' || needs.detect-changes.outputs.extension-e2e == 'true')) || needs.detect-changes.outputs.api-clients == 'true' || needs.detect-changes.outputs.postgres-image == 'true' || needs.detect-changes.outputs.build-config == 'true' || needs.detect-changes.outputs.application-server-image == 'true' || needs.detect-changes.outputs.supported-host-smoke == 'true' || needs.detect-changes.outputs.all-images == 'true'
       )
     env:
       SERVER_BUILD_ARTIFACT: server-build-${{ github.run_id }}
@@ -665,8 +707,6 @@ jobs:
           digest-mismatch: error
       - uses: ./.github/actions/setup-caches
         if: steps.reuse.outputs.artifact-id == ''
-        with:
-          cache-write: "true"
       - name: Package the server
         if: steps.reuse.outputs.artifact-id == ''
         working-directory: server
@@ -705,7 +745,7 @@ jobs:
     name: "Image advisory database"
     needs: [detect-changes]
     if: |
-      needs.detect-changes.outputs.should_skip != 'true' && (
+      needs.detect-changes.outputs.should_skip != 'true' && needs.detect-changes.outputs.draft != 'true' && (
         needs.detect-changes.outputs.release-preflight == 'true' ||
         needs.detect-changes.outputs.release-images == 'true' ||
         (needs.detect-changes.outputs.publishable == 'true' && (
@@ -745,7 +785,7 @@ jobs:
   application-server-image:
     name: "App Server image"
     needs: [detect-changes, server-package, vulnerability-database]
-    if: ${{ !cancelled() && needs.detect-changes.result == 'success' && (needs.vulnerability-database.result == 'success' || needs.vulnerability-database.result == 'skipped') && needs.server-package.result == 'success' && (needs.detect-changes.outputs.application-server-image == 'true' || needs.detect-changes.outputs.supported-host-smoke == 'true' || needs.detect-changes.outputs.all-images == 'true') }}
+    if: ${{ !cancelled() && needs.detect-changes.result == 'success' && needs.detect-changes.outputs.draft != 'true' && (needs.vulnerability-database.result == 'success' || needs.vulnerability-database.result == 'skipped') && needs.server-package.result == 'success' && (needs.detect-changes.outputs.application-server-image == 'true' || needs.detect-changes.outputs.supported-host-smoke == 'true' || needs.detect-changes.outputs.all-images == 'true') }}
     uses: ./.github/workflows/reusable-docker-build.yml
     permissions:
       contents: read
@@ -780,6 +820,7 @@ jobs:
       e2e_changed: ${{ (github.event_name != 'push' || needs.detect-changes.outputs.version-bump == 'true') && (needs.detect-changes.outputs.e2e == 'true' || needs.detect-changes.outputs.unfiltered == 'true') && 'true' || 'false' }}
       extension_e2e_changed: ${{ (github.event_name != 'push' || needs.detect-changes.outputs.version-bump == 'true') && (needs.detect-changes.outputs.extension-e2e == 'true' || needs.detect-changes.outputs.unfiltered == 'true') && 'true' || 'false' }}
       postgres_image_changed: ${{ (needs.detect-changes.outputs.postgres-image == 'true' || needs.detect-changes.outputs.unfiltered == 'true') && 'true' || 'false' }}
+      queue_tier: ${{ needs.detect-changes.outputs.queue-tier }}
 
   # Upstream images ship by digest without a repository build. Scan changed digests here so their
   # vulnerabilities are checked before release evidence is generated. Only this scan reads the
@@ -790,7 +831,7 @@ jobs:
     if: |
       !cancelled() && needs.detect-changes.result == 'success' && (needs.vulnerability-database.result == 'success' || needs.vulnerability-database.result == 'skipped') &&
       (github.event_name != 'push' || needs.detect-changes.outputs.version-bump == 'true') &&
-      needs.detect-changes.outputs.should_skip != 'true' && (
+      needs.detect-changes.outputs.should_skip != 'true' && needs.detect-changes.outputs.draft != 'true' && (
         needs.detect-changes.outputs.release-images == 'true' ||
         needs.detect-changes.outputs.unfiltered == 'true'
       )
@@ -848,25 +889,25 @@ jobs:
     with:
       should_skip: ${{ needs.detect-changes.outputs.should_skip }}
 
+  # The suites run the packaged classes, so a package skipped while they are selected fails them.
   Test:
     uses: ./.github/workflows/ci-tests.yml
-    needs: [detect-changes]
+    needs: [detect-changes, server-package]
     if: |
+      !cancelled() && needs.detect-changes.result == 'success' && needs.server-package.result != 'failure' &&
       (github.event_name != 'push' || needs.detect-changes.outputs.version-bump == 'true') &&
-      needs.detect-changes.outputs.should_skip != 'true' && (
-        needs.detect-changes.outputs.application-server == 'true' ||
-        needs.detect-changes.outputs.test-config == 'true' ||
-        needs.detect-changes.outputs.unfiltered == 'true'
-      )
+      needs.detect-changes.outputs.should_skip != 'true' &&
+      needs.detect-changes.outputs.server-tests == 'true'
     permissions:
       contents: read
       checks: write
     with:
       should_skip: ${{ needs.detect-changes.outputs.should_skip }}
-      application_server_changed: ${{ (needs.detect-changes.outputs.application-server == 'true' || needs.detect-changes.outputs.test-config == 'true' || needs.detect-changes.outputs.unfiltered == 'true') && 'true' || 'false' }}
+      application_server_changed: ${{ needs.detect-changes.outputs.server-tests }}
       # A stacked layer's own base published no image; the alias base is the nearest commit that did.
       postgres_base_sha: ${{ needs.detect-changes.outputs.alias-base || github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.sha }}
       postgres_image_changed: ${{ (needs.detect-changes.outputs.postgres-image == 'true' || needs.detect-changes.outputs.unfiltered == 'true') && 'true' || 'false' }}
+      queue_tier: ${{ needs.detect-changes.outputs.queue-tier }}
 
   Changesets:
     if: github.event_name == 'pull_request'
@@ -889,7 +930,7 @@ jobs:
     # their image builds stay path-filtered.
     if: |
       !cancelled() && needs.detect-changes.result == 'success' && (needs.vulnerability-database.result == 'success' || needs.vulnerability-database.result == 'skipped') &&
-      needs.detect-changes.outputs.should_skip != 'true' && (
+      needs.detect-changes.outputs.should_skip != 'true' && needs.detect-changes.outputs.draft != 'true' && (
         needs.detect-changes.outputs.unfiltered == 'true' ||
         needs.detect-changes.outputs.previews == 'true' ||
         needs.detect-changes.outputs.any-code == 'true' ||
@@ -1190,3 +1231,5 @@ jobs:
           message: >-
             The [combined merge-queue CI run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
             failed, so this pull request left the queue. Inspect the run before re-queueing it.
+            A pull request runs only the fast tier, so an integration, database, drill or browser
+            failure first shows here; add the `ci:full` label to reproduce it on the pull request.

@@ -21,6 +21,7 @@ import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.agent.runtime.StorableText;
 import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerCapacityState;
 import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerProperties;
+import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxProperties;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ResourceLimits;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxCancelledException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxInfrastructureException;
@@ -147,6 +148,7 @@ public class ReviewJobExecutor {
     private final WorkerJwtIssuer workerJwtIssuer;
 
     private final SandboxManager sandboxManager;
+    private final SandboxProperties.DefaultResourceLimits reviewLimits;
     private final AsyncTaskExecutor sandboxExecutor;
     private final TransactionTemplate transactionTemplate;
     private final ObjectMapper objectMapper;
@@ -186,6 +188,7 @@ public class ReviewJobExecutor {
             PracticePiAdapter practiceAgent,
             WorkerJwtIssuer workerJwtIssuer,
             SandboxManager sandboxManager,
+            SandboxProperties sandboxProperties,
             @Qualifier("sandboxExecutor") AsyncTaskExecutor sandboxExecutor,
             TransactionTemplate transactionTemplate,
             ObjectMapper objectMapper,
@@ -206,6 +209,7 @@ public class ReviewJobExecutor {
         this.practiceAgent = practiceAgent;
         this.workerJwtIssuer = workerJwtIssuer;
         this.sandboxManager = sandboxManager;
+        this.reviewLimits = sandboxProperties.defaultResourceLimits();
         this.sandboxExecutor = sandboxExecutor;
         this.transactionTemplate = transactionTemplate;
         this.objectMapper = objectMapper;
@@ -1064,7 +1068,7 @@ public class ReviewJobExecutor {
         return snapshot;
     }
 
-    private static SandboxSpec buildSandboxSpec(
+    private SandboxSpec buildSandboxSpec(
             UUID jobId,
             Map<String, Path> handlerFilesOnDisk,
             List<EvidenceDirectory> handlerDirectories,
@@ -1072,11 +1076,7 @@ public class ReviewJobExecutor {
             ConfigSnapshot snapshot,
             Instant workDeadline,
             int attempt) {
-        ResourceLimits limits = new ResourceLimits(
-                ResourceLimits.DEFAULT.memoryBytes(),
-                ResourceLimits.DEFAULT.cpus(),
-                ResourceLimits.DEFAULT.pidsLimit(),
-                Duration.ofSeconds(snapshot.timeoutSeconds()));
+        ResourceLimits limits = reviewLimits.forAttempt(Duration.ofSeconds(snapshot.timeoutSeconds()));
 
         return new SandboxSpec(
                 jobId,

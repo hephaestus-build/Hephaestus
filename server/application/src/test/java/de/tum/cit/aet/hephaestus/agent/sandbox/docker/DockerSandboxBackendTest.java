@@ -17,7 +17,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
-import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ResourceLimits;
+import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxTestLimits;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxBackend;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxException;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -136,7 +136,7 @@ class DockerSandboxBackendTest extends BaseUnitTest {
                 attempt,
                 "alpine:latest",
                 List.of("run-review"),
-                ResourceLimits.DEFAULT,
+                SandboxTestLimits.ATTEMPT,
                 Instant.now().plusSeconds(600),
                 gateway -> Map.of("LLM_PROXY_URL", gateway + "/internal/llm"));
     }
@@ -147,7 +147,8 @@ class DockerSandboxBackendTest extends BaseUnitTest {
         lenient().when(securityPolicy.buildLabels(JOB_ID)).thenReturn(labels);
         when(networkManager.createJobNetwork(eq(JOB_ID), eq(false), any())).thenReturn(NETWORK_ID);
         when(networkManager.connectAppServer(NETWORK_ID)).thenReturn(APP_SERVER_IP);
-        when(securityPolicy.buildHostConfig(any(), any(), anyBoolean())).thenReturn(HOST_CONFIG);
+        when(securityPolicy.buildHostConfig(any(), eq(SandboxTestLimits.ATTEMPT), anyBoolean()))
+                .thenReturn(HOST_CONFIG);
         lenient().when(containerManager.createContainer(any())).thenAnswer(invocation -> {
             DockerOperations.ContainerSpec spec = invocation.getArgument(0);
             return spec.command().equals(SandboxLayout.INITIALIZER_COMMAND) ? "initializer" : "runtime";

@@ -390,6 +390,25 @@ This prevents another pass from using a worktree that pruning removes.
 
 2. Do not start the reconciler directly.
 
+### Images and free space
+
+After it prunes the worktrees, the reconciler removes the images that neither the release just applied nor the previous release names.
+It considers only the repositories that these two releases name.
+In such a repository, it also removes an unused image that another workload pulled.
+Docker refuses to remove an image that a container uses, running or stopped.
+The journal names each image that is removed or kept.
+
+A rollback to the previous release therefore needs no download.
+A rollback to an older release downloads its images again.
+If a step after the apply fails, the next apply removes the images.
+
+Before it pulls, the reconciler checks the free space on the filesystems that hold Docker's data and the containerd image store.
+It checks only when the release needs a pull, so a rollback whose images are on the host is never refused.
+Below `HEPHAESTUS_MIN_FREE_GIB`, it first removes the images that neither the running, the previous nor the new release names.
+If the space is still too small, it refuses the apply, stops nothing and records nothing.
+The journal states the free space and the threshold, and the next tick tries again.
+[Sizing § Disk](./sizing.mdx#disk) gives the default threshold and the disk budget.
+
 ## Watching it
 
 1. Set `HEPHAESTUS_METRICS_FILE` to a `.prom` file in an existing node_exporter textfile collector directory.
@@ -403,7 +422,11 @@ hephaestus_deploy_reconcile_success 1
 hephaestus_deploy_reconcile_timestamp_seconds …
 hephaestus_deploy_tooling_pending 0
 hephaestus_deploy_last_success_timestamp_seconds …
+hephaestus_deploy_free_bytes …
 ```
+
+Every run that writes metrics, including a failed run, reports `hephaestus_deploy_free_bytes`, the least free space on the filesystems that hold Docker's data.
+Warn when it falls below twice `HEPHAESTUS_MIN_FREE_GIB`, before the reconciler refuses an apply.
 
 Alert when `time() - hephaestus_deploy_reconcile_timestamp_seconds` exceeds ten minutes, when
 `hephaestus_deploy_reconcile_success` is `0`, or when the host's reconciliation metrics are absent.

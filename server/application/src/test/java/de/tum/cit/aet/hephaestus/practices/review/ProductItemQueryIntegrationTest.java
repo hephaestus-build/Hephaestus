@@ -26,12 +26,10 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
-@Import({ReviewIntegrationData.class, ReviewLookupData.class})
 class ProductItemQueryIntegrationTest extends BaseIntegrationTest {
     /** Stored pull request fields that are not part of its revision; a released mirror row can leave them NULL. */
     private static final List<String> OUTSIDE_THE_REVISION =

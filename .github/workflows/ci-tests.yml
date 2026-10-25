@@ -22,10 +22,18 @@ on:
         required: false
         type: string
         default: "false"
+      queue_tier:
+        description: "Whether the run also verifies the queue tier (docs/contributor/ci-cd.mdx § Two verification tiers)"
+        required: true
+        type: string
 
 permissions: {}
 
-# Test compilation runs independently of release packaging to avoid a serial build dependency.
+env:
+  SERVER_BUILD_ARTIFACT: server-build-${{ github.run_id }}
+  # The suites run the package job's compiled classes. docs/contributor/ci-cd.mdx § Build once says why.
+  ORG_GRADLE_PROJECT_packagedServer: "true"
+
 jobs:
   server-verification:
     name: "App Server: Unit and architecture"
@@ -43,6 +51,9 @@ jobs:
         with:
           install: "frozen"
       - uses: ./.github/actions/setup-caches
+      - uses: ./.github/actions/restore-server-build
+        with:
+          artifact: ${{ env.SERVER_BUILD_ARTIFACT }}
       - name: Verify test tier and shard discovery
         run: vp run test:server:selection
       - name: Run unit and architecture tests with coverage floors
@@ -70,7 +81,7 @@ jobs:
 
   server-integration:
     name: "App Server: Integration (${{ matrix.shard }})"
-    if: inputs.should_skip != 'true' && inputs.application_server_changed == 'true'
+    if: inputs.should_skip != 'true' && inputs.application_server_changed == 'true' && inputs.queue_tier == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: ${{ matrix.shard == 'runtime-and-startup' && 20 || 30 }}
     strategy:
@@ -92,6 +103,9 @@ jobs:
         with:
           install: "frozen"
       - uses: ./.github/actions/setup-caches
+      - uses: ./.github/actions/restore-server-build
+        with:
+          artifact: ${{ env.SERVER_BUILD_ARTIFACT }}
       - uses: ./.github/actions/postgres-image
         with:
           base-sha: ${{ inputs.postgres_base_sha }}

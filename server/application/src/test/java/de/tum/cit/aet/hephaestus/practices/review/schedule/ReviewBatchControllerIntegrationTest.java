@@ -22,13 +22,11 @@ import java.util.concurrent.ThreadLocalRandom;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Import;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
-@Import(ReviewIntegrationData.class)
 class ReviewBatchControllerIntegrationTest extends BaseIntegrationTest {
     @Autowired
     ReviewIntegrationData data;

@@ -11,6 +11,7 @@ import {
 } from "react";
 import { Streamdown } from "streamdown";
 
+import { InlineLink } from "@/components/common/InlineLink";
 import { MarkdownCode } from "@/components/common/MarkdownCode";
 
 const HTTP_URL = /^https?:\/\//iu;
@@ -20,16 +21,19 @@ const plainText = (value: string): ReactNode => value;
 /** Carries {@link UntrustedMarkdownProps.renderText} to the text runs; the default is the words. */
 const RenderTextContext = createContext(plainText);
 
-/** A link the model wrote is only a link when it is one: anything else renders as its own text. */
+/**
+ * A link the model wrote is only a link when it is one: anything else renders as its own text.
+ * A link opens in a new tab, so it carries the outbound icon and says so to a screen reader.
+ */
 function SafeAnchor({ href, children, className }: AnchorHTMLAttributes<HTMLAnchorElement>) {
 	if (typeof href !== "string" || !HTTP_URL.test(href)) {
 		return <span className={className}>{children}</span>;
 	}
 	return (
-		<a href={href} className={className} rel="noopener noreferrer" target="_blank">
+		<InlineLink href={href} external>
 			{/* A link's own words are left as written: a rewrite that links them would nest anchors. */}
 			<RenderTextContext.Provider value={plainText}>{children}</RenderTextContext.Provider>
-		</a>
+		</InlineLink>
 	);
 }
 

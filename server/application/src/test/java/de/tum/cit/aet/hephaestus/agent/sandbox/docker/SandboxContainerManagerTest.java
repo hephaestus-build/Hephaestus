@@ -10,6 +10,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxProperties;
+import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxTestLimits;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxException;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Duration;
@@ -39,7 +40,7 @@ class SandboxContainerManagerTest extends BaseUnitTest {
 
     @BeforeEach
     void setUp() {
-        properties = new SandboxProperties(5, 10, 60, null);
+        properties = new SandboxProperties(5, 10, 60, SandboxTestLimits.REVIEW);
         executor = Executors.newSingleThreadExecutor();
         manager = new SandboxContainerManager(
                 containerOps, image -> {}, properties, "default", executor, Duration.ofMillis(20));

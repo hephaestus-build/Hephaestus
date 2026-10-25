@@ -74,9 +74,9 @@ spring:
     reactor:
         context-propagation: auto
 
-    # Virtual threads are always daemons. With virtual threads enabled, both the request executor
-    # and the @Scheduled TaskScheduler use them — so no non-daemon thread remains after main().
-    # keep-alive registers one to hold the JVM open between cron firings.
+    # Virtual threads are always daemons, and the request executor uses them. A role without the
+    # server's scheduler pool may have no non-daemon thread left after main(); keep-alive registers
+    # one to hold the JVM open.
     main:
         keep-alive: true
 
@@ -177,6 +177,11 @@ spring:
     # and its job lock is released before the database closes (ServerSchedulingConfig).
     task:
         scheduling:
+            # The server's scheduled jobs (ServerSchedulingConfig). Keep it above the number of jobs that
+            # can run for most of an hour at once (8: those with lockAtMostFor of PT50M or more), so the
+            # short jobs, the sync lease heartbeat among them, always find a thread.
+            pool:
+                size: 16
             shutdown:
                 await-termination: true
                 await-termination-period: ${SHUTDOWN_TIMEOUT:20s}
@@ -448,6 +453,7 @@ hephaestus:
             enabled: false
             batch-size: 25
             rate-limit-threshold: 500
+            # A cycle holds its replica lock for 30s (HistoricalBackfillScheduler), so a value below 30 runs every 30s.
             interval-seconds: 60
         # Nightly Slack reconciliation (SlackSyncProperties): heal channel metadata and replay
         # conversations.history for ACTIVE monitored channels through the consent-gated ingest stack
@@ -621,9 +627,10 @@ hephaestus:
             port: ${SANDBOX_API_PORT:8081}
             max-request-bytes: ${SANDBOX_API_MAX_REQUEST_BYTES:4194304}
             requests-per-minute: ${SANDBOX_API_REQUESTS_PER_MINUTE:120}
+        # Each review sandbox; the sizing behind the defaults is in docs/admin/sizing.mdx § Review sandbox limits.
         default-resource-limits:
-            memory-bytes: ${SANDBOX_MEMORY_BYTES:4294967296}  # 4 GB (includes tmpfs)
-            cpus: ${SANDBOX_CPUS:2.0}
+            memory-bytes: ${SANDBOX_MEMORY_BYTES:3221225472}  # 3 GiB, tmpfs included
+            cpus: ${SANDBOX_CPUS:1.0}
             pids-limit: ${SANDBOX_PIDS_LIMIT:256}
 
     # Per-workspace readiness of Heph is the Heph model binding. hephaestus.worker.capacity.mentor-max and the

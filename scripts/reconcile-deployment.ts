@@ -9,6 +9,7 @@ import {
 	rename,
 	rm,
 	stat,
+	statfs,
 	symlink,
 	writeFile,
 } from "node:fs/promises";
@@ -328,6 +329,8 @@ export function renderMetrics(state: {
 	lastSuccessAt?: Date;
 	/** The applied record predates the kept commit, so the tooling waits for the next apply. */
 	toolingPending?: boolean;
+	/** Free space on the filesystem that holds Docker's data, when it could be read. */
+	freeBytes?: number;
 }): string {
 	const lines = [
 		"# HELP hephaestus_deploy_info The release this host currently runs.",
@@ -343,6 +346,13 @@ export function renderMetrics(state: {
 		"# TYPE hephaestus_deploy_tooling_pending gauge",
 		`hephaestus_deploy_tooling_pending ${state.toolingPending === true ? 1 : 0}`,
 	];
+	if (state.freeBytes !== undefined) {
+		lines.push(
+			"# HELP hephaestus_deploy_free_bytes Free space on the filesystem that holds Docker's data.",
+			"# TYPE hephaestus_deploy_free_bytes gauge",
+			`hephaestus_deploy_free_bytes ${state.freeBytes}`,
+		);
+	}
 	if (state.lastSuccessAt) {
 		lines.push(
 			"# HELP hephaestus_deploy_last_success_timestamp_seconds When the release this host runs was applied.",
@@ -424,6 +434,184 @@ export function carryPostgresImage(
 	return { ...images, [POSTGRES_IMAGE]: kept };
 }
 
+/** Docker lists a Docker Hub image without its registry and without the `library/` namespace. */
+function repositoryName(repository: string): string {
+	return repository.replace(/^docker\.io\//u, "").replace(/^library\//u, "");
+}
+
+/** The digest-pinned image references a lock names. */
+export function lockImages(lockEnvs: readonly string[]): string[] {
+	return lockEnvs.flatMap((lockEnv) =>
+		lockEnv
+			.split("\n")
+			.map((line) => line.slice(line.indexOf("=") + 1).trim())
+			.filter((value) => IMAGE_DIGEST.test(value)),
+	);
+}
+
+/** One image as `docker image ls --digests` lists it. */
+export interface ListedImage {
+	repository: string;
+	digest: string;
+	id: string;
+}
+
+/**
+ * The images a host may remove: those of a repository a kept lock uses that are neither named by a
+ * kept lock nor the same image as one it names. An image of any other repository is not this
+ * deployment's to judge. The image ID decides sameness, because the digest Docker lists can be a
+ * platform manifest's where the lock names the index.
+ *
+ * `docker image prune` cannot express this. Without `-a`, it removes only untagged images that
+ * nothing references; with `-a`, it also removes the previous release's images and every idle image
+ * of other workloads.
+ */
+export function unkeptImages(
+	listed: readonly ListedImage[],
+	keptReferences: readonly string[],
+	keptIds: ReadonlySet<string>,
+): string[] {
+	const named = new Set<string>();
+	const repositories = new Set<string>();
+	for (const reference of keptReferences) {
+		const at = reference.indexOf("@");
+		const repository = repositoryName(reference.slice(0, at));
+		repositories.add(repository);
+		named.add(`${repository}${reference.slice(at)}`);
+	}
+	return listed
+		.filter(({ repository, digest, id }) => {
+			const name = repositoryName(repository);
+			return repositories.has(name) && !named.has(`${name}@${digest}`) && !keptIds.has(id);
+		})
+		.map(({ repository, digest }) => `${repository}@${digest}`);
+}
+
+/** The ID of a local image, or nothing when the host does not have it. */
+async function localImageId(reference: string): Promise<string | undefined> {
+	try {
+		const id = await output("docker", ["image", "inspect", "--format", "{{.Id}}", reference]);
+		return id.trim();
+	} catch {
+		return undefined;
+	}
+}
+
+async function readLocks(
+	config: HostConfig,
+	releases: readonly (string | undefined)[],
+): Promise<string[]> {
+	const lockEnvs: string[] = [];
+	for (const release of new Set(releases)) {
+		if (release === undefined) {
+			continue;
+		}
+		try {
+			lockEnvs.push(await readFile(path.join(locksDirectory(config), `${release}.env`), "utf8"));
+		} catch (error) {
+			if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) {
+				throw error;
+			}
+		}
+	}
+	return lockEnvs;
+}
+
+/**
+ * Removes the images that no kept lock names. Docker refuses to remove an image that a container
+ * uses, running or stopped, so a refusal leaves the image and the next cleanup tries again.
+ */
+async function removeUnkeptImages(keptLockEnvs: readonly string[]): Promise<number> {
+	const keptReferences = lockImages(keptLockEnvs);
+	// Without a kept lock, nothing says which images are this deployment's, so nothing is removed.
+	if (keptReferences.length === 0) {
+		return 0;
+	}
+	const keptIds = new Set<string>();
+	for (const reference of keptReferences) {
+		const id = await localImageId(reference);
+		if (id !== undefined) {
+			keptIds.add(id);
+		}
+	}
+	const listing = await output("docker", [
+		"image",
+		"ls",
+		"--digests",
+		"--no-trunc",
+		"--format",
+		"{{json .}}",
+	]);
+	const listed = listing
+		.split("\n")
+		.filter((line) => line.trim() !== "")
+		.map((line) => asRecord(parseJson(line), "docker image ls entry"))
+		.filter((image) => typeof image.Digest === "string" && image.Digest.startsWith("sha256:"))
+		.map((image) => ({
+			repository: asString(image.Repository, "image repository"),
+			digest: asString(image.Digest, "image digest"),
+			id: asString(image.ID, "image ID"),
+		}));
+	let removed = 0;
+	for (const image of unkeptImages(listed, keptReferences, keptIds)) {
+		if (await succeeds("docker", ["image", "rm", image])) {
+			removed += 1;
+			console.log(`Removed image ${image}`);
+		} else {
+			console.log(`Keeping image ${image}: Docker refused to remove it`);
+		}
+	}
+	return removed;
+}
+
+/** Docker's image store may be containerd's, which keeps its content outside Docker's data root. */
+const CONTAINERD_ROOT = "/var/lib/containerd";
+
+/** The least free space on the filesystems that hold Docker's images, containers and volumes. */
+async function dockerFreeBytes(): Promise<number> {
+	const dockerRoot = await output("docker", ["info", "--format", "{{.DockerRootDir}}"]);
+	const roots = [dockerRoot.trim()];
+	if (await isDirectory(CONTAINERD_ROOT)) {
+		roots.push(CONTAINERD_ROOT);
+	}
+	const free = await Promise.all(
+		roots.map(async (root) => {
+			const { bavail, bsize } = await statfs(root);
+			return bavail * bsize;
+		}),
+	);
+	return Math.min(...free);
+}
+
+/** For the metric only: a metric that cannot be measured is left out rather than failing the tick. */
+async function readableFreeBytes(): Promise<number | undefined> {
+	return dockerFreeBytes().catch(() => undefined);
+}
+
+const GIB = 1024 ** 3;
+
+/**
+ * Refuses a pull that could fill the disk. A full disk stops PostgreSQL first, so the apply would
+ * take the running release down with it. Unkept images go first: that is the one cleanup that
+ * cannot hurt a rollback.
+ */
+export async function guardFreeSpace(
+	minimumBytes: number,
+	measure: () => Promise<number>,
+	cleanup: () => Promise<number>,
+): Promise<void> {
+	if ((await measure()) >= minimumBytes) {
+		return;
+	}
+	const removed = await cleanup();
+	const free = await measure();
+	if (free < minimumBytes) {
+		throw new OperatorActionRequiredError(
+			`Only ${(free / GIB).toFixed(1)} GiB is free for Docker's data, below the ${(minimumBytes / GIB).toFixed(0)} GiB that HEPHAESTUS_MIN_FREE_GIB requires before a pull, after removing ${removed} unused release images. Free space on the host; the next tick applies the release.`,
+		);
+	}
+}
+
 function isStack(name: string): name is Stack {
 	return STACK_ORDER.some((stack) => stack === name);
 }
@@ -451,6 +639,7 @@ interface HostConfig {
 	metricsFile?: string;
 	waitTimeoutSeconds: number;
 	promoteIdentity: string;
+	minimumFreeBytes: number;
 }
 
 function hostConfig(environment: NodeJS.ProcessEnv): HostConfig {
@@ -463,6 +652,10 @@ function hostConfig(environment: NodeJS.ProcessEnv): HostConfig {
 	if (!Number.isSafeInteger(waitTimeoutSeconds) || waitTimeoutSeconds <= 0) {
 		throw new Error("HEPHAESTUS_WAIT_TIMEOUT must be a positive integer");
 	}
+	const minimumFreeGiB = Number(environment.HEPHAESTUS_MIN_FREE_GIB ?? 10);
+	if (!Number.isFinite(minimumFreeGiB) || minimumFreeGiB <= 0) {
+		throw new Error("HEPHAESTUS_MIN_FREE_GIB must be a positive number");
+	}
 	return {
 		channel,
 		stacks: parseStacks(environment.HEPHAESTUS_STACKS),
@@ -473,6 +666,7 @@ function hostConfig(environment: NodeJS.ProcessEnv): HostConfig {
 		metricsFile: environment.HEPHAESTUS_METRICS_FILE,
 		waitTimeoutSeconds,
 		promoteIdentity: requiredEnv(environment, "HEPHAESTUS_PROMOTE_IDENTITY"),
+		minimumFreeBytes: minimumFreeGiB * GIB,
 	};
 }
 
@@ -701,6 +895,7 @@ async function recordUnchanged(
 				now: startedAt,
 				lastSuccessAt: new Date(applied.appliedAt),
 				toolingPending: appliedCommit(applied) === undefined,
+				freeBytes: await readableFreeBytes(),
 			}),
 		);
 	}
@@ -966,6 +1161,8 @@ export async function main(unitsDirectory = SYSTEMD_UNITS): Promise<void> {
 		decision.release,
 		releaseCommit,
 	);
+	// Read before the new lock is written: a re-promotion of the running release rewrites its lock.
+	const runningLocks = await readLocks(config, [applied?.release, applied?.previous]);
 	const { lockEnv, lockFile } = await prepareLock(
 		config,
 		channel,
@@ -982,6 +1179,15 @@ export async function main(unitsDirectory = SYSTEMD_UNITS): Promise<void> {
 		lockEnv,
 	);
 	const worker = await appliedWorker(config, applied);
+	// A rollback or re-promotion whose images are all on the host pulls nothing, so a full disk
+	// must not stop it.
+	const needed = lockImages([lockEnv]);
+	const present = await Promise.all(needed.map(async (image) => localImageId(image)));
+	if (present.includes(undefined)) {
+		await guardFreeSpace(config.minimumFreeBytes, dockerFreeBytes, async () =>
+			removeUnkeptImages([...runningLocks, lockEnv]),
+		);
+	}
 	await pullStacks(releaseTree, composeArgsByStack);
 	if (worker !== undefined) {
 		await run("docker", [...worker.composeArgs, "stop", WORKER_SERVICE], { cwd: worker.tree });
@@ -1005,6 +1211,7 @@ export async function main(unitsDirectory = SYSTEMD_UNITS): Promise<void> {
 				success: true,
 				now: finishedAt,
 				lastSuccessAt: finishedAt,
+				freeBytes: await readableFreeBytes(),
 			}),
 		);
 	}
@@ -1014,6 +1221,7 @@ export async function main(unitsDirectory = SYSTEMD_UNITS): Promise<void> {
 	// Last, so a prune that fails leaves this release running, recorded and adopted; the next apply
 	// prunes again.
 	await pruneReleases(config, [decision.release, previous]);
+	await removeUnkeptImages(await readLocks(config, [decision.release, previous]));
 }
 
 const DAY_SECONDS = 24 * 60 * 60;
@@ -1320,6 +1528,7 @@ async function reportFailure(): Promise<void> {
 			lastSuccessAt: applied ? new Date(applied.appliedAt) : undefined,
 			// Pending is a fact about the record, so a failed run must not read as the apply that ends it.
 			toolingPending: applied !== undefined && appliedCommit(applied) === undefined,
+			freeBytes: await readableFreeBytes(),
 		}),
 	);
 }

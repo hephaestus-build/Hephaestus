@@ -1,6 +1,7 @@
 import java.time.Duration
 import net.ltgt.gradle.errorprone.errorprone
 import org.gradle.testing.jacoco.plugins.JacocoTaskExtension
+import org.gradle.testing.jacoco.tasks.JacocoReportBase
 
 plugins {
     java
@@ -537,7 +538,7 @@ for ((taskName, command) in
 
 // Consumer jobs execute the package job's compiled test artifact; no compilation is scheduled.
 if (packagedServer.get()) {
-    tasks.named<Test>("databaseTest") {
+    tasks.withType<Test>().configureEach {
         testClassesDirs = files(layout.buildDirectory.dir("classes/java/test"))
         classpath =
             files(
@@ -546,6 +547,11 @@ if (packagedServer.get()) {
                 layout.buildDirectory.dir("resources/test"),
                 configurations.testRuntimeClasspath.get().files,
             )
+    }
+    // The coverage floors read the restored main classes; the default source set output would
+    // schedule compileJava.
+    tasks.withType<JacocoReportBase>().configureEach {
+        classDirectories.setFrom(layout.buildDirectory.dir("classes/java/main"))
     }
 }
 

@@ -71,7 +71,7 @@ public class OutlineDocumentSyncScheduler {
      * when a {@code RECONCILIATION}/{@code SYSTEM} job is warranted; nothing is recorded otherwise.
      */
     @Scheduled(fixedDelayString = "${hephaestus.integration.outline.sync.catch-up-delay}")
-    @SchedulerLock(name = "outline-sync-catch-up", lockAtMostFor = "PT4M", lockAtLeastFor = "PT10S")
+    @SchedulerLock(name = "outline-sync-catch-up", lockAtMostFor = "PT1H", lockAtLeastFor = "PT10S")
     @WorkspaceAgnostic("Catch-up fan-out: enumerates the workspaces with a collection still awaiting a clean pass")
     public void catchUp() {
         for (Long workspaceId : collectionRepository.findDistinctWorkspaceIdsWithPendingSync()) {
