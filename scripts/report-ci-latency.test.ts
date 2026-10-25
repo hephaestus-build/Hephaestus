@@ -117,18 +117,8 @@ void test("lightweight runs cannot make full verification's latency budget pass"
 		["providers-and-startup", "application"],
 	]) {
 		const names = [...verificationJobs, ...integration(...shards)];
-		for (const renamed of [
-			{
-				"Quality / Webapp": "Quality / Webapp",
-				"Build / Webapp: E2E": "Build / Webapp and extension: E2E",
-			},
-			{
-				"Quality / Webapp": "Quality / Webapp / Gates",
-				"Build / Webapp: E2E": "Build / Webapp: E2E",
-			},
-		]) {
-			const rename = new Map<string, string>(Object.entries(renamed));
-			const jobs = names.map((name) => ({ name: rename.get(name) ?? name }));
+		for (const webappName of ["Quality / Webapp", "Quality / Webapp / Gates"]) {
+			const jobs = names.map((name) => ({ name: name === "Quality / Webapp" ? webappName : name }));
 			assert.equal(isFullVerification(jobs), true, shards.join(","));
 			for (const { name } of jobs) {
 				// The four-shard layout without one of its middle shards is an earlier three-shard layout.

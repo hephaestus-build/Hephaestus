@@ -900,6 +900,7 @@ void describe("CI contract", () => {
 			}
 		}
 		assert.deepEqual(guarded.toSorted(), [
+			"extension-e2e",
 			"postgres-drill",
 			"server-database",
 			"server-integration",
@@ -1053,7 +1054,7 @@ void describe("CI contract", () => {
 		for (const [file, queue, fast] of [
 			[
 				".github/workflows/ci-build.yml",
-				["server-database", "postgres-drill", "webapp-e2e"],
+				["server-database", "postgres-drill", "webapp-e2e", "extension-e2e"],
 				["server-api"],
 			],
 			[".github/workflows/ci-tests.yml", ["server-integration"], ["server-verification"]],
@@ -1154,8 +1155,10 @@ void describe("CI contract", () => {
 		assert.doesNotMatch(job(String(api), "generate"), /actions\/setup-java@/u);
 		assert.doesNotMatch(job(String(api), "commit"), /setup-caches|gradlew|vp run/u);
 		const build = await readFile(".github/workflows/ci-build.yml", "utf8");
-		assert.match(job(build, "webapp-e2e"), /actions\/setup-java@/u);
-		assert.doesNotMatch(job(build, "webapp-e2e"), /setup-caches|gradlew/u);
+		for (const name of ["webapp-e2e", "extension-e2e"]) {
+			assert.match(job(build, name), /actions\/setup-java@/u);
+			assert.doesNotMatch(job(build, name), /setup-caches|gradlew/u);
+		}
 	});
 
 	void test("the extension's generated client is regenerated, checked and committed with the webapp's", async () => {
@@ -1216,7 +1219,7 @@ void describe("CI contract", () => {
 			"vp run --filter extension test:e2e",
 		]);
 		const build = await readFile(".github/workflows/ci-build.yml", "utf8");
-		const e2e = job(build, "webapp-e2e");
+		const e2e = job(build, "extension-e2e");
 		assert.match(e2e, /vp run test:extension:e2e/u);
 		// Every Playwright project runs: neither the task nor the job narrows the suite.
 		assert.doesNotMatch(e2e, /--filter extension test:e2e|--project/u);
@@ -1227,18 +1230,17 @@ void describe("CI contract", () => {
 		// handed to Playwright rather than assumed.
 		assert.match(e2e, /--spring\.profiles\.active=e2e,playwright/u);
 		assert.match(e2e, /--hephaestus\.integration\.gitlab\.enabled=true/u);
-		const extensionRun = e2e.slice(e2e.indexOf("Run extension end-to-end tests"));
-		const webappSeed = extensionRun.indexOf("< webapp/e2e/seed.sql");
-		const extensionSeed = extensionRun.indexOf("< extension/e2e/seed.sql");
+		const webappSeed = e2e.indexOf("< webapp/e2e/seed.sql");
+		const extensionSeed = e2e.indexOf("< extension/e2e/seed.sql");
 		assert.ok(
 			webappSeed !== -1 && webappSeed < extensionSeed,
 			"webapp seed runs before extension seed",
 		);
-		assert.ok(extensionSeed < extensionRun.indexOf("vp run test:extension:e2e"));
+		assert.ok(extensionSeed < e2e.indexOf("vp run test:extension:e2e"));
 		const buildWorkflow = parseDocument(build);
 		const e2eStep = namedStep(
 			buildWorkflow,
-			["jobs", "webapp-e2e"],
+			["jobs", "extension-e2e"],
 			"Run extension end-to-end tests against the built server",
 		);
 		assert.equal(e2eStep.getIn(["env", "E2E_SERVER_URL"]), "http://127.0.0.1:8080");
@@ -1670,7 +1672,7 @@ void describe("CI contract", () => {
 		for (const [file, names] of [
 			[
 				".github/workflows/ci-build.yml",
-				["server-api", "server-database", "postgres-drill", "webapp-e2e"],
+				["server-api", "server-database", "postgres-drill", "webapp-e2e", "extension-e2e"],
 			],
 			[".github/workflows/ci-tests.yml", ["server-verification", "server-integration"]],
 		] as const) {
@@ -1710,19 +1712,15 @@ void describe("CI contract", () => {
 			}
 		}
 
-		const e2e = job(build, "webapp-e2e");
-		assert.doesNotMatch(e2e, /needs:/u);
-		assert.equal((e2e.match(/actions\/download-artifact@/gu) ?? []).length, 1);
-		// Each suite keeps its own diagnostics, server log included, whichever of them failed.
-		for (const [suite, log] of [
-			["webapp", "e2e-server.log"],
-			["extension", "extension-e2e-server.log"],
-		] as const) {
-			assert.match(e2e, new RegExp(`name: Upload ${suite} diagnostics\\s+if: always\\(\\)`, "u"));
-			assert.match(e2e, new RegExp(` > ${escapeRegExp(log)} 2>&1 &`, "u"));
+		for (const name of ["webapp-e2e", "extension-e2e"]) {
+			const e2e = job(build, name);
+			assert.doesNotMatch(e2e, /needs:/u);
+			assert.equal((e2e.match(/actions\/download-artifact@/gu) ?? []).length, 1);
+			assert.match(e2e, /name: Upload diagnostics\s+if: always\(\)/u);
+			assert.match(e2e, /e2e-server\.log/u);
+			assert.match(e2e, /http:\/\/localhost:8080\/readyz/u);
+			assert.doesNotMatch(e2e, /actuator\/health\/liveness/u);
 		}
-		assert.equal((e2e.match(/http:\/\/localhost:8080\/readyz/gu) ?? []).length, 2);
-		assert.doesNotMatch(e2e, /actuator\/health\/liveness/u);
 		// The browser suites need the JAR, so either one's paths must start the package job.
 		for (const filter of ["e2e", "extension-e2e"]) {
 			assert.match(
@@ -3825,9 +3823,9 @@ void describe("CI contract", () => {
 				},
 			});
 		}
-		// One setup per job that runs a browser: the E2E suites, Storybook, and the extension leg.
+		// One setup per job that runs a browser: the two E2E suites, Storybook, and the extension leg.
 		for (const [file, browserJobs] of [
-			[".github/workflows/ci-build.yml", 1],
+			[".github/workflows/ci-build.yml", 2],
 			[".github/workflows/ci-quality-gates.yml", 1],
 			[".github/workflows/ci-quality-leg.yml", 1],
 		] as const) {

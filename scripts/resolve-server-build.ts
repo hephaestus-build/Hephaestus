@@ -9,7 +9,7 @@ const requiredJobs = [
 	"Build / App Server: Generated artifacts",
 	"Build / App Server: Database",
 	"Build / App Server: PostgreSQL drills",
-	"Build / Webapp and extension: E2E",
+	"Build / Webapp: E2E",
 	"App Server image / Build linux/amd64 Docker Image",
 	"App Server image / Build linux/arm64 Docker Image",
 	"Test / App Server: Unit and architecture",

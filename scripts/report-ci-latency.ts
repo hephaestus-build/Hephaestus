@@ -58,11 +58,11 @@ export function isFullVerification(jobs: readonly { name: string }[]) {
 		[
 			"Test / App Server: Unit and architecture",
 			"Quality / Webapp: Stories",
+			"Build / Webapp: E2E",
 			"Build / App Server: Database",
 			"Build / App Server: Generated artifacts",
 		].every((name) => names.has(name)) &&
 		(names.has("Quality / Webapp") || names.has("Quality / Webapp / Gates")) &&
-		(names.has("Build / Webapp: E2E") || names.has("Build / Webapp and extension: E2E")) &&
 		INTEGRATION_LAYOUTS.some(
 			(shards) =>
 				shards.length === integrationJobs.length &&
@@ -76,14 +76,13 @@ export function isLatencySample(jobs: readonly { name: string }[]) {
 	return !jobs.some((job) => job.name === "Release evidence preflight");
 }
 
-// The queue tier's job names, past drill and browser job names included; ci-contract.test.ts holds them to the
+// The queue tier's job names, past drill names included; ci-contract.test.ts holds them to the
 // jobs that carry the tier guard.
 export const QUEUE_TIER_JOBS = [
 	/^Test \/ App Server: Integration \(/u,
 	/^Build \/ App Server: Database$/u,
 	/^Build \/ App Server: PostgreSQL drill/u,
 	/^Build \/ Webapp: E2E$/u,
-	/^Build \/ Webapp and extension: E2E$/u,
 	/^Build \/ Extension: E2E$/u,
 ];
 
