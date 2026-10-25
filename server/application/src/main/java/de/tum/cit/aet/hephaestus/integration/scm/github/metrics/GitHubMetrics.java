@@ -14,6 +14,7 @@ public final class GitHubMetrics {
     public static final String GITHUB_SYNC_ERRORS_TOTAL = "github.sync.errors.total";
     public static final String GITHUB_WEBHOOK_REDELIVERY = "github.webhook.redelivery";
     public static final String GITHUB_WEBHOOK_UNRECOVERED = "github.webhook.unrecovered";
+    public static final String GITHUB_MISFILED_WORK = "github.misfiled.work";
 
     private GitHubMetrics() {}
 }

@@ -108,8 +108,10 @@ public class ProcessingContextFactory {
             return Optional.empty();
         }
 
-        Repository repository = repositoryRepository
-                .findByNameWithOwnerAndProviderId(repoFullName, providerId.get())
+        // After a rename another repository can take the old name; only the id stays with the repository.
+        Repository repository = (ref.id() != null
+                        ? repositoryRepository.findByNativeIdAndProviderId(ref.id(), providerId.get())
+                        : repositoryRepository.findByNameWithOwnerAndProviderId(repoFullName, providerId.get()))
                 .orElse(null);
 
         if (repository == null) {

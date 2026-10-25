@@ -370,6 +370,22 @@ GitHub's check paths remain undated and unchanged.
   `native_id`. GitLab has the identical residual across root groups.
 - **Legacy rows without `native_id`** fall back to a previous-`owner/name` lookup, which a
   simultaneous rename-and-transfer can miss. Those rows acquire a `native_id` on their next sync.
+- **A reused repository name.** After a GitHub rename, a new repository can take the old name.
+  GitHub webhooks select the repository row by `repository.id`, so they file events correctly.
+  An earlier version selected it by name and could file an issue or a pull request under the wrong row.
+  The next event or sync of that work moves the row to the repository that GitHub reports (`GitHubMisfiledWork`).
+  A review or comment webhook also does this before it creates a stub for missing work.
+  The work is skipped instead, and the rest of the sync continues, in two cases:
+  - `reason=itemRegistered`: a workspace already registered an item for the work.
+    An item's parent never changes (`guard_item_identity`), so a moved row would leave its item under the wrong repository.
+  - `reason=idHeldByAnotherRepository`: the reported repository already has a row of the same type for the number.
+    An example is a stub that a comment created.
+  `github.misfiled.work{type,outcome,reason}` counts moves and skips.
+  A review or comment on skipped work is dropped.
+  A stub for it would collide with the held id.
+  Each warning names the `rowId` in `issue`, its `holdingRepositoryId` and the reported `repositoryId`.
+  No automatic repair exists for a skipped row. Its work stays under the holding repository until a maintainer moves the row and its items.
+  GitLab webhooks still select a project by its path, so a reused GitLab path has the same hazard.
 - **No replay across a filter rebuild.** Repository-scoped events published between a rename and the
   consumer-filter rebuild were never pending for the durable consumer.
   They are not redelivered. The
