@@ -723,7 +723,11 @@ void test("the runner and the gateway share the text of the attempt-ended refusa
 		filterSource,
 	)?.groups?.literal;
 	assert.ok(literal !== undefined, "the gateway owns the attempt-ended refusal");
-	assert.equal(JSON.parse(literal), ATTEMPT_ENDED);
+	assert.equal(
+		JSON.parse(literal),
+		ATTEMPT_ENDED,
+		"the runner must match the text the gateway writes",
+	);
 });
 
 void test("classifies only the gateway's attempt-ended 409 as a refused attempt, not a provider's 401 or 409", async () => {
