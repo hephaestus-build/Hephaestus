@@ -823,6 +823,33 @@ public class EvidenceFolderPersonDataCatalog implements PersonEvidenceErasure, W
                         "job_id", rs.getString(1), "copy_id", rs.getString(2), "workspace_id", rs.getString(3)))));
     }
 
+    /**
+     * Retires the receipts of review jobs that retention deleted. Once the job row is gone, no result reaches its
+     * receipt (the review item's job reference is cleared), so the receipt vouches for nothing and keeps identities
+     * without a purpose. A receipt that still names people asks its store to remove the copy, as a workspace purge
+     * does, so a store that is offline keeps them until it returns and confirms. A receipt whose removal is confirmed
+     * is deleted, with any identities an erasure has not cleared yet; the erasure counts a deleted receipt as removed.
+     *
+     * @return the larger of the receipts requested and deleted, so a full batch of either asks for another
+     */
+    public int retireReceiptsOfDeletedJobs(int batchSize) {
+        int requested = jdbc.update("""
+            UPDATE person_evidence_copy SET state='PURGE_REQUESTED' WHERE id IN (
+              SELECT c.id FROM person_evidence_copy c
+              WHERE c.state IN ('CAPTURING','READY')
+                AND NOT EXISTS(SELECT 1 FROM review_job j WHERE j.id=c.job_id AND j.workspace_id=c.workspace_id)
+              LIMIT ?)
+            """, batchSize);
+        int deleted = jdbc.update("""
+            DELETE FROM person_evidence_copy WHERE id IN (
+              SELECT c.id FROM person_evidence_copy c
+              WHERE c.state='ERASED'
+                AND NOT EXISTS(SELECT 1 FROM review_job j WHERE j.id=c.job_id AND j.workspace_id=c.workspace_id)
+              LIMIT ?)
+            """, batchSize);
+        return Math.max(requested, deleted);
+    }
+
     /** Queue removal in the workspace transaction; workers can acknowledge only after it commits. */
     @Override
     public void deleteWorkspaceData(Long workspaceId) {
@@ -896,12 +923,13 @@ public class EvidenceFolderPersonDataCatalog implements PersonEvidenceErasure, W
                     Long.parseLong(key.columns().get("workspace_id")));
     }
 
+    /** A receipt that retention deleted is removed too: retention deletes only acknowledged receipts. */
     private boolean allRemoved(PersonDataSelection selection) {
         for (var key : selection.rows()) {
             Boolean remains = jdbc.queryForObject(
                     """
-                    SELECT NOT EXISTS(SELECT 1 FROM person_evidence_copy WHERE job_id=? AND workspace_id=?
-                      AND id=CAST(? AS uuid) AND state='ERASED')
+                    SELECT EXISTS(SELECT 1 FROM person_evidence_copy WHERE job_id=? AND workspace_id=?
+                      AND id=CAST(? AS uuid) AND state<>'ERASED')
                     """,
                     Boolean.class,
                     UUID.fromString(key.columns().get("job_id")),

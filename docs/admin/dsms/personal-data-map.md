@@ -343,8 +343,8 @@ exported as an unfiltered Git object archive.
 Workspace purge queues removal of all mounted attempt copies before deleting job rows. The request
 commits with the workspace purge. It does not wait for a worker inside that database transaction.
 An offline mounted store keeps its receipt and exact identity keys until it returns and confirms
-folder deletion. After that confirmation, purged-workspace receipts keep only technical coordinates and
-the deletion state. Person erasure still waits for every selected store to acknowledge deletion.
+folder deletion. After that confirmation, the next review job retention run deletes the receipts of the
+purged workspace. Person erasure still waits for every selected store to acknowledge deletion.
 
 ### Copied evidence and secondary subjects
 
@@ -355,7 +355,7 @@ are erased through those IDs. The practice results and feedback it recorded abou
 and are not exported.
 
 A receipt's native provenance stays after folder deletion is acknowledged until
-the person-erasure step clears it. Unrelated review jobs and
+the person-erasure step clears it. For a deleted job, review job retention can delete the receipt first. Unrelated review jobs and
 other people's profiles and replies are not selected through repository history alone.
 
 Provider-feedback inspection also covers unconfirmed summary and inline writes.

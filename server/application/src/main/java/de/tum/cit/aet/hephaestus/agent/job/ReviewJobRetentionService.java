@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
 import de.tum.cit.aet.hephaestus.agent.BoundedBatchPass;
+import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceFolderPersonDataCatalog;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
@@ -29,6 +30,7 @@ public class ReviewJobRetentionService {
 
     private final ReviewJobRepository jobRepository;
     private final ReviewCompositionBasisRepository basisRepository;
+    private final EvidenceFolderPersonDataCatalog evidenceCopies;
     private final AgentProperties agentProperties;
     private final Clock clock;
     private final BoundedBatchPass pass;
@@ -39,12 +41,14 @@ public class ReviewJobRetentionService {
     public ReviewJobRetentionService(
             ReviewJobRepository jobRepository,
             ReviewCompositionBasisRepository basisRepository,
+            EvidenceFolderPersonDataCatalog evidenceCopies,
             AgentProperties agentProperties,
             Clock clock,
             TransactionTemplate transactionTemplate,
             MeterRegistry meterRegistry) {
         this.jobRepository = jobRepository;
         this.basisRepository = basisRepository;
+        this.evidenceCopies = evidenceCopies;
         this.agentProperties = agentProperties;
         this.clock = clock;
         this.pass = new BoundedBatchPass(clock);
@@ -60,14 +64,15 @@ public class ReviewJobRetentionService {
     /**
      * {@code @SchedulerLock} single-flights this across replicas: concurrent passes cannot go faster (the
      * batches serialize on row-level contention anyway) and only multiply lock/WAL pressure.
-     * {@code lockAtMostFor} must stay above the three passes' combined {@link BoundedBatchPass#DEFAULT_BUDGET}.
+     * {@code lockAtMostFor} must stay above the four passes' combined {@link BoundedBatchPass#DEFAULT_BUDGET}.
      */
     @Scheduled(fixedDelay = 6, initialDelay = 1, timeUnit = TimeUnit.HOURS)
-    @SchedulerLock(name = "agent-job-retention", lockAtMostFor = "PT20M", lockAtLeastFor = "PT10S")
+    @SchedulerLock(name = "agent-job-retention", lockAtMostFor = "PT25M", lockAtLeastFor = "PT10S")
     public void runRetention() {
         deleteUnusableCompositionInputs();
         stripPayloads();
         deleteOldRows();
+        retireReceiptsOfDeletedJobs();
     }
 
     private void deleteUnusableCompositionInputs() {
@@ -98,6 +103,17 @@ public class ReviewJobRetentionService {
                     "Retention: stripped payloads from {} terminal review_job row(s) completed before {}",
                     result.affected(),
                     cutoff);
+        }
+    }
+
+    private void retireReceiptsOfDeletedJobs() {
+        BoundedBatchPass.Result result = pass.run(log, "evidence-receipts", () -> {
+            Integer changed =
+                    transactionTemplate.execute(status -> evidenceCopies.retireReceiptsOfDeletedJobs(pass.batchSize()));
+            return changed != null ? changed : 0;
+        });
+        if (result.affected() > 0) {
+            log.info("Retention: retired {} evidence-copy receipt(s) of deleted review jobs", result.affected());
         }
     }
 
