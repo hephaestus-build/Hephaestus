@@ -19,7 +19,7 @@ permissions: {}
 jobs:
   validate-pr:
     name: "Validate PR"
-    timeout-minutes: 5
+    timeout-minutes: 15
     runs-on: ubuntu-slim
     if: ${{ !github.event.pull_request.draft }}
     permissions:
@@ -281,7 +281,7 @@ jobs:
 
   assign-author:
     name: "Assign author"
-    timeout-minutes: 5
+    timeout-minutes: 15
     runs-on: ubuntu-slim
     permissions:
       pull-requests: write

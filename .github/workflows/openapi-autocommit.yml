@@ -50,7 +50,7 @@ jobs:
     name: Commit generated files
     needs: generate
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 15
     permissions:
       contents: write # commit generated files to the PR branch
     outputs:
@@ -95,7 +95,7 @@ jobs:
         && github.event.pull_request.head.repo.full_name == github.repository }}
     needs: [generate, commit]
     runs-on: ubuntu-latest
-    timeout-minutes: 2
+    timeout-minutes: 15
     permissions:
       issues: write # remove the label and comment on the PR
     steps:

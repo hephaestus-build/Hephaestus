@@ -10,7 +10,7 @@ jobs:
   verify-changesets:
     name: "Verify changesets"
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     env:
       # Compare with the tested merge's base, not potentially stale PR event metadata.
       BASE_SHA: HEAD^1

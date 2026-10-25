@@ -105,7 +105,7 @@ jobs:
       # run without the opt-in may be skipped as a duplicate.
       # A pull request marked ready repeats the draft's tree but builds what the draft skipped.
       should_skip: ${{ steps.skip_check.outputs.should_skip == 'true' && steps.release_candidate.outputs.release-candidate != 'true' && steps.opt_in.outputs.full == 'false' && github.event.action != 'ready_for_review' }}
-    timeout-minutes: 5
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -558,7 +558,7 @@ jobs:
   # the same guarantee, stated where a reader and a scanner can both see it.
   gradle-wrapper:
     name: "Gradle wrapper"
-    timeout-minutes: 5
+    timeout-minutes: 15
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -570,7 +570,7 @@ jobs:
 
   workflow-lint:
     name: "Actionlint"
-    timeout-minutes: 10
+    timeout-minutes: 15
     runs-on: ubuntu-latest
     needs: [detect-changes]
     if: |
@@ -610,7 +610,7 @@ jobs:
   # A required context as well; the note above `workflow-lint` says why filtering one is safe.
   zizmor:
     name: "Zizmor"
-    timeout-minutes: 10
+    timeout-minutes: 15
     runs-on: ubuntu-latest
     needs: [detect-changes]
     if: |
@@ -762,7 +762,7 @@ jobs:
         ))
       )
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     permissions:
       contents: read
     outputs:
@@ -1092,7 +1092,7 @@ jobs:
 
   all-ci-passed:
     name: "CI Status Gate"
-    timeout-minutes: 10
+    timeout-minutes: 15
     runs-on: ubuntu-slim
     permissions:
       statuses: write
@@ -1212,7 +1212,7 @@ jobs:
     # only a failure says anything about this pull request.
     if: ${{ !cancelled() && github.event_name == 'merge_group' && needs.all-ci-passed.result == 'failure' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 15
     permissions:
       pull-requests: write
     steps:

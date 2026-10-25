@@ -34,6 +34,20 @@ function job(source: string, name: string): string {
 	return match[0];
 }
 
+/**
+ * Every number in a `timeout-minutes` value. A quoted number counts too, because `fromJSON('5')`
+ * yields 5, so a number that is not a limit can only make the check stricter.
+ */
+function limitMinutes(limit: unknown): number[] {
+	if (typeof limit === "number") {
+		return [limit];
+	}
+	if (typeof limit !== "string") {
+		return [];
+	}
+	return [...limit.matchAll(/\d+/gu)].map(Number);
+}
+
 function pathFilter(source: string, name: string): string {
 	const match = new RegExp(
 		`^            ${name}:\\n(?:[\\s\\S]*?)(?=^            [\\w-]+:\\s*$)`,
@@ -3888,6 +3902,8 @@ void describe("CI contract", () => {
 		// step holds a runner for a working day and reports nothing until it is killed. A job that
 		// only `uses:` a reusable workflow runs no step here: its bound is on the callee's jobs.
 		const unbounded: string[] = [];
+		const tight: string[] = [];
+		const MIN_JOB_TIMEOUT_MINUTES = 15;
 		for (const [file, source] of await workflowSources()) {
 			const jobs = parseDocument(source).get("jobs");
 			if (!isMap(jobs)) {
@@ -3898,12 +3914,26 @@ void describe("CI contract", () => {
 				if (!isMap(definition) || !isSeq(definition.get("steps"))) {
 					continue;
 				}
-				if (definition.get("timeout-minutes") === undefined) {
+				const limit = definition.get("timeout-minutes");
+				if (limit === undefined) {
 					unbounded.push(`${file}#${String(entry.key)}`);
+				} else {
+					// A job limit below the floor can cancel a finished job (ci-cd.mdx § Parallelism and
+					// concurrency). An expression limit, such as a matrix-dependent one, is held to it
+					// through every number in it.
+					const minutes = limitMinutes(limit);
+					if (minutes.length === 0 || minutes.some((value) => value < MIN_JOB_TIMEOUT_MINUTES)) {
+						tight.push(`${file}#${String(entry.key)}: ${JSON.stringify(limit)}`);
+					}
 				}
 			}
 		}
 		assert.deepEqual(unbounded, [], "these jobs run steps without bounding how long they may run");
+		assert.deepEqual(
+			tight,
+			[],
+			`a job's limit is a hang detector of at least ${MIN_JOB_TIMEOUT_MINUTES} minutes (ci-cd.mdx)`,
+		);
 	});
 });
 
