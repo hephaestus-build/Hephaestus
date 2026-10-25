@@ -43,7 +43,8 @@ export function InstancePersonDataEraseDialog({
 	const [externalCopiesRemoved, setExternalCopiesRemoved] = useState(false);
 	const [submitted, setSubmitted] = useState(false);
 	const needsExternalConfirmation = externalDeliveryCount > 0;
-	const phraseMismatch = submitted && confirmText !== CONFIRM_PHRASE;
+	const phraseMatches = confirmText.trim() === CONFIRM_PHRASE;
+	const phraseMismatch = submitted && !phraseMatches;
 	const externalMissing = submitted && needsExternalConfirmation && !externalCopiesRemoved;
 
 	function handleOpenChange(next: boolean) {
@@ -58,7 +59,7 @@ export function InstancePersonDataEraseDialog({
 	function confirm(event: SubmitEvent<HTMLFormElement>) {
 		event.preventDefault();
 		setSubmitted(true);
-		if (confirmText !== CONFIRM_PHRASE || (needsExternalConfirmation && !externalCopiesRemoved)) {
+		if (!phraseMatches || (needsExternalConfirmation && !externalCopiesRemoved)) {
 			return;
 		}
 		onConfirm(externalCopiesRemoved);
@@ -104,7 +105,7 @@ export function InstancePersonDataEraseDialog({
 					)}
 					<Field data-invalid={phraseMismatch}>
 						<FieldLabel htmlFor={`${id}-phrase`}>
-							Type <span className="font-mono font-medium">{CONFIRM_PHRASE}</span> to confirm
+							Enter <span className="font-mono font-medium">{CONFIRM_PHRASE}</span> to confirm
 						</FieldLabel>
 						<Input
 							id={`${id}-phrase`}
@@ -117,7 +118,7 @@ export function InstancePersonDataEraseDialog({
 							aria-describedby={phraseMismatch ? `${id}-phrase-error` : undefined}
 						/>
 						{phraseMismatch && (
-							<FieldError id={`${id}-phrase-error`}>Type {CONFIRM_PHRASE} exactly.</FieldError>
+							<FieldError id={`${id}-phrase-error`}>Enter {CONFIRM_PHRASE} exactly.</FieldError>
 						)}
 					</Field>
 					<AlertDialogFooter>

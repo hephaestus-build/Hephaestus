@@ -10,7 +10,7 @@ import {
 	scheduledSurvey,
 } from "@/components/product-feedback/fixtures";
 import { withStandardPage } from "@/stories/decorators";
-import { expectSettledVisible } from "@/stories/overlay";
+import { expectDismissed, expectSettledVisible } from "@/stories/overlay";
 import { STORY_NOW } from "@/stories/story-clock";
 
 import { AdminSurveysTable } from "./AdminSurveysTable";
@@ -112,11 +112,36 @@ export const ConfirmsBeforeDeleting: Story = {
 			canvas.getByRole("button", { name: "Actions for Help improve practice feedback" }),
 		);
 		await userEvent.click(await screen.findByRole("menuitem", { name: "Delete" }));
-		await screen.findByRole("alertdialog", {
-			name: "Delete this survey and its 17 responses and 4 declines?",
+		const dialog = await screen.findByRole("alertdialog", {
+			name: "Delete survey “Help improve practice feedback”?",
 		});
-		await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+		await expect(dialog).toHaveAccessibleDescription(
+			"This deletes its 17 responses and 4 declines. You cannot undo this.",
+		);
 		await expect(args.onDelete).not.toHaveBeenCalled();
+	},
+};
+
+/** A survey nobody answered has nothing else to lose. Cancel keeps it; the confirm button deletes it. */
+export const DeletesAfterConfirming: Story = {
+	args: { state: ready([scheduledSurvey]) },
+	play: async ({ canvas, args }) => {
+		const actions = canvas.getByRole("button", { name: "Actions for Onboarding check-in" });
+		await userEvent.click(actions);
+		await userEvent.click(await screen.findByRole("menuitem", { name: "Delete" }));
+		const dialog = await screen.findByRole("alertdialog", {
+			name: "Delete survey “Onboarding check-in”?",
+		});
+		await expect(dialog).toHaveAccessibleDescription("You cannot undo this.");
+		await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+		await expectDismissed("alertdialog");
+		await expect(args.onDelete).not.toHaveBeenCalled();
+
+		await userEvent.click(actions);
+		await userEvent.click(await screen.findByRole("menuitem", { name: "Delete" }));
+		await screen.findByRole("alertdialog");
+		await userEvent.click(screen.getByRole("button", { name: "Delete survey" }));
+		await expect(args.onDelete).toHaveBeenCalledWith(scheduledSurvey);
 	},
 };
 

@@ -22,7 +22,8 @@ interface WorkspaceMembersPageProps {
 	error?: unknown;
 	onRetry?: () => void;
 	onToggleHidden?: (accountId: string, hidden: boolean) => void;
-	onRoleChange?: (accountId: string, role: WorkspaceRole) => void;
+	onRoleChange?: (member: WorkspaceMemberRow, role: WorkspaceRole) => void;
+	assignableRoles?: readonly WorkspaceRole[];
 	pendingRoleAccountId?: string;
 	teamsError?: unknown;
 	teamsRetrying?: boolean;
@@ -45,6 +46,7 @@ export function WorkspaceMembersPage({
 	onRetryTeams,
 	onToggleHidden,
 	onRoleChange,
+	assignableRoles,
 	pendingRoleAccountId,
 	view,
 	onViewChange,
@@ -75,6 +77,7 @@ export function WorkspaceMembersPage({
 						updating={updating}
 						onToggleHidden={onToggleHidden}
 						onRoleChange={onRoleChange}
+						assignableRoles={assignableRoles}
 						pendingRoleAccountId={pendingRoleAccountId}
 						view={view}
 						onViewChange={onViewChange}

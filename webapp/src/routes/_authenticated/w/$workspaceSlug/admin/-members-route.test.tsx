@@ -508,6 +508,114 @@ describe("workspace members route", () => {
 		);
 	});
 
+	it("asks an owner before making a member an owner and sends the change only once confirmed", async () => {
+		const assigned: AssignRoleRequest[] = [];
+		mockMembersRoute();
+		server.use(
+			http.get("*/workspaces/:workspaceSlug/members/me", () =>
+				HttpResponse.json(ownMembership("OWNER")),
+			),
+			http.post<never, AssignRoleRequest>(
+				"*/workspaces/:workspaceSlug/members/assign",
+				async ({ request }) => {
+					const body = await request.json();
+					assigned.push(body);
+					return HttpResponse.json({ ...SAM, role: body.role });
+				},
+			),
+		);
+		renderRouteAt("/w/acme/admin/members");
+		const user = userEvent.setup();
+
+		await user.click(
+			await screen.findByRole("combobox", { name: "Role of Sam Unclaimed" }, ROUTE_RENDER_WAIT),
+		);
+		await user.click(await screen.findByRole("option", { name: "Owner" }));
+
+		const dialog = await screen.findByRole("alertdialog", {
+			name: "Make Sam Unclaimed an owner?",
+		});
+		within(dialog).getByText(/can then delete this workspace/u);
+		expect(assigned).toStrictEqual([]);
+		// The modal hides the table from the accessibility tree while it asks.
+		within(screen.getByRole("combobox", { name: "Role of Sam Unclaimed", hidden: true })).getByText(
+			"Member",
+		);
+
+		await user.click(within(dialog).getByRole("button", { name: "Make owner" }));
+
+		await waitFor(() => expect(assigned).toStrictEqual([{ accountId: "8", role: "OWNER" }]));
+		await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
+	});
+
+	it("asks before you lower your own role, and Cancel sends nothing", async () => {
+		const own = member("42", { displayName: "The Octocat" }, { role: "ADMIN" });
+		let assigns = 0;
+		mockMembersRoute([ADA, own]);
+		server.use(
+			http.post("*/workspaces/:workspaceSlug/members/assign", () => {
+				assigns += 1;
+				return HttpResponse.json({ ...own, role: "MEMBER" });
+			}),
+		);
+		renderRouteAt("/w/acme/admin/members");
+		const user = userEvent.setup();
+
+		await user.click(
+			await screen.findByRole("combobox", { name: "Role of The Octocat" }, ROUTE_RENDER_WAIT),
+		);
+		await user.click(await screen.findByRole("option", { name: "Member" }));
+
+		const dialog = await screen.findByRole("alertdialog", { name: "Remove your admin access?" });
+		await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
+
+		await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
+		within(screen.getByRole("combobox", { name: "Role of The Octocat" })).getByText("Admin");
+		expect(assigns).toBe(0);
+	});
+
+	it("closes on confirm and reports a refused change as a toast", async () => {
+		mockMembersRoute();
+		server.use(
+			http.get("*/workspaces/:workspaceSlug/members/me", () =>
+				HttpResponse.json(ownMembership("OWNER")),
+			),
+			http.post("*/workspaces/:workspaceSlug/members/assign", () =>
+				HttpResponse.json(
+					{ status: 409, detail: "A workspace needs at least one owner." },
+					{ status: 409 },
+				),
+			),
+		);
+		renderRouteAt("/w/acme/admin/members");
+		const user = userEvent.setup();
+
+		await user.click(
+			await screen.findByRole("combobox", { name: "Role of Ada Lovelace" }, ROUTE_RENDER_WAIT),
+		);
+		await user.click(await screen.findByRole("option", { name: "Owner" }));
+		const dialog = await screen.findByRole("alertdialog", { name: "Make Ada Lovelace an owner?" });
+		await user.click(within(dialog).getByRole("button", { name: "Make owner" }));
+
+		await screen.findByText("We could not change the role");
+		screen.getByText("A workspace needs at least one owner.");
+		expect(screen.queryByRole("alertdialog")).toBeNull();
+	});
+
+	it("offers an admin no Owner role and leaves an owner's row read-only", async () => {
+		mockMembersRoute([ADA, { ...SAM, role: "OWNER" }]);
+		renderRouteAt("/w/acme/admin/members");
+		const user = userEvent.setup();
+
+		await user.click(
+			await screen.findByRole("combobox", { name: "Role of Ada Lovelace" }, ROUTE_RENDER_WAIT),
+		);
+		await screen.findByRole("option", { name: "Admin" });
+		expect(screen.queryByRole("option", { name: "Owner" })).toBeNull();
+		expect(screen.queryByRole("combobox", { name: "Role of Sam Unclaimed" })).toBeNull();
+		within(rowOf("Sam Unclaimed")).getByText("Owner");
+	});
+
 	it("keeps the list and says so when a role change is refused", async () => {
 		mockMembersRoute([{ ...ADA, role: "ADMIN" }, SAM]);
 		server.use(
