@@ -332,19 +332,35 @@ function assertReferencesResolve(
 }
 
 /** The three profiles, and the small one with an operator's external PostgreSQL and NATS. */
-const profiles = ["dev", "preview", "small", "external"] as const;
+const profiles = ["dev", "preview", "small", "small-16gib", "external"] as const;
 const maxFileBytes = {
 	dev: 4_294_967_296,
 	preview: 2_147_483_648,
 	small: 17_179_869_184,
+	"small-16gib": 17_179_869_184,
 	external: 17_179_869_184,
 };
-const layersFor = (name: (typeof profiles)[number]) =>
-	name === "external"
-		? [profile("small"), prepared, operator, reviews, external]
-		: [profile(name), prepared, operator, ...(name === "small" ? [reviews] : [])];
+const layersFor = (name: (typeof profiles)[number]) => {
+	switch (name) {
+		case "external": {
+			return [profile("small"), prepared, operator, reviews, external];
+		}
+		// The 16 GiB profile goes on top of the single-node one.
+		case "small-16gib": {
+			return [profile("small"), profile("small-16gib"), prepared, operator, reviews];
+		}
+		case "small": {
+			return [profile("small"), prepared, operator, reviews];
+		}
+		case "dev":
+		case "preview": {
+			return [profile(name), prepared, operator];
+		}
+	}
+};
 const bundled = (name: (typeof profiles)[number]) => name !== "external";
-const runsReviews = (name: (typeof profiles)[number]) => name === "small" || name === "external";
+const runsReviews = (name: (typeof profiles)[number]) =>
+	name === "small" || name === "small-16gib" || name === "external";
 /** The worker and what it writes into the sandbox namespace. */
 const workerOwned = (resource: Resource) =>
 	["worker", "sandbox"].includes(String(componentOf(resource)));
@@ -1429,6 +1445,117 @@ await test("the server requires the worker registration token exactly when a wor
 	);
 });
 
+await test("practice reviews run exactly when a worker runs, with its Heph turn capacity", () => {
+	// Without a worker, a submitted review job would wait for a worker that never comes.
+	assert.equal(envValue(workload(rendered(layersFor("dev")), "server"), "AGENT_ENABLED"), "false");
+	// The switch the CI clusters did not exercise: a worker without it claims no review.
+	for (const name of profiles.filter((candidate) => runsReviews(candidate))) {
+		const resources = rendered(layersFor(name));
+		for (const role of ["server", "worker"]) {
+			assert.equal(envValue(workload(resources, role), "AGENT_ENABLED"), "true", `${name} ${role}`);
+		}
+		assert.equal(env(workload(resources, "webhook"), "AGENT_ENABLED"), undefined, name);
+	}
+	const capacity = (layers: readonly Layer[]) =>
+		envValue(workload(rendered(layers), "worker"), "HEPHAESTUS_WORKER_CAPACITY_MENTOR_MAX");
+	assert.equal(capacity(layersFor("small")), "1");
+	assert.equal(capacity([...layersFor("small"), { worker: { hephTurns: "auto" } }]), "auto");
+	assert.equal(capacity([...layersFor("small"), { worker: { hephTurns: 0 } }]), "0");
+});
+
+/** The server's SMTP authentication and TLS settings for an email configuration. */
+const mail = (email: object) => {
+	const server = workload(rendered([...layersFor("small"), { config: { email } }]), "server");
+	return [
+		"SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH",
+		"SPRING_MAIL_PROPERTIES_MAIL_SMTP_SSL_ENABLE",
+		"SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE",
+		"SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_REQUIRED",
+	].map((name) => envValue(server, name));
+};
+
+await test("email follows the relay's TLS mode, and authenticates only with a username", () => {
+	const relay = { host: "smtp.example.com", from: "hephaestus@example.com" };
+	assert.deepEqual(mail({ ...relay, username: "hephaestus" }), ["true", "false", "true", "true"]);
+	assert.deepEqual(mail({ ...relay, port: 465, tls: "implicit", username: "hephaestus" }), [
+		"true",
+		"true",
+		"false",
+		"false",
+	]);
+	// An internal relay that takes no credentials.
+	assert.deepEqual(mail(relay), ["false", "false", "true", "true"]);
+});
+
+await test("the server's operator settings reach the server alone", () => {
+	const settings = [
+		"HEPHAESTUS_RESEARCH_ORGANIZATION",
+		"HEPHAESTUS_PUBLIC_ACTIVITY_ENABLED",
+		"HEPHAESTUS_PUBLIC_ACTIVITY_REPOSITORY_VISIBILITY_MAX_AGE",
+		"HEPHAESTUS_LLM_DISPLAY_CURRENCY",
+		"HEPHAESTUS_AUTH_PASSKEYS_INSTANCE_ADMIN_REQUIRED",
+		"HEPHAESTUS_AUTH_PASSKEYS_WORKSPACE_ADMIN_REQUIRED",
+		"HEPHAESTUS_AUTH_PASSKEYS_RP_ID",
+		"HEPHAESTUS_AUTH_PASSKEYS_ALLOWED_ORIGINS",
+		"MONITORING_RUN_ON_STARTUP",
+		"MONITORING_TIMEFRAME",
+		"MONITORING_SYNC_CRON",
+		"MONITORING_SYNC_COOLDOWN_IN_MINUTES",
+	];
+	// The application's defaults under the prod profile (application.yml, application-prod.yml).
+	const defaults = workload(rendered(layersFor("small")), "server");
+	assert.deepEqual(
+		settings.map((name) => envValue(defaults, name)),
+		["", "false", "48h", "", "true", "false", "", "", "true", "7", "0 0 * * * *", "60"],
+	);
+	const resources = rendered([
+		...layersFor("small"),
+		{
+			config: {
+				researchOrganization: "A research group",
+				publicActivity: { enabled: true, repositoryVisibilityMaxAge: "12h" },
+				llmDisplayCurrency: "EUR",
+				auth: {
+					passkeys: {
+						instanceAdminRequired: false,
+						workspaceAdminRequired: true,
+						rpId: "example.com",
+						allowedOrigins: "https://hephaestus.example.com",
+					},
+				},
+				monitoring: {
+					runOnStartup: false,
+					timeframeDays: 14,
+					syncCron: "0 0 3 * * *",
+					cooldownMinutes: 15,
+				},
+			},
+		},
+	]);
+	assert.deepEqual(
+		settings.map((name) => envValue(workload(resources, "server"), name)),
+		[
+			"A research group",
+			"true",
+			"12h",
+			"EUR",
+			"false",
+			"true",
+			"example.com",
+			"https://hephaestus.example.com",
+			"false",
+			"14",
+			"0 0 3 * * *",
+			"15",
+		],
+	);
+	for (const role of ["webhook", "worker"]) {
+		for (const name of settings) {
+			assert.equal(env(workload(resources, role), name), undefined, `${role} ${name}`);
+		}
+	}
+});
+
 /** A Kubernetes quantity in bytes or in cores. */
 const amount = (value: unknown): number => {
 	const text = typeof value === "string" || typeof value === "number" ? String(value) : "0";
@@ -1528,6 +1655,145 @@ await test("the single-node profile's requests, one upgrade beside them and its 
 	assert.ok(disk <= node.disk, `${gib(disk)} GiB of disk, ${gib(node.disk)} GiB on the node`);
 	process.stdout.write(
 		`single-node budget: ${cpu.toFixed(2)} CPU, ${gib(memory)} GiB, ${gib(disk)} GiB disk\n`,
+	);
+});
+
+/** The memory of the sandboxes of docs/admin/runtime-roles.mdx, in GiB: they keep their full size. */
+const sandboxGib = { review: 3, hephHost: 2, turn: 1, pooledTurns: 2, probe: 1.5 };
+
+for (const name of ["small", "small-16gib"] as const) {
+	await test(`${name}: the sandbox quota holds the reviews, Heph turns and pooled turn sandboxes that its workers may run`, () => {
+		const resources = rendered(layersFor(name));
+		const worker = workload(resources, "worker");
+		assert.ok(worker, "the profile runs a worker");
+		// A rollout by surge runs the old workers' Heph hosts and turn sandboxes beside the new ones; the
+		// quota admits one review between them. Recreate never runs two workers.
+		const workers = Number(get(worker, "spec", "replicas")) + surge(worker);
+		const turns = Number(envValue(worker, "HEPHAESTUS_WORKER_CAPACITY_MENTOR_MAX"));
+		assert.ok(Number.isInteger(turns), "the profile bounds the Heph turns");
+		const perWorker = sandboxGib.hephHost + (sandboxGib.pooledTurns + turns) * sandboxGib.turn;
+		const sandboxes = (sandboxGib.review + workers * perWorker + sandboxGib.probe) * 2 ** 30;
+		const quota = resources.find((resource) => kindOf(resource) === "ResourceQuota");
+		const hard = get(quota, "spec", "hard", "limits.memory");
+		assert.ok(
+			sandboxes <= amount(hard),
+			`${gib(sandboxes)} GiB of sandboxes, a quota of ${String(hard)}`,
+		);
+	});
+}
+
+const strategy = (name: (typeof profiles)[number], component: string) =>
+	get(workload(rendered(layersFor(name)), component), "spec", "strategy");
+
+await test("workers roll by surge unless the profile asks for Recreate, and the webhook always surges", () => {
+	assert.deepEqual(strategy("small", "worker"), {
+		type: "RollingUpdate",
+		rollingUpdate: { maxSurge: "100%", maxUnavailable: 0 },
+	});
+	assert.deepEqual(strategy("small-16gib", "worker"), { type: "Recreate" });
+	// Push events are not redeliverable: the new receiver starts before the old one stops.
+	for (const name of ["small", "small-16gib"] as const) {
+		assert.deepEqual(strategy(name, "webhook"), {
+			type: "RollingUpdate",
+			rollingUpdate: { maxUnavailable: 0, maxSurge: 1 },
+		});
+	}
+});
+
+interface Budget {
+	cpu: number;
+	memory: number;
+}
+/** The requests of Pods, each with its count. */
+const total = (pods: [unknown, number][]): Budget => {
+	const budget = { cpu: 0, memory: 0 };
+	for (const [spec, count] of pods) {
+		const requests = podRequests(spec);
+		budget.cpu += requests.cpu * count;
+		budget.memory += requests.memory * count;
+	}
+	return budget;
+};
+/** Sandboxes request their memory limit and a tenth of their CPU limit of one core. */
+const sandboxes = (gibs: number, pods: number): Budget => ({
+	cpu: pods / 10,
+	memory: gibs * 2 ** 30,
+});
+const sum = (...parts: Budget[]): Budget => {
+	const budget = { cpu: 0, memory: 0 };
+	for (const part of parts) {
+		budget.cpu += part.cpu;
+		budget.memory += part.memory;
+	}
+	return budget;
+};
+
+await test("the 16 GiB profile runs a review and a Heph turn, and an upgrade, within one node of 16 GiB", () => {
+	// MemTotal of the qualified node, less what k3s requests itself.
+	const node = { cpu: 4 - 0.25, memory: 16_372_036 * 1024 - 0.25 * 2 ** 30 };
+	const s3 = { bucket: "hephaestus-backups", endpoint: "s3.example.com", region: "eu-central-1" };
+	const resources = rendered([
+		...layersFor("small-16gib"),
+		{ postgresql: { backup: { enabled: true, s3 } } },
+	]);
+	const worker = workload(resources, "worker");
+	assert.ok(worker, "the profile runs a worker");
+	assert.equal(get(worker, "spec", "replicas"), 1);
+	const turns = Number(envValue(worker, "HEPHAESTUS_WORKER_CAPACITY_MENTOR_MAX"));
+	const backup = get(
+		resources.find((resource) => kindOf(resource) === "CronJob"),
+		"spec",
+		"jobTemplate",
+		"spec",
+		"template",
+		"spec",
+	);
+	const roles = workloads(resources).map((resource): [unknown, number] => [
+		podSpec(resource),
+		Number(get(resource, "spec", "replicas") ?? 1),
+	]);
+	// Steady: every role, one backup, one review, the Heph host, the pooled turn sandboxes and one turn each running.
+	const steady = sum(
+		total([...roles, [backup, 1]]),
+		sandboxes(
+			sandboxGib.review + sandboxGib.hephHost + (sandboxGib.pooledTurns + turns) * sandboxGib.turn,
+			2 + sandboxGib.pooledTurns + turns,
+		),
+	);
+	assert.ok(steady.cpu <= node.cpu, `steady: ${steady.cpu.toFixed(2)} CPU of ${node.cpu}`);
+	assert.ok(
+		steady.memory <= node.memory,
+		`steady: ${gib(steady.memory)} of ${gib(node.memory)} GiB`,
+	);
+	// The isolation probe may wait for room then: a probe whose Pods cannot start keeps the last proof.
+	const probing = sum(steady, sandboxes(sandboxGib.probe, 3));
+	// An upgrade: the old worker is gone (Recreate), the webhook and webapp surge, the server restarts in
+	// place, and the migration and stanza Jobs run. The new worker must pass its probe at its start, while
+	// the old worker's pooled turn sandboxes wait for the reconciler; the new pool waits for room.
+	const jobs = resources
+		.filter((resource) => kindOf(resource) === "Job")
+		.map((job): [unknown, number] => [podSpec(job), 1]);
+	const upgrade = sum(
+		total([
+			...workloads(resources).map((resource): [unknown, number] => [
+				podSpec(resource),
+				Number(get(resource, "spec", "replicas") ?? 1) +
+					(kindOf(resource) === "Deployment" ? surge(resource) : 0),
+			]),
+			...jobs,
+		]),
+		sandboxes(
+			sandboxGib.probe + sandboxGib.pooledTurns * sandboxGib.turn,
+			3 + sandboxGib.pooledTurns,
+		),
+	);
+	assert.ok(upgrade.cpu <= node.cpu, `upgrade: ${upgrade.cpu.toFixed(2)} CPU of ${node.cpu}`);
+	assert.ok(
+		upgrade.memory <= node.memory,
+		`upgrade: ${gib(upgrade.memory)} of ${gib(node.memory)} GiB`,
+	);
+	process.stdout.write(
+		`16 GiB budget of ${gib(node.memory)} GiB: steady ${gib(steady.memory)} GiB ${steady.cpu.toFixed(2)} CPU, with the probe ${gib(probing.memory)} GiB, upgrade ${gib(upgrade.memory)} GiB ${upgrade.cpu.toFixed(2)} CPU\n`,
 	);
 });
 

@@ -79,6 +79,25 @@ spec:
               value: {{ include "hephaestus.natsUrl" . | quote }}
             - name: HEPHAESTUS_INTEGRATION_CONSUMER_INACTIVE_THRESHOLD
               value: {{ $config.consumerInactiveThreshold | quote }}
+            # The server submits practice review jobs only when a worker can run them.
+            - name: AGENT_ENABLED
+              value: {{ .Values.worker.enabled | quote }}
+            - name: HEPHAESTUS_RESEARCH_ORGANIZATION
+              value: {{ $config.researchOrganization | quote }}
+            - name: HEPHAESTUS_PUBLIC_ACTIVITY_ENABLED
+              value: {{ $config.publicActivity.enabled | quote }}
+            - name: HEPHAESTUS_PUBLIC_ACTIVITY_REPOSITORY_VISIBILITY_MAX_AGE
+              value: {{ $config.publicActivity.repositoryVisibilityMaxAge | quote }}
+            - name: HEPHAESTUS_LLM_DISPLAY_CURRENCY
+              value: {{ $config.llmDisplayCurrency | quote }}
+            - name: MONITORING_RUN_ON_STARTUP
+              value: {{ $config.monitoring.runOnStartup | quote }}
+            - name: MONITORING_TIMEFRAME
+              value: {{ $config.monitoring.timeframeDays | int | quote }}
+            - name: MONITORING_SYNC_CRON
+              value: {{ $config.monitoring.syncCron | quote }}
+            - name: MONITORING_SYNC_COOLDOWN_IN_MINUTES
+              value: {{ $config.monitoring.cooldownMinutes | int | quote }}
             - name: HEPHAESTUS_AUTH_ISSUER
               value: {{ printf "https://%s" .Values.host | quote }}
             {{- include "hephaestus.secretEnv" (dict "root" . "env" "HEPHAESTUS_AUTH_STATE_COOKIE_KEY") | nindent 12 }}
@@ -90,6 +109,14 @@ spec:
             {{- include "hephaestus.secretEnv" (dict "root" . "env" "HEPHAESTUS_AUTH_BOOTSTRAP_TOKEN" "optional" true) | nindent 12 }}
             - name: HEPHAESTUS_AUTH_BROWSER_EXTENSION_IDS
               value: {{ $config.auth.browserExtensionIds | quote }}
+            - name: HEPHAESTUS_AUTH_PASSKEYS_INSTANCE_ADMIN_REQUIRED
+              value: {{ $config.auth.passkeys.instanceAdminRequired | quote }}
+            - name: HEPHAESTUS_AUTH_PASSKEYS_WORKSPACE_ADMIN_REQUIRED
+              value: {{ $config.auth.passkeys.workspaceAdminRequired | quote }}
+            - name: HEPHAESTUS_AUTH_PASSKEYS_RP_ID
+              value: {{ $config.auth.passkeys.rpId | quote }}
+            - name: HEPHAESTUS_AUTH_PASSKEYS_ALLOWED_ORIGINS
+              value: {{ $config.auth.passkeys.allowedOrigins | quote }}
             - name: GITHUB_OAUTH_CLIENT_ID
               value: {{ $config.github.oauthClientId | quote }}
             {{- include "hephaestus.secretEnv" (dict "root" . "env" "GITHUB_OAUTH_CLIENT_SECRET" "optional" true) | nindent 12 }}
@@ -126,6 +153,16 @@ spec:
             - name: SPRING_MAIL_USERNAME
               value: {{ $config.email.username | quote }}
             {{- include "hephaestus.secretEnv" (dict "root" . "env" "SPRING_MAIL_PASSWORD" "optional" true) | nindent 12 }}
+            # A relay without a username takes no credentials: an internal relay.
+            - name: SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH
+              value: {{ ne $config.email.username "" | quote }}
+            # STARTTLS on submission (587), or implicit TLS (465). Both verify the relay.
+            - name: SPRING_MAIL_PROPERTIES_MAIL_SMTP_SSL_ENABLE
+              value: {{ eq $config.email.tls "implicit" | quote }}
+            - name: SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE
+              value: {{ eq $config.email.tls "starttls" | quote }}
+            - name: SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_REQUIRED
+              value: {{ eq $config.email.tls "starttls" | quote }}
             - name: HEPHAESTUS_EMAIL_FROM
               value: {{ $config.email.from | quote }}
             - name: HEPHAESTUS_EMAIL_FROM_NAME

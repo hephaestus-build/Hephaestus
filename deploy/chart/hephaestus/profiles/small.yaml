@@ -19,13 +19,15 @@ worker:
   enabled: true
   replicas: 1
   reviews: 1
+  hephTurns: 1
   gitCache:
     sizeLimit: 10Gi
   resources:
     limits: { ephemeral-storage: 12Gi }
   sandbox:
     # While the old worker drains beside the new one: one review (3 GiB), two Heph hosts (2 x 2 GiB),
-    # two turn pools (2 x 3.3 GiB), and the new worker's isolation probe (1.5 GiB).
+    # two turn pools (2 x 3.3 GiB: 2 pooled sandboxes and the hephTurns running one), and the new
+    # worker's isolation probe (1.5 GiB).
     quota:
       enabled: true
       pods: 12

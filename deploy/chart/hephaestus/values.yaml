@@ -194,10 +194,17 @@ worker:
   # The reviews that one worker runs at once. Each review sandbox holds SANDBOX_MEMORY_BYTES, 3 GiB
   # by default, so the sandbox quota must hold every worker's reviews.
   reviews: 5
+  # The Heph turns that one worker runs at once: auto, or a number. Each running turn holds a turn
+  # sandbox of 1 GiB beside the 2 pooled ones, so the sandbox quota must hold them.
+  # docs/admin/runtime-roles.mdx § Heph capacity.
+  hephTurns: auto
   # How long a stopping worker serves its running attempts and claims nothing new. A practice
   # review's median run is 10 to 16 minutes, and its bound is 3 hours. When the drain ends, a review
   # that is still running stops: it is tried again on another worker and spends one of its attempts.
   drainTimeoutSeconds: 3600
+  # RollingUpdate starts the new workers before the old ones drain. Recreate stops the old workers
+  # first, for a node that cannot hold both: each upgrade is then a planned outage of reviews and Heph.
+  rolloutStrategy: RollingUpdate
   # The sandbox nodes. The chart passes each value to the worker as it is.
   runtime:
     # Optional. The RuntimeClass of every sandbox pod, for example gVisor's. Empty uses the
@@ -234,6 +241,19 @@ config:
   durableConsumerName: hephaestus
   consumerInactiveThreshold: 30d
   llmUsageRetention: P400D
+  # A second currency beside USD for AI spend: empty, or EUR. docs/admin/production-setup.mdx.
+  llmDisplayCurrency: ""
+  # The organization that runs research on this instance, as the privacy notice names it.
+  researchOrganization: ""
+  publicActivity:
+    enabled: false
+    repositoryVisibilityMaxAge: 48h
+  # The scheduled sync of each workspace's repositories.
+  monitoring:
+    runOnStartup: true
+    timeframeDays: 7
+    syncCron: "0 0 * * * *"
+    cooldownMinutes: 60
   credentialKey:
     version: 1
     priorVersion: ""
@@ -244,6 +264,12 @@ config:
     assuranceEnforced: true
     bootstrapAdmins: ""
     browserExtensionIds: ""
+    # docs/admin/passkeys.mdx. An empty relying party ID and origin list use the host.
+    passkeys:
+      instanceAdminRequired: true
+      workspaceAdminRequired: false
+      rpId: ""
+      allowedOrigins: ""
   github:
     oauthClientId: ""
     appId: 0
@@ -268,6 +294,9 @@ config:
   email:
     host: ""
     port: 587
+    # starttls on submission, usually 587, or implicit for TLS from the first byte, usually 465.
+    tls: starttls
+    # Empty connects without credentials: an internal relay.
     username: ""
     from: ""
     fromName: Hephaestus

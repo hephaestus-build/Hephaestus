@@ -213,17 +213,26 @@ await test("the chart ships no image, tag or release identity of its own", () =>
 	}
 });
 
+const load = (name: string) => asRecord(parse(read(`profiles/${name}`)), name);
+
 await test("every profile installs from the same templates with only the operator's values", () => {
-	assert.deepEqual(profiles.toSorted(), ["dev.yaml", "preview.yaml", "small.yaml"]);
+	assert.deepEqual(profiles.toSorted(), [
+		"dev.yaml",
+		"preview.yaml",
+		"small-16gib.yaml",
+		"small.yaml",
+	]);
 	for (const name of profiles) {
-		const profile = asRecord(parse(read(`profiles/${name}`)), name);
+		const profile = load(name);
 		for (const owned of ["release", "images", "secret", "host", "trustedProxies", "route"]) {
 			assert.equal(owned in profile, false, `${name} sets ${owned}`);
 		}
-		const values = install(profile, prepared, operator);
+		// The 16 GiB profile goes on top of the single-node one.
+		const layers = name === "small-16gib.yaml" ? [load("small.yaml"), profile] : [profile];
+		const values = install(...layers, prepared, operator);
 		assert.equal(validate(values), true, `${name}: ${JSON.stringify(validate.errors)}`);
-		// The single-node profile runs reviews; the operator states the sandbox namespace and API endpoint.
-		assert.equal(at(values, ["worker", "enabled"]), name === "small.yaml", `${name} worker`);
+		// The single-node profiles run reviews; the operator states the sandbox namespace and API endpoint.
+		assert.equal(at(values, ["worker", "enabled"]), name.startsWith("small"), `${name} worker`);
 	}
 });
 
