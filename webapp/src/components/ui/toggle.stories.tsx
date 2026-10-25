@@ -44,12 +44,12 @@ export const Pressed: Story = {
  * toggle shows its focus and keeps its selected border.
  */
 export const FocusedWhilePressed: Story = {
-	args: { defaultPressed: true },
+	// No transition, so the play reads the settled colours.
+	args: { defaultPressed: true, className: "transition-none" },
 	play: async ({ canvas, userEvent }) => {
 		const toggle = canvas.getByRole("button", { name: "Set by hand" });
 		const restEdge = getComputedStyle(toggle).borderTopColor;
 		await userEvent.tab();
-		await expect(toggle).toHaveFocus();
 		await expectSolidFocusLine(toggle);
 		await expect(getComputedStyle(toggle).borderTopColor).toBe(restEdge);
 	},

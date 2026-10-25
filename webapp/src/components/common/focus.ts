@@ -3,10 +3,9 @@
  * button, a name that is a link — so it focuses like a `Button` does: a solid 1 px line in the ring
  * colour at its edge, and a 3 px half-transparent ring outside it. A `Button` draws the line with its
  * border. Most hand-made controls have no border, and some wrap a card that would cover an inset
- * line, so the line here is the outline. Thus, it also stays in forced-colours mode, which removes
- * every box shadow. The half-transparent ring alone does not reach 3:1 against the ground (WCAG 2.2
- * SC 1.4.11), so the line is the part that makes the focus visible. `ui/button.tsx` keeps its own
- * literal: it is a registry install that re-vendoring overwrites, so it cannot import from here.
+ * line, so the line here is the outline. A caller's `outline-none` voids the line. `ui/button.tsx`
+ * keeps its own literal: it is a registry install that re-vendoring overwrites, so it cannot import
+ * from here.
  */
 export const FOCUS_RING =
 	"focus-visible:outline-1 focus-visible:outline-ring focus-visible:ring-3 focus-visible:ring-ring/50";

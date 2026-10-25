@@ -2,4 +2,4 @@
 "hephaestus": patch
 ---
 
-Keyboard focus is now clearly visible on every control, in light and dark mode.
+Keyboard focus is now clearly visible in light and dark mode.

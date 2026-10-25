@@ -1,5 +1,8 @@
 import { expect } from "storybook/test";
 
+import { cn } from "cn";
+import { buttonVariants } from "@/components/ui/button";
+
 const px = (value: string) => Number.parseFloat(value);
 
 /**
@@ -14,12 +17,31 @@ export const paintedLayers = (shadow: string) =>
 		.filter((layer) => (layer.match(/-?\d*\.?\d+px/gu) ?? []).some((length) => px(length) !== 0));
 
 /**
- * Asserts that a focused element draws a solid, coloured outline: the line that makes a focus ring
- * visible where its half-transparent halo alone is too faint against the ground.
+ * The edge colour of a keyboard-focused outline `Button`, the focus line every other control
+ * matches. The specimen does not transition, so it reads the settled colour.
  */
-export async function expectSolidFocusLine(element: Element) {
+async function focusedButtonEdge(): Promise<string> {
+	const button = document.createElement("button");
+	button.type = "button";
+	button.className = cn(buttonVariants({ variant: "outline" }), "transition-none");
+	document.body.append(button);
+	button.focus();
+	await expect(button.matches(":focus-visible")).toBe(true);
+	const edge = getComputedStyle(button).borderTopColor;
+	button.remove();
+	return edge;
+}
+
+/**
+ * Asserts that a keyboard-focused element draws a solid outline in the colour a focused `Button`
+ * gives its edge. Give the element focus by keyboard first; it has focus again afterwards.
+ */
+export async function expectSolidFocusLine(element: HTMLElement) {
+	await expect(element).toHaveFocus();
 	const { outlineStyle, outlineWidth, outlineColor } = getComputedStyle(element);
 	await expect(outlineStyle).toBe("solid");
 	await expect(px(outlineWidth)).toBeGreaterThan(0);
-	await expect(outlineColor).not.toBe("rgba(0, 0, 0, 0)");
+	await expect(outlineColor).toBe(await focusedButtonEdge());
+	element.focus();
+	await expect(element).toHaveFocus();
 }

@@ -2,7 +2,6 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn } from "storybook/test";
 
 import { FEEDBACK_MODE_DESCRIPTIONS } from "@/lib/practice-feedback-mode";
-import { paintedLayers } from "@/stories/focus";
 import { expectNoPageOverflow } from "@/stories/reflow";
 import { Stateful } from "@/stories/stateful";
 
@@ -189,9 +188,10 @@ export const FocusedRadioKeepsItsRing: Story = {
 	args: { variant: "full", value: "OFF" },
 	play: async ({ canvas, userEvent }) => {
 		const off = canvas.getByRole("radio", { name: "Off" });
+		const restEdge = getComputedStyle(off).borderTopColor;
 		await userEvent.tab();
 		await expect(off).toHaveFocus();
-		await expect(paintedLayers(getComputedStyle(off).boxShadow)).toHaveLength(1);
+		await expect(getComputedStyle(off).borderTopColor).not.toBe(restEdge);
 	},
 };
 
