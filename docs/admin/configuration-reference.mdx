@@ -98,7 +98,7 @@ Compose forwards these variables to the Java containers, where Spring binds them
 | `ITEM_EVENT_LEDGER_SWEEP_BATCH_SIZE` | `hephaestus.item-event-ledger.sweep-batch-size` | `200` |  | `application-server`, `application-worker` | Most item events that each step of the ledger sweep handles. The sweep runs every 15 minutes. |
 | `MONITORING_BACKFILL_BATCH_SIZE` | `hephaestus.sync.backfill.batch-size` | `50` |  | `application-server` | Maximum pages to process per repository per cycle. |
 | `MONITORING_BACKFILL_ENABLED` | `hephaestus.sync.backfill.enabled` | `true` |  | `application-server` | Whether backfill processing is enabled. |
-| `MONITORING_BACKFILL_INTERVAL_SECONDS` | `hephaestus.sync.backfill.interval-seconds` | `60` |  | `application-server` | Seconds between backfill cycles. |
+| `MONITORING_BACKFILL_INTERVAL_SECONDS` | `hephaestus.sync.backfill.interval-seconds` | `60` |  | `application-server` | Seconds between backfill cycles. A cycle holds its replica lock for at least 30 seconds, so a shorter interval runs at most every 30 seconds. |
 | `MONITORING_BACKFILL_RATE_LIMIT_THRESHOLD` | `hephaestus.sync.backfill.rate-limit-threshold` | `500` |  | `application-server` | Remaining API rate limit below which backfill pauses. |
 | `MONITORING_RUN_ON_STARTUP` | `hephaestus.sync.run-on-startup` | `true` |  | `application-server` | Whether to trigger a sync run immediately when the application starts. |
 | `MONITORING_SYNC_COOLDOWN_IN_MINUTES` | `hephaestus.sync.cooldown-minutes` | `60` |  | `application-server` | Minimum minutes between consecutive sync operations. |
