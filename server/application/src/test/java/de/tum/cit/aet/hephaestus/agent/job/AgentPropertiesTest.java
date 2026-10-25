@@ -31,7 +31,7 @@ class AgentPropertiesTest extends BaseUnitTest {
             Duration payloadRetention,
             Duration rowRetention) {
         return new AgentProperties(
-                false, pollInterval, 5, maxRetries, heartbeatInterval, payloadRetention, rowRetention);
+                false, pollInterval, 5, maxRetries, heartbeatInterval, payloadRetention, rowRetention, 16);
     }
 
     static Stream<Arguments> invalidConfigurations() {

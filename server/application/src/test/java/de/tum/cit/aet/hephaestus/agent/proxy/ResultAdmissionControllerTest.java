@@ -2,21 +2,17 @@ package de.tum.cit.aet.hephaestus.agent.proxy;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.handler.AdmissionConflictException;
-import de.tum.cit.aet.hephaestus.agent.handler.FeedbackTextRefusedException;
-import de.tum.cit.aet.hephaestus.agent.handler.PublicationContextRefusedException;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.AdmissionRequestDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.PrepareFeedbackRequestDTO;
 import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.JobJwt;
-import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDestination;
-import de.tum.cit.aet.hephaestus.practices.spi.FeedbackStopReason;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Instant;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Stream;
@@ -58,43 +54,24 @@ class ResultAdmissionControllerTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldNameTheStaleHistoryInAPreparationRefusalThatPreparedNothing() {
+    void shouldRefuseASandboxThatAsksToComposeBecauseTheWorkerComposes() {
         var admission = mock(ResultAdmissionService.class);
         var id = UUID.randomUUID();
         var request = new PrepareFeedbackRequestDTO(UUID.randomUUID(), id, 0, List.of(), List.of(), true, null);
         var now = Instant.now();
         var jwt = new JobJwt(id, 1L, 0, Set.of("llm_proxy"), "test", now, now.plusSeconds(60), now.plusSeconds(30));
         var authentication = new JobTokenAuthentication(ProxyIdentity.of(jwt, "worker"), jwt.scopes(), null);
-        when(admission.prepareFeedback(new ResultAdmissionService.AdmissionIdentity(id, 1L, 0, "worker"), request))
-                .thenThrow(new PublicationContextRefusedException(FeedbackStopReason.PUBLIC_HISTORY_CHANGED));
-        assertThatThrownBy(() -> new ResultAdmissionController(admission).prepareFeedback(request, authentication))
-                .isInstanceOfSatisfying(ResponseStatusException.class, error -> {
-                    Assertions.assertThat(error.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
-                    Assertions.assertThat(error.getBody().getProperties())
-                            .containsEntry("code", "PUBLIC_HISTORY_CHANGED");
-                });
-    }
+        var controller = new ResultAdmissionController(admission);
 
-    @Test
-    void shouldNameTheRuleAndFieldButNotTheTextInATextPolicyRefusal() {
-        var admission = mock(ResultAdmissionService.class);
-        var id = UUID.randomUUID();
-        var request = new PrepareFeedbackRequestDTO(UUID.randomUUID(), id, 0, List.of(), List.of(), true, null);
-        var now = Instant.now();
-        var jwt = new JobJwt(id, 1L, 0, Set.of("llm_proxy"), "test", now, now.plusSeconds(60), now.plusSeconds(30));
-        var authentication = new JobTokenAuthentication(ProxyIdentity.of(jwt, "worker"), jwt.scopes(), null);
-        when(admission.prepareFeedback(new ResultAdmissionService.AdmissionIdentity(id, 1L, 0, "worker"), request))
-                .thenThrow(new FeedbackTextRefusedException(FeedbackDestination.ON_WORK, "LINK", "notes[1]"));
-        assertThatThrownBy(() -> new ResultAdmissionController(admission).prepareFeedback(request, authentication))
-                .isInstanceOfSatisfying(ResponseStatusException.class, error -> {
-                    Assertions.assertThat(error.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
-                    Assertions.assertThat(error.getBody().getProperties())
-                            .containsExactlyInAnyOrderEntriesOf(Map.of(
-                                    "code", "FEEDBACK_TEXT_REFUSED",
-                                    "destination", "ON_WORK",
-                                    "rule", "LINK",
-                                    "field", "notes[1]"));
-                });
+        assertThatThrownBy(() -> controller.prepareFeedback(request, authentication))
+                .isInstanceOfSatisfying(
+                        ResponseStatusException.class,
+                        error -> Assertions.assertThat(error.getStatusCode()).isEqualTo(HttpStatus.GONE));
+        assertThatThrownBy(() -> controller.readPublicFeedbackHistory(authentication))
+                .isInstanceOfSatisfying(
+                        ResponseStatusException.class,
+                        error -> Assertions.assertThat(error.getStatusCode()).isEqualTo(HttpStatus.GONE));
+        verifyNoInteractions(admission);
     }
 
     private static Stream<RuntimeException> attemptConflicts() {

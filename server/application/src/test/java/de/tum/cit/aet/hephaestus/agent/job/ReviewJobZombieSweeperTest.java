@@ -65,7 +65,7 @@ class ReviewJobZombieSweeperTest extends BaseUnitTest {
     private ReviewJobZombieSweeper sweeper;
 
     private static final AgentProperties AGENT_PROPS = new AgentProperties(
-            true, Duration.ofSeconds(1), 5, 5, Duration.ofSeconds(25), Duration.ofDays(14), Duration.ofDays(90));
+            true, Duration.ofSeconds(1), 5, 5, Duration.ofSeconds(25), Duration.ofDays(14), Duration.ofDays(90), 16);
 
     @Mock
     private LlmUsageRecorder usageRecorder;
@@ -98,8 +98,7 @@ class ReviewJobZombieSweeperTest extends BaseUnitTest {
                 attemptUsage,
                 meterRegistry,
                 new ReviewJobTelemetry(meterRegistry, Tracer.NOOP),
-                new ReviewJobRecovery(
-                        jobRepository, AGENT_PROPS, objectMapper, attemptUsage, Optional.empty(), Optional.empty()));
+                new ReviewJobRecovery(jobRepository, AGENT_PROPS, objectMapper, attemptUsage, Optional.empty()));
     }
 
     private ConfigSnapshot admittedSnapshot(int timeoutSeconds) {

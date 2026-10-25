@@ -17,6 +17,7 @@ import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelPriceRepository;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelRepository;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
 import de.tum.cit.aet.hephaestus.agent.catalog.PricingMode;
+import de.tum.cit.aet.hephaestus.agent.composer.CompositionStop;
 import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.config.MemberAiRoutingAdapter;
@@ -29,6 +30,7 @@ import de.tum.cit.aet.hephaestus.agent.runtime.worker.testing.WorkerPropertiesFi
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxTestLimits;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxManager;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmAdmissionService;
+import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetBlockReason;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetDecision;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetService;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder;
@@ -166,7 +168,6 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                         properties,
                         mapper,
                         new ReviewAttemptUsageService(jobs, attemptUsageRows, mock(LlmUsageRecorder.class)),
-                        Optional.empty(),
                         Optional.empty()));
     }
 
@@ -272,6 +273,44 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                 .get()
                 .extracting(ReviewJob::getStatus, ReviewJob::getCancellationReason)
                 .containsExactly(ReviewJobStatus.QUEUED, null);
+    }
+
+    @Test
+    void shouldClaimAContinuationOnlyToWithholdWhenTheBudgetIsSpent() {
+        var job = queued(binding(DataHandlingTier.IN_HOUSE));
+        // Attempt 0 admitted the results and was handed on to compose them.
+        jdbc.update(
+                "UPDATE review_job SET attempt=1, admission_attempt=0, admission_digest=? WHERE id=?",
+                "a".repeat(64),
+                job.getId());
+        var budgets = mock(LlmBudgetService.class);
+        when(budgets.decide(anyLong()))
+                .thenReturn(new LlmBudgetDecision(LlmBudgetBlockReason.EXHAUSTED, LlmBudgetBlockReason.EXHAUSTED));
+        var assignmentSnapshots = mock(ReviewJobAssignments.class);
+        when(assignmentSnapshots.load(any())).thenReturn(List.of(RuntimeReviewTestData.assignment(null, null)));
+        var metrics = new SimpleMeterRegistry();
+        var claims = new ReviewJobClaimService(
+                jobs,
+                policy,
+                methods,
+                assignmentSnapshots,
+                transactions,
+                mapper,
+                metrics,
+                budgets,
+                admission,
+                new ReviewJobTelemetry(metrics, Tracer.NOOP),
+                Optional.empty());
+
+        assertThat(claims.claimJob(job.getId()))
+                .isInstanceOfSatisfying(
+                        ReviewJobClaimService.ClaimResult.class,
+                        claim -> assertThat(claim.withholdOnly()).isEqualTo(CompositionStop.BUDGET));
+
+        var claimed = jobs.findById(job.getId()).orElseThrow();
+        assertThat(claimed.getStatus()).isEqualTo(ReviewJobStatus.RUNNING);
+        assertThat(claimed.getAttempt()).isEqualTo(1);
+        assertThat(claimed.getExecutionStartedAt()).isNull();
     }
 
     @Test

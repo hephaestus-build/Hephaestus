@@ -1,0 +1,58 @@
+[
+	{
+		"slug": "handles-errors",
+		"group": "reliability",
+		"name": "Handles errors",
+		"readsSources": [
+			"scm.pull-request.diff"
+		],
+		"exhaustiveSources": [],
+		"knownLimitations": [
+			"Reads the changed lines only."
+		],
+		"whyItMatters": "A swallowed failure hides the cause from the next reader.",
+		"versionId": "12"
+	},
+	{
+		"slug": "describes-changes",
+		"group": "communication",
+		"name": "Describes changes",
+		"readsSources": [
+			"scm.pull-request.core"
+		],
+		"exhaustiveSources": [
+			"scm.pull-request.core"
+		],
+		"knownLimitations": []
+	},
+	{
+		"slug": "tests-behavior",
+		"name": "Tests behavior",
+		"readsSources": [
+			"scm.pull-request.diff"
+		],
+		"exhaustiveSources": [],
+		"knownLimitations": [],
+		"versionId": "4"
+	},
+	{
+		"slug": "checks-inputs",
+		"name": "Checks inputs",
+		"readsSources": [
+			"scm.pull-request.diff"
+		],
+		"exhaustiveSources": [],
+		"knownLimitations": [
+			"Cannot see runtime configuration."
+		]
+	},
+	{
+		"slug": "names-things",
+		"name": "Names things",
+		"readsSources": [
+			"scm.pull-request.diff"
+		],
+		"exhaustiveSources": [],
+		"knownLimitations": []
+	}
+]

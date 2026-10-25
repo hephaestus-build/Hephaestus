@@ -1,8 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.proxy;
 
 import de.tum.cit.aet.hephaestus.agent.handler.AdmissionConflictException;
-import de.tum.cit.aet.hephaestus.agent.handler.FeedbackTextRefusedException;
-import de.tum.cit.aet.hephaestus.agent.handler.PublicationContextRefusedException;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobDeliveryException;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.AdmissionRequestDTO;
@@ -51,31 +49,33 @@ public class ResultAdmissionController {
 
     @Operation(
             operationId = "prepareFeedback",
-            summary = "Prepare feedback for an admitted item review",
-            description =
-                    "Requires the same fenced worker credential and admitted ITEM review. Preparation persists the"
-                            + " package before a provider write.",
+            summary = "Refused: a sandbox prepares no feedback",
+            description = "The worker composes and prepares the feedback after the sandbox ends. A sandbox that asks is"
+                    + " answered 410.",
             security = @SecurityRequirement(name = "workerBearer"))
     @PostMapping("/prepare-feedback")
     @WorkspaceAgnostic("The worker credential supplies the workspace and exact job attempt")
     public PrepareFeedbackResponseDTO prepareFeedback(
             @Valid @RequestBody PrepareFeedbackRequestDTO request, Authentication authentication) {
-        var identity = attemptOf(authentication);
-        return checked(() -> admission.prepareFeedback(identity, request));
+        attemptOf(authentication);
+        throw composedOnTheWorker();
     }
 
     @Operation(
             operationId = "readPublicFeedbackHistory",
-            summary = "Read authorized feedback receipts for the current item review",
-            description =
-                    "Requires the same fenced worker credential and admitted ITEM review. Returns confirmed same-item,"
-                            + " same-developer copy history; a refused read is not an empty history.",
+            summary = "Refused: a sandbox reads no feedback history",
+            description = "The worker reads the history when it composes the feedback after the sandbox ends. A sandbox"
+                    + " that asks is answered 410.",
             security = @SecurityRequirement(name = "workerBearer"))
     @PostMapping("/public-feedback-history")
     @WorkspaceAgnostic("The worker credential supplies the workspace and exact job attempt")
     public PublicFeedbackHistoryDTO readPublicFeedbackHistory(Authentication authentication) {
-        var identity = attemptOf(authentication);
-        return checked(() -> admission.publicFeedbackHistory(identity));
+        attemptOf(authentication);
+        throw composedOnTheWorker();
+    }
+
+    private static ResponseStatusException composedOnTheWorker() {
+        return new ResponseStatusException(HttpStatus.GONE, "Feedback is composed on the worker, not in the sandbox");
     }
 
     private static <T> T checked(Supplier<T> operation) {
@@ -84,21 +84,8 @@ public class ResultAdmissionController {
         } catch (ResultAdmissionService.StaleAttemptException | AdmissionConflictException conflict) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT, "The review attempt or admitted payload changed", conflict);
-        } catch (JobDeliveryException | ResultAdmissionService.PublicHistoryRefusedException refused) {
+        } catch (JobDeliveryException refused) {
             throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_CONTENT, refused.getMessage(), refused);
-        } catch (FeedbackTextRefusedException text) {
-            // Nothing was prepared; the rule and field tell the composer which text to rewrite before it sends again.
-            var refused = new ResponseStatusException(HttpStatus.CONFLICT, text.getMessage(), text);
-            refused.getBody().setProperty("code", "FEEDBACK_TEXT_REFUSED");
-            refused.getBody().setProperty("destination", text.destination().name());
-            refused.getBody().setProperty("rule", text.rule());
-            refused.getBody().setProperty("field", text.field());
-            throw refused;
-        } catch (PublicationContextRefusedException stale) {
-            // Nothing was prepared; the code tells the runner to compose again from a fresh history read.
-            var refused = new ResponseStatusException(HttpStatus.CONFLICT, stale.getMessage(), stale);
-            refused.getBody().setProperty("code", stale.reason().name());
-            throw refused;
         }
     }
 

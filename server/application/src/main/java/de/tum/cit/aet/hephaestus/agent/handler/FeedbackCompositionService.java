@@ -22,6 +22,8 @@ import de.tum.cit.aet.hephaestus.practices.spi.FeedbackState;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackStore;
 import de.tum.cit.aet.hephaestus.practices.spi.PracticePageDecision;
 import de.tum.cit.aet.hephaestus.practices.spi.PracticePageSupport;
+import de.tum.cit.aet.hephaestus.practices.spi.PreparedReviewOnWork;
+import de.tum.cit.aet.hephaestus.practices.spi.PreparedReviewQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.PrivateFeedbackHistory;
 import de.tum.cit.aet.hephaestus.practices.spi.PrivateFeedbackProgress;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultHistoryEntry;
@@ -33,6 +35,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
@@ -46,6 +49,7 @@ public class FeedbackCompositionService {
     static final int PRIVATE_HISTORY_LIMIT = 30;
 
     private final FeedbackStore feedback;
+    private final PreparedReviewQuery preparedReviews;
     private final ReviewAssignmentStore members;
     private final ResultHistoryQuery history;
     private final HistoryCopies copies;
@@ -103,6 +107,11 @@ public class FeedbackCompositionService {
                 prepared.pieces().stream().map(piece -> piece.feedbackId()).toList(),
                 prepared.packageDigest(),
                 prepared.preparedAt());
+    }
+
+    /** The review on the work that the job's review prepared, as it was composed. */
+    public Optional<PreparedReviewOnWork> preparedReviewOnWork(ReviewJob job) {
+        return preparedReviews.preparedReviewOnWork(job.getWorkspaceId(), job.getReviewId());
     }
 
     /** What private composition is given: its routing, its page support, and the earlier feedback on its open routes. */
@@ -220,13 +229,6 @@ public class FeedbackCompositionService {
                                     row.candidate().practiceId(), FeedbackDestination.CONVERSATION))
                             .forEach(routes::add);
         return List.copyOf(routes);
-    }
-
-    public Read readForCapture(ReviewJob job, List<AdmittedResultSnapshot> admitted) {
-        var read = read(job, admitted);
-        if (read.copies().stream().anyMatch(copy -> !copies.record(copy)))
-            throw new IllegalStateException("Historical support cannot be copied into this capture");
-        return read;
     }
 
     public static @Nullable PracticePageSupportDTO page(Read read) {

@@ -1,0 +1,23 @@
+{
+	"checkedOut": "2222222222222222222222222222222222222222",
+	"blobs": {
+		"2222222222222222222222222222222222222222:src/App.java": {
+			"kind": "regular",
+			"base64": "cGFja2FnZSBhY21lOwoKaW1wb3J0IGphdmEuaW8uSU9FeGNlcHRpb247CgpmaW5hbCBjbGFzcyBBcHAgewogICAgcHJpdmF0ZSBmaW5hbCBDbGllbnQgY2xpZW50OwoKICAgIEFwcChDbGllbnQgY2xpZW50KSB7CiAgICAgICAgdGhpcy5jbGllbnQgPSBjbGllbnQ7CiAgICB9CgogICAgU3RyaW5nIGZldGNoKFN0cmluZyBpZCkgewogICAgICAgIHRyeSB7CiAgICAgICAgICAgIHJldHVybiBjbGllbnQuZ2V0KGlkKTsKICAgICAgICB9IGNhdGNoIChJT0V4Y2VwdGlvbiBlKSB7CiAgICAgICAgICAgIHJldHVybiBudWxsOwogICAgICAgIH0KICAgIH0KfQo="
+		}
+	},
+	"diff": {
+		"kind": "available",
+		"files": [
+			{
+				"status": "M",
+				"path": "src/App.java"
+			},
+			{
+				"status": "M",
+				"path": "README.md"
+			}
+		],
+		"text": "diff --git a/src/App.java b/src/App.java\nindex 1111111..2222222 100644\n--- a/src/App.java\n+++ b/src/App.java\n@@ -10,6 +10,10 @@ final class App {\n[L12]      String fetch(String id) {\n[L11] -        return client.get(id);\n[L13] +        try {\n[L14] +            return client.get(id);\n[L15] +        } catch (IOException e) {\n[L16] +            return null;\n[L17] +        }\n[L18]      }\n[L19]  }\ndiff --git a/README.md b/README.md\nindex 3333333..4444444 100644\n--- a/README.md\n+++ b/README.md\n@@ -1,2 +1,3 @@\n[L1]  # App\n[L2]  Fetches records.\n[L3] +Retries are not supported.\n"
+	}
+}

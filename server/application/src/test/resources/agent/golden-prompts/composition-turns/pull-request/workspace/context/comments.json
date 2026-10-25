@@ -1,0 +1,56 @@
+[
+	{
+		"id": 11,
+		"thread": 11,
+		"native_id": 501,
+		"author": "reviewer",
+		"author_id": 200,
+		"body": "Please do not swallow the IOException here.",
+		"created_at": "2026-10-19T09:00:00Z",
+		"updated_at": "2026-10-19T09:30:00Z",
+		"commit_id": "3333333333333333333333333333333333333333",
+		"path": "src/App.java",
+		"line": 15,
+		"side": "RIGHT",
+		"state": "open",
+		"outdated": true
+	},
+	{
+		"id": 12,
+		"thread": 11,
+		"in_reply_to": 11,
+		"in_reply_to_omitted_reason": "DELIVERED_FEEDBACK",
+		"native_id": 502,
+		"author": "dev",
+		"author_id": 100,
+		"body": "Will change it.",
+		"created_at": "2026-10-19T10:00:00Z",
+		"updated_at": "2026-10-19T10:00:00Z",
+		"commit_id": "2222222222222222222222222222222222222222",
+		"side": "LEFT"
+	},
+	{
+		"id": 13,
+		"native_id": 503,
+		"author": "reviewer",
+		"author_id": 200,
+		"body": "Edited after the capture.",
+		"created_at": "2026-10-19T08:00:00Z",
+		"updated_at": "2026-10-21T08:00:00Z"
+	},
+	{
+		"id": 14,
+		"native_id": 504,
+		"author": "bot",
+		"author_id": 300,
+		"bot": true,
+		"body": "   "
+	},
+	{
+		"id": 15,
+		"native_id": 501,
+		"author": "copy",
+		"author_id": 200,
+		"body": "A second record with the same native id."
+	}
+]

@@ -18,9 +18,10 @@ import org.hibernate.type.SqlTypes;
 import tools.jackson.databind.JsonNode;
 
 /**
- * The original public writer inputs of one admitted review: the finite authorized records and whole standards it
- * was written from, kept so a writer lost after admission can be replaced without assessing again. Cold by design:
- * no association reaches it from {@code ReviewJob}, and only a composition reads its payload, by job.
+ * The original composition inputs of one admitted review: the finite authorized records, whole standards and
+ * staged result history its feedback is composed from, kept so an attempt lost after admission composes again
+ * without assessing again. Cold by design: no association reaches it from {@code ReviewJob}, and only a composition
+ * reads its payload, by job.
  *
  * <p>The row is scoped to its job's workspace and removed with the job. Its admission attempt and digest are the
  * identity the admitted citations were verified under; {@code copyId} is the person-evidence receipt that indexes
@@ -37,7 +38,8 @@ import tools.jackson.databind.JsonNode;
 @Setter
 public class ReviewCompositionBasis {
 
-    public static final int VERSION = 1;
+    /** Version 2 retains the problem history; a basis of an earlier version is not composed from. */
+    public static final int VERSION = 2;
 
     /**
      * Uses the debug transcript's one-day eligibility window. An expired basis is refused; the existing retention

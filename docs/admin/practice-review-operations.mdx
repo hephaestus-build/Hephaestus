@@ -75,15 +75,35 @@ Near the budget limit, the model receives a request to record its current result
 Each reservation ends after the call that spends its budget.
 The serial set ends after the call that spends its pool.
 
-Each composition pass gets at most one full set's work budget.
-Each composer request asks for no more output than its pass has left.
-All passes share the remaining whole-run safety ceiling.
+The worker writes the feedback after the sandbox ends, with the same model.
+These calls count against the workspace's model budget like the review's own calls.
+Each feedback session makes at most the model calls of one practice's turn for each practice that it decides, and at most three practices' worth.
+`hephaestus.practice-review.composition-timeout` bounds the time that the worker spends on it (default 10 minutes, at least 1 minute).
+The step also ends 1 minute before the stale-job sweep would end the attempt, about 14 minutes after the assignment's timeout.
+The whole review can therefore take that much longer than the timeout of its **Practice reviews** assignment.
 
-If the safety ceiling or a stall stops the public review, it can continue once in a new attempt of the same job.
-The configured retry limit still applies.
-The original inputs must still be available.
-That attempt is one more sandbox run, so such a review takes longer and can cost more.
-Recovery after a lost worker keeps its own path, within the same shared retry limit.
+While the worker writes, the review holds no sandbox, so the worker can start the next review.
+`AGENT_MAX_CONCURRENT_COMPOSITIONS` (default 16) sets how many reviews one worker runs at once, with or without a sandbox.
+This bounds the feedback that it writes at once.
+
+Feedback that the worker cannot write is withheld with the most specific reason:
+
+- **No AI** when the workspace's AI choice no longer permits the model.
+- **Evidence not permitted** when the captured work was erased.
+- A refusal from the server when the review on the work cannot be published.
+- **Not composed** for every other cause.
+  For example, the budget or the time ran out, or the model decided nothing.
+
+These causes withhold at once, because another attempt would meet them again.
+A review whose results were admitted never fails because of its feedback.
+The `agent.job.composition.stopped` metric below counts each cause.
+
+A passing cause, such as a provider outage or an unexpected failure, withholds nothing.
+A new attempt of the same job then writes only the feedback that is still open.
+It starts no sandbox and uses the job's retry limit with its usual backoff.
+The attempt at the retry limit withholds what a passing cause leaves open.
+If that attempt is lost too, one more attempt only withholds what is open.
+A handed-on attempt that the developer's AI choice, the budget or a missing model would refuse also only withholds, with that reason.
 
 A sandbox that cannot prepare its workspace runs again in a new attempt, within the same shared retry limit.
 This failure occurs before any model call, so it is a failure of the infrastructure, not of the review.
@@ -95,9 +115,6 @@ Known credential formats in those lines are masked.
 The lines can name repository paths.
 [Kubernetes § Troubleshooting](./kubernetes#troubleshooting) shows how to read them.
 A failure before the sandbox starts is logged with its stage, its kind, such as a repository operation, and the exception types.
-
-If private feedback stops after some of its pieces are prepared, a new attempt composes only for the practices that those pieces do not decide.
-The prepared pieces stay as they are, and they keep the room that they use on their destination.
 
 1. For a model that reasons at length, raise the output tokens.
 
@@ -183,6 +200,12 @@ Use them for alerts instead of application logs.
 - **`agent.job.claim.latency`** — time from a job's eligibility to its claim.
 - **`agent.job.execution.duration`** — tagged by `jobType` and outcome `status`.
 - **`agent.job.delivery.recovered`** — deliveries stopped by an executor crash and successfully retried.
+- **`agent.job.composition.stopped`** — destinations whose feedback the worker did not write, tagged by `cause` and `outcome`.
+  `withheld` counts a recorded withholding, and `handed_on` counts an attempt handed on to compose again.
+  `refused` counts a withholding that the server refused, which leaves its destination without a recorded reason.
+  `unrecorded` counts a review whose last attempt was lost as well, so it completed with open destinations.
+  The causes that withhold at once are `no_ai`, `budget`, `deadline`, `model_refused`, `context_window`, `publication_refused`, `no_decision`, `inputs_gone`, `inputs_erased` and `retries_exhausted`.
+  The passing causes are `provider`, `routing_unavailable` and `unexpected`.
 - **`agent.job.retention.stripped`** / **`agent.job.retention.deleted`** — rows pruned by the retention sweep.
 - **`llm.budget.exhausted`** / **`llm.budget.blocked`** — a crossed cap and work refused at a cap.
 - **`llm.proxy.budget.blocked`** — model calls of a running job that the LLM proxy refused at a cap, tagged by `apiProtocol` and `cap`.

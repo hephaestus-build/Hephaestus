@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
 import de.tum.cit.aet.hephaestus.evidence.CitationSide;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
+import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackAnchor;
 import de.tum.cit.aet.hephaestus.practices.feedback.decision.FeedbackContentDigest;
 import de.tum.cit.aet.hephaestus.practices.feedback.delivery.FeedbackLedgerRecorder;
 import de.tum.cit.aet.hephaestus.practices.feedback.delivery.FeedbackPreparationService;
@@ -13,6 +14,7 @@ import de.tum.cit.aet.hephaestus.practices.result.ResultRepository;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewRepository;
 import de.tum.cit.aet.hephaestus.practices.review.model.Review;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackBasisInput;
+import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCompositionTrace;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCopyInput;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCopyKind;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCopyState;
@@ -23,6 +25,8 @@ import de.tum.cit.aet.hephaestus.practices.spi.FeedbackState;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackStopReason;
 import de.tum.cit.aet.hephaestus.practices.spi.PreparedFeedback;
 import de.tum.cit.aet.hephaestus.practices.spi.PreparedPackage;
+import de.tum.cit.aet.hephaestus.practices.spi.PreparedReviewOnWork;
+import de.tum.cit.aet.hephaestus.practices.spi.PreparedReviewQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.PrivateFeedbackProgress;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStatus;
@@ -33,11 +37,14 @@ import java.time.temporal.ChronoUnit;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -46,6 +53,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.JsonNodeFactory;
 import tools.jackson.databind.node.ObjectNode;
@@ -54,7 +62,7 @@ import tools.jackson.databind.node.ObjectNode;
 @Transactional
 @RequiredArgsConstructor
 @ConditionalOnCaptureRole
-public class FeedbackPreparationStore {
+public class FeedbackPreparationStore implements PreparedReviewQuery {
     private static final String PREPARATION_RECEIPTS = "feedbackPreparationReceipts";
     private static final int MAX_REVIEW_CHECK_BYTES = 65_536;
     private final FeedbackRepository feedback;
@@ -101,21 +109,57 @@ public class FeedbackPreparationStore {
                         .toList());
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<PreparedReviewOnWork> preparedReviewOnWork(long workspaceId, UUID reviewId) {
+        var review = reviews.findByIdAndWorkspaceId(reviewId, workspaceId).orElse(null);
+        if (review == null) return Optional.empty();
+        JsonNode compositions = review.getChecks().path("feedbackComposition");
+        return feedback.findByWorkspaceIdAndReviewIdOrderByCreatedAtAscIdAsc(workspaceId, reviewId).stream()
+                .filter(row -> row.getDestination() == FeedbackDestination.ON_WORK
+                        && compositions.path(row.getId().toString()).isObject())
+                .findFirst()
+                .map(row -> new PreparedReviewOnWork(
+                        row.getBody(),
+                        copies.findByWorkspaceIdAndFeedbackIdOrderByPositionAsc(workspaceId, row.getId()).stream()
+                                .filter(copy -> copy.getKind() == FeedbackCopyKind.LINE_NOTE)
+                                .flatMap(copy -> note(copy).stream())
+                                .toList(),
+                        new JsonMapper()
+                                .treeToValue(
+                                        compositions.path(row.getId().toString()), FeedbackCompositionTrace.class)));
+    }
+
+    private static Optional<PreparedReviewOnWork.Note> note(FeedbackCopy copy) {
+        String body = copy.getBody();
+        String path = copy.getPath();
+        if (body == null || path == null) return Optional.empty();
+        return Optional.of(new PreparedReviewOnWork.Note(
+                copy.getPosition(),
+                body,
+                new FeedbackAnchor(path, copy.getStartLine(), copy.getEndLine(), copy.getSide())));
+    }
+
     /** What this review's prepared private pieces decide on the admitted results, and the room they were composed to use. */
     @Transactional(readOnly = true)
     public PrivateFeedbackProgress privateProgress(
             long workspaceId, UUID reviewId, long developerId, Collection<UUID> admittedResultIds) {
         if (admittedResultIds.isEmpty()) return PrivateFeedbackProgress.NONE;
         var decided = new HashSet<UUID>();
+        var byDestination = new EnumMap<FeedbackDestination, Set<UUID>>(FeedbackDestination.class);
         var delivering = new HashMap<UUID, FeedbackDestination>();
         for (var row : basis.findPrivateDecisions(workspaceId, reviewId, developerId, admittedResultIds)) {
             decided.add(row.getResultId());
+            byDestination
+                    .computeIfAbsent(row.getDestination(), ignored -> new HashSet<>())
+                    .add(row.getResultId());
             if (row.getDelivering()) delivering.put(row.getFeedbackId(), row.getDestination());
         }
         return new PrivateFeedbackProgress(
                 decided,
                 Collections.frequency(delivering.values(), FeedbackDestination.PRACTICE_PAGE),
-                Collections.frequency(delivering.values(), FeedbackDestination.CONVERSATION));
+                Collections.frequency(delivering.values(), FeedbackDestination.CONVERSATION),
+                byDestination);
     }
 
     private Instant preparationReceipt(Review review, String packageDigest, Instant acceptedAt) {

@@ -1,0 +1,1 @@
+{"contractVersion":3,"destinations":{"ON_WORK":{"maxPieces":1},"PRACTICE_PAGE":{"maxPieces":1},"CONVERSATION":{"maxPieces":1}},"minDistinctItems":2,"onWorkCopyForms":["FILE_NOTE","LINE_NOTE"]}

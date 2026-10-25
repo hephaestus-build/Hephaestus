@@ -1,0 +1,214 @@
+{
+	"contractVersion": 4,
+	"reviewId": "10000000-0000-4000-8000-000000000001",
+	"jobId": "20000000-0000-4000-8000-000000000001",
+	"attempt": 0,
+	"admissionDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+	"admitted": [
+		{
+			"practiceSlug": "handles-errors",
+			"itemId": "3",
+			"resultId": "30000000-0000-4000-8000-000000000001",
+			"outcome": "NOT_MET",
+			"summary": "The new catch swallows the failure",
+			"explanation": "The catch block returns null and records nothing.",
+			"evidence": {
+				"citations": []
+			},
+			"example": null,
+			"coverage": {
+				"source": "claimed",
+				"complete": true,
+				"selected": 1,
+				"checked": 1,
+				"total": 1
+			},
+			"problems": [
+				{
+					"id": "40000000-0000-4000-8000-000000000001",
+					"severity": "MAJOR",
+					"summary": "The failure is dropped",
+					"resultId": "30000000-0000-4000-8000-000000000001",
+					"position": 0,
+					"key": "swallowed-io",
+					"explanation": "The catch returns null without recording the IOException.",
+					"citations": [],
+					"basis": {
+						"type": "introduced",
+						"head": 0,
+						"explanation": "The change adds the catch that drops the failure."
+					},
+					"nextStep": "Record or rethrow the failure.",
+					"publicEligible": true
+				}
+			],
+			"summaryOnly": false,
+			"publicEligible": true
+		},
+		{
+			"practiceSlug": "describes-changes",
+			"itemId": "3",
+			"resultId": "30000000-0000-4000-8000-000000000002",
+			"outcome": "NOT_MET",
+			"summary": "The description omits the reason",
+			"explanation": "It names the change but not why it is needed.",
+			"evidence": {
+				"citations": []
+			},
+			"example": null,
+			"coverage": {
+				"source": "claimed",
+				"complete": true,
+				"selected": 1,
+				"checked": 1,
+				"total": 1
+			},
+			"problems": [
+				{
+					"id": "40000000-0000-4000-8000-000000000002",
+					"severity": "MINOR",
+					"summary": "No reason is given",
+					"resultId": "30000000-0000-4000-8000-000000000002",
+					"position": 0,
+					"key": null,
+					"explanation": "The description lists the change without its purpose.",
+					"citations": [],
+					"basis": null,
+					"nextStep": null,
+					"publicEligible": true
+				}
+			],
+			"summaryOnly": true,
+			"publicEligible": true
+		},
+		{
+			"practiceSlug": "tests-behavior",
+			"itemId": "3",
+			"resultId": "30000000-0000-4000-8000-000000000003",
+			"outcome": "MET",
+			"summary": "A test covers the fetch",
+			"explanation": "AppTest calls fetch with a failing client.",
+			"evidence": {
+				"citations": []
+			},
+			"example": null,
+			"coverage": {
+				"source": "claimed",
+				"complete": true,
+				"selected": 1,
+				"checked": 1,
+				"total": 1
+			},
+			"problems": [],
+			"summaryOnly": false,
+			"publicEligible": true
+		},
+		{
+			"practiceSlug": "checks-inputs",
+			"itemId": "3",
+			"resultId": "30000000-0000-4000-8000-000000000004",
+			"outcome": "COULD_NOT_DETERMINE",
+			"summary": "The id source is not visible",
+			"explanation": null,
+			"evidence": {
+				"citations": [],
+				"openQuestions": [
+					"Where does the id come from?"
+				],
+				"inapplicability": "ignored"
+			},
+			"example": null,
+			"coverage": {
+				"source": "claimed",
+				"complete": false,
+				"selected": 0,
+				"checked": 0,
+				"total": 1
+			},
+			"problems": [],
+			"summaryOnly": false,
+			"publicEligible": true
+		}
+	],
+	"withheld": [
+		{
+			"practiceSlug": "names-things",
+			"itemId": "7",
+			"reason": "NO_EVIDENCE"
+		}
+	],
+	"practicePageSupport": {
+		"state": "UNAVAILABLE",
+		"readAt": "2026-10-20T10:05:00Z",
+		"refusal": null
+	},
+	"conversationEligibility": {
+		"state": "COMPLETE",
+		"readAt": "2026-10-20T10:05:00Z",
+		"results": [
+			{
+				"resultId": "30000000-0000-4000-8000-000000000001",
+				"decision": "MENTOR_UNAVAILABLE",
+				"stopReason": null
+			},
+			{
+				"resultId": "30000000-0000-4000-8000-000000000002",
+				"decision": "ADMIT",
+				"stopReason": null
+			}
+		]
+	},
+	"privateHistory": {
+		"readAt": "2026-10-20T10:05:00Z",
+		"coverage": {
+			"maxEntries": 30,
+			"hasMore": false,
+			"omittedWithoutCopyAuthority": 1
+		},
+		"delivered": [
+			{
+				"id": "60000000-0000-4000-8000-000000000001",
+				"destination": "PRACTICE_PAGE",
+				"deliveredAt": "2026-09-02T10:00:00Z",
+				"recordedClaimCurrentness": "CURRENT",
+				"withdrawn": false,
+				"basedOn": [
+					{
+						"resultId": "50000000-0000-4000-8000-000000000001",
+						"practiceSlug": "handles-errors",
+						"practiceVersionId": 11,
+						"outcome": "NOT_MET"
+					}
+				],
+				"bodyRole": "PRACTICE_PAGE_CARD",
+				"body": "Earlier card: record each failure you catch."
+			}
+		],
+		"queued": [
+			{
+				"threadKey": "60000000-0000-4000-8000-000000000002",
+				"feedbackId": "60000000-0000-4000-8000-000000000002",
+				"destination": "CONVERSATION",
+				"practiceSlug": "describes-changes",
+				"preparedAt": "2026-10-18T10:00:00Z",
+				"recordedClaimCurrentness": "STALE",
+				"basedOn": [
+					{
+						"resultId": "50000000-0000-4000-8000-000000000002",
+						"practiceSlug": "describes-changes",
+						"practiceVersionId": null,
+						"outcome": "NOT_MET"
+					}
+				],
+				"bodyRole": "MENTOR_NOTES",
+				"body": "Situation: descriptions name changes without reasons."
+			}
+		]
+	},
+	"publicReviewed": false,
+	"privateProgress": {
+		"decidedResultIds": [],
+		"practicePageDeliveries": 0,
+		"conversationDeliveries": 0
+	}
+}

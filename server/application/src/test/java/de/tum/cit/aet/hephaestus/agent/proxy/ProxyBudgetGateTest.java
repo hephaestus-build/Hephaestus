@@ -14,6 +14,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.UsagePricingState;
 import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewProperties;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
@@ -44,7 +45,8 @@ class ProxyBudgetGateTest extends BaseUnitTest {
     @BeforeEach
     void setUp() {
         gate = new ProxyBudgetGate(
-                budgetService, new PracticeReviewProperties(false, 15, 5, null, 12, 16000, 3, 200_000, 1000));
+                budgetService,
+                new PracticeReviewProperties(false, 15, 5, null, 12, 16000, 3, 200_000, 1000, Duration.ofMinutes(10)));
     }
 
     private static LlmBudgetHeadroom instanceCapOfOneDollar() {

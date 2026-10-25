@@ -14,6 +14,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.BoundModelSlot;
 import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewMethod;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import java.time.Duration;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.json.JsonMapper;
@@ -23,7 +24,8 @@ class ReviewMethodVerifierTest extends BaseUnitTest {
     private final LlmModelResolver models = mock(LlmModelResolver.class);
     private final ModelBindingSource binding = mock(ModelBindingSource.class);
     private final ReviewMethodVerifier verifier = new ReviewMethodVerifier(
-            models, new PracticeReviewProperties(false, 15, 5, 0.5, 12, 16000, 3, 200000, 1000));
+            models,
+            new PracticeReviewProperties(false, 15, 5, 0.5, 12, 16000, 3, 200000, 1000, Duration.ofMinutes(10)));
 
     private ReviewMethod persisted() {
         when(models.resolve(binding))

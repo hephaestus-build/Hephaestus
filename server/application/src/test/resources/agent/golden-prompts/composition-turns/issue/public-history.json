@@ -1,0 +1,17 @@
+{
+	"contractVersion": 4,
+	"readAt": "2026-10-20T10:06:00Z",
+	"publicationContext": null,
+	"history": {
+		"item": {
+			"id": "3",
+			"kind": "scm.issue",
+			"parentId": "1",
+			"provider": "GITHUB",
+			"label": "acme/app#7",
+			"title": "Retry record fetches",
+			"url": "https://github.com/acme/app/issues/3"
+		},
+		"feedback": []
+	}
+}

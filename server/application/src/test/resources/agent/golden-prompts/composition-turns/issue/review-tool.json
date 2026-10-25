@@ -1,0 +1,140 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "decisions",
+    "summary"
+  ],
+  "properties": {
+    "decisions": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "description": "Decided first: one decision for each NOT_MET result. RAISE means the texts below speak about it or its problems; any other disposition withholds it, and no text speaks about it or its problems.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "resultId",
+          "disposition"
+        ],
+        "properties": {
+          "resultId": {
+            "type": "string",
+            "enum": [
+              "30000000-0000-4000-8000-000000000001",
+              "30000000-0000-4000-8000-000000000002"
+            ]
+          },
+          "disposition": {
+            "type": "string",
+            "enum": [
+              "RAISE",
+              "NO_MATERIAL_CHANGE",
+              "ALREADY_SAID",
+              "BELOW_BAR"
+            ]
+          },
+          "witnessIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "comment:context/comments.json:801"
+              ]
+            },
+            "description": "For ALREADY_SAID or NO_MATERIAL_CHANGE: the witnessId of each statement under what was already said on this work that gave this advice. ALREADY_SAID takes a statement marked eligibleForAlreadySaid; NO_MATERIAL_CHANGE one marked eligibleForPriorAdvice. Checked, never stored."
+          }
+        }
+      }
+    },
+    "inline": {
+      "type": "array",
+      "maxItems": 0,
+      "description": "Notes intended for cited lines of the change, each one self-contained point about the code at its line. Each location can fail independently.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "basedOn",
+          "body",
+          "anchor"
+        ],
+        "properties": {
+          "basedOn": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string",
+              "enum": [
+                "30000000-0000-4000-8000-000000000001",
+                "40000000-0000-4000-8000-000000000001",
+                "30000000-0000-4000-8000-000000000002",
+                "40000000-0000-4000-8000-000000000002"
+              ]
+            },
+            "description": "Choose these before writing the body: the id of every NOT_MET result or problem behind a concern this body states, and no other: a result's resultId, or a problem's problemId for one located problem. One named by another body does not support this one. Then write the body from exactly these. It includes the anchor's problem or that problem's result."
+          },
+          "body": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 600,
+            "description": "The whole note in Markdown, from the results and problems in basedOn. Aim for at most 300 characters, one point about this line, at most two short sentences: what, then why or next action. No headings, internal labels or citation coordinates."
+          },
+          "anchor": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "problemId",
+              "citationIndex"
+            ],
+            "description": "The line, as one citation marked anchorable of a problem that basedOn names, itself or through its result. A result's own citations take no note.",
+            "properties": {
+              "problemId": {
+                "type": "string"
+              },
+              "citationIndex": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          }
+        }
+      }
+    },
+    "summary": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": false,
+      "required": [
+        "basedOn",
+        "body"
+      ],
+      "description": "Write after the useful line notes: guidance without a useful line note, or brief orientation, without repeating their diagnosis or action. With no useful line notes, carry the complete guidance here. It never acknowledges a MET result. Send null when it adds no useful comment of its own.",
+      "properties": {
+        "basedOn": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "enum": [
+              "30000000-0000-4000-8000-000000000001",
+              "40000000-0000-4000-8000-000000000001",
+              "30000000-0000-4000-8000-000000000002",
+              "40000000-0000-4000-8000-000000000002"
+            ]
+          },
+          "description": "Choose these before writing the body: the id of every NOT_MET result or problem behind a concern this body states, and no other: a result's resultId, or a problem's problemId for one located problem. One named by another body does not support this one. Then write the body from exactly these. If any of them may not go out, the whole comment stays unsaid."
+        },
+        "body": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1200,
+          "description": "The whole comment in Markdown, from the results and problems in basedOn. Aim for at most 600 characters and 3 points; at most two short sentences per point: what, then why or next action. No headings, internal labels or citation coordinates."
+        }
+      }
+    }
+  }
+}

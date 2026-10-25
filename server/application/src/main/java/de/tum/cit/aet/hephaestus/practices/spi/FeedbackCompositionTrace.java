@@ -42,14 +42,17 @@ public record FeedbackCompositionTrace(
         }
     }
 
+    /** Why results stay unsaid: the composer's reason with the prior advice it rests on, or NOT_COMPOSED. */
     public record QuietDecision(List<Support> basedOn, String reason, List<String> witnessIds) {
+        public static final String NOT_COMPOSED = "NOT_COMPOSED";
+
         public QuietDecision {
             basedOn = List.copyOf(basedOn);
             witnessIds = List.copyOf(witnessIds);
             if (basedOn.isEmpty()
-                    || !List.of("BELOW_BAR", "ALREADY_SAID", "NO_MATERIAL_CHANGE")
+                    || !List.of("BELOW_BAR", "ALREADY_SAID", "NO_MATERIAL_CHANGE", NOT_COMPOSED)
                             .contains(reason)
-                    || (!reason.equals("BELOW_BAR") && witnessIds.isEmpty()))
+                    || (List.of("ALREADY_SAID", "NO_MATERIAL_CHANGE").contains(reason) && witnessIds.isEmpty()))
                 throw new IllegalArgumentException("A quiet decision needs its reason and prior-advice witness.");
         }
     }

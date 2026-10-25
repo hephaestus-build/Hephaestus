@@ -25,6 +25,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -80,6 +81,25 @@ class ProxyRoutingService {
         FrozenModel model = slot == ModelKind.CHAT ? snapshot.model() : snapshot.practiceScriptSlot(slot);
         register(job, identity.workerId(), slot, model);
         return routing;
+    }
+
+    /**
+     * The routing of a chat call that the worker makes for a review attempt it runs: the same live checks as a
+     * sandbox's credential, with the worker's own deadline. Anything else, and the call does not start.
+     *
+     * @throws ResponseStatusException 401 when the attempt is no longer running on this worker
+     */
+    ProxyRouting workerRouting(UUID jobId, long workspaceId, int attempt, String workerId, Instant workDeadline) {
+        var job = agentJobRepository
+                .findById(jobId)
+                .filter(found -> found.getStatus() == ReviewJobStatus.RUNNING
+                        && found.getAttempt() == attempt
+                        && found.getWorkspaceId() == workspaceId
+                        && workerId.equals(found.getWorkerId()))
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Review attempt unavailable"));
+        var snapshot = ConfigSnapshot.fromJson(job.getConfigSnapshot(), objectMapper);
+        register(job, workerId, ModelKind.CHAT, snapshot.model());
+        return reviewRouting(job, snapshot, workDeadline);
     }
 
     /**

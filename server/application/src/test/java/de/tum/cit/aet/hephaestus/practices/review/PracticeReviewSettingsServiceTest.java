@@ -20,6 +20,7 @@ import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.settings.PracticeDeliveryStatus;
 import de.tum.cit.aet.hephaestus.workspace.settings.ReviewScopeMode;
 import de.tum.cit.aet.hephaestus.workspace.settings.WorkspaceReviewScope;
+import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -48,7 +49,7 @@ class PracticeReviewSettingsServiceTest extends BaseUnitTest {
     private WorkspaceContext context;
 
     private final PracticeReviewProperties reviewProperties =
-            new PracticeReviewProperties(false, 15, 5, null, 12, 16000, 3, 200_000, 1000);
+            new PracticeReviewProperties(false, 15, 5, null, 12, 16000, 3, 200_000, 1000, Duration.ofMinutes(10));
 
     @BeforeEach
     void setUp() {

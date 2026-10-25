@@ -589,6 +589,9 @@ hephaestus:
         # as Cohere that bill search units instead of tokens. The proxy refuses further direct calls after
         # this sum.
         direct-model-search-units-per-attempt: ${PRACTICE_REVIEW_DIRECT_MODEL_SEARCH_UNITS_PER_ATTEMPT:1000}
+        # How long the worker may compose a review's feedback after its sandbox ends. The stale-job sweep
+        # bounds it as well.
+        composition-timeout: ${PRACTICE_REVIEW_COMPOSITION_TIMEOUT:10m}
         # Fleet-wide limits on review batches (ReviewBatchProperties). max-window and
         # max-items are the spend guard rails: a batch wider than either is refused at preflight,
         # before anything is confirmed and before anything is paid for.
@@ -674,6 +677,9 @@ hephaestus:
         # Max candidate QUEUED jobs considered per poll iteration; bounded by this worker's own
         # free local capacity so one poll never over-claims.
         claim-batch-size: ${AGENT_CLAIM_BATCH_SIZE:5}
+        # The most review attempts one worker runs at once. An attempt composes its feedback after its sandbox
+        # ends and holds no sandbox slot then, so this bounds the concurrent compositions.
+        max-concurrent-compositions: ${AGENT_MAX_CONCURRENT_COMPOSITIONS:16}
         # Max orphan-requeue attempts before a RUNNING job whose owning worker was lost is failed
         # instead of requeued again. Authoritative budget lives on agent_job.retry_count.
         max-retries: ${AGENT_MAX_RETRIES:5}

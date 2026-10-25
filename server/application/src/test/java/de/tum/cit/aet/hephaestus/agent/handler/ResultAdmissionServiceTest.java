@@ -35,6 +35,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.FeedbackIds;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackStore;
 import de.tum.cit.aet.hephaestus.practices.spi.PreparedFeedback;
 import de.tum.cit.aet.hephaestus.practices.spi.PreparedPackage;
+import de.tum.cit.aet.hephaestus.practices.spi.PreparedReviewQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.PrivateFeedbackProgress;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultCandidate;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultHistoryQuery;
@@ -76,6 +77,7 @@ class ResultAdmissionServiceTest extends BaseUnitTest {
     private final ReviewAssignmentStore members = mock(ReviewAssignmentStore.class);
     private final FeedbackCompositionService composition = new FeedbackCompositionService(
             feedback,
+            mock(PreparedReviewQuery.class),
             members,
             mock(ResultHistoryQuery.class),
             mock(HistoryCopies.class),
@@ -205,7 +207,7 @@ class ResultAdmissionServiceTest extends BaseUnitTest {
         var copyId = UUID.randomUUID();
         when(files.completeReceipt(identity())).thenReturn(Optional.of(copyId));
         when(files.holdVouchingReceipt(identity(), copyId)).thenReturn(true);
-        when(files.originalPublicInputs(identity()))
+        when(files.originalCompositionInputs(identity()))
                 .thenReturn(
                         Optional.of(Map.of("context/original.txt", "Original work".getBytes(StandardCharsets.UTF_8))));
 
@@ -234,7 +236,7 @@ class ResultAdmissionServiceTest extends BaseUnitTest {
         var copyId = UUID.randomUUID();
         when(files.completeReceipt(identity())).thenReturn(Optional.of(copyId));
         when(files.holdVouchingReceipt(identity(), copyId)).thenReturn(true);
-        when(files.originalPublicInputs(identity()))
+        when(files.originalCompositionInputs(identity()))
                 .thenReturn(
                         Optional.of(Map.of("context/current.txt", "Current work".getBytes(StandardCharsets.UTF_8))));
         var before = Instant.now();
@@ -307,28 +309,23 @@ class ResultAdmissionServiceTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldOwePrivateFeedbackUntilPreparedPiecesDecideEveryNotMetPractice() {
+    void shouldReadPrivateProgressPerDestinationForTheAdmittedResults() {
         job.setAdmissionAttempt(0);
         job.setAdmissionDigest("admitted");
-        UUID carded = UUID.randomUUID(), pending = UUID.randomUUID(), met = UUID.randomUUID();
-        var admitted = List.of(
-                admitted(carded, 11, ResultOutcome.NOT_MET),
-                admitted(pending, 12, ResultOutcome.NOT_MET),
-                admitted(met, 13, ResultOutcome.MET));
+        when(assignments.review(job))
+                .thenReturn(RuntimeReviewTestData.review(ReviewKind.ITEM, RuntimeReviewTestData.assignment(5L, null)));
+        UUID carded = UUID.randomUUID(), pending = UUID.randomUUID();
+        var admitted =
+                List.of(admitted(carded, 11, ResultOutcome.NOT_MET), admitted(pending, 12, ResultOutcome.NOT_MET));
         when(proof.forAttempt(1, job.getReviewId(), job.getId(), 0)).thenReturn(admitted);
-        when(feedback.privateProgress(1, job.getReviewId(), 5, List.of(carded, pending, met)))
-                .thenReturn(
-                        PrivateFeedbackProgress.NONE,
-                        new PrivateFeedbackProgress(Set.of(carded), 1, 0),
-                        new PrivateFeedbackProgress(Set.of(carded, pending), 1, 0));
+        var progress = new PrivateFeedbackProgress(
+                Set.of(carded), 1, 0, Map.of(FeedbackDestination.PRACTICE_PAGE, Set.of(carded)));
+        when(feedback.privateProgress(1, job.getReviewId(), 5, List.of(carded, pending)))
+                .thenReturn(progress);
 
-        assertThat(service.privateFeedbackOwed(job)).as("nothing prepared yet").isTrue();
-        assertThat(service.privateFeedbackOwed(job))
-                .as("a card decides one practice, the other is open")
-                .isTrue();
-        assertThat(service.privateFeedbackOwed(job))
-                .as("a withholding decides the other; the MET practice owes nothing")
-                .isFalse();
+        assertThat(service.privateProgress(job).decidedByDestination())
+                .as("a page card decides its practice on the page only")
+                .containsExactly(Map.entry(FeedbackDestination.PRACTICE_PAGE, Set.of(carded)));
     }
 
     private static AdmittedResultSnapshot admitted(UUID id, long practiceId, ResultOutcome outcome) {

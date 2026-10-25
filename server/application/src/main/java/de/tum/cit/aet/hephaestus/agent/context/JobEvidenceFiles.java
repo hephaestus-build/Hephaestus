@@ -493,14 +493,14 @@ public class JobEvidenceFiles implements SandboxResultListener {
     private static final String INDEX_MARKDOWN_PATH = "INDEX.md";
 
     /**
-     * The finite inputs a public review writer was staged with, exactly as this attempt's folder holds them: the
-     * manifest and its rendered index (with every source's recorded bytes, digests, absences and omissions), every
-     * captured context record, the practice index and whole standards, the composition request, and the checkout's
-     * recorded HEAD and refs. Private history, sandbox work and the checkout's objects are not among them. Read while the attempt still owns its
-     * folder; a context record the manifest does not list with these exact bytes, or any unreadable file, leaves
-     * nothing to retain rather than a part.
+     * The finite inputs the feedback of this attempt is composed from, exactly as its folder holds them: the manifest
+     * and its rendered index (with every source's recorded bytes, digests, absences and omissions), every captured
+     * context record, the practice index and whole standards, the staged history of earlier results, and the
+     * checkout's recorded HEAD and refs. Sandbox work and the checkout's objects are not among them. Read while the
+     * attempt still owns its folder; a context record the manifest does not list with these exact bytes, or any
+     * unreadable file, leaves nothing to retain rather than a part.
      */
-    public Optional<Map<String, byte[]>> originalPublicInputs(ResultAdmissionService.AdmissionIdentity identity) {
+    public Optional<Map<String, byte[]>> originalCompositionInputs(ResultAdmissionService.AdmissionIdentity identity) {
         Path root = directory(identity.workspaceId(), identity.jobId(), identity.attempt(), identity.workerId());
         try {
             var files = new TreeMap<String, byte[]>();
@@ -511,12 +511,12 @@ public class JobEvidenceFiles implements SandboxResultListener {
             var capture = Objects.requireNonNull(recordedJob.getCapture());
             var manifest = new JsonMapper().treeToValue(capture.path("manifest"), JobFolderIndex.class);
             files.put(SandboxLayout.MANIFEST_PATH, new JsonMapper().writeValueAsBytes(manifest));
-            // The rendered index beside the manifest, and the request; each only as this attempt was staged with it.
-            for (String path : List.of(INDEX_MARKDOWN_PATH, SandboxLayout.FEEDBACK_COMPOSITION_PATH)) {
-                Path staged = root.resolve(path);
-                if (Files.isRegularFile(staged, LinkOption.NOFOLLOW_LINKS)) files.put(path, Files.readAllBytes(staged));
-            }
-            for (String prefix : List.of(SandboxLayout.CONTEXT_PREFIX, SandboxLayout.PRACTICES_PREFIX)) {
+            // The rendered index beside the manifest, only as this attempt was staged with it.
+            Path rendered = root.resolve(INDEX_MARKDOWN_PATH);
+            if (Files.isRegularFile(rendered, LinkOption.NOFOLLOW_LINKS))
+                files.put(INDEX_MARKDOWN_PATH, Files.readAllBytes(rendered));
+            for (String prefix : List.of(
+                    SandboxLayout.CONTEXT_PREFIX, SandboxLayout.PRACTICES_PREFIX, SandboxLayout.HISTORY_PREFIX)) {
                 Path directory = root.resolve(prefix);
                 if (!Files.isDirectory(directory, LinkOption.NOFOLLOW_LINKS)) continue;
                 try (var entries = Files.walk(directory)) {

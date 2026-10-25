@@ -1,0 +1,16 @@
+{
+	"reviewDecisions": [
+		{
+			"nativeId": "901",
+			"author": "lead",
+			"authorId": "300",
+			"body": "Looks fine apart from the catch.",
+			"submittedAt": "2026-10-19T11:00:00Z",
+			"observedAt": "2026-10-19T11:05:00Z",
+			"state": "COMMENTED",
+			"commitId": "2222222222222222222222222222222222222222",
+			"dismissed": false
+		}
+	],
+	"decisionHistoryComplete": false
+}

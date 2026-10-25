@@ -265,6 +265,9 @@ A server pod with the worker role enabled uses one root for both.
 
 The webhook role has no Git.
 
+The worker role also writes each review's feedback after its sandbox ends.
+These model calls take the same proxy path and rules as the sandbox's calls, so they need no new egress.
+
 Sandbox maintenance follows the worker role in both split-out and single-container deployments.
 The worker removes orphaned sandbox resources at startup and then at a fixed interval.
 These resources include a Heph host whose worker is gone.
@@ -566,7 +569,8 @@ The shorter `HEPHAESTUS_WORKER_REVIEW_MAX` and `HEPHAESTUS_WORKER_MENTOR_MAX` ar
 A Kubernetes or systemd deployment ignores them without a warning.
 
 `SANDBOX_MAX_CONCURRENT` also caps review capacity.
-A worker never claims more concurrent reviews than the host permits concurrent sandboxes.
+A worker never claims a review when it already runs as many review sandboxes as the host permits.
+A review that only writes its feedback holds no sandbox, so it does not count.
 The single-host self-hosted Compose file sets this limit to 1.
 A higher review capacity there has no effect until you also raise the sandbox limit.
 

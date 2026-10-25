@@ -1,13 +1,15 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import de.tum.cit.aet.hephaestus.agent.composer.CompositionHandedOnException;
+import de.tum.cit.aet.hephaestus.agent.composer.CompositionStop;
+import de.tum.cit.aet.hephaestus.agent.composer.WorkerFeedbackComposer;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.context.InsufficientEvidenceException;
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.gateway.WorkspaceBudgetExceededException;
 import de.tum.cit.aet.hephaestus.agent.handler.DefaultReviewExecutionHandler;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
-import de.tum.cit.aet.hephaestus.agent.handler.spi.JobPreparationException;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.ReviewSourceNotReadyException;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
@@ -94,7 +96,6 @@ import org.springframework.dao.CannotAcquireLockException;
 import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.dao.RecoverableDataAccessException;
 import org.springframework.dao.TransientDataAccessException;
-import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.CannotCreateTransactionException;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -168,16 +169,25 @@ public class ReviewJobExecutor {
     private final Phaser inFlight = new Phaser(1); // 1 = the executor itself; deregistered on stop
     // The attempt each locally running job runs, so a later attempt of the same job is never mistaken for it.
     private final Map<UUID, Integer> localRunningJobs = new ConcurrentHashMap<>();
+    // The locally running jobs whose sandbox has ended, or that never start one: they compose and hold no sandbox slot.
+    private final Set<UUID> composingJobs = ConcurrentHashMap.newKeySet();
+    private final int sandboxSlots;
 
     private final Optional<WorkerCapacityState> capacityState;
     // Worker identity fences terminal writes.
     private final String workerId;
 
     private @Nullable ReviewCompositionContinuation compositionContinuation;
+    private @Nullable WorkerFeedbackComposer feedbackComposer;
 
     @Autowired(required = false)
     void setCompositionContinuation(ReviewCompositionContinuation compositionContinuation) {
         this.compositionContinuation = compositionContinuation;
+    }
+
+    @Autowired(required = false)
+    void setFeedbackComposer(WorkerFeedbackComposer feedbackComposer) {
+        this.feedbackComposer = feedbackComposer;
     }
 
     @Autowired
@@ -210,6 +220,7 @@ public class ReviewJobExecutor {
         this.workerJwtIssuer = workerJwtIssuer;
         this.sandboxManager = sandboxManager;
         this.reviewLimits = sandboxProperties.defaultResourceLimits();
+        this.sandboxSlots = sandboxProperties.maxConcurrentContainers();
         this.sandboxExecutor = sandboxExecutor;
         this.transactionTemplate = transactionTemplate;
         this.objectMapper = objectMapper;
@@ -292,7 +303,7 @@ public class ReviewJobExecutor {
 
     /**
      * Settles this worker's jobs before stopping their containers. Unadmitted attempts may requeue;
-     * admitted attempts retain their results and fail without repeating the review. The drain
+     * admitted attempts keep their results and are handed on to compose what is open, without measuring again. The drain
      * contract is in docs/admin/runtime-roles.mdx.
      *
      * @return {@code true} if every job this worker still owned was settled and every container stop
@@ -437,19 +448,16 @@ public class ReviewJobExecutor {
         log.info("Agent job executor poll loop stopped");
     }
 
-    // Pool size bounds claims independently of configured worker capacity.
+    // The sandbox slots bound the jobs that hold a sandbox; a job that composes holds none. Every local job composes
+    // in the end, so bounding all of them bounds the compositions.
     int computeCapacity() {
-        int concurrency = Math.min(
-                capacityState.map(WorkerCapacityState::reviewMax).orElse(Integer.MAX_VALUE),
-                sandboxExecutorConcurrency());
-        int free = concurrency == Integer.MAX_VALUE
-                ? agentProperties.claimBatchSize()
-                : Math.max(0, concurrency - localRunningJobs.size());
-        return Math.min(free, agentProperties.claimBatchSize());
-    }
-
-    private int sandboxExecutorConcurrency() {
-        return sandboxExecutor instanceof ThreadPoolTaskExecutor pool ? pool.getMaxPoolSize() : Integer.MAX_VALUE;
+        int slots = Math.min(capacityState.map(WorkerCapacityState::reviewMax).orElse(Integer.MAX_VALUE), sandboxSlots);
+        long holding = localRunningJobs.keySet().stream()
+                .filter(jobId -> !composingJobs.contains(jobId))
+                .count();
+        long free =
+                Math.min(slots - holding, agentProperties.maxConcurrentCompositions() - (long) localRunningJobs.size());
+        return (int) Math.min(Math.max(0, free), agentProperties.claimBatchSize());
     }
 
     // Jitter prevents replicas from polling together and amplifying claim contention.
@@ -607,6 +615,23 @@ public class ReviewJobExecutor {
                     ReviewJobTelemetry.ResultOutcome.STARTED,
                     queueDuration);
 
+            // An admitted review measures nothing again: its attempt composes what an earlier attempt left open.
+            ReviewJob current = jobRepository.findById(jobId).orElse(job);
+            if (ResultAdmissionService.isContinuation(current)) {
+                preparationStage.set(PreparationFailure.Stage.EXECUTION_FENCE);
+                if (!markExecutionStarted(jobId, current.getAttempt())) {
+                    metricOutcome = "OWNERSHIP_LOST";
+                    return;
+                }
+                sandboxExecutionStarted = true;
+                if (!composeFeedback(jobId, claim.snapshot(), true, null, claim.withholdOnly())) {
+                    metricOutcome = "REQUEUED_OR_OWNERSHIP_LOST";
+                    return;
+                }
+                recordedTerminal = persistComposedTerminal(jobId, current.getAttempt());
+                metricOutcome = recordedTerminal == null ? "OWNERSHIP_LOST" : recordedTerminal.name();
+                return;
+            }
             PreparedSandbox preparedSandbox = prepareSandboxSpec(jobId, job, claim.snapshot(), preparationStage);
             stagedInputs = preparedSandbox.stagedInputs();
             SandboxSpec sandboxSpec = preparedSandbox.spec();
@@ -672,7 +697,7 @@ public class ReviewJobExecutor {
             try {
                 recordAttemptOutcome(job, claim.itemKind(), metricOutcome, recordedTerminal, startTime, stagedInputs);
             } finally {
-                releaseCapacity();
+                if (!composingJobs.remove(jobId)) releaseCapacity();
                 localRunningJobs.remove(jobId, job.getAttempt());
                 MDC.remove(MDC_JOB_ID);
                 MDC.remove(StructuredLogKeys.WORKSPACE_ID);
@@ -758,32 +783,125 @@ public class ReviewJobExecutor {
                     job.getAttempt() + 1);
             return null;
         }
-        // An admitted run that stopped composing its feedback continues it as a new attempt when the locked job owes it
-        // and its fences hold. A run the sandbox stopped at its time limit had no chance to say so; the same locked
-        // job,
-        // its recorded preparation and the same fences decide.
-        if ((result.exitCode() == SandboxLayout.EXIT_COMPOSITION_OWED || result.timedOut())
-                && continueComposition(job, agentResult, result)) {
-            log.warn(
-                    "Requeuing job {}: feedback composition stopped before it finished (attempt {})",
-                    jobId,
-                    job.getAttempt() + 1);
-            return null;
-        }
+        // The sandbox has ended; whatever it admitted is composed here, before the attempt ends.
+        if (!composeFeedback(
+                jobId,
+                ConfigSnapshot.fromJson(job.getConfigSnapshot(), objectMapper),
+                false,
+                result.outputFiles().get(SandboxLayout.PRACTICE_SCRIPT_REPORT_FILE),
+                null)) return null;
 
         ReviewJobStatus terminalStatus = persistTerminalState(jobId, job.getAttempt(), agentResult, result);
-        ReviewCompositionContinuation kept = compositionContinuation;
-        if (terminalStatus != null && kept != null) {
-            // Its result is recorded: no writer reads the original inputs again. The retention sweep removes
-            // what a failure here leaves.
-            try {
-                kept.forget(job);
-            } catch (RuntimeException e) {
-                log.warn("Could not remove original composition inputs: jobId={}", jobId, e);
-            }
-        }
-
+        if (terminalStatus != null) forgetCompositionInputs(job);
         return terminalStatus;
+    }
+
+    /** Its feedback is decided: no attempt reads the retained inputs again. The retention sweep removes what this leaves. */
+    private void forgetCompositionInputs(ReviewJob job) {
+        ReviewCompositionContinuation kept = compositionContinuation;
+        if (kept == null) return;
+        try {
+            kept.forget(job);
+        } catch (RuntimeException e) {
+            log.warn("Could not remove original composition inputs: jobId={}", job.getId(), e);
+        }
+    }
+
+    /**
+     * Composes the feedback of the admitted review this worker runs, while the attempt still owns it, after it frees
+     * its sandbox slot for another claim. The composer withholds what it cannot finish. A passing cause, or a failure
+     * that leaves it unable to record its withholdings, hands the attempt on with its inputs kept, so the next attempt
+     * composes what is still open.
+     *
+     * @param scriptReport the practice-script report of the sandbox that measured, recorded if the attempt is handed on,
+     *     because no later attempt reports those runs again
+     * @param withholdOnly the cause a claim check met: the attempt composes nothing and withholds what is open with it
+     * @return false when this worker no longer ends the attempt: it was lost or handed on
+     */
+    private boolean composeFeedback(
+            UUID jobId,
+            ConfigSnapshot snapshot,
+            boolean resumed,
+            byte @Nullable [] scriptReport,
+            @Nullable CompositionStop withholdOnly) {
+        if (composingJobs.add(jobId)) releaseCapacity();
+        WorkerFeedbackComposer composer = feedbackComposer;
+        if (composer == null || workerId == null) return true;
+        ReviewJob current = jobRepository.findById(jobId).orElse(null);
+        if (current == null
+                || current.getStatus() != ReviewJobStatus.RUNNING
+                || !workerId.equals(current.getWorkerId())
+                || !ResultAdmissionService.isAdmitted(current)) return true;
+        Instant anchor =
+                current.getExecutionStartedAt() != null ? current.getExecutionStartedAt() : current.getStartedAt();
+        Instant notAfter = Objects.requireNonNullElseGet(anchor, Instant::now)
+                .plusSeconds(snapshot.timeoutSeconds())
+                .plus(ReviewJobZombieSweeper.RUNNING_BUFFER);
+        try {
+            if (withholdOnly != null) composer.withholdResumed(current, workerId, withholdOnly);
+            else if (resumed) composer.composeResumed(current, workerId, notAfter);
+            else composer.composeAfterMeasurement(current, workerId, notAfter);
+        } catch (ResultAdmissionService.StaleAttemptException lost) {
+            log.info("Feedback composition stopped: the attempt no longer runs on this worker: jobId={}", jobId);
+        } catch (CompositionHandedOnException handedOn) {
+            log.warn(
+                    "Feedback composition is handed on to another attempt: jobId={}, cause={}",
+                    jobId,
+                    handedOn.stop().tag());
+            handOn(current, snapshot, scriptReport);
+            return false;
+        } catch (RuntimeException failed) {
+            log.warn("Feedback composition failed, so the attempt is handed on: jobId={}", jobId, failed);
+            handOn(current, snapshot, scriptReport);
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * Hands the attempt on as recovery hands on a lost one. If that fails too, the attempt stays RUNNING here: the
+     * sweepers settle it, and an admitted review is never failed for its feedback.
+     */
+    private void handOn(ReviewJob job, ConfigSnapshot snapshot, byte @Nullable [] scriptReport) {
+        try {
+            transactionTemplate.execute(status -> {
+                if (scriptReport != null)
+                    practiceScriptRuns.record(job, scriptReport, snapshot.practiceScriptModels(), Instant.now());
+                return recovery.recover(job.getId(), workerId, job.getAttempt(), null);
+            });
+        } catch (RuntimeException failed) {
+            log.error("Could not hand the attempt on; it stays for the sweepers: jobId={}", job.getId(), failed);
+        }
+    }
+
+    /**
+     * Ends an attempt that composed and measured nothing: it completes, and bills the model calls it made, which the
+     * proxy counted on the attempt.
+     */
+    private @Nullable ReviewJobStatus persistComposedTerminal(UUID jobId, int attempt) {
+        ReviewJobStatus status;
+        try {
+            status = terminalPersistRetries.execute(named(
+                    "Terminal persistence for jobId=" + jobId,
+                    () -> transactionTemplate.execute(transaction -> {
+                        if (transitionTerminal(jobId, attempt, ReviewJobStatus.COMPLETED, Instant.now(), null) == 0)
+                            return null;
+                        ReviewJob fresh = jobRepository.findById(jobId).orElseThrow();
+                        ReviewJobLlmUsage proxyCounts =
+                                jobRepository.findLlmUsageById(jobId).orElse(null);
+                        ConfigSnapshot snapshot = ConfigSnapshot.fromJson(fresh.getConfigSnapshot(), objectMapper);
+                        fresh.setProcessingStatus(ProcessingStatus.PENDING);
+                        attemptUsage.settleAttempt(
+                                fresh, FrozenCharge.admitted(snapshot, admittedPrice(snapshot)), null, proxyCounts);
+                        jobRepository.saveAndFlush(fresh);
+                        return ReviewJobStatus.COMPLETED;
+                    })));
+        } catch (RetryException e) {
+            throw new TerminalPersistenceException(e);
+        }
+        if (status != null)
+            forgetCompositionInputs(jobRepository.findById(jobId).orElseThrow());
+        return status;
     }
 
     static String randomSpanId() {
@@ -817,20 +935,11 @@ public class ReviewJobExecutor {
         stage.set(PreparationFailure.Stage.INPUTS);
 
         ReviewJob preparedJob = jobRepository.findById(jobId).orElse(job);
-        // A continuing writer captures nothing: it is staged from its admission's original inputs, and the job keeps
-        // the evidence record that admission verified against.
-        boolean continuation = ResultAdmissionService.isContinuation(preparedJob);
-        ReviewCompositionContinuation continuing = compositionContinuation;
-        if (continuation && continuing == null) {
-            throw new JobPreparationException("The review cannot continue: this runtime cannot stage its writer");
-        }
-        PreparedJobInputs preparedInputs = continuation
-                ? Objects.requireNonNull(continuing).prepareInputs(preparedJob)
-                : handler.prepareInputs(preparedJob);
+        PreparedJobInputs preparedInputs = handler.prepareInputs(preparedJob);
 
         try {
             var report = preparedInputs.automatedReviewReadinessReport();
-            if (!continuation && report != null && report.decisions().stream().noneMatch(report::runs)) {
+            if (report != null && report.decisions().stream().noneMatch(report::runs)) {
                 stage.set(PreparationFailure.Stage.PROVENANCE);
                 persistPreparedEvidence(jobId, job.getWorkspaceId(), job.getAttempt(), preparedInputs);
                 handler.completeWithoutExecution(jobRepository.findById(jobId).orElseThrow());
@@ -864,18 +973,16 @@ public class ReviewJobExecutor {
                     workDeadline,
                     job.getAttempt());
             stage.set(PreparationFailure.Stage.PROVENANCE);
-            if (!continuation) {
-                persistProvenanceDigests(
-                        jobId,
-                        job.getWorkspaceId(),
-                        agentSpec.promptDigest(),
-                        sandboxSpec.inputFiles(),
-                        preparedInputs.filesOnDisk(),
-                        preparedInputs.directories(),
-                        job.getAttempt(),
-                        preparedInputs.automatedReviewReadinessReport(),
-                        preparedInputs.copiesExpireAt());
-            }
+            persistProvenanceDigests(
+                    jobId,
+                    job.getWorkspaceId(),
+                    agentSpec.promptDigest(),
+                    sandboxSpec.inputFiles(),
+                    preparedInputs.filesOnDisk(),
+                    preparedInputs.directories(),
+                    job.getAttempt(),
+                    preparedInputs.automatedReviewReadinessReport(),
+                    preparedInputs.copiesExpireAt());
             return new PreparedSandbox(sandboxSpec, preparedInputs);
         } catch (RuntimeException exception) {
             preparedInputs.close();
@@ -1175,15 +1282,6 @@ public class ReviewJobExecutor {
         if (!Boolean.TRUE.equals(updated)) return false;
         infraRetryRequeued.increment();
         return true;
-    }
-
-    private boolean continueComposition(ReviewJob job, AgentResult agentResult, SandboxResult result) {
-        return Boolean.TRUE.equals(transactionTemplate.execute(status -> recovery.continueComposition(
-                job,
-                workerId,
-                agentResult.usage(),
-                result.outputFiles().get(SandboxLayout.PRACTICE_SCRIPT_REPORT_FILE),
-                result.outputFiles().get(SandboxLayout.FEEDBACK_FILENAME))));
     }
 
     private void recordPracticeReviewRefusal(String reason) {

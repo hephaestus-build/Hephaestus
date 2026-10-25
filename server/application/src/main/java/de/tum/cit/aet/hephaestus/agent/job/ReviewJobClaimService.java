@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelUnavailableException;
+import de.tum.cit.aet.hephaestus.agent.composer.CompositionStop;
 import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.config.FrozenModel;
@@ -102,7 +103,21 @@ public class ReviewJobClaimService {
         BUDGET_HELD,
     }
 
-    record ClaimResult(ReviewJob job, ConfigSnapshot snapshot, String itemKind) implements ClaimAttempt {}
+    /**
+     * A claimed attempt.
+     *
+     * @param withholdOnly for an admitted review handed on to compose, the cause a claim check met: the attempt makes no
+     *     model call and withholds what is still open with it
+     */
+    record ClaimResult(
+            ReviewJob job,
+            ConfigSnapshot snapshot,
+            String itemKind,
+            @Nullable CompositionStop withholdOnly) implements ClaimAttempt {
+        ClaimResult(ReviewJob job, ConfigSnapshot snapshot, String itemKind) {
+            this(job, snapshot, itemKind, null);
+        }
+    }
 
     record TerminalClaim(ReviewJob job, ReviewJobStatus status) implements ClaimAttempt {}
 
@@ -156,9 +171,12 @@ public class ReviewJobClaimService {
 
         // Queued again after its results were admitted: a new attempt would capture the work
         // anew, and its citations would not be the ones the admission verified. Its earlier attempt
-        // was billed when it was requeued, and nothing has run since. Only a writer continuing from
-        // the admission's kept inputs is claimed, under every check below.
-        if (ResultAdmissionService.isAdmitted(job) && !ResultAdmissionService.isContinuation(job)) {
+        // was billed when it was requeued, and nothing has run since. Only an attempt handed on to
+        // compose is claimed. A check below that would refuse it instead claims it to withhold what
+        // is still open with that cause, because a refused review would leave its destinations
+        // without a reason. An erasure above cancels it: an erased person gets no new rows.
+        boolean composing = ResultAdmissionService.isContinuation(job);
+        if (ResultAdmissionService.isAdmitted(job) && !composing) {
             job.setStatus(ReviewJobStatus.FAILED);
             job.setCompletedAt(Instant.now());
             job.setErrorMessage(ResultAdmissionService.INTERRUPTED_AFTER_ADMISSION);
@@ -167,6 +185,7 @@ public class ReviewJobClaimService {
         }
 
         if (!memberAiPolicy.permitsReview(job)) {
+            if (composing) return claimToWithhold(job, CompositionStop.NO_AI);
             job.setStatus(ReviewJobStatus.CANCELLED);
             job.setCompletedAt(Instant.now());
             job.setErrorMessage("The developer has not enabled AI practice reviews in this workspace.");
@@ -179,6 +198,7 @@ public class ReviewJobClaimService {
         LlmBudgetBlockReason blockReason =
                 llmBudgetService.decide(job.getWorkspaceId()).forFunding(claimedFundingSource(job));
         if (blockReason != LlmBudgetBlockReason.NONE) {
+            if (composing) return claimToWithhold(job, CompositionStop.BUDGET);
             return holdOrCancelOverBudget(job, blockReason);
         }
 
@@ -187,11 +207,12 @@ public class ReviewJobClaimService {
         // is refused rather than silently switching the queued job to another model.
         WorkspaceAgentBinding binding = memberAiPolicy.binding(job).orElse(null);
         if (binding == null) {
-            return refuseUnavailableModel(job);
+            return composing ? claimToWithhold(job, CompositionStop.MODEL_UNAVAILABLE) : refuseUnavailableModel(job);
         }
         var assigned = assignments.load(job);
         ConfigSnapshot snapshot = admitModels(job, binding, assigned);
-        if (snapshot == null) return refuseUnavailableModel(job);
+        if (snapshot == null)
+            return composing ? claimToWithhold(job, CompositionStop.MODEL_UNAVAILABLE) : refuseUnavailableModel(job);
         String itemKind = assigned.getFirst().item().kind().value();
         // Admission holds this slot's binding row lock until the RUNNING transition commits.
         long runningCount = jobRepository.countRunningByWorkspaceIdAndDataHandlingTier(
@@ -222,6 +243,18 @@ public class ReviewJobClaimService {
         jobRepository.save(job);
 
         return new ClaimResult(job, snapshot, itemKind);
+    }
+
+    /** Claims an attempt that makes no model call: it withholds what its review still has open, with this cause. */
+    private ClaimResult claimToWithhold(ReviewJob job, CompositionStop cause) {
+        String itemKind = assignments.load(job).getFirst().item().kind().value();
+        job.setStatus(ReviewJobStatus.RUNNING);
+        job.setStartedAt(Instant.now());
+        job.setExecutionStartedAt(null);
+        job.setHoldReason(null);
+        job.setWorkerId(workerId);
+        jobRepository.save(job);
+        return new ClaimResult(job, ConfigSnapshot.fromJson(job.getConfigSnapshot(), objectMapper), itemKind, cause);
     }
 
     private @Nullable ConfigSnapshot admitModels(

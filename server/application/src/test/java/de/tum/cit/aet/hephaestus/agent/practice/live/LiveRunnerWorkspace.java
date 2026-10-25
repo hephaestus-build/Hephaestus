@@ -43,6 +43,7 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -91,7 +92,7 @@ final class LiveRunnerWorkspace {
                 new PiRuntimeFactory(MAPPER),
                 new PiResultParser(MAPPER, new SimpleMeterRegistry()),
                 new AgentImageProperties("hephaestus/agent-pi:live", ImagePullPolicy.NEVER),
-                new PracticeReviewProperties(false, 15, 5, null, 12, 16000, 3, 200_000, 1000),
+                new PracticeReviewProperties(false, 15, 5, null, 12, 16000, 3, 200_000, 1000, Duration.ofMinutes(10)),
                 MAPPER);
     }
 

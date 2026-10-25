@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.handler;
 
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.providers.ReviewHistoryContentSource;
+import de.tum.cit.aet.hephaestus.agent.handler.composition.ComposedFeedback;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedResults;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewCompositionBasis;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewCompositionBasisRepository;
@@ -16,9 +17,11 @@ import de.tum.cit.aet.hephaestus.agent.proxy.dto.PrivateProgressDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.PublicFeedbackHistoryDTO;
 import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
+import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackAnchor;
 import de.tum.cit.aet.hephaestus.practices.spi.AdmittedResultQuery;
+import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCompositionTrace;
+import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCopyKind;
 import de.tum.cit.aet.hephaestus.practices.spi.PrivateFeedbackProgress;
-import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewWriteGuard;
@@ -27,11 +30,15 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
@@ -128,7 +135,7 @@ public class ResultAdmissionService {
         }
         var copy = files.completeReceipt(identity).orElse(null);
         if (copy == null || !files.holdVouchingReceipt(identity, copy)) return;
-        var original = files.originalPublicInputs(identity).orElse(null);
+        var original = files.originalCompositionInputs(identity).orElse(null);
         if (original == null) return;
         var basis = new ReviewCompositionBasis();
         basis.setJobId(job.getId());
@@ -147,14 +154,6 @@ public class ResultAdmissionService {
     }
 
     public AdmissionResponseDTO admittedResponse(ReviewJob job) {
-        return response(job, false);
-    }
-
-    public AdmissionResponseDTO capturedAdmissionResponse(ReviewJob job) {
-        return response(job, true);
-    }
-
-    private AdmissionResponseDTO response(ReviewJob job, boolean duringCapture) {
         if (!isAdmitted(job)) throw new AdmissionConflictException();
         var admitted = proof.forAttempt(job.getWorkspaceId(), job.getReviewId(), job.getId(), citationAttempt(job));
         var results = projection.results(job, admitted);
@@ -171,18 +170,15 @@ public class ResultAdmissionService {
         var progress = PrivateFeedbackProgress.NONE;
         if (assignments.review(job).kind() == ReviewKind.ITEM && !admitted.isEmpty()) {
             progress = composition.privateProgress(job, admitted);
-            if (duringCapture) privateRead = composition.readForCapture(job, admitted);
-            else {
-                var identity = new AdmissionIdentity(
-                        job.getId(), job.getWorkspaceId(), job.getAttempt(), Objects.requireNonNull(job.getWorkerId()));
-                privateRead = files.indexLateRead(
-                        identity,
-                        () -> Objects.requireNonNull(transactions.execute(status -> {
-                            ownedJob(identity);
-                            return composition.read(job, admitted);
-                        })),
-                        read -> new JobEvidenceFiles.LateCopies(read.copies()));
-            }
+            var identity = new AdmissionIdentity(
+                    job.getId(), job.getWorkspaceId(), job.getAttempt(), Objects.requireNonNull(job.getWorkerId()));
+            privateRead = files.indexLateRead(
+                    identity,
+                    () -> Objects.requireNonNull(transactions.execute(status -> {
+                        ownedJob(identity);
+                        return composition.read(job, admitted);
+                    })),
+                    read -> new JobEvidenceFiles.LateCopies(read.copies()));
         }
         return new AdmissionResponseDTO(
                 AdmissionResponseDTO.CONTRACT_VERSION,
@@ -244,6 +240,65 @@ public class ResultAdmissionService {
         }));
     }
 
+    /** A review on the work that an earlier attempt prepared, with the admitted anchor of each of its notes. */
+    public record PreparedReview(
+            @Nullable String summary,
+            List<FeedbackCompositionTrace.Support> summaryBasis,
+            List<PreparedNote> notes,
+            List<FeedbackCompositionTrace.QuietDecision> withheld) {}
+
+    /** One placed note of a prepared review, at the citation it was composed on. */
+    public record PreparedNote(
+            String body, List<FeedbackCompositionTrace.Support> basedOn, ComposedFeedback.Anchor anchor) {}
+
+    /**
+     * The review on the work that an earlier attempt of the job prepared, for the private feedback composed after it.
+     * Each placed note is mapped back to the admitted citation it rests on. Empty when the review prepared none, or
+     * when its review on the work only records that it was not composed.
+     */
+    public Optional<PreparedReview> preparedReview(ReviewJob job) {
+        return Objects.requireNonNull(transactions.execute(status -> {
+            var stored = composition.preparedReviewOnWork(job).orElse(null);
+            if (stored == null) return Optional.<PreparedReview>empty();
+            var trace = stored.trace();
+            var rows = proof.forAttempt(job.getWorkspaceId(), job.getReviewId(), job.getId(), citationAttempt(job));
+            var anchorsAt = new HashMap<FeedbackAnchor, List<ComposedFeedback.Anchor>>();
+            projection
+                    .anchors(job, rows)
+                    .forEach((anchor, location) -> anchorsAt
+                            .computeIfAbsent(location, ignored -> new ArrayList<>())
+                            .add(anchor));
+            var notes = new ArrayList<PreparedNote>();
+            for (var note : stored.notes()) {
+                var support = support(trace, FeedbackCopyKind.LINE_NOTE, note.position());
+                var problems = support.stream()
+                        .map(FeedbackCompositionTrace.Support::problemId)
+                        .filter(Objects::nonNull)
+                        .collect(Collectors.toSet());
+                anchorsAt.getOrDefault(note.anchor(), List.of()).stream()
+                        .filter(anchor -> problems.contains(anchor.problemId()))
+                        .min(Comparator.comparingInt(ComposedFeedback.Anchor::citationIndex))
+                        .ifPresent(anchor -> notes.add(new PreparedNote(note.body(), support, anchor)));
+            }
+            var summaryBasis = support(trace, FeedbackCopyKind.SUMMARY, 0);
+            String summary = summaryBasis.isEmpty() ? null : stored.summary();
+            var withheld = trace.withheld().stream()
+                    .filter(decision -> !decision.reason().equals(FeedbackCompositionTrace.QuietDecision.NOT_COMPOSED))
+                    .toList();
+            if (summary == null && notes.isEmpty() && withheld.isEmpty()) return Optional.<PreparedReview>empty();
+            return Optional.of(new PreparedReview(summary, summaryBasis, notes, withheld));
+        }));
+    }
+
+    private static List<FeedbackCompositionTrace.Support> support(
+            FeedbackCompositionTrace trace, FeedbackCopyKind kind, int position) {
+        return trace.copies().stream()
+                .filter(copy -> copy.kind() == kind && copy.position() == position)
+                .findFirst()
+                .map(FeedbackCompositionTrace.CopySupport::basedOn)
+                .orElse(List.of());
+    }
+
     public PublicFeedbackHistoryDTO publicFeedbackHistory(AdmissionIdentity identity) {
         var retained = files.indexLateRead(
                 identity,
@@ -281,21 +336,11 @@ public class ResultAdmissionService {
         return job.getAdmissionAttempt() != null && job.getAdmissionDigest() != null;
     }
 
-    /**
-     * Whether private feedback may still be owed: the review has no prepared private piece on its admitted results yet,
-     * or one of its NOT_MET practices has none. Only the prepared pieces themselves settle a practice.
-     */
-    public boolean privateFeedbackOwed(ReviewJob job) {
+    /** The private feedback this review's attempts already prepared on its admitted results, per destination. */
+    public PrivateFeedbackProgress privateProgress(ReviewJob job) {
+        if (!isAdmitted(job) || assignments.review(job).kind() != ReviewKind.ITEM) return PrivateFeedbackProgress.NONE;
         var admitted = proof.forAttempt(job.getWorkspaceId(), job.getReviewId(), job.getId(), citationAttempt(job));
-        var decided = composition.privateProgress(job, admitted).decidedResultIds();
-        if (decided.isEmpty()) return true;
-        var settled = admitted.stream()
-                .filter(row -> decided.contains(row.id()))
-                .map(row -> row.candidate().practiceId())
-                .collect(Collectors.toSet());
-        return admitted.stream()
-                .anyMatch(row -> row.candidate().outcome() == ResultOutcome.NOT_MET
-                        && !settled.contains(row.candidate().practiceId()));
+        return admitted.isEmpty() ? PrivateFeedbackProgress.NONE : composition.privateProgress(job, admitted);
     }
 
     public static int citationAttempt(ReviewJob job) {

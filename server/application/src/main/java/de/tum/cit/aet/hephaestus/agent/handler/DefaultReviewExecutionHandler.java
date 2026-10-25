@@ -7,7 +7,6 @@ import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.JobFolderIndex;
 import de.tum.cit.aet.hephaestus.agent.context.WorkspaceContextBuilder;
 import de.tum.cit.aet.hephaestus.agent.context.providers.ReviewHistoryContentSource;
-import de.tum.cit.aet.hephaestus.agent.handler.composition.FeedbackCompositionInputs;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobAssignments;
@@ -27,7 +26,6 @@ import de.tum.cit.aet.hephaestus.evidence.capture.CaptureRequest;
 import de.tum.cit.aet.hephaestus.integration.core.framework.ItemDescriptorRegistry;
 import de.tum.cit.aet.hephaestus.integration.core.spi.AboutRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
-import de.tum.cit.aet.hephaestus.integration.core.spi.ItemDescriptor;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemEventName;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemSource;
@@ -35,7 +33,6 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ScanItemVersions;
 import de.tum.cit.aet.hephaestus.practices.PracticeReadSource;
 import de.tum.cit.aet.hephaestus.practices.PracticeReads;
 import de.tum.cit.aet.hephaestus.practices.UnofferedItemCapabilities;
-import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDestination;
 import de.tum.cit.aet.hephaestus.practices.spi.ReadNeed;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultEvidence;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentId;
@@ -246,19 +243,6 @@ public class DefaultReviewExecutionHandler {
                         SandboxLayout.TASK_ENVELOPE_FILENAME,
                         mapper.writeValueAsBytes(TaskEnvelope.practiceReview(
                                 review.id(), job.getId(), job.getAttempt(), job.getWorkspaceId())));
-                FeedbackCompositionInputs.stage(
-                        staged,
-                        review.kind(),
-                        review.origin(),
-                        Set.of(
-                                FeedbackDestination.ON_WORK,
-                                FeedbackDestination.PRACTICE_PAGE,
-                                FeedbackDestination.CONVERSATION),
-                        items.descriptorFor(item.kind())
-                                .map(ItemDescriptor::copyCapabilities)
-                                .orElseThrow(
-                                        () -> new IllegalStateException("The captured item kind has no descriptor")),
-                        mapper);
                 // The attempt's copies of the occasion's record are kept no longer than the record itself.
                 var prepared = files.prepare(job, evidence.withFiles(staged), report)
                         .withCopiesExpireAt(review.evidenceExpiresAt());

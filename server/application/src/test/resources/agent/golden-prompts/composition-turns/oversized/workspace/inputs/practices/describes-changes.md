@@ -1,0 +1,3 @@
+````
+A fenced ``` block inside.
+````

@@ -161,7 +161,10 @@ public final class ProxyStreamingUtils {
      * @param tap receives a copy of each SSE chunk; {@code null} to stream without observing
      */
     public static UpstreamResult forward(
-            Flux<Part> exchange, Duration limit, HttpServletResponse response, @Nullable Consumer<byte[]> tap) {
+            Flux<Part> exchange,
+            Duration limit,
+            @Nullable HttpServletResponse response,
+            @Nullable Consumer<byte[]> tap) {
         try (Stream<Signal<Part>> signals =
                 endingAfter(exchange, limit).materialize().toStream(1)) {
             Iterator<Signal<Part>> parts = signals.iterator();
@@ -169,6 +172,9 @@ public final class ProxyStreamingUtils {
                 throw new IllegalStateException("The upstream response has no head");
             }
             if (head.stream()) {
+                // Only a servlet caller can relay a stream; an in-process caller asked for a body.
+                if (response == null)
+                    throw new IllegalStateException("The upstream answered a body request with a stream");
                 return new UpstreamResult(head.status(), head.headers(), null, writeStream(head, parts, response, tap));
             }
             var body = new ByteArrayOutputStream();

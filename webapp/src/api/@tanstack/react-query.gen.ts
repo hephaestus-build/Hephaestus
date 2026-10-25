@@ -1743,9 +1743,9 @@ export const admitResultsMutation = (options?: Partial<Options<AdmitResultsData>
 };
 
 /**
- * Prepare feedback for an admitted item review
+ * Refused: a sandbox prepares no feedback
  *
- * Requires the same fenced worker credential and admitted ITEM review. Preparation persists the package before a provider write.
+ * The worker composes and prepares the feedback after the sandbox ends. A sandbox that asks is answered 410.
  */
 export const prepareFeedbackMutation = (options?: Partial<Options<PrepareFeedbackData>>): UseMutationOptions<PrepareFeedbackResponse2, DefaultError, Options<PrepareFeedbackData>> => {
     const mutationOptions: UseMutationOptions<PrepareFeedbackResponse2, DefaultError, Options<PrepareFeedbackData>> = {
@@ -1762,9 +1762,9 @@ export const prepareFeedbackMutation = (options?: Partial<Options<PrepareFeedbac
 };
 
 /**
- * Read authorized feedback receipts for the current item review
+ * Refused: a sandbox reads no feedback history
  *
- * Requires the same fenced worker credential and admitted ITEM review. Returns confirmed same-item, same-developer copy history; a refused read is not an empty history.
+ * The worker reads the history when it composes the feedback after the sandbox ends. A sandbox that asks is answered 410.
  */
 export const readPublicFeedbackHistoryMutation = (options?: Partial<Options<ReadPublicFeedbackHistoryData>>): UseMutationOptions<ReadPublicFeedbackHistoryResponse, DefaultError, Options<ReadPublicFeedbackHistoryData>> => {
     const mutationOptions: UseMutationOptions<ReadPublicFeedbackHistoryResponse, DefaultError, Options<ReadPublicFeedbackHistoryData>> = {

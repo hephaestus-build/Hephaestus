@@ -115,12 +115,13 @@ class ReadIndexesMigrationTest {
         TestDatabase database = PostgreSQLTestContainer.createDatabase("read_indexes_rollback");
         try (Connection connection = connect(database);
                 Liquibase liquibase = liquibase(connection)) {
-            int changeSets = (int) liquibase.listUnrunChangeSets(CONTEXTS, LABELS).stream()
-                    .filter(changeSet -> changeSet.getFilePath().endsWith(CHANGELOG))
-                    .count();
+            // A rollback by count undoes the newest change sets, so it also undoes every changelog after this one.
+            var unrun = liquibase.listUnrunChangeSets(CONTEXTS, LABELS);
+            int first = 0;
+            while (!unrun.get(first).getFilePath().endsWith(CHANGELOG)) first++;
             liquibase.update(CONTEXTS, LABELS);
 
-            liquibase.rollback(changeSets, CONTEXTS, LABELS);
+            liquibase.rollback(unrun.size() - first, CONTEXTS, LABELS);
 
             assertThat(existing(connection, ADDED)).isEmpty();
             assertThat(existing(connection, DROPPED)).containsExactlyElementsOf(DROPPED);

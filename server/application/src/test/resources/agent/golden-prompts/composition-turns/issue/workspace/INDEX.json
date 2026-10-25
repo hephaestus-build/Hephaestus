@@ -1,0 +1,60 @@
+{
+	"contractVersion": "1",
+	"catalogDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+	"itemKind": "scm.issue",
+	"capturedAt": "2026-10-20T10:00:00Z",
+	"sources": [
+		{
+			"kind": "scm.issue.core",
+			"state": {
+				"availability": "AVAILABLE",
+				"content": "TEXT",
+				"completeness": "COMPLETE",
+				"limitations": []
+			},
+			"citation": {
+				"side": "OPTIONAL",
+				"commit": "OPTIONAL"
+			},
+			"files": [
+				{
+					"path": "context/metadata.json"
+				}
+			]
+		},
+		{
+			"kind": "scm.issue.comments",
+			"state": {
+				"availability": "AVAILABLE",
+				"content": "TEXT",
+				"completeness": "PARTIAL",
+				"limitations": []
+			},
+			"citation": {
+				"side": "OPTIONAL",
+				"commit": "OPTIONAL"
+			},
+			"files": [
+				{
+					"path": "context/comments.json"
+				}
+			]
+		}
+	],
+	"refusals": [],
+	"files": [
+		{
+			"kind": "scm.issue.core",
+			"file": {
+				"path": "context/metadata.json"
+			}
+		},
+		{
+			"kind": "scm.issue.comments",
+			"file": {
+				"path": "context/comments.json"
+			}
+		}
+	],
+	"citableTexts": []
+}
