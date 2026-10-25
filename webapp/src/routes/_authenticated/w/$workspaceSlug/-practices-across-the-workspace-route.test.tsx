@@ -6,11 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { stackInSearch } from "@/components/layout/detail-drawer/detail-stack";
 import { EARLIER_REVIEWS_COUNTED } from "@/components/practice-vocabulary/standing-basis-defs";
-import {
-	FIGURES_LOAD_ERROR,
-	LOADING_STATUS,
-	SLOW_LOAD_SHORT,
-} from "@/components/practices-across-the-workspace/across-workspace-copy";
+import { FIGURES_LOAD_ERROR } from "@/components/practices-across-the-workspace/across-workspace-copy";
 import { ownMembership, workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
 import {
@@ -101,11 +97,11 @@ describe("Practices across the workspace", () => {
 		await renderPage();
 		const table = within(screen.getByRole("table", { name: "All practice groups" }));
 		table.getByRole("img", {
-			name: "28 developers in this workspace: 7 Needs attention, 6 Mixed feedback, 8 Going well, 7 none yet. The You marker is on Needs attention.",
+			name: "28 developers in this workspace: 7 Needs attention, 6 Mixed feedback, 8 Going well, 7 none yet. You are in the Needs attention part.",
 		});
 		// Parts of one and two show as they are; the reader without a verdict sits in none yet.
 		table.getByRole("img", {
-			name: "28 developers in this workspace: 1 Needs attention, 0 Mixed feedback, 2 Going well, 25 none yet. The You marker is on none yet.",
+			name: "28 developers in this workspace: 1 Needs attention, 0 Mixed feedback, 2 Going well, 25 none yet. You are in the part with no standing yet.",
 		});
 		expect(overviewReads()).toHaveLength(1);
 		expect(profileReads()).toStrictEqual([]);
@@ -126,7 +122,7 @@ describe("Practices across the workspace", () => {
 		expect(tileWindows()).toStrictEqual(["DAYS_30", "DAYS_90"]);
 		expect(overviewReads()).toHaveLength(1);
 		screen.getByRole("img", {
-			name: "28 developers in this workspace: 7 Needs attention, 6 Mixed feedback, 8 Going well, 7 none yet. The You marker is on Needs attention.",
+			name: "28 developers in this workspace: 7 Needs attention, 6 Mixed feedback, 8 Going well, 7 none yet. You are in the Needs attention part.",
 		});
 	});
 
@@ -159,7 +155,7 @@ describe("Practices across the workspace", () => {
 			),
 		);
 		practices.getByRole("img", {
-			name: "28 developers in this workspace: 9 Needs attention, 4 Mixed feedback, 8 Going well, 7 none yet. The You marker is on Needs attention.",
+			name: "28 developers in this workspace: 9 Needs attention, 4 Mixed feedback, 8 Going well, 7 none yet. You are in the Needs attention part.",
 		});
 		expect(overviewReads()).toHaveLength(1);
 		expect(profileReads()).toStrictEqual([]);
@@ -271,7 +267,7 @@ describe("Practices across the workspace", () => {
 		focusManager.setFocused(undefined);
 	});
 
-	it("says once that it counts, then that the counts take long", async () => {
+	it("loads with its skeletons alone, with no counting line, as the Practice profile does", async () => {
 		const counted = deferred();
 		server.use(
 			http.get(OVERVIEW, async () => {
@@ -280,28 +276,18 @@ describe("Practices across the workspace", () => {
 			}),
 		);
 		renderRouteAtWithRouter(PAGE);
-
-		// One message in the live region, which the slow wording does not replace.
-		const status = await screen.findByText(
-			LOADING_STATUS,
-			{ selector: "[role=status]" },
+		await screen.findByRole(
+			"heading",
+			{ name: "Practices across the workspace" },
 			ROUTE_RENDER_WAIT,
 		);
-		await screen.findByText(SLOW_LOAD_SHORT, undefined, ROUTE_RENDER_WAIT);
-		expect(status.textContent).toBe(LOADING_STATUS);
-		// The rest of the note waits behind the (i) beside it.
-		screen.getByRole("button", { name: "About the wait" });
-
+		expect(screen.queryByText(/^Counting /u)).toBeNull();
+		expect(screen.queryByRole("button", { name: "About the wait" })).toBeNull();
 		counted.resolve();
 		await screen.findByRole(
 			"button",
 			{ name: "Open group Packaging work for review" },
 			ROUTE_RENDER_WAIT,
 		);
-		await waitFor(() => {
-			expect(screen.queryByText(SLOW_LOAD_SHORT)).toBeNull();
-			expect(screen.queryByText(LOADING_STATUS)).toBeNull();
-			expect(screen.queryByRole("button", { name: "About the wait" })).toBeNull();
-		});
 	});
 });

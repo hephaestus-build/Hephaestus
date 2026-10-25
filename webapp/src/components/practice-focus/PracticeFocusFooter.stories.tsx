@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, fn, within } from "storybook/test";
+import { expect, fn, userEvent, within } from "storybook/test";
 
 import { DetailDrawerStack } from "@/components/layout/detail-drawer/DetailDrawerStack";
 import { composeGroupOverview } from "@/components/practice-profile/compose-overview";
@@ -73,7 +73,13 @@ export const ProfileGroupLevel: Story = {
 		});
 		await expectSettledVisible(button);
 		await expectFullSizeSwitch();
-		button.click();
+		// An outline button at rest, as the admin Practice reviews' row actions are: not the dark
+		// primary fill, which only a press shows.
+		await expect(getComputedStyle(button).color).toBe(
+			getComputedStyle(level.getByRole("heading", { name: "Practices in this group" })).color,
+		);
+		// How it answers hover, focus and a press is `ActionButton`'s, and its stories show it.
+		await userEvent.click(button);
 		await expect(args.onSwitch).toHaveBeenCalledOnce();
 	},
 };

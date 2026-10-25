@@ -248,7 +248,7 @@ export const TWO_DEVELOPERS_WORKSPACE: PracticesAcrossWorkspace = {
 	],
 };
 
-/** Two developers are counted, and the reader is not one of them: no You marker anywhere. */
+/** Two developers are counted, and the reader is not one of them: no You bracket anywhere. */
 export const READER_NOT_COUNTED_WORKSPACE: PracticesAcrossWorkspace = {
 	...TWO_DEVELOPERS_WORKSPACE,
 	openFeedback: { yours: 0, middle: { low: 1, high: 2 } },

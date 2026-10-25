@@ -198,3 +198,11 @@ This update restores the decision above. It changes no rule about who and what i
   Quotes, delivery, Heph and every model input keep the full check, so **No AI** still refuses them.
 - Feedback mode **Off** stops delivery only. A practice that is off still has a standing.
   **Reviewed by People** or **Nobody** has no review and no standing.
+
+## Update — 2026-10-25 (the You bracket)
+
+The **You** marker above is now a bracket.
+It spans the whole part of a split that holds the reader.
+A split gives only the part that holds the reader, not a place inside it.
+A point marker suggested such a place, and the bracket does not.
+Nothing else above changes.
