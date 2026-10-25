@@ -5,6 +5,8 @@
 #
 # shared_buffers is 25 % of the limit, the starting value that the PostgreSQL manual (Resource
 # consumption) gives; the manual also says that a larger shared_buffers needs a larger max_wal_size.
+# max_connections leaves each connection about 16 MB, so the pools of the old and the new roles fit
+# during a rolling update (docs/admin/sizing.mdx).
 # Without a limit, PostgreSQL keeps its defaults: the host's memory is not PostgreSQL's to take. These
 # flags come before the ones the container is started with, so a flag in a Compose `command` wins.
 set -eu
@@ -31,8 +33,11 @@ if [ "${1:-}" = postgres ]; then
 				maintenance=$((mb / 16))
 				maintenance=$((maintenance < 64 ? 64 : maintenance > 1024 ? 1024 : maintenance))
 				wal=$((mb / 2 < 1024 ? 1024 : mb / 2))
+				connections=$((mb / 16))
+				connections=$((connections < 100 ? 100 : connections > 400 ? 400 : connections))
 				sizing="-c shared_buffers=$((mb / 4))MB -c effective_cache_size=$((mb * 3 / 4))MB"
 				sizing="$sizing -c maintenance_work_mem=${maintenance}MB -c max_wal_size=${wal}MB"
+				sizing="$sizing -c max_connections=$connections"
 			fi
 			;;
 	esac

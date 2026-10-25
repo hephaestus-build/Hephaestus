@@ -115,9 +115,9 @@ try {
 	}
 	const sized = sql(
 		source,
-		"SELECT current_setting('shared_buffers') || ' ' || current_setting('shared_preload_libraries')",
+		"SELECT current_setting('shared_buffers') || ' ' || current_setting('max_connections') || ' ' || current_setting('shared_preload_libraries')",
 	);
-	if (sized !== "512MB pg_stat_statements") {
+	if (sized !== "512MB 128 pg_stat_statements") {
 		throw new Error(`source is not sized from its 2 GiB limit: ${sized}`);
 	}
 

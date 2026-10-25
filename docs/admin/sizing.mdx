@@ -56,6 +56,7 @@ The other values are common starting points:
 | `effective_cache_size` | 75 % of the limit                        |
 | `maintenance_work_mem` | 1/16 of the limit, from 64 MB to 1 GB    |
 | `max_wal_size`         | half of the limit, at least 1 GB         |
+| `max_connections`      | one for each 16 MB, from 100 to 400      |
 
 A container without a limit keeps the PostgreSQL defaults, because the memory of the host is shared.
 A `-c` flag in the `command` of the `postgres` service overrides a value.
@@ -120,11 +121,24 @@ The server keeps the application default of 20.
 The Compose stacks pass it to the worker only.
 
 Each JVM replica can open up to its own pool size.
-Budget the sum of all pools against the connections that PostgreSQL makes available, less its reserved connections and the connections of other clients.
-For example, one server, one worker and one webhook server use up to 20 + 32 + 2 = 54 connections.
-If PostgreSQL allows 100 connections and reserves 3, then 43 remain for migrations, operator access and other clients.
-This example is only an illustration.
-More replicas or larger pools use more connections, and other clients need their own headroom.
+Budget all clients against `max_connections`:
+
+| Clients                                                          | Connections        |
+| ---------------------------------------------------------------- | ------------------ |
+| The pools of one server, one worker and one webhook server       | 20 + 32 + 2 = 54   |
+| The Heph listener of the server and of the worker, outside pools | 2                  |
+| A database migration or a backup                                 | up to 10           |
+| Operator sessions and monitoring                                 | a few              |
+| The superuser reserve of PostgreSQL                              | 3                  |
+
+Compose stops the old container of a service before it starts the new one, so the roles of two releases never run together.
+Then about 70 connections are in use at most.
+A rolling update, as on Kubernetes, runs the old and the new roles at the same time.
+It needs both sets of pools and listeners, 112 connections, and about 130 with the other clients.
+
+At the default limit of 4 GiB, PostgreSQL allows 256 connections.
+Below 1.6 GiB, it allows 100, which holds the roles of one release only.
+For more replicas or larger pools, raise `POSTGRES_MEM_LIMIT`, or lower `HIKARI_MAXIMUM_POOL_SIZE`.
 
 ## Memory headroom
 
