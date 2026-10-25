@@ -175,7 +175,7 @@ export const NothingResolvedYet: Story = {
 		feedbackTab: "resolved",
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText("No resolved or closed feedback yet")).toBeVisible();
+		await expect(canvas.getByText("No resolved and closed feedback yet")).toBeVisible();
 		await expect(
 			canvas.getByText(
 				"A card moves here once your work resolves it, you mark it yourself, or your workspace changes its practice.",

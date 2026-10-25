@@ -106,6 +106,13 @@ import {
 import { humanizeToken } from "@/lib/humanize";
 import { hasText } from "@/lib/text";
 
+/**
+ * Said under a table of colored group names: the color names the group and carries no rating. The
+ * standings beside them have colors that carry meaning, so the group colors need saying apart.
+ */
+export const GROUP_COLORS_NOTE =
+	"The colors of the group names only tell the groups apart. They are not a rating.";
+
 export interface GroupVisual {
 	Icon: LucideIcon;
 	pill: string;

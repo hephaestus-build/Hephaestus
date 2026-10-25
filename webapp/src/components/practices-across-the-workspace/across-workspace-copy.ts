@@ -136,9 +136,13 @@ export const FIGURES_PLAIN: readonly InfoGroup[] = [
 	},
 ];
 
-/** The part of a split for developers with a standing elsewhere on the page but no verdict here. */
+/**
+ * The part of a split for developers with a standing elsewhere on the page but no verdict here. Its
+ * label is the Practice profile's "No standing yet"; the text alternative keeps the shorter "none
+ * yet" inside its list of counts.
+ */
 export const NONE_YET_SEGMENT = {
-	label: "None yet",
+	label: "No standing yet",
 	inSentence: "none yet",
 	icon: CircleDashedIcon,
 	colorClass: NEUTRAL_GREY,
@@ -148,8 +152,8 @@ export const NONE_YET_SEGMENT = {
  * The plain reading of a bar's colours, first in the legend's (i). Grey is no standing, never "okay".
  */
 export const NONE_YET_PLAIN: InfoLine = {
-	term: "Grey, None yet:",
-	text: "no standing yet. No review has judged this in their work, or there was nothing to judge. Grey does not mean okay.",
+	term: "Grey, No standing yet:",
+	text: "no review has judged this in their work, or there was nothing to judge. Grey does not mean okay.",
 };
 
 /** The lines in the legend's (i) after the colours, in the words of `docs/user/practice-profile.mdx` § The bars. */

@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { formatShortDay } from "@/lib/dates";
 import { hasText } from "@/lib/text";
 
+import { deliveredOnly } from "./ObservationFeedback";
 import { type FeedbackResponseControls, isEmptyFeedbackResponse } from "./reviews";
 
 export interface OwnFeedbackListProps {
@@ -25,7 +26,13 @@ export interface OwnFeedbackListProps {
 	responses?: FeedbackResponseControls;
 }
 
-export function OwnFeedbackList({ feedback, responses }: OwnFeedbackListProps) {
+/**
+ * The reader's feedback from a review: only what reached them (`deliveredOnly`). Feedback that was
+ * withheld, awaits approval, was rejected or failed was never posted, so it is not listed as if it
+ * were on the work.
+ */
+export function OwnFeedbackList({ feedback: given, responses }: OwnFeedbackListProps) {
+	const feedback = deliveredOnly(given);
 	if (feedback.length === 0) {
 		return null;
 	}

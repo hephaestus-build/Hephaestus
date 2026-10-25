@@ -165,6 +165,8 @@ export interface PracticeTableProps<TRow> extends PracticeTableBody<TRow> {
 	heads?: readonly PracticeTableHead[];
 	/** "Practice", "Practice group". */
 	subjectHead: string;
+	/** An (i) beside the subject's heading that says what the subject is, for a page that says it nowhere else. */
+	subjectInfo?: ReactNode;
 	/**
 	 * One `PracticeTableRow` per row: `StandingCell`, the cells under `heads`, `SubjectCell`; the
 	 * row draws its own link at its end.
@@ -200,6 +202,7 @@ export function PracticeTable<TRow>({
 	onSortChange,
 	heads = NO_HEADS,
 	subjectHead,
+	subjectInfo,
 	sections,
 	...body
 }: PracticeTableProps<TRow>) {
@@ -230,7 +233,17 @@ export function PracticeTable<TRow>({
 							{head.label}
 						</TableHead>
 					))}
-					<TableHead>{subjectHead}</TableHead>
+					<TableHead>
+						{subjectInfo === undefined ? (
+							subjectHead
+						) : (
+							// The words in the foreground, as the Standing head's are; the (i) keeps its own tone.
+							<span className="inline-flex items-center gap-1">
+								<span className="text-foreground">{subjectHead}</span>
+								{subjectInfo}
+							</span>
+						)}
+					</TableHead>
 					<TableHead className="w-32">
 						<span className="sr-only">Open</span>
 					</TableHead>
@@ -401,8 +414,12 @@ export function StandingCell({ standing, direction, support, scope, basis }: Sta
 	return (
 		<TableCell className={cn(OPEN_ROW_BAR, "whitespace-normal")}>
 			<div className="flex min-w-0 flex-col items-start gap-1.5">
-				<StandingBadge standing={standing} scope={scope} support={support} />
-				<TrendNote direction={direction} support={support} scope={scope} />
+				{/* A little more room between the standing and its trend, so the two read as two facts;
+				    the note on earlier reviews keeps its own spacing. */}
+				<span className="flex flex-col items-start gap-2.5">
+					<StandingBadge standing={standing} scope={scope} support={support} />
+					<TrendNote direction={direction} support={support} scope={scope} />
+				</span>
 				<StandingBasisNote basis={basis} />
 			</div>
 		</TableCell>

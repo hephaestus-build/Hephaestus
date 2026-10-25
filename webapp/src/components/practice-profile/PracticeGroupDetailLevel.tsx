@@ -18,6 +18,7 @@ import {
 	DEFAULT_PRACTICE_GROUP_SORT,
 	sortByStanding,
 } from "@/components/practice-vocabulary/practice-group-list-order";
+import { isSettledStanding } from "@/components/practice-vocabulary/practice-group-standing-defs";
 import { PracticePill } from "@/components/practice-vocabulary/PracticePill";
 import {
 	PracticeTable,
@@ -35,13 +36,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { TableCell } from "@/components/ui/table";
 import { capitalise, hasText } from "@/lib/text";
 
+import { FoldedPractices, FoldedStandingCell, NoStandingYetBadge } from "./FoldedPractices";
 import {
-	type FoldReason,
-	FoldedPractices,
-	FoldedStandingCell,
-	NeverAppliedBadge,
-} from "./FoldedPractices";
-import { groupNeverApplied, splitFoldedPractices } from "./practice-folds";
+	groupHasNoStandingYet,
+	groupNoStandingYetReason,
+	practiceNoStandingYetReason,
+	splitFoldedPractices,
+} from "./practice-folds";
 import type { PracticePattern } from "./practice-pattern";
 import { GroupWithoutPractices, LevelLead, NoSuchGroup } from "./practice-profile-blocks";
 import { PracticePatternLine } from "./PracticePatternLine";
@@ -114,6 +115,49 @@ function rowGroupMark(group?: GroupRef) {
 
 const NO_SENTENCES: NonNullable<PracticeGroupDetailLevelProps["practiceSentences"]> = {};
 
+/**
+ * The group's standing beside its title. A group with no standing yet reads as its folded row
+ * does: one "No standing yet", with why behind it, from the same practices that fold the row.
+ */
+function GroupStandingChips({
+	standing,
+	practices,
+}: {
+	standing?: PracticeGroupStanding;
+	practices: readonly PracticeStanding[];
+}) {
+	if (
+		!isSettledStanding(standing?.standing ?? "NOT_OBSERVED") ||
+		groupHasNoStandingYet(practices)
+	) {
+		// With no standing there is nothing to compare, and the trend chip says so with its sentence.
+		return (
+			<span className="inline-flex flex-wrap items-center gap-x-5 gap-y-2">
+				<NoStandingYetBadge reason={groupNoStandingYetReason(practices, standing?.standing)} />
+				<TrendNote scope="group" />
+			</span>
+		);
+	}
+	return (
+		<>
+			{/* A little more room between the standing and its trend, so they read as two facts. */}
+			<span className="inline-flex flex-wrap items-center gap-x-5 gap-y-2">
+				<StandingBadge
+					standing={standing?.standing ?? "NOT_OBSERVED"}
+					scope="group"
+					support={standing?.trendSupport ?? undefined}
+				/>
+				<TrendNote
+					direction={standing?.direction ?? undefined}
+					support={standing?.trendSupport ?? undefined}
+					scope="group"
+				/>
+			</span>
+			<StandingBasisNote basis={standing?.basis} />
+		</>
+	);
+}
+
 export function PracticeGroupDetailLevel({
 	nested,
 	path,
@@ -137,12 +181,12 @@ export function PracticeGroupDetailLevel({
 	const heading = rowMark ?? groupMark(UNASSIGNED_GROUP_VISUAL);
 	// The table's sort is this level's alone: it is not a place a reader returns to by URL.
 	const [sort, setSort] = useState(DEFAULT_PRACTICE_GROUP_SORT);
-	// Practices that never applied, and the ones no review has reviewed yet, leave the table for one
-	// folded line each under it.
-	const { shown: applied, neverApplied, notReviewed } = splitFoldedPractices(practices ?? []);
-	// Every practice of the group sits in a fold: the group has practices, so "No practices yet"
-	// would be wrong. The folds stand open instead and their own sentences say why.
-	const onlyFolded = applied.length === 0 && neverApplied.length + notReviewed.length > 0;
+	// Practices with no standing yet, whether they never applied or no review has reviewed them, leave
+	// the table for one folded line under it.
+	const { shown: settled, noStandingYet } = splitFoldedPractices(practices ?? []);
+	// Every practice of the group sits in the fold: the group has practices, so "No practices yet"
+	// would be wrong. The fold stands open instead and its own sentence says why.
+	const onlyFolded = settled.length === 0 && noStandingYet.length > 0;
 	const byStanding = (rows: readonly PracticeStanding[]) =>
 		sortByStanding(
 			rows,
@@ -152,7 +196,7 @@ export function PracticeGroupDetailLevel({
 		);
 	// A folded practice shows as any practice without data: its standing alone, no pattern and no
 	// sentence of what moved.
-	const renderPracticeRow = (practice: PracticeStanding, folded?: FoldReason) => {
+	const renderPracticeRow = (practice: PracticeStanding, folded = false) => {
 		const pattern = folded ? undefined : patterns[practice.slug];
 		const sentences = folded ? undefined : practiceSentences[practice.slug];
 		return (
@@ -167,7 +211,7 @@ export function PracticeGroupDetailLevel({
 				}
 			>
 				{folded ? (
-					<FoldedStandingCell scope="practice" reason={folded} />
+					<FoldedStandingCell reason={practiceNoStandingYetReason(practice)} />
 				) : (
 					<StandingCell
 						standing={practice.standing}
@@ -195,18 +239,17 @@ export function PracticeGroupDetailLevel({
 			</PracticeTableRow>
 		);
 	};
-	// A fold: a toggle row and the folded rows, as sections of the table itself, so they share its
+	// The fold: a toggle row and the folded rows, as sections of the table itself, so they share its
 	// columns.
-	const fold = (folded: readonly PracticeStanding[], reason: FoldReason, columns: number) => (
+	const fold = (columns: number) => (
 		<FoldedPractices
-			count={folded.length}
+			count={noStandingYet.length}
 			noun="practice"
-			reason={reason}
 			columns={columns}
 			defaultOpen={onlyFolded}
 		>
-			{byStanding(folded).map((practice) => (
-				<Fragment key={practice.slug}>{renderPracticeRow(practice, reason)}</Fragment>
+			{byStanding(noStandingYet).map((practice) => (
+				<Fragment key={practice.slug}>{renderPracticeRow(practice, true)}</Fragment>
 			))}
 		</FoldedPractices>
 	);
@@ -218,20 +261,13 @@ export function PracticeGroupDetailLevel({
 			sort={sort}
 			onSortChange={setSort}
 			subjectHead="Practice"
-			rows={byStanding(applied)}
+			rows={byStanding(settled)}
 			rowKey={(practice) => practice.slug}
 			renderRow={(practice) => renderPracticeRow(practice)}
 			empty={onlyFolded ? null : NO_PRACTICES_YET}
 			isLoading={isLoading}
 			loadingRow={loadingRow}
-			sections={(columns) =>
-				isLoading ? undefined : (
-					<>
-						{fold(neverApplied, "never-applied", columns)}
-						{fold(notReviewed, "not-reviewed", columns)}
-					</>
-				)
-			}
+			sections={(columns) => (isLoading ? undefined : fold(columns))}
 		/>
 	);
 
@@ -284,26 +320,10 @@ export function PracticeGroupDetailLevel({
 					</span>
 				}
 				mark={<heading.Icon aria-hidden className={cn("size-6 shrink-0", heading.ink)} />}
+				// No chips while the group loads: an unread standing is not "No standing yet".
 				chips={
 					showsStanding &&
-					// A group whose every practice never applied reads as its folded row does.
-					(groupNeverApplied(practices ?? []) ? (
-						<NeverAppliedBadge scope="group" />
-					) : (
-						<>
-							<StandingBadge
-								standing={standing?.standing ?? "NOT_OBSERVED"}
-								scope="group"
-								support={standing?.trendSupport ?? undefined}
-							/>
-							<TrendNote
-								direction={standing?.direction ?? undefined}
-								support={standing?.trendSupport ?? undefined}
-								scope="group"
-							/>
-							<StandingBasisNote basis={standing?.basis} />
-						</>
-					))
+					!isLoading && <GroupStandingChips standing={standing} practices={practices ?? []} />
 				}
 				aside={
 					showsStanding ? (
