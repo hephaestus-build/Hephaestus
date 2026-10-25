@@ -660,12 +660,13 @@ export function parseStacks(value: string | undefined): Stack[] {
 export interface ChartSettings {
 	release: string;
 	namespace: string;
-	/** A values file in the chart's `profiles/`, without `.yaml`. */
-	profile: string;
+	/** Values files in the chart's `profiles/`, without `.yaml`, each applied over the one before. */
+	profiles: readonly string[];
 	helm: string;
 }
 
 const KUBERNETES_NAME = /^[a-z0-9](?:[a-z0-9-]{0,51}[a-z0-9])?$/u;
+const PROFILE_NAME = /^[a-z0-9-]+$/u;
 
 export function chartSettings(environment: NodeJS.ProcessEnv): ChartSettings {
 	const setting = (name: string, fallback: string): string => {
@@ -675,19 +676,46 @@ export function chartSettings(environment: NodeJS.ProcessEnv): ChartSettings {
 	const settings = {
 		release: setting("HEPHAESTUS_CHART_RELEASE", "hephaestus"),
 		namespace: setting("HEPHAESTUS_CHART_NAMESPACE", "hephaestus"),
-		profile: setting("HEPHAESTUS_CHART_PROFILE", "small"),
+		profiles: setting("HEPHAESTUS_CHART_PROFILE", "small")
+			.split(/[\s,]+/u)
+			.filter(Boolean),
 		helm: setting("HEPHAESTUS_HELM", "helm"),
 	};
 	for (const [name, value] of [
 		["HEPHAESTUS_CHART_RELEASE", settings.release],
 		["HEPHAESTUS_CHART_NAMESPACE", settings.namespace],
-		["HEPHAESTUS_CHART_PROFILE", settings.profile],
 	] as const) {
 		if (!KUBERNETES_NAME.test(value)) {
 			throw new Error(`${name} must be lowercase letters, digits and hyphens, not ${value}`);
 		}
 	}
+	const unusable = settings.profiles.filter((profile) => !PROFILE_NAME.test(profile));
+	if (settings.profiles.length === 0 || unusable.length > 0) {
+		throw new Error(
+			`HEPHAESTUS_CHART_PROFILE must name profiles of lowercase letters, digits and hyphens, not ${unusable.join(", ") || "none"}`,
+		);
+	}
 	return settings;
+}
+
+/** The release tree's values file of each profile, in order; a profile the tree lacks is refused. */
+export async function profileFiles(
+	settings: ChartSettings,
+	releaseTree: string,
+): Promise<string[]> {
+	const files = settings.profiles.map((profile) =>
+		path.join(releaseTree, "deploy/chart/hephaestus/profiles", `${profile}.yaml`),
+	);
+	for (const [index, file] of files.entries()) {
+		try {
+			await stat(file);
+		} catch {
+			throw new Error(
+				`the release has no chart profile ${settings.profiles[index] ?? ""} (${file})`,
+			);
+		}
+	}
+	return files;
 }
 
 /**
@@ -721,27 +749,26 @@ export function chartImageValues(lockEnv: string, release: string): ChartValues 
 }
 
 /**
- * One `helm upgrade --install` of the release tree's chart: the profile, the operator's site values,
- * and last the lock's images and release, so that no site value can run an image the lock does not
- * name.
+ * One `helm upgrade --install` of the release tree's chart: the profiles in order, the operator's
+ * site values, and last the lock's images and release, so that no site value can run an image the
+ * lock does not name.
  */
 export function helmArguments(
 	settings: ChartSettings,
 	releaseTree: string,
+	profiles: readonly string[],
 	imagesFile: string,
 	siteValuesFile: string,
 	timeoutSeconds: number,
 ): string[] {
-	const chart = path.join(releaseTree, "deploy/chart/hephaestus");
 	return [
 		"upgrade",
 		"--install",
 		settings.release,
-		chart,
+		path.join(releaseTree, "deploy/chart/hephaestus"),
 		"--namespace",
 		settings.namespace,
-		"--values",
-		path.join(chart, "profiles", `${settings.profile}.yaml`),
+		...profiles.flatMap((file) => ["--values", file]),
 		"--values",
 		siteValuesFile,
 		"--values",
@@ -1398,6 +1425,7 @@ async function applyChart(
 		helmArguments(
 			settings,
 			releaseTree,
+			await profileFiles(settings, releaseTree),
 			imagesFile,
 			path.join(config.secretsDirectory, "chart.yaml"),
 			config.waitTimeoutSeconds,

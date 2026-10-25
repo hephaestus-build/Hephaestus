@@ -32,6 +32,7 @@ import {
 	commitImages,
 	commitLockEnvironment,
 	helmArguments,
+	profileFiles,
 	ensureReleaseTree,
 	decide,
 	isTarget,
@@ -310,43 +311,70 @@ await test("the chart runs exactly the lock's images, and a commit reports itsel
 	);
 });
 
-await test("a chart host installs the release tree's chart with its profile, the lock's images and the site values", () => {
+await test("a chart host installs the release tree's chart with its profiles, the site values and last the lock's images", async () => {
 	assert.deepEqual(chartSettings({}), {
 		release: "hephaestus",
 		namespace: "hephaestus",
-		profile: "small",
+		profiles: ["small"],
 		helm: "helm",
 	});
-	assert.throws(() => chartSettings({ HEPHAESTUS_CHART_PROFILE: "../small" }), /PROFILE/u);
+	const settings = chartSettings({ HEPHAESTUS_CHART_PROFILE: "small small-16gib" });
+	assert.deepEqual(settings.profiles, ["small", "small-16gib"]);
 	assert.deepEqual(
-		helmArguments(
-			chartSettings({ HEPHAESTUS_HELM: "/usr/local/bin/helm" }),
-			"/var/lib/hephaestus/releases/abc",
-			"/var/lib/hephaestus/chart/abc.images.yaml",
-			"/etc/hephaestus/chart.yaml",
-			1200,
-		),
-		[
-			"upgrade",
-			"--install",
-			"hephaestus",
-			"/var/lib/hephaestus/releases/abc/deploy/chart/hephaestus",
-			"--namespace",
-			"hephaestus",
-			"--values",
-			"/var/lib/hephaestus/releases/abc/deploy/chart/hephaestus/profiles/small.yaml",
-			"--values",
-			"/etc/hephaestus/chart.yaml",
-			// Last: Helm merges later files over earlier ones, so the lock's images always win.
-			"--values",
-			"/var/lib/hephaestus/chart/abc.images.yaml",
-			"--rollback-on-failure",
-			"--wait=watcher",
-			"--wait-for-jobs",
-			"--timeout",
-			"1200s",
-		],
+		chartSettings({ HEPHAESTUS_CHART_PROFILE: "small,small-16gib" }).profiles,
+		settings.profiles,
 	);
+	assert.throws(() => chartSettings({ HEPHAESTUS_CHART_PROFILE: "small ../dev" }), /PROFILE/u);
+	assert.throws(() => chartSettings({ HEPHAESTUS_CHART_PROFILE: " , " }), /PROFILE/u);
+
+	const tree = await mkdtemp(path.join(tmpdir(), "reconcile-profiles-"));
+	try {
+		const profiles = path.join(tree, "deploy/chart/hephaestus/profiles");
+		await mkdir(profiles, { recursive: true });
+		await writeFile(path.join(profiles, "small.yaml"), "{}\n");
+		await assert.rejects(profileFiles(settings, tree), /no chart profile small-16gib/u);
+		await writeFile(path.join(profiles, "small-16gib.yaml"), "{}\n");
+		const files = await profileFiles(settings, tree);
+		assert.deepEqual(files, [
+			path.join(profiles, "small.yaml"),
+			path.join(profiles, "small-16gib.yaml"),
+		]);
+		assert.deepEqual(
+			helmArguments(
+				settings,
+				tree,
+				files,
+				"/var/lib/hephaestus/chart/abc.images.yaml",
+				"/etc/hephaestus/chart.yaml",
+				1200,
+			),
+			[
+				"upgrade",
+				"--install",
+				"hephaestus",
+				path.join(tree, "deploy/chart/hephaestus"),
+				"--namespace",
+				"hephaestus",
+				// Each profile over the one before it, in the order the host names them.
+				"--values",
+				path.join(profiles, "small.yaml"),
+				"--values",
+				path.join(profiles, "small-16gib.yaml"),
+				"--values",
+				"/etc/hephaestus/chart.yaml",
+				// Last: Helm merges later files over earlier ones, so the lock's images always win.
+				"--values",
+				"/var/lib/hephaestus/chart/abc.images.yaml",
+				"--rollback-on-failure",
+				"--wait=watcher",
+				"--wait-for-jobs",
+				"--timeout",
+				"1200s",
+			],
+		);
+	} finally {
+		await rm(tree, { recursive: true, force: true });
+	}
 });
 
 await test("the version rides in labels so a dashboard can group by it", () => {
@@ -899,6 +927,9 @@ async function reconcilerFixture(directory: string) {
 	);
 	// As the repository does, for the ACME store an older release's proxy keeps there.
 	await writeFile(path.join(checkout, ".gitignore"), "docker/letsencrypt/\n");
+	// The profile that a chart host installs by default.
+	await mkdir(path.join(checkout, "deploy/chart/hephaestus/profiles"), { recursive: true });
+	await writeFile(path.join(checkout, "deploy/chart/hephaestus/profiles/small.yaml"), "{}\n");
 	gitIn(checkout, "init", "--quiet", "--initial-branch=main");
 	gitIn(checkout, "config", "user.email", "host@example.invalid");
 	gitIn(checkout, "config", "user.name", "host");

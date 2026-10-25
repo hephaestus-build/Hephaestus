@@ -273,7 +273,7 @@ Set these values in `/etc/hephaestus/reconcile.env`:
 | `HEPHAESTUS_STACKS` | None | `chart`. It takes no other stack. |
 | `HEPHAESTUS_CHART_RELEASE` | `hephaestus` | The Helm release name. |
 | `HEPHAESTUS_CHART_NAMESPACE` | `hephaestus` | The release namespace. |
-| `HEPHAESTUS_CHART_PROFILE` | `small` | A values file in the chart's `profiles/`, without `.yaml`. |
+| `HEPHAESTUS_CHART_PROFILE` | `small` | One or more values files in the chart's `profiles/`, without `.yaml`, separated by spaces or commas. Each profile applies over the one before it, for example `"small small-16gib"`. The reconciler refuses a profile that the release does not have. |
 | `HEPHAESTUS_HELM` | `helm` | The path of the Helm binary, for example `/usr/local/bin/helm`. |
 | `KUBECONFIG` | None | The cluster's kubeconfig. On k3s, `/etc/rancher/k3s/k3s.yaml`. |
 | `HEPHAESTUS_WAIT_TIMEOUT` | `600` | The Helm timeout in seconds. Use `1200`: it must be longer than the 10 minutes that a new Pod waits for the schema. |
@@ -289,7 +289,8 @@ Each apply runs this command:
 ```bash
 helm upgrade --install <release> <release tree>/deploy/chart/hephaestus \
   --namespace <namespace> \
-  --values <release tree>/deploy/chart/hephaestus/profiles/<profile>.yaml \
+  --values <release tree>/deploy/chart/hephaestus/profiles/<first profile>.yaml \
+  --values <release tree>/deploy/chart/hephaestus/profiles/<next profile>.yaml \
   --values /etc/hephaestus/chart.yaml \
   --values /var/lib/hephaestus/chart/<release>.images.yaml \
   --rollback-on-failure --wait=watcher --wait-for-jobs --timeout <timeout>s
