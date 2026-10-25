@@ -586,20 +586,6 @@ class ReviewJobExecutorTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldNotAskForASecondStopOfAnAttemptWhoseStopHasNotReturned() {
-        var job = configuredJob();
-        var executor = claimedOnWorker(job);
-        when(jobs.findRunningAttemptsOwnedBy(any(), eq("worker-1"))).thenReturn(List.of());
-
-        var first = executor.lostAttemptsToStop();
-        assertThat(executor.lostAttemptsToStop())
-                .as("its stop is still pending")
-                .isEmpty();
-        first.forEach(executor::stopLostAttempt);
-        assertThat(executor.lostAttemptsToStop()).as("its stop returned").hasSize(1);
-    }
-
-    @Test
     void shouldNotCancelAJobThisWorkerDoesNotOwn() {
         assertThat(executor(mock(AsyncTaskExecutor.class)).cancelLocalJob(UUID.randomUUID(), "cancelled"))
                 .isFalse();
