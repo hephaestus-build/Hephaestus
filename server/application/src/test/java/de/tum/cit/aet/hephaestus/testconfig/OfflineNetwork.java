@@ -16,12 +16,12 @@ import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 /**
- * Host-name resolution for every test JVM (JEP 418): loopback names resolve, a name a test declared with
- * {@link #answer} resolves to its declared address, a name reserved by RFC 2606 or RFC 6761 or made only of
- * numbers fails as an unknown host, and any other name is refused and recorded, so no test reaches a real
- * provider through any client. A reverse lookup of a public address fails the same way, and is recorded unless one
- * of the host's own interfaces carries the address. {@link OfflineNetworkExtension} fails the test class that made
- * an attempt. The live tier sets {@value #OPEN} to {@code true} and resolves every name.
+ * Host-name resolution for every test JVM (JEP 418): loopback names and the host's names for its own addresses resolve,
+ * a name a test declared with {@link #answer} resolves to its declared address, a name reserved by RFC 2606 or RFC 6761
+ * or made only of numbers fails as an unknown host, and any other name is refused and recorded, so no test reaches a
+ * real provider through any client. A reverse lookup of a public address fails the same way, and is recorded unless one
+ * of the host's own interfaces carries the address. {@link OfflineNetworkExtension} fails the test class that made an
+ * attempt. The live tier sets {@value #OPEN} to {@code true} and resolves every name.
  */
 public final class OfflineNetwork extends InetAddressResolverProvider {
 
@@ -69,12 +69,20 @@ public final class OfflineNetwork extends InetAddressResolverProvider {
     public InetAddressResolver get(Configuration configuration) {
         InetAddressResolver builtin = configuration.builtinResolver();
         String localHost = configuration.lookupLocalHostName().toLowerCase(Locale.ROOT);
+        // The names the host gives its own addresses: the JDK checks a canonical name with a forward lookup.
+        Set<String> ownNames = ConcurrentHashMap.newKeySet();
         return new InetAddressResolver() {
             @Override
             public Stream<InetAddress> lookupByName(String host, LookupPolicy policy) throws UnknownHostException {
                 String name = host.toLowerCase(Locale.ROOT);
                 if (Boolean.getBoolean(OPEN) || name.equals("localhost") || name.equals(localHost))
                     return builtin.lookupByName(host, policy);
+                if (ownNames.contains(name)) {
+                    List<InetAddress> own = builtin.lookupByName(host, policy)
+                            .filter(OfflineNetwork::ownInterface)
+                            .toList();
+                    if (!own.isEmpty()) return own.stream();
+                }
                 InetAddress answer = ANSWERS.get(name);
                 if (answer != null) return Stream.of(answer);
                 if (!reserved(name)) ATTEMPTS.add(name);
@@ -84,7 +92,11 @@ public final class OfflineNetwork extends InetAddressResolverProvider {
             @Override
             public String lookupByAddress(byte[] address) throws UnknownHostException {
                 InetAddress inet = InetAddress.getByAddress(address);
-                if (Boolean.getBoolean(OPEN) || !isPublic(inet)) return builtin.lookupByAddress(address);
+                if (Boolean.getBoolean(OPEN) || !isPublic(inet)) {
+                    String name = builtin.lookupByAddress(address);
+                    if (ownInterface(inet)) ownNames.add(name.toLowerCase(Locale.ROOT));
+                    return name;
+                }
                 String reverse = inet.getHostAddress();
                 if (!ownInterface(inet)) ATTEMPTS.add("reverse " + reverse);
                 throw new UnknownHostException(reverse + ": tests make no external network calls");

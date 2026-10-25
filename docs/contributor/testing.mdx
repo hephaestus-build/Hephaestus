@@ -158,7 +158,7 @@ A GitHub document that the script does not answer fails as a GraphQL error.
 
 Tests make no external network calls.
 `OfflineNetwork` replaces host-name resolution in every test JVM.
-Loopback names resolve.
+Loopback names and the names the host gives its own addresses resolve.
 A name reserved by RFC 2606 or RFC 6761 fails as an unknown host.
 Any other name is refused and recorded, and `OfflineNetworkExtension` fails the test class that tried it.
 
