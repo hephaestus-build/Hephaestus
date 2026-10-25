@@ -56,6 +56,8 @@ export function ReviewCard({
 }: ReviewCardProps) {
 	const [showAllResults, setShowAllResults] = useState(false);
 	const { results, feedback } = review;
+	// Only feedback that reached the reader is listed; the band goes when none did.
+	const delivered = deliveredOnly(feedback);
 	const at = review.review.createdAt;
 	const merged = results.length === 1;
 	const hiddenCount = Math.max(0, results.length - COLLAPSED_RESULT_COUNT);
@@ -115,9 +117,9 @@ export function ReviewCard({
 						</Button>
 					</div>
 				)}
-				{renderObservation === undefined && deliveredOnly(feedback).length > 0 && (
+				{renderObservation === undefined && delivered.length > 0 && (
 					<div className="border-t bg-sidebar px-4 py-3">
-						<OwnFeedbackList feedback={feedback} responses={responses} />
+						<OwnFeedbackList feedback={delivered} responses={responses} />
 					</div>
 				)}
 			</div>

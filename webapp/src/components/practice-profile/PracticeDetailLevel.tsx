@@ -888,7 +888,7 @@ function showAllTimeOf(
 
 /**
  * The Feedback tab with no card to show: "No feedback yet", or, where the timeframe hid every card,
- * that none falls in it, with the way to all time, as the Observations tab says it.
+ * that none falls in it, with a way back to all time.
  */
 function NoFeedbackShown({ onShowAllTime }: { onShowAllTime?: () => void }) {
 	if (onShowAllTime === undefined) {
