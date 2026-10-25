@@ -92,6 +92,10 @@ Preparing code evidence can hold two database connections.
 The worker also needs connections for its control traffic and to record results.
 Thus, the worker's pool must hold two connections for each review that can prepare code evidence at the same time, plus room for the rest.
 
+The scheduled GitHub and GitLab syncs together run at most four workspace syncs at the same time on each server.
+A workspace sync can hold two connections, so the scheduled syncs use at most eight connections of the server's pool.
+The rest stays free for requests.
+
 The worker profile gives the worker a pool of 32 connections, in Compose and on any other deployment.
 The other roles keep the application default of 20.
 `HIKARI_MAXIMUM_POOL_SIZE` overrides the pool size of each JVM that receives it.
