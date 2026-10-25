@@ -469,9 +469,8 @@ public class ReviewJobExecutor {
     }
 
     StartOutcome processJob(UUID jobId) {
-        // The poll offers only queued jobs: an attempt of this job that still runs here was requeued. Stop it, and
-        // claim
-        // the job once it ended, so one job never has two sandboxes on this worker.
+        // The poll offers only queued jobs, so a local attempt of this job was requeued: stop it and claim the job
+        // once it has ended. One job never has two sandboxes on one worker.
         if (localRunningJobs.containsKey(jobId)) {
             cancelLocalJob(jobId, "the job was requeued while this attempt still ran");
             return StartOutcome.SKIPPED;
@@ -1229,12 +1228,11 @@ public class ReviewJobExecutor {
             String failureMessage = sandboxResult.exitCode() == 0
                     ? "The runner did not return a valid result."
                     : "The container exited with code " + sandboxResult.exitCode() + ".";
-            String errorMessage =
-                    switch (terminalStatus) {
-                        case TIMED_OUT -> "The container timed out.";
-                        case FAILED -> storable ? failureMessage : UNSTORABLE_RESULT_MESSAGE;
-                        default -> null;
-                    };
+            String errorMessage = switch (terminalStatus) {
+                case TIMED_OUT -> "The container timed out.";
+                case FAILED -> storable ? failureMessage : UNSTORABLE_RESULT_MESSAGE;
+                default -> null;
+            };
             Instant finishedAt = Instant.now();
             int updated = transitionTerminal(jobId, attempt, terminalStatus, finishedAt, errorMessage);
             if (updated == 0) {

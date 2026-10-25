@@ -1,0 +1,14 @@
+apiVersion: v2
+name: hephaestus
+description: Hephaestus server, webhook receiver, webapp and workers on Kubernetes, from one signed release lock.
+type: application
+# Source checkouts carry no release version. Release packaging sets the chart version from the tag;
+# the image references and the release identity come only from the prepared values file
+# (scripts/kubernetes-chart.ts), never from this file.
+version: 0.0.0-source
+# The lowest Kubernetes that the templates and the worker need: a technical floor. The support
+# statement is docs/admin/kubernetes.mdx § Supported clusters.
+kubeVersion: ">=1.34.0-0"
+home: https://github.com/hephaestus-build/Hephaestus
+sources:
+  - https://github.com/hephaestus-build/Hephaestus

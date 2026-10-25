@@ -59,9 +59,11 @@ const docsSources = "'docs/**/*.{js,jsx,ts,tsx,json,jsonc,css}'";
 // Two passes: a negation applies to the whole invocation, so `!*/**` would also drop the nested set.
 const rootConfigSources = "'*.{json,jsonc,ts,code-workspace}' '!*/**'";
 const nestedConfigSources = "'{.changeset,.vscode,scripts,.vale}/*.{cjs,json}'";
+// The chart's plain JSON and YAML. Its templates are Go templates, not YAML; Helm rendering judges them.
+const chartConfigSources = "'deploy/chart/**/*.{json,yaml}' '!deploy/chart/**/templates/**'";
 // `as const` keeps the command a literal type, so `cached` can still read what it runs.
 const configFormatCommand = (mode: "--check" | "--write") =>
-	`vp fmt ${mode} ${rootConfigSources} && vp fmt ${mode} ${nestedConfigSources}` as const;
+	`vp fmt ${mode} ${rootConfigSources} && vp fmt ${mode} ${nestedConfigSources} && vp fmt ${mode} ${chartConfigSources}` as const;
 // Every tree the root config governs: `webapp/` and `docs/` carry their own configs and gates, and
 // `security/semgrep/` holds fixtures that are wrong on purpose.
 const oxlintTargets =
@@ -265,6 +267,10 @@ export default defineConfig({
 			"gate:server": run(
 				`${gradlew} :spotlessCheck :application:spotlessCheck :application:pmdMain --quiet`,
 			),
+			// After `gate:server`: one Gradle build per checkout, and `compileJava` is then up to date.
+			"gate:server-test-analysis": run(`${gradlew} :application:compileTestJava --quiet`, {
+				dependsOn: ["gate:server"],
+			}),
 			"gate:pmd-canary": run("node scripts/check-pmd-canary.ts"),
 			"test:server:selection": run("node scripts/verify-server-test-selection.ts"),
 			"test:server:unit": run(
@@ -340,6 +346,11 @@ export default defineConfig({
 			"test:agents": run(
 				`node --test --test-concurrency=${nodeTestConcurrency} server/application/src/test/resources/agent/*.spec.ts docker/agents/practice-scripts/*.test.ts docker/agents/practice-scripts/lib/core/**/*.test.ts docker/agents/practice-scripts/kits/**/*.test.ts docker/agents/pi/*.test.ts`,
 			),
+			// The chart suites alone, for a chart change. test:tooling already runs both in the normal
+			// graph; the render suite needs the Helm CLI that .github/actions/setup-helm pins.
+			"test:kubernetes:chart": run(
+				"node --test scripts/kubernetes-chart.test.ts scripts/kubernetes-chart-render.test.ts",
+			),
 			"test:tooling": run(
 				`node --test --test-concurrency=${nodeTestConcurrency} scripts/*.test.ts scripts/api-generator/*.test.ts server/application/src/test/resources/integration/scm/sarif/*.test.ts`,
 			),
@@ -367,7 +378,13 @@ export default defineConfig({
 			"docs:serve": run("vp run --filter docs serve"),
 
 			// What each CI job runs.
-			"ci:server": group([...serverGates, "gate:contracts", "gate:env"]),
+			// The package job compiles the tests without the analysis; this leg runs it.
+			"ci:server": group([
+				...serverGates,
+				"gate:server-test-analysis",
+				"gate:contracts",
+				"gate:env",
+			]),
 			// Render docs after the checks: lint cannot detect broken theme contexts during static rendering.
 			"ci:tooling": run("vp run verification:docs-build", {
 				dependsOn: [
@@ -451,6 +468,8 @@ export default defineConfig({
 			"dev:server:e2e": run(`${gradlew} :application:bootRun -Pprofiles=e2e`, {
 				dependsOn: ["dev:compose:e2e"],
 			}),
+			// The chart on a local k3d cluster with this checkout's images: docs/contributor/local-development.mdx.
+			"dev:kubernetes": run("node scripts/kubernetes-cluster.ts dev"),
 			"check:ports": run("node scripts/check-ports.ts"),
 			"dev:e2e:setup": run("node scripts/e2e-setup.ts"),
 			"dev:public-test": run("node scripts/jean-public-test.ts"),

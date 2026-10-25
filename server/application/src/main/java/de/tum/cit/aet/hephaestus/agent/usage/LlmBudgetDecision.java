@@ -36,11 +36,10 @@ public record LlmBudgetDecision(LlmBudgetBlockReason instanceFunded, LlmBudgetBl
                     ? new Block(UsageFundingSource.WORKSPACE, workspaceFunded)
                     : Block.NONE;
         }
-        LlmBudgetBlockReason reason =
-                switch (fundingSource) {
-                    case INSTANCE -> instanceFunded;
-                    case WORKSPACE -> workspaceFunded;
-                };
+        LlmBudgetBlockReason reason = switch (fundingSource) {
+            case INSTANCE -> instanceFunded;
+            case WORKSPACE -> workspaceFunded;
+        };
         return reason != LlmBudgetBlockReason.NONE ? new Block(fundingSource, reason) : Block.NONE;
     }
 

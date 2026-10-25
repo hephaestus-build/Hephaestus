@@ -23,6 +23,9 @@ public interface ReviewAttemptUsageRepository extends JpaRepository<ReviewAttemp
     /**
      * Creates the attempt's measurement, empty, when the proxy authenticates its first call. Creating it counts no
      * call. The caller holds the job row, which the foreign key needs to exist.
+     *
+     * <p>No conflict target: a targeted {@code ON CONFLICT} arbitrates only its own index, and concurrent first calls
+     * then fail on the three-column key that the charges reference.
      */
     @Modifying(flushAutomatically = true)
     @Query(value = """
@@ -30,7 +33,7 @@ public interface ReviewAttemptUsageRepository extends JpaRepository<ReviewAttemp
             (job_id, attempt, workspace_id, proxy_calls, proxy_input_tokens, proxy_output_tokens,
              proxy_reasoning_tokens, proxy_cache_read_tokens, proxy_cache_write_tokens)
         VALUES (:jobId, :attempt, :workspaceId, 0, 0, 0, 0, 0, 0)
-        ON CONFLICT (job_id, attempt) DO NOTHING
+        ON CONFLICT DO NOTHING
         """, nativeQuery = true)
     int registerIfAbsent(
             @Param("jobId") UUID jobId, @Param("attempt") int attempt, @Param("workspaceId") long workspaceId);

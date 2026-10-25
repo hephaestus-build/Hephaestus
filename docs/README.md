@@ -6,9 +6,9 @@
 
 This site is built with [Docusaurus 3](https://docusaurus.io/); `docusaurus.config.ts` is its configuration. The content is split into three guides:
 
-- **User Guide** (`user/`) – End-user workflows (practice feedback, activity, Heph, workspace management)
-- **Contributor Guide** (`contributor/`) – Engineering guides, the generated ERD, and local development setup
-- **Admin Guide** (`admin/`) – Install, integrations, and production operations
+- **User guide** (`user/`) – End-user workflows (practice feedback, activity, Heph, workspace management)
+- **Contributor guide** (`contributor/`) – Engineering guides, the generated ERD, and local development setup
+- **Admin guide** (`admin/`) – Install, integrations, and production operations
 
 Those three directories are the whole site: each is one `@docusaurus/plugin-content-docs` instance in
 `docusaurus.config.ts`, and every page in them must be reachable from its sidebar.

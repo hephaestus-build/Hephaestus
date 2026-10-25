@@ -294,12 +294,11 @@ class SourceProviderNamespacesIntegrationTest extends BaseIntegrationTest {
 
     private Connection activate(IntegrationKind kind, ConnectionConfig config) {
         var workspace = workspaces.saveAndFlush(WorkspaceTestFixtures.activeWorkspace("source-" + UUID.randomUUID()));
-        String instanceKey =
-                switch (config) {
-                    case ConnectionConfig.OutlineConfig ignored -> "outline-team";
-                    case ConnectionConfig.SlackConfig slack -> Objects.requireNonNull(slack.teamId());
-                    default -> UUID.randomUUID().toString();
-                };
+        String instanceKey = switch (config) {
+            case ConnectionConfig.OutlineConfig ignored -> "outline-team";
+            case ConnectionConfig.SlackConfig slack -> Objects.requireNonNull(slack.teamId());
+            default -> UUID.randomUUID().toString();
+        };
         var connection = connections.saveAndFlush(new Connection(workspace, kind, instanceKey, config));
         return connectionService.transition(
                 connection,

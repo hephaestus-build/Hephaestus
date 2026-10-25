@@ -20,6 +20,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
+import org.springframework.web.client.RestClient;
 
 class GitHubWebhookRedeliveryTest extends BaseUnitTest {
 
@@ -41,6 +42,7 @@ class GitHubWebhookRedeliveryTest extends BaseUnitTest {
                 tokens,
                 Clock.fixed(NOW, ZoneOffset.UTC),
                 meters,
+                RestClient.builder(),
                 github.url("/").toString().replaceAll("/$", ""));
     }
 
@@ -118,6 +120,20 @@ class GitHubWebhookRedeliveryTest extends BaseUnitTest {
         assertThat(github.getRequestCount()).isEqualTo(1);
         assertThat(outcome("unavailable")).isEqualTo(1);
         assertThat(outcome("requested")).isZero();
+    }
+
+    @Test
+    void shouldRedeliverAnEventThatTheReceiverAnsweredWithARedirect() throws Exception {
+        configured();
+        respond(deliveries(delivery(41, "redirected", 3, 302)), null);
+        github.enqueue(new MockResponse.Builder().code(202).build());
+
+        redelivery.redeliverFailed();
+
+        assertThat(github.getRequestCount()).isEqualTo(2);
+        github.takeRequest();
+        assertThat(github.takeRequest().getTarget()).isEqualTo("/app/hook/deliveries/41/attempts");
+        assertThat(outcome("requested")).isEqualTo(1);
     }
 
     @Test

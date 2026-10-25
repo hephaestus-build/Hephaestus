@@ -134,7 +134,7 @@ Run the migration once for each release, before the new roles start:
   Then it starts the new roles.
   A plain `docker compose up -d` alone stops the previous roles for the whole migration.
   [Pull-based deployment](./pull-based-deployment#how-an-apply-stops-the-worker) runs the migration first.
-- **Kubernetes.** Run the migration as a Job for each release, and start the new roles after it completes.
+- **Kubernetes.** The [Helm chart](./kubernetes#upgrades) runs the migration as a Job of each revision, beside the new roles.
   The roles wait for the Job.
 - **Other deployments.** Run the image once with the `migrate` profile, then start the new roles.
 
@@ -559,6 +559,18 @@ warning and generates an ephemeral key that invalidates every worker token on re
 
 [Sizing](./sizing#database-connections) owns the connection pool budget of each role and the JVM [memory headroom](./sizing#memory-headroom).
 
+### Sandbox runtime
+
+`HEPHAESTUS_SANDBOX_RUNTIME` selects where a worker runs its sandboxes: `docker`, the default, or `kubernetes`.
+A worker runs exactly one runtime, and a runtime that cannot start never hands its work to the other one.
+A value that names no runtime stops the worker's start.
+
+The Kubernetes runtime reads the `HEPHAESTUS_SANDBOX_KUBERNETES_*` variables of the [configuration reference](./configuration-reference).
+The [Helm chart](./kubernetes#worker) sets each of them.
+
+Every worker beats in `worker_registry`, also with `AGENT_ENABLED=false`.
+The other workers keep a worker's Heph host and turn sandboxes while it beats.
+
 ## Graceful drain
 
 On SIGTERM, the worker does these actions in order:
@@ -590,6 +602,7 @@ The worker does not wait indefinitely for that call.
 Leftover containers remain subject to normal sandbox reconciliation.
 
 The compose template keeps `stop_grace_period: 6m`.
+The Helm chart sets the drain timeout from `worker.drainTimeoutSeconds`, 3600 by default, and the grace period to that value plus two minutes.
 The cleanup deadline does not extend this grace period or guarantee that all containers stop.
 
 ## See also

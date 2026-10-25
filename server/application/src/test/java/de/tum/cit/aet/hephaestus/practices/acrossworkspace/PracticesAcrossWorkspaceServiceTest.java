@@ -161,8 +161,8 @@ class PracticesAcrossWorkspaceServiceTest {
         when(memberships.isActiveVisibleMember(1L, HIDDEN)).thenReturn(false);
         when(suppression.suppressedAccountIds(anyCollection())).thenReturn(Set.of());
         when(feedback.countOpen(eq(1L), anyCollection())).thenReturn(Map.of(READER, 2, QUIET, 1));
-        when(evidence.asOneRead(anyLong(), any(), any()))
-                .thenAnswer(i -> i.<Supplier<?>>getArgument(2).get());
+        when(evidence.asOneRead(anyLong(), any()))
+                .thenAnswer(i -> i.<Supplier<?>>getArgument(1).get());
     }
 
     @Test

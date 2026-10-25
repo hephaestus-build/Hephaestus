@@ -16,8 +16,9 @@ import org.apache.commons.compress.archivers.tar.TarArchiveOutputStream;
 import org.apache.commons.compress.archivers.tar.TarConstants;
 
 /**
- * The tar streams that the worker stages into a turn sandbox. The sandbox's {@code tar} unpacks them as root and the
- * folder is made read-only after, so the modes here only say what may run.
+ * The tar streams that the worker stages into a turn sandbox. They keep a captured file's executable mode. The sandbox
+ * runtime owns what staging means for the sandbox user: the staged folder is read-only to that user
+ * ({@code ExecSandboxes}).
  */
 final class FolderArchive {
 

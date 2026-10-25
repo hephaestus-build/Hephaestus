@@ -3,14 +3,11 @@ package de.tum.cit.aet.hephaestus.practices.result;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
-import de.tum.cit.aet.hephaestus.practices.model.Result;
 import de.tum.cit.aet.hephaestus.practices.result.dto.ResultDetailDTO;
 import de.tum.cit.aet.hephaestus.practices.result.dto.ResultListDTO;
 import de.tum.cit.aet.hephaestus.practices.spi.CurrentDeveloperLookup;
 import de.tum.cit.aet.hephaestus.practices.spi.EvidenceAuthorization;
 import java.util.List;
-import java.util.Objects;
-import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -60,17 +57,5 @@ public class ResultQueryService {
         return presentation.detail(
                 views.views(ws, List.of(r)).getFirst(),
                 authorization.permits(ws, r, SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY));
-    }
-
-    public List<ResultDetailDTO> details(long ws, long developer, List<Result> rows, Set<UUID> permitted) {
-        return views
-                .views(
-                        ws,
-                        rows.stream()
-                                .filter(r -> Objects.equals(r.getDeveloperId(), developer))
-                                .toList())
-                .stream()
-                .map(v -> presentation.detail(v, permitted.contains(v.result().getId())))
-                .toList();
     }
 }

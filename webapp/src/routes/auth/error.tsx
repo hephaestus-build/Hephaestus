@@ -1,12 +1,10 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 
+import { AuthErrorPage } from "@/components/auth/AuthErrorPage";
 import { ConfirmAccessDialog } from "@/components/auth/ConfirmAccessDialog";
-import { Button, buttonVariants } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
 import { useConfirmAccess } from "@/hooks/use-confirm-access";
 import { pageHead } from "@/lib/page-title";
-import { hasText } from "@/lib/text";
 import { useAuth } from "@/runtime/auth/AuthContext";
 import { safeReturnTo } from "@/runtime/auth/return-to";
 
@@ -16,68 +14,6 @@ interface ErrorSearch {
 	returnTo?: string;
 }
 
-/** PII-free, friendly copy keyed by the server's auth-failure codes. */
-const ERROR_COPY: Record<string, { title: string; description: string }> = {
-	oauth_failure: {
-		title: "Sign-in did not complete",
-		description:
-			"We could not finish signing you in with that provider. Try again from the sign-in page.",
-	},
-	token_exchange: {
-		title: "Sign-in could not be verified",
-		description: "We could not confirm your identity with the provider. Try signing in again.",
-	},
-	idp_unavailable: {
-		title: "Provider unavailable",
-		description: "We could not reach the identity provider. Wait a moment, then try again.",
-	},
-	already_linked: {
-		title: "Account already connected",
-		description:
-			"That provider identity is already connected to another account. Sign in with the original account instead.",
-	},
-	identity_already_linked: {
-		title: "Account already connected",
-		description:
-			"That provider identity is already connected to another account. Sign in with the original account instead.",
-	},
-	link_requires_auth: {
-		// Slack and Outline are both link-only: they can only be attached to an existing session.
-		title: "Sign in before connecting that account",
-		description:
-			"Open Hephaestus, sign in with GitHub or GitLab, then connect Slack or Outline from User settings.",
-	},
-	step_up_required: {
-		// The session is valid and the account is right; only its age is the problem, so this must not
-		// read as a rejected identity.
-		title: "Confirm access before connecting that account",
-		description:
-			"Connecting a sign-in account needs a recent sign-in. Confirm access with a sign-in account you already connected, then connect this one again.",
-	},
-	client_not_registered: {
-		// Reached inside the browser extension's sign-in window: the instance does not list that
-		// extension, so the server refuses to hand it a sign-in rather than redirect to it.
-		title: "This extension cannot sign in here",
-		description:
-			"This Hephaestus instance does not allow that browser extension to sign in. Ask an instance admin to add its extension ID, then try again from the extension.",
-	},
-	unknown_provider: {
-		title: "Provider is not configured",
-		description:
-			"This Hephaestus instance does not have that sign-in provider configured. Ask an instance admin to check the login provider settings.",
-	},
-};
-
-function describe(code: string | undefined): { title: string; description: string } {
-	if (hasText(code) && ERROR_COPY[code]) {
-		return ERROR_COPY[code];
-	}
-	return {
-		title: "We could not sign you in",
-		description: "Try again. If it keeps failing, contact your instance operator.",
-	};
-}
-
 export const Route = createFileRoute("/auth/error")({
 	head: pageHead("Sign-in problem"),
 	staticData: { surface: "auth" },
@@ -85,12 +21,11 @@ export const Route = createFileRoute("/auth/error")({
 		code: typeof search.code === "string" ? search.code : undefined,
 		returnTo: typeof search.returnTo === "string" ? search.returnTo : undefined,
 	}),
-	component: AuthErrorPage,
+	component: AuthErrorRoute,
 });
 
-function AuthErrorPage() {
+function AuthErrorRoute() {
 	const { code, returnTo } = Route.useSearch();
-	const { title, description } = describe(code);
 	const { isAuthenticated } = useAuth();
 	const recovery = code === "step_up_required";
 	// Linking always names where it was headed; a refusal from before it did falls back to where linking lives.
@@ -99,35 +34,15 @@ function AuthErrorPage() {
 	const confirmAccess = useConfirmAccess(confirming, destination);
 
 	return (
-		<div className="flex min-h-[100dvh] items-center justify-center p-4">
-			{/* This page IS the failure message: announce it on arrival, and title it as the page's h1. */}
-			<Card className="w-full max-w-md text-center" role="alert">
-				<CardHeader>
-					{/* The page's only heading, so it must be an h1 — CardTitle renders a div, which would
-					    leave this page with no heading at all for screen-reader navigation. */}
-					<h1 data-slot="card-title" className="text-2xl leading-snug font-medium">
-						{title}
-					</h1>
-					<CardDescription>{description}</CardDescription>
-				</CardHeader>
-				<CardContent>
-					{recovery && isAuthenticated ? (
-						// Signing in through /login would bounce straight back to the workspace: this session
-						// is valid, only too old to link with.
-						<Button className="w-full" onClick={() => setConfirming(true)}>
-							Confirm access
-						</Button>
-					) : (
-						<Link
-							to="/login"
-							search={recovery ? { returnTo: destination } : undefined}
-							className={buttonVariants({ className: "w-full" })}
-						>
-							Back to sign in
-						</Link>
-					)}
-				</CardContent>
-			</Card>
+		<>
+			<AuthErrorPage
+				code={code}
+				next={
+					recovery && isAuthenticated
+						? { kind: "confirm-access", onConfirm: () => setConfirming(true) }
+						: { kind: "sign-in", returnTo: recovery ? destination : undefined }
+				}
+			/>
 			<ConfirmAccessDialog
 				open={confirming}
 				onOpenChange={setConfirming}
@@ -137,6 +52,6 @@ function AuthErrorPage() {
 				onRetry={confirmAccess.retry}
 				onSignIn={confirmAccess.signIn}
 			/>
-		</div>
+		</>
 	);
 }

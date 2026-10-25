@@ -38,6 +38,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.springframework.web.client.RestClient;
 import tools.jackson.databind.ObjectMapper;
 
 class WorkspaceLlmConnectionServiceTest extends BaseUnitTest {
@@ -357,7 +358,8 @@ class WorkspaceLlmConnectionServiceTest extends BaseUnitTest {
                                 new LlmProperties(
                                         "",
                                         new LlmProperties.Egress(true),
-                                        new LlmProperties.Fx(LlmProperties.ECB_DAILY_URL))),
+                                        new LlmProperties.Fx(LlmProperties.ECB_DAILY_URL)),
+                                RestClient.builder()),
                         configAudit);
 
                 WorkspaceLlmProbeResultDTO result = probing.probe(workspaceContext, 5L);

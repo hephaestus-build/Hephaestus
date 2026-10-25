@@ -26,7 +26,8 @@ export interface RunOptions {
 	cwd?: string;
 	env?: Record<string, string | undefined>;
 	stdin?: "inherit" | "ignore";
-	stdout?: "inherit" | "ignore";
+	/** "stderr" sends the child's stdout to this process's stderr, for a caller whose stdout is data. */
+	stdout?: "inherit" | "ignore" | "stderr";
 	stderr?: "inherit" | "ignore";
 	signal?: AbortSignal;
 }
@@ -39,7 +40,11 @@ export async function run(
 	const child = spawn(command, args, {
 		cwd: options.cwd,
 		env: { ...process.env, ...options.env },
-		stdio: [options.stdin ?? "inherit", options.stdout ?? "inherit", options.stderr ?? "inherit"],
+		stdio: [
+			options.stdin ?? "inherit",
+			options.stdout === "stderr" ? process.stderr : (options.stdout ?? "inherit"),
+			options.stderr ?? "inherit",
+		],
 		signal: options.signal,
 	});
 	const exited = Promise.withResolvers<undefined>();

@@ -1,0 +1,166 @@
+{{- $name := include "hephaestus.name" (dict "root" . "component" "server") }}
+{{- $config := .Values.config }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "hephaestus.labels" (dict "root" . "component" "server") | nindent 4 }}
+automountServiceAccountToken: false
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "hephaestus.labels" (dict "root" . "component" "server") | nindent 4 }}
+spec:
+  selector:
+    {{- include "hephaestus.selectorLabels" (dict "root" . "component" "server") | nindent 4 }}
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "hephaestus.labels" (dict "root" . "component" "server") | nindent 4 }}
+spec:
+  # One replica. The worker-token signing key ring has no flat environment form, and without it each
+  # replica signs with its own ephemeral key (docs/admin/runtime-roles.mdx § Worker pod env vars).
+  # Recreate: two server versions would consume the same provider event streams out of order. The
+  # migration Job owns the schema; the server waits for it. 0 stops it for database maintenance.
+  replicas: {{ include "hephaestus.replicas" (dict "root" . "replicas" .Values.server.replicas) }}
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "hephaestus.selectorLabels" (dict "root" . "component" "server") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "hephaestus.labels" (dict "root" . "component" "server") | nindent 8 }}
+    spec:
+      serviceAccountName: {{ $name }}
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext:
+        {{- include "hephaestus.podSecurityContext" (dict "user" 1002 "group" 1001) | nindent 8 }}
+      # The preStop pause, application.yml's SHUTDOWN_TIMEOUT (20 s), and headroom to drain
+      # in-flight requests.
+      terminationGracePeriodSeconds: 35
+      containers:
+        - name: server
+          image: {{ include "hephaestus.image" (dict "root" . "name" "application-server") | quote }}
+          imagePullPolicy: IfNotPresent
+          env:
+            {{- include "hephaestus.env.pod" . | nindent 12 }}
+            {{- include "hephaestus.env.release" . | nindent 12 }}
+            {{- include "hephaestus.env.shared" . | nindent 12 }}
+            {{- include "hephaestus.env.ingestion" . | nindent 12 }}
+            {{- include "hephaestus.env.scm" . | nindent 12 }}
+            - name: SPRING_PROFILES_ACTIVE
+              value: prod
+            # Webhook reception runs in its own Deployment (ADR 0008). The worker role needs a
+            # sandbox runtime and never runs in the server.
+            - name: HEPHAESTUS_RUNTIME_WEBHOOK_ENABLED
+              value: "false"
+            - name: HEPHAESTUS_RUNTIME_WORKER_ENABLED
+              value: "false"
+            # The buildpack's 10M direct-memory default sits below this role's NATS and HTTP footprint.
+            - name: JAVA_TOOL_OPTIONS
+              value: -XX:MaxDirectMemorySize=128M
+            - name: NATS_ENABLED
+              value: "true"
+            - name: NATS_SERVER
+              value: {{ include "hephaestus.natsUrl" . | quote }}
+            - name: HEPHAESTUS_INTEGRATION_CONSUMER_INACTIVE_THRESHOLD
+              value: {{ $config.consumerInactiveThreshold | quote }}
+            - name: HEPHAESTUS_AUTH_ISSUER
+              value: {{ printf "https://%s" .Values.host | quote }}
+            {{- include "hephaestus.secretEnv" (dict "root" . "env" "HEPHAESTUS_AUTH_STATE_COOKIE_KEY") | nindent 12 }}
+            # The auth layer runs on this role only.
+            - name: HEPHAESTUS_AUTH_ASSURANCE_ENFORCED
+              value: {{ $config.auth.assuranceEnforced | quote }}
+            - name: HEPHAESTUS_AUTH_BOOTSTRAP_ADMINS
+              value: {{ $config.auth.bootstrapAdmins | quote }}
+            {{- include "hephaestus.secretEnv" (dict "root" . "env" "HEPHAESTUS_AUTH_BOOTSTRAP_TOKEN" "optional" true) | nindent 12 }}
+            - name: HEPHAESTUS_AUTH_BROWSER_EXTENSION_IDS
+              value: {{ $config.auth.browserExtensionIds | quote }}
+            - name: GITHUB_OAUTH_CLIENT_ID
+              value: {{ $config.github.oauthClientId | quote }}
+            {{- include "hephaestus.secretEnv" (dict "root" . "env" "GITHUB_OAUTH_CLIENT_SECRET" "optional" true) | nindent 12 }}
+            - name: GH_APP_CLIENT_ID
+              value: {{ $config.github.appClientId | quote }}
+            {{- include "hephaestus.secretEnv" (dict "root" . "env" "GH_APP_CLIENT_SECRET" "optional" true) | nindent 12 }}
+            - name: GH_APP_INSTALLATION_URL
+              value: {{ $config.github.appInstallationUrl | quote }}
+            - name: GITLAB_OAUTH_CLIENT_ID
+              value: {{ $config.gitlab.oauthClientId | quote }}
+            {{- include "hephaestus.secretEnv" (dict "root" . "env" "GITLAB_OAUTH_CLIENT_SECRET" "optional" true) | nindent 12 }}
+            - name: GITLAB_OAUTH_BASE_URL
+              value: {{ $config.gitlab.oauthBaseUrl | quote }}
+            - name: GITLAB_OAUTH_DISPLAY_NAME
+              value: {{ $config.gitlab.oauthDisplayName | quote }}
+            - name: GITLAB_WORKSPACE_CREATION
+              value: {{ $config.gitlab.workspaceCreation | quote }}
+            - name: HEPHAESTUS_INTEGRATION_SLACK_CLIENT_ID
+              value: {{ $config.slack.clientId | quote }}
+            {{- include "hephaestus.secretEnv" (dict "root" . "env" "HEPHAESTUS_INTEGRATION_SLACK_CLIENT_SECRET" "optional" true) | nindent 12 }}
+            - name: HEPHAESTUS_INTEGRATION_SLACK_REDIRECT_URI
+              value: {{ $config.slack.redirectUri | quote }}
+            - name: OUTLINE_OAUTH_BASE_URL
+              value: {{ $config.outline.oauthBaseUrl | quote }}
+            - name: OUTLINE_OAUTH_DISPLAY_NAME
+              value: {{ $config.outline.oauthDisplayName | quote }}
+            - name: OUTLINE_OAUTH_CLIENT_ID
+              value: {{ $config.outline.oauthClientId | quote }}
+            {{- include "hephaestus.secretEnv" (dict "root" . "env" "OUTLINE_OAUTH_CLIENT_SECRET" "optional" true) | nindent 12 }}
+            - name: SPRING_MAIL_HOST
+              value: {{ $config.email.host | quote }}
+            - name: SPRING_MAIL_PORT
+              value: {{ $config.email.port | int | quote }}
+            - name: SPRING_MAIL_USERNAME
+              value: {{ $config.email.username | quote }}
+            {{- include "hephaestus.secretEnv" (dict "root" . "env" "SPRING_MAIL_PASSWORD" "optional" true) | nindent 12 }}
+            - name: HEPHAESTUS_EMAIL_FROM
+              value: {{ $config.email.from | quote }}
+            - name: HEPHAESTUS_EMAIL_FROM_NAME
+              value: {{ $config.email.fromName | quote }}
+            - name: HEPHAESTUS_EMAIL_REPLY_TO
+              value: {{ $config.email.replyTo | quote }}
+            - name: HEPHAESTUS_LLM_USAGE_RETENTION
+              value: {{ $config.llmUsageRetention | quote }}
+            - name: HEPHAESTUS_RELEASE_CHECK_ENABLED
+              value: {{ $config.releaseCheckEnabled | quote }}
+            {{- include "hephaestus.secretEnv" (dict "root" . "env" "HEPHAESTUS_WORKER_HUB_TOKEN_REGISTRATION_TOKEN" "key" "HEPHAESTUS_WORKER_REGISTRATION_TOKEN" "optional" (not .Values.worker.enabled)) | nindent 12 }}
+          ports:
+            - name: http
+              containerPort: 8080
+            - name: management
+              containerPort: 9090
+          {{- /* The schema wait (HEPHAESTUS_DATABASE_MIGRATION_WAIT, 10 minutes) runs before readiness. */}}
+          {{- include "hephaestus.probes" (dict "startupFailures" 60) | nindent 10 }}
+          {{- include "hephaestus.preStop" . | nindent 10 }}
+          resources:
+            {{- toYaml .Values.server.resources | nindent 12 }}
+          securityContext:
+            {{- include "hephaestus.containerSecurityContext" . | nindent 12 }}
+          volumeMounts:
+            - name: git-cache
+              mountPath: /data/git-repos
+            - name: tmp
+              mountPath: /tmp
+            {{- include "hephaestus.postgresqlCaMount" . | nindent 12 }}
+      volumes:
+        # Commit ingestion mirrors: a cache that the server fills again after a restart.
+        - name: git-cache
+          emptyDir:
+            sizeLimit: {{ .Values.server.gitCache.sizeLimit }}
+        - name: tmp
+          emptyDir:
+            sizeLimit: 1Gi
+        {{- include "hephaestus.postgresqlCaVolume" . | nindent 8 }}

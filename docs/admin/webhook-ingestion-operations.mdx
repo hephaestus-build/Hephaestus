@@ -46,7 +46,7 @@ This is the procedure that GitHub [recommends](https://docs.github.com/en/webhoo
 - An event whose latest answer was a client error (`4xx`) is not redelivered. The receiver refused it on purpose, for example for a bad signature or an oversized payload.
 - An event gets at most four attempts, all within one hour of its original delivery: the original and three redeliveries.
 - A redelivery keeps its `X-GitHub-Delivery` identifier. The stream discards a copy of a delivery that it already stored within `hephaestus.webhook.stream.duplicate-window` (10 minutes by default).
-- A slow broker can still store a delivery after GitHub stopped waiting for it. If its redelivery comes after the duplicate window, the event is processed twice. Processing an event again changes nothing that the first time did not.
+- A slow broker can still store a delivery after GitHub stopped waiting for it. If its redelivery comes after the duplicate window, the event is processed twice. A late copy can restate an older reviewer list until the next sync reads the list again. [Reviewer lists are dated snapshots](/contributor/sync-lifecycle#reviewer-lists-are-dated-snapshots) explains this.
 - Silent mode does not stop redelivery. A redelivery sends nothing to people. It only asks GitHub to send the event to the receiver again.
 
 The job needs the GitHub App credentials and runs in the server role.
@@ -96,7 +96,7 @@ Hephaestus does not subscribe to that advisory.
 1. Alert if `webhook.stream.consumer.pending` or `webhook.stream.consumer.ack.pending` stays above zero or grows for several monitor intervals.
 2. If `webhook.stream.bytes.utilization` is also near 1, investigate the risk.
 3. Alert on `webhook.stream.poll.age` at a few times `hephaestus.webhook.stream.monitor-interval` (default 60s).
-4. Alert when `github.webhook.unrecovered` is above zero, or when `github.webhook.redelivery` counts `unavailable` runs. Redeliver those events by hand, or let reconciliation recover their effect.
+4. Alert when `github.webhook.unrecovered` is above zero, or when `github.webhook.redelivery` keeps counting `unavailable` or `refused`. Redeliver those events by hand, or let reconciliation recover their effect.
 5. Alert when `webhook.publish` failures continue. Redelivery covers a short stall of the broker, not one that lasts.
 
 At its bound, the stream removes its oldest message on the next publish, regardless of which consumer still needs it.
@@ -350,10 +350,22 @@ Messages still expire under the stream's retention.
 A deployment offline past the stream's byte or age bound returns to a cursor that points at messages no longer present.
 Those messages are not delivered.
 
+## Who reaches the broker
+
+The reference deployment publishes the broker's client port 4222 on the host's loopback address only.
+A process on that host, such as an operator's tool, connects to `127.0.0.1:4222`.
+A stack on the same host connects over the Docker network `shared-network` to `nats-server:4222`.
+Preview environments connect this way.
+
+The single-host stack publishes no broker port.
+Reach its broker from a container on its network, or with `docker exec`.
+
+No other host reaches the broker.
+
 ## Broker image security scope
 
 The bundled broker uses standalone JetStream with user/password authentication and plain NATS
-with the host port bound to loopback by default. Its image assessment for CVE-2026-111943 applies to these
+with the host port bound to loopback. Its image assessment for CVE-2026-111943 applies to these
 shipped launches. The certificate-verification code is present but its TLS, HTTPS resolver, OCSP
 and remote-cluster paths are not enabled.
 

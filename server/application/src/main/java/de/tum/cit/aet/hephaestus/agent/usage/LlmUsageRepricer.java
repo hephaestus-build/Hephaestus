@@ -208,12 +208,11 @@ public class LlmUsageRepricer {
         }
 
         LlmPriceSnapshot toSnapshot(UsageFundingSource fundingSource) {
-            UsagePricingState state =
-                    switch (mode) {
-                        case PRICED -> UsagePricingState.PRICED;
-                        case NO_CHARGE -> UsagePricingState.NO_CHARGE;
-                        case UNPRICED -> UsagePricingState.UNPRICED;
-                    };
+            UsagePricingState state = switch (mode) {
+                case PRICED -> UsagePricingState.PRICED;
+                case NO_CHARGE -> UsagePricingState.NO_CHARGE;
+                case UNPRICED -> UsagePricingState.UNPRICED;
+            };
             return new LlmPriceSnapshot(
                     fundingSource, state, priceId, workspaceModelId, input, output, cacheRead, cacheWrite);
         }

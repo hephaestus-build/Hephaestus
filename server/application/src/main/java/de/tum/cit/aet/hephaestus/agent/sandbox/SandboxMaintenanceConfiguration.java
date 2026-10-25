@@ -1,12 +1,8 @@
-package de.tum.cit.aet.hephaestus.agent.sandbox.docker;
+package de.tum.cit.aet.hephaestus.agent.sandbox;
 
-import com.github.dockerjava.api.DockerClient;
-import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxProperties;
-import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxReconciler;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
 import java.time.Duration;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.ApplicationListener;
 import org.springframework.context.annotation.Bean;
@@ -15,10 +11,12 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.scheduling.config.FixedDelayTask;
 import org.springframework.scheduling.config.ScheduledTaskRegistrar;
 
-/** Worker-owned maintenance without enabling server-wide {@code @Scheduled} methods. */
+/**
+ * The worker's sandbox reconciliation, on every runtime: at its start and then periodically, without enabling
+ * server-wide {@code @Scheduled} methods.
+ */
 @Configuration(proxyBeanMethods = false)
 @Profile("!specs & !cds-training")
-@ConditionalOnClass(DockerClient.class)
 @ConditionalOnWorkerRole
 public class SandboxMaintenanceConfiguration {
 

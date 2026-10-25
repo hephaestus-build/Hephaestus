@@ -44,28 +44,24 @@ class MentorPersonalContextFreshnessTest extends BaseUnitTest {
         var mapper = new ObjectMapper();
         var actorSelector = mock(WorkspaceActorSelector.class);
         lenient().when(actorSelector.connectedProviderId(1L)).thenReturn(Optional.of(5L));
-        ContentSource source =
-                switch (kind) {
-                    case USER -> {
-                        when(queries.fetchUserCounts(
-                                        eq(1L), eq(2L), any(Instant.class), any(Instant.class), any(Instant.class)))
-                                .thenReturn(new MentorUserCounts(0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L));
-                        yield new UserContentSource(accounts, queries, actorSelector, mapper);
-                    }
-                    case WORKSPACE -> {
-                        var workspaces = mock(WorkspaceRepository.class);
-                        var workspace = new Workspace();
-                        workspace.setWorkspaceSlug("context-freshness");
-                        when(workspaces.findById(1L)).thenReturn(Optional.of(workspace));
-                        yield new WorkspaceContentSource(accounts, workspaces, queries, actorSelector, mapper);
-                    }
-                    case AUTHORED_WORK ->
-                        new RecentAuthoredWorkContentSource(
-                                accounts,
-                                mock(MentorContextQueryRepository.class),
-                                mock(ScmMentorWorkQuery.class),
-                                mapper);
-                };
+        ContentSource source = switch (kind) {
+            case USER -> {
+                when(queries.fetchUserCounts(
+                                eq(1L), eq(2L), any(Instant.class), any(Instant.class), any(Instant.class)))
+                        .thenReturn(new MentorUserCounts(0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L));
+                yield new UserContentSource(accounts, queries, actorSelector, mapper);
+            }
+            case WORKSPACE -> {
+                var workspaces = mock(WorkspaceRepository.class);
+                var workspace = new Workspace();
+                workspace.setWorkspaceSlug("context-freshness");
+                when(workspaces.findById(1L)).thenReturn(Optional.of(workspace));
+                yield new WorkspaceContentSource(accounts, workspaces, queries, actorSelector, mapper);
+            }
+            case AUTHORED_WORK ->
+                new RecentAuthoredWorkContentSource(
+                        accounts, mock(MentorContextQueryRepository.class), mock(ScmMentorWorkQuery.class), mapper);
+        };
         when(accounts.findAllByIds(List.of(2L)))
                 .thenReturn(Map.of(2L, new AccountSummaryQuery.AccountSummary(2, "PROFILE-BEFORE-ERASURE", null)));
         var request = new MentorContextRequest(1L, 2L, UUID.randomUUID(), null);

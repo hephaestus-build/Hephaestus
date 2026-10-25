@@ -133,3 +133,16 @@ describe("recent sign-in before linking", () => {
 		expect(signIn.getAttribute("href")).toBe("/login");
 	});
 });
+
+describe("refusal codes", () => {
+	it("gives a code named like a built-in property the generic message", async () => {
+		renderRouteAt("/auth/error?code=toString");
+
+		const heading = await screen.findByRole("heading", { level: 1 }, ROUTE_RENDER_WAIT);
+
+		expect(heading.textContent).toBe("We could not sign you in");
+		expect(screen.getByRole("link", { name: "Back to sign in" }).getAttribute("href")).toBe(
+			"/login",
+		);
+	});
+});

@@ -35,7 +35,12 @@ Install and configure the following tools before you attempt a local build:
 
    After `vp install`, `vp --version` prints the pinned `vite-plus`.
 
-4. **NATS CLI (optional)** – Helpful when inspecting the webhook/sync event stream (NATS is disabled by default locally). The agent job queue runs on PostgreSQL and needs no NATS.
+4. **Helm CLI** – Required by `vp run check` and the pre-push hook: the tooling tests render the
+   chart with the real `helm` on your PATH. Install the version that
+   [`.github/actions/setup-helm/action.yml`](https://github.com/hephaestus-build/Hephaestus/blob/main/.github/actions/setup-helm/action.yml)
+   pins. That file is the one home of the version and its checksums. CI installs the same version.
+   Verify it with `helm version`.
+5. **NATS CLI (optional)** – Helpful when inspecting the webhook/sync event stream (NATS is disabled by default locally). The agent job queue runs on PostgreSQL and needs no NATS.
 
 If you push branches to the repository instead of a fork, also configure commit signing.
 [CONTRIBUTING.md § Signed Commits](https://github.com/hephaestus-build/Hephaestus/blob/main/CONTRIBUTING.md#signed-commits) has the setup.
@@ -397,6 +402,22 @@ Manual database edits are a last resort.
   Check that the provider callback matches `HEPHAESTUS_AUTH_ISSUER`, or `http://localhost:<SERVER_PORT>` when it is unset, plus the configured API prefix.
 - **Logins do not survive a server restart locally:** set `HEPHAESTUS_AUTH_STATE_COOKIE_KEY` (base64 32-byte. `openssl rand -base64 32`) in `server/.env` — otherwise an ephemeral per-boot key is used.
 - **Reset everything:** `vp run dev:reset` (see Running the stack). On next login the account and identity link are recreated.
+
+### Kubernetes
+
+`vp run dev:kubernetes` installs the chart on a local [k3d](https://k3d.io) cluster with this checkout's images.
+It needs Docker, `k3d`, `kubectl`, the pinned Helm CLI and the [`pack` CLI](https://buildpacks.io/docs/for-platform-operators/how-to/integrate-ci/pack/).
+
+1. It creates the k3d cluster `hephaestus` with two nodes, and a local registry that the nodes use as a mirror of `ghcr.io`.
+   A second run keeps both.
+2. It builds the server, webapp, agent and PostgreSQL images, and pushes them to that registry.
+3. It creates the namespaces, a Secret with generated values, and the PostgreSQL certificates.
+   It keeps them in the folder `kubernetes-cluster` of the gitignored `.context` folder.
+4. It installs the chart with the dev profile and two workers.
+   It waits until each worker has passed its isolation probe.
+
+The CI cluster jobs run the same script (`scripts/kubernetes-cluster.ts`) with the images of their run.
+Delete the cluster with `k3d cluster delete hephaestus`.
 
 ### Webhook receiver
 

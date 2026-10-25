@@ -21,6 +21,7 @@ import mockwebserver3.MockWebServer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.web.client.RestClient;
 import tools.jackson.databind.ObjectMapper;
 
 class LlmConnectionProbeServiceTest extends BaseUnitTest {
@@ -42,7 +43,8 @@ class LlmConnectionProbeServiceTest extends BaseUnitTest {
                 new ObjectMapper(),
                 // Loopback allowed: the probe target is a MockWebServer on localhost.
                 new LlmProperties(
-                        "", new LlmProperties.Egress(true), new LlmProperties.Fx(LlmProperties.ECB_DAILY_URL)));
+                        "", new LlmProperties.Egress(true), new LlmProperties.Fx(LlmProperties.ECB_DAILY_URL)),
+                RestClient.builder());
     }
 
     @AfterEach

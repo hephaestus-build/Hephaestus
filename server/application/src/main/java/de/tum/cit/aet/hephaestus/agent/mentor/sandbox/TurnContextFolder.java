@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.mentor.sandbox;
 
+import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ExecSandboxes;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxException;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
@@ -237,7 +238,8 @@ public class TurnContextFolder {
                 return refusal("UNAVAILABLE", "The command could not run in the sandbox.");
             }
             int exitCode = (int) header.value(0);
-            boolean timedOut = exitCode == 124 || exitCode == 137;
+            // `timeout` exits 124 at its limit, and 137 when it had to kill.
+            boolean timedOut = exitCode == SandboxLayout.EXIT_WORK_TIMEOUT || exitCode == SandboxLayout.EXIT_KILLED;
             if (timedOut) {
                 // A child that left the command's process group, with setsid for example, outlives timeout.
                 cancelCommands(sandbox);
@@ -350,7 +352,19 @@ public class TurnContextFolder {
                             ? failed.getClass().getSimpleName()
                             : cause.getClass().getSimpleName());
             return refusal("UNAVAILABLE", "The context folder could not be prepared. Try again once.");
-        } catch (SandboxException | IOException failed) {
+        } catch (SandboxException failed) {
+            if (sandbox.removed()) {
+                return refusal("TIMEOUT", "The answer ended while the sandbox ran.");
+            }
+            // A command whose run or cancellation failed may still start, or still run, in the sandbox: the next
+            // command gets a new one, which nothing of this one can reach.
+            sandboxes.discard(attempt(turn), sandbox);
+            log.warn(
+                    "A turn sandbox call failed: turnId={}, failure={}",
+                    turn.turnId(),
+                    failed.getClass().getSimpleName());
+            return refusal("UNAVAILABLE", "The sandbox failed. Try again once.");
+        } catch (IOException failed) {
             if (sandbox.removed()) {
                 return refusal("TIMEOUT", "The answer ended while the sandbox ran.");
             }
@@ -544,13 +558,9 @@ public class TurnContextFolder {
         List<String> argv =
                 new ArrayList<>(List.of("sh", "-c", "cd \"$1\" && shift && exec \"$@\"", "summary", directory));
         argv.addAll(command);
-        ExecSandboxes.Execution run;
-        try {
-            run = sandboxes.runtime().exec(sandbox.containerId(), new ExecSandboxes.Command(argv, time, SUMMARY_LIMIT));
-        } catch (SandboxException failed) {
-            log.debug("A load's summary failed: {}", failed.getClass().getSimpleName());
-            return "";
-        }
+        // A failed summary may still start in the sandbox: its failure fails the change, which removes the sandbox.
+        ExecSandboxes.Execution run =
+                sandboxes.runtime().exec(sandbox.containerId(), new ExecSandboxes.Command(argv, time, SUMMARY_LIMIT));
         if (run.timedOut()) {
             // The sandbox stays usable: the cancellation ends the sandbox user's processes only.
             cancelCommands(sandbox);
@@ -559,15 +569,13 @@ public class TurnContextFolder {
         return new String(run.stdout(), StandardCharsets.UTF_8).strip();
     }
 
-    /** Ends every process of the sandbox's user, a detached one too; the sandbox stays in use. */
+    /**
+     * Ends every process of the sandbox's user, a detached one too; the sandbox stays in use. A cancellation that the
+     * runtime cannot confirm throws, and the caller's failure removes the sandbox: a late kill must reach no later
+     * command.
+     */
     private void cancelCommands(TurnSandboxes.Sandbox sandbox) {
-        try {
-            sandboxes.runtime().cancelCommands(sandbox.containerId());
-        } catch (SandboxException e) {
-            log.debug(
-                    "Could not cancel the commands of a turn sandbox: {}",
-                    e.getClass().getSimpleName());
-        }
+        sandboxes.runtime().cancelCommands(sandbox.containerId());
     }
 
     /**

@@ -12,6 +12,7 @@ import { parse as parseJsonc } from "jsonc-parser";
 import { minimatch } from "minimatch";
 import { type Document, isMap, isScalar, isSeq, parseDocument, visit, type YAMLMap } from "yaml";
 
+import { commandsFor, scopesFor } from "./check-affected.ts";
 import { evaluate as evaluateVulnerabilityPolicy } from "./check-release-vulnerabilities.ts";
 import { isSet } from "./lib/env.ts";
 import { environmentForGitFixture } from "./lib/git-environment.ts";
@@ -100,9 +101,11 @@ async function readSources(files: string[]): Promise<Map<string, string>> {
 const TASK_INVOCATION =
 	/\bvp run (?:(?:--(?!filter\b)[\w-]+|\$\{\{ *matrix\.\w+ *\}\}) +)*(?<name>(?:[\w:-]|\$\{\{ *matrix\.\w+ *\}\})+)/gu;
 
-// The two gates `check` cannot run: the k6 syntax check needs the pinned container, and the PMD
-// canary runs only when CI decides PMD inputs changed. Every other CI gate is part of `check`.
-const CI_ONLY_GATES = new Set(["gate:load-syntax", "gate:pmd-canary"]);
+// The gates outside `check`: the k6 syntax check needs the pinned container, and the PMD canary runs
+// only when CI decides PMD inputs changed. The server test analysis compiles every test, and
+// `check` does not, so the pre-push hook stays fast; every local server test task runs it.
+// Every other CI gate is part of `check`.
+const CI_ONLY_GATES = new Set(["gate:load-syntax", "gate:pmd-canary", "gate:server-test-analysis"]);
 
 // Assignment names exclude '=' so each token has only one possible split.
 const VP_INVOCATION =
@@ -1493,7 +1496,7 @@ void describe("CI contract", () => {
 		);
 	});
 
-	void test("security mutation checks follow their Gradle launcher and toolchain inputs", async () => {
+	void test("security mutation checks follow their Gradle inputs and compile the tests once", async () => {
 		const workflow = parseDocument(
 			await readFile(".github/workflows/security-mutation.yml", "utf8"),
 		);
@@ -1507,6 +1510,11 @@ void describe("CI contract", () => {
 		]) {
 			assert.ok(paths.includes(input), `security mutation checks must include ${input}`);
 		}
+		// The compile step and PIT share one value, so PIT does not recompile the tests.
+		assert.equal(
+			workflow.getIn(["jobs", "pitest", "env", "ORG_GRADLE_PROJECT_testAnalysis"]),
+			"false",
+		);
 	});
 
 	void test("changes to the PMD canary exercise it even without server source changes", async () => {
@@ -1587,6 +1595,15 @@ void describe("CI contract", () => {
 		assert.ok(isSet(packaging));
 		assert.match(packaging, /:application:bootJar/u);
 		assert.match(packaging, /:application:testClasses/u);
+		// The suites wait for these classes, and the analysis does not change them, so it runs in
+		// the server quality leg, after that leg's other Gradle gate: one build per checkout.
+		assert.match(packaging, / -PtestAnalysis=false(?:\s|$)/u);
+		const config = await readFile("vite.config.ts", "utf8");
+		assert.match(config, /"ci:server": group\(\[[^\]]*"gate:server-test-analysis"/u);
+		assert.match(
+			config,
+			/"gate:server-test-analysis": run\(`\$\{gradlew\} :application:compileTestJava --quiet`, \{\s*dependsOn: \["gate:server"\],/u,
+		);
 		assert.equal((packageJob.match(/actions\/upload-artifact@/gu) ?? []).length, 1);
 		assert.match(packageJob, /overwrite: true/u);
 		for (const name of ["server-api", "server-database", "postgres-drill"]) {
@@ -4871,4 +4888,186 @@ void test("the log collection example reads only tagged entries and indexes only
 		/stage\.structured_metadata\s*\{\s*values\s*=\s*\{\s*trace_id\s*=\s*"",?\s*\}/u,
 	);
 	assert.doesNotMatch(alloy, /stage\.labels/u);
+});
+
+/**
+ * The SHA-256 that get.helm.sh publishes beside each v4.3.1 archive (`<archive>.sha256sum`), keyed
+ * by the runner platform the installer maps to it.
+ */
+const HELM_ARCHIVES = new Map([
+	[
+		"Linux/X64",
+		["linux-amd64", "tar.gz", "0403a88ae20913d11b10a2467b50087721fea7581736da6b9d3992f5357fe54b"],
+	],
+	[
+		"Linux/ARM64",
+		["linux-arm64", "tar.gz", "8cf8f66ecbc252ac8f7f06cca68aba88508ddfde3a6a34feb1678ad1694b4f88"],
+	],
+	[
+		"macOS/X64",
+		["darwin-amd64", "tar.gz", "34bec4eba761ba5c16d1965ee6b8f5b0abe5993974a802274e2a4f0418893d89"],
+	],
+	[
+		"macOS/ARM64",
+		["darwin-arm64", "tar.gz", "6b4e61c8cd27d99e5a801e63ff25dd5c70b36875c2cd659d3e9ce6b76fc23198"],
+	],
+	[
+		"Windows/X64",
+		["windows-amd64", "zip", "fcfd7b796dcf0f225abc40b5636a3b01f55f3de2fb1dfb18475df94e62c14112"],
+	],
+] as const);
+
+void test("one pinned Helm installer verifies the official archive before it extracts the binary", async () => {
+	const action = parseDocument(await readFile(".github/actions/setup-helm/action.yml", "utf8"));
+	const install = namedStep(action, ["runs"], "Install Helm");
+	assert.equal(install.getIn(["env", "HELM_VERSION"]), "v4.3.1");
+	assert.equal(install.getIn(["env", "RUNNER_PLATFORM"]), `\${{ runner.os }}/\${{ runner.arch }}`);
+	const script = runScript(action, ["runs"], "Install Helm");
+	for (const [platform, [name, format, checksum]] of HELM_ARCHIVES) {
+		assert.match(
+			script,
+			new RegExp(
+				`^\\s*${escapeRegExp(platform)}\\) platform=${name} format=${escapeRegExp(format)} binary=helm(?:\\.exe)?\\n\\s*checksum=${checksum} ;;$`,
+				"mu",
+			),
+			platform,
+		);
+	}
+	// A closed mapping: any other runner fails, and no checksum exists that the table above lacks.
+	assert.equal((script.match(/checksum=[a-f0-9]{64}/gu) ?? []).length, HELM_ARCHIVES.size);
+	assert.match(
+		script,
+		/^\s*\*\) echo "::error::No pinned Helm archive for \$RUNNER_PLATFORM"; exit 1 ;;$/mu,
+	);
+	// The official host only, bounded, and the archive is compared before it is opened.
+	assert.match(
+		script,
+		/--max-time 120 -o "\$work\/\$archive" "https:\/\/get\.helm\.sh\/\$archive"/u,
+	);
+	assert.equal((script.match(/https:\/\//gu) ?? []).length, 1);
+	const compared = script.indexOf('if [ "$actual" != "$checksum" ]; then');
+	assert.ok(compared > 0, "the archive checksum must be compared");
+	for (const extraction of ["unzip -q", "tar -xzf"]) {
+		assert.ok(script.indexOf(extraction) > compared, `${extraction} must follow the checksum`);
+	}
+	assert.match(script, /unzip -q "\$work\/\$archive" "\$platform\/\$binary" -d "\$work"/u);
+	assert.match(script, /tar -xzf "\$work\/\$archive" -C "\$work" "\$platform\/\$binary"/u);
+	assert.match(script, /trap 'rm -rf "\$work"' EXIT/u);
+	// Its own directory under the runner's temporary space, first on PATH, never a system location.
+	assert.match(script, /install_dir="\$runner_temp\/helm-\$HELM_VERSION\/bin"/u);
+	assert.match(
+		script,
+		/installed=\$\("\$install_dir\/\$binary" version --template '\{\{\.Version\}\}'\)/u,
+	);
+	assert.match(script, /cygpath -w "\$install_dir" >> "\$GITHUB_PATH"/u);
+	assert.doesNotMatch(script, /\bsudo\b|\/usr\/local\/bin|\bhelm version --short\b/u);
+	// The PATH check reads the one version from the install step instead of repeating it.
+	const check = namedStep(action, ["runs"], "Check the Helm on PATH");
+	assert.equal(check.getIn(["env", "HELM_VERSION"]), `\${{ steps.install.outputs.version }}`);
+	assert.match(
+		runScript(action, ["runs"], "Check the Helm on PATH"),
+		/\*\/helm-"\$HELM_VERSION"\/bin\/helm \|/u,
+	);
+	for (const file of await posixGlob(".github/{actions,workflows}/**/*.{yml,yaml}")) {
+		if (file !== ".github/actions/setup-helm/action.yml") {
+			assert.doesNotMatch(await readFile(file, "utf8"), /get\.helm\.sh|HELM_VERSION/u, file);
+		}
+	}
+});
+
+/** A workflow step that runs Helm, directly or through the chart release script. */
+const usesHelm = (item: unknown) =>
+	isMap(item) &&
+	typeof item.get("run") === "string" &&
+	/\bhelm\b|release-chart\.ts/u.test(String(item.get("run")));
+const installsHelm = (item: unknown) =>
+	isMap(item) && item.get("uses") === "./.github/actions/setup-helm";
+
+void test("every job that runs Helm installs the pinned one first, and the render gate runs on Linux and Windows", async () => {
+	const release = parseDocument(await readFile(".github/workflows/release.yml", "utf8"));
+	const helmJobs: string[] = [];
+	const jobs = release.get("jobs");
+	assert.ok(isMap(jobs));
+	for (const pair of jobs.items) {
+		const steps = isMap(pair.value) ? pair.value.get("steps") : undefined;
+		if (!isSeq(steps)) {
+			continue;
+		}
+		const first = steps.items.findIndex(usesHelm);
+		const installer = steps.items.findIndex(installsHelm);
+		if (first === -1) {
+			assert.equal(installer, -1, `${String(pair.key)} installs Helm it never runs`);
+			continue;
+		}
+		helmJobs.push(String(pair.key));
+		assert.ok(
+			installer !== -1 && installer < first,
+			`${String(pair.key)} runs Helm before the installer`,
+		);
+	}
+	assert.deepEqual(helmJobs, ["tag-images", "publish-release"]);
+
+	const leg = parseDocument(await readFile(".github/workflows/ci-quality-leg.yml", "utf8"));
+	const setup = namedStep(leg, ["jobs", "quality"], "Setup Helm");
+	assert.equal(setup.get("uses"), "./.github/actions/setup-helm");
+	assert.equal(setup.get("if"), "inputs.leg == 'tooling' || inputs.leg == 'windows'");
+	const legSteps = leg.getIn(["jobs", "quality", "steps"]);
+	assert.ok(isSeq(legSteps));
+	assert.ok(
+		legSteps.items.indexOf(setup) <
+			legSteps.items.indexOf(namedStep(leg, ["jobs", "quality"], "Quality gates")),
+		"Helm is installed before the gates",
+	);
+
+	const tasks = await loadTasks();
+	const dependencies = (entry: string) =>
+		asArray(asRecord(tasks[entry], entry).dependsOn, `${entry} dependencies`);
+	// The universal tooling suite owns both chart suites, the real Helm render included: its glob
+	// matches them, and it reaches every quality entry that the Helm installer serves.
+	const tooling = commandsOf(tasks["test:tooling"]).join(" ");
+	const toolingGlobs = [...tooling.matchAll(/(?<glob>\S+\.test\.ts)/gu)].map(
+		(match) => match.groups?.glob ?? "",
+	);
+	for (const file of [
+		"scripts/kubernetes-chart.test.ts",
+		"scripts/kubernetes-chart-render.test.ts",
+	]) {
+		assert.ok(existsSync(file), `${file} exists`);
+		assert.ok(
+			toolingGlobs.some((testGlob) => minimatch(file, testGlob)),
+			`test:tooling must run ${file}`,
+		);
+	}
+	assert.ok(dependencies("gate:tooling-tests").includes("test:tooling"));
+	assert.ok(dependencies("gate:agents").includes("gate:tooling-tests"));
+	for (const entry of ["quality", "ci:tooling", "ci:windows", "affected:agents"]) {
+		assert.ok(dependencies(entry).includes("gate:agents"), `${entry} must run gate:agents`);
+	}
+	// The convenience entry runs the two suites directly; the normal graph never runs them twice.
+	const chartTests = asRecord(tasks["test:kubernetes:chart"], "test:kubernetes:chart");
+	assert.deepEqual(commandsOf(chartTests), [
+		"node --test scripts/kubernetes-chart.test.ts scripts/kubernetes-chart-render.test.ts",
+	]);
+	assert.equal(chartTests.cache, false, "real Helm subprocesses are never cached");
+	assert.equal(tasks["gate:kubernetes-chart"], undefined);
+	for (const [name, task] of Object.entries(tasks)) {
+		const dependsOn = isRecord(task) && Array.isArray(task.dependsOn) ? task.dependsOn : [];
+		assert.ok(!dependsOn.includes("test:kubernetes:chart"), `${name} runs the chart suites again`);
+	}
+	// A chart change selects the scoped set that contains the render suite.
+	const chartChange = scopesFor(["deploy/chart/hephaestus/values.yaml"]);
+	assert.deepEqual(chartChange, ["agents"]);
+	assert.deepEqual(commandsFor(chartChange), [["run", "affected:agents"]]);
+	// The chart's plain JSON and YAML are formatted and checked; Helm judges its Go templates.
+	for (const entry of ["format:config", "gate:config-format"]) {
+		assert.match(
+			commandsOf(tasks[entry]).join(" "),
+			/vp fmt --(?:write|check) 'deploy\/chart\/\*\*\/\*\.\{json,yaml\}' '!deploy\/chart\/\*\*\/templates\/\*\*'/u,
+			entry,
+		);
+	}
+
+	const detection = job(await readFile(".github/workflows/cicd.yml", "utf8"), "detect-changes");
+	assert.match(pathFilter(detection, "tooling"), /- 'deploy\/chart\/\*\*'/u);
+	assert.match(pathFilter(detection, "quality-config"), /- '\.github\/actions\/setup-helm\/\*\*'/u);
 });

@@ -117,12 +117,11 @@ public class MentorContextPathBuilder {
     }
 
     static String prefix(Instant createdAt, MentorEntry.Surface surface, ZoneId zone) {
-        String where =
-                switch (surface) {
-                    case APP -> "app";
-                    case SLACK -> "Slack";
-                    case SYSTEM -> "Hephaestus";
-                };
+        String where = switch (surface) {
+            case APP -> "app";
+            case SLACK -> "Slack";
+            case SYSTEM -> "Hephaestus";
+        };
         return "[" + time(createdAt, zone) + " · " + where + "]";
     }
 

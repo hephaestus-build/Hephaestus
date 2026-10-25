@@ -109,6 +109,9 @@ export function scopesFor(paths: string[]): Scope[] {
 			}
 		} else if (path.startsWith("docker/agents/")) {
 			scopes.add("agents");
+		} else if (path.startsWith("deploy/chart/")) {
+			// The chart suites run in test:tooling, which affected:agents runs.
+			scopes.add("agents");
 		} else if (path.startsWith("docs/")) {
 			scopes.add("docs");
 		} else {

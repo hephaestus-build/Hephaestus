@@ -1,0 +1,82 @@
+name: Setup Helm
+description: Install the pinned Helm CLI from get.helm.sh after a checksum check, and put it first on PATH
+runs:
+  using: composite
+  steps:
+    - name: Install Helm
+      id: install
+      shell: bash
+      env:
+        # The one Helm version of CI and the release. Each archive SHA-256 below is the value that
+        # get.helm.sh publishes beside that archive (<archive>.sha256sum) for this version.
+        HELM_VERSION: v4.3.1
+        RUNNER_PLATFORM: ${{ runner.os }}/${{ runner.arch }}
+      run: |
+        set -euo pipefail
+        case "$RUNNER_PLATFORM" in
+          Linux/X64) platform=linux-amd64 format=tar.gz binary=helm
+            checksum=0403a88ae20913d11b10a2467b50087721fea7581736da6b9d3992f5357fe54b ;;
+          Linux/ARM64) platform=linux-arm64 format=tar.gz binary=helm
+            checksum=8cf8f66ecbc252ac8f7f06cca68aba88508ddfde3a6a34feb1678ad1694b4f88 ;;
+          macOS/X64) platform=darwin-amd64 format=tar.gz binary=helm
+            checksum=34bec4eba761ba5c16d1965ee6b8f5b0abe5993974a802274e2a4f0418893d89 ;;
+          macOS/ARM64) platform=darwin-arm64 format=tar.gz binary=helm
+            checksum=6b4e61c8cd27d99e5a801e63ff25dd5c70b36875c2cd659d3e9ce6b76fc23198 ;;
+          Windows/X64) platform=windows-amd64 format=zip binary=helm.exe
+            checksum=fcfd7b796dcf0f225abc40b5636a3b01f55f3de2fb1dfb18475df94e62c14112 ;;
+          *) echo "::error::No pinned Helm archive for $RUNNER_PLATFORM"; exit 1 ;;
+        esac
+        archive="helm-${HELM_VERSION}-${platform}.${format}"
+        # Git Bash on Windows works in POSIX paths; RUNNER_TEMP arrives as a Windows path there.
+        runner_temp=$RUNNER_TEMP
+        if command -v cygpath > /dev/null; then
+          runner_temp=$(cygpath -u "$RUNNER_TEMP")
+        fi
+        work=$(mktemp -d "$runner_temp/helm-download.XXXXXX")
+        trap 'rm -rf "$work"' EXIT
+        curl -fsSL --proto '=https' --retry 5 --retry-all-errors --retry-delay 2 --retry-max-time 300 \
+          --connect-timeout 15 --max-time 120 -o "$work/$archive" "https://get.helm.sh/$archive"
+        # macOS has shasum, Linux and Git Bash have sha256sum. The archive is never opened before this.
+        if command -v sha256sum > /dev/null; then
+          actual=$(sha256sum "$work/$archive" | cut -d' ' -f1)
+        else
+          actual=$(shasum -a 256 "$work/$archive" | cut -d' ' -f1)
+        fi
+        if [ "$actual" != "$checksum" ]; then
+          echo "::error::$archive has SHA-256 $actual, not the pinned $checksum"
+          exit 1
+        fi
+        # Only the binary leaves the archive.
+        if [ "$format" = zip ]; then
+          unzip -q "$work/$archive" "$platform/$binary" -d "$work"
+        else
+          tar -xzf "$work/$archive" -C "$work" "$platform/$binary"
+        fi
+        install_dir="$runner_temp/helm-$HELM_VERSION/bin"
+        mkdir -p "$install_dir"
+        cp "$work/$platform/$binary" "$install_dir/$binary"
+        chmod 0755 "$install_dir/$binary"
+        installed=$("$install_dir/$binary" version --template '{{.Version}}')
+        if [ "$installed" != "$HELM_VERSION" ]; then
+          echo "::error::$install_dir/$binary reports $installed, not $HELM_VERSION"
+          exit 1
+        fi
+        # GITHUB_PATH takes a native path; Git Bash on Windows translates it back with cygpath.
+        if command -v cygpath > /dev/null; then
+          cygpath -w "$install_dir" >> "$GITHUB_PATH"
+        else
+          echo "$install_dir" >> "$GITHUB_PATH"
+        fi
+        echo "version=$HELM_VERSION" >> "$GITHUB_OUTPUT"
+    - name: Check the Helm on PATH
+      shell: bash
+      env:
+        HELM_VERSION: ${{ steps.install.outputs.version }}
+      run: |
+        set -euo pipefail
+        # Later steps must find this installation first, never a Helm that the runner image carries.
+        case "$(command -v helm)" in
+          */helm-"$HELM_VERSION"/bin/helm | */helm-"$HELM_VERSION"/bin/helm.exe) ;;
+          *) echo "::error::helm on PATH is $(command -v helm), not the pinned installation"; exit 1 ;;
+        esac
+        [ "$(helm version --template '{{.Version}}')" = "$HELM_VERSION" ]

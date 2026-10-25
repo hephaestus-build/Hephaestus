@@ -52,7 +52,7 @@ It can capture evidence only for images that its run published.
 
 | Job                                                                     | Checks                                                                                                                                                                                                    | Local command                                                            |
 | ----------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| Quality → App Server                                                    | Spotless and PMD, NullAway policy, the PMD canary when PMD inputs changed, source-use contracts, setting delivery per runtime role                                                                        | `vp run gate:server`, `gate:java-nullness`, `gate:contracts`, `gate:env` |
+| Quality → App Server                                                    | Spotless and PMD, NullAway policy, the test analysis (`gate:server-test-analysis`), the PMD canary when PMD inputs changed, source-use contracts, setting delivery per runtime role                                                                        | `vp run gate:server`, `gate:java-nullness`, `gate:contracts`, `gate:env` |
 | Quality → Tooling and Docs                                              | toolchain and agent-runtime pins, the runner and lint contracts, `gate:agents`, load-test format and syntax, agent specs, instruction mirrors, docs format and `docs:lint`, Mermaid parse                 | `vp run gate:agents`, `gate:docs`, `test:agents`                         |
 | Quality → Webapp                                                        | `vp check`, presentational components, story prose, docs color tokens, unit tests, Vite build with a `routeTree.gen.ts` diff                                                                              | `vp run check:webapp`, `test:webapp`, `build:webapp`                     |
 | Quality → Webapp: Stories                                               | Storybook interaction tests, `export:assets` diff, Storybook build, Chromatic                                                                                                                             | `vp run test:webapp:stories`                                             |
@@ -482,7 +482,8 @@ Preview environments do not need to be created in advance. The preview workflow 
 Add the `preview` label to a same-repository pull request. Every push redeploys when its CI/CD run
 completes, whether the tests passed or not. The published images decide, not the test verdict.
 
-CI builds a pull request's images only when the run needs them: for the `preview` label, for the supported-host boot smoke, or for release evidence.
+CI builds a pull request's images only when the run needs them.
+The `preview` label, the supported-host boot smoke, the Kubernetes cluster jobs and release evidence need them.
 The merge group builds every other changed image before it lands.
 `Detect changes` reads the label live, as for `ci:full` ([Two verification tiers](#two-verification-tiers)).
 If it cannot read the label, a pull request that is not a draft builds its images.
@@ -937,6 +938,15 @@ cache hit. A change alters the test sources or the main classes they compile aga
 So the suites wait for packaging rather than compile the same sources in each of their jobs.
 The package artifact is kept for one day, so a failed job re-run after that day fails on its download.
 Re-run all jobs instead.
+
+The package job compiles the tests without Error Prone and NullAway (`-PtestAnalysis=false`).
+The analysis can fail the build, but it does not change the bytecode that javac writes.
+Thus, the suites start sooner and still test the same classes.
+
+The server quality leg compiles the tests with the analysis (`gate:server-test-analysis`), and a finding fails that leg.
+That leg runs whenever a Java compile input can change: `server/**`, `.java-version` or the setup actions.
+A push to `main` runs Quality only for a version bump. Its merge group ran the analysis on the same tree.
+Locally, every server test task compiles the tests with the analysis.
 
 The PostgreSQL backup-restore and PITR drills apply the migrations from that same executable JAR.
 Spring Boot's launcher runs the Liquibase bundled in the JAR against the changelog in the JAR, from an empty directory and with a minimal environment.

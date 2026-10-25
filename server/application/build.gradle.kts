@@ -75,6 +75,8 @@ dependencies {
     implementation(libs.docker.java.api)
     implementation(libs.docker.java.core)
     implementation(libs.docker.java.transport.httpclient5)
+    implementation(libs.fabric8.kubernetes.client)
+    testImplementation(libs.fabric8.kubernetes.server.mock)
     implementation(libs.bolt) {
         exclude(group = "com.squareup.okhttp3", module = "okhttp")
     }
@@ -98,6 +100,10 @@ dependencies {
     testCompileOnly(libs.immutables.value.annotations)
     // PostgreSQL test types carry Checker Framework annotations that javac must resolve.
     testCompileOnly(libs.checker.qual)
+    // The native Kubernetes transport fixture exposes Vert.x types with these class-file
+    // annotations.
+    testCompileOnly(libs.vertx.codegen.api)
+    testCompileOnly(libs.vertx.codegen.json)
     testAnnotationProcessor(libs.lombok)
     testAnnotationProcessor(libs.therapi.scribe)
     errorprone(libs.errorprone.core)
@@ -149,6 +155,13 @@ tasks.withType<JavaCompile>().configureEach {
         excludedPaths.set(".*/build/generated/.*")
     }
 }
+
+// Error Prone and NullAway report findings and leave the bytecode as javac writes it. So CI's
+// package job compiles the tests without them (-PtestAnalysis=false), and the server quality leg
+// compiles them with the analysis. docs/contributor/ci-cd.mdx § Build once.
+val testAnalysis = providers.gradleProperty("testAnalysis").map(String::toBoolean).orElse(true)
+
+tasks.named<JavaCompile>("compileTestJava") { options.errorprone.enabled.set(testAnalysis) }
 
 spotless {
     java {
@@ -260,6 +273,12 @@ tasks.withType<Test>().configureEach {
     environment("MANAGEMENT_PORT", "0")
     environment("SERVER_PORT", "0")
     jvmArgs("-XX:+EnableDynamicAgentLoading", "-XX:+ExitOnOutOfMemoryError")
+    // No cached lookup bypasses OfflineNetwork: each attempt is recorded, and a declared name ends
+    // with its class.
+    jvmArgs(
+        "-Djava.security.properties=" +
+            file("src/test/resources/offline-network.security").absolutePath
+    )
     if (profileTests.get()) {
         jvmArgs(
             "-XX:StartFlightRecording=filename=${layout.buildDirectory.file("$name-profile.jfr").get().asFile},settings=profile,dumponexit=true",
@@ -327,6 +346,9 @@ for ((taskName, tag) in testTiers.filterKeys { it != "test" }) {
         selectTestTier(tag)
         shouldRunAfter(tasks.test)
         if (tag == "live") {
+            // Live tests call real providers; every other tier resolves no real host
+            // (OfflineNetwork).
+            systemProperty("hephaestus.test.network.open", "true")
             listOf(
                     "PI_RUNNER_CWD",
                     "HEPHAESTUS_LIVE_LLM_BASE_URL",

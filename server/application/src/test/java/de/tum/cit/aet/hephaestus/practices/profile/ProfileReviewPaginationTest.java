@@ -37,7 +37,9 @@ import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -174,22 +176,28 @@ class ProfileReviewPaginationTest extends BaseUnitTest {
                     })
                     .toList();
         });
-        when(presentation.ownFeedback(any())).thenReturn(List.of());
-        when(reviews.ref(any())).thenAnswer(i -> {
-            Review r = i.getArgument(0);
-            var v = data.stream()
-                    .filter(d -> d.review().getId().equals(r.getId()))
-                    .findFirst()
-                    .orElseThrow();
-            return new ReviewRefDTO(
-                    r.getId(),
-                    r.getKind(),
-                    v.item(),
-                    r.getItemVersion(),
-                    r.getOrigin(),
-                    r.getStatus(),
-                    r.getCreatedAt(),
-                    r.getCompletedAt());
+        when(presentation.ownFeedback(eq(1L), anyCollection())).thenReturn(Map.of());
+        when(reviews.refs(eq(1L), anyCollection())).thenAnswer(i -> {
+            Collection<Review> shown = i.getArgument(1);
+            Map<UUID, ReviewRefDTO> refs = new LinkedHashMap<>();
+            for (Review r : shown) {
+                var v = data.stream()
+                        .filter(d -> d.review().getId().equals(r.getId()))
+                        .findFirst()
+                        .orElseThrow();
+                refs.put(
+                        r.getId(),
+                        new ReviewRefDTO(
+                                r.getId(),
+                                r.getKind(),
+                                v.item(),
+                                r.getItemVersion(),
+                                r.getOrigin(),
+                                r.getStatus(),
+                                r.getCreatedAt(),
+                                r.getCompletedAt()));
+            }
+            return refs;
         });
         return data;
     }

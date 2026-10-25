@@ -125,9 +125,10 @@ class ProxyRoutingServiceTest extends BaseUnitTest {
     void refusesAnAttemptReplacedSinceAuthentication() {
         job.setAttempt(3);
         assertThatThrownBy(() -> routing.resolve(identity, request("/internal/llm/responses")))
-                .isInstanceOfSatisfying(
-                        ResponseStatusException.class,
-                        failure -> assertThat(failure.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED));
+                .isInstanceOfSatisfying(ResponseStatusException.class, failure -> {
+                    assertThat(failure.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+                    assertThat(failure.getReason()).isEqualTo(JobTokenAuthenticationFilter.ATTEMPT_ENDED);
+                });
     }
 
     @Test
@@ -135,9 +136,10 @@ class ProxyRoutingServiceTest extends BaseUnitTest {
         when(attemptUsage.registerCall(any(), anyLong(), anyInt(), any(), any(), any()))
                 .thenReturn(false);
         assertThatThrownBy(() -> routing.resolve(identity, request("/internal/llm/responses")))
-                .isInstanceOfSatisfying(
-                        ResponseStatusException.class,
-                        failure -> assertThat(failure.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED));
+                .isInstanceOfSatisfying(ResponseStatusException.class, failure -> {
+                    assertThat(failure.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+                    assertThat(failure.getReason()).isEqualTo(JobTokenAuthenticationFilter.ATTEMPT_ENDED);
+                });
     }
 
     @Test

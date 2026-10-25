@@ -30,15 +30,24 @@ class AgentRoleGatingTest extends BaseUnitTest {
 
     private static final String AGENT_ON = RuntimeRole.AGENT_ENABLED_PROPERTY + "=true";
 
-    @ParameterizedTest
-    @ValueSource(classes = {ReviewJobExecutor.class, WorkerLivenessReporter.class})
-    void shouldPollJobsOnlyWhenAgentJobsAndTheWorkerRoleAreOn(Class<?> poller) {
-        assertThat(registers(poller)).isFalse();
-        assertThat(registers(poller, AGENT_ON)).isTrue();
-        assertThat(registers(poller, AGENT_ON, RuntimeRole.WORKER_PROPERTY + "=false"))
+    @Test
+    void shouldPollJobsOnlyWhenAgentJobsAndTheWorkerRoleAreOn() {
+        assertThat(registers(ReviewJobExecutor.class)).isFalse();
+        assertThat(registers(ReviewJobExecutor.class, AGENT_ON)).isTrue();
+        assertThat(registers(ReviewJobExecutor.class, AGENT_ON, RuntimeRole.WORKER_PROPERTY + "=false"))
                 .isFalse();
-        assertThat(registers(poller, AGENT_ON, RuntimeRole.SERVER_PROPERTY + "=false"))
+        assertThat(registers(ReviewJobExecutor.class, AGENT_ON, RuntimeRole.SERVER_PROPERTY + "=false"))
                 .isTrue();
+    }
+
+    /** A worker that runs no practice reviews still runs Heph hosts, which other workers keep while it beats. */
+    @Test
+    void shouldBeatWheneverTheWorkerRoleIsOn() {
+        assertThat(registers(WorkerLivenessReporter.class)).isTrue();
+        assertThat(registers(WorkerLivenessReporter.class, RuntimeRole.SERVER_PROPERTY + "=false"))
+                .isTrue();
+        assertThat(registers(WorkerLivenessReporter.class, RuntimeRole.WORKER_PROPERTY + "=false"))
+                .isFalse();
     }
 
     @ParameterizedTest

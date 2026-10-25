@@ -18,13 +18,14 @@ It covers these memory limits, which are ceilings, not reservations:
 | `application-server`           | 5 GiB        | `APPLICATION_SERVER_MEM_LIMIT`                                                              |
 | `application-worker`           | 3 GiB        | `APPLICATION_WORKER_MEM_LIMIT`                                                              |
 | `webhook-server`               | 2 GiB        | `WEBHOOK_SERVER_MEM_LIMIT`                                                                  |
+| `postgres`                     | 4 GiB        | `POSTGRES_MEM_LIMIT`                                                                        |
 | each concurrent review sandbox | 3 GiB        | `SANDBOX_MEMORY_BYTES`, `SANDBOX_MAX_CONCURRENT` (1 in the self-hosted Compose file)        |
 | the Heph host, one per worker  | 2 GiB        | Fixed. [Runtime roles](./runtime-roles.mdx#the-heph-host) gives the limits of the Heph host |
 
-With the defaults of the self-hosted Compose file, these limits add up to 15 GiB, about 16 GB.
+With the defaults of the self-hosted Compose file, these limits add up to 19 GiB, about 20.4 GB.
 During an upgrade, the one-shot `database-migration` container runs beside the previous roles for a few minutes.
 Keep 1 GiB free for it (`DATABASE_MIGRATION_MEM_LIMIT`).
-PostgreSQL, NATS, Traefik, and the webapp have no limit.
+NATS, Traefik, and the webapp have no limit.
 The rest of the 24 GB is for them and the operating system.
 
 A limit caps a container but reserves nothing.
@@ -42,6 +43,25 @@ The review capacity (`HEPHAESTUS_WORKER_REVIEW_MAX`) defaults to `auto`: the num
 
 Each worker also runs [turn sandboxes](./runtime-roles.mdx#turn-sandboxes) for Heph, beside the review sandboxes and the Heph host.
 Their limits are fixed and do not count against `SANDBOX_MAX_CONCURRENT`.
+
+## PostgreSQL memory
+
+The bundled PostgreSQL image sizes its memory settings from the memory limit of its container when it starts.
+`shared_buffers` is the starting value that the [PostgreSQL manual](https://www.postgresql.org/docs/current/runtime-config-resource.html) gives.
+The other values are common starting points:
+
+| Setting                | Value                                    |
+| ---------------------- | ---------------------------------------- |
+| `shared_buffers`       | 25 % of the limit                        |
+| `effective_cache_size` | 75 % of the limit                        |
+| `maintenance_work_mem` | 1/16 of the limit, from 64 MB to 1 GB    |
+| `max_wal_size`         | half of the limit, at least 1 GB         |
+| `max_connections`      | one for each 16 MB, from 100 to 400      |
+
+A container without a limit keeps the PostgreSQL defaults, because the memory of the host is shared.
+A `-c` flag in the `command` of the `postgres` service overrides a value.
+The image also records [statement statistics](./observability#database-statement-statistics).
+To give PostgreSQL more memory, raise `POSTGRES_MEM_LIMIT` and restart the `postgres` service.
 
 ## Review sandbox limits
 
@@ -94,17 +114,35 @@ Preparing code evidence can hold two database connections.
 The worker also needs connections for its control traffic and to record results.
 Thus, the worker's pool must hold two connections for each review that can prepare code evidence at the same time, plus room for the rest.
 
+The scheduled GitHub and GitLab syncs together run at most four workspace syncs at the same time on each server.
+A workspace sync can hold two connections, so the scheduled syncs use at most eight connections of the server's pool.
+The rest stays free for requests.
+
 The worker profile gives the worker a pool of 32 connections, in Compose and on any other deployment.
-The other roles keep the application default of 20.
+The webhook profile gives the webhook server a pool of 2: only an Outline delivery reads the database, with one query.
+The server keeps the application default of 20.
 `HIKARI_MAXIMUM_POOL_SIZE` overrides the pool size of each JVM that receives it.
 The Compose stacks pass it to the worker only.
 
 Each JVM replica can open up to its own pool size.
-Budget the sum of all pools against the connections that PostgreSQL makes available, less its reserved connections and the connections of other clients.
-For example, one server, one worker and one webhook server use up to 32 + 20 + 20 = 72 connections.
-If PostgreSQL allows 100 connections and reserves 3, then 25 remain for migrations, operator access and other clients.
-This example is only an illustration.
-More replicas or larger pools use more connections, and other clients need their own headroom.
+Budget all clients against `max_connections`:
+
+| Clients                                                          | Connections        |
+| ---------------------------------------------------------------- | ------------------ |
+| The pools of one server, one worker and one webhook server       | 20 + 32 + 2 = 54   |
+| The Heph listener of the server and of the worker, outside pools | 2                  |
+| A database migration or a backup                                 | up to 10           |
+| Operator sessions and monitoring                                 | a few              |
+| The superuser reserve of PostgreSQL                              | 3                  |
+
+Compose stops the old container of a service before it starts the new one, so the roles of two releases never run together.
+Then about 70 connections are in use at most.
+A rolling update, as on Kubernetes, runs the old and the new roles at the same time.
+It needs both sets of pools and listeners, 112 connections, and about 130 with the other clients.
+
+At the default limit of 4 GiB, PostgreSQL allows 256 connections.
+Below 1.6 GiB, it allows 100, which holds the roles of one release only.
+For more replicas or larger pools, raise `POSTGRES_MEM_LIMIT`, or lower `HIKARI_MAXIMUM_POOL_SIZE`.
 
 ## Memory headroom
 

@@ -6,7 +6,9 @@ import static org.mockito.Mockito.mock;
 import java.time.Clock;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.restclient.autoconfigure.RestClientAutoConfiguration;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.boot.validation.autoconfigure.ValidationAutoConfiguration;
@@ -19,6 +21,7 @@ class ReleaseRoleContextTest {
     static class PropertiesConfiguration {}
 
     private final ApplicationContextRunner context = new ApplicationContextRunner()
+            .withConfiguration(AutoConfigurations.of(RestClientAutoConfiguration.class))
             .withBean(Clock.class, Clock::systemUTC)
             .withBean(ReleaseStartRepository.class, () -> mock(ReleaseStartRepository.class))
             .withBean(TransactionTemplate.class, () -> mock(TransactionTemplate.class))

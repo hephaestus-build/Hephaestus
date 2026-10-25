@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.sandbox.docker;
 
+import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxProperties;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ResourceLimits;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -36,21 +37,9 @@ public class ContainerSecurityPolicy {
     /** The most the mandatory tmpfs mounts hold. Their pages count against the container's memory limit. */
     public static final long MANDATORY_TMPFS_BYTES = TMP_BYTES + RUN_BYTES + AGENT_LOCAL_BYTES;
 
-    /** The memory a review sandbox keeps for its processes when every mandatory tmpfs mount is full. */
-    public static final long MIN_PROCESS_BYTES = 512L * 1024 * 1024;
-
-    /**
-     * Refuses a review memory limit that a full {@code /tmp} could exhaust: the kernel would then kill the review
-     * for files the agent wrote, not for what its processes use.
-     */
+    /** Refuses a review memory limit that full tmpfs mounts could exhaust ({@link SandboxProperties#requireRoomBeside}). */
     public static void requireRoomBesideTmpfs(long memoryBytes) {
-        long floor = MANDATORY_TMPFS_BYTES + MIN_PROCESS_BYTES;
-        if (memoryBytes < floor) {
-            throw new IllegalStateException(
-                    "SANDBOX_MEMORY_BYTES is " + memoryBytes + "; a review sandbox needs at least "
-                            + floor + ": " + MANDATORY_TMPFS_BYTES + " for its tmpfs mounts and " + MIN_PROCESS_BYTES
-                            + " for its processes");
-        }
+        SandboxProperties.requireRoomBeside(memoryBytes, MANDATORY_TMPFS_BYTES);
     }
 
     private final DockerSandboxProperties properties;

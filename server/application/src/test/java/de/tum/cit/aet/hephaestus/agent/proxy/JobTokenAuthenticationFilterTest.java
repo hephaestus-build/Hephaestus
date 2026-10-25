@@ -143,12 +143,11 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
     void turnTokenReachesNoOtherTurnAndNoSandboxRuntime(String target) throws Exception {
         var jwt = turnJwt();
         when(verifier.verify("turn-token")).thenReturn(jwt);
-        var path =
-                switch (target) {
-                    case "other-turn" -> "/internal/llm/turn/" + UUID.randomUUID() + "/end";
-                    case "runtime" -> "/internal/llm/runtime/" + jwt.turnId();
-                    default -> "/internal/llm/runtime/" + jwt.turnId() + "/commands";
-                };
+        var path = switch (target) {
+            case "other-turn" -> "/internal/llm/turn/" + UUID.randomUUID() + "/end";
+            case "runtime" -> "/internal/llm/runtime/" + jwt.turnId();
+            default -> "/internal/llm/runtime/" + jwt.turnId() + "/commands";
+        };
         var response = new MockHttpServletResponse();
         filter.doFilter(request(path, "Bearer turn-token"), response, (incoming, outgoing) -> {
             throw new AssertionError("Turn token served outside its turn");
@@ -250,15 +249,10 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"attempt", "workspace", "worker", "terminal", "path"})
-    void rejectsCredentialOutsideItsExactRunningAttempt(String mismatch) throws Exception {
+    @ValueSource(strings = {"workspace", "path"})
+    void rejectsCredentialOutsideItsOwnJob(String mismatch) throws Exception {
         var job = running();
-        var jwt = jwt(
-                job.getId(),
-                mismatch.equals("workspace") ? 999L : job.getWorkspaceId(),
-                mismatch.equals("attempt") ? job.getAttempt() + 1 : job.getAttempt());
-        if (mismatch.equals("worker")) job.setWorkerId("other-worker");
-        if (mismatch.equals("terminal")) job.setStatus(ReviewJobStatus.COMPLETED);
+        var jwt = jwt(job.getId(), mismatch.equals("workspace") ? 999L : job.getWorkspaceId(), job.getAttempt());
         when(verifier.verify("valid-token")).thenReturn(jwt);
         when(jobs.findById(job.getId())).thenReturn(Optional.of(job));
         var request = request(
@@ -271,6 +265,25 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
             throw new AssertionError("Unauthenticated request served");
         });
         assertThat(response.getStatus()).isEqualTo(401);
+        assertThat(response.getContentAsString()).isEmpty();
+        assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"requeued", "worker", "terminal"})
+    void modelCallOfAnAttemptThatNoLongerRunsHereGetsTheAttemptEndedConflict(String mismatch) throws Exception {
+        var job = running();
+        when(verifier.verify("valid-token")).thenReturn(jwt(job.getId(), job.getWorkspaceId(), job.getAttempt()));
+        if (mismatch.equals("requeued")) job.setAttempt(job.getAttempt() + 1);
+        if (mismatch.equals("worker")) job.setWorkerId("other-worker");
+        if (mismatch.equals("terminal")) job.setStatus(ReviewJobStatus.COMPLETED);
+        when(jobs.findById(job.getId())).thenReturn(Optional.of(job));
+        var response = new MockHttpServletResponse();
+        filter.doFilter(request("/internal/llm/responses", "Bearer valid-token"), response, (incoming, outgoing) -> {
+            throw new AssertionError("Lost attempt served");
+        });
+        assertThat(response.getStatus()).isEqualTo(409);
+        assertThat(response.getContentAsString()).isEqualTo(JobTokenAuthenticationFilter.ATTEMPT_ENDED);
         assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
     }
 

@@ -61,13 +61,22 @@ public class ReleaseCheckClient {
     private final Clock clock;
 
     @Autowired
-    ReleaseCheckClient(Clock clock) {
-        this(RestClient.builder().requestFactory(isolatedRequestFactory()), clock);
+    ReleaseCheckClient(RestClient.Builder restClients, Clock clock) {
+        this(releases(restClients.requestFactory(isolatedRequestFactory())), clock);
     }
 
-    ReleaseCheckClient(RestClient.Builder builder, Clock clock) {
+    /** Test seam: a builder whose request factory the test controls. */
+    static ReleaseCheckClient over(RestClient.Builder builder, Clock clock) {
+        return new ReleaseCheckClient(releases(builder), clock);
+    }
+
+    private ReleaseCheckClient(RestClient client, Clock clock) {
+        this.client = client;
         this.clock = clock;
-        client = builder.baseUrl("https://api.github.com/repos/" + REPOSITORY + "/releases/latest")
+    }
+
+    private static RestClient releases(RestClient.Builder builder) {
+        return builder.baseUrl("https://api.github.com/repos/" + REPOSITORY + "/releases/latest")
                 .defaultHeader(HttpHeaders.ACCEPT, "application/vnd.github+json")
                 .defaultHeader(HttpHeaders.USER_AGENT, "Hephaestus-release-check")
                 .defaultHeader("X-GitHub-Api-Version", "2022-11-28")

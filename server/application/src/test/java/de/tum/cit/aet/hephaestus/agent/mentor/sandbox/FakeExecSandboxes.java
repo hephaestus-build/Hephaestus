@@ -45,10 +45,18 @@ public final class FakeExecSandboxes implements ExecSandboxes {
     /** The worker's own id; null for a worker that cannot name itself. */
     public volatile @Nullable String self = SELF;
 
+    /** What {@link #ready} answers. */
+    public volatile boolean ready = true;
+
     public volatile Function<Command, Execution> answer = command -> new Execution(0, new byte[0], new byte[0], false);
 
     /** Sees each staging while its archive is still open; a staging fails when it throws a {@link SandboxException}. */
     public volatile Consumer<Staging> onStage = staging -> {};
+
+    @Override
+    public boolean ready() {
+        return ready;
+    }
 
     @Override
     public String create(String sandboxId, ResourceLimits limits) {

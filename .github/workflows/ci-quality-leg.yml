@@ -53,6 +53,11 @@ jobs:
         if: inputs.leg == 'server'
         uses: ./.github/actions/setup-caches
 
+      # test:tooling renders the chart with the real Helm CLI; the release jobs install the same one.
+      - name: Setup Helm
+        if: inputs.leg == 'tooling' || inputs.leg == 'windows'
+        uses: ./.github/actions/setup-helm
+
       # The extension's story tests run in Chromium.
       - name: Setup Playwright browsers
         if: inputs.leg == 'extension'

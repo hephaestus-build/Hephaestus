@@ -41,7 +41,7 @@ The jobs that delete review job data run only when `AGENT_ENABLED` is `true`.
 | Capture and output of a review job | 14 days after the job ends. A job that waits for delivery keeps them. | `hephaestus.agent.payload-retention` | A server job every 6 hours |
 | Review job rows, with their script runs and attempt usage | 90 days after the job ends | `hephaestus.agent.row-retention` | The same job |
 | Original review inputs (composition basis) | Until they expire. The end of the job also deletes them. | None | The same job |
-| Evidence-copy receipts | [No automatic deletion](https://github.com/hephaestus-build/Hephaestus/issues/3163). Erasure empties a receipt and marks it erased. | None | Nothing deletes the row |
+| Evidence-copy receipts | As long as their review job row. After that, until the worker that held the copy confirms its removal. | `hephaestus.agent.row-retention` | The same job, after the worker confirms. Person erasure and workspace purge clear the identities earlier. |
 | Evidence of an item event | Replaced by a marker 30 days after it is recorded | `hephaestus.item-event-ledger.retain-for` | A server job every 15 minutes |
 | Item events that nothing references | 30 days after their decision | `hephaestus.item-event-ledger.retain-for` | The same job |
 | Item events that stay pending | They expire after 7 days. The expired row goes 30 days later. | `ITEM_EVENT_LEDGER_PENDING_LAPSE_AFTER`, `hephaestus.item-event-ledger.retain-for` | The same job |

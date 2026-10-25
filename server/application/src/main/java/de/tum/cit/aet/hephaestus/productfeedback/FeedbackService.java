@@ -77,12 +77,11 @@ class FeedbackService {
 
     @Transactional(readOnly = true)
     public Page<FeedbackItemDTO> list(FeedbackFilter filter, Pageable pageable) {
-        Page<ProductFeedback> page =
-                switch (filter) {
-                    case OPEN -> feedback.findAllByResolvedAtIsNullOrderByCreatedAtDesc(pageable);
-                    case RESOLVED -> feedback.findAllByResolvedAtIsNotNullOrderByResolvedAtDesc(pageable);
-                    case ALL -> feedback.findAllByOrderByCreatedAtDesc(pageable);
-                };
+        Page<ProductFeedback> page = switch (filter) {
+            case OPEN -> feedback.findAllByResolvedAtIsNullOrderByCreatedAtDesc(pageable);
+            case RESOLVED -> feedback.findAllByResolvedAtIsNotNullOrderByResolvedAtDesc(pageable);
+            case ALL -> feedback.findAllByOrderByCreatedAtDesc(pageable);
+        };
         return new PageImpl<>(dtos(page.getContent()), pageable, page.getTotalElements());
     }
 

@@ -16,6 +16,7 @@ import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.web.client.RestClient;
 
 class GitHubAppUserAuthorizationClientTest extends BaseUnitTest {
 
@@ -145,7 +146,8 @@ class GitHubAppUserAuthorizationClientTest extends BaseUnitTest {
                         new GitHubProperties.App(1, null, null, null, clientId, clientSecret),
                         new GitHubProperties.Meta(null)),
                 base,
-                base);
+                base,
+                RestClient.builder());
     }
 
     private void respond(int status, String body) {

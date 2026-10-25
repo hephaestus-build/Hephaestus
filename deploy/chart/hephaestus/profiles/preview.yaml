@@ -1,0 +1,29 @@
+# One short-lived preview of a pull request. Bundled PostgreSQL and NATS, small volumes, no worker.
+# ADR 0035 owns what a preview may run and against what; this file sets only capacity.
+deploymentEnvironment: preview
+config:
+  releaseCheckEnabled: false
+postgresql:
+  persistence:
+    size: 5Gi
+  resources:
+    requests: { cpu: 100m, memory: 256Mi, ephemeral-storage: 128Mi }
+    limits: { cpu: "1", memory: 1Gi, ephemeral-storage: 512Mi }
+nats:
+  jetstream:
+    maxMemory: 256M
+    maxFileBytes: 2147483648
+webhook:
+  stream:
+    maxAge: 14d
+    maxBytes: 128MB
+    maxBytesGithub: 512MB
+  resources:
+    requests: { cpu: 100m, memory: 1536Mi, ephemeral-storage: 128Mi }
+    limits: { cpu: "1", memory: 1536Mi, ephemeral-storage: 512Mi }
+server:
+  gitCache:
+    sizeLimit: 5Gi
+  resources:
+    requests: { cpu: 250m, memory: 3Gi, ephemeral-storage: 256Mi }
+    limits: { cpu: "2", memory: 3Gi, ephemeral-storage: 6Gi }

@@ -138,13 +138,13 @@ public class TurnSandboxes implements AutoCloseable {
 
     /**
      * Whether this worker can serve turn sandboxes: it can name itself on them, so that its next start removes what a
-     * crash left, and the last start of one did not fail.
+     * crash left, its runtime is ready, and the last start of one did not fail.
      */
     public boolean available() {
         synchronized (lifecycle) {
             if (closed) return false;
         }
-        return sandboxes.workerInstance() != null && !lastStartFailed;
+        return sandboxes.workerInstance() != null && sandboxes.ready() && !lastStartFailed;
     }
 
     public ExecSandboxes runtime() {
@@ -322,7 +322,7 @@ public class TurnSandboxes implements AutoCloseable {
     /** Fills the pool in the background, one sandbox at a time. */
     void refill() {
         synchronized (lifecycle) {
-            if (closed || pool.size() >= poolSize || sandboxes.workerInstance() == null) {
+            if (closed || pool.size() >= poolSize || sandboxes.workerInstance() == null || !sandboxes.ready()) {
                 return;
             }
         }

@@ -69,6 +69,14 @@ public interface ExecSandboxes {
     String workerInstance();
 
     /**
+     * Whether the runtime starts a sandbox now. A runtime that proves its isolation first, as Kubernetes does, answers
+     * false until a proof passed, so that callers wait rather than fail.
+     */
+    default boolean ready() {
+        return true;
+    }
+
+    /**
      * @param argv the command, run without a shell
      * @param outputLimit how many bytes of each of stdout and stderr are kept; the rest is dropped
      */

@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueComment;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueCommentRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmItemEvents;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.label.Label;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.label.LabelRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.milestone.Milestone;
@@ -20,6 +21,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.events.EventContext;
 import de.tum.cit.aet.hephaestus.integration.scm.events.ScmDomainEvent;
 import de.tum.cit.aet.hephaestus.integration.scm.events.ScmEventPayload;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.BaseGitHubProcessor;
+import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubMisfiledWork;
 import de.tum.cit.aet.hephaestus.integration.scm.github.issue.dto.GitHubIssueDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.github.issuecomment.dto.GitHubIssueCommentEventDTO.GitHubCommentDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.github.label.dto.GitHubLabelDTO;
@@ -64,6 +66,7 @@ public class GitHubIssueCommentProcessor extends BaseGitHubProcessor {
     private final IssueRepository issueRepository;
     private final PullRequestRepository pullRequestRepository;
     private final ApplicationEventPublisher eventPublisher;
+    private final GitHubMisfiledWork misfiledWork;
 
     public GitHubIssueCommentProcessor(
             IssueCommentRepository commentRepository,
@@ -73,12 +76,14 @@ public class GitHubIssueCommentProcessor extends BaseGitHubProcessor {
             LabelRepository labelRepository,
             MilestoneRepository milestoneRepository,
             GitHubUserProcessor gitHubUserProcessor,
-            ApplicationEventPublisher eventPublisher) {
+            ApplicationEventPublisher eventPublisher,
+            GitHubMisfiledWork misfiledWork) {
         super(userRepository, labelRepository, milestoneRepository, gitHubUserProcessor);
         this.commentRepository = commentRepository;
         this.issueRepository = issueRepository;
         this.pullRequestRepository = pullRequestRepository;
         this.eventPublisher = eventPublisher;
+        this.misfiledWork = misfiledWork;
     }
 
     /**
@@ -162,6 +167,22 @@ public class GitHubIssueCommentProcessor extends BaseGitHubProcessor {
         }
 
         Issue issue = findParent(context.repository(), issueDto.number(), context);
+
+        // An issue row filed under another repository holds the issue's id; a stub here would collide with it. A pull
+        // request's comment names the issue resource id, which its row does not hold.
+        Long issueId = issueDto.getDatabaseId();
+        if (issue == null && !issueDto.isPullRequest() && issueId != null) {
+            var relocation = misfiledWork.relocate(
+                    Objects.requireNonNull(context.repository()),
+                    Objects.requireNonNull(context.providerId(), "Comment processing requires a provider"),
+                    issueId,
+                    issueDto.number(),
+                    "ISSUE",
+                    ScmItemEvents.ISSUE);
+            if (relocation == GitHubMisfiledWork.Outcome.SKIPPED) return null;
+            if (relocation == GitHubMisfiledWork.Outcome.MOVED)
+                issue = findParent(context.repository(), issueDto.number(), context);
+        }
 
         // If parent doesn't exist, create a minimal entity from webhook data
         if (issue == null) {

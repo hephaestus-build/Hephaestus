@@ -13,7 +13,10 @@ import reactor.core.publisher.Mono;
 public class ScmServerEndpointPolicy {
     private final String simulationOrigin;
 
-    public ScmServerEndpointPolicy(Environment environment) {
+    private final WebClient.Builder webClients;
+
+    public ScmServerEndpointPolicy(Environment environment, WebClient.Builder webClients) {
+        this.webClients = webClients;
         simulationOrigin = environment.getProperty("hephaestus.e2e.scm-origin", "");
         if (!simulationOrigin.isEmpty()) {
             if (!environment.acceptsProfiles(Profiles.of("e2e & !prod"))) {
@@ -43,7 +46,8 @@ public class ScmServerEndpointPolicy {
     public WebClient clientFor(String serverUrl) {
         validate(serverUrl);
         URI origin = URI.create(serverUrl);
-        return WebClient.builder()
+        return webClients
+                .clone()
                 .clientConnector(WebClientConnectors.ssrfGuarded(isSimulation(serverUrl)))
                 .filter((request, next) -> {
                     URI target = request.url();

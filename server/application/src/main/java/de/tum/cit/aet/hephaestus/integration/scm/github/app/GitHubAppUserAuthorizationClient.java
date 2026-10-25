@@ -45,11 +45,12 @@ public class GitHubAppUserAuthorizationClient {
     public GitHubAppUserAuthorizationClient(
             GitHubProperties properties,
             @Value("${hephaestus.integration.github.app.web-base-url:https://github.com}") String webBaseUrl,
-            @Value("${hephaestus.integration.github.app.api-base-url:" + GITHUB_API_BASE_URL + "}") String apiBaseUrl) {
+            @Value("${hephaestus.integration.github.app.api-base-url:" + GITHUB_API_BASE_URL + "}") String apiBaseUrl,
+            RestClient.Builder restClients) {
         this.clientId = properties.app().clientId();
         this.clientSecret = properties.app().clientSecret();
-        this.web = RestClient.builder().baseUrl(webBaseUrl).build();
-        this.api = RestClient.builder()
+        this.web = restClients.clone().baseUrl(webBaseUrl).build();
+        this.api = restClients
                 .baseUrl(apiBaseUrl)
                 .defaultHeader(HttpHeaders.ACCEPT, "application/vnd.github+json")
                 .defaultHeader("X-GitHub-Api-Version", "2022-11-28")

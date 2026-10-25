@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.integration.scm.github.pullrequestreview;
 
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.ProcessingContext;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmItemEvents;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReview;
@@ -13,6 +14,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.events.EventContext;
 import de.tum.cit.aet.hephaestus.integration.scm.events.ScmDomainEvent;
 import de.tum.cit.aet.hephaestus.integration.scm.events.ScmEventPayload;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.BaseGitHubProcessor;
+import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubMisfiledWork;
 import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequest.dto.GitHubPullRequestDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequestreview.dto.GitHubPullRequestReviewEventDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.github.user.GitHubUserProcessor;
@@ -50,17 +52,20 @@ public class GitHubPullRequestReviewProcessor extends BaseGitHubProcessor {
     private final PullRequestReviewRepository reviewRepository;
     private final PullRequestRepository prRepository;
     private final ApplicationEventPublisher eventPublisher;
+    private final GitHubMisfiledWork misfiledWork;
 
     public GitHubPullRequestReviewProcessor(
             PullRequestReviewRepository reviewRepository,
             PullRequestRepository prRepository,
             UserRepository userRepository,
             GitHubUserProcessor gitHubUserProcessor,
-            ApplicationEventPublisher eventPublisher) {
+            ApplicationEventPublisher eventPublisher,
+            GitHubMisfiledWork misfiledWork) {
         super(userRepository, null, null, gitHubUserProcessor);
         this.reviewRepository = reviewRepository;
         this.prRepository = prRepository;
         this.eventPublisher = eventPublisher;
+        this.misfiledWork = misfiledWork;
     }
 
     /**
@@ -134,6 +139,23 @@ public class GitHubPullRequestReviewProcessor extends BaseGitHubProcessor {
         PullRequest pr = prRepository
                 .findByRepositoryIdAndNumber(context.repository().getId(), prDto.number())
                 .orElse(null);
+
+        // A row filed under another repository holds the pull request's id; a stub here would collide with it.
+        Long prId = prDto.getDatabaseId();
+        if (pr == null && prId != null) {
+            var relocation = misfiledWork.relocate(
+                    Objects.requireNonNull(context.repository()),
+                    Objects.requireNonNull(context.providerId(), "Review processing requires a provider"),
+                    prId,
+                    prDto.number(),
+                    "PULL_REQUEST",
+                    ScmItemEvents.PULL_REQUEST);
+            if (relocation == GitHubMisfiledWork.Outcome.SKIPPED) return null;
+            if (relocation == GitHubMisfiledWork.Outcome.MOVED)
+                pr = prRepository
+                        .findByRepositoryIdAndNumber(context.repository().getId(), prDto.number())
+                        .orElse(null);
+        }
 
         // If parent doesn't exist, create a minimal entity from webhook data
         if (pr == null) {

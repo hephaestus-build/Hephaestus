@@ -2699,20 +2699,19 @@ class ActivityControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
         @ParameterizedTest
         @EnumSource(TeamRequest.class)
         void shouldListATeamRequestOnlyWhenNothingElseAsksTheMemberOrAnswersIt(TeamRequest given) {
-            PullRequest asking =
-                    switch (given) {
-                        case ASKED_DIRECTLY ->
-                            pullRequest(ada, monitored, requestingTeam(web).andThen(requesting(zoe)));
-                        case AUTHORED -> pullRequest(zoe, monitored, requestingTeam(web));
-                        case DRAFT ->
-                            pullRequest(ada, monitored, requestingTeam(web).andThen(work -> {
-                                work.setDraft(true);
-                                return work;
-                            }));
-                        case UNMONITORED -> pullRequest(ada, unmonitored, requestingTeam(web));
-                        case APPROVED, CHANGES_REQUESTED, COMMENTED, APPROVAL_DISMISSED ->
-                            pullRequest(ada, monitored, requestingTeam(web));
-                    };
+            PullRequest asking = switch (given) {
+                case ASKED_DIRECTLY ->
+                    pullRequest(ada, monitored, requestingTeam(web).andThen(requesting(zoe)));
+                case AUTHORED -> pullRequest(zoe, monitored, requestingTeam(web));
+                case DRAFT ->
+                    pullRequest(ada, monitored, requestingTeam(web).andThen(work -> {
+                        work.setDraft(true);
+                        return work;
+                    }));
+                case UNMONITORED -> pullRequest(ada, unmonitored, requestingTeam(web));
+                case APPROVED, CHANGES_REQUESTED, COMMENTED, APPROVAL_DISMISSED ->
+                    pullRequest(ada, monitored, requestingTeam(web));
+            };
             switch (given) {
                 case APPROVED -> review(asking, zoe, PullRequestReview.State.APPROVED);
                 case CHANGES_REQUESTED -> review(asking, zoe, PullRequestReview.State.CHANGES_REQUESTED);

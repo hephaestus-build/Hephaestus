@@ -54,20 +54,19 @@ public class ScmItemEventRecorder {
     @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)
     public void onPullRequest(ScmDomainEvent.PullRequestEvent event) {
         pinUnresolved(event.pullRequest().repository().id(), event.pullRequest().id());
-        ItemEventName name =
-                switch (event) {
-                    case ScmDomainEvent.PullRequestCreated ignored -> ScmItemEvents.PULL_REQUEST_OPENED;
-                    case ScmDomainEvent.PullRequestReady ignored -> ScmItemEvents.PULL_REQUEST_READY;
-                    case ScmDomainEvent.PullRequestSynchronized ignored -> ScmItemEvents.PULL_REQUEST_SYNCHRONIZED;
-                    case ScmDomainEvent.PullRequestMerged ignored -> ScmItemEvents.PULL_REQUEST_MERGED;
-                    case ScmDomainEvent.PullRequestClosed closed ->
-                        closed.wasMerged() ? null : ScmItemEvents.PULL_REQUEST_CLOSED;
-                    case ScmDomainEvent.PullRequestUpdated updated ->
-                        Collections.disjoint(updated.changedFields(), ScmItemEvents.LINKED_PULL_REQUEST_MATERIAL_FIELDS)
-                                ? null
-                                : ScmItemEvents.PULL_REQUEST_EDITED;
-                    default -> null;
-                };
+        ItemEventName name = switch (event) {
+            case ScmDomainEvent.PullRequestCreated ignored -> ScmItemEvents.PULL_REQUEST_OPENED;
+            case ScmDomainEvent.PullRequestReady ignored -> ScmItemEvents.PULL_REQUEST_READY;
+            case ScmDomainEvent.PullRequestSynchronized ignored -> ScmItemEvents.PULL_REQUEST_SYNCHRONIZED;
+            case ScmDomainEvent.PullRequestMerged ignored -> ScmItemEvents.PULL_REQUEST_MERGED;
+            case ScmDomainEvent.PullRequestClosed closed ->
+                closed.wasMerged() ? null : ScmItemEvents.PULL_REQUEST_CLOSED;
+            case ScmDomainEvent.PullRequestUpdated updated ->
+                Collections.disjoint(updated.changedFields(), ScmItemEvents.LINKED_PULL_REQUEST_MATERIAL_FIELDS)
+                        ? null
+                        : ScmItemEvents.PULL_REQUEST_EDITED;
+            default -> null;
+        };
         if (name != null)
             record(
                     event.pullRequest().repository().id(),
@@ -83,17 +82,16 @@ public class ScmItemEventRecorder {
         if (event instanceof ScmDomainEvent.IssueDeleted) return;
         var issue = Objects.requireNonNull(event.issue());
         if (issue.isPullRequest()) return;
-        ItemEventName name =
-                switch (event) {
-                    case ScmDomainEvent.IssueCreated ignored -> ScmItemEvents.ISSUE_OPENED;
-                    case ScmDomainEvent.IssueClosed ignored -> ScmItemEvents.ISSUE_CLOSED;
-                    case ScmDomainEvent.IssueUpdated updated ->
-                        Collections.disjoint(updated.changedFields(), ScmItemEvents.REVIEWABLE_ISSUE_FIELDS)
-                                ? null
-                                : ScmItemEvents.ISSUE_UPDATED;
-                    case ScmDomainEvent.IssueReopened ignored -> ScmItemEvents.ISSUE_UPDATED;
-                    default -> null;
-                };
+        ItemEventName name = switch (event) {
+            case ScmDomainEvent.IssueCreated ignored -> ScmItemEvents.ISSUE_OPENED;
+            case ScmDomainEvent.IssueClosed ignored -> ScmItemEvents.ISSUE_CLOSED;
+            case ScmDomainEvent.IssueUpdated updated ->
+                Collections.disjoint(updated.changedFields(), ScmItemEvents.REVIEWABLE_ISSUE_FIELDS)
+                        ? null
+                        : ScmItemEvents.ISSUE_UPDATED;
+            case ScmDomainEvent.IssueReopened ignored -> ScmItemEvents.ISSUE_UPDATED;
+            default -> null;
+        };
         if (name != null) record(issue.repository().id(), issue.id(), ScmItemEvents.ISSUE, null, name, event.context());
         if (event instanceof ScmDomainEvent.IssueClosed
                 || event instanceof ScmDomainEvent.IssueReopened

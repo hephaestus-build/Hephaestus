@@ -1,7 +1,7 @@
 {
 	"short_name": "Hephaestus",
 	"name": "Hephaestus",
-	"description": "Hephaestus gives developers practice feedback on software project work, plus an AI mentor for talking through feedback and next steps.",
+	"description": "Hephaestus is an open-source AI mentor for software teams. It checks the issues, pull and merge requests, and reviews that your team already writes against the engineering practices that your workspace adopts. Each developer gets feedback with evidence and, where something needs attention, a next step.",
 	"icons": [
 		{
 			"src": "icon-192.png",

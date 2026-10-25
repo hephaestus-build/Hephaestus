@@ -76,6 +76,9 @@ function start(container: string, dataVolume: string, mount: string, image: stri
 		container,
 		"-p",
 		"127.0.0.1::5432",
+		// The image sizes its memory settings from this limit.
+		"--memory",
+		"2g",
 		"-v",
 		`${dataVolume}:${mount}`,
 		"-e",
@@ -109,6 +112,13 @@ try {
 	const sourcePort = start(source, volume, "/var/lib/postgresql", targetImage ?? `${id}:18`);
 	if (!sql(source, "SHOW server_version_num").startsWith("18")) {
 		throw new Error("source is not PostgreSQL 18");
+	}
+	const sized = sql(
+		source,
+		"SELECT current_setting('shared_buffers') || ' ' || current_setting('max_connections') || ' ' || current_setting('shared_preload_libraries')",
+	);
+	if (sized !== "512MB 128 pg_stat_statements") {
+		throw new Error(`source is not sized from its 2 GiB limit: ${sized}`);
 	}
 
 	migrate(sourcePort);

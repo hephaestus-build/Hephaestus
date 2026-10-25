@@ -408,21 +408,19 @@ class ConnectionControllerTest extends BaseUnitTest {
             long id, long workspaceId, IntegrationKind kind, String instanceKey, IntegrationState state) {
         Workspace ws = new Workspace();
         ws.setId(workspaceId);
-        ConnectionConfig cfg =
-                switch (kind) {
-                    case GITHUB -> new ConnectionConfig.GitHubAppConfig(100L, "acme", null, Set.of());
-                    case GITLAB ->
-                        new ConnectionConfig.GitLabConfig(
-                                "https://gitlab.com",
-                                200L,
-                                null,
-                                ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT,
-                                Set.of(),
-                                null);
-                    case SLACK -> new ConnectionConfig.SlackConfig(null, null, null, Set.of());
-                    case OUTLINE ->
-                        new ConnectionConfig.OutlineConfig("https://app.getoutline.com", null, null, Set.of());
-                };
+        ConnectionConfig cfg = switch (kind) {
+            case GITHUB -> new ConnectionConfig.GitHubAppConfig(100L, "acme", null, Set.of());
+            case GITLAB ->
+                new ConnectionConfig.GitLabConfig(
+                        "https://gitlab.com",
+                        200L,
+                        null,
+                        ConnectionConfig.GitLabConfig.SigningMode.PLAINTEXT,
+                        Set.of(),
+                        null);
+            case SLACK -> new ConnectionConfig.SlackConfig(null, null, null, Set.of());
+            case OUTLINE -> new ConnectionConfig.OutlineConfig("https://app.getoutline.com", null, null, Set.of());
+        };
         Connection c = new Connection(ws, kind, instanceKey, cfg);
         c.setState(state);
         setIdAndTimestamps(c, id);

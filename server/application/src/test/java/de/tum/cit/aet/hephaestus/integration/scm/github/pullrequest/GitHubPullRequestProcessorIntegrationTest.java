@@ -44,6 +44,7 @@ import de.tum.cit.aet.hephaestus.testconfig.RecordingScmEventListener;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.math.BigInteger;
 import java.net.URI;
 import java.time.Duration;
@@ -108,6 +109,9 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private IssueRepository issueRepository;
+
+    @Autowired
+    private MeterRegistry meters;
 
     @Autowired
     private TeamRepository teamRepository;
@@ -669,6 +673,75 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
                     .isNotNull()
                     .extracting(Issue::getId)
                     .isEqualTo(stubbed.getId());
+        }
+
+        private Repository staleRepository() {
+            Repository renamed = new Repository();
+            renamed.setNativeId(FIXTURE_REPO_ID + 1);
+            renamed.setName("TestRepository-archive");
+            renamed.setNameWithOwner(FIXTURE_REPO_FULL_NAME + "-archive");
+            renamed.setHtmlUrl("https://github.com/" + FIXTURE_REPO_FULL_NAME + "-archive");
+            renamed.setVisibility(Repository.Visibility.PUBLIC);
+            renamed.setDefaultBranch("main");
+            renamed.setCreatedAt(Instant.now());
+            renamed.setUpdatedAt(Instant.now());
+            renamed.setPushedAt(Instant.now());
+            renamed.setOrganization(testOrganization);
+            renamed.setProvider(githubProvider);
+            return repositoryRepository.save(renamed);
+        }
+
+        @Test
+        void shouldMoveAPullRequestFiledUnderAStaleRepositoryNameToTheRepositoryGitHubReports() {
+            Repository stale = staleRepository();
+            double moved = misfiledCount("moved", "none");
+            PullRequest misfiled = Objects.requireNonNull(processor.process(
+                    createBasicPullRequestDto(PULL_REQUEST_ID, 40),
+                    ProcessingContext.forSync(testWorkspace.getId(), stale)));
+
+            PullRequest synced = processor.process(
+                    createBasicPullRequestDto(PULL_REQUEST_ID, 40, "synced body", stubUpdatedAt), createContext());
+
+            assertThat(synced).isNotNull().extracting(PullRequest::getId).isEqualTo(misfiled.getId());
+            assertThat(stored(40).getId()).isEqualTo(misfiled.getId());
+            assertThat(stored(40).getNativeId()).isEqualTo(PULL_REQUEST_ID);
+            assertThat(stored(40).getBody()).isEqualTo("synced body");
+            assertThat(pullRequestRepository.findByRepositoryIdAndNumber(stale.getId(), 40))
+                    .isEmpty();
+            assertThat(misfiledCount("moved", "none")).isEqualTo(moved + 1);
+        }
+
+        @Test
+        void shouldSkipOnlyThatPullRequestWhenItsRepositoryAlreadyHasARowForTheNumber() {
+            Repository stale = staleRepository();
+            double skipped = misfiledCount("skipped", "idHeldByAnotherRepository");
+            PullRequest misfiled = Objects.requireNonNull(processor.process(
+                    createBasicPullRequestDto(PULL_REQUEST_ID, 41),
+                    ProcessingContext.forSync(testWorkspace.getId(), stale)));
+            PullRequest stubbed = stub(41);
+
+            assertThat(processor.process(
+                            createBasicPullRequestDto(PULL_REQUEST_ID, 41, "synced body", stubUpdatedAt),
+                            createContext()))
+                    .isNull();
+
+            assertThat(pullRequestRepository
+                            .findByRepositoryIdAndNumber(stale.getId(), 41)
+                            .orElseThrow()
+                            .getId())
+                    .isEqualTo(misfiled.getId());
+            assertThat(stored(41).getId()).isEqualTo(stubbed.getId());
+            assertThat(stored(41).getBody()).isEqualTo("stub body");
+            assertThat(misfiledCount("skipped", "idHeldByAnotherRepository")).isEqualTo(skipped + 1);
+        }
+
+        private double misfiledCount(String outcome, String reason) {
+            var counter = meters.find("github.misfiled.work")
+                    .tag("type", "pull_request")
+                    .tag("outcome", outcome)
+                    .tag("reason", reason)
+                    .counter();
+            return counter == null ? 0 : counter.count();
         }
     }
 
