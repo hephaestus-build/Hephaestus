@@ -32,7 +32,8 @@ import { useIsMobile } from "@/hooks/use-mobile";
  * 3. The user-visible text is sentence case ("Toggle sidebar"), and the mobile sheet is named
  *    "Navigation" so it matches the "Close navigation" button in `AppSidebar`.
  * 4. The Cmd/Ctrl+B shortcut ignores a keystroke typed into an editable element: upstream calls
- *    `preventDefault` there too, which takes bold away from every text editor in the app.
+ *    `preventDefault` there too, which takes the key from the field, such as Ctrl+B that moves the
+ *    cursor back one character on a Mac.
  */
 const SIDEBAR_WIDTH = "16rem";
 const SIDEBAR_WIDTH_MOBILE = "18rem";

@@ -602,7 +602,7 @@ describe("workspace members route", () => {
 
 		await screen.findByText("We could not change the role");
 		screen.getByText("A workspace needs at least one owner.");
-		expect(screen.queryByRole("alertdialog")).toBeNull();
+		await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
 	});
 
 	it("offers an admin no Owner role and leaves an owner's row read-only", async () => {
