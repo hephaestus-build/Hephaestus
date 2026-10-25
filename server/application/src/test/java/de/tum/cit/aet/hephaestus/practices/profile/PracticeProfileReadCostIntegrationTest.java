@@ -47,7 +47,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -62,7 +61,6 @@ import tools.jackson.databind.json.JsonMapper;
  * much Practice page feedback the developer's work has. Every row passes custody and source checks, so the whole
  * authorization path runs for it.
  */
-@Import(ReviewIntegrationData.class)
 class PracticeProfileReadCostIntegrationTest extends BaseIntegrationTest {
     @Autowired
     ReviewIntegrationData data;
