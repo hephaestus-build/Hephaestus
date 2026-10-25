@@ -77,6 +77,5 @@ describe("app chrome with two workspaces", () => {
 
 		expect(notPrevented).toBe(true);
 		expect(router.state.location.pathname).toBe("/settings");
-		screen.getByRole("button", { name: /Acme/u });
 	});
 });

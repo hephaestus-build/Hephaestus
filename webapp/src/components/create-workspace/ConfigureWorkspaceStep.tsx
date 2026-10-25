@@ -24,10 +24,12 @@ function projectSummary(scope: WizardState["projectScope"], selected: number): s
 export interface ConfigureWorkspaceStepProps {
 	/** The choice of the group's projects to monitor, which reads the group's projects itself. */
 	projects: ReactNode;
+	/**
+	 * Every field shows its problem, as after a refused "Create workspace". Otherwise a field shows
+	 * its problem only after the reader leaves it, never while they type.
+	 */
+	showErrors?: boolean;
 }
-
-/** The ids of the field errors, so the create button can point to what stops it. */
-export const WORKSPACE_DETAILS_ERROR_IDS = "workspace-display-name-error workspace-slug-error";
 
 /** The first problem with each field, in the order the schema checks them. */
 function detailErrors(
@@ -44,7 +46,10 @@ function detailErrors(
 	return errors;
 }
 
-export function ConfigureWorkspaceStep({ projects }: ConfigureWorkspaceStepProps) {
+export function ConfigureWorkspaceStep({
+	projects,
+	showErrors = false,
+}: ConfigureWorkspaceStepProps) {
 	const { state, dispatch } = useWizard();
 	const [touched, setTouched] = useState<Partial<Record<keyof WorkspaceDetailsData, boolean>>>({});
 
@@ -54,12 +59,9 @@ export function ConfigureWorkspaceStep({ projects }: ConfigureWorkspaceStepProps
 		displayName: state.displayName,
 		workspaceSlug: state.workspaceSlug,
 	});
-	const displayNameError = touched.displayName === true ? errors.displayName : undefined;
-	// The reader did not enter a slug made from the name and may not look at it. Thus, its problem
-	// shows at once: otherwise "Create workspace" turns off with no reason on the screen.
-	const slugMadeFromName = !state.slugManuallyEdited && hasText(state.displayName.trim());
-	const slugError =
-		touched.workspaceSlug === true || slugMadeFromName ? errors.workspaceSlug : undefined;
+	const displayNameError =
+		showErrors || touched.displayName === true ? errors.displayName : undefined;
+	const slugError = showErrors || touched.workspaceSlug === true ? errors.workspaceSlug : undefined;
 
 	const handleDisplayNameChange = (value: string) => {
 		dispatch({ type: "SET_DISPLAY_NAME", value });
@@ -86,7 +88,7 @@ export function ConfigureWorkspaceStep({ projects }: ConfigureWorkspaceStepProps
 					aria-invalid={hasText(displayNameError)}
 					aria-describedby={
 						hasText(displayNameError)
-							? "workspace-display-name-error"
+							? "workspace-display-name-description workspace-display-name-error"
 							: "workspace-display-name-description"
 					}
 				/>
@@ -109,7 +111,9 @@ export function ConfigureWorkspaceStep({ projects }: ConfigureWorkspaceStepProps
 					onBlur={() => handleBlur("workspaceSlug")}
 					aria-invalid={hasText(slugError)}
 					aria-describedby={
-						hasText(slugError) ? "workspace-slug-error" : "workspace-slug-description"
+						hasText(slugError)
+							? "workspace-slug-description workspace-slug-error"
+							: "workspace-slug-description"
 					}
 				/>
 				<FieldDescription id="workspace-slug-description">

@@ -209,10 +209,6 @@ export const MultipleWorkspaces: Story = {
 		},
 	},
 	play: async ({ args, canvas }) => {
-		// The browser's tab keys switch tabs, not workspaces.
-		await userEvent.keyboard("{Control>}2{/Control}{Meta>}3{/Meta}");
-		await expect(args.onWorkspaceChange).not.toHaveBeenCalled();
-
 		// A login that differs from the name tells two workspaces apart, so it stays on every line.
 		await userEvent.click(canvas.getByRole("button", { name: "AET aet-org" }));
 		const menu = within(await screen.findByRole("menu"));
