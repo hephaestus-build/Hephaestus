@@ -104,7 +104,7 @@ class ProcessingContextFactoryTest {
             String repoFullName = "ls1intum/Hephaestus";
             GitHubWebhookEvent event = createEventWithRepo(repoFullName);
             when(repositoryScopeFilter.isRepositoryAllowed(repoFullName)).thenReturn(true);
-            when(repositoryRepository.findByNameWithOwnerAndProviderId(repoFullName, GITHUB_PROVIDER_ID))
+            when(repositoryRepository.findByNativeIdAndProviderId(1L, GITHUB_PROVIDER_ID))
                     .thenReturn(Optional.empty());
 
             Optional<ProcessingContext> result = factory.forWebhookEvent(event);
@@ -120,7 +120,7 @@ class ProcessingContextFactoryTest {
             repository.setOrganization(null);
 
             when(repositoryScopeFilter.isRepositoryAllowed(repoFullName)).thenReturn(true);
-            when(repositoryRepository.findByNameWithOwnerAndProviderId(repoFullName, GITHUB_PROVIDER_ID))
+            when(repositoryRepository.findByNativeIdAndProviderId(1L, GITHUB_PROVIDER_ID))
                     .thenReturn(Optional.of(repository));
             when(scopeIdResolver.findScopeIdByRepositoryName(repoFullName)).thenReturn(Optional.of(42L));
 
@@ -175,8 +175,13 @@ class ProcessingContextFactoryTest {
             Repository named = TestEntities.repository(2L, repoFullName);
             named.setOrganization(null);
             when(repositoryScopeFilter.isRepositoryAllowed(repoFullName)).thenReturn(true);
-            when(repositoryRepository.findByNameWithOwnerAndProviderId(repoFullName, GITHUB_PROVIDER_ID))
-                    .thenReturn(Optional.of(named));
+            if (nativeId == null) {
+                when(repositoryRepository.findByNameWithOwnerAndProviderId(repoFullName, GITHUB_PROVIDER_ID))
+                        .thenReturn(Optional.of(named));
+            } else {
+                when(repositoryRepository.findByNativeIdAndProviderId(nativeId, GITHUB_PROVIDER_ID))
+                        .thenReturn(Optional.of(named));
+            }
             when(scopeIdResolver.findScopeIdByRepositoryName(repoFullName)).thenReturn(Optional.of(7L));
 
             Optional<ProcessingContext> result =
@@ -207,7 +212,7 @@ class ProcessingContextFactoryTest {
             repository.setOrganization(TestEntities.organization(1L, orgLogin));
 
             when(repositoryScopeFilter.isRepositoryAllowed(repoFullName)).thenReturn(true);
-            when(repositoryRepository.findByNameWithOwnerAndProviderId(repoFullName, GITHUB_PROVIDER_ID))
+            when(repositoryRepository.findByNativeIdAndProviderId(1L, GITHUB_PROVIDER_ID))
                     .thenReturn(Optional.of(repository));
             when(scopeIdResolver.findScopeIdByOrgLogin(orgLogin)).thenReturn(Optional.of(expectedScopeId));
 
@@ -229,7 +234,7 @@ class ProcessingContextFactoryTest {
             repository.setOrganization(null); // Personal repo - no org!
 
             when(repositoryScopeFilter.isRepositoryAllowed(repoFullName)).thenReturn(true);
-            when(repositoryRepository.findByNameWithOwnerAndProviderId(repoFullName, GITHUB_PROVIDER_ID))
+            when(repositoryRepository.findByNativeIdAndProviderId(1L, GITHUB_PROVIDER_ID))
                     .thenReturn(Optional.of(repository));
             when(scopeIdResolver.findScopeIdByRepositoryName(repoFullName)).thenReturn(Optional.of(expectedScopeId));
 
@@ -252,7 +257,7 @@ class ProcessingContextFactoryTest {
             repository.setOrganization(TestEntities.organization(1L, orgLogin));
 
             when(repositoryScopeFilter.isRepositoryAllowed(repoFullName)).thenReturn(true);
-            when(repositoryRepository.findByNameWithOwnerAndProviderId(repoFullName, GITHUB_PROVIDER_ID))
+            when(repositoryRepository.findByNativeIdAndProviderId(1L, GITHUB_PROVIDER_ID))
                     .thenReturn(Optional.of(repository));
             when(scopeIdResolver.findScopeIdByOrgLogin(orgLogin)).thenReturn(Optional.empty());
             when(scopeIdResolver.findScopeIdByRepositoryName(repoFullName)).thenReturn(Optional.of(expectedScopeId));
@@ -274,7 +279,7 @@ class ProcessingContextFactoryTest {
             repository.setOrganization(null);
 
             when(repositoryScopeFilter.isRepositoryAllowed(repoFullName)).thenReturn(true);
-            when(repositoryRepository.findByNameWithOwnerAndProviderId(repoFullName, GITHUB_PROVIDER_ID))
+            when(repositoryRepository.findByNativeIdAndProviderId(1L, GITHUB_PROVIDER_ID))
                     .thenReturn(Optional.of(repository));
             when(scopeIdResolver.findScopeIdByRepositoryName(repoFullName)).thenReturn(Optional.empty());
 

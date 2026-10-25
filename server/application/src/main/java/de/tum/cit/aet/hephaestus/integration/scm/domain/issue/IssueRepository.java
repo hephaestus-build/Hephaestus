@@ -20,6 +20,50 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @WorkspaceAgnostic("Issues scoped through repository_id -> repository.workspace_id")
 public interface IssueRepository extends JpaRepository<Issue, Long> {
+
+    /** The row that holds a provider's issue or pull request id, with the repository it is stored under. */
+    interface Holding {
+        long getId();
+
+        long getRepositoryId();
+    }
+
+    @Query(
+            value = "SELECT id, repository_id AS repositoryId FROM issue WHERE provider_id = :providerId"
+                    + " AND native_id = :nativeId AND issue_type = :issueType",
+            nativeQuery = true)
+    Optional<Holding> findHolding(
+            @Param("providerId") long providerId,
+            @Param("nativeId") long nativeId,
+            @Param("issueType") String issueType);
+
+    /** Whether any workspace registered an item of {@code kind} for this row. An item's parent never changes. */
+    @Query(value = "SELECT EXISTS(SELECT 1 FROM item WHERE kind = :kind AND source_id = :issueId)", nativeQuery = true)
+    boolean registeredAsItem(@Param("kind") String kind, @Param("issueId") long issueId);
+
+    /**
+     * Moves the row with the provider's id to {@code repositoryId} when it is stored under another repository with
+     * the same number and that repository has no row of this type for the number yet. A provider never moves an issue
+     * or a pull request between repositories under the same id, so such a row was filed under a stale repository name.
+     *
+     * @return 1 when the row moved, else 0
+     */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Transactional
+    @Query(value = """
+        UPDATE issue SET repository_id = :repositoryId
+        WHERE provider_id = :providerId AND native_id = :nativeId AND issue_type = :issueType
+          AND number = :number AND repository_id <> :repositoryId
+          AND NOT EXISTS (SELECT 1 FROM issue o WHERE o.repository_id = :repositoryId
+            AND o.issue_type = :issueType AND o.number = :number)
+        """, nativeQuery = true)
+    int moveToRepository(
+            @Param("providerId") long providerId,
+            @Param("nativeId") long nativeId,
+            @Param("issueType") String issueType,
+            @Param("number") int number,
+            @Param("repositoryId") long repositoryId);
+
     @Query(value = "SELECT id FROM issue WHERE id = :id FOR SHARE", nativeQuery = true)
     Optional<Long> lockForReview(@Param("id") long id);
 
