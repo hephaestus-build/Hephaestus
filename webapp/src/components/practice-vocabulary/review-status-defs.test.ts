@@ -31,6 +31,34 @@ describe("legacy withholding reasons", () => {
 			"Hephaestus cannot use this practice’s Review on or About settings for this kind of work. Ask a workspace admin to check them.",
 		);
 	});
+	it.each([
+		["readiness_refused", "Evidence that this practice requires could not be captured."],
+		[
+			"ROLE_UNAVAILABLE",
+			"No eligible person holds the role that this practice is about on this work.",
+		],
+		[
+			"ROLE_AMBIGUOUS",
+			"More than one eligible person holds the role that this practice is about, and Hephaestus does not guess which one.",
+		],
+		["OUTSIDE_REVIEW_SCOPE", "This work or this person is outside the workspace’s review scope."],
+		["WORKSPACE_INACTIVE", "The workspace was not active when the candidate observation arrived."],
+		[
+			"COPY_AUTHORITY_UNAVAILABLE",
+			"Hephaestus could not confirm the record of whose data this review copied, so the candidate observation was not recorded.",
+		],
+		[
+			"quote_unverified",
+			"The candidate observation failed one of Hephaestus’s checks, so it was not recorded.",
+		],
+		[
+			"duplicate_problem_key",
+			"The candidate observation failed one of Hephaestus’s checks, so it was not recorded.",
+		],
+	])("describes the withholding reason %s", (code, sentence) => {
+		expect(reviewReasonSentence(code)).toBe(sentence);
+	});
+
 	it("keeps the generic fallback for an unknown reason", () => {
 		expect(knownReasonSentence("UNKNOWN_REASON")).toBeUndefined();
 		expect(withheldSentence("UNKNOWN_REASON")).toBe(

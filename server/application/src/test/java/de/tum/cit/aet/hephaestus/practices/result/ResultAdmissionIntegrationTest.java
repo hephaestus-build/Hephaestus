@@ -1003,6 +1003,34 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
         assertThat(applicationEvents.stream(ReviewCompleted.class)).isEmpty();
     }
 
+    /**
+     * A practice withheld because its stored definition does not fit the work (an older catalog version, an event
+     * the item kind does not offer) needs an admin, so the review that ran everything else is still Partial.
+     */
+    @ParameterizedTest
+    @ValueSource(strings = {"item_capability_unsupported", "source_contract_unsupported"})
+    void shouldCloseTheReviewPartialWhenAPracticeWasWithheldForADefinitionMismatch(String reason) {
+        var pending = admissions.pending(scenario, Instant.now(), scenarioAccountId);
+        admissions.withheld(pending, reason);
+        admit(pending, ResultOutcome.MET);
+        settle(pending);
+
+        service.complete(
+                scenario.workspace().getId(),
+                pending.review().getId(),
+                new ReviewCompletion(
+                        ReviewStatus.COMPLETE,
+                        null,
+                        Instant.now(),
+                        pending.review().getOrderedAt()));
+
+        var review = reviews.findByIdAndWorkspaceId(
+                        pending.review().getId(), scenario.workspace().getId())
+                .orElseThrow();
+        assertThat(review.getStatus()).isEqualTo(ReviewStatus.PARTIAL);
+        assertThat(review.getStopReason()).isEqualTo(ReviewStopReason.EXECUTION_INCOMPLETE);
+    }
+
     private void settle(ReviewAdmissionData.Pending pending) {
         assertThat(jdbc.sql("UPDATE review_job SET status=:status,processing_status='DONE',completed_at=now()"
                                 + " WHERE workspace_id=:ws AND id=:id")
