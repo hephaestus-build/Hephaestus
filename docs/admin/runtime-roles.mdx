@@ -208,8 +208,9 @@ deployment silently does half its job. They do **not** share a gate:
 - **Execution** (the poll loop that claims and runs jobs) needs this flag **and** the worker role.
   Worker admission and server preparation read the same practice-page feedback support, so that read exists in every role.
   A review attempt that was cancelled, requeued or moved to another worker writes nothing more.
-  The gateway refuses its next model call, and its sandbox stops.
-  A sandbox that makes no further call holds its capacity until its deadline.
+  The gateway refuses each of its calls, and the practice review stops at its next refused call.
+  A worker that polls the requeued job while that attempt still runs on it stops that attempt first.
+  Otherwise, the attempt holds its capacity until its next call or its deadline.
 
 `AGENT_ENABLED` is `false` on all roles until you set it, regardless of how the pod starts.
 

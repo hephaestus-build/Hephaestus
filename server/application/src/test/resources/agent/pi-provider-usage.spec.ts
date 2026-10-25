@@ -707,10 +707,9 @@ void test("openai-responses times a call across an adapter request retry and wai
 	assert.ok(!JSON.stringify(message.diagnostics).includes(SECRET));
 });
 
-test("a credential that the gateway refuses stops the attempt; other failures do not", async () => {
+void test("a credential that the gateway refuses stops the attempt; other failures do not", async () => {
 	for (const [status, refused] of [
 		[401, true],
-		[409, true],
 		[403, false],
 		[500, false],
 	] as const) {

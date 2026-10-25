@@ -367,8 +367,7 @@ public class ReviewJobExecutor {
     }
 
     /**
-     * Stops the container only; the authoritative status transition already happened hub-side before
-     * the {@code CancelJob} frame was sent.
+     * Stops the container only; whoever ended or requeued the attempt already wrote its status.
      *
      * @return true if this worker owns the job and a stop was requested
      */
@@ -376,7 +375,7 @@ public class ReviewJobExecutor {
         if (!localRunningJobs.containsKey(jobId)) {
             return false;
         }
-        log.info("Hub-initiated cancel for locally-running job {}: {}", jobId, reason);
+        log.info("Stopping locally running job {}: {}", jobId, reason);
         try {
             sandboxManager.cancel(jobId);
             return true;
@@ -470,9 +469,9 @@ public class ReviewJobExecutor {
     }
 
     StartOutcome processJob(UUID jobId) {
-        // The job is offered again while an attempt of it still runs here, so the ledger requeued that attempt: stop
-        // it,
-        // and claim the job once it has ended. One job never has two sandboxes on this worker.
+        // The poll offers only queued jobs: an attempt of this job that still runs here was requeued. Stop it, and
+        // claim
+        // the job once it ended, so one job never has two sandboxes on this worker.
         if (localRunningJobs.containsKey(jobId)) {
             cancelLocalJob(jobId, "the job was requeued while this attempt still ran");
             return StartOutcome.SKIPPED;

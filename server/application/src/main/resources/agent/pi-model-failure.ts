@@ -117,7 +117,7 @@ export function modelFailure(message: unknown): ModelFailure {
  * so nothing it does can still be admitted.
  */
 export function refusesAttempt(failure: ModelFailure): boolean {
-	return failure.kind === "HTTP_ERROR" && (failure.status === 401 || failure.status === 409);
+	return failure.kind === "HTTP_ERROR" && failure.status === 401;
 }
 
 /** A message's call span, or null when it has no readable one: a response time beyond the span is dropped. */
