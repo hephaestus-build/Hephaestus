@@ -9,6 +9,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.util.List;
 import org.apache.hc.core5.net.InetAddressUtils;
 import org.jspecify.annotations.Nullable;
+import org.springframework.http.MediaType;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.ProviderManager;
 import org.springframework.security.core.Authentication;
@@ -18,6 +19,12 @@ import org.springframework.security.web.util.matcher.IpAddressMatcher;
 
 public final class JobTokenAuthenticationFilter extends AuthenticationFilter {
     static final String PRACTICE_SCRIPT_PATH = "/internal/llm/practice-script/";
+    /**
+     * The body of the {@code 409} for an attempt that no longer runs. No provider sends it, so a runner that reads it
+     * knows its attempt ended rather than that a provider refused a call; {@code pi-model-failure.ts} holds the same.
+     */
+    static final String ATTEMPT_ENDED = "This attempt no longer runs on this worker.";
+
     private static final String RUNTIME_PATH = "/internal/llm/runtime/";
     private static final String TURN_PATH = "/internal/llm/turn/";
     public static final String PRACTICE_SCRIPT_PRACTICE_HEADER = "x-hephaestus-practice";
@@ -43,10 +50,15 @@ public final class JobTokenAuthenticationFilter extends AuthenticationFilter {
                 new ProviderManager(new JobTokenAuthenticationProvider(jobs, turns, sessions, verifier, workerId)),
                 JobTokenAuthenticationFilter::convert);
         setSuccessHandler((request, response, authentication) -> {});
-        setFailureHandler((request, response, failure) -> response.setStatus(
-                failure instanceof JobTokenAuthenticationProvider.WorkerOwnershipConflict
-                        ? HttpServletResponse.SC_CONFLICT
-                        : HttpServletResponse.SC_UNAUTHORIZED));
+        setFailureHandler((request, response, failure) -> {
+            if (failure instanceof JobTokenAuthenticationProvider.WorkerOwnershipConflict) {
+                response.setStatus(HttpServletResponse.SC_CONFLICT);
+                response.setContentType(MediaType.TEXT_PLAIN_VALUE);
+                response.getWriter().write(ATTEMPT_ENDED);
+            } else {
+                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            }
+        });
     }
 
     private static BearerTokenAuthenticationConverter converter() {
@@ -57,7 +69,6 @@ public final class JobTokenAuthenticationFilter extends AuthenticationFilter {
             boolean get = "GET".equals(incoming.getMethod());
             return new RequestIdentity(
                     runtimeJobId,
-                    "POST".equals(incoming.getMethod()) && runtimeJobId != null && path.endsWith("/result"),
                     segment(path, TURN_PATH),
                     get && runtimeJobId != null && path.equals(RUNTIME_PATH + runtimeJobId + "/commands"),
                     get
@@ -91,11 +102,7 @@ public final class JobTokenAuthenticationFilter extends AuthenticationFilter {
      *     or {@code GET …/runtime/{id}/workspace}
      */
     record RequestIdentity(
-            @Nullable String runtimeJobId,
-            boolean resultUpload,
-            @Nullable String turnId,
-            boolean commands,
-            boolean workspaceRead) {}
+            @Nullable String runtimeJobId, @Nullable String turnId, boolean commands, boolean workspaceRead) {}
 
     static boolean isPrivateIp(@Nullable String ip) {
         if (ip == null || (!InetAddressUtils.isIPv4(ip) && !InetAddressUtils.isIPv6(ip))) return false;

@@ -68,15 +68,14 @@ final class JobTokenAuthenticationProvider implements AuthenticationProvider {
     private Authentication job(JobJwt jwt, JobTokenAuthenticationFilter.RequestIdentity request) {
         if (request.turnId() != null || request.commands()) throw invalid();
         var job = jobs.findById(jwt.jobId()).orElseThrow(JobTokenAuthenticationProvider::invalid);
-        if (job.getStatus() != ReviewJobStatus.RUNNING
-                || job.getWorkspaceId() != jwt.workspaceId()
-                || job.getAttempt() != jwt.attempt()) throw invalid();
+        if (job.getWorkspaceId() != jwt.workspaceId()) throw invalid();
         if (request.runtimeJobId() != null
                 && !request.runtimeJobId().equals(jwt.jobId().toString())) throw invalid();
-        if (!workerId.equals(job.getWorkerId())) {
-            if (request.resultUpload()) throw new WorkerOwnershipConflict("Job is owned by another worker");
-            throw invalid();
-        }
+        // A valid credential of an attempt that ended, was requeued or moved to another worker: its runner stops.
+        if (job.getStatus() != ReviewJobStatus.RUNNING
+                || job.getAttempt() != jwt.attempt()
+                || !workerId.equals(job.getWorkerId()))
+            throw new WorkerOwnershipConflict("This review attempt no longer runs on this worker");
         return new JobTokenAuthentication(ProxyIdentity.of(jwt, workerId), jwt.scopes(), null);
     }
 
@@ -114,7 +113,10 @@ final class JobTokenAuthenticationProvider implements AuthenticationProvider {
         return new JobTokenAuthentication(ProxyIdentity.hostSession(session.id()), Set.of(), null);
     }
 
-    /** Answered {@code 409}: the credential is valid, but another worker or a later attempt now owns the work. */
+    /**
+     * Answered {@code 409} with {@link JobTokenAuthenticationFilter#ATTEMPT_ENDED}: the credential is valid, but the
+     * attempt ended, or another worker or a later attempt now owns the work.
+     */
     static final class WorkerOwnershipConflict extends BadCredentialsException {
         @Serial
         private static final long serialVersionUID = 1L;

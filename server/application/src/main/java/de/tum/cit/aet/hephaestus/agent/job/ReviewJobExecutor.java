@@ -469,9 +469,8 @@ public class ReviewJobExecutor {
     }
 
     StartOutcome processJob(UUID jobId) {
-        // The poll offers only queued jobs: an attempt of this job that still runs here was requeued. Stop it, and
-        // claim
-        // the job once it ended, so one job never has two sandboxes on this worker.
+        // The poll offers only queued jobs, so a local attempt of this job was requeued: stop it and claim the job
+        // once it has ended. One job never has two sandboxes on one worker.
         if (localRunningJobs.containsKey(jobId)) {
             cancelLocalJob(jobId, "the job was requeued while this attempt still ran");
             return StartOutcome.SKIPPED;
