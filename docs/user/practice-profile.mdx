@@ -168,6 +168,9 @@ An older review cannot replace newer proof.
 A marked current observation does not make an earlier observation current again.
 Repository scans have no developer and do not move your personal standing.
 
+A review that a schedule started has the **Scheduled** tag.
+A review that caught up on work from before the connection has the **Backfilled** tag.
+
 Each row names the work and links to the original.
 Its sequence on the work, such as *Review 2 of 3*, sits under the work, and its status stands over the time of the review.
 Your latest review is framed in blue and says **Latest review** in its top left corner.
@@ -258,8 +261,30 @@ It lists each practice with its standing, trend and what changed.
 The practice panel shows the practice's name and your standing on it, when available, then its tabs:
 
 - **Feedback** shows the feedback about this practice. The panel opens on it.
-- **Observations** shows observations by review, newest first. Open an observation to read its available explanation, problems and next steps, evidence, and recorded feedback links. Response controls appear when you can respond. When you select **Open observation** on a review, that observation comes first.
+- **Observations** shows observations by review, newest first. Open an observation to read its available explanation, problems and next steps, evidence, and recorded feedback links.
 - **Guide** explains the practice. It appears when the practice has something to explain.
+
+In an open observation, each problem shows its number and its severity.
+When the observation gave feedback that reached you, a box per piece says where it went.
+It names the work, the practice page or your conversation with Heph, and it links to the feedback there.
+You answer the feedback where it is, not in the observation.
+
+The newest observation opens on arrival.
+When you select **Open observation** on a review, the tab shows that work's observations, with the selected one open.
+An observation does not repeat how its review started, such as **Requested**.
+The list of reviews and the review itself show that.
+
+The search field filters by words, by work such as *#15*, and by problem.
+Every observation the search finds has a blue bar on its left edge.
+**Outcome** selects one or more outcomes, as on a review.
+**Reset** appears once you search or choose an outcome, and it clears only those.
+The timeframe stays as you chose it.
+
+The timeframe in the tab row, right of **Guide**, shows the last 7, 30 or 90 days, or **All time**, the initial value.
+It narrows both the feedback cards and the observations.
+A feedback card falls in the timeframe by the time it shows.
+An observation or card that you arrive at by a link shows even when it lies outside the timeframe.
+The number beside **Feedback** and **Observations** counts what each tab shows, with the timeframe and the tab's filters applied.
 
 The **Guide** tab starts with an introduction:
 
@@ -284,9 +309,18 @@ Feedback posted on a pull request, merge request, or issue stays on that work, n
 2. Select the **Observations** tab.
 3. Open the observation to read its available explanation, problems and next steps, evidence, and recorded feedback links.
 
-Under **Feedback**, select **Read the feedback comment** to open a recorded comment.
-If several comments carry the feedback, their links appear together.
+Under **Feedback from this observation**, each piece the observation delivered to you is numbered.
+It says where it went and when it was delivered.
+Feedback that was not delivered does not appear.
+For feedback on the work, select **Read the comment on the work** to open the recorded comment.
+If several comments carry it, they read **Read comment 1**, **Read comment 2** and so on.
 If no comment link was recorded, use the observation’s link to the original work.
+
+For feedback on the practice page, the link opens the practice’s Feedback tab at that card, and a blue sheen crosses the card once.
+The tab keeps your newest feedback and drops closed feedback a month after it closed.
+If the tab no longer lists the card, a line says so.
+For feedback in your conversation with Heph, the link opens the conversation.
+Back on the Observations tab, the observation is still open.
 
 Feedback that a workspace admin withdrew does not appear here, in **Reviews of your work**, or on a review.
 If the admin restores it, it returns with your earlier response.

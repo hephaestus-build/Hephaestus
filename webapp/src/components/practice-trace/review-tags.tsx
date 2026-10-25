@@ -1,13 +1,18 @@
 import { LayersIcon } from "lucide-react";
 
+import type { ReviewRef } from "@/api/types.gen";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { REVIEW_ORIGIN_DEFS } from "@/components/practice-vocabulary/review-origin-defs";
 import { Badge } from "@/components/ui/badge";
 
 import { reviewOrdinalLabel } from "./review-groups";
 
-export function RequestedReviewTag() {
-	return <StatusBadge def={REVIEW_ORIGIN_DEFS.REQUEST} />;
+/**
+ * How a review began, where that is news: requested, scheduled or backfilled. A review an event
+ * started is the usual case, so it has no tag.
+ */
+export function ReviewOriginTag({ origin }: { origin: Exclude<ReviewRef["origin"], "EVENT"> }) {
+	return <StatusBadge def={REVIEW_ORIGIN_DEFS[origin]} />;
 }
 
 export function ReviewOrdinalTag({

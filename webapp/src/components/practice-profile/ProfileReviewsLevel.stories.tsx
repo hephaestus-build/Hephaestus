@@ -421,6 +421,30 @@ export const ControlNamesStayUnique: Story = {
 	},
 };
 
+/** Each row says how its review began where that is news: requested, scheduled or backfilled. */
+export const HowEachReviewBegan: Story = {
+	args: {
+		feed: feedOf([
+			{ ...openProfileReview, review: { ...openProfileReview.review, origin: "SCHEDULE" } },
+			{
+				...openProfileReview,
+				review: {
+					...openProfileReview.review,
+					id: "00000000-0000-0000-0000-0000000003e1",
+					origin: "BACKFILL",
+				},
+				positionOnWork: 1,
+			},
+		]),
+	},
+	play: async () => {
+		await settledDrawerPanel();
+		await expect(screen.getByText("Scheduled")).toBeVisible();
+		await expect(screen.getByText("Backfilled")).toBeVisible();
+		await expect(screen.queryByText("Requested")).toBeNull();
+	},
+};
+
 /** The sort of the admin Reviews tab: newest first by default, oldest first on request. */
 export const SortedOldestFirst: Story = {
 	args: { order: "OLDEST" },

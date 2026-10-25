@@ -203,6 +203,16 @@ export const PartialReview: Story = {
 	},
 };
 
+/** A review a schedule started says so in its header, as a requested one does. */
+export const ScheduledReview: Story = {
+	args: { state: readyWith({ review: { ...review, origin: "SCHEDULE" } }) },
+	play: async () => {
+		const panel = within(await settledReviewPanel());
+		await expect(panel.getByText("Scheduled")).toBeVisible();
+		await expect(panel.queryByText("Requested")).toBeNull();
+	},
+};
+
 export const UntitledItem: Story = {
 	args: { state: readyWith({ review: { ...review, item: { ...review.item, title: null } } }) },
 	play: async () => {

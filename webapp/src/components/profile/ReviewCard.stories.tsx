@@ -249,7 +249,7 @@ const denseReview: ProfileReview = {
 };
 
 export const ManyResults: Story = {
-	args: { review: denseReview, initiallyOpen: "none" },
+	args: { review: denseReview, openOnArrival: () => false },
 	play: async ({ canvas, userEvent }) => {
 		await expect(
 			canvas.getByRole("button", { name: /The new branch has no test exercising it/u }),

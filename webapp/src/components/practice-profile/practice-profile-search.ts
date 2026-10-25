@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { startOfDay, subDays } from "date-fns";
+import type { FilterOption } from "@/components/common/FilterToggle";
 import { statusValues } from "@/components/common/status-def";
 import {
 	type DetailStackEntry,
@@ -107,6 +108,19 @@ export function reviewRangeStart(now: number, range: ReviewTimeframe): Date {
 
 export type ReviewTimeframe = (typeof REVIEW_TIMEFRAMES)[number];
 
+/** The timeframe's choice that narrows nothing; it never reaches the address, where every one is the default. */
+export const ALL_TIME = "all";
+
+/**
+ * "Last 7 days | Last 30 days | Last 90 days | All time": one segmented timeframe for Reviews of
+ * your work and a practice's Observations tab.
+ */
+export const REVIEW_TIMEFRAME_OPTIONS: readonly FilterOption<ReviewTimeframe | typeof ALL_TIME>[] =
+	[
+		...REVIEW_TIMEFRAMES.map((value) => ({ value, label: REVIEW_TIMEFRAME_DEFS[value].label })),
+		{ value: ALL_TIME, label: "All time" },
+	];
+
 /** What the level with every practice group is called, wherever it is named. */
 export const ALL_PRACTICE_GROUPS = "All practice groups";
 
@@ -135,8 +149,21 @@ export const DEFAULT_PRACTICE_TAB: PracticeTab = "feedback";
 /** The selection inside an open level; each is cleared when its level closes. */
 export interface PracticeGroupDetailSelection {
 	practiceTab?: PracticeTab;
-	/** Exact observation selected independently of loaded review pages. */
+	/**
+	 * The observation a link asked for, read on its own so it shows whatever review pages have
+	 * loaded. It opens alone; see `observation-filter.ts`.
+	 */
 	observation?: string;
+	/** The Observations tab's text filter: words, work (such as "#15") and problems. */
+	observationQuery?: string;
+	/** The Observations tab's outcome filter. */
+	observationOutcome?: Outcome[];
+	/** How far back the Observations tab reaches; absent is every observation. */
+	observationSince?: ReviewTimeframe;
+	/** The feedback card a link asked for on the Feedback tab, by its feedback id: shown and marked. */
+	feedbackCard?: string;
+	/** The work an observation link narrowed the Observations tab to, by its id. */
+	observationWork?: string;
 	/** The reviews list's kinds of work. */
 	reviewKind?: string[];
 	reviewSince?: ReviewTimeframe;
@@ -184,6 +211,13 @@ const practiceProfileFilterSchema = z.object({
 	feedback: z.enum(FEEDBACK_TABS).default(DEFAULT_FEEDBACK_TAB).catch(DEFAULT_FEEDBACK_TAB),
 	practiceTab: z.enum(PRACTICE_TABS).default(DEFAULT_PRACTICE_TAB).catch(DEFAULT_PRACTICE_TAB),
 	observation: z.uuid().optional().catch(undefined),
+	observationQuery: z.string().min(1).max(REVIEW_FILTER_MAX_LENGTH).optional().catch(undefined),
+	observationOutcome: multiValue.transform((values) =>
+		narrowToEnum(values, statusValues(OUTCOME_DEFS)),
+	),
+	observationSince: z.enum(REVIEW_TIMEFRAMES).optional().catch(undefined),
+	feedbackCard: z.uuid().optional().catch(undefined),
+	observationWork: itemIdSchema.optional().catch(undefined),
 	// Free strings, for the reason `TraceKindFilter` gives; a link from before named one kind.
 	reviewKind: multiValue.transform((values) =>
 		nonEmpty(
@@ -220,6 +254,11 @@ export const PRACTICE_PROFILE_SEARCH_PARAMS: (keyof PracticeProfileSearch)[] = [
 export const PRACTICE_PROFILE_LEVEL_PARAMS = [
 	"practiceTab",
 	"observation",
+	"observationQuery",
+	"observationOutcome",
+	"observationSince",
+	"feedbackCard",
+	"observationWork",
 	"reviewKind",
 	"reviewSince",
 	"reviewStatus",

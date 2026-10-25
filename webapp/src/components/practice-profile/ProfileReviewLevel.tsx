@@ -12,7 +12,7 @@ import {
 } from "@/components/layout/detail-drawer/DetailDrawerHeader";
 import type { LevelPath } from "@/components/layout/detail-drawer/DetailPath";
 import { DetailStackLink } from "@/components/layout/detail-drawer/DetailStackLink";
-import { RequestedReviewTag, ReviewOrdinalTag } from "@/components/practice-trace/review-tags";
+import { ReviewOrdinalTag, ReviewOriginTag } from "@/components/practice-trace/review-tags";
 import {
 	type ReviewPracticeFilters,
 	ReviewPracticeTable,
@@ -193,7 +193,9 @@ function ReviewHead({ path, detail, positionOnWork, totalOnWork }: ReviewHeadPro
 					</span>
 				)}
 				{review && <ReviewStatusBadge def={OWN_REVIEW_STATUS_DEFS[review.status]} />}
-				{review?.origin === "REQUEST" && <RequestedReviewTag />}
+				{review !== undefined && review.origin !== "EVENT" && (
+					<ReviewOriginTag origin={review.origin} />
+				)}
 				<ReviewOrdinalTag position={positionOnWork} total={totalOnWork} />
 			</div>
 		</div>

@@ -1,8 +1,10 @@
 import type {
 	FeedbackResponse,
 	FeedbackResponseRequest,
+	OwnFeedbackRef,
 	ProfileReview,
 	ResultList,
+	ReviewRef,
 } from "@/api/types.gen";
 import type { PanelState } from "@/components/common/panel-state";
 import { hasText } from "@/lib/text";
@@ -11,6 +13,17 @@ import {
 	infiniteListState,
 	type MorePages,
 } from "@/runtime/tanstack-query/infinite-list";
+
+/**
+ * What a review's card draws: when the review was and of which work, its observations about the
+ * reader and the reader's feedback from it. A listed review carries more; an observation read on its
+ * own carries only this.
+ */
+export interface ReviewEntry {
+	review: Pick<ReviewRef, "id" | "createdAt" | "item">;
+	results: ResultList[];
+	feedback: OwnFeedbackRef[];
+}
 
 export type ReviewFeedState = PanelState<{ reviews: ProfileReview[] } & MorePages>;
 
