@@ -74,6 +74,13 @@ subprojects {
         lockAllConfigurations()
         lockMode.set(LockMode.STRICT)
     }
+    // The CI cache producer runs this, so a dependency that only one CI job uses is in the
+    // Gradle cache rather than downloaded in that job: the JaCoCo agent, the Liquibase tools, PIT.
+    tasks.register("resolveDependencies") {
+        description = "Resolves every resolvable configuration."
+        inputs.files(configurations.matching { it.isCanBeResolved })
+        doLast {}
+    }
 }
 
 tasks.named("check") { dependsOn(":application:check") }

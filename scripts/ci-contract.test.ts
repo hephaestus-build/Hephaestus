@@ -1006,29 +1006,69 @@ void describe("CI contract", () => {
 		}
 	});
 
-	void test("the server package job is the only Gradle cache producer", async () => {
+	void test("one main-branch workflow is the only Gradle cache producer", async () => {
 		const action = parseDocument(await readFile(".github/actions/setup-caches/action.yml", "utf8"));
 		assert.equal(action.getIn(["inputs", "cache-write", "default"]), "false");
 		assert.equal(
 			namedStep(action, ["runs"], "Set up JDK").getIn(["with", "java-version-file"]),
 			".java-version",
 		);
+		const source = await readFile(".github/actions/setup-caches/action.yml", "utf8");
+		assert.match(source, /inputs.cache-write != 'true' \|\| github.ref != format/u);
+		// The Gradle action restores an older entry of the same job before a newer entry of another,
+		// so a second writer, such as a package job that runs only when reuse fails, would pin stale state.
 		const sources = await workflowSources();
-		const writers = [...sources].filter(([, source]) => source.includes('cache-write: "true"'));
+		const writers = [...sources].filter(([, text]) => text.includes('cache-write: "true"'));
 		assert.deepEqual(
 			writers.map(([file]) => file),
-			[".github/workflows/cicd.yml"],
+			[".github/workflows/cache-gradle.yml"],
 		);
-		const build = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
-		const steps = build.getIn(["jobs", "server-package", "steps"]);
+		const producer = parseDocument(await readFile(".github/workflows/cache-gradle.yml", "utf8"));
+		const branches = producer.getIn(["on", "push", "branches"]);
+		assert.ok(isSeq(branches));
+		assert.deepEqual(branches.toJSON(), ["main"]);
+		const paths = producer.getIn(["on", "push", "paths"]);
+		assert.ok(isSeq(paths));
+		// Every Gradle input of the server, so a dependency or build change refreshes the cache.
+		for (const file of [
+			"server/build.gradle.kts",
+			"server/application/build.gradle.kts",
+			"server/application/gradle.lockfile",
+			"server/generated-clients/gradle.lockfile",
+			"server/settings-gradle.lockfile",
+			"server/buildscript-gradle.lockfile",
+			"server/gradle.properties",
+			"server/gradle/libs.versions.toml",
+			"server/gradle/wrapper/gradle-wrapper.properties",
+			".java-version",
+			".github/actions/setup-caches/action.yml",
+			".github/workflows/cache-gradle.yml",
+		]) {
+			assert.ok(
+				paths.items.some((pattern) => minimatch(file, String(pattern), { dot: true })),
+				`${file} must refresh the Gradle cache`,
+			);
+		}
+		// The producer runs what consumers resolve: packaging, test runtime and the server gates.
+		const build = runScript(producer, ["jobs", "gradle"], "Build what the server jobs restore");
+		for (const task of [
+			"resolveDependencies",
+			":application:bootJar",
+			":application:testClasses",
+			":application:testInventory",
+			":application:pmdMain",
+			":application:spotlessCheck",
+		]) {
+			assert.ok(build.split(/\s+/u).includes(task), `the producer must run ${task}`);
+		}
+		const orchestrator = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
+		const steps = orchestrator.getIn(["jobs", "server-package", "steps"]);
 		assert.ok(isSeq(steps));
 		const cache = steps.items.find(
 			(item) => isMap(item) && item.get("uses") === "./.github/actions/setup-caches",
 		);
 		assert.ok(isMap(cache));
-		assert.equal(cache.getIn(["with", "cache-write"]), "true");
-		const source = await readFile(".github/actions/setup-caches/action.yml", "utf8");
-		assert.match(source, /inputs.cache-write != 'true' \|\| github.ref != format/u);
+		assert.equal(cache.getIn(["with", "cache-write"]), undefined);
 	});
 
 	void test("OpenAPI generation uses the read-only Gradle setup but runtime-only E2E does not", async () => {
