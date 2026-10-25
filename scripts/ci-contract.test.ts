@@ -34,7 +34,10 @@ function job(source: string, name: string): string {
 	return match[0];
 }
 
-/** Every number of minutes a `timeout-minutes` value can yield, ignoring quoted strings. */
+/**
+ * Every number in a `timeout-minutes` value. A quoted number counts too, because `fromJSON('5')`
+ * yields 5, so a number that is not a limit can only make the check stricter.
+ */
 function limitMinutes(limit: unknown): number[] {
 	if (typeof limit === "number") {
 		return [limit];
@@ -42,7 +45,7 @@ function limitMinutes(limit: unknown): number[] {
 	if (typeof limit !== "string") {
 		return [];
 	}
-	return [...limit.replaceAll(/'[^']*'/gu, "").matchAll(/\d+/gu)].map(Number);
+	return [...limit.matchAll(/\d+/gu)].map(Number);
 }
 
 function pathFilter(source: string, name: string): string {
