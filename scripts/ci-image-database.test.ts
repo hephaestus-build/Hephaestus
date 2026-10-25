@@ -58,10 +58,17 @@ void test("one advisory snapshot is selected for every image-policy consumer, no
 		"postgres-image",
 		"docker-config",
 	]) {
-		assert.ok(runs("vulnerability-database", { publishable: "true", [flag]: "true" }), flag);
 		assert.ok(
-			!runs("vulnerability-database", { publishable: "false", [flag]: "true" }),
+			runs("vulnerability-database", { publishable: "true", images: "true", [flag]: "true" }),
+			flag,
+		);
+		assert.ok(
+			!runs("vulnerability-database", { publishable: "false", images: "true", [flag]: "true" }),
 			`unpublished ${flag}`,
+		);
+		assert.ok(
+			!runs("vulnerability-database", { publishable: "true", images: "false", [flag]: "true" }),
+			`${flag} without images`,
 		);
 	}
 	for (const flag of ["release-preflight", "release-images"]) {
@@ -71,9 +78,10 @@ void test("one advisory snapshot is selected for every image-policy consumer, no
 			`duplicate ${flag}`,
 		);
 	}
-	assert.ok(!runs("vulnerability-database", { publishable: "true", previews: "true" }));
+	assert.ok(!runs("vulnerability-database", { publishable: "true", images: "true" }));
 	const fork = {
 		publishable: "false",
+		images: "true",
 		"all-images": "true",
 		"any-code": "true",
 		"release-images": "true",
@@ -94,7 +102,20 @@ void test("one advisory snapshot is selected for every image-policy consumer, no
 			assert.ok(!runs(job, fork, { "detect-changes": "failure" }), `${job}: no selection`);
 		}
 	}
-	assert.ok(runs("Docker", { previews: "true" }, { "vulnerability-database": "skipped" }));
+	assert.ok(
+		runs(
+			"Docker",
+			{ images: "true", "head-images": "true" },
+			{ "vulnerability-database": "skipped" },
+		),
+	);
+	// A pull request that needs no head images builds none; the merge group builds them.
+	for (const job of ["Docker", "application-server-image"]) {
+		assert.ok(
+			!runs(job, { "any-code": "true", "all-images": "true", images: "false" }),
+			`${job} without images`,
+		);
+	}
 	assert.ok(!runs("application-server-image", fork, { "server-package": "failure" }));
 	assert.ok(!runs("application-server-image", fork, { "server-package": "skipped" }));
 	assert.ok(runs("Release-preflight", { "release-preflight": "true" }));

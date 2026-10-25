@@ -98,13 +98,20 @@ jobs:
       # ready starts the ordinary run. ci-cd.mdx § Two verification tiers.
       draft: ${{ github.event_name == 'pull_request' && github.event.pull_request.draft == true && steps.opt_in.outputs.preview != 'true' && steps.release_candidate.outputs.release-candidate != 'true' }}
       publishable: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
-      previews: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && (github.event.pull_request.draft != true || steps.opt_in.outputs.preview == 'true') }}
+      # A same-repository pull request needs every image at its head tag for its preview or the host
+      # boot smoke. An unreadable `preview` label counts as present, except on a draft.
+      head-images: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && (steps.opt_in.outputs.preview == 'true' || (github.event.pull_request.draft != true && (steps.opt_in.outputs.preview != 'false' || steps.filter.outputs.supported-host-smoke == 'true'))) }}
+      # Whether this run builds images at all: every event except a pull request, unless that pull
+      # request is a release candidate or needs head images. The merge group builds every other
+      # changed image before it lands. ci-cd.mdx § Preview deployments.
+      images: ${{ github.event_name != 'pull_request' || steps.release_candidate.outputs.release-candidate == 'true' || (github.event.pull_request.head.repo.full_name == github.repository && (steps.opt_in.outputs.preview == 'true' || (github.event.pull_request.draft != true && (steps.opt_in.outputs.preview != 'false' || steps.filter.outputs.supported-host-smoke == 'true')))) }}
       # A skipped duplicate would skip the image builds the release evidence preflight needs, and
       # the gate refuses to pass the Version PR without one.
       # A re-run after `ci:full` was added repeats a tree whose fast tier already passed, so only a
       # run without the opt-in may be skipped as a duplicate.
       # A pull request marked ready repeats the draft's tree but builds what the draft skipped.
-      should_skip: ${{ steps.skip_check.outputs.should_skip == 'true' && steps.release_candidate.outputs.release-candidate != 'true' && steps.opt_in.outputs.full == 'false' && github.event.action != 'ready_for_review' }}
+      # A labelled preview repeats a tree whose earlier run may have built no image.
+      should_skip: ${{ steps.skip_check.outputs.should_skip == 'true' && steps.release_candidate.outputs.release-candidate != 'true' && steps.opt_in.outputs.full == 'false' && steps.opt_in.outputs.preview == 'false' && github.event.action != 'ready_for_review' }}
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -677,12 +684,12 @@ jobs:
     if: |
       needs.detect-changes.outputs.should_skip != 'true' && (
         needs.detect-changes.outputs.unfiltered == 'true' ||
-        needs.detect-changes.outputs.previews == 'true' ||
+        needs.detect-changes.outputs.head-images == 'true' ||
         needs.detect-changes.outputs.any-code == 'true' ||
         needs.detect-changes.outputs.build-config == 'true' ||
         needs.detect-changes.outputs.test-config == 'true'
       ) && (
-        needs.detect-changes.outputs.server-tests == 'true' || (needs.detect-changes.outputs.queue-tier == 'true' && (needs.detect-changes.outputs.e2e == 'true' || needs.detect-changes.outputs.extension-e2e == 'true')) || needs.detect-changes.outputs.api-clients == 'true' || needs.detect-changes.outputs.postgres-image == 'true' || needs.detect-changes.outputs.build-config == 'true' || needs.detect-changes.outputs.application-server-image == 'true' || needs.detect-changes.outputs.supported-host-smoke == 'true' || needs.detect-changes.outputs.all-images == 'true'
+        needs.detect-changes.outputs.server-tests == 'true' || (needs.detect-changes.outputs.queue-tier == 'true' && (needs.detect-changes.outputs.e2e == 'true' || needs.detect-changes.outputs.extension-e2e == 'true')) || needs.detect-changes.outputs.api-clients == 'true' || needs.detect-changes.outputs.postgres-image == 'true' || needs.detect-changes.outputs.build-config == 'true' || (needs.detect-changes.outputs.images == 'true' && (needs.detect-changes.outputs.application-server-image == 'true' || needs.detect-changes.outputs.supported-host-smoke == 'true' || needs.detect-changes.outputs.all-images == 'true'))
       )
     env:
       SERVER_BUILD_ARTIFACT: server-build-${{ github.run_id }}
@@ -760,7 +767,7 @@ jobs:
       needs.detect-changes.outputs.should_skip != 'true' && needs.detect-changes.outputs.draft != 'true' && (
         needs.detect-changes.outputs.release-preflight == 'true' ||
         needs.detect-changes.outputs.release-images == 'true' ||
-        (needs.detect-changes.outputs.publishable == 'true' && (
+        (needs.detect-changes.outputs.publishable == 'true' && needs.detect-changes.outputs.images == 'true' && (
           needs.detect-changes.outputs.all-images == 'true' ||
           needs.detect-changes.outputs.application-server-image == 'true' ||
           needs.detect-changes.outputs.supported-host-smoke == 'true' ||
@@ -797,7 +804,7 @@ jobs:
   application-server-image:
     name: "App Server image"
     needs: [detect-changes, server-package, vulnerability-database]
-    if: ${{ !cancelled() && needs.detect-changes.result == 'success' && needs.detect-changes.outputs.draft != 'true' && (needs.vulnerability-database.result == 'success' || needs.vulnerability-database.result == 'skipped') && needs.server-package.result == 'success' && (needs.detect-changes.outputs.application-server-image == 'true' || needs.detect-changes.outputs.supported-host-smoke == 'true' || needs.detect-changes.outputs.all-images == 'true') }}
+    if: ${{ !cancelled() && needs.detect-changes.result == 'success' && needs.detect-changes.outputs.draft != 'true' && (needs.vulnerability-database.result == 'success' || needs.vulnerability-database.result == 'skipped') && needs.server-package.result == 'success' && needs.detect-changes.outputs.images == 'true' && (needs.detect-changes.outputs.application-server-image == 'true' || needs.detect-changes.outputs.supported-host-smoke == 'true' || needs.detect-changes.outputs.all-images == 'true') }}
     uses: ./.github/workflows/reusable-docker-build.yml
     permissions:
       contents: read
@@ -937,14 +944,14 @@ jobs:
   Docker:
     uses: ./.github/workflows/ci-docker-build.yml
     needs: [detect-changes, vulnerability-database]
-    # Same-repository previews require every image at the PR head tag; unchanged images are aliased
-    # here and the application image is built by Build. A fork and a merge group have no preview, so
-    # their image builds stay path-filtered.
+    # A preview and the host boot smoke need every image at the head tag; unchanged images are
+    # aliased here and the application image is built by Build. Other runs' image builds stay
+    # path-filtered.
     if: |
       !cancelled() && needs.detect-changes.result == 'success' && (needs.vulnerability-database.result == 'success' || needs.vulnerability-database.result == 'skipped') &&
-      needs.detect-changes.outputs.should_skip != 'true' && needs.detect-changes.outputs.draft != 'true' && (
+      needs.detect-changes.outputs.should_skip != 'true' && needs.detect-changes.outputs.draft != 'true' && needs.detect-changes.outputs.images == 'true' && (
         needs.detect-changes.outputs.unfiltered == 'true' ||
-        needs.detect-changes.outputs.previews == 'true' ||
+        needs.detect-changes.outputs.head-images == 'true' ||
         needs.detect-changes.outputs.any-code == 'true' ||
         needs.detect-changes.outputs.ci-config == 'true'
       )
@@ -976,7 +983,7 @@ jobs:
     # A fork pull request builds its images without publishing them, so there is nothing to pull
     # and no boot to check; the release path exercises a fork's install path once it is on `main`.
     if: >-
-      needs.detect-changes.outputs.previews == 'true' &&
+      needs.detect-changes.outputs.head-images == 'true' &&
       needs.detect-changes.outputs.should_skip != 'true' &&
       needs.detect-changes.outputs.supported-host-smoke == 'true'
     runs-on: ubuntu-24.04
@@ -1246,3 +1253,5 @@ jobs:
             failed, so this pull request left the queue. Inspect the run before re-queueing it.
             A pull request runs only the fast tier, so an integration, database, drill or browser
             failure first shows here; add the `ci:full` label to reproduce it on the pull request.
+            An image build or scan failure also first shows here; add the `preview` label to build
+            the images on the pull request.
