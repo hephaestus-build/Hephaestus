@@ -251,6 +251,10 @@ From v0.86.2, `SHA256SUMS` covers that evidence set and is signed with the relea
 The archived evidence reader verifies its Cosign bundle before checking the bytes or evaluating native file identities, advisory snapshots and policy.
 Trusted capture validation runs before signing and does not authenticate an archive.
 
+Each release also carries `release-vX.Y.Z.intoto.jsonl`, the Sigstore bundle of its release attestation.
+The attestation is a signed in-toto statement over the image lock and every first-party image digest.
+The [release image lock](../admin/release-image-lock#independent-verification) page gives the command that checks it.
+
 ## Current migration-guide instructions
 
 Edit `scripts/templates/migration-guide.md` for current operator instructions, not `MIGRATION.md`.
