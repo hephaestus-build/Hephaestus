@@ -262,11 +262,11 @@ The self-host broker publishes no host port.
 
 8. For a dedicated self-host broker, remove only that instance's `nats-server` container and confirmed `nats-data` volume.
 9. For a dedicated self-host broker, recreate NATS with an empty store.
-10. Start the isolated application server first so Liquibase completes.
+10. Run the isolated database migration first, then start the application server.
 11. Turn on silent mode and read it back.
 12. Start the isolated webhook role to recreate streams.
 
-    Its Compose dependency requires the migrated application server.
+    Its Compose dependency requires the completed database migration.
 
 13. Keep public ingress blocked.
 14. Verify that server consumers attach after streams exist.

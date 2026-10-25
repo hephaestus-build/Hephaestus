@@ -93,7 +93,7 @@ ROLLBACK;
 
 The required tail uses author `hephaestus` and filename `db/changelog/1791941746633_changelog.xml`.
 Check the older baseline with its [own procedure](./liquibase-baseline-runbook).
-Do not release a lock until you prove that no migrator remains alive.
+Do not release a lock by hand except as [One migration at a time](./runtime-roles#one-migration-at-a-time) allows.
 
 ### Dispatch ownership and job purpose
 

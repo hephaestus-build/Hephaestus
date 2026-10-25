@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.core.configuration;
 
+import de.tum.cit.aet.hephaestus.core.database.DatabaseMigration;
 import java.util.List;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
@@ -17,11 +18,14 @@ public final class ProductionConfigurationEnvironmentPostProcessor implements En
     @Override
     public void postProcessEnvironment(ConfigurableEnvironment environment, SpringApplication application) {
         if (!environment.acceptsProfiles(Profiles.of("prod"))) return;
-        List<ConfigurationFactDTO> failures = new ConfigurationReadinessEvaluator(environment)
-                .evaluateDeployment().stream()
-                        .filter(fact -> fact.requirement() == ConfigurationRequirement.REQUIRED)
-                        .filter(fact -> fact.status() == ConfigurationStatus.ACTION_REQUIRED)
-                        .toList();
+        var evaluator = new ConfigurationReadinessEvaluator(environment);
+        List<ConfigurationFactDTO> facts = environment.acceptsProfiles(Profiles.of(DatabaseMigration.PROFILE))
+                ? evaluator.evaluateMigration()
+                : evaluator.evaluateDeployment();
+        List<ConfigurationFactDTO> failures = facts.stream()
+                .filter(fact -> fact.requirement() == ConfigurationRequirement.REQUIRED)
+                .filter(fact -> fact.status() == ConfigurationStatus.ACTION_REQUIRED)
+                .toList();
         if (failures.isEmpty()) return;
         String diagnosis = failures.stream()
                 .map(fact -> " - [" + fact.id() + "] " + fact.explanation() + " Set " + fact.subject() + ". "

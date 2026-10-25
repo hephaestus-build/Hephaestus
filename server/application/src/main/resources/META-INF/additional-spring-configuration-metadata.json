@@ -202,6 +202,12 @@
       "sourceType": "de.tum.cit.aet.hephaestus.core.security.DatabaseTransportGuard"
     },
     {
+      "name": "hephaestus.database.migration-wait",
+      "type": "java.time.Duration",
+      "description": "How long a role waits at start for the database migration of its release, and how long a migration waits while another migration runs. After it, the process stops and names the reason.",
+      "sourceType": "de.tum.cit.aet.hephaestus.core.database.MigratedSchemaWait"
+    },
+    {
       "name": "hephaestus.dev.seed-enabled",
       "type": "java.lang.Boolean",
       "description": "Exposes the development endpoint that local seed scripts use to read the practice versions that a review would pin. Use it only in local development, never in production.",

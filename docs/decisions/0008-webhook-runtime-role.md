@@ -106,7 +106,8 @@ Option 1. Concretely:
   `SERVER_PROPERTY`; only the application-server pod runs PAT workspace creation and GitHub App
   installation activation.
 - **Liquibase migrations remain owned by application-server.** The webhook profile sets
-  `spring.liquibase.enabled=false`. No race between the two pods at boot.
+  `spring.liquibase.enabled=false`. No race between the two pods at boot. (Superseded: the
+  [migrate run mode](../admin/runtime-roles.mdx#database-migrations) now migrates, and no role migrates at start.)
 - **DB connection retained on the webhook pod.** Cheaper than gating every workspace-context
   bean; the receiver itself never touches the DB. Operational cost: ~150 MB extra heap and one
   Hikari pool — acceptable.

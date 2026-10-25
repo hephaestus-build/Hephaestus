@@ -56,11 +56,11 @@ The scheduler is a pool of `spring.task.scheduling.pool.size` threads.
 A long job holds one thread.
 `application.yml` sizes the pool above the number of jobs that can run long at the same time, so the other jobs keep their schedule.
 
-Two server replicas are not safe yet:
+No server migrates at start: the [migrate run mode](/admin/runtime-roles#database-migrations) migrates once per release.
 
-- Two servers pull from the same durable consumer of a scope (`IntegrationNatsConsumer`).
-  Thus, they can process the events of one scope at the same time and out of order.
-- Every server runs the Liquibase migration at start. There is no separate migration run yet.
+Two server replicas are not safe yet.
+Two servers pull from the same durable consumer of a scope (`IntegrationNatsConsumer`).
+Thus, they can process the events of one scope at the same time and out of order.
 
 ## Module boundaries
 

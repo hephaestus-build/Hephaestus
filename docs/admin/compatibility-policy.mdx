@@ -52,7 +52,7 @@ This exception ends with the 1.0.0 release.
 
 ## Database migrations
 
-Liquibase normally applies pending changesets, in order, when the application server starts.
+The [migrate run mode](./runtime-roles#database-migrations) applies pending changesets, in order, before the runtime roles of a release start.
 The release notes flag schema migrations and direct you to the required backup and upgrade instructions.
 Read those instructions before starting any target runtime role.
 

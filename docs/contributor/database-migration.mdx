@@ -5,7 +5,7 @@ title: Database Migration Workflow
 description: How a schema change becomes a Liquibase changelog, and what CI checks.
 ---
 
-Liquibase manages schema changes in the application server. This page is the procedure. The entity
+Liquibase manages schema changes. In production, the [migrate run mode](../admin/runtime-roles#database-migrations) applies them before a release starts. That process has only the database settings, so a change set cannot read encryption keys or other secrets. This page is the procedure. The entity
 conventions the drift gate reads are in `server/AGENTS.md` § Schema changes.
 
 ## Quick start
@@ -104,9 +104,11 @@ if history never changes underneath an instance that already ran part of it.
    Release *N* stops reads and writes, and migrates data if necessary.
    Release *N+1* drops it. A single
    release must stay bootable against the schema left behind by the previous one.
+   The previous release must also stay correct against the new schema.
+   The [migrate run mode](../admin/runtime-roles#database-migrations) migrates before the rollout, so the old roles run on the new schema until they stop.
    An ADR can grant an exception: see [Practice model cutover](#practice-model-cutover)
    and [Heph conversation ledger](#heph-conversation-ledger).
-   Such a release tells operators to stop every role before the upgrade.
+   Such a release ships a `.migration` fragment that tells operators to stop every role before the migration.
 
 CI enforces 1 and 2 mechanically (see below). 3 is a review responsibility. The sole archival
 transition is the verified v0.77.4 baseline: archived files remain byte-identical and test-only.
