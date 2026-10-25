@@ -1361,7 +1361,7 @@ void describe("CI contract", () => {
 		);
 		assert.equal(
 			namedStep(docker, ["jobs", "build"], "Enforce the release vulnerability policy").get("if"),
-			"inputs.publish && inputs.scan-images",
+			`\${{ !cancelled() && steps.prep.outcome == 'success' && inputs.publish && inputs.scan-images }}`,
 		);
 	});
 
@@ -1542,6 +1542,29 @@ void describe("CI contract", () => {
 			workflow.getIn(["jobs", "pitest", "env", "ORG_GRADLE_PROJECT_testAnalysis"]),
 			"false",
 		);
+	});
+
+	void test("a failed image build still lets every other image build and report, but hands over nothing", async () => {
+		const workflow = parseDocument(
+			await readFile(".github/workflows/reusable-docker-build.yml", "utf8"),
+		);
+		const build = ["jobs", "build"];
+		for (const name of [
+			"Set up pack",
+			"Download the executable JAR",
+			"Build with Buildpacks and CDS",
+			"Export digests",
+			"Enforce the release vulnerability policy",
+		]) {
+			assert.match(
+				String(namedStep(workflow, build, name).get("if")),
+				/^\$\{\{ !cancelled\(\) && steps\.prep\.outcome == 'success' && /u,
+				name,
+			);
+		}
+		// The handover runs only when every step succeeded, and the manifest job needs the build.
+		assert.equal(namedStep(workflow, build, "Upload digests").get("if"), "inputs.publish");
+		assert.equal(workflow.getIn(["jobs", "merge", "needs"]), "build");
 	});
 
 	void test("every CI/CD run validates the Gradle wrapper in a job without a condition", async () => {
@@ -2280,7 +2303,7 @@ void describe("CI contract", () => {
 		assert.match(String(reusable.getIn(["jobs", "merge", "if"])), /inputs\.publish/u);
 		assert.equal(
 			namedStep(reusable, build, "Enforce the release vulnerability policy").get("if"),
-			"inputs.publish && inputs.scan-images",
+			`\${{ !cancelled() && steps.prep.outcome == 'success' && inputs.publish && inputs.scan-images }}`,
 		);
 
 		const docker = parseDocument(await readFile(".github/workflows/ci-docker-build.yml", "utf8"));

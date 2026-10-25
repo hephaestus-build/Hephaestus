@@ -88,16 +88,10 @@ on:
 permissions: {}
 
 env:
-  # The images this call publishes, which each job turns into a JSON list.
-  SELECT_IMAGES: >-
-    [if $ARGS.named.server then "application-server" else empty end,
-     if $ARGS.named.webapp then "webapp" else empty end,
-     if $ARGS.named.pi then "agent-pi" else empty end,
-     if $ARGS.named.postgres then "postgres" else empty end]
-  SELECTED_SERVER: ${{ inputs.application-server }}
-  SELECTED_WEBAPP: ${{ inputs.webapp }}
-  SELECTED_PI: ${{ inputs.agent-pi }}
-  SELECTED_POSTGRES: ${{ inputs.postgres }}
+  # Every image this workflow can publish: the one list that each per-image input, check and step
+  # follows. Each job selects the images whose input is true.
+  IMAGE_NAMES: '["application-server","webapp","agent-pi","postgres"]'
+  INPUTS: ${{ toJSON(inputs) }}
   # Every tag is guarded on the event that started the run, so a consumer can derive from its own
   # event which tag exists. The commit tag is the one every consumer resolves through: `github.sha`
   # is the commit a push, dispatch or merge group built, and a pull request uses its head commit
@@ -164,10 +158,9 @@ jobs:
           set -euo pipefail
           platform=$MATRIX_PLATFORM
           echo "platform_pair=${platform//\//-}" >> "$GITHUB_OUTPUT"
-          images=$(jq -cn --argjson server "$SELECTED_SERVER" --argjson webapp "$SELECTED_WEBAPP" \
-            --argjson pi "$SELECTED_PI" --argjson postgres "$SELECTED_POSTGRES" "$SELECT_IMAGES" |
-            jq -c --argjson reuse "$REUSE_IMAGES" '[.[] | select(. as $image | $reuse | index($image) | not)]')
-          jq -e 'type == "array" and length > 0 and all(.[]; IN("application-server", "webapp", "agent-pi", "postgres"))' <<< "$images" >/dev/null
+          images=$(jq -cn --argjson names "$IMAGE_NAMES" --argjson inputs "$INPUTS" --argjson reuse "$REUSE_IMAGES" \
+            '[$names[] | select($inputs[.] == true) | select(. as $image | $reuse | index($image) | not)]')
+          jq -e 'length > 0' <<< "$images" >/dev/null
           echo "images=$images" >> "$GITHUB_OUTPUT"
           echo "bake-targets=$(jq -r '[.[] | select(. != "application-server")] | join(",")' <<< "$images")" >> "$GITHUB_OUTPUT"
 
@@ -224,22 +217,23 @@ jobs:
           targets: ${{ steps.prep.outputs.bake-targets }}
           set: "*.platform=${{ matrix.platform }}"
 
+      # A failed Dockerfile build does not stop the App Server image from building and reporting.
       - name: Set up pack
-        if: contains(fromJSON(steps.prep.outputs.images), 'application-server')
+        if: ${{ !cancelled() && steps.prep.outcome == 'success' && contains(fromJSON(steps.prep.outputs.images), 'application-server') }}
         uses: buildpacks/github-actions/setup-pack@af8c06ccd592e27001cbf78083dcc9b47aa6652a # v6.1.1
         with:
           # renovate: datasource=github-releases depName=buildpacks/pack
           pack-version: 0.40.9
 
       - name: Download the executable JAR
-        if: contains(fromJSON(steps.prep.outputs.images), 'application-server')
+        if: ${{ !cancelled() && steps.prep.outcome == 'success' && contains(fromJSON(steps.prep.outputs.images), 'application-server') }}
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: ${{ inputs.application-artifact }}
           path: ${{ runner.temp }}/application
 
       - uses: ./.github/actions/setup-toolchain
-        if: contains(fromJSON(steps.prep.outputs.images), 'application-server') || (inputs.publish && inputs.scan-images)
+        if: ${{ !cancelled() && steps.prep.outcome == 'success' && (contains(fromJSON(steps.prep.outputs.images), 'application-server') || (inputs.publish && inputs.scan-images)) }}
         with:
           install: "none"
 
@@ -247,7 +241,7 @@ jobs:
       # because the builder is pinned by digest.
       - name: Build with Buildpacks and CDS
         id: build-buildpacks
-        if: contains(fromJSON(steps.prep.outputs.images), 'application-server')
+        if: ${{ !cancelled() && steps.prep.outcome == 'success' && contains(fromJSON(steps.prep.outputs.images), 'application-server') }}
         env:
           APPLICATION_DIRECTORY: ${{ runner.temp }}/application
           INPUT_REGISTRY: ${{ inputs.registry }}
@@ -287,7 +281,7 @@ jobs:
           echo "Per-arch digest: $DIGEST"
 
       - name: Retain complete buildpack diagnostics
-        if: ${{ always() && contains(fromJSON(steps.prep.outputs.images), 'application-server') }}
+        if: ${{ always() && steps.prep.outcome == 'success' && contains(fromJSON(steps.prep.outputs.images), 'application-server') }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: buildpacks-log-${{ steps.prep.outputs.platform_pair }}-${{ github.run_attempt }}
@@ -296,9 +290,10 @@ jobs:
           if-no-files-found: warn
 
       # One directory per image and platform, so the merge job can assemble each index from one
-      # artifact per platform.
+      # artifact per platform. It records every image that built, so each can be scanned, and fails
+      # when one did not; the upload below hands the digests over only when every image built.
       - name: Export digests
-        if: inputs.publish
+        if: ${{ !cancelled() && steps.prep.outcome == 'success' && inputs.publish }}
         env:
           IMAGES: ${{ steps.prep.outputs.images }}
           BAKE_METADATA: ${{ steps.bake.outputs.metadata || '{}' }}
@@ -306,6 +301,7 @@ jobs:
           PLATFORM_PAIR: ${{ steps.prep.outputs.platform_pair }}
         run: |
           set -euo pipefail
+          missing=()
           for name in $(jq -r '.[]' <<< "$IMAGES"); do
             if [ "$name" = application-server ]; then
               digest=$BUILDPACKS_DIGEST
@@ -314,23 +310,25 @@ jobs:
             fi
             if [[ ! "$digest" =~ ^sha256:[a-f0-9]{64}$ ]]; then
               echo "::error::No digest produced for $name (got: ${digest:-<empty>})"
-              exit 1
+              missing+=("$name")
+              continue
             fi
             mkdir -p "$RUNNER_TEMP/digests/$name/$PLATFORM_PAIR"
             touch "$RUNNER_TEMP/digests/$name/$PLATFORM_PAIR/${digest#sha256:}"
           done
+          (( ${#missing[@]} == 0 ))
 
       # The scan runs on the runner that built the platform, before its digest reaches the merge, so
       # a refused image never enters an index. Re-running the job scans a fresh build of the platform.
       - uses: ./.github/actions/setup-release-security-tools
-        if: inputs.publish && inputs.scan-images
+        if: ${{ !cancelled() && steps.prep.outcome == 'success' && inputs.publish && inputs.scan-images }}
         with:
           install-syft: "true"
 
       # A blocking gate inherits Trivy's database availability as a hard dependency, so the
       # retries and the mirror fallback live in one action rather than in each caller.
       - uses: ./.github/actions/download-trivy-db
-        if: inputs.publish && inputs.scan-images
+        if: ${{ !cancelled() && steps.prep.outcome == 'success' && inputs.publish && inputs.scan-images }}
         with:
           database-artifact: ${{ inputs.database-artifact }}
 
@@ -339,7 +337,7 @@ jobs:
       # stop the scans of the others; a subject that cannot be resolved stops the step at once.
       - name: Enforce the release vulnerability policy
         id: scan
-        if: inputs.publish && inputs.scan-images
+        if: ${{ !cancelled() && steps.prep.outcome == 'success' && inputs.publish && inputs.scan-images }}
         env:
           IMAGES: ${{ steps.prep.outputs.images }}
           REGISTRY: ${{ inputs.registry }}
@@ -350,6 +348,11 @@ jobs:
           mkdir -p reports
           refused=()
           for name in $(jq -r '.[]' <<< "$IMAGES"); do
+            # An image that did not build has no digest; its build step already failed the job.
+            if [ ! -d "$RUNNER_TEMP/digests/$name/$PLATFORM_PAIR" ]; then
+              echo "::notice::$name did not build, so it has no scan"
+              continue
+            fi
             subject="$RUNNER_TEMP/subject-$name"
             : > "$subject"
             GITHUB_OUTPUT="$subject" DIGEST_DIRECTORY="$RUNNER_TEMP/digests/$name/$PLATFORM_PAIR" \
@@ -419,8 +422,7 @@ jobs:
           REUSE_IMAGES: ${{ inputs.reuse-images }}
         run: |
           set -euo pipefail
-          images=$(jq -cn --argjson server "$SELECTED_SERVER" --argjson webapp "$SELECTED_WEBAPP" \
-            --argjson pi "$SELECTED_PI" --argjson postgres "$SELECTED_POSTGRES" "$SELECT_IMAGES")
+          images=$(jq -cn --argjson names "$IMAGE_NAMES" --argjson inputs "$INPUTS" '[$names[] | select($inputs[.] == true)]')
           jq -e 'length > 0' <<< "$images" >/dev/null
           built=$(jq -c --argjson reuse "$REUSE_IMAGES" '[.[] | select(. as $image | $reuse | index($image) | not)]' <<< "$images")
           reused=$(jq -c --argjson reuse "$REUSE_IMAGES" '[.[] | select(. as $image | $reuse | index($image))]' <<< "$images")
@@ -532,7 +534,7 @@ jobs:
           mapfile -t platforms < <(jq -er '.[]' <<< "$PLATFORMS")
           (( ${#platforms[@]} > 0 ))
           for name in $(jq -r '.[]' <<< "$BUILT"); do
-            [[ "$name" =~ ^(application-server|webapp|agent-pi|postgres)$ ]]
+            jq -en --arg name "$name" --argjson names "$IMAGE_NAMES" '$names | index($name)' >/dev/null
             repository="$INPUTS_REGISTRY/hephaestus-build/$name"
             entries=("$name"/*)
             (( ${#entries[@]} == ${#platforms[@]} )) || exit 1

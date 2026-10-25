@@ -1035,10 +1035,9 @@ jobs:
   # and on every main commit. `Docker` puts every image under the head commit's tag, by building it or
   # by aliasing the base image; a fork publishes none, so there is nothing to install.
   Kubernetes:
-    needs: [detect-changes, application-server-image, Docker]
+    needs: [detect-changes, Docker]
     if: >-
       !cancelled() && needs.Docker.result == 'success' &&
-      (needs.application-server-image.result == 'success' || needs.application-server-image.result == 'skipped') &&
       needs.detect-changes.outputs.should_skip != 'true' &&
       needs.detect-changes.outputs.publishable == 'true' &&
       (github.event_name == 'push' || needs.detect-changes.outputs.kubernetes == 'true')

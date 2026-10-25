@@ -20,15 +20,18 @@ function isUpstreamImage(value: unknown): value is UpstreamImage {
 	);
 }
 
-/** The images the CI image workflow can publish, as its image selection names them. */
+/** The images the CI image workflow can publish: its `IMAGE_NAMES` list. */
 export function releaseImages(workflow: string): string[] {
-	const images = [...workflow.matchAll(/then "(?<image>[a-z0-9-]+)" else empty end/gu)].map(
-		(match) => match.groups?.image ?? "",
-	);
-	if (images.length === 0) {
+	const list = /^ {2}IMAGE_NAMES: '(?<names>\[[^']*\])'$/mu.exec(workflow)?.groups?.names;
+	const images: unknown = list === undefined ? [] : JSON.parse(list);
+	if (
+		!Array.isArray(images) ||
+		images.length === 0 ||
+		images.some((image) => typeof image !== "string")
+	) {
 		throw new Error("the image workflow selects no images");
 	}
-	return images;
+	return images.map(String);
 }
 
 export function validateInventory(inventory: unknown, workflow: string): string[] {

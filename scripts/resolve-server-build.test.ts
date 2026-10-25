@@ -326,15 +326,18 @@ await test("the image builds receive the queue run a default-branch push resolve
 		`Docker / ${String(docker.getIn(["jobs", "images", "name"]))} / ${String(build.getIn(["jobs", "merge", "name"]))}`,
 	);
 	// One image list: the attestation steps the lookup reads are the images the workflow can select,
-	// so `complete` cannot call a run complete that left out an image CI builds.
-	assert.deepEqual(
-		Object.keys(imageAttestations),
-		[
-			...String(build.getIn(["env", "SELECT_IMAGES"])).matchAll(
-				/then "(?<image>[a-z-]+)" else empty end/gu,
-			),
-		].map((match) => match.groups?.image),
-	);
+	// so `complete` cannot call a run complete that left out an image CI builds. Each listed image has
+	// its input, its digest output and its attestation step.
+	const names: unknown = JSON.parse(String(build.getIn(["env", "IMAGE_NAMES"])));
+	assert.ok(Array.isArray(names));
+	assert.deepEqual(Object.keys(imageAttestations), names);
+	for (const name of names.map(String)) {
+		assert.equal(build.getIn(["on", "workflow_call", "inputs", name, "type"]), "boolean", name);
+		assert.equal(
+			build.getIn(["on", "workflow_call", "outputs", `${name}-digest`, "value"]),
+			`\${{ jobs.merge.outputs.${name}-digest }}`,
+		);
+	}
 	const mergeSteps = build.getIn(["jobs", "merge", "steps"]);
 	assert.ok(isSeq(mergeSteps));
 	for (const [image, step] of Object.entries(imageAttestations)) {

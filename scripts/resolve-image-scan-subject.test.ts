@@ -364,85 +364,103 @@ void test("the image workflow shares the resolver and retains its immutable subj
 	assert.doesNotMatch(run, /\$repository:/u);
 });
 
-void test("every digest artifact carries its image and platform directories, however many a download matches", () => {
-	const workflow = parseDocument(
-		readFileSync(".github/workflows/reusable-docker-build.yml", "utf8"),
-	);
-	// A download extracts a single matched artifact straight into its path and several into one
-	// subdirectory each, so a layout that depended on the count broke the one-platform merge.
-	const step = (job: string, name: string) => {
-		const steps = workflow.getIn(["jobs", job, "steps"]);
-		assert.ok(isSeq(steps));
-		const found: unknown = steps.items.find((item) => isMap(item) && item.get("name") === name);
-		assert.ok(isMap(found), `${job}: ${name}`);
-		return found;
-	};
-	const directory = mkdtempSync(path.join(tmpdir(), "digest-artifact-"));
-	const buildpacks = "b".repeat(64);
-	try {
-		const exported = spawnSync(
-			"bash",
-			["-e", "-c", String(step("build", "Export digests").get("run"))],
-			{
-				encoding: "utf8",
-				env: {
-					...process.env,
-					RUNNER_TEMP: directory,
-					PLATFORM_PAIR: "linux-arm64",
-					IMAGES: JSON.stringify(["application-server", "webapp"]),
-					BAKE_METADATA: JSON.stringify({
-						webapp: { "containerimage.digest": `sha256:${artifact}` },
-					}),
-					BUILDPACKS_DIGEST: `sha256:${buildpacks}`,
+// The export step runs on the Linux build runners only; its shell reads its image list with jq.
+void test(
+	"every digest artifact carries its image and platform directories, however many a download matches",
+	{ skip: process.platform === "win32" },
+	() => {
+		const workflow = parseDocument(
+			readFileSync(".github/workflows/reusable-docker-build.yml", "utf8"),
+		);
+		// A download extracts a single matched artifact straight into its path and several into one
+		// subdirectory each, so a layout that depended on the count broke the one-platform merge.
+		const step = (job: string, name: string) => {
+			const steps = workflow.getIn(["jobs", job, "steps"]);
+			assert.ok(isSeq(steps));
+			const found: unknown = steps.items.find((item) => isMap(item) && item.get("name") === name);
+			assert.ok(isMap(found), `${job}: ${name}`);
+			return found;
+		};
+		const directory = mkdtempSync(path.join(tmpdir(), "digest-artifact-"));
+		const buildpacks = "b".repeat(64);
+		try {
+			const exported = spawnSync(
+				"bash",
+				["-e", "-c", String(step("build", "Export digests").get("run"))],
+				{
+					encoding: "utf8",
+					env: {
+						...process.env,
+						RUNNER_TEMP: directory,
+						PLATFORM_PAIR: "linux-arm64",
+						IMAGES: JSON.stringify(["application-server", "webapp"]),
+						BAKE_METADATA: JSON.stringify({
+							webapp: { "containerimage.digest": `sha256:${artifact}` },
+						}),
+						BUILDPACKS_DIGEST: `sha256:${buildpacks}`,
+					},
 				},
-			},
-		);
-		assert.equal(exported.status, 0, exported.stderr);
-		const entries = readdirSync(path.join(directory, "digests"), {
-			encoding: "utf8",
-			recursive: true,
-		});
-		assert.deepEqual(
-			entries.toSorted((left, right) => left.localeCompare(right)),
-			[
-				"application-server",
-				path.join("application-server", "linux-arm64"),
-				path.join("application-server", "linux-arm64", buildpacks),
-				"webapp",
-				path.join("webapp", "linux-arm64"),
-				path.join("webapp", "linux-arm64", artifact),
-			],
-		);
-		// An image the build did not report refuses the export instead of publishing without it.
-		const missing = spawnSync(
-			"bash",
-			["-e", "-c", String(step("build", "Export digests").get("run"))],
-			{
+			);
+			assert.equal(exported.status, 0, exported.stderr);
+			const entries = readdirSync(path.join(directory, "digests"), {
 				encoding: "utf8",
-				env: {
-					...process.env,
-					RUNNER_TEMP: directory,
-					PLATFORM_PAIR: "linux-arm64",
-					IMAGES: JSON.stringify(["webapp", "postgres"]),
-					BAKE_METADATA: JSON.stringify({
-						webapp: { "containerimage.digest": `sha256:${artifact}` },
-					}),
-					BUILDPACKS_DIGEST: "",
+				recursive: true,
+			});
+			assert.deepEqual(
+				entries.toSorted((left, right) => left.localeCompare(right)),
+				[
+					"application-server",
+					path.join("application-server", "linux-arm64"),
+					path.join("application-server", "linux-arm64", buildpacks),
+					"webapp",
+					path.join("webapp", "linux-arm64"),
+					path.join("webapp", "linux-arm64", artifact),
+				],
+			);
+			// An image the build did not report fails the export, which still records the images that
+			// built so that their scans run; the upload then hands nothing over.
+			rmSync(path.join(directory, "digests"), { recursive: true, force: true });
+			const missing = spawnSync(
+				"bash",
+				["-e", "-c", String(step("build", "Export digests").get("run"))],
+				{
+					encoding: "utf8",
+					env: {
+						...process.env,
+						RUNNER_TEMP: directory,
+						PLATFORM_PAIR: "linux-arm64",
+						IMAGES: JSON.stringify(["webapp", "postgres"]),
+						BAKE_METADATA: JSON.stringify({
+							webapp: { "containerimage.digest": `sha256:${artifact}` },
+						}),
+						BUILDPACKS_DIGEST: "",
+					},
 				},
-			},
+			);
+			assert.notEqual(missing.status, 0);
+			assert.deepEqual(
+				readdirSync(path.join(directory, "digests"), {
+					encoding: "utf8",
+					recursive: true,
+				}).toSorted((left, right) => left.localeCompare(right)),
+				[
+					"webapp",
+					path.join("webapp", "linux-arm64"),
+					path.join("webapp", "linux-arm64", artifact),
+				],
+			);
+		} finally {
+			rmSync(directory, { recursive: true, force: true });
+		}
+		// The upload's root is the digests directory, so the artifact holds `<image>/<platform>/<digest>`.
+		assert.equal(
+			step("build", "Upload digests").getIn(["with", "path"]),
+			`\${{ runner.temp }}/digests`,
 		);
-		assert.notEqual(missing.status, 0);
-	} finally {
-		rmSync(directory, { recursive: true, force: true });
-	}
-	// The upload's root is the digests directory, so the artifact holds `<image>/<platform>/<digest>`.
-	assert.equal(
-		step("build", "Upload digests").getIn(["with", "path"]),
-		`\${{ runner.temp }}/digests`,
-	);
-	assert.equal(step("merge", "Download digests").getIn(["with", "merge-multiple"]), true);
-	assert.match(
-		String(step("merge", "Create manifests and push").get("run")),
-		/files=\("\$name\/linux-\$arch"\/\*\)/u,
-	);
-});
+		assert.equal(step("merge", "Download digests").getIn(["with", "merge-multiple"]), true);
+		assert.match(
+			String(step("merge", "Create manifests and push").get("run")),
+			/files=\("\$name\/linux-\$arch"\/\*\)/u,
+		);
+	},
+);

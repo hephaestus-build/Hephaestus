@@ -562,6 +562,7 @@ process.stdout.write(ref.endsWith(process.env.MERGED_DIGEST) ? process.env.FINAL
 					PATH: `${directory}${path.delimiter}${process.env.PATH ?? ""}`,
 					RUNNER_TEMP: directory,
 					INPUTS_REGISTRY: "ghcr.io",
+					IMAGE_NAMES: String(workflow.getIn(["env", "IMAGE_NAMES"])),
 					BUILT: JSON.stringify(["webapp"]),
 					PLATFORMS: JSON.stringify(platforms),
 					GITHUB_RUN_ID: "77",
