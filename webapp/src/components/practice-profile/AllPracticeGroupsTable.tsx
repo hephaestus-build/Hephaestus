@@ -6,7 +6,7 @@ import type { GroupRef, PracticeGroupStanding, PracticeStanding } from "@/api/ty
 import type { LoadState } from "@/components/common/panel-state";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import type { FeedbackTextSegment } from "@/components/practice-vocabulary/feedback-text";
-import { getGroupVisual } from "@/components/practice-vocabulary/group-visuals";
+import { getGroupVisual, groupMark } from "@/components/practice-vocabulary/group-visuals";
 import { GroupName } from "@/components/practice-vocabulary/GroupName";
 import type { SortDirection } from "@/components/practice-vocabulary/practice-group-list-order";
 import { PracticeGroupStandingRing } from "@/components/practice-vocabulary/PracticeGroupStandingRing";
@@ -114,6 +114,8 @@ function GroupRow({
 				badge={<GroupName name={group.name} icon={Icon} pill={pill} />}
 				sentences={sentences}
 				onOpenPractice={onOpenPractice}
+				// Every practice a row's sentences name is in that row's group: its label shows the icon.
+				practiceGroup={groupMark({ Icon, pill })}
 			/>
 		</PracticeTableRow>
 	);

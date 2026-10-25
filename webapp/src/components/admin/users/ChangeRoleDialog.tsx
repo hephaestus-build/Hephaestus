@@ -1,6 +1,7 @@
-import type { LucideIcon } from "lucide-react";
+import { AlertCircle, type LucideIcon } from "lucide-react";
 
 import type { AdminAccountView } from "@/api/types.gen";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
 	AlertDialog,
 	AlertDialogAction,
@@ -22,7 +23,10 @@ export interface ChangeRoleDialogProps {
 	user: AdminAccountView | null;
 	icon: LucideIcon;
 	isPending: boolean;
-	/** Server refusal (e.g. last-admin 409) shown inline; the dialog stays open so it can be read. */
+	/**
+	 * Server refusal (e.g. last-admin 409) shown inline while the dialog is open. The dialog stays
+	 * dismissible while saving; the page reports a refusal that settles after it closed (ADR 0027).
+	 */
 	errorMessage?: string;
 	onOpenChange: (open: boolean) => void;
 	onConfirm: (user: AdminAccountView, nextRole: AppRole) => void;
@@ -75,15 +79,13 @@ export function ChangeRoleDialog({
 					</AlertDialogDescription>
 				</AlertDialogHeader>
 				{hasText(errorMessage) && (
-					<p
-						role="alert"
-						className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"
-					>
-						{errorMessage}
-					</p>
+					<Alert variant="destructive">
+						<AlertCircle />
+						<AlertDescription>{errorMessage}</AlertDescription>
+					</Alert>
 				)}
 				<AlertDialogFooter>
-					<AlertDialogCancel disabled={isPending}>Cancel</AlertDialogCancel>
+					<AlertDialogCancel>Cancel</AlertDialogCancel>
 					<AlertDialogAction
 						variant={granting ? "destructive" : "default"}
 						disabled={isPending}

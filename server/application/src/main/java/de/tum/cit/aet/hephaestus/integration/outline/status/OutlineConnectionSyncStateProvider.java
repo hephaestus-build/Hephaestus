@@ -17,6 +17,7 @@ import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineCollection;
 import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineCollection.MirrorState;
 import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineCollectionRepository;
 import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineDocumentRepository;
+import java.time.Clock;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -37,18 +38,21 @@ public class OutlineConnectionSyncStateProvider implements ConnectionSyncStatePr
     private final OutlineDocumentRepository documentRepository;
     private final ObjectProvider<OutlineRateLimitTracker> rateLimitTrackerProvider;
     private final String syncCron;
+    private final Clock clock;
 
     public OutlineConnectionSyncStateProvider(
             ConnectionService connectionRepository,
             OutlineCollectionRepository collectionRepository,
             OutlineDocumentRepository documentRepository,
             ObjectProvider<OutlineRateLimitTracker> rateLimitTrackerProvider,
+            Clock clock,
             @Value("${hephaestus.integration.outline.sync.cron:0 0 */6 * * *}") String syncCron) {
         this.connectionRepository = connectionRepository;
         this.collectionRepository = collectionRepository;
         this.documentRepository = documentRepository;
         this.rateLimitTrackerProvider = rateLimitTrackerProvider;
         this.syncCron = syncCron;
+        this.clock = clock;
     }
 
     @Override
@@ -78,8 +82,8 @@ public class OutlineConnectionSyncStateProvider implements ConnectionSyncStatePr
 
         return new ConnectionSyncDetails(
                 webhookRegistered,
-                CronSchedules.nextRun(syncCron),
-                CronSchedules.interval(syncCron),
+                CronSchedules.nextRun(syncCron, clock),
+                CronSchedules.interval(syncCron, clock),
                 rateLimit,
                 null,
                 false);

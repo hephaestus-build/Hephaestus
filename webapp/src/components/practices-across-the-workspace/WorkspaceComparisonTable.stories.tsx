@@ -49,7 +49,7 @@ export const Default: Story = {
 	play: async ({ canvas }) => {
 		await expect(
 			canvas.getByRole("img", {
-				name: "28 developers in this workspace: 4 Needs attention, 5 Mixed feedback, 12 Going well, 7 none yet. The You marker is on Mixed feedback.",
+				name: "28 developers in this workspace: 4 Needs attention, 5 Mixed feedback, 12 Going well, 7 none yet. You are in the Mixed feedback part.",
 			}),
 		).toBeVisible();
 		// Only the row whose own standing rests on earlier reviews says so.

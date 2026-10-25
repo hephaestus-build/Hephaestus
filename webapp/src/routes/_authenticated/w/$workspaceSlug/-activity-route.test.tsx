@@ -29,6 +29,7 @@ import { deferred } from "@/test/async";
 import { ObserverStub } from "@/test/observers";
 import { ROUTE_RENDER_WAIT, renderRouteAtWithRouter, testQueryClient } from "@/test/router-harness";
 import { storeUserView } from "@/test/user-view";
+import { switchWorkspace } from "@/test/workspace-switcher";
 
 // A case mounts the whole app chrome, whose route modules are imported lazily.
 vi.setConfig({ testTimeout: 40_000 });
@@ -2012,7 +2013,7 @@ describe("Workspace activity", () => {
 			);
 			await user.keyboard("{Escape}");
 			await waitFor(() => expect(router.state.location.search.detail).toBeUndefined());
-			await user.keyboard("{Control>}2{/Control}");
+			await switchWorkspace(user, "acme", "beta");
 			await waitFor(() =>
 				expect(router.state.location.pathname).toBe("/w/beta/workspace-activity"),
 			);
@@ -2042,7 +2043,7 @@ describe("Workspace activity", () => {
 			});
 			await user.keyboard("{Escape}");
 			await waitFor(() => expect(router.state.location.search.detail).toBeUndefined());
-			await user.keyboard("{Control>}1{/Control}");
+			await switchWorkspace(user, "beta", "acme");
 			await waitFor(() =>
 				expect(router.state.location.pathname).toBe("/w/acme/workspace-activity"),
 			);

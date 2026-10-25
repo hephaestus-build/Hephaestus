@@ -15,6 +15,7 @@ import { hasText } from "@/lib/text";
 
 import { AllPracticeGroupsLevel } from "./AllPracticeGroupsLevel";
 import type { AllPracticeGroupsTableProps } from "./AllPracticeGroupsTable";
+import type { ObservationFilter, SelectedObservationState } from "./observation-filter";
 import { isNeverApplied } from "./practice-folds";
 import { practicePatternOf } from "./practice-pattern";
 import {
@@ -81,15 +82,19 @@ export interface PracticeGroupDetailDrawerProps {
 	ratingProps?: (feedbackId: string) => FeedbackRatingProps;
 	/** The practice level's tab, from the route's search params; the route owns the navigation. */
 	practiceTab: PracticeTab;
+	/** The feedback card a link asked for on the practice level's Feedback tab. */
+	markedFeedbackId?: string;
 	renderObservation?: (result: ResultList) => ReactNode;
-	selectedObservationId?: string;
-	selectedObservation?: ReactNode;
+	/** The practice level's observation filter, from the route's search. */
+	observationFilter?: ObservationFilter;
+	/** The observation a link asked for, read on its own by the route. */
+	selectedObservation?: SelectedObservationState;
 	/** How many rows the practice level's feed draws while its first page loads. */
 	skeletonRows: number;
 	/** The two review levels; the drawer adds where each sits and which review is open. */
 	reviews: {
 		list: Omit<ProfileReviewsLevelProps, "nested" | "path" | "openReviewId">;
-		open: Omit<ProfileReviewLevelProps, "nested" | "path" | "positionOnWork" | "responses">;
+		open: Omit<ProfileReviewLevelProps, "nested" | "path" | "positionOnWork" | "totalOnWork">;
 	};
 	/**
 	 * Writes the selection in place — the tab is a view of the level, not a place — so Escape and
@@ -123,8 +128,9 @@ export function PracticeGroupDetailDrawer({
 	groupOverview,
 	ratingProps,
 	practiceTab,
+	markedFeedbackId,
 	renderObservation,
-	selectedObservationId,
+	observationFilter,
 	selectedObservation,
 	skeletonRows,
 	reviews,
@@ -172,6 +178,11 @@ export function PracticeGroupDetailDrawer({
 	const pathAt = levelPathAt(detailStack, { pageLabel: PAGE_LABEL, labelOf, onClose });
 	const openReviewId = openLevelId(detailStack, "review");
 	const { list, open } = reviews;
+	// The open review's row in the list under it, which knows its place among the work's reviews.
+	const openListed =
+		list.feed.status === "ready"
+			? list.feed.reviews.find((entry) => entry.review.id === openReviewId)
+			: undefined;
 
 	return (
 		<DetailDrawerStack stack={detailStack} onClose={onClose} footer={levelFooter}>
@@ -217,7 +228,16 @@ export function PracticeGroupDetailDrawer({
 								guidance={detail.guidance}
 								feed={detail.feed}
 								renderObservation={renderObservation}
-								selectedObservationId={selectedObservationId}
+								observationFilter={observationFilter}
+								onObservationFilterChange={(filter) =>
+									onSelectionChange({
+										observation: filter.observationId,
+										observationQuery: filter.query,
+										observationOutcome: filter.outcome,
+										observationSince: filter.since,
+										observationWork: filter.workId,
+									})
+								}
 								selectedObservation={selectedObservation}
 								feedbackCards={feedbackCards}
 								ratingProps={ratingProps}
@@ -225,7 +245,12 @@ export function PracticeGroupDetailDrawer({
 								// The group level is under the practice's whenever the group is known, so a
 								// card's group name goes back to it.
 								onOpenGroup={openGroup && (() => onClose(groupIndex + 1))}
+								// The group under the practice's level, or the one its standing names when the
+								// practice opened alone, as from a review.
+								group={openGroup ?? findGroup(detail.practice?.groupSlug ?? undefined)}
 								tab={practiceTab}
+								markedFeedbackId={markedFeedbackId}
+								onFeedbackArrivalShown={() => onSelectionChange({ feedbackCard: undefined })}
 								onTabChange={(tab) => onSelectionChange({ practiceTab: tab })}
 								responses={detail.responses}
 								neverApplied={detail.practice !== undefined && isNeverApplied(detail.practice)}
@@ -249,10 +274,13 @@ export function PracticeGroupDetailDrawer({
 								nested={level.nested}
 								path={pathAt(level.depth)}
 								{...open}
-								positionOnWork={
-									openReviewId === undefined ? undefined : list.positions?.get(openReviewId)
+								positionOnWork={openListed?.positionOnWork}
+								totalOnWork={openListed?.totalOnWork}
+								// The observation open over this review, from the address: after a reload the
+								// row the reader came from is still marked once they go back.
+								openedObservationId={
+									openPracticeSlug === undefined ? undefined : observationFilter?.observationId
 								}
-								responses={detail.responses}
 							/>
 						);
 					}

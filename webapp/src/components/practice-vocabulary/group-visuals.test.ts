@@ -1,7 +1,15 @@
 import { Folder, Rocket } from "lucide-react";
 import { describe, expect, it } from "vitest";
 
-import { getGroupVisual, ICON_NAMES, iconLabel, iconSearchText, PILL } from "./group-visuals";
+import {
+	getGroupVisual,
+	groupInk,
+	ICON_NAMES,
+	iconLabel,
+	iconSearchText,
+	PILL,
+	UNASSIGNED_GROUP_VISUAL,
+} from "./group-visuals";
 
 describe("groupVisuals", () => {
 	it("uses an admin-set icon and color", () => {
@@ -33,5 +41,17 @@ describe("groupVisuals", () => {
 		const hits = ICON_NAMES.filter((n) => iconSearchText(n).includes("git"));
 		expect(hits).toStrictEqual(expect.arrayContaining(["GitBranch", "GitPullRequest", "GitMerge"]));
 		expect(hits).not.toContain("ShieldX");
+	});
+});
+
+describe("groupInk", () => {
+	it("keeps every color's text and drops its ground, in both themes", () => {
+		for (const pill of [...Object.values(PILL), UNASSIGNED_GROUP_VISUAL.pill]) {
+			const ink = groupInk(pill).split(" ");
+			expect(ink.some((name) => /(?:^|:)bg-/u.test(name))).toBe(false);
+			expect(ink.filter((name) => /(?:^|:)text-/u.test(name))).toStrictEqual(
+				pill.split(" ").filter((name) => /(?:^|:)text-/u.test(name)),
+			);
+		}
 	});
 });

@@ -110,9 +110,10 @@ describe("toFeedbackCard", () => {
 				text: "Resolves on its own once three pieces of work in a row come back clean",
 			},
 		]);
+		// Each piece keeps what the review made of it, so the timeline can draw it.
 		expect(card.reviewedWork).toStrictEqual([
-			{ ref: pullRequest(6), date: new Date("2026-08-19") },
-			{ ref: pullRequest(7), date: new Date("2026-08-13") },
+			{ ref: pullRequest(6), date: new Date("2026-08-19"), outcome: "NOT_MET" },
+			{ ref: pullRequest(7), date: new Date("2026-08-13"), outcome: "NOT_MET" },
 		]);
 	});
 

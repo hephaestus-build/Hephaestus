@@ -27,11 +27,9 @@ const COPIED_TOKENS: CopiedToken[] = [
 	{ infima: "--ifm-color-primary", app: "--mentor", docsTheme: "dark" },
 	{ infima: "--ifm-color-emphasis-100", app: "--muted", docsTheme: "light" },
 	{ infima: "--ifm-color-emphasis-200", app: "--border", docsTheme: "light" },
-	{ infima: "--ifm-color-emphasis-300", app: "--ring", docsTheme: "light" },
 	{ infima: "--ifm-color-emphasis-700", app: "--muted-foreground", docsTheme: "light" },
 	{ infima: "--ifm-color-emphasis-100", app: "--sidebar", docsTheme: "dark" },
 	{ infima: "--ifm-color-emphasis-200", app: "--border", docsTheme: "dark" },
-	{ infima: "--ifm-color-emphasis-400", app: "--ring", docsTheme: "dark" },
 	{ infima: "--ifm-color-emphasis-700", app: "--muted-foreground", docsTheme: "dark" },
 	{ infima: "--ifm-toc-border-color", app: "--border", docsTheme: "dark" },
 	// White on the dark-mode mentor blue is ~2.6:1, so the dark search hit keeps the light one.

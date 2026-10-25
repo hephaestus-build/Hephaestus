@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 
@@ -12,11 +13,15 @@ import {
 	listMembershipsQueryKey,
 	setMemberHiddenMutation,
 } from "@/api/@tanstack/react-query.gen";
-import type { WorkspaceMembership } from "@/api/types.gen";
 import {
+	assignableWorkspaceRoles,
+	roleChangeAsksFirst,
 	WORKSPACE_ROLE_LABELS,
+	type WorkspaceMemberRow,
+	type WorkspaceRoleChange,
 	workspaceMemberRows,
 } from "@/components/admin/members/workspace-members";
+import { WorkspaceChangeRoleDialog } from "@/components/admin/members/WorkspaceChangeRoleDialog";
 import { WorkspaceMembersPage } from "@/components/admin/members/WorkspaceMembersPage";
 import type { WorkspaceMembersTableView } from "@/components/admin/members/WorkspaceMembersTable";
 import { accountName } from "@/components/admin/users/account-labels";
@@ -26,6 +31,8 @@ import { workspaceAdminHead } from "@/lib/page-title";
 import { problemDetailOf } from "@/lib/problem-detail";
 import { pageParam, useSearchState } from "@/lib/search-params";
 import { hasText } from "@/lib/text";
+import type { WorkspaceRole } from "@/lib/workspace-roles";
+import { useAuth } from "@/runtime/auth/AuthContext";
 import { keepSameSubject } from "@/runtime/tanstack-query/keep-same-subject";
 import { useQueryReadRefusal } from "@/runtime/tanstack-query/use-query-read-refusal";
 
@@ -69,7 +76,10 @@ function AdminMembersContainer() {
 		isLoading: isWorkspaceLoading,
 		error: workspaceError,
 		refetch: refetchWorkspace,
+		role: readerRole,
 	} = useWorkspaceAccess();
+	const { getUserId } = useAuth();
+	const [roleChange, setRoleChange] = useState<WorkspaceRoleChange | null>(null);
 
 	const view: WorkspaceMembersTableView = {
 		q: search.q ?? "",
@@ -146,6 +156,8 @@ function AdminMembersContainer() {
 	});
 
 	const { mutate: changeHidden } = toggleHidden;
+	// `mutate` is stable and the mutation result is not. A role handler that closed over the result
+	// would change every render, so the table would rebuild its columns and close an open role list.
 	const { mutate: changeRole } = assignRole;
 	const handleToggleHidden = (accountId: string, hidden: boolean) => {
 		if (!hasText(workspaceSlug)) {
@@ -154,11 +166,26 @@ function AdminMembersContainer() {
 		changeHidden({ path: { workspaceSlug, accountId }, body: { hidden } });
 	};
 
-	const handleRoleChange = (accountId: string, role: WorkspaceMembership["role"]) => {
-		if (!hasText(workspaceSlug)) {
-			return;
+	const sendRoleChange = ({ accountId, to }: WorkspaceRoleChange) => {
+		if (hasText(workspaceSlug)) {
+			changeRole({ path: { workspaceSlug }, body: { accountId, role: to } });
 		}
-		changeRole({ path: { workspaceSlug }, body: { accountId, role } });
+	};
+
+	const handleRoleChange = (member: WorkspaceMemberRow, role: WorkspaceRole) => {
+		const accountId = member.membership.account.id;
+		const change: WorkspaceRoleChange = {
+			accountId,
+			name: member.name,
+			from: member.membership.role,
+			to: role,
+			own: accountId === getUserId(),
+		};
+		if (roleChangeAsksFirst(change)) {
+			setRoleChange(change);
+		} else {
+			sendRoleChange(change);
+		}
 	};
 
 	const teams = teamsQuery.isError ? [] : (teamsQuery.data ?? []);
@@ -170,48 +197,58 @@ function AdminMembersContainer() {
 	}
 
 	return (
-		<WorkspaceMembersPage
-			members={members}
-			rowCount={membersQuery.data?.totalElements ?? 0}
-			teams={teams}
-			isLoading={isLoading || !hasText(workspaceSlug)}
-			updating={membersQuery.isPlaceholderData}
-			error={workspaceError ?? membersQuery.error}
-			onRetry={() => {
-				refetchWorkspace();
-				if (hasText(workspaceSlug)) {
-					void membersQuery.refetch();
+		<>
+			<WorkspaceMembersPage
+				members={members}
+				rowCount={membersQuery.data?.totalElements ?? 0}
+				teams={teams}
+				isLoading={isLoading || !hasText(workspaceSlug)}
+				updating={membersQuery.isPlaceholderData}
+				error={workspaceError ?? membersQuery.error}
+				onRetry={() => {
+					refetchWorkspace();
+					if (hasText(workspaceSlug)) {
+						void membersQuery.refetch();
+						void teamsQuery.refetch();
+					}
+				}}
+				teamsError={teamsQuery.error}
+				teamsRetrying={teamsQuery.isFetching}
+				onRetryTeams={() => {
 					void teamsQuery.refetch();
+				}}
+				onToggleHidden={handleToggleHidden}
+				onRoleChange={handleRoleChange}
+				assignableRoles={assignableWorkspaceRoles(readerRole)}
+				pendingRoleAccountId={
+					assignRole.isPending ? assignRole.variables.body.accountId : undefined
 				}
-			}}
-			teamsError={teamsQuery.error}
-			teamsRetrying={teamsQuery.isFetching}
-			onRetryTeams={() => {
-				void teamsQuery.refetch();
-			}}
-			onToggleHidden={handleToggleHidden}
-			onRoleChange={handleRoleChange}
-			pendingRoleAccountId={assignRole.isPending ? assignRole.variables.body.accountId : undefined}
-			view={view}
-			onViewChange={(patch) => {
-				void setSearch(
-					(previous) =>
-						membersSearch({
-							q: "",
-							team: "all",
-							sort: "name" as const,
-							desc: false,
-							page: 0,
-							size: 10,
-							...previous,
-							...patch,
-						}),
-					{ replace: true },
-				);
-			}}
-			renderPageLink={(page, props) => (
-				<Link to="." search={membersSearch({ ...view, page })} resetScroll={false} {...props} />
-			)}
-		/>
+				view={view}
+				onViewChange={(patch) => {
+					void setSearch(
+						(previous) =>
+							membersSearch({
+								q: "",
+								team: "all",
+								sort: "name" as const,
+								desc: false,
+								page: 0,
+								size: 10,
+								...previous,
+								...patch,
+							}),
+						{ replace: true },
+					);
+				}}
+				renderPageLink={(page, props) => (
+					<Link to="." search={membersSearch({ ...view, page })} resetScroll={false} {...props} />
+				)}
+			/>
+			<WorkspaceChangeRoleDialog
+				change={roleChange}
+				onConfirm={sendRoleChange}
+				onClose={() => setRoleChange(null)}
+			/>
+		</>
 	);
 }

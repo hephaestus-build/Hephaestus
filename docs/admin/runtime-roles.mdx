@@ -103,6 +103,71 @@ profile groups. Startup rejects that combination even when production secrets ar
 Production encryption requirements apply to Spring's expanded profiles, so selecting a production
 profile group requires the same keys as selecting `prod` directly.
 
+## Database migrations
+
+The `migrate` run mode applies the database migration of a release, then exits.
+Start the application image with `SPRING_PROFILES_ACTIVE=prod,migrate`.
+It needs only `DATABASE_URL`, `DATABASE_USERNAME` and `DATABASE_PASSWORD`.
+It starts no web server and no runtime role.
+It exits with status 0 when the schema is current, and with a non-zero status when the migration fails.
+
+Under the `prod` profile, no role migrates at start.
+Each role waits until the database holds every change set of its release.
+The wait reads the migration history and writes nothing.
+A schema that is ahead of the role is correct: during a rollout, the previous release runs against the new schema.
+
+After `hephaestus.database.migration-wait` (`HEPHAESTUS_DATABASE_MIGRATION_WAIT`, default `10m`), the role stops.
+The bundled Compose stacks do not pass this variable, so the default applies there.
+Its error names the first change set that has not run.
+
+Run the migration once for each release, before the new roles start:
+
+- **Compose.** The shipped stacks contain a one-shot `database-migration` service.
+  The server and the worker start only after it completes successfully.
+  The webhook receiver of the single-host stack also waits for it.
+  Run `docker compose run --rm -T --no-deps database-migration` first.
+  `--no-deps` keeps Compose from restarting PostgreSQL under the running roles.
+  The command ends with the exit status of the migration, and the previous roles keep serving until then.
+  If it fails, Compose replaces no role. Follow [Upgrade § If migration fails](./upgrade#if-migration-fails).
+  Then run `docker compose up -d` to replace the roles.
+  It stops the previous roles and runs the migration service again, which finds nothing to apply.
+  Then it starts the new roles.
+  A plain `docker compose up -d` alone stops the previous roles for the whole migration.
+  [Pull-based deployment](./pull-based-deployment#how-an-apply-stops-the-worker) runs the migration first.
+- **Kubernetes.** Run the migration as a Job for each release, and start the new roles after it completes.
+  The roles wait for the Job.
+- **Other deployments.** Run the image once with the `migrate` profile, then start the new roles.
+
+### One migration at a time
+
+Every migration holds a PostgreSQL advisory lock while it runs.
+The lock lives in the database session, so the migration needs a direct or session-pooled connection.
+A proxy that pools by transaction can leave the lock on a server connection.
+This applies to the run mode and to a process that migrates at start, such as the development server or a role with `SPRING_LIQUIBASE_ENABLED=true`.
+A second migration waits until the first ends, and logs `database.migration.lock_awaited`.
+After `hephaestus.database.migration-wait`, the waiting process stops.
+
+PostgreSQL releases this lock when the process stops, also when the process is killed.
+Thus, a killed run cannot block the next one.
+The run mode releases the Liquibase lock that a killed run left.
+It logs `database.migration.lock_released` with the holder and the time of that lock.
+
+A release from before the run mode takes no advisory lock, and its server migrates at start.
+During the first upgrade to this release, do not restart the previous server while the migration starts.
+Otherwise, the run mode can release the Liquibase lock of that server while it still migrates.
+Release a Liquibase lock by hand only when such a process left it, and only after you prove that it no longer runs.
+
+### Rollouts and rollback
+
+Between the migration and the end of the rollout, both releases use the new schema.
+The [expand/contract rule](/contributor/database-migration#changelog-immutability-policy) keeps this safe.
+A release that cannot follow the rule says so in its migration guide entry.
+For that release, stop every role, run the migration, then start the new release.
+
+The schema is never rolled back.
+Roll forward to a release that fixes the problem.
+[Upgrade § If migration fails](./upgrade#if-migration-fails) restores the backup from before the upgrade, and [§ Rollback](./upgrade#rollback) explains why images alone cannot undo a schema change.
+
 ## Configuration cheatsheet
 
 Each cell shows the value a pod uses when the operator sets **no** environment variable for it.

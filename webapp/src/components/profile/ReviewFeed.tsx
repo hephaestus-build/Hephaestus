@@ -1,7 +1,6 @@
 import { PulseIcon } from "@primer/octicons-react";
 import type { ReactNode } from "react";
 
-import type { ProfileReview } from "@/api/types.gen";
 import { InfiniteListEnd, LOADING_MORE_ROWS } from "@/components/common/InfiniteListEnd";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import {
@@ -16,19 +15,24 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { rendersContent } from "@/lib/react-node";
 import type { MorePages } from "@/runtime/tanstack-query/infinite-list";
 
-import type { ReviewFeedState } from "./reviews";
+import type { ReviewEntry, ReviewFeedState } from "./reviews";
 import { ReviewTimeline, type ReviewTimelineProps } from "./ReviewTimeline";
 
 export interface ReviewFeedProps extends Pick<
 	ReviewTimelineProps,
-	"responses" | "showPracticeName" | "initiallyOpen" | "renderObservation"
+	| "responses"
+	| "showPracticeName"
+	| "openOnArrival"
+	| "selectedResultId"
+	| "marksSearchMatches"
+	| "renderObservation"
 > {
 	feed: ReviewFeedState;
 	/**
 	 * The reviews this surface shows, when they are not simply the feed's — a practice's own level
 	 * narrows them to its results.
 	 */
-	reviews?: ProfileReview[];
+	reviews?: ReviewEntry[];
 	skeletonRows: number;
 	emptyTitle: string;
 	emptyDescription: string;
@@ -42,7 +46,9 @@ export function ReviewFeed({
 	skeletonRows,
 	responses,
 	showPracticeName,
-	initiallyOpen,
+	openOnArrival,
+	selectedResultId,
+	marksSearchMatches,
 	renderObservation,
 	emptyTitle,
 	emptyDescription,
@@ -113,7 +119,9 @@ export function ReviewFeed({
 				reviews={shown}
 				responses={responses}
 				showPracticeName={showPracticeName}
-				initiallyOpen={initiallyOpen}
+				openOnArrival={openOnArrival}
+				selectedResultId={selectedResultId}
+				marksSearchMatches={marksSearchMatches}
 				renderObservation={renderObservation}
 				continues={feed.hasMore}
 				loadingMore={loadingMore}

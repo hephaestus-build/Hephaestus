@@ -46,10 +46,7 @@ import { WORKSPACE_ROLE_LABELS, type WorkspaceMemberRow } from "./workspace-memb
 
 const columnHelper = createColumnHelper<DataTableFeatures, WorkspaceMemberRow>();
 
-const ROLE_ITEMS = (["OWNER", "ADMIN", "MEMBER"] satisfies WorkspaceRole[]).map((role) => ({
-	value: role,
-	label: WORKSPACE_ROLE_LABELS[role],
-}));
+const ALL_ROLES: readonly WorkspaceRole[] = ["OWNER", "ADMIN", "MEMBER"];
 
 /** The width each column's placeholder promises, by column id; a column the reader hid has none. */
 const SKELETON_WIDTHS: Record<string, string> = {
@@ -74,7 +71,12 @@ interface WorkspaceMembersTableProps {
 	updating?: boolean;
 	onToggleHidden?: (accountId: string, hidden: boolean) => void;
 	/** Present for an admin, who can give a member another workspace role. */
-	onRoleChange?: (accountId: string, role: WorkspaceRole) => void;
+	onRoleChange?: (member: WorkspaceMemberRow, role: WorkspaceRole) => void;
+	/**
+	 * The roles the reader may give and take. Only an owner manages owners, so for an admin an
+	 * owner's row is read-only and Owner is not offered.
+	 */
+	assignableRoles?: readonly WorkspaceRole[];
 	/** The member whose role change is in flight; only that member's role control waits. */
 	pendingRoleAccountId?: string;
 	view: WorkspaceMembersTableView;
@@ -115,6 +117,7 @@ export function WorkspaceMembersTable({
 	updating = false,
 	onToggleHidden,
 	onRoleChange,
+	assignableRoles = ALL_ROLES,
 	pendingRoleAccountId,
 	view,
 	onViewChange,
@@ -131,126 +134,128 @@ export function WorkspaceMembersTable({
 
 	// TanStack Table caches its column model — and every row model derived from it — against the
 	// identity of this array, so a fresh one each render rebuilds all of them.
-	const columns = useMemo(
-		() =>
-			columnHelper.columns([
-				columnHelper.accessor((row) => row.name, {
-					id: "name",
-					header: "Name",
-					cell: ({ row }) => <div className="font-medium">{row.original.name}</div>,
-				}),
-				columnHelper.accessor((row) => row.logins.join(" "), {
-					id: "username",
-					header: "Username",
-					cell: ({ row }) => (
-						<ul className="space-y-0.5">
-							{row.original.membership.account.identities
-								.filter((identity) => hasText(identity.login))
-								.map((identity) => (
-									<li key={`${identity.provider}:${identity.login ?? ""}`}>
-										{identity.login}{" "}
-										<span className="text-muted-foreground">
-											({getProviderLabel(identity.provider)})
-										</span>
-									</li>
+	const columns = useMemo(() => {
+		const roleItems = assignableRoles.map((role) => ({
+			value: role,
+			label: WORKSPACE_ROLE_LABELS[role],
+		}));
+		return columnHelper.columns([
+			columnHelper.accessor((row) => row.name, {
+				id: "name",
+				header: "Name",
+				cell: ({ row }) => <div className="font-medium">{row.original.name}</div>,
+			}),
+			columnHelper.accessor((row) => row.logins.join(" "), {
+				id: "username",
+				header: "Username",
+				cell: ({ row }) => (
+					<ul className="space-y-0.5">
+						{row.original.membership.account.identities
+							.filter((identity) => hasText(identity.login))
+							.map((identity) => (
+								<li key={`${identity.provider}:${identity.login ?? ""}`}>
+									{identity.login}{" "}
+									<span className="text-muted-foreground">
+										({getProviderLabel(identity.provider)})
+									</span>
+								</li>
+							))}
+					</ul>
+				),
+			}),
+			columnHelper.display({
+				id: "account",
+				header: () => "Account",
+				cell: ({ row }) => <AccountStatus row={row.original} />,
+			}),
+			columnHelper.display({
+				id: "role",
+				header: () => "Role",
+				cell: ({ row }) => {
+					const { account, role } = row.original.membership;
+					const accountId = account.id;
+					if (!onRoleChange || !assignableRoles.includes(role)) {
+						return WORKSPACE_ROLE_LABELS[role];
+					}
+					return (
+						<Select
+							value={role}
+							items={roleItems}
+							disabled={pendingRoleAccountId === accountId}
+							onValueChange={(next) => {
+								if (next !== null && next !== role) {
+									onRoleChange(row.original, next);
+								}
+							}}
+						>
+							<SelectTrigger size="sm" aria-label={`Role of ${row.original.name}`}>
+								{pendingRoleAccountId === accountId && <Spinner />}
+								<SelectValue />
+							</SelectTrigger>
+							<SelectContent aria-label={`Role of ${row.original.name}`}>
+								{roleItems.map((item) => (
+									<SelectItem key={item.value} value={item.value}>
+										{item.label}
+									</SelectItem>
 								))}
-						</ul>
-					),
-				}),
-				columnHelper.display({
-					id: "account",
-					header: () => "Account",
-					cell: ({ row }) => <AccountStatus row={row.original} />,
-				}),
-				columnHelper.display({
-					id: "role",
-					header: () => "Role",
-					cell: ({ row }) => {
-						const { account, role } = row.original.membership;
-						const accountId = account.id;
-						if (!onRoleChange) {
-							return WORKSPACE_ROLE_LABELS[role];
-						}
-						return (
-							<Select
-								value={role}
-								items={ROLE_ITEMS}
-								disabled={pendingRoleAccountId === accountId}
-								onValueChange={(next) => {
-									if (next !== null && next !== role) {
-										onRoleChange(accountId, next);
+							</SelectContent>
+						</Select>
+					);
+				},
+			}),
+			columnHelper.display({
+				id: "joined",
+				header: () => "Joined",
+				cell: ({ row }) => (
+					<span className="text-muted-foreground">
+						{formatDate(row.original.membership.joinedAt)}
+					</span>
+				),
+			}),
+			columnHelper.display({
+				id: "review scope",
+				header: () => "Review scope",
+				cell: ({ row }) => (
+					<span className="text-muted-foreground">
+						{row.original.membership.reviewSelected ? "Included" : "Excluded"}
+					</span>
+				),
+			}),
+			...(onToggleHidden
+				? [
+						columnHelper.display({
+							id: "visibility",
+							// Hiding a row's own controls is not a useful affordance.
+							enableHiding: false,
+							header: () => "Visible",
+							cell: ({ row }) => (
+								<Button
+									variant="ghost"
+									size="icon-xs"
+									onClick={() =>
+										onToggleHidden(
+											row.original.membership.account.id,
+											!row.original.membership.hidden,
+										)
 									}
-								}}
-							>
-								<SelectTrigger size="sm" aria-label={`Role of ${row.original.name}`}>
-									{pendingRoleAccountId === accountId && <Spinner />}
-									<SelectValue />
-								</SelectTrigger>
-								<SelectContent aria-label={`Role of ${row.original.name}`}>
-									{ROLE_ITEMS.map((item) => (
-										<SelectItem key={item.value} value={item.value}>
-											{item.label}
-										</SelectItem>
-									))}
-								</SelectContent>
-							</Select>
-						);
-					},
-				}),
-				columnHelper.display({
-					id: "joined",
-					header: () => "Joined",
-					cell: ({ row }) => (
-						<span className="text-muted-foreground">
-							{formatDate(row.original.membership.joinedAt)}
-						</span>
-					),
-				}),
-				columnHelper.display({
-					id: "review scope",
-					header: () => "Review scope",
-					cell: ({ row }) => (
-						<span className="text-muted-foreground">
-							{row.original.membership.reviewSelected ? "Included" : "Excluded"}
-						</span>
-					),
-				}),
-				...(onToggleHidden
-					? [
-							columnHelper.display({
-								id: "visibility",
-								// Hiding a row's own controls is not a useful affordance.
-								enableHiding: false,
-								header: () => "Visible",
-								cell: ({ row }) => (
-									<Button
-										variant="ghost"
-										size="icon-xs"
-										onClick={() =>
-											onToggleHidden(
-												row.original.membership.account.id,
-												!row.original.membership.hidden,
-											)
-										}
-										aria-label={
-											row.original.membership.hidden
-												? `Show ${row.original.name} in workspace activity`
-												: `Hide ${row.original.name} from workspace activity`
-										}
-									>
-										{row.original.membership.hidden ? (
-											<EyeOffIcon className="size-4 text-muted-foreground" />
-										) : (
-											<EyeIcon className="size-4" />
-										)}
-									</Button>
-								),
-							}),
-						]
-					: []),
-			]),
-		[onToggleHidden, onRoleChange, pendingRoleAccountId],
-	);
+									aria-label={
+										row.original.membership.hidden
+											? `Show ${row.original.name} in workspace activity`
+											: `Hide ${row.original.name} from workspace activity`
+									}
+								>
+									{row.original.membership.hidden ? (
+										<EyeOffIcon className="size-4 text-muted-foreground" />
+									) : (
+										<EyeIcon className="size-4" />
+									)}
+								</Button>
+							),
+						}),
+					]
+				: []),
+		]);
+	}, [onToggleHidden, onRoleChange, assignableRoles, pendingRoleAccountId]);
 
 	const sortedTeams = [...teams].sort((a, b) => a.name.localeCompare(b.name));
 

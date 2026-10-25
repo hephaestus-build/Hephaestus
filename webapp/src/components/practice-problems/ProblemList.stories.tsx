@@ -88,15 +88,6 @@ export const EvidenceHidden: Story = {
 	},
 };
 
-/** The developer's own page leaves severity out, as its result row always has. */
-export const SeverityOmitted: Story = {
-	args: { severity: "omitted" },
-	play: async ({ canvas }) => {
-		await expect(problemItems(canvas)).toHaveLength(problems.length);
-		await expect(canvas.queryByText(SEVERITY_DEFS[first.severity].label)).toBeNull();
-	},
-};
-
 /** Twenty problems stay one readable column at every width. */
 export const Many: Story = {
 	args: {

@@ -1,50 +1,116 @@
-import type { ReactNode } from "react";
+import { XIcon } from "lucide-react";
+import { type ReactNode, useState } from "react";
 
-import { FilterToolbar } from "@/components/common/FilterToolbar";
+import type { ItemRef } from "@/api/types.gen";
+import {
+	AppliedFacetPills,
+	listFacet,
+} from "@/components/admin/practice-reviews/AppliedFacetPills";
+import {
+	ReviewSelectionBar,
+	type ReviewSelectionName,
+} from "@/components/admin/practice-reviews/ReviewSelectionBar";
+import {
+	type ReviewSortItem,
+	ReviewSortSelect,
+} from "@/components/admin/practice-reviews/ReviewSortSelect";
+import type { FacetOption } from "@/components/common/FacetMultiSelect";
+import { FilterToggle } from "@/components/common/FilterToggle";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
-import { SelectFilter } from "@/components/common/SelectFilter";
+import { ResultCount } from "@/components/common/ResultCount";
+import { statusFacetOptions } from "@/components/common/status-def";
 import {
 	DetailDrawerHeader,
 	LevelPathRow,
 } from "@/components/layout/detail-drawer/DetailDrawerHeader";
 import type { LevelPath } from "@/components/layout/detail-drawer/DetailPath";
-import { TraceKindFilter } from "@/components/practice-trace/TraceKindFilter";
+import {
+	OWN_REVIEW_STATUS_DEFS,
+	type ReviewStatus,
+} from "@/components/practice-vocabulary/review-status-defs";
 import { EarlierReviews } from "@/components/profile/ReviewFeed";
 import type { ReviewFeedState } from "@/components/profile/reviews";
+import { Button } from "@/components/ui/button";
 import { DrawerBody, DrawerDescription, DrawerTitle } from "@/components/ui/drawer";
+import { ITEM_KIND_VALUES, itemKindLabel, itemName } from "@/lib/item-kinds";
+import { nonEmpty } from "@/lib/search-params";
 import { hasText } from "@/lib/text";
 
 import {
+	ALL_TIME,
+	LISTED_REVIEW_STATUSES,
 	PROFILE_REVIEWS_PAGE_SIZE,
-	REVIEW_TIMEFRAMES,
-	REVIEW_TIMEFRAME_DEFS,
+	REVIEW_TIMEFRAME_OPTIONS,
 	REVIEWS_OF_YOUR_WORK,
+	type ReviewOrder,
 	type ReviewTimeframe,
 } from "./practice-profile-search";
 import { ReviewsTable, ReviewsTableSkeleton } from "./ReviewsTable";
 
-const TIMEFRAME_OPTIONS = REVIEW_TIMEFRAMES.map((value) => ({
-	value,
-	label: REVIEW_TIMEFRAME_DEFS[value].label,
-}));
+/** The statuses the list can hold, as the developer's own review surfaces name them, with their icons. */
+const STATUS_OPTIONS = statusFacetOptions(OWN_REVIEW_STATUS_DEFS).filter((option) =>
+	LISTED_REVIEW_STATUSES.includes(option.value),
+);
+
+const NEWEST = "NEWEST";
+
+const ORDER_ITEMS: readonly [ReviewSortItem<string>, ...ReviewSortItem<string>[]] = [
+	{ value: NEWEST, label: "Newest first" },
+	{ value: "OLDEST", label: "Oldest first" },
+];
+
+/**
+ * The kinds of work to offer: the ones this build knows, the ones the list shows and any chosen,
+ * for the reason `TraceKindFilter` gives.
+ */
+function kindOptions(
+	reviews: readonly { review: { item: { kind: string } } }[],
+	chosen: readonly string[] | undefined,
+): FacetOption[] {
+	const kinds = new Set([
+		...ITEM_KIND_VALUES,
+		...reviews.map((entry) => entry.review.item.kind),
+		...(chosen ?? []),
+	]);
+	return [...kinds].map((kind) => ({ value: kind, label: itemKindLabel(kind, 2) }));
+}
+
+/**
+ * The tracked work's name for the tracking bar: its own once a row or a Track press showed it; a
+ * placeholder only while the list is still loading; otherwise the bar's general words, since no read
+ * of the name is under way that a placeholder could wait for.
+ */
+function trackedName(item: ItemRef | undefined, loading: boolean): ReviewSelectionName {
+	if (item !== undefined) {
+		return { status: "ready", name: itemName(item) };
+	}
+	return loading ? { status: "loading" } : { status: "ready", name: "a piece of work" };
+}
 
 export interface ProfileReviewsLevelProps {
 	nested?: boolean;
 	path: LevelPath;
 	feed: ReviewFeedState;
-	/**
-	 * Each review's position among the reviews of its work, by review id; absent while the feed does
-	 * not hold every review, so no row claims a count it cannot see.
-	 */
-	positions?: Map<string, number>;
 	onOpenReview: (reviewId: string) => void;
 	/** The review whose level is open over this one. */
 	openReviewId?: string;
-	kind?: string;
-	onKindChange: (kind: string | undefined) => void;
+	/** The kinds of work the list is narrowed to, or `undefined` for every kind. */
+	kind?: string[];
+	onKindChange: (kinds: string[] | undefined) => void;
 	/** How far back the list reaches, or `undefined` for every review. */
 	since?: ReviewTimeframe;
 	onSinceChange: (since: ReviewTimeframe | undefined) => void;
+	/** The statuses the list is narrowed to, or `undefined` for every status. */
+	status?: ReviewStatus[];
+	onStatusChange?: (statuses: ReviewStatus[] | undefined) => void;
+	/** Oldest first, or `undefined` for newest first. */
+	order?: ReviewOrder;
+	onOrderChange?: (order: ReviewOrder | undefined) => void;
+	/** How many reviews the filters keep, from the server; absent until the first page is in. */
+	total?: number;
+	/** The work whose reviews the list is narrowed to, by its id: a row's Track sets it. */
+	trackedItemId?: string;
+	onTrack?: (item: ItemRef | undefined) => void;
 	onReviewNow?: (itemId: string) => void;
 	requesting?: string;
 	/**
@@ -63,19 +129,41 @@ export function ProfileReviewsLevel({
 	nested,
 	path,
 	feed,
-	positions,
 	onOpenReview,
 	openReviewId,
 	kind,
 	onKindChange,
 	since,
 	onSinceChange,
+	status,
+	onStatusChange,
+	order,
+	onOrderChange,
+	total,
+	trackedItemId,
+	onTrack,
 	onReviewNow,
 	requesting,
 	requestOutcome,
 }: ProfileReviewsLevelProps) {
 	const reviews = feed.status === "ready" ? feed.reviews : [];
-	const filtered = hasText(kind) || since !== undefined;
+	const filtered =
+		kind !== undefined || since !== undefined || status !== undefined || hasText(trackedItemId);
+	// The admin Reviews tab's facets, as chips: the control and its pills on a phone, from one place.
+	const kindFacet = listFacet("Work", kindOptions(reviews, kind), kind, (values) =>
+		onKindChange(nonEmpty(values)),
+	);
+	const statusFacet = listFacet("Status", STATUS_OPTIONS, status, (values) =>
+		onStatusChange?.(nonEmpty(values)),
+	);
+	// The tracked work's name, from its rows: every row of the narrowed list is that work. Kept once
+	// seen, so a filter that leaves none of its reviews does not turn the name back into a load.
+	const rowItem = reviews.find((entry) => entry.review.item.id === trackedItemId)?.review.item;
+	const [seenItem, setSeenItem] = useState<ItemRef>();
+	if (rowItem !== undefined && rowItem !== seenItem) {
+		setSeenItem(rowItem);
+	}
+	const trackedItem = rowItem ?? (seenItem?.id === trackedItemId ? seenItem : undefined);
 
 	let body: ReactNode;
 	switch (feed.status) {
@@ -98,13 +186,23 @@ export function ProfileReviewsLevel({
 				<>
 					<ReviewsTable
 						reviews={feed.reviews}
-						filtered={filtered}
+						// Oldest first, the top row is not the latest review either.
+						filtered={filtered || order !== undefined}
 						onOpenReview={onOpenReview}
 						openReviewId={openReviewId}
 						onReviewNow={onReviewNow}
 						requesting={requesting}
-						positions={positions}
 						isLoadingMore={feed.isLoadingMore}
+						trackedItemId={trackedItemId}
+						onTrack={
+							onTrack &&
+							((item) => {
+								if (item !== undefined) {
+									setSeenItem(item);
+								}
+								onTrack(item);
+							})
+						}
 					/>
 					{/* The table draws the next page's placeholder rows itself, in its own columns. */}
 					<EarlierReviews {...feed} />
@@ -123,32 +221,70 @@ export function ProfileReviewsLevel({
 						{REVIEWS_OF_YOUR_WORK}
 					</DrawerTitle>
 					<DrawerDescription className="max-w-2xl">
-						Reviews that recorded something about your work, newest first. A review that is still
-						running appears once it records something.
+						Reviews that recorded something about your work,{" "}
+						{order === "OLDEST" ? "oldest first" : "newest first"}. A review that is still running
+						appears once it records something.
 					</DrawerDescription>
 				</div>
 			</DetailDrawerHeader>
 			<DrawerBody className="flex flex-col gap-3 pt-2">
-				<FilterToolbar
-					hasFilter={filtered}
-					onReset={() => {
-						onKindChange(undefined);
-						onSinceChange(undefined);
-					}}
-				>
-					<TraceKindFilter
-						seen={reviews.map((entry) => entry.review.item.kind)}
-						value={kind}
-						onChange={onKindChange}
-					/>
-					<SelectFilter
-						label="Timeframe"
-						allLabel="All time"
-						options={TIMEFRAME_OPTIONS}
-						value={since}
-						onChange={onSinceChange}
-					/>
-				</FilterToolbar>
+				{/* The filter bar of the admin Reviews tab, in a developer's subset: the facets as chips,
+				    the timeframe as Practices across the workspace picks it, the sort, Reset, and the
+				    count. */}
+				<div role="group" aria-label="Filters" className="space-y-2">
+					{/* The first row holds only what is always there: the facets and the sort on the left,
+					    the timeframe on the right. What a filter adds (the tracked work, Reset) and the count
+					    sit in the row below, so the timeframe never moves. */}
+					<div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+						<div className="flex min-w-0 flex-wrap items-center gap-2">
+							{kindFacet.control}
+							{onStatusChange !== undefined && statusFacet.control}
+							{onOrderChange !== undefined && (
+								<ReviewSortSelect
+									items={ORDER_ITEMS}
+									value={order ?? NEWEST}
+									onChange={(next) => onOrderChange(next === "OLDEST" ? "OLDEST" : undefined)}
+								/>
+							)}
+						</div>
+						<FilterToggle
+							label="Timeframe"
+							options={REVIEW_TIMEFRAME_OPTIONS}
+							value={since ?? ALL_TIME}
+							onChange={(next) => onSinceChange(next === ALL_TIME ? undefined : next)}
+						/>
+					</div>
+					<div className="flex flex-wrap items-center gap-2">
+						{hasText(trackedItemId) && onTrack !== undefined && (
+							// The admin lists' tracking bar: what the list is narrowed to, and one press to stop.
+							<ReviewSelectionBar
+								kind="item"
+								name={trackedName(trackedItem, feed.status === "loading")}
+								onClear={() => onTrack(undefined)}
+							/>
+						)}
+						{filtered && (
+							<Button
+								variant="ghost"
+								size="sm"
+								className="h-8"
+								onClick={() => {
+									onKindChange(undefined);
+									onSinceChange(undefined);
+									onStatusChange?.(undefined);
+									onTrack?.(undefined);
+								}}
+							>
+								Reset
+								<XIcon aria-hidden data-icon="inline-end" />
+							</Button>
+						)}
+						<ResultCount total={total} noun={["review", "reviews"]} hasFilter={filtered} />
+					</div>
+					<div className="flex flex-wrap gap-2 empty:hidden">
+						<AppliedFacetPills pills={[...kindFacet.pills, ...statusFacet.pills]} />
+					</div>
+				</div>
 				{requestOutcome}
 				{body}
 			</DrawerBody>

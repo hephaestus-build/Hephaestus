@@ -183,6 +183,18 @@ export const ChoosingByKeyboard: Story = {
 	},
 };
 
+/** A rung is no choice card, so it has no edge to carry focus, and the radio keeps its own ring. */
+export const FocusedRadioKeepsItsRing: Story = {
+	args: { variant: "full", value: "OFF" },
+	play: async ({ canvas, userEvent }) => {
+		const off = canvas.getByRole("radio", { name: "Off" });
+		const restEdge = getComputedStyle(off).borderTopColor;
+		await userEvent.tab();
+		await expect(off).toHaveFocus();
+		await expect(getComputedStyle(off).borderTopColor).not.toBe(restEdge);
+	},
+};
+
 export const ReSelectingTheRungInForceWritesNothing: Story = {
 	parameters: { chromatic: { disableSnapshot: true } },
 	args: { variant: "full", value: "APPROVE_FIRST" },

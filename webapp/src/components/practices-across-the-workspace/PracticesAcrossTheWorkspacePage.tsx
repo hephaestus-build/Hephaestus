@@ -2,7 +2,6 @@
 
 import type { ReactNode } from "react";
 
-import { useSpinDelay } from "spin-delay";
 import type { PracticesAcrossWorkspace, PracticesAcrossWorkspaceTiles } from "@/api/types.gen";
 import type { PanelState } from "@/components/common/panel-state";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
@@ -27,13 +26,8 @@ import {
 	FIGURES_LOAD_ERROR,
 	FIGURES_PLAIN,
 	GROUPS_LOAD_ERROR,
-	LOADING_LINE_AFTER_MS,
-	LOADING_STATUS,
 	PAGE_INTRO,
 	PAGE_INTRO_SHORT,
-	SLOW_LOAD_AFTER_MS,
-	SLOW_LOAD_NOTE,
-	SLOW_LOAD_SHORT,
 	tileCohortText,
 	WINDOW_OPTIONS,
 	windowHeading,
@@ -59,7 +53,7 @@ export interface PracticesAcrossTheWorkspacePageProps {
 /**
  * A view of the workspace, not the reader's profile: the reader's figures beside the workspace's
  * typical range over the chosen window, then every practice group's split by current standing,
- * with the reader only as the You marker. Only the tiles read the window.
+ * with the reader only as the You bracket. Only the tiles read the window.
  */
 export function PracticesAcrossTheWorkspacePage({
 	state,
@@ -91,7 +85,6 @@ export function PracticesAcrossTheWorkspacePage({
 						</>
 					}
 				/>
-				<LoadingLine loading={loading} />
 			</div>
 
 			{state.status === "error" ? (
@@ -168,42 +161,6 @@ function EarlierReviewsCounted() {
 				{EARLIER_REVIEWS_COUNTED.description}
 			</p>
 		</div>
-	);
-}
-
-/**
- * One calm line while the server counts: a pulsing dot, what is happening and an (i) on the wait.
- * After {@link SLOW_LOAD_AFTER_MS} it says the count takes longer than usual. The live region is in
- * the page from the start and receives one message, once: the slow wording is only drawn, so a
- * screen reader hears the page is counting once, not again when the wording changes.
- */
-function LoadingLine({ loading }: { loading: boolean }) {
-	// A read that is in within the delay only flashes the skeletons, never the line.
-	const counting = useSpinDelay(loading, { delay: LOADING_LINE_AFTER_MS, minDuration: 400 });
-	const slow = useSpinDelay(loading, { delay: SLOW_LOAD_AFTER_MS, minDuration: 500 });
-	return (
-		<>
-			<p role="status" className="sr-only">
-				{counting ? LOADING_STATUS : null}
-			</p>
-			{counting && (
-				<div
-					data-slot="loading-line"
-					className="absolute top-full left-0 mt-1.5 flex max-w-full items-center gap-2 text-sm text-muted-foreground"
-				>
-					<span
-						aria-hidden
-						className="size-2 shrink-0 animate-pulse rounded-full bg-mentor motion-reduce:animate-none"
-					/>
-					<span aria-hidden className="truncate">
-						{slow ? SLOW_LOAD_SHORT : LOADING_STATUS}
-					</span>
-					<InfoTip label="About the wait" className="my-0">
-						<InfoLines lines={SLOW_LOAD_NOTE} />
-					</InfoTip>
-				</div>
-			)}
-		</>
 	);
 }
 

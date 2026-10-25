@@ -423,7 +423,7 @@ Nothing else paints a ground.
 **10, the accent**: `mentor` marks only what should attract attention.
 Use at most one `variant="mentor"` button per surface.
 The accent marks new content, the current selection or sort, and links on hover or focus.
-On Practices across the workspace, it also marks the reader: the **You** marker on a bar and the pin on a tile.
+On Practices across the workspace, it also marks the reader: the **You** bracket over a bar and the pin on a tile.
 
 A link is plain text at rest, except a count that opens its list.
 That count uses `InlineLink tone="count"`, with a faint `decoration-border` underline at rest.
@@ -434,9 +434,15 @@ They reach a surface only through the registries.
 This includes their badges and icons, and the rings, meters, and pressed responses drawn from them.
 Never use them as colored prose.
 
-A card has a wash in exactly two states: new, in the accent, and resolved by the work, in `success`.
+A card's own ground has a wash in exactly two states: new, in the accent, and resolved by the work, in `success`.
 A card that the reader marked as addressed or not applicable closes on the neutral ground.
 `success` is the only status color that paints a surface.
+
+The next step band inside a card is the card's call to action while the reader can still act on it.
+On open feedback (`isOpenFeedback`: new and open), the band takes the accent wash, the accent edge, and the accent icon.
+On a card that the work resolved, it takes the `success` wash.
+On a marked or closed card, it keeps the neutral `bg-sidebar` ground and a muted icon.
+The loading card does not know its state yet, so its band keeps the neutral ground.
 
 ## Testing
 

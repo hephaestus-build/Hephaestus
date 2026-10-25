@@ -1,67 +1,47 @@
 import type { ReviewRef, ReviewResultCounts } from "@/api/types.gen";
-import { count, spell } from "@/components/practice-vocabulary/feedback-text";
+import { statusValues } from "@/components/common/status-def";
+import { type Outcome, OUTCOME_DEFS } from "@/components/practice-vocabulary/outcome-defs";
 
+/** What a review saw of the reader's work: its status and how its practices came out. */
 export interface ReviewSaw {
 	status: ReviewRef["status"];
 	results: ReviewResultCounts;
-	practicesReached?: number;
-	notMetPractices: string[];
 }
 
-const NAMED_PRACTICES = 2;
+/** Where each outcome is counted in a review's counts. */
+export const OUTCOME_COUNT_KEYS = {
+	MET: "met",
+	NOT_MET: "notMet",
+	DOES_NOT_APPLY: "doesNotApply",
+	COULD_NOT_DETERMINE: "couldNotDetermine",
+} as const satisfies Record<Outcome, keyof ReviewResultCounts>;
 
-export function reviewLead(saw: ReviewSaw): string {
-	const names = saw.notMetPractices;
-	if (names.length > 0) {
-		const rest = names.length - NAMED_PRACTICES;
-		const named = names.slice(0, NAMED_PRACTICES).join(", ");
-		return rest > 0 ? `${named} +${rest} more` : named;
-	}
-	switch (saw.status) {
-		case "FAILED":
-		case "CANCELLED": {
-			return "Stopped before it finished";
-		}
-		case "RUNNING": {
-			return "Still running";
-		}
-		case "QUEUED": {
-			return "Waiting to start";
-		}
-		case "COMPLETE":
-		case "PARTIAL": {
-			if (saw.results.couldNotDetermine > 0) {
-				return "Some practices could not be determined";
-			}
-			// A partial review may have run to the end, so it names its scope, not a stop.
-			return saw.status === "PARTIAL"
-				? "Nothing to improve in what it reached"
-				: "Nothing to improve";
-		}
-	}
+/** How many practices the review recorded something about for the reader. */
+export function practicesReviewed(saw: ReviewSaw): number {
+	const { met, notMet, doesNotApply, couldNotDetermine } = saw.results;
+	return met + notMet + doesNotApply + couldNotDetermine;
 }
 
-export function reviewReach(saw: ReviewSaw): string {
-	const { met, doesNotApply, couldNotDetermine } = saw.results;
-	const reached = saw.practicesReached;
-	const outcomes = [
-		{ n: met, verb: "met" },
-		{ n: doesNotApply, verb: "did not apply" },
-		{ n: couldNotDetermine, verb: "could not be determined" },
-	].filter((outcome) => outcome.n > 0);
-	if (outcomes.length === 0 && reached === undefined) {
-		return saw.status === "RUNNING" || saw.status === "QUEUED"
-			? "Observations appear as it finishes"
-			: "";
+/** "8 practices": the lead of the cell, in digits like the counts after it. */
+export function practicesLabel(saw: ReviewSaw): string {
+	const n = practicesReviewed(saw);
+	if (n === 0) {
+		return saw.status === "QUEUED" || saw.status === "RUNNING"
+			? "No practices yet"
+			: "No practices";
 	}
-	const digits = [reached ?? 0, ...outcomes.map((outcome) => outcome.n)].some((n) => n >= 10);
-	const decided = outcomes
-		.map(
-			(outcome, index) =>
-				`${index === 0 ? count(outcome.n, "practice", "practices", digits) : spell(outcome.n, digits)} ${outcome.verb}`,
-		)
-		.join(", ");
-	const reach =
-		reached === undefined ? "" : `${count(reached, "practice", "practices", digits)} reached`;
-	return [decided, reach].filter((clause) => clause !== "").join(" · ");
+	return `${n} ${n === 1 ? "practice" : "practices"}`;
+}
+
+/**
+ * Each outcome the review recorded, in the registry's order, with its count: "5 met", "2 not
+ * met". An outcome with none is left out.
+ */
+export function outcomeCounts(saw: ReviewSaw): { outcome: Outcome; n: number; text: string }[] {
+	return statusValues(OUTCOME_DEFS)
+		.map((outcome) => {
+			const n = saw.results[OUTCOME_COUNT_KEYS[outcome]];
+			return { outcome, n, text: `${n} ${OUTCOME_DEFS[outcome].label.toLowerCase()}` };
+		})
+		.filter((entry) => entry.n > 0);
 }

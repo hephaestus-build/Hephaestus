@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import { type ComponentProps, useState } from "react";
 import { expect } from "storybook/test";
 
 import type { ProfileReview } from "@/api/types.gen";
@@ -19,6 +20,8 @@ const reviews: ProfileReview[] = [
 	detailReview,
 	{
 		review: reviewRef(THREAD_REVIEW, conversation("#releases"), daysBefore(5)),
+		positionOnWork: 1,
+		totalOnWork: 1,
 		results: [
 			{
 				...listedResult(searchedAndFoundNothing),
@@ -58,7 +61,11 @@ export const Default: Story = {
 };
 
 export const OnThePracticeLevel: Story = {
-	args: { showPracticeName: false, initiallyOpen: "newest" },
+	// The practice level opens one row on arrival, the newest (`observation-filter.ts`).
+	args: {
+		showPracticeName: false,
+		openOnArrival: (result) => result.id === detailReview.results[0]?.id,
+	},
 	play: async ({ canvas, userEvent }) => {
 		await expect(canvas.queryByText("Ask questions a teammate can answer")).not.toBeInTheDocument();
 		await expect(canvas.getByText("The question leaves out the attempted fix")).toBeVisible();
@@ -78,5 +85,39 @@ export const Empty: Story = {
 	args: { reviews: [] },
 	play: async ({ canvas }) => {
 		await expect(canvas.queryAllByRole("listitem")).toHaveLength(0);
+	},
+};
+
+function MovingTarget(args: ComponentProps<typeof ReviewTimeline>) {
+	const [target, setTarget] = useState(detailReview.results[0]?.id);
+	return (
+		<>
+			<button type="button" onClick={() => setTarget("00000000-0000-0000-0000-000000000202")}>
+				Move the target
+			</button>
+			<ReviewTimeline {...args} openOnArrival={(result) => result.id === target} />
+		</>
+	);
+}
+
+/**
+ * The row the rule opens moves when a filter or a link moves its target: the new target opens and
+ * the old one closes, though both rows stay in the list.
+ */
+export const ArrivalTargetMoves: Story = {
+	args: { showPracticeName: false },
+	render: (args) => <MovingTarget {...args} />,
+	play: async ({ canvas, userEvent }) => {
+		const newest = canvas.getByRole("button", { name: /The refactor and the fix/u });
+		await expect(newest).toHaveAttribute("aria-expanded", "true");
+		await userEvent.click(canvas.getByRole("button", { name: "Move the target" }));
+		await expect(canvas.getByRole("button", { name: /The question leaves out/u })).toHaveAttribute(
+			"aria-expanded",
+			"true",
+		);
+		await expect(canvas.getByRole("button", { name: /The refactor and the fix/u })).toHaveAttribute(
+			"aria-expanded",
+			"false",
+		);
 	},
 };

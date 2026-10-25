@@ -15,11 +15,6 @@ const edits = [
 		re: /^VERSION=\S+(?<comment>\s+# the release you are installing.*)$/mu,
 		line: `VERSION=${version}$<comment>`,
 	},
-	{
-		file: "README.md",
-		re: /^\s*VERSION=\S+(?<comment>\s+# the release you are installing.*)$/mu,
-		line: `  VERSION=${version}$<comment>`,
-	},
 ];
 
 for (const { file, re, line } of edits) {

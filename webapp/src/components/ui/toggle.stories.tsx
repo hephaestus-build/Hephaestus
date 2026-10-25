@@ -3,11 +3,12 @@ import { expect, within } from "storybook/test";
 
 import { Toggle } from "@/components/ui/toggle";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { expectSolidFocusLine } from "@/stories/focus";
 
 /**
  * A toggle carries four states at once, and each one owns a different channel so that no two of them
  * can look alike: **hover** paints the background, **selection** sets the border colour and the type
- * weight, **focus-visible** draws the ring, **disabled** drops the opacity.
+ * weight, **focus-visible** draws the ring and its solid outline, **disabled** drops the opacity.
  *
  * Selection stays off the background on purpose. `--muted`, `--accent` and `--secondary` are one and
  * the same colour in this theme, so any pressed background is also the hover background — which is
@@ -36,6 +37,22 @@ export const Default: Story = {};
 /** The same toggle holding the chosen value. */
 export const Pressed: Story = {
 	args: { defaultPressed: true },
+};
+
+/**
+ * Focus draws a solid line in the ring colour as the outline, outside the border, so a selected
+ * toggle shows its focus and keeps its selected border.
+ */
+export const FocusedWhilePressed: Story = {
+	// No transition, so the play reads the settled colours.
+	args: { defaultPressed: true, className: "transition-none" },
+	play: async ({ canvas, userEvent }) => {
+		const toggle = canvas.getByRole("button", { name: "Set by hand" });
+		const restEdge = getComputedStyle(toggle).borderTopColor;
+		await userEvent.tab();
+		await expectSolidFocusLine(toggle);
+		await expect(getComputedStyle(toggle).borderTopColor).toBe(restEdge);
+	},
 };
 
 /**

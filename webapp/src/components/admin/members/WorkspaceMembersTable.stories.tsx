@@ -1,5 +1,5 @@
 import type { Meta, StoryContext, StoryObj } from "@storybook/react";
-import { expect, fn, within } from "storybook/test";
+import { expect, fn, screen, within } from "storybook/test";
 
 import { expectNoPageOverflow } from "@/stories/reflow";
 
@@ -104,6 +104,25 @@ export const RoleChangePending: Story = {
 	play: async ({ canvas }) => {
 		await expect(canvas.getByRole("combobox", { name: "Role of Bob Smith" })).toBeDisabled();
 		await expect(canvas.getByRole("combobox", { name: "Role of Alice Johnson" })).toBeEnabled();
+	},
+};
+
+/** An admin manages admins and members only: an owner's row is read-only, and Owner is not offered. */
+export const AdminCannotAssignOwner: Story = {
+	args: { assignableRoles: ["ADMIN", "MEMBER"] },
+	play: async ({ args, canvas, userEvent }) => {
+		const owner = within(rowOf(canvas, "Charlie Brown"));
+		await expect(owner.queryByRole("combobox")).not.toBeInTheDocument();
+		await expect(owner.getByText("Owner")).toBeVisible();
+
+		await userEvent.click(canvas.getByRole("combobox", { name: "Role of Alice Johnson" }));
+		const member = await screen.findByRole("option", { name: "Member" });
+		await expect(screen.queryByRole("option", { name: "Owner" })).not.toBeInTheDocument();
+		await userEvent.click(member);
+		await expect(args.onRoleChange).toHaveBeenCalledWith(
+			expect.objectContaining({ name: "Alice Johnson" }),
+			"MEMBER",
+		);
 	},
 };
 

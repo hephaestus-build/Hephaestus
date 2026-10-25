@@ -69,7 +69,7 @@ export const Default: Story = {
 		// The group's own split beside the title, with the reader marked.
 		await expect(
 			level.getAllByRole("img", {
-				name: "28 developers in this workspace: 7 Needs attention, 6 Mixed feedback, 8 Going well, 7 none yet. The You marker is on Needs attention.",
+				name: "28 developers in this workspace: 7 Needs attention, 6 Mixed feedback, 8 Going well, 7 none yet. You are in the Needs attention part.",
 			}),
 		).toHaveLength(1);
 		const table = within(
@@ -80,7 +80,7 @@ export const Default: Story = {
 		).toHaveLength(5);
 		await expect(
 			table.getByRole("img", {
-				name: "28 developers in this workspace: 9 Needs attention, 4 Mixed feedback, 8 Going well, 7 none yet. The You marker is on Needs attention.",
+				name: "28 developers in this workspace: 9 Needs attention, 4 Mixed feedback, 8 Going well, 7 none yet. You are in the Needs attention part.",
 			}),
 		).toBeVisible();
 		await userEvent.click(

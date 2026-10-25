@@ -89,7 +89,7 @@ The proxy starts last, never routing to a stack that is still starting.
 
 Kubernetes manifests need the same order.
 
-1. Watch `application-server` logs to confirm migration completion.
+1. Watch the `database-migration` logs for `database.migration.completed` to confirm that the migration completed.
 2. Verify the bootstrap admin can sign in.
 3. Verify access to instance-admin navigation.
 4. Verify workspace admin endpoints for workspaces where the bootstrap admin has membership.

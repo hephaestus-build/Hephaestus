@@ -1,13 +1,14 @@
-import { useQuery } from "@tanstack/react-query";
+import { skipToken, type UseQueryResult, useQuery } from "@tanstack/react-query";
 import {
 	createFileRoute,
+	Link,
 	Navigate,
 	retainSearchParams,
 	stripSearchParams,
 } from "@tanstack/react-router";
 
 import { getOwnResultOptions } from "@/api/@tanstack/react-query.gen";
-import type { GroupRef } from "@/api/types.gen";
+import type { GroupRef, ResultDetail, ResultList } from "@/api/types.gen";
 import { InlineLink } from "@/components/common/InlineLink";
 import { combinePanelStates, queryLoadState } from "@/components/common/panel-state";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
@@ -21,6 +22,11 @@ import {
 	composeGroupOverview,
 	composeOverview,
 } from "@/components/practice-profile/compose-overview";
+import {
+	type ObservationFilter,
+	observationLinkFilter,
+	type SelectedObservationState,
+} from "@/components/practice-profile/observation-filter";
 import {
 	PRACTICE_PROFILE_LEVEL_KINDS,
 	openLevelId,
@@ -37,24 +43,21 @@ import {
 } from "@/components/practice-profile/practice-profile-search";
 import { PracticeGroupDetailDrawer } from "@/components/practice-profile/PracticeGroupDetailDrawer";
 import { PracticeProfilePage } from "@/components/practice-profile/PracticeProfilePage";
-import { RefusalFixLink } from "@/components/practice-trace/RefusalFixLink";
 import { ReviewRequestedNotice } from "@/components/practice-trace/ReviewRequestedNotice";
-import { TraceRefusalAlert } from "@/components/practice-trace/TraceRefusalAlert";
-import { ReviewResultDetails, ReviewResultRow } from "@/components/profile/ReviewResultRow";
-import type { FeedbackResponseControls } from "@/components/profile/reviews";
-import { Skeleton } from "@/components/ui/skeleton";
+import { ROW_LINK_CLASS, RowLinkArrow } from "@/components/practice-vocabulary/PracticeTable";
+import {
+	ObservationDetailSkeleton,
+	ReviewResultDetails,
+} from "@/components/profile/ReviewResultRow";
 import { REVIEW_PAGE_SIZE, usePracticeGroupDetail } from "@/hooks/use-practice-group-detail";
 import { usePracticePageFeedback } from "@/hooks/use-practice-page-feedback";
 import { usePracticeProfileOverview } from "@/hooks/use-practice-profile-overview";
 import { usePracticeProfileReviews } from "@/hooks/use-practice-profile-reviews";
 import { usePracticeStandings } from "@/hooks/use-practice-standings";
 import { useWorkspaceFeatures } from "@/hooks/use-workspace-features";
-import { formatShortDay, formatTime } from "@/lib/dates";
 import { pageHead } from "@/lib/page-title";
 import { hasText } from "@/lib/text";
-import { hasMinimumWorkspaceRole } from "@/lib/workspace-roles";
 import { useAuth } from "@/runtime/auth/AuthContext";
-import { workspaceMembershipQueryOptions } from "@/runtime/auth/guard";
 
 export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/practice-profile")({
 	component: PracticeProfile,
@@ -75,8 +78,6 @@ function PracticeProfile() {
 	// A user view reads the developer's page and answers nothing on their behalf.
 	const readOnly = useAuth().userView !== undefined;
 	const { workspaceSlug } = Route.useParams();
-	const membership = useQuery(workspaceMembershipQueryOptions(workspaceSlug));
-	const isAdmin = !readOnly && hasMinimumWorkspaceRole(membership.data?.role, "ADMIN");
 	const search = Route.useSearch();
 
 	const detailStack = parseDetailStack(search.detail, PRACTICE_PROFILE_LEVEL_KINDS);
@@ -109,13 +110,32 @@ function PracticeProfile() {
 	});
 	const openReviewId = openLevelId(detailStack, "review");
 	const openPracticeSlug = openLevelId(detailStack, "practice");
-	const selectedObservationId = openPracticeSlug === undefined ? undefined : search.observation;
+	// The practice level's filter. The observation a link asked for is read on its own, because its
+	// review may sit on a page of the feed that has not loaded.
+	const observationFilter: ObservationFilter = {
+		query: search.observationQuery,
+		outcome: search.observationOutcome,
+		since: search.observationSince,
+		workId: search.observationWork,
+		observationId: openPracticeSlug === undefined ? undefined : search.observation,
+	};
+	const askedObservationOptions = getOwnResultOptions({
+		path: { workspaceSlug, resultId: observationFilter.observationId ?? "" },
+	});
+	const askedObservation = useQuery({
+		...askedObservationOptions,
+		queryFn:
+			observationFilter.observationId === undefined ? skipToken : askedObservationOptions.queryFn,
+	});
 	const reviews = usePracticeProfileReviews({
 		workspaceSlug,
 		listOpen: openLevelId(detailStack, "reviews") !== undefined || openReviewId !== undefined,
 		reviewId: openReviewId,
 		itemKind: search.reviewKind,
 		since: search.reviewSince,
+		status: search.reviewStatus,
+		itemId: search.reviewItem,
+		order: search.reviewOrder,
 	});
 	const detail = usePracticeGroupDetail({
 		workspaceSlug,
@@ -123,6 +143,7 @@ function PracticeProfile() {
 		practiceSlug: openLevelId(detailStack, "practice"),
 		practiceStandings,
 		reviewedPractices,
+		since: search.observationSince,
 	});
 
 	// The page and every level over it show the three together, so they load and fail as one;
@@ -145,20 +166,17 @@ function PracticeProfile() {
 	// A user view reads the developer's page; it never spends their workspace's budget.
 	const onReviewNow = readOnly ? undefined : reviews.onReviewNow;
 	const accepted = readOnly ? undefined : reviews.accepted;
-	// The new review opens over the list, or in the open review's place so Back returns to it; either
-	// way without the tab and filters chosen on the review it leaves.
-	const requestedReview = (inPlace: boolean) =>
-		accepted && (
-			<ReviewRequestedNotice
-				review={
-					<DetailStackLink
-						entry={reviewLevel(accepted.reviewId)}
-						single={inPlace}
-						levelSearch={REVIEW_SELECTION_CLEARED}
-					/>
-				}
-			/>
-		);
+	// The new review opens over the list, without the tab and filters chosen on a review.
+	const requestedReview = accepted && (
+		<ReviewRequestedNotice
+			review={
+				<DetailStackLink
+					entry={reviewLevel(accepted.reviewId)}
+					levelSearch={REVIEW_SELECTION_CLEARED}
+				/>
+			}
+		/>
+	);
 	const openGroup = (group: GroupRef) => stackControls.open(practiceGroupLevel(group.slug));
 	const groupOf = (practiceSlug: string) => {
 		const groupSlug = practiceStandings.find((entry) => entry.slug === practiceSlug)?.groupSlug;
@@ -212,66 +230,57 @@ function PracticeProfile() {
 				ratingProps={readOnly ? undefined : feedback.ratingProps}
 				onOpenPractice={(practiceSlug) => stackControls.open(practiceLevel(practiceSlug))}
 				practiceTab={search.practiceTab}
+				markedFeedbackId={search.feedbackCard}
 				renderObservation={(result) => (
 					<OwnObservationDetail
 						workspaceSlug={workspaceSlug}
 						resultId={result.id}
 						practiceSlug={result.practiceSlug}
-						responses={readOnly ? undefined : detail.responses}
-						layout="body"
 					/>
 				)}
-				selectedObservationId={selectedObservationId}
-				selectedObservation={
-					selectedObservationId !== undefined && openPracticeSlug !== undefined ? (
-						<OwnObservationDetail
-							workspaceSlug={workspaceSlug}
-							resultId={selectedObservationId}
-							practiceSlug={openPracticeSlug}
-							responses={readOnly ? undefined : detail.responses}
-							layout="row"
-						/>
-					) : undefined
-				}
+				observationFilter={observationFilter}
+				selectedObservation={selectedObservationState(
+					askedObservation,
+					observationFilter.observationId,
+					openPracticeSlug,
+				)}
 				skeletonRows={REVIEW_PAGE_SIZE}
 				reviews={{
 					list: {
 						feed: reviews.list,
-						positions: reviews.positions,
 						onOpenReview: (reviewId) => stackControls.open(reviewLevel(reviewId)),
 						kind: search.reviewKind,
 						onKindChange: (reviewKind) => setView({ reviewKind }),
 						since: search.reviewSince,
 						onSinceChange: (reviewSince) => setView({ reviewSince }),
+						status: search.reviewStatus,
+						onStatusChange: (reviewStatus) => setView({ reviewStatus }),
+						order: search.reviewOrder,
+						onOrderChange: (reviewOrder) => setView({ reviewOrder }),
+						total: reviews.total,
+						trackedItemId: search.reviewItem,
+						onTrack: (item) => setView({ reviewItem: item?.id }),
 						onReviewNow,
 						requesting: reviews.requesting,
 						// Only while no review is open over the list: that review says its own answer.
-						requestOutcome: openReviewId === undefined && requestedReview(false),
+						requestOutcome: openReviewId === undefined && requestedReview,
 					},
 					open: {
 						state: reviews.open,
-						onReviewNow,
-						requesting: reviews.requesting,
-						requestOutcome: reviews.refusal ? (
-							<TraceRefusalAlert
-								refusal={reviews.refusal}
-								fix={
-									isAdmin &&
-									reviews.refusal.reason !== null && (
-										<RefusalFixLink workspaceSlug={workspaceSlug} reason={reviews.refusal.reason} />
-									)
-								}
-							/>
-						) : (
-							requestedReview(true)
-						),
-						tab: search.reviewTab,
-						onTabChange: (reviewTab) => setView({ reviewTab }),
-						filters: { group: search.reviewGroup, practice: search.reviewPractice },
+						filters: {
+							group: search.reviewGroup,
+							practice: search.reviewPractice,
+							outcome: search.reviewOutcome,
+						},
 						onFiltersChange: (next) =>
-							setView({ reviewGroup: next.group, reviewPractice: next.practice }),
+							setView({
+								reviewGroup: next.group,
+								reviewPractice: next.practice,
+								reviewOutcome: next.outcome,
+							}),
 						observationLink: (result) => (
 							<InlineLink
+								className={ROW_LINK_CLASS}
 								aria-label={`Open observation for ${result.practiceName}`}
 								render={
 									<DetailStackLink
@@ -279,12 +288,13 @@ function PracticeProfile() {
 										levelSearch={{
 											...REVIEW_SELECTION_CLEARED,
 											practiceTab: "results",
-											observation: result.id,
+											...observationLinkSearch(result),
 										}}
 									/>
 								}
 							>
 								Open observation
+								<RowLinkArrow />
 							</InlineLink>
 						),
 						groupOf,
@@ -316,20 +326,60 @@ function PracticeProfile() {
 	);
 }
 
+/**
+ * The asked observation's state for the practice level: loading, failed, read, or one of another
+ * practice. The own endpoint owns authorization; the level also checks identity, so a stale or
+ * misrouted answer never shows another practice's words under this practice.
+ */
+function selectedObservationState(
+	query: UseQueryResult<ResultDetail>,
+	resultId: string | undefined,
+	practiceSlug: string | undefined,
+): SelectedObservationState | undefined {
+	if (resultId === undefined || practiceSlug === undefined) {
+		return undefined;
+	}
+	if (query.isError) {
+		return {
+			status: "error",
+			error: query.error,
+			onRetry: () => {
+				void query.refetch();
+			},
+		};
+	}
+	if (query.isPending) {
+		return { status: "loading" };
+	}
+	return query.data.id === resultId && query.data.practiceSlug === practiceSlug
+		? { status: "ready", result: query.data }
+		: { status: "elsewhere" };
+}
+
+/** A review row's "Open observation": the practice level filtered to its work, with it open. */
+function observationLinkSearch(result: ResultList) {
+	const filter = observationLinkFilter(result);
+	return {
+		observation: filter.observationId,
+		observationQuery: filter.query,
+		observationWork: filter.workId,
+	};
+}
+
 function OwnObservationDetail({
 	workspaceSlug,
 	resultId,
 	practiceSlug,
-	responses,
-	layout,
 }: {
 	workspaceSlug: string;
 	resultId: string;
 	practiceSlug: string;
-	responses?: FeedbackResponseControls;
-	layout: "row" | "body";
 }) {
-	const result = useQuery(getOwnResultOptions({ path: { workspaceSlug, resultId } }));
+	// The asked observation's own read fills this cache entry first; opening its row reuses it.
+	const result = useQuery({
+		...getOwnResultOptions({ path: { workspaceSlug, resultId } }),
+		refetchOnMount: false,
+	});
 	if (result.isError) {
 		return (
 			<QueryErrorAlert
@@ -342,14 +392,7 @@ function OwnObservationDetail({
 		);
 	}
 	if (result.isPending) {
-		return (
-			<div aria-busy="true" className="flex flex-col gap-3">
-				<span className="sr-only">Loading observation…</span>
-				<Skeleton className="h-5 w-3/4" />
-				<Skeleton className="h-16 w-full" />
-				<Skeleton className="h-16 w-full" />
-			</div>
-		);
+		return <ObservationDetailSkeleton />;
 	}
 	// The own endpoint owns authorization. The destination also checks identity, so a stale or
 	// incorrectly routed response never places another practice's words under this practice.
@@ -360,34 +403,27 @@ function OwnObservationDetail({
 			</p>
 		);
 	}
-	return layout === "body" ? (
-		<ReviewResultDetails result={result.data} responses={responses} />
-	) : (
-		<ol
-			aria-label="Selected observation"
-			className="overflow-hidden rounded-xl border bg-background"
-		>
-			<ReviewResultRow
-				result={result.data}
-				defaultOpen
-				responses={responses}
-				details={<ReviewResultDetails result={result.data} responses={responses} />}
-				work={
-					<span className="flex flex-wrap gap-x-2 text-xs text-muted-foreground">
-						{hasText(result.data.item.url) ? (
-							<InlineLink href={result.data.item.url} external>
-								{result.data.item.label}
-							</InlineLink>
-						) : (
-							result.data.item.label
-						)}
-						<span>{result.data.item.container}</span>
-						<time dateTime={result.data.recordedAt.toISOString()}>
-							{formatShortDay(result.data.recordedAt)} {formatTime(result.data.recordedAt)}
-						</time>
-					</span>
-				}
-			/>
-		</ol>
+	return (
+		<ReviewResultDetails
+			result={result.data}
+			feedbackLinks={{
+				// The practice level this observation is open in: its Feedback tab holds the card. The
+				// observation stays the Observations tab's filter, as a review's link sets it, so the way
+				// back to the tab finds it open again.
+				practicePage: (feedbackId) => (
+					<Link
+						to="."
+						search={(previous) => ({
+							...previous,
+							...observationLinkSearch(result.data),
+							practiceTab: "feedback",
+							// The card this observation's feedback became, which the tab shows and marks.
+							feedbackCard: feedbackId,
+						})}
+					/>
+				),
+				conversation: <Link to="/w/$workspaceSlug/mentor" params={{ workspaceSlug }} />,
+			}}
+		/>
 	);
 }

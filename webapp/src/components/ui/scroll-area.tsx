@@ -31,8 +31,11 @@ function ScrollArea({
 			<ScrollAreaPrimitive.Viewport
 				ref={viewportRef}
 				data-slot="scroll-area-viewport"
+				// ⚠️ Diverges from the shadcn registry: no `outline-none`, and `focus-visible:outline-ring`.
+				// Upstream's `outline-none` sets the outline style to `none`, which voids its own
+				// `focus-visible:outline-1`, so the half-transparent ring was the only sign of focus.
 				className={cn(
-					"size-full rounded-[inherit] transition-[color,box-shadow] outline-none focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-1",
+					"size-full rounded-[inherit] transition-[color,box-shadow] focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-1 focus-visible:outline-ring",
 					viewportClassName,
 				)}
 			>

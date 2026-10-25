@@ -93,6 +93,18 @@ export const Default: Story = {
 		await expectSettledVisible(table);
 		const header = screen.getByRole("heading", { name: packagingGroup.name });
 		await expect(header).toBeVisible();
+		// The heading names the group as the All practice groups table does, its icon and name in the
+		// group's color, only larger: no tinted square.
+		const mark = header.parentElement?.querySelector("svg");
+		await expect(mark).not.toBeNull();
+		const name = within(header).getByText(packagingGroup.name);
+		await expect(getComputedStyle(name).color).toBe(getComputedStyle(mark ?? header).color);
+		await expect(getComputedStyle(name).color).not.toBe(getComputedStyle(document.body).color);
+		// The header's three-line limit can cut the name short, so the full name is its title.
+		await expect(name).toHaveAttribute("title", packagingGroup.name);
+		await expect(getComputedStyle(mark?.parentElement ?? header).backgroundColor).toBe(
+			"rgba(0, 0, 0, 0)",
+		);
 		await expect(screen.getByText("Group")).toBeVisible();
 		// The practice count and its ring sit beside the title, over the line that closes the
 		// header, and the tabs start under it.
@@ -221,8 +233,10 @@ export const WithItsDescription: Story = {
 			"Work a reviewer can start on without asking first.",
 		);
 		await expectSettledVisible(description);
-		const heading = screen.getByRole("heading", { name: packagingGroup.name });
-		await expect(getComputedStyle(description).color).toBe(getComputedStyle(heading).color);
+		// The description is the foreground; the heading over it wears the group's color.
+		await expect(getComputedStyle(description).color).toBe(
+			getComputedStyle(screen.getByText("Practices in this group")).color,
+		);
 		// `text-sm`, the body size of the practice surfaces.
 		const rootSize = Number.parseFloat(getComputedStyle(document.documentElement).fontSize);
 		await expect(Number.parseFloat(getComputedStyle(description).fontSize)).toBe(0.875 * rootSize);
@@ -325,7 +339,12 @@ const pullRequest = (number: number) => work(storyPullRequest(number));
 const patternedSentences = patterned && {
 	...groupOverview(packagingGroup.slug).practiceSentences,
 	[patterned.slug]: [
-		[text("Back to 0 of 3 clean after "), pullRequest(12), text(" and "), pullRequest(14)],
+		[
+			text("Back to none of 3 clean in a row after "),
+			pullRequest(12),
+			text(" and "),
+			pullRequest(14),
+		],
 	],
 };
 const patternArgs = {
@@ -368,6 +387,19 @@ export const PatternDark: Story = {
 export const PatternPhone: Story = {
 	args: Pattern.args,
 	globals: { viewport: { value: "mobile" } },
+	play: async () => {
+		const table = await screen.findByRole("table", { name: "Practices in this group" });
+		await expectSettledVisible(table);
+		// The progress words wrap inside the label rather than run past the table's edge.
+		const frame = table.closest("[class*='overflow-hidden']") ?? table;
+		for (const words of within(table).getAllByText(/in a row/u)) {
+			await expect(words.getBoundingClientRect().right).toBeLessThanOrEqual(
+				frame.getBoundingClientRect().right,
+			);
+			const label = words.parentElement;
+			await expect(label?.scrollWidth ?? 0).toBeLessThanOrEqual((label?.clientWidth ?? 0) + 1);
+		}
+	},
 };
 
 /** The group's practices with one never applied and one no review has reviewed yet. */

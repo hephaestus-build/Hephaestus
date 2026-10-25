@@ -1,13 +1,19 @@
 import { ClipboardCheckIcon } from "lucide-react";
 import { Fragment, type ReactNode, useState } from "react";
 
+import { cn } from "cn";
+
 import type { GroupRef, PracticeGroupStanding, PracticeStanding } from "@/api/types.gen";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import type { LevelPath } from "@/components/layout/detail-drawer/DetailPath";
 import { LevelHeader } from "@/components/layout/detail-drawer/LevelHeader";
 import { Section } from "@/components/layout/Section";
 import { count, type FeedbackTextSegment } from "@/components/practice-vocabulary/feedback-text";
-import { GroupPill } from "@/components/practice-vocabulary/GroupPill";
+import {
+	getGroupVisual,
+	groupMark,
+	UNASSIGNED_GROUP_VISUAL,
+} from "@/components/practice-vocabulary/group-visuals";
 import {
 	DEFAULT_PRACTICE_GROUP_SORT,
 	sortByStanding,
@@ -101,6 +107,11 @@ const loadingRow = (
 	</>
 );
 
+/** Each practice row carries the group's icon in its color, so a row reads as part of this group. */
+function rowGroupMark(group?: GroupRef) {
+	return group === undefined ? undefined : groupMark(getGroupVisual(group.icon, group.color));
+}
+
 const NO_SENTENCES: NonNullable<PracticeGroupDetailLevelProps["practiceSentences"]> = {};
 
 export function PracticeGroupDetailLevel({
@@ -121,6 +132,9 @@ export function PracticeGroupDetailLevel({
 	// A group with no practices has no standing to name and nothing to count.
 	const showsStanding = group !== undefined && (isLoading || practiceCount > 0);
 	const counts = countPracticeStandings(practices ?? []);
+	const rowMark = rowGroupMark(group);
+	// The group's color without its pill's ground, as `GroupName` draws it; muted for no group.
+	const heading = rowMark ?? groupMark(UNASSIGNED_GROUP_VISUAL);
 	// The table's sort is this level's alone: it is not a place a reader returns to by URL.
 	const [sort, setSort] = useState(DEFAULT_PRACTICE_GROUP_SORT);
 	// Practices that never applied, and the ones no review has reviewed yet, leave the table for one
@@ -169,11 +183,11 @@ export function PracticeGroupDetailLevel({
 							// The pattern on the first line of the row, beside the name and level with
 							// the standing, so the two columns open on the same fact.
 							<span className="flex flex-wrap items-center gap-2">
-								<PracticePill name={practice.name} />
+								<PracticePill name={practice.name} group={rowMark} />
 								<PracticePatternLine pattern={pattern} />
 							</span>
 						) : (
-							<PracticePill name={practice.name} />
+							<PracticePill name={practice.name} group={rowMark} />
 						)
 					}
 					sentences={sentences}
@@ -261,16 +275,15 @@ export function PracticeGroupDetailLevel({
 				nested={nested}
 				path={path}
 				current="Group"
-				title={group?.name ?? "Practice group"}
-				mark={
-					<GroupPill
-						size="lg"
-						slug={group?.slug}
-						name={group?.name}
-						icon={group?.icon ?? undefined}
-						color={group?.color ?? undefined}
-					/>
+				// As the group is named in the All practice groups table, its icon and name in its
+				// color, at the heading's size.
+				// The full name as the node's own title, as the header's three-line limit can cut it short.
+				title={
+					<span title={group?.name ?? "Practice group"} className={heading.ink}>
+						{group?.name ?? "Practice group"}
+					</span>
 				}
+				mark={<heading.Icon aria-hidden className={cn("size-6 shrink-0", heading.ink)} />}
 				chips={
 					showsStanding &&
 					// A group whose every practice never applied reads as its folded row does.

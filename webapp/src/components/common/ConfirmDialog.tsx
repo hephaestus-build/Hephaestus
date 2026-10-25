@@ -11,12 +11,16 @@ import {
 	AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
+type ConfirmVariant = "destructive" | "default";
+
 export interface ConfirmDialogProps<T> {
 	/** `null` closes the dialog. The dialog never owns this state. */
 	subject: T | null;
 	title: (subject: T) => ReactNode;
 	description: ReactNode | ((subject: T) => ReactNode);
-	confirmLabel: string;
+	confirmLabel: string | ((subject: T) => string);
+	/** Destructive by default. A confirm that only lowers access, and loses nothing, is `default`. */
+	confirmVariant?: ConfirmVariant | ((subject: T) => ConfirmVariant);
 	cancelLabel?: string;
 	onConfirm: (subject: T) => void;
 	/** Clears `subject`. Called on dismissal *and* right after `onConfirm`. */
@@ -45,6 +49,7 @@ export function ConfirmDialog<T>({
 	title,
 	description,
 	confirmLabel,
+	confirmVariant = "destructive",
 	cancelLabel = "Cancel",
 	onConfirm,
 	onClose,
@@ -72,7 +77,9 @@ export function ConfirmDialog<T>({
 						<AlertDialogFooter>
 							<AlertDialogCancel>{cancelLabel}</AlertDialogCancel>
 							<AlertDialogAction
-								variant="destructive"
+								variant={
+									typeof confirmVariant === "function" ? confirmVariant(shown) : confirmVariant
+								}
 								onClick={() => {
 									// `subject`, not `shown`: `shown` outlives a row the caller has already let go of.
 									if (subject == null) {
@@ -82,7 +89,7 @@ export function ConfirmDialog<T>({
 									onClose();
 								}}
 							>
-								{confirmLabel}
+								{typeof confirmLabel === "function" ? confirmLabel(shown) : confirmLabel}
 							</AlertDialogAction>
 						</AlertDialogFooter>
 					</>

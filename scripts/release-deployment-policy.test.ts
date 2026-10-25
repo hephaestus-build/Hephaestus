@@ -21,7 +21,7 @@ await test("the reconciler starts the stacks in dependency order", () => {
 	// the reconciler derives from the stack names, whichever order the host lists them in.
 	for (const listed of ["core app", "app core", "proxy core app", "app proxy core"]) {
 		const ordered = parseStacks(listed);
-		// The application server runs the Liquibase migration the webhook runtime in core reads.
+		// The app stack's migration service applies the schema the webhook runtime in core waits for.
 		assert.ok(
 			ordered.indexOf("app") < ordered.indexOf("core"),
 			`${ordered.join(" ")} starts the webhook runtime before the migration that feeds it`,

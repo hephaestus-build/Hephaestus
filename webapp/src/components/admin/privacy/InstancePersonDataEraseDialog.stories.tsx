@@ -21,20 +21,21 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const TypeToConfirm: Story = {
+/** The phrase is case-sensitive; spaces around it are ignored. */
+export const EnterToConfirm: Story = {
 	play: async ({ args }) => {
 		const dialog = within(await screen.findByRole("alertdialog"));
 		await waitFor(async () => expect(dialog.getByText(/14 rows in 5 stores/u)).toBeVisible());
-		const phrase = dialog.getByLabelText(/to confirm/iu);
+		const phrase = dialog.getByLabelText("Enter ERASE to confirm");
 		const submit = dialog.getByRole("button", { name: "Erase data" });
 
 		await userEvent.type(phrase, "erase");
 		await userEvent.click(submit);
 		await expect(args.onConfirm).not.toHaveBeenCalled();
-		await waitFor(async () => expect(phrase).toHaveAccessibleDescription("Type ERASE exactly."));
+		await waitFor(async () => expect(phrase).toHaveAccessibleDescription("Enter ERASE exactly."));
 
 		await userEvent.clear(phrase);
-		await userEvent.type(phrase, "ERASE");
+		await userEvent.type(phrase, " ERASE ");
 		await userEvent.click(submit);
 		await expect(args.onConfirm).toHaveBeenCalledWith(false);
 		await expect(args.onOpenChange).toHaveBeenCalledWith(false);

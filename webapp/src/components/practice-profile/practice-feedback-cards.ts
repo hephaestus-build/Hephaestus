@@ -84,9 +84,12 @@ export function toFeedbackCard(
 	const group = groups.find((candidate) => candidate.slug === feedback.groupSlug);
 	const { withdrawn } = feedback;
 	const closure = withdrawn ? undefined : closureOf(feedback);
+	// Practice-page feedback rests only on Not met observations (the server's
+	// `PracticePageFeedbackRouter`), so every piece of its evidence needed attention.
 	const reviewedWork: ReviewedWorkOutcome[] = feedback.evidence.map((evidence) => ({
 		ref: evidence.item,
 		date: evidence.recordedAt,
+		outcome: "NOT_MET",
 	}));
 	return {
 		feedbackId: feedback.id,

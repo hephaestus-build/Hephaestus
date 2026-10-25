@@ -22,6 +22,8 @@ It covers these memory limits, which are ceilings, not reservations:
 | the Heph host, one per worker  | 2 GiB        | Fixed. [Runtime roles](./runtime-roles.mdx#the-heph-host) gives the limits of the Heph host |
 
 With the defaults of the self-hosted Compose file, these limits add up to 15 GiB, about 16 GB.
+During an upgrade, the one-shot `database-migration` container runs beside the previous roles for a few minutes.
+Keep 1 GiB free for it (`DATABASE_MIGRATION_MEM_LIMIT`).
 PostgreSQL, NATS, Traefik, and the webapp have no limit.
 The rest of the 24 GB is for them and the operating system.
 
