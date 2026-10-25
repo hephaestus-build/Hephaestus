@@ -57,7 +57,7 @@ newer bytes.
 
 ### Releases and support
 
-Docker Compose with the Docker driver on one supported Linux host is the only supported 1.x install. ([Updated 2026-10-25](#update--2026-10-25-helm-chart-support-and-1x-security-fixes): the Helm chart is supported beside it.)
+Docker Compose with the Docker driver on one supported Linux host is a supported install for all of 1.x. The Helm chart is supported beside it from the first release that publishes it ([updated 2026-10-25](#update--2026-10-25-helm-chart-support-and-1x-security-fixes)).
 The `v1.0.0` scope includes the complete substrate-neutral architecture described below. During the
 single, scope-named **1.x — Kubernetes in parallel** milestone, one Helm chart and the Kubernetes Job
 driver ship beside Compose and must pass the same driver conformance suite. There is no separate
