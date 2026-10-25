@@ -229,8 +229,9 @@ public class GitHubWebhookRedelivery {
             return !redelivery;
         }
 
+        /** GitHub counts only a 2xx answer as delivered; a redirect is a failed delivery. */
         boolean succeeded() {
-            return statusCode >= 200 && statusCode < 400;
+            return statusCode / 100 == 2;
         }
 
         /**

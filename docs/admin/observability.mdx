@@ -131,6 +131,13 @@ groups:
           severity: warning
         annotations:
           summary: The webhook receiver cannot store deliveries on the broker
+      - alert: HephaestusWebhookRedeliveryNotRunning
+        expr: >-
+          sum(increase(github_webhook_redelivery_total{job="hephaestus",outcome=~"unavailable|refused"}[30m])) > 2
+        labels:
+          severity: warning
+        annotations:
+          summary: GitHub refuses redeliveries, or the deliveries of the GitHub App cannot be read
       - alert: HephaestusWebhookEventsUnrecovered
         expr: max(github_webhook_unrecovered{job="hephaestus"}) > 0
         labels:
