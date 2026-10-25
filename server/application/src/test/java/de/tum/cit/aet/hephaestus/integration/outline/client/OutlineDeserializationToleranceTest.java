@@ -59,7 +59,7 @@ class OutlineDeserializationToleranceTest {
             """;
 
         WebClient stubbed = new OutlineClientConfig(new OutlineRateLimitTracker(new SimpleMeterRegistry()))
-                .outlineWebClient(baseObjectMapper)
+                .outlineWebClient(baseObjectMapper, WebClient.builder())
                 .mutate()
                 .exchangeFunction(request -> Mono.just(ClientResponse.create(HttpStatus.OK)
                         .header("Content-Type", "application/json")
@@ -94,7 +94,7 @@ class OutlineDeserializationToleranceTest {
             """;
 
         WebClient stubbed = new OutlineClientConfig(new OutlineRateLimitTracker(new SimpleMeterRegistry()))
-                .outlineWebClient(baseObjectMapper)
+                .outlineWebClient(baseObjectMapper, WebClient.builder())
                 .mutate()
                 .exchangeFunction(request -> Mono.just(ClientResponse.create(HttpStatus.OK)
                         .header("Content-Type", "application/json")
@@ -148,7 +148,7 @@ class OutlineDeserializationToleranceTest {
             """;
 
         WebClient stubbed = new OutlineClientConfig(new OutlineRateLimitTracker(new SimpleMeterRegistry()))
-                .outlineWebClient(baseObjectMapper)
+                .outlineWebClient(baseObjectMapper, WebClient.builder())
                 .mutate()
                 .exchangeFunction(request -> Mono.just(ClientResponse.create(HttpStatus.OK)
                         .header("Content-Type", "application/json")

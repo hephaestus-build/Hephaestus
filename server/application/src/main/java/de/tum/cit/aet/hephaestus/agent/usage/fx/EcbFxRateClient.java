@@ -39,13 +39,13 @@ public class EcbFxRateClient {
     private final RestClient restClient;
     private final String dailyUrl;
 
-    public EcbFxRateClient(LlmProperties llmProperties) {
+    public EcbFxRateClient(LlmProperties llmProperties, RestClient.Builder restClients) {
         this.dailyUrl = llmProperties.fx().dailyUrl();
         // Its own short-timeout client: a slow ECB must never hold a scheduler thread.
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(TIMEOUT);
         factory.setReadTimeout(TIMEOUT);
-        this.restClient = RestClient.builder().requestFactory(factory).build();
+        this.restClient = restClients.requestFactory(factory).build();
     }
 
     public Optional<EcbDailyRate> fetchLatestUsdRate() {

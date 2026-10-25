@@ -58,7 +58,7 @@ class GitLabPreflightServiceTest extends BaseUnitTest {
     @SuppressWarnings("unchecked")
     void setUp() {
         mockWebClient = mock(WebClient.class);
-        endpoints = spy(new ScmServerEndpointPolicy(new MockEnvironment()));
+        endpoints = spy(new ScmServerEndpointPolicy(new MockEnvironment(), WebClient.builder()));
         lenient().doReturn(mockWebClient).when(endpoints).clientFor(anyString());
         WorkspaceProviderAvailability defaultInstance = new WorkspaceProviderAvailability() {
             @Override

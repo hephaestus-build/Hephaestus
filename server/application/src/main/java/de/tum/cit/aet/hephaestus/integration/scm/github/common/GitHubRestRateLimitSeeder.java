@@ -56,10 +56,10 @@ public class GitHubRestRateLimitSeeder {
     private final WebClient webClient;
     private final ConcurrentHashMap<Long, Instant> lastAttemptByScope = new ConcurrentHashMap<>();
 
-    public GitHubRestRateLimitSeeder(RateLimitObservationSink rateLimitTracker) {
+    public GitHubRestRateLimitSeeder(RateLimitObservationSink rateLimitTracker, WebClient.Builder webClients) {
         this.rateLimitTracker = rateLimitTracker;
         HttpClient httpClient = HttpClient.create().resolver(DefaultAddressResolverGroup.INSTANCE);
-        this.webClient = WebClient.builder()
+        this.webClient = webClients
                 .clientConnector(new ReactorClientHttpConnector(httpClient))
                 .baseUrl(GITHUB_API_BASE_URL)
                 .defaultHeader(HttpHeaders.ACCEPT, "application/vnd.github+json")

@@ -20,6 +20,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.springframework.web.client.RestClient;
 
 class EcbFxRateClientTest extends BaseUnitTest {
 
@@ -42,7 +43,8 @@ class EcbFxRateClientTest extends BaseUnitTest {
 
     private static EcbFxRateClient clientForUrl(String dailyUrl) {
         return new EcbFxRateClient(
-                new LlmProperties("", new LlmProperties.Egress(false), new LlmProperties.Fx(dailyUrl)));
+                new LlmProperties("", new LlmProperties.Egress(false), new LlmProperties.Fx(dailyUrl)),
+                RestClient.builder());
     }
 
     private static String fixture() throws IOException {

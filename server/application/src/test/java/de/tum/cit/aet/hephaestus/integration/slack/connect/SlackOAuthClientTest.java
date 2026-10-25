@@ -15,6 +15,7 @@ import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.web.client.RestClient;
 
 class SlackOAuthClientTest extends BaseUnitTest {
 
@@ -26,7 +27,7 @@ class SlackOAuthClientTest extends BaseUnitTest {
         slackMock = new MockWebServer();
         slackMock.start();
         String base = slackMock.url("/").toString().replaceAll("/$", "");
-        client = new SlackOAuthClient("test-client-id", "test-client-secret", base);
+        client = new SlackOAuthClient("test-client-id", "test-client-secret", base, RestClient.builder());
     }
 
     @AfterEach
@@ -88,7 +89,7 @@ class SlackOAuthClientTest extends BaseUnitTest {
     @Test
     void exchangeCode_blankClientCredentials_throwsBeforeHttp() throws IOException {
         SlackOAuthClient unconfigured =
-                new SlackOAuthClient("", "", slackMock.url("/").toString().replaceAll("/$", ""));
+                new SlackOAuthClient("", "", slackMock.url("/").toString().replaceAll("/$", ""), RestClient.builder());
         assertThatThrownBy(() -> unconfigured.exchangeCode("code", null))
                 .isInstanceOf(SlackOAuthException.class)
                 .hasMessageContaining("slack oauth client not configured");

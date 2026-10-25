@@ -39,7 +39,11 @@ public class GitHubEmailOAuth2UserService implements OAuth2UserService<OAuth2Use
     private static final String EMAILS_URI = "https://api.github.com/user/emails";
 
     private final DefaultOAuth2UserService delegate = new DefaultOAuth2UserService();
-    private final RestClient restClient = RestClient.create();
+    private final RestClient restClient;
+
+    public GitHubEmailOAuth2UserService(RestClient.Builder restClients) {
+        this.restClient = restClients.build();
+    }
 
     @Override
     public OAuth2User loadUser(OAuth2UserRequest userRequest) throws OAuth2AuthenticationException {

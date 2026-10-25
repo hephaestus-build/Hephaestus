@@ -33,10 +33,8 @@ public class OutlineAuthInfoUserService implements OAuth2UserService<OAuth2UserR
 
     private final WebClient webClient;
 
-    public OutlineAuthInfoUserService() {
-        this(WebClient.builder()
-                .clientConnector(WebClientConnectors.ssrfGuarded())
-                .build());
+    public OutlineAuthInfoUserService(WebClient.Builder webClients) {
+        this(webClients.clientConnector(WebClientConnectors.ssrfGuarded()).build());
     }
 
     /** Test seam: inject a WebClient with a stubbed exchange function. */

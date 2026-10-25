@@ -108,12 +108,18 @@ Streaming tests own their subscription and cancellation explicitly.
 Use `.returnResult(Void.class)` when only
 response headers or cookies are needed. A non-void `returnResult` leaves the body subscription to you.
 
+**Tests resolve no real hosts.** A test class whose JVM code resolves a real host fails
+([Testing Guide](../docs/contributor/testing.mdx#gradle-recipes)).
+
 **Rows written by earlier tests are already there.** Assert on the row you created.
 Never assert on a count or on "the only" result.
 Never write cleanup that another test depends on having run.
 
 ## Things that bite
 
+- **Build every HTTP client from the builder Spring injects** (`WebClient.Builder`, `RestClient.Builder`,
+  `RestTemplateBuilder`), so the application's codecs, observation and customizers apply. Set the client's own
+  connector, request factory or codecs on that builder. `HttpClientConstructionArchTest` enforces it.
 - **Keep proxied methods overridable.** Spring's class-based proxies and Hibernate entity proxies
   cannot intercept a `final` method. To avoid an overridable constructor call, use constructor-local
   values or a private calculation helper instead. Making the public method `final` can read

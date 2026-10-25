@@ -131,7 +131,7 @@ public class GitHubGraphQlConfig {
     }
 
     @Bean
-    public WebClient gitHubGraphQlWebClient(JsonMapper baseObjectMapper) {
+    public WebClient gitHubGraphQlWebClient(JsonMapper baseObjectMapper, WebClient.Builder webClients) {
         JsonMapper graphQlObjectMapper = gitHubGraphQlObjectMapper(baseObjectMapper);
 
         // The buffer limit must be set on the CUSTOM decoder, not only via
@@ -167,7 +167,7 @@ public class GitHubGraphQlConfig {
                 .responseTimeout(
                         Duration.ofSeconds(135)); // Must exceed longest block() timeout (backfillGraphqlTimeout=120s)
 
-        return WebClient.builder()
+        return webClients
                 .clientConnector(new ReactorClientHttpConnector(httpClient))
                 .baseUrl(GITHUB_GRAPHQL_URL)
                 .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)

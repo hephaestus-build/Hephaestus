@@ -43,7 +43,8 @@ public class LlmConnectionProbeService {
             LlmConnectionRepository connectionRepository,
             EgressPolicy egressPolicy,
             ObjectMapper objectMapper,
-            LlmProperties llmProperties) {
+            LlmProperties llmProperties,
+            RestClient.Builder restClients) {
         boolean allowLoopback = llmProperties.egress().allowLoopback();
         this.connectionRepository = connectionRepository;
         this.egressPolicy = egressPolicy;
@@ -58,7 +59,7 @@ public class LlmConnectionProbeService {
         ReactorClientHttpRequestFactory factory = new ReactorClientHttpRequestFactory(httpClient);
         factory.setConnectTimeout(PROBE_TIMEOUT);
         factory.setReadTimeout(PROBE_TIMEOUT);
-        this.restClient = RestClient.builder().requestFactory(factory).build();
+        this.restClient = restClients.requestFactory(factory).build();
     }
 
     /**

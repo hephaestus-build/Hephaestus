@@ -19,13 +19,20 @@ import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineDocumentEvent
 import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineDocumentRepository;
 import de.tum.cit.aet.hephaestus.integration.outline.lifecycle.OutlineWebhookRegistrar;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import de.tum.cit.aet.hephaestus.testconfig.OfflineNetwork;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
 
 class OutlineConnectionStrategyTest extends BaseUnitTest {
+
+    @BeforeAll
+    static void declarePublicHosts() {
+        OfflineNetwork.answer("app.getoutline.com", OfflineNetwork.PUBLIC_ADDRESS);
+    }
 
     @Mock
     private OutlineApiClient outlineApiClient;
