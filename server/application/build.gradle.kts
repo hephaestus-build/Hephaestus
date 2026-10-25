@@ -150,6 +150,13 @@ tasks.withType<JavaCompile>().configureEach {
     }
 }
 
+// Error Prone and NullAway report findings and leave the bytecode as javac writes it. So CI's
+// package job compiles the tests without them (-PtestAnalysis=false), and the server quality leg
+// compiles them with the analysis. docs/contributor/ci-cd.mdx § Build once.
+val testAnalysis = providers.gradleProperty("testAnalysis").map(String::toBoolean).orElse(true)
+
+tasks.named<JavaCompile>("compileTestJava") { options.errorprone.enabled.set(testAnalysis) }
+
 spotless {
     java {
         target("src/main/java/**/*.java", "src/test/java/**/*.java")
