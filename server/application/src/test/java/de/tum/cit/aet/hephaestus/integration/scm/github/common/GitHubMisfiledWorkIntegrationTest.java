@@ -20,6 +20,8 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.issuecomment.GitHubIssue
 import de.tum.cit.aet.hephaestus.integration.scm.github.issuecomment.dto.GitHubIssueCommentEventDTO.GitHubCommentDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequest.GitHubPullRequestProcessor;
 import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequest.dto.GitHubPullRequestDTO;
+import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequestreviewcomment.GitHubPullRequestReviewCommentProcessor;
+import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequestreviewcomment.dto.GitHubPullRequestReviewCommentEventDTO.GitHubReviewCommentDTO;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
@@ -52,6 +54,9 @@ class GitHubMisfiledWorkIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private GitHubIssueCommentProcessor comments;
+
+    @Autowired
+    private GitHubPullRequestReviewCommentProcessor reviewComments;
 
     @Autowired
     private IssueRepository issues;
@@ -150,6 +155,42 @@ class GitHubMisfiledWorkIntegrationTest extends BaseIntegrationTest {
 
         assertThat(issues.findByRepositoryIdAndNumber(current.getId(), 44)).isEmpty();
         assertThat(count("issue", "skipped", "itemRegistered")).isEqualTo(skipped + 1);
+    }
+
+    @Test
+    void shouldNotStubAPullRequestForAReviewCommentWhileItsRowStaysUnderTheRenamedRepository() {
+        long nativeId = ThreadLocalRandom.current().nextLong(1, Long.MAX_VALUE);
+        Objects.requireNonNull(pullRequests.process(pullRequest(nativeId, 45, "2026-10-01T09:00:00Z"), sync(renamed)));
+        double skipped = count("pull_request", "skipped", "itemRegistered");
+        var comment = new GitHubReviewCommentDTO(
+                ThreadLocalRandom.current().nextLong(1, Long.MAX_VALUE),
+                "review-comment-node",
+                "@@ -1 +1 @@",
+                "README.md",
+                "A review comment",
+                "https://github.com/" + current.getNameWithOwner() + "/pull/45#discussion_r1",
+                null,
+                Instant.parse("2026-10-02T09:00:00Z"),
+                Instant.parse("2026-10-02T09:00:00Z"),
+                null,
+                null,
+                null,
+                "OWNER",
+                1,
+                1,
+                null,
+                null,
+                "RIGHT",
+                null,
+                null,
+                false);
+
+        assertThat(reviewComments.processCreatedWithParentCreation(
+                        comment, pullRequest(nativeId, 45, "2026-10-02T09:00:00Z"), sync(current)))
+                .isNull();
+
+        assertThat(issues.findByRepositoryIdAndNumber(current.getId(), 45)).isEmpty();
+        assertThat(count("pull_request", "skipped", "itemRegistered")).isEqualTo(skipped + 1);
     }
 
     @Test

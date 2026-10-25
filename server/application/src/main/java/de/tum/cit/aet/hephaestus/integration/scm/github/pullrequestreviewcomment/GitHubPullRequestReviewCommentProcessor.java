@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.integration.scm.github.pullrequestreviewcommen
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.AuthorAssociation;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.ProcessingContext;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmItemEvents;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReviewRepository;
@@ -15,6 +16,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.events.EventContext;
 import de.tum.cit.aet.hephaestus.integration.scm.events.ScmDomainEvent;
 import de.tum.cit.aet.hephaestus.integration.scm.events.ScmEventPayload;
+import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubMisfiledWork;
 import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequest.dto.GitHubPullRequestDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequestreviewcomment.dto.GitHubPullRequestReviewCommentEventDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.github.user.GitHubUserProcessor;
@@ -55,6 +57,7 @@ public class GitHubPullRequestReviewCommentProcessor {
     private final PullRequestReviewThreadRepository threadRepository;
     private final GitHubUserProcessor userProcessor;
     private final ApplicationEventPublisher eventPublisher;
+    private final GitHubMisfiledWork misfiledWork;
 
     public GitHubPullRequestReviewCommentProcessor(
             PullRequestReviewCommentRepository commentRepository,
@@ -62,13 +65,15 @@ public class GitHubPullRequestReviewCommentProcessor {
             PullRequestReviewRepository reviewRepository,
             PullRequestReviewThreadRepository threadRepository,
             GitHubUserProcessor userProcessor,
-            ApplicationEventPublisher eventPublisher) {
+            ApplicationEventPublisher eventPublisher,
+            GitHubMisfiledWork misfiledWork) {
         this.commentRepository = commentRepository;
         this.prRepository = prRepository;
         this.reviewRepository = reviewRepository;
         this.threadRepository = threadRepository;
         this.userProcessor = userProcessor;
         this.eventPublisher = eventPublisher;
+        this.misfiledWork = misfiledWork;
     }
 
     /**
@@ -153,10 +158,27 @@ public class GitHubPullRequestReviewCommentProcessor {
 
         // Try to find existing parent entity using repository ID and PR number (not database ID)
         // This avoids inconsistencies between GraphQL and webhook database IDs
+        Repository repository = Objects.requireNonNull(context.repository());
         PullRequest pr = prRepository
-                .findByRepositoryIdAndNumber(
-                        Objects.requireNonNull(context.repository()).getId(), prDto.number())
+                .findByRepositoryIdAndNumber(repository.getId(), prDto.number())
                 .orElse(null);
+
+        // A row filed under another repository holds the pull request's id; a stub here would collide with it.
+        Long prId = prDto.getDatabaseId();
+        if (pr == null && prId != null) {
+            var relocation = misfiledWork.relocate(
+                    repository,
+                    Objects.requireNonNull(context.providerId()),
+                    prId,
+                    prDto.number(),
+                    "PULL_REQUEST",
+                    ScmItemEvents.PULL_REQUEST);
+            if (relocation == GitHubMisfiledWork.Outcome.SKIPPED) return null;
+            if (relocation == GitHubMisfiledWork.Outcome.MOVED)
+                pr = prRepository
+                        .findByRepositoryIdAndNumber(repository.getId(), prDto.number())
+                        .orElse(null);
+        }
 
         // If parent doesn't exist, create a minimal entity from webhook data
         if (pr == null) {
