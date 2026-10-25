@@ -1,3 +1,5 @@
+import { FootprintsIcon } from "lucide-react";
+
 import { cn } from "cn";
 import type { ReactNode } from "react";
 
@@ -76,7 +78,14 @@ export function ProblemCard({ problem, evidence, open, number, raised = false }:
 			{evidence}
 			{hasText(full?.nextStep) && (
 				<div className={cn("space-y-1 text-sm", raised && "border-t pt-2")}>
-					<p className={raised ? "font-semibold text-muted-foreground" : "font-medium"}>
+					{/* The feedback card's sign for what to do next, so a next step reads the same everywhere. */}
+					<p
+						className={cn(
+							"flex items-center gap-1.5",
+							raised ? "font-semibold text-muted-foreground" : "font-medium",
+						)}
+					>
+						<FootprintsIcon aria-hidden className="size-3.5 shrink-0" />
 						Next step
 					</p>
 					<ProblemProse raised={raised}>{full.nextStep}</ProblemProse>
