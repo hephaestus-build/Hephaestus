@@ -3,10 +3,11 @@ import { expect, fn, userEvent } from "storybook/test";
 
 import { expectTouchTarget } from "@/test/controls";
 
-import { getGroupVisual } from "./group-visuals";
-
-import { PracticeInGroup } from "./PracticeInGroup";
+import { getGroupVisual, groupMark } from "./group-visuals";
 import { PracticePill } from "./PracticePill";
+
+/** A group as the pill shows it: its icon in its color. */
+const CYAN = groupMark(getGroupVisual("MessageSquareReply", "cyan"));
 
 const meta = {
 	component: PracticePill,
@@ -70,7 +71,7 @@ export const LongestName: Story = {
  * The icon is a mark; the name alone opens the practice.
  */
 export const InItsGroup: Story = {
-	args: { group: getGroupVisual("MessageSquareReply", "cyan") },
+	args: { group: CYAN },
 	argTypes: { group: { control: false } },
 	play: async ({ args, canvas, canvasElement }) => {
 		const pill = canvasElement.querySelector("[data-practice-pill]");
@@ -84,64 +85,19 @@ export const InItsGroup: Story = {
 	},
 };
 
-/**
- * `sm` in a line of running text and the weekly digest, the plain gray pill; `row` (the default) in
- * a table, a list or a card's head.
- */
-export const Sizes: Story = {
-	args: { onOpen: undefined },
-	render: (args) => (
-		<div className="flex flex-col items-start gap-3">
-			<span className="text-xs">
-				<PracticePill {...args} size="sm" />
-			</span>
-			<span className="text-sm">
-				<PracticePill {...args} group={getGroupVisual("MessageSquareReply", "cyan")} />
-			</span>
-		</div>
-	),
-	play: async ({ canvas }) => {
-		const [inText, inRow] = canvas.getAllByText("Explain significant decisions");
-		await expect(inText?.closest("[data-slot=badge]")).not.toBeNull();
-		await expect(inRow?.closest("[data-slot=badge]")).toBeNull();
-	},
-};
-
 /** The longest name beside its group's icon: the icon keeps its size and the name truncates. */
 export const LongestNameInItsGroup: Story = {
 	...LongestName,
-	args: { ...LongestName.args, group: getGroupVisual("MessageSquareReply", "cyan") },
+	args: { ...LongestName.args, group: CYAN },
 	argTypes: { group: { control: false } },
 	play: async ({ canvas, canvasElement }) => {
 		const name = canvas.getByText(/Explain significant decisions where/u);
 		await expect(name.scrollWidth).toBeGreaterThan(name.clientWidth);
 		// The icon and the name together stay inside the column, not only the text.
-		const column = canvasElement.querySelector<HTMLElement>(".w-60");
-		const pill = canvas.getByRole("button", { name: /Explain significant decisions where/u });
-		await expect(pill.getBoundingClientRect().right).toBeLessThanOrEqual(
+		const pill = canvasElement.querySelector("[data-practice-pill]");
+		const column = pill?.parentElement;
+		await expect(pill?.getBoundingClientRect().right ?? Infinity).toBeLessThanOrEqual(
 			column?.getBoundingClientRect().right ?? 0,
 		);
-	},
-};
-
-/**
- * A practice beside its group, as a feedback card's head names it: the practice's words and the
- * group's are one size, so neither reads as the larger.
- */
-export const BesideItsGroup: Story = {
-	args: { onOpen: undefined },
-	render: (args) => (
-		<PracticeInGroup
-			practiceName={args.name}
-			practiceSquare={getGroupVisual("Package", "sky")}
-			groupName="Packaging work for review"
-			groupIcon={getGroupVisual("Package", "sky").Icon}
-			groupPill={getGroupVisual("Package", "sky").pill}
-		/>
-	),
-	play: async ({ canvas }) => {
-		const practice = canvas.getByText("Explain significant decisions");
-		const group = canvas.getByText("Packaging work for review");
-		await expect(getComputedStyle(practice).fontSize).toBe(getComputedStyle(group).fontSize);
 	},
 };

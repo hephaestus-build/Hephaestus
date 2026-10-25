@@ -30,10 +30,10 @@ import {
 
 import type { FeedbackTextSegment } from "./feedback-text";
 import { FeedbackText } from "./FeedbackText";
+import type { GroupMark } from "./group-visuals";
 import type { SortDirection } from "./practice-group-list-order";
 import type { StandingScope } from "./practice-group-standing-defs";
 import type { TrendDirection } from "./practice-trend-defs";
-import type { PracticeSquare } from "./PracticePill";
 import type { StandingBasis } from "./standing-basis-defs";
 import { StandingBadge, TrendNote } from "./StandingBadge";
 import { StandingBasisNote } from "./StandingBasisNote";
@@ -417,7 +417,7 @@ export interface SubjectCellProps {
 	/** Opens a practice a sentence names. */
 	onOpenPractice?: (practiceSlug: string) => void;
 	/** The group the sentences' practices belong to, for their labels (`FeedbackTextProps.practiceGroup`). */
-	practiceGroup?: PracticeSquare;
+	practiceGroup?: GroupMark;
 	/** What else goes under the badge: the group table's list of events. */
 	children?: ReactNode;
 	/** `OPEN_ROW_BAR` where the subject is the row's first cell. */

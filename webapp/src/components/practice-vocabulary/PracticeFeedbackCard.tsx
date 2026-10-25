@@ -15,6 +15,8 @@ import { TipPopover } from "@/components/common/TipPopover";
 import { UNTRUSTED_MARKDOWN_PROSE, UntrustedMarkdown } from "@/components/common/UntrustedMarkdown";
 import { useNow } from "@/components/common/use-now";
 import {
+	type GroupMark,
+	groupMark,
 	pillClasses,
 	UNASSIGNED_GROUP_VISUAL,
 } from "@/components/practice-vocabulary/group-visuals";
@@ -35,7 +37,6 @@ import { FeedbackWorkTimeline } from "./FeedbackWorkTimeline";
 import type { Outcome } from "./outcome-defs";
 import { cleanProgress, timelinePieces } from "./practice-feedback-timeline";
 import { PracticeInGroup } from "./PracticeInGroup";
-import type { PracticeSquare } from "./PracticePill";
 
 export type FeedbackBand = "comment" | "disagreement";
 
@@ -70,15 +71,15 @@ export interface CleanWork {
 	date: Date;
 }
 
-/** The practice's square carries its group's icon and color, muted like the group's name without one. */
-function practiceSquareOf(group?: PracticeFeedbackCardGroup): PracticeSquare | undefined {
+/** The practice's pill carries its group's icon and color, muted like the group's name without one. */
+function practiceGroupMark(group?: PracticeFeedbackCardGroup): GroupMark | undefined {
 	if (group === undefined) {
 		return undefined;
 	}
-	return {
+	return groupMark({
 		Icon: group.icon ?? PackageIcon,
 		pill: hasText(group.color) ? pillClasses(group.color) : UNASSIGNED_GROUP_VISUAL.pill,
-	};
+	});
 }
 
 /** The group a card's practice belongs to, with what the card draws its name in. */
@@ -346,7 +347,7 @@ export function PracticeFeedbackCard({
 		<div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
 			<PracticeInGroup
 				practiceName={practiceName}
-				practiceSquare={practiceSquareOf(group)}
+				practiceGroup={practiceGroupMark(group)}
 				onOpenPractice={onOpenPractice && (() => onOpenPractice(practiceSlug))}
 				groupName={group?.name ?? "Unassigned"}
 				groupIcon={GroupIcon}

@@ -4,9 +4,9 @@ import type { GroupRef } from "@/api/types.gen";
 import { InlineLink } from "@/components/common/InlineLink";
 
 import type { FeedbackTextSegment } from "./feedback-text";
-import { getGroupVisual } from "./group-visuals";
+import { getGroupVisual, type GroupMark } from "./group-visuals";
 import { GroupName } from "./GroupName";
-import { PracticePill, type PracticeSquare } from "./PracticePill";
+import { PracticePill, PracticeTextPill } from "./PracticePill";
 
 export interface FeedbackTextProps {
 	segments: FeedbackTextSegment[];
@@ -22,7 +22,7 @@ export interface FeedbackTextProps {
 	 * practices are then named by the row's own label, the gray pill with the group's icon, instead of
 	 * the plain pill of running prose.
 	 */
-	practiceGroup?: PracticeSquare;
+	practiceGroup?: GroupMark;
 	/** A paragraph when the text stands on its own, a span when it sits inside other text. */
 	as?: "p" | "span";
 	className?: string;
@@ -122,14 +122,19 @@ function Segment({
 			/>
 		);
 	}
-	return (
+	return practiceGroup === undefined ? (
+		<PracticeTextPill
+			name={segment.name}
+			onOpen={onOpenPractice && (() => onOpenPractice(segment.slug))}
+			className="align-baseline"
+		/>
+	) : (
 		<PracticePill
 			name={segment.name}
 			onOpen={onOpenPractice && (() => onOpenPractice(segment.slug))}
 			group={practiceGroup}
-			size={practiceGroup === undefined ? "sm" : "row"}
 			// A pill is taller than the line: a little margin keeps pills on wrapped lines apart.
-			className={practiceGroup === undefined ? "align-baseline" : "my-0.5 align-middle"}
+			className="my-0.5 align-middle"
 		/>
 	);
 }

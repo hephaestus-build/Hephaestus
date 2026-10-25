@@ -2,13 +2,14 @@ import type { ComponentType } from "react";
 
 import { cn } from "cn";
 
+import type { GroupMark } from "./group-visuals";
 import { GroupName } from "./GroupName";
-import { PracticePill, type PracticeSquare } from "./PracticePill";
+import { PracticePill } from "./PracticePill";
 
 export interface PracticeInGroupProps {
 	practiceName: string;
-	/** The group's icon and color for the practice's square; without it the square is neutral. */
-	practiceSquare?: PracticeSquare;
+	/** The group's icon and color inside the practice's pill; without it the pill holds the name alone. */
+	practiceGroup?: GroupMark;
 	/** Opens the practice; without it the pill is plain. */
 	onOpenPractice?: () => void;
 	groupName: string;
@@ -26,7 +27,7 @@ export interface PracticeInGroupProps {
  */
 export function PracticeInGroup({
 	practiceName,
-	practiceSquare,
+	practiceGroup,
 	onOpenPractice,
 	groupName,
 	groupIcon,
@@ -36,7 +37,7 @@ export function PracticeInGroup({
 }: PracticeInGroupProps) {
 	return (
 		<div className={cn("flex flex-wrap items-center gap-3 text-sm", className)}>
-			<PracticePill name={practiceName} group={practiceSquare} onOpen={onOpenPractice} />
+			<PracticePill name={practiceName} group={practiceGroup} onOpen={onOpenPractice} />
 			{/* "in" moves with the group, so a wrap never leaves it at the end of the line. */}
 			<span className="inline-flex max-w-full min-w-0 items-center gap-3">
 				<span className="text-muted-foreground">in</span>

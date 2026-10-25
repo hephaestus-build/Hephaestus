@@ -2,8 +2,6 @@ import { XIcon } from "lucide-react";
 import { type ReactNode, useEffect, useEffectEvent, useId, useRef, useState } from "react";
 import { useMediaQuery } from "usehooks-ts";
 
-import { cn } from "cn";
-
 import type {
 	GroupRef,
 	PracticeGuidanceDto,
@@ -35,7 +33,7 @@ import {
 } from "@/components/practice-guidance/PracticeIntro";
 import { REVIEW_FILTER_MAX_LENGTH } from "@/components/practice-trace/trace-format";
 import { isOpenFeedback } from "@/components/practice-vocabulary/feedback-state-defs";
-import { getGroupVisual } from "@/components/practice-vocabulary/group-visuals";
+import { getGroupVisual, groupMark } from "@/components/practice-vocabulary/group-visuals";
 import { OUTCOME_DEFS } from "@/components/practice-vocabulary/outcome-defs";
 import {
 	type FeedbackRatingProps,
@@ -43,6 +41,7 @@ import {
 	type PracticeFeedbackCardEntry,
 	PracticeFeedbackCardSkeleton,
 } from "@/components/practice-vocabulary/PracticeFeedbackCard";
+import { PracticeTitlePill } from "@/components/practice-vocabulary/PracticePill";
 import { StandingBadge, TrendNote } from "@/components/practice-vocabulary/StandingBadge";
 import { StandingBasisNote } from "@/components/practice-vocabulary/StandingBasisNote";
 import { ReviewFeed, ReviewFeedSkeleton } from "@/components/profile/ReviewFeed";
@@ -214,7 +213,6 @@ export function PracticeDetailLevel({
 	onRetry,
 	neverApplied = false,
 }: PracticeDetailLevelProps) {
-	const groupVisual = group === undefined ? undefined : getGroupVisual(group.icon, group.color);
 	const reviews =
 		feed.status === "ready" && practice
 			? feed.reviews
@@ -405,21 +403,15 @@ export function PracticeDetailLevel({
 				nested={nested}
 				path={path}
 				current="Practice"
-				title={practice?.name ?? described?.name ?? "Practice"}
 				// As the practice is named in its group's table: the gray pill with the group's icon
 				// inside, at the heading's size.
-				titleFrame="inline-block rounded-2xl bg-secondary px-3.5 py-1 text-secondary-foreground"
-				titleLead={
-					groupVisual !== undefined && (
-						<groupVisual.Icon
-							aria-hidden
-							className={cn(
-								"mr-2 inline-block size-6 align-[-0.2em]",
-								groupVisual.pill,
-								"bg-transparent dark:bg-transparent",
-							)}
-						/>
-					)
+				title={
+					<PracticeTitlePill
+						name={practice?.name ?? described?.name ?? "Practice"}
+						group={
+							group === undefined ? undefined : groupMark(getGroupVisual(group.icon, group.color))
+						}
+					/>
 				}
 				chips={
 					practice && <PracticeStandingChips practice={practice} neverApplied={neverApplied} />

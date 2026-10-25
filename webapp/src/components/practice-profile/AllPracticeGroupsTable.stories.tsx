@@ -107,13 +107,15 @@ export const ManyEvents: Story = {
 		for (const label of labels) {
 			await expect(label.querySelector("svg")).not.toBeNull();
 		}
-		// Pills on wrapped lines keep a gap between them.
+		// Pills on later lines keep a gap to the pill on the line above; the summary has more than one.
 		const boxes = [...labels].map((label) => label.getBoundingClientRect());
-		for (const [index, box] of boxes.entries()) {
-			const next = boxes[index + 1];
-			if (next !== undefined && next.top > box.top + 1) {
-				await expect(next.top - box.bottom).toBeGreaterThanOrEqual(3);
-			}
+		const gaps = boxes.slice(1).flatMap((next, index) => {
+			const above = boxes[index];
+			return above !== undefined && next.top > above.top + 1 ? [next.top - above.bottom] : [];
+		});
+		await expect(gaps.length).toBeGreaterThan(0);
+		for (const gap of gaps) {
+			await expect(gap).toBeGreaterThanOrEqual(3);
 		}
 		// New feedback is the card's to say, so the cell has no bullet for it.
 		await expect(items).toHaveLength(5);

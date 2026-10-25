@@ -5,13 +5,10 @@ import { hasText } from "@/lib/text";
 
 import { getGroupVisual, UNASSIGNED_GROUP_VISUAL } from "./group-visuals";
 
-/** The group's tinted square, one source for every size a surface names a group or a practice in. */
-export const groupPillVariants = cva("flex shrink-0 items-center justify-center", {
+const groupPillVariants = cva("flex shrink-0 items-center justify-center", {
 	variants: {
 		size: {
 			sm: "size-4 rounded-sm [&_svg]:size-2.5",
-			// Beside a name in a row or a line of text.
-			row: "size-5 rounded-sm [&_svg]:size-3",
 			md: "size-8 rounded-md [&_svg]:size-4",
 			lg: "size-9 rounded-md [&_svg]:size-4",
 		},
