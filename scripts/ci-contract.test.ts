@@ -2381,6 +2381,8 @@ void describe("CI contract", () => {
 		// A fork publishes no images, so there is nothing for this job to pull. The smoke selects the
 		// head images itself, so it does not wait for a preview label.
 		assert.match(condition, /needs\.detect-changes\.outputs\.head-images == 'true'/u);
+		// Without the server image (a failed package) a boot would only repeat that failure.
+		assert.match(condition, /needs\.Docker\.outputs\.application-server-digest != ''/u);
 		const headImages = String(
 			orchestrator.getIn(["jobs", "detect-changes", "outputs", "head-images"]),
 		);

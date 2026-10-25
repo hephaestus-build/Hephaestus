@@ -976,7 +976,8 @@ jobs:
     if: >-
       needs.detect-changes.outputs.head-images == 'true' &&
       needs.detect-changes.outputs.should_skip != 'true' &&
-      needs.detect-changes.outputs.supported-host-smoke == 'true'
+      needs.detect-changes.outputs.supported-host-smoke == 'true' &&
+      needs.Docker.outputs.application-server-digest != ''
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
