@@ -1,6 +1,6 @@
 # ADR 0058: The Helm chart is the only supported deployment from 1.0
 
-**Status:** Accepted
+**Status:** Accepted (amended 2026-10-25 — previews, [ADR 0059](0059-previews-run-on-the-staging-cluster.md))
 **Date:** 2026-10-25
 **Authors:** Felix T.J. Dietrich
 
@@ -231,3 +231,9 @@ Fetched 2026-10-25.
 - **P5** [Airbyte deprecates Docker Compose](https://github.com/airbytehq/airbyte/discussions/40599) and [the migration from Compose](https://docs.airbyte.com/platform/deploying-airbyte/migrating-from-docker-compose).
 - **P6** [Sentry self-hosted](https://develop.sentry.dev/self-hosted/): it installs with Docker Compose.
 - **P7** [Plausible Community Edition](https://github.com/plausible/community-edition): it installs with Docker Compose.
+
+## Update — 2026-10-25: previews ([ADR 0059](0059-previews-run-on-the-staging-cluster.md))
+
+ADR 0059 names the mechanism that § Previews leaves open.
+Flux Operator on the staging k3s installs one namespace for each labelled pull request.
+The chart and its preview values come from `main`, and each preview has its own demo database.
