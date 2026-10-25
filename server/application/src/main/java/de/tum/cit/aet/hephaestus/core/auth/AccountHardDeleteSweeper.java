@@ -54,7 +54,7 @@ public class AccountHardDeleteSweeper {
     }
 
     @Scheduled(cron = "0 5 * * * *")
-    @SchedulerLock(name = "account-hard-delete-sweep", lockAtMostFor = "PT5M", lockAtLeastFor = "PT30S")
+    @SchedulerLock(name = "account-hard-delete-sweep", lockAtMostFor = "PT50M", lockAtLeastFor = "PT30S")
     public void sweep() {
         try {
             SweepResult result = purgeEligibleAccounts();

@@ -24,7 +24,7 @@ public class GitLabTokenRotationScheduler {
     private final GitLabWebhookService webhooks;
 
     @Scheduled(cron = "0 0 3 * * *", zone = "UTC")
-    @SchedulerLock(name = "gitlabTokenRotation", lockAtMostFor = "PT2H")
+    @SchedulerLock(name = "gitlabTokenRotation", lockAtMostFor = "PT2H", lockAtLeastFor = "PT1M")
     public void rotateTokens() {
         for (long workspaceId : connections.findWorkspaceIdsWithActiveConnection(IntegrationKind.GITLAB)) {
             workspaces

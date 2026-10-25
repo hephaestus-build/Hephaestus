@@ -32,7 +32,7 @@ public class ConfigAuditRetentionJob {
     private final ConfigAuditEventRepository repository;
 
     @Scheduled(cron = "0 20 0 * * *")
-    @SchedulerLock(name = "config-audit-retention")
+    @SchedulerLock(name = "config-audit-retention", lockAtMostFor = "PT30M", lockAtLeastFor = "PT1M")
     @WorkspaceAgnostic("Retention ages out rows across every workspace; there is no single tenant to scope it to")
     @Transactional
     public void sweep() {

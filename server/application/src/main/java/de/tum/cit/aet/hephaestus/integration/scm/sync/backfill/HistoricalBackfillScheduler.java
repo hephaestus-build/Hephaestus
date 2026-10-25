@@ -8,6 +8,7 @@ import jakarta.annotation.PostConstruct;
 import java.util.concurrent.TimeUnit;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -72,6 +73,7 @@ public class HistoricalBackfillScheduler {
      * to avoid log noise while remaining ready for new repositories.
      */
     @Scheduled(fixedRateString = "${hephaestus.sync.backfill.interval-seconds:60}", timeUnit = TimeUnit.SECONDS)
+    @SchedulerLock(name = "historical-backfill", lockAtMostFor = "PT1H", lockAtLeastFor = "PT30S")
     public void runBackfillCycle() {
         log.trace("Starting backfill cycle");
         try {

@@ -15,10 +15,8 @@ import org.springframework.resilience.annotation.EnableResilientMethods;
  * <p>{@link org.springframework.scheduling.annotation.EnableScheduling @EnableScheduling} is
  * intentionally NOT declared here — it lives in
  * {@link de.tum.cit.aet.hephaestus.core.runtime.ServerSchedulingConfig} which is gated by
- * {@link de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole#SERVER_PROPERTY}. The
- * {@code webhook-server} container (which sets {@code server.enabled=false}) must NOT fire any
- * {@code @Scheduled} methods, otherwise sync schedulers, zombie sweepers, and rate-limit eviction
- * would double-run alongside the {@code application-server} container. See ADR 0008.
+ * {@link de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole#SERVER_PROPERTY}, so the worker and
+ * webhook containers fire no {@code @Scheduled} method. See ADR 0008.
  *
  * <p>{@link de.tum.cit.aet.hephaestus.notification.email.EmailTransportConfiguration} gates the
  * excluded mail auto-configuration on a configured SMTP host and the server runtime role.
