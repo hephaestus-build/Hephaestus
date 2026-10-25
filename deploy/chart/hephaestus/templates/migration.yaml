@@ -39,6 +39,9 @@ spec:
               value: {{ include "hephaestus.databaseHost" . | quote }}
             - name: DATABASE_PORT
               value: {{ include "hephaestus.databasePort" . | quote }}
+            # Without a user name, libpq asks the system for the name of the Pod's user, which the image
+            # does not know, and pg_isready never dials the server.
+            {{- include "hephaestus.secretEnv" (dict "root" . "env" "PGUSER" "key" "DATABASE_USERNAME") | nindent 12 }}
           resources:
             requests: { cpu: 50m, memory: 32Mi, ephemeral-storage: 16Mi }
             limits: { cpu: 200m, memory: 64Mi, ephemeral-storage: 64Mi }

@@ -881,19 +881,17 @@ export async function render(): Promise<string> {
 		for (const [index, values] of variants.entries()) {
 			const file = path.join(work, `values-${index}.yaml`);
 			await writeFile(file, JSON.stringify(values));
-			manifests.push(
-				await output("helm", [
-					"template",
-					RELEASE,
-					CHART,
-					"--namespace",
-					NAMESPACE,
-					"--values",
-					path.join(CHART, "profiles", "dev.yaml"),
-					"--values",
-					file,
-				]),
-			);
+			const layers = [
+				"--namespace",
+				NAMESPACE,
+				"--values",
+				path.join(CHART, "profiles", "dev.yaml"),
+				"--values",
+				file,
+			];
+			// Helm's own checks first, warnings included. Its report goes to stderr: stdout is the manifests.
+			await run("helm", ["lint", "--strict", CHART, ...layers], { stdout: "stderr" });
+			manifests.push(await output("helm", ["template", RELEASE, CHART, ...layers]));
 		}
 		return manifests.join("\n---\n");
 	} finally {

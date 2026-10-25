@@ -8,7 +8,7 @@ description: Install Hephaestus on a Kubernetes cluster with its Helm chart, and
 
 The Helm chart installs Hephaestus on a Kubernetes cluster.
 From 1.0, the chart is the supported deployment: [ADR 0058](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0058-the-helm-chart-is-the-only-supported-deployment-from-1-0.md) records the decision, and the [compatibility policy](./compatibility-policy#support-for-1x) gives the terms.
-The worker is disabled by default, so practice reviews and Heph turns do not run until you enable it.
+The worker runs practice reviews and Heph turns. The `small.yaml` profile enables it, and [Install](#install) ends when it is ready.
 
 The chart is in `deploy/chart/hephaestus/` of the release checkout.
 It uses the standard Helm chart format: `Chart.yaml`, `values.yaml`, `values.schema.json`, and `templates/`.
@@ -342,7 +342,17 @@ A chart test adds up what that node holds during an upgrade, with backups on:
 | The sandbox quota: one review, the Heph hosts and the turn sandboxes of the old and the new worker while the old one drains, and the new worker's isolation probe | 16 GiB | 1.2 | No limit, as on Docker |
 | Total, against the node less what k3s requests | 29 GiB of 31 GiB | 3.45 of 3.75 | 83 GiB of the 110 GiB left beside images and review workspaces |
 
-The JVM roles request their measured memory and some headroom: the server 2.5 GiB, the worker 2 GiB, and the webhook role 1.25 GiB.
+The table gives the measured resident memory of each role and the chart's sizes.
+Each JVM role requests all of its memory limit, because the heap is sized from the limit, and the limit is the measurement plus headroom.
+NATS requests less than its limit, because JetStream's caches grow above the request.
+
+| Role | Measured | Request | Limit |
+| --- | --- | --- | --- |
+| Server | 1.5 GiB | 2.5 GiB | 2.5 GiB |
+| Worker | 0.8 to 1.4 GiB | 2 GiB | 2 GiB |
+| Webhook role | 1.0 GiB | 1.25 GiB | 1.25 GiB |
+| NATS, with JetStream's memory and file caches | 1.3 to 2.7 GiB | 1.5 GiB | 3 GiB |
+
 The server's and the worker's caches have a bound of 10 GiB each, so that the node does not run out of disk and evict a draining worker.
 On a node of 16 GiB, the Pods of an upgrade do not fit beside a running review: they stay pending, the previous release keeps serving, and the upgrade rolls back when its timeout ends.
 For a cluster with several nodes, start from `small.yaml`, and set the workers, their reviews, their quota and the external services in your own values file.
@@ -369,12 +379,42 @@ A three-server JetStream cluster therefore keeps one replica of each stream.
 
 ## Install
 
-1. Create the release namespace.
-2. Label the namespace with `pod-security.kubernetes.io/enforce=restricted`.
-3. For the worker, create a second namespace for its sandboxes with the same label. Use it for this release alone.
-4. Create the Secret and the PostgreSQL TLS Secret.
-5. Write your values file with `host`, `trustedProxies`, `secret.name`, `postgresql.tls.existingSecret`, `route.parentRefs`, and `networkPolicy.gateway` with its pod labels.
-6. Install the chart:
+1. Create the release namespace and the sandbox namespace, and label both with the Restricted Pod Security level.
+   Use the sandbox namespace for this release alone.
+
+   ```bash
+   kubectl create namespace hephaestus
+   kubectl create namespace hephaestus-sandboxes
+   kubectl label namespace hephaestus hephaestus-sandboxes pod-security.kubernetes.io/enforce=restricted
+   ```
+
+2. Create the [Secret](#create-the-secret) and the [PostgreSQL TLS Secret](#postgresql-tls-secret).
+3. Write your values file, `my-values.yaml`, with `host`, `trustedProxies`, `secret.name`, `postgresql.tls.existingSecret`, `route.parentRefs`, and `networkPolicy.gateway` with its pod labels.
+4. Enable reviews.
+   `small.yaml` enables the worker, and the chart does not render it without the sandbox namespace and the Kubernetes API endpoint.
+   Find the endpoint that the network plugin sees:
+
+   ```bash
+   kubectl get endpointslices --namespace default --selector kubernetes.io/service-name=kubernetes
+   ```
+
+   On a single k3s node, `PORTS` is `6443` and `ENDPOINTS` is the node's internal address, for example `192.168.5.15`.
+   Add both values to `my-values.yaml`:
+
+   ```yaml
+   worker:
+     sandbox:
+       namespace: hephaestus-sandboxes
+   networkPolicy:
+     kubernetesApi:
+       cidr: 192.168.5.15/32
+       port: 6443
+   ```
+
+   Use `/128` for an IPv6 address.
+   If `ENDPOINTS` lists more than one address, one for each control plane node, set a CIDR that holds all of them.
+
+5. Install the chart:
 
    ```bash
    helm install hephaestus "release-chart/hephaestus-$VERSION.tgz" \
@@ -384,7 +424,14 @@ A three-server JetStream cluster therefore keeps one replica of each stream.
      --values my-values.yaml
    ```
 
-7. Follow the migration Job's log until the migrations are complete: `kubectl --namespace hephaestus logs job/hephaestus-migration-1`.
+6. Follow the migration Job's log until the migrations are complete: `kubectl --namespace hephaestus logs job/hephaestus-migration-1`.
+7. Wait until the worker is ready. A worker is ready only after its [isolation probe](#sandbox-prerequisites) passed.
+
+   ```bash
+   kubectl --namespace hephaestus rollout status deployment/hephaestus-worker
+   ```
+
+   If the worker does not become ready, read [Troubleshooting](#troubleshooting).
 
 The schema refuses an unknown key, an image tag, and a value outside its bounds.
 Each object name is `<release>-<component>`, with at most 52 characters.
@@ -401,9 +448,9 @@ To turn it off, for example on a staging instance, set it to `false` yourself.
 ## Worker
 
 The worker role runs every review sandbox, the Heph host, and every turn sandbox.
-The worker is disabled by default.
-Before you set `worker.enabled=true`, prepare the [sandbox prerequisites](#sandbox-prerequisites).
-Set `worker.sandbox.namespace` and `networkPolicy.kubernetesApi`.
+The chart's default disables the worker, and `small.yaml` enables it.
+Prepare the [sandbox prerequisites](#sandbox-prerequisites).
+Set `worker.sandbox.namespace` and `networkPolicy.kubernetesApi` ([Install](#install), step 4).
 The chart refuses a worker without them.
 
 The chart runs the workers as one Deployment:
@@ -434,7 +481,8 @@ A sandbox's credential, not the network, binds it to the worker that started it.
 
 The worker reaches the Kubernetes API only at `networkPolicy.kubernetesApi`.
 Set the address and port that the selected network plugin sees after address translation.
-The chart has no default for them.
+The plugins that CI runs, k3s's kube-router and Calico, see the endpoint of the `kubernetes` Service ([Install](#install), step 4).
+The chart has no default for them, because only the running cluster knows them.
 
 The worker's service account has these permissions in the sandbox namespace, and none elsewhere:
 
@@ -602,6 +650,29 @@ Before phase 1, record the current `webhook.replicas` and `worker.replicas`, and
 A count of 0 is a desired state: check on the cluster that the pods stopped, that the sandbox Pods and Jobs are gone, and that the migrations completed before the next phase.
 Set `worker.replicas=0` to stop the workers; `worker.enabled=false` removes the worker objects.
 While `webhook.replicas` is 0, provider deliveries reach no receiver, and each provider decides whether it retries.
+
+## Uninstall
+
+1. Delete the sandbox namespace first.
+   This stops every sandbox at once.
+   If you remove the release first, its network policies go, and the Heph hosts and turn sandboxes that are left run without them.
+
+   ```bash
+   kubectl delete namespace hephaestus-sandboxes
+   ```
+
+2. Remove the release. Running reviews stop.
+
+   ```bash
+   helm uninstall hephaestus --namespace hephaestus
+   ```
+
+3. These items stay:
+   - The PostgreSQL and NATS volumes.
+   - The Secrets that you created.
+   - The backups in the S3 bucket.
+4. To remove the data too, delete the release namespace: `kubectl delete namespace hephaestus`.
+   A PersistentVolume with the `Retain` reclaim policy stays until you delete it.
 
 ## Troubleshooting
 

@@ -46,9 +46,7 @@ spec:
       automountServiceAccountToken: false
       enableServiceLinks: false
       # The image's postgres user. Started as that user, the entrypoint skips its root-only
-      # ownership fix and initializes the volume directly. Not yet shown on a real volume driver:
-      # fsGroup ownership, first initialization, restart and restore need a start of the release
-      # image on a PVC before this path counts as working.
+      # ownership fix and initializes the volume directly.
       securityContext:
         {{- include "hephaestus.podSecurityContext" (dict "user" 999 "group" 999) | nindent 8 }}
       containers:

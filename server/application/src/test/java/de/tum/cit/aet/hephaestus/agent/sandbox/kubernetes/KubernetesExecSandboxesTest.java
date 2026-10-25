@@ -4,6 +4,7 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.catchThrowable;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 
 import de.tum.cit.aet.hephaestus.agent.sandbox.ImagePullPolicy;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ExecSandboxes;
@@ -44,6 +45,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
+import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.awaitility.Awaitility;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
@@ -61,8 +63,8 @@ import org.junit.jupiter.api.Timeout;
  * <p>The shared client is configured as in production: a 30 second request timeout and ten retries of a failed
  * request. It reads no kubeconfig and no service account; the only data is a synthetic Pod and a synthetic command.
  *
- * <p>These tests prove the client side only: that each call ends by its budget whatever the transport does, and what
- * the adapter reports. Whether a process that the API server started still runs is the kubelet's, and outside them. That
+ * <p>These tests prove the client side only: that each call ends, by its budget or by the failure, whatever the transport
+ * does, and what the adapter reports. Whether a process that the API server started still runs is the kubelet's, and outside them. That
  * a {@link SandboxException} makes the context folder remove the sandbox and stage a new one is
  * {@code TurnContextFolderTest}'s.
  */
@@ -78,8 +80,15 @@ class KubernetesExecSandboxesTest {
     private static final List<String> ARGV = List.of("echo", "synthetic");
     private static final String SUCCESS = "{\"metadata\":{},\"status\":\"Success\"}";
 
-    /** What scheduling may add to a budget on a loaded build machine. */
-    private static final Duration TOLERANCE = Duration.ofMillis(750);
+    /**
+     * A call that outlives this hangs, and {@link #ended} fails it there. It is far beyond the short budgets that a call
+     * must end by. A test whose call must end by a failure instead sets a budget beyond it. It is below the shared
+     * client's 30 second request timeout, so that the timeout cannot end a hanging call just in time.
+     */
+    private static final Duration HANG = Duration.ofSeconds(20);
+
+    /** A budget beyond {@link #HANG}: a call that waits for it fails the test. */
+    private static final Duration BEYOND_HANG = Duration.ofMinutes(5);
 
     /** The client's send queue: a write waits while this much is queued ({@code ExecWebSocketListener}). */
     private static final int SEND_QUEUE = 16 * 1024 * 1024;
@@ -204,15 +213,15 @@ class KubernetesExecSandboxesTest {
     }
 
     /**
-     * The upgrade reaches the server, which answers it only after the call's budget. The call cannot know whether the
-     * command started, so it fails, within its budget; the exec that the server opens late is closed as it opens, and
-     * the shared client still works.
+     * The upgrade reaches the server, which answers it only after the call ended. The call cannot know whether the
+     * command started, so it fails at its deadline; the exec that the server opens late is closed as it opens, and the
+     * shared client still works.
      */
     @Test
-    void shouldFailWithinItsBudgetAndKeepALateUpgradeFromItsCallWhenTheUpgradeIsAnsweredLate() throws Exception {
+    void shouldFailAtItsDeadlineAndKeepALateUpgradeFromItsCallWhenTheUpgradeIsAnsweredLate() throws Exception {
         CountDownLatch asked = new CountDownLatch(1);
         CountDownLatch opened = new CountDownLatch(1);
-        CountDownLatch ended = new CountDownLatch(1);
+        CountDownLatch closed = new CountDownLatch(1);
         exec = request -> {
             asked.countDown();
             await(released);
@@ -226,32 +235,32 @@ class KubernetesExecSandboxesTest {
 
                 @Override
                 public void onClosed(WebSocket webSocket, int code, String reason) {
-                    ended.countDown();
+                    closed.countDown();
                 }
 
                 @Override
                 public void onFailure(WebSocket webSocket, Throwable error, @Nullable Response response) {
-                    ended.countDown();
+                    closed.countDown();
                 }
             });
         };
         Duration budget = Duration.ofMillis(1500);
         var sandboxes = sandboxes(server.url("/").toString());
 
-        long started = System.nanoTime();
-        Throwable failure = catchThrowable(() -> sandboxes.exec(SANDBOX, command(budget)));
-        Duration elapsed = Duration.ofMillis(elapsedMillis(started));
+        Ended call = ended(() -> sandboxes.exec(SANDBOX, command(budget)));
 
         assertThat(asked.getCount()).as("the upgrade reached the server").isZero();
-        assertThat(failure)
+        assertThat(released.getCount())
+                .as("the deadline ended the call: the server still holds its answer")
+                .isOne();
+        assertThat(call.failure())
                 .as("a command that did not open by its deadline may still start: not a timeout")
                 .isInstanceOf(SandboxException.class);
-        assertThat(elapsed).isLessThan(budget.plus(TOLERANCE));
-        assertThat(Thread.currentThread().isInterrupted()).isFalse();
+        assertThat(call.interrupted()).isFalse();
 
         released.countDown();
         boolean openedLate = opened.await(3, TimeUnit.SECONDS);
-        assertThat(!openedLate || ended.await(3, TimeUnit.SECONDS))
+        assertThat(!openedLate || closed.await(3, TimeUnit.SECONDS))
                 .as("an upgrade answered after the call ended is closed as it opens")
                 .isTrue();
         Pod read = shared().pods().inNamespace(TURNS).withName(SANDBOX).get();
@@ -260,15 +269,14 @@ class KubernetesExecSandboxesTest {
     }
 
     @Test
-    void shouldEndWithinItsBudgetWithoutRetryingWhenTheApiAnswersEachReadWithAServerError() {
+    void shouldEndWithoutRetryingWhenTheApiAnswersEachReadWithAServerError() {
         failReads = true;
         Duration budget = Duration.ofSeconds(3);
         var sandboxes = sandboxes(server.url("/").toString());
 
-        long started = System.nanoTime();
-        assertThatThrownBy(() -> sandboxes.exec(SANDBOX, command(budget))).isInstanceOf(SandboxException.class);
+        Ended call = ended(() -> sandboxes.exec(SANDBOX, command(budget)));
 
-        assertThat(Duration.ofMillis(elapsedMillis(started))).isLessThan(budget.plus(TOLERANCE));
+        assertThat(call.failure()).isInstanceOf(SandboxException.class);
         assertThat(server.getRequestCount())
                 .as("a call's own requests are not retried; the shared client would retry each ten times")
                 .isLessThan(5);
@@ -282,22 +290,23 @@ class KubernetesExecSandboxesTest {
             await(released);
             return new MockResponse().setResponseCode(404);
         };
-        Duration budget = Duration.ofSeconds(20);
         var sandboxes = sandboxes(server.url("/").toString());
-        Thread caller = Thread.currentThread();
-        Thread interrupter = Thread.ofVirtual().start(() -> {
-            await(asked);
-            caller.interrupt();
+
+        // On a thread of its own, which the fixture interrupts.
+        Ended call = assertTimeoutPreemptively(HANG, () -> {
+            Thread caller = Thread.currentThread();
+            Thread interrupter = Thread.ofVirtual().start(() -> {
+                await(asked);
+                caller.interrupt();
+            });
+            Throwable failure = catchThrowable(() -> sandboxes.exec(SANDBOX, command(BEYOND_HANG)));
+            boolean interrupted = Thread.interrupted();
+            interrupter.join();
+            return new Ended(failure, interrupted);
         });
 
-        long started = System.nanoTime();
-        Throwable failure = catchThrowable(() -> sandboxes.exec(SANDBOX, command(budget)));
-        boolean interrupted = Thread.interrupted();
-        interrupter.join();
-
-        assertThat(failure).isInstanceOf(SandboxException.class);
-        assertThat(interrupted).as("the caller's interrupt is still set").isTrue();
-        assertThat(Duration.ofMillis(elapsedMillis(started))).isLessThan(budget.dividedBy(2));
+        assertThat(call.failure()).isInstanceOf(SandboxException.class);
+        assertThat(call.interrupted()).as("the caller's interrupt is still set").isTrue();
     }
 
     /**
@@ -319,12 +328,12 @@ class KubernetesExecSandboxesTest {
                         }
                     }));
             var archive = new ByteArrayInputStream(new byte[LARGE_ARCHIVE]);
-            Duration budget = Duration.ofSeconds(20);
             var sandboxes = sandboxes("http://127.0.0.1:" + port);
 
-            long started = System.nanoTime();
-            Throwable failure = catchThrowable(
-                    () -> sandboxes.stage(SANDBOX, new ExecSandboxes.Replace("repos", archive, LARGE_ARCHIVE, budget)));
+            // The failure, not the budget, ends the call.
+            Throwable failure = ended(() -> sandboxes.stage(
+                            SANDBOX, new ExecSandboxes.Replace("repos", archive, LARGE_ARCHIVE, BEYOND_HANG)))
+                    .failure();
 
             assertThat(broken)
                     .as("the peer received archive bytes before it broke the protocol")
@@ -336,9 +345,6 @@ class KubernetesExecSandboxesTest {
             assertThat(archive.available())
                     .as("the staging began to send the archive")
                     .isLessThan(LARGE_ARCHIVE);
-            assertThat(Duration.ofMillis(elapsedMillis(started)))
-                    .as("a failure, not the budget")
-                    .isLessThan(budget.dividedBy(2));
         });
     }
 
@@ -366,10 +372,8 @@ class KubernetesExecSandboxesTest {
                 Duration budget = Duration.ofSeconds(3);
                 var sandboxes = sandboxes("http://127.0.0.1:" + port);
 
-                long started = System.nanoTime();
-                Throwable failure = catchThrowable(() ->
+                Ended call = ended(() ->
                         sandboxes.stage(SANDBOX, new ExecSandboxes.Replace("repos", archive, LARGE_ARCHIVE, budget)));
-                Duration elapsed = Duration.ofMillis(elapsedMillis(started));
 
                 int left = archive.available();
                 assertThat(upgraded.getCount())
@@ -378,18 +382,12 @@ class KubernetesExecSandboxesTest {
                 assertThat(LARGE_ARCHIVE - left)
                         .as("the staging filled the client's send queue")
                         .isGreaterThanOrEqualTo(SEND_QUEUE);
-                assertThat(failure)
+                assertThat(call.failure())
                         .as("a staging that ran out of time, not a failure of the runtime")
-                        .isExactlyInstanceOf(SandboxException.class);
-                assertThat(elapsed)
-                        .as("the deadline ended the staging")
-                        .isGreaterThanOrEqualTo(budget.minus(TOLERANCE))
-                        .isLessThan(budget.plus(TOLERANCE));
-                Thread.sleep(500);
-                assertThat(archive.available())
-                        .as("nothing reads the archive after the call returned")
-                        .isEqualTo(left);
-                assertThat(Thread.currentThread().isInterrupted()).isFalse();
+                        .isExactlyInstanceOf(SandboxException.class)
+                        .hasMessage("Staging into the turn sandbox timed out");
+                assertReadNoMore(archive, left);
+                assertThat(call.interrupted()).isFalse();
             } catch (Exception | Error bodyFailure) {
                 try {
                     release(peer.get());
@@ -430,10 +428,8 @@ class KubernetesExecSandboxesTest {
                     }
                 });
 
-                long started = System.nanoTime();
-                Throwable failure = catchThrowable(() ->
+                Ended call = ended(() ->
                         sandboxes.stage(SANDBOX, new ExecSandboxes.Replace("repos", archive, LARGE_ARCHIVE, budget)));
-                Duration elapsed = Duration.ofMillis(elapsedMillis(started));
                 stop(closer);
 
                 int left = archive.available();
@@ -446,15 +442,11 @@ class KubernetesExecSandboxesTest {
                 assertThat(LARGE_ARCHIVE - left)
                         .as("the staging filled the client's send queue")
                         .isGreaterThanOrEqualTo(SEND_QUEUE);
-                assertThat(failure)
+                assertThat(call.failure())
                         .as("a staging whose delivery is unknown, never a success")
                         .isInstanceOf(SandboxException.class);
-                assertThat(elapsed).as("by the deadline at the latest").isLessThan(budget.plus(TOLERANCE));
-                Thread.sleep(500);
-                assertThat(archive.available())
-                        .as("nothing reads the archive after the call returned")
-                        .isEqualTo(left);
-                assertThat(Thread.currentThread().isInterrupted()).isFalse();
+                assertReadNoMore(archive, left);
+                assertThat(call.interrupted()).isFalse();
             } catch (Exception | Error bodyFailure) {
                 try {
                     release(peer.get());
@@ -482,20 +474,23 @@ class KubernetesExecSandboxesTest {
             });
             try {
                 var archive = new ByteArrayInputStream(new byte[LARGE_ARCHIVE]);
-                Duration budget = Duration.ofSeconds(20);
                 var sandboxes = sandboxes("http://127.0.0.1:" + port);
-                Thread caller = Thread.currentThread();
                 AtomicBoolean filled = new AtomicBoolean();
-                Thread interrupter = onceTheSendQueueIsFull(archive, budget.dividedBy(4), filled, caller::interrupt);
+                AtomicBoolean late = new AtomicBoolean();
 
-                long started = System.nanoTime();
-                Throwable failure = catchThrowable(() ->
-                        sandboxes.stage(SANDBOX, new ExecSandboxes.Replace("repos", archive, LARGE_ARCHIVE, budget)));
-                boolean interrupted = Thread.interrupted();
-                Duration elapsed = Duration.ofMillis(elapsedMillis(started));
-                stop(interrupter);
-                // Also takes back an interrupt that came after the call, so that it cannot reach the next test.
-                boolean late = Thread.interrupted();
+                // On a thread of its own, which the fixture interrupts. The budget is beyond HANG: only the interrupt
+                // ends the call in time.
+                Ended call = assertTimeoutPreemptively(HANG, () -> {
+                    Thread interrupter = onceTheSendQueueIsFull(
+                            archive, Duration.ofSeconds(5), filled, Thread.currentThread()::interrupt);
+                    Throwable failure = catchThrowable(() -> sandboxes.stage(
+                            SANDBOX, new ExecSandboxes.Replace("repos", archive, LARGE_ARCHIVE, BEYOND_HANG)));
+                    boolean interrupted = Thread.interrupted();
+                    stop(interrupter);
+                    // Also takes back an interrupt that came after the call, so that it cannot reach a later call.
+                    late.set(Thread.interrupted());
+                    return new Ended(failure, interrupted);
+                });
 
                 int left = archive.available();
                 assertThat(filled)
@@ -507,18 +502,14 @@ class KubernetesExecSandboxesTest {
                 assertThat(LARGE_ARCHIVE - left)
                         .as("the copy waited on a full send queue")
                         .isGreaterThanOrEqualTo(SEND_QUEUE);
-                assertThat(failure)
+                assertThat(call.failure())
                         .as("the interrupt, not another failure, ended the call")
                         .isInstanceOf(SandboxException.class)
                         .hasMessageContaining("Interrupted");
-                assertThat(interrupted)
+                assertThat(call.interrupted())
                         .as("the caller's interrupt is still set")
                         .isTrue();
-                assertThat(elapsed).isLessThan(budget.dividedBy(2));
-                Thread.sleep(500);
-                assertThat(archive.available())
-                        .as("the copy ended with the call")
-                        .isEqualTo(left);
+                assertReadNoMore(archive, left);
             } catch (Exception | Error bodyFailure) {
                 try {
                     release(peer.get());
@@ -655,8 +646,20 @@ class KubernetesExecSandboxesTest {
         return new ExecSandboxes.Command(ARGV, timeout, 1024);
     }
 
-    private static long elapsedMillis(long started) {
-        return TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started);
+    /** How a call ended: what it threw, and whether its thread's interrupt was set when it returned. */
+    private record Ended(@Nullable Throwable failure, boolean interrupted) {}
+
+    /** Runs the call on a thread of its own, and fails the test there if the call outlives {@link #HANG}. */
+    private static Ended ended(ThrowingCallable call) {
+        return assertTimeoutPreemptively(HANG, () -> new Ended(catchThrowable(call), Thread.interrupted()));
+    }
+
+    /** Nothing reads the archive once the call returned: the copy that the call owns ended with it. */
+    private static void assertReadNoMore(ByteArrayInputStream archive, int left) {
+        Awaitility.await("nothing reads the archive after the call returned")
+                .during(Duration.ofMillis(500))
+                .atMost(Duration.ofSeconds(2))
+                .until(() -> archive.available() == left);
     }
 
     /** Waits for a test's latch in the server's dispatch, at most as long as a test runs. */

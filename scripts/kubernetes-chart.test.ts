@@ -193,7 +193,8 @@ await test("every profile installs from the same templates with only the operato
 		}
 		const values = install(profile, prepared, operator);
 		assert.equal(validate(values), true, `${name}: ${JSON.stringify(validate.errors)}`);
-		assert.equal(at(values, ["worker", "enabled"]), false, `${name} enables the worker`);
+		// The single-node profile runs reviews; the operator states the sandbox namespace and API endpoint.
+		assert.equal(at(values, ["worker", "enabled"]), name === "small.yaml", `${name} worker`);
 	}
 });
 

@@ -407,14 +407,13 @@ public class KubernetesExecSandboxes implements ExecSandboxes, AutoCloseable {
      * boundary.
      */
     private SandboxException sendFailed(String sandbox, long deadline, ExecutionException e) {
-        Exception failure =
-                switch (e.getCause()) {
-                    case IOException io -> io;
-                    case KubernetesClientException api -> api;
-                    case RuntimeException unchecked -> throw unchecked;
-                    case Error error -> throw error;
-                    case null, default -> e;
-                };
+        Exception failure = switch (e.getCause()) {
+            case IOException io -> io;
+            case KubernetesClientException api -> api;
+            case RuntimeException unchecked -> throw unchecked;
+            case Error error -> throw error;
+            case null, default -> e;
+        };
         if (left(deadline) <= 0) {
             return new SandboxException("Staging into the turn sandbox timed out", failure);
         }

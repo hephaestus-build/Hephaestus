@@ -1076,7 +1076,6 @@ class KubernetesSandboxLiveTest {
         assertThat(spec.getCompletions()).isOne();
         assertThat(spec.getParallelism()).isOne();
         assertThat(spec.getBackoffLimit()).isZero();
-        assertThat(spec.getPodReplacementPolicy()).isEqualTo("Failed");
         assertThat(spec.getActiveDeadlineSeconds()).isPositive();
         assertThat(spec.getTtlSecondsAfterFinished())
                 .isEqualTo((int) KubernetesReviewJobs.TTL_AFTER_FINISHED.toSeconds());

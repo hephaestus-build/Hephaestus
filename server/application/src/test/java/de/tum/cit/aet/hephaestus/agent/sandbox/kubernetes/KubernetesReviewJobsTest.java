@@ -67,7 +67,6 @@ class KubernetesReviewJobsTest {
         assertThat(job.getSpec().getBackoffLimit())
                 .as("PostgreSQL decides a retry")
                 .isZero();
-        assertThat(job.getSpec().getPodReplacementPolicy()).isEqualTo("Failed");
         assertThat(job.getSpec().getActiveDeadlineSeconds()).isEqualTo(900L);
         assertThat(job.getSpec().getTtlSecondsAfterFinished()).isEqualTo(900);
         assertThat(job.getSpec().getTemplate().getSpec()).isEqualTo(template.getSpec());

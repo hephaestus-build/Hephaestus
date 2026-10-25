@@ -129,7 +129,7 @@ nats:
     maxFileBytes: 17179869184
   persistence:
     storageClassName: ""
-  # Measured at 1.3 to 2.7 GiB on 2026-10-25: JetStream's memory and file caches.
+  # JetStream's memory and file caches grow above the request, up to the limit.
   resources:
     requests: { cpu: 100m, memory: 1536Mi, ephemeral-storage: 64Mi }
     limits: { cpu: "1", memory: 3Gi, ephemeral-storage: 256Mi }
@@ -143,14 +143,13 @@ nats:
 #
 # The JVM roles (server, webhook, worker) request all of their memory limit: the buildpack sizes the
 # heap from the limit, so a node that has only the request cannot hold what the JVM grows to. Each
-# size is a measured resident set of 2026-10-25 plus headroom.
+# size is a measured resident set plus headroom (docs/admin/kubernetes.mdx § Profiles).
 server:
   # 1, or 0 to stop it. Never more until servers process provider events in order across replicas.
   replicas: 1
   # Commit ingestion mirrors under the fabric root, on node storage. A cache: the server rebuilds it.
   gitCache:
     sizeLimit: 20Gi
-  # Measured at 1.5 GiB.
   resources:
     requests: { cpu: 250m, memory: 2560Mi, ephemeral-storage: 512Mi }
     limits: { cpu: "4", memory: 2560Mi, ephemeral-storage: 22Gi }
@@ -169,7 +168,6 @@ webhook:
     maxAge: 180d
     maxBytes: 1GB
     maxBytesGithub: 10GB
-  # Measured at 1.0 GiB.
   resources:
     requests: { cpu: 250m, memory: 1280Mi, ephemeral-storage: 256Mi }
     limits: { cpu: "2", memory: 1280Mi, ephemeral-storage: 1Gi }
@@ -214,7 +212,6 @@ worker:
     probeInterval: 15m
   gitCache:
     sizeLimit: 50Gi
-  # Measured at 0.8 to 1.4 GiB.
   resources:
     requests: { cpu: 250m, memory: 2Gi, ephemeral-storage: 512Mi }
     limits: { cpu: "4", memory: 2Gi, ephemeral-storage: 52Gi }

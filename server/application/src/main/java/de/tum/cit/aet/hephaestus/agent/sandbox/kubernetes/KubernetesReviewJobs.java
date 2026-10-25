@@ -63,8 +63,6 @@ public class KubernetesReviewJobs {
                 .withParallelism(1)
                 // The claim in PostgreSQL decides whether an attempt runs again, never the Job controller.
                 .withBackoffLimit(0)
-                // No replacement while a failed Pod still terminates.
-                .withPodReplacementPolicy("Failed")
                 .withActiveDeadlineSeconds(activeDeadlineSeconds)
                 .withTtlSecondsAfterFinished((int) TTL_AFTER_FINISHED.toSeconds())
                 .withNewTemplate()

@@ -103,6 +103,11 @@ const workerLayer = {
 	worker: { enabled: true, runtime: workerRuntime, sandbox: { namespace: sandboxNamespace } },
 	networkPolicy: { kubernetesApi },
 };
+/** What the operator states for the single-node profile's worker (docs/admin/kubernetes.mdx § Install). */
+const reviews = {
+	worker: { sandbox: { namespace: sandboxNamespace } },
+	networkPolicy: { kubernetesApi },
+};
 
 type Resource = Record<string, unknown>;
 /** A values file path, or values to write to a file. */
@@ -331,9 +336,13 @@ const maxFileBytes = {
 };
 const layersFor = (name: (typeof profiles)[number]) =>
 	name === "external"
-		? [profile("small"), prepared, operator, external]
-		: [profile(name), prepared, operator];
+		? [profile("small"), prepared, operator, reviews, external]
+		: [profile(name), prepared, operator, ...(name === "small" ? [reviews] : [])];
 const bundled = (name: (typeof profiles)[number]) => name !== "external";
+const runsReviews = (name: (typeof profiles)[number]) => name === "small" || name === "external";
+/** The worker and what it writes into the sandbox namespace. */
+const workerOwned = (resource: Resource) =>
+	["worker", "sandbox"].includes(String(componentOf(resource)));
 const imageOf = {
 	server: "application-server",
 	webhook: "application-server",
@@ -348,12 +357,13 @@ for (const name of profiles) {
 		const components = workloads(resources)
 			.map((resource) => String(componentOf(resource)))
 			.toSorted(byCodePoint);
-		assert.deepEqual(
-			components,
-			bundled(name)
-				? ["nats", "postgresql", "server", "webapp", "webhook"]
-				: ["server", "webapp", "webhook"],
-		);
+		assert.deepEqual(components, [
+			...(bundled(name) ? ["nats", "postgresql"] : []),
+			"server",
+			"webapp",
+			"webhook",
+			...(runsReviews(name) ? ["worker"] : []),
+		]);
 		for (const [component, image] of Object.entries(imageOf)) {
 			if (!components.includes(component)) {
 				continue;
@@ -384,9 +394,12 @@ for (const name of profiles) {
 			assert.equal(envValue(role, "HEPHAESTUS_RELEASE_COMMIT"), prepared.release.commit);
 			assert.equal(envValue(role, "APP_VERSION"), "1.2.3");
 		}
-		// One migration owner, the revision's Job; no cluster-wide authority, no worker objects.
+		// One migration owner, the revision's Job; no cluster-wide authority. Only the worker holds a
+		// Role, in the sandbox namespace; its own test checks that authority.
 		for (const resource of resources.filter(
-			(candidate) => !(kindOf(candidate) === "Job" && componentOf(candidate) === "migration"),
+			(candidate) =>
+				!(kindOf(candidate) === "Job" && componentOf(candidate) === "migration") &&
+				!workerOwned(candidate),
 		)) {
 			assert.ok(
 				![
@@ -405,19 +418,21 @@ for (const name of profiles) {
 			);
 			const annotations = get(resource, "metadata", "annotations");
 			assert.ok(!isRecord(annotations) || !("helm.sh/hook" in annotations), nameOf(resource));
-			assert.notEqual(componentOf(resource), "worker", nameOf(resource));
 		}
 	});
 
 	await test(`${name}: every pod is restricted, tokenless and bounded, and reads secrets by reference`, () => {
 		const resources = rendered(layersFor(name));
-		for (const account of resources.filter((resource) => kindOf(resource) === "ServiceAccount")) {
+		// Only the worker calls the Kubernetes API, so only its Pods mount a token.
+		for (const account of resources.filter(
+			(resource) => kindOf(resource) === "ServiceAccount" && !workerOwned(resource),
+		)) {
 			assert.equal(get(account, "automountServiceAccountToken"), false, nameOf(account));
 		}
 		for (const resource of workloads(resources)) {
 			const label = nameOf(resource);
 			const spec = podSpec(resource);
-			assert.equal(get(spec, "automountServiceAccountToken"), false, label);
+			assert.equal(get(spec, "automountServiceAccountToken"), workerOwned(resource), label);
 			assert.equal(get(spec, "securityContext", "runAsNonRoot"), true, label);
 			assert.notEqual(get(spec, "securityContext", "runAsUser"), 0, label);
 			assert.equal(get(spec, "securityContext", "seccompProfile", "type"), "RuntimeDefault", label);
@@ -637,7 +652,8 @@ for (const name of ["small", "external"] as const) {
 					const selector = get(peer, "podSelector");
 					const labels = get(selector, "matchLabels");
 					assert.ok(
-						isRecord(labels) && Object.keys(labels).length > 0,
+						(isRecord(labels) && Object.keys(labels).length > 0) ||
+							list(get(selector, "matchExpressions")).length > 0,
 						`${nameOf(candidate)} admits a whole namespace`,
 					);
 				}
@@ -1374,7 +1390,7 @@ await test("the server requires the worker registration token exactly when a wor
 			"secretKeyRef",
 			"optional",
 		);
-	assert.equal(optional(layersFor("small")), true);
+	assert.equal(optional(layersFor("dev")), true);
 	assert.equal(optional([...layersFor("small"), workerLayer]), undefined);
 	const worker = workload(rendered([...layersFor("small"), workerLayer]), "worker");
 	assert.equal(
@@ -1515,10 +1531,15 @@ await test("every revision migrates the database once, in a Job that only reache
 	);
 	// It starts once PostgreSQL accepts connections: on a first install, both start together.
 	const [wait] = list(get(podSpec(migration), "initContainers"));
-	assert.deepEqual(
-		list(get(wait, "env")).map((variable) => get(variable, "value")),
-		["heph-postgresql.hephaestus.svc", "5432"],
-	);
+	const waitEnv = (name: string) =>
+		list(get(wait, "env")).find((variable) => get(variable, "name") === name);
+	assert.equal(get(waitEnv("DATABASE_HOST"), "value"), "heph-postgresql.hephaestus.svc");
+	assert.equal(get(waitEnv("DATABASE_PORT"), "value"), "5432");
+	// pg_isready runs as a user that the image's passwd does not name: without PGUSER it never dials.
+	assert.deepEqual(get(waitEnv("PGUSER"), "valueFrom", "secretKeyRef"), {
+		name: secretName,
+		key: "DATABASE_USERNAME",
+	});
 	assert.match(String(list(get(wait, "command")).at(-1)), /pg_isready/u);
 	// No Helm hook: the Job is part of the release, so `--wait-for-jobs` waits for it.
 	assert.equal(get(migration, "metadata", "annotations", "helm.sh/hook"), undefined);
@@ -1613,7 +1634,7 @@ await test("replica counts stop the database roles, start the server alone, and 
 	assert.deepEqual(restored, running);
 
 	// A count does not create a worker that is not enabled.
-	const disabled = rendered([...layersFor("small"), { worker: { replicas: 1 } }]);
+	const disabled = rendered([...layersFor("small"), { worker: { enabled: false, replicas: 1 } }]);
 	assert.equal(
 		disabled.some((resource) => componentOf(resource) === "worker"),
 		false,
@@ -1682,9 +1703,26 @@ await test("values that the chart does not accept fail the render", () => {
 				profile("small"),
 				prepared,
 				operator,
+				reviews,
 				{ ...external, postgresql: { bundled: false, external: { cidr: "10.0.12.0/24" } } },
 			],
 			/postgresql\.external\.host is required/u,
+		],
+		// The single-node profile runs reviews, so an install that skips either sandbox value stops.
+		[
+			"the single-node profile without a sandbox namespace",
+			[profile("small"), prepared, operator, { networkPolicy: { kubernetesApi } }],
+			/worker\.sandbox\.namespace is required/u,
+		],
+		[
+			"the single-node profile without the Kubernetes API endpoint",
+			[
+				profile("small"),
+				prepared,
+				operator,
+				{ worker: { sandbox: { namespace: sandboxNamespace } } },
+			],
+			/networkPolicy\.kubernetesApi\.cidr is required/u,
 		],
 		[
 			"a second server",
@@ -1713,20 +1751,6 @@ await test("values that the chart does not accept fail the render", () => {
 			"an external database in plain text",
 			[...layersFor("external"), { postgresql: { external: { sslmode: "disable" } } }],
 			/sslmode/u,
-		],
-		[
-			"a worker without the API endpoint",
-			[
-				...layersFor("small"),
-				{
-					worker: {
-						enabled: true,
-						runtime: workerRuntime,
-						sandbox: { namespace: sandboxNamespace },
-					},
-				},
-			],
-			/networkPolicy\.kubernetesApi\.cidr is required/u,
 		],
 		[
 			"a worker without the API port",

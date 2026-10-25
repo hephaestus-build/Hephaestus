@@ -38,7 +38,8 @@ jobs:
           install: "none"
       - uses: ./.github/actions/setup-helm
       - uses: ./.github/actions/setup-kubernetes-tools
-      - name: Validate every rendered resource on the lowest and the latest Kubernetes
+      # The render runs `helm lint --strict` on each set of values before it renders them.
+      - name: Lint the chart and validate every rendered resource on the lowest and the latest Kubernetes
         run: |
           set -euo pipefail
           node scripts/kubernetes-cluster.ts render > manifests.yaml
