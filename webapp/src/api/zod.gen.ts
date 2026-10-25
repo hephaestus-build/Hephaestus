@@ -4009,8 +4009,10 @@ export const zOwnItemTrace = z.object({
 
 export const zProfileReview = z.object({
     feedback: z.array(zOwnFeedbackRef),
+    positionOnWork: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
     results: z.array(zResultList),
-    review: zReviewRef
+    review: zReviewRef,
+    totalOnWork: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' })
 });
 
 export const zProfileReviewDetail = z.object({

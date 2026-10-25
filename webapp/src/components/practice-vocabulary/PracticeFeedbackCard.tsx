@@ -26,10 +26,9 @@ import { count, type FeedbackTextSegment, linkWork } from "./feedback-text";
 import { FEEDBACK_USEFULNESS_DEFS, type FeedbackUsefulness } from "./feedback-usefulness-defs";
 import { FeedbackText } from "./FeedbackText";
 import { FeedbackWorkTimeline } from "./FeedbackWorkTimeline";
-import { GroupName } from "./GroupName";
 import type { Outcome } from "./outcome-defs";
 import { cleanLabel, timelinePieces } from "./practice-feedback-timeline";
-import { PracticePill } from "./PracticePill";
+import { PracticeInGroup } from "./PracticeInGroup";
 
 export type FeedbackBand = "comment" | "disagreement";
 
@@ -318,22 +317,14 @@ export function PracticeFeedbackCard({
 	// What the feedback is about: the practice, its group, and where the feedback stands.
 	const head = (
 		<div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-			<div className="flex flex-wrap items-center gap-3 text-sm">
-				<PracticePill
-					name={practiceName}
-					onOpen={onOpenPractice && (() => onOpenPractice(practiceSlug))}
-				/>
-				{/* "in" moves with the group, so a wrap never leaves it at the end of the line. */}
-				<span className="inline-flex max-w-full min-w-0 items-center gap-3">
-					<span className="text-muted-foreground">in</span>
-					<GroupName
-						name={group?.name ?? "Unassigned"}
-						icon={GroupIcon}
-						pill={groupPill}
-						onOpen={group && onOpenGroup && (() => onOpenGroup(group.slug))}
-					/>
-				</span>
-			</div>
+			<PracticeInGroup
+				practiceName={practiceName}
+				onOpenPractice={onOpenPractice && (() => onOpenPractice(practiceSlug))}
+				groupName={group?.name ?? "Unassigned"}
+				groupIcon={GroupIcon}
+				groupPill={groupPill}
+				onOpenGroup={group && onOpenGroup && (() => onOpenGroup(group.slug))}
+			/>
 			<StatusBadge
 				def={FEEDBACK_STATE_DEFS[state]}
 				className={FEEDBACK_STATE_DEFS[state].className}

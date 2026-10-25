@@ -449,6 +449,25 @@ export function SubjectCell({
 }
 
 /**
+ * The look of a row's own link, for a table that draws its link itself: plain at rest, the accent
+ * and an underline while the row (`group/row`) is hovered, with its arrow after the words.
+ */
+export const ROW_LINK_CLASS = cn(
+	"inline-flex items-center gap-1 font-medium whitespace-nowrap group-hover/row:text-mentor group-hover/row:underline",
+	ROW_CONTROL_FOCUS,
+);
+
+/** The arrow after a row link's words, which steps forward while the row is hovered. */
+export function RowLinkArrow() {
+	return (
+		<ArrowRightIcon
+			className="size-3.5 shrink-0 transition-transform motion-safe:group-hover/row:translate-x-0.5"
+			aria-hidden
+		/>
+	);
+}
+
+/**
  * The row's own link at its end: an `InlineLink` drawn as a button carrying `data-row-link` and no
  * handler of its own, so the press bubbles to the row, which owns the opening. A row given a real
  * link draws that instead, carrying the same mark, and the link opens itself. The link rule is
@@ -466,16 +485,10 @@ function RowLinkCell({ link }: { link: PracticeTableRowLink | undefined }) {
 					render={link.render ?? <button type="button" />}
 					data-row-link
 					aria-label={`${link.text} ${link.name}`}
-					className={cn(
-						"inline-flex items-center gap-1 font-medium whitespace-nowrap group-hover/row:text-mentor group-hover/row:underline",
-						ROW_CONTROL_FOCUS,
-					)}
+					className={ROW_LINK_CLASS}
 				>
 					{link.text}
-					<ArrowRightIcon
-						className="size-3.5 shrink-0 transition-transform motion-safe:group-hover/row:translate-x-0.5"
-						aria-hidden
-					/>
+					<RowLinkArrow />
 				</InlineLink>
 			)}
 		</TableCell>

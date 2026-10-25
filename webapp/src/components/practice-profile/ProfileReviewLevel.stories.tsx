@@ -1,23 +1,20 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn, screen, userEvent, waitFor, within } from "storybook/test";
 
-import { detailStackKey } from "@/components/layout/detail-drawer/detail-stack";
+import { InlineLink } from "@/components/common/InlineLink";
 import { DetailDrawerHeader } from "@/components/layout/detail-drawer/DetailDrawerHeader";
 import { DetailDrawerStack } from "@/components/layout/detail-drawer/DetailDrawerStack";
 import { DetailStackLink } from "@/components/layout/detail-drawer/DetailStackLink";
-import { ReviewRequestedNotice } from "@/components/practice-trace/ReviewRequestedNotice";
+import { ROW_LINK_CLASS, RowLinkArrow } from "@/components/practice-vocabulary/PracticeTable";
 import { DrawerBody, DrawerTitle } from "@/components/ui/drawer";
 import { withPageBehind } from "@/stories/decorators";
 import { expectSettledVisible } from "@/stories/overlay";
 import { groups } from "@/stories/practice-profile-story-mock-data";
 import { openProfileReviewDetail } from "@/stories/profile-reviews-story-mock-data";
 import { expectNoPanelOverflow } from "@/stories/reflow";
-import { daysBefore } from "@/stories/story-clock";
-import { levelsOpenedBy } from "@/test/detail-stack";
 
 import {
 	practiceLevel,
-	REVIEW_SELECTION_CLEARED,
 	reviewLevel,
 	REVIEWS_LEVEL,
 	REVIEWS_OF_YOUR_WORK,
@@ -28,7 +25,6 @@ const detail = openProfileReviewDetail;
 const { review } = detail;
 
 const loaded = { status: "ready", detail } satisfies ProfileReviewDetailState;
-const REQUESTED_REVIEW_ID = "0f2b7c1e-9a3d-4c5b-8e1f-2d6a7b8c9d01";
 
 const [, focused] = detail.results;
 if (!focused) {
@@ -72,24 +68,28 @@ const meta = {
 		},
 		state: loaded,
 		positionOnWork: 2,
+		totalOnWork: 2,
 		groupOf: () => groups[0],
 		onOpenPractice: fn(),
 		observationLink: (result) => (
-			<DetailStackLink
+			<InlineLink
+				className={ROW_LINK_CLASS}
 				aria-label={`Open observation for ${result.practiceName}`}
-				entry={practiceLevel(result.practiceSlug)}
-				levelSearch={{ practiceTab: "results", observation: result.id }}
+				render={
+					<DetailStackLink
+						entry={practiceLevel(result.practiceSlug)}
+						levelSearch={{ practiceTab: "results", observation: result.id }}
+					/>
+				}
 			>
 				Open observation
-			</DetailStackLink>
+				<RowLinkArrow />
+			</InlineLink>
 		),
-		tab: "practices",
-		onTabChange: fn(),
 		filters: {},
 		onFiltersChange: fn(),
-		onReviewNow: fn(),
 	},
-	argTypes: { path: { control: false }, requestOutcome: { control: false } },
+	argTypes: { path: { control: false } },
 	render: (args) => (
 		<DetailDrawerStack stack={[REVIEWS_LEVEL, reviewLevel(review.id)]} onClose={fn()}>
 			{(entry, level) =>
@@ -116,19 +116,21 @@ type Story = StoryObj<typeof meta>;
 export const Default: Story = {
 	play: async ({ args }) => {
 		const panel = await settledReviewPanel();
-		await expect(screen.getByRole("link", { name: /^Open the original/u })).toBeVisible();
-		await userEvent.click(screen.getByRole("button", { name: "Request review" }));
-		await expect(args.onReviewNow).toHaveBeenCalledWith(review.item.id);
+		// The work line is the link to the original; asking for another review is the list's.
+		await expect(
+			screen.getByRole("link", { name: new RegExp(review.item.label, "u") }),
+		).toHaveAttribute("href", review.item.url ?? "");
+		await expect(screen.queryByRole("link", { name: /^Open the original/u })).toBeNull();
+		await expect(screen.queryByRole("button", { name: /Request review/u })).toBeNull();
+		within(panel).getByRole("separator");
 		await expect(screen.getByText("Requested")).toBeVisible();
-		await expect(screen.getByText("Review 2")).toBeVisible();
-		await expect(
-			screen.getByRole("tab", { name: `Every practice ${detail.results.length}` }),
-		).toBeVisible();
-		await expect(
-			screen.getByRole("tab", { name: `What we noticed ${detail.trace.events.length}` }),
-		).toBeVisible();
+		await expect(screen.getByText("Review 2 of 2")).toBeVisible();
+		// The review lists its practices and nothing else: no tabs.
+		await expect(screen.queryByRole("tablist")).toBeNull();
 
-		await expect(screen.getByRole("list", { name: "Your feedback" })).toBeVisible();
+		// The feedback this review gave sits with its observations in their practices, not here.
+		await expect(screen.queryByText("Feedback from this review")).toBeNull();
+		await expect(screen.queryByRole("list", { name: "Your feedback" })).toBeNull();
 
 		const table = within(practiceTable());
 		for (const result of detail.results) {
@@ -147,83 +149,6 @@ export const ExactObservationLinks: Story = {
 		const link = table.getByRole("link", { name: `Open observation for ${focused.practiceName}` });
 		await expect(link).toHaveAttribute("href", expect.stringContaining(focused.id));
 		await expect(table.queryByRole("button", { name: /^Show evidence/u })).toBeNull();
-	},
-};
-
-export const WhatWeNoticed: Story = {
-	args: {
-		tab: "noticed",
-		state: readyWith({
-			trace: {
-				...detail.trace,
-				events: [
-					{
-						name: "scm.pull_request.ready",
-						displayName: "Marked ready for review",
-						occurredAt: daysBefore(2),
-					},
-				],
-			},
-		}),
-	},
-	play: async () => {
-		await settledReviewPanel();
-		await expect(screen.getByRole("heading", { name: "What we noticed" })).toBeVisible();
-		await expect(screen.getByText("Marked ready for review")).toBeVisible();
-	},
-};
-
-export const AskingForAReview: Story = {
-	args: { requesting: review.item.id },
-	play: async () => {
-		await settledReviewPanel();
-		await expect(screen.getByRole("button", { name: "Requesting review…" })).toBeDisabled();
-	},
-};
-
-/**
- * An ask from this review was accepted. The way to the new review stands in this one's place over
- * the list, and leaves this review's practice filter behind.
- */
-export const WithRequestedReview: Story = {
-	parameters: {
-		router: {
-			initialUrl: `/?detail=${encodeURIComponent(
-				JSON.stringify([detailStackKey(REVIEWS_LEVEL), detailStackKey(reviewLevel(review.id))]),
-			)}&reviewPractice=thin-controllers`,
-		},
-	},
-	args: {
-		requestOutcome: (
-			<ReviewRequestedNotice
-				review={
-					<DetailStackLink
-						entry={reviewLevel(REQUESTED_REVIEW_ID)}
-						single
-						levelSearch={REVIEW_SELECTION_CLEARED}
-					/>
-				}
-			/>
-		),
-	},
-	play: async () => {
-		const panel = within(await settledReviewPanel());
-		const link = within(panel.getByRole("note")).getByRole("link", {
-			name: "View requested review",
-		});
-		await expect(levelsOpenedBy(link)).toStrictEqual([
-			detailStackKey(REVIEWS_LEVEL),
-			`review:${REQUESTED_REVIEW_ID}`,
-		]);
-		await expect(link.getAttribute("href")).not.toMatch(/admin|reviewPractice/u);
-	},
-};
-
-export const WithoutAsking: Story = {
-	args: { onReviewNow: undefined },
-	play: async () => {
-		await settledReviewPanel();
-		await expect(screen.queryByRole("button", { name: /Request review/u })).toBeNull();
 	},
 };
 

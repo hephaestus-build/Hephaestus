@@ -37,9 +37,8 @@ import {
 } from "@/components/practice-profile/practice-profile-search";
 import { PracticeGroupDetailDrawer } from "@/components/practice-profile/PracticeGroupDetailDrawer";
 import { PracticeProfilePage } from "@/components/practice-profile/PracticeProfilePage";
-import { RefusalFixLink } from "@/components/practice-trace/RefusalFixLink";
 import { ReviewRequestedNotice } from "@/components/practice-trace/ReviewRequestedNotice";
-import { TraceRefusalAlert } from "@/components/practice-trace/TraceRefusalAlert";
+import { ROW_LINK_CLASS, RowLinkArrow } from "@/components/practice-vocabulary/PracticeTable";
 import { ReviewResultDetails, ReviewResultRow } from "@/components/profile/ReviewResultRow";
 import type { FeedbackResponseControls } from "@/components/profile/reviews";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -52,9 +51,7 @@ import { useWorkspaceFeatures } from "@/hooks/use-workspace-features";
 import { formatShortDay, formatTime } from "@/lib/dates";
 import { pageHead } from "@/lib/page-title";
 import { hasText } from "@/lib/text";
-import { hasMinimumWorkspaceRole } from "@/lib/workspace-roles";
 import { useAuth } from "@/runtime/auth/AuthContext";
-import { workspaceMembershipQueryOptions } from "@/runtime/auth/guard";
 
 export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/practice-profile")({
 	component: PracticeProfile,
@@ -75,8 +72,6 @@ function PracticeProfile() {
 	// A user view reads the developer's page and answers nothing on their behalf.
 	const readOnly = useAuth().userView !== undefined;
 	const { workspaceSlug } = Route.useParams();
-	const membership = useQuery(workspaceMembershipQueryOptions(workspaceSlug));
-	const isAdmin = !readOnly && hasMinimumWorkspaceRole(membership.data?.role, "ADMIN");
 	const search = Route.useSearch();
 
 	const detailStack = parseDetailStack(search.detail, PRACTICE_PROFILE_LEVEL_KINDS);
@@ -116,6 +111,9 @@ function PracticeProfile() {
 		reviewId: openReviewId,
 		itemKind: search.reviewKind,
 		since: search.reviewSince,
+		status: search.reviewStatus,
+		itemId: search.reviewItem,
+		order: search.reviewOrder,
 	});
 	const detail = usePracticeGroupDetail({
 		workspaceSlug,
@@ -145,20 +143,17 @@ function PracticeProfile() {
 	// A user view reads the developer's page; it never spends their workspace's budget.
 	const onReviewNow = readOnly ? undefined : reviews.onReviewNow;
 	const accepted = readOnly ? undefined : reviews.accepted;
-	// The new review opens over the list, or in the open review's place so Back returns to it; either
-	// way without the tab and filters chosen on the review it leaves.
-	const requestedReview = (inPlace: boolean) =>
-		accepted && (
-			<ReviewRequestedNotice
-				review={
-					<DetailStackLink
-						entry={reviewLevel(accepted.reviewId)}
-						single={inPlace}
-						levelSearch={REVIEW_SELECTION_CLEARED}
-					/>
-				}
-			/>
-		);
+	// The new review opens over the list, without the tab and filters chosen on a review.
+	const requestedReview = accepted && (
+		<ReviewRequestedNotice
+			review={
+				<DetailStackLink
+					entry={reviewLevel(accepted.reviewId)}
+					levelSearch={REVIEW_SELECTION_CLEARED}
+				/>
+			}
+		/>
+	);
 	const openGroup = (group: GroupRef) => stackControls.open(practiceGroupLevel(group.slug));
 	const groupOf = (practiceSlug: string) => {
 		const groupSlug = practiceStandings.find((entry) => entry.slug === practiceSlug)?.groupSlug;
@@ -237,41 +232,39 @@ function PracticeProfile() {
 				reviews={{
 					list: {
 						feed: reviews.list,
-						positions: reviews.positions,
 						onOpenReview: (reviewId) => stackControls.open(reviewLevel(reviewId)),
 						kind: search.reviewKind,
 						onKindChange: (reviewKind) => setView({ reviewKind }),
 						since: search.reviewSince,
 						onSinceChange: (reviewSince) => setView({ reviewSince }),
+						status: search.reviewStatus,
+						onStatusChange: (reviewStatus) => setView({ reviewStatus }),
+						order: search.reviewOrder,
+						onOrderChange: (reviewOrder) => setView({ reviewOrder }),
+						total: reviews.total,
+						trackedItemId: search.reviewItem,
+						onTrack: (item) => setView({ reviewItem: item?.id }),
 						onReviewNow,
 						requesting: reviews.requesting,
 						// Only while no review is open over the list: that review says its own answer.
-						requestOutcome: openReviewId === undefined && requestedReview(false),
+						requestOutcome: openReviewId === undefined && requestedReview,
 					},
 					open: {
 						state: reviews.open,
-						onReviewNow,
-						requesting: reviews.requesting,
-						requestOutcome: reviews.refusal ? (
-							<TraceRefusalAlert
-								refusal={reviews.refusal}
-								fix={
-									isAdmin &&
-									reviews.refusal.reason !== null && (
-										<RefusalFixLink workspaceSlug={workspaceSlug} reason={reviews.refusal.reason} />
-									)
-								}
-							/>
-						) : (
-							requestedReview(true)
-						),
-						tab: search.reviewTab,
-						onTabChange: (reviewTab) => setView({ reviewTab }),
-						filters: { group: search.reviewGroup, practice: search.reviewPractice },
+						filters: {
+							group: search.reviewGroup,
+							practice: search.reviewPractice,
+							outcome: search.reviewOutcome,
+						},
 						onFiltersChange: (next) =>
-							setView({ reviewGroup: next.group, reviewPractice: next.practice }),
+							setView({
+								reviewGroup: next.group,
+								reviewPractice: next.practice,
+								reviewOutcome: next.outcome,
+							}),
 						observationLink: (result) => (
 							<InlineLink
+								className={ROW_LINK_CLASS}
 								aria-label={`Open observation for ${result.practiceName}`}
 								render={
 									<DetailStackLink
@@ -285,6 +278,7 @@ function PracticeProfile() {
 								}
 							>
 								Open observation
+								<RowLinkArrow />
 							</InlineLink>
 						),
 						groupOf,

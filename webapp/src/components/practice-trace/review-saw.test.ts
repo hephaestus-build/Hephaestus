@@ -1,45 +1,38 @@
 import { describe, expect, it } from "vitest";
 
-import { type ReviewSaw, reviewLead, reviewReach } from "./review-saw";
+import { outcomeCounts, practicesLabel, type ReviewSaw } from "./review-saw";
 
-describe("recorded outcome totals", () => {
-	it("counts sibling outcomes as practices", () => {
-		expect(
-			reviewReach({
-				status: "PARTIAL",
-				results: { met: 2, notMet: 1, doesNotApply: 0, couldNotDetermine: 0 },
-				notMetPractices: [],
-			}),
-		).toBe("two practices met");
-	});
+const saw = (
+	status: ReviewSaw["status"],
+	results: Partial<ReviewSaw["results"]> = {},
+): ReviewSaw => ({
+	status,
+	results: { met: 0, notMet: 0, doesNotApply: 0, couldNotDetermine: 0, ...results },
 });
 
-function nothingNotMet(status: ReviewSaw["status"], couldNotDetermine = 0): ReviewSaw {
-	return {
-		status,
-		results: { met: 2, notMet: 0, doesNotApply: 0, couldNotDetermine },
-		notMetPractices: [],
-	};
-}
-
-describe("the lead of a review with nothing not met", () => {
-	// A partial review may have run to the end, so its lead names the scope and never a stop.
-	it("scopes a partial review's clean lead to what it reached", () => {
-		expect(reviewLead(nothingNotMet("PARTIAL"))).toBe("Nothing to improve in what it reached");
-		expect(reviewLead(nothingNotMet("COMPLETE"))).toBe("Nothing to improve");
+describe("what a review saw", () => {
+	it("counts the practices it reviewed, in digits", () => {
+		expect(practicesLabel(saw("COMPLETE", { met: 5, notMet: 2, doesNotApply: 1 }))).toBe(
+			"8 practices",
+		);
+		expect(practicesLabel(saw("PARTIAL", { met: 1 }))).toBe("1 practice");
 	});
 
-	it.each(["PARTIAL", "COMPLETE"] as const)(
-		"says a %s review could not determine some practices",
-		(status) => {
-			expect(reviewLead(nothingNotMet(status, 1))).toBe("Some practices could not be determined");
-		},
-	);
+	it("breaks the practices down by outcome, in the registry's order, leaving out empty ones", () => {
+		expect(
+			outcomeCounts(saw("COMPLETE", { met: 5, notMet: 2, doesNotApply: 1 })).map(
+				(entry) => entry.text,
+			),
+		).toStrictEqual(["5 met", "2 not met", "1 does not apply"]);
+		expect(
+			outcomeCounts(saw("COMPLETE", { couldNotDetermine: 3 })).map((entry) => entry.text),
+		).toStrictEqual(["3 could not determine"]);
+	});
 
-	it.each(["FAILED", "CANCELLED"] as const)(
-		"says a %s review stopped before it finished",
-		(status) => {
-			expect(reviewLead(nothingNotMet(status))).toBe("Stopped before it finished");
-		},
-	);
+	it("says a review with nothing recorded has no practices, yet while it runs", () => {
+		expect(practicesLabel(saw("RUNNING"))).toBe("No practices yet");
+		expect(practicesLabel(saw("QUEUED"))).toBe("No practices yet");
+		expect(practicesLabel(saw("FAILED"))).toBe("No practices");
+		expect(outcomeCounts(saw("FAILED"))).toStrictEqual([]);
+	});
 });

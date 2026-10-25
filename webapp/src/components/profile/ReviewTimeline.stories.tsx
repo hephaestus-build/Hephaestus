@@ -19,6 +19,8 @@ const reviews: ProfileReview[] = [
 	detailReview,
 	{
 		review: reviewRef(THREAD_REVIEW, conversation("#releases"), daysBefore(5)),
+		positionOnWork: 1,
+		totalOnWork: 1,
 		results: [
 			{
 				...listedResult(searchedAndFoundNothing),

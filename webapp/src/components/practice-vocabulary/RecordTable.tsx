@@ -140,6 +140,8 @@ interface RecordRowsProps<TRow> {
 	renderRow: (row: TRow) => ReactNode;
 	/** What the table says when there are no rows. */
 	empty: ReactNode;
+	/** Classes on the `<table>`, such as a list that centers its cells in the row. */
+	tableClassName?: string;
 }
 
 export interface RecordDayTableProps<TRow> extends RecordRowsProps<TRow> {
@@ -176,9 +178,15 @@ export function RecordGroupedTable<TRow>({
 	renderRow,
 	empty,
 	loadingMore = 0,
+	tableClassName,
 }: RecordGroupedTableProps<TRow>) {
 	return (
-		<RecordTableFrame aria-label={label} columns={columns} busy={loadingMore > 0}>
+		<RecordTableFrame
+			aria-label={label}
+			columns={columns}
+			busy={loadingMore > 0}
+			tableClassName={tableClassName}
+		>
 			{groups.length === 0 && <EmptyBody span={columns.length}>{empty}</EmptyBody>}
 			{groups.map((group) => (
 				<TableBody key={group.label}>

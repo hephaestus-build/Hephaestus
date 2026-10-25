@@ -7,16 +7,13 @@ import de.tum.cit.aet.hephaestus.practices.profile.dto.ProfileReviewDetailDTO;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceScopedController;
 import io.swagger.v3.oas.annotations.Operation;
-import java.time.Instant;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
-import org.jspecify.annotations.Nullable;
-import org.springframework.data.domain.PageRequest;
+import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 
 @ConditionalOnServerRole
 @WorkspaceScopedController
@@ -28,13 +25,8 @@ public class PracticeProfileReviewController {
 
     @GetMapping
     @Operation(operationId = "listOwnReviews", summary = "List reviews with results about you")
-    public PageResponseDTO<ProfileReviewDTO> list(
-            WorkspaceContext ws,
-            @RequestParam(required = false) @Nullable String itemKind,
-            @RequestParam(required = false) @Nullable Instant since,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) {
-        return PageResponseDTO.from(reviews.list(ws, itemKind, null, null, since, PageRequest.of(page, size)));
+    public PageResponseDTO<ProfileReviewDTO> list(WorkspaceContext ws, @ParameterObject OwnReviewListParams query) {
+        return PageResponseDTO.from(reviews.list(ws, query.filter(), query.pageable()));
     }
 
     @GetMapping("/{reviewId}")

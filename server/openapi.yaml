@@ -6927,17 +6927,55 @@ paths:
           maxLength: 51
           minLength: 3
           pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
-      - in: query
+      - description: Only work of these kinds
+        in: query
         name: itemKind
         required: false
         schema:
+          type: array
+          items:
+            type: string
+      - description: "Only the reviews of this work and, for a pull request, of the\
+          \ code reviews on it"
+        in: query
+        name: itemId
+        required: false
+        schema:
           type: string
+          maxLength: 19
+          pattern: "^[1-9][0-9]*$"
+      - description: Only reviews in these statuses
+        in: query
+        name: status
+        required: false
+        schema:
+          type: array
+          items:
+            type: string
+            enum:
+            - QUEUED
+            - RUNNING
+            - COMPLETE
+            - PARTIAL
+            - FAILED
+            - CANCELLED
       - in: query
         name: since
         required: false
         schema:
           type: string
           format: date-time
+      - description: "OLDEST lists the oldest review first; NEWEST, the default, the\
+          \ newest"
+        in: query
+        name: order
+        required: false
+        schema:
+          type: string
+          default: NEWEST
+          enum:
+          - NEWEST
+          - OLDEST
       - in: query
         name: page
         required: false
@@ -21231,16 +21269,27 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/OwnFeedbackRef"
+        positionOnWork:
+          type: integer
+          format: int32
+          description: "This review's place among the reader's reviews of its work,\
+            \ oldest first, whatever the list's filters keep"
         results:
           type: array
           items:
             $ref: "#/components/schemas/ResultList"
         review:
           $ref: "#/components/schemas/ReviewRef"
+        totalOnWork:
+          type: integer
+          format: int32
+          description: How many reviews of its work recorded something about the reader
       required:
       - feedback
+      - positionOnWork
       - results
       - review
+      - totalOnWork
     ProfileReviewDetail:
       type: object
       properties:

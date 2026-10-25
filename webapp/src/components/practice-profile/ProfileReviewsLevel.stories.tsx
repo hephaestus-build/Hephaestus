@@ -5,7 +5,6 @@ import type { ProfileReview } from "@/api/types.gen";
 import { detailStackKey } from "@/components/layout/detail-drawer/detail-stack";
 import { DetailDrawerStack } from "@/components/layout/detail-drawer/DetailDrawerStack";
 import { DetailStackLink } from "@/components/layout/detail-drawer/DetailStackLink";
-import { reviewPositionsOnItem } from "@/components/practice-trace/review-groups";
 import { ReviewRequestedNotice } from "@/components/practice-trace/ReviewRequestedNotice";
 import type { ReviewFeedState } from "@/components/profile/reviews";
 import { withPageBehind } from "@/stories/decorators";
@@ -58,10 +57,13 @@ const meta = {
 	args: {
 		path: { behind: [{ label: "Practice profile", depth: 0 }], onClose: fn() },
 		feed: feedOf(profileReviews),
-		positions: reviewPositionsOnItem(profileReviews.map((entry) => entry.review)),
 		onOpenReview: fn(),
 		onKindChange: fn(),
 		onSinceChange: fn(),
+		onStatusChange: fn(),
+		onOrderChange: fn(),
+		onTrack: fn(),
+		total: profileReviews.length,
 		onReviewNow: fn(),
 	},
 	argTypes: { path: { control: false } },
@@ -79,27 +81,67 @@ type Story = StoryObj<typeof meta>;
 export const Default: Story = {
 	play: async ({ args }) => {
 		const panel = await settledDrawerPanel();
-		await expect(screen.getAllByText("Latest")).toHaveLength(1);
+		await expect(screen.getAllByText("Latest review")).toHaveLength(1);
 		await expect(screen.getAllByText("Requested")).toHaveLength(1);
-		await expect(screen.getByLabelText("Timeframe")).toHaveTextContent("All time");
-		await expect(screen.getByText("Review 2")).toBeVisible();
-		await expect(screen.getByText("Thin controllers")).toBeVisible();
-		await expect(screen.getByText("one practice met, one could not be determined")).toBeVisible();
-		await expect(screen.getByText("Explain each change, Keep the diff reviewable")).toBeVisible();
-		await expect(screen.getByText("one practice did not apply")).toBeVisible();
-		await expect(screen.getByText("Stopped before it finished")).toBeVisible();
-		await expect(screen.getAllByText("Nothing to improve")).toHaveLength(2);
+		// The timeframe is the segmented range of Practices across the workspace.
+		await expect(
+			within(screen.getByRole("toolbar", { name: "Timeframe" })).getByRole("button", {
+				name: "All time",
+			}),
+		).toHaveAttribute("aria-pressed", "true");
+		await expect(screen.getByText("Review 2 of 2")).toBeVisible();
+		// The latest review is the framed row, and says so in its top left corner, over its status.
+		const latestRow = screen.getByText("Latest review").closest("tr");
+		if (latestRow === null) {
+			throw new Error("Expected the latest review's row.");
+		}
+		await expect(latestRow).toHaveAttribute("data-latest", "true");
+		await expect(getComputedStyle(latestRow).outlineStyle).toBe("solid");
+		const corner = screen.getByText("Latest review").getBoundingClientRect();
+		const rowBox = latestRow.getBoundingClientRect();
+		await expect(corner.top - rowBox.top).toBeLessThan(12);
+		await expect(corner.left - rowBox.left).toBeLessThan(12);
+		const row = within(latestRow);
+		// The status stands over the review's time, in the same cell: no column of its own.
+		const status = row.getByRole("button", { name: "Completed" }).getBoundingClientRect();
+		const time = latestRow.querySelector("time")?.getBoundingClientRect();
+		await expect(time).toBeDefined();
+		await expect(status.bottom).toBeLessThanOrEqual((time?.top ?? 0) + 1);
+		await expect(corner.bottom).toBeLessThanOrEqual(status.top);
+		// "What it saw" counts the practices and their outcomes, and says nothing else.
+		const table = within(screen.getByRole("table", { name: REVIEWS_OF_YOUR_WORK }));
+		await expect(table.queryByRole("columnheader", { name: "Status" })).toBeNull();
+		// The count of practices on its line, the outcomes on the line under it.
+		const practices = row.getByText("3 practices").getBoundingClientRect();
+		const met = row.getByText("1 met").getBoundingClientRect();
+		await expect(met.top).toBeGreaterThanOrEqual(practices.bottom - 1);
+		await expect(table.getByText("3 practices")).toBeVisible();
+		await expect(table.getByText("1 could not determine")).toBeVisible();
+		await expect(table.getByText("2 practices")).toBeVisible();
+		await expect(table.getByText("2 not met")).toBeVisible();
+		await expect(table.getByText("1 does not apply")).toBeVisible();
+		await expect(table.getByText("No practices")).toBeVisible();
+		await expect(table.queryByText("Thin controllers")).toBeNull();
+		await expect(screen.queryByText("Nothing to improve")).toBeNull();
 
-		const feedbackLinks = screen.getAllByRole("link", { name: /^Read the feedback on the/u });
-		await expect(feedbackLinks).toHaveLength(1);
-		await expect(feedbackLinks[0]).toHaveAttribute(
-			"href",
-			openProfileReview.feedback[0]?.copies[0]?.externalUrl,
+		// The feedback is read from its observation, not from the list.
+		await expect(screen.queryByRole("link", { name: /^Read the feedback on the/u })).toBeNull();
+		await expect(screen.queryByText("one piece of feedback")).toBeNull();
+
+		// Another review is asked for from a work's latest review only: one button per work.
+		const asks = screen.getAllByRole("button", { name: /^Request another review: /u });
+		await expect(asks).toHaveLength(
+			new Set(profileReviews.map((entry) => entry.review.item.id)).size,
 		);
-		await expect(screen.getByText("one piece of feedback")).toBeVisible();
-
-		const asks = screen.getAllByRole("button", { name: /^Request review: /u });
-		await expect(asks).toHaveLength(profileReviews.length);
+		const olderRun = screen
+			.getAllByRole("row")
+			.find((candidate) => within(candidate).queryByText("Review 1 of 2"));
+		if (olderRun === undefined) {
+			throw new Error("Expected the earlier review of the work reviewed twice.");
+		}
+		await expect(
+			within(olderRun).queryByRole("button", { name: /^Request another review: /u }),
+		).toBeNull();
 		const [firstAsk] = asks;
 		if (!firstAsk) {
 			throw new Error("Expected a row the reader may ask about.");
@@ -108,11 +150,14 @@ export const Default: Story = {
 		await expect(args.onReviewNow).toHaveBeenCalledWith(openItem.id);
 
 		const [newest] = screen.getAllByRole("button", {
-			name: new RegExp(`^Open review of ${openItem.label}, `, "u"),
+			name: new RegExp(`^See the reviewed practices for ${openItem.label}, `, "u"),
 		});
 		if (!newest) {
 			throw new Error("Expected a row link per review.");
 		}
+		// The row link stays on one line at 1280.
+		const lineHeight = Number.parseFloat(getComputedStyle(newest).lineHeight);
+		await expect(newest.getBoundingClientRect().height).toBeLessThan(lineHeight * 1.5);
 		await userEvent.click(newest);
 		await expect(args.onOpenReview).toHaveBeenCalledWith(openProfileReview.review.id);
 		await expectNoPanelOverflow(panel);
@@ -124,15 +169,291 @@ export const Default: Story = {
  * not the latest review, so none wears the tag.
  */
 export const Filtered: Story = {
-	args: { kind: "scm.issue", since: "30d" },
+	args: { kind: ["scm.issue"], since: "30d", total: 1 },
 	play: async ({ args }) => {
 		await settledDrawerPanel();
-		await expect(screen.getByLabelText("Show")).toHaveTextContent("Issues");
-		await expect(screen.getByLabelText("Timeframe")).toHaveTextContent("Last 30 days");
-		await expect(screen.queryByText("Latest")).toBeNull();
+		// The admin Reviews tab's chips: the facet shows what it holds, the count what it kept.
+		await expect(
+			within(screen.getByRole("group", { name: "Filters" })).getAllByText(/Issues/u)[0],
+		).toBeVisible();
+		await expect(screen.getByText("1 review matches your filters.")).toBeVisible();
+		await expect(
+			within(screen.getByRole("toolbar", { name: "Timeframe" })).getByRole("button", {
+				name: "Last 30 days",
+			}),
+		).toHaveAttribute("aria-pressed", "true");
+		await expect(screen.queryByText("Latest review")).toBeNull();
 		await userEvent.click(screen.getByRole("button", { name: /^Reset/u }));
 		await expect(args.onKindChange).toHaveBeenCalledWith(undefined);
 		await expect(args.onSinceChange).toHaveBeenCalledWith(undefined);
+	},
+};
+
+/**
+ * A work reviewed more than once offers Track on its rows, as the admin lists do: it narrows the
+ * list to every review of that work. A work reviewed once offers none.
+ */
+export const TrackAWorksReviews: Story = {
+	play: async ({ args }) => {
+		await settledDrawerPanel();
+		// Both row controls share one width and one height.
+		const [firstAsk] = screen.getAllByRole("button", { name: /^Request another review: /u });
+		const [firstTrack] = screen.getAllByRole("button", { name: /^Track this work: /u });
+		if (firstAsk === undefined || firstTrack === undefined) {
+			throw new Error("Expected both row controls.");
+		}
+		await expect(firstAsk.getBoundingClientRect().width).toBeCloseTo(
+			firstTrack.getBoundingClientRect().width,
+			0,
+		);
+		await expect(firstAsk.getBoundingClientRect().height).toBeCloseTo(
+			firstTrack.getBoundingClientRect().height,
+			0,
+		);
+		// Icons only: each button names itself on hover and focus, and the line over the table says
+		// what both do.
+		await expect(firstAsk).not.toHaveTextContent(/\S/u);
+		await expect(firstTrack).not.toHaveTextContent(/\S/u);
+		await userEvent.hover(firstTrack);
+		const tip = await screen.findByText("Track this work", {
+			selector: "[data-slot=tooltip-content]",
+		});
+		await expect(tip).toHaveAttribute("data-open");
+		await userEvent.unhover(firstTrack);
+		const table = screen.getByRole("table", { name: REVIEWS_OF_YOUR_WORK });
+		const legend = screen.getByText(/show only its reviews/u).closest("p");
+		await expect(legend).toHaveTextContent("Request another review");
+		await expect(legend?.getBoundingClientRect().bottom ?? Infinity).toBeLessThanOrEqual(
+			table.getBoundingClientRect().top,
+		);
+		const tracks = screen.getAllByRole("button", {
+			name: new RegExp(`^Track this work: ${openItem.label}, `, "u"),
+		});
+		// Each run's Track has a name of its own: the review's time follows the work.
+		await expect(new Set(tracks.map((track) => track.getAttribute("aria-label"))).size).toBe(
+			tracks.length,
+		);
+		await expect(tracks).toHaveLength(2);
+		const onceReviewed = profileReviews.find(
+			(entry) =>
+				profileReviews.filter((other) => other.review.item.id === entry.review.item.id).length ===
+				1,
+		);
+		if (onceReviewed === undefined) {
+			throw new Error("The fixture needs a work reviewed once.");
+		}
+		await expect(
+			screen.queryByRole("button", {
+				name: new RegExp(`^Track this work: ${onceReviewed.review.item.label}, `, "u"),
+			}),
+		).toBeNull();
+		const [first] = tracks;
+		if (first === undefined) {
+			throw new Error("Expected a Track toggle.");
+		}
+		await userEvent.click(first);
+		await expect(args.onTrack).toHaveBeenCalledWith(openItem);
+	},
+};
+
+/** Tracking one work: its reviews in sequence, the bar says what is tracked, one press stops it. */
+export const TrackingAWork: Story = {
+	args: {
+		feed: feedOf(profileReviews.filter((entry) => entry.review.item.id === openItem.id)),
+		trackedItemId: openItem.id,
+	},
+	play: async ({ args }) => {
+		await settledDrawerPanel();
+		const bar = screen.getByRole("group", { name: "Selection" });
+		await expect(within(bar).getByText("Tracking:")).toBeVisible();
+		await expect(screen.getByText("Review 2 of 2")).toBeVisible();
+		for (const toggle of screen.getAllByRole("button", {
+			name: new RegExp(`^Track this work: ${openItem.label}, `, "u"),
+		})) {
+			await expect(toggle).toHaveAttribute("aria-pressed", "true");
+		}
+		await userEvent.click(within(bar).getByRole("button", { name: /^Stop tracking/u }));
+		await expect(args.onTrack).toHaveBeenCalledWith(undefined);
+	},
+};
+
+/**
+ * A pressed Track keeps the primary fill in dark mode too, where the outline button's own pressed
+ * ground would leave the icon nearly invisible.
+ */
+export const TrackingAWorkDark: Story = {
+	...TrackingAWork,
+	globals: { theme: "dark" },
+	play: async ({ canvasElement }) => {
+		await settledDrawerPanel();
+		const [toggle] = screen.getAllByRole("button", {
+			name: new RegExp(`^Track this work: ${openItem.label}, `, "u"),
+		});
+		if (toggle === undefined) {
+			throw new Error("Expected a pressed Track toggle.");
+		}
+		await expect(toggle).toHaveAttribute("aria-pressed", "true");
+		const primary = document.createElement("span");
+		primary.className = "bg-primary";
+		canvasElement.append(primary);
+		await expect(getComputedStyle(toggle).backgroundColor).toBe(
+			getComputedStyle(primary).backgroundColor,
+		);
+		primary.remove();
+	},
+};
+
+/**
+ * Tracking a work while another filter leaves none of its reviews: the bar says what it tracks in
+ * words instead of a placeholder for a name nothing is loading.
+ */
+export const TrackingWithNoMatches: Story = {
+	args: {
+		feed: feedOf([]),
+		trackedItemId: openItem.id,
+		status: ["FAILED"],
+		total: 0,
+	},
+	play: async () => {
+		await settledDrawerPanel();
+		const bar = screen.getByRole("group", { name: "Selection" });
+		await expect(bar).toHaveTextContent("Tracking:a piece of work");
+		await expect(bar.querySelector("[data-slot=skeleton]")).toBeNull();
+		within(bar).getByRole("button", { name: "Stop tracking (a piece of work)" });
+	},
+};
+
+/**
+ * A status filter keeps each review's place on its work, which the server counts over every review
+ * of the work: the latest review still offers Request another review, and an earlier one does not.
+ */
+export const StatusFilterKeepsTheLatestReview: Story = {
+	args: {
+		status: ["COMPLETE"],
+		feed: feedOf([
+			openProfileReview,
+			{
+				...openProfileReview,
+				review: { ...openProfileReview.review, id: "00000000-0000-0000-0000-0000000003b1" },
+				positionOnWork: 1,
+			},
+		]),
+	},
+	play: async () => {
+		await settledDrawerPanel();
+		await expect(screen.getByText("Review 2 of 2")).toBeVisible();
+		await expect(screen.getByText("Review 1 of 2")).toBeVisible();
+		const asks = screen.getAllByRole("button", { name: /^Request another review: /u });
+		await expect(asks).toHaveLength(1);
+		const latestRow = screen.getByText("Review 2 of 2").closest("tr");
+		if (latestRow === null) {
+			throw new Error("Expected the latest review's row.");
+		}
+		await expect(
+			within(latestRow).getByRole("button", { name: /^Request another review: /u }),
+		).toBe(asks[0]);
+	},
+};
+
+/** A filter that hides a work's latest review leaves none of its rows to ask from. */
+export const LatestReviewFilteredOut: Story = {
+	args: {
+		status: ["FAILED"],
+		feed: feedOf([
+			{
+				...openProfileReview,
+				review: { ...openProfileReview.review, status: "FAILED" },
+				positionOnWork: 1,
+			},
+		]),
+	},
+	play: async () => {
+		await settledDrawerPanel();
+		await expect(screen.getByText("Review 1 of 2")).toBeVisible();
+		await expect(screen.queryByRole("button", { name: /^Request another review: /u })).toBeNull();
+		await expect(screen.queryByText(/of the work, from its latest review/u)).toBeNull();
+	},
+};
+
+/**
+ * Two runs of one work, and works with the same number in another repository and at another
+ * provider: every button on the page still has a name of its own.
+ */
+export const ControlNamesStayUnique: Story = {
+	args: {
+		feed: feedOf([
+			openProfileReview,
+			{
+				...openProfileReview,
+				review: { ...openProfileReview.review, id: "00000000-0000-0000-0000-0000000003c1" },
+				positionOnWork: 1,
+			},
+			{
+				...openProfileReview,
+				review: {
+					...openProfileReview.review,
+					id: "00000000-0000-0000-0000-0000000003c2",
+					item: { ...openItem, id: "990001", container: "acme/other-service" },
+				},
+				positionOnWork: 1,
+				totalOnWork: 1,
+			},
+			// The same number in the same repository's name at another provider.
+			{
+				...openProfileReview,
+				review: {
+					...openProfileReview.review,
+					id: "00000000-0000-0000-0000-0000000003c3",
+					item: { ...openItem, id: "990002", provider: "GITHUB" },
+				},
+				positionOnWork: 1,
+				totalOnWork: 1,
+			},
+		]),
+	},
+	play: async () => {
+		await settledDrawerPanel();
+		const names = screen
+			.getAllByRole("button", { name: /^(?:Track this work|Request another review): /u })
+			.map((button) => button.getAttribute("aria-label"));
+		await expect(names.length).toBeGreaterThan(2);
+		await expect(new Set(names).size).toBe(names.length);
+	},
+};
+
+/** The sort of the admin Reviews tab: newest first by default, oldest first on request. */
+export const SortedOldestFirst: Story = {
+	args: { order: "OLDEST" },
+	play: async ({ args }) => {
+		await settledDrawerPanel();
+		await expect(screen.getByRole("combobox", { name: "Sort" })).toHaveTextContent("Oldest first");
+		// Oldest first, the newest row is not the latest review either.
+		await expect(screen.queryByText("Latest review")).toBeNull();
+		await userEvent.click(screen.getByRole("combobox", { name: "Sort" }));
+		await userEvent.click(await screen.findByRole("option", { name: "Newest first" }));
+		await expect(args.onOrderChange).toHaveBeenCalledWith(undefined);
+	},
+};
+
+/** The status filter names each status as the developer's review surfaces do. */
+export const FilteredByStatus: Story = {
+	args: {
+		status: ["PARTIAL", "FAILED"],
+		feed: feedOf([]),
+	},
+	play: async ({ args }) => {
+		await settledDrawerPanel();
+		const filters = within(screen.getByRole("group", { name: "Filters" }));
+		await expect(filters.getAllByText(/Partial/u)[0]).toBeVisible();
+		await expect(screen.getByText("No reviews match your filters.")).toBeVisible();
+		// An empty Failed list does not say that nothing failed: the list holds only reviews that
+		// recorded something.
+		await expect(
+			screen.getByText("Only reviews that recorded something about your work appear here."),
+		).toBeVisible();
+		await userEvent.click(screen.getByRole("button", { name: /^Reset/u }));
+		await expect(args.onStatusChange).toHaveBeenCalledWith(undefined);
+		await expect(args.onTrack).toHaveBeenCalledWith(undefined);
 	},
 };
 
@@ -154,11 +475,10 @@ export const ManyReviews: Story = {
 			}),
 			{ hasMore: true },
 		),
-		positions: undefined,
 	},
 	play: async ({ args }) => {
 		await settledDrawerPanel();
-		const openers = screen.getAllByRole("button", { name: /^Open review /u });
+		const openers = screen.getAllByRole("button", { name: /^See the reviewed practices /u });
 		await expect(openers).toHaveLength(30);
 		const frame = openers.at(-1)?.closest("[data-slot='table-container']")?.parentElement;
 		if (!frame) {
@@ -209,8 +529,11 @@ export const AskingForAReview: Story = {
 	args: { requesting: openItem.id },
 	play: async () => {
 		await settledDrawerPanel();
-		await expect(screen.getAllByText("Requesting review…")).toHaveLength(2);
-		await expect(screen.getAllByText("Request review")).toHaveLength(profileReviews.length - 2);
+		// The work's latest review asks; its earlier review offers no button to ask from.
+		await expect(screen.getAllByRole("button", { name: /^Requesting review…: /u })).toHaveLength(1);
+		await expect(
+			screen.getAllByRole("button", { name: /^Request another review: /u }),
+		).toHaveLength(new Set(profileReviews.map((entry) => entry.review.item.id)).size - 1);
 	},
 };
 
@@ -235,28 +558,26 @@ export const CouldNotDetermineResults: Story = {
 				),
 			},
 		]),
-		positions: undefined,
 	},
 	play: async () => {
 		await settledDrawerPanel();
-		await expect(screen.getAllByText("Some practices could not be determined")).toHaveLength(2);
+		await expect(screen.getAllByText("1 could not determine")).toHaveLength(2);
 		await expect(screen.queryByText("Nothing to improve")).toBeNull();
 	},
 };
 
-/** A review still going says so in words and counts nothing yet. */
+/** A review still going counts no practices yet; its status badge says it runs. */
 export const WhileAReviewIsRunning: Story = {
 	args: { feed: feedOf([runningProfileReview, ...profileReviews]) },
 	play: async () => {
 		await settledDrawerPanel();
-		await expect(screen.getByText("Still running")).toBeVisible();
-		await expect(screen.getByText("Observations appear as it finishes")).toBeVisible();
+		await expect(screen.getByText("No practices yet")).toBeVisible();
 	},
 };
 
 /**
- * A partial review with nothing to improve in what it reached. It may have run to the end with a
- * practice failed or withheld, so its row scopes the lead instead of saying it stopped.
+ * A partial review with nothing to improve in what it reached: its row counts what it reached, and
+ * its status badge says it was partial.
  */
 export const PartialReview: Story = {
 	args: {
@@ -269,11 +590,10 @@ export const PartialReview: Story = {
 				),
 			},
 		]),
-		positions: undefined,
 	},
 	play: async ({ args }) => {
 		await settledDrawerPanel();
-		await expect(screen.getByText("Nothing to improve in what it reached")).toBeVisible();
+		await expect(screen.getByText(/^\d+ met$/u)).toBeVisible();
 		// The status is the label the workspace admin's list of reviews shows, with its sentence.
 		const badge = screen.getByRole("button", { name: "Partial" });
 		await expect(badge).toHaveAccessibleDescription(
@@ -331,7 +651,7 @@ export const Empty: Story = {
 
 /** A filter that keeps nothing says so, rather than claim no review of the work exists. */
 export const FilteredEmpty: Story = {
-	args: { feed: feedOf([]), kind: "docs.document" },
+	args: { feed: feedOf([]), kind: ["docs.document"] },
 	play: async () => {
 		await settledDrawerPanel();
 		await expect(screen.getByText("No reviews match your filters.")).toBeVisible();
