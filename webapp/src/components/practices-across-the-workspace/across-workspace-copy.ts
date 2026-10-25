@@ -1,9 +1,12 @@
 import { CircleDashedIcon } from "lucide-react";
 
 import type { PracticesAcrossWorkspaceTiles, WorkspaceSplit } from "@/api/types.gen";
-import { ACTIVITY_RANGE_DEFS, type ActivityRange } from "@/components/activity/activity-range";
 import type { FilterOption } from "@/components/common/FilterToggle";
 import { statusValues } from "@/components/common/status-def";
+import {
+	REVIEW_TIMEFRAME_DEFS,
+	type ReviewTimeframe,
+} from "@/components/practice-profile/practice-profile-search";
 import { count } from "@/components/practice-vocabulary/feedback-text";
 import {
 	isSettledStanding,
@@ -19,34 +22,32 @@ export type AcrossWorkspaceWindow = PracticesAcrossWorkspaceTiles["window"];
 
 interface WindowDef {
 	label: string;
-	shortLabel: string;
 	/** The window as the tail of a sentence: "with a standing so far". */
 	phrase: string;
 }
 
-function activityWindow(range: ActivityRange): WindowDef {
-	const def = ACTIVITY_RANGE_DEFS[range];
-	return { label: def.label, shortLabel: def.shortLabel, phrase: `in ${def.inSentence}` };
+/** A window that reaches back some days from now, named as the reviews list's timeframe names it. */
+function lastDays(timeframe: ReviewTimeframe): WindowDef {
+	const { days, label } = REVIEW_TIMEFRAME_DEFS[timeframe];
+	return { label, phrase: `in the last ${days} days` };
 }
 
 /**
- * Shortest first, as Apple Health orders its ranges, and in Activity's words for the same span. A
- * total `Record`, so a window the server adds fails to compile instead of rendering blank.
+ * Shortest first, as the timeframe of Reviews of your work orders and words them ("Last 7 days |
+ * Last 30 days | Last 90 days | All time"). A total `Record`, so a window the server adds fails to
+ * compile instead of rendering blank.
  */
 const WINDOW_DEFS: Record<AcrossWorkspaceWindow, WindowDef> = {
-	DAYS_30: activityWindow("30d"),
-	DAYS_90: activityWindow("90d"),
-	ALL_TIME: { label: "All time", shortLabel: "All time", phrase: "so far" },
+	DAYS_7: lastDays("7d"),
+	DAYS_30: lastDays("30d"),
+	DAYS_90: lastDays("90d"),
+	ALL_TIME: { label: "All time", phrase: "so far" },
 };
 
 export const WINDOW_VALUES = statusValues(WINDOW_DEFS);
 
 export const WINDOW_OPTIONS: readonly FilterOption<AcrossWorkspaceWindow>[] = WINDOW_VALUES.map(
-	(value) => ({
-		value,
-		label: WINDOW_DEFS[value].label,
-		shortLabel: WINDOW_DEFS[value].shortLabel,
-	}),
+	(value) => ({ value, label: WINDOW_DEFS[value].label }),
 );
 
 export const DEFAULT_WINDOW: AcrossWorkspaceWindow = "DAYS_30";

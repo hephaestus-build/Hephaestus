@@ -3957,7 +3957,7 @@ export type PracticesAcrossWorkspaceTiles = {
     /**
      * The window the tiles read evidence over
      */
-    window: 'ALL_TIME' | 'DAYS_30' | 'DAYS_90';
+    window: 'ALL_TIME' | 'DAYS_7' | 'DAYS_30' | 'DAYS_90';
     /**
      * The practices the reader's profile lists, the denominator of the practice tiles
      */
@@ -14687,7 +14687,7 @@ export type GetPracticeWorkspaceTilesData = {
         workspaceSlug: string;
     };
     query: {
-        window: 'ALL_TIME' | 'DAYS_30' | 'DAYS_90';
+        window: 'ALL_TIME' | 'DAYS_7' | 'DAYS_30' | 'DAYS_90';
     };
     url: '/workspaces/{workspaceSlug}/practices/tiles';
 };

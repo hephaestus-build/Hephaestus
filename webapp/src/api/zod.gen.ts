@@ -7060,6 +7060,7 @@ export const zPracticesAcrossWorkspaceTiles = z.object({
     reviewedWork: zWorkspaceTile,
     window: z.enum([
         'ALL_TIME',
+        'DAYS_7',
         'DAYS_30',
         'DAYS_90'
     ]),

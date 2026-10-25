@@ -113,13 +113,19 @@ describe("Practices across the workspace", () => {
 		expect(tileWindows()).toStrictEqual(["DAYS_30"]);
 
 		const range = screen.getByRole("toolbar", { name: "Time range" });
-		await userEvent.click(within(range).getByRole("button", { name: "90 days" }));
+		await userEvent.click(within(range).getByRole("button", { name: "Last 90 days" }));
 
 		await waitFor(() => {
 			expect(router.state.location.search).toMatchObject({ window: "DAYS_90" });
 		});
 		await screen.findByText("29", undefined, ROUTE_RENDER_WAIT);
 		expect(tileWindows()).toStrictEqual(["DAYS_30", "DAYS_90"]);
+
+		await userEvent.click(within(range).getByRole("button", { name: "Last 7 days" }));
+		await waitFor(() => {
+			expect(router.state.location.search).toMatchObject({ window: "DAYS_7" });
+		});
+		await waitFor(() => expect(tileWindows()).toStrictEqual(["DAYS_30", "DAYS_90", "DAYS_7"]));
 		expect(overviewReads()).toHaveLength(1);
 		screen.getByRole("img", {
 			name: "28 developers in this workspace: 7 Needs attention, 6 Mixed feedback, 8 Going well, 7 none yet. You are in the Needs attention part.",
