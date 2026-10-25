@@ -26,9 +26,12 @@ import de.tum.cit.aet.hephaestus.practices.spi.FeedbackState;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultCoverage;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultMarkKind;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.EnumMap;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
@@ -175,7 +178,7 @@ public class ResultPresentation {
                 coverage(r, permitted),
                 r.getEndedAt(),
                 r.getEndReason(),
-                ownFeedback(r));
+                ownFeedback(r.getWorkspaceId(), List.of(r)).getOrDefault(r.getId(), List.of()));
     }
 
     public @Nullable ResultEvidenceDTO evidence(Result r, boolean permitted) {
@@ -240,41 +243,53 @@ public class ResultPresentation {
     }
 
     /**
-     * The developer's own feedback on a result. A withdrawn piece is left out, as the profile overview and the
-     * response guard read it: it accepts no response. A restore returns it with its earlier response.
+     * The developer's own feedback on each of {@code results}, read for all of them at once and keyed by result id. A
+     * withdrawn piece is left out, as the profile overview and the response guard read it: it accepts no response. A
+     * restore returns it with its earlier response.
      */
-    public List<OwnFeedbackRefDTO> ownFeedback(Result r) {
-        var developer = r.getDeveloperId();
-        if (developer == null) return List.of();
-        var rows = communication.ownFeedback(r.getWorkspaceId(), developer, r.getId());
-        var withdrawn = visibility.withdrawnAt(
-                r.getWorkspaceId(),
-                rows.stream()
-                        .map(ResultCommunicationRepository.OwnFeedback::getId)
-                        .toList());
-        return rows.stream()
-                .filter(row -> !withdrawn.containsKey(row.getId()))
-                .map(row -> {
-                    var responded = row.getRespondedAt();
-                    var response = responded == null
-                            ? null
-                            : new FeedbackResponseDTO(
-                                    row.getResolution(), row.getUsefulness(), row.getComment(), responded);
-                    return new OwnFeedbackRefDTO(
-                            row.getId(),
-                            row.getDestination(),
-                            row.getState(),
-                            row.getDeliveredAt(),
-                            response,
-                            ownCopies(r.getWorkspaceId(), row.getId()));
-                })
-                .toList();
-    }
-
-    private List<OwnFeedbackCopyRefDTO> ownCopies(long ws, UUID feedback) {
-        return communication.ownCopies(ws, feedback).stream()
-                .map(row ->
-                        new OwnFeedbackCopyRefDTO(row.getId(), row.getKind(), row.getExternalUrl(), row.getPostedAt()))
-                .toList();
+    public Map<UUID, List<OwnFeedbackRefDTO>> ownFeedback(long workspaceId, Collection<Result> results) {
+        Map<UUID, List<OwnFeedbackRefDTO>> byResult = new HashMap<>();
+        results.stream()
+                .filter(result -> result.getWorkspaceId() == workspaceId && result.getDeveloperId() != null)
+                .collect(Collectors.groupingBy(
+                        result -> Objects.requireNonNull(result.getDeveloperId()),
+                        Collectors.mapping(Result::getId, Collectors.toSet())))
+                .forEach((developer, ids) -> {
+                    var rows = communication.ownFeedback(workspaceId, developer, ids);
+                    if (rows.isEmpty()) return;
+                    var feedbackIds = rows.stream()
+                            .map(ResultCommunicationRepository.OwnFeedback::getId)
+                            .distinct()
+                            .toList();
+                    var withdrawn = visibility.withdrawnAt(workspaceId, feedbackIds);
+                    var copies = communication.ownCopies(workspaceId, feedbackIds).stream()
+                            .collect(Collectors.groupingBy(
+                                    ResultCommunicationRepository.OwnCopy::getFeedbackId,
+                                    Collectors.mapping(
+                                            row -> new OwnFeedbackCopyRefDTO(
+                                                    row.getId(),
+                                                    row.getKind(),
+                                                    row.getExternalUrl(),
+                                                    row.getPostedAt()),
+                                            Collectors.toList())));
+                    rows.stream()
+                            .filter(row -> !withdrawn.containsKey(row.getId()))
+                            .forEach(row -> {
+                                var responded = row.getRespondedAt();
+                                var response = responded == null
+                                        ? null
+                                        : new FeedbackResponseDTO(
+                                                row.getResolution(), row.getUsefulness(), row.getComment(), responded);
+                                byResult.computeIfAbsent(row.getResultId(), ignored -> new ArrayList<>())
+                                        .add(new OwnFeedbackRefDTO(
+                                                row.getId(),
+                                                row.getDestination(),
+                                                row.getState(),
+                                                row.getDeliveredAt(),
+                                                response,
+                                                copies.getOrDefault(row.getId(), List.of())));
+                            });
+                });
+        return byResult;
     }
 }

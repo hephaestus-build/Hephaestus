@@ -25,10 +25,10 @@ public interface EvidenceAuthorization {
     Set<UUID> permitsAll(long workspaceId, Collection<Result> practiceResults, SourceUsePurpose purpose);
 
     /**
-     * Runs {@code read} as one read of the workspace for {@code purpose}: every authorization inside it shares
-     * its source checks, so a source cited by several of the read's queries is checked once. Changes no answer.
+     * Runs {@code read} as one read of the workspace: every authorization inside it shares its source checks, so a
+     * source cited by several of the read's queries is checked once, whatever purpose each asks for. Changes no answer.
      */
-    default <T> T asOneRead(long workspaceId, SourceUsePurpose purpose, Supplier<T> read) {
+    default <T> T asOneRead(long workspaceId, Supplier<T> read) {
         return read.get();
     }
 }

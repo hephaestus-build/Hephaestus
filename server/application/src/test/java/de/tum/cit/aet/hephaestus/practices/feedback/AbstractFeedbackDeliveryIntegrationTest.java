@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.practices.feedback;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
@@ -54,7 +55,9 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewSnapshot;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -102,6 +105,13 @@ public abstract class AbstractFeedbackDeliveryIntegrationTest extends AbstractFe
                     incorrect ? FeedbackStopReason.RESULT_MARKED_INCORRECT : null,
                     Instant.now(),
                     new FeedbackCheckFacts(0, 0, true, true, true, true, incorrect, true, true, false));
+        });
+        // The page decides its unread pieces in one gate read; each piece gets the answer stubbed above.
+        when(gate.evaluateAll(anyLong(), anyCollection(), any(), anyBoolean())).thenAnswer(call -> {
+            Map<UUID, FeedbackCheck> checks = new LinkedHashMap<>();
+            for (Feedback row : call.<Collection<Feedback>>getArgument(1))
+                checks.put(row.getId(), gate.evaluate(row, call.getArgument(2), call.getArgument(3)));
+            return checks;
         });
         when(conversationReadiness.isReady(anyLong())).thenReturn(true);
         when(gate.mode(any())).thenReturn(FeedbackMode.AUTOMATIC);

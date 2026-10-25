@@ -24,6 +24,7 @@ import de.tum.cit.aet.hephaestus.practices.review.ProductReferenceQuery;
 import de.tum.cit.aet.hephaestus.practices.review.WorkspaceReviewDefaultsProvider;
 import de.tum.cit.aet.hephaestus.practices.review.feedbackmode.FeedbackModeResolver;
 import de.tum.cit.aet.hephaestus.practices.spi.CurrentDeveloperLookup;
+import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCheck;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCheckStage;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackClosedBy;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDestination;
@@ -39,6 +40,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -96,7 +98,7 @@ public class PracticePageFeedbackService {
         Instant now = clock.instant();
         // The gate and the page check the same evidence, so they share one read of its sources.
         var page = resultVisibility.asOneRead(
-                workspaceId, () -> page(workspaceId, eligibleReady(readable, view == null), now));
+                workspaceId, () -> page(workspaceId, eligibleReady(workspaceId, readable, view == null), now));
         var itemIds = page.stream()
                 .flatMap(card -> Stream.concat(
                         card.evidence().stream().map(Result::getItemId),
@@ -152,7 +154,8 @@ public class PracticePageFeedbackService {
         if (developerIds.isEmpty()) {
             return Map.of();
         }
-        var feedback = eligibleReady(feedbackRepository.findReadablePracticePage(workspaceId, developerIds), false);
+        var feedback = eligibleReady(
+                workspaceId, feedbackRepository.findReadablePracticePage(workspaceId, developerIds), false);
         var byDeveloper = feedback.stream().collect(Collectors.groupingBy(Feedback::getDeveloperId));
         Map<Long, Integer> counts = new LinkedHashMap<>();
         for (long developerId : developerIds) {
@@ -170,8 +173,8 @@ public class PracticePageFeedbackService {
      */
     @Transactional(readOnly = true)
     public List<Instant> unreadCreatedAt(long workspaceId, long developerId) {
-        var feedback =
-                eligibleReady(feedbackRepository.findReadablePracticePage(workspaceId, List.of(developerId)), false);
+        var feedback = eligibleReady(
+                workspaceId, feedbackRepository.findReadablePracticePage(workspaceId, List.of(developerId)), false);
         return page(workspaceId, feedback, clock.instant()).stream()
                 .filter(card -> !card.withdrawn() && card.feedback().getState() == FeedbackState.READY)
                 .map(card -> card.feedback().getCreatedAt())
@@ -296,11 +299,20 @@ public class PracticePageFeedbackService {
         return value != null && value.isString() ? value.asString() : null;
     }
 
-    private List<Feedback> eligibleReady(List<Feedback> pieces, boolean record) {
+    /** The pieces the page may show: every one already delivered, and each unread one the egress gate admits now. */
+    private List<Feedback> eligibleReady(long workspaceId, List<Feedback> pieces, boolean record) {
+        var unread = pieces.stream()
+                .filter(piece -> piece.getState() == FeedbackState.READY)
+                .toList();
+        if (unread.isEmpty()) return pieces;
+        var checks = record
+                ? store.checkAll(workspaceId, unread, false)
+                : gate.evaluateAll(workspaceId, unread, FeedbackCheckStage.EGRESS, false);
         return pieces.stream()
                 .filter(piece -> piece.getState() != FeedbackState.READY
-                        || (record ? store.check(piece, false) : gate.evaluate(piece, FeedbackCheckStage.EGRESS, false))
-                                .allowed())
+                        || Optional.ofNullable(checks.get(piece.getId()))
+                                .map(FeedbackCheck::allowed)
+                                .orElse(false))
                 .toList();
     }
 }

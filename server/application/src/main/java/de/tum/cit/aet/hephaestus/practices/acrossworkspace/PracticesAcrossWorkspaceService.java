@@ -3,7 +3,6 @@ package de.tum.cit.aet.hephaestus.practices.acrossworkspace;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountMembershipQuery;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonProcessingSuppression;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
-import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.practices.PracticeGroupService;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.dto.PracticesAcrossWorkspaceDTO;
 import de.tum.cit.aet.hephaestus.practices.acrossworkspace.dto.PracticesAcrossWorkspaceTilesDTO;
@@ -68,8 +67,7 @@ public class PracticesAcrossWorkspaceService {
     /** The splits by the current standing and the open feedback, whatever window the tiles read. */
     @Transactional(readOnly = true)
     public PracticesAcrossWorkspaceDTO read(WorkspaceContext context) {
-        return evidenceAuthorization.asOneRead(
-                context.id(), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY, () -> readOverview(context));
+        return evidenceAuthorization.asOneRead(context.id(), () -> readOverview(context));
     }
 
     private PracticesAcrossWorkspaceDTO readOverview(WorkspaceContext context) {
@@ -130,8 +128,7 @@ public class PracticesAcrossWorkspaceService {
     /** The reader's figures over the window beside the middle half of the developers with a standing in it. */
     @Transactional(readOnly = true)
     public PracticesAcrossWorkspaceTilesDTO readTiles(WorkspaceContext context, PracticesAcrossWorkspaceWindow window) {
-        return evidenceAuthorization.asOneRead(
-                context.id(), SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY, () -> readWindow(context, window));
+        return evidenceAuthorization.asOneRead(context.id(), () -> readWindow(context, window));
     }
 
     private PracticesAcrossWorkspaceTilesDTO readWindow(

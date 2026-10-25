@@ -37,7 +37,9 @@ import java.time.Duration;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.EnumMap;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Function;
@@ -76,10 +78,24 @@ public class ReviewSummaryQueryService {
     }
 
     public ReviewRefDTO ref(Review review) {
+        return ref(review, item(review));
+    }
+
+    /** Each review's reference, keyed by review id, with the reviewed work of all of them read at once. */
+    public Map<UUID, ReviewRefDTO> refs(long workspaceId, Collection<Review> reviews) {
+        var items = references.items(
+                workspaceId, reviews.stream().map(Review::getItemId).distinct().toList());
+        Map<UUID, ReviewRefDTO> refs = new LinkedHashMap<>();
+        reviews.forEach(review ->
+                refs.put(review.getId(), ref(review, Objects.requireNonNull(items.get(review.getItemId())))));
+        return refs;
+    }
+
+    private static ReviewRefDTO ref(Review review, ItemRefDTO item) {
         return new ReviewRefDTO(
                 review.getId(),
                 review.getKind(),
-                item(review),
+                item,
                 review.getItemVersion(),
                 review.getOrigin(),
                 review.getStatus(),

@@ -19,12 +19,15 @@ import de.tum.cit.aet.hephaestus.practices.feedback.page.PracticePageFeedbackSer
 import de.tum.cit.aet.hephaestus.practices.model.Result;
 import de.tum.cit.aet.hephaestus.practices.result.PracticeGroupStandingService;
 import de.tum.cit.aet.hephaestus.practices.result.PracticeStandingService;
+import de.tum.cit.aet.hephaestus.practices.result.ResultFeedQuery;
+import de.tum.cit.aet.hephaestus.practices.result.ResultQueryService;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewIntegrationData;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewIntegrationData.Scenario;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackIds;
 import de.tum.cit.aet.hephaestus.practices.spi.HistoryCustody;
 import de.tum.cit.aet.hephaestus.practices.spi.PracticeStanding;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
+import de.tum.cit.aet.hephaestus.practices.spi.ResultSort;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.SqlReadMeasurement;
 import de.tum.cit.aet.hephaestus.testconfig.SqlStatementCounter;
@@ -32,6 +35,7 @@ import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -47,6 +51,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -85,6 +90,12 @@ class PracticeProfileReadCostIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     SqlStatementCounter statements;
+
+    @Autowired
+    PracticeProfileReviewService reviewList;
+
+    @Autowired
+    ResultQueryService resultList;
 
     @Autowired
     FeedbackRepository feedback;
@@ -146,10 +157,14 @@ class PracticeProfileReadCostIntegrationTest extends BaseIntegrationTest {
     @Test
     void shouldKeepEachProfileReadAtAFixedStatementCountWhenMoreResultsArriveOnTheSameWork() {
         seed(2 * works.size());
-        var few = costs();
+        var few = costs(1);
         seed(4 * works.size());
-        var many = costs();
+        var many = costs(3);
 
+        // The practice page records the egress check of every unread piece it reads, one statement each. What the
+        // pieces share (here one practice, work item and recipient) is read once for all of them.
+        long fewPage = Objects.requireNonNull(few.remove("practice page feedback"));
+        assertThat(many.remove("practice page feedback")).isEqualTo(fewPage + 2);
         assertThat(many).isEqualTo(few);
     }
 
@@ -170,7 +185,7 @@ class PracticeProfileReadCostIntegrationTest extends BaseIntegrationTest {
     }
 
     /** Each read's statements, after checking that the read saw the seeded work. */
-    private Map<String, Long> costs() {
+    private Map<String, Long> costs(int unreadPieces) {
         var context = WorkspaceContext.fromWorkspace(scenario.workspace(), Set.of(), null);
         var shown = groups.findByWorkspaceIdAndShownToDevelopersTrueOrderByPositionAscNameAsc(
                 scenario.workspace().getId());
@@ -199,20 +214,47 @@ class PracticeProfileReadCostIntegrationTest extends BaseIntegrationTest {
                                 .singleElement()
                                 .satisfies(group -> assertThat(group.standing())
                                         .isNotIn(PracticeStanding.NOT_OBSERVED, PracticeStanding.NO_OPPORTUNITY))));
-        // A piece no one has read yet goes through the egress gate on every read.
-        var unread = practicePageFeedback(Objects.requireNonNull(newestProblem), false);
+        costs.put(
+                "reviews",
+                cost(
+                        () -> reviewList.list(
+                                context,
+                                new OwnReviewFilter(null, null, null, null, null, false),
+                                PageRequest.of(0, 10)),
+                        read -> assertThat(read.getContent()).isNotEmpty()));
+        costs.put(
+                "results",
+                cost(
+                        () -> resultList.listOwnResults(
+                                scenario.workspace().getId(),
+                                new ResultFeedQuery(null, null, null, null, null, null, false, ResultSort.NEWEST),
+                                PageRequest.of(0, 10)),
+                        read -> assertThat(read.getContent()).isNotEmpty()));
+        // Pieces no one has read yet go through the egress gate on every read.
+        List<UUID> unread = new ArrayList<>();
+        for (int piece = 0; piece < unreadPieces; piece++)
+            unread.add(practicePageFeedback(Objects.requireNonNull(newestProblem), false));
+        costs.put(
+                "unread practice page feedback",
+                cost(
+                        () -> practicePageFeedback.unreadCreatedAt(
+                                scenario.workspace().getId(),
+                                Objects.requireNonNull(scenario.account().getId())),
+                        // The gate decides the unread pieces and, as the page read below records, refuses them here.
+                        read -> assertThat(read).isEmpty()));
         costs.put(
                 "practice page feedback",
                 writingCost(
                         () -> practicePageFeedback.getOwnPracticePageFeedback(
                                 scenario.workspace().getId()),
                         read -> assertThat(read).isNotEmpty()));
-        assertThat(jdbc.queryForObject(
-                        "SELECT checks->'EGRESS' IS NOT NULL FROM feedback WHERE id=?", Boolean.class, unread))
-                .isTrue();
-        // The gate decides each unread piece on its own, so each measurement reads exactly one; this one now counts
-        // among the delivered history.
-        jdbc.update("UPDATE feedback SET state='DELIVERED',delivered_at=created_at WHERE id=?", unread);
+        for (var piece : unread) {
+            assertThat(jdbc.queryForObject(
+                            "SELECT checks->'EGRESS' IS NOT NULL FROM feedback WHERE id=?", Boolean.class, piece))
+                    .isTrue();
+            // Read now, it counts among the delivered history of the next measurement.
+            jdbc.update("UPDATE feedback SET state='DELIVERED',delivered_at=created_at WHERE id=?", piece);
+        }
         return costs;
     }
 
