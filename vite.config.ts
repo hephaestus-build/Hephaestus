@@ -265,6 +265,10 @@ export default defineConfig({
 			"gate:server": run(
 				`${gradlew} :spotlessCheck :application:spotlessCheck :application:pmdMain --quiet`,
 			),
+			// After `gate:server`: one Gradle build per checkout, and `compileJava` is then up to date.
+			"gate:server-test-analysis": run(`${gradlew} :application:compileTestJava --quiet`, {
+				dependsOn: ["gate:server"],
+			}),
 			"gate:pmd-canary": run("node scripts/check-pmd-canary.ts"),
 			"test:server:selection": run("node scripts/verify-server-test-selection.ts"),
 			"test:server:unit": run(
@@ -367,7 +371,13 @@ export default defineConfig({
 			"docs:serve": run("vp run --filter docs serve"),
 
 			// What each CI job runs.
-			"ci:server": group([...serverGates, "gate:contracts", "gate:env"]),
+			// The package job compiles the tests without the analysis; this leg runs it.
+			"ci:server": group([
+				...serverGates,
+				"gate:server-test-analysis",
+				"gate:contracts",
+				"gate:env",
+			]),
 			// Render docs after the checks: lint cannot detect broken theme contexts during static rendering.
 			"ci:tooling": run("vp run verification:docs-build", {
 				dependsOn: [

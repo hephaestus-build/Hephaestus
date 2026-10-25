@@ -100,9 +100,11 @@ async function readSources(files: string[]): Promise<Map<string, string>> {
 const TASK_INVOCATION =
 	/\bvp run (?:(?:--(?!filter\b)[\w-]+|\$\{\{ *matrix\.\w+ *\}\}) +)*(?<name>(?:[\w:-]|\$\{\{ *matrix\.\w+ *\}\})+)/gu;
 
-// The two gates `check` cannot run: the k6 syntax check needs the pinned container, and the PMD
-// canary runs only when CI decides PMD inputs changed. Every other CI gate is part of `check`.
-const CI_ONLY_GATES = new Set(["gate:load-syntax", "gate:pmd-canary"]);
+// The gates outside `check`: the k6 syntax check needs the pinned container, and the PMD canary runs
+// only when CI decides PMD inputs changed. The server test analysis compiles every test, and
+// `check` does not, so the pre-push hook stays fast; every local server test task runs it.
+// Every other CI gate is part of `check`.
+const CI_ONLY_GATES = new Set(["gate:load-syntax", "gate:pmd-canary", "gate:server-test-analysis"]);
 
 // Assignment names exclude '=' so each token has only one possible split.
 const VP_INVOCATION =
@@ -1493,7 +1495,7 @@ void describe("CI contract", () => {
 		);
 	});
 
-	void test("security mutation checks follow their Gradle launcher and toolchain inputs", async () => {
+	void test("security mutation checks follow their Gradle inputs and compile the tests once", async () => {
 		const workflow = parseDocument(
 			await readFile(".github/workflows/security-mutation.yml", "utf8"),
 		);
@@ -1507,6 +1509,11 @@ void describe("CI contract", () => {
 		]) {
 			assert.ok(paths.includes(input), `security mutation checks must include ${input}`);
 		}
+		// The compile step and PIT share one value, so PIT does not recompile the tests.
+		assert.equal(
+			workflow.getIn(["jobs", "pitest", "env", "ORG_GRADLE_PROJECT_testAnalysis"]),
+			"false",
+		);
 	});
 
 	void test("changes to the PMD canary exercise it even without server source changes", async () => {
@@ -1587,6 +1594,15 @@ void describe("CI contract", () => {
 		assert.ok(isSet(packaging));
 		assert.match(packaging, /:application:bootJar/u);
 		assert.match(packaging, /:application:testClasses/u);
+		// The suites wait for these classes, and the analysis does not change them, so it runs in
+		// the server quality leg, after that leg's other Gradle gate: one build per checkout.
+		assert.match(packaging, / -PtestAnalysis=false(?:\s|$)/u);
+		const config = await readFile("vite.config.ts", "utf8");
+		assert.match(config, /"ci:server": group\(\[[^\]]*"gate:server-test-analysis"/u);
+		assert.match(
+			config,
+			/"gate:server-test-analysis": run\(`\$\{gradlew\} :application:compileTestJava --quiet`, \{\s*dependsOn: \["gate:server"\],/u,
+		);
 		assert.equal((packageJob.match(/actions\/upload-artifact@/gu) ?? []).length, 1);
 		assert.match(packageJob, /overwrite: true/u);
 		for (const name of ["server-api", "server-database", "postgres-drill"]) {
