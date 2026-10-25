@@ -237,6 +237,25 @@ The limit needs `criteriaCases` and a positive integer.
 Without the property, this harness adds no request-count limit.
 Record provider token usage separately.
 
+To measure the same cases with other model settings, add one or more of these optional properties:
+
+```bash
+./gradlew :application:liveTest -PcriteriaCases=dependency-label \
+  -PcriteriaReasoningEffort=HIGH -PcriteriaMaxOutputTokens=32768 -PcriteriaContextWindow=131072
+```
+
+| Property | Value | Default |
+| --- | --- | --- |
+| `criteriaReasoningEffort` | A reasoning effort: `NONE`, `MINIMAL`, `LOW`, `MEDIUM`, `HIGH`, `XHIGH` or `MAX`. The names are case-sensitive. | none sent |
+| `criteriaMaxOutputTokens` | A positive integer, less than the context window | 4096 |
+| `criteriaContextWindow` | A positive integer | 131072 |
+
+Each property needs `criteriaCases`.
+Gradle refuses a token count that is not a positive integer before any test starts.
+The live test refuses a lower-case or unknown reasoning effort, and an output allowance that does not fit the context window, before any model request.
+A live test that is skipped because no credentials are set checks none of these values.
+Each case prints the model settings it uses.
+
 First check the same selection without credentials or a model:
 
 ```bash

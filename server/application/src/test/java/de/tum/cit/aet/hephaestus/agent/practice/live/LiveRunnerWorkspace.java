@@ -95,9 +95,17 @@ final class LiveRunnerWorkspace {
                 MAPPER);
     }
 
-    static PracticeAgentRequest request(String modelId, String jobToken, Map<ModelKind, FrozenModel> models) {
+    static PracticeAgentRequest request(
+            String modelId, String jobToken, Map<ModelKind, FrozenModel> models, LiveModelSettings settings) {
         return new PracticeAgentRequest(
-                "openai-completions", modelId, 131_072, 4096, null, jobToken, TIMEOUT_SECONDS, models);
+                "openai-completions",
+                modelId,
+                settings.contextWindow(),
+                settings.maxOutputTokens(),
+                settings.reasoningEffort(),
+                jobToken,
+                TIMEOUT_SECONDS,
+                models);
     }
 
     static void stageSpec(Path workspace, Map<String, byte[]> inputFiles) throws IOException {
