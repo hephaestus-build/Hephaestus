@@ -81,11 +81,13 @@ export const NotDelivered: Story = {
 				deliveredAt: null,
 			}),
 			ownFeedback("00000000-0000-4000-8000-0000000005a5", { state: "FAILED", deliveredAt: null }),
+			// A comment that a newer piece replaced may still stand on the work; it is not linked here.
+			{ ...onWork, id: "00000000-0000-4000-8000-0000000005a6", state: "REPLACED" },
 		],
 	},
 	play: async ({ canvas }) => {
 		const list = canvas.getByRole("list", { name: "Feedback from this observation" });
-		for (const state of ["READY", "WITHHELD", "UNCONFIRMED", "FAILED"] as const) {
+		for (const state of ["READY", "WITHHELD", "UNCONFIRMED", "FAILED", "REPLACED"] as const) {
 			await expect(within(list).getByText(DELIVERY_STATE_DEFS[state].label)).toBeVisible();
 		}
 		await expect(within(list).queryByText(DELIVERY_STATE_DEFS.DELIVERED.label)).toBeNull();

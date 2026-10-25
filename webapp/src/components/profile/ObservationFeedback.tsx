@@ -91,6 +91,9 @@ function FeedbackWhere({
 	feedback: OwnFeedbackRef;
 	links: ObservationFeedbackLinks | undefined;
 }) {
+	if (feedback.state !== "DELIVERED") {
+		return null;
+	}
 	if (feedback.destination === "ON_WORK") {
 		const urls = feedback.copies.flatMap((copy) =>
 			hasText(copy.externalUrl) ? [copy.externalUrl] : [],
@@ -112,7 +115,7 @@ function FeedbackWhere({
 		feedback.destination === "PRACTICE_PAGE"
 			? links?.practicePage?.(feedback.id)
 			: links?.conversation;
-	if (target === undefined || feedback.state !== "DELIVERED") {
+	if (target === undefined) {
 		return null;
 	}
 	return (

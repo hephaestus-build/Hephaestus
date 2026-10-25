@@ -58,9 +58,10 @@ export function observationLinkFilter(
 }
 
 /**
- * A change the reader makes to the text or the outcome. It lets go of the observation a link asked
- * for: the reader is now browsing, and an id they cannot see must not keep a row open or hold one
- * the filter no longer matches.
+ * A change the reader makes to the text, the outcome or the timeframe. A change to the text or the
+ * outcome lets go of the observation a link asked for: the reader is now browsing, and an id they
+ * cannot see must not keep a row open or hold one the filter no longer matches. The timeframe
+ * keeps it, as a linked observation shows outside the timeframe.
  */
 export function changedObservationFilter(
 	filter: ObservationFilter,
@@ -71,7 +72,7 @@ export function changedObservationFilter(
 	return {
 		...filter,
 		...change,
-		observationId: undefined,
+		observationId: "query" in change || "outcome" in change ? undefined : filter.observationId,
 		workId: "query" in change && change.query !== filter.query ? undefined : filter.workId,
 	};
 }

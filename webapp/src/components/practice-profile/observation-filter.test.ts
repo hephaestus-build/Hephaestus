@@ -76,6 +76,14 @@ describe("a link to one observation", () => {
 		expect(byOutcome.workId).toBe(detailResult.item.id);
 	});
 
+	it("is kept when the reader changes only the timeframe", () => {
+		const linked = observationLinkFilter(detailResult);
+		expect(changedObservationFilter(linked, { since: "7d" })).toStrictEqual({
+			...linked,
+			since: "7d",
+		});
+	});
+
 	it("matches its work exactly, not every work whose label contains it", () => {
 		const linked = observationLinkFilter(detailResult);
 		const sameNumberPlusOne: ResultList = {

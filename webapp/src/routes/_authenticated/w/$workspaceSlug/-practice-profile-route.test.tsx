@@ -1346,7 +1346,7 @@ describe("the feedback an observation gave", () => {
 		);
 	};
 
-	it("opens its card on the Feedback tab once, and Back finds the observation open again", async () => {
+	it("opens its card on the Feedback tab, and Back finds the observation open again", async () => {
 		withFeedback("PRACTICE_PAGE");
 		const scrolledTo: string[] = [];
 		vi.spyOn(Element.prototype, "scrollIntoView").mockImplementation(function (this: Element) {
