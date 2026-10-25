@@ -5,11 +5,13 @@ import { required } from "~/testing/required";
 import {
 	acceptNotice,
 	expect,
+	extensionWindow,
 	holdServer,
 	openInline,
 	OPTIONS_URL,
-	reportFrame,
+	providerPage,
 	removeSite,
+	reportFrame,
 	sendAs,
 	SERVER_URL,
 	serverAvailable,
@@ -94,7 +96,7 @@ test.beforeAll(async () => {
 test.describe("signing in", () => {
 	test("asks a developer who has not accepted the notice to do so first", async ({ context }) => {
 		await signIn(context, `e2e-notice-${Date.now()}`, { admin: false });
-		const page = await context.newPage();
+		const page = await providerPage(context);
 		await providerTab(page, GITLAB_MR);
 		const frame = await openInline(page);
 		await expect(line(frame)).toContainText("One step left in Hephaestus");
@@ -103,18 +105,18 @@ test.describe("signing in", () => {
 	test("tells same-number work apart and survives a worker restart", async ({ context }) => {
 		await acceptNotice("e2e", { admin: true });
 		await signIn(context, "e2e", { admin: true });
-		const page = await context.newPage();
+		const page = await providerPage(context);
 		await providerTab(page, GITLAB_MR);
 		const frame = await openInline(page);
 		await expectWork(frame, TRACE_URL);
 
-		const issue = await context.newPage();
+		const issue = await providerPage(context);
 		await providerTab(issue, GITLAB_ISSUE);
 		const issueFrame = await openInline(issue);
 		await expectWork(issueFrame, feedbackPage(ISSUE4_ITEM_ID));
 
 		await stopWorker(context, page);
-		const again = await context.newPage();
+		const again = await providerPage(context);
 		await providerTab(again, GITLAB_MR5);
 		const againFrame = await openInline(again);
 		await expectWork(againFrame, MR5_TRACE);
@@ -128,10 +130,11 @@ test.describe("inline review activity", () => {
 
 	test("links an admin to the exact work's review details, and confirms a request only in its own window", async ({
 		context,
+		worker,
 	}) => {
 		await signIn(context, "e2e", { admin: true });
 		const mutations = watchReviewMutations(context);
-		const page = await context.newPage();
+		const page = await providerPage(context);
 		await providerTab(page, GITLAB_MR);
 		const frame = await openInline(page);
 		await expectWork(frame, TRACE_URL);
@@ -148,13 +151,15 @@ test.describe("inline review activity", () => {
 
 		// On work with nothing running, "Request review" opens the extension's own window, which
 		// shows what would change and sends nothing until confirmed there; canceling sends nothing.
-		const settings = await context.newPage();
+		const settings = await providerPage(context);
 		await providerTab(settings, GITLAB_MR5);
 		const settingsFrame = await openInline(settings);
-		const opened = context.waitForEvent("page");
 		await settingsFrame.getByRole("button", { name: "Request review" }).last().click();
-		const confirmation = await opened;
-		await expect(confirmation).toHaveURL(/\/action\.html#/u);
+		const { window: confirmation, disconnect } = await extensionWindow(
+			context,
+			worker,
+			/\/action\.html#/u,
+		);
 		await expect(confirmation.getByRole("heading", { level: 1 })).toHaveText(
 			"Request a practice review",
 		);
@@ -164,6 +169,7 @@ test.describe("inline review activity", () => {
 		const closed = confirmation.waitForEvent("close");
 		await confirmation.getByRole("button", { name: "Cancel" }).click();
 		await closed;
+		await disconnect();
 
 		// Only the destination page is a stub: this proves safe top-level navigation and no command
 		// on click. The web app owns its own session, confirmation and mutation browser coverage.
@@ -185,7 +191,7 @@ test.describe("inline review activity", () => {
 	}) => {
 		await signIn(context, "e2e", { admin: true });
 		const mutations = watchReviewMutations(context);
-		const page = await context.newPage();
+		const page = await providerPage(context);
 		await providerTab(page, GITLAB_MR);
 		const frame = await openInline(page);
 		await expectWork(frame, TRACE_URL);
@@ -236,7 +242,7 @@ test.describe("inline review activity", () => {
 	}) => {
 		await signIn(context, "e2e", { admin: true });
 		const mutations = watchReviewMutations(context);
-		const page = await context.newPage();
+		const page = await providerPage(context);
 		await providerTab(page, GITLAB_MR);
 		const hold = await holdServer(context, /\/practices\/items\/920110\/reviews$/u);
 		await openInline(page);
@@ -255,7 +261,7 @@ test.describe("inline review activity", () => {
 	test("clears the old work immediately while the new work is loading", async ({ context }) => {
 		await signIn(context, "e2e", { admin: true });
 		const mutations = watchReviewMutations(context);
-		const page = await context.newPage();
+		const page = await providerPage(context);
 		await providerTab(page, GITLAB_MR);
 		const old = await openInline(page);
 		await expectWork(old, TRACE_URL);
@@ -276,11 +282,11 @@ test.describe("inline review activity", () => {
 	}) => {
 		const options = await signIn(context, "e2e", { admin: true });
 		const hold = await holdServer(context, /\/practices\/results$/u);
-		const page = await context.newPage();
+		const page = await providerPage(context);
 		await providerTab(page, GITLAB_MR);
 		const inline = await openInline(page);
 		await expectWork(inline, TRACE_URL);
-		const issue = await context.newPage();
+		const issue = await providerPage(context);
 		await providerTab(issue, GITLAB_ISSUE);
 		const issueInline = await openInline(issue);
 		await expectWork(issueInline, feedbackPage(ISSUE4_ITEM_ID));
@@ -304,7 +310,7 @@ test.describe("inline review activity", () => {
 	}) => {
 		const options = await signIn(context, "e2e", { admin: true });
 		const hold = await holdServer(context, /\/practices\/results$/u);
-		const page = await context.newPage();
+		const page = await providerPage(context);
 		await providerTab(page, GITLAB_MR);
 		const frame = await openInline(page);
 		await expectWork(frame, TRACE_URL);
@@ -333,7 +339,7 @@ test.describe("inline review activity", () => {
 	}) => {
 		await signIn(context, "e2e", { admin: true });
 		const mutations = watchReviewMutations(context);
-		const page = await context.newPage();
+		const page = await providerPage(context);
 		await providerTab(page, "https://gitlab.example.test/ext/choice/-/issues/1");
 		const frame = await openInline(page);
 		await frame.getByRole("radio", { name: "Extension E2E", exact: true }).check();
@@ -353,7 +359,7 @@ test.describe("inline review activity", () => {
 			frame.getByRole("radio", { name: "Extension E2E alternate", exact: true }),
 		).toBeChecked();
 		// The choice belongs to that tab's report; a report in another tab makes its own.
-		const second = await context.newPage();
+		const second = await providerPage(context);
 		await providerTab(second, "https://gitlab.example.test/ext/choice/-/issues/1");
 		const secondFrame = await openInline(second);
 		await expect(
@@ -371,7 +377,7 @@ test.describe("a developer who is not an admin", () => {
 		await signIn(context, "e2e-dev", { admin: false });
 		const reads: string[] = [];
 		context.on("request", recordServerReads(reads));
-		const page = await context.newPage();
+		const page = await providerPage(context);
 		await providerTab(page, GITLAB_MR6);
 		const frame = await openInline(page);
 		await expect(line(frame)).toContainText("3 comments for you");
@@ -402,7 +408,7 @@ test.describe("a developer who is not an admin", () => {
 		const reads: string[] = [];
 		context.on("request", recordServerReads(reads, "/workspaces/ext-e2e/"));
 		// !6 is authored by the second of the account's two provider identities.
-		const own = await context.newPage();
+		const own = await providerPage(context);
 		await providerTab(own, GITLAB_MR6);
 		const ownFrame = await openInline(own);
 		await expectWork(ownFrame, feedbackPage(MR6_ITEM_ID));
@@ -426,7 +432,7 @@ test.describe("a developer who is not an admin", () => {
 		await expect(ownFrame.getByRole("button", { name: "Request review" }).first()).toBeVisible();
 		await expect(ownFrame.getByRole("link", { name: /^Review details/u })).toHaveCount(0);
 
-		const other = await context.newPage();
+		const other = await providerPage(context);
 		await providerTab(other, GITLAB_MR);
 		const otherFrame = await openInline(other);
 		await expectWork(otherFrame, TRACE_URL);
@@ -442,7 +448,7 @@ test("a list reads only the pressed row, and shows its preview at once without a
 	await signIn(context, "e2e", { admin: true });
 	const reads: string[] = [];
 	context.on("request", recordServerReads(reads));
-	const page = await context.newPage();
+	const page = await providerPage(context);
 	await page.goto("https://gitlab.example.test/ext/demo/-/merge_requests");
 	await expect(page.locator("hephaestus-inspect")).toHaveCount(2);
 	await expect(page.locator("hephaestus-report")).toHaveCount(0);

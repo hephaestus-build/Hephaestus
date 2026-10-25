@@ -5,7 +5,7 @@ const onCI = process.env.CI !== undefined;
 /**
  * Runs the built `e2e` bundle (`wxt build --mode e2e`) in Chromium, in two projects so a result
  * says what it exercised: `providers` needs nothing but the bundle and fixture provider pages served
- * through `context.route`; `server` needs the real Hephaestus server under the `e2e` profile with
+ * by `providerPage`; `server` needs the real Hephaestus server under the `e2e` profile with
  * both seeds loaded, and fails before its first test when that server does not answer
  * (`extension/AGENTS.md` § End-to-end).
  */
