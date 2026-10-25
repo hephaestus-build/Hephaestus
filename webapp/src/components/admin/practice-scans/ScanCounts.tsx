@@ -76,7 +76,7 @@ export function ScanCounts({ counts, recorded, progress, countedNothing }: ScanC
 			<p className="text-sm text-muted-foreground">
 				{countedNothing
 					? "The scan stopped before it reviewed any file, so it has no counts."
-					: `Each file can be reviewed against more than one practice. Reviewed, reused, withheld and not reviewed count practice and file pairs. Reviewed counts only new results from this scan.${recorded ? " As recorded when the scan closed." : ""}`}
+					: `Each file can be reviewed against more than one practice. Reviewed, reused, withheld and not reviewed count practice and file pairs. Reviewed counts only new observations from this scan.${recorded ? " As recorded when the scan closed." : ""}`}
 			</p>
 		</section>
 	);

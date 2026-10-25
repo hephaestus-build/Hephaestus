@@ -19,9 +19,8 @@ export const TRACE_TERMS: Record<TraceTerm, TraceTermDef> = {
 			"Something that happened on the work, such as opened, new commits or merged. A review starts at an event.",
 	},
 	result: {
-		label: "Result",
-		description:
-			"One recorded result of reviewing one practice against one piece of reviewed work.",
+		label: "Observation",
+		description: "The record of reviewing one practice against one piece of reviewed work.",
 	},
 	withheld: {
 		label: "Withheld",
@@ -35,11 +34,11 @@ export const TRACE_TERMS: Record<TraceTerm, TraceTermDef> = {
 };
 
 /** The words in a sentence the glossary explains, once each, in the order they come. */
-const TERM_PATTERN = /\b(?<term>results?|withheld|coalesced|events?)\b/giu;
+const TERM_PATTERN = /\b(?<term>observations?|withheld|coalesced|events?)\b/giu;
 
 function termOf(word: string): TraceTerm {
 	const lower = word.toLowerCase();
-	if (lower.startsWith("result")) {
+	if (lower.startsWith("observation")) {
 		return "result";
 	}
 	if (lower.startsWith("event")) {

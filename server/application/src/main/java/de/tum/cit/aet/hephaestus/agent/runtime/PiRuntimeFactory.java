@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.agent.runtime;
 
-import de.tum.cit.aet.hephaestus.agent.sandbox.spi.NetworkPolicy;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -112,8 +111,6 @@ public class PiRuntimeFactory {
                 + "/"
                 + SandboxLayout.RUNNER_SCRIPT_FILENAME;
 
-        NetworkPolicy networkPolicy = buildNetworkPolicy(jobToken);
-
         log.debug(
                 "Built Pi plan: timeout={}s, apiProtocol={}, model={}, files={}",
                 spec.timeoutSeconds(),
@@ -121,7 +118,7 @@ public class PiRuntimeFactory {
                 spec.upstreamModelId(),
                 inputFiles.size());
         return new PiPlan(
-                List.of("sh", "-c", command), Map.copyOf(env), Map.copyOf(inputFiles), networkPolicy, promptDigest);
+                List.of("sh", "-c", command), Map.copyOf(env), Map.copyOf(inputFiles), jobToken, promptDigest);
     }
 
     private static String renderRuntimeFlags(List<String> flags) {
@@ -197,14 +194,6 @@ public class PiRuntimeFactory {
         }
     }
 
-    /**
-     * A job runs on an internal network: native shell access must not provide a route to push or fetch uncaptured
-     * evidence. The sandbox layer fills in {@code llmProxyUrl}.
-     */
-    static NetworkPolicy buildNetworkPolicy(String jobToken) {
-        return new NetworkPolicy(false, null, jobToken);
-    }
-
     /** Read a classpath resource under {@link #AGENT_RESOURCE_PREFIX}. */
     public static byte[] loadClasspathResource(String relativePath) {
         String fullPath = AGENT_RESOURCE_PREFIX + relativePath;
@@ -225,13 +214,13 @@ public class PiRuntimeFactory {
             List<String> command,
             Map<String, String> environment,
             Map<String, byte[]> inputFiles,
-            NetworkPolicy networkPolicy,
+            String jobToken,
             String promptDigest) {
         public PiPlan {
             command = List.copyOf(Objects.requireNonNull(command, "command"));
             environment = Map.copyOf(Objects.requireNonNull(environment, "environment"));
             inputFiles = Map.copyOf(Objects.requireNonNull(inputFiles, "inputFiles"));
-            Objects.requireNonNull(networkPolicy, "networkPolicy");
+            Objects.requireNonNull(jobToken, "jobToken");
             Objects.requireNonNull(promptDigest, "promptDigest");
         }
     }

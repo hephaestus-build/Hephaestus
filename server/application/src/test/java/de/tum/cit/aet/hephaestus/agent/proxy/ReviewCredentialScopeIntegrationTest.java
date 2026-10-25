@@ -12,6 +12,7 @@ import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBindingRepository;
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.PreparedEvidence;
+import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayConnector;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayProperties;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
@@ -238,6 +239,7 @@ class ReviewCredentialScopeIntegrationTest extends BaseIntegrationTest {
                 .llmProxyFilterChain(
                         httpSecurity(context).servletApi(Customizer.withDefaults()),
                         new SandboxGatewayProperties(GATEWAY_PORT, 1 << 20, 600),
+                        new SandboxGatewayConnector(GATEWAY_PORT),
                         jobs,
                         mock(MentorTurnRepository.class),
                         mock(SandboxGatewaySessions.class),

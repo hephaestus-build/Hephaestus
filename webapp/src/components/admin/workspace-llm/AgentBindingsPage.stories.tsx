@@ -257,7 +257,7 @@ export const RequiredNeedUnmet: Story = {
 		await expect(region.queryByRole("alert")).toBeNull();
 		const note = region.getByRole("note");
 		await expect(note).toHaveTextContent(
-			"1 practice needs a decision model for In-house members. Until you assign one, reviews of their work record no result for this practice.",
+			"1 practice needs a decision model for In-house members. Until you assign one, reviews of their work record no observation for this practice.",
 		);
 		const badge = within(decision).getByText(statusLabel("NEEDS_ATTENTION"), {
 			ignore: ".sr-only",
@@ -303,7 +303,7 @@ export const SeveralPracticesNeedIt: Story = {
 		const notes = region.getAllByRole("note");
 		await expect(notes).toHaveLength(1);
 		await expect(notes[0]).toHaveTextContent(
-			"2 practices need a decision model for In-house members. Until you assign one, reviews of their work record no result for these practices.",
+			"2 practices need a decision model for In-house members. Until you assign one, reviews of their work record no observation for these practices.",
 		);
 		const names = within(region.getByRole("list", { name: "Used by" }))
 			.getAllByRole("link")

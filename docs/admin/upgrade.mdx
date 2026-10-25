@@ -1,0 +1,167 @@
+---
+id: upgrade
+title: Upgrade
+description: Upgrade the self-hosted Compose stack to a new release, recover from a failed migration, and check for new releases.
+---
+
+This page owns the upgrade of the self-hosted Compose stack.
+The [Compatibility Policy](./compatibility-policy) defines the guarantee and the support window.
+The release notes and [`MIGRATION.md`](https://github.com/hephaestus-build/Hephaestus/blob/main/MIGRATION.md) state the actions for each release.
+
+Pre-1.0 upgrades may require an intermediate release or manual preparation.
+The [compatibility policy](./compatibility-policy#upgrade-guarantee) defines skip-version support.
+Read the release notes of every release between yours and the target.
+In-place downgrades are unsupported.
+[Upgrade from 0.x to 1.0](./upgrade-to-1-0) collects the actions on the way to 1.0.
+
+## Validate the actual production data
+
+Use a restricted staging copy of production with the backup's access and retention rules.
+Starting the target release's application server with the production profile runs Spring Boot's Liquibase update against staging.
+The update must use that exact release's changelog, contexts, PostgreSQL image/extensions, secrets, and role configuration.
+
+1. Apply [pre-boot isolation](./production-operations-runbook#pre-boot-isolation--mandatory-for-every-restore) **before** restoring secrets or starting application code.
+2. When crossing the v0.77.4 baseline, complete the [baseline synchronization prerequisites](./liquibase-baseline-runbook#before-deployment) before candidate startup.
+3. When crossing that baseline, rehearse synchronization on this same isolated copy.
+4. Run Liquibase **update**, not just `validate` or SQL generation.
+5. Keep ingress, workers, and sandbox execution disabled.
+6. Keep external destinations denied.
+7. Do not use a test/specs profile, Hibernate `ddl-auto`, or an empty database as this proof.
+8. Record migration duration, errors, free disk/WAL growth, and locks.
+9. Record before/after checks for representative workspace relationships and encrypted-credential readability.
+10. Record before/after checks for the practice catalog and ledger row counts.
+11. Check `databasechangelog` for the expected target changesets.
+12. Check `databasechangeloglock` for a released lock.
+13. Verify application readiness.
+14. Verify authenticated reads.
+15. Set an outage budget.
+16. If the rehearsal exceeds it, abort.
+17. After fixing a migration failure, repeat against a fresh copy.
+
+[CI migration checks](/contributor/database-migration#ci-validation) cover empty and seeded databases,
+not your production data. They do not replace this staging update.
+
+## Upgrade the host
+
+The commands below do not prepare existing databases for the PostgreSQL 18/Liquibase baseline transition.
+
+1. If the host uses [pull-based deployment](./pull-based-deployment#operating-it), pause reconciliation before manual changes.
+2. Wait for any active service run to finish.
+3. Before starting target images, read that release's migration instructions.
+4. If the database crosses the baseline transition, first complete the [baseline synchronization runbook](./liquibase-baseline-runbook.md).
+5. Complete the [runbook silent deployment checklist](./production-operations-runbook#silent-deployment-checklist) through backup and staging validation.
+6. Acquire the tested release:
+
+   ```bash
+   (
+   set -eu
+   VERSION='<new-version>'
+   cd /opt/hephaestus
+   sudo git fetch --depth 1 origin tag "v$VERSION"
+   sudo git checkout "v$VERSION"
+   node scripts/prepare-release-lock.ts "v$VERSION"
+   cd docker/self-host
+   docker compose --env-file .env --env-file release-lock.env pull
+   )
+   ```
+
+7. Before startup, compare `.env` with the release's `.env.example`.
+8. Complete manual steps in [`MIGRATION.md`](https://github.com/hephaestus-build/Hephaestus/blob/main/MIGRATION.md), especially PostgreSQL major-version changes.
+9. Return to **Validate then deploy** in the runbook for guarded startup.
+
+## If migration fails
+
+:::caution CAUTION: Failed migration
+Do not clear checksums, edit released changelogs, or mark the changeset as run.
+Do not run an older binary against the partly migrated database.
+Do not release a Liquibase lock until you prove that no migrator is alive.
+Removal of a stale lock does not repair a failed migration.
+:::
+
+1. Keep ingress and all application writers stopped.
+2. If the host uses [pull-based deployment](./pull-based-deployment#operating-it), pause reconciliation.
+3. Preserve the error and failed changeset identity.
+4. Preserve `databasechangelog`/lock diagnostics and the target image lock.
+5. If feasible, preserve a forensic snapshot.
+6. Follow [Backup & restore](./backup-restore) to restore the pre-upgrade backup into a fresh database.
+7. Use matching PostgreSQL version/extensions, encryption keys, and the **previous signed release lock**.
+8. Before consumers boot, reset/quarantine divergent JetStream state with the [broker recovery strategy](./production-operations-runbook#choose-the-broker-recovery-strategy-before-starting-consumers).
+9. Boot only under pre-boot isolation.
+10. Read back silent mode, and turn it on if it is off.
+11. Verify the restored schema, representative data, and readiness.
+12. Complete **Prove silence**, **Inspect and decide**, and **Turn off silent mode deliberately** in the [silent checklist](./production-operations-runbook#silent-deployment-checklist).
+13. Report actual recovery point/time and any lost writes.
+14. Preserve the failed database until investigation/retention permits removal.
+15. Before you resume reconciliation, make sure the channel matches the recovered release or is frozen.
+
+    Otherwise, the next tick can reapply the failed upgrade.
+
+**Drill**
+
+1. Introduce a controlled migration failure only in a disposable rehearsal.
+2. Restore the old backup/release pair.
+3. Prove old-version readiness and data integrity without any provider write.
+
+## Rollback
+
+:::caution CAUTION: Images alone cannot reverse a schema change
+Reverting images alone is not a rollback.
+Never run an older release against a newer schema.
+Never reconstruct an old lock or resolve mutable image tags.
+:::
+
+To roll back, follow [If migration fails](#if-migration-fails) to restore the previous release's database, secrets, and signed lock.
+
+## Update checks
+
+**Instance administration → Overview** shows the release this server reports from its lock
+([runtime identity handoff](./release-image-lock#runtime-identity-handoff)) and whether GitHub has
+published a newer one. A failed, rate-limited, disabled or never-completed check is shown as exactly
+that, never as "up to date". For a newer release the card links its notes and the upgrade guide and
+says whether that release carries schema migrations. The flag describes the newest release only:
+read every release note between yours and it before upgrading. Nothing here verifies an artifact or
+performs an upgrade.
+
+The server asks GitHub a minute after start and then once a day. After a failure it retries after
+15 minutes, doubling up to a day, or later when GitHub names a longer wait. **Check now** ignores the
+daily cache, never delays the automatic retry, and only waits out a wait GitHub named. A restart
+forgets the last answer. A commit channel or a local build runs no release and is never checked.
+
+Each check is one unauthenticated HTTPS GET to
+`https://api.github.com/repos/hephaestus-build/Hephaestus/releases/latest` with the static user agent
+`Hephaestus-release-check` and, after the first answer, its ETag. It carries no version, credential,
+workspace data or configuration.
+GitHub sees the source IP and the time.
+
+1. On an air-gapped host, set `HEPHAESTUS_RELEASE_CHECK_ENABLED=false` in `.env`.
+2. Recreate `application-server`.
+
+The overview then shows the identity without a check.
+A failed check reaches only instance administration, never health or readiness.
+
+## Deployment environment and release history
+
+Set `DEPLOYMENT_ENVIRONMENT` in `.env` to the name of the deployment, such as `production` or `staging`.
+Use lowercase letters, digits, `.`, `_` or `-`, at most 64 characters.
+Hephaestus refuses to start with another value.
+When it is unset, the instance reports `local`.
+The webapp, the **Release** card, log lines and exported traces all use this name.
+
+The **Release** card also says when this instance first started the release that it runs.
+**Show release history** lists the last ten releases that the server started, newest first.
+The server records a release when it starts one that differs from the last recorded release.
+A restart adds nothing.
+A rollback adds the older release again.
+
+The time is when the server first started that release, not when its images were pulled.
+The history names no person.
+Each worker and webhook server reports its own identity in `/actuator/info` only.
+
+## Release-specific procedures
+
+Some releases need a procedure of their own before the new runtime roles start.
+The [database migration instructions](./compatibility-policy#database-migrations) say when one applies.
+
+- [Baseline synchronization runbook](./liquibase-baseline-runbook.md): the PostgreSQL 18/Liquibase v0.77.4 cut-point.
+- [Native Hibernate JSON cutover](./native-hibernate-json-cutover): the stopped-writer accounting cutover.
+- [Practice model cutover checks](./practice-model-cutover): the pilot rehearsal and a refused practice model upgrade.

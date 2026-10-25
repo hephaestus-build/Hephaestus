@@ -8,12 +8,12 @@ import com.github.dockerjava.core.DefaultDockerClientConfig;
 import com.github.dockerjava.core.DockerClientImpl;
 import com.github.dockerjava.httpclient5.ApacheDockerHttpClient;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
+import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxAttemptRunner;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxProperties;
-import de.tum.cit.aet.hephaestus.agent.sandbox.spi.NetworkPolicy;
+import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxWorkspaceManager;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ResourceLimits;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxResult;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxSpec;
-import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SecurityProfile;
 import de.tum.cit.aet.hephaestus.evidence.capture.EvidenceDirectory;
 import de.tum.cit.aet.hephaestus.testconfig.LiveDockerTest;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -62,7 +62,7 @@ class RepositoryTreeStagingLiveTest {
 
     private final String owner = "live-" + UUID.randomUUID();
     private LiveSandboxGateway gateway;
-    private DockerSandboxAdapter sandboxAdapter;
+    private SandboxAttemptRunner sandboxAdapter;
     private SandboxContainerManager containerManager;
     private SandboxNetworkManager networkManager;
     private ExecutorService dockerWaitExecutor;
@@ -91,15 +91,21 @@ class RepositoryTreeStagingLiveTest {
         dockerWaitExecutor = Executors.newCachedThreadPool();
         containerManager = new SandboxContainerManager(dockerOps, image -> {}, properties, owner, dockerWaitExecutor);
         networkManager = new SandboxNetworkManager(dockerOps, dockerProperties, new SandboxCreator(dockerOps));
-        sandboxAdapter = new DockerSandboxAdapter(
-                networkManager,
+        var meters = new SimpleMeterRegistry();
+        // The gateway runs in this process on the machine itself: the reviews get the route out to reach it.
+        sandboxAdapter = new SandboxAttemptRunner(
+                new DockerSandboxBackend(
+                        networkManager,
+                        containerManager,
+                        new ContainerSecurityPolicy(dockerProperties, null),
+                        dockerOps,
+                        new SandboxCreator(dockerOps),
+                        owner,
+                        gateway::port,
+                        true),
                 new SandboxWorkspaceManager(),
-                containerManager,
-                new ContainerSecurityPolicy(dockerProperties, null),
-                gateway.port(),
-                new SimpleMeterRegistry(),
                 gateway.sessions(),
-                dockerOps);
+                meters);
     }
 
     @AfterEach
@@ -120,7 +126,7 @@ class RepositoryTreeStagingLiveTest {
             // The sweep is a safety net; Docker failing here must not mask the test's own result.
         }
         try {
-            networkManager.listOrphanedNetworks().forEach(n -> {
+            networkManager.listNetworks().forEach(n -> {
                 try {
                     networkManager.removeNetwork(n.id());
                 } catch (Exception ignored) {
@@ -163,16 +169,16 @@ class RepositoryTreeStagingLiveTest {
 
         SandboxSpec spec = new SandboxSpec(
                 UUID.randomUUID(),
+                null,
                 AGENT_IMAGE,
                 List.of("sh", "-c", script),
                 Map.of(),
-                new NetworkPolicy(true, null, "live-gateway-token"),
+                "live-gateway-token",
                 new ResourceLimits(512L * 1024 * 1024, 1.0, 128, Duration.ofMinutes(5)),
-                new SecurityProfile(null, "private", List.of("ALL"), Map.of()),
+                null,
                 Map.of(),
                 Map.of(),
-                List.of(new EvidenceDirectory(SandboxLayout.REPO_MOUNT_RELATIVE, staging)),
-                SandboxLayout.OUTPUT_PATH);
+                List.of(new EvidenceDirectory(SandboxLayout.REPO_MOUNT_RELATIVE, staging)));
 
         SandboxResult result = sandboxAdapter.execute(spec);
 

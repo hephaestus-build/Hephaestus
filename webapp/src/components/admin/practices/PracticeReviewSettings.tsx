@@ -103,7 +103,7 @@ function ReviewStatusSection({
 				<p className="text-sm text-muted-foreground">
 					Hephaestus reviews new work against every practice it reviews automatically. Practices
 					reviewed by people or by nobody are left out. Feedback mode decides separately where
-					results become feedback.
+					observations become feedback.
 				</p>
 			</div>
 			<Field orientation="horizontal">

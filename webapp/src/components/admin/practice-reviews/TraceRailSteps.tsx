@@ -289,7 +289,7 @@ function SiblingsStep({
 	onShowSiblings,
 }: StorySiblings & { onShowSiblings: () => void }) {
 	const parts = [
-		results > 0 ? countOf(results, "other result", "other results") : undefined,
+		results > 0 ? countOf(results, "other observation", "other observations") : undefined,
 		feedback > 0 ? `${countOf(feedback, "other piece", "other pieces")} of feedback` : undefined,
 	].filter(hasText);
 	return (

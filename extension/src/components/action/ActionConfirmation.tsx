@@ -56,7 +56,7 @@ function outcomeText(outcome: ActionOutcome): { title: string; body: string; don
 	return outcome.status === "SUBMITTED"
 		? {
 				title: "Review requested",
-				body: "The review runs in the background. Its results appear in the practice review on the page once they are recorded.",
+				body: "The review runs in the background. Its observations appear in the practice review on the page once they are recorded.",
 				done: true,
 			}
 		: {

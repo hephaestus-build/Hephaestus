@@ -293,7 +293,7 @@ test.describe("inline review activity", () => {
 		await hold.release();
 		for (const surface of [inline, issueInline]) {
 			await expect(surface.getByRole("link", { name: /^Open in Hephaestus/u })).toHaveCount(0);
-			await expect(surface.getByRole("region", { name: "Your results" })).toHaveCount(0);
+			await expect(surface.getByRole("region", { name: "Your observations" })).toHaveCount(0);
 			await expect(surface.getByRole("list", { name: "Comments for you" })).toHaveCount(0);
 			await expect(line(surface)).toContainText("Sign in to");
 		}
@@ -325,7 +325,7 @@ test.describe("inline review activity", () => {
 		await expect(line(frame)).toContainText("Sign in to");
 		await expect(frame.locator(`a[href="${TRACE_URL}"]`)).toHaveCount(0);
 		await expect(frame.getByRole("list", { name: "Comments for you" })).toHaveCount(0);
-		await expect(frame.getByRole("region", { name: "Your results" })).toHaveCount(0);
+		await expect(frame.getByRole("region", { name: "Your observations" })).toHaveCount(0);
 	});
 
 	test("changes a frame's workspace without retaining the previous workspace's links", async ({
@@ -406,7 +406,7 @@ test.describe("a developer who is not an admin", () => {
 		await providerTab(own, GITLAB_MR6);
 		const ownFrame = await openInline(own);
 		await expectWork(ownFrame, feedbackPage(MR6_ITEM_ID));
-		const results = ownFrame.getByRole("region", { name: "Your results" });
+		const results = ownFrame.getByRole("region", { name: "Your observations" });
 		await expect(results.getByRole("listitem")).toHaveCount(4);
 		await expect(results).toContainText("Not met · 1 problem · Major");
 		await expect(results.getByRole("list", { name: "Problems" })).toHaveText(

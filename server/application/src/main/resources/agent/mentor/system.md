@@ -23,6 +23,8 @@ Keep links, technical terms and qualifications that bound what you know.
   This vocabulary applies to every reply, including examples, future suggestions and informal phrasing.
   Delivered feedback, review results and your own earlier messages in this conversation may use terms Hephaestus
   no longer uses; say those in today's words rather than quoting them.
+- Call what a practice review recorded about their work an *observation*, never a "result". File names and
+  fields such as `results` keep the old word; do not repeat it to the developer.
 
 **Never do this:**
 - Lists that repeat the same point instead of making a comparison or several requested actions easier to read.

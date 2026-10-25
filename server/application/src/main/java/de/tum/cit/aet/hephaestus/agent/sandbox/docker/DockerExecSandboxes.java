@@ -12,7 +12,6 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ExecSandboxes;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ResourceLimits;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxInfrastructureException;
-import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SecurityProfile;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -37,7 +36,7 @@ import org.slf4j.LoggerFactory;
  * {@link ExecSandboxes#SANDBOX_USER}. The init process and its sleep run as root, out of that user's reach.
  *
  * <p>Labels record this installation ({@link SandboxLabels#OWNER}), the sandbox id and the worker that created it
- * ({@link SandboxCreator}). {@link SandboxReconciler} ignores these containers: they have no job id and no session id.
+ * ({@link SandboxCreator}). {@code SandboxReconciler} ignores these containers: they have no job id and no session id.
  * The worker that uses them removes them ({@code TurnSandboxes}).
  */
 public class DockerExecSandboxes implements ExecSandboxes, AutoCloseable {
@@ -171,7 +170,7 @@ public class DockerExecSandboxes implements ExecSandboxes, AutoCloseable {
         labels.put(SandboxLabels.HEPH_SANDBOX, sandboxId);
         labels.put(SandboxLabels.HEPH_WORKER, worker);
         HostConfig hostConfig = operations
-                .hostConfig(securityPolicy.buildHostConfig(PROFILE, limits, null))
+                .hostConfig(securityPolicy.buildHostConfig(PROFILE, limits, false))
                 .withNetworkMode("none")
                 .withInit(true);
         imageGuard.ensurePresent(image);

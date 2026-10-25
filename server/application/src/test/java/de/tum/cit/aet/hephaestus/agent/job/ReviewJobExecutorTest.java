@@ -35,7 +35,6 @@ import de.tum.cit.aet.hephaestus.agent.runtime.PiResultParser;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerCapacityState;
 import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerProperties;
-import de.tum.cit.aet.hephaestus.agent.sandbox.spi.NetworkPolicy;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ResourceLimits;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxInfrastructureException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxManager;
@@ -364,23 +363,18 @@ class ReviewJobExecutorTest extends BaseUnitTest {
         String destinations = onWork ? "{\"ON_WORK\":{\"maxPieces\":1}}" : "{\"PRACTICE_PAGE\":{\"maxPieces\":1}}";
         return new SandboxSpec(
                 job.getId(),
+                job.getAttempt(),
                 "practice-runtime",
                 List.of("run"),
-                Map.of(
-                        "SANDBOX_WORK_DEADLINE_MS",
-                        Long.toString(Instant.now().plusSeconds(600).toEpochMilli()),
-                        "PI_COMPOSITION_PHASES",
-                        "PRIVATE_FEEDBACK"),
-                new NetworkPolicy(false, null, "review-token"),
+                Map.of("PI_COMPOSITION_PHASES", "PRIVATE_FEEDBACK"),
+                "review-token",
                 ResourceLimits.DEFAULT,
-                null,
+                Instant.now().plusSeconds(600),
                 Map.of(
                         SandboxLayout.FEEDBACK_COMPOSITION_PATH,
                         ("{\"destinations\":" + destinations + "}").getBytes(StandardCharsets.UTF_8)),
                 Map.of(),
-                List.of(),
-                SandboxLayout.OUTPUT_PATH,
-                job.getAttempt());
+                List.of());
     }
 
     private ReviewJobExecutor twoLaunchExecutor(ReviewJob job, ReviewCompositionContinuation kept) {
@@ -421,8 +415,7 @@ class ReviewJobExecutorTest extends BaseUnitTest {
         assertThat(launches.getAllValues().getFirst()).isSameAs(review);
         var publicReview = launches.getAllValues().getLast();
         assertThat(publicReview.environment()).containsEntry("PI_COMPOSITION_PHASES", "PUBLIC_REVIEW");
-        assertThat(Objects.requireNonNull(publicReview.networkPolicy()).llmProxyToken())
-                .isEqualTo("public-review-token");
+        assertThat(publicReview.gatewayToken()).isEqualTo("public-review-token");
         assertThat(publicReview.inputFiles()).containsKey(ReviewCompositionContinuation.CONTINUATION_PATH);
         // The attempt's ten minutes, less the runner's buffer: the second launch gets only what is left.
         assertThat(Long.parseLong(
@@ -445,7 +438,7 @@ class ReviewJobExecutorTest extends BaseUnitTest {
         assertThat(launches.getAllValues().getFirst().environment())
                 .containsEntry("PI_COMPOSITION_PHASES", "PUBLIC_REVIEW");
         var privateFeedback = launches.getAllValues().getLast();
-        assertThat(privateFeedback.networkPolicy()).isEqualTo(review.networkPolicy());
+        assertThat(privateFeedback.gatewayToken()).isEqualTo(review.gatewayToken());
         assertThat(privateFeedback.environment()).containsEntry("PI_COMPOSITION_PHASES", "PRIVATE_FEEDBACK");
         // The private launch gets only the time the public launch left.
         assertThat(Long.parseLong(
@@ -640,14 +633,7 @@ class ReviewJobExecutorTest extends BaseUnitTest {
                 .thenReturn("issued-job-token");
         when(practiceAgent.buildSandboxSpec(any()))
                 .thenReturn(new PracticeSandboxSpec(
-                        "practice-runtime",
-                        List.of(),
-                        Map.of(),
-                        Map.of(),
-                        SandboxLayout.OUTPUT_PATH,
-                        null,
-                        null,
-                        null));
+                        "practice-runtime", List.of(), Map.of(), Map.of(), "issued-job-token", null));
         when(jobs.updateCapture(any(), anyLong(), any(), anyInt(), any())).thenReturn(1);
         when(jobs.markExecutionStarted(eq(job.getId()), eq(null), any())).thenReturn(1);
         var result = new SandboxResult(0, Map.of(), "", false, Duration.ZERO);
@@ -679,8 +665,7 @@ class ReviewJobExecutorTest extends BaseUnitTest {
         var execution = ArgumentCaptor.forClass(SandboxSpec.class);
         verify(sandbox).execute(execution.capture());
         var spec = execution.getValue();
-        var sandboxDeadline = Instant.ofEpochMilli(
-                Long.parseLong(Objects.requireNonNull(spec.environment().get("SANDBOX_WORK_DEADLINE_MS"))));
+        var sandboxDeadline = Objects.requireNonNull(spec.workDeadline());
         assertThat(issuedDeadline.getValue()).isEqualTo(sandboxDeadline);
         assertThat(issuedExpiry.getValue()).isEqualTo(sandboxDeadline.plus(SandboxLayout.RESULT_UPLOAD_GRACE));
         assertThat(request.getValue().jobToken()).isEqualTo("issued-job-token");

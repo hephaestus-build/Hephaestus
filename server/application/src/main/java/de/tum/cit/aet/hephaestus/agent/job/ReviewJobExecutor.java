@@ -21,7 +21,6 @@ import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.agent.runtime.StorableText;
 import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerCapacityState;
 import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerProperties;
-import de.tum.cit.aet.hephaestus.agent.sandbox.spi.NetworkPolicy;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ResourceLimits;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxCancelledException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxInfrastructureException;
@@ -827,12 +826,11 @@ public class ReviewJobExecutor {
                 JobCredentialScope.PUBLIC_REVIEW);
         Map<String, byte[]> inputs = new HashMap<>(review.inputFiles());
         if (admitting) inputs.put(ReviewCompositionContinuation.CONTINUATION_PATH, staging.admittedResponse(current));
-        NetworkPolicy network = Objects.requireNonNull(review.networkPolicy(), "A review launch has a gateway");
         return sandboxManager.execute(relaunch(
                 review,
                 PracticePiAdapter.publicReviewEnvironment(
                         review.environment(), Duration.between(Instant.now(), workDeadline)),
-                new NetworkPolicy(network.internetAccess(), network.llmProxyUrl(), token),
+                token,
                 inputs));
     }
 
@@ -842,33 +840,28 @@ public class ReviewJobExecutor {
                 review,
                 PracticePiAdapter.withTimeLeft(
                         review.environment(), Duration.between(Instant.now(), workDeadline(review))),
-                review.networkPolicy(),
+                review.gatewayToken(),
                 review.inputFiles());
     }
 
     private static Instant workDeadline(SandboxSpec review) {
-        return Instant.ofEpochMilli(
-                Long.parseLong(Objects.requireNonNull(review.environment().get("SANDBOX_WORK_DEADLINE_MS"))));
+        return Objects.requireNonNull(review.workDeadline(), "A review launch has a work deadline");
     }
 
     private static SandboxSpec relaunch(
-            SandboxSpec review,
-            Map<String, String> environment,
-            @Nullable NetworkPolicy network,
-            Map<String, byte[]> inputs) {
+            SandboxSpec review, Map<String, String> environment, String gatewayToken, Map<String, byte[]> inputs) {
         return new SandboxSpec(
                 review.jobId(),
+                review.attempt(),
                 review.image(),
                 review.command(),
                 environment,
-                network,
+                gatewayToken,
                 review.resourceLimits(),
-                review.securityProfile(),
+                review.workDeadline(),
                 inputs,
                 review.inputFilesOnDisk(),
-                review.inputDirectories(),
-                review.outputPath(),
-                review.attempt());
+                review.inputDirectories());
     }
 
     private boolean requestsReviewOnTheWork(SandboxSpec review) {
@@ -1079,10 +1072,6 @@ public class ReviewJobExecutor {
             ConfigSnapshot snapshot,
             Instant workDeadline,
             int attempt) {
-        Map<String, byte[]> allInputFiles = new HashMap<>(agentSpec.inputFiles());
-        Map<String, String> environment = new HashMap<>(agentSpec.environment());
-        environment.put("SANDBOX_WORK_DEADLINE_MS", Long.toString(workDeadline.toEpochMilli()));
-
         ResourceLimits limits = new ResourceLimits(
                 ResourceLimits.DEFAULT.memoryBytes(),
                 ResourceLimits.DEFAULT.cpus(),
@@ -1091,17 +1080,16 @@ public class ReviewJobExecutor {
 
         return new SandboxSpec(
                 jobId,
+                attempt,
                 agentSpec.image(),
                 agentSpec.command(),
-                environment,
-                agentSpec.networkPolicy(),
+                agentSpec.environment(),
+                agentSpec.gatewayToken(),
                 limits,
-                agentSpec.securityProfile(),
-                allInputFiles,
+                workDeadline,
+                agentSpec.inputFiles(),
                 handlerFilesOnDisk,
-                handlerDirectories,
-                agentSpec.outputPath(),
-                attempt);
+                handlerDirectories);
     }
 
     private boolean handleCancellation(UUID jobId, ReviewJob job) {

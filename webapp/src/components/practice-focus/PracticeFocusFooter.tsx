@@ -86,7 +86,7 @@ export const FOCUS_FOOTER_COPY = {
 		label: "See this practice across the workspace",
 	},
 	workspaceGroup: {
-		sentence: "Your own standing, feedback and results in this group.",
+		sentence: "Your own standing, feedback and observations in this group.",
 		label: "See your own standing",
 	},
 	workspaceAllGroups: {

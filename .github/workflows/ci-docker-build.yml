@@ -16,15 +16,20 @@ on:
         required: false
         type: string
         default: "false"
-      # publish and single_arch have no default; reusable-docker-build.yml says why.
+      # publish and platforms have no default; reusable-docker-build.yml says why.
       publish:
         description: "Whether image jobs may write to the registry"
         required: true
         type: boolean
-      single_arch:
-        description: "Whether to build linux/amd64 alone instead of the supported multi-architecture set"
+      platforms:
+        description: "JSON list of the platforms every image build in the run publishes"
         required: true
         type: string
+      reuse_run:
+        description: "Successful merge-queue run whose verified images of this commit a push reuses"
+        required: false
+        type: string
+        default: ""
       webapp_changed:
         description: "Whether webapp files changed (or should build for other reasons)"
         required: false
@@ -71,11 +76,13 @@ jobs:
       docker-context: "."
       registry: "ghcr.io"
       # Use the PR source branch; ref_name identifies GitHub's synthetic merge ref on pull requests.
+      # A merge group builds the image its push to the default branch reuses, so it names that branch.
       build-args: |
         SOURCE_COMMIT=${{ github.sha }}
-        COOLIFY_BRANCH=${{ github.head_ref || github.ref_name }}
+        COOLIFY_BRANCH=${{ github.head_ref || (github.event_name == 'merge_group' && github.event.repository.default_branch) || github.ref_name }}
       publish: ${{ inputs.publish }}
-      single-arch: ${{ inputs.single_arch == 'true' }}
+      platforms: ${{ inputs.platforms }}
+      reuse-run: ${{ inputs.reuse_run }}
       scan-images: ${{ inputs.scan-images }}
       labels: |
         org.opencontainers.image.title=Hephaestus Webapp
@@ -101,7 +108,8 @@ jobs:
       docker-context: "./docker/agents"
       registry: "ghcr.io"
       publish: ${{ inputs.publish }}
-      single-arch: ${{ inputs.single_arch == 'true' }}
+      platforms: ${{ inputs.platforms }}
+      reuse-run: ${{ inputs.reuse_run }}
       scan-images: ${{ inputs.scan-images }}
       labels: |
         org.opencontainers.image.title=Hephaestus Agent - Pi
@@ -127,7 +135,8 @@ jobs:
       docker-context: "./docker/postgres"
       registry: "ghcr.io"
       publish: ${{ inputs.publish }}
-      single-arch: ${{ inputs.single_arch == 'true' }}
+      platforms: ${{ inputs.platforms }}
+      reuse-run: ${{ inputs.reuse_run }}
       scan-images: ${{ inputs.scan-images }}
       labels: |
         org.opencontainers.image.title=Hephaestus Postgres

@@ -10,7 +10,7 @@ The additive migration stores bounded original evidence on new pull-request, mer
 It also adds an unavailable-original decision reason.
 An earlier server or worker cannot read that new reason.
 Do not mix old and new runtime versions against this database.
-Return to an earlier release only through the [compatible-backup restoration procedure](https://docs.hephaestus.build/admin/install#rollback).
+Return to an earlier release only through the [compatible-backup restoration procedure](https://docs.hephaestus.build/admin/upgrade#rollback).
 
 Events from earlier releases have no retained original.
 Their event-driven reviews are withheld if the original is needed.

@@ -67,8 +67,8 @@ Manual promotions never do this lookup.
 
 ## Requirements
 
-1. Install Docker Engine with Compose v2.
-2. Install `git` and Cosign 3.1.3 or later.
+1. Install Docker Engine and Docker Compose in the [tested versions](./install#tested-versions).
+2. Install `git` and Cosign in the [tested version](./install#tested-versions).
 3. Install the Node.js version pinned in `package.json#devEngines.runtime`.
 4. Verify downloaded tools against their published checksums.
 5. Allow outbound HTTPS to GitHub and its release-asset download hosts.
@@ -240,7 +240,7 @@ Do not change the checkout underneath a tick.
 | You want to                                            | Do this                                                                                                                                                      |
 | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Move an environment                                    | Run the **Promote** workflow: pick the environment and release or commit                                                                                     |
-| Roll back                                              | Pause reconciliation, then follow [Rollback](./install#rollback). After the database matches the older release, promote that release with **allow-rollback** |
+| Roll back                                              | Pause reconciliation, then follow [Rollback](./upgrade#rollback). After the database matches the older release, promote that release with **allow-rollback** |
 | Hold an environment                                    | Promote with **freeze**                                                                                                                                      |
 | Resume a held environment                              | Manually promote the desired release or commit with **freeze** cleared                                                                                       |
 | Reapply Compose configuration                          | Promote the release or commit the host already runs                                                                                                          |
@@ -440,7 +440,7 @@ A matching frontend version does not establish server, worker, webhook, database
 
 **It does not roll back a failed deploy.** A failed apply may leave some services updated. Schema
 migrations are forward-only. Older images may be incompatible with the migrated database. Promote a
-fix, or follow [Rollback](./install#rollback) if database recovery is needed.
+fix, or follow [Rollback](./upgrade#rollback) if database recovery is needed.
 
 **It does not manage anything it does not own.** The reconciler touches only the Compose projects
 named in `HEPHAESTUS_STACKS`. Containers belonging to anything else on the host are left alone.

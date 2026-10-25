@@ -51,14 +51,14 @@ export function reviewReach(saw: ReviewSaw): string {
 	].filter((outcome) => outcome.n > 0);
 	if (outcomes.length === 0 && reached === undefined) {
 		return saw.status === "RUNNING" || saw.status === "QUEUED"
-			? "Results appear as it finishes"
+			? "Observations appear as it finishes"
 			: "";
 	}
 	const digits = [reached ?? 0, ...outcomes.map((outcome) => outcome.n)].some((n) => n >= 10);
 	const decided = outcomes
 		.map(
 			(outcome, index) =>
-				`${index === 0 ? count(outcome.n, "result", "results", digits) : spell(outcome.n, digits)} ${outcome.verb}`,
+				`${index === 0 ? count(outcome.n, "practice", "practices", digits) : spell(outcome.n, digits)} ${outcome.verb}`,
 		)
 		.join(", ");
 	const reach =

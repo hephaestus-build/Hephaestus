@@ -7,6 +7,7 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.config.FrozenModel;
+import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayConnector;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayProperties;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
@@ -117,6 +118,7 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
                 config.llmProxyFilterChain(
                         httpSecurity(context),
                         GATEWAY,
+                        new SandboxGatewayConnector(GATEWAY_PORT),
                         jobRepository,
                         turnRepository,
                         sessions,
@@ -125,7 +127,7 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
                         accounting,
                         OBJECT_MAPPER,
                         WorkerPropertiesFixtures.minimal("1", "1")),
-                config.hideNonGatewayCapabilities(httpSecurity(context), GATEWAY),
+                config.hideNonGatewayCapabilities(httpSecurity(context), new SandboxGatewayConnector(GATEWAY_PORT)),
                 config.blockLlmProxyOnOtherConnectors(httpSecurity(context))));
     }
 

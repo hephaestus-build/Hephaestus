@@ -92,9 +92,7 @@ public class PracticePiAdapter {
                 plan.command(),
                 Map.copyOf(environment),
                 plan.inputFiles(),
-                SandboxLayout.OUTPUT_PATH,
-                null,
-                plan.networkPolicy(),
+                plan.jobToken(),
                 plan.promptDigest());
     }
 

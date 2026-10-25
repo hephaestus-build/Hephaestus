@@ -60,7 +60,7 @@ type Story = StoryObj<typeof meta>;
 
 export const Unfiltered: Story = {
 	play: async ({ canvas }) => {
-		canvas.getByText("12 results.");
+		canvas.getByText("12 observations.");
 		await expect(canvas.queryByRole("button", { name: "Reset" })).not.toBeInTheDocument();
 	},
 };
@@ -71,7 +71,7 @@ export const FilteredCountReadsDifferently: Story = {
 		total: 2,
 	},
 	play: async ({ canvas }) => {
-		canvas.getByText("2 results match your filters.");
+		canvas.getByText("2 observations match your filters.");
 		canvas.getByRole("button", { name: "Reset" });
 	},
 };
@@ -186,7 +186,7 @@ export const AnOutcomeFromTheOverview: Story = {
 	},
 	parameters: { chromatic: { viewports: [320] }, viewport: { defaultViewport: "reflow" } },
 	play: async ({ args, canvas, userEvent }) => {
-		canvas.getByText("4 results match your filters.");
+		canvas.getByText("4 observations match your filters.");
 		await canvas.findByTitle("Outcome: Met");
 		await userEvent.click(canvas.getByLabelText("Clear outcome filter (Met)"));
 		await expect(args.onPatch).toHaveBeenCalledWith({ outcome: undefined });
@@ -203,7 +203,7 @@ export const OnlyResultsMarkedIncorrect: Story = {
 		total: 1,
 	},
 	play: async ({ args, canvas, userEvent }) => {
-		canvas.getByText("1 result matches your filters.");
+		canvas.getByText("1 observation matches your filters.");
 		canvas.getByTitle("Marked incorrect: Only");
 		canvas.getByRole("button", { name: "Reset" });
 		await userEvent.click(
@@ -228,7 +228,7 @@ export const ADisagreementOnAPhone: Story = {
 	args: { search: { ...UNFILTERED, disagreed: false }, total: 2 },
 	parameters: { chromatic: { viewports: [320] }, viewport: { defaultViewport: "reflow" } },
 	play: async ({ args, canvas, userEvent }) => {
-		canvas.getByText("2 results match your filters.");
+		canvas.getByText("2 observations match your filters.");
 		await canvas.findByTitle("Disagreement: No disagreement");
 		await userEvent.click(canvas.getByRole("button", { name: "Reset" }));
 		await expect(args.onReset).toHaveBeenCalledTimes(1);

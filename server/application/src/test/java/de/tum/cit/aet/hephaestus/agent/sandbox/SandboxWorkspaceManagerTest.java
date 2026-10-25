@@ -1,4 +1,4 @@
-package de.tum.cit.aet.hephaestus.agent.sandbox.docker;
+package de.tum.cit.aet.hephaestus.agent.sandbox;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.assertj.core.api.Assertions.assertThat;

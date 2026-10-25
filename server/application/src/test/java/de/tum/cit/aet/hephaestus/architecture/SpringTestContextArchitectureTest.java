@@ -78,6 +78,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
                     "agent.context.providers.mentor.RetainedReviewContextRegressionIntegrationTest", "review-fixture"),
             assignment("practices.feedback.FeedbackGateIntegrationTest", "review-feedbackgate"),
             assignment("agent.handler.PublicReviewEligibilityIntegrationTest", "review-feedbackgate"),
+            assignment("agent.proxy.ReviewCredentialScopeIntegrationTest", "review-credential-scope"),
             assignment("practices.feedback.FeedbackPreparationReceiptIntegrationTest", "review-preparation-receipt"),
             assignment("practices.feedback.FeedbackHistoryQueryIntegrationTest", "review-feedbackhistoryquery"),
             assignment("practices.feedback.FeedbackPrivateHistoryIntegrationTest", "review-privatehistory"),
@@ -198,6 +199,10 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
                     "review-feedbackhistoryquery",
                     "real persisted history with exact private/public source permissions" + " controlled"),
             Map.entry(
+                    "review-credential-scope",
+                    "real job scopes, result admission and feedback preparation with only native SCM boundaries"
+                            + " controlled"),
+            Map.entry(
                     "review-privatehistory",
                     "real private history, routing and person-copy custody with only native SCM boundaries controlled"),
             Map.entry(
@@ -264,6 +269,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             "core.auth.clientsession.ClientSessionMigratedSchemaTest",
             "integration.schema.ProductionSchemaContractIntegrationTest",
             "integration.scm.gitlab.workspace.GitLabWorkspaceEventRoutingIntegrationTest",
+            "agent.proxy.ReviewCredentialScopeIntegrationTest",
             "practices.feedback.FeedbackPrivateHistoryIntegrationTest",
             "testconfig.BaseIntegrationTest",
             "testconfig.RealAuthIntegrationTest");
@@ -305,6 +311,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             "agent.adapter.EvidenceDeliveryAuthorizationIntegrationTest",
             "agent.mentor.weeklydigest.WeeklyDigestIntegrationTest",
             "agent.handler.PublicReviewEligibilityIntegrationTest",
+            "agent.proxy.ReviewCredentialScopeIntegrationTest",
             "practices.result.MigratedHistoryReadIntegrationTest",
             "integration.scm.gitlab.credentials.GitLabTokenLifecycleIntegrationTest",
             "integration.scm.gitlab.workspace.GitLabWorkspaceEventRoutingIntegrationTest",

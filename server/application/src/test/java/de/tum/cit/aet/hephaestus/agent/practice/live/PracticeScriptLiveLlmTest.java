@@ -22,7 +22,7 @@ import de.tum.cit.aet.hephaestus.agent.config.MemberAiRoutingAdapter;
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.PreparedEvidence;
 import de.tum.cit.aet.hephaestus.agent.context.PreparedJobInputsFixtures;
-import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayProperties;
+import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayConnector;
 import de.tum.cit.aet.hephaestus.agent.handler.EvidenceSnapshotFixtures;
 import de.tum.cit.aet.hephaestus.agent.handler.PracticeCatalogInjector;
 import de.tum.cit.aet.hephaestus.agent.handler.PracticeScriptInputs;
@@ -101,7 +101,6 @@ import io.micrometer.core.instrument.MeterRegistry;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.math.BigDecimal;
-import java.net.ServerSocket;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -190,14 +189,12 @@ class PracticeScriptLiveLlmTest extends AbstractWorkspaceIntegrationTest {
         marks unfinished work that is merged anyway.
         """;
 
-    private static final int GATEWAY_PORT = freePort();
-
     private static final Path FABRIC_ROOT = temporaryDirectory("practice-script-live-fabric-");
 
     @DynamicPropertySource
     static void workerRole(DynamicPropertyRegistry registry) {
         registry.add("hephaestus.runtime.worker.enabled", () -> "true");
-        registry.add("hephaestus.sandbox.gateway.port", () -> Integer.toString(GATEWAY_PORT));
+        registry.add("hephaestus.sandbox.gateway.port", () -> "0");
         // Cleanup is scoped to this worker owner and root; other checkouts share the host.
         registry.add("hephaestus.sandbox.docker.owner", () -> "practice-script-live-test");
         registry.add("hephaestus.fabric.root", FABRIC_ROOT::toString);
@@ -236,7 +233,7 @@ class PracticeScriptLiveLlmTest extends AbstractWorkspaceIntegrationTest {
     private WorkerProperties workerProperties;
 
     @Autowired
-    private SandboxGatewayProperties gatewayProperties;
+    private SandboxGatewayConnector gateway;
 
     @Autowired
     private PracticePiAdapter practiceAdapter;
@@ -441,11 +438,7 @@ class PracticeScriptLiveLlmTest extends AbstractWorkspaceIntegrationTest {
         warmUp(chat, warmUps);
         Path log = workDir.resolve("runner.log");
         Process runner = LiveRunnerWorkspace.spawn(
-                workDir,
-                spec.environment(),
-                "http://127.0.0.1:" + gatewayProperties.port() + "/internal/llm",
-                jobToken,
-                log);
+                workDir, spec.environment(), "http://127.0.0.1:" + gateway.port() + "/internal/llm", jobToken, log);
         if (!runner.waitFor(LiveRunnerWorkspace.TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
             runner.destroyForcibly();
             throw new AssertionError("runner did not finish:\n" + Files.readString(log));
@@ -845,14 +838,6 @@ class PracticeScriptLiveLlmTest extends AbstractWorkspaceIntegrationTest {
     private static Path temporaryDirectory(String prefix) {
         try {
             return Files.createTempDirectory(prefix);
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
-        }
-    }
-
-    private static int freePort() {
-        try (ServerSocket socket = new ServerSocket(0)) {
-            return socket.getLocalPort();
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }

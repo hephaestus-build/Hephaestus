@@ -41,7 +41,7 @@ The verifier and every workflow use that map.
 
 ## Rollback
 
-Follow the [rollback procedure](./install#rollback). It selects an earlier published lock without
+Follow the [rollback procedure](./upgrade#rollback). It selects an earlier published lock without
 reconstructing metadata or resolving image tags. Production startup independently rejects a
 non-digest `agent-pi` reference.
 
@@ -63,4 +63,4 @@ The role list shows the container topology that this guide documents.
 After an upgrade, compare `release` on **each** role's management listener. The administration
 overview shows only the server it talks to. The instance-admin API adds the update check to the same
 identity: `GET /admin/release` reads it and `POST /admin/release/checks` asks GitHub now. See
-[Update checks](./install#update-checks) for cadence, privacy and offline operation.
+[Update checks](./upgrade#update-checks) for cadence, privacy and offline operation.

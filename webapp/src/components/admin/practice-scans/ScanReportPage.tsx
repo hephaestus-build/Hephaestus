@@ -197,8 +197,8 @@ function LoadedReport({
 									<AlertDialogHeader>
 										<AlertDialogTitle>Cancel this scan?</AlertDialogTitle>
 										<AlertDialogDescription>
-											The scan stops and cannot be resumed. Its report keeps the results already
-											recorded.
+											The scan stops and cannot be resumed. Its report keeps the observations
+											already recorded.
 										</AlertDialogDescription>
 									</AlertDialogHeader>
 									<AlertDialogFooter>

@@ -389,12 +389,14 @@ function FeedbackBasisList({ basis }: { basis: readonly FeedbackBasis[] }) {
 							{whole && (
 								<>
 									<DotSeparator inline />
-									The whole result
+									The whole observation
 								</>
 							)}
 							{problemIds.map((problemId, index) => {
 								const label =
-									index === 0 ? "One problem of this result" : "Another problem of this result";
+									index === 0
+										? "One problem of this observation"
+										: "Another problem of this observation";
 								// Counts the problems this feedback rests on, not their place in the result.
 								const reference =
 									problemIds.length === 1
@@ -669,11 +671,11 @@ function responseEvent(feedback: FeedbackRecord): SheetEvent | undefined {
 
 const WITHDRAWN_NOW: Record<FeedbackDestination, string> = {
 	ON_WORK:
-		"It is withdrawn. Copies it posted on the work are retracted there, and their receipts stay in this history. The results behind it are unchanged.",
+		"It is withdrawn. Copies it posted on the work are retracted there, and their receipts stay in this history. The observations behind it are unchanged.",
 	PRACTICE_PAGE:
-		"It is off the developer’s practice pages and out of the feedback given to later reviews and Heph. The results behind it are unchanged.",
+		"It is off the developer’s practice pages and out of the feedback given to later reviews and Heph. The observations behind it are unchanged.",
 	CONVERSATION:
-		"It is withdrawn, so Heph does not raise it in a conversation. The results behind it are unchanged.",
+		"It is withdrawn, so Heph does not raise it in a conversation. The observations behind it are unchanged.",
 };
 
 /** Where removing withdrawn feedback from the work stands; the copy counts come from their receipts. */
@@ -684,20 +686,20 @@ function withdrawnOnWorkNow(feedback: FeedbackRecord): string {
 	// An unknown write is settled by reading the work again, not by a removal.
 	const check = deliveryCheck(feedback);
 	if (check === "available") {
-		return `It is withdrawn, but ${copies} may still be on the work, because a write was never confirmed. Check delivery to find out. A comment found there is then retracted. The results behind it are unchanged.`;
+		return `It is withdrawn, but ${copies} may still be on the work, because a write was never confirmed. Check delivery to find out. A comment found there is then retracted. The observations behind it are unchanged.`;
 	}
 	if (check === "checking") {
-		return "It is withdrawn. Heph is confirming whether a comment it began writing appeared on the work. A comment found there is then retracted. The results behind it are unchanged.";
+		return "It is withdrawn. Heph is confirming whether a comment it began writing appeared on the work. A comment found there is then retracted. The observations behind it are unchanged.";
 	}
 	switch (withdrawalCorrection(feedback)) {
 		case "pending": {
-			return "It is withdrawn. Heph is still removing the copies it posted on the work. The results behind it are unchanged.";
+			return "It is withdrawn. Heph is still removing the copies it posted on the work. The observations behind it are unchanged.";
 		}
 		case "retryable": {
-			return `It is withdrawn, but ${copies} may still be on the work. At least one removal is unconfirmed. Check each copy above for details. The results behind it are unchanged.`;
+			return `It is withdrawn, but ${copies} may still be on the work. At least one removal is unconfirmed. Check each copy above for details. The observations behind it are unchanged.`;
 		}
 		case "needsAttention": {
-			return `It is withdrawn, but ${copies} may still be on the work, and Heph cannot remove ${one ? "it" : "them"}. The results behind it are unchanged.`;
+			return `It is withdrawn, but ${copies} may still be on the work, and Heph cannot remove ${one ? "it" : "them"}. The observations behind it are unchanged.`;
 		}
 		case "complete":
 		case undefined: {
@@ -798,7 +800,7 @@ function feedbackTechnical(feedback: FeedbackRecord): TechnicalFact[] {
 		.entries()) {
 		const number = feedback.basis.length === 1 ? "" : ` ${String(index + 1)}`;
 		facts.push({
-			label: `Basis result${number}`,
+			label: `Basis observation${number}`,
 			value: <code>{entry.resultId}</code>,
 			copy: entry.resultId,
 		});
@@ -834,16 +836,16 @@ function canChangeWithdrawal(feedback: FeedbackRecord): boolean {
 
 const WITHDRAW_DESCRIPTIONS: Record<FeedbackDestination, string> = {
 	ON_WORK:
-		"Copies already posted on the work are retracted there, and nothing more is posted. Their receipts stay on this sheet, and the results behind it are unchanged.",
+		"Copies already posted on the work are retracted there, and nothing more is posted. Their receipts stay on this sheet, and the observations behind it are unchanged.",
 	PRACTICE_PAGE:
-		"It comes off the developer’s practice pages and out of the feedback given to later reviews and Heph. The results behind it are unchanged. A developer who already saw it sees that it was withdrawn, not your reason.",
+		"It comes off the developer’s practice pages and out of the feedback given to later reviews and Heph. The observations behind it are unchanged. A developer who already saw it sees that it was withdrawn, not your reason.",
 	CONVERSATION:
-		"Heph does not raise it in a conversation, and it leaves the feedback given to later reviews. The results behind it are unchanged.",
+		"Heph does not raise it in a conversation, and it leaves the feedback given to later reviews. The observations behind it are unchanged.",
 };
 
 // No removal can reach a comment whose write is unknown: it has no provider reference until found.
 const UNKNOWN_WRITE_WITHDRAW_DESCRIPTION =
-	"An unconfirmed comment may still be on the work. Heph can retract that comment only if a check finds it. Receipts and results are kept.";
+	"An unconfirmed comment may still be on the work. Heph can retract that comment only if a check finds it. Receipts and observations are kept.";
 
 function withdrawalCopy(feedback: FeedbackRecord): CorrectionReasonCopy {
 	if (feedback.withdrawn) {
@@ -852,7 +854,7 @@ function withdrawalCopy(feedback: FeedbackRecord): CorrectionReasonCopy {
 			title: "Restore this feedback",
 			description:
 				feedback.destination === "PRACTICE_PAGE"
-					? "It returns to the developer’s practice pages if its results can still be shown there. Nothing is sent again."
+					? "It returns to the developer’s practice pages if its observations can still be shown there. Nothing is sent again."
 					: "The withdrawal ends. It is sent again only after every check passes.",
 			placeholder: "Why the feedback was right after all…",
 		};

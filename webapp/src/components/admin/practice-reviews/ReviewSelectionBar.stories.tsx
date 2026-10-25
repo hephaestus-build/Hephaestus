@@ -94,8 +94,8 @@ export const NotRead: Story = {
 		name: { status: "error", error: new Error("Not found"), onRetry: fn() },
 	},
 	play: async ({ canvas }) => {
-		canvas.getByText("a result");
-		canvas.getByRole("button", { name: "Stop tracking (a result)" });
+		canvas.getByText("an observation");
+		canvas.getByRole("button", { name: "Stop tracking (an observation)" });
 	},
 };
 

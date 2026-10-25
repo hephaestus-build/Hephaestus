@@ -26,21 +26,21 @@ export const SCAN_ENTRY_DEFS: StatusDefs<ScanEntryStatus> = {
 		label: "Reviewed",
 		icon: FileCheck2Icon,
 		badgeVariant: "secondary",
-		description: "Reviewed in this scan. The outcome beside it is this scan’s result.",
+		description: "Reviewed in this scan. The outcome beside it comes from this scan’s observation.",
 	},
 	REUSED: {
 		label: "Reused",
 		icon: RecycleIcon,
 		badgeVariant: "secondary",
 		description:
-			"The file and the practice are unchanged since an earlier review, so this scan reused its result.",
+			"The file and the practice are unchanged since an earlier review, so this scan reused its observation.",
 	},
 	WITHHELD: {
 		label: "Withheld",
 		icon: EyeOffIcon,
 		badgeVariant: "warning",
 		description:
-			"Admission refused the candidate result for the recorded reason. No result was recorded.",
+			"Admission refused the candidate observation for the recorded reason. No observation was recorded.",
 	},
 	LISTED: {
 		label: "Waiting",
@@ -52,7 +52,7 @@ export const SCAN_ENTRY_DEFS: StatusDefs<ScanEntryStatus> = {
 		label: "Not reviewed",
 		icon: CircleSlashIcon,
 		badgeVariant: "outline",
-		description: "The scan ended before this file was reviewed. This is not a result.",
+		description: "The scan ended before this file was reviewed. This is not an observation.",
 	},
 };
 
@@ -61,7 +61,7 @@ export const REMOVED_FILE_DEF: StatusDef = {
 	label: "Removed",
 	icon: FileXIcon,
 	badgeVariant: "outline",
-	description: "The file is no longer in the repository. Earlier results stay as history.",
+	description: "The file is no longer in the repository. Earlier observations stay as history.",
 };
 
 export const NOT_REVIEWED_SENTENCE = "The scan ended before this file was reviewed.";

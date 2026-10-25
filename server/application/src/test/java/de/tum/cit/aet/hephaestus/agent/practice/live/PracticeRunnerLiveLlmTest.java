@@ -307,7 +307,7 @@ class PracticeRunnerLiveLlmTest {
 
     /**
      * Build a {@link SandboxResult} from the on-disk {@code out/} directory. Mirrors what
-     * {@code DockerSandboxAdapter} does after a container exit so we feed the production parser
+     * {@code SandboxAttemptRunner} does after a container exit so we feed the production parser
      * the exact map shape it expects.
      */
     private static SandboxResult buildSandboxResult(int exitCode) throws IOException {

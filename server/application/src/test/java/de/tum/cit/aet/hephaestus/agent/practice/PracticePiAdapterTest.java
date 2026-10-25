@@ -154,8 +154,7 @@ class PracticePiAdapterTest extends BaseUnitTest {
         var spec = adapter.buildSandboxSpec(request);
 
         assertThat(spec.environment()).doesNotContainKey("PRACTICE_SCRIPT_PROXY_TOKEN");
-        assertThat(spec.networkPolicy()).isNotNull();
-        assertThat(spec.networkPolicy().llmProxyToken()).isEqualTo("job-token-123");
+        assertThat(spec.gatewayToken()).isEqualTo("job-token-123");
         JsonNode models = new ObjectMapper().readTree(spec.inputFiles().get(SandboxLayout.PRACTICE_SCRIPT_MODELS_FILE));
         assertThat(models.propertyNames()).containsExactly("chat");
     }
@@ -175,16 +174,8 @@ class PracticePiAdapterTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldKeepPracticeNetworkIsolatedBehindTheLlmProxy() {
-        var policy = adapter.buildSandboxSpec(proxyRequest()).networkPolicy();
-        assertThat(policy).isNotNull();
-        assertThat(policy.internetAccess()).isFalse();
-        assertThat(policy.llmProxyToken()).isEqualTo("job-token-123");
-    }
-
-    @Test
-    void outputPath() {
-        assertThat(adapter.buildSandboxSpec(proxyRequest()).outputPath()).isEqualTo(SandboxLayout.OUTPUT_PATH);
+    void shouldGiveTheSandboxTheJobTokenAsItsGatewayCredential() {
+        assertThat(adapter.buildSandboxSpec(proxyRequest()).gatewayToken()).isEqualTo("job-token-123");
     }
 
     @Test
@@ -208,9 +199,7 @@ class PracticePiAdapterTest extends BaseUnitTest {
         var spec = adapter.buildSandboxSpec(request);
 
         assertThat(spec.image()).isEqualTo(IMAGE);
-        var networkPolicy = spec.networkPolicy();
-        assertThat(networkPolicy).isNotNull();
-        assertThat(networkPolicy.llmProxyToken()).isEqualTo("job-token-123");
+        assertThat(spec.gatewayToken()).isEqualTo("job-token-123");
     }
 
     @Test

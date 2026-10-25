@@ -149,7 +149,7 @@ export const NoProblemsWithWithholding: Story = {
 		).toBeVisible();
 		await expect(
 			canvas.getByText(
-				"That does not mean every practice is met: 4 practice and file pairs have no result in this scan.",
+				"That does not mean every practice is met: 4 practice and file pairs have no observation in this scan.",
 			),
 		).toBeVisible();
 	},
@@ -172,7 +172,7 @@ export const NoProblemsInTheWorkItReached: Story = {
 		).toBeVisible();
 		await expect(
 			canvas.getByText(
-				"Its results cover only the work it reached, so this does not show that the code is clean.",
+				"Its observations cover only the work it reached, so this does not show that the code is clean.",
 			),
 		).toBeVisible();
 		await expect(canvas.queryByText("This scan recorded no problems")).not.toBeInTheDocument();

@@ -145,7 +145,7 @@ export const Default: Story = {
 			SHEET_SECTIONS.details,
 			SHEET_SECTIONS.technical,
 		]);
-		panel.getByRole("heading", { name: "Why this result", level: 4 });
+		panel.getByRole("heading", { name: "Why this observation", level: 4 });
 		// One line between each two sections, one section size, and every section folds.
 		await expectSectionLines(panelElement, 3);
 		await expectSectionHeadings(panelElement);
@@ -179,7 +179,7 @@ export const MarkdownExplanation: Story = {
 	},
 	play: async () => {
 		const panel = within(await settledDrawerPanel());
-		panel.getByRole("heading", { name: "Why this result", level: 4 });
+		panel.getByRole("heading", { name: "Why this observation", level: 4 });
 		await expect(panel.getByRole("heading", { name: "Access check", level: 5 })).toBeVisible();
 		const code = panel.getByText("CacheService.find", { selector: "code" });
 		await expect(code).toBeVisible();
@@ -318,9 +318,9 @@ export const NoLongerCurrent: Story = {
 	},
 	play: async () => {
 		const panel = within(await settledDrawerPanel());
-		panel.getByText("Historical result");
+		panel.getByText("Historical observation");
 		panel.getByText("No longer current");
-		panel.getByText("The work changed after this result.");
+		panel.getByText("The work changed after this observation.");
 		await expect(panel.queryByRole("alert")).toBeNull();
 	},
 };
@@ -336,7 +336,7 @@ export const EvidenceHidden: Story = {
 	},
 	play: async () => {
 		const panel = within(await settledDrawerPanel());
-		panel.getByText("The evidence of this result is hidden.");
+		panel.getByText("The evidence of this observation is hidden.");
 		await expect(panel.queryByText(/Nothing was quoted/u)).toBeNull();
 	},
 };
@@ -347,7 +347,7 @@ export const MarkIncorrect: Story = {
 		const panel = within(await settledDrawerPanel());
 		await userEvent.click(panel.getByRole("button", { name: "Mark incorrect" }));
 		const popover = await screen.findByRole("dialog", {
-			name: "Mark this result incorrect",
+			name: "Mark this observation incorrect",
 		});
 		const reason = within(popover).getByRole("textbox", { name: "Reason" });
 		await expectSettledVisible(reason);
@@ -374,7 +374,7 @@ export const MarkIncorrectFails: Story = {
 		const panel = within(await settledDrawerPanel());
 		await userEvent.click(panel.getByRole("button", { name: "Mark incorrect" }));
 		const popover = await screen.findByRole("dialog", {
-			name: "Mark this result incorrect",
+			name: "Mark this observation incorrect",
 		});
 		const reason = within(popover).getByRole("textbox", { name: "Reason" });
 		await expectSettledVisible(reason);
@@ -468,9 +468,11 @@ export const Loading: Story = {
 	args: { result: { status: "loading" } },
 	play: async () => {
 		const panel = within(await settledDrawerPanel());
-		await expect(panel.getByRole("heading", { level: 2 })).toHaveAccessibleName("Loading result");
+		await expect(panel.getByRole("heading", { level: 2 })).toHaveAccessibleName(
+			"Loading observation",
+		);
 		panel.getByRole("button", { name: "Practice reviews" });
-		await expect(panel.queryByText("We could not load this result")).not.toBeInTheDocument();
+		await expect(panel.queryByText("We could not load this observation")).not.toBeInTheDocument();
 		await expect(panel.queryByRole("button", { name: "Mark incorrect" })).not.toBeInTheDocument();
 	},
 };
@@ -485,8 +487,8 @@ export const LoadFailed: Story = {
 	},
 	play: async () => {
 		const panel = within(await settledDrawerPanel());
-		await expect(panel.getByText("We could not load this result")).toBeVisible();
-		await expect(screen.getByRole("dialog")).toHaveAccessibleName("Result");
+		await expect(panel.getByText("We could not load this observation")).toBeVisible();
+		await expect(screen.getByRole("dialog")).toHaveAccessibleName("Observation");
 		await expect(panel.queryByRole("button", { name: "Mark incorrect" })).not.toBeInTheDocument();
 		await expect(panel.getByRole("button", { name: "Retry" })).toBeEnabled();
 	},
@@ -507,7 +509,7 @@ export const TextUnavailable: Story = {
 	play: async () => {
 		const panel = within(await settledDrawerPanel());
 		await expect(
-			panel.getByRole("heading", { name: "Result text unavailable", level: 2 }),
+			panel.getByRole("heading", { name: "Observation text unavailable", level: 2 }),
 		).toBeVisible();
 		await expect(panel.getByText(RESULT_WORDS_UNAVAILABLE)).toBeVisible();
 		await expect(panel.queryByText(/Nothing was quoted/u)).not.toBeInTheDocument();
@@ -586,7 +588,9 @@ export const WithItsFeedback: Story = {
 	},
 	play: async () => {
 		const panel = within(await settledDrawerPanel());
-		const list = within(panel.getByRole("list", { name: "Feedback written from this result" }));
+		const list = within(
+			panel.getByRole("list", { name: "Feedback written from this observation" }),
+		);
 		await expect(list.getAllByRole("listitem")).toHaveLength(4);
 		const conversation = deliveryOutcome({
 			destination: "CONVERSATION",
@@ -624,7 +628,7 @@ export const WithoutFeedback: Story = {
 		const panel = within(await settledDrawerPanel());
 		await expect(panel.queryByRole("heading", { name: "Feedback", level: 4 })).toBeNull();
 		await expect(
-			panel.queryByRole("list", { name: "Feedback written from this result" }),
+			panel.queryByRole("list", { name: "Feedback written from this observation" }),
 		).toBeNull();
 	},
 };

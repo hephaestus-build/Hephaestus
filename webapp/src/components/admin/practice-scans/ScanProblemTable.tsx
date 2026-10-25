@@ -158,7 +158,7 @@ function ScanProblemResults({
 					icon={<CircleDashedIcon />}
 					headingLevel={2}
 					title="No problems recorded in the work it reached"
-					description="Its results cover only the work it reached, so this does not show that the code is clean."
+					description="Its observations cover only the work it reached, so this does not show that the code is clean."
 				/>
 			);
 		}
@@ -169,7 +169,7 @@ function ScanProblemResults({
 				title="This scan recorded no problems"
 				description={
 					pairsWithoutResult > 0
-						? `That does not mean every practice is met: ${pairsWithoutResult} practice and file ${pairsWithoutResult === 1 ? "pair has" : "pairs have"} no result in this scan.`
+						? `That does not mean every practice is met: ${pairsWithoutResult} practice and file ${pairsWithoutResult === 1 ? "pair has" : "pairs have"} no observation in this scan.`
 						: undefined
 				}
 			/>

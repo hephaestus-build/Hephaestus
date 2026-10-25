@@ -1,6 +1,6 @@
 # ADR 0007: Sandbox SPI shape — sealed VolumeMount + typed NetworkPolicy
 
-**Status:** Accepted (amended 2026-09-03 #1719 — mount portability superseded by [ADR 0041](0041-compose-1x-kubernetes-2.md); 2026-10-09 — interactive SPI replaced by `HostSandbox`, [ADR 0057](0057-one-heph-conversation-per-developer.md))
+**Status:** Accepted (amended 2026-09-03 #1719 — mount portability superseded by [ADR 0041](0041-compose-1x-kubernetes-2.md); 2026-10-09 — interactive SPI replaced by `HostSandbox`, [ADR 0057](0057-one-heph-conversation-per-developer.md); 2026-10-24 — [one attempt runner over a narrow backend](#update--2026-10-24-one-attempt-runner-over-a-narrow-backend))
 **Date:** 2026-05-20
 **Authors:** Server foundations epic (#1097)
 
@@ -80,3 +80,31 @@ seal for will not arrive. No `VolumeMount` type exists; `SandboxSpec.volumeMount
 small SPI, `agent.sandbox.spi.HostSandbox` (`launch(HostSpec)`, `isRunning(Host)`, `remove(Host)`), with the Docker
 implementation `DockerHostSandbox`. It reuses the container, security and network managers of the job
 sandbox. `SandboxSpec` and `NetworkPolicy` are unchanged.
+
+## Update — 2026-10-24: one attempt runner over a narrow backend
+
+The attempt protocol has one implementation for every sandbox runtime.
+`agent.sandbox.SandboxAttemptRunner` implements `SandboxManager`.
+`agent.sandbox.SandboxHosts` implements `HostSandbox`.
+Both own the gateway session, the sandbox environment, the deadlines, cancellation, the result and the metrics.
+A runtime implements only `agent.sandbox.spi.SandboxBackend`: `launch`, `observe`, `running`, `transcript`, `kill`, `remove` and `list`.
+`DockerSandboxBackend` is the Docker implementation.
+`ExecSandboxes` stays a separate SPI.
+
+A handle is the name that the runtime records for the sandbox, not a key in the memory of the process that launched it.
+Thus, `list`, `kill` and `remove` reach a sandbox from any worker that shares the runtime, also after a restart.
+On Docker, the name is the kind, the id and the attempt, which every container, network and volume of the sandbox records in its labels.
+The backend-neutral `agent.sandbox.SandboxReconciler` removes what `list` returns and no attempt or worker uses.
+A review's sandbox goes when its job is neither queued nor running and the sandbox is older than two minutes.
+A Heph host goes when the worker that launched it is gone.
+`Launch` carries the attempt's upload deadline, so that a runtime can end the sandbox without its worker.
+
+The review spec no longer carries runtime details:
+
+- `NetworkPolicy` is deleted. `SandboxSpec` carries the gateway token. The gateway is the sandbox's only destination, and the backend gives its address.
+- `SecurityProfile` moves into the Docker package. Each backend owns its hardening.
+- `outputPath` is deleted. The result always comes from `SandboxLayout.OUTPUT_PATH`.
+- The work deadline is a typed `Instant`, not an environment variable. The sandbox still reads both deadlines from `SANDBOX_WORK_DEADLINE_MS` and `SANDBOX_UPLOAD_DEADLINE_MS`.
+- `SandboxManager.isHealthy` is deleted. It had no caller.
+
+The backend contract states what every backend guarantees for both sandbox processes: the sandbox user, a read-only root, no capability, the launch's limits and environment, and the gateway as the only network destination.

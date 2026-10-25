@@ -1,4 +1,4 @@
-package de.tum.cit.aet.hephaestus.agent.sandbox.docker;
+package de.tum.cit.aet.hephaestus.agent.sandbox;
 
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxException;

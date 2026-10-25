@@ -49,11 +49,4 @@ public interface SandboxManager {
      * @param jobId the job identifier
      */
     void cancel(UUID jobId);
-
-    /**
-     * Check if the sandbox infrastructure is available.
-     *
-     * @return {@code true} if the Docker daemon (or remote runner pool) is reachable
-     */
-    boolean isHealthy();
 }
