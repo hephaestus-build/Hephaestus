@@ -103,8 +103,14 @@ public class PracticePiAdapter {
      * attempt has left. With none left, its runner records that review as stopped, so a later attempt composes it.
      */
     public static Map<String, String> publicReviewEnvironment(Map<String, String> review, Duration left) {
-        Map<String, String> environment = new LinkedHashMap<>(review);
+        Map<String, String> environment = new LinkedHashMap<>(withTimeLeft(review, left));
         environment.put(COMPOSITION_PHASES_ENV, "PUBLIC_REVIEW");
+        return Map.copyOf(environment);
+    }
+
+    /** A launch's environment whose agent budget is the time the attempt has left, less the runner's buffer. */
+    public static Map<String, String> withTimeLeft(Map<String, String> launch, Duration left) {
+        Map<String, String> environment = new LinkedHashMap<>(launch);
         long budget = left.minusSeconds(PiRuntimeFactory.TIMEOUT_BUFFER_SECONDS).toMillis();
         environment.put(PiRuntimeFactory.AGENT_BUDGET_ENV, Long.toString(Math.max(1, budget)));
         return Map.copyOf(environment);

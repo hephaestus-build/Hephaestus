@@ -56,11 +56,15 @@ The review launch measures, admits the results and composes private feedback.
 After it, a public review launch composes only the review on the work, from the admission that the server stages.
 The sessions of the public review launch have no shell.
 A continuing attempt runs the public review launch first and then composes private feedback.
+Each later launch gets only the time that the attempt has left.
+If the public review launch times out or exits with a failure, the attempt ends with that outcome.
+If it cannot start, the attempt fails as for any other launch failure.
 
 Each launch has a credential with one job scope: `review` or `public_review`.
 The gateway refuses admission and practice script calls to a `public_review` credential.
 It refuses public history to a `review` credential.
 Each credential prepares only the feedback of its own launch.
+A public package holds only the review on the work, and a private package holds none of it.
 
 The [workspace ABI](./agent/workspace-abi.mdx) owns the exact result and history paths.
 A history refusal is not an empty result list.

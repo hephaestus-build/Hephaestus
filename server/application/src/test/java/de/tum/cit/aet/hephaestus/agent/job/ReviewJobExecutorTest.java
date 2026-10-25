@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.AdditionalMatchers.aryEq;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -36,6 +37,7 @@ import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerCapacityState;
 import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerProperties;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.NetworkPolicy;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ResourceLimits;
+import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxInfrastructureException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxManager;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxResult;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxSpec;
@@ -442,9 +444,101 @@ class ReviewJobExecutorTest extends BaseUnitTest {
         verify(sandbox, times(2)).execute(launches.capture());
         assertThat(launches.getAllValues().getFirst().environment())
                 .containsEntry("PI_COMPOSITION_PHASES", "PUBLIC_REVIEW");
-        assertThat(launches.getAllValues().getLast()).isSameAs(review);
+        var privateFeedback = launches.getAllValues().getLast();
+        assertThat(privateFeedback.networkPolicy()).isEqualTo(review.networkPolicy());
+        assertThat(privateFeedback.environment()).containsEntry("PI_COMPOSITION_PHASES", "PRIVATE_FEEDBACK");
+        // The private launch gets only the time the public launch left.
+        assertThat(Long.parseLong(
+                        Objects.requireNonNull(privateFeedback.environment().get("AGENT_BUDGET_MS"))))
+                .isBetween(1L, 540_000L);
         // The continuing attempt was staged with its admission already.
         verify(kept, never()).admittedResponse(any());
+    }
+
+    @Test
+    void shouldStartNoPrivateLaunchWhenTheContinuingAttemptsReviewOnTheWorkTimesOut() {
+        var job = owedJob();
+        job.setAttempt(1);
+        var executor = twoLaunchExecutor(job, mock(ReviewCompositionContinuation.class));
+        var timedOut = new SandboxResult(124, Map.of(), "", true, Duration.ofMinutes(10));
+        when(sandbox.execute(any())).thenReturn(timedOut);
+        when(practiceAgent.parseResult(timedOut)).thenReturn(new AgentResult(false, Map.of(), RETURNED_USAGE));
+        terminalWriteOf(job, ReviewJobStatus.TIMED_OUT);
+
+        assertThat(executor.executePrepared(job.getId(), job, reviewLaunch(job, true)))
+                .isEqualTo(ReviewJobStatus.TIMED_OUT);
+
+        verify(sandbox, times(1)).execute(any());
+    }
+
+    @Test
+    void shouldStartNoReviewOnTheWorkAfterAReviewLaunchThatTimedOut() {
+        var job = owedJob();
+        var executor = twoLaunchExecutor(job, mock(ReviewCompositionContinuation.class));
+        var timedOut = new SandboxResult(124, Map.of(), "", true, Duration.ofMinutes(10));
+        when(sandbox.execute(any())).thenReturn(timedOut);
+        when(practiceAgent.parseResult(timedOut)).thenReturn(new AgentResult(false, Map.of(), RETURNED_USAGE));
+        terminalWriteOf(job, ReviewJobStatus.TIMED_OUT);
+
+        assertThat(executor.executePrepared(job.getId(), job, reviewLaunch(job, true)))
+                .isEqualTo(ReviewJobStatus.TIMED_OUT);
+
+        verify(sandbox, times(1)).execute(any());
+        verify(jwtIssuer, never()).issueForJobUntil(any(), any(), anyInt(), any(), any(), any());
+    }
+
+    @Test
+    void shouldContinueAStoppedReviewOnTheWorkWithTheReviewLaunchsScriptRuns() {
+        var job = owedJob();
+        byte[] stop = "{\"compositionFailures\":[]}".getBytes(StandardCharsets.UTF_8);
+        recovery = mock(ReviewJobRecovery.class);
+        when(recovery.continueComposition(
+                        eq(job), eq("worker-1"), eq(RETURNED_USAGE), aryEq(scriptReport()), aryEq(stop)))
+                .thenReturn(true);
+        var executor = twoLaunchExecutor(job, mock(ReviewCompositionContinuation.class));
+        var review = new SandboxResult(
+                0, Map.of(SandboxLayout.PRACTICE_SCRIPT_REPORT_FILE, scriptReport()), "", false, Duration.ofMinutes(1));
+        var owed = new SandboxResult(
+                SandboxLayout.EXIT_COMPOSITION_OWED,
+                Map.of(SandboxLayout.FEEDBACK_FILENAME, stop),
+                "",
+                false,
+                Duration.ofMinutes(1));
+        when(sandbox.execute(any())).thenReturn(review, owed);
+        when(practiceAgent.parseResult(review)).thenReturn(new AgentResult(true, Map.of(), RETURNED_USAGE));
+
+        assertThat(executor.executePrepared(job.getId(), job, reviewLaunch(job, true)))
+                .isNull();
+
+        verify(jobs, never()).transitionStatusOwnedBy(any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void shouldEndTheAttemptAsItsReviewOnTheWorkEndedWhenThatLaunchTimesOut() {
+        var job = owedJob();
+        var executor = twoLaunchExecutor(job, mock(ReviewCompositionContinuation.class));
+        var review = new SandboxResult(0, Map.of(), "", false, Duration.ofMinutes(1));
+        var timedOut = new SandboxResult(124, Map.of(), "", true, Duration.ofMinutes(9));
+        when(sandbox.execute(any())).thenReturn(review, timedOut);
+        when(practiceAgent.parseResult(review)).thenReturn(new AgentResult(true, Map.of(), RETURNED_USAGE));
+        terminalWriteOf(job, ReviewJobStatus.TIMED_OUT);
+
+        assertThat(executor.executePrepared(job.getId(), job, reviewLaunch(job, true)))
+                .isEqualTo(ReviewJobStatus.TIMED_OUT);
+    }
+
+    @Test
+    void shouldFailTheAttemptAsAnyLaunchWhenTheReviewOnTheWorkCannotStart() {
+        var job = owedJob();
+        var executor = twoLaunchExecutor(job, mock(ReviewCompositionContinuation.class));
+        var review = new SandboxResult(0, Map.of(), "", false, Duration.ofMinutes(1));
+        when(sandbox.execute(any())).thenReturn(review).thenThrow(new SandboxInfrastructureException("no daemon"));
+        when(practiceAgent.parseResult(review)).thenReturn(new AgentResult(true, Map.of(), RETURNED_USAGE));
+
+        assertThatThrownBy(() -> executor.executePrepared(job.getId(), job, reviewLaunch(job, true)))
+                .isInstanceOf(SandboxInfrastructureException.class);
+
+        verify(jobs, never()).transitionStatusOwnedBy(any(), any(), any(), any(), any(), any());
     }
 
     @Test

@@ -59,8 +59,10 @@ public class FeedbackCompositionService {
             Map<ComposedFeedback.Anchor, FeedbackAnchor> anchors,
             boolean publicAlreadyAccepted) {
         var drafts = FeedbackDraftBuilder.build(job, request, rows, context.support(), anchors);
-        boolean hasPublic = drafts.stream().anyMatch(draft -> draft.destination() == FeedbackDestination.ON_WORK);
-        if (hasPublic && !request.publicComposition()) throw new AdmissionConflictException();
+        // A public package holds only the review on the work, and a private package holds none of it.
+        if (drafts.stream()
+                .anyMatch(draft -> (draft.destination() == FeedbackDestination.ON_WORK) != request.publicComposition()))
+            throw new AdmissionConflictException();
         if (request.publicComposition() && publicAlreadyAccepted && job.getPublicReviewDigest() == null)
             throw new AdmissionConflictException();
         // An accepted package replays below by its digest; only a first acceptance is checked against current history.
