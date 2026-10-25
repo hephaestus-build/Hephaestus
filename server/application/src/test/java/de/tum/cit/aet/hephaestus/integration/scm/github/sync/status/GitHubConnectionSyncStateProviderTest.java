@@ -30,10 +30,12 @@ import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.time.ZoneId;
-import java.time.ZonedDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -49,6 +51,12 @@ class GitHubConnectionSyncStateProviderTest extends BaseUnitTest {
     private static final long WORKSPACE_ID = 1L;
     private static final long CONNECTION_ID = 10L;
     private static final long INSTALLATION_ID = 100L;
+    private static final Clock NOON = Clock.fixed(Instant.parse("2026-07-01T12:00:00Z"), ZoneOffset.UTC);
+
+    /** {@code localTime} in the zone the server schedules in. */
+    private static Instant scheduled(String localTime) {
+        return LocalDateTime.parse(localTime).atZone(ZoneId.systemDefault()).toInstant();
+    }
 
     @Mock
     private ConnectionRepository connectionRepository;
@@ -78,7 +86,7 @@ class GitHubConnectionSyncStateProviderTest extends BaseUnitTest {
         ref = new IntegrationRef(IntegrationKind.GITHUB, WORKSPACE_ID, String.valueOf(INSTALLATION_ID));
     }
 
-    private GitHubConnectionSyncStateProvider provider(SyncSchedulerProperties properties) {
+    private GitHubConnectionSyncStateProvider provider(SyncSchedulerProperties properties, Clock clock) {
         return new GitHubConnectionSyncStateProvider(
                 connectionRepository,
                 rateLimitTracker,
@@ -86,7 +94,12 @@ class GitHubConnectionSyncStateProviderTest extends BaseUnitTest {
                 properties,
                 repositoryToMonitorRepository,
                 repositoryRepository,
-                countReader);
+                countReader,
+                clock);
+    }
+
+    private GitHubConnectionSyncStateProvider provider(SyncSchedulerProperties properties) {
+        return provider(properties, NOON);
     }
 
     private static SyncSchedulerProperties schedulerProperties(boolean backfillEnabled) {
@@ -176,22 +189,15 @@ class GitHubConnectionSyncStateProviderTest extends BaseUnitTest {
         }
 
         @Test
-        void nextScheduledSyncAt_isTheCronsNextOccurrence() {
+        void nextScheduledSyncAt_isTheCronsNextRunAfterTheClock() {
             when(connectionRepository.findById(CONNECTION_ID)).thenReturn(Optional.of(githubAppConnection()));
-            Instant before = Instant.now();
+            Clock clock = Clock.fixed(scheduled("2026-10-24T03:34"), ZoneOffset.UTC);
 
-            ConnectionSyncDetails details = provider(schedulerProperties(false)).describe(ref, CONNECTION_ID);
+            Instant next = provider(schedulerProperties(false), clock)
+                    .describe(ref, CONNECTION_ID)
+                    .nextScheduledSyncAt();
 
-            // The configured cron fires daily at 03:00: assert the actual next occurrence, not merely
-            // "in the future" (which any future instant, e.g. now+1s, would satisfy).
-            Instant next = details.nextScheduledSyncAt();
-            assertNotNull(next);
-            ZonedDateTime fire = next.atZone(ZoneId.systemDefault());
-            assertThat(fire.getHour()).isEqualTo(3);
-            assertThat(fire.getMinute()).isZero();
-            assertThat(fire.getSecond()).isZero();
-            // 25h, not 24h: on the DST fall-back day the gap to the next 03:00 fire stretches to 25h.
-            assertThat(next).isAfter(before).isBeforeOrEqualTo(before.plus(Duration.ofHours(25)));
+            assertThat(next).isEqualTo(scheduled("2026-10-25T03:00"));
         }
 
         @Test

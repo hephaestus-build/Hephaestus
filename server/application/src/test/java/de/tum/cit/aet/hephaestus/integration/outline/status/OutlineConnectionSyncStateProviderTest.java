@@ -19,10 +19,11 @@ import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineCollection.Sy
 import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineCollectionRepository;
 import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineDocumentRepository;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
-import java.time.Duration;
+import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.time.ZoneId;
-import java.time.ZonedDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -35,6 +36,12 @@ class OutlineConnectionSyncStateProviderTest extends BaseUnitTest {
     private static final long WORKSPACE = 7L;
     private static final long CONNECTION_ID = 42L;
     private static final IntegrationRef REF = new IntegrationRef(IntegrationKind.OUTLINE, WORKSPACE, "team-1");
+    private static final Clock NOON = Clock.fixed(Instant.parse("2026-07-01T12:00:00Z"), ZoneOffset.UTC);
+
+    /** {@code localTime} in the zone the server schedules in. */
+    private static Instant scheduled(String localTime) {
+        return LocalDateTime.parse(localTime).atZone(ZoneId.systemDefault()).toInstant();
+    }
 
     @Mock
     private ConnectionService connectionRepository;
@@ -54,9 +61,13 @@ class OutlineConnectionSyncStateProviderTest extends BaseUnitTest {
     @Mock
     private OutlineRateLimitTracker rateLimitTracker;
 
-    private OutlineConnectionSyncStateProvider provider(String cron) {
+    private OutlineConnectionSyncStateProvider provider(String cron, Clock clock) {
         return new OutlineConnectionSyncStateProvider(
-                connectionRepository, collectionRepository, documentRepository, rateLimitTrackerProvider, cron);
+                connectionRepository, collectionRepository, documentRepository, rateLimitTrackerProvider, clock, cron);
+    }
+
+    private OutlineConnectionSyncStateProvider provider(String cron) {
+        return provider(cron, NOON);
     }
 
     private OutlineConnectionSyncStateProvider provider() {
@@ -120,21 +131,15 @@ class OutlineConnectionSyncStateProviderTest extends BaseUnitTest {
     }
 
     @Test
-    void describe_nextScheduledSyncAt_derivedFromTheCronExpression() {
+    void describe_nextScheduledSyncAt_isTheCronsNextRunAfterTheClock() {
         when(connectionRepository.findInWorkspace(REF.workspaceId(), CONNECTION_ID))
                 .thenReturn(Optional.empty());
-        Instant before = Instant.now();
+        Clock clock = Clock.fixed(scheduled("2026-10-25T00:34"), ZoneOffset.UTC);
 
-        Instant next = provider("0 0 0 * * *").describe(REF, CONNECTION_ID).nextScheduledSyncAt();
+        Instant next =
+                provider("0 0 0 * * *", clock).describe(REF, CONNECTION_ID).nextScheduledSyncAt();
 
-        // The cron fires daily at midnight: assert the actual next occurrence, not merely "in the future"
-        // (which any future instant, e.g. now+1s, would satisfy).
-        assertThat(next).isNotNull();
-        ZonedDateTime fire = next.atZone(ZoneId.systemDefault());
-        assertThat(fire.getHour()).isZero();
-        assertThat(fire.getMinute()).isZero();
-        assertThat(fire.getSecond()).isZero();
-        assertThat(next).isAfter(before).isBeforeOrEqualTo(before.plus(Duration.ofDays(1)));
+        assertThat(next).isEqualTo(scheduled("2026-10-26T00:00"));
     }
 
     @Test
