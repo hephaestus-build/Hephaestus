@@ -32,9 +32,9 @@ FROM nginx:1.30.6-alpine@sha256:47928bf67eb62a1863cb08d9ecb52d3e704304ba614eaee1
 RUN apk upgrade --no-cache && apk add --no-cache bash sed grep curl
 
 FROM os-packages AS runtime
-ARG COOLIFY_BRANCH
+ARG SOURCE_BRANCH
 ARG SOURCE_COMMIT
-ENV BUILD_GIT_BRANCH=$COOLIFY_BRANCH BUILD_GIT_COMMIT=$SOURCE_COMMIT
+ENV BUILD_GIT_BRANCH=$SOURCE_BRANCH BUILD_GIT_COMMIT=$SOURCE_COMMIT
 
 COPY --from=build /repo/webapp/dist /usr/share/nginx/html
 COPY webapp/docker/entrypoint.sh /entrypoint.sh

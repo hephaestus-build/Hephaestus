@@ -78,7 +78,6 @@ await test("every service that runs the webapp image uses one unprivileged port 
 	const mount = `${runtimeDirectory}:uid=101,gid=101,mode=0700,size=16m`;
 	for (const [file, service] of [
 		["../docker/compose.app.yaml", "webapp"],
-		["../docker/preview/compose.app.yaml", "webapp"],
 		["../docker/compose.proxy.yaml", "maintenance"],
 	] as const) {
 		const document = parseDocument(read(file));
@@ -99,12 +98,6 @@ await test("every service that runs the webapp image uses one unprivileged port 
 	assert.deepEqual(servicePorts("../docker/compose.app.yaml", "https?-webapp"), ["8080", "8080"]);
 	assert.deepEqual(servicePorts("../docker/compose.proxy.yaml", "maintenance"), ["8080"]);
 	assert.equal(listenPort(read("../webapp/docker/nginx-maintenance.conf")), "8080");
-	const expose = parseDocument(read("../docker/preview/compose.app.yaml")).getIn(
-		["services", "webapp", "expose"],
-		true,
-	);
-	assert.ok(isSeq(expose));
-	assert.deepEqual(expose.toJSON(), ["8080"]);
 });
 
 /** Every `traefik.http.routers.<name>.<key>=` value in a stack's Compose file. */
@@ -268,7 +261,7 @@ await test("what an operator is told to copy is one host per Host()", () => {
 
 await test("every https router sets HSTS itself, not through the edge", () => {
 	// The proxy stack puts security-headers on its https entrypoint, which covers a deployment whose
-	// edge is that stack. Staging and every preview run behind someone else's proxy, where no
+	// edge is that stack. Staging runs behind someone else's proxy, where no
 	// entrypoint middleware of ours exists — and the omission is invisible, because the webapp's
 	// nginx sets the other security headers on its own responses. HSTS is the one no response can
 	// set for itself, so each router that terminates a public request carries it.

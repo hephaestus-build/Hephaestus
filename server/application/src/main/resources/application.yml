@@ -820,7 +820,6 @@ hephaestus:
         consumer:
             # Lets JetStream delete a durable nothing has been BOUND to for this long — see
             # NatsConsumerProperties for what boundness measures and why 0 is the only value below 1h.
-            # Disposable stacks set something far shorter (docker/preview/compose.app.yaml).
             # A bare number is hours.
             inactive-threshold: ${HEPHAESTUS_INTEGRATION_CONSUMER_INACTIVE_THRESHOLD:30d}
         # ─── GitHub authentication (GitHubProperties) ───

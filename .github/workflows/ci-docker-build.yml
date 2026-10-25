@@ -84,7 +84,7 @@ jobs:
       # A merge group builds the image its push to the default branch reuses, so it names that branch.
       build-args: |
         SOURCE_COMMIT=${{ github.sha }}
-        COOLIFY_BRANCH=${{ github.head_ref || (github.event_name == 'merge_group' && github.event.repository.default_branch) || github.ref_name }}
+        SOURCE_BRANCH=${{ github.head_ref || (github.event_name == 'merge_group' && github.event.repository.default_branch) || github.ref_name }}
       publish: ${{ inputs.publish }}
       platforms: ${{ inputs.platforms }}
       reuse-run: ${{ contains(fromJSON(inputs.reuse_images), 'webapp') && inputs.reuse_run || '' }}
@@ -150,10 +150,10 @@ jobs:
         org.opencontainers.image.licenses=MIT
         hephaestus.component=postgres
 
-  # Preview stacks resolve every component by PR head SHA; alias verified digests for the components
-  # this pull request left alone. They are aliased from the published commit `detect-changes`
-  # resolved, which is the pull request's base only when the default branch contains it —
-  # docs/contributor/ci-cd.mdx has the rule.
+  # A pull request with the `preview` label or the host boot smoke needs every component at its head
+  # SHA; alias verified digests for the components this pull request left alone. They are aliased
+  # from the published commit `detect-changes` resolved, which is the pull request's base only when
+  # the default branch contains it — docs/contributor/ci-cd.mdx has the rule.
   tag-unchanged-images:
     name: "Tag unchanged images"
     if: >-

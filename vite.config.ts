@@ -104,7 +104,6 @@ const policyGates = [
 	"gate:instructions",
 	"gate:prose",
 	"gate:contracts",
-	"gate:preview-stack",
 	"gate:env",
 	"gate:quarantine",
 	"gate:configuration-reference",
@@ -129,10 +128,10 @@ const checkTasks = [
 	...docsGates,
 	...loadGates,
 ];
-// What the Windows runner cannot run: Gradle against a JDK it does not provision, Docker, and the
+// What the Windows runner cannot run: Gradle against a JDK it does not provision, and the
 // agent specs, which run the Linux sandbox runtime. Everything else is expected to pass there; a
 // gate that fails on Windows is a portability defect, not a reason to add it here.
-const linuxOnly = new Set(["gate:server", "gate:agent-tests", "gate:preview-stack"]);
+const linuxOnly = new Set(["gate:server", "gate:agent-tests"]);
 
 export default defineConfig({
 	fmt,
@@ -235,9 +234,6 @@ export default defineConfig({
 			"gate:runner-contract": run("node --test scripts/check-runner-contract.ts"),
 			"gate:lint-contract": run("node --test scripts/check-lint-contract.ts"),
 			"gate:agent-runtime-pins": cached("node scripts/check-agent-runtime-pins.ts"),
-			"gate:preview-stack": run(
-				"node scripts/check-preview-stack.ts && node --test scripts/check-preview-stack.test.ts",
-			),
 			"gate:env": run(
 				"node scripts/check-env-defaults.ts && node scripts/check-env-roles.ts && node --test scripts/check-env-roles.test.ts scripts/self-host-setup.test.ts",
 			),
@@ -390,10 +386,7 @@ export default defineConfig({
 				dependsOn: [
 					// Excluded here because another job or workflow runs them; the Windows leg re-runs what it can.
 					...policyGates.filter(
-						(gate) =>
-							!["gate:contracts", "gate:env", "gate:changesets", "gate:preview-stack"].includes(
-								gate,
-							),
+						(gate) => !["gate:contracts", "gate:env", "gate:changesets"].includes(gate),
 					),
 					...agentGates,
 					...docsGates,

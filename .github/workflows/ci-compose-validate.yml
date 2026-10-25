@@ -207,9 +207,6 @@ jobs:
           [ "$published" = "80 443 " ] || {
             echo "::error::reverse-proxy publishes '$published', expected '80 443 ' — !override was ignored"; exit 1; }
 
-      - name: Render the preview stack and assert it stays sandboxed
-        run: vp run gate:preview-stack
-
       - name: Render the reference deployment
         working-directory: docker
         run: |

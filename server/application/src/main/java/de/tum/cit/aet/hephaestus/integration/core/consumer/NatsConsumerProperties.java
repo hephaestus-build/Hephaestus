@@ -29,7 +29,6 @@ import org.springframework.validation.annotation.Validated;
  * reaped durable is recreated at {@link io.nats.client.api.DeliverPolicy#New} and skips whatever
  * arrived while it was gone. {@link #INACTIVE_THRESHOLD_FLOOR} rejects a value short enough that an
  * ordinary restart trips it, which would make the setting the data loss it exists to prevent.
- * Disposable stacks state their own, much shorter value — {@code docker/preview/compose.app.yaml}.
  *
  * @param inactiveThreshold How long JetStream keeps a durable consumer that no running process is bound to before it
  *     deletes it. Set 0s to disable deletion, otherwise use at least 1h. A recreated consumer skips the messages that

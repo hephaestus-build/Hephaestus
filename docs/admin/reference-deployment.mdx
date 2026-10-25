@@ -98,7 +98,6 @@ Kubernetes manifests need the same order.
    Membership automatically elevates them to workspace ADMIN there.
 5. Verify a test GitHub or GitLab webhook reaches the ingest pipeline.
 6. Before GitLab practice-review tests, confirm `GITLAB_ENABLED`, `GITLAB_WORKSPACE_CREATION`, `AGENT_ENABLED`, `GIT_CHECKOUT_ENABLED`, and `NATS_ENABLED` in the deployed environment.
-   Preview environments most often lack this bundle.
 7. Verify `/imprint` and `/privacy` have no red "not configured" banner.
    See [Legal Pages](./legal-pages).
 
@@ -108,7 +107,6 @@ Use the same variables differently across environments:
 
 | Environment | Intended scope                                                                                                                                                                                             |
 | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Preview     | Limited by default. Keep GitLab login, GitLab workspaces, sandbox, git checkout, and agent job execution disabled unless explicitly validating rollout.                                                    |
 | Staging     | Uses production compose files with a controlled rollout. Enable GitLab login first, then workspace creation. Enable `AGENT_ENABLED` and `GIT_CHECKOUT_ENABLED` only to validate practice review execution. |
 | Production  | Full rollout only after staging validates the identical bundle.                                                                                                                                            |
 
@@ -121,9 +119,7 @@ Their differences should be `.env` values, not compose topology.
 2. Verify trace IDs in logs.
 3. Schedule regular PostgreSQL backups.
    It holds auth state (accounts, identity links, sessions) and application data.
-4. Verify rollouts on staging, not preview.
-
-A preview represents a GitLab practice-review rollout only with identical GitLab IdP, sandbox, git-checkout, and agent-job-queue settings.
+4. Verify rollouts on staging.
 
 ## Support
 

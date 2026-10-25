@@ -70,7 +70,7 @@ It can capture evidence only for images that its run published.
 | Dependency review → New dependency risk                                          | informational dependency review. Pull requests that change a dependency input. Independent of CI Status Gate                                                                                                                                                           | —                                                                        |
 | Security → Dependencies, secrets, and policy                            | Trivy filesystem scan, dependency vulnerability gate, TruffleHog, `security.txt` expiry, changelog immutability guard, legacy-reference guards                                                            | —                                                                        |
 | Changesets → Verify changesets                                          | policy tests, verified-revert detection, release-note presence, `MIGRATION.md` freeze                                                                                                                     | `vp run gate:changesets`                                                 |
-| Compose → Render compose stacks                                         | the self-hosted, preview and reference stacks render                                                                                                                                                      | `vp run gate:preview-stack`                                              |
+| Compose → Render compose stacks                                         | the self-hosted and reference stacks render                                                                                                                                                               | —                                                                        |
 | Docker → Webapp, Agent: Pi, Postgres (pg_partman), Tag unchanged images | Dockerfile images. Aliases for unchanged ones                                                                                                                                                             | —                                                                        |
 | Supported-host boot smoke                                               | `docker/self-host/setup.sh`, then PostgreSQL, NATS and the application server from this run's own images, waiting for the application to report healthy                                                   | —                                                                        |
 | Actionlint, Zizmor                                                      | workflow lint with ShellCheck warnings. Zizmor at medium confidence                                                                                                                                       | —                                                                        |
@@ -126,7 +126,7 @@ the pull request. Each required context is bound to the GitHub Actions integrati
 accepting a same-named external status.
 
 A merge group is a diff, so it selects its jobs from the paths it touches —
-[Path filters](#path-filters). It has no preview, so `Build` and `Docker` are filtered there too.
+[Path filters](#path-filters). It has no `preview` label, so `Build` and `Docker` are filtered there too.
 `any-code` is the union of source filters and reaches `docs/**` through the tooling filter.
 Thus, a documentation-only group starts `Quality`, `Security`, `Build`, and `Docker`, even when their internal jobs skip.
 
@@ -442,7 +442,6 @@ Do not alter dependency submission or disable checksum verification to change it
 
 | Environment       | Eligibility                                 | Deploys on                        | Approval          |
 | ----------------- | ------------------------------------------- | --------------------------------- | ----------------- |
-| Preview (Coolify) | same-repository PR with the `preview` label | every push, once its CI run ends  | none              |
 | Staging           | qualified commits of `main`                 | automatic promotion policy        | none              |
 | Production        | a published release                         | manual promotion                  | required reviewer |
 
@@ -470,136 +469,34 @@ The `proxy` stack publishes :80 and :443. If the host already has an edge, set `
 This omits `proxy` from both render and deploy. Anything else, including an unset variable, deploys all
 three.
 
-Staging sets it because it shares a host with Coolify for preview deployments.
-Coolify's proxy holds both ports.
+Staging sets it because Coolify's proxy on its host holds both ports.
 A second edge would fail the deploy because a port is already allocated.
 
-Preview environments do not need to be created in advance. The preview workflow registers
-`preview/pr-N` as a transient GitHub environment when Coolify accepts the first deployment.
+## The `preview` label
 
-## Preview deployments
+The label builds images only.
+There is no deployed preview until previews move to the staging cluster.
 
-Add the `preview` label to a same-repository pull request. Every push redeploys when its CI/CD run
-completes, whether the tests passed or not. The published images decide, not the test verdict.
-
-CI builds a pull request's images only when the run needs them.
-The `preview` label, the supported-host boot smoke, the Kubernetes cluster jobs and release evidence need them.
+On a same-repository pull request, the label makes CI build, scan and publish every image at the head commit.
+Without it, CI builds a pull request's images only for the supported-host boot smoke, the Kubernetes cluster jobs or release evidence.
 The merge group builds every other changed image before it lands.
+Thus, the label shows an image build or scan failure on the pull request, before the merge queue finds it.
 `Detect changes` reads the label live, as for `ci:full` ([Two verification tiers](#two-verification-tiers)).
 If it cannot read the label, a pull request that is not a draft builds its images.
 
-A label added after CI published the head's images deploys at once.
-If the label comes before the run starts, the comment says that the preview waits for CI, and the completion of that run deploys it.
-If the label comes after the run started, use **Re-run all jobs** on that run, or push a commit.
+If you add the label after the run started, use **Re-run all jobs** on that run, or push a commit.
 **Re-run failed jobs** keeps the earlier `Detect changes` result, so it does not see the label.
-
-This is later than a deploy as soon as the images are ready.
-A push previews only when its slowest CI job ends, tests included.
-Checking after the run ends avoids reporting a build that is still running as a missing image.
 
 `Docker` rebuilds images whose inputs changed.
 Its `Tag unchanged images` job aliases the base commit's verified digests for the rest.
 Thus, every image exists at the head SHA.
 
-An alias serves a preview, never release evidence.
+An alias is never release evidence.
 If the base commit's image is still publishing, it uses the merged pull request's candidate, which carries only `linux/amd64`.
 Either way, the alias is an image that another commit's run built.
 That is why the Version PR's branch builds every image itself instead.
 
-A draft deploys like any other pull request.
-Unfinished work commonly needs review, so the label is the sole opt-in.
-
-A sticky comment carries the URL, and GitHub records each accepted update as the transient
-environment `preview/pr-N`. The deployment opens when the pull request is admitted and its images are published, not when the stack is ready.
-It is `queued` until the last recheck and `in_progress` while Coolify builds, then becomes `success`.
-Thus, the pull request's **View deployment** link and run log remain reachable while Coolify builds.
-
-While CI is still publishing, there is no deployment record. A wait therefore holds no slot, and the previous preview stays live.
-A run that a newer push supersedes, or whose
-label is removed while it works, ends `inactive` rather than `failure`. Neither is a fault.
-
-Remove the `preview` label to tear the stack down and free the slot. Closing or merging the pull
-request does the same thing. Converting it back to draft does not — a draft is a thing you can
-preview.
-
-The environment itself outlives the deployments recorded in it. Deletion needs repository administration, which `GITHUB_TOKEN` cannot receive.
-`administration` is not a workflow-requestable permission scope.
-Thus, after the pull request closes, a `preview/pr-N` entry remains in repository settings with only retired deployments. Removing them is a
-maintainer action:
-
-```bash
-gh api -X DELETE "repos/hephaestus-build/Hephaestus/environments/preview%2Fpr-<n>"
-```
-
-Automating it would mean giving a scheduled workflow an administration-scoped credential, which is a
-larger grant than tidy settings are worth.
-
-Deployments are serialized, never parallel, and each one deploys the pull request's *current* head.
-A burst of pushes therefore produces one deployment of the newest commit rather than one per commit.
-If you push while a deployment is in flight, that run stands down rather than deploying a commit that
-is no longer the head. The new push's CI run starts the next deployment and nothing needs relabeling.
-A CI run that a newer push cancelled deploys nothing.
-
-CI's `workflow_run` completion starts the deploy.
-The App Server image can publish late in the run, so a timed wait can end before it is ready.
-
-A preview runs its own PostgreSQL seeded from staging and reads staging's event stream. What is
-switched off in the copy, how sign-in works, and how the sandbox is enforced are in
-[`docker/preview/README.md`](https://github.com/hephaestus-build/Hephaestus/blob/main/docker/preview/README.md).
-
-Same-repository pull requests can preview while targeting a stacked branch. The controller routes
-them to the default branch's Coolify application and checks their migrations against the default
-branch. The trusted workflow and admission boundary are defined in
-[ADR 0035](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0035-pull-request-previews-are-label-gated.md).
-
-### What a preview keeps from staging
-
-The preview retains accounts, workspaces, items, results, problems, feedback, and AI catalog metadata for reads.
-This includes model prices, grants, and bindings.
-Each connection keeps its staging state. What the clone is stripped of, and what the seed loader verifies before it lets the
-preview boot, is
-[`docker/preview/README.md` § Security boundary](https://github.com/hephaestus-build/Hephaestus/blob/main/docker/preview/README.md#security-boundary).
-
-None of staging's provider credentials are among what it keeps, so a preview reaches no model and no
-provider on staging's account. To give one AI access, add a **preview-only provider key** through
-the preview's own AI models administration and enable that connection. Instance and workspace
-connections both work, and a preview talking to a different endpoint gets a connection of its own.
-There is no provider-key environment variable and no fallback to staging's key, and enabling a
-connection does not switch practice review execution on.
-
-Seeding happens once per preview, so a preview seeded before this policy was installed still holds
-what the policy now clears. **Recreate it, including its private database volume** — a normal
-redeploy preserves an already-seeded database — and configure its AI access again afterwards.
-
-### When the comment says nothing deployed
-
-| Comment says                                      | What to do                                                                                                                                      |
-| ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| does not carry the `preview` label                | Add the label                                                                                                                                   |
-| CI has not published images for …                 | If that commit's CI run started after the label was added, nothing: the preview deploys when it finishes. Otherwise, use **Re-run all jobs** on that run, or push a commit |
-| is behind `main` on schema                        | Merge `main` in. The next push previews automatically                                                                                           |
-| comes from a fork                                 | Push the branch to this repository                                                                                                              |
-| was opened by a … , not a repository collaborator | Nothing. Previews need push access                                                                                                              |
-| changes trusted deployment policy                 | Land that change first — a preview never runs a pull request's own edits to `.github/workflows/**`, `.github/actions/**` or `docker/preview/**` |
-
-### When the preview failed
-
-| Comment says                                              | What it means                                                                                                 |
-| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| CI finished … without publishing this commit's images     | An image build failed or did not run. Open the linked CI run. Re-run it, or push, to retry.                   |
-| Coolify reported a failed preview deployment              | The stack did not start. Open the deployment log link in the comment.                                         |
-| Coolify finished, but the preview did not return HTTP 2xx | Containers started but the app never became healthy.                                                          |
-| Timed out waiting for Coolify …                           | The deploy outlasted its budget. The next push retries.                                                       |
-| The preview host is full (n/m)                            | Drop the label from one of the named pull requests                                                            |
-
-`cleanup-preview.yml` sends the signed close event and marks the GitHub deployment inactive. If
-Coolify rejects the event the job fails and `reconcile-previews.yml` retries nightly, starting from
-the deployment inventory.
-
-Operator configuration, host capacity and secret scopes live in
-[`docker/preview/README.md`](https://github.com/hephaestus-build/Hephaestus/blob/main/docker/preview/README.md).
-Why the label is the authority, and which alternatives were priced and declined, is
-[ADR 0035](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0035-pull-request-previews-are-label-gated.md).
+A draft with the label also builds its images.
 
 ## Workflows
 
@@ -634,9 +531,6 @@ Why the label is the authority, and which alternatives were priced and declined,
 | `delivery-metrics.yml`                | Weekly, manual                                                                | Reports lead time, deployment frequency, and change fail, recovery and rework proxies. See [Delivery Metrics](./delivery-metrics.mdx)                                                                                                 |
 | `ci-server-clean-reference.yml`       | Weekly, manual                                                                | Records cold server phases and compares generated JARs                                                                                                                                                                           |
 | `scorecard-ratchet.yml`               | Push to main, branch-protection change, weekly, manual                        | Fails when a Scorecard check drops below the committed baseline. A push fails only for the checks its own commit decides                                                                                                         |
-| `deploy-preview.yml`                  | `preview` label added, reopen or ready-for-review, or CI/CD completion, on a labelled PR | Deploys this commit's attested CI images once they exist, and registers the native GitHub deployment                                                                                                                  |
-| `cleanup-preview.yml`                 | Label removed, or PR closed                                                   | Removes and verifies resources, then retains a cleanup tombstone                                                                                                                                                                 |
-| `reconcile-previews.yml`              | Nightly, manual                                                               | Re-sends teardown for any preview environment whose pull request is closed or unlabelled                                                                                                                                         |
 | `cd-docs.yml`, `cd-docs-teardown.yml` | `docs/**` on push and pull requests. PR closed                                | Publishes the docs site and its pull-request previews                                                                                                                                                                            |
 | `version-pr.yml`                      | Successful CI/CD completion for the current main tip                          | Maintains the accumulating Version PR (changesets). Its own pull-request CI/CD run, release evidence preflight included, validates it                                                                                            |
 | `release.yml`                         | Successful CI/CD push on `main`                                               | Publishes the release and promotes the moving series and latest image tags                                                                                                                                                       |
@@ -682,10 +576,6 @@ image builder also uses the external login action because its registry is a call
 
 Browser E2E boots the packaged JAR without
 Gradle, so it sets up Java directly. OpenAPI autocommit builds the JAR and uses `setup-caches`.
-
-Preview controllers keep their trusted sparse bootstrap checkouts explicit: a repository-local
-action is unavailable before checkout. Their inventory job uses `github-script`'s bundled Node.
-Controller jobs that invoke Node scripts use `setup-toolchain` without a package install.
 
 Commit, branch and pull request image tags are published only after their immutable digest passes
 signature and provenance verification. Index assembly uses a run-specific staging tag. Final tag
@@ -772,7 +662,7 @@ A pull request runs the **fast tier**. A merge group, a push and a dispatch also
 
 | Tier | Jobs |
 | --- | --- |
-| Fast (pull request and queue) | Detect changes, the quality legs, unit and architecture tests, packaging, generated-artifact drift, [the images it needs](#preview-deployments), Security, Changesets, Compose, Actionlint, Zizmor |
+| Fast (pull request and queue) | Detect changes, the quality legs, unit and architecture tests, packaging, generated-artifact drift, [the images it needs](#the-preview-label), Security, Changesets, Compose, Actionlint, Zizmor |
 | Queue (merge group, push, dispatch) | the integration shards, the database contract tests, the PostgreSQL drills, webapp and extension E2E |
 
 Path filters and the main-push rules in [Path filters](#path-filters) still select within each tier.
@@ -792,7 +682,7 @@ When both tiers ran on each pull request, a merged change paid for the queue tie
 The queue tier is most of a run's runner time, and GitHub's runner concurrency limit is shared by the queue and every pull request.
 
 A queue-tier failure removes the entry from the queue, and the failure comment links the run.
-So does an image build or scan failure, because a pull request builds images only for a preview, the boot smoke or release evidence.
+So does an image build or scan failure, because a pull request builds images only for the `preview` label, the boot smoke or release evidence.
 Fix the failure and queue the pull request again.
 
 A draft pull request runs the fast tier and builds no image. So it gets no host smoke and no image
@@ -801,7 +691,7 @@ scan. The `preview` label still builds its images, and a release candidate alway
 For a draft, the automatic queue tier for the tier's own inputs is off, but `ci:full` still opts in.
 `CI Status Gate` still reports, so required checks resolve on a draft.
 Marking the pull request ready for review (`ready_for_review`) starts an ordinary pull-request run,
-with the images that such a run builds ([Preview deployments](#preview-deployments)). That run is never skipped as a duplicate of the draft's run.
+with the images that such a run builds ([The `preview` label](#the-preview-label)). That run is never skipped as a duplicate of the draft's run.
 A re-run replays the event of its run, so a re-run of a draft's run builds no image, even after
 the pull request is ready. Re-run the ready run instead.
 
@@ -847,7 +737,7 @@ They skip API, schema, database, and browser jobs inside `Build`.
 Release-version pushes repeat those checks. Main still packages and publishes images.
 
 A same-repository pull request with the `preview` label, or with the supported-host boot smoke, also runs `Build` and `Docker` regardless of paths.
-A preview and the smoke need every image at the head SHA. No other event has a preview.
+The label and the smoke need every image at the head SHA. No other event reads the label.
 Any other pull request builds no image. The merge group builds every changed image before it lands.
 
 | Selects                    | Paths                                                                                                                                                                                                                                                                                                                                                                                                                             |
@@ -886,7 +776,7 @@ well, because `packages: read` alone buys nothing.
 
 A pull request from a fork gets a read-only `GITHUB_TOKEN`, so `cicd.yml` passes `publish: false`
 to both image workflows. That build compiles the image and stops: no login, no push, no signature,
-no attestation, no policy scan and no alias moves. Forks therefore get no preview and no boot smoke.
+no attestation, no policy scan and no alias moves. Forks therefore get no published images and no boot smoke.
 The release path exercises their code once it is on `main`.
 
 When release preflight is required, it owns image vulnerability scanning for both architectures.

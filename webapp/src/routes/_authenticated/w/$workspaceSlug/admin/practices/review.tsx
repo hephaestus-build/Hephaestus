@@ -1,6 +1,5 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { InfoIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { toast } from "sonner";
 import {
@@ -52,8 +51,6 @@ import {
 } from "@/components/admin/practices/review/review-sections";
 import { ReviewPage } from "@/components/admin/practices/review/ReviewPage";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import environment from "@/environment";
 import { usePracticeFeedbackModeMutations } from "@/hooks/use-practice-feedback-mode-mutations";
 import { usePracticeReviewSettingsMutation } from "@/hooks/use-practice-review-settings";
 import { reviewModelOf, useReviewReadiness } from "@/hooks/use-review-readiness";
@@ -435,17 +432,6 @@ function AutomatedReviewSection({ workspaceSlug }: { workspaceSlug: string }) {
 
 	return (
 		<div className="max-w-3xl space-y-8">
-			{environment.deployment.environment === "preview" && (
-				<Alert>
-					<InfoIcon aria-hidden />
-					<AlertTitle>Reviews start paused in this preview</AlertTitle>
-					<AlertDescription>
-						Staging data is available, but cloned model assignments, review starts and recurring
-						checks start paused. To test a review in this preview only, select and enable the
-						practice review model below. Then turn on the way to start a review that you need.
-					</AlertDescription>
-				</Alert>
-			)}
 			{reviewSettings}
 			<PracticeReviewSchedule
 				workspaceSlug={workspaceSlug}

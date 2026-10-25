@@ -94,25 +94,25 @@ jobs:
       # database tests, PostgreSQL drills and browser suites. An unreadable label runs it too.
       # ci-cd.mdx § Two verification tiers says why.
       queue-tier: ${{ github.event_name != 'pull_request' || steps.opt_in.outputs.full != 'false' || (github.event.pull_request.draft != true && (steps.filter.outputs.queue-tier-inputs == 'true' || steps.filter.outputs.test-config == 'true' || steps.filter.outputs.build-config == 'true')) }}
-      # A draft runs the fast tier and builds no image: no preview, no host smoke, no image scan,
-      # unless it carries `preview`. A release candidate always builds its evidence. Marking it
+      # A draft runs the fast tier and builds no image: no host smoke, no image scan, unless it
+      # carries `preview`. A release candidate always builds its evidence. Marking it
       # ready starts the ordinary run. ci-cd.mdx § Two verification tiers.
       draft: ${{ github.event_name == 'pull_request' && github.event.pull_request.draft == true && steps.opt_in.outputs.preview != 'true' && steps.release_candidate.outputs.release-candidate != 'true' }}
       publishable: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
-      # A same-repository pull request needs every image at its head tag for its preview, the host
-      # boot smoke or the Kubernetes cluster jobs. An unreadable `preview` label counts as present,
+      # A same-repository pull request needs every image at its head tag for the `preview` label, the
+      # host boot smoke or the Kubernetes cluster jobs. An unreadable `preview` label counts as present,
       # except on a draft.
       head-images: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && (steps.opt_in.outputs.preview == 'true' || (github.event.pull_request.draft != true && (steps.opt_in.outputs.preview != 'false' || steps.filter.outputs.supported-host-smoke == 'true' || steps.filter.outputs.kubernetes == 'true'))) }}
       # Whether this run builds images at all: every event except a pull request, unless that pull
       # request is a release candidate or needs head images. The merge group builds every other
-      # changed image before it lands. ci-cd.mdx § Preview deployments.
+      # changed image before it lands. ci-cd.mdx § The `preview` label.
       images: ${{ github.event_name != 'pull_request' || steps.release_candidate.outputs.release-candidate == 'true' || (github.event.pull_request.head.repo.full_name == github.repository && (steps.opt_in.outputs.preview == 'true' || (github.event.pull_request.draft != true && (steps.opt_in.outputs.preview != 'false' || steps.filter.outputs.supported-host-smoke == 'true' || steps.filter.outputs.kubernetes == 'true')))) }}
       # A skipped duplicate would skip the image builds the release evidence preflight needs, and
       # the gate refuses to pass the Version PR without one.
       # A re-run after `ci:full` was added repeats a tree whose fast tier already passed, so only a
       # run without the opt-in may be skipped as a duplicate.
       # A pull request marked ready repeats the draft's tree but builds what the draft skipped.
-      # A labelled preview repeats a tree whose earlier run may have built no image.
+      # A run with the `preview` label repeats a tree whose earlier run may have built no image.
       should_skip: ${{ steps.skip_check.outputs.should_skip == 'true' && steps.release_candidate.outputs.release-candidate != 'true' && steps.opt_in.outputs.full == 'false' && steps.opt_in.outputs.preview == 'false' && github.event.action != 'ready_for_review' }}
     timeout-minutes: 15
     steps:
@@ -313,10 +313,6 @@ jobs:
               # gate:env validates these deployment inputs against application.yml.
               - 'docker/compose.app.yaml'
               - 'docker/compose.core.yaml'
-              # PreviewSeedPolicyIntegrationTest runs this file's clone policy against the migrated
-              # schema; a preview cannot rehearse it, because the controller refuses to deploy a
-              # head that changes docker/preview/.
-              - 'docker/preview/compose.app.yaml'
               # The generated configuration reference reads these, and its drift check runs on this leg.
               - 'docker/compose.proxy.yaml'
               - 'docker/self-host/compose*.yaml'
@@ -964,7 +960,7 @@ jobs:
   Docker:
     uses: ./.github/workflows/ci-docker-build.yml
     needs: [detect-changes, vulnerability-database]
-    # A preview and the host boot smoke need every image at the head tag; unchanged images are
+    # The `preview` label and the host boot smoke need every image at the head tag; unchanged images are
     # aliased here and the application image is built by Build. Other runs' image builds stay
     # path-filtered.
     if: |
