@@ -148,9 +148,11 @@ export function wizardReducer(state: WizardState, action: WizardAction): WizardS
 			return { ...state, displayName: action.value };
 		}
 		case "SET_SLUG": {
+			// Typed input is lowercased and its spaces and underscores become hyphens, so "My Team" and
+			// "Team_A" are accepted. The creation schema still rejects every other character.
 			return {
 				...state,
-				workspaceSlug: action.value,
+				workspaceSlug: action.value.toLowerCase().replaceAll(/[\s_]+/gu, "-"),
 				slugManuallyEdited: action.manual,
 			};
 		}

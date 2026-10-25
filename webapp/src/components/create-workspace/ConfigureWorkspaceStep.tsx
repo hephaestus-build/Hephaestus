@@ -22,6 +22,11 @@ function projectSummary(scope: WizardState["projectScope"], selected: number): s
 }
 
 export interface ConfigureWorkspaceStepProps {
+	/**
+	 * The `id` of the form that Enter in the name or slug field submits. The project search is a form
+	 * of its own, so this form sits outside the fields rather than around them.
+	 */
+	formId?: string;
 	/** The choice of the group's projects to monitor, which reads the group's projects itself. */
 	projects: ReactNode;
 	/**
@@ -47,6 +52,7 @@ function detailErrors(
 }
 
 export function ConfigureWorkspaceStep({
+	formId,
 	projects,
 	showErrors = false,
 }: ConfigureWorkspaceStepProps) {
@@ -80,6 +86,7 @@ export function ConfigureWorkspaceStep({
 				<FieldLabel htmlFor="workspace-display-name">Display name</FieldLabel>
 				<Input
 					id="workspace-display-name"
+					form={formId}
 					placeholder="My workspace"
 					value={state.displayName}
 					onChange={(e) => handleDisplayNameChange(e.target.value)}
@@ -104,6 +111,7 @@ export function ConfigureWorkspaceStep({
 				<FieldLabel htmlFor="workspace-slug">URL slug</FieldLabel>
 				<Input
 					id="workspace-slug"
+					form={formId}
 					placeholder="my-workspace"
 					aria-required="true"
 					value={state.workspaceSlug}

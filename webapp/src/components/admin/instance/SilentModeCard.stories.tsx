@@ -52,13 +52,13 @@ export const Engaged: Story = {
 	play: async ({ args, canvas }) => {
 		await userEvent.click(canvas.getByRole("button", { name: /turn off silent mode/iu }));
 		const confirm = await screen.findByRole("button", { name: /^turn off silent mode$/iu });
-		await userEvent.type(screen.getByLabelText(/type/iu), "nope");
+		await userEvent.type(screen.getByLabelText(/to confirm/iu), "nope");
 		await userEvent.click(confirm);
 		await expect(args.onRelease).not.toHaveBeenCalled();
 		await expect(await screen.findByText(/does not match/iu)).toBeVisible();
 
-		await userEvent.clear(screen.getByLabelText(/type/iu));
-		await userEvent.type(screen.getByLabelText(/type/iu), "turn off");
+		await userEvent.clear(screen.getByLabelText(/to confirm/iu));
+		await userEvent.type(screen.getByLabelText(/to confirm/iu), "turn off");
 		await userEvent.click(confirm);
 		await expect(args.onRelease).toHaveBeenCalled();
 	},

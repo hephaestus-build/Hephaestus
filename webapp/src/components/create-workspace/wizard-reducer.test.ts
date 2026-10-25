@@ -203,6 +203,15 @@ describe("wizardReducer", () => {
 			expect(result.workspaceSlug).toBe("auto-slug");
 			expect(result.slugManuallyEdited).toBe(false);
 		});
+
+		it.each([
+			["Team_A", "team-a"],
+			["My Team", "my-team"],
+			["QA-Team", "qa-team"],
+		])("normalizes a typed %j to %j", (typed, slug) => {
+			const result = wizardReducer(stateAt(3), { type: "SET_SLUG", value: typed, manual: true });
+			expect(result.workspaceSlug).toBe(slug);
+		});
 	});
 
 	describe("GO_BACK", () => {

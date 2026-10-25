@@ -66,8 +66,10 @@ import {
 	DialogTitle,
 	DialogDescription,
 } from "@/components/ui/dialog";
+import { Kbd } from "@/components/ui/kbd";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { Toaster } from "@/components/ui/sonner";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import environment from "@/environment";
 import { useConfirmAccess } from "@/hooks/use-confirm-access";
 import { useFeedbackAwaitingApproval } from "@/hooks/use-feedback-awaiting-approval";
@@ -414,7 +416,7 @@ function HeaderContainer() {
 
 	return (
 		<Header
-			sidebarTrigger={isAuthenticated && <SidebarTrigger className="-ml-1" />}
+			sidebarTrigger={isAuthenticated && <SidebarToggle />}
 			version={environment.version}
 			environmentName={environment.deployment.name}
 			pullRequest={environment.deployment.pullRequest}
@@ -439,6 +441,25 @@ function HeaderContainer() {
 				void logout();
 			}}
 		/>
+	);
+}
+
+// The sidebar answers Cmd+B and Ctrl+B on every platform. The tooltip shows the key that the reader's
+// keyboard has.
+const SIDEBAR_SHORTCUT_LABEL = /Mac|iPhone|iPad|iPod/u.test(navigator.userAgent) ? "⌘B" : "Ctrl+B";
+
+function SidebarToggle() {
+	return (
+		<Tooltip>
+			<TooltipTrigger
+				render={<SidebarTrigger className="-ml-1" aria-keyshortcuts="Control+B Meta+B" />}
+			/>
+			<TooltipContent side="bottom">
+				<span className="flex items-center gap-2">
+					Toggle sidebar <Kbd>{SIDEBAR_SHORTCUT_LABEL}</Kbd>
+				</span>
+			</TooltipContent>
+		</Tooltip>
 	);
 }
 

@@ -74,7 +74,7 @@ describe("instance settings route", () => {
 			await screen.findByRole("button", { name: "Turn off silent mode…" }, ROUTE_RENDER_WAIT),
 		);
 		const dialog = await screen.findByRole("alertdialog");
-		await user.type(within(dialog).getByLabelText(/Type turn off to confirm/u), "turn off");
+		await user.type(within(dialog).getByLabelText(/Enter turn off to confirm/u), "turn off");
 		await user.click(within(dialog).getByRole("button", { name: "Turn off silent mode" }));
 
 		await waitFor(() => expect(reads).toBe(2));
@@ -102,7 +102,7 @@ describe("instance settings route", () => {
 			await screen.findByRole("button", { name: "Turn off silent mode…" }, ROUTE_RENDER_WAIT),
 		);
 		const dialog = await screen.findByRole("alertdialog");
-		await user.type(within(dialog).getByLabelText(/Type turn off to confirm/u), "turn off");
+		await user.type(within(dialog).getByLabelText(/Enter turn off to confirm/u), "turn off");
 		await user.click(within(dialog).getByRole("button", { name: "Turn off silent mode" }));
 
 		await screen.findByText("We could not verify the current instance settings");

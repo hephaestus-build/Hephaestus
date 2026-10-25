@@ -122,6 +122,7 @@ export const AdminCannotAssignOwner: Story = {
 		await expect(args.onRoleChange).toHaveBeenCalledWith(
 			expect.objectContaining({ name: "Alice Johnson" }),
 			"MEMBER",
+			canvas.getByRole("combobox", { name: "Role of Alice Johnson" }),
 		);
 	},
 };

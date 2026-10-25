@@ -1,7 +1,15 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, Navigate, useNavigate } from "@tanstack/react-router";
 import { ArrowLeftIcon, OctagonXIcon } from "lucide-react";
-import { type ReactNode, useEffect, useReducer, useRef, useState } from "react";
+import {
+	type ReactNode,
+	type SubmitEvent,
+	useEffect,
+	useId,
+	useReducer,
+	useRef,
+	useState,
+} from "react";
 import { flushSync } from "react-dom";
 import { toast } from "sonner";
 
@@ -248,7 +256,7 @@ function GitLabWizardPage() {
 function GitLabWizard({ serverUrl }: { serverUrl: string }) {
 	const [state, dispatch] = useReducer(wizardReducer, serverUrl, createInitialWizardState);
 	const [showDetailErrors, setShowDetailErrors] = useState(false);
-	const wizardRegionRef = useRef<HTMLDivElement>(null);
+	const detailsFormId = useId();
 	const queryClient = useQueryClient();
 	const navigate = useNavigate();
 	const stepAnnouncement = `Step ${state.step} of 3: ${STEP_META[state.step].title}`;
@@ -362,13 +370,19 @@ function GitLabWizard({ serverUrl }: { serverUrl: string }) {
 		dispatch({ type: "GO_BACK" });
 	};
 
-	const handleSubmit = () => {
+	const handleSubmit = (event: SubmitEvent<HTMLFormElement>) => {
+		event.preventDefault();
 		if (!canSubmit || !state.selectedGroup || createWorkspace.isPending) {
 			return;
 		}
 		if (!detailsValid) {
 			flushSync(() => setShowDetailErrors(true));
-			wizardRegionRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus();
+			const firstInvalid = [...event.currentTarget.elements].find(
+				(element) => element.getAttribute("aria-invalid") === "true",
+			);
+			if (firstInvalid instanceof HTMLElement) {
+				firstInvalid.focus();
+			}
 			return;
 		}
 		createWorkspace.mutate({
@@ -412,12 +426,13 @@ function GitLabWizard({ serverUrl }: { serverUrl: string }) {
 
 			<WizardStepIndicator currentStep={state.step} />
 
-			<div ref={wizardRegionRef} className="mt-6" role="region" aria-labelledby="wizard-heading">
+			<div className="mt-6" role="region" aria-labelledby="wizard-heading">
 				<WizardContext.Provider value={wizardContextValue}>
 					{state.step === 1 && <ConnectGitLabStep />}
 					{state.step === 2 && <SelectGroupStep />}
 					{state.step === 3 && (
 						<ConfigureWorkspaceStep
+							formId={detailsFormId}
 							showErrors={showDetailErrors}
 							projects={
 								<ProjectScopeField
@@ -483,10 +498,13 @@ function GitLabWizard({ serverUrl }: { serverUrl: string }) {
 					</Button>
 				)}
 				{state.step === 3 && (
-					<Button onClick={handleSubmit} disabled={!canSubmit || isCreating}>
-						{isCreating && <Spinner className="mr-2" />}
-						Create workspace
-					</Button>
+					// The name and slug fields join this form by `formId`; `ConfigureWorkspaceStep` says why.
+					<form id={detailsFormId} noValidate onSubmit={handleSubmit} className="contents">
+						<Button type="submit" disabled={!canSubmit || isCreating}>
+							{isCreating && <Spinner className="mr-2" />}
+							Create workspace
+						</Button>
+					</form>
 				)}
 			</div>
 		</div>

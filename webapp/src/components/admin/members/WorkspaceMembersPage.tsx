@@ -22,7 +22,7 @@ interface WorkspaceMembersPageProps {
 	error?: unknown;
 	onRetry?: () => void;
 	onToggleHidden?: (accountId: string, hidden: boolean) => void;
-	onRoleChange?: (member: WorkspaceMemberRow, role: WorkspaceRole) => void;
+	onRoleChange?: (member: WorkspaceMemberRow, role: WorkspaceRole, trigger: HTMLElement) => void;
 	assignableRoles?: readonly WorkspaceRole[];
 	pendingRoleAccountId?: string;
 	teamsError?: unknown;

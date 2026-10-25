@@ -8,7 +8,7 @@ import {
 } from "@tanstack/react-table";
 import { ChevronDown, EyeIcon, EyeOffIcon, Filter, Search, Users } from "lucide-react";
 // oxlint-disable-next-line no-restricted-imports -- TanStack Table keys its caches on identity, which the compiler memoises as an optimisation rather than promises; each `useMemo` below says what breaks without it.
-import { type ComponentProps, type ReactElement, useMemo, useState } from "react";
+import { type ComponentProps, type ReactElement, useMemo, useRef, useState } from "react";
 import { useSpinDelay } from "spin-delay";
 import { TableRowsSkeleton } from "@/components/common/TableRowsSkeleton";
 import { Spinner } from "@/components/ui/spinner";
@@ -70,8 +70,11 @@ interface WorkspaceMembersTableProps {
 	 */
 	updating?: boolean;
 	onToggleHidden?: (accountId: string, hidden: boolean) => void;
-	/** Present for an admin, who can give a member another workspace role. */
-	onRoleChange?: (member: WorkspaceMemberRow, role: WorkspaceRole) => void;
+	/**
+	 * Present for an admin, who can give a member another workspace role. `trigger` is the row's Role
+	 * menu, where focus returns after a confirmation that the change asks for.
+	 */
+	onRoleChange?: (member: WorkspaceMemberRow, role: WorkspaceRole, trigger: HTMLElement) => void;
 	/**
 	 * The roles the reader may give and take. Only an owner manages owners, so for an admin an
 	 * owner's row is read-only and Owner is not offered.
@@ -91,6 +94,42 @@ export interface WorkspaceMembersTableView {
 	desc: boolean;
 	page: number;
 	size: number;
+}
+
+interface MemberRoleSelectProps {
+	member: WorkspaceMemberRow;
+	items: { value: WorkspaceRole; label: string }[];
+	pending: boolean;
+	onRoleChange: NonNullable<WorkspaceMembersTableProps["onRoleChange"]>;
+}
+
+function MemberRoleSelect({ member, items, pending, onRoleChange }: MemberRoleSelectProps) {
+	const trigger = useRef<HTMLButtonElement>(null);
+	const { role } = member.membership;
+	return (
+		<Select
+			value={role}
+			items={items}
+			disabled={pending}
+			onValueChange={(next) => {
+				if (next !== null && next !== role && trigger.current !== null) {
+					onRoleChange(member, next, trigger.current);
+				}
+			}}
+		>
+			<SelectTrigger ref={trigger} size="sm" aria-label={`Role of ${member.name}`}>
+				{pending && <Spinner />}
+				<SelectValue />
+			</SelectTrigger>
+			<SelectContent aria-label={`Role of ${member.name}`}>
+				{items.map((item) => (
+					<SelectItem key={item.value} value={item.value}>
+						{item.label}
+					</SelectItem>
+				))}
+			</SelectContent>
+		</Select>
+	);
 }
 
 // An unclaimed account has not signed in; it does not indicate a fault.
@@ -173,33 +212,16 @@ export function WorkspaceMembersTable({
 				header: () => "Role",
 				cell: ({ row }) => {
 					const { account, role } = row.original.membership;
-					const accountId = account.id;
 					if (!onRoleChange || !assignableRoles.includes(role)) {
 						return WORKSPACE_ROLE_LABELS[role];
 					}
 					return (
-						<Select
-							value={role}
+						<MemberRoleSelect
+							member={row.original}
 							items={roleItems}
-							disabled={pendingRoleAccountId === accountId}
-							onValueChange={(next) => {
-								if (next !== null && next !== role) {
-									onRoleChange(row.original, next);
-								}
-							}}
-						>
-							<SelectTrigger size="sm" aria-label={`Role of ${row.original.name}`}>
-								{pendingRoleAccountId === accountId && <Spinner />}
-								<SelectValue />
-							</SelectTrigger>
-							<SelectContent aria-label={`Role of ${row.original.name}`}>
-								{roleItems.map((item) => (
-									<SelectItem key={item.value} value={item.value}>
-										{item.label}
-									</SelectItem>
-								))}
-							</SelectContent>
-						</Select>
+							pending={pendingRoleAccountId === account.id}
+							onRoleChange={onRoleChange}
+						/>
 					);
 				},
 			}),
