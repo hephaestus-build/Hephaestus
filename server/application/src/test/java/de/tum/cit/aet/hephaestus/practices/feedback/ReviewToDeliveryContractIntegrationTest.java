@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.PreparedEvidence;
 import de.tum.cit.aet.hephaestus.agent.handler.AdmissionConflictException;
 import de.tum.cit.aet.hephaestus.agent.handler.EvidenceSnapshotFixtures;
+import de.tum.cit.aet.hephaestus.agent.handler.FeedbackTextRefusedException;
 import de.tum.cit.aet.hephaestus.agent.handler.PublicationContextRefusedException;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.handler.RetainedFeedbackTestData;
@@ -423,7 +424,10 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                                     response,
                                     SUMMARY + " See [the fix](https://other.example.net/fix).",
                                     context)))
-                    .isInstanceOf(AdmissionConflictException.class);
+                    .isInstanceOfSatisfying(FeedbackTextRefusedException.class, refused -> {
+                        assertThat(refused.rule()).isEqualTo("LINK");
+                        assertThat(refused.field()).isEqualTo("summary");
+                    });
 
             assertThat(feedback.findByWorkspaceIdAndReviewIdOrderByCreatedAtAscIdAsc(
                             review.workspaceId(), review.reviewId()))

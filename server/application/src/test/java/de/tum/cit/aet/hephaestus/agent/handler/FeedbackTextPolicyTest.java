@@ -4,7 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import de.tum.cit.aet.hephaestus.agent.handler.FeedbackTextPolicy.Refusal;
+import de.tum.cit.aet.hephaestus.agent.handler.FeedbackTextPolicy.Rule;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.practices.spi.AdmittedProblemSnapshot;
 import de.tum.cit.aet.hephaestus.practices.spi.AdmittedResultSnapshot;
@@ -43,7 +43,7 @@ class FeedbackTextPolicyTest extends BaseUnitTest {
                 "Retries follow the cited article (" + PROBLEM_SUPPLIED + ")."
             })
     void shouldPermitPlainFeedbackCodeAndSuppliedLinks(String text) {
-        assertThat(policy.refusal(text)).isNull();
+        assertThat(policy.broken(text)).isNull();
     }
 
     @ParameterizedTest
@@ -77,23 +77,31 @@ class FeedbackTextPolicyTest extends BaseUnitTest {
             Tell <!subteam^S012AB3CD> about it.                           | MENTION
             Tell <#C012AB3CD> about it.                                   | MENTION
             """)
-    void shouldRefuseLinksMarkupAndMentionsThatTheInputDidNotSupply(String text, Refusal refusal) {
-        assertThat(policy.refusal(text)).isEqualTo(refusal);
+    void shouldRefuseLinksMarkupAndMentionsThatTheInputDidNotSupply(String text, Rule rule) {
+        assertThat(policy.broken(text)).isEqualTo(rule);
     }
 
     @ParameterizedTest
     @ValueSource(ints = {0x202E, 0x2066, 0x200B, 0x200E, 0xFEFF, 0x00AD, 0xE0041, 0x0007, 0x2028})
     void shouldRefuseHiddenAndBidirectionalCharacters(int codePoint) {
-        assertThat(policy.refusal("Keep the cause" + Character.toString(codePoint) + " in the error."))
-                .isEqualTo(Refusal.HIDDEN_CHARACTER);
+        assertThat(policy.broken("Keep the cause" + Character.toString(codePoint) + " in the error."))
+                .isEqualTo(Rule.HIDDEN_CHARACTER);
     }
 
     @Test
     void shouldReadSuppliedLinksOnlyFromCitedQuotes() {
-        assertThat(policy.refusal("The result summary links " + SUMMARY_ONLY + "."))
-                .isEqualTo(Refusal.LINK);
-        assertThat(new FeedbackTextPolicy(List.of()).refusal("The description links " + SUPPLIED + "."))
-                .isEqualTo(Refusal.LINK);
+        assertThat(policy.broken("The result summary links " + SUMMARY_ONLY + "."))
+                .isEqualTo(Rule.LINK);
+        assertThat(new FeedbackTextPolicy(List.of()).broken("The description links " + SUPPLIED + "."))
+                .isEqualTo(Rule.LINK);
+    }
+
+    @Test
+    void shouldMatchASuppliedLinkExactlySoATrailingSlashIsAnotherLink() {
+        assertThat(policy.broken("See [the export guide](https://docs.example.org/export/#failures)."))
+                .isEqualTo(Rule.LINK);
+        assertThat(policy.broken("See https://en.wikipedia.org/wiki/Retry_(computing)/ for retries."))
+                .isEqualTo(Rule.LINK);
     }
 
     private static AdmittedResultSnapshot admitted() {

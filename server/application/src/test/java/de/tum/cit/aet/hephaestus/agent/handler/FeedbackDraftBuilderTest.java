@@ -270,15 +270,15 @@ class FeedbackDraftBuilderTest extends BaseUnitTest {
 
     @ParameterizedTest
     @CsvSource({
-        "ON_WORK, summary",
-        "ON_WORK, note",
-        "CONVERSATION, summary",
-        "PRACTICE_PAGE, title",
-        "PRACTICE_PAGE, body",
-        "PRACTICE_PAGE, nextStep"
+        "ON_WORK, summary, summary",
+        "ON_WORK, note, notes[0]",
+        "CONVERSATION, summary, summary",
+        "PRACTICE_PAGE, title, page.title",
+        "PRACTICE_PAGE, body, page.body",
+        "PRACTICE_PAGE, nextStep, page.nextStep"
     })
     void shouldRefuseThePackageWhenAnyModelWrittenTextBreaksTheTextPolicy(
-            FeedbackDestination destination, String field) {
+            FeedbackDestination destination, String field, String expectedField) {
         var job = RuntimeReviewTestData.job();
         UUID resultId = UUID.randomUUID(), problemId = UUID.randomUUID();
         var candidate = mock(ResultCandidate.class);
@@ -343,6 +343,10 @@ class FeedbackDraftBuilderTest extends BaseUnitTest {
                 .hasSize(1);
         assertThatThrownBy(() -> FeedbackDraftBuilder.build(
                         job, request.apply("Ask @octocat about the cause."), admitted, List.of(), anchors))
-                .isInstanceOf(AdmissionConflictException.class);
+                .isInstanceOfSatisfying(FeedbackTextRefusedException.class, refused -> {
+                    assertThat(refused.destination()).isEqualTo(destination);
+                    assertThat(refused.rule()).isEqualTo("MENTION");
+                    assertThat(refused.field()).isEqualTo(expectedField);
+                });
     }
 }

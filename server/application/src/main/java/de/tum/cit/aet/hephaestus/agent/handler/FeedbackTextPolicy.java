@@ -2,10 +2,9 @@ package de.tum.cit.aet.hephaestus.agent.handler;
 
 import de.tum.cit.aet.hephaestus.agent.handler.composition.ComposedFeedback;
 import de.tum.cit.aet.hephaestus.practices.spi.AdmittedResultSnapshot;
-import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Objects;
 import java.util.Set;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -32,13 +31,16 @@ import org.jspecify.annotations.Nullable;
  * ({@code ScmFeedbackFormatter}); this policy refuses the text before anything is prepared.
  */
 final class FeedbackTextPolicy {
-    enum Refusal {
+    enum Rule {
         HIDDEN_CHARACTER,
         MENTION,
         HTML,
         IMAGE,
         LINK
     }
+
+    /** The rule that a text broke, and the field of the piece that holds it, such as {@code notes[1]}. */
+    record Refusal(Rule rule, String field) {}
 
     private static final Parser MARKDOWN = Parser.builder().build();
 
@@ -62,32 +64,37 @@ final class FeedbackTextPolicy {
         this.admitted = admitted;
     }
 
-    /** The first rule that a model-written text of the piece breaks, or null when the piece may be prepared. */
+    /** The first model-written text of the piece that breaks a rule, or null when the piece may be prepared. */
     @Nullable
     Refusal refusal(ComposedFeedback piece) {
-        var texts = new ArrayList<String>();
+        var texts = new LinkedHashMap<String, String>();
         String summary = piece.summary();
-        if (summary != null) texts.add(summary);
-        piece.notes().forEach(note -> texts.add(note.body()));
+        if (summary != null) texts.put("summary", summary);
+        for (int index = 0; index < piece.notes().size(); index++)
+            texts.put("notes[" + index + "]", piece.notes().get(index).body());
         var page = piece.page();
-        if (page != null) texts.addAll(List.of(page.title(), page.body(), page.nextStep()));
-        return texts.stream()
-                .map(this::refusal)
-                .filter(Objects::nonNull)
-                .findFirst()
-                .orElse(null);
+        if (page != null) {
+            texts.put("page.title", page.title());
+            texts.put("page.body", page.body());
+            texts.put("page.nextStep", page.nextStep());
+        }
+        for (var text : texts.entrySet()) {
+            var rule = broken(text.getValue());
+            if (rule != null) return new Refusal(rule, text.getKey());
+        }
+        return null;
     }
 
     /** The first rule that the text breaks, or null when it may be prepared. */
     @Nullable
-    Refusal refusal(String text) {
-        if (text.codePoints().anyMatch(FeedbackTextPolicy::hidden)) return Refusal.HIDDEN_CHARACTER;
-        if (SLACK_SYNTAX.matcher(text).find()) return Refusal.MENTION;
+    Rule broken(String text) {
+        if (text.codePoints().anyMatch(FeedbackTextPolicy::hidden)) return Rule.HIDDEN_CHARACTER;
+        if (SLACK_SYNTAX.matcher(text).find()) return Rule.MENTION;
         var read = Reading.of(text);
-        if (read.html) return Refusal.HTML;
-        if (read.image) return Refusal.IMAGE;
-        if (MENTION.matcher(read.prose).find()) return Refusal.MENTION;
-        if (!read.links.isEmpty() && !supplied().containsAll(read.links)) return Refusal.LINK;
+        if (read.html) return Rule.HTML;
+        if (read.image) return Rule.IMAGE;
+        if (MENTION.matcher(read.prose).find()) return Rule.MENTION;
+        if (!read.links.isEmpty() && !supplied().containsAll(read.links)) return Rule.LINK;
         return null;
     }
 

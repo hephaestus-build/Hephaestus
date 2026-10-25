@@ -26,7 +26,7 @@ import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-/** Allocates drafts only from this attempt's admitted results, verified anchors and text that the text policy permits. */
+/** Allocates drafts only from this attempt's admitted results, verified anchors and permitted text. */
 public final class FeedbackDraftBuilder {
     private static final Logger log = LoggerFactory.getLogger(FeedbackDraftBuilder.class);
 
@@ -50,8 +50,13 @@ public final class FeedbackDraftBuilder {
             var refusal = texts.refusal(piece);
             if (refusal != null) {
                 log.info(
-                        "Refused composed {} feedback of review job {}: {}", piece.destination(), job.getId(), refusal);
-                throw new AdmissionConflictException();
+                        "Refused composed {} feedback of review job {}: {} in {}",
+                        piece.destination(),
+                        job.getId(),
+                        refusal.rule(),
+                        refusal.field());
+                throw new FeedbackTextRefusedException(
+                        piece.destination(), refusal.rule().name(), refusal.field());
             }
             var support = piece.resultIds().stream()
                     .filter(byId::containsKey)

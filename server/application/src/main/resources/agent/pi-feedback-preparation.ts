@@ -1,16 +1,28 @@
 import { isRetryableStatus, isTimeoutAbort, retrying } from "./pi-runner-retry.ts";
 import { z } from "./work/practice-scripts/lib/core/practice-script.ts";
 
-/** History that changed, or a write of another review with unknown outcome, under the public piece: nothing was prepared. */
+/**
+ * Typed refusals: nothing was prepared. History changed, or a write of another review has an unknown outcome, under the
+ * public piece; or a composed text breaks the server's text policy, which names the rule and the field, never the text.
+ */
 export const PUBLICATION_REFUSALS = [
 	"PUBLIC_HISTORY_CHANGED",
 	"PUBLIC_DELIVERY_UNRESOLVED",
+	"FEEDBACK_TEXT_REFUSED",
 ] as const;
 export type PublicationRefusal = (typeof PUBLICATION_REFUSALS)[number];
 
+const textRefusalSchema = z.object({
+	code: z.literal("FEEDBACK_TEXT_REFUSED"),
+	rule: z.enum(["HIDDEN_CHARACTER", "MENTION", "HTML", "IMAGE", "LINK"]),
+	field: z.string().regex(/^(?:summary|notes\[\d{1,2}\]|page\.(?:title|body|nextStep))$/u),
+});
+export type TextRefusal = Omit<z.infer<typeof textRefusalSchema>, "code">;
+
 export type FeedbackPreparation =
 	| { state: "PREPARED"; receipt: FeedbackPreparationReceipt }
-	| { state: "REFUSED"; publication?: PublicationRefusal }
+	| { state: "REFUSED"; publication?: Exclude<PublicationRefusal, "FEEDBACK_TEXT_REFUSED"> }
+	| { state: "REFUSED"; publication: "FEEDBACK_TEXT_REFUSED"; text: TextRefusal }
 	| { state: "UNAVAILABLE" };
 
 const preparationReceiptSchema = z.strictObject({
@@ -59,25 +71,44 @@ interface PreparationRequest {
 	timeoutMs: number;
 }
 
+type Refusal = Extract<FeedbackPreparation, { state: "REFUSED" }>;
+
 class PreparationError extends Error {
 	override name = "PreparationError";
 	readonly state: "REFUSED" | "UNAVAILABLE";
-	readonly publication: PublicationRefusal | undefined;
-	constructor(state: "REFUSED" | "UNAVAILABLE", message: string, publication?: PublicationRefusal) {
+	readonly refusal: Refusal;
+	constructor(
+		state: "REFUSED" | "UNAVAILABLE",
+		message: string,
+		refusal: Refusal = { state: "REFUSED" },
+	) {
 		super(message);
 		this.state = state;
-		this.publication = publication;
+		this.refusal = refusal;
 	}
 }
 
-function publicationRefusal(body: string): PublicationRefusal | undefined {
+/** The typed refusal a 409 body names; a text refusal without its rule and field stays untyped. */
+function typedRefusal(body: string): Refusal {
 	try {
 		const parsed: unknown = JSON.parse(body);
+		const text = textRefusalSchema.safeParse(parsed);
+		if (text.success) {
+			return {
+				state: "REFUSED",
+				publication: "FEEDBACK_TEXT_REFUSED",
+				text: { rule: text.data.rule, field: text.data.field },
+			};
+		}
 		const code =
 			typeof parsed === "object" && parsed !== null && "code" in parsed ? parsed.code : undefined;
-		return PUBLICATION_REFUSALS.find((refusal) => refusal === code);
+		const publication = PUBLICATION_REFUSALS.find((refusal) => refusal === code);
+		// A text refusal without a readable rule and field cannot tell the composer what to rewrite.
+		return publication === undefined || publication === "FEEDBACK_TEXT_REFUSED"
+			? { state: "REFUSED" }
+			: { state: "REFUSED", publication };
 	} catch {
-		return undefined;
+		return { state: "REFUSED" };
 	}
 }
 
@@ -112,12 +143,12 @@ export async function prepareFeedback(request: PreparationRequest): Promise<Feed
 		}
 		if (!response.ok) {
 			if (response.status === 409) {
-				// Only a typed publication refusal says that nothing was prepared and fresh history may help.
+				// Only a typed refusal says that nothing was prepared and what may help: fresh history or rewritten text.
 				const refusalBody = await response.text().catch(() => "");
 				throw new PreparationError(
 					"REFUSED",
 					"Feedback preparation refused",
-					publicationRefusal(refusalBody),
+					typedRefusal(refusalBody),
 				);
 			}
 			// The HTTP refusal stays final even if closing its body loses the connection.
@@ -151,9 +182,7 @@ export async function prepareFeedback(request: PreparationRequest): Promise<Feed
 		};
 	} catch (error) {
 		if (error instanceof PreparationError && error.state === "REFUSED") {
-			return error.publication === undefined
-				? { state: "REFUSED" }
-				: { state: "REFUSED", publication: error.publication };
+			return error.refusal;
 		}
 		if (error instanceof PreparationError || isTimeoutAbort(error)) {
 			return { state: "UNAVAILABLE" };
