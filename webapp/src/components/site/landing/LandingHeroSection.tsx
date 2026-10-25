@@ -145,7 +145,7 @@ export function HeroScene() {
 					</LandingWorkCard>
 					<LandingFeedbackCard
 						group={groups.packaging}
-						practice="Scope the change to one concern"
+						practice="Keep the change reviewable"
 						lead="The invoice rename does not belong in a CSV export."
 						rotate={-2.5}
 					/>
@@ -219,7 +219,7 @@ export function LandingHeroSection({ onSignIn }: LandingHeroSectionProps) {
 						size="lg"
 						className="relative z-10"
 					>
-						Open-source AI mentoring for software teams
+						Open-source AI mentor for software teams
 					</Badge>
 
 					<motion.h1

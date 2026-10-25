@@ -9,7 +9,7 @@ const meta = {
 	tags: ["autodocs"],
 	args: {
 		group: { color: "sky", icon: "Package" },
-		practice: "Scope the change to one concern",
+		practice: "Keep the change reviewable",
 		lead: "The invoice rename does not belong in a CSV export.",
 	},
 } satisfies Meta<typeof LandingFeedbackCard>;
