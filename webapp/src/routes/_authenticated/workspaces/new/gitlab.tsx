@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, Navigate, useNavigate } from "@tanstack/react-router";
 import { ArrowLeftIcon, OctagonXIcon } from "lucide-react";
-import { type ReactNode, useEffect, useReducer, useRef } from "react";
+import { type ReactNode, useEffect, useReducer, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { toast } from "sonner";
 
 import {
@@ -246,6 +247,8 @@ function GitLabWizardPage() {
 /** Mounted once the server has named its GitLab instance, so no request goes anywhere else. */
 function GitLabWizard({ serverUrl }: { serverUrl: string }) {
 	const [state, dispatch] = useReducer(wizardReducer, serverUrl, createInitialWizardState);
+	const [showDetailErrors, setShowDetailErrors] = useState(false);
+	const wizardRegionRef = useRef<HTMLDivElement>(null);
 	const queryClient = useQueryClient();
 	const navigate = useNavigate();
 	const stepAnnouncement = `Step ${state.step} of 3: ${STEP_META[state.step].title}`;
@@ -315,14 +318,13 @@ function GitLabWizard({ serverUrl }: { serverUrl: string }) {
 
 	const canAdvanceFromStep1 = state.preflightResult?.valid === true;
 	const canAdvanceFromStep2 = state.selectedGroup !== null;
-	const canSubmit =
-		state.step === 3 &&
-		state.selectedGroup !== null &&
-		hasProjectChoice(state) &&
-		workspaceDetailsSchema.safeParse({
-			displayName: state.displayName,
-			workspaceSlug: state.workspaceSlug,
-		}).success;
+	// A name or slug problem does not turn the button off: a press shows every problem and focuses the
+	// first. A turned-off button cannot take focus, so it cannot say what stops it.
+	const detailsValid = workspaceDetailsSchema.safeParse({
+		displayName: state.displayName,
+		workspaceSlug: state.workspaceSlug,
+	}).success;
+	const canSubmit = state.step === 3 && state.selectedGroup !== null && hasProjectChoice(state);
 
 	const handleNext = () => {
 		if (state.step === 1 && canAdvanceFromStep1) {
@@ -355,12 +357,18 @@ function GitLabWizard({ serverUrl }: { serverUrl: string }) {
 		// The projects belong to the group being left; a list still on its way is dropped with them.
 		if (state.step === 3) {
 			listProjects.reset();
+			setShowDetailErrors(false);
 		}
 		dispatch({ type: "GO_BACK" });
 	};
 
 	const handleSubmit = () => {
 		if (!canSubmit || !state.selectedGroup || createWorkspace.isPending) {
+			return;
+		}
+		if (!detailsValid) {
+			flushSync(() => setShowDetailErrors(true));
+			wizardRegionRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus();
 			return;
 		}
 		createWorkspace.mutate({
@@ -404,12 +412,13 @@ function GitLabWizard({ serverUrl }: { serverUrl: string }) {
 
 			<WizardStepIndicator currentStep={state.step} />
 
-			<div className="mt-6" role="region" aria-labelledby="wizard-heading">
+			<div ref={wizardRegionRef} className="mt-6" role="region" aria-labelledby="wizard-heading">
 				<WizardContext.Provider value={wizardContextValue}>
 					{state.step === 1 && <ConnectGitLabStep />}
 					{state.step === 2 && <SelectGroupStep />}
 					{state.step === 3 && (
 						<ConfigureWorkspaceStep
+							showErrors={showDetailErrors}
 							projects={
 								<ProjectScopeField
 									scope={state.projectScope}
