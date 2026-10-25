@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { HttpResponse, http, type PathParams } from "msw";
 import { describe, expect, it } from "vitest";
 
-import type { UpdateNotificationPreferences } from "@/api/types.gen";
+import type { UpdateNotificationPreferences, UpdateUserSettings } from "@/api/types.gen";
 import { server } from "@/mocks/server";
 import { ROUTE_RENDER_WAIT, renderRouteAt } from "@/test/router-harness";
 
@@ -30,10 +30,11 @@ function recordWrites(settings: { practiceFeedbackDeliveryEnabled: boolean; time
 			return HttpResponse.json({ ...preferences, weeklyDigest: true, etag: '"1"' });
 		}),
 		http.get("*/user/settings", () => HttpResponse.json(settings)),
-		http.post("*/user/settings", async ({ request }) => {
+		http.post<PathParams, UpdateUserSettings>("*/user/settings", async ({ request }) => {
 			const body = await request.json();
 			settingsWrites.push(body);
-			return HttpResponse.json(body);
+			// The server keeps the saved time zone when the request has none.
+			return HttpResponse.json({ ...settings, ...body });
 		}),
 	);
 	return { preferenceWrites, settingsWrites };
@@ -108,6 +109,24 @@ describe("weekly digest in User settings", () => {
 				{ practiceFeedbackDeliveryEnabled: true, timeZone: "UTC" },
 			]),
 		);
+	});
+
+	it("leaves the saved time zone out of a change to the feedback choice", async () => {
+		const user = userEvent.setup();
+		const { settingsWrites } = recordWrites({
+			practiceFeedbackDeliveryEnabled: true,
+			timeZone: "Asia/Tokyo",
+		});
+		renderRouteAt("/settings");
+
+		await user.click(
+			await screen.findByRole("switch", { name: "Comments on your work" }, ROUTE_RENDER_WAIT),
+		);
+
+		await waitFor(() =>
+			expect(settingsWrites).toStrictEqual([{ practiceFeedbackDeliveryEnabled: false }]),
+		);
+		expect(screen.getByRole("combobox", { name: "Time zone" }).textContent).toContain("Asia/Tokyo");
 	});
 
 	it("leaves the digest off when the server refuses the browser's time zone", async () => {

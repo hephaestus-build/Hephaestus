@@ -50,6 +50,7 @@ import type {
 	NotificationPreferences,
 	SlackUserPreferences,
 	UpdateNotificationPreferences,
+	UpdateUserSettings,
 	UpdateUserSettingsData,
 	UpdateUserSettingsResponse,
 	UserSettings,
@@ -210,7 +211,12 @@ function RouteComponent() {
 				queryKey: userSettingsQueryKey,
 			});
 			const previousSettings = queryClient.getQueryData<UserSettings>(userSettingsQueryKey);
-			queryClient.setQueryData(userSettingsQueryKey, variables.body);
+			if (previousSettings) {
+				queryClient.setQueryData<UserSettings>(userSettingsQueryKey, {
+					...previousSettings,
+					...variables.body,
+				});
+			}
 			return { previousSettings };
 		},
 		onError: (_error, _variables, context) => {
@@ -229,13 +235,25 @@ function RouteComponent() {
 		},
 	});
 
-	// Spread-based helper: reads latest cache to avoid stale-closure race under rapid toggling
-	const updateSetting = (patch: Partial<UserSettings>, options?: { onSuccess: () => void }) => {
+	// Reads the latest cache to avoid a stale-closure race under rapid toggling. The time zone is sent
+	// only when it changes, because the server keeps the saved one when the request has none.
+	const updateSetting = (
+		patch: Partial<UpdateUserSettings>,
+		options?: { onSuccess: () => void },
+	) => {
 		const current = queryClient.getQueryData<UserSettings>(userSettingsQueryKey);
 		if (!current) {
 			return;
 		}
-		updateSettingsMutation.mutate({ body: { ...current, ...patch } }, options);
+		updateSettingsMutation.mutate(
+			{
+				body: {
+					practiceFeedbackDeliveryEnabled: current.practiceFeedbackDeliveryEnabled,
+					...patch,
+				},
+			},
+			options,
+		);
 	};
 
 	const handlePracticeFeedbackToggle = (checked: boolean) =>
@@ -561,7 +579,10 @@ function weeklyDigestStateOf(
 	settings: UserSettings | undefined,
 	writes: {
 		updatePreferences: (patch: Partial<UpdateNotificationPreferences>) => void;
-		updateSetting: (patch: Partial<UserSettings>, options?: { onSuccess: () => void }) => void;
+		updateSetting: (
+			patch: Partial<UpdateUserSettings>,
+			options?: { onSuccess: () => void },
+		) => void;
 		/** Each write the choice makes: the preferences and the account's time zone. */
 		pending: readonly boolean[];
 	},

@@ -435,6 +435,68 @@ class NotificationSubscriptionIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldKeepTheWeeklyDigestWhenTheRequestDoesNotChooseIt() {
+        long account = account();
+        subscriptions.update(
+                account,
+                new UpdateNotificationPreferencesDTO(false, false, false, false, false, true),
+                EntityTagPrecondition.parse(subscriptions.get(account).etag()),
+                false);
+        var body = mapper.createObjectNode()
+                .put("productFeedback", false)
+                .put("productSurveys", true)
+                .put("researchSurveys", false)
+                .put("workspaceAlerts", false)
+                .put("surveySummaries", false);
+
+        web.put()
+                .uri("/user/notification-preferences")
+                .headers(headers -> headers.setBearerAuth("mock-jwt-member-" + account))
+                .header(HttpHeaders.IF_MATCH, subscriptions.get(account).etag())
+                .bodyValue(body)
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.weeklyDigest")
+                .isEqualTo(true)
+                .jsonPath("$.productSurveys")
+                .isEqualTo(true);
+
+        assertThat(repository.findAllByAccountIdOrderByKind(account))
+                .filteredOn(row -> row.getKind() == NotificationSubscriptionKind.MENTOR_DIGEST)
+                .singleElement()
+                .satisfies(row -> assertThat(row.isEnabled()).isTrue());
+        assertThat(subscriptions.isEnabled(account, NotificationSubscriptionKind.PRODUCT_SURVEYS))
+                .isTrue();
+    }
+
+    @Test
+    void shouldTurnTheWeeklyDigestOffWhenTheRequestChoosesIt() {
+        long account = account();
+        subscriptions.update(
+                account,
+                new UpdateNotificationPreferencesDTO(false, false, false, false, false, true),
+                EntityTagPrecondition.parse(subscriptions.get(account).etag()),
+                false);
+
+        web.put()
+                .uri("/user/notification-preferences")
+                .headers(headers -> headers.setBearerAuth("mock-jwt-member-" + account))
+                .header(HttpHeaders.IF_MATCH, subscriptions.get(account).etag())
+                .bodyValue(new UpdateNotificationPreferencesDTO(false, false, false, false, false, false))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.weeklyDigest")
+                .isEqualTo(false);
+
+        assertThat(subscriptions.isEnabled(account, NotificationSubscriptionKind.MENTOR_DIGEST))
+                .isFalse();
+    }
+
+    @Test
     void shouldTurnTheWeeklyDigestOffWhenItsEmailUnsubscribeLinkIsUsed() {
         long account = account();
         subscriptions.update(
