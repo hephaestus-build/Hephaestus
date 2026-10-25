@@ -400,8 +400,8 @@ This prevents another pass from using a worktree that pruning removes.
 ### Images and free space
 
 After it prunes the worktrees, the reconciler removes the images that neither the release just applied nor the previous release names.
-It considers only the repositories that these two releases name.
-In such a repository, it also removes an unused image that another workload pulled.
+It considers only the repositories that these two releases name, and only images without a tag.
+A release image is pulled by digest and has no tag, so a tagged image of another workload stays.
 Docker refuses to remove an image that a container uses, running or stopped.
 The journal names each image that is removed or kept.
 
