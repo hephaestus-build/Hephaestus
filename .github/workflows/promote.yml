@@ -75,7 +75,7 @@ jobs:
         with:
           install: "none"
 
-      # The workflow lock covers this read through publication, including manually requested holds.
+      # The workflow lock covers this read through publication, including a manually requested freeze.
       # A skipped request leaves every later step skipped, so it publishes and records nothing.
       - name: Check automatic promotion
         id: policy

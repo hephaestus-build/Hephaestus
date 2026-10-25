@@ -93,8 +93,10 @@ Removal of a stale lock does not repair a failed migration.
 13. Report actual recovery point/time and any lost writes.
 14. Preserve the failed database until investigation/retention permits removal.
 15. Promote the recovered release, with **allow-rollback** if it is older than the failed upgrade.
-16. Keep the reconcile timer disabled until the channel names the recovered release.
-    Otherwise, the next tick can reapply the failed upgrade.
+    Until the channel names it, the next tick can reapply the failed upgrade.
+16. Then re-enable the reconcile timer at once.
+    The promotion's version check passes when the host applies the channel.
+    It fails if the timer stays off for 15 minutes.
 
 **Drill**
 
