@@ -446,6 +446,11 @@ export const FilteredByStatus: Story = {
 		const filters = within(screen.getByRole("group", { name: "Filters" }));
 		await expect(filters.getAllByText(/Partial/u)[0]).toBeVisible();
 		await expect(screen.getByText("No reviews match your filters.")).toBeVisible();
+		// An empty Failed list does not say that nothing failed: the list holds only reviews that
+		// recorded something.
+		await expect(
+			screen.getByText("Only reviews that recorded something about your work appear here."),
+		).toBeVisible();
 		await userEvent.click(screen.getByRole("button", { name: /^Reset/u }));
 		await expect(args.onStatusChange).toHaveBeenCalledWith(undefined);
 		await expect(args.onTrack).toHaveBeenCalledWith(undefined);

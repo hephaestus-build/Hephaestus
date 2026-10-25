@@ -136,7 +136,10 @@ export function ReviewsTable({
 				)}
 				empty={
 					filtered ? (
-						<p className="text-sm text-muted-foreground">No reviews match your filters.</p>
+						<div className="space-y-1 text-sm text-muted-foreground">
+							<p>No reviews match your filters.</p>
+							<p>Only reviews that recorded something about your work appear here.</p>
+						</div>
 					) : (
 						<Empty>
 							<EmptyHeader>

@@ -12,7 +12,6 @@ import de.tum.cit.aet.hephaestus.practices.result.ResultViewQuery;
 import de.tum.cit.aet.hephaestus.practices.review.ProductItemRepository;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewSummaryQueryService;
 import de.tum.cit.aet.hephaestus.practices.review.dto.OutcomeVectorDTO;
-import de.tum.cit.aet.hephaestus.practices.review.model.Review;
 import de.tum.cit.aet.hephaestus.practices.spi.CurrentDeveloperLookup;
 import de.tum.cit.aet.hephaestus.practices.spi.EvidenceAuthorization;
 import de.tum.cit.aet.hephaestus.practices.trace.OwnItemTraceQueryService;
@@ -20,14 +19,11 @@ import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
-import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
@@ -48,30 +44,16 @@ public class PracticeProfileReviewService {
     private final EvidenceAuthorization authorization;
     private final ProductItemRepository items;
 
-    private static final Comparator<Review> REVIEW_OLDEST_FIRST = Comparator.comparing(Review::getCreatedAt)
-            .thenComparing(review -> review.getId().toString());
-
-    private static final Comparator<List<ResultView>> OLDEST_FIRST =
-            Comparator.comparing(v -> v.getFirst().review(), REVIEW_OLDEST_FIRST);
-
-    public Page<ProfileReviewDTO> list(
-            WorkspaceContext ws,
-            @Nullable String itemKind,
-            @Nullable Long itemId,
-            @Nullable String groupSlug,
-            @Nullable Instant since,
-            Pageable page) {
-        return list(
-                ws,
-                new OwnReviewFilter(itemKind == null ? null : List.of(itemKind), itemId, groupSlug, null, since, false),
-                page);
-    }
+    private static final Comparator<List<ResultView>> OLDEST_FIRST = Comparator.comparing(
+                    (List<ResultView> v) -> v.getFirst().review().getCreatedAt())
+            .thenComparing(v -> v.getFirst().review().getId().toString());
 
     /**
      * The reader's reviews, narrowed by kinds of work, one work, a group, statuses and a start time,
      * newest first or oldest first. Every narrowing applies before paging, so a page never comes back
      * short of reviews that a later page would have had. Each review's place on its work counts every
-     * review of the work, so a narrowed list still says which review is a work's latest.
+     * review of the work in the database, so a narrowed list still says which review is a work's
+     * latest without reading the reader's whole history.
      */
     public Page<ProfileReviewDTO> list(WorkspaceContext ws, OwnReviewFilter filter, Pageable page) {
         var itemKinds = filter.itemKinds();
@@ -81,16 +63,13 @@ public class PracticeProfileReviewService {
         var since = filter.since();
         var account = developer.currentDeveloperId();
         if (account.isEmpty()) return Page.empty(page);
-        var rows = results.forDevelopersSince(ws.id(), List.of(account.get()), Instant.EPOCH, false);
-        var permitted = authorization.permitsAll(ws.id(), rows, SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY);
-        var all = views.views(ws.id(), rows);
-        var places = placesOnWork(all);
+        var rows = results.forDevelopersSince(
+                ws.id(), List.of(account.get()), since == null ? Instant.EPOCH : since, false);
         boolean includeReviewChildren = itemId != null
                 && items.items(ws.id(), List.of(itemId)).stream()
                         .anyMatch(item -> item.getKind().equals("scm.pull_request"));
         var byReview = new LinkedHashMap<UUID, List<ResultView>>();
-        all.stream()
-                .filter(v -> since == null || !v.result().getRecordedAt().isBefore(since))
+        views.views(ws.id(), rows).stream()
                 .filter(v -> itemKinds == null
                         || itemKinds.isEmpty()
                         || itemKinds.contains(v.item().kind()))
@@ -110,10 +89,21 @@ public class PracticeProfileReviewService {
                         || statuses.contains(v.getFirst().review().getStatus()))
                 .sorted(filter.oldestFirst() ? OLDEST_FIRST : OLDEST_FIRST.reversed())
                 .toList();
+        var shown = ordered.stream()
+                .skip(page.getOffset())
+                .limit(page.getPageSize())
+                .toList();
+        // Only the page's own rows pass the source checks and only its works are counted.
+        var permitted = authorization.permitsAll(
+                ws.id(),
+                shown.stream().flatMap(v -> v.stream().map(ResultView::result)).toList(),
+                SourceUsePurpose.PRACTICE_FEEDBACK_DELIVERY);
+        var places = results.placesOnWork(
+                ws.id(),
+                account.get(),
+                shown.stream().map(v -> v.getFirst().review().getId()).toList());
         return new PageImpl<>(
-                ordered.stream()
-                        .skip(page.getOffset())
-                        .limit(page.getPageSize())
+                shown.stream()
                         .map(v -> {
                             var review = v.getFirst().review();
                             var place = Objects.requireNonNull(places.get(review.getId()));
@@ -128,27 +118,6 @@ public class PracticeProfileReviewService {
                 page,
                 ordered.size());
     }
-
-    /** Each review's place among the reader's reviews of its work, oldest first, by review id. */
-    private static Map<UUID, Place> placesOnWork(List<ResultView> all) {
-        var reviewsByWork = new LinkedHashMap<Long, Map<UUID, Review>>();
-        for (var v : all) {
-            reviewsByWork
-                    .computeIfAbsent(v.review().getItemId(), item -> new LinkedHashMap<>())
-                    .putIfAbsent(v.review().getId(), v.review());
-        }
-        var places = new HashMap<UUID, Place>();
-        for (var onWork : reviewsByWork.values()) {
-            var oldestFirst =
-                    onWork.values().stream().sorted(REVIEW_OLDEST_FIRST).toList();
-            for (int i = 0; i < oldestFirst.size(); i++) {
-                places.put(oldestFirst.get(i).getId(), new Place(i + 1, oldestFirst.size()));
-            }
-        }
-        return places;
-    }
-
-    private record Place(int position, int total) {}
 
     public ProfileReviewDetailDTO get(WorkspaceContext ws, UUID id) {
         long account = developer.currentDeveloperIdElseThrow();
