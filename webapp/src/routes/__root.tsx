@@ -38,7 +38,7 @@ import type { SurveyInvitation } from "@/api/types.gen";
 import { UserViewBanner } from "@/components/admin/users/UserViewBanner";
 import { ConfirmAccessDialog } from "@/components/auth/ConfirmAccessDialog";
 import { LoginDialog } from "@/components/auth/LoginDialog";
-import { NotFoundPage } from "@/components/common/NotFoundPage";
+import { PageError } from "@/components/common/PageError";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import Footer from "@/components/layout/Footer";
 import Header from "@/components/layout/Header";
@@ -196,7 +196,11 @@ function RootLayout() {
 	);
 }
 
-/** The page works without Heph, so a failed Heph panel renders nothing until the next load. */
+/**
+ * The page works without Heph, so a panel whose code did not load renders nothing until the next
+ * load. `React.lazy` keeps the failed import, so a retry here could not help. A panel that fails
+ * after it loaded shows its own message instead, from `-GlobalHephPanel.tsx`.
+ */
 function HephPanelUnavailable() {
 	return null;
 }
@@ -377,8 +381,12 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 	head: () => ({ meta: [{ title: "Hephaestus" }] }),
 	component: RootRoute,
 	// An address no route matches is `routes/$.tsx`, which sets a title; this serves a thrown `notFound()`.
-	notFoundComponent: NotFoundPage,
+	notFoundComponent: NotFound,
 });
+
+function NotFound() {
+	return <PageError cause="not-found" />;
+}
 
 function HeaderContainer() {
 	const openLogin = useLoginNavigation();
@@ -605,6 +613,11 @@ function AppSidebarContainer() {
 			activeWorkspace={chromeWorkspace}
 			administrationWorkspace={administrationWorkspace}
 			administrationWorkspaceSlug={administrationWorkspaceSlug}
+			administrationWorkspaceError={
+				administrationWorkspaceSlug !== undefined && workspaceAccess.error !== undefined
+					? { error: workspaceAccess.error, onRetry: workspaceAccess.refetch }
+					: undefined
+			}
 			onWorkspaceChange={handleWorkspaceChange}
 			onAddWorkspace={handleAddWorkspace}
 			workspacesLoading={workspaceAccess.isLoading}

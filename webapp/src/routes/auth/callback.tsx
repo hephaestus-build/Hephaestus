@@ -1,8 +1,7 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
 
-import { buttonVariants } from "@/components/ui/button";
-import { Spinner } from "@/components/ui/spinner";
+import { SigningInPage } from "@/components/auth/SigningInPage";
 import { pageHead } from "@/lib/page-title";
 import { useAuth } from "@/runtime/auth/AuthContext";
 import { safeReturnTo } from "@/runtime/auth/return-to";
@@ -36,16 +35,5 @@ function AuthCallbackPage() {
 		void navigate({ href: safeReturnTo(returnTo), replace: true });
 	}, [isLoading, isError, returnTo, navigate]);
 
-	return (
-		<div className="flex min-h-[100dvh] flex-col items-center justify-center gap-4">
-			<Spinner className="size-8" aria-label="Signing you in" />
-			<Link
-				to="/login"
-				search={{ returnTo: safeReturnTo(returnTo) }}
-				className={buttonVariants({ variant: "outline", size: "sm" })}
-			>
-				Back to sign in
-			</Link>
-		</div>
-	);
+	return <SigningInPage returnTo={safeReturnTo(returnTo)} />;
 }

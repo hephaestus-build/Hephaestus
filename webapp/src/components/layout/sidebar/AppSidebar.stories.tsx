@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react";
-import { expect, within } from "storybook/test";
+import { expect, fn, userEvent, within } from "storybook/test";
 
 import { SidebarProvider } from "@/components/ui/sidebar";
 
@@ -248,22 +248,41 @@ export const InstanceAdministrationLoading: Story = {
 	play: async ({ canvas }) => {
 		await expect(canvas.getByText("Workspace administration")).toBeVisible();
 		await expect(canvas.getByRole("link", { name: "Back to instance workspaces" })).toBeVisible();
-		await expect(canvas.queryByText("Workspace details are unavailable.")).not.toBeInTheDocument();
+		await expect(canvas.queryByRole("alert")).not.toBeInTheDocument();
 		await expect(canvas.queryByText("AET")).not.toBeInTheDocument();
 	},
 };
 
+/** The details did not load for a reason a second read can fix, so the sidebar offers one. */
 export const InstanceAdministrationUnavailable: Story = {
 	args: {
 		isAppAdmin: true,
 		showMentor: false,
 		activeWorkspace: undefined,
 		administrationWorkspaceSlug: "tutors",
+		administrationWorkspaceError: { error: { status: 503 }, onRetry: fn() },
 	},
-	play: async ({ canvas }) => {
-		await expect(canvas.getByText("Workspace details are unavailable.")).toBeVisible();
+	play: async ({ args, canvas }) => {
+		const alert = canvas.getByRole("alert");
+		await expect(alert).toHaveTextContent("We could not load the workspace details");
+		await expect(alert).toHaveTextContent("The server had a problem. Try again in a moment.");
+		await userEvent.click(within(alert).getByRole("button", { name: "Retry" }));
+		await expect(args.administrationWorkspaceError?.onRetry).toHaveBeenCalledOnce();
 		await expect(canvas.getByRole("link", { name: "Back to instance workspaces" })).toBeVisible();
 		await expect(canvas.queryByText("AET")).not.toBeInTheDocument();
 		await expect(canvas.queryByText("No workspace")).not.toBeInTheDocument();
+	},
+};
+
+/** A refused read says so and offers no retry, which would be refused again. */
+export const InstanceAdministrationRefused: Story = {
+	args: {
+		...InstanceAdministrationUnavailable.args,
+		administrationWorkspaceError: { error: { status: 403 }, onRetry: fn() },
+	},
+	play: async ({ canvas }) => {
+		const alert = canvas.getByRole("alert");
+		await expect(alert).toHaveTextContent("You do not have access to the workspace details");
+		await expect(within(alert).queryByRole("button")).not.toBeInTheDocument();
 	},
 };

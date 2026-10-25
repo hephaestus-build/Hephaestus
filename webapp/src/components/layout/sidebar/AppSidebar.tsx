@@ -3,6 +3,7 @@ import type { MouseEvent, ReactNode } from "react";
 
 import type { IntegrationCatalogEntry, WorkspaceListItem, Workspace } from "@/api/types.gen";
 import { NoWorkspace } from "@/components/common/NoWorkspace";
+import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import {
 	Sidebar,
 	SidebarContent,
@@ -44,6 +45,8 @@ export interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
 	/** The verified target identity remains even while its metadata is pending or refused. */
 	administrationWorkspaceSlug?: string;
 	administrationWorkspace?: Pick<Workspace, "displayName" | "providerType">;
+	/** Why the administration workspace's details did not load, and how to read them again. */
+	administrationWorkspaceError?: { error: unknown; onRetry: () => void };
 	onWorkspaceChange?: (workspace: WorkspaceListItem) => void;
 	onAddWorkspace?: () => void;
 	workspacesLoading?: boolean;
@@ -62,6 +65,7 @@ export function AppSidebar({
 	activeWorkspace,
 	administrationWorkspace,
 	administrationWorkspaceSlug,
+	administrationWorkspaceError,
 	onWorkspaceChange,
 	onAddWorkspace,
 	workspacesLoading = false,
@@ -118,7 +122,13 @@ export function AppSidebar({
 	} else if (administrationWorkspaceSlug !== undefined) {
 		sidebarContent = (
 			<SidebarGroup>
-				<p className="text-sm text-muted-foreground">Workspace details are unavailable.</p>
+				<div className="group-data-[collapsible=icon]:hidden">
+					<QueryErrorAlert
+						title="We could not load the workspace details"
+						error={administrationWorkspaceError?.error}
+						onRetry={administrationWorkspaceError?.onRetry}
+					/>
+				</div>
 			</SidebarGroup>
 		);
 	} else if (activeWorkspace) {

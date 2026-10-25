@@ -1,5 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
-import { useLocation, useMatches, useNavigate } from "@tanstack/react-router";
+import {
+	CatchBoundary,
+	type ErrorComponentProps,
+	useLocation,
+	useMatches,
+	useNavigate,
+} from "@tanstack/react-router";
 import { cn } from "cn";
 import { useId, useRef, useState } from "react";
 import { flushSync } from "react-dom";
@@ -8,6 +14,7 @@ import { getMemberOnboardingOptions } from "@/api/@tanstack/react-query.gen";
 import { RemovableToken } from "@/components/common/RemovableToken";
 import { HephPanel } from "@/components/mentor/HephPanel";
 import type { ThreadFocus } from "@/components/mentor/HephTimeline";
+import { HephUnavailable } from "@/components/mentor/HephUnavailable";
 import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
 import { useHephUnread } from "@/hooks/use-heph-conversation";
 import { useHephLive } from "@/hooks/use-heph-live";
@@ -40,7 +47,16 @@ export default function GlobalHephPanel() {
 	) {
 		return null;
 	}
-	return <WorkspaceHephPanel key={workspaceSlug} workspaceSlug={workspaceSlug} />;
+	return (
+		<CatchBoundary getResetKey={() => workspaceSlug} errorComponent={HephPanelFailed}>
+			<WorkspaceHephPanel key={workspaceSlug} workspaceSlug={workspaceSlug} />
+		</CatchBoundary>
+	);
+}
+
+/** Inside the gate above, so the message shows only where Heph was going to show. */
+function HephPanelFailed({ reset }: ErrorComponentProps) {
+	return <HephUnavailable onRetry={reset} />;
 }
 
 function titleOf(meta: unknown): string | undefined {

@@ -5,7 +5,7 @@ import {
 	createRouter,
 	RouterProvider,
 } from "@tanstack/react-router";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { StrictMode } from "react";
 import { expect, it, vi } from "vitest";
@@ -62,4 +62,39 @@ it("runs a failed route again on retry and shows the page once it renders", asyn
 	for (const [caught] of onCaughtError.mock.calls) {
 		expect(caught).toBe(error);
 	}
+});
+
+function renderGuardedRoute(status: number) {
+	const rootRoute = createRootRoute();
+	const route = createRoute({
+		getParentRoute: () => rootRoute,
+		path: "/",
+		beforeLoad: () => {
+			throw Object.assign(new Error("private detail"), { status });
+		},
+		component: () => <h1>Guarded page</h1>,
+	});
+	const router = createRouter({
+		...ROUTER_SEARCH,
+		routeTree: rootRoute.addChildren([route]),
+		history: createMemoryHistory({ initialEntries: ["/"] }),
+		defaultErrorComponent: RouteError,
+	});
+	render(<RouterProvider router={router} />);
+}
+
+it.each([
+	[404, "We could not find this page"],
+	[403, "You do not have access to this page"],
+	[400, "We could not load this page"],
+])("names a %i from beforeLoad and offers the way home, not a retry", async (status, title) => {
+	renderGuardedRoute(status);
+
+	const alert = await screen.findByRole("alert");
+	expect(within(alert).getByRole("heading", { level: 1 }).textContent).toBe(title);
+	expect(within(alert).queryByRole("button", { name: "Retry" })).toBeNull();
+	expect(within(alert).getByRole("link", { name: "Go to home page" }).getAttribute("href")).toBe(
+		"/",
+	);
+	expect(document.body.textContent).not.toContain("private detail");
 });
