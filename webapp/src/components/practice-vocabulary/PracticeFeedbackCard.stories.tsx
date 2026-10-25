@@ -546,7 +546,7 @@ export const MarkedByYou: Story = {
 		},
 		resolution: "ADDRESSED",
 	},
-	play: async ({ args, canvas }) => {
+	play: async ({ args, canvas, canvasElement }) => {
 		await expect(canvas.getByText("Marked by you")).toBeVisible();
 		await expect(canvas.queryByText("Resolved")).toBeNull();
 		await expect(canvas.getByText("Marked 9 September")).toBeVisible();
@@ -557,8 +557,14 @@ export const MarkedByYou: Story = {
 		// The reader can no longer act on it, so the next step leaves the accent: no accent edge, and
 		// the neutral ground.
 		const band = canvas.getByRole("heading", { name: "Next step" }).closest("[data-next-step]");
-		await expect(band).toHaveAttribute("data-next-step", "closed");
 		await expect(band?.querySelector("[data-next-step-edge]")).toBeNull();
+		const neutral = document.createElement("span");
+		neutral.className = "bg-sidebar";
+		canvasElement.append(neutral);
+		await expect(getComputedStyle(band ?? canvasElement).backgroundColor).toBe(
+			getComputedStyle(neutral).backgroundColor,
+		);
+		neutral.remove();
 		const fixed = canvas.getByRole("button", { name: "I fixed this" });
 		await expect(fixed).toHaveAttribute("aria-pressed", "true");
 		await expect(fixed).toHaveAccessibleDescription(/Press it again to take it back\.$/u);

@@ -434,14 +434,15 @@ They reach a surface only through the registries.
 This includes their badges and icons, and the rings, meters, and pressed responses drawn from them.
 Never use them as colored prose.
 
-A card has a wash in exactly two states: new, in the accent, and resolved by the work, in `success`.
+A card's own ground has a wash in exactly two states: new, in the accent, and resolved by the work, in `success`.
 A card that the reader marked as addressed or not applicable closes on the neutral ground.
 `success` is the only status color that paints a surface.
 
-The next step band is the card's call to action while the reader can still act on it.
+The next step band inside a card is the card's call to action while the reader can still act on it.
 On open feedback (`isOpenFeedback`: new and open), the band takes the accent wash, the accent edge, and the accent icon.
 On a card that the work resolved, it takes the `success` wash.
 On a marked or closed card, it keeps the neutral `bg-sidebar` ground and a muted icon.
+The loading card does not know its state yet, so its band keeps the neutral ground.
 
 ## Testing
 
