@@ -350,10 +350,22 @@ Messages still expire under the stream's retention.
 A deployment offline past the stream's byte or age bound returns to a cursor that points at messages no longer present.
 Those messages are not delivered.
 
+## Who reaches the broker
+
+The reference deployment publishes the broker's client port 4222 on the host's loopback address only.
+A process on that host, such as an operator's tool, connects to `127.0.0.1:4222`.
+A stack on the same host connects over the Docker network `shared-network` to `nats-server:4222`.
+Preview environments connect this way.
+
+The single-host stack publishes no broker port.
+Reach its broker from a container on its network, or with `docker exec`.
+
+No other host reaches the broker.
+
 ## Broker image security scope
 
 The bundled broker uses standalone JetStream with user/password authentication and plain NATS
-with the host port bound to loopback by default. Its image assessment for CVE-2026-111943 applies to these
+with the host port bound to loopback. Its image assessment for CVE-2026-111943 applies to these
 shipped launches. The certificate-verification code is present but its TLS, HTTPS resolver, OCSP
 and remote-cluster paths are not enabled.
 
