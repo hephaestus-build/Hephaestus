@@ -90,7 +90,7 @@ class GitHubTeamMessageHandlerIntegrationTest extends BaseIntegrationTest {
 
         // Create repository (needed for team-repo events)
         Repository repo = new Repository();
-        repo.setNativeId(1000663383L);
+        repo.setNativeId(998279771L);
         repo.setProvider(gitProvider);
         repo.setName("TestRepository");
         repo.setNameWithOwner("HephaestusTest/TestRepository");
