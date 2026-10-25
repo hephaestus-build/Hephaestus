@@ -490,7 +490,8 @@ If it cannot read the label, a pull request that is not a draft builds its image
 A label added after CI published the head's images deploys at once.
 If the label comes before the run starts, the comment says that the preview waits for CI, and the completion of that run deploys it.
 If the label comes after the run started, use **Re-run all jobs** on that run, or push a commit.
-**Re-run failed jobs** keeps the earlier `Detect changes` result, so it does not see the label.
+**Re-run failed jobs** repeats the jobs that failed ([GitHub](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/re-run-workflows-and-jobs#re-running-failed-jobs-in-a-workflow)).
+`Detect changes` succeeded, so it does not read the label again.
 
 This is later than a deploy as soon as the images are ready.
 A push previews only when its slowest CI job ends, tests included.
@@ -498,7 +499,7 @@ Checking after the run ends avoids reporting a build that is still running as a 
 
 `Docker` rebuilds images whose inputs changed.
 Its `Tag unchanged images` job aliases the base commit's verified digests for the rest.
-Thus, every image exists at the head SHA.
+Thus, in a run that builds images, every image exists at the head SHA.
 
 An alias serves a preview, never release evidence.
 If the base commit's image is still publishing, it uses the merged pull request's candidate, which carries only `linux/amd64`.
@@ -585,7 +586,7 @@ redeploy preserves an already-seeded database — and configure its AI access ag
 
 | Comment says                                              | What it means                                                                                                 |
 | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| CI finished … without publishing this commit's images     | An image build failed or did not run. Open the linked CI run. Re-run it, or push, to retry.                   |
+| CI finished … without publishing this commit's images     | If a job in the linked run failed, fix it and push. If the run started before the label, use **Re-run all jobs** on it, or push. |
 | Coolify reported a failed preview deployment              | The stack did not start. Open the deployment log link in the comment.                                         |
 | Coolify finished, but the preview did not return HTTP 2xx | Containers started but the app never became healthy.                                                          |
 | Timed out waiting for Coolify …                           | The deploy outlasted its budget. The next push retries.                                                       |
@@ -812,7 +813,8 @@ tests first run in the merge queue.
 
 To get the queue tier for any other change before you queue it, add the `ci:full` label to the pull request.
 Then push, or use **Re-run all jobs** on the latest CI/CD run.
-**Re-run failed jobs** keeps the earlier `Detect changes` result, so it does not see the label.
+**Re-run failed jobs** repeats the jobs that failed ([GitHub](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/re-run-workflows-and-jobs#re-running-failed-jobs-in-a-workflow)).
+`Detect changes` succeeded, so it does not read the label again.
 `Detect changes` reads the label from the pull request when it runs, not from the event.
 A label read that fails runs the queue tier.
 
@@ -883,10 +885,9 @@ Docker Hub anonymously, which
 A job that reads a first-party image back — the scan, the preflight, the boot smoke — logs in as
 well, because `packages: read` alone buys nothing.
 
-A pull request from a fork gets a read-only `GITHUB_TOKEN`, so `cicd.yml` passes `publish: false`
-to both image workflows. That build compiles the image and stops: no login, no push, no signature,
-no attestation, no policy scan and no alias moves. Forks therefore get no preview and no boot smoke.
-The release path exercises their code once it is on `main`.
+A pull request from a fork gets a read-only `GITHUB_TOKEN` and cannot publish an image, so it builds none.
+Forks therefore get no preview and no boot smoke.
+The merge group builds their images, and the release path exercises their code once it is on `main`.
 
 When release preflight is required, it owns image vulnerability scanning for both architectures.
 The image-build workflows omit their duplicate scans. Other published builds scan every platform

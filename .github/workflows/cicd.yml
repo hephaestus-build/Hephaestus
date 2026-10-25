@@ -685,6 +685,7 @@ jobs:
       needs.detect-changes.outputs.should_skip != 'true' && (
         needs.detect-changes.outputs.unfiltered == 'true' ||
         needs.detect-changes.outputs.head-images == 'true' ||
+        needs.detect-changes.outputs.release-preflight == 'true' ||
         needs.detect-changes.outputs.any-code == 'true' ||
         needs.detect-changes.outputs.build-config == 'true' ||
         needs.detect-changes.outputs.test-config == 'true'
@@ -952,6 +953,7 @@ jobs:
       needs.detect-changes.outputs.should_skip != 'true' && needs.detect-changes.outputs.draft != 'true' && needs.detect-changes.outputs.images == 'true' && (
         needs.detect-changes.outputs.unfiltered == 'true' ||
         needs.detect-changes.outputs.head-images == 'true' ||
+        needs.detect-changes.outputs.release-preflight == 'true' ||
         needs.detect-changes.outputs.any-code == 'true' ||
         needs.detect-changes.outputs.ci-config == 'true'
       )
@@ -980,8 +982,8 @@ jobs:
     # `Docker` publishes no output this job reads, but it is what puts `postgres:<head sha>` in the
     # registry — by building it, or by aliasing the base image when the diff left it alone.
     needs: [detect-changes, application-server-image, Docker]
-    # A fork pull request builds its images without publishing them, so there is nothing to pull
-    # and no boot to check; the release path exercises a fork's install path once it is on `main`.
+    # A fork pull request builds no image, so there is nothing to pull and no boot to check; the
+    # release path exercises a fork's install path once it is on `main`.
     if: >-
       needs.detect-changes.outputs.head-images == 'true' &&
       needs.detect-changes.outputs.should_skip != 'true' &&

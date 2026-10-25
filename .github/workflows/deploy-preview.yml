@@ -291,7 +291,7 @@ jobs:
 
             🔎 **[Deployment log](${{ steps.wait.outputs.log_url || format('{0}/{1}/actions/runs/{2}', github.server_url, github.repository, github.run_id) }})**
 
-            <sub>The next push, or a re-run of this commit's CI, retries automatically.</sub>
+            <sub>The next push, or Re-run all jobs on this commit's CI, retries automatically.</sub>
 
       - name: Fail when the preview failed
         if: >-

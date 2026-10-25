@@ -10,6 +10,7 @@ import {
 	assertWebhookAccepted,
 	buildWebhookPayload,
 	formatOutputs,
+	MISSING_IMAGES_ADVICE,
 	queuePreview,
 	selectExactDeployment,
 	validateDeploymentProvenance,
@@ -577,7 +578,7 @@ void describe("deciding whether CI has published", () => {
 		assert.equal(
 			caught.message,
 			"CI finished (failure) without publishing this commit's images: " +
-				"https://github.example/owner/repo/actions/runs/1",
+				`https://github.example/owner/repo/actions/runs/1. ${MISSING_IMAGES_ADVICE}`,
 		);
 		assert.ok(caught.cause instanceof Error);
 		assert.ok(caught.cause.message.startsWith(IMAGE_PENDING));
@@ -591,7 +592,7 @@ void describe("deciding whether CI has published", () => {
 					runnerFor(["pending"]),
 					() => undefined,
 				),
-			/^Error: CI finished \(failure\) without publishing this commit's images\.$/u,
+			/^Error: CI finished \(failure\) without publishing this commit's images\. A run that starts/u,
 		);
 	});
 

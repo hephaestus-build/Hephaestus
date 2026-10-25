@@ -109,6 +109,11 @@ void test("one advisory snapshot is selected for every image-policy consumer, no
 			{ "vulnerability-database": "skipped" },
 		),
 	);
+	// Release evidence builds every image, whatever the Version PR's paths select.
+	assert.ok(runs("Docker", { "release-preflight": "true", images: "true" }));
+	assert.ok(
+		runs("server-package", { "release-preflight": "true", images: "true", "all-images": "true" }),
+	);
 	// A pull request that needs no head images builds none; the merge group builds them.
 	for (const job of ["Docker", "application-server-image"]) {
 		assert.ok(

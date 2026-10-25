@@ -649,6 +649,16 @@ export function checkImages(
 }
 
 /**
+ * What to do when CI finished without this commit's images. CI builds a pull request's images
+ * only if the label was on it when the run started, and Re-run failed jobs does not run
+ * `Detect changes` again. docs/contributor/ci-cd.mdx § Preview deployments.
+ */
+export const MISSING_IMAGES_ADVICE =
+	"A run that starts without the `preview` label may build no images. If a job in that run " +
+	"failed, fix it and push. If the run started before the label, use Re-run all jobs on it, or " +
+	"push a commit.";
+
+/**
  * Whether this commit's images are published and trusted, checked once. Nothing here waits: a
  * preview asked for before CI finished is deployed by the `workflow_run` that CI's completion
  * starts, so a poll would only hold a runner and the admission group while guessing a deadline.
@@ -677,10 +687,11 @@ export function imagesReady(
 			return false;
 		}
 		const runUrl = environment.CI_RUN_URL;
-		const where = isSet(runUrl) && /^https:\/\/\S+$/u.test(runUrl) ? `: ${runUrl}` : ".";
-		throw new Error(`CI finished (${conclusion}) without publishing this commit's images${where}`, {
-			cause: error,
-		});
+		const where = isSet(runUrl) && /^https:\/\/\S+$/u.test(runUrl) ? `: ${runUrl}` : "";
+		throw new Error(
+			`CI finished (${conclusion}) without publishing this commit's images${where}. ${MISSING_IMAGES_ADVICE}`,
+			{ cause: error },
+		);
 	}
 }
 

@@ -977,12 +977,6 @@ void describe("CI contract", () => {
 			],
 			[
 				"pull_request",
-				{ preview: "false", pullRequest: draft, releaseCandidate: "true" },
-				"true",
-				"false",
-			],
-			[
-				"pull_request",
 				{ preview: "true", pullRequest: fork, filter: { "supported-host-smoke": "true" } },
 				"false",
 				"false",
