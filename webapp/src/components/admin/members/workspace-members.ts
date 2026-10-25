@@ -41,3 +41,10 @@ export interface WorkspaceRoleChange {
  */
 export const roleChangeAsksFirst = (change: WorkspaceRoleChange) =>
 	change.to === "OWNER" || change.own;
+
+const OWNER_ASSIGNS: readonly WorkspaceRole[] = ["OWNER", "ADMIN", "MEMBER"];
+const ADMIN_ASSIGNS: readonly WorkspaceRole[] = ["ADMIN", "MEMBER"];
+
+/** Only an owner gives or takes the owner role; the server refuses it to anyone else. */
+export const assignableWorkspaceRoles = (readerRole: WorkspaceRole | undefined) =>
+	readerRole === "OWNER" ? OWNER_ASSIGNS : ADMIN_ASSIGNS;

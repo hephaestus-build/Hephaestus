@@ -1,7 +1,14 @@
 import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { ShieldCheck, ShieldOff, UserCog, Users } from "lucide-react";
-import { useDeferredValue, useEffect, useEffectEvent, useState } from "react";
+import {
+	useDeferredValue,
+	useEffect,
+	useEffectEvent,
+	useLayoutEffect,
+	useRef,
+	useState,
+} from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 
@@ -63,6 +70,12 @@ function AdminUsersPage() {
 
 	const [roleTarget, setRoleTarget] = useState<DialogTarget>(null);
 	const [signOutTarget, setSignOutTarget] = useState<DialogTarget>(null);
+	// The role dialog on screen, read when a change settles (ADR 0027). A layout effect updates it in
+	// the commit itself, so a change that settles right after a dismissal does not see the old one.
+	const roleOnScreen = useRef<DialogTarget>(null);
+	useLayoutEffect(() => {
+		roleOnScreen.current = roleTarget;
+	}, [roleTarget]);
 
 	const listOptions = adminListUsersInfiniteOptions({ query: { size: PAGE_SIZE } });
 	const listQuery = useInfiniteQuery({
@@ -147,7 +160,15 @@ function AdminUsersPage() {
 			await invalidateList();
 			setRoleTarget(null);
 		},
-		onError: openConfirmAccess,
+		onError: (error, variables) => {
+			if (openConfirmAccess(error)) {
+				return;
+			}
+			// An open dialog shows the refusal itself; one the reader closed while it saved cannot.
+			if (roleOnScreen.current?.user.id !== variables.path.id) {
+				toast.error(problemDetailOf(error, "We could not update the role. Try again."));
+			}
+		},
 	});
 
 	const forceSignOut = useMutation({

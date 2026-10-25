@@ -14,8 +14,10 @@ import {
 	setMemberHiddenMutation,
 } from "@/api/@tanstack/react-query.gen";
 import {
+	assignableWorkspaceRoles,
 	roleChangeAsksFirst,
 	WORKSPACE_ROLE_LABELS,
+	type WorkspaceMemberRow,
 	type WorkspaceRoleChange,
 	workspaceMemberRows,
 } from "@/components/admin/members/workspace-members";
@@ -74,6 +76,7 @@ function AdminMembersContainer() {
 		isLoading: isWorkspaceLoading,
 		error: workspaceError,
 		refetch: refetchWorkspace,
+		role: readerRole,
 	} = useWorkspaceAccess();
 	const { getUserId } = useAuth();
 	const [roleChange, setRoleChange] = useState<WorkspaceRoleChange | null>(null);
@@ -146,12 +149,16 @@ function AdminMembersContainer() {
 			void queryClient.invalidateQueries({
 				queryKey: getOwnMembershipQueryKey({ path: { workspaceSlug: workspaceSlug ?? "" } }),
 			});
-			setRoleChange(null);
+		},
+		onError: (error) => {
+			toast.error("We could not change the role", { description: problemDetailOf(error) });
 		},
 	});
 
 	const { mutate: changeHidden } = toggleHidden;
-	const { mutate: changeRole, reset: resetRoleChange } = assignRole;
+	// `mutate` is stable and the mutation result is not. A role handler that closed over the result
+	// would change every render, so the table would rebuild its columns and close an open role list.
+	const { mutate: changeRole } = assignRole;
 	const handleToggleHidden = (accountId: string, hidden: boolean) => {
 		if (!hasText(workspaceSlug)) {
 			return;
@@ -159,36 +166,30 @@ function AdminMembersContainer() {
 		changeHidden({ path: { workspaceSlug, accountId }, body: { hidden } });
 	};
 
-	const teams = teamsQuery.isError ? [] : (teamsQuery.data ?? []);
-	const members = workspaceMemberRows(membersQuery.data?.content ?? []);
-
-	const handleRoleChange = (accountId: string, role: WorkspaceRole) => {
-		const row = members.find((member) => member.membership.account.id === accountId);
-		if (!hasText(workspaceSlug) || row === undefined) {
-			return;
+	const sendRoleChange = ({ accountId, to }: WorkspaceRoleChange) => {
+		if (hasText(workspaceSlug)) {
+			changeRole({ path: { workspaceSlug }, body: { accountId, role: to } });
 		}
+	};
+
+	const handleRoleChange = (member: WorkspaceMemberRow, role: WorkspaceRole) => {
+		const accountId = member.membership.account.id;
 		const change: WorkspaceRoleChange = {
 			accountId,
-			name: row.name,
-			from: row.membership.role,
+			name: member.name,
+			from: member.membership.role,
 			to: role,
 			own: accountId === getUserId(),
 		};
 		if (roleChangeAsksFirst(change)) {
-			resetRoleChange();
 			setRoleChange(change);
-			return;
+		} else {
+			sendRoleChange(change);
 		}
-		// A one-step change has no dialog to show its refusal in.
-		changeRole(
-			{ path: { workspaceSlug }, body: { accountId, role } },
-			{
-				onError: (error) => {
-					toast.error("We could not change the role", { description: problemDetailOf(error) });
-				},
-			},
-		);
 	};
+
+	const teams = teamsQuery.isError ? [] : (teamsQuery.data ?? []);
+	const members = workspaceMemberRows(membersQuery.data?.content ?? []);
 	const isLoading = isWorkspaceLoading || membersQuery.isPending;
 
 	if (!hasText(workspaceSlug) && !isWorkspaceLoading && workspaceError === undefined) {
@@ -218,6 +219,7 @@ function AdminMembersContainer() {
 				}}
 				onToggleHidden={handleToggleHidden}
 				onRoleChange={handleRoleChange}
+				assignableRoles={assignableWorkspaceRoles(readerRole)}
 				pendingRoleAccountId={
 					assignRole.isPending ? assignRole.variables.body.accountId : undefined
 				}
@@ -244,26 +246,8 @@ function AdminMembersContainer() {
 			/>
 			<WorkspaceChangeRoleDialog
 				change={roleChange}
-				isPending={assignRole.isPending}
-				errorMessage={
-					assignRole.isError && roleChange !== null
-						? problemDetailOf(assignRole.error, "We could not change the role. Try again.")
-						: undefined
-				}
-				onOpenChange={(open) => {
-					if (!open) {
-						setRoleChange(null);
-						resetRoleChange();
-					}
-				}}
-				onConfirm={(change) => {
-					if (hasText(workspaceSlug)) {
-						changeRole({
-							path: { workspaceSlug },
-							body: { accountId: change.accountId, role: change.to },
-						});
-					}
-				}}
+				onConfirm={sendRoleChange}
+				onClose={() => setRoleChange(null)}
 			/>
 		</>
 	);

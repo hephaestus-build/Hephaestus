@@ -4,19 +4,9 @@ import { AlertCircle, CalendarClock } from "lucide-react";
 import { type ReactNode, useId, useState } from "react";
 
 import type { ReviewSchedule, ReviewScheduleInput } from "@/api/types.gen";
+import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { InlineLink } from "@/components/common/InlineLink";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import {
-	AlertDialog,
-	AlertDialogCancel,
-	AlertDialogClose,
-	AlertDialogContent,
-	AlertDialogDescription,
-	AlertDialogFooter,
-	AlertDialogHeader,
-	AlertDialogTitle,
-	AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -245,6 +235,7 @@ function ScheduleRow({
 	onDelete: PracticeReviewScheduleProps["onDelete"];
 }) {
 	const [editing, setEditing] = useState(false);
+	const [deleting, setDeleting] = useState<ReviewSchedule | null>(null);
 	const kind = itemKindLabel(schedule.itemKind, 2);
 	const kindNoun = itemKindNoun(schedule.itemKind, 2);
 	const nextRun = formatMoment(schedule.nextRunAt);
@@ -292,29 +283,23 @@ function ScheduleRow({
 				>
 					Edit <span className="sr-only">the recurring check on {kindNoun}</span>
 				</Button>
-				{/* Asks rather than offering Undo: the API cannot restore a schedule, and creating it
-				    again gives a new one with a later next check and no last check. */}
-				<AlertDialog>
-					<AlertDialogTrigger render={<Button variant="ghost" size="sm" disabled={isSaving} />}>
-						Delete <span className="sr-only">the recurring check on {kindNoun}</span>
-					</AlertDialogTrigger>
-					<AlertDialogContent>
-						<AlertDialogHeader>
-							<AlertDialogTitle>Delete the recurring check on {kindNoun}?</AlertDialogTitle>
-							<AlertDialogDescription>
-								This deletes the schedule and its settings. You cannot undo this.
-								{schedule.enabled ? " To stop checking for a while, pause it instead." : null}
-							</AlertDialogDescription>
-						</AlertDialogHeader>
-						<AlertDialogFooter>
-							<AlertDialogCancel>Cancel</AlertDialogCancel>
-							<AlertDialogClose variant="destructive" onClick={() => onDelete(schedule)}>
-								Delete recurring check
-							</AlertDialogClose>
-						</AlertDialogFooter>
-					</AlertDialogContent>
-				</AlertDialog>
+				<Button variant="ghost" size="sm" disabled={isSaving} onClick={() => setDeleting(schedule)}>
+					Delete <span className="sr-only">the recurring check on {kindNoun}</span>
+				</Button>
 			</ItemActions>
+			{/* A confirm, not Undo: the API cannot restore a deleted schedule. */}
+			<ConfirmDialog
+				subject={deleting}
+				title={() => `Delete the recurring check on ${kindNoun}?`}
+				description={(shown) =>
+					shown.enabled
+						? "This deletes the schedule and its settings. You cannot undo this. To stop checking for a while, pause it instead."
+						: "This deletes the schedule and its settings. You cannot undo this."
+				}
+				confirmLabel="Delete recurring check"
+				onConfirm={onDelete}
+				onClose={() => setDeleting(null)}
+			/>
 			{editing ? (
 				<div className="w-full border-t pt-4">
 					<ScheduleForm

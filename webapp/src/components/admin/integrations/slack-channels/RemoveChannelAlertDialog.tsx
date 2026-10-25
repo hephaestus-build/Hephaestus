@@ -127,7 +127,7 @@ export function RemoveChannelAlertDialog({
 					{!nothingCollected && (
 						<Field data-invalid={mismatch}>
 							<FieldLabel htmlFor="remove-slack-confirm">
-								Type the channel ID <span className="font-mono font-medium">{channelId}</span> to
+								Enter the channel ID <span className="font-mono font-medium">{channelId}</span> to
 								confirm
 							</FieldLabel>
 							<Input
@@ -145,7 +145,7 @@ export function RemoveChannelAlertDialog({
 							/>
 							{mismatch && (
 								<FieldError>
-									That does not match. Type the channel ID exactly: {channelId}
+									That does not match. Enter the channel ID exactly: {channelId}
 								</FieldError>
 							)}
 						</Field>

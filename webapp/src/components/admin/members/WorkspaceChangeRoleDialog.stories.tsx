@@ -29,7 +29,7 @@ const meta = {
 	component: WorkspaceChangeRoleDialog,
 	parameters: { layout: "centered" },
 	tags: ["autodocs"],
-	args: { change: makeOwner, isPending: false, onOpenChange: fn(), onConfirm: fn() },
+	args: { change: makeOwner, onConfirm: fn(), onClose: fn() },
 } satisfies Meta<typeof WorkspaceChangeRoleDialog>;
 
 export default meta;
@@ -38,32 +38,45 @@ type Story = StoryObj<typeof meta>;
 /** Making someone an owner: the reader learns that the new owner can delete the workspace. */
 export const MakeOwner: Story = {
 	play: async ({ args }) => {
-		const dialog = within(
-			await screen.findByRole("alertdialog", { name: "Make Ada Lovelace an owner?" }),
-		);
-		await expectSettledVisible(
-			dialog.getByText(
-				"Ada Lovelace can then delete this workspace and change the role of anyone in it, including you.",
-			),
+		const dialog = await screen.findByRole("alertdialog", { name: "Make Ada Lovelace an owner?" });
+		await expectSettledVisible(dialog);
+		await expect(dialog).toHaveAccessibleDescription(
+			"Ada Lovelace can then delete this workspace and change the role of anyone in it, including you.",
 		);
 		await expect(args.onConfirm).not.toHaveBeenCalled();
-		await userEvent.click(dialog.getByRole("button", { name: "Make owner" }));
-		await expect(args.onConfirm).toHaveBeenCalledWith(makeOwner);
 	},
 };
 
-/** Lowering your own role: Cancel keeps it and commits nothing. */
+/** Confirming hands the change back and closes at once; the row reports the outcome. */
+export const ConfirmCommitsAndCloses: Story = {
+	play: async ({ args }) => {
+		const dialog = within(await screen.findByRole("alertdialog"));
+		await userEvent.click(dialog.getByRole("button", { name: "Make owner" }));
+		await expect(args.onConfirm).toHaveBeenCalledWith(makeOwner);
+		await expect(args.onClose).toHaveBeenCalledTimes(1);
+	},
+};
+
+/** Lowering your own role deletes nothing, so its confirm uses the default style, not the destructive one. */
 export const RemoveOwnAdminAccess: Story = {
 	args: { change: ownDemotion },
+	play: async () => {
+		const dialog = await screen.findByRole("alertdialog", { name: "Remove your admin access?" });
+		await expectSettledVisible(dialog);
+		await expect(dialog).toHaveAccessibleDescription(
+			"You become a member and can no longer manage this workspace. An admin or owner can give you admin access again.",
+		);
+		await expect(within(dialog).getByRole("button", { name: "Remove admin access" })).toBeEnabled();
+	},
+};
+
+/** Cancel commits nothing. */
+export const CancelCommitsNothing: Story = {
+	args: { change: ownDemotion },
 	play: async ({ args }) => {
-		const dialog = within(
-			await screen.findByRole("alertdialog", { name: "Remove your admin access?" }),
-		);
-		await expectSettledVisible(
-			dialog.getByText(/Only an admin can give you admin access again\./u),
-		);
+		const dialog = within(await screen.findByRole("alertdialog"));
 		await userEvent.click(dialog.getByRole("button", { name: "Cancel" }));
-		await expect(args.onOpenChange).toHaveBeenCalledWith(false);
+		await expect(args.onClose).toHaveBeenCalled();
 		await expect(args.onConfirm).not.toHaveBeenCalled();
 	},
 };
@@ -72,34 +85,20 @@ export const RemoveOwnAdminAccess: Story = {
 export const GiveUpOwnOwnerRole: Story = {
 	args: { change: { ...ownDemotion, from: "OWNER", to: "ADMIN" } },
 	play: async () => {
-		const dialog = within(
-			await screen.findByRole("alertdialog", { name: "Give up your owner role?" }),
-		);
-		await expectSettledVisible(dialog.getByText(/You stay an admin/u));
-		await expect(dialog.getByRole("button", { name: "Give up owner role" })).toBeEnabled();
+		const dialog = await screen.findByRole("alertdialog", { name: "Give up your owner role?" });
+		await expectSettledVisible(dialog);
+		await expect(dialog).toHaveAccessibleDescription(/^You stay an admin/u);
+		await expect(within(dialog).getByRole("button", { name: "Give up owner role" })).toBeEnabled();
 	},
 };
 
-/** In flight: both buttons wait, so the change is not sent twice and the dialog cannot close under it. */
-export const Pending: Story = {
-	args: { isPending: true },
-	play: async ({ args }) => {
-		const dialog = within(await screen.findByRole("alertdialog"));
-		await expect(dialog.getByRole("button", { name: "Make owner" })).toBeDisabled();
-		await expect(dialog.getByRole("button", { name: "Cancel" })).toBeDisabled();
-		await userEvent.keyboard("{Escape}");
-		await expect(args.onOpenChange).not.toHaveBeenCalled();
-	},
-};
-
-/** The server refused: the reason stays in the dialog so the reader can read it. */
-export const Refused: Story = {
-	args: { errorMessage: "You cannot manage this role in this workspace." },
+/** An owner who becomes a member is told that only an owner can restore the owner role. */
+export const OwnerBecomesMember: Story = {
+	args: { change: { ...ownDemotion, from: "OWNER" } },
 	play: async () => {
-		const dialog = within(await screen.findByRole("alertdialog"));
-		await expect(dialog.getByRole("alert")).toHaveTextContent(
-			"You cannot manage this role in this workspace.",
+		const dialog = await screen.findByRole("alertdialog", { name: "Remove your admin access?" });
+		await expect(dialog).toHaveAccessibleDescription(
+			/Only an owner can make you an owner again\.$/u,
 		);
-		await expect(dialog.getByRole("button", { name: "Make owner" })).toBeEnabled();
 	},
 };
