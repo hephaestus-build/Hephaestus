@@ -16,6 +16,7 @@ import de.tum.cit.aet.hephaestus.practices.review.model.ReviewItem;
 import de.tum.cit.aet.hephaestus.practices.review.model.ReviewPractice;
 import de.tum.cit.aet.hephaestus.practices.review.report.ScanReportService;
 import de.tum.cit.aet.hephaestus.practices.spi.BoundModelSlot;
+import de.tum.cit.aet.hephaestus.practices.spi.PinnedPractice;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewBudget;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewCancellationRequested;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewCompleted;
@@ -40,8 +41,10 @@ import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -342,6 +345,12 @@ public class ReviewServiceImpl implements ReviewService {
     @Transactional(readOnly = true)
     public Optional<ReviewSnapshot> find(long workspaceId, UUID reviewId) {
         return snapshots.find(workspaceId, reviewId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Map<UUID, List<PinnedPractice>> findPinned(long workspaceId, Collection<UUID> reviewIds) {
+        return snapshots.findPinned(workspaceId, reviewIds);
     }
 
     @Override

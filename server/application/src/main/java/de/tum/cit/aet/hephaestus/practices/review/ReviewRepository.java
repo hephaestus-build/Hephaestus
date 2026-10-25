@@ -23,22 +23,45 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface ReviewRepository extends JpaRepository<Review, UUID>, ReviewQueries, ScanMembershipQueries {
+    /** The result counts of item reviews, per review and practice: the results each review recorded. */
     @Query(value = """
-        SELECT COUNT(*) FILTER(WHERE outcome='MET') AS met,COUNT(*) FILTER(WHERE outcome='NOT_MET') AS notMet,
-          COUNT(*) FILTER(WHERE outcome='DOES_NOT_APPLY') AS doesNotApply,
-          COUNT(*) FILTER(WHERE outcome='COULD_NOT_DETERMINE') AS couldNotDetermine
-        FROM result r WHERE r.workspace_id=:ws AND ((:scan AND EXISTS(SELECT 1 FROM review_item member
-          WHERE member.workspace_id=r.workspace_id AND member.review_id=:id AND member.result_id=r.id))
-          OR (NOT :scan AND r.review_id=:id))
-          AND (CAST(:practice AS bigint) IS NULL OR r.practice_id=:practice)
+        SELECT r.review_id AS reviewId,r.practice_id AS practiceId,
+          COUNT(*) FILTER(WHERE r.outcome='MET') AS met,
+          COUNT(*) FILTER(WHERE r.outcome='NOT_MET') AS notMet,
+          COUNT(*) FILTER(WHERE r.outcome='DOES_NOT_APPLY') AS doesNotApply,
+          COUNT(*) FILTER(WHERE r.outcome='COULD_NOT_DETERMINE') AS couldNotDetermine
+        FROM result r WHERE r.workspace_id=:ws AND r.review_id IN (:ids) GROUP BY r.review_id,r.practice_id
         """, nativeQuery = true)
-    ResultCounts resultCounts(long ws, UUID id, boolean scan, @Nullable Long practice);
+    List<PracticeResultCounts> itemResultCounts(long ws, Collection<UUID> ids);
 
+    /** The result counts of scans, per review and practice: each result a member of the scan retains, once. */
+    @Query(value = """
+        SELECT m.review_id AS reviewId,r.practice_id AS practiceId,
+          COUNT(DISTINCT r.id) FILTER(WHERE r.outcome='MET') AS met,
+          COUNT(DISTINCT r.id) FILTER(WHERE r.outcome='NOT_MET') AS notMet,
+          COUNT(DISTINCT r.id) FILTER(WHERE r.outcome='DOES_NOT_APPLY') AS doesNotApply,
+          COUNT(DISTINCT r.id) FILTER(WHERE r.outcome='COULD_NOT_DETERMINE') AS couldNotDetermine
+        FROM review_item m JOIN result r ON r.id=m.result_id AND r.workspace_id=m.workspace_id
+        WHERE m.workspace_id=:ws AND m.review_id IN (:ids) GROUP BY m.review_id,r.practice_id
+        """, nativeQuery = true)
+    List<PracticeResultCounts> scanResultCounts(long ws, Collection<UUID> ids);
+
+    interface PracticeResultCounts extends ResultCounts {
+        UUID getReviewId();
+
+        long getPracticeId();
+    }
+
+    /** The feedback counts of each review on the page, per state, in one read. */
     @Query(
-            value = "SELECT state,count(*) AS count FROM feedback WHERE workspace_id=:ws AND review_id=:id GROUP BY"
-                    + " state",
+            value = "SELECT review_id AS reviewId,state,count(*) AS count FROM feedback WHERE workspace_id=:ws"
+                    + " AND review_id IN (:ids) GROUP BY review_id,state",
             nativeQuery = true)
-    List<FeedbackStateCount> feedbackCounts(long ws, UUID id);
+    List<ReviewFeedbackStateCount> feedbackCounts(long ws, Collection<UUID> ids);
+
+    interface ReviewFeedbackStateCount extends FeedbackStateCount {
+        UUID getReviewId();
+    }
 
     interface ResultCounts {
         long getMet();

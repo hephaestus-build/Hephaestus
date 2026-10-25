@@ -13,10 +13,6 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public interface ScriptRunRepository extends JpaRepository<ScriptRun, ScriptRun.Id> {
-    @Query("SELECT r FROM ScriptRun r, ReviewJob j WHERE j.workspaceId = :workspaceId"
-            + " AND j.reviewId = :reviewId AND r.workspaceId = :workspaceId AND r.id.jobId = j.id")
-    List<ScriptRun> findForReview(@Param("workspaceId") long workspaceId, @Param("reviewId") UUID reviewId);
-
     @Query("SELECT r FROM ScriptRun r WHERE r.workspaceId = :workspaceId AND r.id.jobId IN :jobIds")
     List<ScriptRun> findByWorkspaceIdAndJobIdIn(
             @Param("workspaceId") long workspaceId, @Param("jobIds") Collection<UUID> jobIds);

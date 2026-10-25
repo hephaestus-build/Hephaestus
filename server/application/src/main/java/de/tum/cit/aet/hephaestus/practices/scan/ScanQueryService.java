@@ -22,6 +22,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewService;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStatus;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Function;
@@ -113,7 +114,7 @@ public class ScanQueryService {
         var summary = summary(review);
         var report = reports.recorded(review);
         var usage = runtime.usage(workspaceId, id);
-        var jobs = runtime.jobCounts(workspaceId, id);
+        var jobs = runtime.jobCounts(workspaceId, List.of(id)).getOrDefault(id, Map.of());
         return new ScanDetailDTO(
                 summary,
                 report.practices().stream()

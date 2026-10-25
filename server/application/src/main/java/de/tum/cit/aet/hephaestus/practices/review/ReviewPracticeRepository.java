@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.practices.review;
 
 import de.tum.cit.aet.hephaestus.practices.review.model.ReviewPractice;
 import jakarta.persistence.LockModeType;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -15,6 +16,9 @@ public interface ReviewPracticeRepository extends JpaRepository<ReviewPractice, 
             long workspaceId, UUID reviewId, long practiceId);
 
     List<ReviewPractice> findByWorkspaceIdAndReviewIdOrderByPracticeIdAsc(long workspaceId, UUID reviewId);
+
+    List<ReviewPractice> findByWorkspaceIdAndReviewIdInOrderByReviewIdAscPracticeIdAsc(
+            long workspaceId, Collection<UUID> reviewIds);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT p FROM ReviewPractice p WHERE p.workspaceId = :workspaceId AND p.reviewId = :reviewId ORDER BY"

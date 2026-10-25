@@ -14,14 +14,19 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface ReviewItemRepository extends JpaRepository<ReviewItem, ReviewItem.Id> {
+    /** The item counts of each review on the page, per practice, in one read. */
     @Query(value = """
-        SELECT practice_id AS practiceId,COUNT(*) AS listed,
+        SELECT review_id AS reviewId,practice_id AS practiceId,COUNT(*) AS listed,
           COUNT(*) FILTER(WHERE state IN ('JUDGED','REUSED')) AS reviewed,
           COUNT(*) FILTER(WHERE state='REUSED') AS reused,COUNT(*) FILTER(WHERE state='WITHHELD') AS withheld,
           COUNT(*) FILTER(WHERE state='LISTED') AS pending FROM review_item
-        WHERE workspace_id=:ws AND review_id=:id GROUP BY practice_id
+        WHERE workspace_id=:ws AND review_id IN (:ids) GROUP BY review_id,practice_id
         """, nativeQuery = true)
-    List<PracticeCounts> practiceCounts(long ws, UUID id);
+    List<ReviewPracticeCounts> practiceCounts(long ws, Collection<UUID> ids);
+
+    interface ReviewPracticeCounts extends PracticeCounts {
+        UUID getReviewId();
+    }
 
     interface PracticeCounts {
         long getPracticeId();

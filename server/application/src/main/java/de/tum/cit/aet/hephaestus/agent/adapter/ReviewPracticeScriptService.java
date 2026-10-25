@@ -1,7 +1,9 @@
 package de.tum.cit.aet.hephaestus.agent.adapter;
 
+import de.tum.cit.aet.hephaestus.agent.job.ReviewRuntimeRepository;
 import de.tum.cit.aet.hephaestus.agent.job.ScriptRun;
 import de.tum.cit.aet.hephaestus.agent.job.ScriptRunRepository;
+import de.tum.cit.aet.hephaestus.agent.job.ScriptUsage;
 import de.tum.cit.aet.hephaestus.agent.job.ScriptUsageRepository;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
@@ -14,9 +16,13 @@ import de.tum.cit.aet.hephaestus.practices.spi.ScriptKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ScriptNoResultCause;
 import de.tum.cit.aet.hephaestus.practices.spi.ScriptRunStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ScriptStopReason;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -34,57 +40,72 @@ public class ReviewPracticeScriptService implements ReviewScriptQuery {
     private final ScriptUsageRepository usage;
     private final ScriptRunRepository runs;
     private final ReviewService reviews;
+    private final ReviewRuntimeRepository runtime;
 
     @Override
     public List<PracticeScriptRunDTO> forReview(long workspaceId, UUID reviewId) {
-        var review = reviews.find(workspaceId, reviewId);
-        if (review.isEmpty()) return List.of();
-        var byRun = usage.findForReview(workspaceId, reviewId).stream()
+        return forReviews(workspaceId, List.of(reviewId)).getOrDefault(reviewId, List.of());
+    }
+
+    @Override
+    public Map<UUID, List<PracticeScriptRunDTO>> forReviews(long workspaceId, Collection<UUID> reviewIds) {
+        var pinnedByReview = reviews.findPinned(workspaceId, reviewIds);
+        if (pinnedByReview.isEmpty()) return Map.of();
+        var reviewOfJob = runtime.jobsOf(workspaceId, pinnedByReview.keySet()).stream()
+                .collect(Collectors.toMap(
+                        ReviewRuntimeRepository.JobOfReview::jobId, ReviewRuntimeRepository.JobOfReview::reviewId));
+        if (reviewOfJob.isEmpty()) return Map.of();
+        var byRun = usage.findByWorkspaceIdAndJobIdIn(workspaceId, reviewOfJob.keySet()).stream()
                 .collect(Collectors.groupingBy(row -> new ScriptRun.Id(
                         row.getId().getJobId(),
                         row.getId().getAttempt(),
                         row.getId().getPracticeId())));
-        return runs.findForReview(workspaceId, reviewId).stream()
+        Map<UUID, List<PracticeScriptRunDTO>> byReview = new HashMap<>();
+        runs.findByWorkspaceIdAndJobIdIn(workspaceId, reviewOfJob.keySet()).stream()
                 .sorted(Comparator.comparing(ScriptRun::getFinishedAt)
                         .thenComparingInt(run -> run.getId().getAttempt())
                         .thenComparingLong(run -> run.getId().getPracticeId()))
-                .map(run -> {
-                    var practice = review.get().practices().stream()
-                            .filter(pinned -> pinned.practiceId() == run.getId().getPracticeId()
-                                    && pinned.practiceVersionId() == run.getPracticeVersionId())
-                            .findFirst();
-                    List<PracticeScriptModelDTO> models = byRun.getOrDefault(run.getId(), List.of()).stream()
-                            .map(usage -> new PracticeScriptModelDTO(
-                                    usage.modelKind(),
-                                    modelId(practice.orElse(null), usage.modelKind()),
-                                    usage.getDataHandlingTier(),
-                                    usage.getCalls(),
-                                    usage.getInputTokens(),
-                                    usage.getOutputTokens(),
-                                    usage.getCacheReadTokens(),
-                                    usage.getCacheWriteTokens()))
-                            .toList();
-                    JsonNode sessions = reviewSessions(run);
-                    return new PracticeScriptRunDTO(
-                            run.getId().getJobId(),
-                            run.getId().getAttempt(),
-                            Long.toString(run.getId().getPracticeId()),
-                            Long.toString(run.getPracticeVersionId()),
-                            run.getStatus(),
-                            run.getScriptKind(),
-                            run.getStopReason(),
-                            noResultCause(run, sessions),
-                            run.getFinishedAt(),
-                            run.getDurationMs() == null
-                                    ? null
-                                    : run.getDurationMs().longValue(),
-                            run.getError(),
-                            models,
-                            sessions == null
-                                    ? null
-                                    : sessions.path("modelCalls").asInt(0));
-                })
+                .forEach(run -> {
+                    var reviewId =
+                            Objects.requireNonNull(reviewOfJob.get(run.getId().getJobId()));
+                    byReview.computeIfAbsent(reviewId, ignored -> new ArrayList<>())
+                            .add(present(run, Objects.requireNonNull(pinnedByReview.get(reviewId)), byRun));
+                });
+        return byReview;
+    }
+
+    private PracticeScriptRunDTO present(
+            ScriptRun run, List<PinnedPractice> practices, Map<ScriptRun.Id, List<ScriptUsage>> byRun) {
+        var practice = practices.stream()
+                .filter(pinned -> pinned.practiceId() == run.getId().getPracticeId()
+                        && pinned.practiceVersionId() == run.getPracticeVersionId())
+                .findFirst();
+        List<PracticeScriptModelDTO> models = byRun.getOrDefault(run.getId(), List.of()).stream()
+                .map(usage -> new PracticeScriptModelDTO(
+                        usage.modelKind(),
+                        modelId(practice.orElse(null), usage.modelKind()),
+                        usage.getDataHandlingTier(),
+                        usage.getCalls(),
+                        usage.getInputTokens(),
+                        usage.getOutputTokens(),
+                        usage.getCacheReadTokens(),
+                        usage.getCacheWriteTokens()))
                 .toList();
+        JsonNode sessions = reviewSessions(run);
+        return new PracticeScriptRunDTO(
+                run.getId().getJobId(),
+                run.getId().getAttempt(),
+                Long.toString(run.getId().getPracticeId()),
+                Long.toString(run.getPracticeVersionId()),
+                run.getStatus(),
+                run.getScriptKind(),
+                run.getStopReason(),
+                noResultCause(run, sessions),
+                run.getFinishedAt(),
+                run.getDurationMs() == null ? null : run.getDurationMs().longValue(),
+                run.getError(),
+                models,
+                sessions == null ? null : sessions.path("modelCalls").asInt(0));
     }
 
     /** The runner's review-session counts, as the recorder stored them; null for a run recorded without them. */
