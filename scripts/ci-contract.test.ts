@@ -1436,7 +1436,7 @@ void describe("CI contract", () => {
 		);
 	});
 
-	void test("security mutation checks follow their Gradle launcher and toolchain inputs", async () => {
+	void test("security mutation checks follow their Gradle inputs and compile the tests once", async () => {
 		const workflow = parseDocument(
 			await readFile(".github/workflows/security-mutation.yml", "utf8"),
 		);
@@ -1450,6 +1450,11 @@ void describe("CI contract", () => {
 		]) {
 			assert.ok(paths.includes(input), `security mutation checks must include ${input}`);
 		}
+		// The compile step and PIT share one value, so PIT does not recompile the tests.
+		assert.equal(
+			workflow.getIn(["jobs", "pitest", "env", "ORG_GRADLE_PROJECT_testAnalysis"]),
+			"false",
+		);
 	});
 
 	void test("changes to the PMD canary exercise it even without server source changes", async () => {
