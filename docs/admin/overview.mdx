@@ -27,6 +27,68 @@ The worker starts a sandboxed container for each practice review.
 It does not keep that container active between reviews.
 [Runtime roles](./runtime-roles) explains each role and why the webhook role has its own container.
 
+## Architecture and network
+
+The diagram shows the self-hosted Compose stack on one host.
+Each box is a container, and each arrow is one of its main connections.
+[Network egress](./network-egress) lists every outbound destination and when it is used, also the ones that the diagram leaves out.
+The [threat model](./threat-model#system-and-data-flow) shows the trust boundaries of the same system.
+
+```mermaid
+flowchart LR
+accTitle: Self-hosted Hephaestus architecture and network
+accDescr: Browsers and provider webhooks reach the reverse proxy on ports 80 and 443, the only published ports. The proxy routes the page to the webapp, the API and Slack interactivity to the application server, and the other webhooks to the webhook server. The webhook server publishes verified events to NATS, which the application server consumes. All three Java roles use PostgreSQL. The worker starts sandboxes on internal networks through the Docker socket. Review sandboxes and the Heph host reach only the sandbox gateway of the worker. Turn sandboxes have no network. The server and the worker call the providers, and the worker's LLM proxy calls the AI provider.
+
+  subgraph Internet[Internet]
+    Browser[Browser]
+    Providers[GitHub, GitLab, Slack, Outline]
+    AiProvider[AI provider]
+  end
+
+  subgraph HostMachine[One Linux host]
+    subgraph SharedNetwork[Compose network]
+      ReverseProxy[reverse-proxy: Traefik, ports 80 and 443]
+      Webapp[webapp]
+      Server[application-server]
+      WebhookServer[webhook-server]
+      Worker[application-worker: LLM proxy and sandbox gateway]
+      Nats[(nats-server: JetStream)]
+      Postgres[(postgres)]
+    end
+    subgraph SandboxNetworks[Internal sandbox networks without internet]
+      ReviewSandbox[Review sandboxes]
+      HephHost[Heph host]
+      TurnSandbox[Turn sandboxes, no network]
+    end
+  end
+
+  Browser -->|HTTPS| ReverseProxy
+  Providers -->|webhooks and OAuth callbacks| ReverseProxy
+  ReverseProxy -->|page| Webapp
+  ReverseProxy -->|/api and Slack interactivity| Server
+  ReverseProxy -->|/webhooks, except Slack interactivity| WebhookServer
+  WebhookServer -->|verified events| Nats
+  Nats -->|events| Server
+  Server --> Postgres
+  WebhookServer --> Postgres
+  Worker -->|jobs, turns and results| Postgres
+  Worker -.->|starts through the Docker socket| SandboxNetworks
+  ReviewSandbox -->|gateway only| Worker
+  HephHost -->|gateway only| Worker
+  Server -->|API calls, delivery and Git fetches| Providers
+  Worker -->|Git fetches| Providers
+  Worker -->|model calls| AiProvider
+```
+
+Only `application-worker` starts containers through the Docker socket.
+`reverse-proxy` mounts the socket read-only to discover its routes.
+
+Only `reverse-proxy` publishes ports, 80 and 443.
+Browsers, OAuth callbacks, and provider webhooks arrive there.
+Each Java container has a management port, 9090, for health and metrics.
+That port, PostgreSQL, and NATS stay on the internal Compose network.
+[Runtime roles](./runtime-roles) explains what each role does.
+
 ## Two kinds of admin
 
 - **Instance admin** — operates the whole deployment. This includes AI providers, instance-wide settings, and the practice catalog that workspaces can adopt from.

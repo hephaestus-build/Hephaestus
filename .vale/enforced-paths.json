@@ -115,6 +115,7 @@
 	"docs/admin/integrations.mdx",
 	"docs/admin/legal-pages.mdx",
 	"docs/admin/liquibase-baseline-runbook.md",
+	"docs/admin/network-egress.mdx",
 	"docs/admin/observability.mdx",
 	"docs/admin/overview.mdx",
 	"docs/admin/practice-catalog.mdx",

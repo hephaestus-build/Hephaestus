@@ -72,13 +72,7 @@ To see which Docker Engine and Docker Compose a release ran, download the `host-
 - An NTP-synchronized clock. [Clocks](#clocks) explains why.
 - A **DNS A record** that points your hostname at the host.
   Ports **80 and 443** must be reachable from the internet for `Let's Encrypt` HTTP-01, OAuth callbacks, and webhooks.
-- Outbound HTTPS for these purposes:
-  - Images: `ghcr.io` and `docker.io`.
-  - Release lock: `github.com` and `api.github.com`.
-  - Keyless signature verification: `fulcio.sigstore.dev`, `rekor.sigstore.dev`, and `tuf-repo-cdn.sigstore.dev`.
-
-  Database migrations do not fetch or send Liquibase usage analytics.
-  Set `LIQUIBASE_ANALYTICS_ENABLED=true` to send them.
+- Outbound HTTPS to the destinations in [Network egress](./network-egress).
 - The [Node.js](https://nodejs.org/en/download) version pinned in `package.json#devEngines.runtime`
   and [Cosign](https://docs.sigstore.dev/cosign/system_config/installation/) for release-lock
   verification.

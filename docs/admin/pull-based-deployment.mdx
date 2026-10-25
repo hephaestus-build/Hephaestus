@@ -79,12 +79,7 @@ Manual promotions never do this lookup.
 2. Install `git` and Cosign in the [tested version](./install#tested-versions).
 3. Install the Node.js version pinned in `package.json#devEngines.runtime`.
 4. Verify downloaded tools against their published checksums.
-5. Allow outbound HTTPS to GitHub and its release-asset download hosts.
-6. Allow outbound HTTPS to Sigstore trust services.
-7. Allow outbound HTTPS to the lock's image registries, including GHCR and Docker Hub.
-
-Registry authentication and download redirects may use additional hosts.
-An allowlist with only `github.com` and `ghcr.io` is insufficient.
+5. Allow outbound HTTPS to the host destinations in [Network egress](./network-egress#host).
 
 ## Install
 
