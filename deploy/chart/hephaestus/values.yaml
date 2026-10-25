@@ -18,7 +18,7 @@ deploymentEnvironment: local
 trustedProxies: ""
 
 # One existing Secret in the release namespace. The chart reads the fixed key names that
-# docs/admin/kubernetes.mdx lists and never writes a secret value.
+# docs/admin/secret-custody.mdx lists and never writes a secret value.
 secret:
   name: ""
 
