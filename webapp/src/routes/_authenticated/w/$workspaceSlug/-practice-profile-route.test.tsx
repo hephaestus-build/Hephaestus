@@ -1263,13 +1263,9 @@ describe("complete practice observations", () => {
 		expect(reads).toBe(failedReads + 1);
 	});
 
-	it.each([
-		{ outcome: "MET", label: "Met" },
-		{ outcome: "DOES_NOT_APPLY", label: "Does not apply" },
-		{ outcome: "COULD_NOT_DETERMINE", label: "Could not determine" },
-	] as const)(
-		"keeps the complete explanation for $outcome without fabricating a problem",
-		async ({ outcome, label }) => {
+	it.each(["MET", "DOES_NOT_APPLY", "COULD_NOT_DETERMINE"] as const)(
+		"keeps the complete explanation for %s without fabricating a problem",
+		async (outcome) => {
 			server.use(
 				http.get("*/workspaces/:workspaceSlug/practices/results/:resultId", () =>
 					HttpResponse.json({ ...completeObservation, outcome, problems: [], severity: null }),
@@ -1281,8 +1277,6 @@ describe("complete practice observations", () => {
 			await within(selected).findByText(completeObservation.explanation);
 			expect(within(selected).queryByText("Problems")).toBeNull();
 			expect(within(selected).queryByText("Next step")).toBeNull();
-			// The row's head is the feed's own row for this observation; its outcome is the feed's.
-			expect(label).not.toBe("");
 		},
 	);
 });
@@ -1315,6 +1309,116 @@ const feedback: PracticePageFeedback = {
 const guidance = bundledGuidance satisfies PracticeGuidanceDto;
 
 const PRACTICE_PAGE = `${PAGE}?detail=${encodeURIComponent(JSON.stringify([group, practiceEntry]))}`;
+
+describe("the feedback an observation gave", () => {
+	afterEach(() => {
+		clearUserView();
+		vi.restoreAllMocks();
+	});
+
+	// The address takes a card's id as a UUID, as the server writes them.
+	const pageCard: PracticePageFeedback = {
+		...feedback,
+		id: "00000000-0000-4000-8000-000000000201",
+	};
+
+	/** The open observation, with one delivered piece at `destination`. */
+	const withFeedback = (destination: "PRACTICE_PAGE" | "CONVERSATION") => {
+		server.use(
+			http.get("*/workspaces/:workspaceSlug/practices/results/:resultId", () =>
+				HttpResponse.json({
+					...completeObservation,
+					feedback: [
+						{
+							id: pageCard.id,
+							destination,
+							state: "DELIVERED",
+							deliveredAt: "2026-09-09T14:20:00Z",
+							response: null,
+							copies: [],
+						},
+					],
+				}),
+			),
+			http.get("*/workspaces/:workspaceSlug/practices/feedback/practice-page", () =>
+				HttpResponse.json([pageCard]),
+			),
+		);
+	};
+
+	it("opens its card on the Feedback tab once, and Back finds the observation open again", async () => {
+		withFeedback("PRACTICE_PAGE");
+		const scrolledTo: string[] = [];
+		vi.spyOn(Element.prototype, "scrollIntoView").mockImplementation(function (this: Element) {
+			scrolledTo.push(this.textContent);
+		});
+		const { router } = renderRouteAtWithRouter(observationPage());
+		const selected = await screen.findByRole("list", { name: "Reviews" }, ROUTE_RENDER_WAIT);
+		await within(selected).findByRole(
+			"link",
+			{ name: "Read it on this practice’s Feedback tab" },
+			SETTLE_WAIT,
+		);
+		// The observation stands on its own until its history loads and draws its row again, so the
+		// link is read once the history is the one list.
+		await waitFor(() => expect(screen.getAllByRole("list", { name: "Reviews" })).toHaveLength(1));
+		fireEvent.click(screen.getByRole("link", { name: "Read it on this practice’s Feedback tab" }));
+		// The Feedback tab is the default, so the address leaves it out.
+		await waitFor(() => {
+			expect(screen.getByRole("tab", { name: /^Feedback/u }).getAttribute("aria-selected")).toBe(
+				"true",
+			);
+		}, SETTLE_WAIT);
+		// The card the link named scrolls into view as it arrives.
+		await waitFor(() => expect(scrolledTo.join("\n")).toContain(pageCard.headline), SETTLE_WAIT);
+		// The address lets go of the card on arrival, so a reload or a later visit does not mark it again.
+		await waitFor(() => expect(router.state.location.search.feedbackCard).toBeUndefined());
+		expect(router.state.location.search.observation).toBe(completeObservation.id);
+
+		router.history.back();
+		await waitFor(() => expect(router.state.location.search.practiceTab).toBe("results"));
+		const back = await screen.findByRole("list", { name: "Reviews" }, SETTLE_WAIT);
+		assert(completeObservation.explanation !== null);
+		await within(back).findByText(completeObservation.explanation, undefined, SETTLE_WAIT);
+	});
+
+	it("links feedback raised in conversation to the conversation with Heph", async () => {
+		withFeedback("CONVERSATION");
+		renderRouteAtWithRouter(observationPage());
+		const selected = await screen.findByRole("list", { name: "Reviews" }, ROUTE_RENDER_WAIT);
+		const link = await within(selected).findByRole(
+			"link",
+			{ name: "Read it in your conversation with Heph" },
+			SETTLE_WAIT,
+		);
+		expect(link.getAttribute("href")).toBe("/w/acme/mentor");
+	});
+
+	it("turns the observations' timeframe into the since the group's reviews ask for", async () => {
+		const noon = new Date(2026, 8, 22, 12, 0);
+		vi.useFakeTimers({ toFake: ["Date"] });
+		vi.setSystemTime(noon);
+		try {
+			const asked: (string | null)[] = [];
+			server.use(
+				http.get(
+					"*/workspaces/:workspaceSlug/practice-groups/:groupSlug/reviews",
+					({ request }) => {
+						asked.push(new URL(request.url).searchParams.get("since"));
+						return HttpResponse.json(pageOf([groupReview]));
+					},
+				),
+			);
+			renderRouteAtWithRouter(`${PRACTICE_PAGE}&practiceTab=results&observationSince=30d`);
+			await waitFor(
+				() => expect(asked.at(-1)).toBe(reviewRangeStart(noon.getTime(), "30d").toISOString()),
+				SETTLE_WAIT,
+			);
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+});
 
 describe("practice introduction", () => {
 	let guidanceAsked: unknown[] = [];

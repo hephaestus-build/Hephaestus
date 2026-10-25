@@ -1,7 +1,6 @@
 import { PulseIcon } from "@primer/octicons-react";
 import type { ReactNode } from "react";
 
-import type { ProfileReview } from "@/api/types.gen";
 import { InfiniteListEnd, LOADING_MORE_ROWS } from "@/components/common/InfiniteListEnd";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import {
@@ -16,7 +15,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { rendersContent } from "@/lib/react-node";
 import type { MorePages } from "@/runtime/tanstack-query/infinite-list";
 
-import type { ReviewFeedState } from "./reviews";
+import type { ReviewEntry, ReviewFeedState } from "./reviews";
 import { ReviewTimeline, type ReviewTimelineProps } from "./ReviewTimeline";
 
 export interface ReviewFeedProps extends Pick<
@@ -33,7 +32,7 @@ export interface ReviewFeedProps extends Pick<
 	 * The reviews this surface shows, when they are not simply the feed's — a practice's own level
 	 * narrows them to its results.
 	 */
-	reviews?: ProfileReview[];
+	reviews?: ReviewEntry[];
 	skeletonRows: number;
 	emptyTitle: string;
 	emptyDescription: string;

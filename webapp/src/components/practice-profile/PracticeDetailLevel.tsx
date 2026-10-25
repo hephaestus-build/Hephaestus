@@ -1,5 +1,6 @@
 import { XIcon } from "lucide-react";
-import { type ReactNode, useEffect, useId, useRef, useState } from "react";
+import { type ReactNode, useEffect, useEffectEvent, useId, useRef, useState } from "react";
+import { useMediaQuery } from "usehooks-ts";
 
 import type {
 	PracticeGuidanceDto,
@@ -44,6 +45,7 @@ import { ReviewFeed, ReviewFeedSkeleton } from "@/components/profile/ReviewFeed"
 import {
 	EMPTY_REVIEW_FEED,
 	type FeedbackResponseControls,
+	type ReviewEntry,
 	type ReviewFeedState,
 } from "@/components/profile/reviews";
 import { ReviewTimeline } from "@/components/profile/ReviewTimeline";
@@ -479,18 +481,22 @@ function PracticeFeedbackSection({
 }) {
 	// The arrival is this mount's: kept here, while the address lets go of the id at once, so a
 	// later visit to the tab (Observations and back) does not play it again. A new link arrives with
-	// the id again and plays it again.
+	// the id again and plays it again. The card it marked keeps its wrapper after the sheen, so the
+	// card is not remounted and keeps any focus inside it.
+	const [seen, setSeen] = useState(markedFeedbackId);
+	const [marked, setMarked] = useState(markedFeedbackId);
 	const [arriving, setArriving] = useState(markedFeedbackId);
-	if (markedFeedbackId !== undefined && markedFeedbackId !== arriving) {
-		setArriving(markedFeedbackId);
+	if (markedFeedbackId !== seen) {
+		setSeen(markedFeedbackId);
+		if (markedFeedbackId !== undefined) {
+			setMarked(markedFeedbackId);
+			setArriving(markedFeedbackId);
+		}
 	}
-	const arrived = useRef(onFeedbackArrivalShown);
-	useEffect(() => {
-		arrived.current = onFeedbackArrivalShown;
-	}, [onFeedbackArrivalShown]);
+	const arrived = useEffectEvent(() => onFeedbackArrivalShown?.());
 	useEffect(() => {
 		if (markedFeedbackId !== undefined) {
-			arrived.current?.();
+			arrived();
 		}
 	}, [markedFeedbackId]);
 	// No "Learn more" on a card here: this level is the practice, and its Guide tab explains it.
@@ -503,8 +509,12 @@ function PracticeFeedbackSection({
 				onOpenGroup={onOpenGroup && (() => onOpenGroup())}
 			/>
 		);
-		return card.feedbackId === arriving ? (
-			<MarkedFeedbackCard key={card.feedbackId} onArrivalShown={() => setArriving(undefined)}>
+		return card.feedbackId === marked ? (
+			<MarkedFeedbackCard
+				key={card.feedbackId}
+				arriving={card.feedbackId === arriving}
+				onArrivalShown={() => setArriving(undefined)}
+			>
 				{element}
 			</MarkedFeedbackCard>
 		) : (
@@ -547,7 +557,7 @@ function PracticeFeedbackSection({
 	);
 }
 
-function observationCount(reviews: readonly ProfileReview[]): number {
+function observationCount(reviews: readonly ReviewEntry[]): number {
 	return reviews.reduce((count, review) => count + review.results.length, 0);
 }
 
@@ -748,33 +758,44 @@ function ObservationHistory({
 }
 
 /**
- * The card a link from an observation asked for: scrolled into view once, and crossed once by the
- * new card's mentor sheen (`ArrivalHighlight`), then it is a card like the others.
+ * The card a link from an observation asked for: scrolled into view on each arrival, and crossed
+ * once by the new card's mentor sheen (`ArrivalHighlight`), then it reads as a card like the others.
  */
 function MarkedFeedbackCard({
 	children,
+	arriving,
 	onArrivalShown,
 }: {
 	children: ReactNode;
+	/** True while the arrival plays; afterwards only the wrapper stays. */
+	arriving: boolean;
 	onArrivalShown?: () => void;
 }) {
 	const ref = useRef<HTMLDivElement>(null);
+	const reduceMotion = useMediaQuery("(prefers-reduced-motion: reduce)", {
+		initializeWithValue: true,
+	});
+	const scroll = useEffectEvent(() =>
+		ref.current?.scrollIntoView({ block: "center", behavior: reduceMotion ? "auto" : "smooth" }),
+	);
 	useEffect(() => {
-		const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-		ref.current?.scrollIntoView({ block: "center", behavior: reduce ? "auto" : "smooth" });
-	}, []);
+		if (arriving) {
+			scroll();
+		}
+	}, [arriving]);
 	return (
-		<div ref={ref} data-marked-feedback="" aria-current="true" className="relative rounded-xl">
-			<ArrivalHighlight onDone={onArrivalShown} />
+		<div
+			ref={ref}
+			data-marked-feedback=""
+			aria-current={arriving || undefined}
+			className="relative rounded-xl"
+		>
+			{arriving && <ArrivalHighlight onDone={onArrivalShown} />}
 			{children}
 		</div>
 	);
 }
 
-/**
- * The cards the level's timeframe keeps: a card by the time it shows (when it was created or last
- * moved), and the card a link arrived at whatever its time, so the arrival always lands.
- */
 /**
  * The card a link arrived at stays listed for the rest of this visit, whatever the timeframe: the
  * address lets go of its id at once (so the arrival sheen never replays), and the level keeps it
@@ -788,6 +809,10 @@ function useKeptCard(markedFeedbackId: string | undefined): string | undefined {
 	return keptCard;
 }
 
+/**
+ * The cards the level's timeframe keeps: a card by the time it shows (when it was created or last
+ * moved), and the card a link arrived at whatever its time, so the arrival always lands.
+ */
 function withinTimeframe(
 	feedback: ReturnType<typeof feedbackCardsOf>,
 	since: Date | undefined,

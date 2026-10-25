@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
+import { useMediaQuery } from "usehooks-ts";
 
 /** How long the sheen takes to cross, in milliseconds. */
 export const ARRIVAL_SHEEN_MS = 1300;
@@ -14,22 +15,15 @@ export const ARRIVAL_STILL_MS = 2000;
  * child of a `relative` box; it takes the box's rounding and lets every press through.
  */
 export function ArrivalHighlight({ onDone }: { onDone?: () => void }) {
-	const [still] = useState(
-		() =>
-			typeof window !== "undefined" &&
-			window.matchMedia("(prefers-reduced-motion: reduce)").matches,
-	);
+	const still = useMediaQuery("(prefers-reduced-motion: reduce)", { initializeWithValue: true });
 	const [done, setDone] = useState(false);
 	const band = useRef<HTMLSpanElement>(null);
 	// The latest callback, read when the highlight ends: it belongs to the mount, not to a render.
-	const finished = useRef(onDone);
-	useEffect(() => {
-		finished.current = onDone;
-	}, [onDone]);
+	const finished = useEffectEvent(() => onDone?.());
 	useEffect(() => {
 		const end = () => {
 			setDone(true);
-			finished.current?.();
+			finished();
 		};
 		if (still) {
 			const timer = window.setTimeout(end, ARRIVAL_STILL_MS);

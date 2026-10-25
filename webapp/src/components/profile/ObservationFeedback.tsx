@@ -5,6 +5,7 @@ import type { OwnFeedbackRef } from "@/api/types.gen";
 import { InlineLink } from "@/components/common/InlineLink";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { useNow } from "@/components/common/use-now";
+import { DELIVERY_STATE_DEFS } from "@/components/practice-vocabulary/delivery-state-defs";
 import { FEEDBACK_DESTINATION_DEFS } from "@/components/practice-vocabulary/feedback-destination-defs";
 import { FEEDBACK_RESOLUTION_DEFS } from "@/components/practice-vocabulary/feedback-resolution-defs";
 import { FEEDBACK_USEFULNESS_DEFS } from "@/components/practice-vocabulary/feedback-usefulness-defs";
@@ -37,8 +38,9 @@ const LINK_AT_REST = "text-mentor underline";
 const FEEDBACK_BOX = "rounded-xl border border-foreground/15 bg-background p-3 shadow-sm";
 
 /**
- * The feedback an observation gave, one white box each: where it went (on the work, on the
- * practice page, in the conversation with Heph), whether it arrived, and the way to read it there.
+ * The feedback an observation gave, one box each: where it went (on the work, on the practice page,
+ * in the conversation with Heph), its delivery state as every feedback surface names it, and the way
+ * to read it there once it was delivered.
  * Nothing here answers it: the reader responds where the feedback is. An observation has no rating
  * of its own (the server records responses per piece of feedback only). A response already given is
  * said in one read-only line.
@@ -66,7 +68,12 @@ export function ObservationFeedback({ feedback, links }: ObservationFeedbackProp
 							{index + 1}
 						</span>
 						<StatusBadge def={FEEDBACK_DESTINATION_DEFS[piece.destination]} />
-						<span className="text-muted-foreground">{deliveryWords(piece, today)}</span>
+						<StatusBadge def={DELIVERY_STATE_DEFS[piece.state]} />
+						{piece.state === "DELIVERED" && piece.deliveredAt !== null && (
+							<time dateTime={piece.deliveredAt.toISOString()} className="text-muted-foreground">
+								{formatDayTime(piece.deliveredAt, today)}
+							</time>
+						)}
 					</p>
 					<FeedbackWhere feedback={piece} links={links} />
 					<ResponseLine feedback={piece} />
@@ -74,28 +81,6 @@ export function ObservationFeedback({ feedback, links }: ObservationFeedbackProp
 			))}
 		</ul>
 	);
-}
-
-/** Whether the feedback reached the reader yet, in their words rather than the pipeline's. */
-function deliveryWords(feedback: OwnFeedbackRef, today: Date): string {
-	switch (feedback.state) {
-		case "DELIVERED": {
-			return feedback.deliveredAt === null
-				? "Delivered"
-				: `Delivered ${formatDayTime(feedback.deliveredAt, today)}`;
-		}
-		case "AWAITING_APPROVAL":
-		case "READY":
-		case "UNCONFIRMED": {
-			return "Not delivered yet";
-		}
-		case "WITHHELD":
-		case "REJECTED":
-		case "REPLACED":
-		case "FAILED": {
-			return "Not sent";
-		}
-	}
 }
 
 /** The way to the feedback where it lives: its comment on the work, or its place in Hephaestus. */

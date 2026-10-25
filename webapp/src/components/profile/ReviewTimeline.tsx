@@ -1,12 +1,12 @@
 import type { ReactNode } from "react";
-import type { ProfileReview, ResultList } from "@/api/types.gen";
+import type { ResultList } from "@/api/types.gen";
 
 import { ReviewCard } from "./ReviewCard";
-import type { FeedbackResponseControls } from "./reviews";
+import type { FeedbackResponseControls, ReviewEntry } from "./reviews";
 import { TimelineItemSkeleton } from "./TimelineItem";
 
 export interface ReviewTimelineProps {
-	reviews: ProfileReview[];
+	reviews: ReviewEntry[];
 	/** The reader's response to each piece of feedback, handed to every card. */
 	responses?: FeedbackResponseControls;
 	/** Route-owned, lazy detail for one observation. */

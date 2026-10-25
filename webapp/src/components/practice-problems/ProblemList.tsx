@@ -20,12 +20,6 @@ export interface ProblemCardProps {
 	 */
 	evidence?: ReactNode;
 	/**
-	 * The problem's severity badge, from the same registry on every surface: the operator ranks
-	 * problems by it, and the developer reads which problem blocks the work and which is a small gap.
-	 * "omitted" is for a surface that has no room for it.
-	 */
-	severity?: "shown" | "omitted";
-	/**
 	 * The level that shows this problem on its own. It takes the place of the level the card is on,
 	 * which is a step in history, so Back returns there.
 	 */
@@ -34,20 +28,14 @@ export interface ProblemCardProps {
 	number?: number;
 	/**
 	 * Drawn as a card that stands off its ground, with the feedback card's edge and faint shadow: the
-	 * developer's open observation, whose problems sit on a tinted body.
+	 * developer's open observation, whose problems sit on a tinted body. Its next step sits under a
+	 * rule, and its words take the foreground so they read apart from the labels around them.
 	 */
 	raised?: boolean;
 }
 
 /** One problem under a Not met result: its severity, summary, explanation, evidence and next step. */
-export function ProblemCard({
-	problem,
-	evidence,
-	severity = "shown",
-	open,
-	number,
-	raised = false,
-}: ProblemCardProps) {
+export function ProblemCard({ problem, evidence, open, number, raised = false }: ProblemCardProps) {
 	const full = "citations" in problem ? problem : undefined;
 	const summary = problem.summary.trim();
 	return (
@@ -69,7 +57,9 @@ export function ProblemCard({
 						{number}
 					</span>
 				)}
-				{severity === "shown" && <StatusBadge def={SEVERITY_DEFS[problem.severity]} />}
+				{/* The severity, from the same registry on every surface: the operator ranks problems by it,
+				    and the developer reads which problem blocks the work and which is a small gap. */}
+				<StatusBadge def={SEVERITY_DEFS[problem.severity]} />
 				<p className="min-w-0 flex-1 basis-48 text-sm font-medium text-pretty break-words">
 					{open === undefined ? (
 						summary
@@ -80,12 +70,16 @@ export function ProblemCard({
 					)}
 				</p>
 			</div>
-			{hasText(full?.explanation) && <ProblemProse>{full.explanation}</ProblemProse>}
+			{hasText(full?.explanation) && (
+				<ProblemProse raised={raised}>{full.explanation}</ProblemProse>
+			)}
 			{evidence}
 			{hasText(full?.nextStep) && (
-				<div className="space-y-1 border-t pt-2 text-sm">
-					<p className="font-semibold text-muted-foreground">Next step</p>
-					<ProblemProse>{full.nextStep}</ProblemProse>
+				<div className={cn("space-y-1 text-sm", raised && "border-t pt-2")}>
+					<p className={raised ? "font-semibold text-muted-foreground" : "font-medium"}>
+						Next step
+					</p>
+					<ProblemProse raised={raised}>{full.nextStep}</ProblemProse>
 				</div>
 			)}
 		</div>
@@ -95,11 +89,12 @@ export function ProblemCard({
 /** The feedback card's edge: a stronger outline and a faint shadow, so the card stands off its ground. */
 const RAISED_CARD = "border-foreground/15 shadow-sm";
 
-// The review writes a problem's explanation and next step in Markdown; the words take the
-// foreground, so they read apart from the labels around them.
-function ProblemProse({ children }: { children: string }) {
+// The review writes a problem's explanation and next step in Markdown.
+function ProblemProse({ children, raised }: { children: string; raised: boolean }) {
 	return (
-		<div className={cn(UNTRUSTED_MARKDOWN_PROSE, "text-sm text-pretty text-foreground")}>
+		<div
+			className={cn(UNTRUSTED_MARKDOWN_PROSE, "text-sm text-pretty", raised && "text-foreground")}
+		>
 			<UntrustedMarkdown>{children}</UntrustedMarkdown>
 		</div>
 	);
@@ -109,7 +104,6 @@ export interface ProblemListProps {
 	problems: readonly ProblemEntry[];
 	/** The evidence of one problem in full; a summary has none. */
 	evidence?: (problem: Problem) => ReactNode;
-	severity?: ProblemCardProps["severity"];
 	/** The level of one problem, where the surface can open it. */
 	open?: (problemId: string) => DetailStackEntry;
 	/** Numbers the problems 1, 2, each in a small circle, in the order shown. */
@@ -126,7 +120,6 @@ function positionOf(problem: ProblemEntry): number {
 export function ProblemList({
 	problems,
 	evidence,
-	severity,
 	open,
 	numbered = false,
 	raised = false,
@@ -140,7 +133,6 @@ export function ProblemList({
 					<ProblemCard
 						problem={problem}
 						evidence={"citations" in problem ? evidence?.(problem) : undefined}
-						severity={severity}
 						open={open?.(problem.id)}
 						number={numbered ? index + 1 : undefined}
 						raised={raised}

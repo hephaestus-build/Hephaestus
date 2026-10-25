@@ -1,4 +1,4 @@
-import { type UseQueryResult, useQuery } from "@tanstack/react-query";
+import { skipToken, type UseQueryResult, useQuery } from "@tanstack/react-query";
 import {
 	createFileRoute,
 	Link,
@@ -119,11 +119,13 @@ function PracticeProfile() {
 		workId: search.observationWork,
 		observationId: openPracticeSlug === undefined ? undefined : search.observation,
 	};
+	const askedObservationOptions = getOwnResultOptions({
+		path: { workspaceSlug, resultId: observationFilter.observationId ?? "" },
+	});
 	const askedObservation = useQuery({
-		...getOwnResultOptions({
-			path: { workspaceSlug, resultId: observationFilter.observationId ?? "" },
-		}),
-		enabled: observationFilter.observationId !== undefined,
+		...askedObservationOptions,
+		queryFn:
+			observationFilter.observationId === undefined ? skipToken : askedObservationOptions.queryFn,
 	});
 	const reviews = usePracticeProfileReviews({
 		workspaceSlug,

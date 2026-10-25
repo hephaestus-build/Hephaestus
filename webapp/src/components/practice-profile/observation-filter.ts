@@ -1,6 +1,7 @@
-import type { ProfileReview, ResultList } from "@/api/types.gen";
+import type { ResultList } from "@/api/types.gen";
 import type { PanelState } from "@/components/common/panel-state";
 import type { Outcome } from "@/components/practice-vocabulary/outcome-defs";
+import type { ReviewEntry } from "@/components/profile/reviews";
 import { hasText } from "@/lib/text";
 
 import type { ReviewTimeframe } from "./practice-profile-search";
@@ -100,10 +101,10 @@ export function matchesObservation(result: ResultList, filter: ObservationFilter
 }
 
 /** The reviews narrowed to the observations the filter keeps; a review left with none drops out. */
-export function filterObservations(
-	reviews: readonly ProfileReview[],
+export function filterObservations<TEntry extends ReviewEntry>(
+	reviews: readonly TEntry[],
 	filter: ObservationFilter,
-): ProfileReview[] {
+): TEntry[] {
 	if (!hasObservationFilter(filter)) {
 		return [...reviews];
 	}
@@ -115,7 +116,7 @@ export function filterObservations(
 		.filter((review) => review.results.length > 0);
 }
 
-export function carriesObservation(reviews: readonly ProfileReview[], id: string): boolean {
+export function carriesObservation(reviews: readonly ReviewEntry[], id: string): boolean {
 	return reviews.some((review) => review.results.some((result) => result.id === id));
 }
 
@@ -131,18 +132,9 @@ export type SelectedObservationState = PanelState<{ result: ResultList }> | { st
  * not loaded. It carries what a history row shows: the work, the time and the one observation. The
  * time is when the observation was recorded, which is within its review.
  */
-export function asReviewEntry(result: ResultList): ProfileReview {
+export function asReviewEntry(result: ResultList): ReviewEntry {
 	return {
-		review: {
-			id: result.reviewId,
-			createdAt: result.recordedAt,
-			completedAt: null,
-			item: result.item,
-			itemVersion: null,
-			kind: "ITEM",
-			origin: result.origin,
-			status: "COMPLETE",
-		},
+		review: { id: result.reviewId, createdAt: result.recordedAt, item: result.item },
 		results: [result],
 		feedback: [],
 	};
@@ -153,10 +145,10 @@ export function asReviewEntry(result: ResultList): ProfileReview {
  * loaded, the observation a link asked for, in its place by time. Never the asked observation twice.
  */
 export function shownObservations(
-	reviews: readonly ProfileReview[],
+	reviews: readonly ReviewEntry[],
 	filter: ObservationFilter,
 	selected: ResultList | undefined,
-): ProfileReview[] {
+): ReviewEntry[] {
 	const shown = filterObservations(reviews, filter);
 	// The asked observation obeys the same filter as the loaded ones, so a page loading never
 	// makes it appear or vanish.
@@ -186,7 +178,7 @@ export function shownObservations(
  * it, the rows whose answer changed start again from the rule (`ReviewCard` keys each row by it).
  */
 export function openOnArrival(
-	shown: readonly ProfileReview[],
+	shown: readonly ReviewEntry[],
 	observationId: string | undefined,
 ): string | undefined {
 	if (observationId !== undefined) {

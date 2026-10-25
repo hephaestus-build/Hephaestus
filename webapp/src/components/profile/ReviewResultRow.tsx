@@ -335,12 +335,10 @@ export function ReviewResultDetails({
 			)}
 			<ReasonSections reasons={reasons} />
 			{feedback.length > 0 && (
-				<DetailSection
-					label="Feedback delivered through the following destinations"
-					className="gap-2"
-				>
-					{/* Which feedback this observation gave and where, each in a white box with the way to
-					    read it there. No response controls: the reader answers the feedback where it is. */}
+				<DetailSection label="Feedback from this observation" className="gap-2">
+					{/* Which feedback this observation gave, where it went and its delivery state, each in a
+					    box with the way to read it there. No response controls: the reader answers the
+					    feedback where it is. */}
 					<ObservationFeedback feedback={feedback} links={feedbackLinks} />
 				</DetailSection>
 			)}

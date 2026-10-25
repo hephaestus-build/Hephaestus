@@ -104,19 +104,15 @@ export const Default: Story = {
 		await expect(canvas.getByText("Explain significant decisions")).toBeVisible();
 		await expect(canvas.getByText("Met")).toBeVisible();
 		await expect(canvas.queryByText(formatDay(strength.recordedAt))).toBeNull();
-		const labels = [
-			"Why it was noted",
-			"Evidence",
-			"Feedback delivered through the following destinations",
-		];
+		const labels = ["Why it was noted", "Evidence", "Feedback from this observation"];
 		const positions = labels.map((label) => canvas.getByText(label).getBoundingClientRect().top);
 		await expect([...positions].sort((a, b) => a - b)).toStrictEqual(positions);
 		await expect(
 			canvas.getByText("private static final Duration TIMEOUT = Duration.ofSeconds(90);"),
 		).toBeVisible();
 		await expect(canvas.getByText("agent.timeout: 90s")).toBeVisible();
-		// The feedback the observation gave, in a white box: where it went and the way to read it
-		// there. No response controls inside the observation.
+		// The feedback the observation gave, in a box: where it went, its delivery state and the way
+		// to read it there. No response controls inside the observation.
 		const feedback = canvas.getByRole("list", { name: "Feedback from this observation" });
 		await expect(within(feedback).getByText("On the work")).toBeVisible();
 		await expect(
@@ -162,9 +158,7 @@ export const ListedResult: Story = {
 			card === null || card === undefined ? "none" : getComputedStyle(card).boxShadow,
 		).not.toBe("none");
 		await expect(canvas.queryByText("Why it was noted")).toBeNull();
-		await expect(
-			canvas.queryByText("Feedback delivered through the following destinations"),
-		).toBeNull();
+		await expect(canvas.queryByText("Feedback from this observation")).toBeNull();
 		await expect(canvas.queryByRole("group")).toBeNull();
 	},
 };
@@ -179,9 +173,7 @@ export const StaleWithoutEvidence: Story = {
 		).toBeVisible();
 		await expect(canvas.queryByText("Why it was noted")).not.toBeInTheDocument();
 		await expect(canvas.queryByText("Evidence")).not.toBeInTheDocument();
-		await expect(
-			canvas.getByText("Feedback delivered through the following destinations"),
-		).toBeVisible();
+		await expect(canvas.getByText("Feedback from this observation")).toBeVisible();
 	},
 };
 

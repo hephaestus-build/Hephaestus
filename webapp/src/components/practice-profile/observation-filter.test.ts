@@ -1,6 +1,7 @@
 import { assert, describe, expect, it } from "vitest";
 
-import type { ProfileReview, ResultList } from "@/api/types.gen";
+import type { ResultList } from "@/api/types.gen";
+import type { ReviewEntry } from "@/components/profile/reviews";
 import { detailResult, detailReviews } from "@/stories/practice-detail-story-mock-data";
 
 import {
@@ -14,7 +15,7 @@ import {
 	shownObservations,
 } from "./observation-filter";
 
-const ids = (reviews: readonly ProfileReview[]) =>
+const ids = (reviews: readonly ReviewEntry[]) =>
 	reviews.flatMap((review) => review.results.map((result) => result.id));
 
 const newest = detailReviews[0]?.results[0];

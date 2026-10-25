@@ -2,7 +2,7 @@ import { ChevronDownIcon, ChevronUpIcon } from "lucide-react";
 import { type ReactNode, useState } from "react";
 
 import { cn } from "cn";
-import type { ItemRef, ProfileReview, ResultList } from "@/api/types.gen";
+import type { ItemRef, ResultList } from "@/api/types.gen";
 import { DotSeparator } from "@/components/common/DotSeparator";
 import { InlineLink } from "@/components/common/InlineLink";
 import { reviewedWorkIcon } from "@/components/icons/reviewed-work-icon";
@@ -13,11 +13,11 @@ import { hasText } from "@/lib/text";
 
 import { OwnFeedbackList } from "./OwnFeedbackList";
 import { ReviewResultRow } from "./ReviewResultRow";
-import type { FeedbackResponseControls } from "./reviews";
+import type { FeedbackResponseControls, ReviewEntry } from "./reviews";
 import { TimelineItem } from "./TimelineItem";
 
 export interface ReviewCardProps {
-	review: ProfileReview;
+	review: ReviewEntry;
 	/** The reader's response to each piece of feedback; absent leaves no response controls. */
 	responses?: FeedbackResponseControls;
 	/** Route-owned, lazy detail for one observation. */

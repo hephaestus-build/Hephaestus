@@ -9,7 +9,7 @@ import { ActionButton } from "@/components/common/ActionButton";
 import { LOADING_MORE_ROWS } from "@/components/common/InfiniteListEnd";
 import { useNow } from "@/components/common/use-now";
 import { OUTCOME_COUNT_KEYS, type ReviewSaw } from "@/components/practice-trace/review-saw";
-import { RequestedReviewTag } from "@/components/practice-trace/review-tags";
+import { ReviewOriginTag } from "@/components/practice-trace/review-tags";
 import {
 	type ReviewColumn,
 	ReviewDayTable,
@@ -317,7 +317,7 @@ function ReviewRow({
 				item={item}
 				position={entry.positionOnWork}
 				total={entry.totalOnWork}
-				tags={review.origin === "REQUEST" && <RequestedReviewTag />}
+				tags={review.origin !== "EVENT" && <ReviewOriginTag origin={review.origin} />}
 			/>
 			<ReviewSawCell saw={sawOf(entry)} />
 			<TableCell className="align-top whitespace-normal">
