@@ -42,12 +42,13 @@ Where this report differs from DORA's definition, the report says **proxy**.
 | Deployment frequency | Successful deployments per environment, per week, and the number of days with a deployment. | Same. |
 | Change fail rate (proxy) | Deployments that ended in `failure` or `error`, or that the next deployment moved back, divided by decided deployments. | Deployments that cause a failure in production that needs remediation. Here, `failure` also covers a version check that a slow host failed. |
 | Failed deployment recovery time (proxy) | From the first of consecutive failed deployments to the next deployment that stayed. The unit is an incident, not a deployment. | Time to recover from a failed deployment. DORA formerly called it time to restore service. |
-| Deployment rework rate (proxy) | Patch releases (`vX.Y.Z` with Z above 0) as a share of published releases. | Deployments that were unplanned and made to fix a production incident. |
+| Deployment rework rate (proxy) | Deployments that ended an incident, divided by decided deployments. A release number cannot tell rework apart: before 1.0, every fix is a patch release. | Deployments that were unplanned and made to fix a production incident. |
 
 A **rollback** is a successful deployment of a commit that is older on `main`'s first-parent history than the one it replaced.
 The request's rollback permission does not decide it.
 
-A **repeat** is a deployment of what the environment already runs, such as a re-promotion or a freeze of the running build.
+A **repeat** is a deployment of what the environment already runs, such as a re-promotion of the running build.
+After a failed deployment, what runs is unknown, so the next deployment of the last good build is a recovery, not a repeat.
 It moves nothing, so it is neither a deployment nor a failure. The report counts repeats separately.
 
 The Version PR is not a change. It consumes the changes it releases.
@@ -60,6 +61,7 @@ Reverted pull requests are reported beside the fail rate.
   It does not prove that every service is healthy. Host metrics are the record of what a host runs.
 - A failure that no deployment record shows, such as an incident that a forward fix resolved, is not counted.
 - GitHub's search lists at most 1,000 pull requests. The report fails instead of measuring fewer than it found.
+- The report reads deployments from 28 days back. The first of them has no predecessor, so it cannot be a rollback or a repeat.
 - Days with a deployment are calendar days in UTC.
 
 ## Run it locally

@@ -17,9 +17,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
+      # The merged heads' CI runs and statuses give the push-to-merge stages.
+      actions: read
+      checks: read
       contents: read
       deployments: read
       pull-requests: read
+      statuses: read
     steps:
       # Lead time places each merge on main's first-parent history.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

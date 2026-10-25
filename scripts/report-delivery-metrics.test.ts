@@ -5,7 +5,6 @@ import {
 	classify,
 	deliveryMetrics,
 	duration,
-	isPatch,
 	isRevert,
 	parseChanges,
 	parseDeployment,
@@ -354,23 +353,52 @@ await test("a deployment's outcome skips the inactive status that replaced it", 
 	);
 });
 
-await test("patch releases and reverts are recognized", () => {
+await test("reverts are recognized from either revert title", () => {
 	const metrics = deliveryMetrics(
 		window,
 		[change({ title: 'Revert "fix(server): keep feedback current"' })],
 		[],
-		[
-			{ tag: "v1.2.0", commit: "b", publishedAt: 10 * MINUTE },
-			{ tag: "v1.2.1", commit: "c", publishedAt: 20 * MINUTE },
-		],
+		[],
 		position,
 	);
-	assert.deepEqual(metrics.releases, { published: 2, patches: 1, patchShare: 0.5 });
 	assert.equal(metrics.changes.revertRate, 1);
-	assert.ok(isPatch("v0.94.10"));
-	assert.ok(!isPatch("v0.95.0"));
 	assert.ok(isRevert("revert(release): defer v0.75.0"));
 	assert.ok(!isRevert("fix(server): revert the cache to its old key"));
+});
+
+await test("redeploying the last good build after a failure is a recovery and rework, not a repeat", () => {
+	const deployments = [
+		deployment({ sha: "a", createdAt: 10 * MINUTE, finishedAt: 15 * MINUTE }),
+		deployment({ sha: "b", createdAt: 20 * MINUTE, outcome: "failure", finishedAt: 25 * MINUTE }),
+		deployment({ sha: "a", createdAt: 30 * MINUTE, finishedAt: 40 * MINUTE }),
+	];
+	assert.deepEqual([...classify(deployments, position).values()], ["success", "failed", "success"]);
+	const [staging] = deliveryMetrics(window, [], deployments, [], position).environments;
+	assert.ok(staging);
+	assert.deepEqual(
+		{
+			recovered: staging.recoveryTime.count,
+			p50: staging.recoveryTime.p50,
+			open: staging.unrecovered,
+			rework: staging.reworkRate,
+		},
+		{ recovered: 1, p50: 15 * MINUTE, open: 0, rework: 1 / 3 },
+	);
+});
+
+await test("a deployment or release outside the first-parent history is counted, not measured", () => {
+	const rendered = renderDeliveryMetrics(
+		"Delivery metrics",
+		deliveryMetrics(
+			window,
+			[],
+			[deployment({ sha: "x" })],
+			[{ tag: "v1.0.0", commit: "y", publishedAt: MINUTE }],
+			position,
+		),
+	);
+	assert.match(rendered, /1 release commits are not on the default branch/u);
+	assert.match(rendered, /1 Staging deployments are not on the default branch/u);
 });
 
 await test("the report shows missing measurements as missing, not as zero", () => {
@@ -380,7 +408,6 @@ await test("the report shows missing measurements as missing, not as zero", () =
 	);
 	assert.match(rendered, /\| Merged → running in production \| — \| — \| 0 \|/u);
 	assert.match(rendered, /\| Production \| 0 \| 0\.0 \| 0 \| — \(0\/0\)/u);
-	assert.match(rendered, /Patch releases \(rework rate proxy\): 0 of 0 \(—\)/u);
 	assert.equal(duration(90 * MINUTE), "90 min");
 	assert.equal(duration(3 * 60 * MINUTE), "3.0 h");
 	assert.equal(duration(72 * 60 * MINUTE), "3.0 d");

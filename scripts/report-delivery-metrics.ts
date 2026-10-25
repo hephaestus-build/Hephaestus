@@ -81,11 +81,6 @@ function firstArrival(
 	return first;
 }
 
-/** A `vX.Y.Z` release with Z above 0: the cheap stand-in for rework, a release that fixes a release. */
-export function isPatch(tag: string): boolean {
-	return /^v\d+\.\d+\.[1-9]\d*$/u.test(tag);
-}
-
 /** GitHub's revert button and the Conventional Commit `revert` type. */
 export function isRevert(title: string): boolean {
 	return /^(?:Revert "|revert(?:\([^)]*\))?:)/u.test(title);
@@ -113,6 +108,10 @@ export function classify(
 		}
 		if (deployment.outcome !== "success") {
 			verdicts.set(deployment, deployment.outcome === undefined ? "undecided" : "failed");
+			// After a failure, what runs is unknown, so deploying the last good build again is a recovery.
+			if (deployment.outcome !== undefined) {
+				running = undefined;
+			}
 			continue;
 		}
 		const from = previous === undefined ? undefined : position.get(previous.sha);
@@ -256,12 +255,14 @@ export function deliveryMetrics(
 				decided.length === 0 ? null : (decided.length - successes.length) / decided.length,
 			recoveryTime: distribution(recoveries),
 			unrecovered,
+			// A deployment that ended an incident was made to fix one, not planned.
+			reworkRate: decided.length === 0 ? null : recoveries.length / decided.length,
+			unplaced: current.filter((deployment) => !position.has(deployment.sha)).length,
 		};
 	});
 
 	const reverts = merged.filter((change) => isRevert(change.title)).length;
 	const published = releases.filter((release) => inWindow(release.publishedAt, window));
-	const patches = published.filter((release) => isPatch(release.tag)).length;
 	return {
 		window: {
 			since: new Date(window.since).toISOString(),
@@ -277,11 +278,8 @@ export function deliveryMetrics(
 			awaitingRelease,
 			awaitingProduction,
 		},
-		releases: {
-			published: published.length,
-			patches,
-			patchShare: published.length === 0 ? null : patches / published.length,
-		},
+		releases: published.length,
+		unplacedReleases: published.filter((release) => !position.has(release.commit)).length,
 		leadTime: {
 			pushToGreen: distribution(pushToGreen),
 			greenToQueued: distribution(greenToQueued),
@@ -314,13 +312,31 @@ export function duration(milliseconds: number | null): string {
 
 const percent = (value: number | null) => (value === null ? "—" : `${Math.round(value * 100)} %`);
 
+/** What the first-parent history of the default branch cannot place, so the report cannot measure. */
+function unplacedLines(metrics: Metrics): string[] {
+	const counts = [
+		[metrics.changes.unplaced, "merge commits"],
+		[metrics.unplacedReleases, "release commits"],
+		...metrics.environments.map(
+			({ environment, unplaced }) => [unplaced, `${environment} deployments`] as const,
+		),
+	] as const;
+	return counts
+		.filter(([count]) => count > 0)
+		.map(
+			([count, what]) =>
+				`${count} ${what} are not on the default branch's first-parent history and are not measured.`,
+		)
+		.flatMap((line) => ["", line]);
+}
+
 export function renderDeliveryMetrics(title: string, metrics: Metrics): string {
 	const lead = (label: string, values: Metrics["leadTime"][keyof Metrics["leadTime"]]) =>
 		`| ${label} | ${duration(values.p50)} | ${duration(values.p90)} | ${values.count} |`;
 	return [
 		`## ${title}`,
 		"",
-		`${metrics.window.since.slice(0, 10)} to ${metrics.window.until.slice(0, 10)}: ${metrics.changes.merged} changes merged, ${metrics.releases.published} releases published.`,
+		`${metrics.window.since.slice(0, 10)} to ${metrics.window.until.slice(0, 10)}: ${metrics.changes.merged} changes merged, ${metrics.releases} releases published.`,
 		"",
 		"### Lead time for changes",
 		"",
@@ -340,28 +356,29 @@ export function renderDeliveryMetrics(title: string, metrics: Metrics): string {
 		`Dropped from the merge queue at least once: ${metrics.changes.requeued} of ${metrics.changes.merged}.`,
 		"",
 		`Not yet on staging: ${metrics.changes.awaitingStaging}. Not yet released: ${metrics.changes.awaitingRelease}. Not yet in production: ${metrics.changes.awaitingProduction}.`,
-		...(metrics.changes.unplaced === 0
-			? []
-			: [
-					"",
-					`${metrics.changes.unplaced} merge commits are not on the default branch's first-parent history and are not measured.`,
-				]),
+		...unplacedLines(metrics),
 		"",
 		"### Deployments",
 		"",
-		"Production is the DORA measure; Staging shows the flow before it. The fail rate and recovery time are proxies: a failure is a deployment whose version check failed or that was rolled back. See the Delivery Metrics page.",
+		"Production is the DORA measure; Staging shows the flow before it. The fail rate, recovery time and rework rate are proxies: a failure is a deployment whose version check failed or that was rolled back, and rework is a deployment that ended such an incident. See the Delivery Metrics page.",
 		"",
-		"| Environment | Successful | Per week | Days with a deployment | Change fail rate (proxy) | Failed deployment recovery time (median, proxy) | Not recovered | Repeats of what ran |",
-		"|---|---:|---:|---:|---:|---:|---:|---:|",
+		"| Environment | Successful | Per week | Days with a deployment | Change fail rate (proxy) | Failed deployment recovery time (median, proxy) | Not recovered | Deployment rework rate (proxy) | Repeats of what ran |",
+		"|---|---:|---:|---:|---:|---:|---:|---:|---:|",
 		...metrics.environments.map(
 			(environment) =>
-				`| ${environment.environment} | ${environment.successful} | ${environment.perWeek.toFixed(1)} | ${environment.deploymentDays} | ${percent(environment.changeFailRate)} (${environment.failed}/${environment.deployments}) | ${duration(environment.recoveryTime.p50)} (n=${environment.recoveryTime.count}) | ${environment.unrecovered} | ${environment.repeats} |`,
+				`| ${environment.environment} | ${environment.successful} | ${environment.perWeek.toFixed(1)} | ${environment.deploymentDays} | ${percent(environment.changeFailRate)} (${environment.failed}/${environment.deployments}) | ${duration(environment.recoveryTime.p50)} (n=${environment.recoveryTime.count}) | ${environment.unrecovered} | ${percent(environment.reworkRate)} | ${environment.repeats} |`,
 		),
 		"",
 		`Reverted changes: ${metrics.changes.reverts} of ${metrics.changes.merged} (${percent(metrics.changes.revertRate)}).`,
-		`Patch releases (rework rate proxy): ${metrics.releases.patches} of ${metrics.releases.published} (${percent(metrics.releases.patchShare)}).`,
 		"",
 	].join("\n");
+}
+
+function positiveInteger(value: unknown, label: string): number {
+	if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 1) {
+		throw new TypeError(`Invalid ${label}`);
+	}
+	return value;
 }
 
 const time = (value: unknown, label: string) => {
@@ -422,7 +439,7 @@ export function parseChanges(pages: unknown, releaseBranch: string): Change[] {
 				const firstCommit = asArray(asRecord(node.commits, "commits").nodes, "commit nodes")[0];
 				const openedAt = time(node.createdAt, "createdAt");
 				return {
-					number: Number(node.number),
+					number: positiveInteger(node.number, "pull request number"),
 					title: asString(node.title, "title"),
 					openedAt,
 					firstCommitAt: isRecord(firstCommit)
@@ -448,7 +465,7 @@ const PULLS_QUERY = `query($q: String!, $endCursor: String) {
       commits(first: 1) { nodes { commit { authoredDate } } }
       head: commits(last: 1) { nodes { commit {
         status { contexts { context state createdAt } }
-        checkSuites(first: 20) { nodes { workflowRun { event createdAt workflow { name } } } }
+        checkSuites(first: 50) { nodes { workflowRun { event createdAt workflow { name } } } }
       } } }
       timelineItems(itemTypes: [ADDED_TO_MERGE_QUEUE_EVENT], last: 20) {
         nodes { ... on AddedToMergeQueueEvent { createdAt } }
@@ -524,6 +541,28 @@ async function api(args: readonly string[]): Promise<unknown> {
 	return parseJson(await output("gh", ["api", ...args]));
 }
 
+/** GitHub lists deployments newest first, so the pages stop at the first one before `since`. */
+async function deploymentsSince(
+	repository: string,
+	environment: Environment,
+	since: number,
+): Promise<Record<string, unknown>[]> {
+	const found: Record<string, unknown>[] = [];
+	for (let page = 1; ; page += 1) {
+		const listed = asArray(
+			await api([
+				`repos/${repository}/deployments?environment=${environment}&per_page=100&page=${page}`,
+			]),
+			"deployments",
+		).map((value) => asRecord(value, "deployment"));
+		const recent = listed.filter((record) => time(record.created_at, "created_at") >= since);
+		found.push(...recent);
+		if (listed.length < 100 || recent.length < listed.length) {
+			return found;
+		}
+	}
+}
+
 if (import.meta.main) {
 	const repository = process.env.GITHUB_REPOSITORY;
 	if (repository === undefined || !/^[\w.-]+\/[\w.-]+$/u.test(repository)) {
@@ -570,23 +609,24 @@ if (import.meta.main) {
 	);
 	const deployments: Deployment[] = [];
 	for (const environment of ENVIRONMENTS) {
-		const listed = asArray(
-			await api([
-				"--paginate",
-				"--slurp",
-				`repos/${repository}/deployments?environment=${environment}&per_page=100`,
-			]),
-			"deployment pages",
-		).flatMap((page) => asArray(page, "deployments"));
-		for (const deployment of listed) {
-			const record = asRecord(deployment, "deployment");
-			if (time(record.created_at, "created_at") < since) {
-				continue;
-			}
-			const statuses = await api([
-				`repos/${repository}/deployments/${String(record.id)}/statuses?per_page=100`,
-			]);
-			deployments.push(parseDeployment(environment, record, statuses));
+		const records = await deploymentsSince(repository, environment, since);
+		// A few requests at a time: one per deployment, without a burst against the API.
+		for (let start = 0; start < records.length; start += 8) {
+			deployments.push(
+				...(await Promise.all(
+					records
+						.slice(start, start + 8)
+						.map(async (record) =>
+							parseDeployment(
+								environment,
+								record,
+								await api([
+									`repos/${repository}/deployments/${String(record.id)}/statuses?per_page=100`,
+								]),
+							),
+						),
+				)),
+			);
 		}
 	}
 
