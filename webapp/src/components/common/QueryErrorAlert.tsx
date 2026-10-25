@@ -4,7 +4,15 @@ import type * as React from "react";
 import { Alert, AlertAction, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
-import { problemDetailOf, problemIsRetryable, problemStatusOf } from "@/lib/problem-detail";
+import {
+	PROBLEM_COPY,
+	type ProblemCopy,
+	type ProblemKind,
+	problemDetailOf,
+	problemIsRetryable,
+	problemKindOf,
+	problemStatusOf,
+} from "@/lib/problem-detail";
 
 export interface QueryErrorAlertProps {
 	error: unknown;
@@ -14,80 +22,27 @@ export interface QueryErrorAlertProps {
 	className?: string;
 }
 
-interface ErrorClass {
+interface ErrorLook {
 	icon: React.ReactNode;
-	/** What happened, used when the server gave no wording of its own. */
-	cause?: string;
-	/** What the reader does next. */
-	next: string;
 	variant: "destructive" | "warning";
-	/** Re-words the caller's "We could not load X" title when the failure is not a load failure. */
-	retitle?: (what: string) => string;
 	/** The status already says everything, so the server's wording is not shown. */
 	ignoreDetail?: boolean;
 }
 
-function classifyError(status: number | undefined): ErrorClass {
-	if (status == null) {
-		return {
-			icon: <AlertCircleIcon />,
-			next: "Check your connection, then try again.",
-			variant: "destructive",
-		};
-	}
-	if (status === 401) {
-		return {
-			icon: <LockIcon />,
-			next: "Your session has expired. Sign in again to continue.",
-			variant: "warning",
-			ignoreDetail: true,
-		};
-	}
-	if (status === 403) {
-		return {
-			icon: <LockIcon />,
-			next: "Ask a workspace admin or instance admin for access.",
-			variant: "destructive",
-			retitle: (what) => `You do not have access to ${what}`,
-		};
-	}
-	if (status === 404) {
-		return {
-			icon: <SearchXIcon />,
-			next: "It may have been deleted or moved. Go back to continue.",
-			variant: "destructive",
-			retitle: (what) => `We could not find ${what}`,
-		};
-	}
-	if (status === 409) {
-		return {
-			icon: <InfoIcon />,
-			next: "Something else changed this first. Reload the page to see the current state.",
-			variant: "warning",
-		};
-	}
-	if (status === 429) {
-		return {
-			icon: <InfoIcon />,
-			cause: "Too many requests.",
-			next: "Wait a moment, then try again.",
-			variant: "warning",
-		};
-	}
-	if (status >= 500) {
-		return {
-			icon: <AlertCircleIcon />,
-			cause: "The server had a problem.",
-			next: "Try again in a moment.",
-			variant: "destructive",
-		};
-	}
-	return {
-		icon: <AlertCircleIcon />,
-		cause: "The request was not accepted.",
-		next: "Reload the page and try again.",
-		variant: "destructive",
-	};
+const LOOK = {
+	"no-answer": { icon: <AlertCircleIcon />, variant: "destructive" },
+	"signed-out": { icon: <LockIcon />, variant: "warning", ignoreDetail: true },
+	"no-access": { icon: <LockIcon />, variant: "destructive" },
+	"not-found": { icon: <SearchXIcon />, variant: "destructive" },
+	conflict: { icon: <InfoIcon />, variant: "warning" },
+	"rate-limited": { icon: <InfoIcon />, variant: "warning" },
+	server: { icon: <AlertCircleIcon />, variant: "destructive" },
+	rejected: { icon: <AlertCircleIcon />, variant: "destructive" },
+} satisfies Record<ProblemKind, ErrorLook>;
+
+function classifyError(status: number | undefined): ErrorLook & ProblemCopy {
+	const kind = problemKindOf(status);
+	return { ...LOOK[kind], ...PROBLEM_COPY[kind] };
 }
 
 /** Whether the error guidance offers a repeat of the failed read: the client retries by the same answer. */

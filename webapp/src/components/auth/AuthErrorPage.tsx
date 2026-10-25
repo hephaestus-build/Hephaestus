@@ -5,6 +5,12 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
 import { hasText } from "@/lib/text";
 
+const ALREADY_CONNECTED = {
+	title: "Account already connected",
+	description:
+		"That provider identity is already connected to another account. Sign in with the original account instead.",
+};
+
 /**
  * PII-free copy keyed by the server's auth-failure codes. A `Map` rather than an object literal, so
  * a code such as `toString` or `__proto__` cannot reach an inherited value.
@@ -32,22 +38,8 @@ const ERROR_COPY = new Map<string, { title: string; description: string }>([
 			description: "We could not reach the identity provider. Wait a moment, then try again.",
 		},
 	],
-	[
-		"already_linked",
-		{
-			title: "Account already connected",
-			description:
-				"That provider identity is already connected to another account. Sign in with the original account instead.",
-		},
-	],
-	[
-		"identity_already_linked",
-		{
-			title: "Account already connected",
-			description:
-				"That provider identity is already connected to another account. Sign in with the original account instead.",
-		},
-	],
+	["already_linked", ALREADY_CONNECTED],
+	["identity_already_linked", ALREADY_CONNECTED],
 	[
 		"link_requires_auth",
 		{

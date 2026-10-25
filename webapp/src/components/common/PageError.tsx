@@ -1,15 +1,9 @@
 import { Link } from "@tanstack/react-router";
 import { AlertCircleIcon, LockIcon, SearchXIcon } from "lucide-react";
 
+import { EmptyState } from "@/components/common/EmptyState";
 import { Button, buttonVariants } from "@/components/ui/button";
-import {
-	Empty,
-	EmptyContent,
-	EmptyDescription,
-	EmptyHeader,
-	EmptyMedia,
-	EmptyTitle,
-} from "@/components/ui/empty";
+import { PROBLEM_COPY } from "@/lib/problem-detail";
 
 /** Why the page cannot be shown. Only a failed load offers a retry, and only where one can help. */
 export type PageErrorProps =
@@ -17,49 +11,55 @@ export type PageErrorProps =
 	| { cause: "no-access" }
 	| { cause: "failed"; onRetry?: () => void };
 
-const COPY = {
-	"not-found": {
-		icon: <SearchXIcon />,
-		title: "We could not find this page",
-		description: "It may have been moved or deleted, or you may not have access to it.",
-	},
-	"no-access": {
-		icon: <LockIcon />,
-		title: "You do not have access to this page",
-		description: "Ask a workspace admin or instance admin for access.",
-	},
-	failed: {
-		icon: <AlertCircleIcon />,
-		title: "We could not load this page",
-		description: "Try again. If it keeps failing, contact your instance operator.",
-	},
-} as const;
+const NOT_FOUND = PROBLEM_COPY["not-found"];
+const NO_ACCESS = PROBLEM_COPY["no-access"];
 
-/** A failure that a retry cannot fix, such as a refused request, sends the reader on instead. */
-const FAILED_FOR_GOOD =
-	"Go to the home page to continue. If this keeps happening, contact your instance operator.";
+function copyOf(props: PageErrorProps) {
+	switch (props.cause) {
+		case "not-found": {
+			return {
+				icon: <SearchXIcon />,
+				title: NOT_FOUND.retitle("this page"),
+				description: NOT_FOUND.next,
+			};
+		}
+		case "no-access": {
+			return {
+				icon: <LockIcon />,
+				title: NO_ACCESS.retitle("this page"),
+				description: NO_ACCESS.next,
+			};
+		}
+		case "failed": {
+			return {
+				icon: <AlertCircleIcon />,
+				title: "We could not load this page",
+				// A failure that a retry cannot fix, such as a refused request, sends the reader on instead.
+				description:
+					props.onRetry === undefined
+						? "Go to the home page to continue. If it keeps failing, contact your instance operator."
+						: "Try again. If it keeps failing, contact your instance operator.",
+			};
+		}
+	}
+}
 
 /** Fills the page in place of its content: the page's own title is its heading. */
 export function PageError(props: PageErrorProps) {
-	const { icon, title, description } = COPY[props.cause];
 	const onRetry = props.cause === "failed" ? props.onRetry : undefined;
 	return (
-		<Empty>
-			<EmptyHeader>
-				<EmptyMedia variant="icon">{icon}</EmptyMedia>
-				<EmptyTitle role="heading" aria-level={1}>
-					{title}
-				</EmptyTitle>
-				<EmptyDescription>
-					{props.cause === "failed" && onRetry === undefined ? FAILED_FOR_GOOD : description}
-				</EmptyDescription>
-			</EmptyHeader>
-			<EmptyContent className="flex-row flex-wrap justify-center">
-				{onRetry && <Button onClick={onRetry}>Retry</Button>}
-				<Link to="/" className={buttonVariants({ variant: onRetry ? "outline" : "default" })}>
-					Go to home page
-				</Link>
-			</EmptyContent>
-		</Empty>
+		<EmptyState
+			variant="plain"
+			headingLevel={1}
+			{...copyOf(props)}
+			action={
+				<div className="flex flex-wrap justify-center gap-2">
+					{onRetry && <Button onClick={onRetry}>Retry</Button>}
+					<Link to="/" className={buttonVariants({ variant: onRetry ? "outline" : "default" })}>
+						Go to the home page
+					</Link>
+				</div>
+			}
+		/>
 	);
 }

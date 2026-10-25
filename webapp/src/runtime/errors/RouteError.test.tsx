@@ -93,8 +93,8 @@ it.each([
 	const alert = await screen.findByRole("alert");
 	expect(within(alert).getByRole("heading", { level: 1 }).textContent).toBe(title);
 	expect(within(alert).queryByRole("button", { name: "Retry" })).toBeNull();
-	expect(within(alert).getByRole("link", { name: "Go to home page" }).getAttribute("href")).toBe(
-		"/",
-	);
+	expect(
+		within(alert).getByRole("link", { name: "Go to the home page" }).getAttribute("href"),
+	).toBe("/");
 	expect(document.body.textContent).not.toContain("private detail");
 });

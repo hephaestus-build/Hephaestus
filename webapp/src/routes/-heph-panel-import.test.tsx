@@ -17,7 +17,7 @@ vi.mock("./-GlobalHephPanel", () => {
 	throw importFailure;
 });
 
-it("keeps the main route available when the optional Heph panel import rejects", async () => {
+it("keeps the main route available and offers a reload when the Heph panel import rejects", async () => {
 	server.use(
 		http.get("*/workspaces", () => HttpResponse.json([])),
 		http.get("*/user/features", () => HttpResponse.json({})),
@@ -54,6 +54,9 @@ it("keeps the main route available when the optional Heph panel import rejects",
 				.getAttribute("href"),
 		).toBe("/workspaces/new");
 		expect(screen.queryByText("We could not load this page")).toBeNull();
+		// The browser keeps a failed import, so the message offers a page load, not a retry.
+		expect(screen.getByText("We could not show Heph").closest('[role="alert"]')).not.toBeNull();
+		screen.getByRole("button", { name: "Reload page" });
 	} finally {
 		// This test creates its own QueryClient. Unmount observers before cancelling requests,
 		// then release cache timers while React's environment is still available.

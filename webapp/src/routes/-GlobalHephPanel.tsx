@@ -56,7 +56,7 @@ export default function GlobalHephPanel() {
 
 /** Inside the gate above, so the message shows only where Heph was going to show. */
 function HephPanelFailed({ reset }: ErrorComponentProps) {
-	return <HephUnavailable onRetry={reset} />;
+	return <HephUnavailable recovery="retry" onRecover={reset} />;
 }
 
 function titleOf(meta: unknown): string | undefined {

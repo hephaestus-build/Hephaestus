@@ -46,6 +46,7 @@ import { RouteAnnouncer } from "@/components/layout/RouteAnnouncer";
 import { AppSidebar, type SidebarContext } from "@/components/layout/sidebar/AppSidebar";
 import { SkipToContent } from "@/components/layout/SkipToContent";
 import { StandardPageSurface } from "@/components/layout/StandardPageSurface";
+import { HephUnavailable } from "@/components/mentor/HephUnavailable";
 import type { FeedbackKind } from "@/components/product-feedback/feedback-copy";
 import {
 	PAGE_PATH_MAX_LENGTH,
@@ -197,12 +198,12 @@ function RootLayout() {
 }
 
 /**
- * The page works without Heph, so a panel whose code did not load renders nothing until the next
- * load. `React.lazy` keeps the failed import, so a retry here could not help. A panel that fails
- * after it loaded shows its own message instead, from `-GlobalHephPanel.tsx`.
+ * The panel's code did not load, often a file replaced by a deploy. `React.lazy` keeps that failure,
+ * so only a page load can try again. A panel that fails after it loaded has its own boundary, in
+ * `-GlobalHephPanel.tsx`.
  */
 function HephPanelUnavailable() {
-	return null;
+	return <HephUnavailable recovery="reload" onRecover={() => window.location.reload()} />;
 }
 
 /** The announcer sits above the layout, whose auth and app branches each remount what they hold. */

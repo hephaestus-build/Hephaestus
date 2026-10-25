@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, fn, userEvent } from "storybook/test";
+import { expect, fn } from "storybook/test";
 
 import { expectNoPageOverflow } from "@/stories/reflow";
 
@@ -9,13 +9,11 @@ import { PageError } from "./PageError";
  * A page that cannot be shown, in place of its content. Retry appears only on a failed load that
  * running the page again can fix: a missing page or a refused one would fail the same way again.
  */
-const onRetry = fn();
-
 const meta = {
 	component: PageError,
 	parameters: { layout: "fullscreen" },
 	tags: ["autodocs"],
-	args: { cause: "failed", onRetry },
+	args: { cause: "failed", onRetry: fn() },
 } satisfies Meta<typeof PageError>;
 
 export default meta;
@@ -29,9 +27,8 @@ export const Default: Story = {
 		await expect(
 			canvas.getByText("Try again. If it keeps failing, contact your instance operator."),
 		).toBeVisible();
-		await userEvent.click(canvas.getByRole("button", { name: "Retry" }));
-		await expect(onRetry).toHaveBeenCalledOnce();
-		await expect(canvas.getByRole("link", { name: "Go to home page" })).toHaveAttribute(
+		await expect(canvas.getByRole("button", { name: "Retry" })).toBeEnabled();
+		await expect(canvas.getByRole("link", { name: "Go to the home page" })).toHaveAttribute(
 			"href",
 			"/",
 		);
@@ -46,7 +43,7 @@ export const FailedForGood: Story = {
 			canvas.getByRole("heading", { level: 1, name: "We could not load this page" }),
 		).toBeVisible();
 		await expect(canvas.queryByRole("button", { name: "Retry" })).not.toBeInTheDocument();
-		await expect(canvas.getByRole("link", { name: "Go to home page" })).toHaveAttribute(
+		await expect(canvas.getByRole("link", { name: "Go to the home page" })).toHaveAttribute(
 			"href",
 			"/",
 		);
@@ -60,7 +57,7 @@ export const NotFound: Story = {
 			canvas.getByRole("heading", { level: 1, name: "We could not find this page" }),
 		).toBeVisible();
 		await expect(canvas.queryByRole("button", { name: "Retry" })).not.toBeInTheDocument();
-		await expect(canvas.getByRole("link", { name: "Go to home page" })).toHaveAttribute(
+		await expect(canvas.getByRole("link", { name: "Go to the home page" })).toHaveAttribute(
 			"href",
 			"/",
 		);

@@ -45,7 +45,7 @@ export interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
 	/** The verified target identity remains even while its metadata is pending or refused. */
 	administrationWorkspaceSlug?: string;
 	administrationWorkspace?: Pick<Workspace, "displayName" | "providerType">;
-	/** Why the administration workspace's details did not load, and how to read them again. */
+	/** Why the administration workspace's details did not load, and how to read them again. Read only without those details. */
 	administrationWorkspaceError?: { error: unknown; onRetry: () => void };
 	onWorkspaceChange?: (workspace: WorkspaceListItem) => void;
 	onAddWorkspace?: () => void;
@@ -107,7 +107,20 @@ export function AppSidebar({
 				scmProviderType={administrationWorkspace.providerType === "GITLAB" ? "GITLAB" : "GITHUB"}
 			/>
 		);
-	} else if (workspacesLoading) {
+	} else if (!workspacesLoading && administrationWorkspaceError !== undefined) {
+		sidebarContent = (
+			<SidebarGroup>
+				<div className="group-data-[collapsible=icon]:hidden">
+					<QueryErrorAlert
+						title="We could not load the workspace details"
+						error={administrationWorkspaceError.error}
+						onRetry={administrationWorkspaceError.onRetry}
+					/>
+				</div>
+			</SidebarGroup>
+		);
+	} else if (workspacesLoading || administrationWorkspaceSlug !== undefined) {
+		// Also an administration target whose details have neither arrived nor failed: still loading.
 		sidebarContent = (
 			<SidebarGroup>
 				<SidebarMenu>
@@ -117,18 +130,6 @@ export function AppSidebar({
 						</SidebarMenuItem>
 					))}
 				</SidebarMenu>
-			</SidebarGroup>
-		);
-	} else if (administrationWorkspaceSlug !== undefined) {
-		sidebarContent = (
-			<SidebarGroup>
-				<div className="group-data-[collapsible=icon]:hidden">
-					<QueryErrorAlert
-						title="We could not load the workspace details"
-						error={administrationWorkspaceError?.error}
-						onRetry={administrationWorkspaceError?.onRetry}
-					/>
-				</div>
 			</SidebarGroup>
 		);
 	} else if (activeWorkspace) {
