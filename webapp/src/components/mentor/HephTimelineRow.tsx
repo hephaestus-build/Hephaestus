@@ -52,10 +52,9 @@ function ThreadSummary({
 	return (
 		<Button
 			variant="link"
-			size="xs"
-			// On a line of its own, so 24 px tall (WCAG 2.5.8); the negative margin lines its words up
-			// with the message's.
-			className="-ml-2 self-start"
+			size="inline"
+			// On a line of its own, so its target is 24 px tall (WCAG 2.5.8).
+			className="min-h-6 self-start"
 			aria-label={`${shown} (${subject})`}
 			aria-expanded={open}
 			aria-controls={open ? panelId : undefined}

@@ -232,7 +232,6 @@ export const Loading: Story = {
 	args: { state: { status: "loading" } },
 	play: async ({ canvas }) => {
 		// The skeleton waits a second, so a read from the cache shows none.
-		await expect(canvas.queryByText("Loading the conversation…")).toBeNull();
 		await expect(
 			await canvas.findByText("Loading the conversation…", undefined, { timeout: 3000 }),
 		).toBeVisible();

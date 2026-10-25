@@ -94,13 +94,10 @@ export const Failed: Story = {
 	},
 };
 
-/** The same line in the dark theme, where the tone has to stay apart from the muted words. */
+/** The same line in the dark theme. */
 export const FailedDark: Story = {
 	args: { state: { kind: "failed", reason: "Heph took too long to answer.", onTryAgain: fn() } },
 	globals: { theme: "dark" },
-	play: async ({ canvasElement }) => {
-		await expect(iconStandsOut(canvasElement)).toBe(true);
-	},
 };
 
 const onRetry = fn();

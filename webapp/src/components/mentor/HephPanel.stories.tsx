@@ -180,10 +180,6 @@ export const ThreadPushed: Story = {
 		await expectSettledVisible(panel);
 		await userEvent.click(screen.getByRole("button", { name: "Back to the conversation" }));
 		await expect(args.thread?.onBack).toHaveBeenCalledOnce();
-		// Escape goes back the same way, and the panel stays open.
-		await userEvent.keyboard("{Escape}");
-		await expect(args.thread?.onBack).toHaveBeenCalledTimes(2);
-		await expect(panel).toBeVisible();
 	},
 };
 

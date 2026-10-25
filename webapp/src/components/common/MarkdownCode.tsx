@@ -73,8 +73,7 @@ export function MarkdownCode({
 			startLine={startLine}
 			tabIndex={0}
 		>
-			{/* Copy only: every block here is a snippet in a message, a practice or a page, never a file
-			to keep, so a Download beside Copy is a second way to do the same thing. */}
+			{/* Copy only: a block here is a snippet to paste, not a file to save. */}
 			<CodeBlockCopyButton />
 		</CodeBlock>
 	);

@@ -31,12 +31,16 @@ export interface HephComposerProps {
 	draftKey?: string;
 }
 
-/** A touch screen: its keyboard has no Shift, so Return there has to start a new line. */
+/**
+ * A touch screen, as its main pointer tells: a phone keyboard has no Shift, so Enter there has to
+ * start a new line. A tablet with a hardware keyboard may report this too, so Cmd or Ctrl with
+ * Enter still sends.
+ */
 const TOUCH = "(pointer: coarse)";
 
 /**
  * Where the developer writes to Heph. Enter sends and Shift+Enter starts a new line. On a touch
- * screen, Return starts a new line and Send sends, as in a phone's messaging apps. An empty field
+ * screen, Enter starts a new line, and Send or Cmd or Ctrl with Enter sends. An empty field
  * is one line tall and grows with what is written. The row below it holds the context and the
  * controls; where they do not fit side by side, as a long page name with Stop in a phone's panel,
  * the controls wrap below the context, and the context's name shortens before it leaves the row.
@@ -59,9 +63,7 @@ export function HephComposer({
 		}
 	};
 	const canSend = hasText(input.trim());
-	// Read through a subscription rather than by each render, and followed as it changes, such as
-	// when a tablet gets a trackpad.
-	const touch = useMediaQuery(TOUCH, { initializeWithValue: true });
+	const touch = useMediaQuery(TOUCH);
 
 	const handleSubmit = (event: SubmitEvent<HTMLFormElement>) => {
 		event.preventDefault();
@@ -89,12 +91,8 @@ export function HephComposer({
 					onChange={(event) => setInput(event.target.value)}
 					enterKeyHint={touch ? "enter" : "send"}
 					onKeyDown={(event) => {
-						if (
-							event.key === "Enter" &&
-							!event.shiftKey &&
-							!event.nativeEvent.isComposing &&
-							!touch
-						) {
+						const sends = touch ? event.metaKey || event.ctrlKey : !event.shiftKey;
+						if (event.key === "Enter" && sends && !event.nativeEvent.isComposing) {
 							event.preventDefault();
 							event.currentTarget.form?.requestSubmit();
 						}

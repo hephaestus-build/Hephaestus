@@ -62,8 +62,7 @@ function NoMessagesYet({ name }: { name: string }) {
 			<EmptyHeader>
 				<EmptyTitle>No messages yet</EmptyTitle>
 				<EmptyDescription>
-					When {name} asks Heph something, here or in Slack, the question and Heph’s answer appear
-					here.
+					Questions {name} asks Heph, here or in Slack, show up with Heph’s answers.
 				</EmptyDescription>
 			</EmptyHeader>
 		</Empty>

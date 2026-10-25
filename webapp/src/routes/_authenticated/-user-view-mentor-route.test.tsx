@@ -77,9 +77,7 @@ it("says that a viewed member with no conversation has no messages, and whose th
 
 	renderRouteAt("/w/engineering/mentor", queryClient);
 	await screen.findByText("No messages yet", {}, ROUTE_RENDER_WAIT);
-	screen.getByText(
-		"When Alex asks Heph something, here or in Slack, the question and Heph’s answer appear here.",
-	);
+	screen.getByText("Questions Alex asks Heph, here or in Slack, show up with Heph’s answers.");
 	// The greeting invites the reader to ask, which a view cannot.
 	expect(screen.queryByRole("textbox")).toBeNull();
 });

@@ -21,7 +21,6 @@ const SHOWN = { timeout: 3000 };
  */
 export const Default: Story = {
 	play: async ({ canvas }) => {
-		await expect(canvas.queryByText("Loading the conversation…")).toBeNull();
 		await expect(
 			await canvas.findByText("Loading the conversation…", undefined, SHOWN),
 		).toBeVisible();

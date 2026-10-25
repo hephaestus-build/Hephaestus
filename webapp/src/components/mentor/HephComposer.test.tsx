@@ -38,9 +38,29 @@ it.each([
 		expect(onSend.mock.calls.map(([text]) => text)).toStrictEqual(sentOnEnter);
 		expect(field).toHaveProperty("value", value);
 
-		// Send sends on any pointer: on a touch screen it is the only way to.
+		// Send sends on any pointer.
 		await user.type(field, "Second line");
 		await user.click(screen.getByRole("button", { name: "Send message" }));
 		expect(onSend).toHaveBeenLastCalledWith(sentOnSend);
+	},
+);
+
+it.each(["Meta", "Control"])(
+	"with a coarse pointer, %s with Enter still sends, for a tablet with a hardware keyboard",
+	async (modifier) => {
+		const media = window.matchMedia.bind(window);
+		using _pointerMedia = vi
+			.spyOn(window, "matchMedia")
+			.mockImplementation((query) =>
+				Object.assign(media(query), { matches: query === "(pointer: coarse)" }),
+			);
+		const user = userEvent.setup();
+		const onSend = vi.fn<(text: string) => void>();
+		render(<HephComposer label="Message Heph" placeholder="Message Heph" onSend={onSend} />);
+		const field = screen.getByRole("textbox", { name: "Message Heph" });
+
+		await user.type(field, `From the keyboard{${modifier}>}{Enter}{/${modifier}}`);
+		expect(onSend).toHaveBeenCalledWith("From the keyboard");
+		expect(field).toHaveProperty("value", "");
 	},
 );

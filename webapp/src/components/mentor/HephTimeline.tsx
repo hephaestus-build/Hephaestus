@@ -130,8 +130,9 @@ const JUMP_READ_LIMIT = 250;
 
 /**
  * Above the oldest loaded message: loads the older page once that message comes into view. The
- * button serves a keyboard and a failed load. Each button sits on the separator's line, not inside
- * a sentence, so it is 24 px tall (WCAG 2.5.8).
+ * button serves a keyboard and a failed load. Show earlier messages stands alone on the separator's
+ * line, so it is 24 px tall (WCAG 2.5.8). Retry follows a sentence, where the inline exception
+ * would allow less; it takes the same size, so the recovery actions in Heph read as one kind.
  */
 function EarlierMessagesControl({
 	earlier,
