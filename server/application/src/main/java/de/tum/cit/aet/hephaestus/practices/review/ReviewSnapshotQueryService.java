@@ -89,14 +89,10 @@ public class ReviewSnapshotQueryService implements ReviewSnapshotQuery {
         if (reviewIds.isEmpty()) return Map.of();
         var found = reviews.findByWorkspaceIdAndIdIn(workspaceId, reviewIds);
         // find finds a review only while its work is active.
-        var active = itemRows
-                .items(
+        var active = items.findAll(
                         workspaceId,
                         found.stream().map(Review::getItemId).distinct().toList())
-                .stream()
-                .filter(row -> row.getRemovedAt() == null)
-                .map(ProductItemRepository.ItemRow::getId)
-                .collect(Collectors.toSet());
+                .keySet();
         var shown = found.stream()
                 .filter(review -> active.contains(review.getItemId()))
                 .map(Review::getId)

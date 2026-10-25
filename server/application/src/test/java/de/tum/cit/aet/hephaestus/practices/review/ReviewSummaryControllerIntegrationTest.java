@@ -2,6 +2,9 @@ package de.tum.cit.aet.hephaestus.practices.review;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import de.tum.cit.aet.hephaestus.integration.core.item.Item;
+import de.tum.cit.aet.hephaestus.integration.core.item.ItemRepository;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
 import de.tum.cit.aet.hephaestus.practices.DefinitionTestFixtures;
 import de.tum.cit.aet.hephaestus.practices.PracticeVersionService;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
@@ -9,11 +12,17 @@ import de.tum.cit.aet.hephaestus.practices.model.Result;
 import de.tum.cit.aet.hephaestus.practices.result.ResultMarkService;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewIntegrationData.Scenario;
 import de.tum.cit.aet.hephaestus.practices.review.model.ReviewPractice;
+import de.tum.cit.aet.hephaestus.practices.scan.ScanReportTestData;
+import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDestination;
+import de.tum.cit.aet.hephaestus.practices.spi.FeedbackState;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultMarkKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewStatus;
 import de.tum.cit.aet.hephaestus.practices.trace.ItemTraceQueryService;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.SqlReadMeasurement;
+import de.tum.cit.aet.hephaestus.workspace.PracticeModelTestFixtures;
+import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -58,6 +67,15 @@ class ReviewSummaryControllerIntegrationTest extends BaseIntegrationTest {
     @Autowired
     JdbcClient jdbc;
 
+    @Autowired
+    ScanReportTestData scans;
+
+    @Autowired
+    PracticeModelTestFixtures fixtures;
+
+    @Autowired
+    ItemRepository items;
+
     Scenario scenario;
 
     long scenarioAccountId;
@@ -82,9 +100,14 @@ class ReviewSummaryControllerIntegrationTest extends BaseIntegrationTest {
 
     @Test
     void shouldReadAPageOfReviewsAndTheirWorksTraceInAFixedNumberOfStatementsWhateverTheirPracticesAndRuns() {
+        // The scan scenario's practice also scans files, so the page can hold a scan beside the reviews of the work.
+        var scanned = scans.scenario();
+        scenario = scanned.owner();
+        scenarioAccountId = Objects.requireNonNull(scenario.account().getId());
         var alongside = List.of(practice(), practice());
         List<Result> recorded = new ArrayList<>();
         Map<UUID, UUID> jobOfReview = new HashMap<>();
+        Map<UUID, UUID> eventOfReview = new HashMap<>();
         IntConsumer reviews = count -> {
             for (int review = 0; review < count; review++) {
                 var at = Instant.now();
@@ -95,6 +118,9 @@ class ReviewSummaryControllerIntegrationTest extends BaseIntegrationTest {
                 // The first reviews pin one practice alongside, the later ones two.
                 pinAlongside(result, recorded.size() < 2 ? alongside.subList(0, 1) : alongside);
                 jobOfReview.put(result.getReviewId(), scriptRun(result));
+                // Every other review starts from an event of the work; the others keep their requester.
+                if (recorded.size() % 2 == 0) eventOfReview.put(result.getReviewId(), startedByEvent(result));
+                fixtures.feedback(result, FeedbackDestination.ON_WORK, FeedbackState.DELIVERED, "Recorded feedback");
                 recorded.add(result);
             }
         };
@@ -102,15 +128,28 @@ class ReviewSummaryControllerIntegrationTest extends BaseIntegrationTest {
         long itemId = Objects.requireNonNull(scenario.item().getId());
         var everything = new ReviewFilterParams(null, null, null, null, null, null, null, null, null, null, null);
 
+        var scan = scans.scan(scanned, ReviewStatus.COMPLETE, Instant.now());
+        scans.result(scanned, scan);
         reviews.accept(2);
         var fewList = reads.measure(() -> summaries.list(ws, everything, PageRequest.of(0, 100)));
         var fewTrace = reads.measure(() -> traces.trace(ws, itemId));
         reviews.accept(8);
+        var onOtherFile = otherFile(scanned);
+        var laterScan = scans.scan(onOtherFile, ReviewStatus.COMPLETE, Instant.now());
+        scans.result(onOtherFile, laterScan);
         var manyList = reads.measure(() -> summaries.list(ws, everything, PageRequest.of(0, 100)));
         var manyTrace = reads.measure(() -> traces.trace(ws, itemId));
 
-        assertThat(fewList.value().getContent()).hasSize(2);
-        assertThat(manyList.value().getContent()).hasSize(10);
+        assertThat(fewList.value().getContent()).hasSize(3);
+        assertThat(manyList.value().getContent()).hasSize(12);
+        for (var eachScan : List.of(scan, laterScan)) {
+            var scanSummary = manyList.value().getContent().stream()
+                    .filter(s -> s.id().equals(eachScan.getId()))
+                    .findFirst()
+                    .orElseThrow();
+            assertThat(scanSummary.results().notMet()).isOne();
+            assertThat(scanSummary.jobCount()).isOne();
+        }
         for (int review = 0; review < recorded.size(); review++) {
             var result = recorded.get(review);
             var summary = manyList.value().getContent().stream()
@@ -122,11 +161,23 @@ class ReviewSummaryControllerIntegrationTest extends BaseIntegrationTest {
             assertThat(summary.results().met()).isEqualTo(met ? 1 : 0);
             assertThat(summary.results().notMet()).isEqualTo(met ? 0 : 1);
             assertThat(summary.jobCount()).isEqualTo(1);
+            assertThat(summary.feedback().delivered()).isOne();
+            var event = eventOfReview.get(result.getReviewId());
+            if (event == null) {
+                assertThat(summary.startedBy()).isNull();
+                assertThat(Objects.requireNonNull(summary.requestedBy()).id())
+                        .isEqualTo(Long.toString(scenarioAccountId));
+            } else {
+                assertThat(Objects.requireNonNull(summary.startedBy()).id()).isEqualTo(event);
+                assertThat(summary.requestedBy()).isNull();
+            }
             var reviewed = summary.practices().stream()
                     .filter(practice ->
                             practice.practiceSlug().equals(scenario.practice().getSlug()))
                     .findFirst()
                     .orElseThrow();
+            assertThat(reviewed.itemCounts().listed()).isOne();
+            assertThat(reviewed.itemCounts().reviewed()).isOne();
             var script = Objects.requireNonNull(reviewed.script());
             assertThat(script.jobId()).isEqualTo(jobOfReview.get(result.getReviewId()));
             assertThat(script.models()).hasSize(1);
@@ -163,6 +214,38 @@ class ReviewSummaryControllerIntegrationTest extends BaseIntegrationTest {
                 .captureDecision(first.getCaptureDecision())
                 .method(first.getMethod())
                 .build()));
+    }
+
+    /** The scan scenario on another file of its repository, so a second scan holds a member of its own. */
+    private ScanReportTestData.Scenario otherFile(ScanReportTestData.Scenario scanned) {
+        var file = new Item();
+        file.setWorkspaceId(scanned.repository().getWorkspaceId());
+        file.setKind(new ItemKind("scm.file"));
+        file.setParentId(scanned.repository().getId());
+        file.setPath("src/Other.java");
+        file.setCreatedAt(Instant.now().minusSeconds(7200));
+        items.saveAndFlush(file);
+        return new ScanReportTestData.Scenario(scanned.owner(), scanned.repository(), file);
+    }
+
+    /** The result's review starts from an opened event of its work instead of a request. */
+    private UUID startedByEvent(Result result) {
+        var event = UUID.randomUUID();
+        jdbc.sql("""
+            INSERT INTO item_event(id,workspace_id,item_id,name,item_version,occurred_at,found_by,state,decided_at)
+            VALUES(:id,:ws,:item,'scm.pull_request.opened',:version,:at,'WEBHOOK','STARTED',:at)
+            """)
+                .param("id", event)
+                .param("ws", result.getWorkspaceId())
+                .param("item", result.getItemId())
+                .param("version", result.getItemVersion())
+                .param("at", Timestamp.from(result.getRecordedAt()))
+                .update();
+        jdbc.sql("UPDATE review SET origin='EVENT',requested_by_id=NULL,event_id=:event WHERE id=:review")
+                .param("event", event)
+                .param("review", result.getReviewId())
+                .update();
+        return event;
     }
 
     /** A finished job of the result's review that ran the reviewed practice's script and called one model. */

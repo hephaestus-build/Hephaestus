@@ -117,8 +117,8 @@ public class ReviewSummaryQueryService {
     }
 
     /**
-     * Each review's summary, keyed by review id, read in a fixed number of queries however many reviews and practices
-     * the page holds.
+     * Each review's summary, keyed by review id, read in a fixed number of statements per integration however many
+     * reviews and practices the page holds.
      */
     public Map<UUID, ReviewSummaryDTO> summaries(long ws, List<Review> page) {
         if (page.isEmpty()) return Map.of();
@@ -187,8 +187,15 @@ public class ReviewSummaryQueryService {
             assignmentsByReview =
                     assignments.findByWorkspaceIdAndReviewIdInOrderByReviewIdAscPracticeIdAsc(ws, ids).stream()
                             .collect(Collectors.groupingBy(ReviewPractice::getReviewId));
-            practicesById = practices.findByWorkspaceId(ws).stream()
-                    .collect(Collectors.toMap(Practice::getId, Function.identity()));
+            var practiceIds = assignmentsByReview.values().stream()
+                    .flatMap(List::stream)
+                    .map(ReviewPractice::getPracticeId)
+                    .distinct()
+                    .toList();
+            practicesById = practiceIds.isEmpty()
+                    ? Map.of()
+                    : practices.findByWorkspaceIdAndIdIn(ws, practiceIds).stream()
+                            .collect(Collectors.toMap(Practice::getId, Function.identity()));
             var versionIds = assignmentsByReview.values().stream()
                     .flatMap(List::stream)
                     .map(ReviewPractice::getPracticeVersionId)
