@@ -137,6 +137,8 @@ void test("an install keeps hooks disabled when it drops an absolute dispatcher 
 void test("every worktree's install creates the dispatcher that its own hooks run through", () => {
 	const { repository, git } = clone();
 	git("add", "--all");
+	git("config", "user.name", "Hooks Test");
+	git("config", "user.email", "test@example.invalid");
 	git("-c", "commit.gpgsign=false", "commit", "--quiet", "--message", "hooks");
 	installIn(repository);
 	const worktree = path.join(mkdtempSync(path.join(tmpdir(), "enable-hooks-worktree-")), "second");
