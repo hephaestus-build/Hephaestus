@@ -167,7 +167,6 @@ public class ReviewJobExecutor {
     private final Phaser inFlight = new Phaser(1); // 1 = the executor itself; deregistered on stop
     // The attempt each locally running job runs, so a later attempt of the same job is never mistaken for it.
     private final Map<UUID, Integer> localRunningJobs = new ConcurrentHashMap<>();
-    // Lost attempts whose sandbox stop was asked for and has not returned yet.
 
     private final Optional<WorkerCapacityState> capacityState;
     // Worker identity fences terminal writes.

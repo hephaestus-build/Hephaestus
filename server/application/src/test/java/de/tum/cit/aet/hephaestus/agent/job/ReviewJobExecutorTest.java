@@ -578,6 +578,20 @@ class ReviewJobExecutorTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldKeepTheSandboxOfALaterAttemptThatStartedHereAfterTheLossWasFound() {
+        var job = configuredJob();
+        var executor = claimedOnWorker(job);
+        when(jobs.findRunningAttemptsOwnedBy(any(), eq("worker-1"))).thenReturn(List.of());
+        var lost = executor.lostAttemptsToStop();
+
+        job.setAttempt(3);
+        assertThat(executor.processJob(job.getId())).isEqualTo(ReviewJobExecutor.StartOutcome.STARTED);
+        lost.forEach(executor::stopLostAttempt);
+
+        verify(sandbox, never()).cancel(any());
+    }
+
+    @Test
     void shouldKeepTheSandboxWhileTheLedgerRunsTheSameAttemptOnThisWorker() {
         var job = configuredJob();
         var executor = claimedOnWorker(job);
