@@ -395,14 +395,13 @@ Dependabot's alerts. The [pinned action's dependencies](https://github.com/ossf/
 turns every component's group, name and version in `server/gradle/verification-metadata.xml` into a
 package, ignoring its artifact entries and whether Gradle selected that version.
 
-That file is a checksum allowlist, not a resolved dependency graph. Gradle can need an older
-version's POM or module descriptor while selecting a patched JAR. Metadata generation also retains
-previously trusted artifacts. For example, resolution reads Jackson 2.15.3 module descriptors and the Commons Lang 3.16.0 POM, although the lockfile selects patched versions.
-Their verification entries contain only `.module` or `.pom` artifacts, not JARs.
+That file is a checksum allowlist, not a resolved dependency graph.
+Gradle can read an older version's POM or module descriptor while it selects a patched JAR.
+Metadata generation also only adds entries. It keeps the entry of a version that no build downloads any more.
+OSV reports both kinds as dependencies.
 
-Removing their checksums to quiet OSV
-would break fresh dependency verification, not fix a dependency. Pruning obsolete JAR hashes alone
-would still leave these descriptor-only entries in OSV's inventory.
+[Updating Java dependencies](local-development.mdx#updating-java-dependencies) removes the entries that no build downloads.
+Do not remove an entry that a fresh build reads: dependency verification then fails.
 
 Reproduce the distinction for the Gradle sources from the repository root with the
 [OSV Scanner release used by the action](https://github.com/google/osv-scanner/releases/tag/v2.3.2):
@@ -436,9 +435,8 @@ other gates. The baseline records that reason. Its other exclusions have separat
 The [dependency vulnerability gate](#security-and-supply-chain-controls) and release image policy remain
 enforced.
 
-Restore the check when its input distinguishes verified descriptors and historical hashes
-from selected dependencies. Do not alter dependency submission or disable checksum verification to
-change its score.
+Restore the check when the OSV Scanner run above reports no advisory.
+Do not alter dependency submission or disable checksum verification to change its score.
 
 ## Environments
 

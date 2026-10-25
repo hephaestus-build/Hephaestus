@@ -514,6 +514,19 @@ flags, still without configuration caching and with another empty Gradle user ho
 downloads. Exercise changed generators, formatters, Liquibase or mutation tooling as well: their
 classpaths are separate from the application runtime. Restore your usual Gradle user home afterward.
 
+Gradle does not remove the verification entry of a version that no build downloads any more.
+OSV Scanner reports such an entry as a dependency — [Gradle dependency inventory](ci-cd.mdx#gradle-dependency-inventory-and-the-vulnerabilities-exclusion).
+After an update that replaces versions, remove those entries:
+
+1. Set `GRADLE_USER_HOME` to an empty temporary directory.
+2. Run `dependencies buildEnvironment :generated-clients:jar` and the tasks of the `Build what the server jobs restore` step in `.github/workflows/cache-gradle.yml`.
+   Use `--no-configuration-cache`.
+3. Delete each `<component>` that is not in `caches/modules-2/files-2.1` of that home.
+   Keep `org.gradle:github-dependency-graph-gradle-plugin`.
+   The dependency-graph workflows inject it through `gradle/actions`, so a local build does not download it.
+4. Run the verification run above.
+   A deletion trusts no new artifact, but the verification run fails if a build still needs the entry.
+
 For a Gradle wrapper update, also run the build with `--warning-mode all` and review plugin
 compatibility before accepting a new major. Do not suppress upstream deprecations to make the
 upgrade appear clean. A JDK-line change updates `.java-version` and Renovate's matching
