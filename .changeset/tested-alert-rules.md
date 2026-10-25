@@ -1,0 +1,5 @@
+---
+"hephaestus": minor
+---
+
+The release now includes Prometheus alert rules that you load as they are, in `deploy/observability/hephaestus-alerts.yml`, each with unit tests. Besides the earlier example alerts, they warn when PostgreSQL cannot archive its WAL, when no PostgreSQL backup completed in 30 hours, when the PostgreSQL or NATS JetStream volume or a node disk fills, when provider events stay undelivered on the broker, when an agent job waits more than an hour for a worker, when a worker's sandbox isolation probe fails, and when a certificate that cert-manager manages expires within a week. The server now reports a failing WAL archive in `database_wal_archive_failing`. Alerts that put data at risk have `severity: critical`, the others `warning`. The cluster alerts need kube-state-metrics, the kubelet metrics, node-exporter and cert-manager metrics, as the observability guide lists. If you copied the example rules from the guide, replace them with this file: the agent-job failure rule there read a metric name that does not exist, so it never fired.

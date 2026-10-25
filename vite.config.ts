@@ -61,9 +61,10 @@ const rootConfigSources = "'*.{json,jsonc,ts,code-workspace}' '!*/**'";
 const nestedConfigSources = "'{.changeset,.vscode,scripts,.vale}/*.{cjs,json}'";
 // The chart's plain JSON and YAML. Its templates are Go templates, not YAML; Helm rendering judges them.
 const chartConfigSources = "'deploy/chart/**/*.{json,yaml}' '!deploy/chart/**/templates/**'";
+const alertRuleSources = "'deploy/observability/*.yml'";
 // `as const` keeps the command a literal type, so `cached` can still read what it runs.
 const configFormatCommand = (mode: "--check" | "--write") =>
-	`vp fmt ${mode} ${rootConfigSources} && vp fmt ${mode} ${nestedConfigSources} && vp fmt ${mode} ${chartConfigSources}` as const;
+	`vp fmt ${mode} ${rootConfigSources} && vp fmt ${mode} ${nestedConfigSources} && vp fmt ${mode} ${chartConfigSources} && vp fmt ${mode} ${alertRuleSources}` as const;
 // Every tree the root config governs: `webapp/` and `docs/` carry their own configs and gates, and
 // `security/semgrep/` holds fixtures that are wrong on purpose.
 const oxlintTargets =
@@ -355,6 +356,10 @@ export default defineConfig({
 				`node --test --test-concurrency=${nodeTestConcurrency} scripts/*.test.ts scripts/api-generator/*.test.ts server/application/src/test/resources/integration/scm/sarif/*.test.ts`,
 			),
 
+			// The Prometheus alert rules that operators load: promtool's checks and unit tests, in Docker.
+			"gate:alerts": group(["test:alerts"]),
+			"test:alerts": run("node scripts/check-alert-rules.ts"),
+
 			// Load tests
 			"gate:load-format": cached(`vp fmt --check ${loadSources}`),
 			"gate:load-syntax": group(["test:load:syntax"]),
@@ -399,6 +404,7 @@ export default defineConfig({
 					...docsGates,
 					...loadGates,
 					"gate:load-syntax",
+					"gate:alerts",
 				],
 			}),
 			"ci:webapp:static": group([...webappGates, "gate:docs-tokens", "verification:webapp-tests"]),

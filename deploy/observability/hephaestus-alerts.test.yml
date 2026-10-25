@@ -1,0 +1,577 @@
+# promtool test rules: each alert fires on one set of series and stays quiet on another.
+rule_files:
+  - hephaestus-alerts.yml
+evaluation_interval: 1m
+
+tests:
+  - name: a target that cannot be scraped fires, a scraped one does not
+    interval: 1m
+    input_series:
+      - series: 'up{job="hephaestus",instance="server:9090",runtime_role="server"}'
+        values: "0x5"
+      - series: 'up{job="hephaestus",instance="worker:9090",runtime_role="worker"}'
+        values: "1x5"
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: HephaestusMetricsUnavailable
+        exp_alerts: []
+      - eval_time: 3m
+        alertname: HephaestusMetricsUnavailable
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: hephaestus
+              instance: server:9090
+              runtime_role: server
+            exp_annotations:
+              summary: A Hephaestus metrics target cannot be scraped
+
+  - name: a poison event fires, an unchanged poison count does not
+    interval: 1m
+    input_series:
+      - series: 'integration_consumer_poison_total{job="hephaestus",instance="server:9090",kind="github"}'
+        values: "0 0 1 1 1"
+      - series: 'integration_consumer_poison_total{job="hephaestus",instance="server:9090",kind="gitlab"}'
+        values: "2x4"
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: HephaestusConsumerPoison
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              kind: github
+            exp_annotations:
+              summary: An integration event reached the poison retry limit
+
+  - name: a stale or never refreshed poll age fires, a fresh one does not
+    interval: 1m
+    input_series:
+      - series: 'webhook_stream_poll_age_seconds{job="hephaestus",instance="webhook:9090",runtime_role="webhook",stream="github"}'
+        values: "200x5"
+      - series: 'webhook_stream_poll_age_seconds{job="hephaestus",instance="webhook:9090",runtime_role="webhook",stream="gitlab"}'
+        values: "NaN NaN NaN NaN NaN NaN"
+      - series: 'webhook_stream_poll_age_seconds{job="hephaestus",instance="webhook:9090",runtime_role="webhook",stream="slack"}'
+        values: "30x5"
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: HephaestusStreamPollStale
+        exp_alerts: []
+      - eval_time: 3m
+        alertname: HephaestusStreamPollStale
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: hephaestus
+              instance: webhook:9090
+              runtime_role: webhook
+              stream: github
+            exp_annotations:
+              summary: Webhook stream gauges are stale or have never been refreshed
+          - exp_labels:
+              severity: warning
+              job: hephaestus
+              instance: webhook:9090
+              runtime_role: webhook
+              stream: gitlab
+            exp_annotations:
+              summary: Webhook stream gauges are stale or have never been refreshed
+
+  - name: a receiver without poll age fires, a receiver with poll age does not
+    interval: 1m
+    input_series:
+      - series: 'up{job="hephaestus",instance="webhook-a:9090",runtime_role="webhook"}'
+        values: "1x10"
+      - series: 'up{job="hephaestus",instance="webhook-b:9090",runtime_role="webhook"}'
+        values: "1x10"
+      - series: 'webhook_stream_poll_age_seconds{job="hephaestus",instance="webhook-b:9090",runtime_role="webhook",stream="github"}'
+        values: "10x10"
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: HephaestusStreamPollMissing
+        exp_alerts: []
+      - eval_time: 6m
+        alertname: HephaestusStreamPollMissing
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: hephaestus
+              instance: webhook-a:9090
+              runtime_role: webhook
+            exp_annotations:
+              summary: A scraped webhook receiver exports no stream poll age
+
+  - name: a backlog above 50 for 15 minutes fires, a small or emptied backlog does not
+    interval: 1m
+    input_series:
+      - series: 'webhook_stream_consumer_pending{job="hephaestus",instance="webhook:9090",runtime_role="webhook",stream="github"}'
+        values: "60x20"
+      - series: 'webhook_stream_consumer_pending{job="hephaestus",instance="webhook:9090",runtime_role="webhook",stream="gitlab"}'
+        values: "60x5 0 60x14"
+      - series: 'webhook_stream_consumer_pending{job="hephaestus",instance="webhook:9090",runtime_role="webhook",stream="slack"}'
+        values: "40x20"
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: HephaestusStreamBacklog
+        exp_alerts: []
+      - eval_time: 16m
+        alertname: HephaestusStreamBacklog
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              stream: github
+            exp_annotations:
+              summary: More than 50 events of a stream stayed undelivered to the consumers for 15 minutes
+
+  - name: continued publish failures fire, successful publishes do not
+    interval: 1m
+    input_series:
+      - series: 'webhook_publish_total{job="hephaestus",instance="webhook:9090",outcome="failure"}'
+        values: "0+1x20"
+      - series: 'webhook_publish_total{job="hephaestus",instance="webhook:9090",outcome="success"}'
+        values: "0+50x20"
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: HephaestusWebhookPublishFailing
+        exp_alerts: []
+      - eval_time: 15m
+        alertname: HephaestusWebhookPublishFailing
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: The webhook receiver cannot store deliveries on the broker
+
+  - name: successful publishes alone do not fire
+    interval: 1m
+    input_series:
+      - series: 'webhook_publish_total{job="hephaestus",instance="webhook:9090",outcome="failure"}'
+        values: "4x20"
+      - series: 'webhook_publish_total{job="hephaestus",instance="webhook:9090",outcome="success"}'
+        values: "0+50x20"
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: HephaestusWebhookPublishFailing
+        exp_alerts: []
+
+  - name: unrecovered GitHub events fire, zero does not
+    interval: 1m
+    input_series:
+      - series: 'github_webhook_unrecovered{job="hephaestus",instance="server:9090"}'
+        values: "0 0 2"
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: HephaestusWebhookEventsUnrecovered
+        exp_alerts: []
+      - eval_time: 2m
+        alertname: HephaestusWebhookEventsUnrecovered
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: GitHub events failed every delivery attempt and were not received
+
+  - name: a crossed budget cap fires, an unchanged count does not
+    interval: 1m
+    input_series:
+      - series: 'llm_budget_exhausted_total{job="hephaestus",instance="worker:9090"}'
+        values: "0 0 0 1 1"
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: HephaestusBudgetExhausted
+        exp_alerts: []
+      - eval_time: 4m
+        alertname: HephaestusBudgetExhausted
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: A workspace crossed the instance-funded monthly budget cap
+
+  - name: refused work fires for its surface and cap, an unchanged count does not
+    interval: 1m
+    input_series:
+      - series: 'llm_budget_blocked_total{job="hephaestus",instance="server:9090",surface="review_job",cap="instance"}'
+        values: "0 0 1 1 1"
+      - series: 'llm_budget_blocked_total{job="hephaestus",instance="server:9090",surface="mentor"}'
+        values: "5x4"
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: HephaestusBudgetBlocked
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              surface: review_job
+              cap: instance
+            exp_annotations:
+              summary: LLM budget admission refused work
+
+  - name: three failed or timed-out jobs fire, cancellations and fewer failures do not
+    interval: 1m
+    input_series:
+      - series: 'agent_job_total{job="hephaestus",instance="worker-a:9090",outcome="failed"}'
+        values: "0 1 2 3 3"
+      - series: 'agent_job_total{job="hephaestus",instance="worker-b:9090",outcome="timed_out"}'
+        values: "0 0 1 1 1"
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: HephaestusAgentJobsFailing
+        exp_alerts: []
+      - eval_time: 4m
+        alertname: HephaestusAgentJobsFailing
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: At least three agent jobs failed or timed out in fifteen minutes
+
+  - name: cancelled jobs and two failures do not fire
+    interval: 1m
+    input_series:
+      - series: 'agent_job_total{job="hephaestus",instance="worker:9090",outcome="failed"}'
+        values: "0 1 2 2 2"
+      - series: 'agent_job_total{job="hephaestus",instance="worker:9090",outcome="cancelled"}'
+        values: "0+5x4"
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: HephaestusAgentJobsFailing
+        exp_alerts: []
+
+  - name: a job that waits more than an hour fires, a shorter wait does not
+    interval: 1m
+    input_series:
+      - series: 'agent_queue_oldest_age_seconds{job="hephaestus",instance="server:9090"}'
+        values: "1800 3300 3700 3760 3820 3880 3940 4000 4060"
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: HephaestusAgentQueueStalled
+        exp_alerts: []
+      - eval_time: 7m
+        alertname: HephaestusAgentQueueStalled
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: An agent job that can run has waited for a worker for more than one hour
+
+  - name: an empty queue does not fire
+    interval: 1m
+    input_series:
+      - series: 'agent_queue_oldest_age_seconds{job="hephaestus",instance="server:9090"}'
+        values: "0x10"
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: HephaestusAgentQueueStalled
+        exp_alerts: []
+
+  - name: a failed isolation probe fires, a worker whose probe passes does not
+    interval: 1m
+    input_series:
+      - series: 'sandbox_isolation_passed{job="hephaestus",instance="worker-a:9090",runtime_role="worker"}'
+        values: "1 1 0x8"
+      - series: 'sandbox_isolation_passed{job="hephaestus",instance="worker-b:9090",runtime_role="worker"}'
+        values: "0 1x9"
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: HephaestusSandboxIsolationFailed
+        exp_alerts: []
+      - eval_time: 8m
+        alertname: HephaestusSandboxIsolationFailed
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: hephaestus
+              instance: worker-a:9090
+              runtime_role: worker
+            exp_annotations:
+              summary: A worker's sandbox isolation probe failed, so the worker starts no sandbox
+
+  - name: an archive that keeps failing fires, a recovered or unread archive does not
+    interval: 1m
+    input_series:
+      - series: 'database_wal_archive_failing{job="hephaestus",instance="server:9090",runtime_role="server"}'
+        values: "0 1x15"
+    alert_rule_test:
+      - eval_time: 8m
+        alertname: HephaestusWalArchiveFailing
+        exp_alerts: []
+      - eval_time: 12m
+        alertname: HephaestusWalArchiveFailing
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+            exp_annotations:
+              summary: PostgreSQL cannot archive its WAL, so backups and point-in-time recovery stop
+
+  - name: a firing archive alert stays firing while the server cannot read the archiver
+    interval: 1m
+    input_series:
+      - series: 'database_wal_archive_failing{job="hephaestus",instance="server:9090",runtime_role="server"}'
+        values: "0 1x12 NaN NaN NaN NaN NaN 1x5"
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: HephaestusWalArchiveFailing
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+            exp_annotations:
+              summary: PostgreSQL cannot archive its WAL, so backups and point-in-time recovery stop
+      - eval_time: 19m
+        alertname: HephaestusWalArchiveFailing
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+            exp_annotations:
+              summary: PostgreSQL cannot archive its WAL, so backups and point-in-time recovery stop
+
+  - name: refused or unreadable redeliveries fire, a single refusal and successful redeliveries do not
+    interval: 1m
+    input_series:
+      - series: 'github_webhook_redelivery_total{job="hephaestus",instance="server:9090",runtime_role="server",outcome="refused"}'
+        values: "0 1 2 3 4 4x30"
+      - series: 'github_webhook_redelivery_total{job="hephaestus",instance="server:9090",runtime_role="server",outcome="requested"}'
+        values: "0+5x40"
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: HephaestusWebhookRedeliveryNotRunning
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: HephaestusWebhookRedeliveryNotRunning
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: GitHub refuses redeliveries, or the deliveries of the GitHub App cannot be read
+      - eval_time: 40m
+        alertname: HephaestusWebhookRedeliveryNotRunning
+        exp_alerts: []
+  - name: a short archive failure, archive_mode off and a healthy archive do not fire
+    interval: 1m
+    input_series:
+      - series: 'database_wal_archive_failing{job="hephaestus",instance="server-a:9090",runtime_role="server"}'
+        values: "1x5 0x10"
+      - series: 'database_wal_archive_failing{job="hephaestus",instance="server-b:9090",runtime_role="server"}'
+        values: "NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN NaN"
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: HephaestusWalArchiveFailing
+        exp_alerts: []
+
+  # 31 hours of one sample each minute. time() starts at 0, so a value is seconds since the start.
+  - name: a release whose newest backup is 31 hours old fires, a release with a daily backup does not
+    interval: 1m
+    input_series:
+      - series: 'kube_cronjob_created{namespace="hephaestus",cronjob="hephaestus-postgresql-backup-full"}'
+        values: "0x1860"
+      - series: 'kube_cronjob_created{namespace="hephaestus",cronjob="hephaestus-postgresql-backup-diff"}'
+        values: "0x1860"
+      # The weekly full backup is old; the daily differential backup of hour 24 is recent.
+      - series: 'kube_cronjob_status_last_successful_time{namespace="hephaestus",cronjob="hephaestus-postgresql-backup-full"}'
+        values: "0x1860"
+      - series: 'kube_cronjob_status_last_successful_time{namespace="hephaestus",cronjob="hephaestus-postgresql-backup-diff"}'
+        values: "0x1440 86400x420"
+      # A second release in the same namespace: its last backup is from the start.
+      - series: 'kube_cronjob_created{namespace="hephaestus",cronjob="staging-postgresql-backup-diff"}'
+        values: "0x1860"
+      - series: 'kube_cronjob_status_last_successful_time{namespace="hephaestus",cronjob="staging-postgresql-backup-diff"}'
+        values: "0x1860"
+      # Another CronJob of the namespace is not a backup.
+      - series: 'kube_cronjob_status_last_successful_time{namespace="hephaestus",cronjob="report"}'
+        values: "0x1860"
+    alert_rule_test:
+      - eval_time: 29h
+        alertname: HephaestusBackupStale
+        exp_alerts: []
+      - eval_time: 31h
+        alertname: HephaestusBackupStale
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              namespace: hephaestus
+              release: staging
+            exp_annotations:
+              summary: No PostgreSQL backup completed in the last 30 hours
+
+  - name: backup CronJobs with no successful run for 30 hours fire
+    interval: 1m
+    input_series:
+      - series: 'kube_cronjob_created{namespace="hephaestus",cronjob="hephaestus-postgresql-backup-full"}'
+        values: "0x1860"
+      - series: 'kube_cronjob_created{namespace="hephaestus",cronjob="hephaestus-postgresql-backup-diff"}'
+        values: "0x1860"
+    alert_rule_test:
+      - eval_time: 29h
+        alertname: HephaestusBackupStale
+        exp_alerts: []
+      - eval_time: 31h
+        alertname: HephaestusBackupStale
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              namespace: hephaestus
+              release: hephaestus
+            exp_annotations:
+              summary: No PostgreSQL backup completed in the last 30 hours
+
+  - name: a PostgreSQL volume below 15 % free warns, below 5 % it is also critical, one with more space is quiet
+    interval: 1m
+    input_series:
+      - series: 'kubelet_volume_stats_available_bytes{namespace="prod",persistentvolumeclaim="data-prod-postgresql-0"}'
+        values: "3x10"
+      - series: 'kubelet_volume_stats_capacity_bytes{namespace="prod",persistentvolumeclaim="data-prod-postgresql-0"}'
+        values: "100x10"
+      - series: 'kubelet_volume_stats_available_bytes{namespace="hephaestus",persistentvolumeclaim="data-hephaestus-postgresql-0"}'
+        values: "10x10"
+      - series: 'kubelet_volume_stats_capacity_bytes{namespace="hephaestus",persistentvolumeclaim="data-hephaestus-postgresql-0"}'
+        values: "100x10"
+      - series: 'kubelet_volume_stats_available_bytes{namespace="hephaestus",persistentvolumeclaim="data-staging-postgresql-0"}'
+        values: "40x10"
+      - series: 'kubelet_volume_stats_capacity_bytes{namespace="hephaestus",persistentvolumeclaim="data-staging-postgresql-0"}'
+        values: "100x10"
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: HephaestusPostgresVolumeFilling
+        exp_alerts: []
+      - eval_time: 6m
+        alertname: HephaestusPostgresVolumeFilling
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              namespace: hephaestus
+              persistentvolumeclaim: data-hephaestus-postgresql-0
+            exp_annotations:
+              summary: The PostgreSQL volume has less than 15 % free space
+          - exp_labels:
+              severity: warning
+              namespace: prod
+              persistentvolumeclaim: data-prod-postgresql-0
+            exp_annotations:
+              summary: The PostgreSQL volume has less than 15 % free space
+          - exp_labels:
+              severity: critical
+              namespace: prod
+              persistentvolumeclaim: data-prod-postgresql-0
+            exp_annotations:
+              summary: The PostgreSQL volume has less than 5 % free space
+
+  # JetStream's max_file is 80 % of the volume, so a broker at its budget leaves 20 % free.
+  - name: a JetStream volume below 10 % free fires, one at its storage budget does not
+    interval: 1m
+    input_series:
+      - series: 'kubelet_volume_stats_available_bytes{namespace="hephaestus",persistentvolumeclaim="data-hephaestus-nats-0"}'
+        values: "5x10"
+      - series: 'kubelet_volume_stats_capacity_bytes{namespace="hephaestus",persistentvolumeclaim="data-hephaestus-nats-0"}'
+        values: "100x10"
+      - series: 'kubelet_volume_stats_available_bytes{namespace="hephaestus",persistentvolumeclaim="data-staging-nats-0"}'
+        values: "18x10"
+      - series: 'kubelet_volume_stats_capacity_bytes{namespace="hephaestus",persistentvolumeclaim="data-staging-nats-0"}'
+        values: "100x10"
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: HephaestusJetStreamVolumeFilling
+        exp_alerts: []
+      - eval_time: 6m
+        alertname: HephaestusJetStreamVolumeFilling
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              namespace: hephaestus
+              persistentvolumeclaim: data-hephaestus-nats-0
+            exp_annotations:
+              summary: The NATS JetStream volume has less than 10 % free space
+
+  - name: a full node disk fires, memory, read-only, pod volume and free file systems do not
+    interval: 1m
+    input_series:
+      - series: 'node_filesystem_avail_bytes{instance="node-a",device="/dev/sdb",fstype="ext4",mountpoint="/var/lib/kubelet/pods/0f1e/volumes/kubernetes.io~csi/pvc-1/mount"}'
+        values: "1x20"
+      - series: 'node_filesystem_size_bytes{instance="node-a",device="/dev/sdb",fstype="ext4",mountpoint="/var/lib/kubelet/pods/0f1e/volumes/kubernetes.io~csi/pvc-1/mount"}'
+        values: "100x20"
+      - series: 'node_filesystem_readonly{instance="node-a",device="/dev/sdb",fstype="ext4",mountpoint="/var/lib/kubelet/pods/0f1e/volumes/kubernetes.io~csi/pvc-1/mount"}'
+        values: "0x20"
+      - series: 'node_filesystem_avail_bytes{instance="node-a",device="/dev/sda1",fstype="ext4",mountpoint="/"}'
+        values: "10x20"
+      - series: 'node_filesystem_size_bytes{instance="node-a",device="/dev/sda1",fstype="ext4",mountpoint="/"}'
+        values: "100x20"
+      - series: 'node_filesystem_readonly{instance="node-a",device="/dev/sda1",fstype="ext4",mountpoint="/"}'
+        values: "0x20"
+      - series: 'node_filesystem_avail_bytes{instance="node-a",device="tmpfs",fstype="tmpfs",mountpoint="/run"}'
+        values: "1x20"
+      - series: 'node_filesystem_size_bytes{instance="node-a",device="tmpfs",fstype="tmpfs",mountpoint="/run"}'
+        values: "100x20"
+      - series: 'node_filesystem_readonly{instance="node-a",device="tmpfs",fstype="tmpfs",mountpoint="/run"}'
+        values: "0x20"
+      - series: 'node_filesystem_avail_bytes{instance="node-a",device="/dev/sr0",fstype="iso9660",mountpoint="/media"}'
+        values: "0x20"
+      - series: 'node_filesystem_size_bytes{instance="node-a",device="/dev/sr0",fstype="iso9660",mountpoint="/media"}'
+        values: "100x20"
+      - series: 'node_filesystem_readonly{instance="node-a",device="/dev/sr0",fstype="iso9660",mountpoint="/media"}'
+        values: "1x20"
+      - series: 'node_filesystem_avail_bytes{instance="node-b",device="/dev/sda1",fstype="ext4",mountpoint="/"}'
+        values: "30x20"
+      - series: 'node_filesystem_size_bytes{instance="node-b",device="/dev/sda1",fstype="ext4",mountpoint="/"}'
+        values: "100x20"
+      - series: 'node_filesystem_readonly{instance="node-b",device="/dev/sda1",fstype="ext4",mountpoint="/"}'
+        values: "0x20"
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: HephaestusNodeDiskFilling
+        exp_alerts: []
+      - eval_time: 16m
+        alertname: HephaestusNodeDiskFilling
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              instance: node-a
+              device: /dev/sda1
+              fstype: ext4
+              mountpoint: /
+            exp_annotations:
+              summary: A node file system has less than 15 % free space
+
+  # 6 days and 30 days after the start.
+  - name: a certificate that expires within seven days fires after one hour, a later one does not
+    interval: 1m
+    input_series:
+      - series: 'certmanager_certificate_expiration_timestamp_seconds{namespace="gateway",name="hephaestus-tls",issuer_name="letsencrypt",issuer_kind="ClusterIssuer",issuer_group="cert-manager.io"}'
+        values: "518400x70"
+      - series: 'certmanager_certificate_expiration_timestamp_seconds{namespace="hephaestus",name="hephaestus-postgresql",issuer_name="internal",issuer_kind="Issuer",issuer_group="cert-manager.io"}'
+        values: "2592000x70"
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: HephaestusCertificateExpiring
+        exp_alerts: []
+      - eval_time: 61m
+        alertname: HephaestusCertificateExpiring
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              namespace: gateway
+              name: hephaestus-tls
+              issuer_name: letsencrypt
+              issuer_kind: ClusterIssuer
+              issuer_group: cert-manager.io
+            exp_annotations:
+              summary: A certificate that cert-manager manages expires in less than seven days, or has no issued certificate
+
+  # cert-manager exports 0 for a certificate that has no notAfter yet, as during its first issuance.
+  - name: a certificate in its first issuance is quiet for an hour, then fires as not issued
+    interval: 1m
+    input_series:
+      - series: 'certmanager_certificate_expiration_timestamp_seconds{namespace="gateway",name="hephaestus-tls",issuer_name="letsencrypt",issuer_kind="ClusterIssuer",issuer_group="cert-manager.io"}'
+        values: "0x70"
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: HephaestusCertificateExpiring
+        exp_alerts: []
+      - eval_time: 61m
+        alertname: HephaestusCertificateExpiring
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              namespace: gateway
+              name: hephaestus-tls
+              issuer_name: letsencrypt
+              issuer_kind: ClusterIssuer
+              issuer_group: cert-manager.io
+            exp_annotations:
+              summary: A certificate that cert-manager manages expires in less than seven days, or has no issued certificate
