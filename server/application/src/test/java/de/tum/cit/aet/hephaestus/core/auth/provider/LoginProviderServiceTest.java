@@ -40,7 +40,6 @@ import tools.jackson.databind.ObjectMapper;
  */
 class LoginProviderServiceTest extends BaseUnitTest {
 
-    // The URL checks resolve these names to tell a public host from a private one.
     @BeforeAll
     static void declarePublicHosts() {
         OfflineNetwork.answer("gitlab.lrz.de", OfflineNetwork.PUBLIC_ADDRESS);

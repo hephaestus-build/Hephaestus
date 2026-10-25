@@ -18,10 +18,12 @@ import java.util.stream.Stream;
 /**
  * Host-name resolution for every test JVM (JEP 418): loopback names and the host's names for its own addresses resolve,
  * a name a test declared with {@link #answer} resolves to its declared address, a name reserved by RFC 2606 or RFC 6761
- * or made only of numbers fails as an unknown host, and any other name is refused and recorded, so no test reaches a
- * real provider through any client. A reverse lookup of a public address fails the same way, and is recorded unless one
- * of the host's own interfaces carries the address. {@link OfflineNetworkExtension} fails the test class that made an
- * attempt. The live tier sets {@value #OPEN} to {@code true} and resolves every name.
+ * or made only of numbers fails as an unknown host, and any other name is refused and recorded, so no JVM client in a
+ * test resolves a real host. A reverse lookup of a public address fails the same way, and is recorded unless one of the
+ * host's own interfaces carries the address. {@link OfflineNetworkExtension} fails the test class that made an attempt.
+ * The guard covers {@link InetAddress} lookups in the test JVM only: a child process such as {@code git}, a native DNS
+ * client or a container uses its own resolver. The live tier sets {@value #OPEN} to {@code true} and resolves every
+ * name.
  */
 public final class OfflineNetwork extends InetAddressResolverProvider {
 
@@ -41,7 +43,8 @@ public final class OfflineNetwork extends InetAddressResolverProvider {
     private static final Map<String, InetAddress> ANSWERS = new ConcurrentHashMap<>();
 
     /**
-     * Declares what a name resolves to until the test class ends, for code that classifies an address. The name then
+     * Declares what a name resolves to until the test class ends, for code that classifies an address: the URL checks
+     * resolve a name to tell a public host from a private one. Call it from a {@code @BeforeAll} method. The name then
      * resolves like a real host, so the test must not connect to it.
      */
     public static void answer(String host, String address) {
@@ -65,6 +68,11 @@ public final class OfflineNetwork extends InetAddressResolverProvider {
         return List.copyOf(ATTEMPTS);
     }
 
+    /** Forgets the attempts after the first {@code kept}, which the guard's own tests make on purpose. */
+    static void forgetAttemptsAfter(int kept) {
+        ATTEMPTS.subList(kept, ATTEMPTS.size()).clear();
+    }
+
     @Override
     public InetAddressResolver get(Configuration configuration) {
         InetAddressResolver builtin = configuration.builtinResolver();
@@ -86,7 +94,7 @@ public final class OfflineNetwork extends InetAddressResolverProvider {
                 InetAddress answer = ANSWERS.get(name);
                 if (answer != null) return Stream.of(answer);
                 if (!reserved(name)) ATTEMPTS.add(name);
-                throw new UnknownHostException(host + ": tests make no external network calls");
+                throw new UnknownHostException(host + ": tests resolve no real hosts");
             }
 
             @Override
@@ -99,7 +107,7 @@ public final class OfflineNetwork extends InetAddressResolverProvider {
                 }
                 String reverse = inet.getHostAddress();
                 if (!ownInterface(inet)) ATTEMPTS.add("reverse " + reverse);
-                throw new UnknownHostException(reverse + ": tests make no external network calls");
+                throw new UnknownHostException(reverse + ": tests resolve no real hosts");
             }
         };
     }

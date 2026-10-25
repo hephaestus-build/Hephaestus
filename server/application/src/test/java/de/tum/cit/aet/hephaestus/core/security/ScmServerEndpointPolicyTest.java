@@ -22,7 +22,6 @@ import reactor.netty.http.server.HttpServer;
 
 class ScmServerEndpointPolicyTest extends BaseUnitTest {
 
-    // The URL checks resolve these names to tell a public host from a private one.
     @BeforeAll
     static void declarePublicHosts() {
         OfflineNetwork.answer("gitlab.com", OfflineNetwork.PUBLIC_ADDRESS);

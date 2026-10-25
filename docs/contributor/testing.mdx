@@ -156,8 +156,9 @@ The application's own client, senders, schedulers and listeners run unchanged, a
 A test reads what the application posted from `ScriptedGitHub.threads()`, keyed by repository and number.
 A GitHub document that the script does not answer fails as a GraphQL error.
 
-Tests make no external network calls.
-`OfflineNetwork` replaces host-name resolution in every test JVM.
+No JVM client in a test resolves a real host.
+`OfflineNetwork` replaces `InetAddress` host-name resolution in every test JVM.
+A child process such as `git`, a native DNS client or a container uses its own resolver, so the guard does not cover it.
 Loopback names and the names the host gives its own addresses resolve.
 A name reserved by RFC 2606 or RFC 6761 fails as an unknown host.
 Any other name is refused and recorded, and `OfflineNetworkExtension` fails the test class that tried it.

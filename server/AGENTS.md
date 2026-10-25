@@ -108,7 +108,7 @@ Streaming tests own their subscription and cancellation explicitly.
 Use `.returnResult(Void.class)` when only
 response headers or cookies are needed. A non-void `returnResult` leaves the body subscription to you.
 
-**Tests make no external network calls.** A test class that resolves a real host fails
+**Tests resolve no real hosts.** A test class whose JVM code resolves a real host fails
 ([Testing Guide](../docs/contributor/testing.mdx#gradle-recipes)).
 
 **Rows written by earlier tests are already there.** Assert on the row you created.

@@ -57,7 +57,6 @@ import org.springframework.web.util.UriBuilder;
  */
 class ConfigAuditIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
-    // The URL checks resolve these names to tell a public host from a private one.
     @BeforeAll
     static void declarePublicHosts() {
         OfflineNetwork.answer("api.openai.com", OfflineNetwork.PUBLIC_ADDRESS);

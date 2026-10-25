@@ -30,7 +30,7 @@ public final class OfflineNetworkExtension implements BeforeAllCallback, AfterAl
         if (!made.isEmpty()) {
             throw new AssertionError(context.getDisplayName()
                     + " tried to reach real hosts " + made.stream().distinct().toList()
-                    + "; tests make no external network calls (docs/contributor/testing.mdx)");
+                    + "; tests resolve no real hosts (docs/contributor/testing.mdx)");
         }
     }
 }

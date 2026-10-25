@@ -29,7 +29,6 @@ import org.mockito.Mock;
 
 class OutlineConnectionStrategyTest extends BaseUnitTest {
 
-    // The URL checks resolve these names to tell a public host from a private one.
     @BeforeAll
     static void declarePublicHosts() {
         OfflineNetwork.answer("app.getoutline.com", OfflineNetwork.PUBLIC_ADDRESS);

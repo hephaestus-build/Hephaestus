@@ -13,7 +13,6 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 class ServerUrlValidatorTest extends BaseUnitTest {
 
-    // The URL checks resolve these names to tell a public host from a private one.
     @BeforeAll
     static void declarePublicHosts() {
         OfflineNetwork.answer("gitlab.com", OfflineNetwork.PUBLIC_ADDRESS);
