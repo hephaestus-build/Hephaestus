@@ -246,7 +246,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
         AuthenticationResult result = authenticate(earlierAttempt);
 
-        assertThat(result.status()).isEqualTo(401);
+        assertThat(result.status()).isEqualTo(409);
         assertThat(result.authentication()).isNull();
     }
 
@@ -263,9 +263,9 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
     }
 
     @ParameterizedTest
-    @CsvSource({"GET,'',401", "GET,/workspace,401", "GET,/frames,401", "POST,/result,409"})
-    void shouldAuthorizeRuntimeRoutesOnlyForThePersistedWorkerAndAttempt(
-            String method, String suffix, int nonOwnerStatus) throws Exception {
+    @CsvSource({"GET,''", "GET,/workspace", "GET,/frames", "POST,/result"})
+    void shouldAuthorizeRuntimeRoutesOnlyForThePersistedWorkerAndAttempt(String method, String suffix)
+            throws Exception {
         ReviewJob job = runningJob(true);
         String token = tokenFor(job);
         String path = "/internal/llm/runtime/" + job.getId() + suffix;
@@ -276,12 +276,12 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
         job.setWorkerId("another-worker");
         jobRepository.save(RuntimeJobTestData.persistParent(jdbc, job));
-        assertThat(authenticate(method, path, token).status()).isEqualTo(nonOwnerStatus);
+        assertThat(authenticate(method, path, token).status()).isEqualTo(409);
 
         job.setWorkerId("worker-1");
         job.setAttempt(job.getAttempt() + 1);
         jobRepository.save(RuntimeJobTestData.persistParent(jdbc, job));
-        assertThat(authenticate(method, path, token).status()).isEqualTo(401);
+        assertThat(authenticate(method, path, token).status()).isEqualTo(409);
     }
 
     @ParameterizedTest

@@ -9,7 +9,11 @@ import test from "node:test";
 
 import { ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
 
-import { modelFailure, refusesAttempt } from "../../../main/resources/agent/pi-model-failure.ts";
+import {
+	ATTEMPT_ENDED,
+	refusesAttempt,
+	stopIfAttemptRefused,
+} from "../../../main/resources/agent/pi-model-failure.ts";
 import { registerHephaestusProvider } from "../../../main/resources/agent/pi-provider.ts";
 import {
 	addAssistantUsage,
@@ -707,20 +711,66 @@ void test("openai-responses times a call across an adapter request retry and wai
 	assert.ok(!JSON.stringify(message.diagnostics).includes(SECRET));
 });
 
-void test("a credential that the gateway refuses stops the attempt; other failures do not", async () => {
-	for (const [status, refused] of [
-		[401, true],
-		[403, false],
-		[500, false],
+void test("the runner and the gateway share the text of the attempt-ended refusal", () => {
+	const filterSource = readFileSync(
+		new URL(
+			"../../../main/java/de/tum/cit/aet/hephaestus/agent/proxy/JobTokenAuthenticationFilter.java",
+			import.meta.url,
+		),
+		"utf8",
+	);
+	const literal = /static final String ATTEMPT_ENDED\s*=\s*(?<literal>"(?:[^"\\]|\\.)*");/u.exec(
+		filterSource,
+	)?.groups?.literal;
+	assert.ok(literal !== undefined, "the gateway owns the attempt-ended refusal");
+	assert.equal(JSON.parse(literal), ATTEMPT_ENDED);
+});
+
+void test("classifies only the gateway's attempt-ended 409 as a refused attempt, not a provider's 401 or 409", async () => {
+	for (const [status, body, refused] of [
+		[409, ATTEMPT_ENDED, true],
+		[409, "conflict", false],
+		[401, "Incorrect API key provided", false],
+		[401, ATTEMPT_ENDED, false],
+		[403, "forbidden", false],
+		[500, "boom", false],
 	] as const) {
 		const message = await completeWith(
 			"openai-completions",
 			(response) => {
 				response.writeHead(status, { "content-type": "text/plain" });
-				response.end("refused");
+				response.end(body);
 			},
 			{ maxRetries: 0 },
 		);
-		assert.equal(refusesAttempt(modelFailure(message)), refused, `status ${status}`);
+		assert.equal(refusesAttempt(message), refused, `${status} ${body}`);
 	}
+});
+
+void test("stops the runner on the gateway's refusal of a failed call, and only then", async () => {
+	const refusedMessage = await completeWith(
+		"openai-completions",
+		(response) => {
+			response.writeHead(409, { "content-type": "text/plain" });
+			response.end(ATTEMPT_ENDED);
+		},
+		{ maxRetries: 0 },
+	);
+	const providerMessage = await completeWith(
+		"openai-completions",
+		(response) => {
+			response.writeHead(401, { "content-type": "text/plain" });
+			response.end("Incorrect API key provided");
+		},
+		{ maxRetries: 0 },
+	);
+	const exits: number[] = [];
+	const exit = (code: number) => {
+		exits.push(code);
+	};
+	stopIfAttemptRefused("error", providerMessage, exit);
+	stopIfAttemptRefused("aborted", refusedMessage, exit);
+	assert.deepEqual(exits, []);
+	stopIfAttemptRefused("error", refusedMessage, exit);
+	assert.deepEqual(exits, [1]);
 });
