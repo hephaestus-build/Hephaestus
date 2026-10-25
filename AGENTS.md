@@ -275,6 +275,7 @@ Every *Done when* bullet is a change that ships, never a measurement or a verdic
 | Artefact | Command |
 |---|---|
 | `server/openapi.yaml` | `vp run generate:api:specs` |
+| `docs/admin/configuration-reference.mdx` | `vp run generate:configuration-reference` |
 | `webapp/src/api/**`, `extension/src/api/**` | `vp run generate:api:client` |
 | `docs/contributor/erd/schema.mmd` | `vp run db:generate-erd-docs` |
 | `webapp/src/routeTree.gen.ts` | TanStack Router Vite plugin |

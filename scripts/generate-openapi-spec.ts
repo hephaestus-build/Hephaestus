@@ -1,37 +1,16 @@
 // Scrape the supplied CI artifact, or build a local JAR when HEPHAESTUS_APPLICATION_JAR is unset.
 import { spawn } from "node:child_process";
 import { once } from "node:events";
-import { glob, readFile, rm, writeFile } from "node:fs/promises";
+import { readFile, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:net";
 import path from "node:path";
 import process from "node:process";
 import { setTimeout as sleep } from "node:timers/promises";
 
-import { isSet } from "./lib/env.ts";
-import { run } from "./lib/process.ts";
+import { executableJar, serverDirectory } from "./lib/application-jar.ts";
 
-const serverDirectory = path.join(import.meta.dirname, "..", "server");
 const specification = path.join(serverDirectory, "openapi.yaml");
-const wrapper = path.join(import.meta.dirname, "run-gradlew.ts");
 const startupBudgetMs = 180_000;
-
-async function executableJar(): Promise<string> {
-	const configured = process.env.HEPHAESTUS_APPLICATION_JAR;
-	if (isSet(configured)) {
-		return configured;
-	}
-	await run(process.execPath, [wrapper, ":application:bootJar", ...process.argv.slice(2)], {
-		cwd: serverDirectory,
-	});
-	const built = await Array.fromAsync(
-		glob("application/build/libs/hephaestus-application-*.jar", { cwd: serverDirectory }),
-	);
-	const jars = built.filter((jar) => !/-(?:sources|javadoc)\.jar$/u.test(jar));
-	if (jars.length !== 1) {
-		throw new Error(`Expected one executable JAR, found ${jars.length}`);
-	}
-	return path.join(serverDirectory, jars[0] ?? "");
-}
 
 async function freePort(): Promise<number> {
 	const probe = createServer().listen(0, "127.0.0.1");
@@ -64,7 +43,7 @@ async function fetchSpecification(url: string, child: ReturnType<typeof spawn>):
 	throw new Error(`The server did not serve ${url} within ${startupBudgetMs / 1000}s`);
 }
 
-const jar = await executableJar();
+const jar = await executableJar(process.argv.slice(2));
 // Both HTTP connectors must be isolated from other worktrees, including the sandbox gateway.
 const [port, sandboxPort] = await Promise.all([freePort(), freePort()]);
 const child = spawn(

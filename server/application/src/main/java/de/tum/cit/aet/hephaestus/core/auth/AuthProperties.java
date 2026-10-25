@@ -18,27 +18,29 @@ import org.springframework.web.util.UriComponentsBuilder;
  *                   {@code X-Forwarded-Prefix}; see {@code ProxyTrustGuard} before changing that strategy.
  * @param audience expected {@code aud} claim
  * @param accessTtl access-token lifetime, bounded by the absolute session deadline
- * @param cookieName access-token cookie name; {@code __Host-} requires Secure, Path=/, and no Domain
- * @param stateCookieKey base64-encoded 32-byte AES key sealing OAuth state and auth-intent cookies;
- *                       required outside development
+ * @param cookieName Name of the access-token cookie. A name that starts with {@code __Host-} requires Secure, Path=/
+ *                   and no Domain.
+ * @param stateCookieKey Base64-encoded 32-byte AES key that seals the OAuth state and sign-in intent cookies.
+ *                       Required outside development.
  * @param deleteCooldown interval during which a soft-deleted account can be restored
  * @param loginProviders initial login providers keyed by registration ID; seeding never overwrites
  *                       later administrator edits
- * @param bootstrapAdmins identities promoted to instance admin on login, in
- *                        {@code registrationId:@username} or {@code registrationId:subject} form.
- *                        Use a stable subject where usernames can be reclaimed; email is never matched.
- * @param bootstrapToken optional deployment-controlled token for recovering an instance with no active
- *                       admin; blank disables the endpoint
+ * @param bootstrapAdmins Identities that become instance admins when they sign in, as {@code provider:@username} or
+ *                        {@code provider:subject}. Use the subject where a username can be claimed again. Email
+ *                        addresses are never matched.
+ * @param bootstrapToken Optional token, controlled by the deployment, that recovers an instance without an active
+ *                       admin. A blank value turns off the recovery endpoint.
  * @param sessionMaxLifetime absolute session deadline set at login and preserved through refresh
- * @param stepUpMaxAge maximum sign-in age for sensitive actions; refresh does not reset sign-in time
- * @param assuranceEnforced require additional passkey and recent-sign-in assurance; disable only on isolated test instances
- * @param devLoginEnabled passwordless local sign-in; rejected under the production profile and unsafe
- *                        on an internet-exposed deployment
+ * @param stepUpMaxAge Maximum age of a sign-in for sensitive actions. A token refresh does not reset the sign-in
+ *                     time.
+ * @param assuranceEnforced Requires passkey verification and a recent sign-in for protected admin actions. Turn it
+ *                          off only on an isolated test instance.
+ * @param devLoginEnabled Turns on sign-in without a password for local development. The production profile refuses
+ *                        it, and it is unsafe on a deployment that the internet can reach.
  * @param cookieSecure whether auth and CSRF cookies use Secure and the {@code __Host-} prefix;
  *                     disabling is restricted to HTTP E2E tests without the production profile
- * @param browserExtensionIds Chrome extension ids allowed to sign in as installed clients; each id
- *                            yields exactly one callback and one CORS origin
- *                            ({@code core.auth.clientsession.InstalledClientRegistry})
+ * @param browserExtensionIds Chrome extension IDs that may sign in as installed clients. Each ID gets exactly one
+ *                            callback and one CORS origin.
  */
 @ConfigurationProperties(prefix = "hephaestus.auth")
 public record AuthProperties(

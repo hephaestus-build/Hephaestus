@@ -14,25 +14,24 @@ import org.springframework.validation.annotation.Validated;
  *
  * <p>Binds to the {@code hephaestus.practice-review} prefix in application configuration.
  *
- * @param deliverToMerged     whether to post feedback on already-merged PRs; other channels are unaffected
+ * @param deliverToMerged     Posts feedback on pull requests that are already merged. Other destinations do not
+ *                            change.
  * @param cooldownMinutes     minimum minutes between reviews for the same PR. 0 disables cooldown.
  * @param maxRequestsPerRequesterPerHour
  *                            manual review requests per person, workspace and hour. 0 disables the limit.
  * @param samplingTemperature requested model sampling temperature, or null for the provider default.
- * @param practiceModelCalls  the model calls one practice is owed in a review turn; a turn gets this per
- *                            practice it carries, and never less than three practices' worth.
+ * @param practiceModelCalls  The model calls that one practice gets in a review turn. A turn gets this number for
+ *                            each practice, and at least the number for three practices.
  * @param practiceOutputTokens
  *                            the output tokens one practice is owed in a review turn, counted the same way.
  * @param practiceConcurrency maximum concurrent practice sessions in an item review. Scans remain serial.
- * @param directModelTokensPerAttempt
- *                            the input and output tokens that the direct model calls of one review attempt's practice
- *                            programs may spend on all their slots together: a sublimit of the attempt, which the
- *                            review session's own calls do not count against. The runner holds its programs to it,
- *                            and the proxy refuses further direct calls.
- * @param directModelSearchUnitsPerAttempt
- *                            the search units that the direct reranking calls of one review attempt may bill, for
- *                            providers such as Cohere that bill search units instead of tokens. Only the proxy counts
- *                            them, and it refuses further direct calls.
+ * @param directModelTokensPerAttempt The input and output tokens that the direct model calls of the practice programs
+ *                                    of one review attempt may spend together. The calls of the review session itself
+ *                                    do not count. The runner holds the programs to it, and the proxy refuses further
+ *                                    direct calls.
+ * @param directModelSearchUnitsPerAttempt The search units that the direct reranking calls of one review attempt may
+ *                                         bill, for providers such as Cohere that bill search units. The proxy counts
+ *                                         them and refuses further direct calls.
  */
 @Validated
 @ConfigurationProperties(prefix = "hephaestus.practice-review")

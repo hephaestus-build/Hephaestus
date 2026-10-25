@@ -100,6 +100,7 @@
 	"docs/admin/browser-extension.mdx",
 	"docs/admin/compatibility-policy.mdx",
 	"docs/admin/configuration-readiness.mdx",
+	"docs/admin/configuration-reference.mdx",
 	"docs/admin/credential-key-rotation.mdx",
 	"docs/admin/dsms/README.md",
 	"docs/admin/dsms/item-source-governance.md",
