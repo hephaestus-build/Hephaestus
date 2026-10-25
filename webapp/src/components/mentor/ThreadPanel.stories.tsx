@@ -96,13 +96,21 @@ export const Default: Story = {
 	},
 };
 
-/** Escape hands focus back to the control that opened the thread. */
+/**
+ * The heading takes focus as the thread opens, and shows the same ring a button does, so a
+ * keyboard reader sees where they are. Escape hands focus back to the control that opened the
+ * thread.
+ */
 export const ReturnsFocus: Story = {
 	render: (args) => <OpensFromButton {...args} />,
 	play: async ({ args, canvas, userEvent }) => {
 		const opener = canvas.getByRole("button", { name: "3 replies" });
-		await userEvent.click(opener);
-		await expect(canvas.getByRole("heading", { name: "Thread" })).toHaveFocus();
+		opener.focus();
+		await userEvent.keyboard("{Enter}");
+		const heading = canvas.getByRole("heading", { name: "Thread" });
+		await expect(heading).toHaveFocus();
+		await expect(heading.matches(":focus-visible")).toBe(true);
+		await expect(getComputedStyle(heading).boxShadow).not.toBe("none");
 		await userEvent.keyboard("{Escape}");
 		await expect(args.onClose).toHaveBeenCalledOnce();
 		await expect(opener).toHaveFocus();
@@ -310,7 +318,9 @@ export const Loading: Story = {
 	args: { children: <HephTimelineSkeleton rows={2} label="Loading the thread…" /> },
 	play: async ({ canvas }) => {
 		const panel = canvas.getByRole("complementary", { name: "Thread" });
-		await expect(within(panel).getByText("Loading the thread…")).toBeVisible();
+		await expect(
+			await within(panel).findByText("Loading the thread…", undefined, { timeout: 3000 }),
+		).toBeVisible();
 	},
 };
 

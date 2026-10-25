@@ -520,6 +520,7 @@ it("copies and discards only one failed send without deleting stored messages or
 	await expect(navigator.clipboard.readText()).resolves.toBe(
 		"The failed question to copy and discard",
 	);
+	await screen.findByText("Message copied");
 	await user.click(within(failed).getByRole("button", { name: /^Delete message \(/u }));
 
 	await waitFor(() =>
@@ -560,9 +561,9 @@ it("sends a follow-up while Heph answers, and stops the running turn", async () 
 	);
 	await screen.findByText("Queued. Heph answers this next.");
 
-	await userEvent.click(
-		within(screen.getByRole("log")).getByRole("button", { name: /^Stop Heph \(/u }),
-	);
+	// One Stop for the running answer, beside Send; the status line in the log offers none.
+	expect(within(screen.getByRole("log")).queryByRole("button", { name: /^Stop Heph/u })).toBeNull();
+	await userEvent.click(screen.getByRole("button", { name: "Stop Heph" }));
 	await waitFor(() => expect(fake.stops).toStrictEqual([running.id]));
 });
 
@@ -746,7 +747,7 @@ it("says the thread is loading in its panel while the conversation beside it sho
 	renderRouteAtWithRouter(`/w/acme/mentor?thread=${parent.id}`);
 	try {
 		const panel = await screen.findByRole("complementary", { name: "Thread" }, ROUTE_RENDER_WAIT);
-		await within(panel).findByText("Loading the thread…");
+		await within(panel).findByText("Loading the thread…", {}, ROUTE_RENDER_WAIT);
 		expect(within(panel).queryByText("Loading the conversation…")).toBeNull();
 
 		held.resolve();
@@ -989,7 +990,7 @@ it("shows what the live stream reports: Heph's answer as it arrives and a messag
 		});
 	});
 	await screen.findByText(streamedText("You opened two"));
-	within(screen.getByRole("log")).getByRole("button", { name: /^Stop Heph/u });
+	screen.getByRole("button", { name: "Stop Heph" });
 
 	act(() => {
 		stream.emit("entry", {

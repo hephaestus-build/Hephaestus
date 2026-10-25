@@ -1,5 +1,6 @@
 import { ArrowUpIcon, SquareIcon } from "lucide-react";
 import { type ReactNode, type SubmitEvent, useRef, useState } from "react";
+import { useMediaQuery } from "usehooks-ts";
 
 import {
 	InputGroup,
@@ -7,6 +8,7 @@ import {
 	InputGroupButton,
 	InputGroupTextarea,
 } from "@/components/ui/input-group";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { readDraft, writeDraft } from "@/lib/composer-drafts";
 import { rendersContent } from "@/lib/react-node";
 import { hasText } from "@/lib/text";
@@ -30,7 +32,15 @@ export interface HephComposerProps {
 }
 
 /**
- * Where the developer writes to Heph. Enter sends and Shift+Enter starts a new line. An empty field
+ * A touch screen, as its main pointer tells: a phone keyboard has no Shift, so Enter there has to
+ * start a new line. A tablet with a hardware keyboard may report this too, so Cmd or Ctrl with
+ * Enter still sends.
+ */
+const TOUCH = "(pointer: coarse)";
+
+/**
+ * Where the developer writes to Heph. Enter sends and Shift+Enter starts a new line. On a touch
+ * screen, Enter starts a new line, and Send or Cmd or Ctrl with Enter sends. An empty field
  * is one line tall and grows with what is written. The row below it holds the context and the
  * controls; where they do not fit side by side, as a long page name with Stop in a phone's panel,
  * the controls wrap below the context, and the context's name shortens before it leaves the row.
@@ -53,6 +63,7 @@ export function HephComposer({
 		}
 	};
 	const canSend = hasText(input.trim());
+	const touch = useMediaQuery(TOUCH);
 
 	const handleSubmit = (event: SubmitEvent<HTMLFormElement>) => {
 		event.preventDefault();
@@ -78,8 +89,10 @@ export function HephComposer({
 					placeholder={placeholder}
 					value={input}
 					onChange={(event) => setInput(event.target.value)}
+					enterKeyHint={touch ? "enter" : "send"}
 					onKeyDown={(event) => {
-						if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+						const sends = touch ? event.metaKey || event.ctrlKey : !event.shiftKey;
+						if (event.key === "Enter" && sends && !event.nativeEvent.isComposing) {
 							event.preventDefault();
 							event.currentTarget.form?.requestSubmit();
 						}
@@ -91,14 +104,23 @@ export function HephComposer({
 					{rendersContent(context) && <div className="flex min-w-0 *:min-w-0">{context}</div>}
 					<div className="ml-auto flex items-center gap-1">
 						{stop && (
-							<InputGroupButton
-								variant="outline"
-								size="icon-sm"
-								aria-label={stop.label}
-								onClick={stop.onStop}
-							>
-								<SquareIcon fill="currentColor" strokeWidth={0} />
-							</InputGroupButton>
+							<TooltipProvider delay={0}>
+								<Tooltip>
+									<TooltipTrigger
+										render={
+											<InputGroupButton
+												variant="outline"
+												size="icon-sm"
+												aria-label={stop.label}
+												onClick={stop.onStop}
+											/>
+										}
+									>
+										<SquareIcon fill="currentColor" strokeWidth={0} />
+									</TooltipTrigger>
+									<TooltipContent>{stop.label}</TooltipContent>
+								</Tooltip>
+							</TooltipProvider>
 						)}
 						<InputGroupButton
 							type="submit"

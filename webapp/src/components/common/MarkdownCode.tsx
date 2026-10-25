@@ -2,7 +2,6 @@ import { isValidElement, type JSX, type ReactNode } from "react";
 import {
 	CodeBlock,
 	CodeBlockCopyButton,
-	CodeBlockDownloadButton,
 	type ExtraProps,
 	useIsCodeFenceIncomplete,
 } from "streamdown";
@@ -74,7 +73,7 @@ export function MarkdownCode({
 			startLine={startLine}
 			tabIndex={0}
 		>
-			<CodeBlockDownloadButton code={code} language={language} />
+			{/* Copy only: a block here is a snippet to paste, not a file to save. */}
 			<CodeBlockCopyButton />
 		</CodeBlock>
 	);

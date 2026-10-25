@@ -182,3 +182,25 @@ export const ThreadPushed: Story = {
 		await expect(args.thread?.onBack).toHaveBeenCalledOnce();
 	},
 };
+
+/**
+ * Escape takes one level at a time, as a stack of detail drawers does: out of the thread to the
+ * conversation, then out of the panel. Closing the whole panel from a thread would lose the
+ * reader's place one press too early.
+ */
+export const EscapeInThread: Story = {
+	args: { children: threadTimeline() },
+	render: (args) => <OpensThread {...args} />,
+	play: async ({ canvas, userEvent }) => {
+		const launcher = canvas.getByRole("button", { name: "Open Heph, AI mentor" });
+		await userEvent.click(launcher);
+		await userEvent.click(await screen.findByRole("button", { name: "1 reply" }));
+		await expectSettledVisible(await screen.findByRole("dialog", { name: "Thread" }));
+		await userEvent.keyboard("{Escape}");
+		await expect(await screen.findByRole("button", { name: "1 reply" })).toBeVisible();
+		await expect(screen.getByRole("dialog", { name: /^Heph/u })).toBeVisible();
+		await userEvent.keyboard("{Escape}");
+		await expectDismissed();
+		await expect(launcher).toHaveFocus();
+	},
+};

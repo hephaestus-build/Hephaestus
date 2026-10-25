@@ -9,6 +9,8 @@ import {
 	useState,
 } from "react";
 
+import { cn } from "cn";
+import { FOCUS_RING } from "@/components/common/focus";
 import { useArrived } from "@/components/layout/detail-drawer/use-arrived";
 import { Button } from "@/components/ui/button";
 import {
@@ -135,7 +137,7 @@ function ThreadAside({
 					id={headingId}
 					ref={headingRef}
 					tabIndex={-1}
-					className="text-base font-semibold outline-none"
+					className={cn("rounded-sm text-base font-semibold", FOCUS_RING)}
 				>
 					Thread
 				</h2>
