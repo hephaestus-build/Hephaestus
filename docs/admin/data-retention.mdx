@@ -13,29 +13,38 @@ The [record of processing](./dsms/record-of-processing.md) gives the legal basis
 
 The **Setting** column names the environment variable when the supported stack forwards it from `.env`.
 Otherwise, it names the Spring property, and the value is fixed in the supported stack.
-The [configuration reference](./configuration-reference) lists both kinds.
+The [configuration reference](./configuration-reference) lists the settings that have an environment variable.
+The times of the scheduled jobs are in the time zone of the server process.
 
 ## Worker disk
 
-The worker keeps these files under `HEPHAESTUS_FABRIC_ROOT`, on the `worker-git-repos` volume.
+The worker keeps these files under `/data/worker-git-repos`, on the `worker-git-repos` volume.
 
 | Data | Retention | Setting | Deleted by |
 | --- | --- | --- | --- |
 | Debug transcript of an agent run | 24 hours. It goes earlier when the job's evidence expires. | None | A worker sweep every minute |
 | Inputs of an attempt | Until the result is admitted. Otherwise, 1 hour after the attempt ends. A worker restart deletes them. | None | The same sweep |
-| Repository mirrors | No age limit. The server deletes a mirror when no workspace monitors its repository. | None | Repository monitoring |
+| Repository checkouts of the worker | No automatic deletion | None | Nothing deletes them |
 
-## PostgreSQL
+## Server disk
 
 | Data | Retention | Setting | Deleted by |
 | --- | --- | --- | --- |
-| Capture and output of a review job | 14 days after the job ends. A job that waits for delivery keeps them. | `hephaestus.agent.payload-retention` | A server job every 6 hours, when `AGENT_ENABLED` is `true` |
+| Repository mirrors, on the `git-repos` volume | No age limit. The server deletes a mirror when no workspace monitors its repository. | None | Repository monitoring |
+
+## PostgreSQL
+
+The jobs that delete review job data run only when `AGENT_ENABLED` is `true`.
+
+| Data | Retention | Setting | Deleted by |
+| --- | --- | --- | --- |
+| Capture and output of a review job | 14 days after the job ends. A job that waits for delivery keeps them. | `hephaestus.agent.payload-retention` | A server job every 6 hours |
 | Review job rows, with their script runs and attempt usage | 90 days after the job ends | `hephaestus.agent.row-retention` | The same job |
 | Original review inputs (composition basis) | Until they expire. The end of the job also deletes them. | None | The same job |
-| Evidence-copy receipts | [No automatic deletion](https://github.com/hephaestus-build/Hephaestus/issues/3163). Erasure empties a receipt and marks it erased. | None | Erasure only |
+| Evidence-copy receipts | [No automatic deletion](https://github.com/hephaestus-build/Hephaestus/issues/3163). Erasure empties a receipt and marks it erased. | None | Nothing deletes the row |
 | Evidence of an item event | Replaced by a marker 30 days after it is recorded | `hephaestus.item-event-ledger.retain-for` | A server job every 15 minutes |
 | Item events that nothing references | 30 days after their decision | `hephaestus.item-event-ledger.retain-for` | The same job |
-| Item events that stay pending | 7 days | `ITEM_EVENT_LEDGER_PENDING_LAPSE_AFTER` | The same job |
+| Item events that stay pending | They expire after 7 days. The expired row goes 30 days later. | `ITEM_EVENT_LEDGER_PENDING_LAPSE_AFTER`, `hephaestus.item-event-ledger.retain-for` | The same job |
 | Practice results that no feedback cites, and the raw proof of scans | 400 days | None | A server job at 03:00 every day |
 | Feedback and its delivery records | No automatic deletion. Conversation feedback that is never shown is withheld after 14 days and kept. | None | Workspace purge or person erasure |
 | LLM usage records | 400 days | `HEPHAESTUS_LLM_USAGE_RETENTION` | A server job at 04:15 every day |
@@ -50,7 +59,7 @@ The worker keeps these files under `HEPHAESTUS_FABRIC_ROOT`, on the `worker-git-
 | Issued access tokens | Until they expire. Access tokens last 24 hours. | `hephaestus.auth.access-ttl` | A server job at 03:30 every day |
 | Client sessions | At most 7 days. A revoked session goes 1 day after revocation. | `hephaestus.auth.session-max-lifetime` | A server job every hour |
 | OAuth state values | 7 days | `hephaestus.integration.oauth-state.nonce-retention` | A server job at 04:00 every day |
-| Email notifications waiting for delivery | Deleted when delivered. Security, alert, and weekly digest mail expires after 24 hours. Product feedback mail expires after 7 days. Survey mail expires with its request. | None | Delivery and the retry job |
+| Email notifications waiting for delivery | Deleted when delivered. An account deletion confirmation expires at the purge deadline. Security, alert, and weekly digest mail expires after 24 hours. Product feedback mail expires after 7 days. Survey mail expires with its request. | None | Delivery and the retry job |
 | Self-service account exports | The download goes 48 hours after it is ready. | None | A server job every hour |
 | Deleted accounts | Removed 48 hours after the request, by the next hourly sweep | `hephaestus.auth.delete-cooldown` | A server job every hour |
 | Product feedback and survey responses | No automatic deletion | None | Account erasure, survey deletion, or workspace purge |
@@ -59,16 +68,8 @@ The worker keeps these files under `HEPHAESTUS_FABRIC_ROOT`, on the `worker-git-
 ## NATS JetStream
 
 The `nats-data` volume keeps webhook deliveries.
-A stream deletes its oldest messages first when it reaches a limit.
-
-| Stream | Age limit | Size limit | Setting |
-| --- | --- | --- | --- |
-| `github` | 180 days | 10 GB | `HEPHAESTUS_WEBHOOK_STREAM_MAX_AGE`, `HEPHAESTUS_WEBHOOK_STREAM_MAX_BYTES_GITHUB` |
-| `gitlab` | 180 days | 1 GB | `HEPHAESTUS_WEBHOOK_STREAM_MAX_AGE`, `HEPHAESTUS_WEBHOOK_STREAM_MAX_BYTES` |
-| `slack`, `outline` | 72 hours | 1 GB | `HEPHAESTUS_WEBHOOK_STREAM_MAX_BYTES` |
-
-The self-hosted `.env.example` sets smaller size limits.
-A shorter limit on an existing stream does not apply until you allow it, as [Webhook ingestion operations](./webhook-ingestion-operations#changing-a-bound-on-a-stream-that-already-exists) describes.
+Each stream deletes its oldest messages first when it reaches its age limit or its size limit.
+[Webhook ingestion operations](./webhook-ingestion-operations#how-long-a-delivery-is-actually-kept) gives the limits of each stream and their settings.
 
 ## Logs and traces
 
@@ -86,7 +87,7 @@ No container writes an HTTP access log.
 
 | Data | Retention | Where to change it |
 | --- | --- | --- |
-| pgBackRest backups, with the optional backup overlay | Two full backups, with their differential backups and WAL. A full backup runs every Sunday at 02:15 UTC. A differential backup runs Monday to Saturday at 02:15 UTC. | `repo1-retention-full` in `pgbackrest.conf` |
+| pgBackRest backups, with the optional backup overlay | Two full backups, with their differential backups and WAL. [Backup & restore](./backup-restore#automated-off-host-backup-self-host-compose) gives the schedule. | `repo1-retention-full` in `pgbackrest.conf` |
 | A plain `pg_dump` file | No automatic deletion | Delete the file yourself |
 
 A backup contains the whole database, so it also contains data that the instance deleted later.
