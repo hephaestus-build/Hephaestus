@@ -39,6 +39,19 @@ The verifier and every workflow use that map.
    gh attestation verify "release-$VERSION.json" --owner hephaestus-build
    ```
 
+4. To check the release attestation without GitHub's attestation store, use the bundle that ships with the release:
+
+   ```bash
+   gh release download "$VERSION" --repo hephaestus-build/Hephaestus \
+     --pattern "release-$VERSION.intoto.jsonl"
+   gh attestation verify "release-$VERSION.json" \
+     --bundle "release-$VERSION.intoto.jsonl" \
+     --predicate-type https://in-toto.io/attestation/release/v0.1 \
+     --repo hephaestus-build/Hephaestus
+   ```
+
+   Releases before this asset existed have no such file.
+
 ## Rollback
 
 Follow the [rollback procedure](./upgrade#rollback). It selects an earlier published lock without
