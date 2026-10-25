@@ -95,7 +95,7 @@ class ReviewJobExecutorTest extends BaseUnitTest {
     private final PracticePiAdapter practiceAgent = mock(PracticePiAdapter.class);
     private final WorkerJwtIssuer jwtIssuer = mock(WorkerJwtIssuer.class);
     private Optional<WorkerCapacityState> capacity = Optional.empty();
-    private Optional<WorkerProperties> worker = Optional.empty();
+    private WorkerProperties worker = workerNamed("worker-1");
     private SandboxProperties sandboxProperties = SandboxTestLimits.PROPERTIES;
     private final SimpleMeterRegistry meters = new SimpleMeterRegistry();
     private final PracticeScriptRunRecorder practiceScriptRuns = mock(PracticeScriptRunRecorder.class);
@@ -241,7 +241,7 @@ class ReviewJobExecutorTest extends BaseUnitTest {
         assertThat(job.getStatus()).isEqualTo(ReviewJobStatus.RUNNING);
         assertThat(job.getCompletedAt()).isNull();
         assertThat(job.getExitCode()).isNull();
-        verify(jobs, never()).transitionStatusOwnedBy(any(), any(), any(), any(), any(), any());
+        verify(jobs, never()).transitionStatusOwnedBy(any(), any(), any(), any(), any(), anyInt());
         verify(practiceScriptRuns, never()).record(any(), any(), any(), any());
         verify(usageRecorder, never()).project(any(), any());
         verify(kept, never()).forget(any());
@@ -258,7 +258,12 @@ class ReviewJobExecutorTest extends BaseUnitTest {
         when(jobs.lockById(job.getId())).thenReturn(Optional.of(job));
         when(jobs.findById(job.getId())).thenReturn(Optional.of(job));
         when(jobs.transitionStatusOwnedBy(
-                        eq(job.getId()), eq(ReviewJobStatus.COMPLETED), any(), eq(null), any(), eq("worker-1")))
+                        eq(job.getId()),
+                        eq(ReviewJobStatus.COMPLETED),
+                        any(),
+                        eq(null),
+                        eq("worker-1"),
+                        eq(job.getAttempt())))
                 .thenReturn(1);
         var executor = owedExecutor(kept);
 
@@ -289,7 +294,7 @@ class ReviewJobExecutorTest extends BaseUnitTest {
         assertThat(job.getStatus()).isEqualTo(ReviewJobStatus.RUNNING);
         assertThat(job.getCompletedAt()).isNull();
         assertThat(job.getExitCode()).isNull();
-        verify(jobs, never()).transitionStatusOwnedBy(any(), any(), any(), any(), any(), any());
+        verify(jobs, never()).transitionStatusOwnedBy(any(), any(), any(), any(), any(), anyInt());
         verify(usageRecorder, never()).project(any(), any());
         verify(kept, never()).forget(any());
     }
@@ -314,8 +319,8 @@ class ReviewJobExecutorTest extends BaseUnitTest {
                         eq(ReviewJobStatus.TIMED_OUT),
                         any(),
                         eq("The container timed out."),
-                        any(),
-                        eq("worker-1"));
+                        eq("worker-1"),
+                        eq(job.getAttempt()));
         verify(usageRecorder).project(eq(job.getWorkspaceId()), any());
         verify(practiceScriptRuns).record(eq(job), aryEq(scriptReport()), any(), any());
         verify(kept).forget(job);
@@ -354,14 +359,21 @@ class ReviewJobExecutorTest extends BaseUnitTest {
     private void terminalWriteOf(ReviewJob job, ReviewJobStatus status) {
         when(jobs.lockById(job.getId())).thenReturn(Optional.of(job));
         when(jobs.findById(job.getId())).thenReturn(Optional.of(job));
-        when(jobs.transitionStatusOwnedBy(eq(job.getId()), eq(status), any(), any(), any(), eq("worker-1")))
+        when(jobs.transitionStatusOwnedBy(
+                        eq(job.getId()), eq(status), any(), any(), eq("worker-1"), eq(job.getAttempt())))
                 .thenReturn(1);
+    }
+
+    private static WorkerProperties workerNamed(String id) {
+        var properties = mock(WorkerProperties.class);
+        lenient().when(properties.resolvedWorkerId()).thenReturn(id);
+        return properties;
     }
 
     private ReviewJobExecutor runExecutor(ReviewCompositionContinuation kept, SandboxResult result, boolean success) {
         var properties = mock(WorkerProperties.class);
         when(properties.resolvedWorkerId()).thenReturn("worker-1");
-        worker = Optional.of(properties);
+        worker = properties;
         var parsed = new AgentResult(success, Map.of("rawOutput", OWED_RESULT), RETURNED_USAGE);
         when(sandbox.execute(any())).thenReturn(result);
         when(practiceAgent.parseResult(result)).thenReturn(parsed);
@@ -383,7 +395,7 @@ class ReviewJobExecutorTest extends BaseUnitTest {
     private ReviewJobExecutor owedExecutor(ReviewCompositionContinuation kept) {
         var properties = mock(WorkerProperties.class);
         when(properties.resolvedWorkerId()).thenReturn("worker-1");
-        worker = Optional.of(properties);
+        worker = properties;
         var owed = owedResult();
         when(sandbox.execute(any())).thenReturn(owed);
         when(practiceAgent.parseResult(owed))
@@ -449,7 +461,8 @@ class ReviewJobExecutorTest extends BaseUnitTest {
                 .thenReturn(new PracticeSandboxSpec(
                         "practice-runtime", List.of(), Map.of(), Map.of(), "issued-job-token", null));
         when(jobs.updateCapture(any(), anyLong(), any(), anyInt(), any())).thenReturn(1);
-        when(jobs.markExecutionStarted(eq(job.getId()), eq(null), any())).thenReturn(1);
+        when(jobs.markExecutionStarted(eq(job.getId()), eq("worker-1"), eq(2), any()))
+                .thenReturn(1);
         var result = new SandboxResult(0, Map.of(), "", false, Duration.ZERO);
         when(sandbox.execute(any())).thenReturn(result);
         when(practiceAgent.parseResult(result)).thenReturn(new AgentResult(true, Map.of(), null));
@@ -517,6 +530,32 @@ class ReviewJobExecutorTest extends BaseUnitTest {
         var pool = new ThreadPoolTaskExecutor();
         pool.setMaxPoolSize(2);
         assertThat(executor(pool).computeCapacity()).isEqualTo(2);
+    }
+
+    @Test
+    void shouldStopTheLocalAttemptOfARequeuedJobInsteadOfClaimingItAgain() {
+        var job = configuredJob();
+        job.setAttempt(2);
+        var properties = mock(WorkerProperties.class);
+        when(properties.resolvedWorkerId()).thenReturn("worker-1");
+        worker = properties;
+        when(jobs.findByIdQueuedForUpdateSkipLocked(any(), any())).thenReturn(Optional.of(job));
+        when(jobs.findById(job.getId())).thenReturn(Optional.of(job));
+        when(policy.permitsReview(job)).thenReturn(true);
+        var binding = mock(WorkspaceAgentBinding.class);
+        when(binding.getDataHandlingTier()).thenReturn(DataHandlingTier.UNDECLARED);
+        when(binding.getMaxConcurrentJobs()).thenReturn(1);
+        when(policy.binding(job)).thenReturn(Optional.of(binding));
+        when(budgets.decide(job.getWorkspaceId())).thenReturn(LlmBudgetDecision.ALLOWED);
+        when(assignments.load(job)).thenReturn(List.of(RuntimeReviewTestData.assignment(null, null)));
+        // The pool has not run attempt 2 yet, so it still runs here when the job is offered again.
+        var executor = executor(mock(AsyncTaskExecutor.class));
+        assertThat(executor.processJob(job.getId())).isEqualTo(ReviewJobExecutor.StartOutcome.STARTED);
+
+        assertThat(executor.processJob(job.getId())).isEqualTo(ReviewJobExecutor.StartOutcome.SKIPPED);
+
+        verify(sandbox).cancel(job.getId());
+        verify(jobs, never()).transitionStatusOwnedBy(any(), any(), any(), any(), any(), anyInt());
     }
 
     @Test
@@ -604,7 +643,8 @@ class ReviewJobExecutorTest extends BaseUnitTest {
         capacity = Optional.of(workerCapacity);
         when(jobs.findByIdQueuedForUpdateSkipLocked(any(), any())).thenReturn(Optional.of(job));
         when(jobs.findById(job.getId())).thenReturn(Optional.of(job));
-        when(jobs.transitionStatus(any(), any(), any(), any(), any())).thenReturn(1);
+        when(jobs.transitionStatusOwnedBy(any(), any(), any(), any(), eq("worker-1"), anyInt()))
+                .thenReturn(1);
         when(policy.permitsReview(job)).thenReturn(true);
         var binding = mock(WorkspaceAgentBinding.class);
         when(binding.getDataHandlingTier()).thenReturn(DataHandlingTier.UNDECLARED);
@@ -659,7 +699,8 @@ class ReviewJobExecutorTest extends BaseUnitTest {
         capacity = Optional.of(workerCapacity);
         when(jobs.findByIdQueuedForUpdateSkipLocked(any(), any())).thenReturn(Optional.of(job));
         when(jobs.findById(job.getId())).thenReturn(Optional.of(job));
-        when(jobs.transitionStatus(any(), any(), any(), any(), any())).thenReturn(1);
+        when(jobs.transitionStatusOwnedBy(any(), any(), any(), any(), eq("worker-1"), anyInt()))
+                .thenReturn(1);
         when(policy.permitsReview(job)).thenReturn(true);
         var binding = mock(WorkspaceAgentBinding.class);
         when(binding.getDataHandlingTier()).thenReturn(DataHandlingTier.UNDECLARED);
@@ -726,7 +767,14 @@ class ReviewJobExecutorTest extends BaseUnitTest {
 
         assertThat(executor.computeCapacity()).isEqualTo(1);
         assertThat(job.getProcessingStatus()).isEqualTo(ProcessingStatus.PENDING);
-        verify(jobs).transitionStatus(eq(job.getId()), eq(ReviewJobStatus.COMPLETED), any(), eq(null), any());
+        verify(jobs)
+                .transitionStatusOwnedBy(
+                        eq(job.getId()),
+                        eq(ReviewJobStatus.COMPLETED),
+                        any(),
+                        eq(null),
+                        eq("worker-1"),
+                        eq(job.getAttempt()));
         verify(handler).completeWithoutExecution(job);
         verify(workerCapacity).releaseReview();
         assertThat(MDC.get("job.id")).isNull();

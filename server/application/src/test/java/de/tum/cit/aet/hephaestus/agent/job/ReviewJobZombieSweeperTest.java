@@ -314,12 +314,7 @@ class ReviewJobZombieSweeperTest extends BaseUnitTest {
             ReviewJob persistedJob = orphanedJob(jobId, 7L, 5);
             when(jobRepository.lockById(jobId)).thenReturn(Optional.of(persistedJob));
             when(jobRepository.transitionStatusOwnedBy(
-                            eq(jobId),
-                            eq(ReviewJobStatus.FAILED),
-                            any(),
-                            any(),
-                            eq(Set.of(ReviewJobStatus.RUNNING)),
-                            eq(DEAD_WORKER_ID)))
+                            eq(jobId), eq(ReviewJobStatus.FAILED), any(), any(), eq(DEAD_WORKER_ID), eq(5)))
                     .thenReturn(1);
 
             sweeper.recoverOrphanedJobs();
@@ -327,12 +322,7 @@ class ReviewJobZombieSweeperTest extends BaseUnitTest {
             verify(jobRepository, never()).requeueOrphan(any(), any(), anyInt(), any());
             verify(jobRepository)
                     .transitionStatusOwnedBy(
-                            eq(jobId),
-                            eq(ReviewJobStatus.FAILED),
-                            any(),
-                            any(),
-                            eq(Set.of(ReviewJobStatus.RUNNING)),
-                            eq(DEAD_WORKER_ID));
+                            eq(jobId), eq(ReviewJobStatus.FAILED), any(), any(), eq(DEAD_WORKER_ID), eq(5));
             verify(usageRecorder, never()).record(any(), any());
             verify(usageRecorder, never()).project(any(), any());
         }
