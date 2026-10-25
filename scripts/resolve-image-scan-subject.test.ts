@@ -394,9 +394,7 @@ void test(
 						RUNNER_TEMP: directory,
 						PLATFORM_PAIR: "linux-arm64",
 						IMAGES: JSON.stringify(["application-server", "webapp"]),
-						BAKE_METADATA: JSON.stringify({
-							webapp: { "containerimage.digest": `sha256:${artifact}` },
-						}),
+						WEBAPP_DIGEST: `sha256:${artifact}`,
 						BUILDPACKS_DIGEST: `sha256:${buildpacks}`,
 					},
 				},
@@ -430,9 +428,7 @@ void test(
 						RUNNER_TEMP: directory,
 						PLATFORM_PAIR: "linux-arm64",
 						IMAGES: JSON.stringify(["webapp", "postgres"]),
-						BAKE_METADATA: JSON.stringify({
-							webapp: { "containerimage.digest": `sha256:${artifact}` },
-						}),
+						WEBAPP_DIGEST: `sha256:${artifact}`,
 						BUILDPACKS_DIGEST: "",
 					},
 				},

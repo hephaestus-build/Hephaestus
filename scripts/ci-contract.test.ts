@@ -1562,6 +1562,20 @@ void describe("CI contract", () => {
 				name,
 			);
 		}
+		// The export reads each image's digest, never the whole bake metadata: its provenance records
+		// exceed what a process environment can hold.
+		const exported = namedStep(workflow, build, "Export digests");
+		assert.equal(exported.hasIn(["env", "BAKE_METADATA"]), false);
+		for (const [variable, target] of [
+			["WEBAPP_DIGEST", ".webapp"],
+			["AGENT_PI_DIGEST", "['agent-pi']"],
+			["POSTGRES_DIGEST", ".postgres"],
+		] as const) {
+			assert.equal(
+				exported.getIn(["env", variable]),
+				`\${{ steps.bake.outputs.metadata && fromJSON(steps.bake.outputs.metadata)${target}['containerimage.digest'] || '' }}`,
+			);
+		}
 		// The handover runs only when every step succeeded, and the manifest job needs the build.
 		assert.equal(namedStep(workflow, build, "Upload digests").get("if"), "inputs.publish");
 		assert.equal(workflow.getIn(["jobs", "merge", "needs"]), "build");

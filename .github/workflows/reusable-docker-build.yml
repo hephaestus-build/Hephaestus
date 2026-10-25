@@ -296,18 +296,24 @@ jobs:
         if: ${{ !cancelled() && steps.prep.outcome == 'success' && inputs.publish }}
         env:
           IMAGES: ${{ steps.prep.outputs.images }}
-          BAKE_METADATA: ${{ steps.bake.outputs.metadata || '{}' }}
+          # Only the digests: the full bake metadata carries provenance records too large for the
+          # environment of a process.
+          WEBAPP_DIGEST: ${{ steps.bake.outputs.metadata && fromJSON(steps.bake.outputs.metadata).webapp['containerimage.digest'] || '' }}
+          AGENT_PI_DIGEST: ${{ steps.bake.outputs.metadata && fromJSON(steps.bake.outputs.metadata)['agent-pi']['containerimage.digest'] || '' }}
+          POSTGRES_DIGEST: ${{ steps.bake.outputs.metadata && fromJSON(steps.bake.outputs.metadata).postgres['containerimage.digest'] || '' }}
           BUILDPACKS_DIGEST: ${{ steps.build-buildpacks.outputs.digest }}
           PLATFORM_PAIR: ${{ steps.prep.outputs.platform_pair }}
         run: |
           set -euo pipefail
           missing=()
           for name in $(jq -r '.[]' <<< "$IMAGES"); do
-            if [ "$name" = application-server ]; then
-              digest=$BUILDPACKS_DIGEST
-            else
-              digest=$(jq -r --arg name "$name" '.[$name]["containerimage.digest"] // empty' <<< "$BAKE_METADATA")
-            fi
+            case "$name" in
+              application-server) digest=$BUILDPACKS_DIGEST ;;
+              webapp) digest=$WEBAPP_DIGEST ;;
+              agent-pi) digest=$AGENT_PI_DIGEST ;;
+              postgres) digest=$POSTGRES_DIGEST ;;
+              *) digest= ;;
+            esac
             if [[ ! "$digest" =~ ^sha256:[a-f0-9]{64}$ ]]; then
               echo "::error::No digest produced for $name (got: ${digest:-<empty>})"
               missing+=("$name")
