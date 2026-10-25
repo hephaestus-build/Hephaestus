@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, fn } from "storybook/test";
 
 import { FEEDBACK_MODE_DESCRIPTIONS } from "@/lib/practice-feedback-mode";
+import { paintedLayers } from "@/stories/focus";
 import { expectNoPageOverflow } from "@/stories/reflow";
 import { Stateful } from "@/stories/stateful";
 
@@ -180,6 +181,17 @@ export const ChoosingByKeyboard: Story = {
 		const approveFirst = canvas.getByRole("radio", { name: "Approve first" });
 		await expect(approveFirst).toHaveFocus();
 		await expect(approveFirst).toBeChecked();
+	},
+};
+
+/** A rung is no choice card, so it has no edge to carry focus, and the radio keeps its own ring. */
+export const FocusedRadioKeepsItsRing: Story = {
+	args: { variant: "full", value: "OFF" },
+	play: async ({ canvas, userEvent }) => {
+		const off = canvas.getByRole("radio", { name: "Off" });
+		await userEvent.tab();
+		await expect(off).toHaveFocus();
+		await expect(paintedLayers(getComputedStyle(off).boxShadow)).toHaveLength(1);
 	},
 };
 

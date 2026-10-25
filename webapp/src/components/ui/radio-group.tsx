@@ -21,8 +21,12 @@ function RadioGroupItem({ className, ...props }: RadioPrimitive.Root.Props) {
 			// `data-disabled:`, never `disabled:`: the radio is a `<span role="radio">` with a visually
 			// hidden `<input>` beside it, and `:disabled` matches only form elements — so a `disabled:`
 			// rule compiles fine and leaves a disabled radio looking entirely live.
+			// In a choice card the card takes the focus ring, so the radio drops its own and returns to
+			// its rest border. The resets are spelled as in `checkbox.tsx`, for the reason there. The rest
+			// border is `border-input` whether the radio is checked or not, so one class replaces
+			// upstream's checked and unchecked pair.
 			className={cn(
-				"group/radio-group-item peer relative flex aspect-square size-4 shrink-0 rounded-full border border-input text-primary outline-none after:absolute after:-inset-x-3 after:-inset-y-2 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:bg-input/30 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 data-disabled:cursor-not-allowed data-disabled:opacity-50",
+				"group/radio-group-item peer relative flex aspect-square size-4 shrink-0 rounded-full border border-input text-primary outline-none after:absolute after:-inset-x-3 after:-inset-y-2 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 group-has-[>[data-slot=field]]/field-label:focus-visible:border-input group-has-[>[data-slot=field]]/field-label:focus-visible:ring-0 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:bg-input/30 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 data-disabled:cursor-not-allowed data-disabled:opacity-50",
 				className,
 			)}
 			{...props}
