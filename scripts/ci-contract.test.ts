@@ -4375,7 +4375,10 @@ void test("pnpm reuses only trusted native verification verdicts and still runs 
 	for (const declaration of [locate, restore, install, proof]) {
 		assert.equal(declaration.get("if"), "inputs.install == 'frozen'");
 	}
-	assert.equal(install.get("run"), "pnpm install --frozen-lockfile --ignore-scripts");
+	assert.equal(
+		install.get("run"),
+		"pnpm install --frozen-lockfile --ignore-scripts --no-trust-lockfile",
+	);
 	assert.match(String(locate.get("run")), /\$\(pnpm cache path\)/u);
 	assert.match(
 		String(locate.get("run")),

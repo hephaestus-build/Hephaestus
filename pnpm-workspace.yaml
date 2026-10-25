@@ -15,6 +15,10 @@ publicHoistPattern:
   - "@types/react-dom"
   - "@types/hast"
 minimumReleaseAge: 4320
+# An install checks only the versions it newly resolves against the release age. Re-verifying
+# every locked entry needs each package's full registry metadata, more memory than Renovate's
+# hosted job has. The setup-toolchain install in CI still verifies every entry (--no-trust-lockfile).
+trustLockfile: true
 # Initial, explicitly requested adoption; keep the age policy for every other package/version.
 minimumReleaseAgeExclude:
   - "@shadcn/lint@0.1.0"
