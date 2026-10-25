@@ -7,8 +7,9 @@ import {
 	boxOf,
 	expect,
 	openInline,
-	reportHeight,
+	providerPage,
 	reportFrame,
+	reportHeight,
 	reportHost,
 	tabIdOf,
 	test,
@@ -232,7 +233,7 @@ async function settled(page: Page): Promise<void> {
 
 test.describe("where the report goes", () => {
 	test("in a GitLab merge request's reports area, before its activity", async ({ context }) => {
-		const page = await context.newPage();
+		const page = await providerPage(context);
 		await page.goto(GITLAB_MR);
 		await expect(reportHost(page)).toHaveCount(1);
 		expect(await neighbours(page)).toStrictEqual({
@@ -250,14 +251,14 @@ test.describe("where the report goes", () => {
 	test("keeps the GitLab report in Overview while inactive Rapid Diffs uses content-visibility hidden", async ({
 		context,
 	}) => {
-		await context.route(GITLAB_MR, async (route) => {
+		const page = await providerPage(context);
+		await page.route(GITLAB_MR, async (route) => {
 			const body = gitLabMergeRequest("Add the login screen").replace(
 				'class="tab-pane diffs" hidden',
 				'class="tab-pane diffs" style="display:block;visibility:visible;content-visibility:hidden"',
 			);
 			await route.fulfill({ contentType: "text/html", body });
 		});
-		const page = await context.newPage();
 		await page.goto(GITLAB_MR);
 		const computed = await page.locator("#diffs").evaluate((pane) => {
 			const style = getComputedStyle(pane);
@@ -290,7 +291,7 @@ test.describe("where the report goes", () => {
 	});
 
 	test("between a GitHub pull request's description and its timeline", async ({ context }) => {
-		const page = await context.newPage();
+		const page = await providerPage(context);
 		await page.goto(GITHUB_PR);
 		await expect(reportHost(page)).toHaveCount(1);
 		expect(await neighbours(page)).toStrictEqual({
@@ -301,7 +302,7 @@ test.describe("where the report goes", () => {
 	});
 
 	test("between a GitHub issue's description and its activity", async ({ context }) => {
-		const page = await context.newPage();
+		const page = await providerPage(context);
 		await page.goto(GITHUB_ISSUE);
 		await expect(reportHost(page)).toHaveCount(1);
 		const place = await neighbours(page);
@@ -310,7 +311,7 @@ test.describe("where the report goes", () => {
 	});
 
 	test("first in a GitLab work item's activity area, adding no grid area", async ({ context }) => {
-		const page = await context.newPage();
+		const page = await providerPage(context);
 		await page.goto(GITLAB_ISSUE);
 		await expect(reportHost(page)).toHaveCount(1);
 		const place = await neighbours(page);
@@ -322,7 +323,7 @@ test.describe("where the report goes", () => {
 	});
 
 	test("above the changed files on GitHub and GitLab", async ({ context }) => {
-		const page = await context.newPage();
+		const page = await providerPage(context);
 		await page.goto(`${GITHUB_PR}/changes`);
 		await expect(reportHost(page)).toHaveCount(1);
 		expect(await nextToReport(page)).toBe("progressive-diffs-list");
@@ -342,7 +343,7 @@ test.describe("where the report goes", () => {
 	});
 
 	test("nowhere on a page with no slot, rather than floating over it", async ({ context }) => {
-		const page = await context.newPage();
+		const page = await providerPage(context);
 		for (const url of [
 			`${GITHUB_ORIGIN}/hephaestus-build/demo`,
 			`${GITHUB_PR}/commits`,
@@ -359,7 +360,7 @@ test.describe("in the page's flow", () => {
 	test("opens in place, moving the activity below it, and closes back to its line", async ({
 		context,
 	}) => {
-		const page = await context.newPage();
+		const page = await providerPage(context);
 		await page.goto(GITLAB_MR);
 		await reportFrame(page);
 		await expect.poll(async () => reportHeight(page)).toBe(COLLAPSED);
@@ -381,7 +382,7 @@ test.describe("in the page's flow", () => {
 	test("follows the reader between the overview and the changes, one report at a time", async ({
 		context,
 	}) => {
-		const page = await context.newPage();
+		const page = await providerPage(context);
 		await page.goto(GITLAB_MR);
 		await reportFrame(page);
 		await showTab(page, "changes");
@@ -395,7 +396,7 @@ test.describe("in the page's flow", () => {
 	test("follows the provider's navigation to other work and away from work", async ({
 		context,
 	}) => {
-		const page = await context.newPage();
+		const page = await providerPage(context);
 		await page.goto(GITLAB_MR);
 		const first = await frameToken(page);
 		await page.evaluate(() => {
@@ -416,7 +417,7 @@ test.describe("in the page's flow", () => {
 	});
 
 	test("keeps exactly one report when the provider re-renders its content", async ({ context }) => {
-		const page = await context.newPage();
+		const page = await providerPage(context);
 		await page.goto(GITLAB_MR);
 		await reportFrame(page);
 		await page.evaluate(rerenderDiscussion);
@@ -430,7 +431,7 @@ test.describe("what the page can see and do", () => {
 	test("reads nothing about the work or the account, and cannot resize the frame", async ({
 		context,
 	}) => {
-		const page = await context.newPage();
+		const page = await providerPage(context);
 		await page.goto(GITLAB_MR);
 		const frame = await reportFrame(page);
 		await expect(frame.getByRole("heading", { level: 2 })).toContainText("Connect the extension");
@@ -449,7 +450,7 @@ test.describe("what the page can see and do", () => {
 	});
 
 	test("cannot open the report from the address it gives the frame", async ({ context }) => {
-		const page = await context.newPage();
+		const page = await providerPage(context);
 		await page.goto(GITLAB_MR);
 		await page.evaluate(askForExpansionInFrameAddress);
 		await page.evaluate(() => {
@@ -466,7 +467,7 @@ test.describe("what the page can see and do", () => {
 	test("shows a generic failure when the page replaces the frame document, without fighting it", async ({
 		context,
 	}) => {
-		const page = await context.newPage();
+		const page = await providerPage(context);
 		// A hostile or incompatible page controls its DOM, and the report's shadow root is open to it.
 		// Set srcdoc at insertion, before the extension document can report ready; do not weaken
 		// browser protections to make it load.
@@ -483,7 +484,7 @@ test.describe("a report moved by the page", () => {
 		test(`recovers the frame document after its ${removed} is removed and reinserted in one turn`, async ({
 			context,
 		}) => {
-			const page = await context.newPage();
+			const page = await providerPage(context);
 			const failures: string[] = [];
 			page.on("console", collectPostMessageFailures(failures));
 			await page.emulateMedia({ colorScheme: "light" });
@@ -513,7 +514,7 @@ test.describe("scrolling across the report", () => {
 		test(`continues scrolling the provider over collapsed and expanded reports on ${new URL(url).host}`, async ({
 			context,
 		}) => {
-			const page = await context.newPage();
+			const page = await providerPage(context);
 			await page.setViewportSize({ width: 1000, height: 800 });
 			await page.goto(url);
 			await page.evaluate(() => {
@@ -539,7 +540,7 @@ test.describe("scrolling across the report", () => {
 	test("scrolls a height-capped report internally then continues into the provider at its boundary", async ({
 		context,
 	}) => {
-		const page = await context.newPage();
+		const page = await providerPage(context);
 		await page.setViewportSize({ width: 1000, height: 800 });
 		await page.goto(GITLAB_MR);
 		await page.evaluate(() => {
@@ -578,7 +579,7 @@ test.describe("scrolling across the report", () => {
 
 test.describe("the report's look", () => {
 	test("adopts GitLab's dark theme when the frame becomes ready", async ({ context }) => {
-		const page = await context.newPage();
+		const page = await providerPage(context);
 		await page.emulateMedia({ colorScheme: "light" });
 		await page.goto(GITLAB_MR);
 		await page.evaluate(() => document.documentElement.classList.add("gl-dark"));
@@ -590,7 +591,7 @@ test.describe("the report's look", () => {
 	test("follows GitHub's selected palettes and the system without replacing the frame", async ({
 		context,
 	}) => {
-		const page = await context.newPage();
+		const page = await providerPage(context);
 		await page.emulateMedia({ colorScheme: "light" });
 		await page.goto(GITHUB_PR);
 		await page.evaluate(() => {
@@ -619,7 +620,7 @@ test.describe("the report's look", () => {
 		test(`keeps one setup action and keyboard and wheel access at 320px on ${new URL(url).host}`, async ({
 			context,
 		}) => {
-			const page = await context.newPage();
+			const page = await providerPage(context);
 			await page.setViewportSize({ width: 320, height: 700 });
 			await page.goto(url);
 			await page.evaluate(appendNextProviderAction);
@@ -651,7 +652,7 @@ test.describe("the report's look", () => {
 	}
 
 	test("keeps its line whole in a narrow window", async ({ context }) => {
-		const page = await context.newPage();
+		const page = await providerPage(context);
 		await page.setViewportSize({ width: 360, height: 700 });
 		await page.goto(GITHUB_PR);
 		const frame = await reportFrame(page);
@@ -679,7 +680,7 @@ test("reinjection replaces the old report and access removal tears down the curr
 	context,
 	worker,
 }) => {
-	const page = await context.newPage();
+	const page = await providerPage(context);
 	await page.goto(GITLAB_MR);
 	await expect(reportHost(page)).toHaveCount(1);
 	const tabId = await tabIdOf(worker, GITLAB_MR);
@@ -716,7 +717,7 @@ test.describe("a list row's preview in the row", () => {
 		test(`shows the row's own background through it, not an opaque ${scheme} box, on a page declaring "${declared}"`, async ({
 			context,
 		}) => {
-			const page = await context.newPage();
+			const page = await providerPage(context);
 			await page.emulateMedia({ colorScheme: scheme });
 			await page.goto(`${GITHUB_ORIGIN}/hephaestus-build/demo/pulls`);
 			await page.evaluate(followSystemScheme, declared);
@@ -759,7 +760,7 @@ test.describe("a repository's list", () => {
 		{ url: `${GITLAB_ORIGIN}/ext/demo/-/work_items`, number: 4 },
 	]) {
 		test(`previews one work at a time in ${list.url}`, async ({ context }) => {
-			const page = await context.newPage();
+			const page = await providerPage(context);
 			await page.goto(list.url);
 			const inspect = page.locator("hephaestus-inspect");
 			await expect(inspect).toHaveCount(2);
