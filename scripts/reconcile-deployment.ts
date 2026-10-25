@@ -449,9 +449,11 @@ export function lockImages(lockEnvs: readonly string[]): string[] {
 	);
 }
 
-/** One image as `docker image ls --digests` lists it. */
+/** One image as `docker image ls --all --digests` lists it. */
 export interface ListedImage {
 	repository: string;
+	/** `<none>` for an image pulled by digest, as every release image is. */
+	tag: string;
 	digest: string;
 	id: string;
 }
@@ -459,8 +461,9 @@ export interface ListedImage {
 /**
  * The images a host may remove: those of a repository a kept lock uses that are neither named by a
  * kept lock nor the same image as one it names. An image of any other repository is not this
- * deployment's to judge. The image ID decides sameness, because the digest Docker lists can be a
- * platform manifest's where the lock names the index.
+ * deployment's to judge, and so is a tagged image: a release image is pulled by digest and carries no
+ * tag. The image ID decides sameness, because the digest Docker lists can be a platform manifest's
+ * where the lock names the index.
  *
  * `docker image prune` cannot express this. Without `-a`, it removes only untagged images that
  * nothing references; with `-a`, it also removes the previous release's images and every idle image
@@ -480,9 +483,14 @@ export function unkeptImages(
 		named.add(`${repository}${reference.slice(at)}`);
 	}
 	return listed
-		.filter(({ repository, digest, id }) => {
+		.filter(({ repository, tag, digest, id }) => {
 			const name = repositoryName(repository);
-			return repositories.has(name) && !named.has(`${name}@${digest}`) && !keptIds.has(id);
+			return (
+				tag === "<none>" &&
+				repositories.has(name) &&
+				!named.has(`${name}@${digest}`) &&
+				!keptIds.has(id)
+			);
 		})
 		.map(({ repository, digest }) => `${repository}@${digest}`);
 }
@@ -534,9 +542,11 @@ async function removeUnkeptImages(keptLockEnvs: readonly string[]): Promise<numb
 			keptIds.add(id);
 		}
 	}
+	// Docker hides untagged images from the listing unless asked, and every release image is one.
 	const listing = await output("docker", [
 		"image",
 		"ls",
+		"--all",
 		"--digests",
 		"--no-trunc",
 		"--format",
@@ -549,6 +559,7 @@ async function removeUnkeptImages(keptLockEnvs: readonly string[]): Promise<numb
 		.filter((image) => typeof image.Digest === "string" && image.Digest.startsWith("sha256:"))
 		.map((image) => ({
 			repository: asString(image.Repository, "image repository"),
+			tag: asString(image.Tag, "image tag"),
 			digest: asString(image.Digest, "image digest"),
 			id: asString(image.ID, "image ID"),
 		}));
