@@ -368,6 +368,13 @@ The existing supersession service replaces the old queued feedback only after th
 Public and private pieces use separate preparation requests.
 A refusal for one package does not clear another package's accepted feedback.
 
+Preparation applies one text policy to each text that the composer writes, for every destination.
+A text contains no link that a cited quote of the work did not supply.
+It contains no GitHub, GitLab or Slack mention, no raw HTML, no image and no hidden or bidirectional control character.
+Code spans and code blocks can quote code, but not Slack syntax.
+If one text breaks the policy, preparation refuses the package and stores nothing.
+The server logs the rule that the text broke, and the runner records the refusal as `SERVER_REFUSED`.
+
 ## Deliver copies
 
 Preparation commits feedback, basis, copies and an eligible send before external access.

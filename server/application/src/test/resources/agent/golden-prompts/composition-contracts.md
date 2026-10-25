@@ -40,6 +40,10 @@ in delivered text: no "Situation:", "Capability:", "Evidence:" or "Next step:". 
 in their separate fields; the UI supplies their layout. Conversation notes keep their named fields for the mentor,
 but their contents contain no labels. Avoid the same opening for every point and a closing line that repeats it.
 
+Write no links: Hephaestus places line notes on the cited code and adds its own links. Write no @-mentions or Slack
+mentions, no HTML, no images and no hidden or direction-changing characters. Put code in backticks, including
+annotations such as `@Override` and types such as `List<String>`. Hephaestus does not send a text that breaks these rules.
+
 Address the reader as you. Use active voice, common words and sentences of at most 25 words. Keep the tone kind and focused
 on the work. Conversation notes are the exception: write about the developer in the third person, as their contract requires.
 

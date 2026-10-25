@@ -411,6 +411,33 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldStoreNoFeedbackWhenTheComposedTextLinksBeyondTheCompositionInput() {
+        try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
+            var response = admission.admit(review.identity(), request(review));
+            var context = admission.publicFeedbackHistory(review.identity()).publicationContext();
+
+            assertThatThrownBy(() -> admission.prepareFeedback(
+                            review.identity(),
+                            composition(
+                                    review,
+                                    response,
+                                    SUMMARY + " See [the fix](https://other.example.net/fix).",
+                                    context)))
+                    .isInstanceOf(AdmissionConflictException.class);
+
+            assertThat(feedback.findByWorkspaceIdAndReviewIdOrderByCreatedAtAscIdAsc(
+                            review.workspaceId(), review.reviewId()))
+                    .isEmpty();
+            assertThat(jobs.findById(review.identity().jobId()).orElseThrow().getPublicReviewDigest())
+                    .isNull();
+            assertThat(admission
+                            .prepareFeedback(review.identity(), composition(review, response, SUMMARY, context))
+                            .feedbackIds())
+                    .containsExactly(FeedbackIds.onWork(review.workspaceId(), review.reviewId(), review.developerId()));
+        }
+    }
+
+    @Test
     void shouldReplayTheAcceptedPackageButWithholdItsSendWhenAnotherReviewPostedOnThePullRequestSinceAcceptance() {
         try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
             var response = admission.admit(review.identity(), request(review));
