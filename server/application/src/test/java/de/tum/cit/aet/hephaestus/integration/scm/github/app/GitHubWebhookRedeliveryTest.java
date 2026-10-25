@@ -121,6 +121,20 @@ class GitHubWebhookRedeliveryTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldRedeliverAnEventThatTheReceiverAnsweredWithARedirect() throws Exception {
+        configured();
+        respond(deliveries(delivery(41, "redirected", 3, 302)), null);
+        github.enqueue(new MockResponse.Builder().code(202).build());
+
+        redelivery.redeliverFailed();
+
+        assertThat(github.getRequestCount()).isEqualTo(2);
+        github.takeRequest();
+        assertThat(github.takeRequest().getTarget()).isEqualTo("/app/hook/deliveries/41/attempts");
+        assertThat(outcome("requested")).isEqualTo(1);
+    }
+
+    @Test
     void shouldAskGitHubNothingWhenTheAppIsNotConfigured() {
         when(tokens.isConfigured()).thenReturn(false);
 
