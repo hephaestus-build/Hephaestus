@@ -197,6 +197,24 @@ Prometheus evaluates rules.
 Your Alertmanager or equivalent controls notification delivery, grouping, and silences.
 See the [Prometheus alerting guidance](https://prometheus.io/docs/practices/alerting/).
 
+## Database statement statistics
+
+The bundled PostgreSQL image loads [`pg_stat_statements`](https://www.postgresql.org/docs/current/pgstatstatements.html).
+It records the run count and time of each statement for all databases.
+To read the statistics, create the extension once in the `postgres` database.
+Then the application schema stays unchanged.
+From `/opt/hephaestus/docker/self-host`, run:
+
+```bash
+docker compose --env-file .env --env-file release-lock.env exec postgres \
+  psql -U root -d postgres -c 'CREATE EXTENSION IF NOT EXISTS pg_stat_statements'
+docker compose --env-file .env --env-file release-lock.env exec postgres \
+  psql -U root -d postgres -c 'SELECT calls, round(mean_exec_time) AS mean_ms, round(total_exec_time) AS total_ms, left(query, 120) AS query FROM pg_stat_statements ORDER BY total_exec_time DESC LIMIT 20'
+```
+
+For most statements, the statistics replace constants with placeholders.
+A clean restart keeps them, and `SELECT pg_stat_statements_reset()` clears them.
+
 ## Reading log records
 
 | Field                                             | Meaning                                                                                          |
