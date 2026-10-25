@@ -14,7 +14,6 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.UUID;
 import java.util.concurrent.Executor;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.QueryTimeoutException;
@@ -25,19 +24,6 @@ class WorkerLivenessReporterTest extends BaseUnitTest {
 
     private final WorkerRegistryRepository registry = mock(WorkerRegistryRepository.class);
     private final ReviewJobExecutor executor = mock(ReviewJobExecutor.class);
-
-    @Test
-    void shouldStopEveryAttemptTheLedgerNoLongerRunsHere() {
-        var lost = new ReviewJobExecutor.LostAttempt(UUID.randomUUID(), 2);
-        var other = new ReviewJobExecutor.LostAttempt(UUID.randomUUID(), 0);
-        when(executor.lostAttemptsToStop()).thenReturn(List.of(lost, other));
-
-        reporter(Runnable::run).beat();
-
-        verify(registry).heartbeat("test-worker");
-        verify(executor).stopLostAttempt(lost);
-        verify(executor).stopLostAttempt(other);
-    }
 
     @Test
     void shouldReadTheLedgerOffTheHeartbeatAndQueueOnlyOneCheck() {

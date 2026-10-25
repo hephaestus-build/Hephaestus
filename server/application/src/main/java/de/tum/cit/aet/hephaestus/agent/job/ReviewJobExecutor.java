@@ -498,6 +498,9 @@ public class ReviewJobExecutor {
     }
 
     StartOutcome processJob(UUID jobId) {
+        // An attempt of this job still runs here: it was lost and requeued. The next heartbeat stops it, and the job is
+        // claimed only after it unwound, so one job never has two attempts on this worker.
+        if (localRunningJobs.containsKey(jobId)) return StartOutcome.SKIPPED;
         ReviewJobClaimService.ClaimAttempt attempt;
         try {
             attempt = claims.claimJob(jobId);
@@ -649,7 +652,7 @@ public class ReviewJobExecutor {
             // for recovery on another process. A lost fence means the job was cancelled or requeued
             // while preparation ran, so its sandbox must not start.
             preparationStage.set(PreparationFailure.Stage.EXECUTION_FENCE);
-            if (!markExecutionStarted(jobId)) {
+            if (!markExecutionStarted(jobId, job.getAttempt())) {
                 metricOutcome = "OWNERSHIP_LOST";
                 log.info("Skipped sandbox start after execution fence was lost: jobId={}", jobId);
                 return;
@@ -816,9 +819,9 @@ public class ReviewJobExecutor {
         return "%016x".formatted(value);
     }
 
-    private boolean markExecutionStarted(UUID jobId) {
+    private boolean markExecutionStarted(UUID jobId, int attempt) {
         Integer updated = transactionTemplate.execute(
-                status -> jobRepository.markExecutionStarted(jobId, workerId, Instant.now()));
+                status -> jobRepository.markExecutionStarted(jobId, workerId, attempt, Instant.now()));
         return updated != null && updated == 1;
     }
 

@@ -11,6 +11,7 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -461,7 +462,8 @@ class ReviewJobExecutorTest extends BaseUnitTest {
                 .thenReturn(new PracticeSandboxSpec(
                         "practice-runtime", List.of(), Map.of(), Map.of(), "issued-job-token", null));
         when(jobs.updateCapture(any(), anyLong(), any(), anyInt(), any())).thenReturn(1);
-        when(jobs.markExecutionStarted(eq(job.getId()), eq("worker-1"), any())).thenReturn(1);
+        when(jobs.markExecutionStarted(eq(job.getId()), eq("worker-1"), eq(2), any()))
+                .thenReturn(1);
         var result = new SandboxResult(0, Map.of(), "", false, Duration.ZERO);
         when(sandbox.execute(any())).thenReturn(result);
         when(practiceAgent.parseResult(result)).thenReturn(new AgentResult(true, Map.of(), null));
@@ -578,17 +580,18 @@ class ReviewJobExecutorTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldKeepTheSandboxOfALaterAttemptThatStartedHereAfterTheLossWasFound() {
+    void shouldNotClaimAJobAgainWhileItsLostAttemptStillRunsHereButStopThatAttempt() {
         var job = configuredJob();
         var executor = claimedOnWorker(job);
-        when(jobs.findRunningAttemptsOwnedBy(any(), eq("worker-1"))).thenReturn(List.of());
-        var lost = executor.lostAttemptsToStop();
-
+        // The sweeper requeued the job while attempt 2 still runs here, and the poll offers it again.
         job.setAttempt(3);
-        assertThat(executor.processJob(job.getId())).isEqualTo(ReviewJobExecutor.StartOutcome.STARTED);
-        lost.forEach(executor::stopLostAttempt);
 
-        verify(sandbox, never()).cancel(any());
+        assertThat(executor.processJob(job.getId())).isEqualTo(ReviewJobExecutor.StartOutcome.SKIPPED);
+        verify(jobs, times(1)).findByIdQueuedForUpdateSkipLocked(eq(job.getId()), any());
+
+        when(jobs.findRunningAttemptsOwnedBy(any(), eq("worker-1"))).thenReturn(List.of());
+        executor.lostAttemptsToStop().forEach(executor::stopLostAttempt);
+        verify(sandbox).cancel(job.getId());
     }
 
     @Test

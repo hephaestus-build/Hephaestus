@@ -51,7 +51,10 @@ public class WorkerLivenessReporter {
     // The ledger read and the stops run here, so a slow query or container stop never delays the heartbeat.
     private final Executor stops;
 
-    /** At most one check waits or runs, so a stalled one does not queue another at every heartbeat. */
+    /**
+     * At most one check waits or runs, so a stalled one does not queue another at every heartbeat. A stop that never
+     * returns, as with a hung container runtime, holds every later check until it does; the heartbeats continue.
+     */
     private final AtomicBoolean checking = new AtomicBoolean();
 
     @Autowired

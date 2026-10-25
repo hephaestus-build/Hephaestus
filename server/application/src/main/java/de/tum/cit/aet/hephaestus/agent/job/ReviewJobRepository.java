@@ -332,16 +332,19 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query("UPDATE ReviewJob j SET j.executionStartedAt = :now "
             + "WHERE j.id = :id AND j.status = 'RUNNING' AND j.executionStartedAt IS NULL "
-            + "AND ((:workerId IS NULL AND j.workerId IS NULL) OR j.workerId = :workerId)")
+            + "AND j.workerId = :workerId AND j.attempt = :attempt")
     int markExecutionStarted(
-            @Param("id") UUID id, @Param("workerId") @Nullable String workerId, @Param("now") Instant now);
+            @Param("id") UUID id,
+            @Param("workerId") String workerId,
+            @Param("attempt") int attempt,
+            @Param("now") Instant now);
 
     @WorkspaceAgnostic("ID-based evidence-refusal transition; job ID + owner from worker-local execution context")
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query(EVIDENCE_REFUSAL_TRANSITION)
     int transitionToEvidenceRefused(
             @Param("id") UUID id,
-            @Param("workerId") @Nullable String workerId,
+            @Param("workerId") String workerId,
             @Param("attempt") int attempt,
             @Param("now") Instant now,
             @Param("output") JsonNode output);

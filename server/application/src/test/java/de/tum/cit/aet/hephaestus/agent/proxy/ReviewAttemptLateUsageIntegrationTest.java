@@ -328,9 +328,9 @@ class ReviewAttemptLateUsageIntegrationTest extends AbstractWorkspaceIntegration
     void shouldBillTheLockedAttemptWhenAnExecutorRetriesWithItsDetachedPreExecutionClaim() {
         ReviewJob claim = runningJob("late-detached-retry", false, false);
         assertThat(claim.getExecutionStartedAt()).isNull();
-        transactions.executeWithoutResult(
-                tx -> assertThat(jobs.markExecutionStarted(claim.getId(), "worker-1", Instant.now()))
-                        .isEqualTo(1));
+        transactions.executeWithoutResult(tx -> assertThat(
+                        jobs.markExecutionStarted(claim.getId(), "worker-1", claim.getAttempt(), Instant.now()))
+                .isEqualTo(1));
         assertThat(claim.getExecutionStartedAt()).isNull();
         assertThat(jobs.findById(claim.getId()).orElseThrow().getExecutionStartedAt())
                 .isNotNull();
