@@ -10,7 +10,8 @@ The Helm chart installs Hephaestus on a Kubernetes cluster.
 From 1.0, the chart is the supported deployment: [ADR 0058](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0058-the-helm-chart-is-the-only-supported-deployment-from-1-0.md) records the decision, and the [compatibility policy](./compatibility-policy#support-for-1x) gives the terms.
 The worker runs practice reviews and Heph turns. The `small.yaml` profile enables it, and [Install](#install) ends when it is ready.
 
-The chart is in `deploy/chart/hephaestus/` of the release checkout.
+Each release publishes the chart as a signed OCI artifact, `oci://ghcr.io/hephaestus-build/charts/hephaestus`.
+The chart source is in `deploy/chart/hephaestus/` of the repository.
 It uses the standard Helm chart format: `Chart.yaml`, `values.yaml`, `values.schema.json`, and `templates/`.
 It uses only stable Kubernetes APIs and the Gateway API `HTTPRoute` resource of version `v1`.
 
@@ -59,45 +60,52 @@ The `Recreate` strategy applies only to the server.
 The webhook role and the worker also connect to the database, and their rollouts do not wait for the server.
 [Database maintenance](#database-maintenance) gives the order of the roles for a change of the database or of a schema that needs every role stopped.
 
-## Prepare the chart from the release lock
+## Verify the release chart
 
-The chart has no default image, tag, or registry.
-A release that includes the chart publishes a second signed lock, `release-vX.Y.Z.chart.json`, of schema version 2.
-That joint lock names the images and the OCI chart of the release by digest.
-The schema 1 lock `release-vX.Y.Z.json` that Compose reads does not change.
+The chart package of a release names the release version, the source commit, and the release's five images by digest.
+Thus, you give Helm only your own values.
 The chart version and its `appVersion` are the release version without the leading `v`.
-No release has published such a lock yet.
+The chart source in the repository names no image, tag, or registry.
+No release has published the chart yet.
 
-You need Node.js, [Cosign](https://docs.sigstore.dev/cosign/system_config/installation/), and the Helm CLI.
+You need [Cosign](https://docs.sigstore.dev/cosign/system_config/installation/) 3.1 or later, the Helm CLI, `curl`, and `jq`.
+The release signs the chart with Cosign 3.1 in the Sigstore bundle format.
+Cosign 2 reads that format only from version 2.6 and only with `--new-bundle-format`, and CI does not test it.
+You do not need Node.js or a checkout of the repository.
 Use the Helm version that [`.github/actions/setup-helm`](https://github.com/hephaestus-build/Hephaestus/blob/main/.github/actions/setup-helm/action.yml) pins.
 CI and the release workflow install that version.
 Contributors also need it: see the [local development prerequisites](/contributor/local-development#prerequisites).
 The pin is a build tool, not a qualified Helm version for an installation.
 No Helm plugin is necessary.
 
-1. Check out the release tag, as step 1 of the [Compose install](./install#1-get-the-files) shows.
-2. Prepare the release:
+Run these commands in the directory of your `site.yaml`.
+If one command fails, stop: do not install the chart.
 
-   ```bash
-   node scripts/prepare-release-lock.ts "v$VERSION" release-lock.env --chart release-chart
-   ```
+```bash
+VERSION=X.Y.Z
+CHART=ghcr.io/hephaestus-build/charts/hephaestus
+# 1. The chart digest, from the joint lock of the release.
+DIGEST=$(curl -fsSL "https://github.com/hephaestus-build/Hephaestus/releases/download/v$VERSION/release-v$VERSION.chart.json" |
+  jq -er .chart.digest)
+# 2. The release workflow signed that digest.
+cosign verify "$CHART@$DIGEST" \
+  --certificate-identity 'https://github.com/hephaestus-build/Hephaestus/.github/workflows/release.yml@refs/heads/main' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+# 3. The one pull: Helm gets the chart by that digest, never by a tag.
+helm pull "oci://$CHART@$DIGEST" --untar --untardir "chart-$VERSION"
+# 4. The signed chart is the chart of this release.
+helm show chart "chart-$VERSION/hephaestus" | grep -qx "version: $VERSION"
+```
 
-The script does these checks in this order. If one check fails, it stops and writes nothing:
+Step 2 proves that the release workflow made the chart.
+That identity is the same for every release, so step 4 binds the chart to the release that you asked for.
+The digest from step 1 needs no other check: steps 2 and 4 refuse every other chart.
+A version tag can move, and it is not a release signal.
 
-1. It verifies the joint lock signature with the identity of the release workflow.
-2. It checks the lock against the evidence manifest of the release.
-3. It pulls the chart by the digest in the lock, never by a tag.
-4. It verifies the package signature of the chart with the same identity.
-5. It checks that the chart name, version, and `appVersion` belong to this release.
-6. It checks that the lock and the release image inventory of the checkout name the same images and upstream pins.
-
-Then it writes the Compose environment file and a new `release-chart` directory.
-That directory contains the verified chart package and `release-values.yaml`.
-The values file contains only the release version, the source commit, and five image references.
-The script refuses a `release-chart` path that already exists.
-With `--chart`, the script reads only the joint lock.
-If the release has no joint lock, the script stops: it never falls back to the schema 1 lock.
-It runs with Node alone and needs no installed packages.
+The `chart-$VERSION/hephaestus` directory is the verified chart, with its `profiles/`.
+Step 3 stops if that directory already exists.
+[Install](#install) and [Upgrades](#upgrades) use it.
+[Release assets](./release-image-lock#release-assets) gives the purpose of each signed asset of a release.
 
 ## Create the Secret
 
@@ -325,6 +333,8 @@ They request their whole memory limit and a tenth of their CPU limit, because th
 
 Three values files in `profiles/` set capacity for one use.
 All three use the same templates.
+Each release chart contains them in `chart-$VERSION/hephaestus/profiles/` after you [verify the release chart](#verify-the-release-chart).
+Give the profile as the first `-f` file, before your own values, as [Install](#install) shows.
 
 | Profile | Use | PostgreSQL and NATS |
 | --- | --- | --- |
@@ -389,7 +399,8 @@ A three-server JetStream cluster therefore keeps one replica of each stream.
    ```
 
 2. Create the [Secret](#create-the-secret) and the [PostgreSQL TLS Secret](#postgresql-tls-secret).
-3. Write your values file, `my-values.yaml`, with `host`, `trustedProxies`, `secret.name`, `postgresql.tls.existingSecret`, `route.parentRefs`, and `networkPolicy.gateway` with its pod labels.
+3. Write your values file, `site.yaml`, with `host`, `trustedProxies`, `secret.name`, `postgresql.tls.existingSecret`, `route.parentRefs`, and `networkPolicy.gateway` with its pod labels.
+   Do not set `release` or `images`: the release chart sets them.
 4. Enable reviews.
    `small.yaml` enables the worker, and the chart does not render it without the sandbox namespace and the Kubernetes API endpoint.
    Find the endpoint that the network plugin sees:
@@ -399,7 +410,7 @@ A three-server JetStream cluster therefore keeps one replica of each stream.
    ```
 
    On a single k3s node, `PORTS` is `6443` and `ENDPOINTS` is the node's internal address, for example `192.168.5.15`.
-   Add both values to `my-values.yaml`:
+   Add both values to `site.yaml`:
 
    ```yaml
    worker:
@@ -414,18 +425,17 @@ A three-server JetStream cluster therefore keeps one replica of each stream.
    Use `/128` for an IPv6 address.
    If `ENDPOINTS` lists more than one address, one for each control plane node, set a CIDR that holds all of them.
 
-5. Install the chart:
+5. [Verify the release chart](#verify-the-release-chart).
+6. Install the verified chart with a [profile](#profiles) and your values:
 
    ```bash
-   helm install hephaestus "release-chart/hephaestus-$VERSION.tgz" \
-     --namespace hephaestus \
-     --values deploy/chart/hephaestus/profiles/small.yaml \
-     --values release-chart/release-values.yaml \
-     --values my-values.yaml
+   helm upgrade --install hephaestus "chart-$VERSION/hephaestus" -n hephaestus \
+     -f "chart-$VERSION/hephaestus/profiles/small.yaml" -f site.yaml \
+     --rollback-on-failure --wait=watcher --wait-for-jobs --timeout 20m
    ```
 
-6. Follow the migration Job's log until the migrations are complete: `kubectl --namespace hephaestus logs job/hephaestus-migration-1`.
-7. Wait until the worker is ready. A worker is ready only after its [isolation probe](#sandbox-prerequisites) passed.
+7. Follow the migration Job's log until the migrations are complete: `kubectl --namespace hephaestus logs job/hephaestus-migration-1`.
+8. Wait until the worker is ready. A worker is ready only after its [isolation probe](#sandbox-prerequisites) passed.
 
    ```bash
    kubectl --namespace hephaestus rollout status deployment/hephaestus-worker
@@ -602,14 +612,13 @@ Rehearse a restore on a copy of the instance before you need one.
 
 ## Upgrades
 
-An upgrade to a new release is one `helm upgrade`, with the new release's prepared chart and values and your own values:
+An upgrade to a new release is one `helm upgrade`, with the new release's chart, its profile, and your own values.
+First, [verify the release chart](#verify-the-release-chart) of the new release.
+Then upgrade:
 
 ```bash
-helm upgrade hephaestus "release-chart/hephaestus-$VERSION.tgz" \
-  --namespace hephaestus \
-  --values deploy/chart/hephaestus/profiles/small.yaml \
-  --values release-chart/release-values.yaml \
-  --values my-values.yaml \
+helm upgrade --install hephaestus "chart-$VERSION/hephaestus" -n hephaestus \
+  -f "chart-$VERSION/hephaestus/profiles/small.yaml" -f site.yaml \
   --rollback-on-failure --wait=watcher --wait-for-jobs --timeout 20m
 ```
 
@@ -642,7 +651,7 @@ Each phase is one `helm upgrade` with the replica counts of that phase:
 | 3. Migrate | 1 | 0 | 0 | The migration Job of the revision completed. The server is ready. |
 | 4. Restore | 1 | The prior count | The prior count | The pods of the three roles are ready. |
 
-Phase 1 uses the chart, release lock and values of the current release, with only the three counts changed.
+Phase 1 uses the verified chart and the values of the current release, with only the three counts changed.
 Phase 2 applies the change: the new release values, a new PostgreSQL configuration, or a restart of PostgreSQL after you update its TLS Secret.
 Phase 3 runs the new release's migration Job and starts its server alone.
 

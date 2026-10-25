@@ -1,20 +1,11 @@
-import { mkdir, mkdtemp, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { parseInventory } from "./commit-image-lock.ts";
-import { chartValues, renderChartValues } from "./kubernetes-chart.ts";
 import { isSet } from "./lib/env.ts";
-import { parseJson } from "./lib/json.ts";
 import { run } from "./lib/process.ts";
 import { releaseCertificateIdentity, releaseRepository } from "./lib/release-identities.ts";
-import {
-	chartPackageName,
-	type Execute,
-	readChartLock,
-	verifyReleaseChart,
-} from "./release-chart.ts";
-import { isRelease, jointLockAsset } from "./release-image-lock.ts";
+import { isRelease } from "./release-image-lock.ts";
 
 /** A stalled download must not hold a host's reconcile tick until its unit gives up. */
 const DOWNLOAD_TIMEOUT_MS = 5 * 60_000;
@@ -25,16 +16,12 @@ export interface PrepareOptions {
 	release: string;
 	/** The Compose environment file. */
 	output: string;
-	/** A new directory for the verified chart package and its values, or none for Compose only. */
-	chart?: string;
 }
 
 export interface PrepareDependencies {
 	environment: NodeJS.ProcessEnv;
 	download: (repository: string, release: string, names: string[], into: string) => Promise<void>;
 	run: (command: string, args: string[]) => Promise<void>;
-	/** The helm and cosign calls of the chart verification. */
-	execute?: Execute;
 }
 
 async function downloadReleaseAsset(
@@ -79,16 +66,17 @@ const defaults: PrepareDependencies = {
 };
 
 /**
- * Verify a release and write what a host deploys from it. The lock signature is checked first,
- * then the lock against the evidence manifest, then (for a chart) the chart by its locked digest.
- * Nothing reaches `output` or `chart` before every requested check passed.
+ * Verify a release and write the Compose environment that a host deploys from it. The lock
+ * signature is checked first, then the lock against the evidence manifest. Nothing reaches
+ * `output` before both checks passed. A Kubernetes installation verifies the signed chart itself
+ * and needs none of this (docs/admin/kubernetes.mdx).
  */
 export async function prepareReleaseLock(
-	{ release, output, chart }: PrepareOptions,
+	{ release, output }: PrepareOptions,
 	dependencies: PrepareDependencies = defaults,
 ): Promise<void> {
 	if (!isRelease(release)) {
-		throw new Error("usage: prepare-release-lock vX.Y.Z [output] [--chart directory]");
+		throw new Error("usage: prepare-release-lock vX.Y.Z [output]");
 	}
 	const { environment } = dependencies;
 	const directory = await mkdtemp(path.join(tmpdir(), "hephaestus-release-"));
@@ -97,21 +85,13 @@ export async function prepareReleaseLock(
 		path.join(outputDirectory, `.${path.basename(output)}-`),
 	);
 	const temporaryOutput = path.join(outputTempDirectory, "lock.env");
-	const chartTempDirectory =
-		chart === undefined
-			? undefined
-			: await mkdtemp(path.join(path.dirname(chart), `.${path.basename(chart)}-`));
-	// Compose reads the schema 1 lock it always read. The chart path reads only the signed joint
-	// lock: a release without one has no chart, and the schema 1 lock is never a fallback.
-	const asset = chart === undefined ? `release-${release}.json` : jointLockAsset(release);
-	const signature = `${chartPackageName(release)}.sigstore.json`;
+	const asset = `release-${release}.json`;
 	const repository = releaseRepository(release, environment);
 	try {
-		const assets = [asset, `${asset}.sigstore.json`, "manifest.json"];
 		await dependencies.download(
 			repository,
 			release,
-			chart === undefined ? assets : [...assets, signature],
+			[asset, `${asset}.sigstore.json`, "manifest.json"],
 			directory,
 		);
 		await dependencies.run("cosign", [
@@ -133,59 +113,16 @@ export async function prepareReleaseLock(
 			release,
 			temporaryOutput,
 		]);
-		if (chartTempDirectory !== undefined && chart !== undefined) {
-			const lock = await readChartLock(path.join(directory, asset), release);
-			await verifyReleaseChart(
-				lock,
-				path.join(directory, signature),
-				chartTempDirectory,
-				environment,
-				dependencies.execute,
-			);
-			const inventory = parseInventory(
-				parseJson(
-					await readFile(path.join(repositoryRoot, "security/release-images.json"), "utf8"),
-				),
-			);
-			await writeFile(
-				path.join(chartTempDirectory, "release-values.yaml"),
-				renderChartValues(chartValues(lock, inventory)),
-				{ flag: "wx" },
-			);
-			// A path that already exists is never replaced: mkdir refuses it before anything moves.
-			// The entries move into it one by one, because Windows refuses a rename onto a directory.
-			await mkdir(chart);
-			try {
-				for (const entry of await readdir(chartTempDirectory)) {
-					await rename(path.join(chartTempDirectory, entry), path.join(chart, entry));
-				}
-			} catch (error) {
-				await rm(chart, { recursive: true, force: true });
-				throw error;
-			}
-		}
 		await rename(temporaryOutput, output);
-		console.log(
-			`Verified ${release}; wrote ${output}${chart === undefined ? "" : ` and ${chart}`}`,
-		);
+		console.log(`Verified ${release}; wrote ${output}`);
 	} finally {
 		await rm(directory, { recursive: true, force: true });
 		await rm(outputTempDirectory, { recursive: true, force: true });
-		if (chartTempDirectory !== undefined) {
-			await rm(chartTempDirectory, { recursive: true, force: true });
-		}
 	}
 }
 
 if (import.meta.main) {
-	const args = process.argv.slice(2);
-	const flag = args.indexOf("--chart");
-	const chart = flag === -1 ? undefined : args[flag + 1];
-	if (flag !== -1 && !isSet(chart)) {
-		throw new Error("usage: prepare-release-lock vX.Y.Z [output] [--chart directory]");
-	}
-	const positional = flag === -1 ? args : [...args.slice(0, flag), ...args.slice(flag + 2)];
 	const [release = "", output = path.join(repositoryRoot, "docker/self-host/release-lock.env")] =
-		positional;
-	await prepareReleaseLock({ release, output, chart });
+		process.argv.slice(2);
+	await prepareReleaseLock({ release, output });
 }

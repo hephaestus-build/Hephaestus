@@ -1,8 +1,9 @@
 # Hephaestus chart values. docs/admin/kubernetes.mdx describes each group.
 # values.schema.json owns the shape of every key. The templates own the cross-field rules.
 
-# Written by scripts/kubernetes-chart.ts from a verified release lock. Never set these by hand:
-# the chart has no default image, tag or registry.
+# The release writes its version, commit and image digests here, in the chart package that it
+# signs (scripts/kubernetes-chart.ts). The source names no image, tag or registry: a render of the
+# source needs these values from the run that built its images.
 release:
   version: ""
   commit: ""

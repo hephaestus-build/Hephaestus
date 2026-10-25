@@ -12,6 +12,7 @@ import {
 	jointLockFromEvidence,
 	legacyLock,
 	lockEnvironment,
+	lockFromEvidence,
 	parseReleaseImageLock,
 	verifyLegacyProjection,
 	verifyLockAgainstEvidence,
@@ -200,6 +201,8 @@ await test("one producer writes the joint lock, and the schema 1 lock is exactly
 	assert.deepEqual(joint, parseReleaseImageLock(jointLock, "v1.2.3"));
 	const legacy = legacyLock(joint);
 	assert.deepEqual(legacy, parseReleaseImageLock(rawLock, "v1.2.3"));
+	// The chart's values are made from the same lock, before the chart exists.
+	assert.deepEqual(lockFromEvidence(evidence, "v1.2.3"), legacy);
 	verifyLegacyProjection(joint, parseReleaseImageLock(structuredClone(legacy), "v1.2.3"));
 	assert.equal(lockEnvironment(legacy), lockEnvironment(joint));
 	assert.equal(jointLockAsset("v1.2.3"), "release-v1.2.3.chart.json");

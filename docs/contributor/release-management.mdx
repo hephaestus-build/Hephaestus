@@ -257,6 +257,7 @@ The [release image lock](../admin/release-image-lock#independent-verification) p
 
 ### Joint lock with the chart
 
+[Release assets](../admin/release-image-lock#release-assets) gives the purpose and the reader of each release asset.
 A release that ships a chart provides two signed locks.
 
 - `release-vX.Y.Z.json` stays a schema 1 lock with its name, shape, and signature identity.
@@ -266,9 +267,11 @@ A release that ships a chart provides two signed locks.
 - `release-vX.Y.Z.chart.json` is the joint lock of schema version 2.
   It adds one `chart` field to the schema 1 fields: `repository`, `version`, and `digest`.
 
-`scripts/release-image-lock.ts write` builds the joint lock once from the verified evidence manifest and the pushed chart.
-It derives the schema 1 lock from that same object, so the two can never name different images.
+`lockFromEvidence` in `scripts/release-image-lock.ts` builds the lock once from the verified evidence manifest.
+The chart values, the schema 1 lock, and the joint lock all come from that object, so no two of them can name different images.
+`scripts/release-image-lock.ts write` adds the pushed chart to make the joint lock, and writes the schema 1 lock as its projection.
 `scripts/release-image-lock.ts projection` refuses a schema 1 lock that is not exactly the joint lock without its chart.
+
 The reader accepts schema 1 and schema 2 strictly, and refuses an unknown version or an extra field.
 `scripts/fixtures/release-v0.94.7/release-image-lock.ts` is the v0.94.7 reader, byte for byte.
 The tests run it against the schema 1 lock that the producer writes.
@@ -277,30 +280,40 @@ The `tag-images` job does these steps in this order:
 
 1. It checks the release state with `plan-release.ts --source`.
    Only an absent release or this commit's own draft may continue, because the push writes the chart version tag.
-2. It packages `deploy/chart/hephaestus` from the released commit with `helm package`.
+2. It copies `deploy/chart/hephaestus` of the released commit to `RUNNER_TEMP`.
+   It writes the release version, the source commit, and the five chart images into the `values.yaml` of the copy.
+   `chartValues` in `scripts/kubernetes-chart.ts` is the one map from the lock to the chart images.
+   It refuses a lock that does not cover the release image inventory of the checkout.
+3. It packages the copy with `helm package`.
    The chart version and `appVersion` are the release version without the leading `v`.
-3. It pushes the package to `<release namespace>/charts/hephaestus` and reads the manifest digest from the push.
-4. It pulls the chart back by that digest and compares the bytes with the package.
-5. It writes both locks and checks the projection.
-6. It attests the chart manifest digest, the package bytes, and both locks as subjects of the release.
-7. It signs the package bytes and both locks with `keyless-sign.ts sign-blob` and the release workflow identity.
-8. It verifies both lock signatures, and the chart again from the joint lock.
+   It refuses a package whose `helm show values` output does not hold the release lines exactly once.
+4. It pushes the package to `<release namespace>/charts/hephaestus` and reads the manifest digest from the push.
+5. It pulls the chart back by that digest and compares the bytes with the package.
+6. It writes both locks and checks the projection.
+7. It attests the chart manifest digest, the package bytes, and both locks as subjects of the release.
+8. It signs both locks with `keyless-sign.ts sign-blob` and the release workflow identity.
+   It signs the chart digest in the registry with `keyless-sign.ts sign` and the same identity.
+9. It verifies both lock signatures, and the chart again from the joint lock with `cosign verify`.
+   The pulled chart must pin exactly the images that `chartValues` makes from the joint lock and the inventory of the checkout.
 
-The chart values name no image, so the package never contains the lock that names its digest.
+The images are known before the package exists, and the joint lock that names the package digest comes after it.
+Thus, the package never contains the lock that names its digest.
+The chart source stays without images, so the CI cluster jobs give the images of their own run.
 The chart is not an image subject of the evidence bundle.
-The OCI version tag of the chart is not a release signal: hosts and the verifier use the digest in the joint lock.
+The OCI version tag of the chart is not a release signal: operators and the verifier use the digest in the joint lock.
 Every image gate stays in force.
 
 `scripts/release-chart.ts` owns the Helm and Cosign calls of the chart.
 It reads the chart metadata as four exact lines of the `helm show chart` output, without a YAML parser.
-The release jobs and hosts run these scripts with Node alone: they import only `node:` and relative modules.
-`publish-release` verifies both lock signatures, the projection, the chart by the locked digest, and its release attestation before it publishes.
+The release jobs run these scripts with Node alone: they import only `node:` and relative modules.
+Before it publishes, `publish-release` verifies both lock signatures and the projection, does the chart checks of step 9, and verifies the release attestation of the chart.
+Thus, both release gates prove that the chart pins the images of the signed joint lock.
 
-`scripts/prepare-release-lock.ts --chart` reads only the joint lock and repeats the operator checks in the order that [Kubernetes chart](../admin/kubernetes#prepare-the-chart-from-the-release-lock) describes.
-Without `--chart`, it reads the schema 1 lock as before.
-
-The package signature identity is the release workflow on the default branch, not one release.
-The package is bound to its release by the digest in the signed joint lock and by the version check.
+The chart has one signature form: the registry signature of its digest.
+The signature identity is the release workflow on the default branch, not one release.
+The chart is bound to its release by the digest in the signed joint lock and by the version check.
+Operators verify the chart without the repository tooling, as [Verify the release chart](../admin/kubernetes#verify-the-release-chart) describes.
+`scripts/prepare-release-lock.ts` reads only the schema 1 lock for Compose hosts.
 
 The release jobs use the Helm CLI that the [shared installer](https://github.com/hephaestus-build/Hephaestus/blob/main/.github/actions/setup-helm/action.yml) pins.
 Commit channels and the native apply path do not carry a chart yet.
