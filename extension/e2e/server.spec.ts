@@ -5,7 +5,6 @@ import { required } from "~/testing/required";
 import {
 	acceptNotice,
 	expect,
-	extensionWindow,
 	holdServer,
 	openInline,
 	OPTIONS_URL,
@@ -21,6 +20,7 @@ import {
 	test,
 	watchReviewMutations,
 	WEB_APP_URL,
+	withExtensionWindow,
 } from "./fixtures.ts";
 import { GITLAB_ISSUE, GITLAB_MR, GITLAB_MR5, GITLAB_MR6 } from "./provider-pages.ts";
 
@@ -155,21 +155,17 @@ test.describe("inline review activity", () => {
 		await providerTab(settings, GITLAB_MR5);
 		const settingsFrame = await openInline(settings);
 		await settingsFrame.getByRole("button", { name: "Request review" }).last().click();
-		const { window: confirmation, disconnect } = await extensionWindow(
-			context,
-			worker,
-			/\/action\.html#/u,
-		);
-		await expect(confirmation.getByRole("heading", { level: 1 })).toHaveText(
-			"Request a practice review",
-		);
-		// The exact work and workspace, read afresh from Hephaestus.
-		await expect(confirmation.getByRole("definition").first()).toContainText("!5");
-		await expect(confirmation.getByRole("definition").nth(1)).toContainText("Extension E2E");
-		const closed = confirmation.waitForEvent("close");
-		await confirmation.getByRole("button", { name: "Cancel" }).click();
-		await closed;
-		await disconnect();
+		await withExtensionWindow(context, worker, /\/action\.html#/u, async (confirmation) => {
+			await expect(confirmation.getByRole("heading", { level: 1 })).toHaveText(
+				"Request a practice review",
+			);
+			// The exact work and workspace, read afresh from Hephaestus.
+			await expect(confirmation.getByRole("definition").first()).toContainText("!5");
+			await expect(confirmation.getByRole("definition").nth(1)).toContainText("Extension E2E");
+			const closed = confirmation.waitForEvent("close");
+			await confirmation.getByRole("button", { name: "Cancel" }).click();
+			await closed;
+		});
 
 		// Only the destination page is a stub: this proves safe top-level navigation and no command
 		// on click. The web app owns its own session, confirmation and mutation browser coverage.

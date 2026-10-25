@@ -97,16 +97,17 @@ export async function providerPage(context: BrowserContext): Promise<Page> {
 const profiles = new WeakMap<BrowserContext, string>();
 
 /**
- * The extension page that the worker opened in its own window, once Chrome has loaded it. Playwright attaches to a
+ * Runs `use` on the extension page that the worker opened in its own window, once Chrome has loaded it. Playwright attaches to a
  * new window while Chrome creates it. When the worker navigates the window during that attach, Playwright can miss
  * the commit and never report the page, although the page loads and runs. A second connection attaches to the
  * loaded window instead.
  */
-export async function extensionWindow(
+export async function withExtensionWindow(
 	context: BrowserContext,
 	worker: Worker,
 	address: RegExp,
-): Promise<{ window: Page; disconnect: () => Promise<void> }> {
+	use: (window: Page) => Promise<void>,
+): Promise<void> {
 	await expect
 		.poll(async () => {
 			const tabs = await worker.evaluate(async () =>
@@ -120,14 +121,19 @@ export async function extensionWindow(
 	const activePort = await readFile(path.join(profile, "DevToolsActivePort"), "utf8");
 	const port = required(activePort.split("\n")[0], "DevTools port");
 	const devtools = await chromium.connectOverCDP(`http://127.0.0.1:${port}`);
-	const window = required(
-		devtools
-			.contexts()
-			.flatMap((connected) => connected.pages())
-			.find((page) => address.test(page.url())),
-		"extension window",
-	);
-	return { window, disconnect: async () => devtools.close() };
+	try {
+		await use(
+			required(
+				devtools
+					.contexts()
+					.flatMap((connected) => connected.pages())
+					.find((page) => address.test(page.url())),
+				"extension window",
+			),
+		);
+	} finally {
+		await devtools.close();
+	}
 }
 
 export const test = base.extend<{ context: BrowserContext; worker: Worker }>({
