@@ -269,6 +269,7 @@ export default defineConfig({
 				dependsOn: ["gate:server"],
 			}),
 			"gate:pmd-canary": run("node scripts/check-pmd-canary.ts"),
+			"gate:api-compatibility": run("node scripts/check-api-compatibility.ts"),
 			"test:server:selection": run("node scripts/verify-server-test-selection.ts"),
 			"test:server:unit": run(
 				`${gradlew} :application:test :application:jacocoTestCoverageVerification`,

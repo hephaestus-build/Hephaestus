@@ -335,6 +335,10 @@ jobs:
               - 'scripts/generate-configuration-reference.ts'
               - 'scripts/lib/configuration-reference.ts'
               - 'scripts/lib/application-jar.ts'
+              # The API compatibility gate runs on this leg.
+              - 'scripts/check-api-compatibility.ts'
+              - 'scripts/lib/pinned-binary.ts'
+              - 'scripts/plan-release.ts'
               - '!server/**/AGENTS.md'
               - '!server/**/CLAUDE.md'
             tooling:

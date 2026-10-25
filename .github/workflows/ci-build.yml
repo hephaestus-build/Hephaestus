@@ -84,6 +84,13 @@ jobs:
             echo "| API specs sync | :x: Out of sync | \`vp run generate:api\` |" >> $GITHUB_STEP_SUMMARY
             exit 1
           fi
+      # Judges the spec generated above against the latest published release, which it fetches from
+      # origin. docs/contributor/ci-cd.mdx § API compatibility.
+      - name: API compatibility with the previous release
+        id: api-compatibility
+        continue-on-error: true
+        if: always()
+        run: vp run gate:api-compatibility
       - name: Configuration reference
         id: configuration-reference
         continue-on-error: true
@@ -136,11 +143,12 @@ jobs:
         if: always()
         env:
           OPENAPI: ${{ steps.openapi.outcome }}
+          API_COMPATIBILITY: ${{ steps.api-compatibility.outcome }}
           CONFIGURATION_REFERENCE: ${{ steps.configuration-reference.outcome }}
           SCHEMA: ${{ steps.schema.outcome }}
         run: |
-          if [ "$OPENAPI" != "success" ] || [ "$CONFIGURATION_REFERENCE" != "success" ] || [ "$SCHEMA" != "success" ]; then
-            echo "::error::OpenAPI, configuration reference or schema validation failed; review the independently reported steps."
+          if [ "$OPENAPI" != "success" ] || [ "$API_COMPATIBILITY" != "success" ] || [ "$CONFIGURATION_REFERENCE" != "success" ] || [ "$SCHEMA" != "success" ]; then
+            echo "::error::OpenAPI, API compatibility, configuration reference or schema validation failed; review the independently reported steps."
             exit 1
           fi
 
