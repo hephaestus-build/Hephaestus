@@ -1,6 +1,6 @@
 # ADR 0041: Compose for 1.x; Kubernetes only for 2.0
 
-**Status:** Accepted (amended 2026-10-09 — debug transcripts; 2026-10-09 — Heph host, [ADR 0057](0057-one-heph-conversation-per-developer.md); 2026-10-24 — [the Kubernetes runtime](#update--2026-10-24-the-kubernetes-runtime); 2026-10-25 — Helm chart support and 1.x security fixes)
+**Status:** Accepted (amended 2026-10-09 — debug transcripts; 2026-10-09 — Heph host, [ADR 0057](0057-one-heph-conversation-per-developer.md); 2026-10-24 — [the Kubernetes runtime](#update--2026-10-24-the-kubernetes-runtime); 2026-10-25 — Helm chart support and 1.x security fixes; 2026-10-25 — § Releases and support superseded by [ADR 0058](0058-the-helm-chart-is-the-only-supported-deployment-from-1-0.md))
 **Date:** 2026-09-03
 **Authors:** Hephaestus maintainers
 **Amends:** [ADR 0005](0005-two-role-runtime-via-conditional-on-property.md),
@@ -495,3 +495,26 @@ Compose stays supported for all of 1.x.
 After 2.0.0, the last 1.x minor release gets a fixed period of security fixes.
 The [compatibility policy](../admin/compatibility-policy.mdx#support-for-1x) owns the terms.
 2.0 stays Kubernetes only.
+
+## Update — 2026-10-25 (Kubernetes from 1.0, [ADR 0058](0058-the-helm-chart-is-the-only-supported-deployment-from-1-0.md))
+
+ADR 0058 supersedes § Releases and support. ADR 0058 § Supported deployment owns the supported deployment from 1.0.
+It also supersedes the Compose part of the update above: Compose is not a supported 1.x deployment.
+The 1.x support terms of that update stay with the chart, and the [compatibility policy](../admin/compatibility-policy.mdx#supported-deployment) owns them.
+There is no 1.x milestone with two supported deployments.
+
+The migration of a Compose install moves from 2.0 to the time before 1.0.
+ADR 0058 § Migration of a Compose install owns its state table.
+The JetStream drain rule of this decision stays in that table.
+
+These parts of this decision change with it:
+
+- **§ Context**, the 1.x milestone and the removal in 2.0. Both move to the time before 1.0.
+- **§ Considered options**, option 3. ADR 0058 chooses the chart only, from 1.0.
+- **§ The rule for a substrate split.** The Docker driver stays as the driver for development and for the live suites. It passes the same conformance suite. A decision after 1.0 removes it or keeps it.
+- **§ Roles, control channel, and previews.** Previews move to the staging k3s before 2.0.
+- **§ Rejected alternatives**, row "Keep a Compose floor after 2.0". The row now applies from 1.0. ADR 0058 § Revisit trigger owns the reversal trigger.
+- **§ Consequences**, the bullets about the 1.x milestone and about 2.0. Kubernetes is an operator prerequisite from 1.0.
+- **§ Revisit triggers**, the Kubernetes-only product decision. ADR 0058 § Revisit trigger replaces it.
+
+The architecture of this decision stays: state and storage, the job folder, the Sandbox Gateway, evidence admission, the sandbox boundary, the Kubernetes execution model, and the three runtime roles.

@@ -48,7 +48,7 @@ People keep responsibility for the harder judgment and the relationships.
 > Until 1.0, a *minor* release can change configuration or the API in ways that need you to act.
 > Read the release notes before every upgrade.
 >
-> Version 1.0 makes upgrades, configuration, Compose, and the REST API predictable:
+> Version 1.0 makes upgrades, configuration, the Helm chart, and the REST API predictable:
 > [compatibility policy](https://docs.hephaestus.build/admin/compatibility-policy) ·
 > [1.0 milestone](https://github.com/hephaestus-build/Hephaestus/milestone/5).
 

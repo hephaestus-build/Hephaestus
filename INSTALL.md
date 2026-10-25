@@ -1,10 +1,12 @@
 # Installing Hephaestus
 
-There is exactly **one supported install**: the Docker Compose stack in
+Until 1.0.0, there is exactly **one supported install**: the Docker Compose stack in
 [`docker/self-host/`](docker/self-host/) on one 64-bit Linux host.
 The [installation requirements](https://docs.hephaestus.build/admin/install#requirements)
 describe the supported hosts and capacity guidance.
 Other setups may work but are unsupported.
+The Compose stack is deprecated.
+The [compatibility policy](https://docs.hephaestus.build/admin/compatibility-policy#supported-deployment) states the supported deployment from 1.0.0 and what it means for your install.
 
 **→ Follow the install guide: <https://docs.hephaestus.build/admin/install>**
 

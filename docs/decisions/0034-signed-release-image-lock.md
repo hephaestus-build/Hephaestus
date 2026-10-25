@@ -1,6 +1,6 @@
 # ADR 0034: Production consumes one signed release image lock
 
-**Status:** Accepted (amended 2026-09-03 #1719 — 2.0 lock inventory from [ADR 0041](0041-compose-1x-kubernetes-2.md); 2026-09-05 — operator toolchain superseded by [ADR 0037](0037-node-24-and-pnpm-12-are-the-javascript-toolchain.md))
+**Status:** Accepted (amended 2026-09-03 #1719 — 2.0 lock inventory from [ADR 0041](0041-compose-1x-kubernetes-2.md); 2026-09-05 — operator toolchain superseded by [ADR 0037](0037-node-24-and-pnpm-12-are-the-javascript-toolchain.md); 2026-10-25 — the chart lock moves to 1.0, [ADR 0058](0058-the-helm-chart-is-the-only-supported-deployment-from-1-0.md))
 **Date:** 2026-08-28
 **Supersedes:** [ADR 0031](0031-agent-image-follows-the-deployments-own-tag.md)
 
@@ -58,3 +58,11 @@ Supersedes the operator toolchain in § Consequences.
 version the repository pins, and `prepare-release-lock.ts` reaches for the GitHub CLI only inside
 GitHub Actions — an operator's run fetches over HTTP. Preparing self-hosted deployment inputs
 therefore needs Cosign and that Node.js version, and no GitHub CLI.
+
+## Update — 2026-10-25 (the chart lock moves to 1.0, [ADR 0058](0058-the-helm-chart-is-the-only-supported-deployment-from-1-0.md))
+
+Under ADR 0058 § Supported deployment, the inventory that the 2026-09-03 update gives to 2.0 applies from 1.0.
+The release pins the image digests in the default values of the signed chart.
+The chart is the one artifact that an operator verifies.
+The lock for Compose goes with the deletion of the Compose files.
+The signer identity, the signature validation, the immutable publication, and the no-rebuild rollback rules stay.
