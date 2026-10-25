@@ -128,6 +128,8 @@ class GitLabDataSyncSchedulerTest extends BaseUnitTest {
 
     @BeforeEach
     void setUp() {
+        // The fan-out starts no workspace sync once the job service is stopping.
+        lenient().when(syncJobService.isRunning()).thenReturn(true);
         SyncSchedulerProperties syncProps = new SyncSchedulerProperties(
                 true,
                 7,

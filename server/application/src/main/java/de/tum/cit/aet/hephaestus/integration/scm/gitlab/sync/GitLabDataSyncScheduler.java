@@ -183,13 +183,15 @@ public class GitLabDataSyncScheduler {
 
         log.info("Starting scheduled GitLab sync: workspaceCount={}", sessions.size());
 
-        ScopeSyncFanOut.Outcome outcome =
-                ScopeSyncFanOut.run(sessions, this::syncScopeWithJobRecording, monitoringExecutor);
+        ScopeSyncFanOut.Outcome outcome = ScopeSyncFanOut.run(
+                sessions, this::syncScopeWithJobRecording, monitoringExecutor, syncJobService::isRunning);
         log.info(
-                "Completed scheduled GitLab sync: workspaceCount={}, successful={}, failed={}, interrupted={}",
+                "Completed scheduled GitLab sync: workspaceCount={}, successful={}, failed={}, notStarted={},"
+                        + " interrupted={}",
                 sessions.size(),
                 outcome.succeeded(),
                 outcome.failed(),
+                outcome.notStarted(),
                 Thread.currentThread().isInterrupted());
     }
 
