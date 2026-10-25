@@ -1,4 +1,4 @@
-import { XIcon } from "lucide-react";
+import { SearchIcon, XIcon } from "lucide-react";
 import { type ReactNode, useEffect, useEffectEvent, useId, useRef, useState } from "react";
 import { useMediaQuery } from "usehooks-ts";
 
@@ -9,6 +9,10 @@ import type {
 	ResultList,
 	ProfileReview,
 } from "@/api/types.gen";
+import {
+	AppliedFacetPills,
+	listFacet,
+} from "@/components/admin/practice-reviews/AppliedFacetPills";
 import { ArrivalHighlight } from "@/components/common/ArrivalHighlight";
 import { FilterToggle } from "@/components/common/FilterToggle";
 import { FilterToolbar } from "@/components/common/FilterToolbar";
@@ -19,8 +23,7 @@ import {
 	PracticeTabsTrigger,
 } from "@/components/common/practice-tabs";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
-import { SelectFilter } from "@/components/common/SelectFilter";
-import { statusValues } from "@/components/common/status-def";
+import { statusFacetOptions } from "@/components/common/status-def";
 import { useNow } from "@/components/common/use-now";
 import type { LevelPath } from "@/components/layout/detail-drawer/DetailPath";
 import { LevelHeader } from "@/components/layout/detail-drawer/LevelHeader";
@@ -61,6 +64,7 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { problemStatusOf } from "@/lib/problem-detail";
+import { nonEmpty } from "@/lib/search-params";
 import { hasText } from "@/lib/text";
 
 import { NeverAppliedBadge } from "./FoldedPractices";
@@ -577,10 +581,7 @@ function emptyDescriptionOf(filtered: boolean, ownFiltered: boolean): string {
 	return "They appear after Hephaestus reviews your work.";
 }
 
-const OUTCOME_OPTIONS = statusValues(OUTCOME_DEFS).map((value) => ({
-	value,
-	label: OUTCOME_DEFS[value].label,
-}));
+const OUTCOME_OPTIONS = statusFacetOptions(OUTCOME_DEFS);
 
 /**
  * The practice's observations in one history, narrowed by the filter bar over it. A link to one
@@ -630,25 +631,33 @@ function ObservationHistory({
 		feed.status === "ready" &&
 		!feed.hasMore &&
 		shown.length === 0;
+	// The Outcome facet of a review's table, as a chip: the same control on both levels.
+	const outcomeFacet = listFacet("Outcome", OUTCOME_OPTIONS, filter.outcome, (values) =>
+		onFilterChange?.(changedObservationFilter(filter, { outcome: nonEmpty(values) })),
+	);
 	const showBar =
 		onFilterChange !== undefined && (filtered || (feed.status === "ready" && reviews.length > 0));
 	return (
 		<>
 			{showBar && (
-				<FilterToolbar hasFilter={ownFiltered} onReset={clearOwn}>
-					<div className="flex min-w-0 items-center gap-2">
-						<Label htmlFor={queryId} className="shrink-0 text-muted-foreground">
-							Search
+				<>
+					<FilterToolbar hasFilter={ownFiltered} onReset={clearOwn}>
+						{/* The search field of a filter's popover, as the reviews lists' chips open it: a
+						    magnifier in a soft gray field. The browser's own clear button is tinted by the
+						    platform; this one is the foreground, as every other control's icon is. */}
+						<Label htmlFor={queryId} className="sr-only">
+							Search observations
 						</Label>
-						{/* The browser's own clear button is tinted by the platform; this one is the
-						    foreground, as every other control's icon is. */}
-						<InputGroup className="w-64 max-w-full">
+						<InputGroup variant="soft" className="w-72 max-w-full">
+							<InputGroupAddon>
+								<SearchIcon className="size-4 shrink-0 opacity-50" aria-hidden />
+							</InputGroupAddon>
 							<InputGroupInput
 								id={queryId}
 								type="search"
 								value={filter.query ?? ""}
 								maxLength={REVIEW_FILTER_MAX_LENGTH}
-								placeholder="Words or work, such as #15"
+								placeholder="Search words or work, such as #15"
 								className="[&::-webkit-search-cancel-button]:appearance-none"
 								onChange={(event) =>
 									onFilterChange(
@@ -672,15 +681,10 @@ function ObservationHistory({
 								</InputGroupAddon>
 							)}
 						</InputGroup>
-					</div>
-					<SelectFilter
-						label="Outcome"
-						allLabel="All outcomes"
-						options={OUTCOME_OPTIONS}
-						value={filter.outcome}
-						onChange={(outcome) => onFilterChange(changedObservationFilter(filter, { outcome }))}
-					/>
-				</FilterToolbar>
+						{outcomeFacet.control}
+					</FilterToolbar>
+					<AppliedFacetPills pills={outcomeFacet.pills} />
+				</>
 			)}
 			{/* The tab's own number shows the count; a screen reader still hears it change. */}
 			<p role="status" aria-live="polite" className="sr-only">

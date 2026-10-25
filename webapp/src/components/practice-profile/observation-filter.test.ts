@@ -42,7 +42,7 @@ describe("filterObservations", () => {
 	});
 
 	it("narrows by outcome", () => {
-		const kept = filterObservations(detailReviews, { outcome: "MET" }).flatMap(
+		const kept = filterObservations(detailReviews, { outcome: ["MET"] }).flatMap(
 			(review) => review.results,
 		);
 		expect(kept.length).toBeGreaterThan(0);
@@ -70,7 +70,7 @@ describe("a link to one observation", () => {
 			observationId: undefined,
 			workId: undefined,
 		});
-		const byOutcome = changedObservationFilter(linked, { outcome: "MET" });
+		const byOutcome = changedObservationFilter(linked, { outcome: ["MET"] });
 		expect(byOutcome.observationId).toBeUndefined();
 		// The work stays: the search field still names it.
 		expect(byOutcome.workId).toBe(detailResult.item.id);
@@ -114,7 +114,7 @@ describe("hasOwnObservationFilter", () => {
 		expect(hasOwnObservationFilter({ since: "7d" })).toBe(false);
 		expect(hasObservationFilter({ since: "7d" })).toBe(true);
 		expect(hasOwnObservationFilter({ since: "7d", query: "#15" })).toBe(true);
-		expect(hasOwnObservationFilter({ outcome: "NOT_MET" })).toBe(true);
+		expect(hasOwnObservationFilter({ outcome: ["NOT_MET"] })).toBe(true);
 		expect(hasOwnObservationFilter({ workId: "work-1" })).toBe(true);
 		expect(hasOwnObservationFilter({ query: "  " })).toBe(false);
 	});
@@ -129,7 +129,7 @@ describe("shownObservations", () => {
 	});
 
 	it("keeps the asked observation out when the filter does not match it", () => {
-		const shown = shownObservations(detailReviews.slice(1), { outcome: "MET" }, newest);
+		const shown = shownObservations(detailReviews.slice(1), { outcome: ["MET"] }, newest);
 		expect(newest.outcome).not.toBe("MET");
 		expect(ids(shown)).not.toContain(newest.id);
 	});
