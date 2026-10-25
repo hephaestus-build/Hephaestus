@@ -879,7 +879,7 @@ void test("preparation retains exact copy support, the second citation, quiet wi
 void test("a refused private package preserves accepted public feedback and records its typed reason", async (t) => {
 	const { prepareComposedFeedback } =
 		await import("../../../main/resources/agent/pi-composition-stage.ts");
-	for (const [refusal, reason] of [
+	for (const [refusal, recorded] of [
 		[null, "SERVER_REFUSED"],
 		[
 			{
@@ -922,6 +922,7 @@ void test("a refused private package preserves accepted public feedback and reco
 				},
 			],
 		};
+		const refusedBody = refusal === null ? null : JSON.stringify(refusal);
 		let calls = 0;
 		t.mock.method(globalThis, "fetch", async () => {
 			calls += 1;
@@ -931,9 +932,7 @@ void test("a refused private package preserves accepted public feedback and reco
 						contentDigest: "a".repeat(64),
 						preparedAt: "2026-10-15T00:00:00Z",
 					})
-				: refusal === null
-					? new Response(null, { status: 409 })
-					: Response.json(refusal, { status: 409 });
+				: new Response(refusedBody, { status: 409 });
 		});
 		const failures: string[] = [];
 		await prepareComposedFeedback({
@@ -952,7 +951,7 @@ void test("a refused private package preserves accepted public feedback and reco
 		assert.ok(feedback.review?.summary);
 		assert.equal(feedback.preparation?.contentDigest, "a".repeat(64));
 		assert.deepEqual(feedback.feedback, []);
-		assert.deepEqual(failures, [`PRIVATE_FEEDBACK:${reason}`]);
+		assert.deepEqual(failures, [`PRIVATE_FEEDBACK:${recorded}`]);
 		t.mock.restoreAll();
 	}
 });

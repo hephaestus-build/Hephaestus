@@ -77,14 +77,10 @@ class PreparationError extends Error {
 	override name = "PreparationError";
 	readonly state: "REFUSED" | "UNAVAILABLE";
 	readonly refusal: Refusal;
-	constructor(
-		state: "REFUSED" | "UNAVAILABLE",
-		message: string,
-		refusal: Refusal = { state: "REFUSED" },
-	) {
+	constructor(state: "REFUSED" | "UNAVAILABLE", message: string, refusal?: Refusal) {
 		super(message);
 		this.state = state;
-		this.refusal = refusal;
+		this.refusal = refusal ?? { state: "REFUSED" };
 	}
 }
 

@@ -1096,14 +1096,18 @@ const TEXT_RULES: Record<TextRefusal["rule"], string> = {
 
 /** What the composer must rewrite: the server names the rule and the field, never the text. */
 export function textRefusal({ rule, field }: TextRefusal): string {
-	const note = /^notes\[(\d+)\]$/u.exec(field);
-	const where =
-		field === "summary"
-			? "The summary"
-			: note !== null
-				? `Inline note ${Number(note[1]) + 1}`
-				: `The card's ${field === "page.nextStep" ? "next step" : field.slice("page.".length)}`;
-	return `${where} ${TEXT_RULES[rule]}.`;
+	return `${fieldName(field)} ${TEXT_RULES[rule]}.`;
+}
+
+function fieldName(field: string): string {
+	if (field === "summary") {
+		return "The summary";
+	}
+	const note = /^notes\[(?<index>\d+)\]$/u.exec(field)?.groups?.index;
+	if (note !== undefined) {
+		return `Inline note ${Number(note) + 1}`;
+	}
+	return `The card's ${field === "page.nextStep" ? "next step" : field.slice("page.".length)}`;
 }
 
 type ReviewToolRuntime = Pick<
