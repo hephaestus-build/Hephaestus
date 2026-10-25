@@ -16,10 +16,6 @@ import {
 	reviewRangeStart,
 	type ReviewTimeframe,
 } from "@/components/practice-profile/practice-profile-search";
-import {
-	reviewPositionsOnItem,
-	reviewTotalsOnItem,
-} from "@/components/practice-trace/review-groups";
 import type { ReviewStatus } from "@/components/practice-vocabulary/review-status-defs";
 import {
 	EMPTY_REVIEW_FEED,
@@ -119,25 +115,10 @@ export function usePracticeProfileReviews({
 		detail,
 	}));
 
-	// Positions read the list newest first, so an oldest-first list cannot count them either.
-	const sequenced =
-		list.status === "ready" &&
-		!list.hasMore &&
-		itemKind === undefined &&
-		since === undefined &&
-		status === undefined &&
-		order === undefined;
 	return {
 		list,
 		/** How many reviews the filters keep, from the server; absent until the first page is in. */
 		total: reviewsQuery.data?.pages[0]?.totalElements,
-		// Exact positions require every review of a work; filters or partial pages would undercount.
-		// Narrowed to one work, the list holds every review of it, so they still count.
-		positions: sequenced
-			? reviewPositionsOnItem(list.reviews.map(({ review }) => review))
-			: undefined,
-		/** How many reviews each review's work has, under the same condition as the positions. */
-		totals: sequenced ? reviewTotalsOnItem(list.reviews.map(({ review }) => review)) : undefined,
 		open,
 		onReviewNow: request.ask,
 		requesting: request.asking,

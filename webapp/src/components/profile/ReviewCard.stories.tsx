@@ -39,6 +39,8 @@ function met(id: string, practiceSlug: string, practiceName: string, summary: st
 
 const review: ProfileReview = {
 	review: reviewRef(REVIEW, pullRequest902, daysBefore(2)),
+	positionOnWork: 1,
+	totalOnWork: 1,
 	results: [
 		met(
 			"00000000-0000-0000-0000-000000000102",

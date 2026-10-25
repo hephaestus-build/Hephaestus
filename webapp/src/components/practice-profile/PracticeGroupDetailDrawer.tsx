@@ -172,6 +172,11 @@ export function PracticeGroupDetailDrawer({
 	const pathAt = levelPathAt(detailStack, { pageLabel: PAGE_LABEL, labelOf, onClose });
 	const openReviewId = openLevelId(detailStack, "review");
 	const { list, open } = reviews;
+	// The open review's row in the list under it, which knows its place among the work's reviews.
+	const openListed =
+		list.feed.status === "ready"
+			? list.feed.reviews.find((entry) => entry.review.id === openReviewId)
+			: undefined;
 
 	return (
 		<DetailDrawerStack stack={detailStack} onClose={onClose} footer={levelFooter}>
@@ -249,12 +254,8 @@ export function PracticeGroupDetailDrawer({
 								nested={level.nested}
 								path={pathAt(level.depth)}
 								{...open}
-								positionOnWork={
-									openReviewId === undefined ? undefined : list.positions?.get(openReviewId)
-								}
-								totalOnWork={
-									openReviewId === undefined ? undefined : list.totals?.get(openReviewId)
-								}
+								positionOnWork={openListed?.positionOnWork}
+								totalOnWork={openListed?.totalOnWork}
 								// The observation open over this review, from the address: after a reload the
 								// row the reader came from is still marked once they go back.
 								openedObservationId={

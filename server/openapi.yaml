@@ -6935,8 +6935,8 @@ paths:
           type: array
           items:
             type: string
-      - description: "Only the reviews of this work, with the reviews of its pull\
-          \ request's reviews"
+      - description: "Only the reviews of this work and, for a pull request, of the\
+          \ code reviews on it"
         in: query
         name: itemId
         required: false
@@ -21269,16 +21269,27 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/OwnFeedbackRef"
+        positionOnWork:
+          type: integer
+          format: int32
+          description: "This review's place among the reader's reviews of its work,\
+            \ oldest first, whatever the list's filters keep"
         results:
           type: array
           items:
             $ref: "#/components/schemas/ResultList"
         review:
           $ref: "#/components/schemas/ReviewRef"
+        totalOnWork:
+          type: integer
+          format: int32
+          description: How many reviews of its work recorded something about the reader
       required:
       - feedback
+      - positionOnWork
       - results
       - review
+      - totalOnWork
     ProfileReviewDetail:
       type: object
       properties:

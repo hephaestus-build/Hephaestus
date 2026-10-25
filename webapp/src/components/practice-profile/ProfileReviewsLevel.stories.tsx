@@ -5,10 +5,6 @@ import type { ProfileReview } from "@/api/types.gen";
 import { detailStackKey } from "@/components/layout/detail-drawer/detail-stack";
 import { DetailDrawerStack } from "@/components/layout/detail-drawer/DetailDrawerStack";
 import { DetailStackLink } from "@/components/layout/detail-drawer/DetailStackLink";
-import {
-	reviewPositionsOnItem,
-	reviewTotalsOnItem,
-} from "@/components/practice-trace/review-groups";
 import { ReviewRequestedNotice } from "@/components/practice-trace/ReviewRequestedNotice";
 import type { ReviewFeedState } from "@/components/profile/reviews";
 import { withPageBehind } from "@/stories/decorators";
@@ -61,8 +57,6 @@ const meta = {
 	args: {
 		path: { behind: [{ label: "Practice profile", depth: 0 }], onClose: fn() },
 		feed: feedOf(profileReviews),
-		positions: reviewPositionsOnItem(profileReviews.map((entry) => entry.review)),
-		totals: reviewTotalsOnItem(profileReviews.map((entry) => entry.review)),
 		onOpenReview: fn(),
 		onKindChange: fn(),
 		onSinceChange: fn(),
@@ -284,6 +278,32 @@ export const TrackingAWork: Story = {
 };
 
 /**
+ * A pressed Track keeps the primary fill in dark mode too, where the outline button's own pressed
+ * ground would leave the icon nearly invisible.
+ */
+export const TrackingAWorkDark: Story = {
+	...TrackingAWork,
+	globals: { theme: "dark" },
+	play: async ({ canvasElement }) => {
+		await settledDrawerPanel();
+		const [toggle] = screen.getAllByRole("button", {
+			name: new RegExp(`^Track this work: ${openItem.label}, `, "u"),
+		});
+		if (toggle === undefined) {
+			throw new Error("Expected a pressed Track toggle.");
+		}
+		await expect(toggle).toHaveAttribute("aria-pressed", "true");
+		const primary = document.createElement("span");
+		primary.className = "bg-primary";
+		canvasElement.append(primary);
+		await expect(getComputedStyle(toggle).backgroundColor).toBe(
+			getComputedStyle(primary).backgroundColor,
+		);
+		primary.remove();
+	},
+};
+
+/**
  * Tracking a work while another filter leaves none of its reviews: the bar says what it tracks in
  * words instead of a placeholder for a name nothing is loading.
  */
@@ -304,44 +324,69 @@ export const TrackingWithNoMatches: Story = {
 };
 
 /**
- * A status filter can hide a work's latest review, so without every review's position no row claims
- * to be the one to ask from: no Request another review, and the line over the table names Track only.
+ * A status filter keeps each review's place on its work, which the server counts over every review
+ * of the work: the latest review still offers Request another review, and an earlier one does not.
  */
-export const StatusFilterOffersNoRequest: Story = {
+export const StatusFilterKeepsTheLatestReview: Story = {
 	args: {
 		status: ["COMPLETE"],
-		positions: undefined,
-		totals: undefined,
-		feed: feedOf(profileReviews.filter((entry) => entry.review.status === "COMPLETE")),
+		feed: feedOf([
+			openProfileReview,
+			{
+				...openProfileReview,
+				review: { ...openProfileReview.review, id: "00000000-0000-0000-0000-0000000003b1" },
+				positionOnWork: 1,
+			},
+		]),
 	},
 	play: async () => {
 		await settledDrawerPanel();
-		// The rows are there; only the ask is not.
+		await expect(screen.getByText("Review 2 of 2")).toBeVisible();
+		await expect(screen.getByText("Review 1 of 2")).toBeVisible();
+		const asks = screen.getAllByRole("button", { name: /^Request another review: /u });
+		await expect(asks).toHaveLength(1);
+		const latestRow = screen.getByText("Review 2 of 2").closest("tr");
+		if (latestRow === null) {
+			throw new Error("Expected the latest review's row.");
+		}
 		await expect(
-			screen.getAllByRole("button", { name: /^See the reviewed practices /u }).length,
-		).toBeGreaterThan(0);
-		await expect(
-			screen.queryByRole("button", { name: /^Request another review: /u }),
-		).not.toBeInTheDocument();
-		await expect(
-			screen.queryByText(/of the work, from its latest review/u),
-		).not.toBeInTheDocument();
+			within(latestRow).getByRole("button", { name: /^Request another review: /u }),
+		).toBe(asks[0]);
+	},
+};
+
+/** A filter that hides a work's latest review leaves none of its rows to ask from. */
+export const LatestReviewFilteredOut: Story = {
+	args: {
+		status: ["FAILED"],
+		feed: feedOf([
+			{
+				...openProfileReview,
+				review: { ...openProfileReview.review, status: "FAILED" },
+				positionOnWork: 1,
+			},
+		]),
+	},
+	play: async () => {
+		await settledDrawerPanel();
+		await expect(screen.getByText("Review 1 of 2")).toBeVisible();
+		await expect(screen.queryByRole("button", { name: /^Request another review: /u })).toBeNull();
+		await expect(screen.queryByText(/of the work, from its latest review/u)).toBeNull();
 	},
 };
 
 /**
- * Two runs of one work in the same minute, and another repository's work with the same number: every
- * button on the page still has a name of its own.
+ * Two runs of one work, and works with the same number in another repository and at another
+ * provider: every button on the page still has a name of its own.
  */
 export const ControlNamesStayUnique: Story = {
 	args: {
-		positions: undefined,
-		totals: undefined,
 		feed: feedOf([
 			openProfileReview,
 			{
 				...openProfileReview,
 				review: { ...openProfileReview.review, id: "00000000-0000-0000-0000-0000000003c1" },
+				positionOnWork: 1,
 			},
 			{
 				...openProfileReview,
@@ -350,6 +395,8 @@ export const ControlNamesStayUnique: Story = {
 					id: "00000000-0000-0000-0000-0000000003c2",
 					item: { ...openItem, id: "990001", container: "acme/other-service" },
 				},
+				positionOnWork: 1,
+				totalOnWork: 1,
 			},
 			// The same number in the same repository's name at another provider.
 			{
@@ -359,6 +406,8 @@ export const ControlNamesStayUnique: Story = {
 					id: "00000000-0000-0000-0000-0000000003c3",
 					item: { ...openItem, id: "990002", provider: "GITHUB" },
 				},
+				positionOnWork: 1,
+				totalOnWork: 1,
 			},
 		]),
 	},
@@ -369,61 +418,6 @@ export const ControlNamesStayUnique: Story = {
 			.map((button) => button.getAttribute("aria-label"));
 		await expect(names.length).toBeGreaterThan(2);
 		await expect(new Set(names).size).toBe(names.length);
-	},
-};
-
-/**
- * Without every review's position, the work's latest review is its first row in the list's order,
- * the order the server created them in, even when an earlier review finished later.
- */
-export const RequestFollowsTheListOrder: Story = {
-	args: {
-		positions: undefined,
-		totals: undefined,
-		feed: feedOf([
-			{
-				...openProfileReview,
-				review: {
-					...openProfileReview.review,
-					id: "00000000-0000-0000-0000-0000000003d1",
-					createdAt: daysBefore(1),
-					completedAt: daysBefore(1),
-				},
-			},
-			{
-				...openProfileReview,
-				review: {
-					...openProfileReview.review,
-					id: "00000000-0000-0000-0000-0000000003d2",
-					createdAt: daysBefore(2),
-					completedAt: daysBefore(0),
-				},
-			},
-		]),
-	},
-	play: async () => {
-		await settledDrawerPanel();
-		const first = screen.getAllByRole("row").find((row) => row.querySelector("td") !== null);
-		if (first === undefined) {
-			throw new Error("Expected rows.");
-		}
-		await expect(
-			within(first).getByRole("button", { name: /^Request another review: /u }),
-		).toBeVisible();
-		await expect(
-			screen.getAllByRole("button", { name: /^Request another review: /u }),
-		).toHaveLength(1);
-	},
-};
-
-/** A timeframe reads when results were recorded, so it cannot vouch for a work's latest review either. */
-export const TimeframeOffersNoRequest: Story = {
-	args: { since: "30d", positions: undefined, totals: undefined },
-	play: async () => {
-		await settledDrawerPanel();
-		await expect(
-			screen.queryByRole("button", { name: /^Request another review: /u }),
-		).not.toBeInTheDocument();
 	},
 };
 
@@ -476,7 +470,6 @@ export const ManyReviews: Story = {
 			}),
 			{ hasMore: true },
 		),
-		positions: undefined,
 	},
 	play: async ({ args }) => {
 		await settledDrawerPanel();
@@ -560,7 +553,6 @@ export const CouldNotDetermineResults: Story = {
 				),
 			},
 		]),
-		positions: undefined,
 	},
 	play: async () => {
 		await settledDrawerPanel();
@@ -593,7 +585,6 @@ export const PartialReview: Story = {
 				),
 			},
 		]),
-		positions: undefined,
 	},
 	play: async ({ args }) => {
 		await settledDrawerPanel();

@@ -160,8 +160,6 @@ The links, the buttons, and the work on the line keep their own action.
 
 The title chip opens the reviews that recorded an observation about your work, newest first and grouped by day.
 A review that still runs may not appear yet, because a review appears only after it records an observation about your work.
-The newest review is framed in blue and says **Latest review** in its corner.
-
 A review that someone requested has the **Requested** tag.
 It is a real review and retains earlier observations in history.
 The newest eligible observation follows recorded order, regardless of who started it.
@@ -183,7 +181,9 @@ The list does not link the feedback a review gave. Open an observation of the re
 The filters work as on the admin **Reviews** tab:
 
 - **Work** selects one or more kinds of work.
-- **Status** selects one or more statuses: **Waiting**, **Running**, **Completed**, **Partial**, **Failed** or **Cancelled**.
+- **Status** selects one or more statuses: **Running**, **Completed**, **Partial**, **Failed** or **Cancelled**.
+  The list holds only reviews that recorded an observation about your work.
+  Thus, a review that failed or was cancelled before it recorded anything is not in it.
 - The timeframe shows the last 7, 30, or 90 days, or **All time**, the initial value.
 - **Sort** lists the newest review first, or the oldest.
 - **Reset** clears every filter, and a line counts the reviews that match.
@@ -192,7 +192,7 @@ Each row ends in icon buttons: the play button is **Request another review**, th
 A line above the table says what each one does, and hovering or focusing a button shows its name.
 When a work has more than one review, its rows offer **Track this work**.
 
-**Track this work** narrows the list to every review of that work. Once all of them have loaded, and with no other filter and newest first, each shows its sequence, such as *Review 2 of 3*.
+**Track this work** narrows the list to every review of that work.
 **Tracking** above the table names the work. Its close button removes the work filter. **Reset** clears every filter.
 With any filter on, or oldest first, no row is framed as the **Latest review**, because the top review might not be your latest.
 
@@ -200,14 +200,13 @@ Older reviews load when you scroll to the end of the list.
 You can also select **View earlier reviews**.
 If older reviews cannot load, select **Retry**.
 
-Every review of a work reviewed more than once shows its sequence, such as *Review 2 of 3*.
-It does so after the whole list loads, newest first and with no filter other than **Track this work**.
+Every review of a work reviewed more than once shows its sequence, such as *Review 2 of 3*, whatever the filters keep.
 **Request another review** appears in the row of a work's latest review when you may ask for one as author, assignee, or workspace admin.
-With a **Status** filter, a timeframe or oldest first, the list cannot tell which review is a work's latest, so no row offers it.
+If a filter hides that review, no row of the work offers it.
 
 **See the reviewed practices** opens a review.
 Its header names the work as a link to the original.
-The date and the status follow, then its sequence on the work when the list knows it.
+The date and the status follow, then its sequence on the work.
 To ask for another review, use **Request another review** in the list.
 
 A table lists every practice the review reached, with its outcome, under a gray heading for each practice group.

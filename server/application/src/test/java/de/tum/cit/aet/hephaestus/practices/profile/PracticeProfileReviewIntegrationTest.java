@@ -26,6 +26,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStopReason;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
@@ -542,6 +543,41 @@ class PracticeProfileReviewIntegrationTest extends BaseIntegrationTest {
                 .expectBody()
                 .jsonPath("$.totalElements")
                 .isEqualTo(0);
+    }
+
+    @Test
+    void shouldGiveEachReviewItsPlaceOnTheWorkWhenAFilterHidesTheOthers() {
+        var at = Instant.now();
+        var complete = data.result(scenario, ResultOutcome.MET, at.minus(Duration.ofDays(40)));
+        data.end(complete, at.minus(Duration.ofDays(39)));
+        var partial = data.result(scenario, ResultOutcome.NOT_MET, at);
+        var review = reviews.findById(partial.getReviewId()).orElseThrow();
+        review.setStatus(ReviewStatus.PARTIAL);
+        review.setStopReason(ReviewStopReason.RESULT_WITHHELD);
+        reviews.saveAndFlush(review);
+
+        get("/practice-profile/reviews?status=COMPLETE")
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.content[0].review.id")
+                .isEqualTo(complete.getReviewId().toString())
+                .jsonPath("$.content[0].positionOnWork")
+                .isEqualTo(1)
+                .jsonPath("$.content[0].totalOnWork")
+                .isEqualTo(2);
+        get("/practice-profile/reviews?since=" + at.minus(Duration.ofDays(30)) + "&order=OLDEST")
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.totalElements")
+                .isEqualTo(1)
+                .jsonPath("$.content[0].review.id")
+                .isEqualTo(partial.getReviewId().toString())
+                .jsonPath("$.content[0].positionOnWork")
+                .isEqualTo(2)
+                .jsonPath("$.content[0].totalOnWork")
+                .isEqualTo(2);
     }
 
     @Test

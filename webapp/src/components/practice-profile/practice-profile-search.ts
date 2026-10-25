@@ -162,6 +162,12 @@ export type FeedbackTab = (typeof FEEDBACK_TABS)[number];
 
 export const DEFAULT_FEEDBACK_TAB: FeedbackTab = "open";
 
+/**
+ * A work's id in the address: a positive 64-bit number, kept as text. The router reads a numeric
+ * value from the address as a number, so it is coerced back.
+ */
+const itemIdSchema = z.coerce.string().regex(/^[1-9]\d{0,18}$/u);
+
 const practiceProfileFilterSchema = z.object({
 	dir: z
 		.enum(SORT_DIRECTIONS)
@@ -170,7 +176,6 @@ const practiceProfileFilterSchema = z.object({
 	feedback: z.enum(FEEDBACK_TABS).default(DEFAULT_FEEDBACK_TAB).catch(DEFAULT_FEEDBACK_TAB),
 	practiceTab: z.enum(PRACTICE_TABS).default(DEFAULT_PRACTICE_TAB).catch(DEFAULT_PRACTICE_TAB),
 	observation: z.uuid().optional().catch(undefined),
-	// A free string, for the reason `TraceKindFilter` gives.
 	// Free strings, for the reason `TraceKindFilter` gives; a link from before named one kind.
 	reviewKind: multiValue.transform((values) =>
 		nonEmpty(
@@ -182,12 +187,7 @@ const practiceProfileFilterSchema = z.object({
 		narrowToEnum(values, statusValues(OWN_REVIEW_STATUS_DEFS)),
 	),
 	reviewOrder: z.enum(REVIEW_ORDERS).optional().catch(undefined),
-	// The router reads a numeric value from the address as a number; the id is kept as text.
-	reviewItem: z.coerce
-		.string()
-		.regex(/^\d{1,18}$/u)
-		.optional()
-		.catch(undefined),
+	reviewItem: itemIdSchema.optional().catch(undefined),
 	reviewGroup: z.string().min(1).max(REVIEW_FILTER_MAX_LENGTH).optional().catch(undefined),
 	reviewPractice: z.string().min(1).max(REVIEW_FILTER_MAX_LENGTH).optional().catch(undefined),
 	reviewOutcome: multiValue.transform((values) => narrowToEnum(values, statusValues(OUTCOME_DEFS))),

@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { ReviewRef } from "@/api/types.gen";
 
 import { tracedItem } from "./fixtures";
-import { groupByDay, reviewOrdinalLabel, reviewPositionsOnItem } from "./review-groups";
+import { groupByDay, reviewOrdinalLabel } from "./review-groups";
 
 const NOW = new Date(2026, 8, 22, 21, 30);
 
@@ -35,17 +35,6 @@ describe("groupByDay", () => {
 			["Monday, 21 September", ["c"]],
 			["Wednesday, 31 December 2025", ["d"]],
 		]);
-	});
-});
-
-describe("reviewPositionsOnItem", () => {
-	it("counts each item's reviews from the oldest", () => {
-		const positions = reviewPositionsOnItem([
-			review("newer", NOW),
-			review("other", NOW, "1418"),
-			review("older", NOW),
-		]);
-		expect(Object.fromEntries(positions)).toStrictEqual({ newer: 2, other: 1, older: 1 });
 	});
 });
 

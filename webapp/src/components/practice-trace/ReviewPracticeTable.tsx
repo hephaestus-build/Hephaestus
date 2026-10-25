@@ -72,7 +72,7 @@ export interface ReviewPracticeTableProps {
 	openedObservationId?: string;
 }
 
-const UNGROUPED = "Other practices";
+const UNGROUPED = "Unassigned";
 
 /** The outcomes as the admin Observations tab offers them, with their icons. */
 const OUTCOME_OPTIONS = statusFacetOptions(OUTCOME_DEFS);

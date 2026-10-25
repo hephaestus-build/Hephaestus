@@ -86,12 +86,10 @@ export interface ReviewItemCellProps {
 	linked?: boolean;
 	children?: ReactNode;
 	/**
-	 * Tags about this review of the work, such as "Latest": on one line with its sequence ("Review
-	 * 2"), so the two read together.
+	 * Tags about this review of the work, such as "Requested": on one line with its sequence
+	 * ("Review 2"), so the two read together.
 	 */
 	tags?: ReactNode;
-	/** A line under the tags, such as the way to the feedback on the work. */
-	footer?: ReactNode;
 }
 
 export function ReviewItemCell({
@@ -101,7 +99,6 @@ export function ReviewItemCell({
 	linked = true,
 	children,
 	tags,
-	footer,
 }: ReviewItemCellProps) {
 	const ItemIcon = reviewedWorkIcon(item.kind, item.provider ?? undefined);
 	const name = itemName(item);
@@ -130,7 +127,6 @@ export function ReviewItemCell({
 					<span className="max-w-xs text-xs text-muted-foreground">{title}</span>
 				)}
 				<ReviewTags position={position} total={total} tags={tags} />
-				{footer}
 			</span>
 		</TableCell>
 	);

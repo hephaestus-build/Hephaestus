@@ -4092,8 +4092,16 @@ export type ProfileChange = {
 
 export type ProfileReview = {
     feedback: Array<OwnFeedbackRef>;
+    /**
+     * This review's place among the reader's reviews of its work, oldest first, whatever the list's filters keep
+     */
+    positionOnWork: number;
     results: Array<ResultList>;
     review: ReviewRef;
+    /**
+     * How many reviews of its work recorded something about the reader
+     */
+    totalOnWork: number;
 };
 
 export type ProfileReviewDetail = {
@@ -12675,7 +12683,7 @@ export type ListOwnReviewsData = {
          */
         itemKind?: Array<string>;
         /**
-         * Only the reviews of this work, with the reviews of its pull request's reviews
+         * Only the reviews of this work and, for a pull request, of the code reviews on it
          */
         itemId?: string;
         /**

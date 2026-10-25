@@ -232,8 +232,6 @@ function PracticeProfile() {
 				reviews={{
 					list: {
 						feed: reviews.list,
-						positions: reviews.positions,
-						totals: reviews.totals,
 						onOpenReview: (reviewId) => stackControls.open(reviewLevel(reviewId)),
 						kind: search.reviewKind,
 						onKindChange: (reviewKind) => setView({ reviewKind }),

@@ -14,7 +14,7 @@ public record OwnReviewListParams(
         @Parameter(description = "Only work of these kinds") @Nullable
         List<String> itemKind,
 
-        @Parameter(description = "Only the reviews of this work, with the reviews of its pull request's reviews")
+        @Parameter(description = "Only the reviews of this work and, for a pull request, of the code reviews on it")
         @Nullable
         Long itemId,
 

@@ -8,7 +8,8 @@ export interface ReviewSaw {
 	results: ReviewResultCounts;
 }
 
-const COUNT_KEYS = {
+/** Where each outcome is counted in a review's counts. */
+export const OUTCOME_COUNT_KEYS = {
 	MET: "met",
 	NOT_MET: "notMet",
 	DOES_NOT_APPLY: "doesNotApply",
@@ -39,7 +40,7 @@ export function practicesLabel(saw: ReviewSaw): string {
 export function outcomeCounts(saw: ReviewSaw): { outcome: Outcome; n: number; text: string }[] {
 	return statusValues(OUTCOME_DEFS)
 		.map((outcome) => {
-			const n = saw.results[COUNT_KEYS[outcome]];
+			const n = saw.results[OUTCOME_COUNT_KEYS[outcome]];
 			return { outcome, n, text: `${n} ${OUTCOME_DEFS[outcome].label.toLowerCase()}` };
 		})
 		.filter((entry) => entry.n > 0);

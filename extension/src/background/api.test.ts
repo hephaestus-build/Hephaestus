@@ -110,7 +110,13 @@ function ownTrace(review: ReviewRef, item = review.item): OwnItemTrace {
 }
 
 function ownReviews(...reviews: ReviewRef[]): PageResponseDtoProfileReview {
-	const content = reviews.map((review) => ({ review, results: [], feedback: [] }));
+	const content = reviews.map((review) => ({
+		review,
+		results: [],
+		feedback: [],
+		positionOnWork: 1,
+		totalOnWork: 1,
+	}));
 	const sort = { empty: false, sorted: true, unsorted: false };
 	return {
 		content,

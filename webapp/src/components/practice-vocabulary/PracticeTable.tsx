@@ -449,16 +449,6 @@ export function SubjectCell({
 }
 
 /**
- * The row's own link at its end: an `InlineLink` drawn as a button carrying `data-row-link` and no
- * handler of its own, so the press bubbles to the row, which owns the opening. A row given a real
- * link draws that instead, carrying the same mark, and the link opens itself. The link rule is
- * `InlineLink`'s, and the row's own hover is added since the whole row is the pointer path. The
- * accessible name is built from the visible words, so it always starts with what is on screen and
- * a reader who speaks them reaches the link (WCAG 2.2 SC 2.5.3). An `aria-label` rather than
- * hidden text after the words: how name-from-content joins an out-of-flow child to the text before
- * it differs between engines, and a label is one string everywhere.
- */
-/**
  * The look of a row's own link, for a table that draws its link itself: plain at rest, the accent
  * and an underline while the row (`group/row`) is hovered, with its arrow after the words.
  */
@@ -477,6 +467,16 @@ export function RowLinkArrow() {
 	);
 }
 
+/**
+ * The row's own link at its end: an `InlineLink` drawn as a button carrying `data-row-link` and no
+ * handler of its own, so the press bubbles to the row, which owns the opening. A row given a real
+ * link draws that instead, carrying the same mark, and the link opens itself. The link rule is
+ * `InlineLink`'s, and the row's own hover is added since the whole row is the pointer path. The
+ * accessible name is built from the visible words, so it always starts with what is on screen and
+ * a reader who speaks them reaches the link (WCAG 2.2 SC 2.5.3). An `aria-label` rather than
+ * hidden text after the words: how name-from-content joins an out-of-flow child to the text before
+ * it differs between engines, and a label is one string everywhere.
+ */
 function RowLinkCell({ link }: { link: PracticeTableRowLink | undefined }) {
 	return (
 		<TableCell className="text-right">

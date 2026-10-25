@@ -54,8 +54,13 @@ const TIMEFRAME_OPTIONS: readonly FilterOption<ReviewTimeframe | typeof ALL_TIME
 	{ value: ALL_TIME, label: "All time" },
 ];
 
-/** The statuses as the developer's own review surfaces name them, with their icons. */
-const STATUS_OPTIONS = statusFacetOptions(OWN_REVIEW_STATUS_DEFS);
+/**
+ * The statuses as the developer's own review surfaces name them, with their icons. The list holds a
+ * review only once it records something about the reader, so a waiting review is never in it.
+ */
+const STATUS_OPTIONS = statusFacetOptions(OWN_REVIEW_STATUS_DEFS).filter(
+	(option) => option.value !== "QUEUED",
+);
 
 const NEWEST = "NEWEST";
 
@@ -96,13 +101,6 @@ export interface ProfileReviewsLevelProps {
 	nested?: boolean;
 	path: LevelPath;
 	feed: ReviewFeedState;
-	/**
-	 * Each review's position among the reviews of its work, by review id; absent while the feed does
-	 * not hold every review, so no row claims a count it cannot see.
-	 */
-	positions?: Map<string, number>;
-	/** How many reviews each review's work has, under the same condition as `positions`. */
-	totals?: Map<string, number>;
 	onOpenReview: (reviewId: string) => void;
 	/** The review whose level is open over this one. */
 	openReviewId?: string;
@@ -112,7 +110,6 @@ export interface ProfileReviewsLevelProps {
 	/** How far back the list reaches, or `undefined` for every review. */
 	since?: ReviewTimeframe;
 	onSinceChange: (since: ReviewTimeframe | undefined) => void;
-	/** The review status the list is narrowed to, or `undefined` for every status. */
 	/** The statuses the list is narrowed to, or `undefined` for every status. */
 	status?: ReviewStatus[];
 	onStatusChange?: (statuses: ReviewStatus[] | undefined) => void;
@@ -142,8 +139,6 @@ export function ProfileReviewsLevel({
 	nested,
 	path,
 	feed,
-	positions,
-	totals,
 	onOpenReview,
 	openReviewId,
 	kind,
@@ -203,13 +198,10 @@ export function ProfileReviewsLevel({
 						reviews={feed.reviews}
 						// Oldest first, the top row is not the latest review either.
 						filtered={filtered || order !== undefined}
-						latestKnowable={status === undefined && since === undefined && order === undefined}
 						onOpenReview={onOpenReview}
 						openReviewId={openReviewId}
 						onReviewNow={onReviewNow}
 						requesting={requesting}
-						positions={positions}
-						totals={totals}
 						isLoadingMore={feed.isLoadingMore}
 						trackedItemId={trackedItemId}
 						onTrack={

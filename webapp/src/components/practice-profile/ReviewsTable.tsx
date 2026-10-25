@@ -8,7 +8,7 @@ import type { ItemRef, ProfileReview, ReviewResultCounts } from "@/api/types.gen
 import { ActionButton } from "@/components/common/ActionButton";
 import { LOADING_MORE_ROWS } from "@/components/common/InfiniteListEnd";
 import { useNow } from "@/components/common/use-now";
-import type { ReviewSaw } from "@/components/practice-trace/review-saw";
+import { OUTCOME_COUNT_KEYS, type ReviewSaw } from "@/components/practice-trace/review-saw";
 import { RequestedReviewTag } from "@/components/practice-trace/review-tags";
 import {
 	type ReviewColumn,
@@ -46,25 +46,15 @@ export interface ReviewsTableProps {
 	openReviewId?: string;
 	onReviewNow?: (itemId: string) => void;
 	requesting?: string;
-	/** Each review's position among the reviews of its item, when every review is loaded. */
-	positions?: Map<string, number>;
-	/** How many reviews each review's work has, when every review is loaded: "Review 2 of 3". */
-	totals?: Map<string, number>;
 	/** Whether the next page of reviews is on its way: placeholder rows then continue the table. */
 	isLoadingMore?: boolean;
 	/** The work whose reviews the list is narrowed to, by its id; its rows show Track pressed. */
 	trackedItemId?: string;
 	/**
 	 * Narrows the list to every review of one work, or lets go of it; without it no row offers
-	 * Track. A row offers it when its work has another review in the list or an earlier one.
+	 * Track. A row offers it when its work has more than one review.
 	 */
 	onTrack?: (item: ItemRef | undefined) => void;
-	/**
-	 * Whether the loaded rows can show each work's latest review without every review loaded: the
-	 * list keeps every status and runs newest first. Request another review is offered only on a
-	 * latest review, so without it no row offers it until positions are known.
-	 */
-	latestKnowable?: boolean;
 }
 
 const COLUMNS: readonly ReviewColumn[] = [
@@ -79,15 +69,7 @@ const reviewedAt = ({ review }: ProfileReview): Date => review.completedAt ?? re
 function sawOf({ review, results }: ProfileReview): ReviewSaw {
 	const counts: ReviewResultCounts = { met: 0, notMet: 0, doesNotApply: 0, couldNotDetermine: 0 };
 	for (const { outcome } of results) {
-		if (outcome === "MET") {
-			counts.met += 1;
-		} else if (outcome === "NOT_MET") {
-			counts.notMet += 1;
-		} else if (outcome === "DOES_NOT_APPLY") {
-			counts.doesNotApply += 1;
-		} else {
-			counts.couldNotDetermine += 1;
-		}
+		counts[OUTCOME_COUNT_KEYS[outcome]] += 1;
 	}
 	return { status: review.status, results: counts };
 }
@@ -99,34 +81,21 @@ export function ReviewsTable({
 	openReviewId,
 	onReviewNow,
 	requesting,
-	positions,
-	totals,
 	isLoadingMore = false,
 	trackedItemId,
 	onTrack,
-	latestKnowable = true,
 }: ReviewsTableProps) {
 	// The newest row of a narrowed list is only the newest of what the filter kept.
 	const latestId = filtered ? undefined : reviews[0]?.review.id;
-	const reviewsPerItem = new Map<string, number>();
-	for (const { review } of reviews) {
-		reviewsPerItem.set(review.item.id, (reviewsPerItem.get(review.item.id) ?? 0) + 1);
-	}
 	const today = new Date(useNow());
-	const names = controlNames(reviews, positions, totals, today);
-	const latestOnItem = latestReviewPerItem(reviews, positions, totals, latestKnowable);
+	const names = controlNames(reviews, today);
 	// Track narrows to a work's runs, so only a work with more than one review offers it.
 	const trackable = (entry: ProfileReview) =>
-		(reviewsPerItem.get(entry.review.item.id) ?? 0) > 1 ||
-		(positions?.get(entry.review.id) ?? 0) > 1 ||
-		entry.review.item.id === trackedItemId;
+		entry.totalOnWork > 1 || entry.review.item.id === trackedItemId;
 
 	const offersRequest =
 		onReviewNow !== undefined &&
-		reviews.some(
-			(entry) =>
-				entry.review.kind === "ITEM" && latestOnItem.get(entry.review.item.id) === entry.review.id,
-		);
+		reviews.some((entry) => entry.review.kind === "ITEM" && isLatestOnWork(entry));
 	const offersTrack = onTrack !== undefined && reviews.some(trackable);
 
 	return (
@@ -151,12 +120,8 @@ export function ReviewsTable({
 						open={entry.review.id === openReviewId}
 						onOpenReview={onOpenReview}
 						// Another review of a work is asked for from its latest review, the one it would follow.
-						onReviewNow={
-							latestOnItem.get(entry.review.item.id) === entry.review.id ? onReviewNow : undefined
-						}
+						onReviewNow={isLatestOnWork(entry) ? onReviewNow : undefined}
 						isRequesting={requesting !== undefined && requesting === entry.review.item.id}
-						position={positions?.get(entry.review.id)}
-						total={totals?.get(entry.review.id)}
 						workName={names.work.get(entry.review.item.id) ?? entry.review.item.label}
 						trackName={names.track.get(entry.review.id) ?? entry.review.item.label}
 						track={
@@ -192,53 +157,16 @@ export function ReviewsTable({
 	);
 }
 
-/**
- * Each work's latest review among the rows, by the work's id. With every review loaded, it is the
- * one whose position is its work's total. Otherwise only a list that keeps every status and time, newest
- * first, can tell: its first row of a work is the work's latest review, in the server's own order
- * (when the review was created), since later pages hold only older ones. A status filter can hide
- * the latest review, a timeframe reads when results were recorded rather than reviews created, and
- * oldest first loads it last, so there no row claims to be the latest.
- */
-function latestReviewPerItem(
-	reviews: readonly ProfileReview[],
-	positions: Map<string, number> | undefined,
-	totals: Map<string, number> | undefined,
-	newestKnowable: boolean,
-): Map<string, string> {
-	const latest = new Map<string, ProfileReview>();
-	for (const entry of reviews) {
-		const itemId = entry.review.item.id;
-		const position = positions?.get(entry.review.id);
-		const total = totals?.get(entry.review.id);
-		if (position !== undefined && total !== undefined) {
-			if (position === total) {
-				latest.set(itemId, entry);
-			}
-			continue;
-		}
-		if (!newestKnowable) {
-			continue;
-		}
-		// The list's own order, not the time a review finished: a later review can finish first.
-		if (!latest.has(itemId)) {
-			latest.set(itemId, entry);
-		}
-	}
-	return new Map([...latest].map(([itemId, entry]) => [itemId, entry.review.id]));
-}
+/** Whether a row is its work's latest review, by the server's count of every review of the work. */
+const isLatestOnWork = (entry: ProfileReview) => entry.positionOnWork === entry.totalOnWork;
 
 /**
  * The names a row's buttons say after their words, one per control on the page. A work is named by
  * its number ("#19"), with its repository or channel where another work on the page has the same
- * number. Track is on every run of a work, so its name adds which run: "review 2 of 3" where every
- * review is loaded, else the review's time; a name that still repeats on the page, as two runs in
- * one minute would, ends in its place among them.
+ * number. Track is on every run of a work, so its name adds which run: "review 2 of 3".
  */
 function controlNames(
 	reviews: readonly ProfileReview[],
-	positions: Map<string, number> | undefined,
-	totals: Map<string, number> | undefined,
 	today: Date,
 ): { work: Map<string, string>; track: Map<string, string> } {
 	const itemsPerLabel = new Map<string, Set<string>>();
@@ -277,29 +205,19 @@ function controlNames(
 			}
 		}
 	}
-	const bases = reviews.map((entry) => {
-		const position = positions?.get(entry.review.id);
-		const total = totals?.get(entry.review.id);
-		const run =
-			position !== undefined && total !== undefined
-				? `review ${position} of ${total}`
-				: formatDayTime(reviewedAt(entry), today);
-		return [
-			entry.review.id,
-			`${work.get(entry.review.item.id) ?? entry.review.item.label}, ${run}`,
-		] as const;
-	});
-	const seen = new Map<string, number>();
-	const repeats = new Map<string, number>();
-	for (const [, base] of bases) {
-		repeats.set(base, (repeats.get(base) ?? 0) + 1);
-	}
-	const track = new Map<string, string>();
-	for (const [id, base] of bases) {
-		const nth = (seen.get(base) ?? 0) + 1;
-		seen.set(base, nth);
-		track.set(id, (repeats.get(base) ?? 0) > 1 ? `${base} (${nth})` : base);
-	}
+	// Every work's name is unique by now, and so is each run's place on its work.
+	const track = new Map(
+		reviews.map((entry) => {
+			const run =
+				entry.totalOnWork > 1
+					? `review ${entry.positionOnWork} of ${entry.totalOnWork}`
+					: formatDayTime(reviewedAt(entry), today);
+			return [
+				entry.review.id,
+				`${work.get(entry.review.item.id) ?? entry.review.item.label}, ${run}`,
+			] as const;
+		}),
+	);
 	return { work, track };
 }
 
@@ -339,8 +257,6 @@ interface ReviewRowProps {
 	onOpenReview: (reviewId: string) => void;
 	onReviewNow?: (itemId: string) => void;
 	isRequesting: boolean;
-	position?: number;
-	total?: number;
 	/** The work as the row's buttons name it, unique among the works on the page. */
 	workName: string;
 	/** What Track's name says after its words, unique among the rows on the page. */
@@ -356,8 +272,6 @@ function ReviewRow({
 	onOpenReview,
 	onReviewNow,
 	isRequesting,
-	position,
-	total,
 	workName,
 	trackName,
 	track,
@@ -398,8 +312,8 @@ function ReviewRow({
 			{/* The sequence on the work and "Requested" share one line under the work. */}
 			<ReviewItemCell
 				item={item}
-				position={position}
-				total={total}
+				position={entry.positionOnWork}
+				total={entry.totalOnWork}
 				tags={review.origin === "REQUEST" && <RequestedReviewTag />}
 			/>
 			<ReviewSawCell saw={sawOf(entry)} />
@@ -486,9 +400,12 @@ const LATEST_ROW = [
 const LATEST_LABEL =
 	"absolute top-1.5 left-2 text-xs leading-none font-medium text-mentor @max-2xl:-top-5.5";
 
-/** A pressed Track keeps the primary fill a press shows. */
+/**
+ * A pressed Track keeps the primary fill a press shows. The outline button's own
+ * `dark:aria-pressed:bg-muted` outranks the plain state, so dark mode names it again.
+ */
 const TRACK_PRESSED =
-	"aria-pressed:border-primary aria-pressed:bg-primary aria-pressed:text-primary-foreground";
+	"aria-pressed:border-primary aria-pressed:bg-primary aria-pressed:text-primary-foreground dark:aria-pressed:border-primary dark:aria-pressed:bg-primary";
 
 /** The words on a row's Track toggle. */
 export const TRACK_LABEL = "Track this work";
