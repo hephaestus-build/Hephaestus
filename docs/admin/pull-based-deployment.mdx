@@ -422,8 +422,10 @@ Free the space once by hand:
 3. For each `HEPHAESTUS_IMAGE_*` value in the two locks, read its image ID with `docker image inspect --format '{{.Id}}' <reference>`.
    Keep every image with one of these IDs.
    The agent image and the carried PostgreSQL image are among them.
-4. List the images on the host with `docker image ls --digests --no-trunc`.
-5. Remove each other image of the same repositories with `docker image rm <repository>@<digest>`.
+4. List the images on the host with `docker image ls --all --digests --no-trunc`.
+   Without `--all`, Docker hides the release images, because they have no tag.
+5. Remove each other untagged image of the same repositories with `docker image rm <repository>@<digest>`.
+   Keep every tagged image: it belongs to another workload.
    Do not force the removal.
    Docker refuses only an image that a container uses, and the agent image has no container between reviews.
 6. Check the free space with `df -h /var/lib/docker`.
