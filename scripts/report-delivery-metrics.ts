@@ -103,11 +103,12 @@ export function classify(
 	let running: string | undefined;
 	let previous: Deployment | undefined;
 	for (const deployment of ordered) {
-		// A failure counts whatever it deployed. Afterwards, what runs is unknown, so deploying the
-		// last good build again is a recovery.
+		// A failure counts whatever it deployed. Afterwards, what runs is unknown, so the next deployment
+		// that stays is a recovery: it neither repeats nor rolls back what ran before.
 		if (deployment.outcome === "failure" || deployment.outcome === "error") {
 			verdicts.set(deployment, "failed");
 			running = undefined;
+			previous = undefined;
 			continue;
 		}
 		if (deployment.sha === running) {
@@ -262,7 +263,7 @@ export function deliveryMetrics(
 			// A deployment that ended an incident was made to fix one, not planned.
 			reworkRate: decided.length === 0 ? null : recoveries.length / decided.length,
 			unplaced: current.filter((deployment) => !position.has(deployment.sha)).length,
-			undecided: current.filter((deployment) => verdict(deployment) === "undecided").length,
+			undecided: current.filter((deployment) => deployment.outcome === undefined).length,
 		};
 	});
 

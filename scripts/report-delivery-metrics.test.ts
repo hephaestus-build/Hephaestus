@@ -389,6 +389,19 @@ await test("a failed deployment of what runs is a failure, not a repeat", () => 
 	assert.equal(staging?.changeFailRate, 1 / 3);
 });
 
+await test("moving back after a failed redeployment is a recovery, not a rollback of the build before", () => {
+	const deployments = [
+		deployment({ sha: "c", createdAt: 10 * MINUTE, finishedAt: 15 * MINUTE }),
+		deployment({ sha: "c", createdAt: 20 * MINUTE, outcome: "failure", finishedAt: 25 * MINUTE }),
+		deployment({ sha: "b", createdAt: 30 * MINUTE, finishedAt: 40 * MINUTE }),
+	];
+	assert.deepEqual([...classify(deployments, position).values()], ["success", "failed", "success"]);
+	const [staging] = deliveryMetrics(window, [], deployments, [], position).environments;
+	assert.ok(staging);
+	assert.equal(staging.changeFailRate, 1 / 3);
+	assert.equal(staging.recoveryTime.p50, 15 * MINUTE);
+});
+
 await test("redeploying the last good build after a failure is a recovery and rework, not a repeat", () => {
 	const deployments = [
 		deployment({ sha: "a", createdAt: 10 * MINUTE, finishedAt: 15 * MINUTE }),
@@ -436,6 +449,21 @@ await test("a deployment without a final status is reported, not counted", () =>
 		),
 	);
 	assert.match(rendered, /1 Staging deployments have no final status yet and are not counted/u);
+	// An undecided deployment of what runs is a repeat, and it still has no final status.
+	const repeated = renderDeliveryMetrics(
+		"Delivery metrics",
+		deliveryMetrics(
+			window,
+			[],
+			[
+				deployment({ sha: "c", createdAt: MINUTE }),
+				deployment({ sha: "c", createdAt: 2 * MINUTE, outcome: undefined, finishedAt: undefined }),
+			],
+			[],
+			position,
+		),
+	);
+	assert.match(repeated, /1 Staging deployments have no final status yet/u);
 	assert.match(rendered, /\| Staging \| 0 \| 0\.0 \| 0 \| — \(0\/0\)/u);
 });
 
