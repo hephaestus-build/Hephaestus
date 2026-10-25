@@ -409,6 +409,28 @@ If the space is still too small, it refuses the apply, stops nothing and records
 The journal states the free space and the threshold, and the next tick tries again.
 [Sizing § Disk](./sizing.mdx#disk) gives the default threshold and the disk budget.
 
+#### Recover a host that is already full
+
+A host runs the reconciler of the release it last applied.
+A host whose tooling predates the image cleanup removes no images.
+When such a host is full, its pull fails with `no space left on device`, and it cannot pull the release that brings the cleanup.
+Free the space once by hand:
+
+1. Read the running and previous releases from `/var/lib/hephaestus/applied.json`.
+2. Open `/var/lib/hephaestus/release-locks/<release>.env` for both releases.
+   If a lock is missing, stop. Do not guess which images to keep.
+3. For each `HEPHAESTUS_IMAGE_*` value in the two locks, read its image ID with `docker image inspect --format '{{.Id}}' <reference>`.
+   Keep every image with one of these IDs.
+   The agent image and the carried PostgreSQL image are among them.
+4. List the images on the host with `docker image ls --digests --no-trunc`.
+5. Remove each other image of the same repositories with `docker image rm <repository>@<digest>`.
+   Do not force the removal.
+   Docker refuses only an image that a container uses, and the agent image has no container between reviews.
+6. Check the free space with `df -h /var/lib/docker`.
+
+The next tick applies the release.
+From then on, the reconciler keeps the images itself.
+
 ## Watching it
 
 1. Set `HEPHAESTUS_METRICS_FILE` to a `.prom` file in an existing node_exporter textfile collector directory.
