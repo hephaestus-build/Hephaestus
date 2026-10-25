@@ -79,3 +79,43 @@ describe("app chrome with two workspaces", () => {
 		expect(router.state.location.pathname).toBe("/settings");
 	});
 });
+
+/** Cmd or Ctrl and B toggles the sidebar, except while the reader types in a field. */
+describe("app chrome sidebar shortcut", () => {
+	beforeEach(() => {
+		server.use(
+			http.get("*/workspaces", () =>
+				HttpResponse.json([workspaceListItem("acme", { displayName: "Acme" })]),
+			),
+			http.get("*/workspaces/:workspaceSlug/members/me", () =>
+				HttpResponse.json(ownMembership("ADMIN")),
+			),
+		);
+	});
+
+	it.each([
+		["Ctrl", { ctrlKey: true }],
+		["Cmd", { metaKey: true }],
+	])("announces %s+B on the toggle and leaves it to a field", async (_name, modifier) => {
+		renderRouteAt("/settings");
+		// The sidebar's rail carries the same name; the header button is the one that announces the keys.
+		await screen.findByRole("button", { name: /Acme/u }, ROUTE_RENDER_WAIT);
+		const toggle = screen
+			.getAllByRole("button", { name: "Toggle sidebar" })
+			.find((button) => button.dataset.sidebar === "trigger");
+		expect(toggle?.getAttribute("aria-keyshortcuts")).toBe("Control+B Meta+B");
+
+		const field = document.createElement("textarea");
+		document.body.append(field);
+		let fieldKept = false;
+		let pageTaken = false;
+		await act(async () => {
+			fieldKept = fireEvent.keyDown(field, { key: "b", ...modifier });
+			pageTaken = !fireEvent.keyDown(document.body, { key: "b", ...modifier });
+		});
+		field.remove();
+
+		expect(fieldKept).toBe(true);
+		expect(pageTaken).toBe(true);
+	});
+});

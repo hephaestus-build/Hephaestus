@@ -14,7 +14,7 @@ const envBaseUrl = process.env.DOCUSAURUS_BASE_URL;
 const baseUrl = envBaseUrl === undefined || envBaseUrl === "" ? "/" : envBaseUrl;
 
 const DESCRIPTION =
-	"Hephaestus is an open-source AI mentor for software teams. It checks the issues, pull and merge requests, and reviews that your team already writes against the engineering practices that your workspace adopts. Each developer gets feedback with evidence and, where something needs attention, a next step.";
+	"Hephaestus is an open-source AI mentor for software teams. It checks the issues, pull and merge requests, and reviews that your team already writes against the engineering practices that your workspace adopts.";
 
 function rawMermaidSourcePlugin(_context: LoadContext): Plugin {
 	return {
