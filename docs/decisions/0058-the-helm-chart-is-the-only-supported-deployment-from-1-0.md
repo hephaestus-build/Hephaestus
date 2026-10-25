@@ -20,14 +20,14 @@ Version 2.0 was to remove Compose and to own the migration.
 Thus, every 1.x release had to qualify two deployments, and the migration moved to the time with the most operators.
 
 The Compose and preview path is large.
-On 2026-10-25, `wc -l` over the tracked files counted these lines:
+On 2026-10-25, `wc -l` over the tracked files of these paths counted these lines:
 
-| Area | Lines |
-| --- | --- |
-| The Compose stacks, `docker/self-host/`, and `docker/preview/` | 3,454 |
-| The preview scripts and their tests | 5,580 |
-| The three preview workflows | 502 |
-| The host checks and their tests | 1,381 |
+| Area | Paths | Lines |
+| --- | --- | --- |
+| The Compose stacks | `docker/compose.{app,core,proxy}.yaml`, `docker/.env.example`, `docker/self-host/**`, `docker/observability/compose.journald.yaml`, `docker/preview/**` | 3,454 |
+| The preview scripts and their tests | `scripts/{coolify-preview,preview-controller,check-preview-stack,render-preview-comment,publish-preview-comments}*.ts` | 5,580 |
+| The preview workflows | `.github/workflows/{deploy-preview,cleanup-preview,reconcile-previews}.yml` | 502 |
+| The host checks and their tests | `scripts/{compose-host-routing,self-host-setup}.test.ts`, `scripts/{prepare-host-smoke-env,prepare-smoke-lock,sandbox-isolation-probe}*.ts` | 1,381 |
 
 One maintainer qualifies each release.
 A 1.x promise for Compose keeps these lines and a host smoke for each release until 2.0.
@@ -49,7 +49,7 @@ No issue names an external installation.
 - One supported installation, upgrade path, and qualification for each release.
 - No migration that waits for a time when more operators must do it.
 - A sandbox boundary that the platform enforces, not one that depends on a root-equivalent socket.
-- A single-host install that is not more ambiguous than Compose is today.
+- An easy single-host install: complete values, one command, and a test on a fresh VM.
 
 ## Considered options
 
@@ -78,7 +78,7 @@ The lesson is the same in both groups: support one path.
 
 ### Supported deployment
 
-From 1.0.0, the Helm chart is the only supported production deployment.
+From 1.0.0, the Helm chart is the only supported deployment.
 A cluster and a single host use the same `helm upgrade --install`.
 A single host first installs k3s with its one-command installer [K1].
 Hephaestus does not build an appliance or an operator.
@@ -97,7 +97,7 @@ The [deprecation policy](../admin/compatibility-policy.mdx#deprecation-policy) r
 The release notes of 0.95.0 announce the deprecation of the Compose deployment.
 The Compose deployment stays supported for the rest of the 0.x releases.
 
-In 1.0.0, the Helm values interface replaces the Docker Compose interface in the [public contract](../admin/compatibility-policy.mdx#the-public-contract).
+In 1.0.0, the [public contract](../admin/compatibility-policy.mdx#the-public-contract) changes, as the [compatibility policy](../admin/compatibility-policy.mdx#supported-deployment) states.
 From 1.0.0, a Compose file that is still in the repository is not supported, and it is not part of the contract.
 Thus, its later deletion is not a removal under the deprecation policy, and it does not need a major release.
 
@@ -162,13 +162,14 @@ The tag waits for all of these:
 
 1. Chart CI passes on k3d at the minimum and the latest supported Kubernetes minor, on amd64 and arm64.
 2. Chart CI also passes on kind with Calico and an external PostgreSQL.
+   The published support names only the Kubernetes versions, architectures, and network plugins that chart CI tests.
 3. A practice review completes on the chart, also across a `helm upgrade`.
 4. The release publishes a signed chart with pinned images.
 5. The one-host install has complete values: TLS, PostgreSQL certificates and their renewal, secrets, and an enabled worker.
 6. The one-host install checks DNS and the firewall before it starts.
 7. On a fresh VM, the one-host install passes a first install, a reboot, a certificate renewal, and an upgrade.
 8. The k3s recipe passes on a clean runner on both architectures, and it runs a practice review.
-9. The previous release boots and claims a review on the new schema.
+9. The previous server, worker, and webhook server boot on the new schema, and the previous server claims a review. A failed migration recovers by the restore of the matched backup.
 10. Staging runs one release cycle on the chart. The rollback and restore drills pass.
 11. The backup page states the measured RTO and RPO. No webhook was lost in the move.
 12. A restore after total host loss onto empty storage passes, with the keys from off-host storage.
@@ -182,13 +183,14 @@ The tag waits for all of these:
 ## Consequences
 
 - Each release from 1.0 qualifies one deployment. The Compose and preview lines go in one deletion.
-- Kubernetes is an operator prerequisite from 1.0, not from 2.0. The runbook gives the `kubectl` step for each operation.
-- Operators keep k3s up to date themselves. Hephaestus pins the platform add-ons and tests them in the release smoke.
+- Kubernetes is an operator prerequisite from 1.0, not from 2.0. An operator needs Kubernetes skills during an incident. The runbook gives the `kubectl` step for each operation.
+- The 1.0 tag can come later than a Compose 1.0 would. As in ADR 0041, the scope sets the date, not the reverse.
+- Operators keep k3s up to date themselves. Hephaestus pins the platform add-ons (the Gateway API CRDs, Traefik, and cert-manager) in one platform manifest. The release smoke tests these pins, so a change upstream can block a release.
 - k3s uses about 1.4 GiB of memory and 5 % of a core [K3]. The recommended single host is the `small` profile: 4 vCPU, 32 GiB of memory, and 150 GiB of disk.
 - The `small` profile is provisional. A 16 GiB profile can qualify separately, with bounded concurrency and upgrades in a planned outage.
 - An existing Compose install must migrate before it upgrades to 1.0. The release notes of 0.95.0 and the migration guide give notice.
 - Until a later change adds a rolling update, the server role uses the `Recreate` strategy. Its outage for each upgrade is the same as on Compose today. Upgrades without an outage are a later goal.
-- A failed `helm upgrade` returns the workloads to the previous release, not the database. The gate on the previous release and the new schema makes this safe.
+- A failed `helm upgrade` returns the workloads to the previous release, not the database. After a successful migration, this is safe because the previous release runs on the new schema (gate 9). After a failed migration, the recovery is the restore of the matched backup, as [If migration fails](../admin/upgrade.mdx#if-migration-fails) describes.
 - The sandbox boundary no longer depends on the Docker socket in a supported deployment.
 - Previews are not available until they return on the staging k3s.
 

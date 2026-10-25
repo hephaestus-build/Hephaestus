@@ -7,7 +7,7 @@ description: The supported 0.x install of Hephaestus — Docker Compose on a sin
 Until 1.0.0, this is the **only supported install path**: the Docker Compose stack in
 [`docker/self-host/`](https://github.com/hephaestus-build/Hephaestus/tree/main/docker/self-host)
 on one Linux host. Other setups (own reverse proxy, external database, Podman)
-can work but are unsupported.
+can work but are unsupported. Kubernetes is unsupported before 1.0.0.
 
 The stack you get:
 
@@ -22,8 +22,7 @@ The stack you get:
 | `nats-server`        | NATS JetStream event buffer                                                                  |
 
 :::caution CAUTION: Docker Compose is deprecated
-From 1.0.0, the Helm chart is the only supported production deployment.
-The [compatibility policy](./compatibility-policy#supported-deployment) states what this means for your install.
+The [compatibility policy](./compatibility-policy#supported-deployment) states the supported deployment from 1.0.0 and what it means for your install.
 :::
 
 ## Requirements

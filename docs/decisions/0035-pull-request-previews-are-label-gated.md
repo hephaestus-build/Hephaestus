@@ -276,8 +276,7 @@ previews like any other pull request (`docs/contributor/ci-cd.mdx` § Preview de
 
 ## Update — 2026-10-25: the Coolify preview path goes ([ADR 0058](0058-the-helm-chart-is-the-only-supported-deployment-from-1-0.md))
 
-From 1.0.0, the Helm chart is the only supported deployment.
-A Coolify preview is a Compose stack, so it tests a topology that the project no longer ships.
+Under ADR 0058 § Supported deployment, a Coolify preview tests a Compose topology that the project no longer ships.
 The project deletes the Coolify preview path, its scripts, and its workflows.
 Until previews return, pull requests have no preview.
 

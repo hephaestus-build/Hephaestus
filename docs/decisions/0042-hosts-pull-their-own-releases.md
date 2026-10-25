@@ -122,7 +122,7 @@ on staging first.
 
 ## Update — 2026-10-25 (Helm apply, [ADR 0058](0058-the-helm-chart-is-the-only-supported-deployment-from-1-0.md))
 
-From 1.0.0, the Helm chart is the only supported deployment.
+ADR 0058 § Supported deployment changes what the hosts apply.
 This decision keeps its trust model: the signed channel, the descent check, and the identity of `promote.yml`.
 Only the apply step changes.
 The reconciler verifies the signed chart and runs `helm upgrade --install` with the flags in ADR 0058 § Upgrades.
@@ -130,7 +130,7 @@ It no longer runs `docker compose`.
 
 These parts change when the Helm apply ships:
 
-- **§ Decision**, "A failed apply stops." With `--rollback-on-failure`, Helm returns the workloads to the previous release. It does not return the database. This is safe only because the previous release must run on the new schema, and a gate in ADR 0058 checks it.
+- **§ Decision**, "A failed apply stops." With `--rollback-on-failure`, Helm returns the workloads to the previous release. It does not return the database. After a successful migration, this is safe only because the previous release must run on the new schema, and a gate in ADR 0058 checks it. After a failed migration, the recovery is the restore of the matched backup.
 - **§ Consequences**, the Docker socket. The reconciler holds the Kubernetes credentials that the chart needs, not write access to the Docker socket.
 - **§ Consequences**, previews. The Coolify preview path goes ([ADR 0035](0035-pull-request-previews-are-label-gated.md)).
 - **The operator page.** Pull-based deployment describes how the maintainers operate their hosts. Its page moves from the admin docs to the contributor docs.

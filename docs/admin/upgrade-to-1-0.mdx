@@ -30,8 +30,10 @@ Stop `application-server`, `application-worker`, and `webhook-server` before you
 
 1.0 supports only the Helm chart, as [Supported deployment](./compatibility-policy#supported-deployment) states.
 Change the deployment or the release, never both in one step.
-First, upgrade on Compose to the last 0.x release that ships Compose.
+First, upgrade on Compose to the last 0.x release.
 Then move that release to the chart.
+Before 1.0.0, a migration guide for the move follows.
+Before the move, make a backup and verify that it restores, as [Backup & restore](./backup-restore) describes.
 
 ## Breaking changes after v0.94.7
 
