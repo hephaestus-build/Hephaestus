@@ -12,7 +12,7 @@ import type { ReviewTimeframe } from "./practice-profile-search";
  *
  * - `query`: free text, matched without case against the observation's words, its work (the label
  *   such as "#15", the title and the repository or channel) and the summaries of its problems.
- * - `outcome`: one outcome.
+ * - `outcome`: the outcomes kept, any of them.
  * - `observationId`: the one observation a link asked for, such as a review's "Open observation".
  *   It narrows nothing by itself; the link sets `workId` and `query` to the observation's work
  *   beside it, so the tab shows that work's observations of this practice with the asked one among
@@ -23,7 +23,7 @@ import type { ReviewTimeframe } from "./practice-profile-search";
  */
 export interface ObservationFilter {
 	query?: string;
-	outcome?: Outcome;
+	outcome?: Outcome[];
 	/** How far back the history reaches, read by the server; absent is every observation. */
 	since?: ReviewTimeframe;
 	observationId?: string;
@@ -91,7 +91,7 @@ function textOf(result: ResultList): string {
 }
 
 export function matchesObservation(result: ResultList, filter: ObservationFilter): boolean {
-	if (filter.outcome !== undefined && result.outcome !== filter.outcome) {
+	if (filter.outcome !== undefined && !filter.outcome.includes(result.outcome)) {
 		return false;
 	}
 	if (hasText(filter.workId)) {

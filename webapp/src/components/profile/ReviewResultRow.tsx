@@ -35,7 +35,11 @@ import {
 	toEvidenceLocations,
 } from "./evidence";
 import { EvidenceFileBlock } from "./EvidenceFileBlock";
-import { type ObservationFeedbackLinks, ObservationFeedback } from "./ObservationFeedback";
+import {
+	deliveredOnly,
+	type ObservationFeedbackLinks,
+	ObservationFeedback,
+} from "./ObservationFeedback";
 import { resultSummary } from "./reviews";
 
 // The reviewer's words are the content under each label, so they take the foreground, as the
@@ -168,6 +172,14 @@ function ReasonSections({ reasons }: { reasons: ResultReasons }) {
 	);
 }
 
+/**
+ * The feedback an observation shows: only what was delivered. Feedback that is ready, withheld or
+ * failed never reached the developer, so the developer pages do not name it.
+ */
+function deliveredFeedback(result: ResultList | ResultDetail) {
+	return isResultDetail(result) ? deliveredOnly(result.feedback) : [];
+}
+
 export function ReviewResultRow({
 	result,
 	defaultOpen = true,
@@ -182,7 +194,7 @@ export function ReviewResultRow({
 	const note = claimCurrentnessNote(result.currentness);
 	const markedIncorrect = result.markedIncorrectAt !== null;
 	const reasons = reasonsOf(result);
-	const feedback = isResultDetail(result) ? result.feedback : [];
+	const feedback = deliveredFeedback(result);
 	const hasWorkLine = rendersContent(work);
 	const hasBody =
 		rendersContent(details) ||
@@ -312,7 +324,7 @@ export function ReviewResultDetails({
 	const markedIncorrect = result.markedIncorrectAt !== null;
 	const note = claimCurrentnessNote(result.currentness);
 	const reasons = reasonsOf(result);
-	const feedback = isResultDetail(result) ? result.feedback : [];
+	const feedback = deliveredFeedback(result);
 	if (!markedIncorrect && note === undefined && !hasReasons(reasons) && feedback.length === 0) {
 		return (
 			<p className="text-sm text-muted-foreground">

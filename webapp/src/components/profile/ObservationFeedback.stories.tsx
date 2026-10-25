@@ -1,7 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
 import { expect, within } from "storybook/test";
 
-import { DELIVERY_STATE_DEFS } from "@/components/practice-vocabulary/delivery-state-defs";
 import { ownFeedback } from "@/stories/practice-detail-story-mock-data";
 import { daysBefore } from "@/stories/story-clock";
 
@@ -51,7 +50,7 @@ export const Delivered: Story = {
 		await expect(pieces).toHaveLength(3);
 		const [work, page, conversation] = pieces;
 		for (const piece of pieces) {
-			await expect(piece.getByText(DELIVERY_STATE_DEFS.DELIVERED.label)).toBeVisible();
+			await expect(piece.getByText(/^Delivered /u)).toBeVisible();
 		}
 		await expect(work?.getByText("On the work")).toBeVisible();
 		await expect(
@@ -67,8 +66,8 @@ export const Delivered: Story = {
 };
 
 /**
- * Feedback that did not reach the reader says so in the delivery states every feedback surface uses,
- * and offers no way to read it in Hephaestus.
+ * Feedback that did not reach the reader is not shown: an observation with only such feedback draws
+ * no block, as one that gave none.
  */
 export const NotDelivered: Story = {
 	args: {
@@ -81,17 +80,11 @@ export const NotDelivered: Story = {
 				deliveredAt: null,
 			}),
 			ownFeedback("00000000-0000-4000-8000-0000000005a5", { state: "FAILED", deliveredAt: null }),
-			// A comment that a newer piece replaced may still stand on the work; it is not linked here.
 			{ ...onWork, id: "00000000-0000-4000-8000-0000000005a6", state: "REPLACED" },
 		],
 	},
 	play: async ({ canvas }) => {
-		const list = canvas.getByRole("list", { name: "Feedback from this observation" });
-		for (const state of ["READY", "WITHHELD", "UNCONFIRMED", "FAILED", "REPLACED"] as const) {
-			await expect(within(list).getByText(DELIVERY_STATE_DEFS[state].label)).toBeVisible();
-		}
-		await expect(within(list).queryByText(DELIVERY_STATE_DEFS.DELIVERED.label)).toBeNull();
-		await expect(within(list).queryByRole("link")).toBeNull();
+		await expect(canvas.queryByRole("list")).toBeNull();
 	},
 };
 
