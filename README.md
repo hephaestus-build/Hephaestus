@@ -23,8 +23,8 @@
 </div>
 
 Hephaestus is an open-source AI mentor for software teams.
-It checks the issues, pull requests, and reviews that your team already writes against the engineering practices that you choose.
-Each developer gets feedback with evidence and a next step.
+It checks the issues, pull and merge requests, and reviews that your team already writes against the engineering practices that your workspace adopts.
+Each developer gets feedback with evidence and, where something needs attention, a next step.
 
 Every piece of feedback names its practice and points back to the reviewed work.
 Developers can ask why, disagree, or discuss the next step.

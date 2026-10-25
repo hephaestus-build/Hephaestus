@@ -61,8 +61,9 @@ function HomepageHeader() {
 						</Heading>
 						<p className={styles.heroSubtitle}>
 							Hephaestus is an open-source AI mentor for software teams. It checks the issues, pull
-							requests, and reviews that your team already writes against the engineering practices
-							that you choose. Each developer gets feedback with evidence and a next step.
+							and merge requests, and reviews that your team already writes against the engineering
+							practices that your workspace adopts. Each developer gets feedback with evidence and,
+							where something needs attention, a next step.
 						</p>
 						<div className={styles.heroActions}>
 							<Link className="button button--primary button--lg" to="/user/overview">
@@ -121,10 +122,7 @@ function GuideRouter(): ReactNode {
 export default function Home(): ReactNode {
 	const { siteConfig } = useDocusaurusContext();
 	return (
-		<Layout
-			title={siteConfig.title}
-			description="Documentation for Hephaestus, an open-source AI mentor for software teams. User, administrator and contributor guides."
-		>
+		<Layout title={siteConfig.title}>
 			<HomepageHeader />
 			<main>
 				<GuideRouter />
