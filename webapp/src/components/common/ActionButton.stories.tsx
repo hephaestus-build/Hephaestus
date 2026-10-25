@@ -24,8 +24,9 @@ function primaryBackground(host: HTMLElement): string {
 }
 
 /**
- * White with a thin border at rest. Held down by a key, as by a pointer, it takes the dark primary
- * fill, and it lets go of it on release; most browsers apply `:active` to Enter not at all.
+ * White with a thin border at rest. Held down by a pointer or a key it takes the dark primary fill,
+ * and it lets go of it on release; most browsers apply `:active` to Enter not at all, so a key press
+ * is tracked as `data-pressing`.
  */
 export const Pressed: Story = {
 	play: async ({ canvas, canvasElement }) => {
@@ -39,18 +40,19 @@ export const Pressed: Story = {
 			});
 		};
 		await fillIs(false);
-
-		await userEvent.pointer({ keys: "[MouseLeft>]", target: button });
+		// One session, so the release knows the press it ends.
+		const user = userEvent.setup();
+		await user.pointer({ keys: "[MouseLeft>]", target: button });
 		await fillIs(true);
-		await userEvent.pointer({ keys: "[/MouseLeft]", target: button });
-		await userEvent.unhover(button);
-		button.blur();
-		await fillIs(false);
-
+		await user.pointer({ keys: "[/MouseLeft]", target: button });
+		// The button keeps focus after the press, and focus shows the same fill, so the release is read
+		// off the pressing state the fill follows, before the focus leaves.
+		await expect(button).not.toHaveAttribute("data-pressing");
 		button.focus();
-		await userEvent.keyboard("{Enter>}");
-		await fillIs(true);
-		await userEvent.keyboard("{/Enter}");
+		await user.keyboard("{Enter>}");
+		await expect(button).toHaveAttribute("data-pressing");
+		await user.keyboard("{/Enter}");
+		await expect(button).not.toHaveAttribute("data-pressing");
 		button.blur();
 		await fillIs(false);
 	},

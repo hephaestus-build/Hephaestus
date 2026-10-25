@@ -4,7 +4,6 @@
 **Date:** 2026-10-02
 **Amended:** 2026-10-07, accepted. The page has no smallest count. *Amendment of 2026-10-07* gives the change.
 2026-10-09: standings and practices stay out of sorting and the public page. *Update — 2026-10-09* gives the limit.
-2026-10-25: the **You** marker is a bracket over the reader's part. *Update — 2026-10-25* gives the change.
 **Authors:** Valentin Grüner
 **Builds on:** [ADR 0045](0045-activity-counts-work-and-never-ranks-people.md) (no score, no rank),
 [ADR 0047](0047-the-practice-profile-has-one-reader.md) (the Practice profile has one reader)
