@@ -14,7 +14,7 @@ const envBaseUrl = process.env.DOCUSAURUS_BASE_URL;
 const baseUrl = envBaseUrl === undefined || envBaseUrl === "" ? "/" : envBaseUrl;
 
 const DESCRIPTION =
-	"Hephaestus is an open-source AI mentor for software teams. It reads the work developers already do against the practices their project cares about, and writes back feedback they can act on.";
+	"Hephaestus is an open-source AI mentor for software teams. It checks the issues, pull requests, and reviews that your team already writes against the engineering practices that you choose. Each developer gets feedback with evidence and a next step.";
 
 function rawMermaidSourcePlugin(_context: LoadContext): Plugin {
 	return {
@@ -30,8 +30,8 @@ function rawMermaidSourcePlugin(_context: LoadContext): Plugin {
 }
 
 const config: Config = {
-	title: "Hephaestus Documentation",
-	tagline: "Learn from the work you're already doing",
+	title: "Hephaestus documentation",
+	tagline: "Learn from the work you’re already doing",
 	favicon: "img/favicon.png",
 
 	future: {
@@ -167,7 +167,7 @@ const config: Config = {
 				content: "Hephaestus, AI mentor, code review feedback, software engineering practices, TUM",
 			},
 			{ name: "twitter:card", content: "summary_large_image" },
-			{ name: "twitter:title", content: "Hephaestus Documentation" },
+			{ name: "twitter:title", content: "Hephaestus documentation" },
 			{ name: "twitter:description", content: DESCRIPTION },
 		],
 		navbar: {
@@ -184,21 +184,21 @@ const config: Config = {
 					sidebarId: "userSidebar",
 					docsPluginId: "default",
 					position: "left",
-					label: "User Guide",
+					label: "User guide",
 				},
 				{
 					type: "docSidebar",
 					sidebarId: "contributorSidebar",
 					docsPluginId: "contributor-docs",
 					position: "left",
-					label: "Contributor Guide",
+					label: "Contributor guide",
 				},
 				{
 					type: "docSidebar",
 					sidebarId: "adminSidebar",
 					docsPluginId: "admin-docs",
 					position: "left",
-					label: "Admin Guide",
+					label: "Admin guide",
 				},
 
 				{
@@ -221,15 +221,15 @@ const config: Config = {
 					title: "Product",
 					items: [
 						{
-							label: "User Guide",
+							label: "User guide",
 							to: "/user/overview",
 						},
 						{
-							label: "Admin Guide",
+							label: "Admin guide",
 							to: "/admin/overview",
 						},
 						{
-							label: "Release Notes",
+							label: "Release notes",
 							href: `${REPO_URL}/releases`,
 						},
 						{
@@ -246,15 +246,15 @@ const config: Config = {
 					title: "Contribute",
 					items: [
 						{
-							label: "Contributor Guide",
+							label: "Contributor guide",
 							to: "/contributor/overview",
 						},
 						{
-							label: "Feature Requests",
+							label: "Feature requests",
 							href: `${REPO_URL}/discussions/categories/ideas`,
 						},
 						{
-							label: "Bug Tracker",
+							label: "Bug tracker",
 							href: `${REPO_URL}/issues`,
 						},
 					],
@@ -267,7 +267,7 @@ const config: Config = {
 							href: "https://aet.cit.tum.de/",
 						},
 						{
-							label: "GitHub Repository",
+							label: "GitHub repository",
 							href: REPO_URL,
 						},
 						{
@@ -281,7 +281,7 @@ const config: Config = {
 					],
 				},
 			],
-			copyright: `Built by <a href="https://github.com/ls1intum">AET Team</a> at <a href="https://www.tum.de/en/">TUM</a>. Source on <a href="${REPO_URL}">GitHub</a>.`,
+			copyright: `Built by <a href="https://aet.cit.tum.de/">Applied Education Technologies</a> at <a href="https://www.tum.de/en/">TUM</a>. Source on <a href="${REPO_URL}">GitHub</a>.`,
 		},
 		announcementBar: {
 			id: "pre-1-0",
