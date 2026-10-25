@@ -187,6 +187,28 @@ services:
         max-size: "50m"
         max-file: "5"
 
+  # Applies this release's database migration, then exits. Every role waits for it and none
+  # migrates at start. Upgrade order: docs/admin/runtime-roles.mdx#database-migrations.
+  database-migration:
+    image: "${HEPHAESTUS_IMAGE_APPLICATION_SERVER:?verified release lock required}"
+    mem_limit: ${DATABASE_MIGRATION_MEM_LIMIT:-1g}
+    environment:
+      SPRING_PROFILES_ACTIVE: prod,migrate
+      DATABASE_URL: postgresql://postgres:5432/hephaestus?sslmode=disable
+      DATABASE_USERNAME: root
+      DATABASE_PASSWORD: root
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+    networks:
+      - shared-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
   application-server:
     # Management is reachable only inside the Compose network; never publish or proxy it.
     expose:
@@ -296,8 +318,7 @@ services:
       # WEBHOOK_EXTERNAL_URL intentionally unset: GitLab auto-registration defaults it to
       # APPLICATION_HOST_URL (same origin here), then appends /webhooks/gitlab itself.
       # AES-256-GCM key for credentials encrypted at rest in the `connection` table. Exactly 32
-      # chars. Required in prod (fail-fast); the Liquibase backfill re-encrypts on boot, so this
-      # MUST be set on application-server (where Liquibase runs). Keep it stable.
+      # chars. Required in prod (fail-fast). Keep it stable.
       HEPHAESTUS_SECURITY_ENCRYPTION_KEY: ${HEPHAESTUS_SECURITY_ENCRYPTION_KEY:?Set HEPHAESTUS_SECURITY_ENCRYPTION_KEY to exactly 32 printable ASCII characters}
       HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY: ${HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY:?Set HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY to exactly 32 printable ASCII characters}
       HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY_VERSION: ${HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY_VERSION:-1}
@@ -368,6 +389,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      database-migration:
+        condition: service_completed_successfully
       volume-init:
         condition: service_completed_successfully
     restart: unless-stopped
@@ -426,8 +449,8 @@ services:
       interval: 15s
       timeout: 5s
       retries: 3
-      # Database migrations run before readiness. A successful probe ends this grace immediately;
-      # later failures still use the normal retry limit.
+      # The start can wait for the schema (hephaestus.database.migration-wait). A successful
+      # probe ends this grace immediately; later failures still use the normal retry limit.
       start_period: 10m
     # Matches application.yml's SHUTDOWN_TIMEOUT default (20s) plus headroom so SIGTERM has time
     # to drain in-flight requests before Docker SIGKILLs the launcher.
@@ -531,6 +554,8 @@ services:
         condition: service_healthy
       postgres:
         condition: service_healthy
+      database-migration:
+        condition: service_completed_successfully
       volume-init:
         condition: service_completed_successfully
     restart: unless-stopped

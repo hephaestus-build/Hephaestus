@@ -4,6 +4,7 @@ import { AlertCircle, CalendarClock } from "lucide-react";
 import { type ReactNode, useId, useState } from "react";
 
 import type { ReviewSchedule, ReviewScheduleInput } from "@/api/types.gen";
+import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { InlineLink } from "@/components/common/InlineLink";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -234,6 +235,7 @@ function ScheduleRow({
 	onDelete: PracticeReviewScheduleProps["onDelete"];
 }) {
 	const [editing, setEditing] = useState(false);
+	const [deleting, setDeleting] = useState<ReviewSchedule | null>(null);
 	const kind = itemKindLabel(schedule.itemKind, 2);
 	const kindNoun = itemKindNoun(schedule.itemKind, 2);
 	const nextRun = formatMoment(schedule.nextRunAt);
@@ -281,10 +283,23 @@ function ScheduleRow({
 				>
 					Edit <span className="sr-only">the recurring check on {kindNoun}</span>
 				</Button>
-				<Button variant="ghost" size="sm" disabled={isSaving} onClick={() => onDelete(schedule)}>
+				<Button variant="ghost" size="sm" disabled={isSaving} onClick={() => setDeleting(schedule)}>
 					Delete <span className="sr-only">the recurring check on {kindNoun}</span>
 				</Button>
 			</ItemActions>
+			{/* A confirm, not Undo: the API cannot restore a deleted schedule. */}
+			<ConfirmDialog
+				subject={deleting}
+				title={() => `Delete the recurring check on ${kindNoun}?`}
+				description={(shown) =>
+					shown.enabled
+						? "This deletes the schedule and its settings. You cannot undo this. To stop checking for a while, pause it instead."
+						: "This deletes the schedule and its settings. You cannot undo this."
+				}
+				confirmLabel="Delete recurring check"
+				onConfirm={onDelete}
+				onClose={() => setDeleting(null)}
+			/>
 			{editing ? (
 				<div className="w-full border-t pt-4">
 					<ScheduleForm

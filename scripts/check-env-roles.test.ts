@@ -544,6 +544,7 @@ await test("the shipped topology delivers every role-scoped variable to a contai
 	// recognised as running the application image, so a renamed lock variable would otherwise retire
 	// that half of the gate by finding nothing to compare.
 	assert.deepEqual(applicationContainers, [
+		"docker/compose.app.yaml:database-migration",
 		"docker/compose.app.yaml:application-server",
 		"docker/compose.app.yaml:application-worker",
 		"docker/compose.core.yaml:webhook-server",

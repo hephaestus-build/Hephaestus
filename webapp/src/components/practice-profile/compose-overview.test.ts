@@ -128,7 +128,7 @@ describe("composeOverview", () => {
 		);
 		expect(composed.latestReview?.reviewId).toBe("5d1e2a3b-0000-4000-8000-000000000001");
 		expect(composed.groupSentences.communication?.map(plain)).toStrictEqual([
-			"Scope moved to Going well.",
+			"Scope is now at Going well for you.",
 		]);
 	});
 });
@@ -145,7 +145,9 @@ describe("a fall back", () => {
 			}),
 			"review-ready-work",
 		).practiceSentences;
-		expect(plainBullets(sentences["diff-size"])).toBe("Back to 0 of 3 clean after !425.");
+		expect(plainBullets(sentences["diff-size"])).toBe(
+			"Back to none of 3 clean in a row after !425.",
+		);
 		expect(sentences["diff-size"]?.flat()).toContainEqual({ type: "work", ref: pullRequest(425) });
 	});
 
@@ -161,7 +163,7 @@ describe("a fall back", () => {
 			}),
 			"review-ready-work",
 		).practiceSentences;
-		expect(plainBullets(sentences["diff-size"])).toBe("Back to no clean work after !425.");
+		expect(plainBullets(sentences["diff-size"])).toBe("Back to no clean work in a row after !425.");
 	});
 });
 
@@ -174,7 +176,9 @@ describe("dedupe", () => {
 			change("STANDING_MOVED", "scope", "Scope", { from: "MIXED", to: "STRENGTH" }),
 			change("FEEDBACK_NEW", "scope", "Scope"),
 		]);
-		expect(plainBullets(sentences.scope)).toBe("Moved to Going well after !421 and !425.");
+		expect(plainBullets(sentences.scope)).toBe(
+			"Your standing is now Going well after !421 and !425.",
+		);
 	});
 
 	it("keeps the fall back over new feedback when one practice did both", () => {
@@ -182,7 +186,7 @@ describe("dedupe", () => {
 			change("FEEDBACK_NEW", "scope", "Scope"),
 			change("FEEDBACK_RESET", "scope", "Scope", { evidence: [pullRequest(425)] }),
 		]);
-		expect(plainBullets(sentences.scope)).toBe("Back to 0 of 3 clean after !425.");
+		expect(plainBullets(sentences.scope)).toBe("Back to none of 3 clean in a row after !425.");
 	});
 
 	it("keeps a move up and a move down of the same practice to the one with precedence", () => {
@@ -194,7 +198,9 @@ describe("dedupe", () => {
 				direction: "DOWN",
 			}),
 		]);
-		expect(plainBullets(sentences.scope)).toBe("Moved to Needs attention after !421 and !425.");
+		expect(plainBullets(sentences.scope)).toBe(
+			"Your standing is now Needs attention after !421 and !425.",
+		);
 	});
 });
 
@@ -293,7 +299,7 @@ describe("group sentences", () => {
 		});
 		// The group moved up, so its bullet comes with the moves up, before the first sightings.
 		expect(sentences).toStrictEqual([
-			"The group moved to Going well.",
+			"The group is now at Going well for you.",
 			"A and B were seen for the first time.",
 		]);
 	});
@@ -307,7 +313,7 @@ describe("group sentences", () => {
 				change("GROUP_MOVED", "", "", { from: "MIXED", to: "STRENGTH", evidence: [] }),
 			],
 		});
-		expect(sentences).toStrictEqual(["A moved to Going well, and the group with it."]);
+		expect(sentences).toStrictEqual(["A is now at Going well for you, and the group with it."]);
 	});
 
 	it("agree with the practices the group moved with, and leave a different move alone", () => {
@@ -322,8 +328,8 @@ describe("group sentences", () => {
 			],
 		});
 		expect(sentences).toStrictEqual([
-			"A and B moved to Going well, and the group with them.",
-			"C moved to Mixed feedback.",
+			"A and B are now at Going well for you, and the group with them.",
+			"C is now at Mixed feedback for you.",
 		]);
 	});
 
@@ -357,7 +363,7 @@ describe("composeGroupOverview", () => {
 		expect(composed.practiceSentences.scope).toBeUndefined();
 		expect(plainBullets(composed.practiceSentences.describe)).toBe("Feedback resolved.");
 		expect(plainBullets(composed.practiceSentences["diff-size"])).toBe(
-			"Moved to Needs attention after !423.",
+			"Your standing is now Needs attention after !423.",
 		);
 		expect(composed.practiceSentences.other).toBeUndefined();
 	});

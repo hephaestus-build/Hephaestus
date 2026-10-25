@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.core.web.PageResponseDTO;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemRefDTO;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureCode;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureException;
+import de.tum.cit.aet.hephaestus.practices.profile.OwnReviewFilter;
 import de.tum.cit.aet.hephaestus.practices.profile.PracticeProfileReviewService;
 import de.tum.cit.aet.hephaestus.practices.profile.dto.ProfileReviewDTO;
 import de.tum.cit.aet.hephaestus.practices.review.ProductItemQuery;
@@ -111,6 +112,7 @@ public class ItemController {
             @PathVariable long itemId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        return PageResponseDTO.from(reviews.list(ws, null, itemId, null, null, PageRequest.of(page, size)));
+        return PageResponseDTO.from(reviews.list(
+                ws, new OwnReviewFilter(null, itemId, null, null, null, false), PageRequest.of(page, size)));
     }
 }

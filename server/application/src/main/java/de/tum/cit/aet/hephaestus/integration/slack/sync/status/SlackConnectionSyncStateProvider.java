@@ -15,6 +15,7 @@ import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannelR
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackTs;
 import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackRateLimitTracker;
 import de.tum.cit.aet.hephaestus.integration.slack.sync.SlackSyncProperties;
+import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -32,16 +33,19 @@ public class SlackConnectionSyncStateProvider implements ConnectionSyncStateProv
     private final SlackMessageRepository messageRepository;
     private final SlackSyncProperties properties;
     private final SlackRateLimitTracker rateLimitTracker;
+    private final Clock clock;
 
     public SlackConnectionSyncStateProvider(
             SlackMonitoredChannelRepository monitoredChannelRepository,
             SlackMessageRepository messageRepository,
             SlackSyncProperties properties,
-            SlackRateLimitTracker rateLimitTracker) {
+            SlackRateLimitTracker rateLimitTracker,
+            Clock clock) {
         this.monitoredChannelRepository = monitoredChannelRepository;
         this.messageRepository = messageRepository;
         this.properties = properties;
         this.rateLimitTracker = rateLimitTracker;
+        this.clock = clock;
     }
 
     @Override
@@ -70,8 +74,8 @@ public class SlackConnectionSyncStateProvider implements ConnectionSyncStateProv
 
         return new ConnectionSyncDetails(
                 webhookRegistered,
-                CronSchedules.nextRun(properties.cron()),
-                CronSchedules.interval(properties.cron()),
+                CronSchedules.nextRun(properties.cron(), clock),
+                CronSchedules.interval(properties.cron(), clock),
                 rateLimit,
                 null,
                 false);

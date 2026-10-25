@@ -146,6 +146,32 @@ public class ResultQueriesImpl implements ResultQueries {
     }
 
     @Override
+    public Map<UUID, PlaceOnWork> placesOnWork(long workspaceId, long developerId, Collection<UUID> reviewIds) {
+        if (reviewIds.isEmpty()) return Map.of();
+        // Numbered over the developer's reviews of the listed reviews' works only, in the order the
+        // list sorts reviews by, so a page reads its own works and nothing else.
+        List<Object[]> rows = session()
+                .createNativeQuery(
+                        "SELECT placed.id,placed.position,placed.total FROM (SELECT rv.id,"
+                                + " row_number() OVER (PARTITION BY rv.item_id ORDER BY rv.created_at,rv.id::text)"
+                                + " AS position,count(*) OVER (PARTITION BY rv.item_id) AS total FROM review rv"
+                                + " WHERE rv.workspace_id=:ws AND rv.item_id IN (SELECT listed.item_id FROM review"
+                                + " listed WHERE listed.workspace_id=:ws AND listed.id IN (:reviews)) AND EXISTS(SELECT 1"
+                                + JOIN
+                                + "WHERE r.workspace_id=:ws AND r.review_id=rv.id AND r.developer_id=:developer))"
+                                + " placed WHERE placed.id IN (:reviews)",
+                        Object[].class)
+                .setParameter("ws", workspaceId)
+                .setParameter("developer", developerId)
+                .setParameterList("reviews", reviewIds)
+                .getResultList();
+        return rows.stream()
+                .collect(Collectors.toMap(
+                        row -> (UUID) row[0],
+                        row -> new PlaceOnWork(((Number) row[1]).intValue(), ((Number) row[2]).intValue())));
+    }
+
+    @Override
     public List<Long> developersSince(long workspaceId, Instant since) {
         return session()
                 .createNativeQuery(

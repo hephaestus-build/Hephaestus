@@ -1,22 +1,29 @@
 import { Meter } from "@base-ui/react/meter";
-import { ArrowRightIcon, CheckIcon, ClockIcon, PackageIcon } from "lucide-react";
+import { ArrowRightIcon, CheckIcon, ClockIcon, FootprintsIcon, PackageIcon } from "lucide-react";
 import { type ComponentType, type ReactNode, useId } from "react";
 
 import { cn } from "cn";
 import type { ItemRef } from "@/api/types.gen";
 import { FOCUS_RING } from "@/components/common/focus";
+import { InfoTip } from "@/components/common/InfoTip";
 import { InlineLink } from "@/components/common/InlineLink";
 import { ResponseButton, toneOf } from "@/components/common/ResponseButton";
 import { ResponseCommentBand } from "@/components/common/ResponseCommentBand";
 import { statusValues } from "@/components/common/status-def";
 import { StatusBadge } from "@/components/common/StatusBadge";
+import { TipPopover } from "@/components/common/TipPopover";
 import { UNTRUSTED_MARKDOWN_PROSE, UntrustedMarkdown } from "@/components/common/UntrustedMarkdown";
 import { useNow } from "@/components/common/use-now";
-import { pillClasses } from "@/components/practice-vocabulary/group-visuals";
+import {
+	type GroupMark,
+	groupMark,
+	pillClasses,
+	UNASSIGNED_GROUP_VISUAL,
+} from "@/components/practice-vocabulary/group-visuals";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { formatDay, formatDayTime } from "@/lib/dates";
+import { formatDay, formatDayTime, formatShortDay } from "@/lib/dates";
 import { hasText } from "@/lib/text";
 
 import { UNVERIFIED_HISTORY_NOTE } from "./claim-currentness";
@@ -24,12 +31,12 @@ import { FEEDBACK_RESOLUTION_DEFS, type FeedbackResolution } from "./feedback-re
 import { FEEDBACK_STATE_DEFS, type FeedbackState, isOpenFeedback } from "./feedback-state-defs";
 import { count, type FeedbackTextSegment, linkWork } from "./feedback-text";
 import { FEEDBACK_USEFULNESS_DEFS, type FeedbackUsefulness } from "./feedback-usefulness-defs";
+import { type WorkSeenIn, workKey, workSeenIn } from "./feedback-work-kind";
 import { FeedbackText } from "./FeedbackText";
 import { FeedbackWorkTimeline } from "./FeedbackWorkTimeline";
-import { GroupName } from "./GroupName";
 import type { Outcome } from "./outcome-defs";
-import { cleanLabel, timelinePieces } from "./practice-feedback-timeline";
-import { PracticePill } from "./PracticePill";
+import { cleanProgress, timelinePieces } from "./practice-feedback-timeline";
+import { PracticeInGroup } from "./PracticeInGroup";
 
 export type FeedbackBand = "comment" | "disagreement";
 
@@ -44,15 +51,14 @@ export type ResolvingAnswer = Exclude<FeedbackResolution, "DISAGREE">;
 
 /**
  * One piece of reviewed work on the card's timeline — the evidence behind the feedback — with
- * what the review saw on it where the record says so. Practice-page evidence carries no outcome,
- * and the timeline invents none for it.
+ * what the review saw on it.
  */
 export interface ReviewedWorkOutcome {
 	/** The work by number — "!425" — linked to its page when the provider has one. */
 	ref: ItemRef;
 	/** When the work was reviewed; the timeline orders by it and shows it as the short day, "28 Aug". */
 	date: Date;
-	outcome?: Outcome;
+	outcome: Outcome;
 }
 
 /**
@@ -63,6 +69,17 @@ export interface CleanWork {
 	ref: ItemRef;
 	/** When the piece was reviewed; the timeline orders and dates it by this. */
 	date: Date;
+}
+
+/** The practice's pill carries its group's icon and color, muted like the group's name without one. */
+function practiceGroupMark(group?: PracticeFeedbackCardGroup): GroupMark | undefined {
+	if (group === undefined) {
+		return undefined;
+	}
+	return groupMark({
+		Icon: group.icon ?? PackageIcon,
+		pill: hasText(group.color) ? pillClasses(group.color) : UNASSIGNED_GROUP_VISUAL.pill,
+	});
 }
 
 /** The group a card's practice belongs to, with what the card draws its name in. */
@@ -100,7 +117,7 @@ export interface PracticeFeedbackCardEntry {
 	body: string;
 	/**
 	 * The evidence behind the feedback; the timeline shows the newest, oldest to newest, in any
-	 * order given, and counts the older ones in one "N earlier" place.
+	 * order given, and marks that older ones exist with one short "…" stretch at its start.
 	 */
 	reviewedWork: ReviewedWorkOutcome[];
 	/**
@@ -202,8 +219,9 @@ const DISAGREE = {
 } as const;
 
 /**
- * The rule under the zone's title on an open card, with the card's own number: "Resolves when three
- * pieces of reviewed work come back clean." The meter's tooltip keeps the full sentence.
+ * The rule behind the (i) beside the zone's title on an open card, with the card's own number:
+ * "Resolves when three pieces of reviewed work come back clean." The meter's line above its track
+ * says the same in numbers, so the rule waits until asked for.
  */
 function resolveRule(cleanNeeded: number): string {
 	const pieces = count(cleanNeeded, "piece of reviewed work", "pieces of reviewed work");
@@ -244,7 +262,12 @@ const CARD_LINK_STATE =
  */
 const ZONE_HEADING = "text-sm font-semibold text-foreground";
 
-const workKey = (ref: { kind: string; id: string | number }) => `${ref.kind} ${ref.id}`;
+/**
+ * The card's edge and its inner rules: the outer edge is the one strong line, with a faint shadow,
+ * and the rules inside are half as strong, so no inner rule reads as the card's end.
+ */
+const CARD_EDGE = "rounded-xl border border-foreground/15 bg-background shadow-sm";
+const INNER_RULE = "border-border/50";
 
 function UnverifiedHistoryNotice({ unverified }: { unverified?: boolean }) {
 	return unverified === true ? (
@@ -303,41 +326,65 @@ export function PracticeFeedbackCard({
 	const closed = state === "closed";
 	const open = isOpenFeedback(state);
 	const answerable = open || state === "marked";
-	const BandIcon = FEEDBACK_STATE_DEFS[open ? "open" : state].icon;
 	const GroupIcon = group?.icon ?? PackageIcon;
 	const groupPill = hasText(group?.color) ? pillClasses(group.color) : undefined;
 	const cleanCount = cleanWork.length;
 	const knownWork = [...reviewedWork.map((piece) => piece.ref), ...cleanWork.map((c) => c.ref)];
 	// The timeline shows the newest pieces only, oldest to newest, at most `TIMELINE_WORK_LIMIT`
-	// whatever the history; what falls out of it is counted in one "N earlier" place at its start,
-	// piece by piece, so evidence on work that also came back clean still counts.
+	// whatever the history; what falls out of it is one "…" stretch at its start, which needs no
+	// count: the pattern is in the newest pieces.
 	const shown = timelinePieces(reviewedWork, cleanWork);
 	const earlier = reviewedWork.length + cleanWork.length - shown.length;
 	const cleanKeys = new Set(cleanWork.map((piece) => `${workKey(piece.ref)} clean`));
 	const missing = resolved || closed ? 0 : Math.max(cleanNeeded - cleanCount, 0);
-	// What the feedback is about: the practice, its group, and where the feedback stands.
+	// The kind and number of the work it was seen on, from the work itself; a withdrawn card says
+	// nothing about the work.
+	const seenIn =
+		state === "withdrawn" ? undefined : workSeenIn(reviewedWork.map((piece) => piece.ref));
+	// What the feedback is about: the practice, its group, the work it was seen on, and where the
+	// feedback stands.
 	const head = (
 		<div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-			<div className="flex flex-wrap items-center gap-3 text-sm">
-				<PracticePill
-					name={practiceName}
-					onOpen={onOpenPractice && (() => onOpenPractice(practiceSlug))}
-				/>
-				{/* "in" moves with the group, so a wrap never leaves it at the end of the line. */}
-				<span className="inline-flex max-w-full min-w-0 items-center gap-3">
-					<span className="text-muted-foreground">in</span>
-					<GroupName
-						name={group?.name ?? "Unassigned"}
-						icon={GroupIcon}
-						pill={groupPill}
-						onOpen={group && onOpenGroup && (() => onOpenGroup(group.slug))}
-					/>
-				</span>
-			</div>
-			<StatusBadge
-				def={FEEDBACK_STATE_DEFS[state]}
-				className={FEEDBACK_STATE_DEFS[state].className}
+			<PracticeInGroup
+				practiceName={practiceName}
+				practiceGroup={practiceGroupMark(group)}
+				onOpenPractice={onOpenPractice && (() => onOpenPractice(practiceSlug))}
+				groupName={group?.name ?? "Unassigned"}
+				groupIcon={GroupIcon}
+				groupPill={groupPill}
+				onOpenGroup={group && onOpenGroup && (() => onOpenGroup(group.slug))}
 			/>
+			<span className="ml-auto inline-flex flex-wrap items-center gap-2">
+				{seenIn && (
+					// The count stays short in the head at any number of works; a hover, focus or tap names
+					// them, linked as the timeline below links them.
+					<TipPopover
+						label={seenIn.label}
+						align="end"
+						wide
+						trigger={
+							<button
+								type="button"
+								// The words first, then the card's headline: a page of cards has one name per chip.
+								aria-label={`${seenIn.label}: ${headline}`}
+								data-work-seen-in=""
+								className={cn(
+									"inline-flex cursor-help items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs text-muted-foreground hover:text-foreground data-popup-open:text-foreground",
+									FOCUS_RING,
+								)}
+							/>
+						}
+						content={<RecurringWorks seenIn={seenIn} reviewedWork={reviewedWork} />}
+					>
+						<seenIn.icon className="size-3.5 shrink-0" aria-hidden />
+						{seenIn.label}
+					</TipPopover>
+				)}
+				<StatusBadge
+					def={FEEDBACK_STATE_DEFS[state]}
+					className={FEEDBACK_STATE_DEFS[state].className}
+				/>
+			</span>
 		</div>
 	);
 
@@ -347,7 +394,7 @@ export function PracticeFeedbackCard({
 		return (
 			<article
 				aria-labelledby={headingId}
-				className={cn("flex flex-col overflow-hidden rounded-xl border bg-background", className)}
+				className={cn("flex flex-col overflow-hidden", CARD_EDGE, className)}
 			>
 				<div className="flex flex-col gap-3 p-4">
 					{head}
@@ -359,7 +406,12 @@ export function PracticeFeedbackCard({
 						your work stands on this practice.
 					</p>
 				</div>
-				<div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t px-4 py-2.5 text-xs">
+				<div
+					className={cn(
+						"flex flex-wrap items-center gap-x-4 gap-y-2 border-t px-4 py-2.5 text-xs",
+						INNER_RULE,
+					)}
+				>
 					<span className="inline-flex items-center gap-1.5 text-muted-foreground">
 						<ClockIcon className="size-3.5 shrink-0" aria-hidden />
 						<time dateTime={timestamp.toISOString()}>{shownTimestamp}</time>
@@ -373,7 +425,8 @@ export function PracticeFeedbackCard({
 		<article
 			aria-labelledby={headingId}
 			className={cn(
-				"group/card relative isolate flex flex-col overflow-hidden rounded-xl border bg-background",
+				"group/card relative isolate flex flex-col overflow-hidden",
+				CARD_EDGE,
 				onLearnMore && ["cursor-pointer", ABOVE_CARD_LINK, CARD_LINK_STATE],
 				state === "new" && "border-mentor/35 bg-linear-160 from-mentor/5 to-background to-55%",
 				resolved && "border-success/35 bg-linear-160 from-success/5 to-background to-55%",
@@ -425,29 +478,7 @@ export function PracticeFeedbackCard({
 				)}
 			</div>
 
-			{/* What to do. */}
-			<div
-				className={cn(
-					"grid grid-cols-[auto_minmax(0,1fr)] items-start gap-x-4 border-y px-4 py-3",
-					resolved ? "bg-success/10 dark:bg-success/15" : "bg-sidebar",
-				)}
-			>
-				<span className="flex h-5 items-center" aria-hidden>
-					{resolved ? (
-						<span className="inline-flex size-4 items-center justify-center rounded-full bg-success">
-							<CheckIcon className="size-3 text-success-foreground" strokeWidth={3} />
-						</span>
-					) : (
-						<BandIcon className="size-4 text-muted-foreground" />
-					)}
-				</span>
-				<div className="flex min-w-0 flex-col gap-1">
-					<h4 className={ZONE_HEADING}>Next step</h4>
-					<div className={cn(UNTRUSTED_MARKDOWN_PROSE, "max-w-3xl text-sm text-foreground")}>
-						<UntrustedMarkdown>{nextStep}</UntrustedMarkdown>
-					</div>
-				</div>
-			</div>
+			<NextStepBand tone={nextStepTone(state)} nextStep={nextStep} />
 
 			{/*
 			 * Work reviewed for this practice: on the left, where the practice was seen, along the timeline; on the
@@ -460,15 +491,21 @@ export function PracticeFeedbackCard({
 				<div className="grid gap-x-10 gap-y-4 @xl/progress:grid-cols-[minmax(0,1fr)_auto]">
 					<div className="flex min-w-0 flex-col gap-2.5">
 						<div className="flex flex-col gap-1">
-							<h4 className={ZONE_HEADING}>Work reviewed for this practice</h4>
-							{/* The rule in sight on an open card; once it no longer holds, the closing sentence. */}
-							<p data-progress-rule="" className="text-xs text-muted-foreground">
-								{open ? (
-									resolveRule(cleanNeeded)
-								) : (
-									<FeedbackText segments={condition} onOpenPractice={onOpenPractice} />
+							{/* The rule behind an (i) on an open card; once it no longer holds, the closing sentence in sight. */}
+							<div className="flex items-center gap-1">
+								<h4 className={ZONE_HEADING}>Work reviewed for this practice</h4>
+								{open && (
+									// One (i) per card on a page of cards: the headline tells the buttons apart.
+									<InfoTip label="How this feedback resolves" nameContext={headline}>
+										<p data-progress-rule="">{resolveRule(cleanNeeded)}</p>
+									</InfoTip>
 								)}
-							</p>
+							</div>
+							{!open && (
+								<p data-progress-rule="" className="text-xs text-muted-foreground">
+									<FeedbackText segments={condition} onOpenPractice={onOpenPractice} />
+								</p>
+							)}
 						</div>
 						<FeedbackWorkTimeline
 							pieces={shown}
@@ -490,7 +527,7 @@ export function PracticeFeedbackCard({
 								<CleanMeter
 									cleanCount={cleanCount}
 									cleanNeeded={cleanNeeded}
-									label={cleanLabel({ cleanCount, cleanNeeded })}
+									label={cleanProgress({ cleanCount, cleanNeeded })}
 									description={open ? <FeedbackText segments={condition} /> : undefined}
 								/>
 							)}
@@ -528,7 +565,12 @@ export function PracticeFeedbackCard({
 			</div>
 
 			{/* When it was written, and how the reader rates it. */}
-			<div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t px-4 py-2.5 text-xs">
+			<div
+				className={cn(
+					"flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t px-4 py-2.5 text-xs",
+					INNER_RULE,
+				)}
+			>
 				<div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1.5">
 					<span className="inline-flex items-center gap-1.5 text-muted-foreground">
 						<ClockIcon className="size-3.5 shrink-0" aria-hidden />
@@ -607,10 +649,72 @@ export function PracticeFeedbackCard({
 	);
 }
 
+/**
+ * What to do. On open feedback it is the card's call to action: a calm mentor wash with a 2 px
+ * accent on its left edge, drawn as its own strip and not as a border, so it meets the rules above
+ * and below square instead of in a mitred corner, and the band stays unpositioned under the card's
+ * link. Once the work resolved the feedback, the band wears the success wash and leads with the
+ * green tick. Feedback the reader marked, or a practice change closed, keeps the neutral ground
+ * (`webapp/AGENTS.md` § Practice surfaces palette).
+ */
+type NextStepTone = "open" | "resolved" | "closed";
+
+function nextStepTone(state: FeedbackState): NextStepTone {
+	if (state === "resolved") {
+		return "resolved";
+	}
+	return isOpenFeedback(state) ? "open" : "closed";
+}
+
+function NextStepBand({ tone, nextStep }: { tone: NextStepTone; nextStep: string }) {
+	return (
+		<div
+			data-next-step={tone}
+			className={cn(
+				"flex border-y",
+				INNER_RULE,
+				tone === "open" && "bg-mentor/5 dark:bg-mentor/10",
+				tone === "resolved" && "bg-success/10 dark:bg-success/15",
+				tone === "closed" && "bg-sidebar",
+			)}
+		>
+			{tone === "open" && (
+				<span aria-hidden data-next-step-edge="" className="w-0.5 shrink-0 bg-mentor" />
+			)}
+			<div
+				className={cn(
+					"grid min-w-0 flex-1 grid-cols-[auto_minmax(0,1fr)] items-start gap-x-4 py-3 pr-4",
+					tone === "open" ? "pl-3.5" : "pl-4",
+				)}
+			>
+				<span className="flex h-5 items-center" aria-hidden>
+					{tone === "resolved" ? (
+						<span className="inline-flex size-4 items-center justify-center rounded-full bg-success">
+							<CheckIcon className="size-3 text-success-foreground" strokeWidth={3} />
+						</span>
+					) : (
+						// Footprints: the steps to take next, not the card's state, which its badge says.
+						<FootprintsIcon
+							className={cn("size-4", tone === "open" ? "text-mentor" : "text-muted-foreground")}
+						/>
+					)}
+				</span>
+				<div className="flex min-w-0 flex-col gap-1">
+					{/* The heading stays in the set's own colour; the wash, the edge and the icon carry the accent. */}
+					<h4 className={ZONE_HEADING}>Next step</h4>
+					<div className={cn(UNTRUSTED_MARKDOWN_PROSE, "max-w-3xl text-sm text-foreground")}>
+						<UntrustedMarkdown>{nextStep}</UntrustedMarkdown>
+					</div>
+				</div>
+			</div>
+		</div>
+	);
+}
+
 /** The card's zones while the feedback loads. */
 export function PracticeFeedbackCardSkeleton() {
 	return (
-		<div aria-hidden className="flex flex-col overflow-hidden rounded-xl border bg-background">
+		<div aria-hidden className={cn("flex flex-col overflow-hidden", CARD_EDGE)}>
 			<div className="flex flex-col gap-3 p-4">
 				<div className="flex flex-wrap items-center justify-between gap-4">
 					<div className="flex items-center gap-3">
@@ -627,7 +731,7 @@ export function PracticeFeedbackCardSkeleton() {
 				</div>
 				<Skeleton className="h-5 w-52 self-end" />
 			</div>
-			<div className="flex flex-col gap-1 border-y bg-sidebar px-4 py-3 pl-12">
+			<div className={cn("flex flex-col gap-1 border-y bg-sidebar px-4 py-3 pl-12", INNER_RULE)}>
 				<Skeleton className="h-5 w-20" />
 				<Skeleton className="h-5 w-full max-w-xl" />
 			</div>
@@ -642,7 +746,12 @@ export function PracticeFeedbackCardSkeleton() {
 					<Skeleton className="h-8 w-full" />
 				</div>
 			</div>
-			<div className="flex flex-wrap items-center justify-between gap-4 border-t px-4 py-2.5">
+			<div
+				className={cn(
+					"flex flex-wrap items-center justify-between gap-4 border-t px-4 py-2.5",
+					INNER_RULE,
+				)}
+			>
 				<Skeleton className="h-5 w-48" />
 				<Skeleton className="h-8 w-28" />
 			</div>
@@ -651,8 +760,9 @@ export function PracticeFeedbackCardSkeleton() {
 }
 
 /**
- * The clean work in a row: a segment bar that takes the block's width, with the count beside it in
- * the text's own size. On an open card its tooltip carries
+ * The clean work in a row: one muted line in words above a segment bar that takes the block's
+ * width, set like "Or mark it yourself" above the answers, so the block reads as label and control
+ * twice. On an open card its tooltip carries
  * the sentence on how the feedback resolves, which stays the meter's description for a screen
  * reader; the meter then takes focus, so a keyboard opens the tooltip too.
  */
@@ -675,13 +785,16 @@ function CleanMeter({
 		"aria-describedby": description === undefined ? undefined : descriptionId,
 		getAriaValueText: () => label,
 		className: cn(
-			"flex h-6 w-full items-center gap-3 rounded-sm",
+			"flex w-full flex-col gap-1.5 rounded-sm",
 			description !== undefined && FOCUS_RING,
 		),
 	};
 	const parts = (
 		<>
-			<Meter.Track className="flex min-w-24 flex-1 gap-1">
+			<Meter.Value className="text-xs text-muted-foreground tabular-nums">
+				{() => label}
+			</Meter.Value>
+			<Meter.Track className="flex h-2 min-w-24 gap-1">
 				{Array.from({ length: cleanNeeded }, (_, index) => (
 					<span
 						key={index}
@@ -692,9 +805,6 @@ function CleanMeter({
 					/>
 				))}
 			</Meter.Track>
-			<Meter.Value className="text-sm whitespace-nowrap text-foreground tabular-nums">
-				{() => label}
-			</Meter.Value>
 		</>
 	);
 	if (description === undefined) {
@@ -824,5 +934,58 @@ function CardTint() {
 			data-card-tint=""
 			className="pointer-events-none absolute inset-0 -z-10 bg-muted/0 transition-colors group-hover/card:bg-muted/25 group-has-[[data-card-link]:focus-visible]/card:bg-muted/25"
 		/>
+	);
+}
+
+/**
+ * The works a pattern recurs in, as the chip's panel lists them: a short heading, then one line per
+ * work, newest first, its number linked to the work, its title and repository muted after it, and
+ * the day it was reviewed.
+ */
+function RecurringWorks({
+	seenIn,
+	reviewedWork,
+}: {
+	seenIn: WorkSeenIn<ItemRef>;
+	reviewedWork: ReviewedWorkOutcome[];
+}) {
+	const lastSeen = (ref: ItemRef) =>
+		Math.max(
+			...reviewedWork
+				.filter((piece) => workKey(piece.ref) === workKey(ref))
+				.map((piece) => piece.date.getTime()),
+		);
+	const works = [...seenIn.pieces].sort((a, b) => lastSeen(b) - lastSeen(a));
+	return (
+		<div className="flex min-w-0 flex-col gap-1.5">
+			<p className="font-semibold text-foreground">Recurring in {seenIn.these}</p>
+			<ul className="flex min-w-0 flex-col divide-y divide-border/60 text-sm">
+				{works.map((ref) => {
+					const seen = lastSeen(ref);
+					return (
+						<li key={workKey(ref)} className="flex min-w-0 items-baseline gap-2 py-1.5">
+							<InlineLink
+								href={ref.url ?? undefined}
+								external
+								className="shrink-0 font-medium whitespace-nowrap"
+							>
+								{ref.label}
+							</InlineLink>
+							<span className="min-w-0 flex-1 truncate text-muted-foreground">
+								{[ref.title, ref.container].filter(hasText).join(" · ")}
+							</span>
+							{Number.isFinite(seen) && (
+								<time
+									dateTime={new Date(seen).toISOString()}
+									className="shrink-0 text-xs text-muted-foreground tabular-nums"
+								>
+									{formatShortDay(new Date(seen))}
+								</time>
+							)}
+						</li>
+					);
+				})}
+			</ul>
+		</div>
 	);
 }

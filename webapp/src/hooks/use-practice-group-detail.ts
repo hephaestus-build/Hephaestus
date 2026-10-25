@@ -7,7 +7,12 @@ import {
 } from "@/api/@tanstack/react-query.gen";
 import type { PracticeStanding, ReviewedPractice } from "@/api/types.gen";
 import { panelState } from "@/components/common/panel-state";
+import { useNow } from "@/components/common/use-now";
 import type { PracticeGuidanceState } from "@/components/practice-guidance/PracticeIntro";
+import {
+	reviewRangeStart,
+	type ReviewTimeframe,
+} from "@/components/practice-profile/practice-profile-search";
 import {
 	EMPTY_REVIEW_FEED,
 	type FeedbackResponseControls,
@@ -31,6 +36,8 @@ export interface PracticeGroupDetailRequest {
 	 */
 	practiceStandings: PracticeStanding[];
 	reviewedPractices: ReviewedPractice[];
+	/** How far back the open practice's observations reach; absent for every one. */
+	since?: ReviewTimeframe;
 }
 
 export interface PracticeGroupDetail {
@@ -58,7 +65,9 @@ export function usePracticeGroupDetail({
 	practiceSlug,
 	practiceStandings,
 	reviewedPractices,
+	since,
 }: PracticeGroupDetailRequest): PracticeGroupDetail {
+	const now = useNow();
 	const practice =
 		practiceSlug === undefined
 			? undefined
@@ -68,7 +77,11 @@ export function usePracticeGroupDetail({
 
 	const activityOptions = listOwnGroupReviewsInfiniteOptions({
 		path: { workspaceSlug, groupSlug: feedGroupSlug ?? "" },
-		query: { size: REVIEW_PAGE_SIZE },
+		query: {
+			size: REVIEW_PAGE_SIZE,
+			// The server narrows the pages, so the window holds across every page, not only the loaded.
+			since: since === undefined ? undefined : reviewRangeStart(now, since),
+		},
 	});
 	const activityQuery = useInfiniteQuery({
 		...activityOptions,

@@ -165,11 +165,12 @@ public class ReviewJobExecutor {
     private final AtomicBoolean running = new AtomicBoolean(false);
     private volatile @Nullable Thread pollThread;
     private final Phaser inFlight = new Phaser(1); // 1 = the executor itself; deregistered on stop
-    private final Set<UUID> localRunningJobs = ConcurrentHashMap.newKeySet();
+    // The attempt each locally running job runs, so a later attempt of the same job is never mistaken for it.
+    private final Map<UUID, Integer> localRunningJobs = new ConcurrentHashMap<>();
 
     private final Optional<WorkerCapacityState> capacityState;
-    // Worker identity fences terminal writes; it is absent when the worker role is disabled.
-    private final @Nullable String workerId;
+    // Worker identity fences terminal writes.
+    private final String workerId;
 
     private @Nullable ReviewCompositionContinuation compositionContinuation;
 
@@ -196,7 +197,7 @@ public class ReviewJobExecutor {
             PracticeScriptRunRecorder practiceScriptRuns,
             @Nullable LlmAdmissionService llmAdmissionService,
             Optional<WorkerCapacityState> capacityState,
-            Optional<WorkerProperties> workerProperties,
+            WorkerProperties workerProperties,
             ReviewJobClaimService claims,
             ReviewJobRecovery recovery) {
         this.agentProperties = agentProperties;
@@ -217,7 +218,7 @@ public class ReviewJobExecutor {
         this.practiceScriptRuns = practiceScriptRuns;
         this.llmAdmissionService = llmAdmissionService;
         this.capacityState = capacityState;
-        this.workerId = workerProperties.map(WorkerProperties::resolvedWorkerId).orElse(null);
+        this.workerId = workerProperties.resolvedWorkerId();
 
         this.infraRetryRequeued = Counter.builder(AgentMetrics.AGENT_JOB_INFRA_RETRY_REQUEUED)
                 .description("Jobs requeued (not failed) after a retryable preparation or infrastructure failure")
@@ -303,7 +304,7 @@ public class ReviewJobExecutor {
 
     // Settle custody before stopping containers; stop only attempts whose settlement transition this worker won.
     boolean cancelInFlight(ReviewJobCancellationReason reason, Duration cleanupTimeout) {
-        Set<UUID> snapshot = Set.copyOf(localRunningJobs);
+        Set<UUID> snapshot = Set.copyOf(localRunningJobs.keySet());
         if (snapshot.isEmpty()) return true;
         log.info("Draining {} in-flight job(s) owned by this worker with reason {}", snapshot.size(), reason);
         boolean settledAll = true;
@@ -326,7 +327,6 @@ public class ReviewJobExecutor {
     }
 
     private boolean settleForDrain(UUID jobId, ReviewJobCancellationReason reason) {
-        if (workerId == null) return false;
         ReviewJob job = jobRepository.findById(jobId).orElse(null);
         return job != null
                 && recovery.recover(jobId, workerId, job.getAttempt(), reason) != ReviewJobRecovery.Outcome.NONE;
@@ -367,16 +367,15 @@ public class ReviewJobExecutor {
     }
 
     /**
-     * Stops the container only; the authoritative status transition already happened hub-side before
-     * the {@code CancelJob} frame was sent.
+     * Stops the container only; whoever ended or requeued the attempt already wrote its status.
      *
      * @return true if this worker owns the job and a stop was requested
      */
     public boolean cancelLocalJob(UUID jobId, String reason) {
-        if (!localRunningJobs.contains(jobId)) {
+        if (!localRunningJobs.containsKey(jobId)) {
             return false;
         }
-        log.info("Hub-initiated cancel for locally-running job {}: {}", jobId, reason);
+        log.info("Stopping locally running job {}: {}", jobId, reason);
         try {
             sandboxManager.cancel(jobId);
             return true;
@@ -470,6 +469,13 @@ public class ReviewJobExecutor {
     }
 
     StartOutcome processJob(UUID jobId) {
+        // The poll offers only queued jobs: an attempt of this job that still runs here was requeued. Stop it, and
+        // claim
+        // the job once it ended, so one job never has two sandboxes on this worker.
+        if (localRunningJobs.containsKey(jobId)) {
+            cancelLocalJob(jobId, "the job was requeued while this attempt still ran");
+            return StartOutcome.SKIPPED;
+        }
         ReviewJobClaimService.ClaimAttempt attempt;
         try {
             attempt = claims.claimJob(jobId);
@@ -493,7 +499,7 @@ public class ReviewJobExecutor {
         // Counted after the claim commits, never inside its transaction: a failed commit rolls the row
         // back to QUEUED and no execution then runs to release the count. Since the count is the hard
         // claim bound, one leaked entry would retire a slot for this worker's lifetime.
-        localRunningJobs.add(jobId);
+        localRunningJobs.put(jobId, claim.job().getAttempt());
         capacityState.ifPresent(WorkerCapacityState::claimReview);
         return startExecution(jobId, claim);
     }
@@ -606,7 +612,8 @@ public class ReviewJobExecutor {
             SandboxSpec sandboxSpec = preparedSandbox.spec();
             if (sandboxSpec == null) {
                 recordedTerminal = transactionTemplate.execute(status -> {
-                    int updated = transitionTerminal(jobId, ReviewJobStatus.COMPLETED, Instant.now(), null);
+                    int updated =
+                            transitionTerminal(jobId, job.getAttempt(), ReviewJobStatus.COMPLETED, Instant.now(), null);
                     if (updated == 0) return null;
                     var completed = jobRepository.findById(jobId).orElseThrow();
                     completed.setProcessingStatus(ProcessingStatus.PENDING);
@@ -620,7 +627,7 @@ public class ReviewJobExecutor {
             // for recovery on another process. A lost fence means the job was cancelled or requeued
             // while preparation ran, so its sandbox must not start.
             preparationStage.set(PreparationFailure.Stage.EXECUTION_FENCE);
-            if (!markExecutionStarted(jobId)) {
+            if (!markExecutionStarted(jobId, job.getAttempt())) {
                 metricOutcome = "OWNERSHIP_LOST";
                 log.info("Skipped sandbox start after execution fence was lost: jobId={}", jobId);
                 return;
@@ -666,7 +673,7 @@ public class ReviewJobExecutor {
                 recordAttemptOutcome(job, claim.itemKind(), metricOutcome, recordedTerminal, startTime, stagedInputs);
             } finally {
                 releaseCapacity();
-                localRunningJobs.remove(jobId);
+                localRunningJobs.remove(jobId, job.getAttempt());
                 MDC.remove(MDC_JOB_ID);
                 MDC.remove(StructuredLogKeys.WORKSPACE_ID);
                 MDC.remove(MDC_JOB_TYPE);
@@ -764,7 +771,7 @@ public class ReviewJobExecutor {
             return null;
         }
 
-        ReviewJobStatus terminalStatus = persistTerminalState(jobId, agentResult, result);
+        ReviewJobStatus terminalStatus = persistTerminalState(jobId, job.getAttempt(), agentResult, result);
         ReviewCompositionContinuation kept = compositionContinuation;
         if (terminalStatus != null && kept != null) {
             // Its result is recorded: no writer reads the original inputs again. The retention sweep removes
@@ -787,9 +794,9 @@ public class ReviewJobExecutor {
         return "%016x".formatted(value);
     }
 
-    private boolean markExecutionStarted(UUID jobId) {
+    private boolean markExecutionStarted(UUID jobId, int attempt) {
         Integer updated = transactionTemplate.execute(
-                status -> jobRepository.markExecutionStarted(jobId, workerId, Instant.now()));
+                status -> jobRepository.markExecutionStarted(jobId, workerId, attempt, Instant.now()));
         return updated != null && updated == 1;
     }
 
@@ -984,8 +991,8 @@ public class ReviewJobExecutor {
 
     private boolean handleCancellation(UUID jobId, ReviewJob job) {
         Boolean cancelled = transactionTemplate.execute(status -> {
-            int updated =
-                    transitionTerminal(jobId, ReviewJobStatus.CANCELLED, Instant.now(), "Cancelled during execution");
+            int updated = transitionTerminal(
+                    jobId, job.getAttempt(), ReviewJobStatus.CANCELLED, Instant.now(), "Cancelled during execution");
             if (updated > 0) billTerminatedJob(job, "cancelled during execution");
             return updated > 0;
         });
@@ -1043,7 +1050,7 @@ public class ReviewJobExecutor {
             log.error("Agent job failed: jobId={}, error={}", jobId, errorMessage, e);
         }
 
-        if (workerId != null && isRetryableExecutionFailure(e)) {
+        if (isRetryableExecutionFailure(e)) {
             int currentRetryCount = job.getAttempt();
             if (requeueForAnotherAttempt(job, sandboxExecutionStarted)) {
                 log.warn(
@@ -1061,7 +1068,8 @@ public class ReviewJobExecutor {
         }
 
         Integer failed = transactionTemplate.execute(status -> {
-            int updated = transitionTerminal(jobId, ReviewJobStatus.FAILED, Instant.now(), errorMessage);
+            int updated =
+                    transitionTerminal(jobId, job.getAttempt(), ReviewJobStatus.FAILED, Instant.now(), errorMessage);
             if (updated > 0 && preparation != null) {
                 var diagnosis = objectMapper
                         .createObjectNode()
@@ -1118,7 +1126,6 @@ public class ReviewJobExecutor {
 
     // Bill within the requeue transaction before it clears usage counters.
     private boolean requeueForAnotherAttempt(ReviewJob job, boolean bill) {
-        if (workerId == null) return false;
         Boolean updated = transactionTemplate.execute(status -> recovery.retryUnadmitted(job, workerId, bill));
         if (!Boolean.TRUE.equals(updated)) return false;
         infraRetryRequeued.increment();
@@ -1126,7 +1133,6 @@ public class ReviewJobExecutor {
     }
 
     private boolean continueComposition(ReviewJob job, AgentResult agentResult, SandboxResult result) {
-        if (workerId == null) return false;
         return Boolean.TRUE.equals(transactionTemplate.execute(status -> recovery.continueComposition(
                 job,
                 workerId,
@@ -1143,12 +1149,10 @@ public class ReviewJobExecutor {
         capacityState.ifPresent(WorkerCapacityState::releaseReview);
     }
 
-    // Fence late terminal writes on worker ownership so they cannot overwrite a sibling's attempt.
-    private int transitionTerminal(UUID jobId, ReviewJobStatus status, Instant now, @Nullable String error) {
-        return workerId != null
-                ? jobRepository.transitionStatusOwnedBy(
-                        jobId, status, now, error, Set.of(ReviewJobStatus.RUNNING), workerId)
-                : jobRepository.transitionStatus(jobId, status, now, error, Set.of(ReviewJobStatus.RUNNING));
+    // Fence late terminal writes on worker and attempt so they cannot end an attempt that was requeued since.
+    private int transitionTerminal(
+            UUID jobId, int attempt, ReviewJobStatus status, Instant now, @Nullable String error) {
+        return jobRepository.transitionStatusOwnedBy(jobId, status, now, error, workerId, attempt);
     }
 
     // A failed runner's draft can reach delivery only through results the server already admitted.
@@ -1194,7 +1198,7 @@ public class ReviewJobExecutor {
     // Retain RUNNING state if accounting cannot commit; rerunning completed provider work would bill it twice.
     // The sweeper ends the attempt and records proxy usage.
     private @Nullable ReviewJobStatus persistTerminalState(
-            UUID jobId, AgentResult agentResult, SandboxResult sandboxResult) {
+            UUID jobId, int attempt, AgentResult agentResult, SandboxResult sandboxResult) {
         JsonNode output = objectMapper.valueToTree(agentResult.output());
         boolean storable = textRepresentableInJsonb(output);
         if (!storable) {
@@ -1203,14 +1207,19 @@ public class ReviewJobExecutor {
         try {
             return terminalPersistRetries.execute(named(
                     "Terminal persistence for jobId=" + jobId,
-                    () -> persistTerminalStateOnce(jobId, agentResult, sandboxResult, output, storable)));
+                    () -> persistTerminalStateOnce(jobId, attempt, agentResult, sandboxResult, output, storable)));
         } catch (RetryException e) {
             throw new TerminalPersistenceException(e);
         }
     }
 
     private @Nullable ReviewJobStatus persistTerminalStateOnce(
-            UUID jobId, AgentResult agentResult, SandboxResult sandboxResult, JsonNode output, boolean storable) {
+            UUID jobId,
+            int attempt,
+            AgentResult agentResult,
+            SandboxResult sandboxResult,
+            JsonNode output,
+            boolean storable) {
         return transactionTemplate.execute(status -> {
             ReviewJob locked = jobRepository.lockById(jobId).orElse(null);
             if (locked == null) return null;
@@ -1227,7 +1236,7 @@ public class ReviewJobExecutor {
                         default -> null;
                     };
             Instant finishedAt = Instant.now();
-            int updated = transitionTerminal(jobId, terminalStatus, finishedAt, errorMessage);
+            int updated = transitionTerminal(jobId, attempt, terminalStatus, finishedAt, errorMessage);
             if (updated == 0) {
                 log.info("Job no longer owned/RUNNING, skipping output persist: jobId={}", jobId);
                 return null;

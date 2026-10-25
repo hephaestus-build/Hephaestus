@@ -26,6 +26,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStopReason;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
@@ -459,6 +460,124 @@ class PracticeProfileReviewIntegrationTest extends BaseIntegrationTest {
                 .isEqualTo(0)
                 .jsonPath("$.content.length()")
                 .isEqualTo(0);
+    }
+
+    @Test
+    void itemFilterKeepsOnlyTheReviewsOfThatWork() {
+        var at = Instant.now();
+        var first = data.result(scenario, ResultOutcome.NOT_MET, at);
+        // One current result per work and practice: the second review replaces the first.
+        data.end(first, at.plusMillis(500));
+        var second = data.result(scenario, ResultOutcome.MET, at.plusSeconds(1));
+        var other = historyItem(scenario.account(), "scm.issue", scenario.item());
+        data.result(other, ResultOutcome.MET, at.plusSeconds(2));
+
+        get("/practice-profile/reviews?itemId=" + scenario.item().getId() + "&size=1")
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.totalElements")
+                .isEqualTo(2)
+                .jsonPath("$.content[0].review.id")
+                .isEqualTo(second.getReviewId().toString());
+        get("/practice-profile/reviews?itemId=" + scenario.item().getId())
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.content[*].review.id")
+                .value(ids -> assertThat(ids)
+                        .asInstanceOf(InstanceOfAssertFactories.list(String.class))
+                        .containsExactly(
+                                second.getReviewId().toString(),
+                                first.getReviewId().toString()));
+    }
+
+    @Test
+    void statusFilterIsAppliedBeforePagination() {
+        var at = Instant.now();
+        var complete = data.result(scenario, ResultOutcome.MET, at);
+        data.end(complete, at.plusMillis(500));
+        var partial = data.result(scenario, ResultOutcome.NOT_MET, at.plusSeconds(1));
+        var review = reviews.findById(partial.getReviewId()).orElseThrow();
+        review.setStatus(ReviewStatus.PARTIAL);
+        review.setStopReason(ReviewStopReason.RESULT_WITHHELD);
+        reviews.saveAndFlush(review);
+
+        get("/practice-profile/reviews?status=PARTIAL&size=1")
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.totalElements")
+                .isEqualTo(1)
+                .jsonPath("$.content[0].review.id")
+                .isEqualTo(partial.getReviewId().toString())
+                .jsonPath("$.content[0].review.status")
+                .isEqualTo("PARTIAL");
+        get("/practice-profile/reviews?status=COMPLETE")
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.totalElements")
+                .isEqualTo(1)
+                .jsonPath("$.content[0].review.id")
+                .isEqualTo(complete.getReviewId().toString());
+        get("/practice-profile/reviews?status=PARTIAL&status=COMPLETE&order=OLDEST")
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.totalElements")
+                .isEqualTo(2)
+                .jsonPath("$.content[0].review.id")
+                .isEqualTo(complete.getReviewId().toString())
+                .jsonPath("$.content[1].review.id")
+                .isEqualTo(partial.getReviewId().toString());
+        get("/practice-profile/reviews?itemKind=chat.thread&itemKind=scm.pull_request")
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.totalElements")
+                .isEqualTo(2);
+        get("/practice-profile/reviews?status=FAILED")
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.totalElements")
+                .isEqualTo(0);
+    }
+
+    @Test
+    void shouldGiveEachReviewItsPlaceOnTheWorkWhenAFilterHidesTheOthers() {
+        var at = Instant.now();
+        var complete = data.result(scenario, ResultOutcome.MET, at.minus(Duration.ofDays(40)));
+        data.end(complete, at.minus(Duration.ofDays(39)));
+        var partial = data.result(scenario, ResultOutcome.NOT_MET, at);
+        var review = reviews.findById(partial.getReviewId()).orElseThrow();
+        review.setStatus(ReviewStatus.PARTIAL);
+        review.setStopReason(ReviewStopReason.RESULT_WITHHELD);
+        reviews.saveAndFlush(review);
+
+        get("/practice-profile/reviews?status=COMPLETE")
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.content[0].review.id")
+                .isEqualTo(complete.getReviewId().toString())
+                .jsonPath("$.content[0].positionOnWork")
+                .isEqualTo(1)
+                .jsonPath("$.content[0].totalOnWork")
+                .isEqualTo(2);
+        get("/practice-profile/reviews?since=" + at.minus(Duration.ofDays(30)) + "&order=OLDEST")
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.totalElements")
+                .isEqualTo(1)
+                .jsonPath("$.content[0].review.id")
+                .isEqualTo(partial.getReviewId().toString())
+                .jsonPath("$.content[0].positionOnWork")
+                .isEqualTo(2)
+                .jsonPath("$.content[0].totalOnWork")
+                .isEqualTo(2);
     }
 
     @Test

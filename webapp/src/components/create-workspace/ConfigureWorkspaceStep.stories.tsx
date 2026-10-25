@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react";
-import { expect, fn } from "storybook/test";
+import { expect, fn, userEvent } from "storybook/test";
 
 import type { GitLabGroup } from "@/api/types.gen";
 
@@ -155,4 +155,98 @@ export const LongGroupName: Story = {
 			preflightResult: { valid: true, username: "admin-user" },
 		}),
 	],
+};
+
+/** The short-slug problem, as a reader sees it under the field. */
+const shortSlug = "Enter a URL slug of 3 to 51 characters: a to z, 0 to 9, or hyphens";
+
+/** A group with a short name, as the step opens for it: the slug made from the name is too short. */
+const shortName = withWizardState({
+	step: 3,
+	selectedGroup: makeGroup(2, "QA", "ls1intum/qa"),
+	displayName: "QA",
+	workspaceSlug: "qa",
+	preflightResult: { valid: true, username: "admin-user" },
+});
+
+/**
+ * A short name makes a slug that is too short. The step opens quietly, and the slug says what to fix
+ * once the reader leaves it.
+ */
+export const SlugTooShortFromName: Story = {
+	decorators: [shortName],
+	play: async ({ canvas }) => {
+		const slug = canvas.getByRole("textbox", { name: "URL slug" });
+		await expect(slug).toHaveValue("qa");
+		await expect(slug).toBeValid();
+		await expect(canvas.queryByRole("alert")).not.toBeInTheDocument();
+
+		await userEvent.click(slug);
+		await userEvent.tab();
+		await expect(slug).toBeInvalid();
+		await expect(slug).toHaveAccessibleDescription(`Used in URLs: /w/qa ${shortSlug}`);
+	},
+};
+
+/** The same step after the reader pressed "Create workspace": every field shows its problem. */
+export const SlugTooShortAfterCreate: Story = {
+	args: { showErrors: true },
+	decorators: [shortName],
+	play: async ({ canvas }) => {
+		const slug = canvas.getByRole("textbox", { name: "URL slug" });
+		await expect(slug).toBeInvalid();
+		await expect(slug).toHaveAccessibleDescription(`Used in URLs: /w/qa ${shortSlug}`);
+		await expect(canvas.getByRole("alert")).toHaveTextContent(shortSlug);
+		await expect(canvas.getByRole("textbox", { name: "Display name" })).toBeValid();
+	},
+};
+
+/**
+ * A name with no letters from a to z makes no slug at all. After "Create workspace", the field says
+ * what to enter, and the address under it is only an example.
+ */
+export const SlugEmptyFromNonLatinNameAfterCreate: Story = {
+	args: { showErrors: true },
+	decorators: [
+		withWizardState({
+			step: 3,
+			selectedGroup: makeGroup(3, "Команда", "ls1intum/komanda"),
+			displayName: "Команда",
+			workspaceSlug: "",
+			preflightResult: { valid: true, username: "admin-user" },
+		}),
+	],
+	play: async ({ canvas }) => {
+		const slug = canvas.getByRole("textbox", { name: "URL slug" });
+		await expect(slug).toHaveValue("");
+		await expect(slug).toBeInvalid();
+		await expect(slug).toHaveAccessibleDescription(
+			`Used in URLs, such as /w/my-workspace. ${shortSlug}`,
+		);
+	},
+};
+
+/** A slug the reader enters stays quiet until they leave the field, then says what to fix. */
+export const SlugEnteredNotYetLeft: Story = {
+	decorators: [
+		withWizardState({
+			step: 3,
+			selectedGroup: defaultGroup,
+			displayName: "Hephaestus",
+			workspaceSlug: "he",
+			slugManuallyEdited: true,
+			preflightResult: { valid: true, username: "admin-user" },
+		}),
+	],
+	play: async ({ canvas }) => {
+		const slug = canvas.getByRole("textbox", { name: "URL slug" });
+		await expect(slug).toBeValid();
+		await expect(canvas.queryByRole("alert")).not.toBeInTheDocument();
+		await expect(slug).toHaveAccessibleDescription("Used in URLs: /w/he");
+
+		await userEvent.click(slug);
+		await userEvent.tab();
+		await expect(slug).toBeInvalid();
+		await expect(slug).toHaveAccessibleDescription(`Used in URLs: /w/he ${shortSlug}`);
+	},
 };

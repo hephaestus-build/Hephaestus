@@ -101,12 +101,28 @@ export const ManyEvents: Story = {
 			throw new Error("The group's name sits in its cell");
 		}
 		const items = within(cell).getAllByRole("listitem");
+		// A practice in the group's summary wears the row's label: the gray pill with the group's icon.
+		const labels = cell.querySelectorAll("li [data-practice-pill]");
+		await expect(labels.length).toBeGreaterThan(0);
+		for (const label of labels) {
+			await expect(label.querySelector("svg")).not.toBeNull();
+		}
+		// Pills on later lines keep a gap to the pill on the line above; the summary has more than one.
+		const boxes = [...labels].map((label) => label.getBoundingClientRect());
+		const gaps = boxes.slice(1).flatMap((next, index) => {
+			const above = boxes[index];
+			return above !== undefined && next.top > above.top + 1 ? [next.top - above.bottom] : [];
+		});
+		await expect(gaps.length).toBeGreaterThan(0);
+		for (const gap of gaps) {
+			await expect(gap).toBeGreaterThanOrEqual(3);
+		}
 		// New feedback is the card's to say, so the cell has no bullet for it.
 		await expect(items).toHaveLength(5);
 		await expect(cell).not.toHaveTextContent(/new feedback/u);
 		// Feedback the work fell back on comes first, then the resolutions.
 		await expect(items[0]).toHaveTextContent(
-			"Say which acceptance criteria are done is back to 0 of 3 clean.",
+			"Say which acceptance criteria are done is back to none of 3 clean in a row.",
 		);
 		// Each reference carries its own "(opens in a new tab)", so the sentence is matched to its
 		// first.
@@ -138,7 +154,7 @@ export const OneBulletPerMove: Story = {
 		await expect(items).toHaveLength(3);
 		// The group moved where this practice moved, so it is the tail of that practice's bullet.
 		await expect(items[0]).toHaveTextContent(
-			"Describe what changed and why moved to Going well, and the group with it.",
+			"Describe what changed and why is now at Going well for you, and the group with it.",
 		);
 		await expect(items[1]).toHaveTextContent(
 			"Mark the change ready and link its issue was seen for the first time.",
@@ -160,7 +176,7 @@ export const OneBulletPerMove: Story = {
 			throw new Error("The group's name sits in its cell");
 		}
 		await expect(within(alone).getByRole("listitem")).toHaveTextContent(
-			"The group moved to Mixed feedback.",
+			"The group is now at Mixed feedback for you.",
 		);
 	},
 };

@@ -21,6 +21,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.sync.status.ScmResourceCountRea
 import de.tum.cit.aet.hephaestus.integration.scm.sync.status.ScmResourceCountReader.ScmResourceCounts;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitor;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
+import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -45,6 +46,7 @@ public class GitHubConnectionSyncStateProvider implements ConnectionSyncStatePro
     private final RepositoryToMonitorRepository repositoryToMonitorRepository;
     private final RepositoryRepository repositoryRepository;
     private final ScmResourceCountReader countReader;
+    private final Clock clock;
 
     public GitHubConnectionSyncStateProvider(
             ConnectionRepository connectionRepository,
@@ -53,7 +55,8 @@ public class GitHubConnectionSyncStateProvider implements ConnectionSyncStatePro
             SyncSchedulerProperties syncSchedulerProperties,
             RepositoryToMonitorRepository repositoryToMonitorRepository,
             RepositoryRepository repositoryRepository,
-            ScmResourceCountReader countReader) {
+            ScmResourceCountReader countReader,
+            Clock clock) {
         this.connectionRepository = connectionRepository;
         this.rateLimitTracker = rateLimitTracker;
         this.suspensionTracker = suspensionTracker;
@@ -61,6 +64,7 @@ public class GitHubConnectionSyncStateProvider implements ConnectionSyncStatePro
         this.repositoryToMonitorRepository = repositoryToMonitorRepository;
         this.repositoryRepository = repositoryRepository;
         this.countReader = countReader;
+        this.clock = clock;
     }
 
     @Override
@@ -88,8 +92,8 @@ public class GitHubConnectionSyncStateProvider implements ConnectionSyncStatePro
 
         return new ConnectionSyncDetails(
                 webhookRegistered,
-                CronSchedules.nextRun(syncSchedulerProperties.cron()),
-                CronSchedules.interval(syncSchedulerProperties.cron()),
+                CronSchedules.nextRun(syncSchedulerProperties.cron(), clock),
+                CronSchedules.interval(syncSchedulerProperties.cron(), clock),
                 rateLimitTracker.snapshot(workspaceId),
                 ScmBackfillRollup.summarize(
                         syncSchedulerProperties.backfill().enabled(),

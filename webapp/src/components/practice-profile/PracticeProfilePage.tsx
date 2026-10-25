@@ -160,7 +160,8 @@ export function PracticeProfilePage({
 						<span className="pb-2 text-sm text-muted-foreground">Newest first</span>
 					</PracticeTabsRail>
 					<TabsContent value={feedbackTab}>
-						<div className="flex flex-col gap-3" aria-busy={isLoading}>
+						{/* Room between the cards, so each card's own edge is what parts them. */}
+						<div className="flex flex-col gap-6" aria-busy={isLoading}>
 							{isLoading &&
 								Array.from({ length: SKELETON_CARD_COUNT }, (_, index) => (
 									<PracticeFeedbackCardSkeleton key={index} />

@@ -8,7 +8,7 @@ spring:
         activate:
             on-profile: webhook
 
-    # Only application-server owns DDL; disable here to avoid a boot-time race.
+    # The receiver never migrates; it waits at start until the schema is current.
     liquibase:
         enabled: false
 

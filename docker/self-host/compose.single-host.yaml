@@ -76,6 +76,10 @@ services:
       shared-network:
         ipv4_address: 172.29.47.2
 
+  database-migration:
+    environment:
+      DATABASE_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+
   application-server:
     # Inherited management listener: internal network only, no host publish or proxy route.
     expose:
@@ -123,10 +127,9 @@ services:
       # reference deploys them as separate projects and cannot.
       postgres:
         condition: service_healthy
-      # Liquibase runs on application-server only, so wait for it rather than
-      # querying a pre-migration schema on a cold start.
-      application-server:
-        condition: service_healthy
+      # Start after this release's migration rather than wait for it at start.
+      database-migration:
+        condition: service_completed_successfully
 
   postgres:
     environment:

@@ -7,6 +7,7 @@ import org.jspecify.annotations.Nullable;
 /** The span the page's tiles read evidence over; the splits read the current standing and take no window. */
 public enum PracticesAcrossWorkspaceWindow {
     ALL_TIME(null),
+    DAYS_7(7),
     DAYS_30(30),
     DAYS_90(90);
 

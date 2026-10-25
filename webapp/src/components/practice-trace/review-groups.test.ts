@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { ReviewRef } from "@/api/types.gen";
 
 import { tracedItem } from "./fixtures";
-import { groupByDay, reviewOrdinalLabel, reviewPositionsOnItem } from "./review-groups";
+import { groupByDay, reviewOrdinalLabel } from "./review-groups";
 
 const NOW = new Date(2026, 8, 22, 21, 30);
 
@@ -38,17 +38,6 @@ describe("groupByDay", () => {
 	});
 });
 
-describe("reviewPositionsOnItem", () => {
-	it("counts each item's reviews from the oldest", () => {
-		const positions = reviewPositionsOnItem([
-			review("newer", NOW),
-			review("other", NOW, "1418"),
-			review("older", NOW),
-		]);
-		expect(Object.fromEntries(positions)).toStrictEqual({ newer: 2, other: 1, older: 1 });
-	});
-});
-
 describe("reviewOrdinalLabel", () => {
 	it.each([
 		[1, undefined],
@@ -65,5 +54,11 @@ describe("reviewOrdinalLabel", () => {
 	it("counts the item's reviews when it knows them", () => {
 		expect(reviewOrdinalLabel(2, 3)).toBe("Review 2 of 3");
 		expect(reviewOrdinalLabel(4, 3)).toBe("Review 4");
+	});
+
+	it("names the first run too once the work has more than one", () => {
+		expect(reviewOrdinalLabel(1, 2)).toBe("Review 1 of 2");
+		expect(reviewOrdinalLabel(1, 1)).toBeUndefined();
+		expect(reviewOrdinalLabel(1)).toBeUndefined();
 	});
 });

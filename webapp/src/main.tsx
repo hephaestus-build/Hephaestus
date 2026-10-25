@@ -7,6 +7,7 @@ import environment from "@/environment";
 import { ROUTER_SEARCH } from "@/lib/router-search";
 import { csrfFetch } from "@/runtime/auth/csrf";
 import { RouteError } from "@/runtime/errors/RouteError";
+import { installPreloadErrorReload } from "@/runtime/preload-error";
 import {
 	installWorkspaceNavigation,
 	workspaceAddressConfig,
@@ -67,6 +68,7 @@ const router = createRouter({
 });
 
 installPasskeyChallenge(router);
+installPreloadErrorReload(router);
 
 client.interceptors.response.use((response) => {
 	handlePossibleSessionExpiry(response, TanstackQuery.getContext().queryClient);

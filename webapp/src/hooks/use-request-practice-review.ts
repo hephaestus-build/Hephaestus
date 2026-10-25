@@ -126,7 +126,5 @@ export function useRequestPracticeReview(
 		 * only on the work it was asked about.
 		 */
 		accepted,
-		/** Forgets the refusal, for a surface whose level moved on to something else. */
-		forgetRefusal: () => setRefusal(undefined),
 	};
 }

@@ -1,0 +1,16 @@
+# The migrate run mode, SPRING_PROFILES_ACTIVE=prod,migrate (docs/admin/runtime-roles.mdx#database-migrations).
+# Application.main hands this profile to core.database.DatabaseMigration, which starts only the data source
+# and Liquibase, applies the changelog and exits. No runtime role runs.
+spring:
+    config:
+        activate:
+            on-profile: migrate
+
+hephaestus:
+    runtime:
+        server:
+            enabled: false
+        worker:
+            enabled: false
+        webhook:
+            enabled: false

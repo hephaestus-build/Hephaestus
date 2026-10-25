@@ -16,9 +16,10 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.math.BigDecimal;
+import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
-import java.util.Set;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -139,12 +140,7 @@ class ReviewJobTerminalStorageIntegrationTest extends BaseIntegrationTest {
         var job = running("runtime-terminal-owner");
         var input = job.getInput();
         assertThat(transactions.<Integer>execute(status -> jobs.transitionStatusOwnedBy(
-                        job.getId(),
-                        ReviewJobStatus.COMPLETED,
-                        Instant.now(),
-                        null,
-                        Set.of(ReviewJobStatus.RUNNING),
-                        "owner")))
+                        job.getId(), ReviewJobStatus.COMPLETED, Instant.now(), null, "owner", job.getAttempt())))
                 .isEqualTo(1);
         var stored =
                 jobs.findByIdAndWorkspaceId(job.getId(), job.getWorkspaceId()).orElseThrow();
@@ -158,14 +154,55 @@ class ReviewJobTerminalStorageIntegrationTest extends BaseIntegrationTest {
     void shouldRefuseATerminalWriteFromAnotherWorker() {
         var job = running("runtime-terminal-foreign");
         assertThat(transactions.<Integer>execute(status -> jobs.transitionStatusOwnedBy(
-                        job.getId(),
-                        ReviewJobStatus.FAILED,
-                        Instant.now(),
-                        "failed",
-                        Set.of(ReviewJobStatus.RUNNING),
-                        "other")))
+                        job.getId(), ReviewJobStatus.FAILED, Instant.now(), "failed", "other", job.getAttempt())))
                 .isZero();
         assertThat(jobs.findById(job.getId()).orElseThrow().getStatus()).isEqualTo(ReviewJobStatus.RUNNING);
+    }
+
+    @Test
+    void shouldRefuseATerminalWriteFromAnEarlierAttemptOfTheSameWorker() {
+        var job = running("runtime-terminal-stale");
+        int stale = job.getAttempt();
+        // The sweeper requeued the attempt and the same worker claimed the job again.
+        jdbc.update("UPDATE review_job SET attempt = attempt + 1 WHERE id = ?", job.getId());
+
+        assertThat(transactions.<Integer>execute(status -> jobs.transitionStatusOwnedBy(
+                        job.getId(), ReviewJobStatus.FAILED, Instant.now(), "failed", "owner", stale)))
+                .isZero();
+        assertThat(transactions.<Integer>execute(status -> jobs.transitionToCancelledOwnedBy(
+                        job.getId(),
+                        Instant.now(),
+                        "cancelled",
+                        ReviewJobCancellationReason.DRAIN_IMMEDIATE,
+                        "owner",
+                        stale)))
+                .isZero();
+        var stored = jobs.findById(job.getId()).orElseThrow();
+        assertThat(stored.getStatus()).isEqualTo(ReviewJobStatus.RUNNING);
+        assertThat(stored.getAttempt()).isEqualTo(stale + 1);
+    }
+
+    @Test
+    void shouldStartTheSandboxOnlyForTheAttemptTheLedgerRuns() {
+        var job = running("runtime-start-requeued");
+        // The sweeper requeued the job and the same worker claimed it again; requeue cleared the start.
+        jdbc.update(
+                "UPDATE review_job SET attempt = attempt + 1, execution_started_at = NULL WHERE id = ?", job.getId());
+
+        assertThat(transactions.<Integer>execute(
+                        status -> jobs.markExecutionStarted(job.getId(), "owner", job.getAttempt(), Instant.now())))
+                .isZero();
+        assertThat(executionStartedAt(job)).isNull();
+
+        assertThat(transactions.<Integer>execute(
+                        status -> jobs.markExecutionStarted(job.getId(), "owner", job.getAttempt() + 1, Instant.now())))
+                .isEqualTo(1);
+        assertThat(executionStartedAt(job)).isNotNull();
+    }
+
+    private @Nullable Timestamp executionStartedAt(ReviewJob job) {
+        return jdbc.queryForObject(
+                "SELECT execution_started_at FROM review_job WHERE id = ?", Timestamp.class, job.getId());
     }
 
     @Test

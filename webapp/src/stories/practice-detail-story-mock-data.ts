@@ -317,6 +317,8 @@ export const metWithoutSummary: ResultDetail = recorded({
 
 export const detailReview: ProfileReview = {
 	review: reviewRef(DETAIL_REVIEW, pullRequest902, daysBefore(2)),
+	positionOnWork: 1,
+	totalOnWork: 1,
 	results: [listedResult(detailResult), listedResult(metWithoutSummary)],
 	feedback: [detailFeedback],
 };
@@ -326,6 +328,8 @@ export const detailReviews: ProfileReview[] = [
 	detailReview,
 	{
 		review: reviewRef("00000000-0000-0000-0000-000000000111", pullRequest(898), daysBefore(4)),
+		positionOnWork: 1,
+		totalOnWork: 1,
 		results: [
 			listedResult(
 				recorded({
@@ -353,6 +357,8 @@ export const detailReviews: ProfileReview[] = [
 	},
 	{
 		review: reviewRef("00000000-0000-0000-0000-000000000121", pullRequest(884), daysBefore(11)),
+		positionOnWork: 1,
+		totalOnWork: 1,
 		results: [
 			listedResult(
 				recorded({
@@ -377,6 +383,8 @@ export const requestedCleanReview: ProfileReview = {
 	review: reviewRef("00000000-0000-0000-0000-000000000141", pullRequest902, daysBefore(1), {
 		origin: "REQUEST",
 	}),
+	positionOnWork: 1,
+	totalOnWork: 1,
 	results: [
 		listedResult(
 			recorded({

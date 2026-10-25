@@ -91,6 +91,43 @@ describe("instance users route", () => {
 		expect(screen.queryByRole("menuitem", { name: "Grant instance admin" })).toBeNull();
 	});
 
+	it("lets the reader close the role dialog while it saves, and reports a later refusal", async () => {
+		const held = deferred();
+		server.use(
+			http.get("*/admin/users", () =>
+				HttpResponse.json([
+					{
+						id: 7,
+						displayName: "Ada Lovelace",
+						primaryEmail: "ada@example.com",
+						appRole: "USER",
+						status: "ACTIVE",
+					},
+				]),
+			),
+			http.patch("*/admin/users/:id", async () => {
+				await held.promise;
+				return HttpResponse.json(
+					{ status: 503, detail: "Role update unavailable." },
+					{ status: 503 },
+				);
+			}),
+		);
+		try {
+			renderRouteAt("/admin/users");
+			const user = await chooseRowAction("Actions for Ada Lovelace", "Grant instance admin");
+			const dialog = await screen.findByRole("alertdialog", { name: "Grant instance admin?" });
+			await user.click(within(dialog).getByRole("button", { name: "Grant instance admin" }));
+			await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
+			await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
+
+			held.resolve();
+			await screen.findByText("Role update unavailable.");
+		} finally {
+			held.resolve();
+		}
+	});
+
 	it("keeps loaded pages after a failed role update and refreshes them after a successful retry", async () => {
 		const earlierAccounts = Array.from(
 			{ length: 25 },

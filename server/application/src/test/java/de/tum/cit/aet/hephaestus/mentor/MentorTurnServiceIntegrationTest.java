@@ -4,19 +4,24 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.entry;
 
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyFence;
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import jakarta.persistence.EntityManager;
+import java.time.Clock;
 import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.node.JsonNodeFactory;
@@ -48,6 +53,21 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
 
     @Autowired
     private TransactionTemplate transactionTemplate;
+
+    @Autowired
+    private MentorConversationRepository conversationRepository;
+
+    @Autowired
+    private MentorRedaction redaction;
+
+    @Autowired
+    private PersonDataCopyFence copies;
+
+    @Autowired
+    private PersonDataWriteFence writeFence;
+
+    @Autowired
+    private ApplicationEventPublisher events;
 
     private Workspace workspace;
     private MentorConversation main;
@@ -427,6 +447,31 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
         assertThat(failed.getStatus()).isEqualTo(MentorTurn.Status.FAILED);
         assertThat(failed.getError()).isNotBlank();
         assertThat(turns.expireLease(first.getId())).isEmpty();
+    }
+
+    @Test
+    void shouldKeepALiveLeaseFromTheReaperWhenTheWorkersClockRunsBehindTheServers() {
+        ask(main, "Question");
+        // The worker's clock runs ten minutes behind the server whose reaper judges the lease.
+        var behind = new MentorTurnService(
+                conversationRepository,
+                entryRepository,
+                turnRepository,
+                entryService,
+                redaction,
+                copies,
+                writeFence,
+                events,
+                Clock.offset(Clock.systemUTC(), Duration.ofMinutes(-10)),
+                3);
+        MentorTurn running = Objects.requireNonNull(transactionTemplate.execute(
+                tx -> behind.claimNext(WORKER, Duration.ofMinutes(1)).orElseThrow()));
+        transactionTemplate.executeWithoutResult(
+                tx -> behind.renewLease(running.getId(), running.getAttempt(), WORKER, Duration.ofMinutes(1)));
+
+        assertThat(turns.expiredLeases()).doesNotContain(running.getId());
+        assertThat(turns.expireLease(running.getId())).isEmpty();
+        assertThat(stored(running).getStatus()).isEqualTo(MentorTurn.Status.RUNNING);
     }
 
     @Test

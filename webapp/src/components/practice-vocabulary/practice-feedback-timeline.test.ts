@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { ItemRef } from "@/api/types.gen";
 
-import { TIMELINE_WORK_LIMIT, timelinePieces } from "./practice-feedback-timeline";
+import { cleanProgress, TIMELINE_WORK_LIMIT, timelinePieces } from "./practice-feedback-timeline";
 
 const pullRequest = (n: number): ItemRef => ({
 	id: String(n),
@@ -74,5 +74,29 @@ describe("timelinePieces", () => {
 			TIMELINE_WORK_LIMIT,
 		);
 		expect(labels(ninePieces)).toStrictEqual(["#15", "#16", "#17", "#21", "#22"]);
+	});
+});
+
+describe("cleanProgress", () => {
+	it("says the run and what is still missing, never a fraction", () => {
+		expect(cleanProgress({ cleanCount: 2, cleanNeeded: 3 })).toBe(
+			"2 clean in a row · 1 more resolves it",
+		);
+		expect(cleanProgress({ cleanCount: 1, cleanNeeded: 3 })).toBe(
+			"1 clean in a row · 2 more resolve it",
+		);
+	});
+
+	it("says how long the run has to be while it is empty", () => {
+		expect(cleanProgress({ cleanCount: 0, cleanNeeded: 3 })).toBe(
+			"None clean yet · 3 in a row resolve it",
+		);
+		expect(cleanProgress({ cleanCount: 0, cleanNeeded: 1 })).toBe(
+			"None clean yet · 1 in a row resolves it",
+		);
+	});
+
+	it("says only the run once it is full", () => {
+		expect(cleanProgress({ cleanCount: 3, cleanNeeded: 3 })).toBe("3 clean in a row");
 	});
 });

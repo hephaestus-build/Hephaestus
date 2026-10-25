@@ -77,7 +77,57 @@ async function fetchWithTimeout(input: string, init?: RequestInit): Promise<Resp
 	return fetch(input, { ...init, signal: AbortSignal.timeout(HTTP_TIMEOUT_MS) });
 }
 
-function startApplication(name: string, image: string, database = "hephaestus"): number {
+function databaseEnvironment(database: string): string[] {
+	return [
+		"--env",
+		"SPRING_LIQUIBASE_CONTEXTS=prod",
+		"--env",
+		`SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/${database}`,
+		"--env",
+		"SPRING_DATASOURCE_USERNAME=root",
+		"--env",
+		"SPRING_DATASOURCE_PASSWORD=root",
+	];
+}
+
+/**
+ * The candidate migrates as production does: the migrate run mode first, then a start that only waits for the
+ * schema. The previous release may predate the run mode, so it keeps migrating at start.
+ */
+function migrate(image: string, database = "hephaestus") {
+	return spawnSync(
+		"docker",
+		[
+			"run",
+			"--rm",
+			"--name",
+			`${runId}-migration`,
+			"--network",
+			network,
+			"--env",
+			"SPRING_PROFILES_ACTIVE=e2e,migrate",
+			...databaseEnvironment(database),
+			image,
+		],
+		{ encoding: "utf8", maxBuffer: CAPTURE_LIMIT_BYTES, timeout: 600_000 },
+	);
+}
+
+function migrateCandidate(image: string, database = "hephaestus"): void {
+	const result = migrate(image, database);
+	if (result.status !== 0) {
+		throw new Error(
+			`The candidate's migration exited with ${String(result.status ?? result.signal)}:\n${result.stdout}${result.stderr}`,
+		);
+	}
+}
+
+function startApplication(
+	name: string,
+	image: string,
+	database = "hephaestus",
+	migratesAtStart = true,
+): number {
 	docker(
 		"run",
 		"--detach",
@@ -90,13 +140,8 @@ function startApplication(name: string, image: string, database = "hephaestus"):
 		"--env",
 		"SPRING_PROFILES_ACTIVE=e2e",
 		"--env",
-		"SPRING_LIQUIBASE_CONTEXTS=prod",
-		"--env",
-		`SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/${database}`,
-		"--env",
-		"SPRING_DATASOURCE_USERNAME=root",
-		"--env",
-		"SPRING_DATASOURCE_PASSWORD=root",
+		`SPRING_LIQUIBASE_ENABLED=${String(migratesAtStart)}`,
+		...databaseEnvironment(database),
 		"--env",
 		"HEPHAESTUS_SYNC_NATS_ENABLED=false",
 		"--env",
@@ -547,7 +592,8 @@ async function assertFreshSchemaEqualsUpgraded(image: string): Promise<void> {
 	docker("exec", postgres, "createdb", "--username=root", "hephaestus_fresh");
 	const fresh = `${runId}-fresh`;
 	try {
-		await waitUntilReady(fresh, startApplication(fresh, image, "hephaestus_fresh"));
+		migrateCandidate(image, "hephaestus_fresh");
+		await waitUntilReady(fresh, startApplication(fresh, image, "hephaestus_fresh", false));
 	} finally {
 		spawnSync("docker", ["rm", "--force", fresh], { stdio: "ignore" });
 	}
@@ -613,7 +659,7 @@ function historyFingerprint(): string {
 	);
 }
 
-async function assertRefusal(image: string, seededData: string): Promise<void> {
+function assertRefusal(image: string, seededData: string): void {
 	if (count("SELECT count(*) FROM databasechangelog WHERE id = '1788679885460-1';") !== 0) {
 		throw new Error("Refusal fixture unexpectedly reached v0.77.4");
 	}
@@ -631,23 +677,17 @@ ${result.stdout}${result.stderr}`);
 		throw new Error("Refused synchronization changed migration history or seeded data");
 	}
 
-	application = `${runId}-refused`;
-	startApplication(application, image);
-	const deadline = Date.now() + 180_000;
-	while (docker("inspect", "--format", "{{.State.Status}}", application) === "running") {
-		if (Date.now() >= deadline) {
-			throw new Error("Pre-cut-point startup did not stop within 180 seconds");
-		}
-		await sleep(1000);
-	}
-	const exitCode = docker("inspect", "--format", "{{.State.ExitCode}}", application);
-	const logs = docker("logs", application);
-	if (exitCode === "0" || !logs.includes(CUT_POINT_MESSAGE)) {
-		throw new Error(`Expected cut-point refusal at startup (exit ${exitCode}):
-${logs}`);
+	const refused = migrate(image);
+	if (
+		refused.status === null ||
+		refused.status === 0 ||
+		!`${refused.stdout}${refused.stderr}`.includes(CUT_POINT_MESSAGE)
+	) {
+		throw new Error(`Expected cut-point refusal from the migration (exit ${String(refused.status)}):
+${refused.stdout}${refused.stderr}`);
 	}
 	if (historyFingerprint() !== history || dataFingerprint("legacy") !== seededData) {
-		throw new Error("Refused startup changed migration history or seeded data");
+		throw new Error("Refused migration changed migration history or seeded data");
 	}
 	if (count("SELECT count(*) FROM databasechangeloglock WHERE locked;") !== 0) {
 		throw new Error("Refused upgrade left the Liquibase lock held");
@@ -770,7 +810,7 @@ try {
 	const previousChanges = appliedChangeCount();
 
 	if (upgradePath === "refusal") {
-		await assertRefusal(candidateImage, seededData);
+		assertRefusal(candidateImage, seededData);
 	} else {
 		if (
 			upgradePath === "baseline" &&
@@ -779,8 +819,9 @@ try {
 			throw new Error("Pinned v0.77.4 fixture already has a baseline tag");
 		}
 		synchronizeBaseline(candidateImage);
+		migrateCandidate(candidateImage);
 		application = `${runId}-candidate`;
-		port = startApplication(application, candidateImage);
+		port = startApplication(application, candidateImage, "hephaestus", false);
 		await waitUntilReady(application, port);
 		if (peopleLayout(query(PEOPLE_LAYOUT_SQL)) !== "native") {
 			throw new Error("Candidate did not reach the native people layout");

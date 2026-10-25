@@ -16,10 +16,12 @@ import de.tum.cit.aet.hephaestus.integration.slack.messaging.SlackRateLimitTrack
 import de.tum.cit.aet.hephaestus.integration.slack.sync.SlackSyncProperties;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.time.ZoneId;
-import java.time.ZonedDateTime;
+import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
@@ -33,6 +35,12 @@ class SlackConnectionSyncStateProviderTest extends BaseUnitTest {
     private static final long WS = 11L;
     private static final long CONNECTION_ID = 3L;
     private static final IntegrationRef REF = new IntegrationRef(IntegrationKind.SLACK, WS, "T123");
+    private static final Clock NOON = Clock.fixed(Instant.parse("2026-07-01T12:00:00Z"), ZoneOffset.UTC);
+
+    /** {@code localTime} in the zone the server schedules in. */
+    private static Instant scheduled(String localTime) {
+        return LocalDateTime.parse(localTime).atZone(ZoneId.systemDefault()).toInstant();
+    }
 
     @Mock
     private SlackMonitoredChannelRepository monitoredChannelRepository;
@@ -44,12 +52,17 @@ class SlackConnectionSyncStateProviderTest extends BaseUnitTest {
 
     private SlackConnectionSyncStateProvider provider;
 
-    private SlackConnectionSyncStateProvider providerWith(String cron) {
+    private SlackConnectionSyncStateProvider providerWith(String cron, Clock clock) {
         return new SlackConnectionSyncStateProvider(
                 monitoredChannelRepository,
                 messageRepository,
                 new SlackSyncProperties(cron, 10, 15, Duration.ZERO, true, 5, true),
-                rateLimitTracker);
+                rateLimitTracker,
+                clock);
+    }
+
+    private SlackConnectionSyncStateProvider providerWith(String cron) {
+        return providerWith(cron, NOON);
     }
 
     @BeforeEach
@@ -109,21 +122,13 @@ class SlackConnectionSyncStateProviderTest extends BaseUnitTest {
     }
 
     @Test
-    void describe_nextScheduledSyncAt_isComputedFromTheCronExpression() {
-        provider = providerWith("0 0 4 * * *");
-        Instant before = Instant.now();
+    void describe_nextScheduledSyncAt_isTheCronsNextRunAfterTheClock() {
+        Clock clock = Clock.fixed(scheduled("2026-10-24T04:34"), ZoneOffset.UTC);
 
-        ConnectionSyncDetails details = provider.describe(REF, CONNECTION_ID);
+        Instant next =
+                providerWith("0 0 4 * * *", clock).describe(REF, CONNECTION_ID).nextScheduledSyncAt();
 
-        // The cron fires daily at 04:00: assert the actual next occurrence, not merely "in the future"
-        // (which any future instant, e.g. now+1s, would satisfy).
-        Instant next = details.nextScheduledSyncAt();
-        assertThat(next).isNotNull();
-        ZonedDateTime fire = next.atZone(ZoneId.systemDefault());
-        assertThat(fire.getHour()).isEqualTo(4);
-        assertThat(fire.getMinute()).isZero();
-        assertThat(fire.getSecond()).isZero();
-        assertThat(next).isAfter(before).isBeforeOrEqualTo(before.plus(Duration.ofDays(1)));
+        assertThat(next).isEqualTo(scheduled("2026-10-25T04:00"));
     }
 
     @Test

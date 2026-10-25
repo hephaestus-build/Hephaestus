@@ -2,7 +2,7 @@ import { RepeatIcon } from "lucide-react";
 
 import { cn } from "cn";
 
-import { cleanLabel } from "@/components/practice-vocabulary/practice-feedback-timeline";
+import { cleanProgress } from "@/components/practice-vocabulary/practice-feedback-timeline";
 
 import type { PracticePattern } from "./practice-pattern";
 
@@ -36,19 +36,23 @@ export function PracticePatternLine({ pattern, className }: PracticePatternLineP
 	return (
 		<span
 			className={cn(
-				"inline-flex h-6 w-fit max-w-full items-center gap-1.5 rounded-full border border-border bg-card px-2.5 text-xs font-medium whitespace-nowrap text-foreground",
+				// One line where it fits; on a phone the progress words wrap to a second line inside the
+				// label rather than run past the table's edge.
+				"inline-flex min-h-6 w-fit max-w-full flex-wrap items-center gap-x-1.5 gap-y-0.5 rounded-xl border border-border bg-card px-2.5 py-0.5 text-xs font-medium text-foreground",
 				className,
 			)}
 		>
-			<RepeatIcon aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />
-			<span>{PATTERN}</span>
-			<span aria-hidden className="inline-flex gap-0.5">
-				<CleanSegments pattern={pattern} />
+			<span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+				<RepeatIcon aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />
+				<span>{PATTERN}</span>
+				<span aria-hidden className="inline-flex gap-0.5">
+					<CleanSegments pattern={pattern} />
+				</span>
 			</span>
 			{/* The segments are drawn for the eye; the count beside them is the words for everyone. */}
-			<span className="font-normal text-muted-foreground tabular-nums">
+			<span className="min-w-0 font-normal text-muted-foreground tabular-nums">
 				<span className="sr-only">, </span>
-				{cleanLabel(pattern)}
+				{cleanProgress(pattern)}
 			</span>
 		</span>
 	);

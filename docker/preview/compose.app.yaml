@@ -391,6 +391,36 @@ services:
           memory: 512M
           pids: 128
 
+  # Migrates the restored staging dump to this commit, then exits; the app server waits for it.
+  database-migration:
+    image: ghcr.io/hephaestus-build/application-server:${SOURCE_COMMIT:?Coolify supplies the deployed commit}
+    restart: "no"
+    environment:
+      SPRING_PROFILES_ACTIVE: prod,migrate
+      DATABASE_URL: postgresql://${SERVICE_NAME_POSTGRES:-postgres}:5432/hephaestus?sslmode=disable
+      # The app server's reason applies here too: the database answers to a renamed host.
+      HEPHAESTUS_DATABASE_ALLOW_INSECURE_REMOTE: "true"
+      DATABASE_USERNAME: hephaestus
+      DATABASE_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+    depends_on:
+      seed-loader:
+        condition: service_completed_successfully
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    logging:
+      driver: json-file
+      options:
+        max-size: 50m
+        max-file: "3"
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+          pids: 256
+
   appserver:
     image: ghcr.io/hephaestus-build/application-server:${SOURCE_COMMIT:?Coolify supplies the deployed commit}
     # Bounded automatic retries, unlike the reference stack, because restarting this image is not
@@ -505,6 +535,8 @@ services:
         condition: service_healthy
       seed-loader:
         condition: service_completed_successfully
+      database-migration:
+        condition: service_completed_successfully
     stop_grace_period: 30s
     security_opt:
       - no-new-privileges:true
@@ -514,8 +546,7 @@ services:
       test: ["CMD", "/workspace/health-check"]
       interval: 15s
       timeout: 5s
-      # First boot runs Liquibase over a freshly restored staging dump, on a host shared with
-      # staging.
+      # First boot runs on a host shared with staging.
       retries: 10
       start_period: 300s
     logging:

@@ -517,9 +517,12 @@ async function laterEvidence(directory: string) {
 			await copyFile(path.join(archive, file), path.join(evidence, file));
 		}
 	}
+	const attestation = path.join(directory, "attestation.jsonl");
+	await writeFile(attestation, '{"mediaType":"application/vnd.dev.sigstore.bundle.v0.3+json"}\n');
 	return {
 		SHA: later,
 		ASSET: `evidence/release-${release}.json`,
+		ATTESTATION: attestation,
 		MIGRATIONS: "false",
 		RELEASE_NOTES: `## ${release.slice(1)}`,
 	};
@@ -574,6 +577,11 @@ for (const scenario of ["absent", "same-source-draft", ...writerRefusals.keys()]
 				assert.deepEqual(
 					await readFile(path.join(archive, `release-${release}.json`)),
 					await readFile(path.join(directory, evidence.ASSET)),
+				);
+				// The release attestation travels with the release, under the name provenance tools read.
+				assert.deepEqual(
+					await readFile(path.join(archive, `release-${release}.intoto.jsonl`)),
+					await readFile(evidence.ATTESTATION),
 				);
 				return;
 			}

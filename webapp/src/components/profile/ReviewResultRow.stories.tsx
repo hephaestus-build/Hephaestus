@@ -1,10 +1,9 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import type { ComponentProps } from "react";
 import { expect, screen, within } from "storybook/test";
 
 import type { ResultDetail, ResultList } from "@/api/types.gen";
+import { SEVERITY_DEFS } from "@/components/practice-vocabulary/severity-defs";
 import { formatDay } from "@/lib/dates";
-import { useStoryFeedbackResponses } from "@/stories/feedback-ratings";
 import { expectSettledVisible } from "@/stories/overlay";
 import {
 	detailFeedback,
@@ -18,12 +17,7 @@ import {
 import { expectNoPageOverflow } from "@/stories/reflow";
 import { daysBefore } from "@/stories/story-clock";
 
-import { ReviewResultRow } from "./ReviewResultRow";
-
-function Answerable(props: ComponentProps<typeof ReviewResultRow>) {
-	const responses = useStoryFeedbackResponses();
-	return <ReviewResultRow {...props} responses={responses} />;
-}
+import { ObservationDetailSkeleton, ReviewResultRow } from "./ReviewResultRow";
 
 const strength: ResultDetail = {
 	...metWithExample,
@@ -91,7 +85,6 @@ const meta = {
 	parameters: { layout: "padded" },
 	tags: ["autodocs"],
 	args: { result: strength },
-	render: (args) => <Answerable {...args} />,
 	decorators: [
 		(Story) => (
 			<ul className="divide-y rounded-lg border">
@@ -111,16 +104,31 @@ export const Default: Story = {
 		await expect(canvas.getByText("Explain significant decisions")).toBeVisible();
 		await expect(canvas.getByText("Met")).toBeVisible();
 		await expect(canvas.queryByText(formatDay(strength.recordedAt))).toBeNull();
-		const labels = ["Why it was noted", "Evidence", "Feedback", "Your response"];
+		const labels = ["Why it was noted", "Evidence", "Feedback from this observation"];
 		const positions = labels.map((label) => canvas.getByText(label).getBoundingClientRect().top);
 		await expect([...positions].sort((a, b) => a - b)).toStrictEqual(positions);
 		await expect(
 			canvas.getByText("private static final Duration TIMEOUT = Duration.ofSeconds(90);"),
 		).toBeVisible();
 		await expect(canvas.getByText("agent.timeout: 90s")).toBeVisible();
+		// The feedback the observation gave, in a box: where it went, its delivery state and the way
+		// to read it there. No response controls inside the observation.
+		const feedback = canvas.getByRole("list", { name: "Feedback from this observation" });
+		await expect(within(feedback).getByText("On the work")).toBeVisible();
 		await expect(
-			canvas.getByRole("group", { name: "Your response to the feedback on the work" }),
+			within(feedback).getAllByRole("link", { name: /^Read (?:the )?comment/u })[0],
 		).toBeVisible();
+		await expect(
+			canvas.queryByRole("group", { name: /^Your response to the feedback/u }),
+		).toBeNull();
+		// Each destination is numbered as the problems are, and its links read as links at rest.
+		await expect(feedback.querySelector("[data-destination-number]")).toHaveTextContent("1");
+		const [comment] = within(feedback).getAllByRole("link", { name: /^Read (?:the )?comment/u });
+		await expect(getComputedStyle(comment ?? feedback).textDecorationLine).toContain("underline");
+		await expect(
+			getComputedStyle(feedback.querySelector("[data-observation-feedback]") ?? feedback)
+				.backgroundColor,
+		).not.toBe("rgba(0, 0, 0, 0)");
 	},
 };
 
@@ -132,8 +140,25 @@ export const ListedResult: Story = {
 		).toHaveTextContent("Not met · 3 problems");
 		const problems = canvas.getByRole("list", { name: "Problems" });
 		await expect(within(problems).getAllByRole("listitem")).toHaveLength(3);
+		// Each problem carries its number in a small circle before its title, on a raised card.
+		const numbers = [...problems.querySelectorAll("[data-problem-number]")];
+		await expect(numbers.map((number) => number.textContent)).toStrictEqual(["1", "2", "3"]);
+		const [first] = numbers;
+		if (first === undefined) {
+			throw new Error("Expected a numbered problem.");
+		}
+		const circle = getComputedStyle(first);
+		await expect(circle.borderRadius).not.toBe("0px");
+		await expect(first.getBoundingClientRect().width).toBeCloseTo(
+			first.getBoundingClientRect().height,
+			0,
+		);
+		const card = first.closest("li")?.firstElementChild;
+		await expect(
+			card === null || card === undefined ? "none" : getComputedStyle(card).boxShadow,
+		).not.toBe("none");
 		await expect(canvas.queryByText("Why it was noted")).toBeNull();
-		await expect(canvas.queryByText("Feedback")).toBeNull();
+		await expect(canvas.queryByText("Feedback from this observation")).toBeNull();
 		await expect(canvas.queryByRole("group")).toBeNull();
 	},
 };
@@ -148,7 +173,7 @@ export const StaleWithoutEvidence: Story = {
 		).toBeVisible();
 		await expect(canvas.queryByText("Why it was noted")).not.toBeInTheDocument();
 		await expect(canvas.queryByText("Evidence")).not.toBeInTheDocument();
-		await expect(canvas.getByText("Feedback")).toBeVisible();
+		await expect(canvas.getByText("Feedback from this observation")).toBeVisible();
 	},
 };
 
@@ -209,7 +234,8 @@ export const MobileReflow: Story = {
 	},
 	parameters: { viewport: { defaultViewport: "reflow" }, chromatic: { viewports: [320] } },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText("Backfilled")).toBeVisible();
+		// How the review began is the review's to say, not the observation's.
+		await expect(canvas.queryByText("Backfilled")).not.toBeInTheDocument();
 		await expectNoPageOverflow();
 	},
 };
@@ -218,14 +244,14 @@ export const SearchedAndFoundNothing: Story = {
 	args: { result: searchedAndFoundNothing },
 	play: async ({ canvas }) => {
 		await expect(canvas.getByText("What was checked")).toBeVisible();
-		await expect(canvas.getByText("Looked for:")).toBeVisible();
+		await expect(canvas.getByText("Looked for")).toBeVisible();
 		await expect(
 			canvas.getByText("a test exercising the new caching branch of the loader"),
 		).toBeVisible();
 		await expect(
 			canvas.getByText("The code changes and Files and history in the repository"),
 		).toBeVisible();
-		await expect(canvas.getByText("How far it reached:")).toBeVisible();
+		await expect(canvas.getByText("How far it reached")).toBeVisible();
 		await expect(
 			canvas.getByText(/^every test file the diff touches/u, { selector: "p" }),
 		).toBeVisible();
@@ -251,9 +277,19 @@ export const NotMetWithProblems: Story = {
 		await expect(
 			within(problems).getByText("Move the class in one commit and add the cache in the next."),
 		).toBeVisible();
-		for (const label of ["Critical", "Major", "Minor", "Trivial"]) {
-			await expect(canvas.queryByText(label)).toBeNull();
+		// Each problem shows its severity, from the registry the admin pages use, right after its
+		// number, so a problem that blocks the work and a small gap no longer look alike.
+		for (const item of items) {
+			const number = item.querySelector("[data-problem-number]");
+			await expect(number?.nextElementSibling).toHaveAttribute("data-slot", "badge");
 		}
+		await expect(
+			items.map((item) => item.querySelector("[data-slot=badge]")?.textContent),
+		).toStrictEqual(
+			[...detailResult.problems]
+				.sort((a, b) => a.position - b.position)
+				.map((problem) => SEVERITY_DEFS[problem.severity].label),
+		);
 		await expect(
 			within(problems).getByText(
 				'@Cacheable(cacheNames = "practice-catalog", key = "#workspaceId")',
@@ -271,7 +307,7 @@ export const CouldNotDetermine: Story = {
 		await expect(
 			within(questions).getByText("Was the package move asked for in the linked issue?"),
 		).toBeVisible();
-		await expect(within(questions).getAllByText("Would settle it:")).toHaveLength(2);
+		await expect(within(questions).getAllByText("Would settle it")).toHaveLength(2);
 		await expect(
 			within(questions).getByText("The text of issue #880, which the description links."),
 		).toBeVisible();
@@ -315,5 +351,15 @@ export const HiddenHistoryText: Story = {
 	play: async ({ canvas }) => {
 		canvas.getByText("Observation text unavailable");
 		canvas.getByText(metWithoutSummary.practiceName);
+	},
+};
+
+/** Opened while its details still load: a placeholder in their shape fills the open row. */
+export const LoadingDetail: Story = {
+	args: { result: listedResult(detailResult), details: <ObservationDetailSkeleton /> },
+	play: async ({ canvasElement }) => {
+		const loading = canvasElement.querySelector("[data-observation-loading]");
+		await expect(loading).toHaveAttribute("aria-busy", "true");
+		await expect(loading?.querySelectorAll("[data-slot=skeleton]").length).toBeGreaterThan(3);
 	},
 };

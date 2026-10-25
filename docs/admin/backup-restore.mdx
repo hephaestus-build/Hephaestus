@@ -163,6 +163,7 @@ Turning silent mode off is an explicit step, not part of the restore command.
    It never passes `BACKUP_S3_KEY` or `BACKUP_S3_KEY_SECRET` to either container.
    A plain `up` with the restore overlay starts only PostgreSQL.
    Profiles exclude application, broker, and public ingress services.
+   They also exclude the database migration, so the clone keeps the schema of the backup's release.
 
    ```bash
    (

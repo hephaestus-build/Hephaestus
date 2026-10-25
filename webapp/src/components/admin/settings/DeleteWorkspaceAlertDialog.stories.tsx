@@ -39,13 +39,13 @@ function FocusStory(args: ComponentProps<typeof DeleteWorkspaceAlertDialog>) {
 	);
 }
 
-export const TypeToConfirm: Story = {
+export const EnterToConfirm: Story = {
 	play: async ({ args }) => {
 		const dialog = within(await screen.findByRole("alertdialog"));
-		const gate = dialog.getByLabelText(/to confirm/iu);
+		const gate = dialog.getByLabelText("Enter acme-corp to confirm");
 		const submit = dialog.getByRole("button", { name: /delete workspace/iu });
 
-		await userEvent.type(gate, " acme-corp");
+		await userEvent.type(gate, "acme-corps");
 		await userEvent.click(submit);
 		await expect(args.onConfirm).not.toHaveBeenCalled();
 		await waitFor(async () => expect(gate).toHaveAttribute("aria-invalid", "true"));
@@ -55,6 +55,18 @@ export const TypeToConfirm: Story = {
 		await userEvent.clear(gate);
 		await userEvent.type(gate, "acme-corp");
 		await userEvent.click(submit);
+		await expect(args.onConfirm).toHaveBeenCalledTimes(1);
+	},
+};
+
+/** A space copied along with the slug still matches. */
+export const SpacesAroundTheSlugMatch: Story = {
+	play: async ({ args }) => {
+		const dialog = within(await screen.findByRole("alertdialog"));
+		const gate = dialog.getByLabelText("Enter acme-corp to confirm");
+		await userEvent.type(gate, " acme-corp ");
+		await userEvent.click(dialog.getByRole("button", { name: /delete workspace/iu }));
+		await expect(gate).not.toHaveAttribute("aria-invalid", "true");
 		await expect(args.onConfirm).toHaveBeenCalledTimes(1);
 	},
 };

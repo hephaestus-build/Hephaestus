@@ -1519,7 +1519,7 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
                 new PracticeScriptRunRecorder(scriptReports, scriptRuns, meterRegistry, objectMapper, assignments),
                 null,
                 Optional.empty(),
-                Optional.of(worker),
+                worker,
                 mock(ReviewJobClaimService.class),
                 recovery);
         executor.setCompositionContinuation(continuation);
@@ -1618,8 +1618,8 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
                 ReviewJobStatus.FAILED,
                 Instant.now(),
                 "The original capture no longer permits composition",
-                Set.of(ReviewJobStatus.RUNNING),
-                "next-worker"));
+                "next-worker",
+                claimed.getAttempt()));
         assertThat(failed).isEqualTo(1);
 
         completion.tick();

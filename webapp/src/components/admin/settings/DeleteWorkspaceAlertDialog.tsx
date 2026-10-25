@@ -46,7 +46,8 @@ export function DeleteWorkspaceAlertDialog({
 
 	function confirm(event: SubmitEvent<HTMLFormElement>) {
 		event.preventDefault();
-		if (confirmText !== workspaceSlug) {
+		// A space copied along with the slug is not a different answer.
+		if (confirmText.trim() !== workspaceSlug) {
 			setMismatch(true);
 			return;
 		}
@@ -94,7 +95,7 @@ export function DeleteWorkspaceAlertDialog({
 				<form onSubmit={confirm} className="grid gap-4">
 					<Field data-invalid={mismatch}>
 						<FieldLabel htmlFor="delete-workspace-confirm">
-							Type <span className="font-mono font-medium break-all">{workspaceSlug}</span> to
+							Enter <span className="font-mono font-medium break-all">{workspaceSlug}</span> to
 							confirm
 						</FieldLabel>
 						<Input
@@ -113,7 +114,7 @@ export function DeleteWorkspaceAlertDialog({
 						/>
 						{mismatch && (
 							<FieldError id="delete-workspace-confirm-error">
-								That does not match. Type the workspace slug exactly.
+								That does not match. Enter the workspace slug exactly.
 							</FieldError>
 						)}
 					</Field>

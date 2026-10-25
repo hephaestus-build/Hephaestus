@@ -1,16 +1,8 @@
-import { ExternalLinkIcon, PlayIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
-import { cn } from "cn";
 import type { GroupRef, ProfileReviewDetail, ResultList } from "@/api/types.gen";
 import { InlineLink } from "@/components/common/InlineLink";
 import type { PanelState } from "@/components/common/panel-state";
-import {
-	PracticeTabsList,
-	PracticeTabsRail,
-	PracticeTabsSkeleton,
-	PracticeTabsTrigger,
-} from "@/components/common/practice-tabs";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import { useNow } from "@/components/common/use-now";
 import { reviewedWorkIcon } from "@/components/icons/reviewed-work-icon";
@@ -20,35 +12,24 @@ import {
 } from "@/components/layout/detail-drawer/DetailDrawerHeader";
 import type { LevelPath } from "@/components/layout/detail-drawer/DetailPath";
 import { DetailStackLink } from "@/components/layout/detail-drawer/DetailStackLink";
-import { RequestedReviewTag, ReviewOrdinalTag } from "@/components/practice-trace/review-tags";
+import { ReviewOrdinalTag, ReviewOriginTag } from "@/components/practice-trace/review-tags";
 import {
 	type ReviewPracticeFilters,
 	ReviewPracticeTable,
 	ReviewPracticeTableSkeleton,
 } from "@/components/practice-trace/ReviewPracticeTable";
-import { TraceEventTimeline } from "@/components/practice-trace/TraceEventTimeline";
 import {
 	isActiveReview,
 	OWN_REVIEW_STATUS_DEFS,
 } from "@/components/practice-vocabulary/review-status-defs";
 import { ReviewStatusBadge } from "@/components/practice-vocabulary/ReviewStatusBadge";
-import { OwnFeedbackList } from "@/components/profile/OwnFeedbackList";
-import type { FeedbackResponseControls } from "@/components/profile/reviews";
-import { Button, buttonVariants } from "@/components/ui/button";
 import { DrawerBody, DrawerTitle } from "@/components/ui/drawer";
-import { Spinner } from "@/components/ui/spinner";
-import { Tabs, TabsContent } from "@/components/ui/tabs";
+import { Separator } from "@/components/ui/separator";
 import { formatDayTime } from "@/lib/dates";
 import { itemName } from "@/lib/item-kinds";
 import { hasText } from "@/lib/text";
 
-import { LabelledBlock } from "./practice-profile-blocks";
-import {
-	REVIEW_SELECTION_CLEARED,
-	REVIEW_TABS,
-	reviewLevel,
-	type ReviewTab,
-} from "./practice-profile-search";
+import { REVIEW_SELECTION_CLEARED, reviewLevel } from "./practice-profile-search";
 
 export type ProfileReviewDetailState = PanelState<{ detail: ProfileReviewDetail }>;
 
@@ -57,31 +38,18 @@ export interface ProfileReviewLevelProps {
 	path: LevelPath;
 	state: ProfileReviewDetailState;
 	positionOnWork?: number;
+	/** How many reviews the work has, when the list knows: "Review 2 of 3". */
+	totalOnWork?: number;
 	groupOf: (practiceSlug: string) => GroupRef | undefined;
 	onOpenPractice: (practiceSlug: string) => void;
-	tab: ReviewTab;
-	onTabChange: (tab: ReviewTab) => void;
 	filters: ReviewPracticeFilters;
 	onFiltersChange: (filters: ReviewPracticeFilters) => void;
 	observationLink?: (result: ResultList) => ReactNode;
-	/** The reader's responses to the feedback this review gave them; absent where they may not respond. */
-	responses?: FeedbackResponseControls;
-	onReviewNow?: (itemId: string) => void;
-	requesting?: string;
-	/**
-	 * The answer to the last ask from this level, drawn by the route: why it started nothing, with
-	 * the fix only an admin can apply, or the way to the review it created. It is said here rather
-	 * than only in a toast: it is the answer they asked for.
-	 */
-	requestOutcome?: ReactNode;
+	/** The observation open in a practice level over this review, which its row marks. */
+	openedObservationId?: string;
 }
 
 const SKELETON_ROWS = 4;
-
-const TAB_LABELS: Record<ReviewTab, string> = {
-	practices: "Every practice",
-	noticed: "What we noticed",
-};
 
 /**
  * Swapped in for this review rather than opened over it: the review level is read off the stack by
@@ -109,17 +77,13 @@ export function ProfileReviewLevel({
 	path,
 	state,
 	positionOnWork,
+	totalOnWork,
 	groupOf,
 	onOpenPractice,
-	tab,
-	onTabChange,
 	filters,
 	onFiltersChange,
 	observationLink,
-	responses,
-	onReviewNow,
-	requesting,
-	requestOutcome,
+	openedObservationId,
 }: ProfileReviewLevelProps) {
 	const detail = state.status === "ready" ? state.detail : undefined;
 
@@ -133,66 +97,30 @@ export function ProfileReviewLevel({
 			/>
 		);
 	} else if (state.status === "loading") {
-		body = (
-			<div className="flex flex-col gap-4">
-				<PracticeTabsSkeleton tabs={REVIEW_TABS.length} />
-				<ReviewPracticeTableSkeleton rows={SKELETON_ROWS} />
-			</div>
-		);
+		body = <ReviewPracticeTableSkeleton rows={SKELETON_ROWS} />;
 	} else {
-		const { review, results, feedback, trace } = state.detail;
-		const counts: Record<ReviewTab, number> = {
-			practices: results.length,
-			noticed: trace.events.length,
-		};
+		// The review lists every practice it reached for the reader, and nothing else: that is the
+		// most a developer wants from one review. What it noticed on the work stays in the admin trace.
+		// The feedback the review gave sits with its observation in the practice, where it can be
+		// read and answered; a list of it here could not be narrowed, so the review leaves it out.
+		const { review, results } = state.detail;
 		body = (
-			<>
-				{feedback.length > 0 && (
-					<LabelledBlock label="Feedback from this review" className="flex flex-col gap-2.5">
-						<OwnFeedbackList feedback={feedback} responses={responses} />
-					</LabelledBlock>
-				)}
-				<Tabs
-					value={tab}
-					onValueChange={(next) => {
-						const chosen = REVIEW_TABS.find((candidate) => candidate === next);
-						if (chosen) {
-							onTabChange(chosen);
-						}
-					}}
-					className="gap-4"
-				>
-					<PracticeTabsRail>
-						<PracticeTabsList aria-label="This review">
-							{REVIEW_TABS.map((candidate) => (
-								<PracticeTabsTrigger key={candidate} value={candidate} count={counts[candidate]}>
-									{TAB_LABELS[candidate]}
-								</PracticeTabsTrigger>
-							))}
-						</PracticeTabsList>
-					</PracticeTabsRail>
-					<TabsContent value="practices" className="min-w-0">
-						<ReviewPracticeTable
-							results={results}
-							reviewId={review.id}
-							groupOf={groupOf}
-							filters={filters}
-							onFiltersChange={onFiltersChange}
-							onOpenPractice={onOpenPractice}
-							earlierReviewLink={earlierReviewLink}
-							observationLink={observationLink}
-							emptyMessage={
-								isActiveReview(review.status)
-									? "Observations appear here as the review reaches each practice."
-									: "This review recorded no observation about you, so there is nothing to list here."
-							}
-						/>
-					</TabsContent>
-					<TabsContent value="noticed" className="min-w-0">
-						<TraceEventTimeline events={trace.events} />
-					</TabsContent>
-				</Tabs>
-			</>
+			<ReviewPracticeTable
+				results={results}
+				reviewId={review.id}
+				groupOf={groupOf}
+				filters={filters}
+				onFiltersChange={onFiltersChange}
+				onOpenPractice={onOpenPractice}
+				earlierReviewLink={earlierReviewLink}
+				observationLink={observationLink}
+				openedObservationId={openedObservationId}
+				emptyMessage={
+					isActiveReview(review.status)
+						? "Observations appear here as the review reaches each practice."
+						: "This review recorded no observation about you, so there is nothing to list here."
+				}
+			/>
 		);
 	}
 
@@ -203,12 +131,14 @@ export function ProfileReviewLevel({
 					path={path}
 					detail={detail}
 					positionOnWork={positionOnWork}
-					onReviewNow={onReviewNow}
-					requesting={requesting}
-					requestOutcome={requestOutcome}
+					totalOnWork={totalOnWork}
 				/>
 			</DetailDrawerHeader>
-			<DrawerBody className="flex flex-col gap-4 pt-2">{body}</DrawerBody>
+			<DrawerBody className="flex flex-col gap-4 pt-2">
+				{/* The rule between what was reviewed and what the review found. */}
+				<Separator />
+				{body}
+			</DrawerBody>
 		</>
 	);
 }
@@ -217,36 +147,38 @@ interface ReviewHeadProps {
 	path: LevelPath;
 	detail: ProfileReviewDetail | undefined;
 	positionOnWork: number | undefined;
-	onReviewNow?: (itemId: string) => void;
-	requesting?: string;
-	requestOutcome?: ReactNode;
+	totalOnWork: number | undefined;
 }
 
-function ReviewHead({
-	path,
-	detail,
-	positionOnWork,
-	onReviewNow,
-	requesting,
-	requestOutcome,
-}: ReviewHeadProps) {
+/**
+ * The review's head: the work it reviewed, as a link to the original, then its title and when and
+ * how it ran. No asking here: the list one level down asks for another review of the work.
+ */
+function ReviewHead({ path, detail, positionOnWork, totalOnWork }: ReviewHeadProps) {
 	const today = new Date(useNow());
 	const review = detail?.review;
 	const item = review?.item;
 	const at = review?.completedAt ?? review?.createdAt;
 	const ItemIcon = reviewedWorkIcon(item?.kind, item?.provider ?? undefined);
-	const isRequesting = item !== undefined && requesting === item.id;
-	const canAsk = review?.kind === "ITEM" && onReviewNow !== undefined;
+	const work = (
+		<>
+			{item ? itemName(item) : "Reviewed work"}
+			{hasText(item?.container) && `, ${item.container}`}
+		</>
+	);
 
 	return (
 		<div className="flex min-w-0 flex-1 flex-col gap-2">
 			<LevelPathRow {...path} current="Review" />
 			<p className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
 				<ItemIcon className="size-3.5 shrink-0" />
-				<span className="truncate">
-					{item ? itemName(item) : "Reviewed work"}
-					{hasText(item?.container) && `, ${item.container}`}
-				</span>
+				{hasText(item?.url) ? (
+					<InlineLink href={item.url} external className="min-w-0 truncate text-xs">
+						{work}
+					</InlineLink>
+				) : (
+					<span className="truncate">{work}</span>
+				)}
 			</p>
 			<DrawerTitle className="text-2xl font-semibold tracking-tight break-words">
 				{hasText(item?.title) ? item.title : (item?.label ?? "Review")}
@@ -261,36 +193,11 @@ function ReviewHead({
 					</span>
 				)}
 				{review && <ReviewStatusBadge def={OWN_REVIEW_STATUS_DEFS[review.status]} />}
-				{review?.origin === "REQUEST" && <RequestedReviewTag />}
-				<ReviewOrdinalTag position={positionOnWork} />
+				{review !== undefined && review.origin !== "EVENT" && (
+					<ReviewOriginTag origin={review.origin} />
+				)}
+				<ReviewOrdinalTag position={positionOnWork} total={totalOnWork} />
 			</div>
-			{item && (hasText(item.url) || canAsk) && (
-				<div className="flex flex-wrap items-center gap-2 pt-1">
-					{hasText(item.url) && (
-						<a
-							href={item.url}
-							target="_blank"
-							rel="noopener noreferrer"
-							className={cn(buttonVariants({ variant: "outline" }))}
-						>
-							<ExternalLinkIcon aria-hidden data-icon="inline-start" />
-							Open the original
-							<span className="sr-only"> (opens in a new tab)</span>
-						</a>
-					)}
-					{canAsk && (
-						<Button type="button" disabled={isRequesting} onClick={() => onReviewNow(item.id)}>
-							{isRequesting ? (
-								<Spinner data-icon="inline-start" />
-							) : (
-								<PlayIcon aria-hidden data-icon="inline-start" />
-							)}
-							{isRequesting ? "Requesting review…" : "Request review"}
-						</Button>
-					)}
-				</div>
-			)}
-			{requestOutcome}
 		</div>
 	);
 }

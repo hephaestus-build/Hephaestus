@@ -244,6 +244,7 @@ jobs:
           echo "purl-repository=${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
 
       - name: Attest release image lock
+        id: release-attestation
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-checksums: subjects.sha256
@@ -318,14 +319,19 @@ jobs:
           TAG_NAME: ${{ needs.release.outputs.tag_name }}
           SHA: ${{ needs.release.outputs.sha }}
           ASSET: ${{ steps.pin.outputs.asset-path }}
+          ATTESTATION: ${{ steps.release-attestation.outputs.bundle-path }}
         run: |
           set -euo pipefail
           # Assets replace those of this commit's own draft only.
           node scripts/plan-release.ts --source "$TAG_NAME" "$SHA" draft
+          # The release attestation is also in GitHub's attestation store; as an asset, it travels
+          # with the release, under the name provenance tools look for.
+          provenance="$RUNNER_TEMP/release-${TAG_NAME}.intoto.jsonl"
+          cp "$ATTESTATION" "$provenance"
           # --clobber so a re-run over a resumed draft replaces its assets instead of failing on
           # every name that already exists.
           gh release upload "$TAG_NAME" \
-            "$ASSET" "${ASSET}.sigstore.json" evidence/* \
+            "$ASSET" "${ASSET}.sigstore.json" "$provenance" evidence/* \
             --clobber \
             --repo "${{ github.repository }}"
 
@@ -532,6 +538,10 @@ jobs:
           node scripts/release-image-lock.ts "evidence/$lock" evidence/manifest.json \
             "$TAG_NAME" "$RUNNER_TEMP/release-lock.env"
           node scripts/verify-release-evidence.ts evidence --verify-signatures
+          gh attestation verify "evidence/$lock" \
+            --bundle "evidence/release-${TAG_NAME}.intoto.jsonl" \
+            --predicate-type https://in-toto.io/attestation/release/v0.1 \
+            --repo "${{ github.repository }}"
           asset="evidence/release-${TAG_NAME}.json"
           cosign verify-blob --bundle "${asset}.sigstore.json" \
             --certificate-identity '${{ github.server_url }}/${{ github.repository }}/.github/workflows/release.yml@refs/heads/main' \

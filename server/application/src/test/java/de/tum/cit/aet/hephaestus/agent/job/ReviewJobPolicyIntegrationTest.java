@@ -25,6 +25,7 @@ import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBindingRepository;
 import de.tum.cit.aet.hephaestus.agent.handler.DefaultReviewExecutionHandler;
 import de.tum.cit.aet.hephaestus.agent.handler.RuntimeReviewTestData;
 import de.tum.cit.aet.hephaestus.agent.practice.PracticePiAdapter;
+import de.tum.cit.aet.hephaestus.agent.runtime.worker.testing.WorkerPropertiesFixtures;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxTestLimits;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxManager;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmAdmissionService;
@@ -141,7 +142,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                 mock(PracticeScriptRunRecorder.class),
                 admission,
                 Optional.empty(),
-                Optional.empty(),
+                WorkerPropertiesFixtures.minimal("1", "1"),
                 new ReviewJobClaimService(
                         jobs,
                         policy,

@@ -61,6 +61,8 @@ const olderReview = reviewRef(
 
 export const openProfileReview: ProfileReview = {
 	review: openReview,
+	positionOnWork: 2,
+	totalOnWork: 2,
 	results: [
 		onReview(detailResult, openReview, {
 			id: "00000000-0000-4000-8000-000000000301",
@@ -109,6 +111,8 @@ export const profileReviews: ProfileReview[] = [
 	openProfileReview,
 	{
 		review: secondReview,
+		positionOnWork: 1,
+		totalOnWork: 2,
 		results: [
 			onReview(detailResult, secondReview, {
 				id: "00000000-0000-4000-8000-000000000304",
@@ -131,6 +135,8 @@ export const profileReviews: ProfileReview[] = [
 	},
 	{
 		review: issueReview,
+		positionOnWork: 1,
+		totalOnWork: 1,
 		results: [
 			onReview(
 				metWithExample,
@@ -149,11 +155,15 @@ export const profileReviews: ProfileReview[] = [
 		review: reviewRef("00000000-0000-4000-8000-0000000002a4", pullRequest(890), daysBefore(12), {
 			status: "FAILED",
 		}),
+		positionOnWork: 1,
+		totalOnWork: 1,
 		results: [],
 		feedback: [],
 	},
 	{
 		review: olderReview,
+		positionOnWork: 1,
+		totalOnWork: 1,
 		results: [
 			onReview(metWithExample, olderReview, {
 				id: "00000000-0000-4000-8000-000000000307",
@@ -171,6 +181,8 @@ export const runningProfileReview: ProfileReview = {
 		status: "RUNNING",
 		completedAt: null,
 	}),
+	positionOnWork: 1,
+	totalOnWork: 1,
 	results: [],
 	feedback: [],
 };

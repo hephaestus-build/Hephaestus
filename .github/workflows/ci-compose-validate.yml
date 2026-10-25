@@ -103,6 +103,7 @@ jobs:
             (.services["pgbackrest-restore"].volumes | any(.target == "/var/lib/postgresql" and .read_only != true))
           ' <<< "$restored" >/dev/null
           jq -e '
+            .services["database-migration"].entrypoint == ["/bin/false"] and
             .services["application-server"].entrypoint == ["/bin/false"] and
             .services["application-worker"].entrypoint == ["/bin/false"] and
             .services["webhook-server"].entrypoint == ["/bin/false"]

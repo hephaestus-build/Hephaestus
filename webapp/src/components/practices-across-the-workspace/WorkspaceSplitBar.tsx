@@ -1,7 +1,6 @@
 // `role="img"`, not a Base UI `Meter`: a meter announces one value in a range, and a split is four
 // counts of one whole. CSS, not Recharts (`ui/chart.tsx`): one stacked row needs no axis or scale.
 
-import { TriangleIcon } from "lucide-react";
 import type { ComponentType } from "react";
 
 import { cn } from "cn";
@@ -14,6 +13,7 @@ import {
 	type StandingScope,
 } from "@/components/practice-vocabulary/practice-group-standing-defs";
 import { NEUTRAL_GREY, standingColorClass } from "@/components/practice-vocabulary/standing-counts";
+import { SUMMARY_FRAME } from "@/components/practice-vocabulary/StandingSummaryBox";
 import { Skeleton } from "@/components/ui/skeleton";
 
 import { type InfoLine, InfoLines, InfoTip } from "@/components/common/InfoTip";
@@ -29,7 +29,7 @@ import {
 export interface WorkspaceSplitBarProps {
 	split: WorkspaceSplit;
 	/**
-	 * The part the You marker is on. The server sends it only on a split that counts the reader, so
+	 * The part the You bracket spans. The server sends it only on a split that counts the reader, so
 	 * its absence is the unmarked bar.
 	 */
 	yourStanding?: PracticeGroupStandingValue;
@@ -71,11 +71,17 @@ const SPLIT_PARTS: readonly PartDef[] = [
 /** Dashed, so an empty track is never read as a part of none yet. */
 const EMPTY_TRACK = cn("h-2 rounded-sm border border-dashed border-current", NEUTRAL_GREY);
 
-function YouMarker() {
+/**
+ * A bracket open toward the bar, as wide as the reader's part. Not a point: the bar knows only the
+ * part the reader is in, never a place within it, and a pointer reads as one.
+ */
+const YOU_BRACKET = "h-1.5 rounded-t-sm border-x-2 border-t-2 border-current";
+
+function YouBracket() {
 	return (
 		<>
 			<span className="text-xs leading-3 font-semibold">You</span>
-			<TriangleIcon aria-hidden className="size-2.5 rotate-180 fill-current" />
+			<span aria-hidden data-slot="you-bracket" className={cn("w-full", YOU_BRACKET)} />
 		</>
 	);
 }
@@ -124,8 +130,9 @@ export function WorkspaceSplitBar({ split, yourStanding }: WorkspaceSplitBarProp
 							className="flex min-w-10 grow-(--count) basis-0 flex-col items-center gap-0.5"
 							style={{ "--count": count }}
 						>
-							<span className="flex h-5 flex-col items-center justify-end text-mentor">
-								{isYours && <YouMarker />}
+							{/* `pb-0.5` keeps the bracket's corners off the part it spans. */}
+							<span className="flex h-5.5 w-full flex-col items-center justify-end gap-0.5 pb-0.5 text-mentor">
+								{isYours && <YouBracket />}
 							</span>
 							<span className={cn("h-2 w-full rounded-sm bg-current", def.colorClass)} />
 							<span className="flex w-full items-center justify-center gap-1 text-xs text-muted-foreground tabular-nums">
@@ -149,14 +156,14 @@ export function WorkspaceSplitBar({ split, yourStanding }: WorkspaceSplitBarProp
  * split counts nobody draws it alone and says why once.
  */
 export function EmptyTrack() {
-	return <div aria-hidden className={cn("mt-5 w-full", EMPTY_TRACK)} />;
+	return <div aria-hidden className={cn("mt-5.5 w-full", EMPTY_TRACK)} />;
 }
 
 /** Unequal parts, so the loading bar reads as a split rather than one block. */
 const SKELETON_PARTS = [5, 4, 6, 3] as const;
 
 /**
- * The bar's lines while it loads, at the loaded bar's heights: the marker's row, the parts with a
+ * The bar's lines while it loads, at the loaded bar's heights: the bracket's row, the parts with a
  * count under each, then the total.
  */
 export function WorkspaceSplitBarSkeleton() {
@@ -169,7 +176,7 @@ export function WorkspaceSplitBarSkeleton() {
 						className="flex min-w-10 grow-(--count) basis-0 flex-col items-center gap-0.5"
 						style={{ "--count": grow }}
 					>
-						<span className="h-5" />
+						<span className="h-5.5" />
 						<Skeleton className="h-2 w-full rounded-sm" />
 						<span className="flex h-4 items-center">
 							<Skeleton className="h-3 w-7" />
@@ -184,14 +191,17 @@ export function WorkspaceSplitBarSkeleton() {
 	);
 }
 
-/** A split at the width a level header's aside gives it. */
+/**
+ * A split at the width a level header's aside gives it, in the frame a practice group's summary
+ * wears on the Practice profile.
+ */
 export function LevelSplit({
 	state,
 }: {
 	state: { status: "loading" } | ({ status: "ready" } & WorkspaceSplitBarProps);
 }) {
 	return (
-		<div className="flex w-full sm:w-88">
+		<div className={cn("flex w-full sm:w-96", SUMMARY_FRAME)}>
 			{state.status === "ready" ? <WorkspaceSplitBar {...state} /> : <WorkspaceSplitBarSkeleton />}
 		</div>
 	);
@@ -248,9 +258,10 @@ function SplitLegendItems() {
 					</li>
 				);
 			})}
-			<li className="inline-flex items-center gap-1 text-mentor">
-				<YouMarker />
-				<span className="text-muted-foreground">marks your part</span>
+			<li className="inline-flex items-center gap-1.5 text-mentor">
+				<span aria-hidden className={cn("mt-1 w-4", YOU_BRACKET)} />
+				<span className="font-semibold">You</span>
+				<span className="text-muted-foreground">spans your part</span>
 			</li>
 		</ul>
 	);

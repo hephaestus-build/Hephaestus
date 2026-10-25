@@ -1,5 +1,4 @@
 import { skipToken, useInfiniteQuery, useQuery } from "@tanstack/react-query";
-import { useState } from "react";
 import { useQueryReadRefusal } from "@/runtime/tanstack-query/use-query-read-refusal";
 
 import {
@@ -13,10 +12,11 @@ import { type PanelState, panelState } from "@/components/common/panel-state";
 import { useNow } from "@/components/common/use-now";
 import {
 	PROFILE_REVIEWS_PAGE_SIZE,
+	type ReviewOrder,
 	reviewRangeStart,
 	type ReviewTimeframe,
 } from "@/components/practice-profile/practice-profile-search";
-import { reviewPositionsOnItem } from "@/components/practice-trace/review-groups";
+import type { ReviewStatus } from "@/components/practice-vocabulary/review-status-defs";
 import {
 	EMPTY_REVIEW_FEED,
 	type ReviewFeedState,
@@ -25,7 +25,6 @@ import {
 import { useInvalidateOnSettle } from "@/hooks/use-invalidate-on-settle";
 import { PRACTICE_PROFILE_POLL_MS } from "@/hooks/use-practice-profile-overview";
 import { useRequestPracticeReview } from "@/hooks/use-request-practice-review";
-import { hasText } from "@/lib/text";
 import { retryQuery } from "@/runtime/tanstack-query/query-defaults";
 import { springPageParams } from "@/runtime/tanstack-query/spring-page";
 
@@ -34,8 +33,14 @@ interface ProfileReviewsRequest {
 	/** True while a level that shows the list is open; a closed drawer reads nothing. */
 	listOpen: boolean;
 	reviewId?: string;
-	itemKind?: string;
+	itemKind?: string[];
 	since?: ReviewTimeframe;
+	/** Only reviews in these statuses. */
+	status?: ReviewStatus[];
+	/** Oldest first; absent is newest first. */
+	order?: ReviewOrder;
+	/** Only the reviews of this work, by its id. */
+	itemId?: string;
 }
 
 /** The open review, with its results, the reader's feedback from it and what they may see of its trace. */
@@ -51,6 +56,9 @@ export function usePracticeProfileReviews({
 	reviewId,
 	itemKind,
 	since,
+	status,
+	itemId,
+	order,
 }: ProfileReviewsRequest) {
 	const now = useNow();
 	const listOptions = listOwnReviewsInfiniteOptions({
@@ -58,6 +66,9 @@ export function usePracticeProfileReviews({
 		query: {
 			size: PROFILE_REVIEWS_PAGE_SIZE,
 			itemKind,
+			itemId,
+			status,
+			order,
 			since: since === undefined ? undefined : reviewRangeStart(now, since),
 		},
 	});
@@ -87,15 +98,8 @@ export function usePracticeProfileReviews({
 	]);
 
 	const openItemId = reviewQuery.data?.review.item.id;
-	const request = useRequestPracticeReview(workspaceSlug, {
-		showsInline: (itemId) => reviewId !== undefined && itemId === openItemId,
-	});
-	// Refusals belong to the active review level; clear them on leaving it.
-	const [visited, setVisited] = useState(reviewId);
-	if (visited !== reviewId) {
-		setVisited(reviewId);
-		request.forgetRefusal();
-	}
+	// Asking is the list's alone, so a refusal is always a toast: no level says it inline.
+	const request = useRequestPracticeReview(workspaceSlug);
 
 	// This hook outlives the open review, so an acceptance is said on a review only about its own
 	// work, and never as a link to itself. A failed refresh keeps the work read before it.
@@ -113,15 +117,11 @@ export function usePracticeProfileReviews({
 
 	return {
 		list,
-		// Exact positions require every review; filters or partial pages would undercount.
-		positions:
-			list.status === "ready" && !list.hasMore && !hasText(itemKind) && since === undefined
-				? reviewPositionsOnItem(list.reviews.map(({ review }) => review))
-				: undefined,
+		/** How many reviews the filters keep, from the server; absent until the first page is in. */
+		total: reviewsQuery.data?.pages[0]?.totalElements,
 		open,
 		onReviewNow: request.ask,
 		requesting: request.asking,
-		refusal: request.refusal?.outcome,
 		/** The review the latest ask created, for the list or for the open review of the same work. */
 		accepted: acceptedHere,
 	};
