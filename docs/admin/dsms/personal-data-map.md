@@ -355,7 +355,7 @@ are erased through those IDs. The practice results and feedback it recorded abou
 and are not exported.
 
 A receipt's native provenance stays after folder deletion is acknowledged until
-the person-erasure step clears it. Unrelated review jobs and
+the person-erasure step clears it. For a deleted job, review job retention can delete the receipt first. Unrelated review jobs and
 other people's profiles and replies are not selected through repository history alone.
 
 Provider-feedback inspection also covers unconfirmed summary and inline writes.
