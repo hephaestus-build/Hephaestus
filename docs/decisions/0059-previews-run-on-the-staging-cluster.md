@@ -12,7 +12,7 @@
 
 ADR 0035 deployed each labelled pull request as a Compose stack on Coolify, on the staging VM.
 The Coolify path is off, and [ADR 0058](0058-the-helm-chart-is-the-only-supported-deployment-from-1-0.md) deletes it.
-The staging host moves to k3s. There it will install the Helm chart of ADR 0058, which is not on `main` yet ([#3139](https://github.com/hephaestus-build/Hephaestus/pull/3139)).
+The staging host moves to k3s. There it will install the Helm chart of ADR 0058, which is in `deploy/chart/hephaestus/` on `main` ([#3227](https://github.com/hephaestus-build/Hephaestus/pull/3227)).
 A preview on that host must do five things:
 
 1. List the open pull requests with the label `preview`.
