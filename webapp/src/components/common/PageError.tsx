@@ -20,7 +20,8 @@ function copyOf(props: PageErrorProps) {
 			return {
 				icon: <SearchXIcon />,
 				title: NOT_FOUND.retitle("this page"),
-				description: NOT_FOUND.next,
+				// Not the shared `next`, which says to go back: this page offers the home page instead.
+				description: "It may have been deleted or moved. Go to the home page to continue.",
 			};
 		}
 		case "no-access": {
@@ -44,7 +45,11 @@ function copyOf(props: PageErrorProps) {
 	}
 }
 
-/** Fills the page in place of its content: the page's own title is its heading. */
+/**
+ * Fills the page in place of its content: the page's own title is its heading. A caller announces
+ * an error as an alert. A missing page is not an error and is not announced: the reader arrives on
+ * it like any page.
+ */
 export function PageError(props: PageErrorProps) {
 	const onRetry = props.cause === "failed" ? props.onRetry : undefined;
 	return (

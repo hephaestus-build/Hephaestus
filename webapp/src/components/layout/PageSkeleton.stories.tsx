@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect } from "storybook/test";
+import { expect, waitFor } from "storybook/test";
 
 import { StandardPageSurface } from "@/components/layout/StandardPageSurface";
 import { expectNoPageOverflow } from "@/stories/reflow";
@@ -29,9 +29,10 @@ type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {
 	play: async ({ canvas }) => {
-		const status = canvas.getByText("Loading page");
-		await expect(status).toHaveClass("sr-only");
-		await expect(status.parentElement).toHaveAttribute("aria-busy", "true");
+		// The text arrives one frame after the live region, so the region announces it.
+		await waitFor(async () => {
+			await expect(canvas.getByRole("status")).toHaveTextContent("Loading page…");
+		});
 		// Nothing stands in for the page's real heading.
 		await expect(canvas.queryByRole("heading")).not.toBeInTheDocument();
 	},

@@ -28,7 +28,10 @@ export function RouteError({ error }: Pick<ErrorComponentProps, "error">) {
 	} else {
 		state = { cause: "failed" };
 	}
-	return (
+	// `PageError` owns the rule: an error is an alert, a missing page is not.
+	return state.cause === "not-found" ? (
+		<PageError {...state} />
+	) : (
 		<div role="alert" className="flex flex-1 flex-col">
 			<PageError {...state} />
 		</div>

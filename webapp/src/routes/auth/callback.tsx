@@ -1,5 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
+import { useSpinDelay } from "spin-delay";
 
 import { SigningInPage } from "@/components/auth/SigningInPage";
 import { pageHead } from "@/lib/page-title";
@@ -35,5 +36,9 @@ function AuthCallbackPage() {
 		void navigate({ href: safeReturnTo(returnTo), replace: true });
 	}, [isLoading, isError, returnTo, navigate]);
 
-	return <SigningInPage returnTo={safeReturnTo(returnTo)} />;
+	// Only a slow check offers the way back, so a fast return does not flash a competing choice.
+	// `ssr: false`: the default shows the delayed state on the first render.
+	const slow = useSpinDelay(true, { delay: 1000, ssr: false });
+
+	return <SigningInPage returnTo={safeReturnTo(returnTo)} showBackLink={slow} />;
 }

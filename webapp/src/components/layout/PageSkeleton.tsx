@@ -1,14 +1,28 @@
+import { useEffect, useRef } from "react";
+
 import { PageLayout } from "@/components/layout/PageLayout";
 import { Skeleton } from "@/components/ui/skeleton";
 
 /**
  * A page whose content is not known yet: the `PageHeader` title and description, then one section.
  * For a route that guards every page under it, so it cannot mirror a single page more closely.
+ *
+ * The status text is written one frame after the region mounts. A live region announces a change,
+ * and text that is already inside when the region mounts is not one (ARIA22).
  */
 export function PageSkeleton() {
+	const status = useRef<HTMLParagraphElement>(null);
+	useEffect(() => {
+		const frame = requestAnimationFrame(() => {
+			if (status.current) {
+				status.current.textContent = "Loading page…";
+			}
+		});
+		return () => cancelAnimationFrame(frame);
+	}, []);
 	return (
 		<PageLayout aria-busy>
-			<p className="sr-only">Loading page</p>
+			<p ref={status} role="status" className="sr-only" />
 			<div className="space-y-2" aria-hidden>
 				<Skeleton className="h-8 w-56 max-w-full" />
 				<Skeleton className="h-4 w-full max-w-2xl" />

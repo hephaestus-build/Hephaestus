@@ -55,8 +55,9 @@ it("keeps the main route available and offers a reload when the Heph panel impor
 		).toBe("/workspaces/new");
 		expect(screen.queryByText("We could not load this page")).toBeNull();
 		// The browser keeps a failed import, so the message offers a page load, not a retry.
-		expect(screen.getByText("We could not show Heph").closest('[role="alert"]')).not.toBeNull();
+		await screen.findByText("We could not show Heph.");
 		screen.getByRole("button", { name: "Reload page" });
+		expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
 	} finally {
 		// This test creates its own QueryClient. Unmount observers before cancelling requests,
 		// then release cache timers while React's environment is still available.

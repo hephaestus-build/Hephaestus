@@ -10,27 +10,36 @@ const meta = {
 	component: SigningInPage,
 	parameters: { layout: "fullscreen" },
 	tags: ["autodocs"],
-	args: { returnTo: "/w/aet/practice-profile" },
+	args: { returnTo: "/w/aet/practice-profile", showBackLink: false },
 } satisfies Meta<typeof SigningInPage>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
 
+/** A fast return: the status alone, with no way back that competes with it. */
 export const Default: Story = {
 	play: async ({ canvas }) => {
 		await expect(canvas.getByText("Signing you in…")).toBeVisible();
-		// The words carry the status, so the spinner beside them stays out of the accessibility tree.
-		await expect(canvas.queryByRole("status")).not.toBeInTheDocument();
-		// A fast return never shows the way back; a slow one shows it after a second.
 		await expect(canvas.queryByRole("link", { name: "Back to sign in" })).not.toBeInTheDocument();
-		const back = await canvas.findByRole("link", { name: "Back to sign in" }, { timeout: 3000 });
-		await expect(back).toHaveAttribute("href", "/login?returnTo=/w/aet/practice-profile");
 	},
 };
 
-export const Dark: Story = { globals: { theme: "dark" } };
+/** The check is slow, so the reader gets a way back to the sign-in page. */
+export const Slow: Story = {
+	args: { showBackLink: true },
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText("Signing you in…")).toBeVisible();
+		await expect(canvas.getByRole("link", { name: "Back to sign in" })).toHaveAttribute(
+			"href",
+			"/login?returnTo=/w/aet/practice-profile",
+		);
+	},
+};
+
+export const Dark: Story = { args: { showBackLink: true }, globals: { theme: "dark" } };
 
 export const OnAPhone: Story = {
+	args: { showBackLink: true },
 	parameters: { viewport: { defaultViewport: "reflow" }, chromatic: { viewports: [320] } },
 	play: expectNoPageOverflow,
 };

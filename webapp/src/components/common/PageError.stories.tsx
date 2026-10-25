@@ -56,6 +56,10 @@ export const NotFound: Story = {
 		await expect(
 			canvas.getByRole("heading", { level: 1, name: "We could not find this page" }),
 		).toBeVisible();
+		// The next step names the action this page offers, not "go back".
+		await expect(
+			canvas.getByText("It may have been deleted or moved. Go to the home page to continue."),
+		).toBeVisible();
 		await expect(canvas.queryByRole("button", { name: "Retry" })).not.toBeInTheDocument();
 		await expect(canvas.getByRole("link", { name: "Go to the home page" })).toHaveAttribute(
 			"href",

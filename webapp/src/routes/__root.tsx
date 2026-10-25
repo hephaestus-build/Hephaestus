@@ -46,7 +46,6 @@ import { RouteAnnouncer } from "@/components/layout/RouteAnnouncer";
 import { AppSidebar, type SidebarContext } from "@/components/layout/sidebar/AppSidebar";
 import { SkipToContent } from "@/components/layout/SkipToContent";
 import { StandardPageSurface } from "@/components/layout/StandardPageSurface";
-import { HephUnavailable } from "@/components/mentor/HephUnavailable";
 import type { FeedbackKind } from "@/components/product-feedback/feedback-copy";
 import {
 	PAGE_PATH_MAX_LENGTH,
@@ -89,6 +88,7 @@ import { useProviderColors } from "@/runtime/theme/provider-colors";
 import { exitUserView } from "@/runtime/user-view/session";
 import { workspaceAddressConfig, publicHref } from "@/runtime/workspace-address";
 import { isHephPanelExcludedRoute } from "./-heph-panel-route";
+import { showHephUnavailable } from "./-heph-unavailable";
 
 const GlobalHephPanel = lazy(async () => import("./-GlobalHephPanel"));
 
@@ -186,7 +186,11 @@ function RootLayout() {
 			<PublicLoginOverlay />
 			{userView && <UserViewConfirmAccess />}
 			{showHephPanel && (
-				<CatchBoundary getResetKey={() => 0} errorComponent={HephPanelUnavailable}>
+				<CatchBoundary
+					getResetKey={() => 0}
+					onCatch={() => showHephUnavailable({ again: false })}
+					errorComponent={HephPanelUnavailable}
+				>
 					<Suspense fallback={null}>
 						<GlobalHephPanel />
 					</Suspense>
@@ -199,11 +203,11 @@ function RootLayout() {
 
 /**
  * The panel's code did not load, often a file replaced by a deploy. `React.lazy` keeps that failure,
- * so only a page load can try again. A panel that fails after it loaded has its own boundary, in
- * `-GlobalHephPanel.tsx`.
+ * so the toast from `onCatch` offers a page load, not a retry. A panel that fails after it loaded
+ * has its own boundary, in `-GlobalHephPanel.tsx`.
  */
 function HephPanelUnavailable() {
-	return <HephUnavailable recovery="reload" onRecover={() => window.location.reload()} />;
+	return null;
 }
 
 /** The announcer sits above the layout, whose auth and app branches each remount what they hold. */

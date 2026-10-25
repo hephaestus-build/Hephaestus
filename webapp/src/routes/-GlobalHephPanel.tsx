@@ -1,20 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
-import {
-	CatchBoundary,
-	type ErrorComponentProps,
-	useLocation,
-	useMatches,
-	useNavigate,
-} from "@tanstack/react-router";
+import { CatchBoundary, useLocation, useMatches, useNavigate } from "@tanstack/react-router";
 import { cn } from "cn";
-import { useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 
 import { getMemberOnboardingOptions } from "@/api/@tanstack/react-query.gen";
 import { RemovableToken } from "@/components/common/RemovableToken";
 import { HephPanel } from "@/components/mentor/HephPanel";
 import type { ThreadFocus } from "@/components/mentor/HephTimeline";
-import { HephUnavailable } from "@/components/mentor/HephUnavailable";
 import { useActiveWorkspaceSlug } from "@/hooks/use-active-workspace";
 import { useHephUnread } from "@/hooks/use-heph-conversation";
 import { useHephLive } from "@/hooks/use-heph-live";
@@ -24,6 +17,7 @@ import { withoutAppName } from "@/lib/page-title";
 import { hasText } from "@/lib/text";
 import { useAuth } from "@/runtime/auth/AuthContext";
 
+import { dismissHephUnavailable, showHephUnavailable } from "./-heph-unavailable";
 import { MainConversation, ThreadConversation } from "./-HephConversationView";
 
 /**
@@ -38,6 +32,8 @@ export default function GlobalHephPanel() {
 		...getMemberOnboardingOptions({ path: { workspaceSlug: workspaceSlug ?? "" } }),
 		enabled: Boolean(workspaceSlug),
 	});
+	// Each Retry renders the panel again; one that fails after a retry offers a page load instead.
+	const [retries, setRetries] = useState(0);
 	if (
 		!hasText(workspaceSlug) ||
 		isLoading ||
@@ -47,16 +43,27 @@ export default function GlobalHephPanel() {
 	) {
 		return null;
 	}
+	// Inside the gate above, so the message shows only where Heph was going to show.
 	return (
-		<CatchBoundary getResetKey={() => workspaceSlug} errorComponent={HephPanelFailed}>
+		<CatchBoundary
+			getResetKey={() => `${workspaceSlug}/${retries}`}
+			onCatch={() => {
+				showHephUnavailable(
+					retries === 0
+						? { again: false, retry: () => setRetries((count) => count + 1) }
+						: { again: true },
+				);
+			}}
+			errorComponent={HephPanelFailed}
+		>
 			<WorkspaceHephPanel key={workspaceSlug} workspaceSlug={workspaceSlug} />
 		</CatchBoundary>
 	);
 }
 
-/** Inside the gate above, so the message shows only where Heph was going to show. */
-function HephPanelFailed({ reset }: ErrorComponentProps) {
-	return <HephUnavailable recovery="retry" onRecover={reset} />;
+/** The toast from `onCatch` says what happened; the launcher's place stays empty. */
+function HephPanelFailed() {
+	return null;
 }
 
 function titleOf(meta: unknown): string | undefined {
@@ -87,6 +94,10 @@ interface PanelThread {
 }
 
 function WorkspaceHephPanel({ workspaceSlug }: { workspaceSlug: string }) {
+	// Rendered again, as after a Retry: Heph is back, so the message about it goes.
+	useEffect(() => {
+		dismissHephUnavailable();
+	}, []);
 	const navigate = useNavigate();
 	// The stream runs while the launcher shows, so an answer that lands with the panel closed marks it.
 	const livePaused = useHephLive(workspaceSlug, true);

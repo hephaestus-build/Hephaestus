@@ -56,8 +56,8 @@ export function stepUpChallengeOf(err: unknown): StepUpChallenge | undefined {
  * stays refused. The client's retries and the error guidance both read this one answer.
  */
 export function problemIsRetryable(err: unknown): boolean {
-	const status = problemStatusOf(err);
-	return status === undefined || status === 429 || status >= 500;
+	const kind = problemKindOf(problemStatusOf(err));
+	return kind === "no-answer" || kind === "rate-limited" || kind === "server";
 }
 
 /**

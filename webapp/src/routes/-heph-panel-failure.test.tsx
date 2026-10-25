@@ -1,4 +1,4 @@
-import { screen, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { assert, expect, it, vi } from "vitest";
@@ -21,7 +21,15 @@ vi.mock("./-HephConversationView", () => ({
 	ThreadConversation: () => null,
 }));
 
-it("shows a message with Retry in the launcher's place when the open panel fails", async () => {
+/** The toast that holds this text: the page under it has a Retry of its own. */
+async function toastSaying(text: string): Promise<HTMLElement> {
+	const message = await screen.findByText(text, undefined, ROUTE_RENDER_WAIT);
+	const toast = message.closest<HTMLElement>("[data-sonner-toast]");
+	assert(toast !== null, `"${text}" is not in a toast.`);
+	return toast;
+}
+
+it("offers Retry, then a page load once Retry did not help, and goes when Heph is back", async () => {
 	const user = userEvent.setup();
 	const ready: WorkspaceOnboarding = {
 		...workspaceOnboarding(),
@@ -35,19 +43,25 @@ it("shows a message with Retry in the launcher's place when the open panel fails
 		...new MentorFake("acme").handlers(),
 	);
 	renderRouteAtWithRouter("/w/acme/teams");
-	await user.click(
-		await screen.findByRole("button", { name: "Open Heph, AI mentor" }, ROUTE_RENDER_WAIT),
-	);
+	const openHeph = async () =>
+		user.click(
+			await screen.findByRole("button", { name: "Open Heph, AI mentor" }, ROUTE_RENDER_WAIT),
+		);
 
-	// By text, not by role: the page can hold other alerts of its own.
-	const title = await screen.findByText("We could not show Heph", undefined, ROUTE_RENDER_WAIT);
-	const message = title.closest<HTMLElement>('[role="alert"]');
-	assert(message !== null, "The message is not announced as an alert.");
+	await openHeph();
+	const first = await toastSaying("We could not show Heph.");
 	expect(screen.queryByRole("button", { name: "Open Heph, AI mentor" })).toBeNull();
 	// The page under it still works.
 	screen.getByRole("heading", { name: "Teams" });
 
-	await user.click(within(message).getByRole("button", { name: "Retry" }));
+	// Retry renders the panel again: the launcher is back and the message goes.
+	await user.click(within(first).getByRole("button", { name: "Retry" }));
 	await screen.findByRole("button", { name: "Open Heph, AI mentor" });
-	expect(screen.queryByText("We could not show Heph")).toBeNull();
+	await waitFor(() => expect(screen.queryByText("We could not show Heph.")).toBeNull());
+
+	// It fails again on open, so the message says Retry ran and offers a page load instead.
+	await openHeph();
+	const again = await toastSaying("Heph still could not be shown.");
+	within(again).getByRole("button", { name: "Reload page" });
+	expect(within(again).queryByRole("button", { name: "Retry" })).toBeNull();
 });
