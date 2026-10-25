@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, fn, screen } from "storybook/test";
+import { expect, fn, screen, within } from "storybook/test";
 
+import { expectDismissed, expectSettledVisible } from "@/stories/overlay";
 import { expectNoPageOverflow } from "@/stories/reflow";
 import { expectClosedSelectShows } from "@/test/controls";
 
@@ -108,6 +109,46 @@ export const Running: Story = {
 			canvas.getByRole("button", { name: "Delete the recurring check on pull or merge requests" }),
 		).toBeVisible();
 		await expectNoPageOverflow();
+	},
+};
+
+/** Deleting cannot be undone, so it asks first and names the check. */
+export const DeleteAsksFirst: Story = {
+	args: { schedules: [schedule()] },
+	play: async ({ args, canvas, userEvent }) => {
+		await userEvent.click(
+			canvas.getByRole("button", { name: "Delete the recurring check on pull or merge requests" }),
+		);
+		const dialog = await screen.findByRole("alertdialog", {
+			name: "Delete the recurring check on pull or merge requests?",
+		});
+		await expectSettledVisible(dialog);
+		await expect(dialog).toHaveTextContent(
+			"This deletes the schedule and its settings. You cannot undo this. To stop checking for a while, pause it instead.",
+		);
+		await expect(args.onDelete).not.toHaveBeenCalled();
+	},
+};
+
+/** Cancel keeps the check; only the confirm button deletes it. A paused check is not told to pause. */
+export const DeleteAfterConfirming: Story = {
+	args: { schedules: [schedule({ enabled: false })] },
+	play: async ({ args, canvas, userEvent }) => {
+		const remove = canvas.getByRole("button", {
+			name: "Delete the recurring check on pull or merge requests",
+		});
+		await userEvent.click(remove);
+		let dialog = await screen.findByRole("alertdialog");
+		await expect(dialog).not.toHaveTextContent(/pause it instead/u);
+		await userEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+		await expectDismissed("alertdialog");
+		await expect(args.onDelete).not.toHaveBeenCalled();
+
+		await userEvent.click(remove);
+		dialog = await screen.findByRole("alertdialog");
+		await userEvent.click(within(dialog).getByRole("button", { name: "Delete recurring check" }));
+		await expect(args.onDelete).toHaveBeenCalledWith(args.schedules[0]);
+		await expectDismissed("alertdialog");
 	},
 };
 

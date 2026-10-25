@@ -24,3 +24,20 @@ export function workspaceMemberRows(
 		logins: membership.account.identities.map((identity) => identity.login).filter(hasText),
 	}));
 }
+
+/** A role a member is about to get, with what the reader needs to judge it. */
+export interface WorkspaceRoleChange {
+	accountId: string;
+	name: string;
+	from: WorkspaceRole;
+	to: WorkspaceRole;
+	/** The account is the reader's own. */
+	own: boolean;
+}
+
+/**
+ * An owner can delete the workspace and change any role, and a reader who lowers their own role
+ * may not be able to raise it again. Both ask first; every other change is one step.
+ */
+export const roleChangeAsksFirst = (change: WorkspaceRoleChange) =>
+	change.to === "OWNER" || change.own;

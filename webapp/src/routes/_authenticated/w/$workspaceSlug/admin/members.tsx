@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 
@@ -12,11 +13,13 @@ import {
 	listMembershipsQueryKey,
 	setMemberHiddenMutation,
 } from "@/api/@tanstack/react-query.gen";
-import type { WorkspaceMembership } from "@/api/types.gen";
 import {
+	roleChangeAsksFirst,
 	WORKSPACE_ROLE_LABELS,
+	type WorkspaceRoleChange,
 	workspaceMemberRows,
 } from "@/components/admin/members/workspace-members";
+import { WorkspaceChangeRoleDialog } from "@/components/admin/members/WorkspaceChangeRoleDialog";
 import { WorkspaceMembersPage } from "@/components/admin/members/WorkspaceMembersPage";
 import type { WorkspaceMembersTableView } from "@/components/admin/members/WorkspaceMembersTable";
 import { accountName } from "@/components/admin/users/account-labels";
@@ -26,6 +29,8 @@ import { workspaceAdminHead } from "@/lib/page-title";
 import { problemDetailOf } from "@/lib/problem-detail";
 import { pageParam, useSearchState } from "@/lib/search-params";
 import { hasText } from "@/lib/text";
+import type { WorkspaceRole } from "@/lib/workspace-roles";
+import { useAuth } from "@/runtime/auth/AuthContext";
 import { keepSameSubject } from "@/runtime/tanstack-query/keep-same-subject";
 import { useQueryReadRefusal } from "@/runtime/tanstack-query/use-query-read-refusal";
 
@@ -70,6 +75,8 @@ function AdminMembersContainer() {
 		error: workspaceError,
 		refetch: refetchWorkspace,
 	} = useWorkspaceAccess();
+	const { getUserId } = useAuth();
+	const [roleChange, setRoleChange] = useState<WorkspaceRoleChange | null>(null);
 
 	const view: WorkspaceMembersTableView = {
 		q: search.q ?? "",
@@ -139,14 +146,12 @@ function AdminMembersContainer() {
 			void queryClient.invalidateQueries({
 				queryKey: getOwnMembershipQueryKey({ path: { workspaceSlug: workspaceSlug ?? "" } }),
 			});
-		},
-		onError: (error) => {
-			toast.error("We could not change the role", { description: problemDetailOf(error) });
+			setRoleChange(null);
 		},
 	});
 
 	const { mutate: changeHidden } = toggleHidden;
-	const { mutate: changeRole } = assignRole;
+	const { mutate: changeRole, reset: resetRoleChange } = assignRole;
 	const handleToggleHidden = (accountId: string, hidden: boolean) => {
 		if (!hasText(workspaceSlug)) {
 			return;
@@ -154,15 +159,36 @@ function AdminMembersContainer() {
 		changeHidden({ path: { workspaceSlug, accountId }, body: { hidden } });
 	};
 
-	const handleRoleChange = (accountId: string, role: WorkspaceMembership["role"]) => {
-		if (!hasText(workspaceSlug)) {
-			return;
-		}
-		changeRole({ path: { workspaceSlug }, body: { accountId, role } });
-	};
-
 	const teams = teamsQuery.isError ? [] : (teamsQuery.data ?? []);
 	const members = workspaceMemberRows(membersQuery.data?.content ?? []);
+
+	const handleRoleChange = (accountId: string, role: WorkspaceRole) => {
+		const row = members.find((member) => member.membership.account.id === accountId);
+		if (!hasText(workspaceSlug) || row === undefined) {
+			return;
+		}
+		const change: WorkspaceRoleChange = {
+			accountId,
+			name: row.name,
+			from: row.membership.role,
+			to: role,
+			own: accountId === getUserId(),
+		};
+		if (roleChangeAsksFirst(change)) {
+			resetRoleChange();
+			setRoleChange(change);
+			return;
+		}
+		// A one-step change has no dialog to show its refusal in.
+		changeRole(
+			{ path: { workspaceSlug }, body: { accountId, role } },
+			{
+				onError: (error) => {
+					toast.error("We could not change the role", { description: problemDetailOf(error) });
+				},
+			},
+		);
+	};
 	const isLoading = isWorkspaceLoading || membersQuery.isPending;
 
 	if (!hasText(workspaceSlug) && !isWorkspaceLoading && workspaceError === undefined) {
@@ -170,48 +196,75 @@ function AdminMembersContainer() {
 	}
 
 	return (
-		<WorkspaceMembersPage
-			members={members}
-			rowCount={membersQuery.data?.totalElements ?? 0}
-			teams={teams}
-			isLoading={isLoading || !hasText(workspaceSlug)}
-			updating={membersQuery.isPlaceholderData}
-			error={workspaceError ?? membersQuery.error}
-			onRetry={() => {
-				refetchWorkspace();
-				if (hasText(workspaceSlug)) {
-					void membersQuery.refetch();
+		<>
+			<WorkspaceMembersPage
+				members={members}
+				rowCount={membersQuery.data?.totalElements ?? 0}
+				teams={teams}
+				isLoading={isLoading || !hasText(workspaceSlug)}
+				updating={membersQuery.isPlaceholderData}
+				error={workspaceError ?? membersQuery.error}
+				onRetry={() => {
+					refetchWorkspace();
+					if (hasText(workspaceSlug)) {
+						void membersQuery.refetch();
+						void teamsQuery.refetch();
+					}
+				}}
+				teamsError={teamsQuery.error}
+				teamsRetrying={teamsQuery.isFetching}
+				onRetryTeams={() => {
 					void teamsQuery.refetch();
+				}}
+				onToggleHidden={handleToggleHidden}
+				onRoleChange={handleRoleChange}
+				pendingRoleAccountId={
+					assignRole.isPending ? assignRole.variables.body.accountId : undefined
 				}
-			}}
-			teamsError={teamsQuery.error}
-			teamsRetrying={teamsQuery.isFetching}
-			onRetryTeams={() => {
-				void teamsQuery.refetch();
-			}}
-			onToggleHidden={handleToggleHidden}
-			onRoleChange={handleRoleChange}
-			pendingRoleAccountId={assignRole.isPending ? assignRole.variables.body.accountId : undefined}
-			view={view}
-			onViewChange={(patch) => {
-				void setSearch(
-					(previous) =>
-						membersSearch({
-							q: "",
-							team: "all",
-							sort: "name" as const,
-							desc: false,
-							page: 0,
-							size: 10,
-							...previous,
-							...patch,
-						}),
-					{ replace: true },
-				);
-			}}
-			renderPageLink={(page, props) => (
-				<Link to="." search={membersSearch({ ...view, page })} resetScroll={false} {...props} />
-			)}
-		/>
+				view={view}
+				onViewChange={(patch) => {
+					void setSearch(
+						(previous) =>
+							membersSearch({
+								q: "",
+								team: "all",
+								sort: "name" as const,
+								desc: false,
+								page: 0,
+								size: 10,
+								...previous,
+								...patch,
+							}),
+						{ replace: true },
+					);
+				}}
+				renderPageLink={(page, props) => (
+					<Link to="." search={membersSearch({ ...view, page })} resetScroll={false} {...props} />
+				)}
+			/>
+			<WorkspaceChangeRoleDialog
+				change={roleChange}
+				isPending={assignRole.isPending}
+				errorMessage={
+					assignRole.isError && roleChange !== null
+						? problemDetailOf(assignRole.error, "We could not change the role. Try again.")
+						: undefined
+				}
+				onOpenChange={(open) => {
+					if (!open) {
+						setRoleChange(null);
+						resetRoleChange();
+					}
+				}}
+				onConfirm={(change) => {
+					if (hasText(workspaceSlug)) {
+						changeRole({
+							path: { workspaceSlug },
+							body: { accountId: change.accountId, role: change.to },
+						});
+					}
+				}}
+			/>
+		</>
 	);
 }

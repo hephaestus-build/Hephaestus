@@ -6,6 +6,17 @@ import { type ReactNode, useId, useState } from "react";
 import type { ReviewSchedule, ReviewScheduleInput } from "@/api/types.gen";
 import { InlineLink } from "@/components/common/InlineLink";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import {
+	AlertDialog,
+	AlertDialogCancel,
+	AlertDialogClose,
+	AlertDialogContent,
+	AlertDialogDescription,
+	AlertDialogFooter,
+	AlertDialogHeader,
+	AlertDialogTitle,
+	AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -281,9 +292,28 @@ function ScheduleRow({
 				>
 					Edit <span className="sr-only">the recurring check on {kindNoun}</span>
 				</Button>
-				<Button variant="ghost" size="sm" disabled={isSaving} onClick={() => onDelete(schedule)}>
-					Delete <span className="sr-only">the recurring check on {kindNoun}</span>
-				</Button>
+				{/* Asks rather than offering Undo: the API cannot restore a schedule, and creating it
+				    again gives a new one with a later next check and no last check. */}
+				<AlertDialog>
+					<AlertDialogTrigger render={<Button variant="ghost" size="sm" disabled={isSaving} />}>
+						Delete <span className="sr-only">the recurring check on {kindNoun}</span>
+					</AlertDialogTrigger>
+					<AlertDialogContent>
+						<AlertDialogHeader>
+							<AlertDialogTitle>Delete the recurring check on {kindNoun}?</AlertDialogTitle>
+							<AlertDialogDescription>
+								This deletes the schedule and its settings. You cannot undo this.
+								{schedule.enabled ? " To stop checking for a while, pause it instead." : null}
+							</AlertDialogDescription>
+						</AlertDialogHeader>
+						<AlertDialogFooter>
+							<AlertDialogCancel>Cancel</AlertDialogCancel>
+							<AlertDialogClose variant="destructive" onClick={() => onDelete(schedule)}>
+								Delete recurring check
+							</AlertDialogClose>
+						</AlertDialogFooter>
+					</AlertDialogContent>
+				</AlertDialog>
 			</ItemActions>
 			{editing ? (
 				<div className="w-full border-t pt-4">
