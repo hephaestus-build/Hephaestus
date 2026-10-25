@@ -57,7 +57,6 @@ void test("refreshes an empty history without inventing a release, including on 
 	});
 	await mkdir(path.join(cwd, "docs/admin"), { recursive: true });
 	await writeFile(path.join(cwd, "package.json"), '{"version":"99.0.0"}');
-	await writeFile(path.join(cwd, "README.md"), "VERSION=0.0.0 # the release you are installing\n");
 	await writeFile(
 		path.join(cwd, "docs/admin/install.mdx"),
 		"VERSION=0.0.0 # the release you are installing\n",
@@ -96,10 +95,6 @@ void test("synchronizes every release-owned version reference", async (t) => {
 		"VERSION=0.74.0 # the release you are installing\n",
 	);
 	await writeFile(
-		path.join(cwd, "README.md"),
-		"```bash\n  VERSION=0.74.0 # the release you are installing\n```\n",
-	);
-	await writeFile(
 		path.join(cwd, "MIGRATION.md"),
 		guide(
 			"### Next release\n\n#### 🔴 Existing action\n\nDo it.\n\n### v0.76.0\n\n#### 🔴 Newer unreleased action\n\nFold me.\n\n### v0.75.0\n\n#### 🔴 Same-version unreleased action\n\nFold me too.\n\n### v0.74.0\n\nOld.\n",
@@ -120,10 +115,6 @@ void test("synchronizes every release-owned version reference", async (t) => {
 	assert.equal(
 		await readFile(path.join(cwd, "docs/admin/install.mdx"), "utf8"),
 		"VERSION=0.75.0 # the release you are installing\n",
-	);
-	assert.equal(
-		await readFile(path.join(cwd, "README.md"), "utf8"),
-		"```bash\n  VERSION=0.75.0 # the release you are installing\n```\n",
 	);
 	const stamped = guide(
 		"### Next release\n\n### v0.75.0\n\n#### 🔴 Existing action\n\nDo it.\n\n#### 🔴 Newer unreleased action\n\nFold me.\n\n#### 🔴 Same-version unreleased action\n\nFold me too.\n\n#### 🔴 A action\n\nDo A.\n\n```md\n### Next release\n## Automatic vs Manual Migrations\n### v0.75.0\n```\n\n#### 🔴 Z action\n\nDo Z: keep `$$VAR`, `$&`, and `$'` literal.\n\n### v0.74.0\n\nOld.\n",

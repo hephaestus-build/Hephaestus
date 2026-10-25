@@ -3,7 +3,10 @@
     <img alt="Hephaestus" width="484" src="./docs/static/img/brand/hephaestus-lockup-dark.png#gh-dark-mode-only">
     <img alt="Hephaestus" width="484" src="./docs/static/img/brand/hephaestus-lockup-light.png#gh-light-mode-only">
   </h1>
-  <p><strong>Learn from the work you already do</strong></p>
+  <!-- The product tagline, quoted verbatim. -->
+  <!-- vale STE.Contractions = NO -->
+  <p><strong>Learn from the work you’re already doing</strong></p>
+  <!-- vale STE.Contractions = YES -->
 
   <p>
     <a href="https://hephaestus.build"><strong>App</strong></a> ·
@@ -20,9 +23,8 @@
 </div>
 
 Hephaestus is an open-source AI mentor for software teams.
-It checks developers' existing work against the engineering practices that their project values.
-This work includes issues, pull requests, reviews, and their related discussions.
-Hephaestus explains where the work needs attention and suggests a next step.
+It checks the issues, pull requests, and reviews that your team already writes against the engineering practices that you choose.
+Each developer gets feedback with evidence and a next step.
 
 Every piece of feedback names its practice and points back to the reviewed work.
 Developers can ask why, disagree, or discuss the next step.
@@ -53,15 +55,7 @@ People keep responsibility for the harder judgment and the relationships.
 ## What Hephaestus does
 
 - **Reviews contributions against engineering practices.** A curated set of practices ships with it.
-  These practices cover:
-  - How developers scope and describe work.
-  - How developers write issues.
-  - How developers give and answer reviews.
-  - Testing and failure handling.
-  - Security and maintainability.
-  - Recorded decisions and version control.
-  - Planning and communication in the open.
-
+  They cover how developers scope work, write issues, and give reviews, and also testing, security, version control, and recorded decisions.
   A workspace adopts the groups it values.
   It can rewrite any practice inside them.
 - **Gets the feedback to the developer.** Feedback can appear on the work itself.
@@ -80,15 +74,10 @@ People keep responsibility for the harder judgment and the relationships.
   workspaces.
   That choice limits practice reviews and Heph.
   It does not stop source sync.
-- **Opens on your Practice profile.** This private page is the workspace home when it reviews
-  practices. Other workspaces open on Activity.
 - **Puts admins in control.** They configure repositories, practices, members, integrations, the AI
   model through any OpenAI-compatible endpoint, and a monthly spending cap.
 - **Shows what happened.** Activity shows work that needs you, such as review requests and returned pull requests.
-  It summarizes your pull requests, reviews, comments, and issues over a time range.
-  It keeps a timeline of the work.
-  Workspace activity does the same for everyone or one team.
-  You can sort its people table by name or activity counts.
+  It also summarizes your work, or your team's work, over a time range.
 
 ## How feedback works
 
@@ -107,30 +96,15 @@ The feedback is advisory: it does not approve a change for merge or grade anyone
 
 ## Get started
 
-- **Try the hosted app:** open the [TUM deployment](https://hephaestus.build).
+- **Use it at TUM:** if your course or team has a workspace, sign in at [hephaestus.build](https://hephaestus.build).
 - **Learn how it works:** read the [user guide](https://docs.hephaestus.build/user/overview).
-- **Run your own deployment.** Check the [supported hosts and capacity guidance](https://docs.hephaestus.build/admin/install#requirements).
-
-  ```bash
-  VERSION=0.94.7   # the release you are installing, without the leading "v"
-  sudo git clone --depth 1 --branch "v$VERSION" https://github.com/hephaestus-build/Hephaestus.git /opt/hephaestus
-  sudo chown -R "$USER" /opt/hephaestus
-  cd /opt/hephaestus/docker/self-host
-  cp .env.example .env
-  ```
-
-  The stack refuses to start until `.env` is complete.
-  Before the first `docker compose up -d`, finish the
-  [installation guide](https://docs.hephaestus.build/admin/install).
-  It covers the sign-in OAuth app, TLS, and the first admin account.
-
-  Before you upgrade, read the release notes and the [migration guide](./MIGRATION.md).
+- **Run your own deployment:** follow the [installation guide](https://docs.hephaestus.build/admin/install).
+  It starts with the [supported hosts and capacity guidance](https://docs.hephaestus.build/admin/install#requirements).
+- **Upgrade:** read the release notes and the [upgrade guide](https://docs.hephaestus.build/admin/upgrade).
   Then test the upgrade in staging.
-
 - **Contribute:** start with the
   [local development guide](https://docs.hephaestus.build/contributor/local-development).
-  Explore the UI components with Storybook in the
-  [local development guide](https://docs.hephaestus.build/contributor/local-development#component-workflow-storybook--chromatic).
+  It also shows how to explore the UI components in Storybook.
 
 ## Get help
 
