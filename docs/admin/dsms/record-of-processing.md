@@ -335,6 +335,15 @@ Pending delivery blocks both passes. Row deletion sets the job reference of a re
 1. Monitor the backlog.
 2. For individual requests, use verified person erasure.
 
+Evidence-copy receipts (`person_evidence_copy`)
+
+A receipt records the copy of review inputs that one attempt made on a worker volume. It names the provider identities and repositories that the copy contains, and the earlier jobs whose words it copied. The receipt outlives the copy. Hephaestus uses it for two purposes:
+
+- Person erasure finds the copies and the copied words of the erased person.
+- A later review can copy an earlier review's words only while the earlier job's receipt vouches for them. An erased or purged receipt keeps refusing those words.
+
+Receipts have no time-based expiry. Person erasure clears the identities of the receipts that name the person. Workspace purge clears them after each worker volume confirms that it deleted its copies. The cleared receipt keeps only technical coordinates and its state.
+
 Source evidence retention
 
 Retention separates durable verification results from temporary worker inputs. The [source governance decision](./item-source-governance.md) owns the retention and erasure boundaries. A digest is an integrity identifier, not authorization. Extended evaluation retention requires a separate approved purpose and tenant-safe authorization.
@@ -748,7 +757,7 @@ and inline provider comments are not recalled. This is correction and delivery c
 Slack channel retention defaults to 30 days, configurable per connection with a 180-day ceiling.
 Eligibility is measured from a thread's last message, so an active thread can contain much older
 messages. This is not a maximum age for each message and does not apply to Heph DMs. Daily cleanup
-and failures can delay removal. Contributor profiles, conversations, practice results, feedback, consent records, and several operational stores have no independent time-based expiry.
+and failures can delay removal. Contributor profiles, conversations, practice results, feedback, consent records, evidence-copy receipts, and several operational stores have no independent time-based expiry.
 
 1. Choose a necessity review and deletion trigger.
 2. Document them.
