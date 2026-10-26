@@ -307,22 +307,18 @@ They replace the safety-fallback.
          - ./legal-overrides:/usr/share/nginx/html/legal-overrides:ro
    ```
 
-   On Kubernetes, project the Markdown files into the same path through a `ConfigMap` volume.
-   The simplest form mounts the whole ConfigMap as the directory:
+   With the Helm chart, put both files in a ConfigMap in the release namespace.
+   Name it in `webapp.legalOverrides`, and the chart mounts it read-only at that path:
 
-   ```yaml
-   volumes:
-     - name: legal-overrides
-       configMap:
-         name: hephaestus-legal-overrides # keys: imprint.md, privacy.md
-   volumeMounts:
-     - name: legal-overrides
-       mountPath: /usr/share/nginx/html/legal-overrides
-       readOnly: true
+   ```bash
+   kubectl --namespace hephaestus create configmap hephaestus-legal-overrides \
+     --from-file=imprint.md --from-file=privacy.md
    ```
 
-   A whole-ConfigMap mount hides the directory's original contents.
-   For an overlay of only some files, use `items` with `subPath`, or a `projected` volume.
+   ```yaml
+   webapp:
+     legalOverrides: hephaestus-legal-overrides
+   ```
 
    The webapp container runs as UID 101.
    Make the directory and the files readable by that user, for example with mode `0755` for the directory and `0644` for the files.

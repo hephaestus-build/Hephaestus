@@ -189,6 +189,9 @@ webapp:
   # The deployment's contact for /.well-known/security.txt: one mailto:, https:// or tel: URI.
   # Empty serves no file.
   securityContact: ""
+  # A ConfigMap in the release namespace with the keys imprint.md and privacy.md, served as
+  # /imprint and /privacy. Empty serves the built-in placeholder. docs/admin/legal-pages.mdx.
+  legalOverrides: ""
   resources:
     requests: { cpu: 50m, memory: 64Mi, ephemeral-storage: 64Mi }
     limits: { cpu: 500m, memory: 256Mi, ephemeral-storage: 256Mi }

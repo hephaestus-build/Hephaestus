@@ -424,7 +424,8 @@ await test("the webapp runs the non-root image as it is, with only /tmp writable
 		/initContainers/u,
 		/sysctls/u,
 		/ip_unprivileged_port_start/u,
-		/\/usr\/share\/nginx\/html/u,
+		// The operator's legal pages are the one mount there, and it is read-only.
+		/\/usr\/share\/nginx\/html(?!\/legal-overrides\n\s*readOnly: true\n)/u,
 		/\/var\/cache\/nginx/u,
 		/mountPath: \/run/u,
 		/^\s*(?:command|args):/mu,
@@ -438,7 +439,7 @@ await test("the webapp runs the non-root image as it is, with only /tmp writable
 	assert.match(webapp, /- name: http\n\s*port: 8080\n\s*targetPort: http/u);
 	assert.deepEqual(
 		[...webapp.matchAll(/mountPath: (?<path>\S+)/gu)].map((match) => match.groups?.path),
-		["/tmp/hephaestus-webapp"],
+		["/tmp/hephaestus-webapp", "/usr/share/nginx/html/legal-overrides"],
 	);
 	assert.match(webapp, /emptyDir:\n\s*sizeLimit: 16Mi/u);
 });

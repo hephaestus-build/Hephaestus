@@ -740,6 +740,8 @@ These values set the server's settings of the same meaning ([Production setup](.
 
 `webapp.securityContact` sets the webapp's `SECURITY_CONTACT`: with a value, `/.well-known/security.txt` names it as the contact of this deployment ([Production setup](./production-setup)). Empty serves no file.
 
+`webapp.legalOverrides` names a ConfigMap with your imprint and privacy pages, as [Legal pages](./legal-pages#deployment-specific-overrides) describes.
+
 ## Integration values
 
 Each integration takes its settings from `site.yaml` and its secrets from the [Secret](#create-the-secret).
