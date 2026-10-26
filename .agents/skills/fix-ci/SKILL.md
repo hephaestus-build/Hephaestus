@@ -102,7 +102,7 @@ Server tiers: `vp run test:server:unit`, `vp run test:server:architecture`,
 ## 5. Commit and push once
 
 ```bash
-git add -A
+git add <path>...    # only the paths of this fix
 git commit -m "fix(<scope>): resolve ci failures"
 git push
 ```

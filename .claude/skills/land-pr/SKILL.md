@@ -10,6 +10,7 @@ allowed-tools:
   - Bash(vp *)
   - Bash(./gradlew *)
   - Read
+  - Write
   - Grep
   - Glob
 metadata:
@@ -62,7 +63,7 @@ fails.
 
 ## 4. Regenerate what your change invalidated
 
-Generated artefacts are never hand-edited, and regeneration is destructive — it empties the target
+Generated artifacts are never hand-edited, and regeneration is destructive — it empties the target
 directory first, so stash local edits.
 
 ```bash
@@ -116,10 +117,23 @@ Changing `db/changelog/` without changing `.changeset/` is always wrong.
 
 ## 8. Branch, commit, push
 
+Read the whole diff against the goal of the task first.
+Remove what the goal does not need.
+
+```bash
+git status --short
+git fetch origin main
+git diff origin/main...HEAD --stat    # committed work, against the merge base
+git diff --stat                      # uncommitted work
+```
+
+Stage only the paths of this task.
+Changes in the worktree that you did not make belong to the maintainer, so never use `git add -A`.
+
 ```bash
 git branch --show-current    # if main, branch first
-git checkout -b <type>/<description>
-git add -A
+git switch -c <type>/<description>
+git add <path>...
 git commit -m "<type>(<scope>): <description>"
 git push -u origin HEAD
 ```
@@ -135,31 +149,40 @@ The changeset, not the header, carries pre-1.0 breaking changes.
 PAGER=cat gh pr view --json number,url
 ```
 
-If that reports that the current branch has no pull request, create it:
+If that reports that the current branch has no pull request, write the body in `tmp/pr-body.md`. Git ignores `tmp/`.
+Use the sections of `.github/PULL_REQUEST_TEMPLATE.md` and delete the ones that do not apply.
+
+The title says what changes for the reader, not which mechanism changed.
+The squash merge makes it the commit message.
+
+```text
+Bad:  fix(webapp): add useDeferredValue to FeedbackList
+Good: fix(webapp): feedback list no longer jumps while it loads
+```
+
+The body starts with the problem in one or two sentences, in the words of the person who has it.
+Then it explains the fix and how you verified it.
+Do not start with a list of changed files.
+
+```text
+Bad:  Moved the filter state into a search param, added useSearchState, updated three stories.
+Good: Reloading the practice list reset its filters, so a shared link showed a different list.
+      The filters are now part of the URL.
+```
+
+Before you create the PR, check the title and the body for secrets, tokens, and private details.
+Add no model, agent, or tool attribution: `Validate PR` fails a body that has one.
+Open it ready for review. A draft is for unfinished work.
 
 ```bash
-PAGER=cat gh pr create --base main --title "<type>(<scope>): <description>" --body "$(cat <<'BODY'
-## What changed and why
+PAGER=cat gh pr create --base main --title "<type>(<scope>): <description>" --body-file tmp/pr-body.md
+```
 
-<1-2 sentences: what and why>
+If GraphQL is rate-limited, `gh pr create` fails. The REST limit is separate:
 
-## How to test
-
-<manual steps, or "CI covers this">
-
-## Release impact
-
-<link the changeset and state operator action, or explain why neither applies>
-
-## Notes for reviewers
-
-<risks, tradeoffs, follow-up work, or delete this section>
-
-## Visual evidence
-
-<UI: before and after. Motion or timing: a short video. Otherwise delete this section.>
-BODY
-)"
+```bash
+PAGER=cat gh api repos/{owner}/{repo}/pulls -f base=main -f head="$(git branch --show-current)" \
+  -f title="<type>(<scope>): <description>" -F body=@tmp/pr-body.md --jq .html_url
 ```
 
 ## 10. Upload visual evidence
