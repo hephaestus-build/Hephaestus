@@ -236,24 +236,21 @@ management:
             probes:
                 enabled: true
                 add-additional-paths: true
-            # Operational dependencies affect readiness, not process liveness. This group replaces the
-            # auto-configured readiness probe, which contains readinessState alone — on the
-            # webhook-only container that reduces the probe to "the Spring context started", and both
-            # the container healthcheck and Traefik read it.
+            # Readiness answers whether this Pod can serve, never whether a remote dependency is up: a
+            # broker outage would take every Pod out of rotation at once, and a receiver out of rotation
+            # cannot answer a provider's delivery with the 503 that makes the provider retry. `webhook` and
+            # `integrationConsumer` (NATS) stay in /actuator/health and the metrics, which ADR 0008's
+            # webhook-server-down alert reads.
             #
-            # `webhook` is what makes ADR 0008's webhook-server-down alert able to fire: there it is
-            # the ONLY contributor that knows about NATS, so without it a total ingestion outage reads
-            # as 200. On a combined-role container it adds no new exposure — `integrationConsumer`
-            # already reports DOWN on the same disconnect.
-            #
-            # `kubernetesSandbox` holds a Kubernetes worker unready until its isolation probe passed, so
-            # a rollout drains an old worker only after the new one proved the cluster.
+            # `practiceReview` is the worker's own configuration. `kubernetesSandbox` holds a Kubernetes
+            # worker unready until its isolation probe passed, so a rollout drains an old worker only after
+            # the new one proved the cluster.
             group:
                 readiness:
-                    include: readinessState,integrationConsumer,webhook,practiceReview,catalogProvenanceBackfillStartup,kubernetesSandbox
+                    include: readinessState,practiceReview,kubernetesSandbox
             # Most of the group is role-gated, and the default (true) aborts the refresh wherever a
-            # named contributor is absent — so every container the compose files ship, plus any deploy
-            # with NATS off, plus the specs and test profiles. What it removes is a spelling check, and
+            # named contributor is absent — so every container that is not a Kubernetes worker, plus the
+            # specs and test profiles. What it removes is a spelling check, and
             # WebhookIngestionCannotFailSilentlyTest runs that against every role at once rather than
             # each container against only its own.
             validate-group-membership: false
