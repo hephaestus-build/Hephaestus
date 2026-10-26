@@ -122,6 +122,10 @@ public final class MigratedSchemaWait implements InitializingBean {
                 .toList();
     }
 
+    /**
+     * Unqualified, as Liquibase finds its tables: the history is read in the first schema of the connection's
+     * {@code search_path}, so a separate Liquibase schema setting is not supported here.
+     */
     private List<ChangeSet> pending(List<ChangeSet> expected) {
         if (!Boolean.TRUE.equals(
                 jdbc.queryForObject("SELECT to_regclass('databasechangelog') IS NOT NULL", Boolean.class))) {

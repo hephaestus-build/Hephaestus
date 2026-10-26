@@ -82,6 +82,35 @@ class DatabaseMigrationTest {
     }
 
     @Test
+    void shouldNameTheChangeSetThatAPartlyMigratedHistoryLacks() {
+        TestDatabase database = PostgreSQLTestContainer.createDatabase("hephaestus_migrate_partial");
+        assertThat(DatabaseMigration.run(arguments(database))).isZero();
+        var jdbc = jdbc(database);
+        String id = jdbc.queryForObject(
+                "SELECT id FROM databasechangelog ORDER BY orderexecuted DESC LIMIT 1", String.class);
+        jdbc.update("DELETE FROM databasechangelog WHERE id = ?", id);
+
+        assertThatThrownBy(() -> awaitSchema(database, Duration.ofSeconds(1)))
+                .rootCause()
+                .hasMessageContaining("1 change sets have not run, first " + id + " in db/changelog/");
+    }
+
+    @Test
+    void shouldStartWhenTheSchemaIsAheadOfThisRelease() {
+        TestDatabase database = PostgreSQLTestContainer.createDatabase("hephaestus_migrate_ahead");
+        assertThat(DatabaseMigration.run(arguments(database))).isZero();
+        // A change set of a later release, which this release's changelog does not hold.
+        jdbc(database).update("""
+                        INSERT INTO databasechangelog (id, author, filename, dateexecuted, orderexecuted, exectype)
+                        SELECT 'later-release', 'hephaestus', 'db/changelog/9999999999999_changelog.xml', now(),
+                               max(orderexecuted) + 1, 'EXECUTED'
+                        FROM databasechangelog
+                        """);
+
+        awaitSchema(database, Duration.ofSeconds(1));
+    }
+
+    @Test
     void shouldKeepAnotherRunsLiquibaseLockWhileThatRunHoldsTheMigrationLock(CapturedOutput output) throws Exception {
         TestDatabase database = PostgreSQLTestContainer.createDatabase("hephaestus_migrate_live_lock");
         assertThat(DatabaseMigration.run(arguments(database))).isZero();
