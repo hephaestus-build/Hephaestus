@@ -17,7 +17,7 @@ const E2E_FIXTURE_ORIGINS = ["https://github.com/*", "https://gitlab.example.tes
 
 // The public half of the development key pins the extension id to ijkajblcbajjpjbknfgdiiiljipafiko,
 // the id the development and e2e server profiles allowlist. It is not a secret.
-const developmentKey = readFileSync(new URL("dev-key.txt", import.meta.url), "utf8").trim();
+const developmentKey = readFileSync(new URL("dev-public-key.txt", import.meta.url), "utf8").trim();
 
 export default defineConfig({
 	srcDir: "src",
