@@ -13,6 +13,21 @@ This site is built with [Docusaurus 3](https://docusaurus.io/); `docusaurus.conf
 Those three directories are the whole site: each is one `@docusaurus/plugin-content-docs` instance in
 `docusaurus.config.ts`, and every page in them must be reachable from its sidebar.
 
+## Markdown for AI assistants
+
+`@signalwire/docusaurus-plugin-llms-txt` converts the built pages to Markdown after the build:
+
+- `/llms.txt` is the index of every page, grouped by guide.
+- `/llms-full.txt` holds every page.
+- `/<page>.md` is the Markdown twin of each page. Its links point at other twins.
+
+The plugin reads the rendered HTML, so links and MDX components come out as the reader sees them.
+Mermaid draws its diagrams in the browser, so a diagram is not in a twin.
+The plugin imports three Docusaurus packages that it does not declare. `pnpm-workspace.yaml` § `packageExtensions` adds them as its peers, and `package.json` pins them with the rest of Docusaurus.
+
+The **Copy page** button on each page (`src/components/PageActions`) copies the twin, and its menu opens the twin in ChatGPT or Claude.
+The twins exist only in a build, not in `docs:dev`.
+
 ## Diagrams
 
 Mermaid, validated by `vp run gate:diagrams` — which fails a diagram with no `accTitle` and

@@ -1,0 +1,123 @@
+/* One split button: the action on the left, the menu on the right, joined by a shared border. */
+.actions {
+	display: inline-flex;
+	position: relative;
+	border: 1px solid var(--ifm-toc-border-color);
+	border-radius: calc(var(--ifm-global-radius) - 0.125rem);
+	font-size: 0.8125rem;
+}
+
+.copy,
+.more {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.4rem;
+	padding: 0.3rem 0.65rem;
+	border: 0;
+	background: transparent;
+	color: var(--ifm-font-color-base);
+	font: inherit;
+	font-weight: 500;
+	cursor: pointer;
+}
+
+.copy {
+	border-radius: inherit;
+	border-start-end-radius: 0;
+	border-end-end-radius: 0;
+}
+
+.more {
+	border-start-end-radius: inherit;
+	border-end-end-radius: inherit;
+}
+
+.copy:hover,
+.more:hover,
+.menu[open] > .more {
+	background-color: var(--ifm-color-emphasis-100);
+}
+
+.copy:focus-visible,
+.more:focus-visible {
+	outline: 2px solid var(--ifm-color-primary);
+	outline-offset: 1px;
+}
+
+.icon {
+	width: 0.9rem;
+	height: 0.9rem;
+}
+
+.menu {
+	border-inline-start: 1px solid var(--ifm-toc-border-color);
+	border-start-end-radius: inherit;
+	border-end-end-radius: inherit;
+}
+
+.more {
+	height: 100%;
+	/* At least 24px wide (WCAG 2.5.8). */
+	padding-inline: 0.6rem;
+	list-style: none;
+}
+
+.more::-webkit-details-marker {
+	display: none;
+}
+
+.more::after {
+	content: "";
+	width: 0.45rem;
+	height: 0.45rem;
+	margin-top: -0.2rem;
+	border-right: 1.5px solid currentColor;
+	border-bottom: 1.5px solid currentColor;
+	transform: rotate(45deg);
+}
+
+.list {
+	position: absolute;
+	top: calc(100% + 0.35rem);
+	inset-inline-end: 0;
+	z-index: var(--ifm-z-index-dropdown);
+	min-width: 12rem;
+	margin: 0;
+	padding: 0.3rem;
+	border: 1px solid var(--ifm-toc-border-color);
+	border-radius: var(--ifm-global-radius);
+	background: var(--ifm-background-color);
+	box-shadow: 0 8px 24px rgb(0 0 0 / 0.12);
+	list-style: none;
+}
+
+.list a {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.75rem;
+	padding: 0.4rem 0.6rem;
+	border-radius: calc(var(--ifm-global-radius) - 0.25rem);
+	color: var(--ifm-font-color-base);
+	text-decoration: none;
+}
+
+.list a:hover,
+.list a:focus-visible {
+	background-color: var(--ifm-color-emphasis-100);
+}
+
+.status {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	overflow: hidden;
+	clip-path: inset(50%);
+	white-space: nowrap;
+}
+
+@media print {
+	.actions {
+		display: none;
+	}
+}
