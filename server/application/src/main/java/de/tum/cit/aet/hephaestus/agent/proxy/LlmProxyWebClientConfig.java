@@ -22,8 +22,9 @@ import reactor.netty.resources.LoopResources;
  *
  * <p>Connect-time SSRF guard: {@code EgressPolicy} validates the upstream host before the call, so
  * without a guarded resolver here a DNS-rebind target (public answer during validation, private answer
- * at connect time) would sail straight through. The {@code allow-loopback} exemption is read from
- * {@link LlmProperties} so the validator and this dialler cannot drift on what it means.
+ * at connect time) would sail straight through. The {@code allow-loopback} and {@code private-hosts}
+ * exemptions are read from {@link LlmProperties} so the validator and this dialler cannot drift on what
+ * they mean.
  */
 @Configuration
 @ConditionalOnWorkerRole
@@ -53,7 +54,7 @@ class LlmProxyWebClientConfig {
             LoopResources llmProxyLoopResources,
             LlmProperties llmProperties,
             WebClient.Builder webClientBuilder) {
-        boolean allowLoopback = llmProperties.egress().allowLoopback();
+        LlmProperties.Egress egress = llmProperties.egress();
         // Two independent limits bound a response. responseTimeout is an idle limit: Reactor Netty fails the response
         // when no bytes arrive for 5 minutes, however long the response has run. The total is the caller's: the
         // proxy ends each exchange at the attempt's work deadline, or, for a mentor turn, at its own fixed limits.
@@ -61,7 +62,7 @@ class LlmProxyWebClientConfig {
                 .runOn(llmProxyLoopResources)
                 .responseTimeout(Duration.ofMinutes(5))
                 .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 10_000)
-                .resolver(WebClientConnectors.resolverGroup(allowLoopback))
+                .resolver(WebClientConnectors.resolverGroup(egress.allowLoopback(), egress.privateHostAllowlist()))
                 .doOnConnected(conn -> conn.addHandlerLast(new WriteTimeoutHandler(60)));
 
         ExchangeStrategies strategies = ExchangeStrategies.builder()

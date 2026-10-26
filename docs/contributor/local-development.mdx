@@ -338,7 +338,7 @@ Models always use the in-app LLM proxy: the upstream key is injected by the prox
 the sandbox.
 
 An SSRF egress guard (`EgressPolicy`) validates provider base URLs.
-In production, it accepts only a public HTTPS host.
+In production, it accepts only a public HTTPS host, or a private host that the operator lists in `hephaestus.llm.egress.private-hosts`.
 It rejects plain-HTTP `localhost`/`127.0.0.1`/`::1` targets. To point a connection at a local OpenAI-compatible gateway during development,
 set:
 

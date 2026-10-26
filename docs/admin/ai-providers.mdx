@@ -128,7 +128,7 @@ The HTTP 400 rejections have title `Invalid request`:
 | Message                                                                        | Cause                                                                                                                                                                                     |
 | ------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | “Provider URLs must not contain credentials or query parameters.”              | The URL has userinfo, a query string, or a fragment. Gateways with URL keys (`https://gw/v1?api-key=…`) are refused. That value would enter snapshots, DTOs, and logs.                    |
-| “Provider host must be a public HTTPS URL”                                     | Non-HTTPS, or a private, link-local, loopback, or CGNAT host address. The SSRF guard has no override. It checks again at connect time to prevent DNS rebinds between save and connection. |
+| “Provider host must be a public HTTPS URL”                                     | Non-HTTPS, or a private, link-local, loopback, or CGNAT host address that the operator did not allow ([Model endpoints on your own network](#model-endpoints-on-your-own-network)). It checks again at connect time to prevent DNS rebinds between save and connection. |
 | “Provider host `<host>` is not in the allowed list”                            | Instance settings define an egress allowlist without this host. A blank allowlist allows any public host.                                                                                 |
 | — (HTTP 403) “This server does not allow you to connect your own AI provider.” | A workspace admin tried to add a connection or model with **Let workspaces add providers and models** off.                                                                                |
 
@@ -140,6 +140,37 @@ It lets a workspace admin direct a "provider" to host-local services.
 It does not relax the private-address check.
 
 :::
+
+### Model endpoints on your own network
+
+By default, a provider base URL must resolve to a public address.
+An admin who configures a provider must not be able to send requests into your private network.
+To keep model calls inside your network, for example to vLLM or Ollama on your own GPUs, allow the endpoint explicitly.
+
+Set `HEPHAESTUS_LLM_EGRESS_PRIVATE_HOSTS` on the server and on the worker to a comma-separated list.
+On Kubernetes, set `config.llmPrivateHosts` ([A model endpoint on a private network](./kubernetes#a-model-endpoint-on-a-private-network)).
+Each entry is one of these:
+
+| Entry | Example | Allows |
+| --- | --- | --- |
+| A host name | `vllm.lab.example` | This exact name, at any private address that it resolves to. Use only a name whose DNS you control. Wildcards are not supported. |
+| An IP address | `192.168.5.9` | Any host name that resolves to this address. |
+| A CIDR range | `10.20.0.0/16`, `fd00:1::/32` | Any host name that resolves into this range. |
+
+These rules apply:
+
+- An entry that is not a host name, an IP address, or a CIDR range stops startup.
+- Only private addresses qualify: `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `100.64.0.0/10`, and `fc00::/7`.
+  Loopback, link-local, and public addresses stay refused, even when an entry covers them.
+  The cloud metadata addresses `100.100.100.200` and `fd00:ec2::254` also stay refused.
+  For a local development setup, use `HEPHAESTUS_LLM_EGRESS_ALLOW_LOOPBACK`.
+- A range lets each admin who configures a provider reach every port of every host in it. Prefer host names or single addresses.
+- The check happens again at connect time, on the address that the connection uses. A host name that is not listed and that changes its DNS answer to a private address is still refused.
+- Plain `http://` stays refused. To permit it for listed hosts, set `HEPHAESTUS_LLM_EGRESS_PRIVATE_HOSTS_ALLOW_HTTP=true`.
+  A host is listed if its name is an entry, or if the list covers all its addresses.
+  The API key then crosses your network unencrypted.
+- The instance allowlist in the admin UI still applies on top of this list.
+- No admin UI shows or changes this list. Only the operator of the deployment sets it.
 
 ## 3. What "Test and fetch models" does
 

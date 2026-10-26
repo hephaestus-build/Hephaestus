@@ -20,6 +20,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -60,7 +61,9 @@ class LlmUsageFxDisplayIntegrationTest extends AbstractWorkspaceIntegrationTest 
     @BeforeEach
     void setUpServices() {
         LlmProperties properties = new LlmProperties(
-                "EUR", new LlmProperties.Egress(false), new LlmProperties.Fx(LlmProperties.ECB_DAILY_URL));
+                "EUR",
+                new LlmProperties.Egress(false, List.of(), false),
+                new LlmProperties.Fx(LlmProperties.ECB_DAILY_URL));
         FxRateLookup rates = new FxRateLookup(fxRateRepository, clock, properties);
         usageService = new LlmUsageService(
                 usageRepository, workspaceRepository, budgetService, configAudit, jobRepository, rates);

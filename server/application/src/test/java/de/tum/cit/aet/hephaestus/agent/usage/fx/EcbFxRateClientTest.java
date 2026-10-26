@@ -9,6 +9,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 import java.util.stream.Stream;
 import mockwebserver3.MockResponse;
@@ -43,7 +44,8 @@ class EcbFxRateClientTest extends BaseUnitTest {
 
     private static EcbFxRateClient clientForUrl(String dailyUrl) {
         return new EcbFxRateClient(
-                new LlmProperties("", new LlmProperties.Egress(false), new LlmProperties.Fx(dailyUrl)),
+                new LlmProperties(
+                        "", new LlmProperties.Egress(false, List.of(), false), new LlmProperties.Fx(dailyUrl)),
                 RestClient.builder());
     }
 

@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.core;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import de.tum.cit.aet.hephaestus.core.security.PrivateHostAllowlist;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.netty.resolver.AddressResolver;
 import io.netty.util.concurrent.EventExecutor;
@@ -102,20 +103,22 @@ class SsrfGuardedResolverGroupTest extends BaseUnitTest {
         @Test
         void allowsLoopbackWhenExemptionEnabled() throws Exception {
             InetSocketAddress loopback = new InetSocketAddress(InetAddress.getLoopbackAddress(), 1);
-            assertThat(SsrfGuardedResolverGroup.blockedReason(loopback, true)).isNull();
+            assertThat(SsrfGuardedResolverGroup.blockedReason("host.test", loopback, true, PrivateHostAllowlist.NONE))
+                    .isNull();
         }
 
         @Test
         void stillBlocksNonLoopbackPrivateAddressesWhenExemptionEnabled() throws Exception {
             InetSocketAddress rfc1918 = new InetSocketAddress(InetAddress.getByName("10.0.0.9"), 1);
-            assertThat(SsrfGuardedResolverGroup.blockedReason(rfc1918, true)).isNotNull();
+            assertThat(SsrfGuardedResolverGroup.blockedReason("host.test", rfc1918, true, PrivateHostAllowlist.NONE))
+                    .isNotNull();
         }
 
         @Test
         void resolverPassesLoopbackThroughWhenGuardedResolverIsExempt() throws Exception {
             InetSocketAddress fixed = new InetSocketAddress(InetAddress.getByAddress(new byte[] {127, 0, 0, 1}), 443);
-            SsrfGuardedResolverGroup.GuardedResolver resolver =
-                    new SsrfGuardedResolverGroup.GuardedResolver(EXEC, new StubResolver(fixed), true);
+            SsrfGuardedResolverGroup.GuardedResolver resolver = new SsrfGuardedResolverGroup.GuardedResolver(
+                    EXEC, new StubResolver(fixed), true, PrivateHostAllowlist.NONE);
 
             Future<InetSocketAddress> result = resolver.resolve(UNRESOLVED);
 
@@ -126,13 +129,50 @@ class SsrfGuardedResolverGroupTest extends BaseUnitTest {
         @Test
         void resolverStillBlocksLoopbackWhenNotExempt() throws Exception {
             InetSocketAddress fixed = new InetSocketAddress(InetAddress.getLoopbackAddress(), 443);
-            SsrfGuardedResolverGroup.GuardedResolver resolver =
-                    new SsrfGuardedResolverGroup.GuardedResolver(EXEC, new StubResolver(fixed), false);
+            SsrfGuardedResolverGroup.GuardedResolver resolver = new SsrfGuardedResolverGroup.GuardedResolver(
+                    EXEC, new StubResolver(fixed), false, PrivateHostAllowlist.NONE);
 
             Future<InetSocketAddress> result = resolver.resolve(UNRESOLVED);
 
             assertThat(result.isSuccess()).isFalse();
             assertThat(result.cause()).isInstanceOf(UnknownHostException.class);
+        }
+    }
+
+    /** {@code hephaestus.llm.egress.private-hosts}: the connect-time half of the operator's allow-list. */
+    @Nested
+    class PrivateHosts {
+
+        private final PrivateHostAllowlist allowlist =
+                PrivateHostAllowlist.parse(List.of("vllm.lab.test", "10.20.0.0/16"));
+
+        private Future<InetSocketAddress> resolve(String host, String literalIp) throws Exception {
+            InetSocketAddress fixed = new InetSocketAddress(InetAddress.getByName(literalIp), 443);
+            return new SsrfGuardedResolverGroup.GuardedResolver(EXEC, new StubResolver(fixed), false, allowlist)
+                    .resolve(InetSocketAddress.createUnresolved(host, 443));
+        }
+
+        @Test
+        void shouldConnectWhenListedHostNameResolvesToPrivateAddress() throws Exception {
+            assertThat(resolve("vllm.lab.test", "192.168.7.7").isSuccess()).isTrue();
+        }
+
+        @Test
+        void shouldConnectWhenAnyHostNameResolvesIntoListedRange() throws Exception {
+            assertThat(resolve("gpu.lab.test", "10.20.3.4").isSuccess()).isTrue();
+        }
+
+        @Test
+        void shouldBlockWhenUnlistedHostNameRebindsToPrivateAddress() throws Exception {
+            Future<InetSocketAddress> result = resolve("attacker.example", "192.168.7.7");
+
+            assertThat(result.isSuccess()).isFalse();
+            assertThat(result.cause()).isInstanceOf(UnknownHostException.class);
+        }
+
+        @Test
+        void shouldBlockMetadataAddressEvenForListedHostName() throws Exception {
+            assertThat(resolve("vllm.lab.test", "169.254.169.254").isSuccess()).isFalse();
         }
     }
 

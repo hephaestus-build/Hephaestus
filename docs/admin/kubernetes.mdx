@@ -225,6 +225,7 @@ The chart then opens only these paths:
 | `worker` | `server` | 8080 |
 | `worker` | The Kubernetes API, `networkPolicy.kubernetesApi` | Its port |
 | `worker`, if `networkPolicy.workerGatewayPorts` is set | `networkPolicy.gateway` pods | `networkPolicy.workerGatewayPorts` |
+| `server`, `worker`, for each item of `networkPolicy.modelEndpoints` | Its `cidr` | Its `ports` |
 | Review sandboxes and Heph hosts | `worker` | 8081, the sandbox gateway |
 | PostgreSQL and the backup Jobs, with backups on | `postgresql.backup.s3`, or `networkPolicy.externalEgress` | `postgresql.backup.s3.port` |
 | The backup Jobs, with backups on | PostgreSQL | 8432, the pgBackRest TLS server |
@@ -276,6 +277,34 @@ spec:
         - { port: 8443, protocol: TCP }
         - { port: 8000, protocol: TCP }
 ```
+
+### A model endpoint on a private network
+
+A model endpoint outside the cluster can have a private address, for example a vLLM server on the LAN.
+The application and the network policy both refuse private addresses by default, so you must allow the endpoint in both places:
+
+```yaml
+config:
+  # The application: host names, IP addresses, or CIDR ranges that a provider base URL can use.
+  llmPrivateHosts: [vllm.lab.example]
+  # Only if the endpoint serves plain HTTP.
+  llmPrivateHostsAllowHttp: true
+networkPolicy:
+  # The network: the address range and the ports of the endpoint.
+  modelEndpoints:
+    - cidr: 10.20.0.0/16
+      ports: [8000]
+```
+
+If only `config.llmPrivateHosts` names the endpoint, a connection saves, and then the request times out at the network.
+The chart cannot compare the two lists, because a host name is not an address range.
+[Connect an AI provider](./ai-providers#model-endpoints-on-your-own-network) tells what the application allows.
+
+A `cidr` must be in 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 100.64.0.0/10, or fc00::/7, and `ports` must name at least one port.
+Thus, no item can open the link-local range of the cloud metadata service.
+Use `modelEndpoints` only for addresses outside the cluster.
+A NetworkPolicy `ipBlock` does not reliably match Pod addresses.
+For an endpoint in this cluster, use `networkPolicy.workerGatewayPorts` or a policy with a `podSelector`, as the previous section shows.
 
 The management listener binds to the pod address.
 The kubelet probes it, and the metrics scraper can read it.

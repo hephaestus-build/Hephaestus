@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.net.ConnectException;
 import java.net.UnknownHostException;
 import java.time.Duration;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.springframework.core.NestedExceptionUtils;
@@ -31,7 +32,9 @@ class LlmProxyWebClientConfigTest extends BaseUnitTest {
                     provider,
                     loop,
                     new LlmProperties(
-                            "", new LlmProperties.Egress(false), new LlmProperties.Fx(LlmProperties.ECB_DAILY_URL)),
+                            "",
+                            new LlmProperties.Egress(false, List.of(), false),
+                            new LlmProperties.Fx(LlmProperties.ECB_DAILY_URL)),
                     WebClient.builder());
 
             Throwable thrown = catchThrowable(() -> client.get()

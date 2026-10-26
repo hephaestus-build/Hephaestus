@@ -15,6 +15,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -46,7 +47,9 @@ class FxRateLookupTest extends BaseUnitTest {
 
     private FxRateLookup lookup(String configuredCurrency) {
         LlmProperties properties = new LlmProperties(
-                configuredCurrency, new LlmProperties.Egress(false), new LlmProperties.Fx(LlmProperties.ECB_DAILY_URL));
+                configuredCurrency,
+                new LlmProperties.Egress(false, List.of(), false),
+                new LlmProperties.Fx(LlmProperties.ECB_DAILY_URL));
         return new FxRateLookup(repository, CLOCK, properties);
     }
 

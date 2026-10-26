@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.agent.LlmProperties;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.io.IOException;
+import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -43,7 +44,9 @@ class LlmConnectionProbeServiceTest extends BaseUnitTest {
                 new ObjectMapper(),
                 // Loopback allowed: the probe target is a MockWebServer on localhost.
                 new LlmProperties(
-                        "", new LlmProperties.Egress(true), new LlmProperties.Fx(LlmProperties.ECB_DAILY_URL)),
+                        "",
+                        new LlmProperties.Egress(true, List.of(), false),
+                        new LlmProperties.Fx(LlmProperties.ECB_DAILY_URL)),
                 RestClient.builder());
     }
 

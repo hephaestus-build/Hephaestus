@@ -7,6 +7,7 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.LlmProperties;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -23,7 +24,9 @@ class EgressPolicyTest extends BaseUnitTest {
 
     private static LlmProperties properties(boolean allowLoopback) {
         return new LlmProperties(
-                "", new LlmProperties.Egress(allowLoopback), new LlmProperties.Fx(LlmProperties.ECB_DAILY_URL));
+                "",
+                new LlmProperties.Egress(allowLoopback, List.of(), false),
+                new LlmProperties.Fx(LlmProperties.ECB_DAILY_URL));
     }
 
     private EgressPolicy loopbackBlocked() {
@@ -234,6 +237,69 @@ class EgressPolicyTest extends BaseUnitTest {
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("8.8.8.8")
                     .hasMessageContaining("not in the allowed list");
+        }
+    }
+
+    /** {@code hephaestus.llm.egress.private-hosts}: model endpoints on the operator's own network. */
+    @Nested
+    class PrivateHosts {
+
+        private EgressPolicy policy(boolean allowHttp) {
+            return new EgressPolicy(
+                    settingsRepository,
+                    new LlmProperties(
+                            "",
+                            new LlmProperties.Egress(false, List.of("10.20.0.0/16", "fd00:1::/32"), allowHttp),
+                            new LlmProperties.Fx(LlmProperties.ECB_DAILY_URL)));
+        }
+
+        @ParameterizedTest
+        @ValueSource(strings = {"https://10.20.3.4:8000/v1", "https://[fd00:1::7]/v1"})
+        void shouldAcceptHttpsToPrivateAddressInListedRange(String baseUrl) {
+            stubNoSettingsRow();
+
+            assertThatCode(() -> policy(false).validate(baseUrl)).doesNotThrowAnyException();
+        }
+
+        @ParameterizedTest
+        @ValueSource(strings = {"https://10.21.0.1/v1", "https://192.168.0.1/v1", "https://169.254.169.254/v1"})
+        void shouldRejectPrivateAddressOutsideListedRanges(String baseUrl) {
+            stubNoSettingsRow();
+
+            assertThatThrownBy(() -> policy(true).validate(baseUrl))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessage("Provider host must be a public HTTPS URL");
+        }
+
+        @Test
+        void shouldRejectHttpToListedHostUnlessHttpIsAllowed() {
+            stubNoSettingsRow();
+
+            assertThatThrownBy(() -> policy(false).validate("http://10.20.3.4:8000/v1"))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessage("Provider host must be a public HTTPS URL");
+            assertThatCode(() -> policy(true).validate("http://10.20.3.4:8000/v1"))
+                    .doesNotThrowAnyException();
+        }
+
+        @Test
+        void shouldRejectHttpToPublicHostEvenWhenHttpIsAllowed() {
+            stubNoSettingsRow();
+
+            assertThatThrownBy(() -> policy(true).validate("http://8.8.8.8/v1"))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessage("Provider host must be a public HTTPS URL");
+        }
+
+        @Test
+        void shouldFailAtConstructionForAnEntryThatIsNoHostAddressOrRange() {
+            LlmProperties invalid = new LlmProperties(
+                    "",
+                    new LlmProperties.Egress(false, List.of("https://vllm.lab.test"), false),
+                    new LlmProperties.Fx(LlmProperties.ECB_DAILY_URL));
+
+            assertThatThrownBy(() -> new EgressPolicy(settingsRepository, invalid))
+                    .isInstanceOf(IllegalArgumentException.class);
         }
     }
 

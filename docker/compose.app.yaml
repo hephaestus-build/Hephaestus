@@ -376,6 +376,8 @@ services:
       # a loopback provider URL may be SAVED, the worker's proxy decides whether it may be DIALLED.
       # Leave false in production.
       HEPHAESTUS_LLM_EGRESS_ALLOW_LOOPBACK: ${HEPHAESTUS_LLM_EGRESS_ALLOW_LOOPBACK:-false}
+      HEPHAESTUS_LLM_EGRESS_PRIVATE_HOSTS: ${HEPHAESTUS_LLM_EGRESS_PRIVATE_HOSTS:-}
+      HEPHAESTUS_LLM_EGRESS_PRIVATE_HOSTS_ALLOW_HTTP: ${HEPHAESTUS_LLM_EGRESS_PRIVATE_HOSTS_ALLOW_HTTP:-false}
       <<: [*practice-review-env, *scm-access-env, *observability-env, *release-identity-env]
       # Only the server role asks GitHub for newer releases; set false on an air-gapped host.
       HEPHAESTUS_RELEASE_CHECK_ENABLED: ${HEPHAESTUS_RELEASE_CHECK_ENABLED:-true}
@@ -511,7 +513,10 @@ services:
       # SSRF guard for the in-process LLM proxy. Must match application-server's value: that pod
       # decides whether a loopback provider URL may be SAVED, this one whether it may be DIALLED, and
       # a split between them shows up as connections that save fine and then fail at call time.
+      # The same holds for the private-host list.
       HEPHAESTUS_LLM_EGRESS_ALLOW_LOOPBACK: ${HEPHAESTUS_LLM_EGRESS_ALLOW_LOOPBACK:-false}
+      HEPHAESTUS_LLM_EGRESS_PRIVATE_HOSTS: ${HEPHAESTUS_LLM_EGRESS_PRIVATE_HOSTS:-}
+      HEPHAESTUS_LLM_EGRESS_PRIVATE_HOSTS_ALLOW_HTTP: ${HEPHAESTUS_LLM_EGRESS_PRIVATE_HOSTS_ALLOW_HTTP:-false}
       # No LLM credential passthrough: docs/admin/runtime-roles.mdx § Worker pod env vars.
       HEPHAESTUS_WORKER_CAPACITY_REVIEW_MAX: ${HEPHAESTUS_WORKER_REVIEW_MAX:-auto}
       # docs/admin/runtime-roles.mdx § Tunables.

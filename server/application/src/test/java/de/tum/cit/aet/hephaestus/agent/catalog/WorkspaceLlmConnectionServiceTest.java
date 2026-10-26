@@ -357,7 +357,7 @@ class WorkspaceLlmConnectionServiceTest extends BaseUnitTest {
                                 new ObjectMapper(),
                                 new LlmProperties(
                                         "",
-                                        new LlmProperties.Egress(true),
+                                        new LlmProperties.Egress(true, List.of(), false),
                                         new LlmProperties.Fx(LlmProperties.ECB_DAILY_URL)),
                                 RestClient.builder()),
                         configAudit);

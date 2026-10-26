@@ -45,7 +45,7 @@ public class LlmConnectionProbeService {
             ObjectMapper objectMapper,
             LlmProperties llmProperties,
             RestClient.Builder restClients) {
-        boolean allowLoopback = llmProperties.egress().allowLoopback();
+        LlmProperties.Egress egress = llmProperties.egress();
         this.connectionRepository = connectionRepository;
         this.egressPolicy = egressPolicy;
         this.objectMapper = objectMapper;
@@ -54,7 +54,7 @@ public class LlmConnectionProbeService {
         // The guarded resolver re-runs the private-address check on the resolution actually connected
         // to, closing the DNS-rebind window that validate-time checking leaves open.
         HttpClient httpClient = HttpClient.create()
-                .resolver(WebClientConnectors.resolverGroup(allowLoopback))
+                .resolver(WebClientConnectors.resolverGroup(egress.allowLoopback(), egress.privateHostAllowlist()))
                 .followRedirect(false);
         ReactorClientHttpRequestFactory factory = new ReactorClientHttpRequestFactory(httpClient);
         factory.setConnectTimeout(PROBE_TIMEOUT);

@@ -1834,7 +1834,9 @@ class LlmProxyServiceTest extends BaseUnitTest {
                         pool,
                         loops,
                         new LlmProperties(
-                                "", new LlmProperties.Egress(true), new LlmProperties.Fx(LlmProperties.ECB_DAILY_URL)),
+                                "",
+                                new LlmProperties.Egress(true, List.of(), false),
+                                new LlmProperties.Fx(LlmProperties.ECB_DAILY_URL)),
                         WebClient.builder());
                 // The client's first exchange also starts its event loop and opens its pooled connection. That
                 // one-time start is no part of a work deadline, so it happens before the deadline is set.
