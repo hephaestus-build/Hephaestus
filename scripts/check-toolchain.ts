@@ -418,7 +418,7 @@ if ("if" in nodeSetupStep) {
 	throw new Error("setup-toolchain must select the pinned Node version in either install mode");
 }
 const frozenInstall = setupStep(
-	(step) => step.run === "pnpm install --frozen-lockfile --ignore-scripts",
+	(step) => step.run === "pnpm install --frozen-lockfile --ignore-scripts --no-trust-lockfile",
 );
 if (frozenInstall.if !== frozenOnly) {
 	throw new Error(

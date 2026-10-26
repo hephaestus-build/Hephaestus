@@ -2,7 +2,7 @@ name: "Setup toolchain"
 description: "The Node.js version package.json pins and, for a frozen install, its pnpm pin with the executable, package store and native lockfile-verification verdict cached, then the lockfile's Vite+ on PATH; install is none or frozen."
 inputs:
   install:
-    description: "none: the Node.js runtime alone, for dependency-free Node scripts or shell; frozen: pnpm as well, then pnpm install --frozen-lockfile --ignore-scripts and the installed Vite+ on PATH. No lifecycle script runs in CI, so pnpm-workspace.yaml#allowBuilds is exercised only by a contributor's install."
+    description: "none: the Node.js runtime alone, for dependency-free Node scripts or shell; frozen: pnpm as well, then pnpm install --frozen-lockfile --ignore-scripts --no-trust-lockfile and the installed Vite+ on PATH. No lifecycle script runs in CI, so pnpm-workspace.yaml#allowBuilds is exercised only by a contributor's install."
     required: false
     default: "none"
 runs:
@@ -114,12 +114,13 @@ runs:
       with:
         path: ${{ steps.pnpm-verification-path.outputs.path }}
         key: pnpm-verification-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.pnpm.outputs.version }}-${{ hashFiles('pnpm-lock.yaml', 'pnpm-workspace.yaml', '.npmrc') }}
-    # pnpm/setup cannot pass --ignore-scripts, so the install is its own step.
+    # pnpm/setup cannot pass --ignore-scripts, so the install is its own step. --no-trust-lockfile
+    # verifies every locked entry, which pnpm-workspace.yaml#trustLockfile skips elsewhere.
     - name: Install dependencies
       id: pnpm-install
       if: inputs.install == 'frozen'
       shell: bash
-      run: pnpm install --frozen-lockfile --ignore-scripts
+      run: pnpm install --frozen-lockfile --ignore-scripts --no-trust-lockfile
     # Jobs run the Vite+ CLI that the lockfile installed. The global installer downloads a separate
     # CLI package that the lockfile does not pin; the clean-install job still exercises that path.
     - name: Use the installed Vite+

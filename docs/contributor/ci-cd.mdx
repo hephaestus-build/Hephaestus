@@ -289,8 +289,23 @@ Dependency Dashboard approval. Native
 bound routine update concurrency. The hourly limit only restricts PR creation. Vulnerability alerts
 remain ungrouped and bypass those gates and limits.
 
+pnpm's `minimumReleaseAge` in `pnpm-workspace.yaml` still applies to a version that a lockfile update newly resolves.
+A fix younger than that age opens as a pull request with a failed lockfile update.
+To take it earlier, a maintainer adds the version to `minimumReleaseAgeExclude`.
+
 Lockfile maintenance runs on Mondays. `renovate.json` owns the managed ecosystems and extraction
 rules. `scripts/renovate-config.test.ts` exercises each custom manager against its source.
+
+Renovate runs as the Mend-hosted app on the [Community plan](https://docs.renovatebot.com/mend-hosted/overview/#resources-and-scheduling).
+A job has 3 GB of memory and 30 minutes.
+A job that exceeds a limit stops before it writes pull requests or the Dependency Dashboard.
+Mend then [runs the repository only weekly](https://docs.renovatebot.com/mend-hosted/job-scheduling/).
+
+If the Dependency Dashboard stops changing, read the latest job on the [Mend Developer Portal](https://developer.mend.io/github/hephaestus-build/Hephaestus).
+The job page shows its status, such as `kernel-out-of-memory`, and its log.
+After you fix the cause, select **Retry** on that job.
+A successful job returns the repository to the normal schedule.
+`trustLockfile` in `pnpm-workspace.yaml` keeps the pnpm lockfile updates in a job inside the memory limit.
 
 The Node,
 pnpm and Pi SDK pins are grouped, so a version stated in several managed files moves in one pull
