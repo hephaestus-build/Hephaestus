@@ -1,4 +1,7 @@
+import { readFileSync } from "node:fs";
+
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 
 import type {
 	FeedbackResponse,
@@ -8,6 +11,8 @@ import type {
 	PracticePageEvidence,
 	PracticePageFeedback,
 } from "@/api/types.gen";
+
+import type { FeedbackTextSegment } from "@/components/practice-vocabulary/feedback-text";
 
 import { toFeedbackCard } from "./practice-feedback-cards";
 
@@ -234,5 +239,60 @@ describe("toFeedbackCard", () => {
 	it("gives a practice in no group no group at all, so nothing offers to open one", () => {
 		const card = toFeedbackCard({ ...feedback, groupSlug: null, groupName: null }, [group]);
 		expect(card.group).toBeUndefined();
+	});
+});
+
+/**
+ * The internal words that the feedback writing guide keeps out of what a developer reads. The server's
+ * guard reads the same list (`InternalFeedbackTerms`).
+ */
+const internalTerms = z
+	.object({ terms: z.array(z.string()).nonempty() })
+	.parse(
+		JSON.parse(
+			readFileSync(
+				"../server/application/src/test/resources/agent/internal-feedback-terms.json",
+				"utf8",
+			),
+		),
+	).terms;
+
+const literal = (term: string) => term.replaceAll(/[.*+?^${}()|[\]\\]/gu, String.raw`\$&`);
+const internal = new RegExp(String.raw`\b(?:${internalTerms.map(literal).join("|")})\b`, "iu");
+
+/** The words a card writes itself, without the work and practice references between them. */
+const wordsOf = (segments: FeedbackTextSegment[]): string[] =>
+	segments
+		.filter(
+			(segment): segment is Extract<FeedbackTextSegment, { type: "text" }> =>
+				segment.type === "text",
+		)
+		.map((segment) => segment.text);
+
+describe("card copy", () => {
+	it("names no internal term in any state a card can show", () => {
+		const closedAt = new Date("2026-09-09T14:10:00Z");
+		const cards = [
+			toFeedbackCard(feedback, [group]),
+			toFeedbackCard({ ...feedback, ...RESOLVED_BY_WORK }, [group]),
+			toFeedbackCard({ ...feedback, ...RESOLVED_BY_WORK, cleanWork: [] }, [group]),
+			toFeedbackCard({ ...feedback, ...answered("ADDRESSED"), closedAt, closedBy: "DEVELOPER" }, [
+				group,
+			]),
+			toFeedbackCard(
+				{ ...feedback, ...answered("NOT_APPLICABLE"), closedAt, closedBy: "DEVELOPER" },
+				[group],
+			),
+			toFeedbackCard({ ...feedback, closedAt, closedBy: "PRACTICE_CHANGED" }, [group]),
+			toFeedbackCard({ ...feedback, ...answered("DISAGREE") }, [group]),
+			toFeedbackCard({ ...feedback, withdrawn: true, body: null, nextStep: null }, [group]),
+		];
+		const copy = cards.flatMap((card) => wordsOf(card.condition));
+
+		expect(copy.length).toBeGreaterThanOrEqual(cards.length - 1);
+		for (const text of copy) {
+			expect(text, text).not.toMatch(internal);
+		}
+		expect("Not flagged ready for delivery").toMatch(internal);
 	});
 });

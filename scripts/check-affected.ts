@@ -70,6 +70,7 @@ const serverInputsOfTheWebapp = [
 	/^server\/application\/src\/main\/resources\/practices\/default-catalog\.json$/u,
 	/^server\/application\/src\/main\/resources\/practices\/guidance\//u,
 	/^server\/application\/src\/main\/resources\/contracts\/source-use\//u,
+	/^server\/application\/src\/test\/resources\/agent\/internal-feedback-terms\.json$/u,
 	/^server\/application\/src\/main\/java\/de\/tum\/cit\/aet\/hephaestus\/practices\/PracticeGuidanceRules\.java$/u,
 ];
 

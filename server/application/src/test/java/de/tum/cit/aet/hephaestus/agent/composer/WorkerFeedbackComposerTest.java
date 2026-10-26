@@ -38,6 +38,7 @@ import de.tum.cit.aet.hephaestus.agent.proxy.dto.PrepareFeedbackResponseDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.PrivateFeedbackHistoryDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.PrivateProgressDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.PublicFeedbackHistoryDTO;
+import de.tum.cit.aet.hephaestus.agent.runtime.InternalFeedbackTerms;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.integration.core.framework.ItemDescriptorRegistry;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CopyCapability;
@@ -216,6 +217,17 @@ class WorkerFeedbackComposerTest {
         assertThat(finish.get(finish.size() - 1).path("content").asString())
                 .startsWith("## Undecided")
                 .contains(" on CONVERSATION.");
+        // What the developer reads keeps to the writing guide: no internal names or mechanics.
+        var delivered = new ArrayList<String>();
+        prepared.forEach(request -> request.composition().forEach(piece -> {
+            if (piece.summary() != null) delivered.add(piece.summary());
+            piece.notes().forEach(note -> delivered.add(note.body()));
+            if (piece.page() != null)
+                delivered.addAll(List.of(
+                        piece.page().title(), piece.page().body(), piece.page().nextStep()));
+        }));
+        assertThat(delivered).hasSize(5);
+        InternalFeedbackTerms.assertPlain(delivered);
     }
 
     @Test

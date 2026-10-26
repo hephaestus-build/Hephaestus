@@ -16,13 +16,17 @@ public final class FeedbackWritingGuide {
     }
 
     private static String load() {
-        String document = new String(
-                        PiRuntimeFactory.loadClasspathResource("practice-feedback-language.md"), StandardCharsets.UTF_8)
-                .replace("\r\n", "\n");
+        return section(new String(
+                PiRuntimeFactory.loadClasspathResource("practice-feedback-language.md"), StandardCharsets.UTF_8));
+    }
+
+    /** The "Writing feedback" section of the page, to the next heading of its level or the end. */
+    static String section(String document) {
+        String text = document.replace("\r\n", "\n");
         String heading = "## Writing feedback\n";
-        int start = document.indexOf(heading);
+        int start = text.indexOf(heading);
         if (start < 0) throw new IllegalStateException("Missing feedback writing guide");
-        int end = document.indexOf("\n## ", start + heading.length());
-        return document.substring(start, end < 0 ? document.length() : end).strip();
+        int end = text.indexOf("\n## ", start + heading.length());
+        return text.substring(start, end < 0 ? text.length() : end).strip();
     }
 }

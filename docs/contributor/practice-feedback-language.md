@@ -22,14 +22,17 @@ Use item only in contributor documentation, code and API contracts.
 Use this guide for feedback on the work, on the practice page and in conversation.
 Each destination's prompt adds its own rules for length, layout and links.
 
-State the answer or concern first.
+When you answer about the work, state the answer or concern first.
+In conversation, when the developer expresses a feeling, respond to the feeling first, as that destination's rules say.
 Give only the detail the reader needs to understand the point and decide what to do.
 Explain a technical concept in plain words before giving its term in brackets.
 Point to the exact place in the work, and link it where the destination lets you write links.
 
 When a point needs an action, give one useful next step.
+In a Slack conversation, keep each reply short.
 Describe the work, not the person.
-Do not expose internal names or mechanics, such as delivery states, practice slugs, identifiers, pipelines, models, tools, sandboxes or context files.
+Do not expose internal names or mechanics.
+Examples are delivery states, outcome or severity codes, scores, practice slugs, identifiers, pipelines, models, tools, sandboxes and context files.
 
 ## Retired words
 

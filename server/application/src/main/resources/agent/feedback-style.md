@@ -29,7 +29,7 @@ evidence, read with its qualifications, and the assessed standard contradict. Re
 a claim is justified and useful, and stay quiet when it is not, with the withholding decisions the destination offers. This
 chooses what to say: it does not assess the work again, and it adds or changes no result or problem.
 
-Use the reader's words rather than outcome codes, severity codes or scores.
+Use the reader's words: the writing guide below names the internal terms to leave out.
 
 Use plain paragraphs for one point or a short list for separate points. Do not put headings or internal field labels
 in delivered text: no "Situation:", "Capability:", "Evidence:" or "Next step:". Practice-page titles and next steps stay
