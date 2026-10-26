@@ -217,9 +217,11 @@ Removing a usefulness answer does not remove the developer's disagreement.
 | **Workspace** | One team's tenant, with its connected repositories, members, practices and feedback. |  |
 | **Instance** | One running deployment that hosts workspaces. |  |
 | **Integration** | One connected provider: GitHub, GitLab, Slack or Outline. |  |
-| **Heph** | The conversational assistant. | agent, bot |
-| **Mentor** | The product area for conversations with Heph. |  |
-| **Hephaestus** | The application. | agent |
+| **Heph** | The conversational assistant. | agent, bot, mentor |
+| **Conversations** | The product area for conversations with Heph. | Mentor |
+| **Mentor** | A person who guides a less experienced developer, such as a reviewer or an experienced colleague. Use it only for people. |  |
+| **Practice feedback** | The product category: feedback on how developers apply engineering practices. | AI mentoring, AI code review |
+| **Hephaestus** | The application. | agent, AI mentor |
 | **Practice profile** | The developer's private page for practice standing, changes and feedback. | practice dashboard, standings page |
 | **Practice page** | The page for one practice within the developer's Practice profile. |  |
 | **Standing** | Needs attention, Mixed feedback or Going well, read from the newest eligible decided work. A change to the work keeps its last decision until a newer review decides again. | score, grade, rating |
@@ -250,6 +252,23 @@ The workspace page never names developers, but small counts can disclose a perso
 It has no minimum count that prevents that disclosure.
 Hidden members and repositories do not contribute to those counts.
 The [Practice profile guide](/user/practice-profile) owns the user procedures and visibility details.
+
+### Research terms
+
+The research on Hephaestus and the product use different words for some concepts.
+Use the product word in the product, its docs and its release notes.
+Use the research word only when you quote or cite the research.
+
+| Research word | Product word |
+| --- | --- |
+| AI-generated feedback on practice application | Practice feedback |
+| Contribution | Work, or item in contributor docs |
+| Assessment | Observation |
+| Met, not met, does not apply, could not determine | Met, Not met, Does not apply, Could not determine |
+| Problem, severity, next step | Problem, severity, next step |
+| Delivery strategy: in-context, in-app, in-chat | Destination: On the work, On the practice page, In conversation |
+| Mentor approves feedback | Approve first, a feedback mode |
+| Reply: agree, disagree, question, usefulness | Response (resolution and usefulness), Disagreement, or a question in the Heph conversation |
 
 ### Heph
 

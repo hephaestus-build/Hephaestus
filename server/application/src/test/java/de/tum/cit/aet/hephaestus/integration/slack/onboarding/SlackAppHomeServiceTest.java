@@ -207,7 +207,7 @@ class SlackAppHomeServiceTest extends BaseUnitTest {
 
         View view = service.buildHomeView(7L, "T1", "U1");
 
-        assertThat(view.getBlocks().toString()).contains("Unavailable").contains("Mentor unavailable");
+        assertThat(view.getBlocks().toString()).contains("Unavailable").contains("Heph unavailable");
     }
 
     @Test

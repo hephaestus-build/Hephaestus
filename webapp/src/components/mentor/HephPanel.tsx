@@ -81,7 +81,9 @@ export function HephPanel({
 							shape="pill"
 							size="icon"
 							className="relative size-16 shadow-lg transition-all duration-200 hover:shadow-xl motion-safe:active:scale-95"
-							aria-label={unread ? "Open Heph, AI mentor, new answer" : "Open Heph, AI mentor"}
+							aria-label={
+								unread ? "Open Heph, AI assistant, new answer" : "Open Heph, AI assistant"
+							}
 						/>
 					}
 				>
@@ -112,7 +114,7 @@ export function HephPanel({
 									<HephIcon className="-mx-1.5" size={32} pad={4} />
 									Heph{" "}
 									<Badge variant="muted">
-										<Sparkles /> AI mentor
+										<Sparkles /> AI assistant
 									</Badge>
 								</>
 							)}
@@ -143,7 +145,11 @@ export function HephPanel({
 									render={
 										<DrawerClose
 											render={
-												<Button variant="outline" size="icon" aria-label="Close Heph, AI mentor" />
+												<Button
+													variant="outline"
+													size="icon"
+													aria-label="Close Heph, AI assistant"
+												/>
 											}
 										/>
 									}

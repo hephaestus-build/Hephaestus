@@ -10,7 +10,7 @@ const meta = {
 	parameters: { layout: "centered" },
 	tags: ["autodocs"],
 	args: {
-		title: "Mentor",
+		title: "Conversations",
 		backLink: <Link to="/" />,
 	},
 	decorators: [withSidebarFrame],

@@ -764,12 +764,12 @@ it.each([
 					?.status,
 			).toBe("success"),
 		);
-		expect(screen.queryByRole("link", { name: /AI mentor/u })).toBeNull();
+		expect(screen.queryByRole("link", { name: /AI assistant/u })).toBeNull();
 
 		await user.click(pickerOf(row("Heph", title)));
 		await user.click(await screen.findByRole("option", { name: new RegExp(modelName, "u") }));
 		await user.click(saveButton("Heph", title));
-		await user.click(await screen.findByRole("link", { name: /AI mentor/u }, ROUTE_RENDER_WAIT));
+		await user.click(await screen.findByRole("link", { name: /AI assistant/u }, ROUTE_RENDER_WAIT));
 		await screen.findByRole("textbox", { name: "Message Heph" }, ROUTE_RENDER_WAIT);
 
 		await act(async () => {
@@ -781,7 +781,7 @@ it.each([
 		await screen.findByRole("button", { name: "Heph" }, ROUTE_RENDER_WAIT);
 		await user.click(clearButton(row("Heph", title)));
 		await waitFor(
-			() => expect(screen.queryByRole("link", { name: /AI mentor/u })).toBeNull(),
+			() => expect(screen.queryByRole("link", { name: /AI assistant/u })).toBeNull(),
 			ROUTE_RENDER_WAIT,
 		);
 		await act(async () => {

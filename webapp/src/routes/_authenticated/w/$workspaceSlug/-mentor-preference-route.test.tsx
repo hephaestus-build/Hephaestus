@@ -168,7 +168,7 @@ it("lists Heph in the navigation for a member who has not chosen", async () => {
 		http.get("*/workspaces/acme/onboarding/me", () => HttpResponse.json(workspaceOnboarding())),
 	);
 	renderRouteAtWithRouter("/w/acme/teams");
-	await screen.findByRole("link", { name: /AI mentor/u }, ROUTE_RENDER_WAIT);
+	await screen.findByRole("link", { name: /AI assistant/u }, ROUTE_RENDER_WAIT);
 });
 
 it("keeps Heph out of the navigation for a reader who is not a member", async () => {
@@ -188,7 +188,7 @@ it("keeps Heph out of the navigation for a reader who is not a member", async ()
 	renderRouteAtWithRouter("/w/acme/teams");
 	await screen.findByRole("heading", { name: "Teams" }, ROUTE_RENDER_WAIT);
 	await waitFor(() => expect(membershipAnswered).toBe(true), ROUTE_RENDER_WAIT);
-	expect(screen.queryByRole("link", { name: /AI mentor/u })).toBeNull();
+	expect(screen.queryByRole("link", { name: /AI assistant/u })).toBeNull();
 });
 
 it("offers Heph in the navigation where a Heph model is ready, whatever the member chose", async () => {
@@ -208,7 +208,7 @@ it("offers Heph in the navigation where a Heph model is ready, whatever the memb
 		),
 	);
 	renderRouteAtWithRouter("/w/acme/teams");
-	await screen.findByRole("link", { name: /AI mentor/u }, ROUTE_RENDER_WAIT);
+	await screen.findByRole("link", { name: /AI assistant/u }, ROUTE_RENDER_WAIT);
 });
 
 it("keeps Heph out of the navigation of a workspace where only practice reviews have a model", async () => {
@@ -237,7 +237,7 @@ it("keeps Heph out of the navigation of a workspace where only practice reviews 
 		),
 	);
 	const { router, queryClient } = renderRouteAtWithRouter("/w/acme/teams");
-	await screen.findByRole("link", { name: /AI mentor/u }, ROUTE_RENDER_WAIT);
+	await screen.findByRole("link", { name: /AI assistant/u }, ROUTE_RENDER_WAIT);
 
 	await act(async () => {
 		await router.navigate({ to: "/w/$workspaceSlug/teams", params: { workspaceSlug: "other" } });
@@ -250,5 +250,5 @@ it("keeps Heph out of the navigation of a workspace where only practice reviews 
 			).toBe("success"),
 		ROUTE_RENDER_WAIT,
 	);
-	expect(screen.queryByRole("link", { name: /AI mentor/u })).toBeNull();
+	expect(screen.queryByRole("link", { name: /AI assistant/u })).toBeNull();
 });

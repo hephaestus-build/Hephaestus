@@ -45,7 +45,7 @@ class SlackConsentBlocksTest extends BaseUnitTest {
                 .contains(
                         "From now on",
                         "new messages and thread replies",
-                        "mentor each person privately about software practices",
+                        "give each person private feedback on software practices",
                         "Hephaestus does not read earlier history",
                         "It will not reply in this channel",
                         "deletes the channel-message data that Hephaestus already collected from you",

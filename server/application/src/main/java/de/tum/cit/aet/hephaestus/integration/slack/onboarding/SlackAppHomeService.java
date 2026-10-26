@@ -141,7 +141,7 @@ public class SlackAppHomeService {
         return List.of(
                 section(s -> s.text(markdownText(leadText(state)))),
                 section(s -> s.fields(List.of(
-                        markdownText("*Mentor*\n"
+                        markdownText("*Heph*\n"
                                 + stateIcon(state.mentorReady()
                                         && state.login().isPresent()
                                         && state.refusal().isEmpty())
@@ -184,7 +184,7 @@ public class SlackAppHomeService {
 
     private static String leadText(HomeOverviewState state) {
         if (!state.mentorReady()) {
-            return "*Mentor unavailable.* Heph is turned off or not set up for this workspace. You can still manage your privacy here.";
+            return "*Heph unavailable.* Heph is turned off or not set up for this workspace. You can still manage your privacy here.";
         }
         if (state.login().isEmpty()) {
             return "*Check your account access to use Heph.* You need an active Hephaestus account that you linked to Slack. You also need a project identity in this workspace. You can still manage channel-message privacy here.";

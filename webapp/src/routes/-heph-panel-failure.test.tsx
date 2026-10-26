@@ -51,18 +51,18 @@ it("offers Retry, then a page load once Retry did not help, and goes when Heph i
 	renderRouteAtWithRouter("/w/acme/teams");
 	const openHeph = async () =>
 		user.click(
-			await screen.findByRole("button", { name: "Open Heph, AI mentor" }, ROUTE_RENDER_WAIT),
+			await screen.findByRole("button", { name: "Open Heph, AI assistant" }, ROUTE_RENDER_WAIT),
 		);
 
 	await openHeph();
 	const first = await toastSaying("We could not show Heph.");
-	expect(screen.queryByRole("button", { name: "Open Heph, AI mentor" })).toBeNull();
+	expect(screen.queryByRole("button", { name: "Open Heph, AI assistant" })).toBeNull();
 	// The page under it still works.
 	screen.getByRole("heading", { name: "Teams" });
 
 	// Retry renders the panel again: the launcher is back and the message goes.
 	await user.click(within(first).getByRole("button", { name: "Retry" }));
-	await screen.findByRole("button", { name: "Open Heph, AI mentor" });
+	await screen.findByRole("button", { name: "Open Heph, AI assistant" });
 	await waitFor(() => expect(screen.queryByText("We could not show Heph.")).toBeNull());
 
 	// It fails again on open, so the message says Retry ran and offers a page load instead.

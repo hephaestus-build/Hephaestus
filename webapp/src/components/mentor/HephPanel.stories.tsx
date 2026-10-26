@@ -93,7 +93,7 @@ type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {
 	play: async ({ canvas }) => {
-		const launcher = canvas.getByRole("button", { name: "Open Heph, AI mentor" });
+		const launcher = canvas.getByRole("button", { name: "Open Heph, AI assistant" });
 		const mark = launcher.querySelector("svg");
 		await expect(mark).not.toBeNull();
 		await expect(mark?.getBoundingClientRect().width).toBe(56);
@@ -105,7 +105,7 @@ export const Unread: Story = {
 	args: { unread: true },
 	play: async ({ canvas }) => {
 		await expect(
-			canvas.getByRole("button", { name: "Open Heph, AI mentor, new answer" }),
+			canvas.getByRole("button", { name: "Open Heph, AI assistant, new answer" }),
 		).toBeVisible();
 	},
 };
@@ -113,7 +113,7 @@ export const Unread: Story = {
 /** The same conversation as the Heph page; Open the Heph page takes it there. */
 export const Open: Story = {
 	play: async ({ args, canvas, userEvent }) => {
-		const launcher = canvas.getByRole("button", { name: "Open Heph, AI mentor" });
+		const launcher = canvas.getByRole("button", { name: "Open Heph, AI assistant" });
 		await userEvent.click(launcher);
 		const panel = await screen.findByRole("dialog", { name: /Heph/u });
 		await expectSettledVisible(panel);
@@ -154,7 +154,7 @@ export const ThreadOnTablet: Story = {
 	parameters: { viewport: { defaultViewport: "tablet" } },
 	render: (args) => <OpensThread {...args} />,
 	play: async ({ canvas, userEvent }) => {
-		await userEvent.click(canvas.getByRole("button", { name: "Open Heph, AI mentor" }));
+		await userEvent.click(canvas.getByRole("button", { name: "Open Heph, AI assistant" }));
 		await userEvent.click(await screen.findByRole("button", { name: "1 reply" }));
 		const panel = await screen.findByRole("dialog", { name: "Thread" });
 		await expectSettledVisible(panel);
@@ -175,7 +175,7 @@ export const ThreadPushed: Story = {
 		children: threadTimeline(),
 	},
 	play: async ({ args, canvas, userEvent }) => {
-		await userEvent.click(canvas.getByRole("button", { name: "Open Heph, AI mentor" }));
+		await userEvent.click(canvas.getByRole("button", { name: "Open Heph, AI assistant" }));
 		const panel = await screen.findByRole("dialog", { name: "Thread" });
 		await expectSettledVisible(panel);
 		await userEvent.click(screen.getByRole("button", { name: "Back to the conversation" }));
@@ -192,7 +192,7 @@ export const EscapeInThread: Story = {
 	args: { children: threadTimeline() },
 	render: (args) => <OpensThread {...args} />,
 	play: async ({ canvas, userEvent }) => {
-		const launcher = canvas.getByRole("button", { name: "Open Heph, AI mentor" });
+		const launcher = canvas.getByRole("button", { name: "Open Heph, AI assistant" });
 		await userEvent.click(launcher);
 		await userEvent.click(await screen.findByRole("button", { name: "1 reply" }));
 		await expectSettledVisible(await screen.findByRole("dialog", { name: "Thread" }));
