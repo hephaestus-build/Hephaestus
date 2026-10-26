@@ -330,7 +330,7 @@ They check text from variables, prompts, diagrams, and user-facing server messag
 3. Add the exact path to `.vale/enforced-paths.json`.
 4. Run `vp run gate:prose` and the scoped checks for that tree.
 
-The gate compares the list with the base branch and rejects removal.
+The gate compares the list with the base branch and rejects removal of a page that still exists.
 The gate follows Git-detected renames with at least 40% content similarity when the new path remains enforced.
 A page that is deleted together with its entry passes.
 Removing the entry of a page that still exists fails, and so does a rename to a path outside the list.
