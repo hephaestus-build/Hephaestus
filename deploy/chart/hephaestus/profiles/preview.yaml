@@ -15,7 +15,7 @@ nats:
     maxFileBytes: 2147483648
 webhook:
   stream:
-    maxAge: 14d
+    maxAge: 72h
     maxBytes: 128MB
     maxBytesGithub: 512MB
   resources:

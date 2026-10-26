@@ -122,6 +122,26 @@ tests:
             exp_annotations:
               summary: More than 50 events of a stream stayed undelivered to the consumers for 15 minutes
 
+  - name: a stream above half of its byte bound for an hour fires, one that ages out does not
+    interval: 5m
+    input_series:
+      - series: 'webhook_stream_bytes_utilization{job="hephaestus",instance="webhook:9090",runtime_role="webhook",stream="github"}'
+        values: "0.6x20"
+      - series: 'webhook_stream_bytes_utilization{job="hephaestus",instance="webhook:9090",runtime_role="webhook",stream="gitlab"}'
+        values: "0.4x20"
+    alert_rule_test:
+      - eval_time: 30m
+        alertname: HephaestusWebhookStreamNearByteBound
+        exp_alerts: []
+      - eval_time: 70m
+        alertname: HephaestusWebhookStreamNearByteBound
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              stream: github
+            exp_annotations:
+              summary: A webhook stream stayed above half of its byte bound; its age bound is too long for its volume
+
   - name: continued publish failures fire, successful publishes do not
     interval: 1m
     input_series:

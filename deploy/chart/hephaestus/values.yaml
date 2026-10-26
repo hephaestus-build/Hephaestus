@@ -166,7 +166,9 @@ webhook:
   # 1 to 3, or 0 to stop it. While it is 0 the release receives no provider deliveries.
   replicas: 1
   stream:
-    maxAge: 180d
+    # Consumers acknowledge within seconds, so the age holds the stream in steady state. Keep the age
+    # times the daily GitHub volume below half of maxBytesGithub (webhook ingestion operations).
+    maxAge: 7d
     maxBytes: 1GB
     maxBytesGithub: 10GB
   resources:

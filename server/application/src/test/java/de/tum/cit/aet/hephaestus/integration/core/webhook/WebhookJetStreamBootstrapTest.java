@@ -236,7 +236,8 @@ class WebhookJetStreamBootstrapTest extends BaseUnitTest {
         ArgumentCaptor<StreamConfiguration> captor = ArgumentCaptor.forClass(StreamConfiguration.class);
         verify(jsm, times(4)).updateStream(captor.capture());
         assertThat(captor.getAllValues())
-                .allSatisfy(config -> assertThat(config.getMaxAge()).isEqualTo(Duration.ofDays(180)));
+                .allSatisfy(config -> assertThat(config.getMaxAge())
+                        .isEqualTo(properties.stream().maxAge()));
     }
 
     @Test

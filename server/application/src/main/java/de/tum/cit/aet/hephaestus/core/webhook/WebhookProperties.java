@@ -144,13 +144,12 @@ public record WebhookProperties(
     /**
      * Retention and storage bounds for the four webhook streams.
      *
-     * <p>{@link #maxAge} is the retention <em>ceiling</em> and {@link #maxBytes} the disk-safety
-     * <em>floor</em> under it; which of the two binds is a function of a deployment's volume, and the
-     * answer for a given deployment is published as {@code webhook.stream.oldest.message.age} rather
-     * than predicted here. {@link #maxBytes} is sized against what a shed message costs: nightly
-     * {@code SyncJobType.RECONCILIATION} re-fetches over {@code hephaestus.sync.timeframe-days}, so
-     * inside that window a shed webhook is recoverable from the provider API and outside it, by
-     * nothing (ADR 0008: webhook deliveries are not redeliverable).
+     * <p>{@link #maxAge} is the bound that holds a stream in steady state: consumers acknowledge within
+     * seconds, so the age only decides how long an offline deployment can resume from the stream, and
+     * reconciliation repairs what it misses inside {@code hephaestus.sync.timeframe-days}. It is sized so a
+     * busy stream stays below half of {@link #maxBytes}, because a stream that lives at its byte bound
+     * deletes its head on every publish. {@link #maxBytes} is the disk-safety bound behind it, sized
+     * against what a shed message costs (ADR 0008).
      *
      * @param maxAge Longest time a webhook stream keeps a message, for each stream without an entry in
      *     max-age-by-stream. Must be positive.
@@ -179,7 +178,7 @@ public record WebhookProperties(
             // cover GitHub — which has NO timestamp, so the dedup window keyed on X-GitHub-Delivery is
             // its ONLY replay defense — plus provider redelivery horizons. See REPLAY_TOLERANCE_FLOOR.
             @DefaultValue("10m") Duration duplicateWindow,
-            @DefaultValue("180d") Duration maxAge,
+            @DefaultValue("7d") Duration maxAge,
             @DefaultValue Map<String, Duration> maxAgeByStream,
             @DefaultValue("1GB") DataSize maxBytes,
             @DefaultValue Map<String, DataSize> maxBytesByStream,

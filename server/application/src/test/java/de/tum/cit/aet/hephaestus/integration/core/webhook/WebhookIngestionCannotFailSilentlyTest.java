@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
@@ -19,6 +20,7 @@ import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.context.properties.bind.Binder;
+import org.springframework.boot.convert.DurationStyle;
 import org.springframework.boot.env.YamlPropertySourceLoader;
 import org.springframework.boot.health.actuate.endpoint.HealthEndpoint;
 import org.springframework.boot.health.actuate.endpoint.HealthEndpointGroups;
@@ -32,6 +34,7 @@ import org.springframework.core.env.EnumerablePropertySource;
 import org.springframework.core.env.PropertySource;
 import org.springframework.core.env.StandardEnvironment;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.core.io.FileSystemResource;
 import org.springframework.util.unit.DataSize;
 
 /**
@@ -49,6 +52,7 @@ class WebhookIngestionCannotFailSilentlyTest extends BaseUnitTest {
 
     private static final Path NATS_COMPOSE = Path.of("..", "..", "docker", "compose.core.yaml");
     private static final Path SHIPPED_ENV = Path.of("..", "..", "docker", ".env.example");
+    private static final Path CHART_VALUES = Path.of("..", "..", "deploy", "chart", "hephaestus", "values.yaml");
 
     /** GitHub deliveries a busy instance receives in a day. */
     private static final long BUSY_GITHUB_BYTES_PER_DAY = 750_000_000L;
@@ -167,6 +171,46 @@ class WebhookIngestionCannotFailSilentlyTest extends BaseUnitTest {
                 .isGreaterThan(repairableTraffic);
     }
 
+    @Test
+    void aBusyGitHubStreamStaysBelowHalfItsByteBound() throws IOException {
+        WebhookProperties.Stream stream = shippedStream();
+        Duration shippedAge = DurationStyle.detectAndParse(shippedEnvValue("HEPHAESTUS_WEBHOOK_STREAM_MAX_AGE"));
+        Long shippedBytes = shippedEnvSizes("HEPHAESTUS_WEBHOOK_STREAM_MAX_BYTES_GITHUB")
+                .get("HEPHAESTUS_WEBHOOK_STREAM_MAX_BYTES_GITHUB");
+        assertNotNull(shippedBytes);
+
+        assertThat(busyBytesHeldFor(stream.maxAgeFor("github")))
+                .as("consumers acknowledge within seconds, so max-age is what holds the stream in steady state. "
+                        + "A stream at its byte bound deletes its oldest message on every publish, so a busy "
+                        + "stream has to age out well before it reaches that bound")
+                .isLessThanOrEqualTo(stream.maxBytesFor("github") / 2);
+        assertThat(busyBytesHeldFor(shippedAge))
+                .as("docker/.env.example sets what a deployment following the documented setup runs")
+                .isLessThanOrEqualTo(shippedBytes / 2);
+
+        Binder chart = Binder.get(environmentOf(
+                new YamlPropertySourceLoader().load("values.yaml", new FileSystemResource(CHART_VALUES))));
+        Duration chartAge = DurationStyle.detectAndParse(
+                chart.bind("webhook.stream.max-age", String.class).get());
+        long chartBytes = DataSize.parse(chart.bind("webhook.stream.max-bytes-github", String.class)
+                        .get())
+                .toBytes();
+        assertThat(busyBytesHeldFor(chartAge))
+                .as("the Helm chart's values.yaml sets what a Kubernetes release runs")
+                .isLessThanOrEqualTo(chartBytes / 2);
+    }
+
+    private static StandardEnvironment environmentOf(List<PropertySource<?>> sources) {
+        StandardEnvironment environment = new StandardEnvironment();
+        environment.getPropertySources().remove(StandardEnvironment.SYSTEM_ENVIRONMENT_PROPERTY_SOURCE_NAME);
+        sources.forEach(environment.getPropertySources()::addLast);
+        return environment;
+    }
+
+    private static long busyBytesHeldFor(Duration age) {
+        return BUSY_GITHUB_BYTES_PER_DAY * age.toHours() / 24;
+    }
+
     /**
      * The widest reconciliation window any shipped artefact selects. {@code application.yml} carries the
      * default, {@code docker/.env.example} carries what a deployment following the documented setup
@@ -198,6 +242,13 @@ class WebhookIngestionCannotFailSilentlyTest extends BaseUnitTest {
                         + "receiver refuses to start when the bounds overcommit the budget. The defaults in "
                         + "application.yml agree with each other whether or not this file does")
                 .isLessThanOrEqualTo(shipped.get("NATS_JS_MAX_FILE_BYTES"));
+    }
+
+    private String shippedEnvValue(String name) throws IOException {
+        Matcher m = Pattern.compile("^" + Pattern.quote(name) + "=(\\S+)$", Pattern.MULTILINE)
+                .matcher(Files.readString(SHIPPED_ENV));
+        assertThat(m.find()).as("%s is set in docker/.env.example", name).isTrue();
+        return m.group(1);
     }
 
     /**

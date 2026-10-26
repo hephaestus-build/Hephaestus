@@ -20,7 +20,7 @@ public final class WebhookPropertiesFixture {
     public static WebhookProperties.Stream stream() {
         return new WebhookProperties.Stream(
                 Duration.ofMinutes(10),
-                Duration.ofDays(180),
+                Duration.ofDays(7),
                 Map.of(),
                 gibibytes(1),
                 Map.of(),

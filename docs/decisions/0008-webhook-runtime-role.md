@@ -583,3 +583,24 @@ A run cannot see the answer to its own requests: GitHub lists a redelivery's res
 
 The trigger is storage: the bundled broker calls `fsync` for each message, and a disk that a database or container runtime saturates delays every publish.
 Broker storage is a sizing decision outside this ADR.
+
+## Update — 2026-10-26 (webhook streams age out in steady state; amends "Two bounds")
+
+`max-age` was a 180-day ceiling, so on a busy instance every stream lived at its byte bound.
+At that bound, the broker deletes its oldest message on every publish, and `webhook.stream.bytes.utilization` sits at 1.0, so it says nothing.
+Consumers acknowledge within seconds, so the stored history serves only a deployment that is offline.
+Reconciliation repairs what such a deployment misses inside `hephaestus.sync.timeframe-days`.
+A full stream is not the cause of a slow broker: a reproduction with the same bytes below the bound measured the same publish and stream-request times.
+The bound is still worth keeping small, because a stream at its bound gives no warning before it sheds unconsumed messages.
+
+Decision: `max-age` is 7 days, in `application.yml`, `docker/.env.example`, `docker/compose.core.yaml` and the Helm chart (previews 72 hours).
+At the busy rate of 750 MB a day that is about 5 GB, below half of the 10 GiB GitHub bound.
+`WebhookIngestionCannotFailSilentlyTest` holds the default, `docker/.env.example` and the chart's values to that rule.
+`webhook.stream.bytes.utilization` above 0.5 for an hour is now an alert, `HephaestusWebhookStreamNearByteBound`: the age is too long for the volume.
+An existing stream gets the shorter age only on a start with `allow-destructive-limit-updates`, as "Limits may be corrected in place" requires.
+
+Considered and rejected:
+
+- **Interest retention.** It removes a message once every consumer has acknowledged it.
+  A durable that a former deployment left behind keeps all its messages, and a long-lived broker can hold many such durables with large backlogs.
+  It also changes the shape of existing streams.
