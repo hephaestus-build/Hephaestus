@@ -96,12 +96,14 @@ The feedback is advisory: it does not approve a change for merge or grade anyone
 
 ## Get started
 
-- **Use it at TUM:** if your course or team has a workspace, sign in at [hephaestus.build](https://hephaestus.build).
-- **Learn how it works:** read the [user guide](https://docs.hephaestus.build/user/overview).
-- **Run your own deployment:** install the [Helm chart](https://docs.hephaestus.build/admin/kubernetes) on a Kubernetes cluster, or on one host with k3s.
+- **Run your own deployment:** on one Linux host, `k3s-install.sh` installs k3s and the Helm chart.
+  See [Install on one host (k3s)](https://docs.hephaestus.build/admin/kubernetes#install-on-one-host-k3s).
+  On a Kubernetes cluster, install the [Helm chart](https://docs.hephaestus.build/admin/kubernetes#install).
   Then follow the [first steps](https://docs.hephaestus.build/admin/first-steps).
+- **Learn how it works:** read the [user guide](https://docs.hephaestus.build/user/overview).
 - **Upgrade:** read the release notes and the [upgrade guide](https://docs.hephaestus.build/admin/upgrade).
   Then test the upgrade in staging.
+- **Use it at TUM:** if your course or team has a workspace, sign in at [hephaestus.build](https://hephaestus.build).
 - **Contribute:** start with the
   [local development guide](https://docs.hephaestus.build/contributor/local-development).
   It also shows how to explore the UI components in Storybook.

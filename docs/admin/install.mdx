@@ -135,13 +135,13 @@ credential key only with the [credential-key rotation procedure](./credential-ke
 2. Fill in the remaining **REQUIRED** values.
 3. Do not replace the generated internal secrets manually.
 
-   | Variable                           | What / how                                                                                                                                           |
-   | ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-   | `APP_HOSTNAME`                     | Your public hostname, for example, `hephaestus.example.com`                                                                                          |
-   | `ACME_EMAIL`                       | `Let's Encrypt` expiry notices                                                                                                                       |
+   | Variable                           | What / how                                                                                                                                                                                                  |
+   | ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+   | `APP_HOSTNAME`                     | Your public hostname, for example, `hephaestus.example.com`                                                                                                                                                 |
+   | `ACME_EMAIL`                       | `Let's Encrypt` expiry notices                                                                                                                                                                              |
    | One login provider                 | GitHub OAuth (`GH_OAUTH_CLIENT_ID` / `_SECRET`) or GitLab OAuth (`GITLAB_OAUTH_CLIENT_ID` / `_SECRET` and its base URL), from [First steps § 1](./first-steps#1-configure-a-login-provider). One is enough. |
-   | `DOCKER_GROUP_ID`                  | Host group ID that can access `/var/run/docker.sock`. Use the command below. A wrong value prevents every sandbox start.                             |
-   | `HEPHAESTUS_AUTH_BOOTSTRAP_ADMINS` | From [First steps § 2](./first-steps#2-name-the-first-admin) — set it **before** first boot                                                                                                           |
+   | `DOCKER_GROUP_ID`                  | Host group ID that can access `/var/run/docker.sock`. Use the command below. A wrong value prevents every sandbox start.                                                                                    |
+   | `HEPHAESTUS_AUTH_BOOTSTRAP_ADMINS` | From [First steps § 2](./first-steps#2-name-the-first-admin) — set it **before** first boot                                                                                                                 |
 
 4. To find `DOCKER_GROUP_ID`, run:
 
