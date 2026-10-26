@@ -855,6 +855,29 @@ const grants = (role: unknown) =>
 		})
 		.toSorted(byCodePoint);
 
+await test("a release can apply a stream limit that deletes stored messages only when its operator turns it on", () => {
+	// The migration that shortens an existing stream's age needs one start with this flag.
+	const defaults = workload(rendered(layersFor("small")), "webhook");
+	assert.equal(
+		envValue(defaults, "HEPHAESTUS_WEBHOOK_STREAM_ALLOW_DESTRUCTIVE_LIMIT_UPDATES"),
+		"false",
+	);
+	assert.equal(envValue(defaults, "HEPHAESTUS_WEBHOOK_STREAM_LIMIT_UPDATE_TIMEOUT"), "5m");
+
+	const migrating = workload(
+		rendered([
+			...layersFor("small"),
+			{ webhook: { stream: { allowDestructiveLimitUpdates: true, limitUpdateTimeout: "30m" } } },
+		]),
+		"webhook",
+	);
+	assert.equal(
+		envValue(migrating, "HEPHAESTUS_WEBHOOK_STREAM_ALLOW_DESTRUCTIVE_LIMIT_UPDATES"),
+		"true",
+	);
+	assert.equal(envValue(migrating, "HEPHAESTUS_WEBHOOK_STREAM_LIMIT_UPDATE_TIMEOUT"), "30m");
+});
+
 await test("an enabled worker receives its runtime settings, its sandbox namespace and only the authority its runtime uses", () => {
 	const resources = rendered([...layersFor("small"), workerLayer]);
 	const worker = workload(resources, "worker");

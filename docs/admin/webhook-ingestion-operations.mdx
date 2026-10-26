@@ -151,38 +151,68 @@ Provider reconciliation restores current source state within each integration's 
 event. See
 [choosing the broker recovery strategy](./production-operations-runbook.mdx#choose-the-broker-recovery-strategy-before-starting-consumers).
 
-Do not page on `webhook.stream.bytes.utilization`. A healthy stream at its bound sits near 1.0
-forever — that is the bound doing its job, not an incident. It is a dashboard number.
+Alert when `webhook.stream.bytes.utilization` stays above 0.5.
+In steady state the age bound holds the stream, well below its byte bound.
+A stream at its byte bound deletes its oldest message on every publish.
+Lower `HEPHAESTUS_WEBHOOK_STREAM_MAX_AGE` or raise the byte bound.
 
 `webhook.stream.consumers` climbing and never falling means durables are accumulating on a shared
 broker. See [Consumers that outlive their deployment](#consumers-that-outlive-their-deployment).
 
 ## How long a delivery is actually kept
 
-The self-host `.env.example` overrides the application defaults below with `512MB` per stream and
-`6GB` for GitHub. Its broker defaults are `NATS_JS_MAX_MEM=1G` and
-`NATS_JS_MAX_FILE_BYTES=10737418240` (10 GiB). The four configured stream bounds must fit within
+Two environment files ship, with different numbers:
+
+- `docker/.env.example` (the reference deployment) keeps the application defaults below: `1GB` per
+  stream, `10GB` for GitHub, and a broker cap of `NATS_JS_MAX_FILE_BYTES=17179869184` (16 GiB).
+- `docker/self-host/.env.example` (one small host) sets `512MB` per stream, `6GB` for GitHub,
+  `NATS_JS_MAX_MEM=1G` and `NATS_JS_MAX_FILE_BYTES=10737418240` (10 GiB). At the 7-day age, its
+  GitHub bound fits about 460 MB of deliveries a day.
+
+The four configured stream bounds must fit within
 the broker's file-storage cap. Do not size that cap above the volume's available space.
 
-Each stream carries two bounds, and **which one binds depends on your traffic**:
+Each stream carries two bounds:
 
-- `HEPHAESTUS_WEBHOOK_STREAM_MAX_AGE` (default `180d`) is the **ceiling** — the longest a delivery is
-  kept if disk allows.
+- `HEPHAESTUS_WEBHOOK_STREAM_MAX_AGE` (default `7d`) holds the stream in steady state.
+  Consumers acknowledge a delivery within seconds.
+  The age decides only how long a deployment that is offline can resume from the stream.
 - `HEPHAESTUS_WEBHOOK_STREAM_MAX_BYTES` (default `1GB`, and
-  `HEPHAESTUS_WEBHOOK_STREAM_MAX_BYTES_GITHUB` at `10GB`) is the **floor** under it. At the bound the
-  broker deletes the oldest messages to admit new ones.
+  `HEPHAESTUS_WEBHOOK_STREAM_MAX_BYTES_GITHUB` at `10GB`) is the disk-safety bound behind it.
+  At this bound, the broker deletes the oldest message on every publish.
 
-At low volume, nothing approaches the byte bound and retention is the full 180 days.
-At high volume, the byte bound recycles the stream much earlier.
-Neither limit shows your actual retention.
-Read `webhook.stream.oldest.message.age` for your deployment to get that value.
+Size the age so that your daily GitHub volume times the age stays below half of the GitHub byte bound.
+The defaults keep a busy instance (750 MB a day) at about 5 GB.
+Lower the age as your volume grows.
+`webhook.stream.oldest.message.age` shows the retention that your deployment gets.
+
+### Upgrading a stream that is already full
+
+An existing stream keeps its earlier limits until startup applies the new ones.
+Startup withholds a shorter age, because it deletes messages that the stream holds.
+The webhook receiver then logs `Stream github limit change withheld because it would delete stored messages` at every start.
+
+To apply the new age once:
+
+1. Check that `webhook.stream.consumer.pending` and `webhook.stream.consumer.ack.pending` are near zero.
+   The messages that the new age deletes were then delivered already.
+2. Set `HEPHAESTUS_WEBHOOK_STREAM_ALLOW_DESTRUCTIVE_LIMIT_UPDATES=true` and restart the webhook receiver.
+   On the Helm chart, set `webhook.stream.allowDestructiveLimitUpdates` instead.
+   The broker deletes the old messages before it answers.
+   How long that takes on a large stream on a slow disk is unmeasured.
+   With several webhook receivers, the others keep publishing while one applies the limit.
+   If the log reports a timeout, raise `HEPHAESTUS_WEBHOOK_STREAM_LIMIT_UPDATE_TIMEOUT` (chart: `webhook.stream.limitUpdateTimeout`) and restart again.
+3. Look for `Reconciled JetStream stream limits and DELETED stored messages` in the log.
+4. Set the flag back to `false`.
 
 Scheduled sync (`MONITORING_SYNC_CRON`, hourly by default in production) fetches the last `MONITORING_TIMEFRAME` days from the provider API again.
 Other means can recover a delivery removed inside that window.
 Nothing can recover one removed outside it.
 
-1. Size the byte bound against **the cost of a removed message**, not the age ceiling.
-2. **If you raise `MONITORING_TIMEFRAME`, raise the byte bounds with it.**
+1. The age bound removes messages in steady state.
+   A deployment that was offline gets back what it missed inside `MONITORING_TIMEFRAME` days through reconciliation.
+2. The byte bound only protects the disk.
+   Keep it above twice your daily GitHub volume times the age, so the age binds first.
 
 Streams carrying personal message content — `slack` and `outline` — are capped at 72 hours regardless
 of volume. PostgreSQL is the system of record. An erasure request cannot reach inside a broker
@@ -190,7 +220,7 @@ stream, so those are transport buffers and nothing more.
 
 ## The storage budget, and why it is not just a number
 
-`NATS_JS_MAX_FILE_BYTES` is 10 GiB in the self-host `.env.example` and 16 GiB without an override.
+`NATS_JS_MAX_FILE_BYTES` is 16 GiB in `docker/.env.example` and without an override, and 10 GiB in `docker/self-host/.env.example`.
 It sets the broker's JetStream budget and the total against which the receiver checks per-stream bounds.
 **The receiver refuses to start if the four bounds sum above that budget:**
 

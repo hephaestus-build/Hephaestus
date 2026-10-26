@@ -762,13 +762,15 @@ hephaestus:
             # no timestamp, so this dedup window keyed on X-GitHub-Delivery is its only replay
             # defense; 10m also covers provider redelivery horizons. See WebhookProperties.Stream.
             duplicate-window: 10m
-            # The retention CEILING: the longest a delivery is kept if disk allows. max-bytes below
-            # is the floor under it, and which of the two binds is a function of volume. Nothing here
-            # can predict that — `webhook.stream.oldest.message.age` reports the answer per stream.
-            max-age: ${HEPHAESTUS_WEBHOOK_STREAM_MAX_AGE:180d}
+            # The bound that holds a stream in steady state. Consumers acknowledge within seconds, so
+            # the age only decides how long an offline deployment can resume from the stream;
+            # reconciliation repairs what it misses inside hephaestus.sync.timeframe-days. Sized so a
+            # busy GitHub stream stays below half of its byte bound: a stream at its byte bound deletes
+            # its oldest message on every publish (WebhookIngestionCannotFailSilentlyTest).
+            max-age: ${HEPHAESTUS_WEBHOOK_STREAM_MAX_AGE:7d}
             # Streams whose messages carry real personal content, not just change pointers. SQL is the
             # system of record and GDPR erasure cannot reach inside the broker, so these are capped
-            # at a transport-buffer horizon rather than the ceiling above:
+            # at a transport-buffer horizon below the bound above:
             #   slack   — the envelope is the channel/DM message text itself.
             #   outline — an Outline webhook delivery embeds the whole document in payload.model.text
             #             (full Markdown body, plus author/collaborator ids), so an erased or corrected
@@ -776,8 +778,8 @@ hephaestus:
             max-age-by-stream:
                 slack: 72h
                 outline: 72h
-            # The disk-safety FLOOR. At the bound JetStream deletes the oldest messages to admit new
-            # ones, so it is sized to outlast what nightly RECONCILIATION can re-fetch
+            # The disk-safety bound behind max-age. At the bound JetStream deletes the oldest messages to
+            # admit new ones, so it is sized to outlast what nightly RECONCILIATION can re-fetch
             # (hephaestus.sync.timeframe-days): inside that window a shed webhook is recoverable from
             # the provider API, outside it, it is recoverable by nothing. There is deliberately no
             # message-count bound — a count says nothing about disk.

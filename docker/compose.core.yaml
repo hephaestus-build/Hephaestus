@@ -39,7 +39,7 @@ services:
       # Stream bounds belong on THIS container. The beans that read hephaestus.webhook.stream.* are
       # gated on the webhook role, so the same variables on application-server (which runs with the
       # role off) would configure nothing at all. `gate:env` fails the build if they drift back.
-      HEPHAESTUS_WEBHOOK_STREAM_MAX_AGE: ${HEPHAESTUS_WEBHOOK_STREAM_MAX_AGE:-180d}
+      HEPHAESTUS_WEBHOOK_STREAM_MAX_AGE: ${HEPHAESTUS_WEBHOOK_STREAM_MAX_AGE:-7d}
       HEPHAESTUS_WEBHOOK_STREAM_MAX_BYTES: ${HEPHAESTUS_WEBHOOK_STREAM_MAX_BYTES:-1GB}
       # github carries essentially all of the traffic, so it is the only per-stream override and the
       # only one worth moving. Raise it and NATS_JS_MAX_FILE_BYTES together.

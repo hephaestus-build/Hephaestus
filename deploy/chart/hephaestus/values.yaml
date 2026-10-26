@@ -169,9 +169,17 @@ webhook:
   # 1 to 3, or 0 to stop it. While it is 0 the release receives no provider deliveries.
   replicas: 1
   stream:
-    maxAge: 180d
+    # Consumers acknowledge within seconds, so the age holds the stream in steady state. Keep the age
+    # times the daily GitHub volume below half of maxBytesGithub (webhook ingestion operations).
+    maxAge: 7d
     maxBytes: 1GB
     maxBytesGithub: 10GB
+    # Set true for one release to apply a limit that deletes stored messages, such as a shorter
+    # maxAge on a stream that already holds older deliveries; then set it back to false.
+    allowDestructiveLimitUpdates: false
+    # How long the receiver's start waits for one such limit update. A bound that sheds messages
+    # deletes them before the broker answers, so a large stream on a slow disk can need more.
+    limitUpdateTimeout: 5m
   resources:
     requests: { cpu: 250m, memory: 1280Mi, ephemeral-storage: 256Mi }
     limits: { cpu: "2", memory: 1280Mi, ephemeral-storage: 1Gi }

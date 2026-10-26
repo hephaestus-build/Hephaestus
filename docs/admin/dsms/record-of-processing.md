@@ -350,9 +350,9 @@ Retention separates durable verification results from temporary worker inputs. T
 
 Webhook and integration-sync event transport buffer (NATS JetStream)
 
-The `slack` and `outline` streams carry real message and document content and expire after at most 72 hours. The GitHub and GitLab streams carry delivered webhook payloads: pull-request, issue and review-comment bodies. These streams expire after at most 180 days.
+The `slack` and `outline` streams carry real message and document content and expire after at most 72 hours. The GitHub and GitLab streams carry delivered webhook payloads: pull-request, issue and review-comment bodies. These streams expire after at most 7 days. An install upgraded from an earlier version keeps its earlier limit of at most 180 days until its operator applies the new limit, as [webhook ingestion operations](../webhook-ingestion-operations#how-long-a-delivery-is-actually-kept) describes.
 
-Each stream also has a disk ceiling (`HEPHAESTUS_WEBHOOK_STREAM_MAX_BYTES`). When ingest volume reaches it, the broker discards the oldest messages first. Actual retention is then shorter than the time limit. The system reports retention per stream as `webhook.stream.oldest.message.age`. The time limit is the maximum, not the guaranteed duration.
+Each stream also has a size limit that protects the disk (`HEPHAESTUS_WEBHOOK_STREAM_MAX_BYTES`). It is set well above what the time limit keeps. If ingest volume reaches it anyway, the broker discards the oldest messages first, and retention is shorter than the time limit. The system reports retention per stream as `webhook.stream.oldest.message.age`. The time limit is the maximum, not the guaranteed duration.
 
 PostgreSQL is the system of record, and all consent/erasure controls apply there. Erasure cannot reach inside the broker. These horizons, not an erasure request, remove the buffered copy.
 

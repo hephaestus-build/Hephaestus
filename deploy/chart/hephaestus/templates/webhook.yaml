@@ -85,6 +85,10 @@ spec:
               value: {{ $stream.maxBytes | quote }}
             - name: HEPHAESTUS_WEBHOOK_STREAM_MAX_BYTES_GITHUB
               value: {{ $stream.maxBytesGithub | quote }}
+            - name: HEPHAESTUS_WEBHOOK_STREAM_ALLOW_DESTRUCTIVE_LIMIT_UPDATES
+              value: {{ $stream.allowDestructiveLimitUpdates | quote }}
+            - name: HEPHAESTUS_WEBHOOK_STREAM_LIMIT_UPDATE_TIMEOUT
+              value: {{ $stream.limitUpdateTimeout | quote }}
             # Startup refuses stream bounds that sum above the broker's max_file.
             - name: HEPHAESTUS_WEBHOOK_STREAM_STORAGE_BUDGET
               value: {{ int64 .Values.nats.jetstream.maxFileBytes | quote }}

@@ -372,11 +372,19 @@
 				"stream": {
 					"type": "object",
 					"additionalProperties": false,
-					"required": ["maxAge", "maxBytes", "maxBytesGithub"],
+					"required": [
+						"maxAge",
+						"maxBytes",
+						"maxBytesGithub",
+						"allowDestructiveLimitUpdates",
+						"limitUpdateTimeout"
+					],
 					"properties": {
 						"maxAge": { "$ref": "#/definitions/duration" },
 						"maxBytes": { "$ref": "#/definitions/dataSize" },
-						"maxBytesGithub": { "$ref": "#/definitions/dataSize" }
+						"maxBytesGithub": { "$ref": "#/definitions/dataSize" },
+						"allowDestructiveLimitUpdates": { "type": "boolean" },
+						"limitUpdateTimeout": { "$ref": "#/definitions/duration" }
 					}
 				},
 				"resources": { "$ref": "#/definitions/resources" }

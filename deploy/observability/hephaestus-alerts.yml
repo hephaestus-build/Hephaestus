@@ -46,6 +46,13 @@ groups:
           severity: warning
         annotations:
           summary: More than 50 events of a stream stayed undelivered to the consumers for 15 minutes
+      - alert: HephaestusWebhookStreamNearByteBound
+        expr: max by (stream) (webhook_stream_bytes_utilization{job="hephaestus",runtime_role="webhook"}) > 0.5
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: A webhook stream stayed above half of its byte bound; its age bound is too long for its volume
       - alert: HephaestusWebhookPublishFailing
         expr: sum(increase(webhook_publish_total{job="hephaestus",outcome="failure"}[10m])) > 0
         for: 10m

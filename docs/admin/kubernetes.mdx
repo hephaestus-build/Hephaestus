@@ -305,7 +305,7 @@ Use a network plugin that encrypts traffic between nodes, for example WireGuard 
 | PostgreSQL | Volume size | `postgresql.persistence.size` |
 | JetStream | Broker `max_file` and stream storage budget | `nats.jetstream.maxFileBytes` |
 | JetStream volume | `max_file` plus 25 % | Derived from `nats.jetstream.maxFileBytes` |
-| Webhook streams | Age and size for each stream | `webhook.stream.*` |
+| Webhook streams | Age and size for each stream, and one start that may delete stored messages to apply a smaller bound | `webhook.stream.*` |
 | Server Git mirrors | `emptyDir` size limit on the node | `server.gitCache.sizeLimit` |
 | Worker Git mirrors | `emptyDir` size limit on the node, per worker | `worker.gitCache.sizeLimit` |
 | AI spend ledger | Retention | `config.llmUsageRetention` |
