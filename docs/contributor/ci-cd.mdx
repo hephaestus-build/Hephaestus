@@ -65,13 +65,12 @@ It can capture evidence only for images that its run published.
 | Build → App Server: PostgreSQL drills                                   | `test:postgres-restore`, then `test:postgres-pitr`, in one job beside `databaseTest`. **Re-run failed jobs** repeats both drills                                                                          | `vp run test:postgres-restore`, `test:postgres-pitr`                     |
 | Build → Webapp: E2E                                                     | Playwright against the packaged JAR                                                                                                                                                                       | `vp run --filter webapp test:e2e`                                        |
 | Build → Extension: E2E                                                  | Playwright with the extension's `e2e` build — not the production zip — against the packaged JAR                                                                                                           | `vp run test:extension:e2e`                                              |
-| Build → App Server image                                                | `pack build` from the packaged JAR, signed, attested and policy-scanned                                                                                                                                   | —                                                                        |
 | Test → App Server: Unit and architecture, App Server: Integration       | the package job's compiled classes, without compiling again                                                                                                                                               | `vp run test:server:verification`, `test:server:integration`             |
 | Dependency review → New dependency risk                                          | informational dependency review. Pull requests that change a dependency input. Independent of CI Status Gate                                                                                                                                                           | —                                                                        |
 | Security → Dependencies, secrets, and policy                            | Trivy filesystem scan, dependency vulnerability gate, TruffleHog, `security.txt` expiry, changelog immutability guard, legacy-reference guards                                                            | —                                                                        |
 | Changesets → Verify changesets                                          | policy tests, verified-revert detection, release-note presence, `MIGRATION.md` freeze                                                                                                                     | `vp run gate:changesets`                                                 |
 | Compose → Render compose stacks                                         | the self-hosted and reference stacks render                                                                                                                                                               | —                                                                        |
-| Docker → Webapp, Agent: Pi, Postgres (pg_partman), Tag unchanged images | Dockerfile images. Aliases for unchanged ones                                                                                                                                                             | —                                                                        |
+| Docker → Images, Tag unchanged images                                   | One build job per platform builds every image of the run and scans it. The Dockerfile images use `docker buildx bake`. The App Server image uses `pack build` from the packaged JAR. One manifest job merges, attests and signs them. Aliases for unchanged images           | —                                                                        |
 | Supported-host boot smoke                                               | `docker/self-host/setup.sh`, then PostgreSQL, NATS and the application server from this run's own images, waiting for the application to report healthy                                                   | —                                                                        |
 | Actionlint, Zizmor                                                      | workflow lint with ShellCheck warnings. Zizmor at medium confidence                                                                                                                                       | —                                                                        |
 | PR → Validate PR                                                        | Conventional Commit title. Every commit’s primary author resolves to the PR author’s GitHub account (including bot accounts) or a listed review-policy maintainer. The PR body follows attribution policy | —                                                                        |
@@ -511,8 +510,8 @@ A draft with the label also builds its images.
 | `cache-gradle.yml`                    | Main push changing Gradle inputs, or dispatch                                 | The only Gradle cache producer: builds what the server jobs restore                                                                                                                                                              |
 | `ci-build.yml`                        | Called by cicd.yml                                                            | Runs the OpenAPI, schema, database and browser E2E gates against the server artifact packaged by cicd.yml                                                                                                                        |
 | `ci-tests.yml`                        | Called by cicd.yml                                                            | The server unit, architecture and integration suites, on the package job's compiled classes                                                                                                                                     |
-| `ci-docker-build.yml`                 | Called by cicd.yml                                                            | Dockerfile image builds (webapp, agent, PostgreSQL) and aliases for unchanged images                                                                                                                                             |
-| `reusable-docker-build.yml`           | Called by cicd.yml and ci-docker-build.yml                                    | Builds each requested platform natively, merges the index, signs, attests, and blocks on the release vulnerability policy for each platform                                                                                       |
+| `ci-docker-build.yml`                 | Called by cicd.yml                                                            | Every image build of the run (App Server, webapp, agent, PostgreSQL) and aliases for unchanged images                                                                                                                            |
+| `reusable-docker-build.yml`           | Called by ci-docker-build.yml                                                 | Builds every requested image in one job per platform, natively, and blocks on the release vulnerability policy there. One job merges each index, attests, signs and tags it                                                       |
 | `ci-security-scan.yml`                | Called by cicd.yml                                                            | Trivy dependency scan, secret detection and repository policy checks                                                                                                                                                             |
 | `dependency-review.yml`               | PR changing a dependency input                                                | Reports introduced dependency advisories independently of the required CI verdict                                                                                                                                                |
 | `dependency-graph.yml`                | PR changing a dependency input, push to main                                  | Resolves and uploads the verified Gradle dependency graph with read-only permissions                                                                                                                                             |
@@ -757,12 +756,13 @@ Any other pull request builds no image. The merge group builds every changed ima
 
 ## Docker layer caching
 
-Dockerfile builds import `<image>:cache-main-<platform>` from `ghcr.io`.
+The Dockerfile images are targets of `docker/docker-bake.hcl`, built for one platform in one `docker buildx bake` call.
+Each imports `<image>:cache-main-<platform>` from `ghcr.io`.
 Only pushes to `main` and merge groups write it, with every intermediate layer.
 A pull request reuses those layers and writes nothing.
 
-amd64 builds on `ubuntu-24.04`, arm64 on `ubuntu-24.04-arm`. No emulation. The buildpacks
-path (`App Server image`) does not use this cache. Dockerfile builds always bypass the cache for
+amd64 builds on `ubuntu-24.04`, arm64 on `ubuntu-24.04-arm`. No emulation. The App Server
+image, built with Buildpacks, does not use this cache. Dockerfile builds always bypass the cache for
 the `os-packages` and exported `runtime` stages. [OS package updates](vulnerability-remediation.mdx#os-package-updates-in-first-party-images)
 owns that contract and the local build commands.
 
@@ -854,15 +854,16 @@ and release preflight wait for the image producers, not the API, database or bro
 final CI gate still requires all of them. An early image verdict cannot approve a failed artifact gate.
 
 A default-branch push reuses the packaged server when a successful merge group
-validated the exact same commit. The source must be this repository's `cicd.yml` run, with successful
-artifact gates, tests, security checks, both server image builds and final gate. Release preflight
+validated the exact same commit. The source must be this repository's `cicd.yml` run.
+Its artifact gates, tests, security checks, both platform image builds and final gate must have succeeded.
+Its `Create manifests` job must have attested the App Server image. Release preflight
 does not change the packaged Java artifact, so its absence in ordinary merge groups does not force
 a rebuild. Release candidates still require release preflight.
 
-The latest attempt of each job counts, so an arm64 server image build that flaked and passed on a
+The latest attempt of each job counts, so an arm64 image build that flaked and passed on a
 re-run does not block reuse. A queue run whose arm64 build stays failed fails its gate, so its
 commit does not merge. `main` packages the server again when the merge group did not rebuild the
-server image, because that queue run has no server image builds.
+App Server image, because that queue run attested no App Server image.
 
 The immutable artifact ID and its SHA-256 digest bind the download to that run. Missing, expired or
 unavailable source evidence falls back to packaging. A corrupt download fails rather than being used.
@@ -874,7 +875,7 @@ Release publication still generates fresh vulnerability evidence and signatures.
 A default-branch push reuses each image that its successful merge group published for the same commit.
 `detect-changes` resolves that run with `scripts/resolve-queue-run.ts`.
 The run must have a successful `CI Status Gate`, which covers its image builds and per-platform scans.
-The `reuse` job in `reusable-docker-build.yml` accepts the image at `<image>:<commit>` only when all these checks pass:
+The `Create manifests` job in `reusable-docker-build.yml` accepts the image at `<image>:<commit>` only when all these checks pass:
 
 - Its platform leaves are exactly the platforms that the push requests.
 - Its cosign signature comes from `reusable-docker-build.yml` on the queue branch, with the `merge_group` trigger, at this commit.
@@ -884,15 +885,24 @@ The push then signs the index and each leaf again, verifies them, and moves the 
 It does not rebuild, re-attest, or rescan the image.
 The release verifier accepts only the default-branch signing identity, so the push signs the image again.
 The provenance stays the queue run's, because that run built the image.
-A missing or unverifiable image is built and scanned as before.
+
+An image that the queue run did not publish is built and scanned as before.
 Examples are a direct push, an image that the merge group did not rebuild, and a lookup that failed.
+An image that the queue run published but that fails a check fails the push, which then publishes no image.
+Thus, `main` never ships a different image in place of one that its merge group built and tested.
 
-`resolve-queue-run.ts` also lists the images whose `Create manifest` job succeeded in the queue run.
-The push runs the `reuse` job only for those images.
-For any other image, the build starts at once, without a job that waits for a runner only to find nothing to reuse.
+After a transient failure, such as a registry or API timeout, **Re-run failed jobs** repeats the manifest job and the jobs that follow it.
+After a persistent failure, merge a new commit through the queue.
+Its merge group builds, scans and signs the images again, and its push publishes them for `main`, staging and the release.
 
-A merge group adds one arm64 build job, which also scans that platform, for each image that it rebuilds.
-That is four jobs when it rebuilds all images.
+`resolve-queue-run.ts` also lists the images whose attestation step succeeded in the queue run's `Create manifests` job.
+The push reuses only those images, and its build jobs build the rest at once.
+When the queue run published every image, a push that is not a version bump builds and scans nothing.
+It then skips `App Server: Package` and `Image advisory database`.
+It runs `Detect changes`, `Docker / Images / Create manifests` and `CI Status Gate`.
+Thus, it holds few of the runners that a waiting merge group needs.
+
+A merge group adds one arm64 build job, which builds and scans that platform for every image that it rebuilds.
 The push reuses those images and no longer builds or scans them on either architecture.
 It still builds and scans both platforms of each image that the merge group did not rebuild, as before.
 The webapp records its branch at build time, so a merge group builds it with the default branch's name.
@@ -949,8 +959,12 @@ If no such default-branch commit exists, the run builds every image itself. `det
 
 - `Security` starts from `Detect changes`. Only `Pinned upstream images` reads the advisory
   snapshot, so only it waits for `Image advisory database`.
-- Quality legs run independently. The image matrix in `reusable-docker-build.yml` uses
-  `fail-fast: true`.
+- Quality legs run independently. The platform matrix in `reusable-docker-build.yml` uses
+  `fail-fast: false`. One platform's refusal does not cancel the scan of the other platform.
+- All images of a run share one build job per platform and one manifest job.
+  Each job pays a runner's setup.
+  The App Server image is built from the packaged JAR.
+  Thus, the build jobs start when `App Server: Package` uploads it, and the Dockerfile images wait with them.
 - A push to a pull request cancels the earlier runs of that pull request, and no other runs.
   A superseded run validates a commit that nobody merges, and it holds runners that other pull requests wait for.
   Each workflow that runs on `pull_request` or `pull_request_target` declares this at the top level:
@@ -1224,8 +1238,14 @@ Extend the pipeline at the ownership boundary that changed. Do not copy an exist
    Use `frozen` for any job that calls `vp`, because Vite+ loads the task graph from workspace configs. `none` only for jobs that run
    `node scripts/…` or shell alone. Java jobs use a validated `setup-caches`
    type. Browser jobs use `setup-browsers`.
-4. Add image builds through `reusable-docker-build.yml`. Keep image metadata, immutable tags,
-   attestations, and signing in that workflow rather than reproducing them in the caller.
+4. Add a Dockerfile image as a target of `docker/docker-bake.hcl` and an input of
+   `reusable-docker-build.yml`. Keep image metadata, immutable tags, attestations, and signing in
+   that workflow rather than reproducing them in the caller. In that workflow, also add the image to:
+   - `IMAGE_NAMES`, the one list that the image selection and every name check read, and a boolean input of the same name.
+   - A metadata step, its `bake-file-labels` entry, and the image list of the merge job's metadata step.
+   - A digest output and an `Attest the <image> image` step.
+   - `imageAttestations` in `scripts/resolve-server-build.ts`, so that a push can reuse the image.
+   - Its `*_changed` input in `ci-docker-build.yml` and `security/release-images.json`.
 5. Pass the change-detection output from `cicd.yml` to every reusable workflow that needs it.
 
 `scripts/ci-contract.test.ts` owns the workflow invariants. Extend it when the service introduces one.
