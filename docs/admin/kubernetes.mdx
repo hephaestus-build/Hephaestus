@@ -7,6 +7,7 @@ description: Install Hephaestus on a Kubernetes cluster with its Helm chart, and
 # Kubernetes
 
 The Helm chart installs Hephaestus on a Kubernetes cluster.
+A single host runs the chart on k3s.
 From 1.0, the chart is the supported deployment: [ADR 0058](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0058-the-helm-chart-is-the-only-supported-deployment-from-1-0.md) records the decision, and the [compatibility policy](./compatibility-policy#support-for-1x) gives the terms.
 The worker runs practice reviews and Heph turns. The `small.yaml` profile enables it, and [Install](#install) ends when it is ready.
 On one host, k3s runs the cluster: [Install on one host (k3s)](#install-on-one-host-k3s) gives the complete procedure.
@@ -602,6 +603,7 @@ For one host, use [Install on one host (k3s)](#install-on-one-host-k3s).
 
 2. Create the [Secret](#create-the-secret) and the [PostgreSQL TLS Secret](#postgresql-tls-secret).
 3. Write your values file, `site.yaml`, with `host`, `trustedProxies`, `secret.name`, `postgresql.tls.existingSecret`, `route.parentRefs`, and `networkPolicy.gateway` with its pod labels.
+   Add the login provider and the first admin, as [First steps § 1 and § 2](./first-steps) describe.
    Do not set `release` or `images`: the release chart sets them.
 4. Enable reviews.
    `small.yaml` enables the worker, and the chart does not render it without the sandbox namespace and the Kubernetes API endpoint.
@@ -644,6 +646,8 @@ For one host, use [Install on one host (k3s)](#install-on-one-host-k3s).
    ```
 
    If the worker does not become ready, read [Troubleshooting](#troubleshooting).
+
+9. Continue with [First steps § 3. Sign in](./first-steps#3-sign-in).
 
 The schema refuses an unknown key, an image tag, and a value outside its bounds.
 Each object name is `<release>-<component>`, with at most 52 characters.

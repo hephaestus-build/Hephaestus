@@ -53,7 +53,8 @@ To mount legal overrides, see [Legal Pages](./legal-pages).
 
 ## Deployment steps (reference stack)
 
-The [Install guide](./install) owns the same base installation, secrets, GitHub OAuth app and callback, before-first-boot admin allowlist, and legal-pages obligation.
+The [Install guide](./install) owns the same base installation and secrets. [First steps](./first-steps) owns the GitHub OAuth app and callback, the before-first-boot admin allowlist, and the legal-pages obligation.
+
 Only multi-file stack differences appear here.
 Each file is a separate Compose project and needs its own `-p` and `up`.
 Each resolves images from the verified release lock.

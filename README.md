@@ -11,7 +11,7 @@
   <p>
     <a href="https://hephaestus.build"><strong>App</strong></a> ·
     <a href="https://docs.hephaestus.build/"><strong>Docs</strong></a> ·
-    <a href="https://docs.hephaestus.build/admin/install"><strong>Self-host</strong></a> ·
+    <a href="https://docs.hephaestus.build/admin/kubernetes"><strong>Self-host</strong></a> ·
     <a href="https://github.com/hephaestus-build/Hephaestus/discussions"><strong>Discussions</strong></a>
   </p>
   <p>
@@ -98,8 +98,8 @@ The feedback is advisory: it does not approve a change for merge or grade anyone
 
 - **Use it at TUM:** if your course or team has a workspace, sign in at [hephaestus.build](https://hephaestus.build).
 - **Learn how it works:** read the [user guide](https://docs.hephaestus.build/user/overview).
-- **Run your own deployment:** follow the [installation guide](https://docs.hephaestus.build/admin/install).
-  It starts with the [supported hosts and capacity guidance](https://docs.hephaestus.build/admin/install#requirements).
+- **Run your own deployment:** install the [Helm chart](https://docs.hephaestus.build/admin/kubernetes) on a Kubernetes cluster, or on one host with k3s.
+  Then follow the [first steps](https://docs.hephaestus.build/admin/first-steps).
 - **Upgrade:** read the release notes and the [upgrade guide](https://docs.hephaestus.build/admin/upgrade).
   Then test the upgrade in staging.
 - **Contribute:** start with the

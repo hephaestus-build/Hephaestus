@@ -100,8 +100,9 @@ A person can be both.
 
 ## Set it up in this order
 
-1. [Install](./install) the supported Compose stack. The guide covers required `.env` values and TLS.
-   Compose is deprecated, as [Supported deployment](./compatibility-policy#supported-deployment) states.
+1. [Install the Helm chart](./kubernetes), on a cluster or on one host with k3s.
+   Then follow [First steps](./first-steps) for the login provider, the first admin, and the first review.
+   The [Docker Compose install](./install) is deprecated and stays supported until 1.0.0, as [Supported deployment](./compatibility-policy#supported-deployment) states.
 2. [Connect a source](./integrations): a GitHub App or GitLab connection that supplies repository activity.
    [Integration settings](./production-setup) covers Slack and Outline.
 3. [Connect an AI provider](./ai-providers) with an OpenAI-compatible endpoint.

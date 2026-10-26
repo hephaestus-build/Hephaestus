@@ -55,7 +55,7 @@ export function LandingCtaSection({ onSignIn }: LandingCtaSectionProps) {
 						Running your own deployment?{" "}
 						<a
 							className="font-medium text-foreground underline underline-offset-4"
-							href="https://docs.hephaestus.build/admin/install"
+							href="https://docs.hephaestus.build/admin/kubernetes"
 							target="_blank"
 							rel="noopener noreferrer"
 						>
