@@ -1,0 +1,124 @@
+name: Release Host Smoke
+
+# The one-host install of docs/admin/kubernetes.mdx § Install on one host (k3s) on a clean runner of
+# each supported architecture: the release's signed k3s-install.sh with its other k3s assets, as the
+# docs run it. It then checks the migration Job and every role, each worker's isolation probe and
+# its reviews, the configured shutdown budget, and requests through the Gateway, and it runs the
+# installer a second time and an upgrade.
+# Let's Encrypt cannot reach a runner, so a local CA issues the Gateway certificate in its place.
+# release.yml runs it beside the Compose host smoke before publication; a dispatch runs it again for
+# a release, a draft included, that has the k3s assets.
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        description: The release tag, for example v0.95.0
+        type: string
+        required: true
+      sha:
+        description: The release's commit, whose scripts run the smoke
+        type: string
+        required: true
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: The release tag, for example v0.95.0. A draft release works too.
+        type: string
+        required: true
+      sha:
+        description: The release's commit
+        type: string
+        required: true
+
+permissions: {}
+
+jobs:
+  smoke:
+    name: k3s host smoke (${{ matrix.architecture }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - architecture: amd64
+            runner: ubuntu-24.04
+          - architecture: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    permissions:
+      # A draft release's assets require authenticated push access.
+      contents: write
+      packages: read
+    env:
+      TAG: ${{ inputs.tag }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.sha }}
+          persist-credentials: false
+
+      # The smoke reads the certificates asset with the repository's YAML parser.
+      - uses: ./.github/actions/setup-toolchain
+        with:
+          install: "frozen"
+
+      - uses: ./.github/actions/setup-helm
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@af595e623eec1ede52d6322f53b635d5def0a95a
+        with:
+          cosign-release: v3.1.4
+
+      - name: Log in to GitHub Container Registry
+        uses: ./.github/actions/ghcr-login
+        with:
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      # As the operator does: every k3s asset after its signature check. The installer verifies the
+      # chart by the digest in the joint lock; a draft's assets need the token, so gh downloads them.
+      - name: Verify the k3s assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          IDENTITY: ${{ github.server_url }}/${{ github.repository }}/.github/workflows/release.yml@refs/heads/main
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          mkdir k3s-assets
+          gh release download "$TAG" --repo "$REPOSITORY" --dir k3s-assets --pattern 'k3s-*'
+          gh release download "$TAG" --repo "$REPOSITORY" --pattern "release-$TAG.chart.json"
+          [ -f k3s-assets/k3s-install.sh ] || { echo "::error::$TAG has no k3s-install.sh"; exit 1; }
+          for file in $(find k3s-assets -type f ! -name '*.sigstore.json' | sort); do
+            cosign verify-blob --bundle "$file.sigstore.json" --certificate-identity "$IDENTITY" \
+              --certificate-oidc-issuer https://token.actions.githubusercontent.com "$file"
+          done
+
+      - name: Install with k3s-install.sh, run it again, upgrade, and check every role and the Gateway
+        env:
+          ARCHITECTURE: ${{ matrix.architecture }}
+        run: |
+          node scripts/kubernetes-cluster.ts release-smoke --work "$RUNNER_TEMP/release-smoke" \
+            --assets "$RUNNER_TEMP/k3s-assets" --lock "$RUNNER_TEMP/release-$TAG.chart.json" \
+            --release "$TAG" --architecture "$ARCHITECTURE"
+
+      - name: Record the cluster state
+        if: ${{ failure() }}
+        env:
+          KUBECONFIG: ${{ runner.temp }}/k3s-assets/kubeconfig
+        run: |
+          sudo journalctl -u k3s --no-pager | tail -n 200 || true
+          kubectl get pods -A -o wide || true
+          kubectl get helmcharts,addons -A || true
+          kubectl get gateways,httproutes,certificates,certificaterequests,challenges -A || true
+          kubectl -n hephaestus describe pods || true
+          kubectl -n hephaestus get jobs -o wide || true
+          kubectl -n hephaestus logs -l app.kubernetes.io/component=migration --tail=200 --prefix || true
+          kubectl -n hephaestus logs -l app.kubernetes.io/component=worker --tail=300 --prefix || true
+          kubectl -n hephaestus logs -l app.kubernetes.io/component=server --tail=300 --prefix || true
+          kubectl -n traefik logs -l app.kubernetes.io/name=traefik --tail=200 --prefix || true
+          kubectl -n cert-manager logs -l app.kubernetes.io/instance=cert-manager --tail=200 --prefix || true
+          kubectl -n hephaestus-sandboxes get pods,jobs -o wide || true
+          kubectl describe nodes | grep -A 12 "Allocated resources" || true
+

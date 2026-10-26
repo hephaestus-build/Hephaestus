@@ -1,0 +1,94 @@
+# The certificates of a one-host install on k3s: docs/admin/kubernetes.mdx § Install on one host (k3s).
+#
+# k3s-install.sh writes this file to /var/lib/rancher/k3s/server/manifests/hephaestus-certificates.yaml
+# with two values replaced: hephaestus.example.com by the host name, and acme@example.com by the
+# address that gets the expiry notices of Let's Encrypt. k3s applies it until cert-manager and the
+# hephaestus namespace exist. cert-manager renews each certificate before it expires.
+---
+# Let's Encrypt, through the HTTP-01 challenge on the Gateway's plain HTTP listener.
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: gateway
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: acme@example.com
+    privateKeySecretRef:
+      name: gateway-acme-account
+    solvers:
+      - http01:
+          gatewayHTTPRoute:
+            parentRefs:
+              - name: traefik-gateway
+                namespace: traefik
+                kind: Gateway
+                sectionName: web
+---
+# The certificate of the Gateway's HTTPS listener (deploy/platform/k3s-platform.yaml).
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: hephaestus-tls
+  namespace: traefik
+spec:
+  secretName: hephaestus-tls
+  dnsNames:
+    - hephaestus.example.com
+  issuerRef:
+    kind: ClusterIssuer
+    name: gateway
+---
+# A CA of the release namespace alone, for the PostgreSQL server certificate.
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: hephaestus-postgresql-root
+  namespace: hephaestus
+spec:
+  selfSigned: {}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: hephaestus-postgresql-ca
+  namespace: hephaestus
+spec:
+  isCA: true
+  commonName: Hephaestus PostgreSQL CA
+  secretName: hephaestus-postgresql-ca
+  # Ten years. A new CA needs a restart of every role, and the roles trust only this one.
+  duration: 87600h
+  renewBefore: 720h
+  issuerRef:
+    kind: Issuer
+    name: hephaestus-postgresql-root
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: hephaestus-postgresql-ca
+  namespace: hephaestus
+spec:
+  ca:
+    secretName: hephaestus-postgresql-ca
+---
+# The Secret that postgresql.tls.existingSecret names: tls.crt and tls.key for the bundled
+# PostgreSQL, and ca.crt for the roles. The roles connect to exactly this name.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: hephaestus-postgresql-tls
+  namespace: hephaestus
+spec:
+  secretName: hephaestus-postgresql-tls
+  commonName: hephaestus-postgresql.hephaestus.svc
+  dnsNames:
+    - hephaestus-postgresql.hephaestus.svc
+  # One year. PostgreSQL reads a renewed certificate only when it starts: restart it in the 30 days
+  # between the renewal and the expiry of the previous certificate.
+  duration: 8760h
+  renewBefore: 720h
+  issuerRef:
+    kind: Issuer
+    name: hephaestus-postgresql-ca

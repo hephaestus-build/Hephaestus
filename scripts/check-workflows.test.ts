@@ -9,9 +9,11 @@ import type { TemplateToken } from "@actions/workflow-parser/templates/tokens/te
 
 import { checkRepository, runScript } from "./check-workflows.ts";
 import { openActionsLanguage } from "./lib/actions-language.ts";
+import { prepareShellCheck } from "./lib/shellcheck.ts";
 
 const mask = (expression: string) => "_".repeat(expression.length);
 const language = await openActionsLanguage();
+const shellcheck = await prepareShellCheck();
 const roots: string[] = [];
 after(async () => {
 	await language.close();
@@ -66,7 +68,7 @@ async function check(workflow: string, extra: Record<string, string> = {}) {
 		await mkdir(path.dirname(path.join(root, name)), { recursive: true });
 		await writeFile(path.join(root, name), content);
 	}
-	return { root, ...(await checkRepository(language, root)) };
+	return { root, ...(await checkRepository(language, root, shellcheck)) };
 }
 
 const job = (steps: string, on = "push") =>
@@ -228,10 +230,10 @@ void test("holds a local action's caller to its declared inputs, inside this rep
 		if (name === "link escape") {
 			// Discovery finds the linked action too, and refuses to read it rather than checking it.
 			await symlink(outside, path.join(root, ".github/actions/link"));
-			await assert.rejects(checkRepository(language, root), /outside the repository/u);
+			await assert.rejects(checkRepository(language, root, shellcheck), /outside the repository/u);
 			continue;
 		}
-		const { problems } = await checkRepository(language, root);
+		const { problems } = await checkRepository(language, root, shellcheck);
 		assert.ok(
 			problems.some((problem) => problem.startsWith(".github/workflows/test.yml: build step 1:")),
 			name,

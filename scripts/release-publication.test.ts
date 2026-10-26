@@ -45,6 +45,8 @@ const upstream = ["agent-pi", "application-server", "nats", "postgres"].map((nam
 /** The release image inventory of the fixture checkout and its evidence. */
 const inventory = { schemaVersion: 1, images: ["webapp"], upstream };
 const jointLock = `release-${release}.chart.json`;
+/** The k3s platform assets, in the job's workspace as release.yml collects them. */
+const platformAssets = ["k3s-platform.yaml", "k3s-values.yaml"];
 /** A synthetic Cosign bundle: a JSON object naming the signed bytes. It proves nothing about Sigstore. */
 const bundle = (bytes: string | Uint8Array) => JSON.stringify({ sha256: hash(bytes) });
 const sign = async (file: string) =>
@@ -390,6 +392,15 @@ async function fixture(directory: string, source = commit) {
 	for (const file of ["SHA256SUMS", `release-${release}.json`, jointLock]) {
 		await sign(path.join(archive, file));
 	}
+	// The k3s platform assets: collected in the job's workspace, where the producer signs them, and
+	// published beside the locks. They are not evidence.
+	await mkdir(path.join(directory, "k3s-platform"));
+	for (const name of platformAssets) {
+		for (const folder of [path.join(directory, "k3s-platform"), archive]) {
+			await writeFile(path.join(folder, name), `# ${name} of ${source}\n`);
+		}
+		await sign(path.join(archive, name));
+	}
 	// The chart is not evidence: the registry, not the release, holds the package and its signature.
 	// Its values pin the images of the lock that the evidence makes.
 	const pinned = releaseValuesLines(
@@ -734,6 +745,10 @@ async function laterEvidence(directory: string) {
 			await copyFile(path.join(archive, file), path.join(evidence, file));
 		}
 	}
+	// What the producer signed in the job's workspace before the writer uploads it.
+	for (const name of platformAssets) {
+		await sign(path.join(directory, "k3s-platform", name));
+	}
 	const attestation = path.join(directory, "attestation.jsonl");
 	await writeFile(attestation, '{"mediaType":"application/vnd.dev.sigstore.bundle.v0.3+json"}\n');
 	return {
@@ -1000,7 +1015,11 @@ for (const scenario of ["absent", "same-source-draft", ...producerRefusals.keys(
 			`${chart.repository}@${chart.digest}`,
 			pushed,
 		]);
-		for (const file of [`release-${release}.json`, jointLock]) {
+		for (const file of [
+			`release-${release}.json`,
+			jointLock,
+			...platformAssets.map((name) => `k3s-platform/${name}`),
+		]) {
 			const signature = asRecord(
 				parseJson(await readFile(path.join(directory, `${file}.sigstore.json`), "utf8")),
 				file,

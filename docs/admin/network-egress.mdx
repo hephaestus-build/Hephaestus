@@ -23,6 +23,23 @@ The host connects to these destinations during installation, upgrades, and each 
 | `github.com`, `api.github.com`, and the GitHub release-asset download hosts | Download the signed release lock and its assets. |
 | `fulcio.sigstore.dev`, `rekor.sigstore.dev`, and `tuf-repo-cdn.sigstore.dev` | Verify the keyless signatures of the release lock. |
 
+## One host on k3s
+
+A [one-host install on k3s](./kubernetes#install-on-one-host-k3s) also needs these destinations:
+
+| Destination | Purpose |
+| --- | --- |
+| `github.com`, `raw.githubusercontent.com`, and the GitHub release-asset download hosts | Download the k3s installer, k3s, and the release assets. |
+| `charts.jetstack.io` | Download the cert-manager chart. |
+| `traefik.github.io` | Download the Traefik chart. |
+| `quay.io` | Pull the cert-manager images by digest. |
+| `docker.io` | Pull the Traefik image by digest, and the images that k3s ships. |
+| The `Let's Encrypt` ACME API | Issue and renew the Gateway certificate through cert-manager. |
+
+A worker reaches a model endpoint through `networkPolicy.externalEgress`, which leaves out private addresses.
+If this host's own Gateway serves the model endpoint, the connection ends at the Traefik Pod, a private address.
+Then set `networkPolicy.workerGatewayPorts: [8443, 8000]` in `site.yaml` ([Network policy](./kubernetes#network-policy)).
+
 ## Containers
 
 | Destination | Purpose | Container | When |

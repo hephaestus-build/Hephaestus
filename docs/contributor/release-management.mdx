@@ -142,7 +142,27 @@ waits for stack readiness, and exercises HTTPS ingress. Either cell can block pu
 The release workflow attaches each cell's status record to the immutable GitHub release. This qualification covers a
 clean boot. The seeded-upgrade gate separately proves the supported migration path.
 
-A pull request that can change fresh-installation bindings gets the same boot before merge.
+Every release also installs its draft assets with the Helm chart on native Ubuntu 24.04 `amd64` and `arm64` runners.
+`release-host-smoke.yml` follows [Install on one host (k3s)](/admin/kubernetes#install-on-one-host-k3s).
+It verifies the signed `k3s-*` assets. The installer verifies the release chart as [Verify the release chart](/admin/kubernetes#verify-the-release-chart) describes.
+Then `scripts/kubernetes-cluster.ts release-smoke` runs the release's `k3s-install.sh`, the command of the docs, with a local CA and without the DNS and clock checks. A runner of 16 GiB installs with the `small-16gib.yaml` profile.
+
+It runs the command a second time, which must keep the release Secret, and then an upgrade that rolls every role.
+It waits for the migration Job, every role, and each worker's isolation probe, and it sends requests through the Gateway.
+It also checks that the kubelet and logind run with the configured shutdown budget. It does not reboot.
+Publication waits for both cells of this smoke and of the Compose boot.
+
+`Let's Encrypt` cannot reach a runner, so a local CA issues the Gateway certificate in the k3s smoke.
+The k3s smoke runs only at a release, or by a dispatch of `release-host-smoke.yml` with a release tag and its commit.
+A change to `deploy/platform/` runs the k3d jobs of `ci-kubernetes.yml` in pull requests, not the k3s smoke.
+
+The release job copies the files of `deploy/platform/`, `k3s-install.sh` included, as release assets.
+It signs each of these assets, attests them with the release, and uploads them beside the release locks.
+`deploy/platform/k3s-platform.yaml` holds every platform pin: k3s, Traefik, and cert-manager.
+k3s brings the Gateway API definitions with its bundled `gateway-api-crd` chart.
+The clusters of `ci-kubernetes.yml` run no cert-manager: only the k3s smoke tests that pin.
+
+A pull request that can change fresh-installation bindings gets the Compose boot before merge.
 `Supported-host boot smoke` in `cicd.yml` runs `docker/self-host/setup.sh`.
 It starts PostgreSQL, NATS, and the application server from that run's images, on `amd64` only and without the edge.
 Both jobs fill blank installer settings through `scripts/prepare-host-smoke-env.ts`.
@@ -314,7 +334,7 @@ Thus, both release gates prove that the chart pins the images of the signed join
 The chart has one signature form: the registry signature of its digest.
 The signature identity is the release workflow on the default branch, not one release.
 The chart is bound to its release by the digest in the signed joint lock and by the version check.
-Operators verify the chart without the repository tooling, as [Verify the release chart](../admin/kubernetes#verify-the-release-chart) describes.
+Operators verify the chart without the repository tooling, as [Verify the release chart](/admin/kubernetes#verify-the-release-chart) describes.
 `scripts/prepare-release-lock.ts` reads only the schema 1 lock for Compose hosts.
 
 The release jobs use the Helm CLI that the [shared installer](https://github.com/hephaestus-build/Hephaestus/blob/main/.github/actions/setup-helm/action.yml) pins.

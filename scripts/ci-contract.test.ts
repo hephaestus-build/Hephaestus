@@ -5194,11 +5194,12 @@ void test("every job that runs Helm installs the pinned one first, and the rende
 	const chartChange = scopesFor(["deploy/chart/hephaestus/values.yaml"]);
 	assert.deepEqual(chartChange, ["agents"]);
 	assert.deepEqual(commandsFor(chartChange), [["run", "affected:agents"]]);
-	// The chart's plain JSON and YAML are formatted and checked; Helm judges its Go templates.
+	// The plain JSON and YAML of the chart and the platform files are formatted and checked; Helm
+	// judges the chart's Go templates.
 	for (const entry of ["format:config", "gate:config-format"]) {
 		assert.match(
 			commandsOf(tasks[entry]).join(" "),
-			/vp fmt --(?:write|check) 'deploy\/chart\/\*\*\/\*\.\{json,yaml\}' '!deploy\/chart\/\*\*\/templates\/\*\*'/u,
+			/vp fmt --(?:write|check) 'deploy\/\{chart,platform\}\/\*\*\/\*\.\{json,yaml\}' '!deploy\/chart\/\*\*\/templates\/\*\*'/u,
 			entry,
 		);
 	}

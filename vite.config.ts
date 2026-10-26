@@ -59,8 +59,10 @@ const docsSources = "'docs/**/*.{js,jsx,ts,tsx,json,jsonc,css}'";
 // Two passes: a negation applies to the whole invocation, so `!*/**` would also drop the nested set.
 const rootConfigSources = "'*.{json,jsonc,ts,code-workspace}' '!*/**'";
 const nestedConfigSources = "'{.changeset,.vscode,scripts,.vale}/*.{cjs,json}'";
-// The chart's plain JSON and YAML. Its templates are Go templates, not YAML; Helm rendering judges them.
-const chartConfigSources = "'deploy/chart/**/*.{json,yaml}' '!deploy/chart/**/templates/**'";
+// The chart's plain JSON and YAML, and the platform files beside it. The chart's templates are Go
+// templates, not YAML; Helm rendering judges them.
+const chartConfigSources =
+	"'deploy/{chart,platform}/**/*.{json,yaml}' '!deploy/chart/**/templates/**'";
 const alertRuleSources = "'deploy/observability/*.yml'";
 // `as const` keeps the command a literal type, so `cached` can still read what it runs.
 const configFormatCommand = (mode: "--check" | "--write") =>
@@ -108,6 +110,7 @@ const policyGates = [
 	"gate:env",
 	"gate:quarantine",
 	"gate:configuration-reference",
+	"gate:shell",
 ];
 const serverGates = ["gate:java-nullness", "gate:server"];
 const webappGates = ["gate:webapp", "gate:webapp-format", "gate:components", "gate:stories"];
@@ -231,6 +234,7 @@ export default defineConfig({
 
 			// Repository policy
 			"gate:toolchain": run("node scripts/check-toolchain.ts"),
+			"gate:shell": run("node scripts/check-shell.ts"),
 			"sync:toolchain-pins": run("node scripts/sync-toolchain-pins.ts"),
 			"gate:runner-contract": run("node --test scripts/check-runner-contract.ts"),
 			"gate:lint-contract": run("node --test scripts/check-lint-contract.ts"),

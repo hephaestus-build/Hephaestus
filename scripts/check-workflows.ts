@@ -15,6 +15,7 @@ import { TextDocument } from "vscode-languageserver-textdocument";
 import { type ActionsLanguage, openActionsLanguage } from "./lib/actions-language.ts";
 import { asArray, asRecord, isRecord, parseJson } from "./lib/json.ts";
 import { CAPTURE_LIMIT_BYTES } from "./lib/process.ts";
+import { prepareShellCheck } from "./lib/shellcheck.ts";
 
 /** Actionlint passes these to ShellCheck too: each misreads a masked expression or a runner variable. */
 const SHELLCHECK_EXCLUDED = "SC1091,SC2194,SC2050,SC2154,SC2157";
@@ -119,7 +120,7 @@ function interpreter(shell: string): "bash" | "sh" | "python" | undefined {
 }
 
 /** Problems a script checker reports for one script, or an error when the checker is absent. */
-function checkScript(where: string, shell: string, script: string): string[] {
+function checkScript(where: string, shell: string, script: string, shellcheck: string): string[] {
 	const kind = interpreter(shell);
 	if (kind === undefined) {
 		return [];
@@ -142,7 +143,7 @@ function checkScript(where: string, shell: string, script: string): string[] {
 			.map((line) => `${where}: ${line.replace(/^<stdin>:/u, "line ")}`);
 	}
 	const result = spawnSync(
-		"shellcheck",
+		shellcheck,
 		[
 			"--norc",
 			"--format=json1",
@@ -167,9 +168,11 @@ function checkScript(where: string, shell: string, script: string): string[] {
 	);
 }
 
+/** `shellcheck` is the pinned ShellCheck of scripts/lib/shellcheck.ts. */
 export async function checkRepository(
 	language: ActionsLanguage,
 	root: string,
+	shellcheck: string,
 ): Promise<WorkflowCheck> {
 	const { isMapping, isSequence, isString, NoOperationTraceWriter } = language.parser;
 	const { DescriptionDictionary, FeatureFlags, data, isDescriptionDictionary } =
@@ -490,7 +493,7 @@ export async function checkRepository(
 			);
 			return;
 		}
-		problems.push(...checkScript(`${file}: ${label}`, stepShell, body));
+		problems.push(...checkScript(`${file}: ${label}`, stepShell, body, shellcheck));
 	}
 
 	// A link is listed whatever it points at; reading through it is confined like any other read.
@@ -614,7 +617,11 @@ export async function checkRepository(
 if (import.meta.main) {
 	const language = await openActionsLanguage();
 	try {
-		const { problems, compatible } = await checkRepository(language, process.cwd());
+		const { problems, compatible } = await checkRepository(
+			language,
+			process.cwd(),
+			await prepareShellCheck(),
+		);
 		for (const problem of problems) {
 			console.error(problem);
 		}

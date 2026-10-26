@@ -1,0 +1,7 @@
+# The k3s configuration of a one-host install: /etc/rancher/k3s/config.yaml.
+# docs/admin/kubernetes.mdx § Install on one host (k3s).
+kubelet-arg:
+  - config=/etc/rancher/k3s/kubelet.yaml
+# k3s-platform.yaml installs a pinned Traefik in place of the bundled one.
+disable:
+  - traefik
