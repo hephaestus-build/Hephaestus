@@ -149,7 +149,8 @@ The trust model of § Decision does not change, so no host changes its trusted i
 The configuration of the project's own hosts is not product documentation.
 The project's own operations notes hold it, outside this repository.
 These notes include each host's site values, cluster manifests, extra units, and runbooks.
-They also include the reference Compose deployment that the maintainers run.
+They also include the documentation of the multi-file Compose deployment that the maintainers run.
+Its Compose files stay in `docker/` until 1.0, because the self-hosted stack includes them.
 The notes hold no secret values.
 
 The pull-based deployment page stays in the admin docs and describes the mechanism for any operator.

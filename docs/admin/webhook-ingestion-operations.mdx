@@ -423,7 +423,7 @@ Those messages are not delivered.
 
 ## Who reaches the broker
 
-The reference deployment publishes the broker's client port 4222 on the host's loopback address only.
+The Compose files publish the broker's client port 4222 on the host's loopback address only.
 A process on that host, such as an operator's tool, connects to `127.0.0.1:4222`.
 A stack on the same host connects over the Docker network `shared-network` to `nats-server:4222`.
 Preview environments connect this way.
@@ -464,7 +464,7 @@ For the other providers, reconciliation covers `MONITORING_TIMEFRAME` days after
    docker compose --env-file .env --env-file release-lock.env exec nats-server cat /etc/nats/nats-server.conf
    ```
 
-3. For the reference stack:
+3. For the multi-file Compose stack:
 
 ```bash
 dc() { docker compose --env-file .env --env-file release-lock.env -p hephaestus-core -f compose.core.yaml "$@"; }

@@ -46,7 +46,7 @@ Split the worker out when:
 - LLM reviews and HTTP traffic compete for the same JVM heap / sandbox quota.
 - You want to scale practice-review throughput independently of webhook ingestion.
 
-The shipped Compose stacks use separate containers in both the reference deployment and the single-host install.
+The shipped Compose stacks use separate containers in both the multi-file stack (`docker/compose.{proxy,core,app}.yaml`) and the single-host install.
 `application-server` turns off the worker role and has no Docker socket.
 `application-worker` runs all sandboxes and is the only container with the socket.
 The `gate:env` check fails a container that mounts the socket without the worker role.

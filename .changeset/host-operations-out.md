@@ -1,4 +1,4 @@
 ---
 ---
 
-No release note: an example value in the reconciler configuration and documentation moves.
+No release note: example values and comments in the Compose and reconciler example files change. No setting changes.

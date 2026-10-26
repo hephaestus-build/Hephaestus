@@ -40,7 +40,7 @@ See [Spring Boot management listeners](https://docs.spring.io/spring-boot/refere
 No monitoring service or outbound metric exporter is enabled by this configuration. Operators who
 do not run Prometheus need no monitoring setup. Traces remain opt-in and separate from scraping.
 
-Example `prometheus.yml` for the reference deployment:
+Example `prometheus.yml` for the multi-file Compose stack:
 
 ```yaml
 scrape_configs:
@@ -526,7 +526,7 @@ request's trace ID. Sandbox proxy calls propagate the execution trace. The
 [trace export contract](#exporting-opentelemetry-traces) describes the separate submission attribute.
 
 No collector or log aggregator is necessary.
-From a reference deployment:
+From the multi-file Compose stack:
 
 1. Take the ID a user reports, or the `X-Request-Id` from a failed response.
 2. Search the container logs:
@@ -595,7 +595,7 @@ It does not start Alloy, and it names no destination.
    The webapp keeps its local `json-file` log: nginx error lines can name a client address and a request with its query.
    PostgreSQL keeps `json-file`, because its error lines can quote rejected row values.
    Sandbox containers, NATS and the proxy are not tagged.
-3. The reference deployment renders each stack as its own Compose project.
+3. The multi-file Compose stack renders each stack as its own Compose project.
    Give each of the three Java services the same `logging` block in that stack's override.
 4. Run Alloy with [`docker/observability/config.alloy`](https://github.com/hephaestus-build/Hephaestus/blob/main/docker/observability/config.alloy).
    Set `LOKI_PUSH_URL` to your Loki push endpoint and `DEPLOYMENT_ENVIRONMENT` to the instance's name.
