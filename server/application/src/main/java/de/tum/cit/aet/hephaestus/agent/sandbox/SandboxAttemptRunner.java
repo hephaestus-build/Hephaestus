@@ -166,6 +166,9 @@ public class SandboxAttemptRunner implements SandboxManager {
             // run again within its retry budget.
             Integer initExit = initialized.exitCode();
             if (initialized.timedOut() || initExit == null || initExit != 0) {
+                if (initialized.timedOut()) {
+                    executionsTimedOut.increment();
+                }
                 String transcript = backend.transcript(handle, SandboxBackend.Container.INITIALIZER);
                 logTranscriptTail(transcript);
                 throw new SandboxInitializationException(initExit, initialized.timedOut(), transcript);

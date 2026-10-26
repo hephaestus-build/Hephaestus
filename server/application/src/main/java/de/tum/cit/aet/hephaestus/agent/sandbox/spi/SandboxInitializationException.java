@@ -10,9 +10,9 @@ import org.jspecify.annotations.Nullable;
  * deadline. No model call ran, so the attempt is the infrastructure's failure and may run again within the job's retry
  * budget.
  *
- * <p>The message, which reaches the log, carries the exit code only. The transcript tail is for the attempt's failure
- * record: bounded, and with every credential format masked. The initializer prints the workspace download and its
- * extraction, never the task or the model's output.
+ * <p>The message carries the exit code only. The transcript tail is for the attempt's failure record: bounded, and
+ * with the known credential formats masked. The initializer prints the workspace download and its extraction, which
+ * can name repository paths, never the model's output.
  */
 public class SandboxInitializationException extends SandboxInfrastructureException {
 

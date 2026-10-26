@@ -87,9 +87,13 @@ Recovery after a lost worker keeps its own path, within the same shared retry li
 
 A sandbox that cannot prepare its workspace runs again in a new attempt, within the same shared retry limit.
 This failure occurs before any model call, so it is a failure of the infrastructure, not of the review.
+A failure that repeats on every attempt uses all attempts of the retry limit, five by default, before the job fails.
 The worker log names it with its exit code.
+
 After the last attempt, the job keeps the initializer's exit code and the last 20 lines of its log under `capture.initializationFailure`.
-Credentials in those lines are masked.
+Known credential formats in those lines are masked.
+The lines can name repository paths.
+[Kubernetes § Troubleshooting](./kubernetes#troubleshooting) shows how to read them.
 A failure before the sandbox starts is logged with its stage, its kind, such as a repository operation, and the exception types.
 
 If private feedback stops after some of its pieces are prepared, a new attempt composes only for the practices that those pieces do not decide.
