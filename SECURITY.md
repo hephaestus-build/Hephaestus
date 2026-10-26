@@ -56,4 +56,6 @@ Independent of this reporting channel, the project runs:
 - **Native alerts**: GitHub secret scanning and Dependabot dependency alerts
 - **Mend Bolt**: the app is still installed from the former organization of this repository. Its scan stopped at a commit from February 2025. [`.whitesource`](.whitesource) turns off its issues. Use the scanners above for dependency risk.
 
-A machine-readable [`security.txt`](https://hephaestus.build/.well-known/security.txt) ([RFC 9116](https://www.rfc-editor.org/info/rfc9116/)) points to this policy.
+This policy covers the Hephaestus software.
+Each deployment can publish a [`security.txt`](https://www.rfc-editor.org/info/rfc9116/) at `/.well-known/security.txt` that names the contact of its own operator.
+Report a problem with one installation to that contact.
