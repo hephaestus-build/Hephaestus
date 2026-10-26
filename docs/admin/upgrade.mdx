@@ -71,7 +71,7 @@ The commands below do not prepare existing databases for the PostgreSQL 18/Liqui
 
 ## If migration fails
 
-:::caution CAUTION: Failed migration
+:::caution[CAUTION: Failed migration]
 Do not clear checksums, edit released changelogs, or mark the changeset as run.
 Do not run a release other than the previous one against the partly migrated database. If the migration guide entry of the new release starts with **Stop every role**, do not run the previous one either ([Rollouts and rollback](./runtime-roles#rollouts-and-rollback)).
 Do not release a Liquibase lock by hand except as [One migration at a time](./runtime-roles#one-migration-at-a-time) allows.
@@ -106,7 +106,7 @@ Removal of a stale lock does not repair a failed migration.
 
 ## Rollback
 
-:::caution CAUTION: Images alone cannot reverse a schema change
+:::caution[CAUTION: Images alone cannot reverse a schema change]
 Reverting images alone is not a rollback.
 Never run a release older than the previous one against a newer schema. [Rollouts and rollback](./runtime-roles#rollouts-and-rollback) says when the previous release can run on it.
 Never reconstruct an old lock or resolve mutable image tags.

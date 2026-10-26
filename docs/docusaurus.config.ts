@@ -29,6 +29,42 @@ function rawMermaidSourcePlugin(_context: LoadContext): Plugin {
 	};
 }
 
+interface MarkdownNode {
+	type: string;
+	value?: string;
+	children?: MarkdownNode[];
+	position?: { start: { line: number } };
+}
+
+/*
+ * MDX 3 reads an admonition title only in brackets (`:::caution[Title]`). The MDX 1 form
+ * (`:::caution Title`) does not fail: it renders as a paragraph that starts with `:::`.
+ */
+function rejectUnparsedAdmonitions() {
+	return (tree: MarkdownNode, file: { path: string }) => {
+		const visit = (node: MarkdownNode) => {
+			// A line of the paragraph starts with `:::`: the first text child's start, or after a line break.
+			const unparsed =
+				node.type === "paragraph" &&
+				node.children?.some(
+					(child, index) =>
+						child.type === "text" &&
+						(index === 0 ? /(?:^|\n):::/u : /\n:::/u).test(child.value ?? ""),
+				) === true;
+			if (unparsed) {
+				const line = node.position?.start.line ?? 0;
+				throw new Error(
+					`${file.path}: the paragraph at line ${line} has an admonition that MDX did not parse. Write the title in brackets: :::caution[Title].`,
+				);
+			}
+			for (const child of node.children ?? []) {
+				visit(child);
+			}
+		};
+		visit(tree);
+	};
+}
+
 const config: Config = {
 	title: "Hephaestus documentation",
 	tagline: "Learn from the work you’re already doing",
@@ -107,6 +143,7 @@ const config: Config = {
 				editUrl: `${REPO_URL}/tree/main/docs/`,
 				showLastUpdateAuthor: true,
 				showLastUpdateTime: true,
+				remarkPlugins: [rejectUnparsedAdmonitions],
 			},
 		],
 		[
@@ -119,6 +156,7 @@ const config: Config = {
 				editUrl: `${REPO_URL}/tree/main/docs/`,
 				showLastUpdateAuthor: true,
 				showLastUpdateTime: true,
+				remarkPlugins: [rejectUnparsedAdmonitions],
 			},
 		],
 		[
@@ -131,6 +169,7 @@ const config: Config = {
 				editUrl: `${REPO_URL}/tree/main/docs/`,
 				showLastUpdateAuthor: true,
 				showLastUpdateTime: true,
+				remarkPlugins: [rejectUnparsedAdmonitions],
 			},
 		],
 		[

@@ -132,7 +132,7 @@ The HTTP 400 rejections have title `Invalid request`:
 | “Provider host `<host>` is not in the allowed list”                            | Instance settings define an egress allowlist without this host. A blank allowlist allows any public host.                                                                                 |
 | — (HTTP 403) “This server does not allow you to connect your own AI provider.” | A workspace admin tried to add a connection or model with **Let workspaces add providers and models** off.                                                                                |
 
-:::caution CAUTION: Keep the loopback exception out of production
+:::caution[CAUTION: Keep the loopback exception out of production]
 
 `HEPHAESTUS_LLM_EGRESS_ALLOW_LOOPBACK=true` permits `http://localhost` base URLs for local development.
 It lets a workspace admin direct a "provider" to host-local services.
@@ -614,7 +614,7 @@ Rollback is supported before onboarding settings, member choices, declarations, 
 After use, rollback is deliberately refused.
 Loss of a saved refusal could restore unrestricted processing.
 
-:::caution CAUTION: Preserve saved AI refusals
+:::caution[CAUTION: Preserve saved AI refusals]
 
 A lost saved refusal could restore unrestricted processing.
 Recover through a [verified pre-upgrade backup](./backup-restore).
@@ -961,7 +961,7 @@ Chat calls from a script are not in this table, because they are part of each re
 On **By run type** and **By day**, **Runs** counts review attempts and Heph turns only.
 A usage row of a model for practice scripts adds its calls and cost to its review, but it is not a run.
 
-:::caution CAUTION: A priced reranking model that bills search units or reports no tokens
+:::caution[CAUTION: A priced reranking model that bills search units or reports no tokens]
 
 Some reranking providers, such as Cohere, bill search units and report no token usage.
 Hephaestus records the search units on the usage row.

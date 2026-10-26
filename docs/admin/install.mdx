@@ -25,7 +25,7 @@ The stack you get:
 | `postgres`           | PostgreSQL 18 + pg_partman (custom image — vanilla `postgres:18` is **not** a drop-in)       |
 | `nats-server`        | NATS JetStream event buffer                                                                  |
 
-:::caution CAUTION: Docker Compose is deprecated
+:::caution[CAUTION: Docker Compose is deprecated]
 The [compatibility policy](./compatibility-policy#supported-deployment) states the supported deployment from 1.0.0 and what it means for your install.
 :::
 
@@ -122,7 +122,7 @@ See [Troubleshooting](./troubleshooting).
 
 ## 2. Configure `.env`
 
-:::caution CAUTION: Back up both encryption keys
+:::caution[CAUTION: Back up both encryption keys]
 `HEPHAESTUS_SECURITY_ENCRYPTION_KEY` protects the values that [What the database seals](./secret-custody#what-the-database-seals) lists.
 `HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY` protects integration credentials. Loss of either key
 makes the corresponding database values unreadable. Keep both with the backup set, in separate storage with separate credentials, as [Keep the required keys outside the cluster](./secret-custody#keep-the-required-keys-outside-the-cluster) describes. Rotate the

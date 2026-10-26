@@ -11,7 +11,7 @@ This runbook is for the **instance operator**.
 1. Before changing state, record the instance URL, Compose project, signed release lock, incident owner, and rollback point.
 2. Keep credentials and feedback bodies out of tickets.
 
-:::caution CAUTION: Before broad or unattended delivery
+:::caution[CAUTION: Before broad or unattended delivery]
 The operator must execute and sign off three drills on isolated, representative infrastructure.
 The [failed-migration drill](./upgrade#if-migration-fails) is on the Upgrade page.
 The broker and un-delivery drills are below.
@@ -163,7 +163,7 @@ For backup and recovery:
 8. If the backup overlaps a [key rotation](./credential-key-rotation), preserve active **and prior** credential-encryption keys and versions.
 9. Disable rotation during recovery.
 
-   :::caution CAUTION: Broker snapshot consistency
+   :::caution[CAUTION: Broker snapshot consistency]
    Never treat a live filesystem copy as a consistent broker backup.
    Per-stream snapshots are not atomic with each other, PostgreSQL, or external provider writes.
    Preserve them for gap analysis, not automatic replay after PITR.
@@ -254,7 +254,7 @@ The self-host broker publishes no host port.
 6. Identify the **exact** `nats-server` data mount through container inspection and Compose project labels.
 7. Preserve a cold snapshot and configuration in restricted incident storage.
 
-   :::caution CAUTION: Remove only confirmed instance storage
+   :::caution[CAUTION: Remove only confirmed instance storage]
    Never use `down -v`, a wildcard, or the first volume name ending in `nats-data`.
    On a shared broker, do not remove the broker volume.
    Have its owner export this instance's streams and consumers first.
@@ -649,7 +649,7 @@ Missing cache rates can leave the entire call unpriced.
 
 ## Decommission
 
-:::caution CAUTION: Shared integrations and retained data
+:::caution[CAUTION: Shared integrations and retained data]
 Do not delete a shared app that another instance still uses.
 Destroy data only when retention permits.
 :::

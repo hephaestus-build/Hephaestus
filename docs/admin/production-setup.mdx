@@ -49,7 +49,7 @@ These deployment settings complement the install table. `LEGAL_PROFILE`, `SECURI
 | `HEPHAESTUS_INTEGRATION_OAUTH_SUCCESS_REDIRECT` / `HEPHAESTUS_INTEGRATION_OAUTH_FAILURE_REDIRECT` | Post-callback landing URLs for integration OAuth. Success defaults to `/integrations?status=success`, failure to the success base + `?status=error`. Set absolute URLs when the SPA host differs from the API host.                                                                                                                                                                    |
 | `springdoc.api-docs.enabled` / `springdoc.swagger-ui.enabled`                                     | Publish the OpenAPI description at `/v3/api-docs` and the interactive Swagger UI. Both default to `false`.                                                                                                                                                                                                                                                                             |
 
-:::caution CAUTION: The enabled API description needs no authentication
+:::caution[CAUTION: The enabled API description needs no authentication]
 
 `springdoc.api-docs.enabled` controls whether the endpoint exists, not whether it requires login.
 Whenever springdoc registers, `/v3/api-docs/**` and `/swagger-ui/**` answer any request.
@@ -59,7 +59,7 @@ Generate the spec at build time instead.
 
 :::
 
-:::caution CAUTION: `docker/.env` does not forward every setting
+:::caution[CAUTION: `docker/.env` does not forward every setting]
 
 The shipped Compose files forward `LEGAL_PROFILE` and `SECURITY_CONTACT`, so their `docker/.env` values work.
 They do **not** forward these settings:
@@ -76,7 +76,7 @@ Leave the API description endpoints disabled unless you supply an explicit servi
 
 :::
 
-:::caution CAUTION: `GH_`, not `GITHUB_`
+:::caution[CAUTION: `GH_`, not `GITHUB_`]
 
 The GitHub OAuth keys in `docker/.env` are `GH_OAUTH_CLIENT_ID` / `GH_OAUTH_CLIENT_SECRET`.
 GitHub Actions reserves the `GITHUB_` prefix.
@@ -374,7 +374,7 @@ A token within `hephaestus.webhook.token-rotation.threshold-days` of expiry (def
 It needs GitLab `api` or `self_rotate` scope and an instance version with self-rotation support.
 The server serializes rotation with token replacement.
 
-:::caution CAUTION: Do not share a token that Hephaestus rotates
+:::caution[CAUTION: Do not share a token that Hephaestus rotates]
 
 Rotation immediately revokes the old token.
 Do not share that token with other applications.

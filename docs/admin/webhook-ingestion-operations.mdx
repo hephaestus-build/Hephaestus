@@ -263,7 +263,7 @@ Stream github limit change withheld because it would delete stored messages:
 set hephaestus.webhook.stream.allow-destructive-limit-updates=true to apply it
 ```
 
-:::caution CAUTION: Destructive limit changes
+:::caution[CAUTION: Destructive limit changes]
 A destructive change deletes stored messages.
 A flag left on gives all future deploys permission to delete messages.
 Enable it only for one deliberate change.
@@ -450,7 +450,7 @@ applies to an external broker reached through a `tls://` application connection.
 The broker configuration is supplied by a Compose `configs:` block.
 A content change does not change the container spec.
 
-:::caution CAUTION: Restart loses active deliveries
+:::caution[CAUTION: Restart loses active deliveries]
 Recreation preserves stored messages because JetStream data lives in the volume.
 GitHub deliveries in progress during the restart are redelivered within an hour. See [Failed GitHub deliveries](#failed-github-deliveries).
 For the other providers, reconciliation covers `MONITORING_TIMEFRAME` days afterward.

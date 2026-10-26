@@ -102,7 +102,7 @@ Spring. `vp run dev:server:e2e` uses that interface.
 
 Create `application-local.yml` in `server/application/src/main/resources` to override defaults. This file is gitignored.
 
-:::caution Keep it local
+:::caution[Keep it local]
 Never commit `application-local.yml`. It may contain secrets and machine-specific configuration.
 :::
 
@@ -151,7 +151,7 @@ Every host-side port is configurable so multiple Hephaestus instances (or other 
 | Mailpit UI         | 8025    | `MAILPIT_UI_PORT`   | `server/.env`   |
 | Webapp (Vite dev)  | 4200    | `WEBAPP_PORT`       | Shell env only  |
 
-:::tip Pre-flight check
+:::tip[Pre-flight check]
 Run `vp run check:ports` before starting the stack. It checks the six ports above. A NATS
 container binds 4222 as well, and a conflict there shows up only at boot.
 :::
@@ -206,7 +206,7 @@ webapp loads before its bundle:
 window.__ENV__ = { APPLICATION_SERVER_URL: "http://localhost:18080" };
 ```
 
-:::caution Keep it local
+:::caution[Keep it local]
 `env-config.js` is committed as an empty stub and overwritten by the Docker entrypoint in
 production. Treat a local override the way you treat `application-local.yml`: do not commit it.
 :::

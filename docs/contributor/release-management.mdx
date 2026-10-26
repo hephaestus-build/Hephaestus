@@ -391,7 +391,7 @@ The waiver covers the whole release: the changelog guard and the seeded-upgrade 
 Add it only for a release that an ADR or the maintainer allows to stop every role.
 [Expand and contract](./database-migration#expand-and-contract) owns the rule.
 
-:::caution Pre-1.0
+:::caution[Pre-1.0]
 Never pick a `major` bump while the version is `0.x`.
 It would cut 1.0.0, and CI accepts that only from the planned changeset in [Cut 1.0.0](#cut-100).
 Breaking changes use `minor` instead.

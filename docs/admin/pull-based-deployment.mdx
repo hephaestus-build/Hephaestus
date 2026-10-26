@@ -148,7 +148,7 @@ Operators write the per-stack files in `/etc/hephaestus` (`app.env`, `core.env`)
    In a release worktree, the old bind-mounted `acme.json` is under `docker/letsencrypt/`.
    The reconciler never prunes a worktree that still holds that file.
 
-   :::caution CAUTION: Preserve the active ACME store
+   :::caution[CAUTION: Preserve the active ACME store]
    An existing `acme.json` in the volume is Traefik's active store.
    An older backup would discard certificates currently in service.
    The command below refuses that replacement.
@@ -195,7 +195,7 @@ That checkout did not update.
 The commands below advance it manually once.
 Afterward, the reconciler maintains the link and units.
 
-:::caution CAUTION: Do not change a checkout during reconciliation
+:::caution[CAUTION: Do not change a checkout during reconciliation]
 A oneshot service remains `activating` while it runs.
 Stopping the timer does not stop an active tick.
 The commands first stop the timer and wait for an active tick to finish.
@@ -389,7 +389,7 @@ Applied-record command:
 cat /var/lib/hephaestus/applied.json
 ```
 
-:::caution CAUTION: Pause reconciliation before manual changes
+:::caution[CAUTION: Pause reconciliation before manual changes]
 An active reconciliation can conflict with manual changes.
 Disable the timer before editing.
 Confirm that the service no longer runs with:

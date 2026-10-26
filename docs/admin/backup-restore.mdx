@@ -42,7 +42,7 @@ This is a **target**, not a guaranteed RPO.
 Repository failure, a stalled archiver, or a missing key can make the usable recovery point older.
 The [operations runbook](./production-operations-runbook#backup-restore-and-postgresql--jetstream) defines the release gate and broker procedure.
 
-:::caution CAUTION: Backup secrets and archive failures
+:::caution[CAUTION: Backup secrets and archive failures]
 A lost passphrase makes the repository unusable.
 Generate `BACKUP_CIPHER_PASS` independently with this command:
 
@@ -144,7 +144,7 @@ The restore requires these conditions:
 - The same repository and cipher passphrase.
 - No PostgreSQL process running on that volume.
 
-:::caution CAUTION: Isolated restore only
+:::caution[CAUTION: Isolated restore only]
 Never point a rehearsal at the production Compose project or volumes.
 Do not combine the backup and restore overlays.
 Keep the clone's provider egress denied.
@@ -152,7 +152,7 @@ Keep `AGENT_ENABLED=false` on server **and** worker.
 Turn on silent mode before any application role starts.
 :::
 
-:::caution CAUTION: Production data and application startup
+:::caution[CAUTION: Production data and application startup]
 Never pipe this file into the production database.
 The restore overlay also refuses direct starts of the server, worker, and webhook roles.
 For later application-health checks, use a separately reviewed isolated override.
@@ -214,7 +214,7 @@ A logical dump can run while the application runs.
 PostgreSQL supplies a consistent database snapshot.
 It does not coordinate external writes, JetStream, or secret rotation.
 
-:::caution CAUTION: Rollback consistency and secrets
+:::caution[CAUTION: Rollback consistency and secrets]
 For a deployment rollback point, first stop application writers and key rotation as the runbook requires.
 Do not deploy or rotate keys until you capture the database, configuration, and release lock.
 Do not enable shell tracing around secrets.
@@ -255,7 +255,7 @@ The private `/var/tmp` directory is temporary staging, not the backup repository
 
 ## Restore
 
-:::caution CAUTION: Restore replaces data
+:::caution[CAUTION: Restore replaces data]
 The commands below replace the named database.
 Do not run them until you confirm the instance, backup, and permitted data loss.
 If investigation requires the failed database, preserve it separately.
