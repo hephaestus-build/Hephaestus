@@ -18,7 +18,7 @@ application listener refuses this metrics path, including requests with a user t
 the sandbox gateway, not a metrics endpoint. Liveness and readiness also remain available on the
 application listener at `/livez` and `/readyz`. Container probes use these application-listener paths.
 
-The reference and single-host Compose stacks bind management to the container's own `shared-network` address through its network-qualified hostname.
+The multi-file and single-host Compose stacks bind management to the container's own `shared-network` address through its network-qualified hostname.
 They expose 9090 **only on that network**.
 This excludes sandbox interfaces, including after a restart with other networks attached.
 Docker's [network-scoped DNS resolution](https://github.com/moby/moby/blob/v28.2.2/libnetwork/sandbox.go#L401-L425) selects the management network without a fixed container IP.

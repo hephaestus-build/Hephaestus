@@ -12,12 +12,12 @@
 # =============================================================================
 
 services:
-  # ── Services the reference runs that a single host must not ────────────────
+  # ── Services the multi-file stack runs that a single host must not ─────────
   # A profile no one activates: `docker compose up -d` skips these, and the
-  # reference files stay untouched (adding profiles there would risk the
-  # maintainers' deploy, which runs `up -d --remove-orphans` without profiles).
+  # multi-file stack stays untouched (adding profiles there would change what
+  # `up -d --remove-orphans` without profiles starts).
 
-  # Traefik error page for the maintainers' multi-replica rollouts.
+  # Traefik error page for multi-replica rollouts.
   maintenance:
     profiles: ["reference-deployment-only"]
 

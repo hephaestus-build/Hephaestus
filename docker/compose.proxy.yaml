@@ -150,7 +150,7 @@ services:
       - "--serversTransport.forwardingTimeouts.responseHeaderTimeout=30s"
       - "--providers.docker.exposedbydefault=false"
       - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
-      - "--certificatesresolvers.letsencrypt.acme.email=admin@tum.de"
+      - "--certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL:?Set ACME_EMAIL (Let's Encrypt expiry notices)}"
       - "--certificatesresolvers.letsencrypt.acme.${ACME_CHALLENGE:-httpchallenge.entrypoint}=${ACME_CHALLENGE_VALUE:-http}"
       - "--providers.docker=true"
       # Docker labels cannot define TLS options, so load them through the file provider.
