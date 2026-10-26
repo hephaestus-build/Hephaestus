@@ -114,6 +114,11 @@ public class SandboxAttemptRunner implements SandboxManager {
     }
 
     @Override
+    public boolean ready() {
+        return backend.ready();
+    }
+
+    @Override
     public SandboxResult execute(SandboxSpec spec) throws SandboxException {
         UUID jobId = spec.jobId();
         AtomicBoolean cancelled = new AtomicBoolean(false);

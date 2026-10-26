@@ -135,6 +135,11 @@ public class HephHost {
         return false;
     }
 
+    /** Whether the sandbox runtime starts a host now; a running host also needs it for the sandboxes of its turns. */
+    boolean sandboxReady() {
+        return sandbox.ready();
+    }
+
     boolean isReady() {
         return channel != null;
     }

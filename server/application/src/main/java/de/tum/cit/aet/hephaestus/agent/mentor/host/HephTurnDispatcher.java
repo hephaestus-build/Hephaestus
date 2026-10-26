@@ -343,7 +343,7 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
                 Thread.currentThread().interrupt();
                 return;
             }
-            while (active && running.size() < capacity) {
+            while (active && running.size() < capacity && host.sandboxReady()) {
                 Optional<MentorTurnStarter.StartedTurn> started;
                 try {
                     started = starter.startNext(workerId, lease);

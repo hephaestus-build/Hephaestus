@@ -459,6 +459,9 @@ public class ReviewJobExecutor {
     // The sandbox slots bound the jobs that hold a sandbox; a job that composes holds none. Every local job composes
     // in the end, so bounding all of them bounds the compositions.
     int computeCapacity() {
+        if (!sandboxManager.ready()) {
+            return 0;
+        }
         int slots = Math.min(capacityState.map(WorkerCapacityState::reviewMax).orElse(Integer.MAX_VALUE), sandboxSlots);
         long holding = localRunningJobs.keySet().stream()
                 .filter(jobId -> !composingJobs.contains(jobId))

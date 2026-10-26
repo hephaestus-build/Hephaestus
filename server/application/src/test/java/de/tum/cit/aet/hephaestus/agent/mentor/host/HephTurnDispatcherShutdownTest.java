@@ -3,7 +3,9 @@ package de.tum.cit.aet.hephaestus.agent.mentor.host;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -70,8 +72,16 @@ class HephTurnDispatcherShutdownTest extends BaseUnitTest {
      * releases it.
      */
     private final class HeldHost extends HephHost {
+        /** Whether the sandbox runtime proved its isolation. */
+        volatile boolean sandboxReady = true;
+
         HeldHost() {
             super(mock(HostSandbox.class));
+        }
+
+        @Override
+        boolean sandboxReady() {
+            return sandboxReady;
         }
 
         @Override
@@ -257,6 +267,31 @@ class HephTurnDispatcherShutdownTest extends BaseUnitTest {
         }
     }
 
+    @Test
+    void shouldClaimNoTurnUntilTheSandboxRuntimeProvedItsIsolationAndThenClaim() {
+        MentorTurnStarter starter = mock(MentorTurnStarter.class);
+        when(starter.startNext(any(), any())).thenReturn(Optional.empty());
+        HeldHost host = new HeldHost();
+        host.sandboxReady = false;
+        HephTurnDispatcher dispatcher =
+                dispatcher(starter, mock(MentorTurnService.class), mock(MentorTurnCompletion.class), host);
+        dispatcher.start();
+        try {
+            dispatcher.resync();
+            await().during(Duration.ofSeconds(1))
+                    .atMost(Duration.ofSeconds(3))
+                    .untilAsserted(() -> verify(starter, never()).startNext(any(), any()));
+
+            host.sandboxReady = true;
+            dispatcher.resync();
+            await().atMost(Duration.ofSeconds(10))
+                    .untilAsserted(() -> verify(starter, atLeastOnce()).startNext(any(), any()));
+        } finally {
+            release.countDown();
+            dispatcher.stop();
+        }
+    }
+
     private HephTurnDispatcher dispatcher() {
         return dispatcher(
                 mock(MentorTurnStarter.class), mock(MentorTurnService.class), mock(MentorTurnCompletion.class));
@@ -264,12 +299,17 @@ class HephTurnDispatcherShutdownTest extends BaseUnitTest {
 
     private HephTurnDispatcher dispatcher(
             MentorTurnStarter starter, MentorTurnService turns, MentorTurnCompletion completion) {
+        return dispatcher(starter, turns, completion, new HeldHost());
+    }
+
+    private HephTurnDispatcher dispatcher(
+            MentorTurnStarter starter, MentorTurnService turns, MentorTurnCompletion completion, HephHost host) {
         return new HephTurnDispatcher(
                 starter,
                 turns,
                 completion,
                 mock(MentorLedgerNotifications.class),
-                new HeldHost(),
+                host,
                 new ProxyCallsInFlight(),
                 mock(TurnSandboxes.class),
                 mock(WorkerJwtIssuer.class),
