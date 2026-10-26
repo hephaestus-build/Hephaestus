@@ -19,3 +19,11 @@
 
 # Unified diff context adds a space before the upstream source's indentation.
 patches/*.patch whitespace=-space-before-tab
+
+# Generated files. GitHub collapses them in diffs and leaves them out of language statistics.
+# server/openapi.yaml is generated too, but it stays expanded: reviewers read the wire contract there.
+webapp/src/api/** linguist-generated=true
+extension/src/api/** linguist-generated=true
+webapp/src/routeTree.gen.ts linguist-generated=true
+docs/contributor/erd/schema.mmd linguist-generated=true
+docs/admin/configuration-reference.mdx linguist-generated=true
