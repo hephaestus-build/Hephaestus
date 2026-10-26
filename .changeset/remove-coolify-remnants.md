@@ -1,4 +1,4 @@
 ---
 ---
 
-Comment and example-file wording only. No user or operator effect.
+No release note: comment, log-message, and example-file wording only.
