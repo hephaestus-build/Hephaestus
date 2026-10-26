@@ -3428,7 +3428,7 @@ void describe("CI contract", () => {
 		);
 		assert.match(
 			String(workflow.getIn(["jobs", "Kubernetes", "if"])),
-			/\(github\.event_name == 'push' \|\| needs\.detect-changes\.outputs\.kubernetes == 'true'\)/u,
+			/needs\.detect-changes\.outputs\.kubernetes == 'true'/u,
 		);
 		assert.match(
 			complete,
@@ -5273,6 +5273,26 @@ void test("a pull request runs the chart and the latest k3s on amd64; the queue 
 	for (const event of ["merge_group", "push", "workflow_dispatch"]) {
 		assert.match(queue, new RegExp(`github\\.event_name == '${event}'`, "u"));
 	}
+	// A push that a merge group tested runs no leg; a push with no merge-group run, such as a direct
+	// push, runs them all. The nightly run on main runs every leg on the newest build that passed CI.
+	assert.match(
+		String(cicd.getIn(["jobs", "Kubernetes", "if"])),
+		/github\.event_name == 'push' && needs\.detect-changes\.outputs\.queue-run == ''/u,
+	);
+	const nightly = parseDocument(await readFile(".github/workflows/kubernetes-nightly.yml", "utf8"));
+	assert.ok(isMap(nightly.getIn(["on", "schedule", 0])));
+	assert.equal(
+		nightly.getIn(["jobs", "Kubernetes", "uses"]),
+		"./.github/workflows/ci-kubernetes.yml",
+	);
+	assert.equal(nightly.getIn(["jobs", "Kubernetes", "with", "queue"]), true);
+	assert.equal(
+		nightly.getIn(["jobs", "Kubernetes", "with", "ref"]),
+		nightly.getIn(["jobs", "Kubernetes", "with", "commit"]),
+	);
+	// A failed scheduled run fails no pull request, so it reports on a tracking issue.
+	assert.equal(nightly.getIn(["jobs", "report", "if"]), "failure()");
+	assert.equal(nightly.getIn(["jobs", "report", "permissions", "issues"]), "write");
 
 	// The matrix GitHub expands: every minor and architecture, less each exclude that matches.
 	const matrix = kubernetes.getIn(["jobs", "k3d", "strategy", "matrix"]);

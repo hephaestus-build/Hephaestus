@@ -15,6 +15,10 @@ on:
         description: Whether to run the lowest minor on amd64 and arm64, kind with Calico and the backup drill too; a pull request runs the latest k3s alone
         type: boolean
         default: false
+      ref:
+        description: The commit whose chart and scripts to check out; empty checks out the caller's commit
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -32,6 +36,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ inputs.ref }}
           persist-credentials: false
       - uses: ./.github/actions/setup-toolchain
         with:
@@ -76,6 +81,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ inputs.ref }}
           persist-credentials: false
       - uses: ./.github/actions/setup-toolchain
         with:
@@ -148,6 +154,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ inputs.ref }}
           persist-credentials: false
       - uses: ./.github/actions/setup-toolchain
         with:
