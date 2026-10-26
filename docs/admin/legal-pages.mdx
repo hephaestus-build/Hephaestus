@@ -11,6 +11,7 @@ This page explains how the webapp resolves them and each self-hosted operator's 
 :::caution[CAUTION: Configure legal notices before admitting users]
 The built-in “not configured” pages are placeholders, not legal notices.
 Each operator must supply their own notices.
+On the Helm chart, put them in a ConfigMap and name it in `webapp.legalOverrides`, as [Deployment-specific overrides](#deployment-specific-overrides) describes.
 :::
 
 ## First-login consent notice
@@ -283,45 +284,30 @@ A banner alerts end users whenever the webapp serves the disclaimer.
 ### Deployment-specific overrides
 
 Every public deployment uses this configuration.
-You write two Markdown files and mount them into the webapp container.
-They replace the safety-fallback.
+You write two Markdown files, `imprint.md` and `privacy.md`, and the webapp serves them instead of the safety-fallback.
 
-1. Create a directory next to your Compose file:
-
-   ```text
-   legal-overrides/
-   ├── imprint.md
-   └── privacy.md
-   ```
-
-2. Mount the directory read-only into the webapp container at `/usr/share/nginx/html/legal-overrides`:
-
-   ```yaml
-   services:
-     webapp:
-       volumes:
-         - ./legal-overrides:/usr/share/nginx/html/legal-overrides:ro
-   ```
-
-   With the Helm chart, put both files in a ConfigMap in the release namespace.
-   Name it in `webapp.legalOverrides`, and the chart mounts it read-only at that path:
+1. Put both files in a ConfigMap in the release namespace:
 
    ```bash
    kubectl --namespace hephaestus create configmap hephaestus-legal-overrides \
      --from-file=imprint.md --from-file=privacy.md
    ```
 
+2. Name the ConfigMap in your values file:
+
    ```yaml
    webapp:
      legalOverrides: hephaestus-legal-overrides
    ```
 
-   The webapp container runs as UID 101.
-   Make the directory and the files readable by that user, for example with mode `0755` for the directory and `0644` for the files.
+   The chart mounts it read-only at `/usr/share/nginx/html/legal-overrides`.
+   The webapp Pod waits until the ConfigMap that it names exists.
 
-The webapp checks file paths on each request.
-Thus, you can update the files in the mount without a redeploy.
-A changed ConfigMap reaches the pod within about a minute.
+A container that runs outside the chart reads the same two files from a read-only mount at `/usr/share/nginx/html/legal-overrides`.
+The webapp runs as UID 101, so that user must be able to read the files.
+
+The webapp reads the files on each request.
+Kubernetes updates a mounted ConfigMap within about a minute, so a change needs no redeploy.
 
 Resolution is per page: a single-file override leaves the other page on the built-in fallback. Verify both pages identify the correct operator.
 
