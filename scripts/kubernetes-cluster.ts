@@ -776,18 +776,27 @@ export async function verify(): Promise<number> {
 			throw new Error(`${worker} logged no passed isolation probe`);
 		}
 	}
-	const leftovers = await kubectl([
-		"-n",
-		SANDBOXES,
-		"get",
-		"pods",
-		"-l",
-		"hephaestus.build/isolation-probe=true",
-		"-o",
-		"name",
-	]);
-	if (leftovers.trim() !== "") {
-		throw new Error(`isolation probe pods stayed: ${leftovers.trim()}`);
+	// The probe deletes each of its Jobs when it ends; the garbage collector then deletes the Pod.
+	let leftovers = "";
+	for (let tries = 0; tries < 30; tries += 1) {
+		const probes = await kubectl([
+			"-n",
+			SANDBOXES,
+			"get",
+			"jobs,pods",
+			"-l",
+			"hephaestus.build/isolation-probe=true",
+			"-o",
+			"name",
+		]);
+		leftovers = probes.trim();
+		if (leftovers === "") {
+			break;
+		}
+		await sleep(2000);
+	}
+	if (leftovers !== "") {
+		throw new Error(`isolation probe Jobs or Pods stayed: ${leftovers}`);
 	}
 	process.stdout.write(
 		`${workers.length} workers passed the isolation probe; every workload is ready\n`,

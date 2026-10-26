@@ -34,7 +34,7 @@ import org.junit.jupiter.api.Test;
  */
 @Tag("unit")
 @EnableKubernetesMockClient(crud = true)
-class KubernetesReviewJobsTest {
+class KubernetesSandboxJobsTest {
 
     private static final String SANDBOXES = "hephaestus-sandboxes";
     private static final ResourceLimits LIMITS =
@@ -44,13 +44,13 @@ class KubernetesReviewJobsTest {
     private @Nullable KubernetesClient client;
     private KubernetesWorker worker;
     private KubernetesPods pods;
-    private KubernetesReviewJobs jobs;
+    private KubernetesSandboxJobs jobs;
 
     @BeforeEach
     void setUp() {
         worker = KubernetesFixtures.worker(SANDBOXES);
         pods = new KubernetesPods(api(), worker, 10, ImagePullPolicy.IF_NOT_PRESENT);
-        jobs = new KubernetesReviewJobs(api(), worker);
+        jobs = new KubernetesSandboxJobs(api(), worker);
     }
 
     @Test
@@ -93,7 +93,7 @@ class KubernetesReviewJobsTest {
 
         Pod found = jobs.awaitPod(name, Duration.ofSeconds(10), () -> false);
 
-        assertThat(found.getMetadata().getLabels()).containsEntry(KubernetesReviewJobs.JOB_NAME, name);
+        assertThat(found.getMetadata().getLabels()).containsEntry(KubernetesSandboxJobs.JOB_NAME, name);
         assertThat(found.getMetadata().getName()).isEqualTo(name + "-" + name);
     }
 
@@ -177,7 +177,7 @@ class KubernetesReviewJobsTest {
                 .withName(name + "-" + job)
                 .withNamespace(SANDBOXES)
                 .addToLabels(worker.labels(KubernetesWorker.KIND_REVIEW))
-                .addToLabels(KubernetesReviewJobs.JOB_NAME, job)
+                .addToLabels(KubernetesSandboxJobs.JOB_NAME, job)
                 .endMetadata()
                 .withNewSpec()
                 .addNewContainer()

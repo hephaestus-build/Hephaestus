@@ -880,6 +880,7 @@ On a later probe, it logs each failed item, reports itself not ready, and starts
 Until a probe passes, at the start and after a failed later probe, the worker is not ready and claims no practice review and no Heph turn.
 They stay queued for a ready worker. Reviews and turns that already run continue.
 A later probe whose Pods cannot start, because the sandbox quota is full or the nodes have no room, proves nothing: the worker logs a warning and keeps its last passing proof.
+A Pod that the sandbox quota refuses delays that verdict by up to 2 minutes.
 
 The probe also records the isolation tier of the cluster, which is not a requirement:
 
@@ -890,7 +891,10 @@ The probe also records the isolation tier of the cluster, which is not a require
 | Process limit | The number of processes that a sandbox Pod could start before the node refused one, or no limit. |
 
 The worker's log and the metrics `sandbox.isolation.passed`, `sandbox.isolation.user_namespaces` and `sandbox.isolation.process_limit` show the tier.
-The probe Pods use the agent image and the sandbox configuration, and the worker deletes them when the probe ends.
+The probe Pods use the agent image and the sandbox configuration.
+Each probe Pod is the Pod of a Job, and a run takes 768 MiB of the sandbox quota on the cluster's default runtime: 512 MiB for the Pod that tries 1024 processes, and 128 MiB for each of the two others.
+The worker deletes the Jobs when the probe ends.
+If the worker stops during a run, the Job's deadline ends a Pod that still waits for a node, and Kubernetes deletes the finished Job with its Pod after 15 minutes.
 
 Some network plugins apply the policy of a new Pod a few seconds after the Pod starts.
 Each sandbox Pod therefore starts with an init container that waits, at most 60 seconds, until it cannot reach the Kubernetes API.

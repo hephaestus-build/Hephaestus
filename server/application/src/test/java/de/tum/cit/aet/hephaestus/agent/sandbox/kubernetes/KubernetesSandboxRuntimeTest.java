@@ -113,7 +113,7 @@ class KubernetesSandboxRuntimeTest {
     private KubernetesLiveWorkers liveWorkers;
     private KubernetesWorker worker;
     private KubernetesPods pods;
-    private KubernetesReviewJobs reviewJobs;
+    private KubernetesSandboxJobs reviewJobs;
 
     private KubernetesClient api() {
         return Objects.requireNonNull(client, "setUp creates the client");
@@ -162,7 +162,7 @@ class KubernetesSandboxRuntimeTest {
         when(registry.findLiveWorkerIds(anyLong())).thenReturn(List.of(WORKER_ID));
         liveWorkers = new KubernetesLiveWorkers(registry);
         pods = new KubernetesPods(api(), worker, 10, ImagePullPolicy.IF_NOT_PRESENT);
-        reviewJobs = new KubernetesReviewJobs(api(), worker);
+        reviewJobs = new KubernetesSandboxJobs(api(), worker);
     }
 
     @AfterEach
@@ -619,7 +619,7 @@ class KubernetesSandboxRuntimeTest {
         var adapter = new SandboxAttemptRunner(
                 new KubernetesSandboxBackend(
                         unprovedPods,
-                        new KubernetesReviewJobs(api(), unproved),
+                        new KubernetesSandboxJobs(api(), unproved),
                         unproved,
                         liveWorkers,
                         new SandboxExits(unprovedPods, new SimpleMeterRegistry())),
@@ -918,7 +918,7 @@ class KubernetesSandboxRuntimeTest {
                 .withName(name + "-child")
                 .withNamespace(SANDBOXES)
                 .withLabels(job.getSpec().getTemplate().getMetadata().getLabels())
-                .addToLabels(KubernetesReviewJobs.JOB_NAME, name)
+                .addToLabels(KubernetesSandboxJobs.JOB_NAME, name)
                 .endMetadata()
                 .withSpec(job.getSpec().getTemplate().getSpec())
                 .build();

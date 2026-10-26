@@ -22,7 +22,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Sandboxes in the sandbox namespace: a practice review attempt as a {@code batch/v1} Job ({@link KubernetesReviewJobs})
+ * Sandboxes in the sandbox namespace: a practice review attempt as a {@code batch/v1} Job ({@link KubernetesSandboxJobs})
  * and a Heph host as a Pod. Both run the Pod of {@link KubernetesPods#workspacePod}: the isolation gate, the workspace
  * initializer, then the runtime with {@code /workspace} read-only. The chart's policy lets them reach the gateway port
  * of the worker Pods and nothing else.
@@ -42,7 +42,7 @@ public class KubernetesSandboxBackend implements SandboxBackend {
     private static final String HOST_PREFIX = "hephaestus-host-";
 
     private final KubernetesPods pods;
-    private final KubernetesReviewJobs reviewJobs;
+    private final KubernetesSandboxJobs reviewJobs;
     private final KubernetesWorker worker;
     private final KubernetesLiveWorkers liveWorkers;
     private final SandboxExits exits;
@@ -50,7 +50,7 @@ public class KubernetesSandboxBackend implements SandboxBackend {
 
     public KubernetesSandboxBackend(
             KubernetesPods pods,
-            KubernetesReviewJobs reviewJobs,
+            KubernetesSandboxJobs reviewJobs,
             KubernetesWorker worker,
             KubernetesLiveWorkers liveWorkers,
             SandboxExits exits) {
@@ -191,8 +191,8 @@ public class KubernetesSandboxBackend implements SandboxBackend {
             return known;
         }
         Duration wait = until(deadline);
-        if (wait.compareTo(KubernetesReviewJobs.CHILD_START) > 0) {
-            wait = KubernetesReviewJobs.CHILD_START;
+        if (wait.compareTo(KubernetesSandboxJobs.CHILD_START) > 0) {
+            wait = KubernetesSandboxJobs.CHILD_START;
         }
         String name = reviewJobs
                 .awaitPod(sandbox.name, wait, () -> sandbox.killed)
