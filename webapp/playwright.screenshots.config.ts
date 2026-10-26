@@ -2,7 +2,7 @@ import { defineConfig, devices } from "@playwright/test";
 
 import { BASE_URL, PORT } from "./e2e/screenshots/server.ts";
 
-// The user-guide screenshots: `docs/contributor/documentation-guide.md` § Screenshots of the web app.
+// The user-guide screenshots: `docs/contributor/add-a-user-guide-screenshot.md`.
 export default defineConfig({
 	testDir: "./e2e/screenshots",
 	testMatch: "**/*.shot.ts",

@@ -179,16 +179,8 @@ import Screenshot from "@site/src/components/Screenshot";
 - An image of more than 150 KB fails the capture.
 - A request that `workspace.ts` does not answer fails the capture, so no image shows an error by accident.
 
-To add a screenshot, do these steps:
-
-1. Add the screen to the list in `webapp/e2e/screenshots/user-guide.shot.ts`.
-2. Add the data for the screen to `workspace.ts`. Use invented names, and use practice names from the shipped catalog.
-3. Run `vp run generate:docs-screenshots`.
-4. Look at both images.
-5. Add the `Screenshot` component to the page.
-
-Run the command again when a pull request changes a screen that a user page shows.
-Commit the new images with that change.
+[Add a user-guide screenshot](./add-a-user-guide-screenshot.md) gives the steps.
+A pull request that changes a screen that a user page shows also commits the new images.
 
 ## Callouts
 
