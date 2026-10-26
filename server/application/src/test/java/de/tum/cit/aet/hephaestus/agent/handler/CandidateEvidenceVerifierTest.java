@@ -136,7 +136,7 @@ class CandidateEvidenceVerifierTest extends BaseUnitTest {
             {"outcome":"MET","summary":"The practice is met","explanation":"The captured body supports the criterion",
              "citations":[{"sourceKind":"docs.document.core","sourcePath":"context/body.txt","path":"document/body",
              "startLine":999,"endLine":999,"quote":"Exact quote"}],
-             "evidence":{},"coverage":{"source":"claimed","selected":1,"checked":1,"total":1,"complete":true}}
+             "evidence":{},"coverage":{"source":"host","reads":1,"truncatedReads":0,"failedReads":0,"receipts":[],"complete":true}}
             """));
     }
 
@@ -228,7 +228,7 @@ class CandidateEvidenceVerifierTest extends BaseUnitTest {
             {"outcome":"MET","summary":"The practice is met","explanation":"The captured change supports the criterion",
              "citations":[{"sourceKind":"scm.pull-request.diff","sourcePath":"%s","path":"%s","side":"%s",%s
              "startLine":2,"endLine":2,"quote":"%s"}],
-             "evidence":{},"coverage":{"source":"claimed","selected":1,"checked":1,"total":1,"complete":true}}
+             "evidence":{},"coverage":{"source":"host","reads":1,"truncatedReads":0,"failedReads":0,"receipts":[],"complete":true}}
             """.formatted(
                         sourcePath, path, side, commit.isEmpty() ? "" : "\"commit\":\"" + commit + "\",", quote)));
     }
@@ -380,7 +380,7 @@ class CandidateEvidenceVerifierTest extends BaseUnitTest {
                 "startLine":1,"endLine":1,"quote":"Exact quote"}],"basis":{"type":"duty","criterionQuote":"Use clear names.","event":0,"explanation":"The body is the witness"}}],
              "example":{"citation":{"sourceKind":"docs.document.core","sourcePath":"context/body.txt","path":"document/body",
                 "startLine":999,"endLine":999,"quote":"Exact quote"},"note":"The same quote is called an example"},
-             "evidence":{},"coverage":{"source":"claimed","selected":1,"checked":1,"total":1,"complete":true}}
+             "evidence":{},"coverage":{"source":"host","reads":1,"truncatedReads":0,"failedReads":0,"receipts":[],"complete":true}}
             """));
         assertThatThrownBy(
                         () -> verifier.verifyCandidate(job, assignment(), ReviewKind.ITEM, candidate, captured(true)))
@@ -400,7 +400,7 @@ class CandidateEvidenceVerifierTest extends BaseUnitTest {
                 "basis":{"type":"duty","criterionQuote":"Use clear names.","event":0,"explanation":"The body is the witness"}}],
              "example":{"citation":{"sourceKind":"docs.document.core","sourcePath":"context/body.txt","path":"document/body",
                 "startLine":999,"endLine":999,"quote":"After"},"note":"A separate example"},
-             "evidence":{},"coverage":{"source":"claimed","selected":1,"checked":1,"total":1,"complete":true}}
+             "evidence":{},"coverage":{"source":"host","reads":1,"truncatedReads":0,"failedReads":0,"receipts":[],"complete":true}}
             """));
         var verified = verifier.verifyCandidate(job, assignment(), ReviewKind.ITEM, candidate, captured(true));
         assertThat(verified.problems().getFirst().citations().getFirst().startLine())
@@ -427,7 +427,7 @@ class CandidateEvidenceVerifierTest extends BaseUnitTest {
                     {"outcome":"MET","summary":"Clear names","explanation":"The text supports the criterion",
                     "citations":[{"sourceKind":"docs.document.core","sourcePath":"context/body.txt","path":"document/body",
                     "startLine":1,"endLine":1,"quote":"Exact quote"}],"evidence":{},
-                    "coverage":{"source":"claimed","selected":1,"checked":1,"total":1,"complete":true}}
+                    "coverage":{"source":"host","reads":1,"truncatedReads":0,"failedReads":0,"receipts":[],"complete":true}}
                     """);
                 var citation = (ObjectNode) raw.path("citations").get(0);
                 citation.set("startLine", fixture.path("startLine"));
@@ -499,7 +499,7 @@ class CandidateEvidenceVerifierTest extends BaseUnitTest {
                "explanation":"The words do not meet the criterion","nextStep":"Rewrite the sentence",
                "citations":[{"sourceKind":"docs.document.core","sourcePath":"context/body.txt","path":"document/body",
                  "startLine":2,"endLine":2,"quote":"Exact quote"}],"basis":%s}],"evidence":{},
-             "coverage":{"source":"claimed","selected":1,"checked":1,"total":1,"complete":true}}
+             "coverage":{"source":"host","reads":1,"truncatedReads":0,"failedReads":0,"receipts":[],"complete":true}}
             """.formatted(basis)));
     }
 

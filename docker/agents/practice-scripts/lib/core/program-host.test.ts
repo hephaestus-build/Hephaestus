@@ -236,9 +236,33 @@ void describe("a practice's result", () => {
 					endLine: 36,
 				},
 			],
-			coverage: { source: "claimed", selected: 1, checked: 1, total: 1, complete: true },
+			coverage: { source: "host", truncatedReads: 0, failedReads: 0, complete: true },
 		});
 		reportEntry("direct", outcome);
+	});
+
+	void test("a program that claims complete coverage after a failed read gets no MET", async () => {
+		const ws = await workspace({
+			hidden: program(
+				"definePracticeScript",
+				`{ meta: {}, run: async (ctx) => {
+					await ctx.evidence.record("..").catch(() => undefined);
+					return {
+						outcome: "MET",
+						summary: "Met",
+						explanation: "The program swallowed its failed read.",
+						citations: [await ctx.evidence.citeRecord("metadata.json", 36)],
+						evidence: {},
+						coverage: { source: "claimed", selected: 1, checked: 1, total: 1, complete: true },
+					};
+				} }`,
+			),
+		});
+		const { outcome } = await run(ws, "hidden");
+		assert.equal(outcome.status, "failed");
+		assert.equal(outcome.stopReason, "invalid-candidate");
+		assert.match(outcome.error ?? "", /^met_coverage_incomplete:/u);
+		assert.equal(outcome.candidate, undefined);
 	});
 
 	void test("the built-in asks one review with no prepared input and returns its result", async () => {

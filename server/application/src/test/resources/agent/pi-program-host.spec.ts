@@ -134,7 +134,7 @@ void test("a custom program that returns a result directly opens no session, and
 							endLine: 1,
 						},
 					],
-					coverage: { source: "claimed", selected: 1, checked: 1, total: 1, complete: true },
+					coverage: { source: "host", truncatedReads: 0, failedReads: 0, complete: true },
 				},
 			},
 		],

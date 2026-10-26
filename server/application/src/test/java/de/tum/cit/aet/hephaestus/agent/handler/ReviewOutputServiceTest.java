@@ -92,7 +92,7 @@ class ReviewOutputServiceTest extends BaseUnitTest {
         var candidate = mapper.readTree("""
             {"outcome":"MET","summary":"Clear names","explanation":"The names explain the document.",
              "citations":[{"sourceKind":"docs.document.core","sourcePath":"context/body.txt","path":"document/body","startLine":1,"endLine":1,"quote":"Clear names"}],
-             "evidence":{},"coverage":{"source":"claimed","selected":1,"checked":1,"total":1,"complete":true}}
+             "evidence":{},"coverage":{"source":"host","reads":1,"truncatedReads":0,"failedReads":0,"receipts":[],"complete":true}}
             """);
         return new AdmissionRequestDTO(
                 3,

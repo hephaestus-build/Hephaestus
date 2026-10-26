@@ -118,11 +118,12 @@ class PinnedInlineAnchorsTest {
                 .put("quote", line == 4 ? statement : line == 20 ? "outside();" : "context");
         raw.putObject("evidence");
         raw.putObject("coverage")
-                .put("source", "claimed")
-                .put("selected", 1)
-                .put("checked", 1)
-                .put("total", 1)
-                .put("complete", true);
+                .put("source", "host")
+                .put("reads", 1)
+                .put("truncatedReads", 0)
+                .put("failedReads", 0)
+                .put("complete", true)
+                .putArray("receipts");
         var admitted = new CandidateEvidenceVerifier(files, catalogs, List.of(new ScmCitationVerifier(mapper)))
                 .verifyCandidate(job, assignment, ReviewKind.ITEM, CandidateParser.parse(raw), captured)
                 .citations()

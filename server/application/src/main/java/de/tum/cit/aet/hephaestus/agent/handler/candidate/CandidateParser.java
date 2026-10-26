@@ -224,6 +224,12 @@ public final class CandidateParser {
                 }
             }
         }
+        if ((outcome == ResultOutcome.MET || outcome == ResultOutcome.DOES_NOT_APPLY)
+                && coverage instanceof ClaimedCoverage) {
+            throw refuse(
+                    CandidateRefusal.COVERAGE_INCONSISTENT,
+                    "a " + outcome + " result needs the coverage that the host measured");
+        }
         List<OpenQuestion> openQuestions = questions == null ? List.of() : questions;
         return switch (outcome) {
             case MET -> new MetCandidate(sent.summary(), sent.explanation(), citations, coverage, example, searchNode);

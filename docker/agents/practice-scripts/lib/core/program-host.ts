@@ -240,40 +240,42 @@ export async function runPracticeProgram(
 	if (readReceipts.length > CANDIDATE_LIMITS.receipts) {
 		return finished("failed", "too-large", { error: "read receipts exceed the proof bound" });
 	}
-	if (candidate.coverage.source === "host") {
-		const source = candidate.coverage;
-		const omitted = [...(source.complete ? [] : source.omitted)];
-		if (services.receipts.truncatedReads > 0) {
-			omitted.push({
-				what: "script reads cut short",
-				count: services.receipts.truncatedReads,
-				reason: "truncated",
-			});
-		}
-		if (services.receipts.failedReads > 0) {
-			omitted.push({
-				what: "script reads that failed",
-				count: services.receipts.failedReads,
-				reason: "unavailable",
-			});
-		}
-		const base = {
-			source: "host" as const,
-			reads: source.reads + services.receipts.reads,
-			truncatedReads: source.truncatedReads + services.receipts.truncatedReads,
-			failedReads: source.failedReads + services.receipts.failedReads,
-			receipts: readReceipts,
-		};
-		const coverage =
-			omitted.length === 0 ? { ...base, complete: true } : { ...base, complete: false, omitted };
-		const final = parseCandidate({ ...candidate, coverage });
-		if (!final.ok) {
-			return finished("failed", "invalid-candidate", {
-				error: `${final.reasonCode}: ${final.message}`,
-			});
-		}
-		candidate = final.candidate;
+	// Program code may type its coverage; the host replaces those counts with what the reads reached.
+	const source =
+		candidate.coverage.source === "host"
+			? candidate.coverage
+			: { ...candidate.coverage, reads: 0, truncatedReads: 0, failedReads: 0 };
+	const omitted = [...(source.complete ? [] : source.omitted)];
+	if (services.receipts.truncatedReads > 0) {
+		omitted.push({
+			what: "script reads cut short",
+			count: services.receipts.truncatedReads,
+			reason: "truncated",
+		});
 	}
+	if (services.receipts.failedReads > 0) {
+		omitted.push({
+			what: "script reads that failed",
+			count: services.receipts.failedReads,
+			reason: "unavailable",
+		});
+	}
+	const base = {
+		source: "host" as const,
+		reads: source.reads + services.receipts.reads,
+		truncatedReads: source.truncatedReads + services.receipts.truncatedReads,
+		failedReads: source.failedReads + services.receipts.failedReads,
+		receipts: readReceipts,
+	};
+	const coverage =
+		omitted.length === 0 ? { ...base, complete: true } : { ...base, complete: false, omitted };
+	const final = parseCandidate({ ...candidate, coverage });
+	if (!final.ok) {
+		return finished("failed", "invalid-candidate", {
+			error: `${final.reasonCode}: ${final.message}`,
+		});
+	}
+	candidate = final.candidate;
 
 	if (job.inputs.scope.kind === "SCAN" && candidate.outcome === "MET") {
 		const file = job.inputs.scope.item.path;

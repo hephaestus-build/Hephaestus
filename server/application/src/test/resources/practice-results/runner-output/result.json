@@ -74,10 +74,11 @@
 					}
 				],
 				"coverage": {
-					"source": "claimed",
-					"selected": 1,
-					"checked": 1,
-					"total": 1,
+					"source": "host",
+					"reads": 0,
+					"truncatedReads": 0,
+					"failedReads": 0,
+					"receipts": [],
 					"complete": true
 				},
 				"evidence": {

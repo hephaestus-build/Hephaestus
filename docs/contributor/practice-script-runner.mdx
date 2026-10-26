@@ -63,8 +63,11 @@ The server derives the result's worst severity.
 Every new problem has verified citations and a permitted claim basis.
 An example can appear only on Met or Not met and cannot overlap a problem.
 
-Coverage distinguishes host read receipts from a script's claimed counts.
-Claimed completeness is not a trusted complete file read.
+The host measures the coverage of every candidate.
+A script can type claimed counts.
+The program host replaces them with host coverage from the script's own reads.
+A truncated or failed script read makes that coverage incomplete, so the script cannot return Met.
+Admission refuses claimed coverage on Met and Does not apply.
 
 Host coverage checks the practice's required sources and the sources that its result cites.
 A source supplied in full by the opening brief needs no duplicate read.

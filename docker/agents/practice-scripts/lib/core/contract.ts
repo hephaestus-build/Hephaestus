@@ -431,7 +431,8 @@ export type Completeness =
 	| { complete: false; omitted: NonEmpty<Omission> };
 /**
  * What the result covers. "host": the host derived it from its own read receipts. "claimed": program
- * code typed it, and it stays a claim.
+ * code typed it; the program host replaces it with host coverage before admission, which refuses a
+ * claimed MET or DOES_NOT_APPLY.
  */
 export const readReceiptSchema = z
 	.strictObject({

@@ -304,8 +304,23 @@ class CandidateFixturesTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldRefuseClaimedCoverageWhenTheOutcomeIsMetOrDoesNotApply() throws IOException {
+        for (String name : List.of("candidate-met-with-example.json", "candidate-not-applicable.json")) {
+            ObjectNode candidate = fixture(name);
+            candidate
+                    .putObject("coverage")
+                    .put("source", "claimed")
+                    .put("selected", 1)
+                    .put("checked", 1)
+                    .put("total", 1)
+                    .put("complete", true);
+            assertRefused(candidate, CandidateRefusal.COVERAGE_INCONSISTENT);
+        }
+    }
+
+    @Test
     void shouldKeepUnknownTotalWhenClaimedCoverageIsCompleteForTheSelectedItems() throws IOException {
-        ObjectNode candidate = fixture("candidate-met-with-example.json");
+        ObjectNode candidate = fixture("candidate-undetermined.json");
         candidate
                 .putObject("coverage")
                 .put("source", "claimed")
