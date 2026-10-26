@@ -185,7 +185,8 @@ This update restores the decision above. It changes no rule about who and what i
   Each developer counts once, at the standing that their profile shows.
 - A requested or backfilled review takes over the current result of its work.
   The live review before it still sets the standing and the trend.
-  A newer live review, a work change, a repair or a removal ends it.
+  A newer live review, a repair or a removal ends it.
+  A work change no longer ends it ([ADR 0065](https://github.com/hephaestus-build/Hephaestus/pull/3284)).
   The quoted results stay the current ones.
 - Results that the cutover carried over from the earlier model have no current proof.
   A practice that no current review decided uses them, marked *earlier reviews*, without quotes and without a trend.

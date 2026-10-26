@@ -275,6 +275,24 @@ class PracticeStandingServiceTest {
     }
 
     @Test
+    void shouldSkipAnOutrankedResultBetweenAWorkChangeAndARequest() {
+        add(1, ResultOutcome.NOT_MET);
+        var live = data.getFirst();
+        var outranked = ReviewTestData.view(
+                live.result().getItemId(),
+                UUID.randomUUID(),
+                now.minus(Duration.ofDays(7)),
+                new ItemKind("scm.pull_request"),
+                ResultOutcome.MET);
+        outranked.result().end(ResultEndReason.OUTRANKED, outranked.result().getRecordedAt());
+        data.add(outranked);
+        replace(live, 5, ResultOutcome.MET, ReviewOrigin.REQUEST, ResultEndReason.WORK_CHANGED);
+
+        var standing = only(service.getStandingSnapshots(1L, 7L, List.of(now)).getFirst());
+        assertThat(standing.liveRuns()).extracting(ResultView::result).containsExactly(live.result());
+    }
+
+    @Test
     void shouldNotReachPastARepairToAnEarlierWorkChange() {
         add(1, ResultOutcome.NOT_MET);
         var repaired = replace(data.getFirst(), 3, ResultOutcome.MET, ReviewOrigin.EVENT, ResultEndReason.WORK_CHANGED);
@@ -403,6 +421,18 @@ class PracticeStandingServiceTest {
         when(visibility.permitsStandingAt(eq(1L), anyCollection(), any())).thenReturn(Set.of());
 
         assertThat(card().standing()).isEqualTo(PracticeStanding.NOT_OBSERVED);
+    }
+
+    @Test
+    void shouldReadNoStandingWhenTheStandingFencesRefuseARowThatAWorkChangeEnded() {
+        add(1, ResultOutcome.NOT_MET);
+        data.getFirst().result().end(ResultEndReason.WORK_CHANGED, now.minusSeconds(1));
+        assertThat(card().standing()).isEqualTo(PracticeStanding.MIXED);
+        when(visibility.permitsStandingAt(eq(1L), anyCollection(), any())).thenReturn(Set.of());
+
+        var standing = only(service.getStandingSnapshots(1L, 7L, List.of(now)).getFirst());
+        assertThat(standing.dto().standing()).isEqualTo(PracticeStanding.NOT_OBSERVED);
+        assertThat(standing.liveRuns()).isEmpty();
     }
 
     @Test

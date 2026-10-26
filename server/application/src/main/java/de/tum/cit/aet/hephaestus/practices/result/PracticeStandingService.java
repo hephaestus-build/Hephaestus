@@ -268,8 +268,9 @@ public class PracticeStandingService {
      * before it. So the claim held at {@code edge} is followed back through the claims it replaced, on the same
      * work version, to the newest live run. A newer live run is that run. A work change does not end the chain: the
      * newest decision about the work stands until a newer review of the work replaces it, even when a push started
-     * no review of the practice (ADR 0065). A repair or a removal ends the chain. An outranked result never held
-     * the claim.
+     * no review of the practice (ADR 0065). Such a result counts but is not quoted: quotes follow the current claim,
+     * and the lines it cites may be gone from the new version. A repair or a removal ends the chain. An outranked
+     * result never held the claim.
      *
      * <p>A migrated predecessor remains historical assessment only. The classifier keeps it out of current
      * proof, quotes and trends. The results stay as recorded: this reads their end facts.
@@ -281,7 +282,7 @@ public class PracticeStandingService {
                 .forEach(view -> claims.computeIfAbsent(ClaimKey.of(view.result()), key -> new ArrayList<>())
                         .add(view));
         List<ResultView> live = new ArrayList<>();
-        claims.values().forEach(claim -> liveRunOf(claim, edge).ifPresent(live::add));
+        claims.values().forEach(claim -> Claim.of(claim).liveRunAt(edge).ifPresent(live::add));
         return live;
     }
 
@@ -292,35 +293,44 @@ public class PracticeStandingService {
         }
     }
 
-    private static Optional<ResultView> liveRunOf(List<ResultView> claim, Instant edge) {
-        List<ResultView> newestFirst = claim.stream()
-                .sorted(Comparator.comparing(PracticeStandingService::order).reversed())
-                .toList();
-        ResultView holder = newestFirst.stream()
-                .filter(view -> holdsClaimAt(view.result(), edge))
-                .findFirst()
-                .or(() -> workChanged(newestFirst.stream()))
-                .orElse(null);
-        while (holder != null && !isLive(holder)) {
-            ResultView successor = holder;
-            List<ResultView> older = newestFirst.stream()
-                    .filter(view -> order(view).compareTo(order(successor)) < 0)
-                    .toList();
-            holder = older.stream()
-                    .filter(view -> replacedBy(view.result(), successor.result()))
-                    .findFirst()
-                    .or(() -> workChanged(older.stream()))
-                    .orElse(null);
+    /** One piece of work's results for one practice and developer, newest first. */
+    private record Claim(List<ResultView> newestFirst) {
+        static Claim of(List<ResultView> views) {
+            return new Claim(views.stream()
+                    .sorted(Comparator.comparing(PracticeStandingService::order).reversed())
+                    .toList());
         }
-        return Optional.ofNullable(holder);
-    }
 
-    /** The newest of {@code newestFirst} that could hold the claim, when a work change ended it. */
-    private static Optional<ResultView> workChanged(Stream<ResultView> newestFirst) {
-        return newestFirst
-                .filter(view -> view.result().getEndReason() != ResultEndReason.OUTRANKED)
-                .findFirst()
-                .filter(view -> view.result().getEndReason() == ResultEndReason.WORK_CHANGED);
+        Optional<ResultView> liveRunAt(Instant edge) {
+            ResultView holder = newestFirst.stream()
+                    .filter(view -> holdsClaimAt(view.result(), edge))
+                    .findFirst()
+                    .or(() -> newestEndedByWorkChange(newestFirst.stream()))
+                    .orElse(null);
+            while (holder != null && !isLive(holder)) {
+                ResultView successor = holder;
+                List<ResultView> older = newestFirst.stream()
+                        .filter(view -> order(view).compareTo(order(successor)) < 0)
+                        .toList();
+                holder = older.stream()
+                        .filter(view -> replacedBy(view.result(), successor.result()))
+                        .findFirst()
+                        .or(() -> newestEndedByWorkChange(older.stream()))
+                        .orElse(null);
+            }
+            return Optional.ofNullable(holder);
+        }
+
+        /**
+         * The newest of {@code newestFirst} that held the claim, when a work change ended it. An outranked result
+         * never held the claim, so it neither stands nor hides the result before it.
+         */
+        private static Optional<ResultView> newestEndedByWorkChange(Stream<ResultView> newestFirst) {
+            return newestFirst
+                    .filter(view -> view.result().getEndReason() != ResultEndReason.OUTRANKED)
+                    .findFirst()
+                    .filter(view -> view.result().getEndReason() == ResultEndReason.WORK_CHANGED);
+        }
     }
 
     // ResultClaimWriter ends the claim it replaces at the replacing result's recording, or at the replaced
