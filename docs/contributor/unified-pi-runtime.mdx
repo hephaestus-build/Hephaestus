@@ -577,13 +577,17 @@ The folder has this layout:
 ```text
 /workspace/
 ├── INDEX.md                    # What each area holds, what Heph can load, and the rules.
+├── FIELDS.md                   # What each document's fields mean and do not show.
 ├── inputs/context/<doc>.json   # The context documents of the attempt.
 └── repos/<host>/<path>/        # A repository with its Git history, after load_context.
 ```
 
 `ContextFolderIndex` writes the core part of INDEX.md.
 Each context loader adds its own section.
-INDEX.md is the only description of the documents for the model.
+INDEX.md lists the documents for the model.
+`FIELDS.md` (`agent/mentor/fields.md`) explains each document's fields, with one section for each document.
+Heph reads a section only when it needs it, so the system prompt that each model call sends stays short.
+`ContextFolderIndexTest` keeps one section for each fixed document.
 The host holds no list of document keys.
 
 The host offers the three tools only when `GET context` returns `contextFolder: true` (`TurnContextFolder.available`).
@@ -687,7 +691,7 @@ The call after it gets a new sandbox.
 #### Staging
 
 `TurnContextFolder` stages the folder on the first call of an attempt (`ExecSandboxes.stage`).
-An `Add` sends INDEX.md and the attempt's documents as one tar into `/workspace`.
+An `Add` sends INDEX.md, FIELDS.md and the attempt's documents as one tar into `/workspace`.
 A load sends a `Replace`: the tar replaces one directory, for example `repos/<host>/<path>`, with all its contents.
 The worker owns the tar stream, and the sandbox reads exactly its size.
 A staged path is a plain path in `/workspace`.
@@ -803,6 +807,7 @@ Nothing about a conversation stays in the host after the turn.
 The request has four parts, in this order:
 
 1. The system prompt `agent/mentor/system.md` and the [shared feedback writing guide](./practice-feedback-language.md#writing-feedback). They are the same for each turn.
+   `HephHostSpecTest` keeps the two together at 15 KiB or less, because each model call sends them again.
 2. The tools. They are the same for each turn of one worker.
 3. The path from the server (`MentorContextPathBuilder`). It is the same bytes for each turn of one conversation, until it changes.
 4. The situation (`MentorSituation`). The host adds it as the last message and never stores it.

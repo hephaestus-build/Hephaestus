@@ -124,7 +124,7 @@ class TurnContextFolderTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldStageTheIndexAndTheDocumentsOnceWhenTheAttemptFirstReads() {
+    void shouldStageTheIndexTheFieldGuideAndTheDocumentsOnceWhenTheAttemptFirstReads() {
         sandboxAnswers("");
         TurnJwt turn = turn(Duration.ofMinutes(5));
 
@@ -134,11 +134,12 @@ class TurnContextFolderTest extends BaseUnitTest {
 
         assertThat(first.path("ok").asBoolean()).as(first.toString()).isTrue();
         assertThat(second.path("text").asString()).isEqualTo("{\n");
-        assertThat(staged).containsExactly(List.of("inputs/context/user.json", "INDEX.md"));
+        assertThat(staged).containsExactly(List.of("inputs/context/user.json", "FIELDS.md", "INDEX.md"));
         assertThat(runtime.stagings)
                 .singleElement()
                 .isInstanceOfSatisfying(
-                        ExecSandboxes.Add.class, add -> assertThat(add.names()).containsExactly("inputs", "INDEX.md"));
+                        ExecSandboxes.Add.class,
+                        add -> assertThat(add.names()).containsExactly("inputs", "FIELDS.md", "INDEX.md"));
         assertThat(stagedFiles).containsEntry("inputs/context/user.json", "{\n  \"counts\" : 3\n}");
         assertThat(runtime.createdCount()).isOne();
     }

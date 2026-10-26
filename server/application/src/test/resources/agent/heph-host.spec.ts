@@ -747,6 +747,33 @@ void test("Heph has read, bash and load_context only in a turn whose context say
 	}
 });
 
+void test("a turn without a context folder never reaches the worker for files and still ends with its answer", async () => {
+	const worker = fakeWorker({
+		...contextOf([], "Why is my pull request not met?"),
+		contextFolder: false,
+	});
+	const requests: FauxRequest[] = [];
+	const end = await runTurn(
+		worker,
+		fauxModels([
+			(context) => {
+				requests.push(context);
+				return faux.fauxAssistantMessage([faux.fauxToolCall("read", { path: "INDEX.md" })], {
+					stopReason: "toolUse",
+				});
+			},
+			(context) => {
+				requests.push(context);
+				return faux.fauxAssistantMessage("I can't look at your pull requests right now.");
+			},
+		]),
+	);
+
+	assert.equal(end.outcome, "DONE");
+	assert.equal(requests.length, 2);
+	assert.deepEqual([worker.reads.length, worker.execs.length, worker.loads.length], [0, 0, 0]);
+});
+
 function contract(name: string): Record<string, unknown> {
 	const value: unknown = JSON.parse(
 		readFileSync(new URL(`heph-turn-contract/${name}`, import.meta.url), "utf8"),
