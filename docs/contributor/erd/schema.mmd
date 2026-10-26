@@ -631,6 +631,26 @@ erDiagram
         BIGINT provider_id FK,UK "NOT NULL"
     }
 
+    LlmCallPermit {
+        UUID id PK
+        TIMESTAMPTZ acquired_at "NOT NULL"
+        VARCHAR(16) call_class "NOT NULL"
+        BIGINT pool_id FK "NOT NULL"
+        TIMESTAMPTZ renewed_at "NOT NULL"
+        VARCHAR(255) worker_id "NOT NULL"
+    }
+
+    LlmCallPool {
+        BIGINT id PK
+        TIMESTAMPTZ created_at "NOT NULL"
+        VARCHAR(128) display_name "NOT NULL"
+        INTEGER interactive_reserve "NOT NULL"
+        INTEGER max_concurrent_calls
+        TIMESTAMPTZ no_call_before
+        VARCHAR(64) slug UK "NOT NULL"
+        TIMESTAMPTZ updated_at
+    }
+
     LlmConnection {
         BIGINT id PK
         VARCHAR(64) slug UK "NOT NULL"
@@ -662,6 +682,7 @@ erDiagram
         VARCHAR(200) data_handling_note
         VARCHAR(24) operated_by
         VARCHAR(16) brand
+        BIGINT call_pool_id FK
     }
 
     LlmModelPrice {
@@ -1875,6 +1896,7 @@ erDiagram
         VARCHAR(200) data_handling_note
         VARCHAR(24) operated_by
         VARCHAR(16) brand
+        BIGINT call_pool_id FK
     }
 
     WorkspaceOnboardingSetting {
@@ -2008,7 +2030,9 @@ erDiagram
     Workspace ||--o{ ItemEvent : has
     Repository ||--o{ Label : labeled
     IdentityProvider ||--o{ Label : labeled
+    LlmCallPool ||--o{ LlmCallPermit : has
     LlmConnection ||--o{ LlmModel : has
+    LlmCallPool ||--o{ LlmModel : has
     LlmModel ||--o{ LlmModelPrice : has
     Review ||--o{ LlmUsageEvent : has
     Workspace ||--o{ LlmUsageEvent : has
@@ -2154,6 +2178,7 @@ erDiagram
     Workspace ||--o{ WorkspaceLlmConnection : has
     WorkspaceLlmConnection ||--o{ WorkspaceLlmModel : connection_id
     Workspace ||--o{ WorkspaceLlmModel : has
+    LlmCallPool ||--o{ WorkspaceLlmModel : has
     WorkspaceLlmConnection ||--o{ WorkspaceLlmModel : connection_id
     Workspace ||--o{ WorkspaceSlugHistory : has
 

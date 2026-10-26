@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1793052936577-1" author="hephaestus">
+        <createTable tableName="llm_call_permit">
+            <column name="id" type="UUID">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="llm_call_permitPK"/>
+            </column>
+            <column defaultValueComputed="now()" name="acquired_at" type="TIMESTAMP(6) WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="call_class" type="VARCHAR(16)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="pool_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column defaultValueComputed="now()" name="renewed_at" type="TIMESTAMP(6) WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="worker_id" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+    <changeSet id="1793052936577-2" author="hephaestus">
+        <createTable tableName="llm_call_pool">
+            <column autoIncrement="true" name="id" type="BIGINT">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="llm_call_poolPK"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP(6) WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="display_name" type="VARCHAR(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column defaultValueNumeric="0" name="interactive_reserve" type="INTEGER">
+                <constraints nullable="false"/>
+            </column>
+            <column name="max_concurrent_calls" type="INTEGER"/>
+            <column name="no_call_before" type="TIMESTAMP(6) WITH TIME ZONE"/>
+            <column name="slug" type="VARCHAR(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMP(6) WITH TIME ZONE"/>
+        </createTable>
+    </changeSet>
+    <changeSet id="1793052936577-3" author="hephaestus">
+        <addColumn tableName="llm_model">
+            <column name="call_pool_id" type="BIGINT"/>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1793052936577-4" author="hephaestus">
+        <addColumn tableName="workspace_llm_model">
+            <column name="call_pool_id" type="BIGINT"/>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1793052936577-5" author="hephaestus">
+        <addUniqueConstraint columnNames="slug" constraintName="ux_llm_call_pool_slug" tableName="llm_call_pool"/>
+    </changeSet>
+    <changeSet id="1793052936577-6" author="hephaestus">
+        <createIndex indexName="idx_llm_call_permit_pool" tableName="llm_call_permit">
+            <column name="pool_id"/>
+        </createIndex>
+    </changeSet>
+    <changeSet id="1793052936577-7" author="hephaestus">
+        <comment>A deleted pool takes the permits of its calls in flight with it; its models are no longer limited.</comment>
+        <addForeignKeyConstraint baseTableName="llm_call_permit" baseColumnNames="pool_id" referencedTableName="llm_call_pool" referencedColumnNames="id" constraintName="sfk_llm_call_permit_pool" onDelete="CASCADE" validate="true"/>
+        <addForeignKeyConstraint baseTableName="llm_model" baseColumnNames="call_pool_id" referencedTableName="llm_call_pool" referencedColumnNames="id" constraintName="sfk_llm_model_call_pool" onDelete="SET NULL" validate="true"/>
+        <addForeignKeyConstraint baseTableName="workspace_llm_model" baseColumnNames="call_pool_id" referencedTableName="llm_call_pool" referencedColumnNames="id" constraintName="sfk_ws_llm_model_call_pool" onDelete="SET NULL" validate="true"/>
+        <rollback>
+            <dropForeignKeyConstraint baseTableName="workspace_llm_model" constraintName="sfk_ws_llm_model_call_pool"/>
+            <dropForeignKeyConstraint baseTableName="llm_model" constraintName="sfk_llm_model_call_pool"/>
+            <dropForeignKeyConstraint baseTableName="llm_call_permit" constraintName="sfk_llm_call_permit_pool"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

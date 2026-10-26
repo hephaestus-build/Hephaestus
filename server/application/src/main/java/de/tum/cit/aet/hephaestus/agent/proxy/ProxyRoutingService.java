@@ -1,5 +1,8 @@
 package de.tum.cit.aet.hephaestus.agent.proxy;
 
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallClass;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.config.FrozenModel;
 import de.tum.cit.aet.hephaestus.agent.job.FrozenCharge;
@@ -17,8 +20,10 @@ import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.TurnJwt;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewSnapshotQuery;
 import jakarta.servlet.http.HttpServletRequest;
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
@@ -39,16 +44,39 @@ class ProxyRoutingService {
     private final MentorTurnRepository mentorTurns;
     private final ObjectMapper objectMapper;
     private final ReviewAttemptUsageService attemptUsage;
+    private final ReviewSnapshotQuery reviews;
+
+    /** A review's origin never changes, so each job's call class is read once. */
+    private final Cache<UUID, LlmCallClass> callClasses =
+            Caffeine.newBuilder().expireAfterAccess(Duration.ofHours(1)).build();
 
     ProxyRoutingService(
             ReviewJobRepository jobs,
             MentorTurnRepository mentorTurns,
             ObjectMapper mapper,
-            ReviewAttemptUsageService attemptUsage) {
+            ReviewAttemptUsageService attemptUsage,
+            ReviewSnapshotQuery reviews) {
         this.agentJobRepository = jobs;
         this.mentorTurns = mentorTurns;
         this.objectMapper = mapper;
         this.attemptUsage = attemptUsage;
+        this.reviews = reviews;
+    }
+
+    /**
+     * Whose call this is, for its pool: a Heph turn, or the origin of the review that makes it.
+     *
+     * @throws ResponseStatusException 409 when the call's review no longer exists
+     */
+    LlmCallClass callClass(ProxyRouting routing) {
+        if (routing.attempt().sourceType() == UsageSourceType.MENTOR_TURN) return LlmCallClass.TURN;
+        return callClasses.get(
+                routing.sourceId(),
+                jobId -> agentJobRepository
+                        .findById(jobId)
+                        .flatMap(job -> reviews.find(job.getWorkspaceId(), job.getReviewId()))
+                        .map(review -> LlmCallClass.of(review.origin()))
+                        .orElseThrow(ProxyRoutingService::attemptEnded));
     }
 
     ProxyRouting resolve(ProxyIdentity identity, HttpServletRequest request) {

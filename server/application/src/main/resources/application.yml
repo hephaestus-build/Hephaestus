@@ -709,6 +709,12 @@ hephaestus:
         # like GBP: an instance that accepted GBP could only ever have shown USD, so a currency this
         # instance cannot convert to is a deploy-time typo, not something to start up and warn about.
         display-currency: ${HEPHAESTUS_LLM_DISPLAY_CURRENCY:}
+        call-pools:
+            # How long a permit of a call pool counts without its worker's renewal. A crashed worker's calls hold
+            # their pool for up to 1.25 times this; a shorter lease frees them sooner and renews more often.
+            permit-lease: ${HEPHAESTUS_LLM_CALL_POOLS_PERMIT_LEASE:PT1M}
+            # The longest pause of a call pool after a rate limit answer, whatever its Retry-After asks for.
+            max-cooldown: ${HEPHAESTUS_LLM_CALL_POOLS_MAX_COOLDOWN:PT5M}
         egress:
             # Allow http://localhost provider base URLs, for testing against an Ollama/vLLM running
             # beside the app. NEVER set this in production: it is an SSRF hole that lets a workspace

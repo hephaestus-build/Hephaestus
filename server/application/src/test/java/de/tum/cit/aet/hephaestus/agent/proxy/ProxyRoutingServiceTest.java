@@ -31,6 +31,7 @@ import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewSnapshotQuery;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import java.math.BigDecimal;
@@ -53,7 +54,8 @@ class ProxyRoutingServiceTest extends BaseUnitTest {
     private final JsonMapper mapper = new JsonMapper();
     private final MentorTurnRepository turns = mock(MentorTurnRepository.class);
     private final ReviewAttemptUsageService attemptUsage = mock(ReviewAttemptUsageService.class);
-    private final ProxyRoutingService routing = new ProxyRoutingService(jobs, turns, mapper, attemptUsage);
+    private final ProxyRoutingService routing =
+            new ProxyRoutingService(jobs, turns, mapper, attemptUsage, mock(ReviewSnapshotQuery.class));
     private final ReviewJob job = new ReviewJob();
     private final Instant workDeadline = Instant.now().plusSeconds(30);
     private ProxyIdentity identity;

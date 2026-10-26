@@ -1899,6 +1899,31 @@ export const zCurrentUserView = z.object({
 });
 
 /**
+ * Provider capacity that the models in it share
+ */
+export const zLlmCallPool = z.object({
+    displayName: z.string(),
+    id: z.int(),
+    interactiveReserve: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
+    maxConcurrentCalls: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }).optional(),
+    noCallBefore: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
+    slug: z.string()
+});
+
+/**
+ * A model and the pool its calls share
+ */
+export const zLlmCallPoolModel = z.object({
+    callPoolId: z.int().optional(),
+    connectionDisplayName: z.string(),
+    displayName: z.string(),
+    host: z.string().optional(),
+    modelId: z.int(),
+    scope: z.enum(['INSTANCE', 'WORKSPACE']),
+    workspaceSlug: z.string().optional()
+});
+
+/**
  * Instance LLM provider connection (API key redacted)
  */
 export const zLlmConnection = z.object({
@@ -1985,6 +2010,7 @@ export const zLlmModel = z.object({
         'Z_AI',
         'MOONSHOT'
     ]).optional(),
+    callPoolId: z.int().optional(),
     connectionDisplayName: z.string(),
     connectionId: z.int(),
     contextWindow: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }).optional(),
@@ -4520,6 +4546,16 @@ export const zRuntimeNonResult = z.object({
     ])
 });
 
+/**
+ * Create or change a pool of provider capacity
+ */
+export const zSaveLlmCallPoolRequest = z.object({
+    displayName: z.string().min(0).max(128),
+    interactiveReserve: z.int().gte(0).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
+    maxConcurrentCalls: z.int().gte(1).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }).optional(),
+    slug: z.string().min(0).max(64).regex(/[a-z0-9]+(-[a-z0-9]+)*/)
+});
+
 export const zScanAvailability = z.object({
     expired: z.boolean(),
     expiredProofPairs: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
@@ -5760,6 +5796,14 @@ export const zUpdateLlmBudgetRequest = z.object({
 });
 
 /**
+ * The models whose calls share a pool
+ */
+export const zUpdateLlmCallPoolModelsRequest = z.object({
+    instanceModelIds: z.array(z.int()),
+    workspaceModelIds: z.array(z.int())
+});
+
+/**
  * Update an instance LLM provider connection (all fields optional)
  */
 export const zUpdateLlmConnectionRequest = z.object({
@@ -6517,6 +6561,7 @@ export const zWorkspaceLlmModel = z.object({
         'Z_AI',
         'MOONSHOT'
     ]).optional(),
+    callPool: zLlmCallPool.optional(),
     connectionDisplayName: z.string(),
     connectionId: z.int(),
     contextWindow: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }).optional(),

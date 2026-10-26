@@ -446,7 +446,45 @@ If that happens, use [the triage list](./practice-review#follow-one-review-end-t
 A workspace admin who chooses a model sees its display name, connection name, reasoning effort, and price framing.
 They never see an upstream model ID, base URL, or credential.
 
-## 6. Errors you can hit
+## 6. Sharing provider capacity
+
+Put models into a **call pool** when their calls share one provider endpoint with a limited capacity.
+An example is a GPU gateway that other systems also use.
+The pool limits the calls in flight across all workers and all workspaces.
+It also pauses all its models when the provider answers with a rate limit.
+[Runtime roles](./runtime-roles.mdx#call-pools) describes how the limit works and why it can be overshot briefly.
+
+A model is in no pool until you put it into one.
+Such a model is not limited.
+Hephaestus never puts a model into a pool by itself, not even when two connections use the same host.
+Two deployments behind one host can have separate capacity.
+
+Set up a pool through the instance admin API, under `/api/admin/llm/call-pools`:
+
+1. Create the pool with a slug, a name, the most calls in flight (`maxConcurrentCalls`) and an interactive reserve (`interactiveReserve`).
+   The slug names the pool in metrics and cannot change.
+   Without a maximum, the pool limits nothing, and only its rate limit pause applies.
+2. List the models with `GET /api/admin/llm/call-pools/models`.
+   The list holds instance models and the models on workspaces' own connections, each with its connection's host.
+   Look for models on the same host that are not in the pool.
+3. Replace the pool's models with `PUT /api/admin/llm/call-pools/{id}/models`.
+   A model that joins leaves its previous pool.
+
+The interactive reserve is the part of the pool that only Heph conversations may use.
+Reviews never use it, even when it is idle.
+With a maximum of 1 and a reserve of 1, no review can call the model.
+
+A workspace admin sees the pool of their own model, read-only.
+Only an instance admin puts a model into a pool or takes it out.
+When you delete a pool, its models leave it.
+They are then no longer limited.
+
+Azure OpenAI limits each deployment by tokens and requests per minute.
+Those are rates, not calls in flight.
+A pool does not enforce them.
+Its rate limit pause reacts to them.
+
+## 7. Errors you can hit
 
 In addition to the HTTP 400 responses above, the catalog returns these RFC 7807 problem types.
 The `type` slug is an API contract.
@@ -457,6 +495,7 @@ The UI shows the title.
 | 409    | `llm-connection-in-use`          | A connection still has models. Delete the models before the connection.                                                                                                                                          |
 | 409    | `llm-model-in-use`               | A model still has an assignment. Assign another model in that workspace before deletion.                                                                                                                         |
 | 409    | `llm-connection-slug-conflict`   | Your supplied slug is taken.                                                                                                                                                                                     |
+| 409    | `llm-call-pool-slug-conflict`    | The pool slug is taken.                                                                                                                                                                                          |
 | 409    | `llm-model-slug-conflict`        | The model slug is taken on this connection.                                                                                                                                                                      |
 | 409    | `llm-model-upstream-id-conflict` | Two catalog entries would use the same upstream id on one connection. This is refused because price selection would be nondeterministic. A `NO_CHARGE` copy could silently replace a `PRICED` model for billing. |
 | 409    | `agent-binding-slot-mismatch`    | A model's declared tier does not match the assignment row. The body's `declaredTier` names the model tier, which the UI uses to explain the refusal. An undeclared model has no `declaredTier`, only the detail. |

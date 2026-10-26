@@ -488,6 +488,129 @@ paths:
       summary: Send a test email
       tags:
       - Instance Email
+  /admin/llm/call-pools:
+    get:
+      operationId: adminListLlmCallPools
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/LlmCallPool"
+          description: OK
+      summary: List the pools of provider capacity
+      tags:
+      - Admin LLM
+    post:
+      operationId: adminCreateLlmCallPool
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SaveLlmCallPoolRequest"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LlmCallPool"
+          description: Pool created; URL in the Location header
+        "409":
+          description: A pool with this slug already exists
+      summary: Create a pool of provider capacity
+      tags:
+      - Admin LLM
+  /admin/llm/call-pools/models:
+    get:
+      operationId: adminListLlmCallPoolModels
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/LlmCallPoolModel"
+          description: OK
+      summary: "List every model that can join a pool, with the pool it is in"
+      tags:
+      - Admin LLM
+  /admin/llm/call-pools/{id}:
+    delete:
+      operationId: adminDeleteLlmCallPool
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: integer
+          format: int64
+      responses:
+        "204":
+          description: Pool deleted
+        "404":
+          description: Pool not found
+      summary: Delete a pool; its models are no longer limited
+      tags:
+      - Admin LLM
+    put:
+      operationId: adminUpdateLlmCallPool
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: integer
+          format: int64
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SaveLlmCallPoolRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LlmCallPool"
+          description: OK
+        "404":
+          description: Pool not found
+      summary: Change a pool's name and limits
+      tags:
+      - Admin LLM
+  /admin/llm/call-pools/{id}/models:
+    put:
+      operationId: adminUpdateLlmCallPoolModels
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: integer
+          format: int64
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateLlmCallPoolModelsRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LlmCallPoolModel"
+          description: OK
+        "404":
+          description: Pool or model not found
+      summary: Replace the models in a pool
+      tags:
+      - Admin LLM
   /admin/llm/connections:
     get:
       operationId: adminListLlmConnections
@@ -16850,6 +16973,74 @@ components:
       - practiceSlug
       - reason
       - status
+    LlmCallPool:
+      type: object
+      description: Provider capacity that the models in it share
+      properties:
+        displayName:
+          type: string
+          description: Human-readable name
+        id:
+          type: integer
+          format: int64
+          description: Pool id
+        interactiveReserve:
+          type: integer
+          format: int32
+          description: Calls only Heph conversations may use
+        maxConcurrentCalls:
+          type: integer
+          format: int32
+          description: Most model calls in flight at once; null does not limit them
+        noCallBefore:
+          type: string
+          format: date-time
+          description: The provider asked for no call before this time
+        slug:
+          type: string
+          description: Unique slug; also the pool label of its metrics
+      required:
+      - displayName
+      - id
+      - interactiveReserve
+      - slug
+    LlmCallPoolModel:
+      type: object
+      description: A model and the pool its calls share
+      properties:
+        callPoolId:
+          type: integer
+          format: int64
+          description: The pool the model is in; null for none
+        connectionDisplayName:
+          type: string
+          description: Connection's display name
+        displayName:
+          type: string
+          description: Human-readable name
+        host:
+          type: string
+          description: The connection's host; null when its URL has none
+        modelId:
+          type: integer
+          format: int64
+          description: Model id within its scope
+        scope:
+          type: string
+          description: "INSTANCE for the instance catalog, WORKSPACE for a workspace's\
+            \ own model"
+          enum:
+          - INSTANCE
+          - WORKSPACE
+        workspaceSlug:
+          type: string
+          description: Slug of the workspace that owns the model; null for an instance
+            model
+      required:
+      - connectionDisplayName
+      - displayName
+      - modelId
+      - scope
     LlmConnection:
       type: object
       description: Instance LLM provider connection (API key redacted)
@@ -16965,6 +17156,10 @@ components:
           - COHERE
           - Z_AI
           - MOONSHOT
+        callPoolId:
+          type: integer
+          format: int64
+          description: The pool whose capacity the model's calls share; null for none
         connectionDisplayName:
           type: string
           description: Owning connection's display name
@@ -25044,6 +25239,36 @@ components:
       required:
       - practiceSlug
       - reason
+    SaveLlmCallPoolRequest:
+      type: object
+      description: Create or change a pool of provider capacity
+      properties:
+        displayName:
+          type: string
+          description: Human-readable name
+          maxLength: 128
+          minLength: 0
+        interactiveReserve:
+          type: integer
+          format: int32
+          description: Calls only Heph conversations may use
+          minimum: 0
+        maxConcurrentCalls:
+          type: integer
+          format: int32
+          description: Most model calls in flight at once; null does not limit them
+          minimum: 1
+        slug:
+          type: string
+          description: "Unique slug, lowercase words joined by hyphens; set at creation\
+            \ only"
+          maxLength: 64
+          minLength: 0
+          pattern: "[a-z0-9]+(-[a-z0-9]+)*"
+      required:
+      - displayName
+      - interactiveReserve
+      - slug
     ScanAvailability:
       type: object
       properties:
@@ -26671,6 +26896,25 @@ components:
             \ (instance) models, /workspaces/{workspaceSlug}/llm/budget caps the workspace's\
             \ spend on its own connected provider. The two are never added together."
           minimum: 0.00
+    UpdateLlmCallPoolModelsRequest:
+      type: object
+      description: The models whose calls share a pool
+      properties:
+        instanceModelIds:
+          type: array
+          description: Ids of instance models
+          items:
+            type: integer
+            format: int64
+        workspaceModelIds:
+          type: array
+          description: Ids of models on workspaces' own connections
+          items:
+            type: integer
+            format: int64
+      required:
+      - instanceModelIds
+      - workspaceModelIds
     UpdateLlmConnectionRequest:
       type: object
       description: Update an instance LLM provider connection (all fields optional)
@@ -28040,6 +28284,10 @@ components:
           - COHERE
           - Z_AI
           - MOONSHOT
+        callPool:
+          $ref: "#/components/schemas/LlmCallPool"
+          description: The instance pool whose capacity the model's calls share; only
+            an instance admin sets it
         connectionDisplayName:
           type: string
           description: Owning connection's display name

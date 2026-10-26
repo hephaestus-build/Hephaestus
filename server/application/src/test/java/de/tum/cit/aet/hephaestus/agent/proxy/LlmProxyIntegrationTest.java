@@ -44,6 +44,7 @@ import de.tum.cit.aet.hephaestus.practices.PracticeVersionService;
 import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewProperties;
 import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewSnapshotQuery;
 import de.tum.cit.aet.hephaestus.testconfig.LlmCatalogTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
@@ -132,6 +133,9 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     @Autowired
     private ReviewAttemptUsageService attemptUsage;
+
+    @Autowired
+    private ReviewSnapshotQuery reviewSnapshots;
 
     @Autowired
     private PlatformTransactionManager transactionManager;
@@ -355,7 +359,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                     + "\"usage\":{\"prompt_tokens\":12,\"completion_tokens\":3}}"));
             ReviewJob job = practiceScriptJob(upstream.url("/v1").toString());
             var gateway = new ReviewModelGateway(
-                    new ProxyRoutingService(jobRepository, turnRepository, objectMapper, attemptUsage),
+                    new ProxyRoutingService(jobRepository, turnRepository, objectMapper, attemptUsage, reviewSnapshots),
                     proxyService(200_000),
                     objectMapper);
             byte[] body = "{\"model\":\"any\",\"messages\":[{\"role\":\"user\",\"content\":\"Compose.\"}]}"
@@ -731,11 +735,11 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                         objectMapper),
                 policy,
                 mock(ScanCallGuard.class),
-                new ProxyRoutingService(jobRepository, turnRepository, objectMapper, attemptUsage),
+                new ProxyRoutingService(jobRepository, turnRepository, objectMapper, attemptUsage, reviewSnapshots),
                 new ProxyCallsInFlight(),
                 new LlmConnectionHealth(CircuitBreakerRegistry.ofDefaults()),
-                Duration.ofMinutes(5),
-                Duration.ofMinutes(2));
+                mock(LlmCallPermits.class),
+                new HephCallProperties(Duration.ofMinutes(5), Duration.ofMinutes(2)));
     }
 
     // The worker role is off here, so the accumulator is built with its own transaction boundary.
@@ -891,7 +895,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     private ProxyRouting routingOf(AuthenticationResult result) {
         Authentication authentication = Objects.requireNonNull(result.authentication(), "token did not authenticate");
-        return new ProxyRoutingService(jobRepository, turnRepository, objectMapper, attemptUsage)
+        return new ProxyRoutingService(jobRepository, turnRepository, objectMapper, attemptUsage, reviewSnapshots)
                 .resolve(
                         (ProxyIdentity) Objects.requireNonNull(authentication.getPrincipal()),
                         new MockHttpServletRequest("POST", "/internal/llm/chat/completions"));

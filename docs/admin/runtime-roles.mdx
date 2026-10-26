@@ -413,6 +413,49 @@ If it fails, the breaker opens again.
 A rate limit, a request error, or a client that went away does not count.
 [Observability](./observability.mdx#heph-turn-metrics) names the breaker's metrics.
 
+### Call pools
+
+A call pool limits the model calls in flight to one provider endpoint, for example a GPU gateway that other systems also use.
+Every worker counts against the same limit, for every workspace whose models are in the pool.
+A model in no pool is not limited.
+[AI providers](./ai-providers.mdx#6-sharing-provider-capacity) shows how to set up a pool.
+
+Each model call takes a permit before it reaches the provider:
+
+- A Heph turn needs fewer permits in use than the pool's maximum.
+- A call of a practice review needs fewer permits in use than the maximum minus the interactive reserve.
+  This includes its practice scripts and its feedback composition.
+  A reserve equal to the maximum stops every review call.
+- A pool without a maximum gives no permits.
+  Only its cooldown applies.
+
+A call that gets no permit waits.
+It asks the pool again every second, or at once when another call of its worker ends.
+The wait ends when the attempt ends or when its work deadline passes.
+The wait counts toward the deadline.
+Size the pool so that admitted reviews rarely wait.
+
+A permit is a lease.
+The worker renews all its permits with one database statement every quarter of `HEPHAESTUS_LLM_CALL_POOLS_PERMIT_LEASE` (default 1 minute).
+When no renewal succeeded for three quarters of the lease, the worker cancels the calls itself.
+The database counts a permit that nobody renewed for one and a quarter leases as free.
+A crashed worker thus holds its permits for at most that long.
+
+The limit is not exact.
+The provider does not check our permits.
+A worker cancels its calls half a lease before the database frees their permits.
+That half lease covers a short pause and a slow cancellation.
+A longer pause or a network partition can still let calls overlap.
+
+When the provider answers a call with HTTP 429, the whole pool pauses.
+The pause comes from the `retry-after-ms` header, else from `Retry-After` in seconds or as a date.
+Without either, it is 5 seconds.
+`HEPHAESTUS_LLM_CALL_POOLS_MAX_COOLDOWN` (default 5 minutes) caps it.
+A later, shorter pause never shortens a longer one.
+
+The 429 still reaches the caller.
+Its next call waits for the pause to end.
+
 ### The Heph host
 
 Each worker starts its Heph host when it claims its first turn.

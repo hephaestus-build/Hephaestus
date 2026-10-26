@@ -110,6 +110,8 @@ class DataIsolationArchitectureTest extends HephaestusArchitectureTest {
             "LlmConnection", // Instance-owned provider connection; global, not tenant-scoped
             "LlmModel", // Instance-curated model behind a connection; global
             "LlmModelPrice", // Instance model price history; global pricing authority
+            "LlmCallPool", // Provider capacity shared by the workspaces whose models are in it
+            "LlmCallPermit", // A model call in flight in a pool; no workspace label by design
             "InstanceLlmSettings", // Instance LLM settings singleton (egress allowlist + BYO enable + default policy);
             // global
             "CatalogEntry",
