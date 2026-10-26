@@ -85,6 +85,7 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.mockito.ArgumentCaptor;
@@ -649,6 +650,20 @@ class ReviewJobExecutorTest extends BaseUnitTest {
                 Duration.ofSeconds(1));
     }
 
+    @BeforeEach
+    void sandboxRuntimeReady() {
+        when(sandbox.ready()).thenReturn(true);
+    }
+
+    @Test
+    void shouldClaimNothingWhenTheSandboxRuntimeHasNotProvedItsIsolation() {
+        when(sandbox.ready()).thenReturn(false);
+
+        assertThat(executor(mock(AsyncTaskExecutor.class)).computeCapacity())
+                .as("queued reviews stay queued until the runtime starts sandboxes")
+                .isZero();
+    }
+
     @Test
     void shouldClaimNoMoreThanTheSandboxSlots() {
         sandboxProperties = new SandboxProperties(
@@ -946,7 +961,7 @@ class ReviewJobExecutorTest extends BaseUnitTest {
         assertThat(executor.computeCapacity()).isEqualTo(1);
         verify(workerCapacity).releaseReview();
         assertThat(MDC.get("job.id")).isNull();
-        verifyNoInteractions(sandbox);
+        verify(sandbox, never()).execute(any());
         // A preparation failure names its stage, kind and exception types in the log line, never its message.
         assertThat(appender.list)
                 .map(ILoggingEvent::getFormattedMessage)
@@ -1116,6 +1131,6 @@ class ReviewJobExecutorTest extends BaseUnitTest {
         verify(handler).completeWithoutExecution(job);
         verify(workerCapacity).releaseReview();
         assertThat(MDC.get("job.id")).isNull();
-        verifyNoInteractions(sandbox);
+        verify(sandbox, never()).execute(any());
     }
 }

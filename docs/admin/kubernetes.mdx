@@ -836,6 +836,8 @@ The probe checks these items on the running cluster:
 The worker starts no sandbox while one of these items fails.
 At its start, the worker then logs each failed item and stops, and Kubernetes starts it again.
 On a later probe, it logs each failed item, reports itself not ready, and starts no new sandbox until a probe passes again.
+Until a probe passes, at the start and after a failed later probe, the worker is not ready and claims no practice review and no Heph turn.
+They stay queued for a ready worker. Reviews and turns that already run continue.
 A later probe whose Pods cannot start, because the sandbox quota is full or the nodes have no room, proves nothing: the worker logs a warning and keeps its last passing proof.
 
 The probe also records the isolation tier of the cluster, which is not a requirement:

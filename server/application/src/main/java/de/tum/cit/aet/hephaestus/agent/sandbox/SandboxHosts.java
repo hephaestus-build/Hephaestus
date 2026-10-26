@@ -47,6 +47,11 @@ public class SandboxHosts implements HostSandbox {
             SandboxBackend.@Nullable Handle handle, SandboxGatewaySessions.@Nullable Session session) {}
 
     @Override
+    public boolean ready() {
+        return backend.ready();
+    }
+
+    @Override
     public Host launch(HostSpec spec) throws IOException {
         UUID id = UUID.randomUUID();
         String token = ReviewJob.generateJobToken();

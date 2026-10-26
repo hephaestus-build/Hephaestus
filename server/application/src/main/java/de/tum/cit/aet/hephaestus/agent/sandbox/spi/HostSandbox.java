@@ -36,6 +36,14 @@ public interface HostSandbox {
     /** A started host. Its id names its gateway session. */
     record Host(UUID id) {}
 
+    /**
+     * Whether the runtime starts a sandbox now. A runtime that proves its isolation first, as Kubernetes does, answers
+     * false until a proof passed, so that callers claim no work rather than fail it.
+     */
+    default boolean ready() {
+        return true;
+    }
+
     /** Starts a host, and returns once its process runs. */
     Host launch(HostSpec spec) throws IOException;
 

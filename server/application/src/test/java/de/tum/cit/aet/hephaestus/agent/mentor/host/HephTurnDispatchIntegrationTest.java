@@ -142,6 +142,11 @@ class HephTurnDispatchIntegrationTest extends AbstractWorkspaceIntegrationTest {
         }
 
         @Override
+        boolean sandboxReady() {
+            return true;
+        }
+
+        @Override
         void onLost(Runnable lost) {
             this.lost = lost;
         }

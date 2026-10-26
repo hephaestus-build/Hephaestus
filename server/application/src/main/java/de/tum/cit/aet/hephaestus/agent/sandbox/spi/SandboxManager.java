@@ -22,6 +22,14 @@ import java.util.UUID;
  */
 public interface SandboxManager {
     /**
+     * Whether the runtime starts a sandbox now. A runtime that proves its isolation first, as Kubernetes does, answers
+     * false until a proof passed, so that callers claim no work rather than fail it.
+     */
+    default boolean ready() {
+        return true;
+    }
+
+    /**
      * Execute a sandboxed container and return the result.
      *
      * <p>Blocks the calling thread until the container exits, the timeout expires (returns with

@@ -73,6 +73,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.health.contributor.HealthIndicator;
+import org.springframework.boot.health.contributor.Status;
 import org.springframework.web.server.ResponseStatusException;
 
 /**
@@ -577,6 +579,13 @@ class KubernetesSandboxRuntimeTest {
                 new SandboxWorkspaceManager(),
                 sessions,
                 meters);
+        HealthIndicator readiness =
+                new KubernetesSandboxConfiguration().kubernetesSandboxHealthIndicator(api(), unproved);
+
+        assertThat(adapter.ready()).as("the claim loops take no work").isFalse();
+        assertThat(Objects.requireNonNull(readiness.health()).getStatus())
+                .as("the worker is not ready")
+                .isEqualTo(Status.DOWN);
 
         assertThatThrownBy(() -> adapter.execute(spec(UUID.randomUUID())))
                 .isInstanceOf(SandboxInfrastructureException.class)
@@ -587,6 +596,11 @@ class KubernetesSandboxRuntimeTest {
         assertThat(api().batch().v1().jobs().inNamespace(SANDBOXES).list().getItems())
                 .isEmpty();
         assertThat(api().pods().inNamespace(SANDBOXES).list().getItems()).isEmpty();
+
+        unproved.proved(new KubernetesIsolationProbe.Proof(Instant.now(), List.of(), false, "", 256));
+
+        assertThat(adapter.ready()).isTrue();
+        assertThat(Objects.requireNonNull(readiness.health()).getStatus()).isEqualTo(Status.UP);
     }
 
     @Test

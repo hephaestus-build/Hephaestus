@@ -70,6 +70,12 @@ public class KubernetesSandboxBackend implements SandboxBackend {
         }
     }
 
+    /** The isolation probe's latest proof, which the worker's readiness also reports. */
+    @Override
+    public boolean ready() {
+        return worker.isolated();
+    }
+
     @Override
     public Handle launch(Launch launch) {
         worker.requireIsolation();

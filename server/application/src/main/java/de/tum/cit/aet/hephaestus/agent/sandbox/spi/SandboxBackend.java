@@ -28,6 +28,14 @@ import org.jspecify.annotations.Nullable;
 public interface SandboxBackend {
 
     /**
+     * Whether the runtime starts a sandbox now. A runtime that proves its isolation first, as Kubernetes does, answers
+     * false until a proof passed, so that callers claim no work rather than fail it.
+     */
+    default boolean ready() {
+        return true;
+    }
+
+    /**
      * Creates the sandbox's isolation and storage and starts its initializer. It returns once the backend accepted the
      * sandbox, before the initializer ended.
      *
