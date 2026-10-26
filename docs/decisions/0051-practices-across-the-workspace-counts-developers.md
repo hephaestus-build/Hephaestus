@@ -186,7 +186,7 @@ This update restores the decision above. It changes no rule about who and what i
 - A requested or backfilled review takes over the current result of its work.
   The live review before it still sets the standing and the trend.
   A newer live review, a repair or a removal ends it.
-  A work change no longer ends it ([ADR 0065](https://github.com/hephaestus-build/Hephaestus/pull/3284)).
+  A work change no longer ends it ([ADR 0065](0065-standing-counts-the-newest-observation-of-each-item.md)).
   The quoted results stay the current ones.
 - Results that the cutover carried over from the earlier model have no current proof.
   A practice that no current review decided uses them, marked *earlier reviews*, without quotes and without a trend.
@@ -217,4 +217,4 @@ Nothing else above changes.
 
 [ADR 0065](0065-standing-counts-the-newest-observation-of-each-item.md) amends the 2026-10-20 update.
 A work change no longer ends the live review. A newer live review, a repair or a removal still ends it.
-This is decided and is not shipped yet.
+[#3294](https://github.com/hephaestus-build/Hephaestus/pull/3294) ships it.
