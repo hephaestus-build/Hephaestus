@@ -127,6 +127,10 @@ Scans review files and repositories, not the practice's item kind, so this check
 An example is a practice version from an older catalog.
 A workspace admin must fix the practice, so the review closes as Partial.
 
+A retry of the review job runs only the practices that are still open.
+A practice that an earlier attempt withheld keeps that withholding and its reason.
+The retry does not capture or measure it again, also when an earlier refusal came from a source that was not ready then.
+
 If no practice can be captured, the review records a readiness refusal and the sandbox does not start.
 
 An optional read must name a supported source.

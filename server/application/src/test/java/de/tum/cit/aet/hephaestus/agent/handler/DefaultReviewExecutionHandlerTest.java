@@ -219,6 +219,19 @@ class DefaultReviewExecutionHandlerTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldNeitherCaptureNorRunAPracticeThatAnEarlierAttemptWithheld() {
+        var job = prepare(true);
+        long practiceId = RuntimeReviewTestData.assignment(5L, null).practice().practiceId();
+        when(members.endedPractices(1L, job.getReviewId(), job.getId())).thenReturn(Set.of(practiceId));
+
+        assertThatThrownBy(() -> handler.prepareInputs(job)).isInstanceOf(InsufficientEvidenceException.class);
+
+        verify(members).capture(eq(1L), eq(job.getReviewId()), eq(job.getId()), eq(job.getAttempt()), eq(List.of()));
+        verify(context, never()).prepare(any(), any());
+        verifyNoInteractions(catalog);
+    }
+
+    @Test
     void scanStagesTheVersionBoundGrantInsteadOfExpandingCapturedFiles() {
         var job = prepare(true);
         var assignment = PracticeCatalogInjectorTest.scanAssignment();

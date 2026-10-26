@@ -39,6 +39,7 @@ import de.tum.cit.aet.hephaestus.evidence.SourceContractVersion;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.evidence.capture.CaptureRequest;
 import de.tum.cit.aet.hephaestus.integration.core.framework.ItemDescriptorRegistry;
+import de.tum.cit.aet.hephaestus.integration.core.spi.CandidateRefusal;
 import de.tum.cit.aet.hephaestus.integration.core.spi.DeliveredPullRequestCommentLookup;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemSnapshot;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemSource;
@@ -66,6 +67,7 @@ import de.tum.cit.aet.hephaestus.practices.PracticeReadSource;
 import de.tum.cit.aet.hephaestus.practices.PracticeReads;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.PracticeVersionRepository;
+import de.tum.cit.aet.hephaestus.practices.PracticeVersionService;
 import de.tum.cit.aet.hephaestus.practices.curated.BundledPracticeCatalogLoader;
 import de.tum.cit.aet.hephaestus.practices.model.PracticeVersion;
 import de.tum.cit.aet.hephaestus.practices.result.ResultRepository;
@@ -80,6 +82,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ProcessingStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReadNeed;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultStore;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentId;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentStore;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewItemState;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobSnapshot;
@@ -147,6 +150,9 @@ class AppliesWhenExecutionIntegrationTest extends AbstractResultAdmissionIntegra
     PracticeVersionRepository versionRows;
 
     @Autowired
+    PracticeVersionService practiceVersions;
+
+    @Autowired
     ItemDescriptorRegistry descriptors;
 
     @Autowired
@@ -199,12 +205,18 @@ class AppliesWhenExecutionIntegrationTest extends AbstractResultAdmissionIntegra
     private ReviewAdmissionData.Pending pending(ReviewIntegrationData.Scenario scenario) {
         var pending =
                 admissions.pending(scenario, Instant.now(), scenario.account().getId());
-        admissions.running(pending, 1);
-        when(runtime.runtime(scenario.workspace().getId(), pending.review().getId()))
+        running(pending, 1);
+        return pending;
+    }
+
+    /** Runs the pending review's job at {@code attempt}, as the runtime reports it. */
+    private void running(ReviewAdmissionData.Pending pending, int attempt) {
+        admissions.running(pending, attempt);
+        when(runtime.runtime(pending.review().getWorkspaceId(), pending.review().getId()))
                 .thenReturn(Optional.of(new ReviewRuntimeSnapshot(List.of(new ReviewJobSnapshot(
                         pending.jobId(),
                         ReviewJobStatus.RUNNING,
-                        1,
+                        attempt,
                         ProcessingStatus.PENDING,
                         Instant.now(),
                         Instant.now(),
@@ -212,7 +224,6 @@ class AppliesWhenExecutionIntegrationTest extends AbstractResultAdmissionIntegra
                         null,
                         null,
                         "test-trace")))));
-        return pending;
     }
 
     private DefaultReviewExecutionHandler handler(ReviewJob job, boolean available, Set<String> paths) {
@@ -604,5 +615,120 @@ class AppliesWhenExecutionIntegrationTest extends AbstractResultAdmissionIntegra
         assertThat(member.getReason()).isEqualTo(DefaultReviewExecutionHandler.SOURCE_CONTRACT_UNSUPPORTED);
         assertThat(proof.forAttempt(job.getWorkspaceId(), job.getReviewId(), job.getId(), job.getAttempt()))
                 .isEmpty();
+    }
+
+    /**
+     * A retry captures the review again. What the first attempt withheld at capture keeps its state and reason, and
+     * the practices still open run.
+     */
+    @Test
+    void shouldKeepTheFirstAttemptsCaptureWithholdingWhenARetryCapturesAgain() {
+        var pending = pending();
+        var scenario = pending.scenario();
+        var d = DefinitionTestFixtures.definition();
+        var unsupported = practiceVersions.create(new PracticeVersionService.NewPractice(
+                scenario.workspace(),
+                "retry-unsupported-" + UUID.randomUUID().toString().substring(0, 8),
+                scenario.item().getKind(),
+                d,
+                null,
+                0,
+                scenario.account().getId()));
+        // A version stored by an earlier release, which reads a source that this item cannot supply.
+        var retained = mapper.valueToTree(new PracticeDefinition(
+                d.name(),
+                d.reviewOn(),
+                null,
+                d.about(),
+                new PracticeReads(
+                        "2.0.0",
+                        List.of(
+                                new PracticeReadSource(new SourceKind("scm.pull-request.core"), ReadNeed.COMPLETE),
+                                new PracticeReadSource(new SourceKind("outline.documents"), ReadNeed.OPTIONAL))),
+                d.reviewedBy(),
+                d.criteria(),
+                d.script(),
+                d.scan(),
+                d.lineNotes(),
+                d.guidance()));
+        var row = practiceRows.findById(unsupported.getId()).orElseThrow();
+        row.setCurrentVersion(versionRows.saveAndFlush(new PracticeVersion(row, 2, retained, null)));
+        practiceRows.saveAndFlush(row);
+        admissions.assigned(pending, practiceRows.findById(row.getId()).orElseThrow());
+        long ready = scenario.practice().getId();
+
+        var first = jobs.findById(pending.jobId()).orElseThrow();
+        try (var prepared = handler(first, true, Set.of("src/App.swift")).prepareInputs(first)) {
+            assertThat(prepared.folderIndex()).isNotNull();
+            assertThat(assignments.admissible(first))
+                    .extracting(a -> a.practice().practiceId())
+                    .containsExactly(ready);
+        }
+        var withheld = reviewItems
+                .findByWorkspaceIdAndReviewIdAndPracticeIdAndItemId(
+                        first.getWorkspaceId(),
+                        first.getReviewId(),
+                        row.getId(),
+                        scenario.item().getId())
+                .orElseThrow();
+        assertThat(withheld.getState()).isEqualTo(ReviewItemState.WITHHELD);
+        assertThat(withheld.getReason()).isEqualTo(DefaultReviewExecutionHandler.SOURCE_CONTRACT_UNSUPPORTED);
+
+        running(pending, 2);
+        var retry = jobs.findById(pending.jobId()).orElseThrow();
+        try (var prepared = handler(retry, true, Set.of("src/App.swift")).prepareInputs(retry)) {
+            assertThat(prepared.folderIndex()).isNotNull();
+            assertThat(assignments.admissible(retry))
+                    .extracting(a -> a.practice().practiceId())
+                    .containsExactly(ready);
+            assertThat(Objects.requireNonNull(retry.getCapture()).path("index").size())
+                    .isEqualTo(1);
+            assertThat(Objects.requireNonNull(retry.getCapture())
+                            .path("readiness")
+                            .path("decisions")
+                            .valueStream()
+                            .map(decision -> decision.path("practiceSlug").asString()))
+                    .containsExactly(scenario.practice().getSlug());
+        }
+        var kept = reviewItems
+                .findByWorkspaceIdAndReviewIdAndPracticeIdAndItemId(
+                        retry.getWorkspaceId(),
+                        retry.getReviewId(),
+                        row.getId(),
+                        scenario.item().getId())
+                .orElseThrow();
+        assertThat(kept.getState()).isEqualTo(ReviewItemState.WITHHELD);
+        assertThat(kept.getReason()).isEqualTo(DefaultReviewExecutionHandler.SOURCE_CONTRACT_UNSUPPORTED);
+        assertThat(kept.getAttemptedAt()).isEqualTo(withheld.getAttemptedAt());
+    }
+
+    /** The store names the practices of the job that an earlier attempt ended, not the open ones or another job's. */
+    @Test
+    void shouldNameOnlyThePracticesOfTheJobWhoseMembershipEnded() {
+        var pending = pending();
+        var scenario = pending.scenario();
+        var ended = practiceVersions.create(new PracticeVersionService.NewPractice(
+                scenario.workspace(),
+                "retry-ended-" + UUID.randomUUID().toString().substring(0, 8),
+                scenario.item().getKind(),
+                DefinitionTestFixtures.definition(),
+                null,
+                0,
+                scenario.account().getId()));
+        admissions.assigned(pending, ended);
+        admissions.withheld(pending, DefaultReviewExecutionHandler.SOURCE_CONTRACT_UNSUPPORTED);
+        long workspaceId = scenario.workspace().getId();
+        var reviewId = pending.review().getId();
+        assertThat(members.endedPractices(workspaceId, reviewId, pending.jobId()))
+                .isEmpty();
+
+        members.withhold(
+                workspaceId,
+                new ReviewAssignmentId(reviewId, ended.getId(), scenario.item().getId()),
+                CandidateRefusal.MALFORMED_CANDIDATE,
+                "refused");
+
+        assertThat(members.endedPractices(workspaceId, reviewId, pending.jobId()))
+                .containsExactly(ended.getId());
     }
 }

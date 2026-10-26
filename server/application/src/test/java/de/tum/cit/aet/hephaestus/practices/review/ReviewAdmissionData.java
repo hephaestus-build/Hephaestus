@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.evidence.CitationSide;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.practices.DefinitionTestFixtures;
 import de.tum.cit.aet.hephaestus.practices.PracticeVersionService;
+import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.review.model.Review;
 import de.tum.cit.aet.hephaestus.practices.review.model.ReviewItem;
 import de.tum.cit.aet.hephaestus.practices.review.model.ReviewPractice;
@@ -179,6 +180,52 @@ public class ReviewAdmissionData {
                 .state(ReviewItemState.WITHHELD)
                 .reason(reason)
                 .detail(json.createObjectNode())
+                .build());
+    }
+
+    /** Adds {@code practice} at its current version to the pending review and to its job, still listed. */
+    @Transactional
+    public void assigned(Pending pending, Practice practice) {
+        var scenario = pending.scenario();
+        var pinned = practices
+                .findByWorkspaceIdAndReviewIdAndPracticeId(
+                        scenario.workspace().getId(),
+                        pending.review().getId(),
+                        scenario.practice().getId())
+                .orElseThrow();
+        practices.saveAndFlush(ReviewPractice.builder()
+                .workspaceId(scenario.workspace().getId())
+                .reviewId(pending.review().getId())
+                .practiceId(practice.getId())
+                .practiceVersionId(practice.getCurrentVersion().getId())
+                .status(ReviewPracticeStatus.READY)
+                .itemsListed(1)
+                .listingComplete(true)
+                .method(pinned.getMethod())
+                .build());
+        jdbc.sql(
+                        "UPDATE review_job SET input=jsonb_set(input,'{assignments}',input->'assignments' || CAST(:id AS jsonb))"
+                                + " WHERE workspace_id=:ws AND id=:job")
+                .param(
+                        "id",
+                        json.writeValueAsString(List.of(new ReviewAssignmentId(
+                                pending.review().getId(),
+                                practice.getId(),
+                                scenario.item().getId()))))
+                .param("ws", pending.review().getWorkspaceId())
+                .param("job", pending.jobId())
+                .update();
+        var detail = json.createObjectNode();
+        if (pending.developerId() == null) detail.putNull("developerId");
+        else detail.put("developerId", pending.developerId());
+        items.saveAndFlush(ReviewItem.builder()
+                .workspaceId(scenario.workspace().getId())
+                .reviewId(pending.review().getId())
+                .practiceId(practice.getId())
+                .itemId(scenario.item().getId())
+                .itemVersion(pending.review().getItemVersion())
+                .jobId(pending.jobId())
+                .detail(detail)
                 .build());
     }
 

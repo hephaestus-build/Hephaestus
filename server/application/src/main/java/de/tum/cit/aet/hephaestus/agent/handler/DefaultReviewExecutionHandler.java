@@ -86,8 +86,14 @@ public class DefaultReviewExecutionHandler {
 
     public PreparedJobInputs prepareInputs(ReviewJob job) {
         var review = assignments.review(job);
-        var assigned = assignments.load(job);
-        var item = assigned.getFirst().item();
+        var loaded = assignments.load(job);
+        var item = loaded.getFirst().item();
+        // A retry runs only what is still open. A practice that an earlier attempt of the job withheld keeps that
+        // withholding and its reason, and is neither captured nor run again.
+        var ended = capture.endedPractices(job.getWorkspaceId(), review.id(), job.getId());
+        var assigned = loaded.stream()
+                .filter(assignment -> !ended.contains(assignment.practice().practiceId()))
+                .toList();
         var matching = sources.stream().filter(source -> source.supports(item)).toList();
         if (matching.size() != 1) throw new IllegalStateException("The item needs exactly one capture source");
         var source = matching.getFirst();
