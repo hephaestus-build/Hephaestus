@@ -42,6 +42,8 @@ import java.util.stream.Collectors;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.Mockito;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -225,13 +227,61 @@ class PracticeStandingServiceTest {
     }
 
     @Test
-    void shouldNotKeepTheLiveRunWhenTheWorkChangedBeforeTheRequest() {
+    void shouldKeepTheLiveRunWhenTheWorkChangedBeforeTheRequest() {
         add(1, ResultOutcome.NOT_MET);
-        replace(data.getFirst(), 5, ResultOutcome.MET, ReviewOrigin.REQUEST, ResultEndReason.WORK_CHANGED);
+        var live = data.getFirst();
+        replace(live, 5, ResultOutcome.MET, ReviewOrigin.REQUEST, ResultEndReason.WORK_CHANGED);
+
+        var standing = only(service.getStandingSnapshots(1L, 7L, List.of(now)).getFirst());
+        assertThat(standing.liveRuns()).extracting(ResultView::result).containsExactly(live.result());
+        assertThat(standing.dto().toWorkOn()).isEmpty();
+    }
+
+    @Test
+    void shouldKeepTheLiveStandingWhenAWorkChangeStartedNoReviewOfThePractice() {
+        add(1, ResultOutcome.NOT_MET);
+        var live = data.getFirst();
+        var before = card().standing();
+        live.result().end(ResultEndReason.WORK_CHANGED, now.minusSeconds(1));
+
+        var standing = only(service.getStandingSnapshots(1L, 7L, List.of(now)).getFirst());
+        assertThat(standing.dto().standing()).isEqualTo(before);
+        assertThat(standing.dto().basis()).isEqualTo(StandingBasis.CURRENT_REVIEWS);
+        assertThat(standing.liveRuns()).extracting(ResultView::result).containsExactly(live.result());
+        // The ended result counts, but it is no current proof to quote.
+        assertThat(standing.dto().toWorkOn()).isEmpty();
+    }
+
+    @Test
+    void shouldPreferANewerLiveRunOverTheOneAWorkChangeEnded() {
+        add(1, ResultOutcome.NOT_MET);
+        var newer = replace(data.getFirst(), 5, ResultOutcome.MET, ReviewOrigin.EVENT, ResultEndReason.WORK_CHANGED);
+
+        var standing = only(service.getStandingSnapshots(1L, 7L, List.of(now)).getFirst());
+        assertThat(standing.liveRuns()).extracting(ResultView::result).containsExactly(newer.result());
+    }
+
+    @ParameterizedTest
+    @EnumSource(
+            value = ResultEndReason.class,
+            names = {"REPAIRED", "REMOVED"})
+    void shouldEndTheLiveRunAtARepairOrRemoval(ResultEndReason reason) {
+        add(1, ResultOutcome.NOT_MET);
+        data.getFirst().result().end(reason, now.minusSeconds(1));
+
+        var standing = only(service.getStandingSnapshots(1L, 7L, List.of(now)).getFirst());
+        assertThat(standing.dto().standing()).isEqualTo(PracticeStanding.NOT_OBSERVED);
+        assertThat(standing.liveRuns()).isEmpty();
+    }
+
+    @Test
+    void shouldNotReachPastARepairToAnEarlierWorkChange() {
+        add(1, ResultOutcome.NOT_MET);
+        var repaired = replace(data.getFirst(), 3, ResultOutcome.MET, ReviewOrigin.EVENT, ResultEndReason.WORK_CHANGED);
+        replace(repaired, 5, ResultOutcome.MET, ReviewOrigin.REQUEST, ResultEndReason.REPAIRED);
 
         var standing = only(service.getStandingSnapshots(1L, 7L, List.of(now)).getFirst());
         assertThat(standing.liveRuns()).isEmpty();
-        assertThat(standing.dto().toWorkOn()).isEmpty();
     }
 
     @Test
