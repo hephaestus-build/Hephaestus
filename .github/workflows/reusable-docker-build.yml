@@ -206,7 +206,7 @@ jobs:
           # Use the PR source branch; ref_name identifies GitHub's synthetic merge ref on pull
           # requests. A merge group builds the image its push to the default branch reuses, so it
           # names that branch.
-          COOLIFY_BRANCH: ${{ github.head_ref || (github.event_name == 'merge_group' && github.event.repository.default_branch) || github.ref_name }}
+          SOURCE_BRANCH: ${{ github.head_ref || (github.event_name == 'merge_group' && github.event.repository.default_branch) || github.ref_name }}
         with:
           source: .
           files: |

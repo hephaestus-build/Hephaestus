@@ -26,7 +26,7 @@ variable "SOURCE_COMMIT" {
   default = ""
 }
 
-variable "COOLIFY_BRANCH" {
+variable "SOURCE_BRANCH" {
   default = ""
 }
 
@@ -53,7 +53,7 @@ target "webapp" {
   dockerfile = "webapp/Dockerfile"
   args = {
     SOURCE_COMMIT  = SOURCE_COMMIT
-    COOLIFY_BRANCH = COOLIFY_BRANCH
+    SOURCE_BRANCH = SOURCE_BRANCH
   }
   cache-from = ["type=registry,ref=${repository("webapp")}:cache-main-${PLATFORM_PAIR}"]
   cache-to   = WRITE_CACHE == "true" ? ["type=registry,ref=${repository("webapp")}:cache-main-${PLATFORM_PAIR},mode=max"] : []

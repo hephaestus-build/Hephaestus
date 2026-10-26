@@ -357,7 +357,7 @@ await test("the image builds receive the queue run a default-branch push resolve
 	const bake = buildSteps.items.find((item) => isMap(item) && item.get("id") === "bake");
 	assert.ok(isMap(bake));
 	assert.equal(
-		bake.getIn(["env", "COOLIFY_BRANCH"]),
+		bake.getIn(["env", "SOURCE_BRANCH"]),
 		`\${{ github.head_ref || (github.event_name == 'merge_group' && github.event.repository.default_branch) || github.ref_name }}`,
 	);
 });
