@@ -51,15 +51,13 @@ type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {
 	args: {
-		isAuthenticated: true,
-		isLoading: false,
+		session: "signed-in",
 	},
 };
 
 export const Staging: Story = {
 	args: {
-		isAuthenticated: true,
-		isLoading: false,
+		session: "signed-in",
 		environmentName: "Staging",
 		isProduction: false,
 	},
@@ -67,8 +65,7 @@ export const Staging: Story = {
 
 export const Preview: Story = {
 	args: {
-		isAuthenticated: true,
-		isLoading: false,
+		session: "signed-in",
 		environmentName: "Preview",
 		isProduction: false,
 	},
@@ -76,8 +73,7 @@ export const Preview: Story = {
 
 export const PreviewOfAPullRequest: Story = {
 	args: {
-		isAuthenticated: true,
-		isLoading: false,
+		session: "signed-in",
 		environmentName: "Preview",
 		isProduction: false,
 		pullRequest: 2042,
@@ -96,8 +92,7 @@ export const PreviewOfAPullRequest: Story = {
 
 export const Development: Story = {
 	args: {
-		isAuthenticated: true,
-		isLoading: false,
+		session: "signed-in",
 		version: "DEV",
 		environmentName: "Local",
 		isProduction: false,
@@ -106,22 +101,33 @@ export const Development: Story = {
 
 export const LoggedOut: Story = {
 	args: {
-		isAuthenticated: false,
-		isLoading: false,
+		session: "signed-out",
+	},
+};
+
+/** The server cannot say who is signed in, as during a restart: no sign-in is offered. */
+export const Unavailable: Story = {
+	args: {
+		session: "unavailable",
+	},
+	play: async ({ canvas }) => {
+		await expect(canvas.getByText("Hephaestus is not reachable right now")).toHaveAttribute(
+			"aria-live",
+			"polite",
+		);
+		await expect(canvas.queryByRole("button", { name: "Sign in" })).toBeNull();
 	},
 };
 
 export const Loading: Story = {
 	args: {
-		isAuthenticated: false,
-		isLoading: true,
+		session: "loading",
 	},
 };
 
 export const NoWorkspace: Story = {
 	args: {
-		isAuthenticated: true,
-		isLoading: false,
+		session: "signed-in",
 		workspaceSlug: undefined,
 	},
 };
@@ -129,8 +135,7 @@ export const NoWorkspace: Story = {
 /** Open, so the accessibility check sees links as menu items, which a wrapping link would break. */
 export const AccountMenu: Story = {
 	args: {
-		isAuthenticated: true,
-		isLoading: false,
+		session: "signed-in",
 	},
 	play: async ({ canvas }) => {
 		await userEvent.click(canvas.getByRole("button", { name: "Account" }));
@@ -148,8 +153,7 @@ export const AccountMenu: Story = {
 /** During a user view the menu holds only what acts on the signed-in administrator. */
 export const ReadOnly: Story = {
 	args: {
-		isAuthenticated: true,
-		isLoading: false,
+		session: "signed-in",
 		readOnly: true,
 	},
 	play: async ({ canvas }) => {
@@ -163,8 +167,7 @@ export const ReadOnly: Story = {
 
 export const Mobile: Story = {
 	args: {
-		isAuthenticated: true,
-		isLoading: false,
+		session: "signed-in",
 	},
 	parameters: {
 		viewport: { defaultViewport: "reflow" },

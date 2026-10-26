@@ -400,6 +400,7 @@ function HeaderContainer() {
 	const {
 		isAuthenticated,
 		isLoading,
+		session,
 		userProfile,
 		userView,
 		logout,
@@ -421,8 +422,7 @@ function HeaderContainer() {
 			environmentName={environment.deployment.name}
 			pullRequest={environment.deployment.pullRequest}
 			isProduction={environment.deployment.isProduction}
-			isAuthenticated={isAuthenticated}
-			isLoading={isLoading}
+			session={session}
 			name={effectiveName}
 			username={effectiveUsername}
 			avatarUrl={getUserProfilePictureUrl()}

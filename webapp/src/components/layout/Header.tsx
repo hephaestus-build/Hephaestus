@@ -20,6 +20,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { getInitials } from "@/lib/avatar";
 import { firstNonBlank, hasText } from "@/lib/text";
+import type { Session } from "@/runtime/auth/AuthContext";
 import { type EnvironmentTone, resolveHeaderBadge } from "./version";
 
 const ENV_DOT: Record<EnvironmentTone, string> = {
@@ -35,8 +36,8 @@ export interface HeaderProps {
 	isProduction: boolean;
 	/** The pull request a preview deployment is of; absent on every other environment. */
 	pullRequest?: number;
-	isAuthenticated: boolean;
-	isLoading: boolean;
+	/** Unavailable means that the server cannot say who is signed in, so the header offers no sign-in. */
+	session: Session;
 	name?: string;
 	username?: string;
 	avatarUrl?: string;
@@ -53,8 +54,7 @@ export default function Header({
 	environmentName,
 	isProduction,
 	pullRequest,
-	isAuthenticated,
-	isLoading,
+	session,
 	name,
 	username,
 	workspaceSlug,
@@ -75,6 +75,8 @@ export default function Header({
 			/>
 		</span>
 	);
+
+	const isAuthenticated = session === "signed-in";
 
 	return (
 		<header className="flex h-16 shrink-0 items-center justify-between gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
@@ -214,10 +216,16 @@ export default function Header({
 							</DropdownMenu>
 						</div>
 					) : (
-						<Button variant="outline" onClick={onLogin} disabled={isLoading}>
-							Sign in
-						</Button>
+						session !== "unavailable" && (
+							<Button variant="outline" onClick={onLogin} disabled={session === "loading"}>
+								Sign in
+							</Button>
+						)
 					)}
+					{/* Mounted before its text, so that screen readers announce the change. */}
+					<p aria-live="polite" className="text-sm text-muted-foreground empty:sr-only">
+						{session === "unavailable" ? "Hephaestus is not reachable right now" : null}
+					</p>
 				</div>
 			</div>
 		</header>

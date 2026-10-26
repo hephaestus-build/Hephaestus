@@ -35,6 +35,19 @@ export function currentUserQueryOptions() {
 	});
 }
 
+/**
+ * Whether a failed identity read means that the server could not answer. Only a 401 or 403 is an
+ * answer about the session, and signing in, as another account if need be, is its remedy. A server
+ * error or a lost connection signs no one out.
+ */
+export function sessionUnavailable(error: unknown): boolean {
+	return !(
+		error instanceof Error &&
+		error.cause instanceof Response &&
+		(error.cause.status === 401 || error.cause.status === 403)
+	);
+}
+
 /** Use cached identity during revalidation; cold-load outages reach the router error surface. */
 export async function resolveCurrentUser(
 	queryClient: QueryClient,

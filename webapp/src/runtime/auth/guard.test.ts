@@ -9,7 +9,13 @@ import { deferred } from "@/test/async";
 import { safeReturnTo } from "@/runtime/auth/return-to";
 import { getContext } from "@/runtime/tanstack-query/root-provider";
 
-import { consentIsPending, currentUserQueryOptions, isAppAdmin, resolveCurrentUser } from "./guard";
+import {
+	consentIsPending,
+	currentUserQueryOptions,
+	isAppAdmin,
+	resolveCurrentUser,
+	sessionUnavailable,
+} from "./guard";
 
 describe("safeReturnTo", () => {
 	describe("accepts same-origin absolute paths", () => {
@@ -204,6 +210,25 @@ describe("resolveCurrentUser", () => {
 
 		await expect(resolveCurrentUser(queryClient)).resolves.toMatchObject({ appRole: "APP_ADMIN" });
 		await vi.waitFor(() => expect(failing.times).toBe(1));
+	});
+});
+
+describe("sessionUnavailable", () => {
+	it.each([500, 502, 503])("reads HTTP %i as a server that cannot answer", async (status) => {
+		serve(() => new HttpResponse(null, { status }));
+		await expect(client().query(currentUserQueryOptions())).rejects.toSatisfy(sessionUnavailable);
+	});
+
+	it("reads a lost connection as a server that cannot answer", async () => {
+		serve(() => HttpResponse.error());
+		await expect(client().query(currentUserQueryOptions())).rejects.toSatisfy(sessionUnavailable);
+	});
+
+	it.each([401, 403])("reads HTTP %i as an answer about the session", async (status) => {
+		serve(() => new HttpResponse(null, { status }));
+		await expect(client().query(currentUserQueryOptions())).rejects.toSatisfy(
+			(error) => !sessionUnavailable(error),
+		);
 	});
 });
 
