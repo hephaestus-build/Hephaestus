@@ -49,7 +49,7 @@ async function report(root: string) {
 void test("the author tool returns an authored candidate without model access", async (t) => {
 	const { root, args } = await workspace(
 		t,
-		`export default {meta:{},run:async()=>(${JSON.stringify({ ...REVIEWED, coverage: { source: "claimed", selected: 1, checked: 1, total: 1, complete: true } })})};`,
+		`export default {meta:{},run:async()=>(${JSON.stringify({ ...REVIEWED, coverage: undefined })})};`,
 	);
 	const exit = run(args);
 	assert.equal(exit.status, 0, exit.stderr);

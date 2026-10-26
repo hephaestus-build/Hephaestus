@@ -176,6 +176,7 @@ async function runSource(
 				signal: new AbortController().signal,
 				log: () => undefined,
 				receipts,
+				requiredSources: [],
 			},
 		);
 		runs.set(slug, { outcome, reviews });

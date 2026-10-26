@@ -75,10 +75,21 @@
 				],
 				"coverage": {
 					"source": "host",
-					"reads": 0,
+					"reads": 1,
 					"truncatedReads": 0,
 					"failedReads": 0,
-					"receipts": [],
+					"receipts": [
+						{
+							"sourceKind": "scm.pull-request.core",
+							"sourcePath": "context/metadata.json",
+							"path": "context/metadata.json",
+							"version": "sha256:1ac892e0b46151f5a9cc527efa17b834a79e869b687fcfd0c387c39a5e66595e",
+							"status": "COMPLETE",
+							"contentDigest": "1ac892e0b46151f5a9cc527efa17b834a79e869b687fcfd0c387c39a5e66595e",
+							"startLine": 1,
+							"endLine": 23
+						}
+					],
 					"complete": true
 				},
 				"evidence": {
@@ -91,7 +102,18 @@
 					}
 				}
 			},
-			"readReceipts": []
+			"readReceipts": [
+				{
+					"sourceKind": "scm.pull-request.core",
+					"sourcePath": "context/metadata.json",
+					"path": "context/metadata.json",
+					"version": "sha256:1ac892e0b46151f5a9cc527efa17b834a79e869b687fcfd0c387c39a5e66595e",
+					"status": "COMPLETE",
+					"contentDigest": "1ac892e0b46151f5a9cc527efa17b834a79e869b687fcfd0c387c39a5e66595e",
+					"startLine": 1,
+					"endLine": 23
+				}
+			]
 		}
 	]
 }

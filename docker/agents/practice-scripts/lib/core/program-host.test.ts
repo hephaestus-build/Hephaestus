@@ -176,6 +176,7 @@ async function run(ws: Workspace, slug: string, options: RunOptions = {}) {
 				logs.push(line.replace(/^\s*\[[^\]]*\] /u, ""));
 			},
 			receipts,
+			requiredSources: [],
 		},
 	);
 	return { outcome, reviews, logs, staged };
@@ -241,19 +242,64 @@ void describe("a practice's result", () => {
 		reportEntry("direct", outcome);
 	});
 
-	void test("a program that claims complete coverage after a failed read gets no MET", async () => {
+	void test("a program result that types its own coverage is refused", async () => {
+		const ws = await workspace({
+			typed: program(
+				"definePracticeScript",
+				`{ meta: {}, run: async (ctx) => ({
+					outcome: "MET",
+					summary: "Met",
+					explanation: "The program typed its coverage.",
+					citations: [await ctx.evidence.citeRecord("metadata.json", 36)],
+					evidence: {},
+					coverage: { source: "claimed", selected: 1, checked: 1, total: 1, complete: true },
+				}) }`,
+			),
+		});
+		const { outcome } = await run(ws, "typed");
+		assert.equal(outcome.status, "failed");
+		assert.equal(outcome.stopReason, "invalid-candidate");
+		assert.match(outcome.error ?? "", /coverage_inconsistent/u);
+	});
+
+	void test("code that cites a source it did not read gets no MET", async () => {
+		const ws = await workspace({
+			unread: program(
+				"definePracticeScript",
+				`{ meta: {}, run: async (ctx) => ({
+					outcome: "MET",
+					summary: "Met",
+					explanation: "The program quoted one line and read nothing.",
+					citations: [await ctx.evidence.citeRecord("metadata.json", 36)],
+					evidence: {},
+				}) }`,
+			),
+		});
+		const { outcome } = await run(ws, "unread");
+		assert.equal(outcome.status, "failed");
+		assert.equal(outcome.stopReason, "invalid-candidate");
+		assert.match(outcome.error ?? "", /^met_coverage_incomplete:/u);
+	});
+
+	void test("code that ignored a failed read gets no Does not apply", async () => {
 		const ws = await workspace({
 			hidden: program(
 				"definePracticeScript",
 				`{ meta: {}, run: async (ctx) => {
 					await ctx.evidence.record("..").catch(() => undefined);
+					await ctx.evidence.record("metadata.json");
 					return {
-						outcome: "MET",
-						summary: "Met",
-						explanation: "The program swallowed its failed read.",
+						outcome: "DOES_NOT_APPLY",
+						summary: "No user interface changes",
+						explanation: "The program ignored its failed read.",
 						citations: [await ctx.evidence.citeRecord("metadata.json", 36)],
-						evidence: {},
-						coverage: { source: "claimed", selected: 1, checked: 1, total: 1, complete: true },
+						evidence: {
+							inapplicability: {
+								consulted: ["scm.pull-request.core"],
+								prerequisite: "user interface files",
+								ruledOutBy: "No changed file is a view.",
+							},
+						},
 					};
 				} }`,
 			),
@@ -261,8 +307,45 @@ void describe("a practice's result", () => {
 		const { outcome } = await run(ws, "hidden");
 		assert.equal(outcome.status, "failed");
 		assert.equal(outcome.stopReason, "invalid-candidate");
-		assert.match(outcome.error ?? "", /^met_coverage_incomplete:/u);
-		assert.equal(outcome.candidate, undefined);
+		assert.match(outcome.error ?? "", /complete coverage/u);
+	});
+
+	void test("code that ignored a failed read keeps its Not met, with incomplete coverage", async () => {
+		const ws = await workspace({
+			partial: program(
+				"definePracticeScript",
+				`{ meta: {}, run: async (ctx) => {
+					await ctx.evidence.record("..").catch(() => undefined);
+					await ctx.evidence.record("metadata.json");
+					const cited = await ctx.evidence.citeRecord("metadata.json", 36);
+					return {
+						outcome: "NOT_MET",
+						summary: "The change is too large",
+						explanation: "The record counts the changed files.",
+						citations: [],
+						problems: [{
+							severity: "MINOR",
+							summary: "Too many changed files",
+							explanation: "The record states the count.",
+							citations: [cited],
+							basis: { type: "state", explanation: "The pull request has this state." },
+						}],
+						evidence: {},
+					};
+				} }`,
+			),
+		});
+		const { outcome } = await run(ws, "partial");
+		assert.equal(outcome.status, "ok", outcome.error);
+		assert.partialDeepStrictEqual(outcome.candidate, {
+			outcome: "NOT_MET",
+			coverage: {
+				source: "host",
+				failedReads: 1,
+				complete: false,
+				omitted: [{ what: "script reads that failed", count: 1, reason: "unavailable" }],
+			},
+		});
 	});
 
 	void test("the built-in asks one review with no prepared input and returns its result", async () => {
@@ -457,7 +540,7 @@ void describe("the host's bounds on a program's messages", () => {
 	void test("a pending review settles before the next practice starts", async () => {
 		const candidate = {
 			...REVIEWED,
-			coverage: { source: "claimed", selected: 1, checked: 1, total: 1, complete: true },
+			coverage: undefined,
 		};
 		const ws = await workspace({
 			first: program(
@@ -591,7 +674,7 @@ void describe("a program that does not stop when the host stops it", { concurren
 		const cancel = new AbortController();
 		const candidate = {
 			...REVIEWED,
-			coverage: { source: "claimed", selected: 1, checked: 1, total: 1, complete: true },
+			coverage: undefined,
 		};
 		const ws = await workspace({
 			late: program(

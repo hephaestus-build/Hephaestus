@@ -79,7 +79,14 @@ function notMet(): Record<string, unknown> {
 		problems: [problem(20), problem(30, { severity: "MINOR" })],
 		example: { citation: citation(40, "  throw error;"), note: "This catch rethrows." },
 		evidence: {},
-		coverage: { source: "claimed", selected: 3, checked: 3, total: 3, complete: true },
+		coverage: {
+			source: "host",
+			reads: 1,
+			truncatedReads: 0,
+			failedReads: 0,
+			receipts: [],
+			complete: true,
+		},
 	};
 }
 
@@ -96,7 +103,14 @@ function notApplicable(): Record<string, unknown> {
 				ruledOutBy: "no view file",
 			},
 		},
-		coverage: { source: "claimed", selected: 1, checked: 1, total: 1, complete: true },
+		coverage: {
+			source: "host",
+			reads: 1,
+			truncatedReads: 0,
+			failedReads: 0,
+			receipts: [],
+			complete: true,
+		},
 	};
 }
 
@@ -164,14 +178,7 @@ const BREACHES: Record<
 		"notMet",
 		(v) =>
 			Object.assign(v, {
-				coverage: {
-					source: "claimed",
-					selected: 3,
-					checked: 4,
-					total: 3,
-					complete: false,
-					omitted: incomplete.omitted,
-				},
+				coverage: { source: "claimed", selected: 3, checked: 3, total: 3, complete: true },
 			}),
 	],
 	example_outcome_mismatch: [

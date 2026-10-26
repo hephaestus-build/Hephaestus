@@ -169,6 +169,7 @@ import {
 	runPracticeProgram,
 	type PracticeProgram,
 	type ProgramOutcome,
+	type RequiredSource,
 } from "./work/practice-scripts/lib/core/program-host.ts";
 import {
 	practiceIndexSchema,
@@ -1913,6 +1914,19 @@ export async function runReviewJob(): Promise<void> {
 		};
 	}
 
+	/** The captured sources, other than the tree, that the practice declares in its reads; as a review session requires them. */
+	function requiredSourcesOf(slug: string): RequiredSource[] {
+		if (assignedInputs.get(slug)?.scope.kind === "SCAN") {
+			return [];
+		}
+		const declared = new Set(
+			practiceIndex.find((practice) => practice.slug === slug)?.readsSources,
+		);
+		return [...sourceFileSources]
+			.filter(([, kind]) => kind !== TREE_SOURCE && declared.has(kind))
+			.map(([sourcePath, sourceKind]) => ({ sourceKind, sourcePath }));
+	}
+
 	function jobFiles(inputs: PracticeInputs, evidence: EvidenceSources): JobFiles | null {
 		if (inputs.scope.kind === "SCAN") {
 			return evidence.headRevision === null
@@ -3402,6 +3416,7 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 							console.error(`[pi-runner]${line}`);
 						},
 						receipts: programReads,
+						requiredSources: requiredSourcesOf(slug),
 					},
 				);
 				const reached: Receipts = {

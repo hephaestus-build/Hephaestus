@@ -5,13 +5,21 @@
  */
 import { createHash } from "node:crypto";
 
+import { DIFF_SOURCE, TREE_SOURCE } from "../../kits/scm/sources.ts";
+
 import {
 	parseCandidate,
+	sessionCandidateSchema,
 	CANDIDATE_LIMITS,
 	parseMeta,
 	parseReviewOptions,
 	type Candidate,
+	type Citation,
+	type Coverage,
+	type Omission,
+	type ParsedSessionCandidate,
 	type ProgramCalls,
+	type SessionCandidate,
 	type ReadReceipt,
 	type ProgramKind,
 	type ReviewSessionFacts,
@@ -20,6 +28,7 @@ import {
 } from "./contract.ts";
 import { noReceipts, type Receipts } from "./evidence-reader.ts";
 import type { ProgramJob } from "./ipc.ts";
+import { isJsonObject } from "./json.ts";
 import { definePracticeScript, reasonOf, UnratedError } from "./practice-script.ts";
 import { programContext } from "./program-context.ts";
 import {
@@ -55,6 +64,12 @@ export interface ProgramOutcome {
 	reviewSessions?: ReviewSessionFacts;
 	coverageReached: Receipts;
 	durationMs: number | null;
+}
+
+/** A captured source that the practice declares in its reads. Code that decides needs it read in full. */
+export interface RequiredSource {
+	sourceKind: string;
+	sourcePath: string;
 }
 
 export const programDigest = (source: Buffer): string =>
@@ -140,7 +155,7 @@ async function runBuiltin(job: ProgramJob, services: ProgramServices): Promise<P
 export async function runPracticeProgram(
 	program: PracticeProgram,
 	job: ProgramJob,
-	services: ProgramServices & { receipts: Receipts },
+	services: ProgramServices & { receipts: Receipts; requiredSources: readonly RequiredSource[] },
 ): Promise<ProgramOutcome> {
 	const started = Date.now();
 	/** The coverage each review of this practice returned: the only host coverage its candidate may carry. */
@@ -196,39 +211,6 @@ export async function runPracticeProgram(
 			? finished("withheld", failure.stopReason)
 			: finished("failed", failure.stopReason, { error: failure.error });
 	}
-	const parsed = parseCandidate(execution.value);
-	if (!parsed.ok) {
-		return finished("failed", "invalid-candidate", {
-			error: `the program returned no valid result: ${parsed.reasonCode}: ${parsed.message}`,
-		});
-	}
-	let { candidate } = parsed;
-	if (job.inputs.scope.kind === "SCAN") {
-		const citations = [
-			...candidate.citations,
-			...(candidate.outcome === "NOT_MET"
-				? candidate.problems.flatMap((problem) => problem.citations)
-				: []),
-			...(!("example" in candidate) || candidate.example === undefined
-				? []
-				: [candidate.example.citation]),
-			...("openQuestions" in candidate.evidence
-				? (candidate.evidence.openQuestions ?? [])
-				: []
-			).flatMap((question) => (question.citation === undefined ? [] : [question.citation])),
-		];
-		if (citations.some((citation) => !services.reader.allowsCitation(citation))) {
-			return finished("failed", "invalid-candidate", {
-				error: "a scan citation is outside its frozen context",
-			});
-		}
-	}
-
-	if (candidate.coverage.source === "host" && !returned.has(JSON.stringify(candidate.coverage))) {
-		return finished("failed", "invalid-candidate", {
-			error: "the result carries host coverage that no review of this practice returned",
-		});
-	}
 	const readReceipts = [
 		...new Map(
 			[...services.reader.readReceipts, ...sessionReadReceipts].map((receipt) => [
@@ -240,12 +222,46 @@ export async function runPracticeProgram(
 	if (readReceipts.length > CANDIDATE_LIMITS.receipts) {
 		return finished("failed", "too-large", { error: "read receipts exceed the proof bound" });
 	}
-	// Program code may type its coverage; the host replaces those counts with what the reads reached.
-	const source =
-		candidate.coverage.source === "host"
-			? candidate.coverage
-			: { ...candidate.coverage, reads: 0, truncatedReads: 0, failedReads: 0 };
-	const omitted = [...(source.complete ? [] : source.omitted)];
+	const { value } = execution;
+	let reviewed: Extract<Coverage, { source: "host" }> | null = null;
+	let shaped: ParsedSessionCandidate | SessionCandidate;
+	if (isJsonObject(value) && "coverage" in value) {
+		const parsed = parseCandidate(value);
+		if (!parsed.ok) {
+			return finished("failed", "invalid-candidate", {
+				error: `the program returned no valid result: ${parsed.reasonCode}: ${parsed.message}`,
+			});
+		}
+		const { coverage, ...rest } = parsed.candidate;
+		if (coverage.source !== "host" || !returned.has(JSON.stringify(coverage))) {
+			return finished("failed", "invalid-candidate", {
+				error: "the result carries host coverage that no review of this practice returned",
+			});
+		}
+		reviewed = coverage;
+		shaped = rest;
+	} else {
+		const parsed = sessionCandidateSchema.safeParse(value);
+		if (!parsed.success) {
+			return finished("failed", "invalid-candidate", {
+				error: `the program returned no valid result: ${parsed.error.issues[0]?.message ?? "invalid"}`,
+			});
+		}
+		shaped = parsed.data;
+	}
+	const citations = citationsOf(shaped);
+	if (
+		job.inputs.scope.kind === "SCAN" &&
+		citations.some((citation) => !services.reader.allowsCitation(citation))
+	) {
+		return finished("failed", "invalid-candidate", {
+			error: "a scan citation is outside its frozen context",
+		});
+	}
+	const omitted: Omission[] =
+		reviewed === null
+			? unreadSources(citations, services.requiredSources, readReceipts, job.files?.change != null)
+			: [...(reviewed.complete ? [] : reviewed.omitted)];
 	if (services.receipts.truncatedReads > 0) {
 		omitted.push({
 			what: "script reads cut short",
@@ -262,20 +278,25 @@ export async function runPracticeProgram(
 	}
 	const base = {
 		source: "host" as const,
-		reads: source.reads + services.receipts.reads,
-		truncatedReads: source.truncatedReads + services.receipts.truncatedReads,
-		failedReads: source.failedReads + services.receipts.failedReads,
+		reads: (reviewed?.reads ?? 0) + services.receipts.reads,
+		truncatedReads: (reviewed?.truncatedReads ?? 0) + services.receipts.truncatedReads,
+		failedReads: (reviewed?.failedReads ?? 0) + services.receipts.failedReads,
 		receipts: readReceipts,
 	};
 	const coverage =
 		omitted.length === 0 ? { ...base, complete: true } : { ...base, complete: false, omitted };
-	const final = parseCandidate({ ...candidate, coverage });
+	if (reviewed === null && shaped.outcome === "DOES_NOT_APPLY" && !coverage.complete) {
+		return finished("failed", "invalid-candidate", {
+			error: "a Does not apply that code decided needs complete coverage",
+		});
+	}
+	const final = parseCandidate({ ...shaped, coverage });
 	if (!final.ok) {
 		return finished("failed", "invalid-candidate", {
 			error: `${final.reasonCode}: ${final.message}`,
 		});
 	}
-	candidate = final.candidate;
+	const { candidate } = final;
 
 	if (job.inputs.scope.kind === "SCAN" && candidate.outcome === "MET") {
 		const file = job.inputs.scope.item.path;
@@ -296,4 +317,91 @@ export async function runPracticeProgram(
 		}
 	}
 	return finished("ok", null, { candidate, readReceipts });
+}
+
+interface Cited {
+	citations: readonly Citation[];
+	problems?: readonly { citations: readonly Citation[] }[];
+	example?: { citation: Citation };
+	evidence: {
+		search?: unknown;
+		inapplicability?: unknown;
+		openQuestions?: readonly { citation?: Citation }[];
+	};
+}
+
+/** Every citation of a candidate: its own, its problems', its example's and its open questions'. */
+function citationsOf(candidate: Cited): Citation[] {
+	const questions = candidate.evidence.openQuestions ?? [];
+	return [
+		...candidate.citations,
+		...(candidate.problems ?? []).flatMap((problem) => problem.citations),
+		...(candidate.example === undefined ? [] : [candidate.example.citation]),
+		...questions.flatMap((question) =>
+			question.citation === undefined ? [] : [question.citation],
+		),
+	];
+}
+
+/**
+ * What code left unread, by the rule review sessions follow: each required source and each cited
+ * source needs a complete read, or the host supplied it whole (the captured change). Code that read
+ * nothing covers nothing.
+ */
+function unreadSources(
+	citations: readonly Citation[],
+	required: readonly RequiredSource[],
+	receipts: readonly ReadReceipt[],
+	changeSupplied: boolean,
+): Omission[] {
+	const complete = (sourcePath: string, file?: string) =>
+		receipts.some(
+			(receipt) =>
+				receipt.status === "COMPLETE" &&
+				receipt.sourcePath === sourcePath &&
+				(file === undefined || receipt.path === file),
+		);
+	const covered = (sourceKind: string, sourcePath: string, file?: string) =>
+		sourceKind === DIFF_SOURCE ? changeSupplied : complete(sourcePath, file);
+	const unreadRequired = required
+		.filter((source) => !covered(source.sourceKind, source.sourcePath))
+		.map((source) => source.sourcePath);
+	const unreadCited = [
+		...new Set(
+			citations
+				.filter(
+					(citation) =>
+						!covered(
+							citation.sourceKind,
+							citation.sourcePath,
+							citation.sourceKind === TREE_SOURCE ? citation.path : undefined,
+						),
+				)
+				.map((citation) => citation.path),
+		),
+	];
+	const omitted: Omission[] = [];
+	for (const [what, items] of [
+		["required sources not read in full", unreadRequired],
+		["cited sources not read in full", unreadCited],
+	] as const) {
+		if (items.length > 0) {
+			omitted.push({
+				what,
+				count: items.length,
+				reason: "unavailable",
+				items: items
+					.slice(0, CANDIDATE_LIMITS.omissionItems)
+					.map((item) => item.slice(0, CANDIDATE_LIMITS.warrantFieldChars)),
+			});
+		}
+	}
+	if (receipts.length === 0 && !changeSupplied) {
+		omitted.push({
+			what: "no relevant source was supplied or read",
+			count: 1,
+			reason: "unavailable",
+		});
+	}
+	return omitted;
 }

@@ -229,6 +229,7 @@ try {
 					console.error(line);
 				},
 				receipts,
+				requiredSources: [],
 			},
 		);
 	}

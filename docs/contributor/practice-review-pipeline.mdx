@@ -199,6 +199,17 @@ An invalid custom script stops its practice without fallback.
 Only the final candidate returned by the script reaches admission.
 
 The host supplies assignment identity and trusted read receipts.
+The host measures the coverage of every candidate. A candidate cannot claim its own coverage.
+A review session's candidate gets the coverage that its session ledger measured.
+Admission refuses claimed coverage on every outcome.
+
+A candidate that script code decided gets the coverage of the script's own reads.
+The captured change counts as supplied in full to a script.
+A citation alone does not count as a read, because it returns only the quoted lines.
+A truncated or failed script read makes the coverage incomplete.
+A script that read nothing has incomplete coverage.
+A Does not apply that script code decided needs complete coverage.
+
 ITEM coverage includes the practice's required sources and the sources that its result cites.
 A brief-only decision can be complete when the opening brief supplied all these sources.
 An omitted source requires continuous reads from line 1 through EOF.

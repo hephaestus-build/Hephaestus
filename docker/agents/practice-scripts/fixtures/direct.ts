@@ -7,6 +7,7 @@ export default definePracticeScript({
 		const domain = scm(ctx);
 		expectKind(domain, "scm.pull_request");
 		const changed = requireChange(domain.files).size;
+		await ctx.evidence.record("metadata.json");
 		const citation = await ctx.evidence.citeRecord("metadata.json", 36);
 		return {
 			outcome: "DOES_NOT_APPLY",
@@ -19,13 +20,6 @@ export default definePracticeScript({
 					prerequisite: "user interface files that the change adds or changes",
 					ruledOutBy: "Every changed file is a TypeScript source outside a view folder.",
 				},
-			},
-			coverage: {
-				source: "claimed",
-				selected: changed,
-				checked: changed,
-				total: changed,
-				complete: true,
 			},
 		};
 	},

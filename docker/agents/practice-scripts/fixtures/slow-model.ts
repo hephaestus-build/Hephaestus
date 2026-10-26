@@ -11,11 +11,8 @@ export default definePracticeScript({
 		if (found === undefined) {
 			throw new Error("the change was not captured");
 		}
-		const outcome = await step("slow", async () =>
-			embedMany({ model: ctx.models.embedding, values: ["x"] }),
-		);
+		await step("slow", async () => embedMany({ model: ctx.models.embedding, values: ["x"] }));
 		await sleep(500);
-		const reason = "unrated" in outcome ? outcome.unrated : "selection";
 		return {
 			outcome: "COULD_NOT_DETERMINE",
 			summary: "The added comment was not compared with the others",
@@ -29,14 +26,6 @@ export default definePracticeScript({
 						citation: found,
 					},
 				],
-			},
-			coverage: {
-				source: "claimed",
-				selected: 1,
-				checked: 0,
-				total: 1,
-				complete: false,
-				omitted: [{ what: "embedding of the added comments", count: 1, reason }],
 			},
 		};
 	},

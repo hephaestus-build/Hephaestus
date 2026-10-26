@@ -150,7 +150,7 @@ void test("a custom program that returns a result directly opens no session, and
 			stopReason: null,
 			calls: noCalls,
 			reviewSessions: { modelCalls: 0, evidenceRefusals: 0, formatRefusals: 0 },
-			coverageReached: { reads: 0, truncatedReads: 0, failedReads: 0 },
+			coverageReached: { reads: 1, truncatedReads: 0, failedReads: 0 },
 			durationMs: "number",
 		},
 	);

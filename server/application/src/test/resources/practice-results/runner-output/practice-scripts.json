@@ -34,7 +34,7 @@
 			"practiceSlug": "ui-scope",
 			"program": {
 				"kind": "custom",
-				"digest": "eefcf35286f64c4ca3b8a8c06695ce13dd5e7ecb0867f96afd173fc3af9c7ce3"
+				"digest": "98d5903f0810361a5772d2b1bd0fb9d56ea91ad80131ad9fb9884c06210aea3d"
 			},
 			"models": [
 				{
@@ -59,7 +59,7 @@
 				"formatRefusals": 0
 			},
 			"coverageReached": {
-				"reads": 0,
+				"reads": 1,
 				"truncatedReads": 0,
 				"failedReads": 0
 			},

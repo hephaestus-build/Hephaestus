@@ -130,6 +130,31 @@ class ReviewOutputServiceTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldWithholdAClaimedMetWithoutWritingAResultWhenTheCoverageIsNotMeasured() {
+        var submission = submission("clear-names", "docs:one");
+        var claimed = ((ObjectNode) submission.results().getFirst().candidate());
+        claimed.putObject("coverage")
+                .put("source", "claimed")
+                .put("selected", 1)
+                .put("checked", 1)
+                .put("total", 1)
+                .put("complete", true);
+        when(results.admit(1, job.getReviewId(), job.getId(), 0, List.of()))
+                .thenReturn(new AdmissionReceipt(List.of(), List.of()));
+
+        service.prepare(job, submission).record(job);
+
+        verifyNoInteractions(verifier);
+        verify(results).admit(1, job.getReviewId(), job.getId(), 0, List.of());
+        verify(membership)
+                .withhold(
+                        eq(1L),
+                        eq(RuntimeReviewTestData.assignment(5L, null).id()),
+                        eq(CandidateRefusal.COVERAGE_INCONSISTENT),
+                        any());
+    }
+
+    @Test
     void shouldWithholdHostCoverageWhenItsReceiptsDifferFromTheSubmission() {
         var submitted = submission("clear-names", "docs:one");
         var entry = submitted.results().getFirst();

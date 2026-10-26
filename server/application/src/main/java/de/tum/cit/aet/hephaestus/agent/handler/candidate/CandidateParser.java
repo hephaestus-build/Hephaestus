@@ -224,12 +224,6 @@ public final class CandidateParser {
                 }
             }
         }
-        if ((outcome == ResultOutcome.MET || outcome == ResultOutcome.DOES_NOT_APPLY)
-                && coverage instanceof ClaimedCoverage) {
-            throw refuse(
-                    CandidateRefusal.COVERAGE_INCONSISTENT,
-                    "a " + outcome + " result needs the coverage that the host measured");
-        }
         List<OpenQuestion> openQuestions = questions == null ? List.of() : questions;
         return switch (outcome) {
             case MET -> new MetCandidate(sent.summary(), sent.explanation(), citations, coverage, example, searchNode);
@@ -257,28 +251,12 @@ public final class CandidateParser {
     }
 
     private static @Nullable String coverageProblem(ResultCoverage coverage) {
-        boolean complete;
-        boolean omits;
-        switch (coverage) {
-            case HostCoverage host -> {
-                complete = host.complete();
-                omits = host.omitted() != null && !host.omitted().isEmpty();
-                if (complete && (host.truncatedReads() > 0 || host.failedReads() > 0))
-                    return "complete host coverage cannot have truncated or failed reads";
-            }
-            case ClaimedCoverage claimed -> {
-                complete = claimed.complete();
-                omits = claimed.omitted() != null && !claimed.omitted().isEmpty();
-                if (claimed.checked() > claimed.selected())
-                    return "claimed coverage checked more items than it selected";
-                var total = claimed.total();
-                if (total != null && claimed.selected() > total)
-                    return "claimed coverage selected more items than the total";
-                if (complete
-                        && (claimed.checked() != claimed.selected() || (total != null && claimed.selected() != total)))
-                    return "complete claimed coverage checks every selected item of the total";
-            }
-        }
+        if (!(coverage instanceof HostCoverage host))
+            return "coverage is what the host measured; a result cannot claim it";
+        boolean complete = host.complete();
+        boolean omits = host.omitted() != null && !host.omitted().isEmpty();
+        if (complete && (host.truncatedReads() > 0 || host.failedReads() > 0))
+            return "complete host coverage cannot have truncated or failed reads";
         return complete == omits
                 ? (complete ? "complete coverage lists no omission" : "incomplete coverage lists what it omitted")
                 : null;

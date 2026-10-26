@@ -81,8 +81,11 @@ Do not return result-level severity.
 Not met can retain open questions beside established problems.
 Operational read or model failure does not become an open question.
 
-The host measures coverage from the script's own reads.
-Counts that the script types are replaced, so a truncated or failed read prevents Met.
+Return the result of `ctx.review`, or a result that your code decided, without `coverage`.
+Hephaestus measures coverage from the reads of the script.
+Read each source that you cite in full. A citation alone shows only the quoted lines.
+A failed or cut-short read prevents Met and Does not apply.
+
 A scan Met needs a trusted complete read of the assigned file.
 A listing, search match or claimed count alone does not prove that read.
 Citations must quote authorized captured text.
@@ -128,6 +131,7 @@ Execution details can expire while durable review history remains available.
 
 If the default export has the wrong shape, execution stops with “The script's default export is not a practice script. Write it with definePracticeScript.”
 Use the [operator migration entry](https://github.com/hephaestus-build/Hephaestus/blob/main/MIGRATION.md) and the [runner contract](/contributor/practice-script-runner) to upgrade custom scripts.
+A script that returns a result with `coverage` stops as an invalid result. Remove `coverage` from the result.
 
 ## Limits
 
