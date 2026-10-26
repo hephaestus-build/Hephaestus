@@ -384,7 +384,7 @@ jobs:
               - '.opencode/**'
               - '.agents/**'
               - 'opencode.json'
-              - 'renovate.json'
+              - '.github/renovate.json'
               - 'security/scorecard-baseline.json'
               - 'openapitools.json'
               - 'project.code-workspace'

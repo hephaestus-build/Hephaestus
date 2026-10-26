@@ -230,7 +230,7 @@ if (
 ) {
 	throw new Error("Gradle must compile with the JDK line from .java-version");
 }
-const renovate = asRecord(readJsonFileSync("renovate.json"), "renovate.json");
+const renovate = asRecord(readJsonFileSync(".github/renovate.json"), ".github/renovate.json");
 if (asRecord(renovate.constraints, "Renovate constraints").java !== javaVersion) {
 	throw new Error(
 		"Renovate constraints.java must restate .java-version for Gradle artifact updates",
