@@ -29,7 +29,7 @@ uses the stated endpoint. Before activation or renewal, the controller must fill
 | Field | Required deployment evidence |
 |---|---|
 | Recipient and role | `[legal entity, service, endpoint, controller/processor/joint-controller analysis]`. Distinguish source-platform purposes from processing on instructions. |
-| Contract | `[signed DPA/AVV reference, instructions, subprocessors, renewal/review owner]`. An API key is not an agreement. |
+| Contract | `[signed DPA reference, instructions, subprocessors, renewal/review owner]`. An API key is not an agreement. |
 | Scope | `[data categories, subjects, purposes, review/Heph inputs and any human provider access]`. Include broader Slack-thread and person-history context. |
 | Retention and training | `[prompt/response and abuse-monitoring retention, deletion path, training terms, any exception]`. No-training is not zero retention. |
 | Location and transfer | `[storage, inference, support access, subprocessors, transfer mechanism and evidence date]`. Verify deployment type, not just a resource's region. |

@@ -102,7 +102,7 @@ Three differences between splits were also guarded.
 On 2026-10-07, the maintainer, as product owner, removed these thresholds after a reassessment of the new audience.
 The page now shows all counts and all splits.
 The reassessment found a low residual risk.
-It is recorded in `docs/admin/dsms/dpia-prescreen.md` § 6.
+It is recorded in § 6 of the TUM deployment's DPIA pre-screen, now in the maintainers' operations records.
 The TUM/AET data-protection coordinator confirms it in the full DPIA.
 
 The reasons:

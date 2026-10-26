@@ -44,7 +44,7 @@ The [processor checklist](./processor-checklist.md) lists the recipients to asse
 [Data retention](../data-retention.mdx) lists the periods that Hephaestus applies and the settings that change them.
 The [personal-data map](./personal-data-map.md) describes erasure and residual copies.
 
-## Technical and organisational measures (Art. 30(1)(g) and Art. 32)
+## Technical and organizational measures (Art. 30(1)(g) and Art. 32)
 
 `[access owners, key management, backups and their expiry, restore tests, incident response]`.
 The [threat model](../threat-model.mdx), [Secret custody](../secret-custody.mdx) and [Backup and restore](../backup-restore.mdx) describe the measures that Hephaestus supplies.

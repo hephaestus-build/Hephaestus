@@ -65,7 +65,7 @@ await test("STE paths are explicit, unique, and grow only", () => {
 	);
 	assert.throws(() => parsePaths('[".claude/skills/composition-patterns/other.json"]'));
 	assert.doesNotThrow(() => assertGrowth(["a.md"], ["a.md", "b.md"]));
-	assert.throws(() => assertGrowth(["a.md"], ["b.md"]), /Restore them/u);
+	assert.throws(() => assertGrowth(["a.md"], ["b.md"]), /restore its entry/u);
 	assert.doesNotThrow(() => assertGrowth(["a.md"], ["b.md"], new Map(), () => false));
 });
 

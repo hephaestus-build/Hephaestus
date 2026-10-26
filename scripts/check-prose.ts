@@ -56,7 +56,7 @@ export function assertGrowth(
 	});
 	if (lost.length > 0) {
 		throw new Error(
-			`STE enforcement lost paths: ${lost.join(", ")}. Restore them; get maintainer review for an explicit rename or deletion.`,
+			`STE enforcement lost paths: ${lost.join(", ")}. Each page still exists, so restore its entry, or carry it to the page's new name.`,
 		);
 	}
 }
