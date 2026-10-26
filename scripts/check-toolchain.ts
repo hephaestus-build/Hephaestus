@@ -571,7 +571,7 @@ for (const file of tracked) {
 	}
 	// Vendored runner examples target other projects; repository notices remain part of this scan.
 	if (
-		/^\.(?:agents|claude)\/skills\/shadcn\//u.test(file) &&
+		file.startsWith(".claude/skills/shadcn/") &&
 		!["LICENSE.md", "NOTICE.md"].includes(basename)
 	) {
 		continue;
