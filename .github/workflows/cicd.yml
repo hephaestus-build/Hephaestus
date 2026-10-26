@@ -1056,10 +1056,12 @@ jobs:
   # The chart on real clusters with this run's images, when the chart or the sandbox runtime changed,
   # and on every main commit. `Docker` puts every image under the head commit's tag, by building it or,
   # in a pull request, by aliasing the base image; a fork publishes none, so there is nothing to install.
+  # `Docker` succeeds with the Dockerfile images alone when `App Server: Package` failed, so this job
+  # waits for the package too: the run reports that failure once, not again as a cluster failure.
   Kubernetes:
-    needs: [detect-changes, Docker]
+    needs: [detect-changes, server-package, Docker]
     if: >-
-      !cancelled() && needs.Docker.result == 'success' &&
+      !cancelled() && needs.Docker.result == 'success' && needs.server-package.result != 'failure' &&
       needs.detect-changes.outputs.should_skip != 'true' &&
       needs.detect-changes.outputs.publishable == 'true' &&
       (github.event_name == 'push' || needs.detect-changes.outputs.kubernetes == 'true')

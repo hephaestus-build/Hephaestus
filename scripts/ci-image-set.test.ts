@@ -117,6 +117,8 @@ const PATHS = [
 	".changeset/example.md",
 	"docs/user/index.mdx",
 	".github/workflows/cicd.yml",
+	// Selects the host boot smoke and no image filter.
+	".github/workflows/ci-build.yml",
 ];
 
 const VERSION_FILES = ["package.json", "CHANGELOG.md", ".changeset/example.md"];
@@ -154,7 +156,7 @@ interface Case {
 	/** A dispatch's `release-preflight` input. */
 	preflight: string;
 	/** A run that builds no image, a draft that builds because of its label, or a failed image build. */
-	skip: "" | "fork" | "draft" | "draft-preview" | "should-skip" | "docker-fails";
+	skip: "" | "fork" | "draft" | "draft-preview" | "should-skip" | "package-fails" | "docker-fails";
 }
 
 interface Settings {
@@ -164,8 +166,8 @@ interface Settings {
 	releaseCandidate: string[];
 	queue: { queueImages: string; versionBump: string }[];
 	preflight: string[];
-	/** The runs that put no image under the commit, each tried on its own. */
-	skips: Case["skip"][];
+	/** The runs that put no image under the commit, each tried on its own, with what the run asks for. */
+	skips: { skip: Case["skip"]; releaseCandidate?: string; preflight?: string }[];
 }
 
 // Only a pull request has a `preview` label. A push resolves no alias base; it reuses what its merge
@@ -183,7 +185,15 @@ const SETTINGS: Settings[] = [
 		releaseCandidate: ["false", "true"],
 		queue: [NO_QUEUE],
 		preflight: ["false"],
-		skips: ["fork", "draft", "draft-preview", "should-skip", "docker-fails"],
+		skips: [
+			{ skip: "fork" },
+			{ skip: "draft" },
+			{ skip: "draft-preview" },
+			{ skip: "should-skip" },
+			{ skip: "package-fails" },
+			{ skip: "docker-fails" },
+			{ skip: "docker-fails", releaseCandidate: "true" },
+		],
 	},
 	{
 		event: "merge_group",
@@ -192,7 +202,11 @@ const SETTINGS: Settings[] = [
 		releaseCandidate: ["false", "true"],
 		queue: [NO_QUEUE],
 		preflight: ["false"],
-		skips: ["docker-fails"],
+		skips: [
+			{ skip: "package-fails" },
+			{ skip: "docker-fails" },
+			{ skip: "docker-fails", releaseCandidate: "true" },
+		],
 	},
 	{
 		event: "push",
@@ -207,7 +221,7 @@ const SETTINGS: Settings[] = [
 			{ queueImages: ALL_IMAGES, versionBump: "true" },
 		],
 		preflight: ["false"],
-		skips: ["docker-fails"],
+		skips: [{ skip: "docker-fails" }],
 	},
 	{
 		event: "workflow_dispatch",
@@ -216,7 +230,7 @@ const SETTINGS: Settings[] = [
 		releaseCandidate: ["false"],
 		queue: [NO_QUEUE],
 		preflight: ["false", "true"],
-		skips: ["docker-fails"],
+		skips: [{ skip: "docker-fails" }, { skip: "docker-fails", preflight: "true" }],
 	},
 ];
 
@@ -244,13 +258,17 @@ function* cases(): Generator<Case> {
 					),
 				),
 		);
-		for (const skip of skips) {
+		for (const {
+			skip,
+			releaseCandidate: candidate = "false",
+			preflight: evidence = "false",
+		} of skips) {
 			settings.push({
-				aliasBase: aliasBase.at(-1) ?? "",
+				aliasBase: candidate === "true" ? "" : (aliasBase.at(-1) ?? ""),
 				preview: { "should-skip": "false", "draft-preview": "true" }[skip as string] ?? "",
-				releaseCandidate: "false",
+				releaseCandidate: candidate,
 				...NO_QUEUE,
-				preflight: "false",
+				preflight: evidence,
 				skip,
 			});
 		}
@@ -261,6 +279,49 @@ function* cases(): Generator<Case> {
 		}
 	}
 }
+
+/**
+ * Follows an output of `Docker` through ci-docker-build.yml and reusable-docker-build.yml to the
+ * step that sets it, and returns the image whose digest that step reports.
+ */
+function digestSource(output: string): string {
+	const called = String(docker.getIn(["on", "workflow_call", "outputs", output, "value"]));
+	const inner = /^\$\{\{ jobs\.images\.outputs\.(?<name>[\w-]+) \}\}$/u.exec(called)?.groups?.name;
+	assert.ok(
+		inner !== undefined,
+		`ci-docker-build.yml's ${output} is not an output of its images job: ${called}`,
+	);
+	const value = String(reusableBuild.getIn(["on", "workflow_call", "outputs", inner, "value"]));
+	const job = /^\$\{\{ jobs\.(?<job>[\w-]+)\.outputs\.(?<name>[\w-]+) \}\}$/u.exec(value)?.groups;
+	assert.ok(
+		job?.job === "merge" && job.name !== undefined,
+		`${inner} is not the manifest job's: ${value}`,
+	);
+	const step = String(reusableBuild.getIn(["jobs", "merge", "outputs", job.name]));
+	const image = /^\$\{\{ steps\.digest\.outputs\.(?<image>[\w-]+) \}\}$/u.exec(step)?.groups?.image;
+	assert.ok(image !== undefined && image in IMAGES, `${job.name} reports no image digest: ${step}`);
+	return image;
+}
+
+// The digest outputs that each consumer reads, anywhere in its job.
+const READS_DIGEST = new Map(
+	["Kubernetes", "Supported-host-smoke", "Release-preflight"].map((name) => [
+		name,
+		[
+			...JSON.stringify(cicd.getIn(["jobs", name])).matchAll(
+				/needs\.Docker\.outputs\.(?<name>[\w-]+)/gu,
+			),
+		].map(({ groups }) => String(groups?.name)),
+	]),
+);
+
+// Every `Docker` output that cicd.yml reads, with the image whose digest it carries.
+const DIGESTS = new Map(
+	[...String(cicd).matchAll(/needs\.Docker\.outputs\.(?<name>[\w-]+)/gu)].map(({ groups }) => {
+		const output = String(groups?.name);
+		return [output, digestSource(output)] as const;
+	}),
+);
 
 const CONSUMERS = ["Kubernetes", "Supported-host-smoke", "Release-preflight"];
 
@@ -278,7 +339,12 @@ const READ = new Set(
 );
 
 /** The consumers each event needs, stated from the run's facts rather than from the workflow. */
-function needed(entry: Case): Record<string, boolean> {
+function needed(entry: Case): Record<string, boolean | undefined> {
+	// A failed package may or may not leave an image missing, by whether the base is aliased; only the
+	// safety assertions judge that run.
+	if (entry.skip === "package-fails") {
+		return {};
+	}
 	const fails = entry.skip === "docker-fails";
 	const builtAtAll =
 		!fails && entry.skip !== "draft" && entry.skip !== "fork" && entry.skip !== "should-skip";
@@ -368,7 +434,11 @@ function run(entry: Case) {
 			evaluate(condition, ["needs", "github"], dictionary({ needs, github })) === "true"
 		);
 	};
-	needs["server-package"] = { result: job("server-package") ? "success" : "skipped" };
+	let packageResult = "skipped";
+	if (job("server-package")) {
+		packageResult = entry.skip === "package-fails" ? "failure" : "success";
+	}
+	needs["server-package"] = { result: packageResult };
 	needs["vulnerability-database"] = {
 		result: job("vulnerability-database") ? "success" : "skipped",
 	};
@@ -415,10 +485,16 @@ function run(entry: Case) {
 			inputs.publish === "true" && selected[image] === true && (reused.has(image) || builds),
 		]),
 	);
-	const present = Object.fromEntries(
+	const aliased = Object.fromEntries(
 		Object.entries(IMAGES).map(([image, changed]) => [
 			image,
-			published[image] === true || (!fails && aliases && inputs[changed] !== "true"),
+			!fails && aliases && inputs[changed] !== "true",
+		]),
+	);
+	const present = Object.fromEntries(
+		Object.keys(IMAGES).map((image) => [
+			image,
+			published[image] === true || aliased[image] === true,
 		]),
 	);
 
@@ -426,22 +502,40 @@ function run(entry: Case) {
 	if (dockerRuns) {
 		dockerResult = fails ? "failure" : "success";
 	}
+	// Each digest output, wired as the workflows wire it, is set when its image is published.
 	needs.Docker = {
 		result: dockerResult,
-		outputs: {
-			"application-server-digest": published["application-server"] === true ? "sha256:digest" : "",
-		},
+		outputs: Object.fromEntries(
+			[...DIGESTS].map(([output, image]) => [
+				output,
+				published[image] === true ? `sha256:${image}` : "",
+			]),
+		),
 	};
 	return {
 		present,
+		published,
+		aliased,
+		built: Object.fromEntries(
+			Object.keys(IMAGES).map((image) => [image, published[image] === true && !reused.has(image)]),
+		),
+		packaged: needs["server-package"].result === "success",
 		expected: needed(entry),
 		consumers: Object.fromEntries(CONSUMERS.map((name) => [name, job(name)])),
+		digests: needs.Docker.outputs ?? {},
 	};
 }
 
 function describeCase(entry: Case): string {
 	return `${entry.event} changing [${entry.paths.join(", ")}], alias base '${entry.aliasBase}', preview '${entry.preview}', release candidate '${entry.releaseCandidate}', queue images ${entry.queueImages}, version bump '${entry.versionBump}', preflight '${entry.preflight}', skip '${entry.skip}'`;
 }
+
+void test("each digest that cicd.yml reads comes from its own image's publication", () => {
+	assert.ok(DIGESTS.size > 0);
+	for (const [output, image] of DIGESTS) {
+		assert.equal(`${image}-digest`, output, `${output} carries the ${image} digest`);
+	}
+});
 
 void test("the step ids this model sets are the workflow's", () => {
 	const steps = cicd.getIn(["jobs", "detect-changes", "steps"]);
@@ -463,15 +557,41 @@ void test("the step ids this model sets are the workflow's", () => {
 void test("a job that installs every image runs exactly when its event needs it and the run has put every image there", () => {
 	const reached = new Set<string>();
 	for (const entry of cases()) {
-		const { present, expected, consumers } = run(entry);
-		for (const [consumer, runs] of Object.entries(consumers)) {
-			assert.equal(
-				runs,
-				expected[consumer],
-				`${consumer} ${runs ? "runs" : "does not run"} on ${describeCase(entry)}`,
+		const { present, published, aliased, built, packaged, expected, consumers, digests } =
+			run(entry);
+		for (const image of Object.keys(IMAGES)) {
+			// An alias would overwrite the tag of the image this run built.
+			assert.ok(
+				!(published[image] === true && aliased[image] === true),
+				`${image} is both built and aliased on ${describeCase(entry)}`,
 			);
+		}
+		assert.ok(
+			built["application-server"] !== true || packaged,
+			`the App Server image is built without a packaged server on ${describeCase(entry)}`,
+		);
+		// A version bump runs the release checks on the push, and they need the packaged server.
+		assert.ok(
+			entry.event !== "push" || entry.versionBump !== "true" || entry.skip !== "" || packaged,
+			`a version-bump push does not package the server: ${describeCase(entry)}`,
+		);
+		for (const [consumer, runs] of Object.entries(consumers)) {
+			if (expected[consumer] !== undefined) {
+				assert.equal(
+					runs,
+					expected[consumer],
+					`${consumer} ${runs ? "runs" : "does not run"} on ${describeCase(entry)}`,
+				);
+			}
 			if (!runs) {
 				continue;
+			}
+			for (const output of READS_DIGEST.get(consumer) ?? []) {
+				assert.notEqual(
+					digests[output],
+					"",
+					`${consumer} runs without ${output} on ${describeCase(entry)}`,
+				);
 			}
 			reached.add(`${consumer} on ${entry.event}`);
 			const missing = Object.entries(present)
