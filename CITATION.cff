@@ -1,0 +1,19 @@
+cff-version: 1.2.0
+message: If you use Hephaestus in your research, please cite it as below.
+type: software
+title: Hephaestus
+abstract: >-
+  Hephaestus reviews the pull requests, issues, and code reviews your team already writes against
+  the engineering practices you choose. It gives each developer feedback that cites their work and
+  names a next step.
+authors:
+  - name: TUM Applied Education Technologies
+    website: https://aet.cit.tum.de/
+repository-code: https://github.com/hephaestus-build/Hephaestus
+url: https://hephaestus.build
+license: MIT
+keywords:
+  - practice-feedback
+  - engineering-practices
+  - developer-feedback
+  - self-hosted
