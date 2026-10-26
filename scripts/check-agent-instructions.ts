@@ -13,6 +13,7 @@
  *   uncommanded — a typed-only skill with no opencode command to type.
  *   unmirrored  — a Codex copy of a skill that has drifted from the Claude Code original.
  *   duplicated  — two agent files with one body.
+ *   oversized   — an `AGENTS.md` chain longer than Codex loads, which cuts the tail off unannounced.
  *   stale       — a contributor document names a repository path or npm package that does not resolve.
  *
  * `unread` runs before all of them and reports this gate's own blind spot: an agent file the
@@ -865,6 +866,36 @@ function duplicated(repo: Repo): readonly string[] {
 }
 
 /**
+ * Codex joins every `AGENTS.md` from the root down to its working directory and stops reading at
+ * `project_doc_max_bytes`, 32 KiB by default (https://developers.openai.com/codex/guides/agents-md).
+ * What falls past the limit is dropped without a warning, and it is always the deepest guide's tail.
+ */
+const CODEX_INSTRUCTION_BYTES = 32 * 1024;
+
+const inChain = (guide: string, ancestor: string): boolean =>
+	dirname(ancestor) === "." || guide.startsWith(`${dirname(ancestor)}/`);
+
+function oversized(repo: Repo): readonly string[] {
+	const bytes = (path: string): number => {
+		const file = readable(repo, path);
+		return file.kind === "text" ? Buffer.byteLength(file.content) : 0;
+	};
+	return repo.guides
+		.map((guide) =>
+			repo.guides
+				.filter((ancestor) => inChain(guide, ancestor))
+				.toSorted((a, b) => a.split("/").length - b.split("/").length),
+		)
+		.map((chain) => ({ chain, total: chain.reduce((sum, path) => sum + bytes(path), 0) }))
+		.filter(({ total }) => total > CODEX_INSTRUCTION_BYTES)
+		.map(
+			({ chain, total }) =>
+				`${chain.join(" + ")} is ${total} bytes, and Codex reads ${CODEX_INSTRUCTION_BYTES}.\n` +
+				"  It drops the rest without a warning. Move detail into the owning doc and point to it.",
+		);
+}
+
+/**
  * `codexSkills` is the repo's intent rather than the algorithm's, so it is supplied rather than
  * assumed: the CLI passes `CODEX_SKILLS`, and a caller reasoning about a snapshot alone passes none.
  */
@@ -882,6 +913,7 @@ export const analyse = (
 		...uncommanded(repo),
 		...unmirrored(repo, codexSkills),
 		...duplicated(repo),
+		...oversized(repo),
 		...staleContributorClaims(repo),
 	];
 };

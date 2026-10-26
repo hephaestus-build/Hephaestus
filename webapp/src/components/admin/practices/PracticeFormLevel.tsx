@@ -12,7 +12,7 @@ export interface PracticeFormLevelProps {
 	children: ReactNode;
 }
 
-/** The practice editor as a drawer level. Guarded — `webapp/AGENTS.md` § Guarded levels. */
+/** The practice editor as a drawer level. Guarded — `webapp/DESIGN.md` § Guarded levels. */
 export function PracticeFormLevel({ creating, nested, path, children }: PracticeFormLevelProps) {
 	return (
 		<>

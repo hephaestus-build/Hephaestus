@@ -13,7 +13,7 @@ import { cn } from "cn";
  * 4. The `shape` axis.
  * 5. `aria-pressed` is styled wherever `aria-expanded` is, in the dark theme too: a pressed toggle
  *    rendered as a Button has to look pressed, and upstream styles only the expanded case.
- * 6. `mentor`, the accent a practice surface carries at most one of — `webapp/AGENTS.md`
+ * 6. `mentor`, the accent a practice surface carries at most one of — `webapp/DESIGN.md`
  *    § Practice surfaces palette owns when a surface may wear it.
  */
 const buttonVariants = cva(

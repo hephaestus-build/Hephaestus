@@ -1,4 +1,4 @@
-// The palette this page and its levels share is `webapp/AGENTS.md` § Practice surfaces palette.
+// The palette this page and its levels share is `webapp/DESIGN.md` § Practice surfaces palette.
 import type { GroupRef, PracticeStanding, ProfileReviewRef } from "@/api/types.gen";
 import type { LoadState } from "@/components/common/panel-state";
 import {

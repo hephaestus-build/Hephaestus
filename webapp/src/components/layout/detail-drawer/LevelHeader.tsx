@@ -40,7 +40,7 @@ export interface LevelHeaderProps {
 
 /**
  * The header of every level a host names with `levelPathAt`: its path, its name, its standing and
- * one line of provenance, in one column so it holds at 320px (`webapp/AGENTS.md` § Panel regions).
+ * one line of provenance, in one column so it holds at 320px (`webapp/DESIGN.md` § Panel regions).
  * A level's actions are its footer, never a column beside the title.
  */
 export function LevelHeader({

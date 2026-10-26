@@ -258,5 +258,6 @@
 	"server/application/src/main/resources/practices/guidance/validates-and-escapes-untrusted-input/guide.md",
 	"server/application/src/main/resources/practices/guidance/validates-inputs-and-edge-cases-at-the-boundary/guide.md",
 	"webapp/AGENTS.md",
-	"webapp/CLAUDE.md"
+	"webapp/CLAUDE.md",
+	"webapp/DESIGN.md"
 ]

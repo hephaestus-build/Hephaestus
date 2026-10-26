@@ -20,7 +20,7 @@ export interface CatalogFormLevelProps {
 	children: ReactNode;
 }
 
-/** An instance-catalog editor as a drawer level. Guarded — `webapp/AGENTS.md` § Guarded levels. */
+/** An instance-catalog editor as a drawer level. Guarded — `webapp/DESIGN.md` § Guarded levels. */
 export function CatalogFormLevel({ kind, nested, path, children }: CatalogFormLevelProps) {
 	return (
 		<>

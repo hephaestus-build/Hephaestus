@@ -24,7 +24,7 @@ export interface FeedbackStateDef extends StatusDef {
 	/**
 	 * The badge's colour where the palette gives the state one beyond its variant: a new card is
 	 * the one thing on the page the eye should land on, so its badge wears the mentor accent
-	 * (`webapp/AGENTS.md` § Practice surfaces palette).
+	 * (`webapp/DESIGN.md` § Practice surfaces palette).
 	 */
 	className?: string;
 	/** The word before the day in the card's footer, where the label does not fit there. */
