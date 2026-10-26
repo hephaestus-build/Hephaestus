@@ -1027,8 +1027,10 @@ Right after a merge, that run is still building, so the pull request builds ever
   A run that builds every image also packages the server for the App Server image. It does so
   even when its diff holds no code, such as a bot's pin bump in `ci-kubernetes.yml`.
   `scripts/ci-image-set.test.ts` evaluates the workflow's own conditions and path filters. It covers
-  every event and every change of up to three representative files. It fails when a job that
-  installs every image can run while no job builds or aliases one of them.
+  every event and every change of up to three representative files. It also covers a push that
+  reuses part of its merge group's images and a dispatch for the release preflight. It covers a
+  fork, a draft with and without its `preview` label, a skipped run and a failed image build. A job that installs every image must run where its event needs it. It must not run while
+  some image is not built, reused or aliased.
 - A Kubernetes cluster leg is named for its distribution, minor and architecture, such as
   `k3s 1.37 amd64`. Its check history thus survives an image update. The job summary names the
   pinned node image. Renovate updates the image within its minor. A new minor is a workflow change.

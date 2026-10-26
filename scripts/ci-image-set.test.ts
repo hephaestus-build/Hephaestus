@@ -6,13 +6,18 @@ import { data, Evaluator, Lexer, Parser } from "@actions/expressions";
 import { Minimatch } from "minimatch";
 import { isMap, isSeq, parseDocument } from "yaml";
 
-// The Kubernetes legs and the host boot smoke install every image under the run's commit. Two jobs
-// put an image there, by building it or by aliasing it, under conditions that differ per event. A
-// combination where neither runs fails only in the run that meets it, often a later pull request's
-// merge group, so this test evaluates the workflow's own conditions for every combination instead.
+// The Kubernetes legs, the host boot smoke and the release preflight install every image under the
+// run's commit. Jobs put an image there by building it, by reusing the merge group's build on a push,
+// or by aliasing it, under conditions that differ per event. A combination where none runs fails only
+// in the run that meets it, often a later pull request's merge group, so this test evaluates the
+// workflow's own conditions for every combination instead. An alias base here is a published commit;
+// resolve-alias-base.test.ts owns whether the resolver returns only such a commit.
 
 const cicd = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
 const docker = parseDocument(await readFile(".github/workflows/ci-docker-build.yml", "utf8"));
+const reusableBuild = parseDocument(
+	await readFile(".github/workflows/reusable-docker-build.yml", "utf8"),
+);
 
 const functions = [
 	{ name: "cancelled", minArgs: 0, maxArgs: 0, call: () => new data.BooleanData(false) },
@@ -134,40 +139,86 @@ function changes(): string[][] {
 	return all;
 }
 
+const ALL_IMAGES = JSON.stringify(Object.keys(IMAGES));
+
 interface Case {
 	event: string;
 	paths: string[];
 	filters: Record<string, string>;
 	aliasBase: string;
 	preview: string;
-	queueComplete: string;
 	releaseCandidate: string;
+	/** On a push, the images that the merge group's run published, as a JSON list. */
+	queueImages: string;
+	versionBump: string;
+	/** A dispatch's `release-preflight` input. */
+	preflight: string;
+	/** A run that builds no image, a draft that builds because of its label, or a failed image build. */
+	skip: "" | "fork" | "draft" | "draft-preview" | "should-skip" | "docker-fails";
 }
 
-// Only a pull request has a `preview` label, a push resolves no alias base but reuses the merge
-// group's images, and only a push asks whether that merge group published every image.
-// A release candidate is the Version PR's branch or a merge group that bumps the version; it builds
-// every image itself, so its alias base does not matter, and its diff holds the version files.
-const SETTINGS = {
-	pull_request: {
+interface Settings {
+	event: string;
+	aliasBase: string[];
+	preview: string[];
+	releaseCandidate: string[];
+	queue: { queueImages: string; versionBump: string }[];
+	preflight: string[];
+	/** The runs that put no image under the commit, each tried on its own. */
+	skips: Case["skip"][];
+}
+
+// Only a pull request has a `preview` label. A push resolves no alias base; it reuses what its merge
+// group published, all of it or a part. A release candidate is the Version PR's branch or a merge
+// group that bumps the version; it builds every image itself, so its alias base does not matter, and
+// its diff holds the version files. A dispatch may ask for the release preflight. A fork publishes
+// nothing, a draft builds only with its `preview` label, a skipped run builds nothing, and a failed
+// build stops every job that needs it.
+const NO_QUEUE = { queueImages: "[]", versionBump: "false" };
+const SETTINGS: Settings[] = [
+	{
+		event: "pull_request",
 		aliasBase: ["", "0123abc"],
 		preview: ["", "true", "false"],
-		queueComplete: [""],
 		releaseCandidate: ["false", "true"],
+		queue: [NO_QUEUE],
+		preflight: ["false"],
+		skips: ["fork", "draft", "draft-preview", "should-skip", "docker-fails"],
 	},
-	merge_group: {
+	{
+		event: "merge_group",
 		aliasBase: ["", "0123abc"],
 		preview: [""],
-		queueComplete: [""],
 		releaseCandidate: ["false", "true"],
+		queue: [NO_QUEUE],
+		preflight: ["false"],
+		skips: ["docker-fails"],
 	},
-	push: {
+	{
+		event: "push",
 		aliasBase: [""],
 		preview: [""],
-		queueComplete: ["true", "false"],
 		releaseCandidate: ["false"],
+		queue: [
+			NO_QUEUE,
+			{ queueImages: JSON.stringify(["application-server"]), versionBump: "false" },
+			{ queueImages: JSON.stringify(["webapp", "agent-pi", "postgres"]), versionBump: "false" },
+			{ queueImages: ALL_IMAGES, versionBump: "false" },
+			{ queueImages: ALL_IMAGES, versionBump: "true" },
+		],
+		preflight: ["false"],
+		skips: ["docker-fails"],
 	},
-};
+	{
+		event: "workflow_dispatch",
+		aliasBase: [""],
+		preview: [""],
+		releaseCandidate: ["false"],
+		queue: [NO_QUEUE],
+		preflight: ["false", "true"],
+		skips: ["docker-fails"],
+	},
+];
 
 function* cases(): Generator<Case> {
 	const changed = changes().map((paths) => ({ paths, filters: filterOutputs(paths) }));
@@ -175,19 +226,34 @@ function* cases(): Generator<Case> {
 		const withVersion = [...new Set([...paths, ...VERSION_FILES])];
 		return { paths: withVersion, filters: filterOutputs(withVersion) };
 	});
-	for (const [event, options] of Object.entries(SETTINGS)) {
-		const settings = options.releaseCandidate.flatMap((releaseCandidate) =>
-			(releaseCandidate === "true" ? [""] : options.aliasBase).flatMap((aliasBase) =>
-				options.preview.flatMap((preview) =>
-					options.queueComplete.map((queueComplete) => ({
-						aliasBase,
-						preview,
-						queueComplete,
-						releaseCandidate,
-					})),
+	for (const { event, aliasBase, preview, releaseCandidate, queue, preflight, skips } of SETTINGS) {
+		const settings: Omit<Case, "event" | "paths" | "filters">[] = releaseCandidate.flatMap(
+			(candidate) =>
+				(candidate === "true" ? [""] : aliasBase).flatMap((base) =>
+					preview.flatMap((label) =>
+						queue.flatMap((reuse) =>
+							preflight.map((evidence) => ({
+								aliasBase: base,
+								preview: label,
+								releaseCandidate: candidate,
+								...reuse,
+								preflight: evidence,
+								skip: "" as const,
+							})),
+						),
+					),
 				),
-			),
 		);
+		for (const skip of skips) {
+			settings.push({
+				aliasBase: aliasBase.at(-1) ?? "",
+				preview: { "should-skip": "false", "draft-preview": "true" }[skip as string] ?? "",
+				releaseCandidate: "false",
+				...NO_QUEUE,
+				preflight: "false",
+				skip,
+			});
+		}
 		for (const setting of settings) {
 			for (const change of setting.releaseCandidate === "true" ? released : changed) {
 				yield { event, ...change, ...setting };
@@ -211,6 +277,24 @@ const READ = new Set(
 		.map(({ groups }) => String(groups?.name)),
 );
 
+/** The consumers each event needs, stated from the run's facts rather than from the workflow. */
+function needed(entry: Case): Record<string, boolean> {
+	const fails = entry.skip === "docker-fails";
+	const builtAtAll =
+		!fails && entry.skip !== "draft" && entry.skip !== "fork" && entry.skip !== "should-skip";
+	const evidence =
+		entry.releaseCandidate === "true" ||
+		(entry.event === "workflow_dispatch" && entry.preflight === "true");
+	return {
+		Kubernetes: builtAtAll && (entry.event === "push" || entry.filters.kubernetes === "true"),
+		"Supported-host-smoke":
+			builtAtAll &&
+			entry.event === "pull_request" &&
+			entry.filters["supported-host-smoke"] === "true",
+		"Release-preflight": !fails && evidence,
+	};
+}
+
 function run(entry: Case) {
 	const github = {
 		event_name: entry.event,
@@ -220,8 +304,14 @@ function run(entry: Case) {
 			pull_request:
 				entry.event === "pull_request"
 					? {
-							draft: false,
-							head: { sha: "head", repo: { full_name: "hephaestus-build/Hephaestus" } },
+							draft: entry.skip === "draft" || entry.skip === "draft-preview",
+							head: {
+								sha: "head",
+								repo: {
+									full_name:
+										entry.skip === "fork" ? "someone/Hephaestus" : "hephaestus-build/Hephaestus",
+								},
+							},
 						}
 					: undefined,
 		},
@@ -230,13 +320,24 @@ function run(entry: Case) {
 		filter: { outputs: entry.filters },
 		alias_base: { outputs: { commit: entry.aliasBase } },
 		opt_in: { outputs: { preview: entry.preview, full: "false" } },
-		queue_run: { outputs: { complete: entry.queueComplete, images: "[]", "run-id": "" } },
+		queue_run: {
+			outputs: {
+				complete: String(entry.queueImages === ALL_IMAGES),
+				images: entry.queueImages,
+				"run-id": entry.queueImages === "[]" ? "" : "1",
+			},
+		},
 		release_candidate: { outputs: { "release-candidate": entry.releaseCandidate } },
-		version_bump: { outputs: { changed: "false" } },
+		version_bump: { outputs: { changed: entry.versionBump } },
+		skip_check: { outputs: { should_skip: String(entry.skip === "should-skip") } },
 	};
 	const declared = cicd.getIn(["jobs", "detect-changes", "outputs"]);
 	assert.ok(isMap(declared));
-	const detection = dictionary({ github, steps, inputs: {} });
+	const detection = dictionary({
+		github,
+		steps,
+		inputs: { "release-preflight": entry.preflight === "true" },
+	});
 	const outputs = Object.fromEntries(
 		declared.items
 			.filter((item) => READ.has(String(item.key)))
@@ -249,12 +350,24 @@ function run(entry: Case) {
 	const needs: Record<string, { result: string; outputs?: Record<string, string> }> = {
 		"detect-changes": { result: "success", outputs },
 	};
-	const job = (name: string) =>
-		evaluate(
-			cicd.getIn(["jobs", name, "if"]),
-			["needs", "github"],
-			dictionary({ needs, github }),
-		) === "true";
+	// A condition without a status function also needs every job it waits for to succeed.
+	const job = (name: string) => {
+		const condition = String(cicd.getIn(["jobs", name, "if"]));
+		const waits = cicd.getIn(["jobs", name, "needs"]);
+		assert.ok(isSeq(waits));
+		const succeeded = waits.items.every((need) => {
+			const result = needs[String(need)]?.result;
+			assert.ok(
+				result !== undefined,
+				`${name} needs ${String(need)}, which this model does not run`,
+			);
+			return result === "success";
+		});
+		return (
+			(/\b(?:always|cancelled|failure|success)\(/u.test(condition) || succeeded) &&
+			evaluate(condition, ["needs", "github"], dictionary({ needs, github })) === "true"
+		);
+	};
 	needs["server-package"] = { result: job("server-package") ? "success" : "skipped" };
 	needs["vulnerability-database"] = {
 		result: job("vulnerability-database") ? "success" : "skipped",
@@ -274,33 +387,89 @@ function run(entry: Case) {
 	const called = dictionary({ inputs, github });
 	const reusable = (path: string[]) =>
 		dockerRuns && evaluate(docker.getIn(path), ["inputs", "github"], called) === "true";
-	const buildsAny = reusable(["jobs", "images", "if"]);
+	const selects = reusable(["jobs", "images", "if"]);
 	const aliases = reusable(["jobs", "tag-unchanged-images", "if"]);
+	// reusable-docker-build.yml's inputs, typed as it declares them, and its build job's condition.
+	const selected = Object.fromEntries(
+		Object.keys(IMAGES).map((image) => [
+			image,
+			selects && reusable(["jobs", "images", "with", image]),
+		]),
+	);
+	const reuseImages = String(inputs.reuse_images);
+	const builds =
+		evaluate(
+			reusableBuild.getIn(["jobs", "build", "if"]),
+			["inputs", "github"],
+			dictionary({ inputs: { ...selected, "reuse-images": reuseImages }, github }),
+		) === "true";
+	const reuseList: unknown = JSON.parse(reuseImages);
+	assert.ok(Array.isArray(reuseList));
+	const reused = new Set<unknown>(reuseList);
+	const fails = entry.skip === "docker-fails";
+	// What the `images` job publishes, the one source of the digest output, and what the alias adds.
+	// A failed run may still have published some of them before a later job failed.
+	const published = Object.fromEntries(
+		Object.keys(IMAGES).map((image) => [
+			image,
+			inputs.publish === "true" && selected[image] === true && (reused.has(image) || builds),
+		]),
+	);
 	const present = Object.fromEntries(
-		Object.entries(IMAGES).map(([image, changed]) => {
-			const built = buildsAny && reusable(["jobs", "images", "with", image]);
-			const aliased = aliases && inputs[changed] !== "true";
-			return [image, built || aliased];
-		}),
+		Object.entries(IMAGES).map(([image, changed]) => [
+			image,
+			published[image] === true || (!fails && aliases && inputs[changed] !== "true"),
+		]),
 	);
 
+	let dockerResult = "skipped";
+	if (dockerRuns) {
+		dockerResult = fails ? "failure" : "success";
+	}
 	needs.Docker = {
-		result: dockerRuns ? "success" : "skipped",
+		result: dockerResult,
 		outputs: {
-			"application-server-digest": present["application-server"] === true ? "sha256:digest" : "",
+			"application-server-digest": published["application-server"] === true ? "sha256:digest" : "",
 		},
 	};
 	return {
 		present,
+		expected: needed(entry),
 		consumers: Object.fromEntries(CONSUMERS.map((name) => [name, job(name)])),
 	};
 }
 
-void test("a job that installs every image of the run runs only when the run has put every image there", () => {
+function describeCase(entry: Case): string {
+	return `${entry.event} changing [${entry.paths.join(", ")}], alias base '${entry.aliasBase}', preview '${entry.preview}', release candidate '${entry.releaseCandidate}', queue images ${entry.queueImages}, version bump '${entry.versionBump}', preflight '${entry.preflight}', skip '${entry.skip}'`;
+}
+
+void test("the step ids this model sets are the workflow's", () => {
+	const steps = cicd.getIn(["jobs", "detect-changes", "steps"]);
+	assert.ok(isSeq(steps));
+	const ids = new Set(steps.items.map((item) => (isMap(item) ? String(item.get("id")) : "")));
+	for (const id of [
+		"filter",
+		"alias_base",
+		"opt_in",
+		"queue_run",
+		"release_candidate",
+		"version_bump",
+		"skip_check",
+	]) {
+		assert.ok(ids.has(id), `detect-changes has no step ${id}`);
+	}
+});
+
+void test("a job that installs every image runs exactly when its event needs it and the run has put every image there", () => {
 	const reached = new Set<string>();
 	for (const entry of cases()) {
-		const { present, consumers } = run(entry);
+		const { present, expected, consumers } = run(entry);
 		for (const [consumer, runs] of Object.entries(consumers)) {
+			assert.equal(
+				runs,
+				expected[consumer],
+				`${consumer} ${runs ? "runs" : "does not run"} on ${describeCase(entry)}`,
+			);
 			if (!runs) {
 				continue;
 			}
@@ -311,7 +480,7 @@ void test("a job that installs every image of the run runs only when the run has
 			assert.deepEqual(
 				missing,
 				[],
-				`${consumer} runs on ${entry.event} changing [${entry.paths.join(", ")}], alias base '${entry.aliasBase}', preview '${entry.preview}', queue complete '${entry.queueComplete}', release candidate '${entry.releaseCandidate}', but nothing puts ${missing.join(", ")} under the commit`,
+				`${consumer} runs on ${describeCase(entry)}, but nothing puts ${missing.join(", ")} under the commit`,
 			);
 		}
 	}
@@ -320,8 +489,10 @@ void test("a job that installs every image of the run runs only when the run has
 		"Kubernetes on merge_group",
 		"Kubernetes on pull_request",
 		"Kubernetes on push",
+		"Kubernetes on workflow_dispatch",
 		"Release-preflight on merge_group",
 		"Release-preflight on pull_request",
+		"Release-preflight on workflow_dispatch",
 		"Supported-host-smoke on pull_request",
 	]);
 });
