@@ -264,7 +264,7 @@ services:
       HEPHAESTUS_AUTH_PASSKEYS_RP_ID:
       HEPHAESTUS_AUTH_PASSKEYS_ALLOWED_ORIGINS:
       HEPHAESTUS_AUTH_STATE_COOKIE_KEY: ${HEPHAESTUS_AUTH_STATE_COOKIE_KEY:?Set HEPHAESTUS_AUTH_STATE_COOKIE_KEY to a Base64-encoded 32-byte key}
-      # First instance super-admin bootstrap (auth-cutover runbook). The admin UI is admin-gated, so
+      # First instance super-admin bootstrap (docs/admin/instance-admin.mdx). The admin UI is admin-gated, so
       # the first APP_ADMIN must come from operator config — comma-separated <provider>:@user or
       # <provider>:<subject>. Optional break-glass token enables POST /auth/bootstrap-admin.
       HEPHAESTUS_AUTH_BOOTSTRAP_ADMINS: ${HEPHAESTUS_AUTH_BOOTSTRAP_ADMINS:-}

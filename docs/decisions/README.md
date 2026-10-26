@@ -8,7 +8,7 @@ New ADRs use the next available number and link from this index.
 
 ## These are repo-only — deliberately not on the docs site
 
-`docs/decisions/`, `docs/runbooks/`, `docs/auth-architecture.md` and `docs/auth-glossary.md` are
+`docs/decisions/`, `docs/auth-architecture.md` and `docs/auth-glossary.md` are
 **not** registered with any Docusaurus plugin and never appear on
 [the site](https://docs.hephaestus.build/). That is a decision, not an oversight. They are
 written against internal class names, they are amended by the same PR that changes the code, and
@@ -34,8 +34,8 @@ Two rules follow, and CI enforces the second one:
    `https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/<file>.md`. Relative links
    *between* files in this tree are fine — they are only ever read on GitHub.
 
-An operator-facing fact must not live only here. If a runbook step is something a self-hoster has to
-do, its home is the Admin Guide (`docs/admin/`) and the runbook links to it.
+An operator-facing fact must not live only here. If a self-hoster has to do a step, its home is the
+Admin Guide (`docs/admin/`), and the ADR links to it.
 
 | # | Title | Status |
 |---|---|---|

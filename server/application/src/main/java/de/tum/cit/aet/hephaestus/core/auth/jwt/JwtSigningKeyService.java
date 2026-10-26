@@ -123,14 +123,14 @@ public class JwtSigningKeyService implements JWKSource<SecurityContext> {
      * best-effort {@link #ensureActiveKey()} bootstrap) and re-enforced at key materialization
      * ({@link #toJwk}) so a deferred first-issuance can never sign with an unsealed key either.
      * A freshly generated key in prod is always sealed, so this only trips on a legacy/misconfigured
-     * row, which must be rotated out before deploying (ADR 0017 / auth-cutover runbook).
+     * row, which must be rotated out before deploying (ADR 0017).
      */
     public void assertProdKeysSealed() {
         if (isProd() && hasUnsealedActiveKey()) {
             throw new IllegalStateException(
                     "Active JWT signing key is stored unsealed (encryption_key_id=" + UNSEALED_KEY_ID
                             + "). Hephaestus refuses to operate in prod because a database read would let an attacker forge any token. "
-                            + "Rotate the legacy row out before deploying (ADR 0017 / auth-cutover runbook).");
+                            + "Rotate the legacy row out before deploying (ADR 0017).");
         }
     }
 

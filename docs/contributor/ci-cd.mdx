@@ -547,11 +547,8 @@ A deploy starts `app`, then `core`, then `proxy`.
 The [database migration](/admin/runtime-roles#database-migrations) in `app` applies the schema that the webhook runtime in `core` waits for.
 The edge starts last, against complete routers. The pull reconciler applies this order.
 
-The `proxy` stack publishes :80 and :443. If the host already has an edge, set `DEPLOY_EDGE_PROXY=false`.
-This omits `proxy` from both render and deploy. Anything else, including an unset variable, deploys all
-three.
-
-Staging sets it because Coolify's proxy on its host holds both ports.
+The `proxy` stack publishes :80 and :443.
+If another proxy on the host already holds both ports, leave `proxy` out of `HEPHAESTUS_STACKS`.
 A second edge would fail the deploy because a port is already allocated.
 
 ## The `preview` label

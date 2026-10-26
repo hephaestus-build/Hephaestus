@@ -100,7 +100,7 @@ main() {
   # Legal profile sanity check: an invalid or unbundled value silently falls
   # through to the built-in disclaimer, which is a § 5 DDG / Art. 13 GDPR
   # violation if served in production. Emit a discoverable WARN so operators
-  # notice in `docker logs` / Coolify / kubectl logs.
+  # notice in `docker logs` / kubectl logs.
   if [[ -n "${LEGAL_PROFILE:-}" ]]; then
     local profiles_dir="${HTML_DIR}/legal/profiles"
     if [[ ! "$LEGAL_PROFILE" =~ $LEGAL_PROFILE_PATTERN ]]; then
