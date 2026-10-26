@@ -166,6 +166,7 @@ import {
 } from "./work/practice-scripts/lib/core/practice-script.ts";
 import {
 	notReached as notReachedOutcome,
+	requiredSources,
 	runPracticeProgram,
 	type PracticeProgram,
 	type ProgramOutcome,
@@ -1919,12 +1920,10 @@ export async function runReviewJob(): Promise<void> {
 		if (assignedInputs.get(slug)?.scope.kind === "SCAN") {
 			return [];
 		}
-		const declared = new Set(
-			practiceIndex.find((practice) => practice.slug === slug)?.readsSources,
+		return requiredSources(
+			practiceIndex.find((practice) => practice.slug === slug)?.readsSources ?? [],
+			sourceFileSources,
 		);
-		return [...sourceFileSources]
-			.filter(([, kind]) => kind !== TREE_SOURCE && declared.has(kind))
-			.map(([sourcePath, sourceKind]) => ({ sourceKind, sourcePath }));
 	}
 
 	function jobFiles(inputs: PracticeInputs, evidence: EvidenceSources): JobFiles | null {

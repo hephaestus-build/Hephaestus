@@ -17,6 +17,7 @@ import {
 	type Citation,
 	type Coverage,
 	type Omission,
+	type Outcome,
 	type ParsedSessionCandidate,
 	type ProgramCalls,
 	type SessionCandidate,
@@ -70,6 +71,17 @@ export interface ProgramOutcome {
 export interface RequiredSource {
 	sourceKind: string;
 	sourcePath: string;
+}
+
+/** The captured sources, other than the tree, that the practice declares in its reads. */
+export function requiredSources(
+	declared: Iterable<string>,
+	captured: Iterable<readonly [sourcePath: string, sourceKind: string]>,
+): RequiredSource[] {
+	const reads = new Set(declared);
+	return [...captured]
+		.filter(([, kind]) => kind !== TREE_SOURCE && reads.has(kind))
+		.map(([sourcePath, sourceKind]) => ({ sourceKind, sourcePath }));
 }
 
 export const programDigest = (source: Buffer): string =>
@@ -158,14 +170,18 @@ export async function runPracticeProgram(
 	services: ProgramServices & { receipts: Receipts; requiredSources: readonly RequiredSource[] },
 ): Promise<ProgramOutcome> {
 	const started = Date.now();
-	/** The coverage each review of this practice returned: the only host coverage its candidate may carry. */
-	const returned = new Set<string>();
+	/**
+	 * The coverage each review of this practice returned, with the outcomes it returned it for: the only
+	 * host coverage its candidate may carry.
+	 */
+	const returned = new Map<string, Set<Outcome>>();
 	const sessionReadReceipts: ReadReceipt[] = [];
 	const hosted: ProgramServices = {
 		...services,
 		review: async (options, signal) => {
 			const candidate = await services.review(options, signal);
-			returned.add(JSON.stringify(candidate.coverage));
+			const key = JSON.stringify(candidate.coverage);
+			returned.set(key, (returned.get(key) ?? new Set()).add(candidate.outcome));
 			if (candidate.coverage.source === "host") {
 				sessionReadReceipts.push(...candidate.coverage.receipts);
 			}
@@ -258,34 +274,18 @@ export async function runPracticeProgram(
 			error: "a scan citation is outside its frozen context",
 		});
 	}
-	const omitted: Omission[] =
+	const coverage = hostCoverage(
+		reviewed,
 		reviewed === null
 			? unreadSources(citations, services.requiredSources, readReceipts, job.files?.change != null)
-			: [...(reviewed.complete ? [] : reviewed.omitted)];
-	if (services.receipts.truncatedReads > 0) {
-		omitted.push({
-			what: "script reads cut short",
-			count: services.receipts.truncatedReads,
-			reason: "truncated",
-		});
-	}
-	if (services.receipts.failedReads > 0) {
-		omitted.push({
-			what: "script reads that failed",
-			count: services.receipts.failedReads,
-			reason: "unavailable",
-		});
-	}
-	const base = {
-		source: "host" as const,
-		reads: (reviewed?.reads ?? 0) + services.receipts.reads,
-		truncatedReads: (reviewed?.truncatedReads ?? 0) + services.receipts.truncatedReads,
-		failedReads: (reviewed?.failedReads ?? 0) + services.receipts.failedReads,
-		receipts: readReceipts,
-	};
-	const coverage =
-		omitted.length === 0 ? { ...base, complete: true } : { ...base, complete: false, omitted };
-	if (reviewed === null && shaped.outcome === "DOES_NOT_APPLY" && !coverage.complete) {
+			: [],
+		services.receipts,
+		readReceipts,
+	);
+	// A review may decide Does not apply on incomplete coverage; code may not, even on a review's coverage.
+	const reviewDecided =
+		reviewed !== null && returned.get(JSON.stringify(reviewed))?.has(shaped.outcome) === true;
+	if (!reviewDecided && shaped.outcome === "DOES_NOT_APPLY" && !coverage.complete) {
 		return finished("failed", "invalid-candidate", {
 			error: "a Does not apply that code decided needs complete coverage",
 		});
@@ -404,4 +404,42 @@ function unreadSources(
 		});
 	}
 	return omitted;
+}
+
+/** The coverage the host attaches: the review's, or none, with the script's own reads added to it. */
+function hostCoverage(
+	reviewed: Extract<Coverage, { source: "host" }> | null,
+	unread: readonly Omission[],
+	script: Receipts,
+	receipts: readonly ReadReceipt[],
+): Extract<Coverage, { source: "host" }> {
+	const omitted: Omission[] = [
+		...unread,
+		...(reviewed === null || reviewed.complete ? [] : reviewed.omitted),
+	];
+	if (script.truncatedReads > 0) {
+		omitted.push({
+			what: "script reads cut short",
+			count: script.truncatedReads,
+			reason: "truncated",
+		});
+	}
+	if (script.failedReads > 0) {
+		omitted.push({
+			what: "script reads that failed",
+			count: script.failedReads,
+			reason: "unavailable",
+		});
+	}
+	const base = {
+		source: "host" as const,
+		reads: (reviewed?.reads ?? 0) + script.reads,
+		truncatedReads: (reviewed?.truncatedReads ?? 0) + script.truncatedReads,
+		failedReads: (reviewed?.failedReads ?? 0) + script.failedReads,
+		receipts,
+	};
+	const [first, ...rest] = omitted;
+	return first === undefined
+		? { ...base, complete: true }
+		: { ...base, complete: false, omitted: [first, ...rest] };
 }

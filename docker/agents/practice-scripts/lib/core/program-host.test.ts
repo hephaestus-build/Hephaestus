@@ -30,6 +30,7 @@ import {
 	runPracticeProgram,
 	type PracticeProgram,
 	type ProgramOutcome,
+	type RequiredSource,
 } from "./program-host.ts";
 import { InputReader } from "./script-inputs.ts";
 import { ProgramSettlementError, RETURN_MS } from "./script-run.ts";
@@ -139,6 +140,7 @@ interface RunOptions {
 	budget?: ModelBudget;
 	signal?: AbortSignal;
 	deadlineMs?: number;
+	requiredSources?: RequiredSource[];
 }
 
 async function run(ws: Workspace, slug: string, options: RunOptions = {}) {
@@ -176,7 +178,7 @@ async function run(ws: Workspace, slug: string, options: RunOptions = {}) {
 				logs.push(line.replace(/^\s*\[[^\]]*\] /u, ""));
 			},
 			receipts,
-			requiredSources: [],
+			requiredSources: options.requiredSources ?? [],
 		},
 	);
 	return { outcome, reviews, logs, staged };
@@ -212,6 +214,23 @@ const slowReview = (ms: number) => async () => {
 	await sleep(ms);
 	return REVIEWED;
 };
+
+/** A program that cites the change, and reads the core record first when `read` is set. */
+const decidesFromTheChange = (read: boolean) =>
+	program(
+		"definePracticeScript",
+		`{ meta: {}, run: async (ctx) => {
+				${read ? 'await ctx.evidence.record("metadata.json");' : ""}
+				const found = await scm(ctx).files?.change?.cite("src/cart.ts", "NEW", 2);
+				return {
+					outcome: "MET",
+					summary: "Met",
+					explanation: "The change shows the practice.",
+					citations: [found],
+					evidence: {},
+				};
+			} }`,
+	);
 
 void describe("a practice's result", () => {
 	void test("a custom program that decides in code returns its own result and asks for no review", async () => {
@@ -308,6 +327,55 @@ void describe("a practice's result", () => {
 		assert.equal(outcome.status, "failed");
 		assert.equal(outcome.stopReason, "invalid-candidate");
 		assert.match(outcome.error ?? "", /complete coverage/u);
+	});
+
+	void test("code cannot turn a review's Could not determine into Does not apply after a failed read", async () => {
+		const ws = await workspace({
+			rides: program(
+				"definePracticeScript",
+				`{ meta: {}, run: async (ctx) => {
+					const reviewed = await ctx.review({});
+					await ctx.evidence.record("..").catch(() => undefined);
+					return {
+						outcome: "DOES_NOT_APPLY",
+						summary: "No user interface changes",
+						explanation: "The program replaced the review's outcome.",
+						citations: reviewed.citations,
+						evidence: {
+							inapplicability: {
+								consulted: ["scm.pull-request.core"],
+								prerequisite: "user interface files",
+								ruledOutBy: "No changed file is a view.",
+							},
+						},
+						coverage: reviewed.coverage,
+					};
+				} }`,
+			),
+		});
+		const { outcome } = await run(ws, "rides");
+		assert.equal(outcome.status, "failed");
+		assert.equal(outcome.stopReason, "invalid-candidate");
+		assert.match(outcome.error ?? "", /complete coverage/u);
+	});
+
+	void test("code gets no MET until it reads each source that its practice requires", async () => {
+		const ws = await workspace({
+			unread: decidesFromTheChange(false),
+			read: decidesFromTheChange(true),
+		});
+		const requiredSources = [
+			{ sourceKind: "scm.pull-request.core", sourcePath: "context/metadata.json" },
+		];
+		const unread = await run(ws, "unread", { requiredSources });
+		assert.equal(unread.outcome.status, "failed");
+		assert.match(unread.outcome.error ?? "", /^met_coverage_incomplete:/u);
+		const read = await run(ws, "read", { requiredSources });
+		assert.equal(read.outcome.status, "ok", read.outcome.error);
+		assert.partialDeepStrictEqual(read.outcome.candidate, {
+			outcome: "MET",
+			coverage: { source: "host", complete: true },
+		});
 	});
 
 	void test("code that ignored a failed read keeps its Not met, with incomplete coverage", async () => {
