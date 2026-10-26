@@ -86,8 +86,9 @@ jobs:
       # found and docs/contributor/ci-cd.mdx the rule.
       alias-base: ${{ steps.alias_base.outputs.commit }}
       # A release candidate publishes its complete image set under its own commit identity.
-      # Ordinary PRs can reuse unchanged images when their base has published artifacts.
-      all-images: ${{ steps.alias_base.outputs.commit == '' || steps.release_candidate.outputs.release-candidate == 'true' }}
+      # Ordinary PRs can reuse unchanged images when their base has published artifacts. A merge
+      # group aliases nothing, so one that runs the Kubernetes legs builds every image they install.
+      all-images: ${{ steps.alias_base.outputs.commit == '' || steps.release_candidate.outputs.release-candidate == 'true' || (github.event_name == 'merge_group' && steps.filter.outputs.kubernetes == 'true') }}
       # A push and a dispatch validate a commit whole; a pull request and a merge group are each a
       # diff, which paths-filter reads for a group from `merge_group.base_sha..head_sha` without
       # being told.
@@ -1046,8 +1047,8 @@ jobs:
           node ../../scripts/sandbox-isolation-probe.ts --env-file .env --env-file smoke-lock.env
 
   # The chart on real clusters with this run's images, when the chart or the sandbox runtime changed,
-  # and on every main commit. `Docker` puts every image under the head commit's tag, by building it or
-  # by aliasing the base image; a fork publishes none, so there is nothing to install.
+  # and on every main commit. `Docker` puts every image under the head commit's tag, by building it or,
+  # in a pull request, by aliasing the base image; a fork publishes none, so there is nothing to install.
   Kubernetes:
     needs: [detect-changes, Docker]
     if: >-

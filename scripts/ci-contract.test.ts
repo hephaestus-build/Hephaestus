@@ -2145,9 +2145,14 @@ void describe("CI contract", () => {
 			"server-tests runs the suites for every unfiltered event",
 		);
 
-		assert.doesNotMatch(
-			String(workflow.getIn(["jobs", "detect-changes", "outputs", "all-images"])),
-			/event_name/u,
+		// The image set may name one event, the merge group, whose Kubernetes legs install every image.
+		assert.deepEqual(
+			[
+				...String(workflow.getIn(["jobs", "detect-changes", "outputs", "all-images"])).matchAll(
+					/github\.event_name (?<operator>[!=]=) '(?<event>\w+)'/gu,
+				),
+			].map(({ groups }) => `${String(groups?.operator)} ${String(groups?.event)}`),
+			["== merge_group"],
 		);
 		// The caller owns which commit a run is a diff from; `ci-build.yml` derives nothing from
 		// the event.
@@ -3327,7 +3332,7 @@ void describe("CI contract", () => {
 		const complete = String(workflow.getIn([...detection, "outputs", "all-images"]));
 		assert.match(
 			complete,
-			/^\$\{\{ steps\.alias_base\.outputs\.commit == '' \|\| steps\.release_candidate\.outputs\.release-candidate == 'true' \}\}$/u,
+			/^\$\{\{ steps\.alias_base\.outputs\.commit == '' \|\| steps\.release_candidate\.outputs\.release-candidate == 'true' \|\| \(github\.event_name == 'merge_group' && steps\.filter\.outputs\.kubernetes == 'true'\) \}\}$/u,
 		);
 		// A run builds every image when it resolved no commit to alias from, so which events can
 		// resolve one is read from the resolver's own condition rather than restated here.
@@ -3411,6 +3416,22 @@ void describe("CI contract", () => {
 				`${image} must not re-test the event its caller already decided on`,
 			);
 		}
+
+		// Only a pull request aliases, so a merge group that runs the Kubernetes legs, which install
+		// every image under the run's commit, must build them all.
+		assert.match(alias, /github\.event_name == 'pull_request'/u);
+		assert.match(
+			String(workflow.getIn([...detection, "outputs", "kubernetes"])),
+			/^\$\{\{ steps\.filter\.outputs\.kubernetes \}\}$/u,
+		);
+		assert.match(
+			String(workflow.getIn(["jobs", "Kubernetes", "if"])),
+			/\(github\.event_name == 'push' \|\| needs\.detect-changes\.outputs\.kubernetes == 'true'\)/u,
+		);
+		assert.match(
+			complete,
+			/\(github\.event_name == 'merge_group' && steps\.filter\.outputs\.kubernetes == 'true'\)/u,
+		);
 	});
 
 	void test("rescans main's images weekly and reports drift to an issue, not a status", async () => {
