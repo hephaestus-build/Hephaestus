@@ -30,6 +30,7 @@ import de.tum.cit.aet.hephaestus.agent.handler.EvidenceSnapshotFixtures;
 import de.tum.cit.aet.hephaestus.agent.handler.RuntimeReviewTestData;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobPreparationException;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
+import de.tum.cit.aet.hephaestus.agent.handler.spi.ReviewSourceNotReadyException;
 import de.tum.cit.aet.hephaestus.agent.practice.PracticeAgentRequest;
 import de.tum.cit.aet.hephaestus.agent.practice.PracticePiAdapter;
 import de.tum.cit.aet.hephaestus.agent.practice.PracticeSandboxSpec;
@@ -185,6 +186,74 @@ class ReviewJobExecutorTest extends BaseUnitTest {
         verify(recovery).retryUnadmitted(any(), eq("worker-1"), anyBoolean());
         verify(jobs, never()).transitionStatusOwnedBy(any(), eq(ReviewJobStatus.FAILED), any(), any(), any(), anyInt());
         verify(jobs, never()).recordInitializationFailure(any(), anyLong(), anyInt(), any(), any());
+        assertThat(requeued("sandbox")).isEqualTo(1);
+        assertThat(requeued("preparation")).isZero();
+    }
+
+    @Test
+    void shouldCountARequeueAsPreparationWhenTheSourceIsNotReadyBeforeTheSandboxStarts() {
+        var job = configuredJob();
+        recovery = mock(ReviewJobRecovery.class);
+        when(recovery.retryUnadmitted(any(), eq("worker-1"), anyBoolean())).thenReturn(true);
+        when(jobs.findByIdQueuedForUpdateSkipLocked(any(), any())).thenReturn(Optional.of(job));
+        when(jobs.findById(job.getId())).thenReturn(Optional.of(job));
+        when(policy.permitsReview(job)).thenReturn(true);
+        var binding = mock(WorkspaceAgentBinding.class);
+        when(binding.getDataHandlingTier()).thenReturn(DataHandlingTier.UNDECLARED);
+        when(binding.getMaxConcurrentJobs()).thenReturn(1);
+        when(policy.binding(job)).thenReturn(Optional.of(binding));
+        when(budgets.decide(job.getWorkspaceId())).thenReturn(LlmBudgetDecision.ALLOWED);
+        when(assignments.load(job)).thenReturn(List.of(RuntimeReviewTestData.assignment(null, null)));
+        when(handler.prepareInputs(job)).thenThrow(new ReviewSourceNotReadyException("not captured yet"));
+        var pool = mock(AsyncTaskExecutor.class);
+        doAnswer(invocation -> {
+                    Runnable work = invocation.getArgument(0);
+                    work.run();
+                    return null;
+                })
+                .when(pool)
+                .execute(any(Runnable.class));
+
+        assertThat(executor(pool).processJob(job.getId())).isEqualTo(ReviewJobExecutor.StartOutcome.STARTED);
+
+        verify(sandbox, never()).execute(any());
+        assertThat(requeued("preparation")).isEqualTo(1);
+        assertThat(requeued("sandbox")).isZero();
+    }
+
+    @Test
+    void shouldCountARequeueAsServerUnreachableWhenTheSandboxCouldNotReachTheGateway() {
+        assertThat(requeuedAfterExit(SandboxLayout.EXIT_SERVER_UNREACHABLE, "server_unreachable"))
+                .isEqualTo(1);
+        assertThat(requeued("provider_unreachable")).isZero();
+    }
+
+    @Test
+    void shouldCountARequeueAsProviderUnreachableWhenNoModelCallWasAnswered() {
+        assertThat(requeuedAfterExit(SandboxLayout.EXIT_PROVIDER_UNREACHABLE, "provider_unreachable"))
+                .isEqualTo(1);
+        assertThat(requeued("server_unreachable")).isZero();
+    }
+
+    private double requeuedAfterExit(int exitCode, String cause) {
+        var job = owedJob();
+        recovery = mock(ReviewJobRecovery.class);
+        when(recovery.retryUnadmitted(any(), eq("worker-1"), anyBoolean())).thenReturn(true);
+        var executor = runExecutor(
+                mock(ReviewCompositionContinuation.class),
+                new SandboxResult(exitCode, Map.of(), "", false, Duration.ofSeconds(1)),
+                false);
+
+        assertThat(executor.executePrepared(job.getId(), job, mock(SandboxSpec.class)))
+                .isNull();
+        return requeued(cause);
+    }
+
+    private double requeued(String cause) {
+        return meters.get("agent.job.infra.retry.requeued")
+                .tag("cause", cause)
+                .counter()
+                .count();
     }
 
     @Test

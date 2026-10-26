@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.core.webhook;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -53,7 +54,8 @@ class JetStreamPublisherRetryTest extends BaseUnitTest {
                         .intervalFunction(IntervalFunction.of(Duration.ofMillis(1)))
                         .failAfterMaxAttempts(true)
                         .build());
-        JetStreamPublisher publisher = new JetStreamPublisher(jetStream, retry, properties, new SimpleMeterRegistry());
+        var meters = new SimpleMeterRegistry();
+        JetStreamPublisher publisher = new JetStreamPublisher(jetStream, retry, properties, meters);
         PublishRequest request = new PublishRequest(
                 "gitlab.org.repo.push", "gitlab-x", Map.of("Nats-Msg-Id", "gitlab-x"), new byte[] {1});
 
@@ -63,5 +65,38 @@ class JetStreamPublisherRetryTest extends BaseUnitTest {
 
         verify(jetStream, times(properties.publish().maxRetries()))
                 .publishAsync(any(String.class), any(Headers.class), any(byte[].class), any(PublishOptions.class));
+        assertThat(published(meters, "gitlab", "failure")).isEqualTo(1);
+        assertThat(published(meters, "gitlab", "success")).isZero();
+    }
+
+    @Test
+    void shouldCountAStoredDeliveryUnderItsStream() {
+        JetStream jetStream = mock(JetStream.class);
+        when(jetStream.publishAsync(
+                        any(String.class), any(Headers.class), any(byte[].class), any(PublishOptions.class)))
+                .thenReturn(CompletableFuture.completedFuture(mock(PublishAck.class)));
+        var meters = new SimpleMeterRegistry();
+        JetStreamPublisher publisher = new JetStreamPublisher(jetStream, Retry.ofDefaults("test"), properties, meters);
+
+        publisher.publish(new PublishRequest(
+                "github.org.repo.push", "github-x", Map.of("Nats-Msg-Id", "github-x"), new byte[] {1}));
+
+        assertThat(published(meters, "github", "success")).isEqualTo(1);
+        assertThat(published(meters, "gitlab", "success")).isZero();
+    }
+
+    @Test
+    void shouldTagASubjectOutsideTheKnownStreamsAsOther() {
+        assertThat(JetStreamPublisher.streamTag("slack.team.message")).isEqualTo("slack");
+        assertThat(JetStreamPublisher.streamTag("unknown.x")).isEqualTo("other");
+        assertThat(JetStreamPublisher.streamTag("nodot")).isEqualTo("other");
+    }
+
+    private static double published(SimpleMeterRegistry meters, String stream, String outcome) {
+        return meters.get("webhook.publish")
+                .tag("stream", stream)
+                .tag("outcome", outcome)
+                .counter()
+                .count();
     }
 }

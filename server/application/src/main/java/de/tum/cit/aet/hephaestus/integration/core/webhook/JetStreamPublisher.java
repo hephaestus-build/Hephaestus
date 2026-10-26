@@ -35,8 +35,7 @@ public class JetStreamPublisher {
     private final JetStream jetStream;
     private final Retry retry;
     private final WebhookProperties properties;
-    private final Counter successCounter;
-    private final Counter failureCounter;
+    private final MeterRegistry meterRegistry;
     private final Counter retryCounter;
     private final Phaser inFlight = new Phaser(1);
 
@@ -44,15 +43,41 @@ public class JetStreamPublisher {
         this.jetStream = jetStream;
         this.retry = retry;
         this.properties = properties;
-        this.successCounter = Counter.builder(IntegrationCoreMetrics.WEBHOOK_PUBLISH)
-                .tag("outcome", "success")
-                .register(meterRegistry);
-        this.failureCounter = Counter.builder(IntegrationCoreMetrics.WEBHOOK_PUBLISH)
-                .tag("outcome", "failure")
-                .register(meterRegistry);
+        this.meterRegistry = meterRegistry;
+        // Registered up front, so a rate over a stream that received nothing yet reads 0, not no data.
+        for (String stream : WebhookJetStreamBootstrap.STREAMS) {
+            published(meterRegistry, stream, SUCCESS);
+            published(meterRegistry, stream, FAILURE);
+        }
         this.retryCounter =
                 Counter.builder(IntegrationCoreMetrics.WEBHOOK_PUBLISH_RETRY).register(meterRegistry);
         retry.getEventPublisher().onRetry(event -> retryCounter.increment());
+    }
+
+    private static final String SUCCESS = "success";
+    private static final String FAILURE = "failure";
+    private static final String OTHER_STREAM = "other";
+
+    private static Counter published(MeterRegistry meterRegistry, String stream, String outcome) {
+        return Counter.builder(IntegrationCoreMetrics.WEBHOOK_PUBLISH)
+                .description("Webhook deliveries that the broker stored, or did not store in time, by stream")
+                .tag("stream", stream)
+                .tag("outcome", outcome)
+                .register(meterRegistry);
+    }
+
+    /** The stream as a bounded tag value: a subject outside the known streams counts as {@code other}. */
+    static String streamTag(String subject) {
+        int firstDot = subject.indexOf('.');
+        String prefix = firstDot <= 0 ? "" : subject.substring(0, firstDot);
+        for (String stream : WebhookJetStreamBootstrap.STREAMS) {
+            if (stream.equals(prefix)) return stream;
+        }
+        return OTHER_STREAM;
+    }
+
+    private void count(PublishRequest request, String outcome) {
+        published(meterRegistry, streamTag(request.subject()), outcome).increment();
     }
 
     public void publish(PublishRequest request) {
@@ -62,9 +87,9 @@ public class JetStreamPublisher {
                             retry,
                             () -> publishOnce(request, properties.publish().timeout()))
                     .call();
-            successCounter.increment();
+            count(request, SUCCESS);
         } catch (Exception e) {
-            failureCounter.increment();
+            count(request, FAILURE);
             throw new PublishFailedException(
                     "Failed to publish webhook to NATS after retries: subject=" + request.subject(), e);
         } finally {
@@ -76,9 +101,9 @@ public class JetStreamPublisher {
         inFlight.register();
         try {
             publishOnce(request, timeout);
-            successCounter.increment();
+            count(request, SUCCESS);
         } catch (Exception e) {
-            failureCounter.increment();
+            count(request, FAILURE);
             throw new PublishFailedException("Failed to publish webhook to NATS: subject=" + request.subject(), e);
         } finally {
             inFlight.arriveAndDeregister();
