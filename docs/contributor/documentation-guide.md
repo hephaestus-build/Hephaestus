@@ -70,6 +70,7 @@ page_type: how-to
 - `title` is the page title. Do not write a `#` heading in the body. Docusaurus shows the title as the heading.
 - `description` is one sentence of at most 160 characters. Search results and link previews show it.
 - Do not set `id`. The file name is the ID.
+- Add other Docusaurus keys, such as `sidebar_label`, only when the page needs them.
 - The first paragraph follows the front matter. No heading, image, or callout comes before it.
 
 ### Overview
@@ -80,7 +81,7 @@ page_type: how-to
 
 ### Tutorial
 
-- **Title:** the result, as a verb phrase, such as `Get started` or `First steps`.
+- **Title:** the start that the reader makes, such as `Getting started` or `First steps`.
 - **First paragraph:** what the reader has at the end.
 - **Sections:**
   1. `## Before you start`: the accounts, access, and tools that the reader needs.
@@ -182,8 +183,8 @@ GitLab: "Use them sparingly, and never have an alert box immediately follow anot
 
 ## Files and names
 
-- Put a page at `docs/<guide>/<name>.md`. The name is the subject in kebab-case, such as `backup-restore`. Do not repeat the guide name.
-- Use `<name>.mdx` only for a page that uses a component.
+- Put a new page at `docs/<guide>/<name>.md`. The name is the subject in kebab-case, such as `backup-restore`. Do not repeat the guide name.
+- Use `<name>.mdx` for a new page only if it uses a component. Docusaurus reads both extensions as MDX, so existing pages keep their extension.
 - Add the page to its guide's sidebar, `docs/sidebars.<guide>.ts`, in the category of its task.
 - Do not rename a published page in a content change. A rename breaks links from outside the site. Rename pages only in a change to the guide's structure.
 - Do not put a date in a file name. A page states the current behavior. Git keeps the history.
@@ -201,15 +202,19 @@ Do these steps before you open a pull request that changes a page:
 
 `gate:docs-pages` checks these rules in the user guide:
 
-- Each page has a `title`, a `description` of at most 160 characters, and a `page_type` that the guide allows.
+- Each page has a `title`, a `description` of at most 160 characters, and a `page_type` that the guide allows. No page sets an `id`.
 - No page has a `#` heading in its body.
-- A tutorial has numbered steps and a `Next steps` section. A how-to page has numbered steps and a `Check that it worked` section.
-- A `Troubleshooting` section is the last section.
 - No section uses a name from the "Do not use" column.
 - Only a reference page links to the contributor guide.
 - No inline code names a repository command or a source path.
 
-In the admin and contributor guides, the gate checks a declared `page_type` and the callout types.
+In every guide, the gate checks these rules:
+
+- A declared `page_type` is one that the guide allows.
+- A tutorial has numbered steps and a `Next steps` section. A how-to page has numbered steps and a `Check that it worked` section.
+- A `Troubleshooting` section is the last section.
+- A callout is a note, a tip, or a caution.
+
 A guide gets the full check after all its pages declare a type.
 Vale checks the sentences, as the [writing standard](./simplified-technical-english.md#machine-checks-and-human-review) describes.
 

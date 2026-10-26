@@ -36,6 +36,28 @@ await describe("checkPage", async () => {
 
 	await test("ignores headings and commands inside fenced code", () => {
 		assert.deepEqual(check(feature("Text.\n\n```sh\n# a comment\nvp run dev\n```")), []);
+		assert.deepEqual(check(feature("````md\n```sh\n# a comment\n```\n````\n\n# Heading")), [
+			"page.md:13: Remove the # heading. The front matter title is the page heading.",
+		]);
+		assert.deepEqual(check(feature("```\n```sh\n# a comment\n```")), []);
+	});
+
+	await test("reports front matter that does not parse, or a field that is not text", () => {
+		const unparsed = check(page("title: [unclosed", "Text."));
+		assert.equal(unparsed.length, 1);
+		assert.match(unparsed[0] ?? "", /^page\.md:1: Fix the front matter: /u);
+		assert.ok(
+			check(page("title: 2026\ndescription: B.\npage_type: feature", "Text.")).includes(
+				"page.md:1: Write the title as text.",
+			),
+		);
+	});
+
+	await test("rejects an id, because the file name is the ID", () => {
+		assert.deepEqual(
+			check(page("id: activity\ntitle: A\ndescription: B.\npage_type: feature", "Text.")),
+			["page.md:1: Remove the id. The file name is the ID."],
+		);
 	});
 
 	await test("names the section a synonym stands for", () => {
@@ -59,16 +81,21 @@ await describe("checkPage", async () => {
 		assert.deepEqual(check(source.replace("Text.", "1. Sign in.\n\n## Next steps")), []);
 	});
 
-	await test("asks a how-to page for the check of its result", () => {
-		const source = page("title: Rotate\ndescription: Rotate.\npage_type: how-to", "1. Rotate.");
-		assert.ok(
-			check(source).includes('page.md:6: A how-to page needs a "Check that it worked" section.'),
-		);
+	await test("holds a declared type to its template in a guide that is not fully checked", () => {
+		const source = page("page_type: how-to", "1. Rotate the key.");
+		assert.deepEqual(check(source, "admin"), [
+			'page.md:4: A how-to page needs a "Check that it worked" section.',
+		]);
+		assert.deepEqual(check("1. Rotate the key.", "admin"), []);
 	});
 
 	await test("sends a user page's reader to the user or admin guide, not the contributor guide", () => {
 		const link = "See [the pipeline](/contributor/practice-review-pipeline).";
-		assert.equal(check(feature(link)).length, 1);
+		assert.deepEqual(check(feature(link)), [
+			"page.md:7: Link the user or admin guide. Only a reference page cites the contributor guide.",
+		]);
+		assert.equal(check(feature("[pipeline]: ../contributor/practice-review-pipeline")).length, 1);
+		assert.equal(check(feature('<a href="/contributor/ci-cd">CI</a>')).length, 1);
 		assert.deepEqual(check(page("title: A\ndescription: B.\npage_type: reference", link)), []);
 	});
 
@@ -83,5 +110,6 @@ await describe("checkPage", async () => {
 		assert.deepEqual(check("Text.\n\n:::warning[Careful]\nText.\n:::", "contributor"), [
 			'page.md:3: Use a note, tip or caution callout, not "warning".',
 		]);
+		assert.equal(check("::::info\nText.\n::::", "admin").length, 1);
 	});
 });

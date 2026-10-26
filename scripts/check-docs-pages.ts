@@ -1,8 +1,4 @@
-/**
- * The page rules of `docs/contributor/documentation-guide.md` that a machine can hold. A guide in
- * `FULLY_CHECKED` answers to all of them; the others only to the ones every page already meets, until
- * each of their pages declares a `page_type`.
- */
+/** The page rules of `docs/contributor/documentation-guide.md` that a machine can hold. */
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { parse } from "yaml";
@@ -16,6 +12,7 @@ const PAGE_TYPES: Record<Guide, readonly string[]> = {
 	admin: ["overview", "tutorial", "how-to", "reference", "explanation", "troubleshooting"],
 	contributor: ["overview", "how-to", "reference", "explanation"],
 };
+// Every page of these guides declares a type, so each page answers to every rule.
 const FULLY_CHECKED = new Set<Guide>(["user"]);
 
 const CALLOUTS = new Set(["note", "tip", "caution"]);
@@ -42,7 +39,8 @@ const MAX_DESCRIPTION = 160;
 // What a user cannot run or open: the repository's commands and its top-level source trees.
 const REPOSITORY_TOOLING =
 	/^(?:vp|pnpm|npm|npx|\.\/gradlew|gradlew)\s|^(?:server|webapp|extension|docs|scripts|deploy|docker|\.github)\//u;
-const CONTRIBUTOR_LINK = /\]\((?:\.\.\/|\/)contributor\//u;
+// An inline link, a reference definition or an HTML anchor whose target is in the contributor guide.
+const CONTRIBUTOR_LINK = /(?:\]\(|\]:\s+|href=["'])(?:[^)\s"']*\/)?contributor\//u;
 
 interface Line {
 	number: number;
@@ -52,16 +50,22 @@ interface Line {
 /** Splits a page into its front matter and the body lines outside fenced code. */
 function readPage(source: string): {
 	frontMatter: unknown;
+	frontMatterError?: string;
 	frontMatterLines: number;
 	body: Line[];
 } {
 	const lines = source.split(/\r?\n/u);
 	let frontMatterLines = 0;
 	let frontMatter: unknown = undefined;
+	let frontMatterError: string | undefined;
 	if (lines[0] === "---") {
 		const end = lines.indexOf("---", 1);
 		if (end > 0) {
-			frontMatter = parse(lines.slice(1, end).join("\n"));
+			try {
+				frontMatter = parse(lines.slice(1, end).join("\n"));
+			} catch (error) {
+				frontMatterError = error instanceof Error ? error.message : String(error);
+			}
 			frontMatterLines = end + 1;
 		}
 	}
@@ -71,7 +75,10 @@ function readPage(source: string): {
 		if (index < frontMatterLines) {
 			continue;
 		}
-		const marker = /^\s*(?<fence>`{3,}|~{3,})/u.exec(text)?.groups?.fence;
+		// A closing fence has no info string and is at least as long as the opening one.
+		const marker = (
+			fence === undefined ? /^\s*(?<fence>`{3,}|~{3,})/u : /^\s*(?<fence>`{3,}|~{3,})\s*$/u
+		).exec(text)?.groups?.fence;
 		if (marker !== undefined && (fence === undefined || marker.startsWith(fence))) {
 			fence = fence === undefined ? marker : undefined;
 			continue;
@@ -80,14 +87,17 @@ function readPage(source: string): {
 			body.push({ number: index + 1, text });
 		}
 	}
-	return { frontMatter, frontMatterLines, body };
+	return { frontMatter, frontMatterError, frontMatterLines, body };
 }
 
-function field(frontMatter: unknown, key: string): string | undefined {
-	if (typeof frontMatter !== "object" || frontMatter === null) {
-		return undefined;
-	}
-	const value: unknown = Reflect.get(frontMatter, key);
+function field(frontMatter: unknown, key: string): unknown {
+	return typeof frontMatter === "object" && frontMatter !== null
+		? Reflect.get(frontMatter, key)
+		: undefined;
+}
+
+function textField(frontMatter: unknown, key: string): string | undefined {
+	const value = field(frontMatter, key);
 	return typeof value === "string" ? value : undefined;
 }
 
@@ -99,17 +109,21 @@ interface Problem {
 function frontMatterProblems(frontMatter: unknown, guide: Guide): Problem[] {
 	const problems: Problem[] = [];
 	const report = (message: string) => problems.push({ line: 1, message });
-	if (field(frontMatter, "title") === undefined) {
-		report("Add a title to the front matter.");
+	for (const key of ["title", "description", "page_type"]) {
+		const value = field(frontMatter, key);
+		if (value === undefined || value === null) {
+			const choices = key === "page_type" ? `: ${PAGE_TYPES[guide].join(", ")}` : "";
+			report(`Add a ${key} to the front matter${choices}.`);
+		} else if (typeof value !== "string") {
+			report(`Write the ${key} as text.`);
+		}
 	}
-	const description = field(frontMatter, "description");
-	if (description === undefined) {
-		report("Add a description to the front matter.");
-	} else if (description.length > MAX_DESCRIPTION) {
+	const description = textField(frontMatter, "description");
+	if (description !== undefined && description.length > MAX_DESCRIPTION) {
 		report(`Shorten the description to ${MAX_DESCRIPTION} characters (${description.length}).`);
 	}
-	if (field(frontMatter, "page_type") === undefined) {
-		report(`Add a page_type to the front matter: ${PAGE_TYPES[guide].join(", ")}.`);
+	if (field(frontMatter, "id") !== undefined) {
+		report("Remove the id. The file name is the ID.");
 	}
 	return problems;
 }
@@ -165,9 +179,12 @@ function sectionProblems(body: Line[], firstLine: number, pageType?: string): Pr
 }
 
 export function checkPage(file: string, guide: Guide, source: string): string[] {
-	const { frontMatter, frontMatterLines, body } = readPage(source);
+	const { frontMatter, frontMatterError, frontMatterLines, body } = readPage(source);
+	if (frontMatterError !== undefined) {
+		return [`${file}:1: Fix the front matter: ${frontMatterError}`];
+	}
 	const problems: Problem[] = [];
-	const pageType = field(frontMatter, "page_type");
+	const pageType = textField(frontMatter, "page_type");
 	if (pageType !== undefined && !PAGE_TYPES[guide].includes(pageType)) {
 		problems.push({
 			line: 1,
@@ -175,7 +192,7 @@ export function checkPage(file: string, guide: Guide, source: string): string[] 
 		});
 	}
 	for (const { number, text } of body) {
-		const callout = /^\s*:::(?<type>\w+)/u.exec(text)?.groups?.type;
+		const callout = /^\s*:{3,}(?<type>\w+)/u.exec(text)?.groups?.type;
 		if (callout !== undefined && !CALLOUTS.has(callout)) {
 			problems.push({
 				line: number,
@@ -187,8 +204,10 @@ export function checkPage(file: string, guide: Guide, source: string): string[] 
 		problems.push(
 			...frontMatterProblems(frontMatter, guide),
 			...body.flatMap((line) => lineProblems(line, guide, pageType)),
-			...sectionProblems(body, frontMatterLines + 1, pageType),
 		);
+	}
+	if (FULLY_CHECKED.has(guide) || pageType !== undefined) {
+		problems.push(...sectionProblems(body, frontMatterLines + 1, pageType));
 	}
 	return problems.map(({ line, message }) => `${file}:${line}: ${message}`);
 }
