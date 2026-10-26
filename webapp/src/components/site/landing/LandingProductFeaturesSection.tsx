@@ -1,3 +1,4 @@
+import { PRODUCT_FEATURES } from "@/components/site/product-features";
 import { ProductFeatureList } from "@/components/site/ProductFeatureList";
 
 export function LandingProductFeaturesSection() {
@@ -10,7 +11,7 @@ export function LandingProductFeaturesSection() {
 				>
 					Features
 				</h2>
-				<ProductFeatureList />
+				<ProductFeatureList features={PRODUCT_FEATURES} />
 			</div>
 		</section>
 	);

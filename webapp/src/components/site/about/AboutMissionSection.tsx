@@ -1,4 +1,5 @@
 import { InstitutionalAttribution } from "@/components/layout/InstitutionalAttribution";
+import { PRODUCT_FEATURES } from "@/components/site/product-features";
 import { ProductFeatureList } from "@/components/site/ProductFeatureList";
 
 export function AboutMissionSection() {
@@ -30,7 +31,7 @@ export function AboutMissionSection() {
 
 			<div>
 				<h2 className="mb-6 text-2xl font-bold">Features</h2>
-				<ProductFeatureList />
+				<ProductFeatureList features={PRODUCT_FEATURES} />
 			</div>
 
 			<div>

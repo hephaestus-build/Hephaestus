@@ -19,7 +19,7 @@ const faqItems = [
 	{
 		key: "feedback-location",
 		q: "Where does feedback appear?",
-		a: "It can appear on the work itself, on your private practice profile, or in your next conversation with Heph. Feedback on the work waits for a workspace admin’s approval by default. Admins choose which repositories are connected. You can carry on the conversation in the web app or, when Slack is connected, in a direct message.",
+		a: "It can appear on the work itself, on each developer’s private practice page, or in your next conversation with Heph. Feedback on the work waits for a workspace admin’s approval by default. Admins choose which repositories are connected. You can carry on the conversation in the web app or, when Slack is connected, in a direct message.",
 	},
 	{
 		key: "heph-conversation",

@@ -9,7 +9,7 @@ describe("LandingFaqSection", () => {
 		const user = userEvent.setup();
 		render(<LandingFaqSection />);
 		await user.click(screen.getByRole("button", { name: "Where does feedback appear?" }));
-		const answer = await screen.findByText(/on your private practice profile/u);
+		const answer = await screen.findByText(/on each developer’s private practice page/u);
 		expect(answer.textContent).toContain("waits for a workspace admin’s approval by default");
 	});
 
