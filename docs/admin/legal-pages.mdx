@@ -365,7 +365,7 @@ Use Art. 13 GDPR as the outline. Hephaestus processes personal data in at least 
 - **Identity and authentication** — Hephaestus-native auth federates to GitHub / LRZ GitLab.
   Each federated identity stores the provider, stable subject id, login, email-at-signup, and display name (ADR 0017).
 - **Repository synchronization** — each configured repository supplies pull/merge requests, issues, reviews, review comments, commit metadata, and author profile information.
-  The notice must state the retention triggers in the [record of processing](./dsms/record-of-processing.md).
+  The notice must state the retention triggers that [Data retention](./data-retention) lists.
   The mirror is erased when the last workspace stops monitoring the source repository.
   Disconnection of the workspace's integration or a workspace purge also erases it.
 - **Account settings and email notifications** — user preferences and the provider-verified primary email address for account-security and deletion email.
@@ -393,7 +393,6 @@ contractual safeguards rather than inferring coverage from a provider's brand.
 When it is on, a workspace admin can publish the activity of the workspace's public repositories to anyone.
 The page lists members and outside contributors who never signed in.
 Each person can hide.
-The [DPIA pre-screen](./dsms/dpia-prescreen.md#reassessment-the-public-activity-page) gives the TUM reasoning.
 
 Before you turn on the setting:
 

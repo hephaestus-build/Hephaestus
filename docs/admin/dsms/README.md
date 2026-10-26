@@ -2,20 +2,16 @@
 id: dsms
 sidebar_position: 3
 title: Data-Protection Documentation
-description: Art. 30 / Art. 35 / Art. 28 records and source-governance controls for the TUM-operated deployment.
+description: What an operator records under Arts. 28, 30 and 35 GDPR, and the source-governance and personal-data controls that Hephaestus ships.
 ---
 
 # Hephaestus — Data-Protection Documentation
 
-This package describes the shipped processing and the TUM deployment record.
-Self-hosters must complete their own record before they collect data.
-Do not assume that the TUM identity, public-task basis, or institutional agreements apply to another operator.
+This package describes the processing that Hephaestus ships.
+Each operator completes its own record of processing before it collects data.
+Do not assume that another operator's identity, legal basis, or institutional agreements apply to your deployment.
 A setting, a source-use decision, or a successful test cannot establish a legal basis.
-None of these proves that a deployment follows this record.
-
-The TUM public notice contains no placeholders.
-Its publication does not record a DPO or institutional approval, and the full DPIA is still open (see the [screen](./dpia-prescreen.md)).
-[#1377](https://github.com/hephaestus-build/Hephaestus/issues/1377) still owns the release action.
+None of these proves that a deployment follows its record.
 
 ## Before collecting data
 
@@ -29,7 +25,7 @@ Do not publish unresolved placeholders as a valid privacy notice.
 | Responsibility | `[controller name, address, representative, privacy contact, DPO where applicable]`. Identify any joint controllers and their actual arrangement. An admin role alone does not establish Art. 26 status. |
 | Purpose and lawful basis | `[basis and necessity per purpose and data-subject group]`, including people who never sign in, employees, students, incidental third parties, and research participants. Terms acceptance and the AI choice do not supply this basis. Research uses a broad consent to an area of research. Record `[research organization, research information page URL or contact, retention criterion, removal procedure, privacy contact]`. The [research prerequisites](../legal-pages.mdx#what-operators-must-do) decide whether an ethics vote is needed. |
 | Information duties | `[how and when people receive the Art. 13/14 notice]`, including source-only contributors and Slack participants. Record any claimed Art. 14 exception and its safeguards. A footer link alone does not prove that you meet this duty. |
-| Risk | `[full DPIA reference, owner, measures, residual risk and controller decision]`. The [screen](./dpia-prescreen.md) indicates a full DPIA for the current combined scope. |
+| Risk | `[full DPIA reference, owner, measures, residual risk and controller decision]`. The combined source scope indicates a full DPIA. |
 | Recipients and transfers | `[exact providers, roles, regions, contracts, subprocessors, transfer safeguards, renewal dates]`, using the [processor checklist](./processor-checklist.md). |
 | Retention | `[duration or review/deletion trigger for every category]`, including stores with no automatic expiry, active Slack threads, unavailable repositories, exports, suppression keys, logs and backups. |
 | Security and recovery | `[access owners, key management, backup destination and expiry, restore test, incident response and breach procedure]`. Verify the configured stack. Source code does not prove operational controls. |
@@ -89,14 +85,12 @@ They do not redact every name, secret, or third-party detail in source text.
 
 | File | Purpose |
 |---|---|
-| [`record-of-processing.md`](./record-of-processing.md) | Art. 30 record. TOMs (Art. 32) folded in under Art. 30(1)(g). Fenced blocks paste-ready into the TUM DSMS form. |
-| [`dpia-prescreen.md`](./dpia-prescreen.md) | Art. 35 pre-screen. Indicates a full DPIA. Records the pending controller/DPO determination, safeguards, and change freeze. Covers the research purpose and the reasoning for one research consent. Reassesses the new audiences: Practices across the workspace and the public activity page. |
-| [`processor-checklist.md`](./processor-checklist.md) | Art. 28 checklist. Per-processor AVV status. LRZ-as-separate-controller analysis. |
+| [`record-of-processing.md`](./record-of-processing.md) | Art. 30 template: each element with the placeholders that the operator fills in, and the pages that describe what Hephaestus does. |
+| [`processor-checklist.md`](./processor-checklist.md) | Art. 28 checklist: the recipients to assess and the evidence to record for each. |
 | [`item-source-governance.md`](./item-source-governance.md) | Approval, minimization, processor-egress, retention, and erasure gate for every AI-readable source. |
 | [`personal-data-map.md`](./personal-data-map.md) | Personal-data stores, export coverage, erasure paths, residual retention, and their verification. Includes how withdrawal reaches research copies. |
-| [`tum-privacy-notice-changes.md`](./tum-privacy-notice-changes.md) | Changes to the TUM public notice for sorted activity, the public activity page and workspace addresses. The legal reviewer approves each wording. |
 
-The live imprint and privacy pages are at https://hephaestus.build/imprint and https://hephaestus.build/privacy. Markdown source: [`webapp/public/legal/profiles/tumaet/`](https://github.com/hephaestus-build/Hephaestus/tree/main/webapp/public/legal/profiles/tumaet).
+[Data retention](../data-retention.mdx) lists the retention period of each category that Hephaestus stores.
 
 ## Maintenance
 
@@ -105,15 +99,9 @@ This includes a new processor, source, or source combination.
 It also includes changes to purpose, audience, data category, retention window, or identity provider.
 Activation of an integration that the latest review does not cover also requires review.
 
-The DPIA pre-screen requires a recorded controller/DPO determination before material source expansion.
-The amendment triggers are in `processor-checklist.md`, `dpia-prescreen.md` §5–§6, and `item-source-governance.md`.
+Record a controller or DPO determination in your DPIA before a material source expansion.
+The amendment triggers are in `processor-checklist.md` and `item-source-governance.md`.
 
 A change to the research wording needs a new notice version.
 Every account then answers once more, because an earlier yes to narrower wording does not carry over.
 Update the records in this package in the same change.
-
-## Contacts
-
-- TUM DPO: [beauftragter@datenschutz.tum.de](mailto:beauftragter@datenschutz.tum.de).
-- Hephaestus operational contact: [ls1.admin@in.tum.de](mailto:ls1.admin@in.tum.de).
-- TUM DSMS portal: https://dsms.datenschutz.tum.de/ (reachable from MWN / eduVPN with TUM login).

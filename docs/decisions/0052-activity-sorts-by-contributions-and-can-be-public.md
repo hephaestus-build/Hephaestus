@@ -173,7 +173,7 @@ There is no email, no banner and no notice period.
   Each review counts once for each pull request, and each count opens its list.
   Thus, the gaming is visible to every reader.
 - The public sees who did the most work in public repositories.
-  The [DPIA pre-screen](../admin/dsms/dpia-prescreen.md) reassesses this audience.
+  The DPIA pre-screen of the TUM deployment reassesses this audience. It moved to the maintainers' operations records.
   The TUM data-protection coordinator confirms it before a TUM workspace goes public.
 - Hiding is from the public, not from the workspace.
   Members still see a hidden person, so an admin can find who is hidden by a comparison.
