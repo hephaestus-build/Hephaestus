@@ -1,33 +1,10 @@
-# CODEOWNERS - Defines code ownership for automatic review assignment
+# Code ownership for automatic review requests.
 # Docs: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
 
-# Default owners for everything in the repo
 * @hephaestus-build/maintainer
 
-# Release management and CI/CD
-.github/                         @hephaestus-build/maintainer
-.changeset/                      @hephaestus-build/maintainer
-CHANGELOG.md                     @hephaestus-build/maintainer
-commitlint.config.ts             @hephaestus-build/maintainer
-renovate.json                    @hephaestus-build/maintainer
-
-# Application Server (Java/Spring)
-server/       @hephaestus-build/maintainer
-
-# Auth / identity (Account, IdentityLink, JWT issuance, oauth2Login) — see ADR 0017
+# Auth and identity: ADR 0017.
 server/application/src/main/java/de/tum/cit/aet/hephaestus/core/auth/   @FelixTJDietrich @hephaestus-build/maintainer
-docs/decisions/0017-replace-keycloak-with-spring-native-auth.md   @FelixTJDietrich
-docs/auth-glossary.md            @FelixTJDietrich
-docs/auth-architecture.md        @FelixTJDietrich
-docs/runbooks/auth-cutover.md    @FelixTJDietrich
-
-# Webapp (React/TypeScript)
-webapp/                          @hephaestus-build/maintainer
-
-# Documentation
-docs/                            @hephaestus-build/maintainer
-
-# Infrastructure
-docker/                          @hephaestus-build/maintainer
-**/Dockerfile                    @hephaestus-build/maintainer
-**/docker-compose*.yml           @hephaestus-build/maintainer
+docs/decisions/0017-replace-keycloak-with-spring-native-auth.md          @FelixTJDietrich @hephaestus-build/maintainer
+docs/auth-glossary.md                                                     @FelixTJDietrich @hephaestus-build/maintainer
+docs/auth-architecture.md                                                 @FelixTJDietrich @hephaestus-build/maintainer

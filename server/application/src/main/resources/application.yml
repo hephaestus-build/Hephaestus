@@ -169,7 +169,7 @@ spring:
             document-locations: classpath:graphql/github/operations/
 
     # Graceful shutdown drains in-flight requests before terminating; pairs with server.shutdown
-    # below. Coolify's default stop-grace is 10s — bump to 30s in the deploy substrate.
+    # below. The container's stop grace (the chart's terminationGracePeriodSeconds) must exceed it.
     lifecycle:
         timeout-per-shutdown-phase: ${SHUTDOWN_TIMEOUT:20s}
 

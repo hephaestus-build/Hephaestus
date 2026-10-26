@@ -8,7 +8,7 @@ New ADRs use the next available number and link from this index.
 
 ## These are repo-only — deliberately not on the docs site
 
-`docs/decisions/`, `docs/runbooks/`, `docs/auth-architecture.md` and `docs/auth-glossary.md` are
+`docs/decisions/`, `docs/auth-architecture.md` and `docs/auth-glossary.md` are
 **not** registered with any Docusaurus plugin and never appear on
 [the site](https://docs.hephaestus.build/). That is a decision, not an oversight. They are
 written against internal class names, they are amended by the same PR that changes the code, and

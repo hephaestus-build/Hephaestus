@@ -110,7 +110,7 @@ public class WorkerTokenExchangeController {
 
     /**
      * Prefer the left-most {@code X-Forwarded-For} entry when the request came through a
-     * reverse proxy (Coolify / Traefik / Nginx). Falls back to the raw socket peer. Without
+     * reverse proxy (an ingress controller, Traefik or Nginx). Falls back to the raw socket peer. Without
      * this, the per-IP rate limit is a per-proxy rate limit and one bad actor exhausts the
      * counter for the entire fleet.
      */

@@ -16,7 +16,7 @@
 {
 	"$schema": "https://raw.githubusercontent.com/DavidAnson/markdownlint-cli2/main/schema/markdownlint-cli2-config-schema.json",
 
-	// `decisions/` (every ADR) and `runbooks/` are mounted by no Docusaurus plugin, so the site
+	// `decisions/` (every ADR) is mounted by no Docusaurus plugin, so the site
 	// build never compiles them and never link-checks them — the linter is their only gate.
 	"globs": ["**/*.md", "**/*.mdx", "../load-tests/**/*.md"],
 	// `venv/` is a Docusaurus contributor's Python environment for the diagram tooling. It is

@@ -541,7 +541,7 @@ The `proxy` stack publishes :80 and :443. If the host already has an edge, set `
 This omits `proxy` from both render and deploy. Anything else, including an unset variable, deploys all
 three.
 
-Staging sets it because Coolify's proxy on its host holds both ports.
+Set it when another proxy on the host holds both ports.
 A second edge would fail the deploy because a port is already allocated.
 
 ## The `preview` label

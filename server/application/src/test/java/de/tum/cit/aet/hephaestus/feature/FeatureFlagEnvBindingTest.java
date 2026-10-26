@@ -44,7 +44,7 @@ class FeatureFlagEnvBindingTest extends BaseUnitTest {
     }
 
     /**
-     * Adding the short-name placeholder must not have cost anyone the long name: a Kubernetes or Coolify
+     * Adding the short-name placeholder must not have cost anyone the long name: a Kubernetes or Compose
      * deployment that already sets {@code HEPHAESTUS_FEATURES_FLAGS_GITLAB_WORKSPACE_CREATION} directly
      * keeps working, and keeps winning over the placeholder's default, because an env var outranks a
      * config file.

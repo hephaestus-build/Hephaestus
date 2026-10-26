@@ -30,7 +30,7 @@ No emoji, no single-letter ids, and no `graph` — it is a deprecated alias for 
 
 ## What is deliberately *not* published
 
-`decisions/`, `runbooks/`, `auth-architecture.md` and `auth-glossary.md` are repo-only reference
+`decisions/`, `auth-architecture.md` and `auth-glossary.md` are repo-only reference
 material — no plugin serves them, and they are read on GitHub. See
 [`decisions/README.md`](decisions/README.md) for why, and for the rule that a published page links
 into them by absolute GitHub URL rather than a relative path.

@@ -342,9 +342,7 @@ They override the bundled profile, if present, and the safety-fallback.
    The webapp container runs as UID 101.
    Make the directory and the files readable by that user, for example with mode `0755` for the directory and `0644` for the files.
 
-3. On Coolify, add `/usr/share/nginx/html/legal-overrides` as a **Bind Mount**, not a Volume.
-   The files remain editable from the host filesystem.
-   The webapp checks file paths on each request.
+3. The webapp checks file paths on each request.
    Thus, you can update the files in the mount without a redeploy.
 
 Resolution is per page: a single-file override leaves the other page on the next available layer. Verify both pages identify the correct operator.

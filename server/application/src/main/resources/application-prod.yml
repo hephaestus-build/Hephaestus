@@ -19,7 +19,7 @@ spring:
     # <provider>:@username or <provider>:<subject>, e.g. gitlab:@m.mustermann,github:1234567) —
     # promoted to APP_ADMIN on login; optional one-time
     # HEPHAESTUS_AUTH_BOOTSTRAP_TOKEN enables the break-glass POST /auth/bootstrap-admin.
-    # See ADR 0017 + docs/runbooks/auth-cutover.md (First instance admin).
+    # See ADR 0017 and docs/admin/instance-admin.mdx § Bootstrap and recovery.
 
     # Belt-and-suspenders: the spring-boot-docker-compose jar ships in the image (it powers the
     # local profile), and Boot's default is enabled=true. Prod brings infra up via docker/compose.*
