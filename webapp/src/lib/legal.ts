@@ -7,20 +7,7 @@ export const LEGAL_PAGE_TITLES: Record<LegalPageId, string> = {
 
 export interface ResolvedLegalContent {
 	markdown: string;
-	source: "override" | "profile" | "disclaimer";
-	profile: string;
-}
-
-// Profile names are joined into a URL path on the webapp origin, so we accept
-// only the character class we ship filesystem directories in. Anything else
-// (whitespace, `..`, `/`, ...) falls through to the disclaimer, mirroring the
-// "unset profile" case — the resolver never constructs an unexpected URL.
-// Kept in sync with webapp/docker/entrypoint.sh — a unit test pins the pair.
-export const LEGAL_PROFILE_PATTERN_SOURCE = "^[a-z0-9][a-z0-9_-]{0,31}$";
-const PROFILE_PATTERN = new RegExp(LEGAL_PROFILE_PATTERN_SOURCE, "u");
-
-export function isValidLegalProfile(profile: string): boolean {
-	return PROFILE_PATTERN.test(profile);
+	source: "override" | "disclaimer";
 }
 
 // Restrict hyperlink protocols in operator-supplied markdown. `javascript:`,
@@ -44,14 +31,10 @@ interface Candidate {
 	source: ResolvedLegalContent["source"];
 }
 
-function buildCandidates(page: LegalPageId, profile: string): Candidate[] {
-	const candidates: Candidate[] = [{ url: `/legal-overrides/${page}.md`, source: "override" }];
-	if (profile) {
-		candidates.push({ url: `/legal/profiles/${profile}/${page}.md`, source: "profile" });
-	}
-	candidates.push({ url: `/legal/_disclaimer/${page}.md`, source: "disclaimer" });
-	return candidates;
-}
+const candidates = (page: LegalPageId): Candidate[] => [
+	{ url: `/legal-overrides/${page}.md`, source: "override" },
+	{ url: `/legal/_disclaimer/${page}.md`, source: "disclaimer" },
+];
 
 async function tryFetch(url: string, signal?: AbortSignal): Promise<string | null> {
 	let response: Response;
@@ -88,15 +71,12 @@ async function tryFetch(url: string, signal?: AbortSignal): Promise<string | nul
 
 export async function resolveLegalContent(
 	page: LegalPageId,
-	options: { signal?: AbortSignal; profile?: string } = {},
+	options: { signal?: AbortSignal } = {},
 ): Promise<ResolvedLegalContent> {
-	const raw = (options.profile ?? "").trim();
-	const profile = isValidLegalProfile(raw) ? raw : "";
-	const candidates = buildCandidates(page, profile);
-	for (const candidate of candidates) {
+	for (const candidate of candidates(page)) {
 		const markdown = await tryFetch(candidate.url, options.signal);
 		if (markdown !== null) {
-			return { markdown, source: candidate.source, profile };
+			return { markdown, source: candidate.source };
 		}
 	}
 	// The disclaimer cascade terminates every call; reaching this line means the

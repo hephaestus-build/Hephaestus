@@ -664,6 +664,8 @@ For one host, use [Install on one host (k3s)](#install-on-one-host-k3s).
 3. Write your values file, `site.yaml`, with `host`, `trustedProxies`, `secret.name`, `postgresql.tls.existingSecret`, `route.parentRefs`, and `networkPolicy.gateway` with its pod labels.
    Add `config.github.oauthClientId` and `config.auth.bootstrapAdmins`, as [First steps § 1 and § 2](./first-steps) describe.
    Do not set `release` or `images`: the release chart sets them.
+   For a public instance, create the ConfigMap with your legal pages and name it in `webapp.legalOverrides`, as [Legal pages](./legal-pages#deployment-specific-overrides) describes.
+   The webapp Pod waits for a ConfigMap that it names.
 4. Enable reviews.
    `small.yaml` enables the worker, and the chart does not render it without the sandbox namespace and the Kubernetes API endpoint.
    Find the endpoint that the network plugin sees:

@@ -55,8 +55,6 @@ spec:
               value: {{ printf "https://%s" .Values.host | quote }}
             - name: APPLICATION_SERVER_URL
               value: {{ printf "https://%s/api" .Values.host | quote }}
-            - name: LEGAL_PROFILE
-              value: {{ .Values.webapp.legalProfile | quote }}
             - name: SECURITY_CONTACT
               value: {{ .Values.webapp.securityContact | quote }}
             - name: DEPLOYMENT_ENVIRONMENT
@@ -93,7 +91,17 @@ spec:
             # stay read-only.
             - name: runtime
               mountPath: /tmp/hephaestus-webapp
+            {{- with .Values.webapp.legalOverrides }}
+            - name: legal-overrides
+              mountPath: /usr/share/nginx/html/legal-overrides
+              readOnly: true
+            {{- end }}
       volumes:
         - name: runtime
           emptyDir:
             sizeLimit: 16Mi
+        {{- with .Values.webapp.legalOverrides }}
+        - name: legal-overrides
+          configMap:
+            name: {{ . | quote }}
+        {{- end }}

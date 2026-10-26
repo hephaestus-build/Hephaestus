@@ -616,6 +616,29 @@ await test("the webapp takes its security contact from one URI value", () => {
 	}
 });
 
+await test("the webapp serves the operator's legal pages from a ConfigMap, read-only", () => {
+	const webapp = workload(
+		rendered([...layersFor("small"), { webapp: { legalOverrides: "site-legal" } }]),
+		"webapp",
+	);
+	assert.deepEqual(get(container(webapp), "volumeMounts"), [
+		{ name: "runtime", mountPath: "/tmp/hephaestus-webapp" },
+		{
+			name: "legal-overrides",
+			mountPath: "/usr/share/nginx/html/legal-overrides",
+			readOnly: true,
+		},
+	]);
+	assert.deepEqual(get(podSpec(webapp), "volumes", 1), {
+		name: "legal-overrides",
+		configMap: { name: "site-legal" },
+	});
+	assert.match(
+		render([...layersFor("small"), { webapp: { legalOverrides: "../etc" } }]).stderr,
+		/legalOverrides/u,
+	);
+});
+
 await test("the route attaches to the platform Gateway and strips only /api", () => {
 	const resources = rendered(layersFor("small"));
 	const routes = resources.filter((resource) => kindOf(resource) === "HTTPRoute");

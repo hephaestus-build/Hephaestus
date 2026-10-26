@@ -2,7 +2,6 @@ import { type AnchorHTMLAttributes, type ImgHTMLAttributes, useEffect, useState 
 import { Streamdown } from "streamdown";
 
 import { MarkdownCode } from "@/components/common/MarkdownCode";
-import environment from "@/environment";
 import {
 	isSafeLegalHref,
 	isSafeLegalImageSrc,
@@ -12,7 +11,7 @@ import {
 } from "@/lib/legal";
 
 const DISCLAIMER_BANNER =
-	"This deployment has not been configured with a legal profile. The content below is a placeholder and does not identify the operator of this instance.";
+	"This deployment has not published its own legal pages. The content below is a placeholder and does not identify the operator of this instance.";
 
 const ERROR_COPY = "We could not load this page. Reload to try again.";
 
@@ -49,34 +48,25 @@ export interface LegalPageProps {
 	page: LegalPageId;
 	title: string;
 	resolver?: typeof resolveLegalContent;
-	profileOverride?: string;
 }
 
-export function LegalPage({
-	page,
-	title,
-	resolver = resolveLegalContent,
-	profileOverride,
-}: LegalPageProps) {
-	const profile = profileOverride ?? environment.legal.profile;
-
+export function LegalPage({ page, title, resolver = resolveLegalContent }: LegalPageProps) {
 	return (
 		<div className="mx-auto flex max-w-4xl flex-col gap-4">
 			<h1 className="text-3xl font-bold">{title}</h1>
 			{/* Keyed by what identifies the content: a switch remounts, so the previous page's markdown
 			    is never on screen while the new one loads. */}
-			<LegalContent key={`${page}:${profile}`} page={page} profile={profile} resolver={resolver} />
+			<LegalContent key={page} page={page} resolver={resolver} />
 		</div>
 	);
 }
 
 interface LegalContentProps {
 	page: LegalPageId;
-	profile: string;
 	resolver: typeof resolveLegalContent;
 }
 
-function LegalContent({ page, profile, resolver }: LegalContentProps) {
+function LegalContent({ page, resolver }: LegalContentProps) {
 	const [resolved, setResolved] = useState<ResolvedLegalContent | null>(null);
 	const [loadError, setLoadError] = useState<Error | null>(null);
 
@@ -84,7 +74,7 @@ function LegalContent({ page, profile, resolver }: LegalContentProps) {
 		const controller = new AbortController();
 		async function load() {
 			try {
-				const content = await resolver(page, { signal: controller.signal, profile });
+				const content = await resolver(page, { signal: controller.signal });
 				if (controller.signal.aborted) {
 					return;
 				}
@@ -93,7 +83,7 @@ function LegalContent({ page, profile, resolver }: LegalContentProps) {
 					warnedDisclaimer.add(page);
 					// oxlint-disable-next-line no-console -- Remediation addressed to whoever deployed the instance, once per page; the reader's half of this is the disclaimer banner.
 					console.warn(
-						`[legal] Disclaimer fallback served for page=${page}. Configure LEGAL_PROFILE or mount /legal-overrides/. See docs/admin/legal-pages.`,
+						`[legal] Disclaimer fallback served for page=${page}. Mount /legal-overrides/. See docs/admin/legal-pages.`,
 					);
 				}
 			} catch (error: unknown) {
@@ -108,7 +98,7 @@ function LegalContent({ page, profile, resolver }: LegalContentProps) {
 		}
 		void load();
 		return () => controller.abort();
-	}, [page, profile, resolver]);
+	}, [page, resolver]);
 
 	return (
 		<>
