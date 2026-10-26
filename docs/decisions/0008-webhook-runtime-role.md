@@ -527,3 +527,59 @@ check dependencies that other Pods share.
 metrics. The `webhook-server-down` alert reads `/actuator/health` returning DOWN for 60 s or more, not
 readiness. `WebhookIngestionCannotFailSilentlyTest` asserts that a JetStream failure leaves readiness UP
 and health DOWN. This supersedes "`webhook` joins the readiness group".
+
+## Update — 2026-10-26 (the receiver tolerates a slow broker)
+
+On staging, a third of GitHub's first deliveries failed in the minutes when JetStream answered slowly.
+The receiver logged far fewer publish failures than GitHub recorded.
+A reproduction with NATS 2.14.8, `sync_interval: always` and a delayed disk showed that slow fsync alone makes publishes and stream requests slow, also on a small stream.
+Three decisions follow.
+
+### The webhook health indicator makes no broker request
+
+`WebhookHealthIndicator` asked the broker for the information of every stream on each health check.
+Each of those requests waited as long as the slowest broker operation, so a slow disk made every health check of the receiver slow.
+On staging, a proxy that routed on that check refused deliveries itself while publishes still succeeded.
+Which health group the indicator belongs to is decided in the update above.
+
+Decision: the indicator reports the state of the NATS connection only.
+The client holds that state, so a health check sends nothing to the broker.
+Ingestion still cannot fail silently.
+`webhook.publish{outcome=failure}` counts every delivery that the broker did not acknowledge, at the place where it fails, and `HephaestusWebhookPublishFailing` alerts on it.
+`WebhookStreamMonitor` reports stream state off the request path, and `HephaestusStreamPollStale` alerts when it cannot.
+
+### Every publish attempt ends inside the provider's response window
+
+The receiver made 5 attempts of 9 seconds each.
+GitHub and GitLab fail a delivery after 10 seconds, so attempts after the first held a request thread for an answer nobody read.
+Decision: 2 attempts of 4 seconds each.
+The second attempt carries the same `Nats-Msg-Id`, so a first attempt that stored late is answered as a duplicate.
+`WebhookPublishStallIntegrationTest` pauses a real broker and asserts that the receiver answers `503` before GitHub stops waiting, while its health indicator stays UP.
+The answer while the broker is slow stays `503`.
+A `2xx` before the broker acknowledges would lose the delivery, and `discard: new` stays rejected.
+Slack keeps its one publish attempt of 2 seconds: Slack waits only 3 seconds for an answer and retries a failed event itself.
+
+### Redeliveries are spaced and bounded (amends "failed GitHub deliveries are redelivered")
+
+`GitHubWebhookRedelivery` redelivered each failed event on the next three runs, 10 minutes apart, inside a one-hour window.
+A stall of about 30 minutes used every attempt, and each run sent its whole backlog into a broker that was still slow.
+
+Decision: the redeliveries of one event are due 0, 10, 20, 40 and 80 minutes after its original delivery, up to six attempts.
+The window is two hours, so the run that requests the last one still lists the original, and a run reads up to 100 pages.
+A run whose listing reaches the page limit counts `outcome=truncated`.
+A stall shorter than 80 minutes is outlasted at every phase of the runs.
+`GitHubWebhookRedeliveryTest` drives the schedule through simulated stalls to prove that.
+
+A run that requested 1,859 redeliveries took longer than its 9-minute lock, so a second run could redeliver the same events.
+A run now sends requests for at most 5 minutes, the oldest events first, and leaves the rest for the next run.
+GitHub calls time out after 5 seconds to connect and 10 seconds to read, so the budget plus one request stays far inside the lock.
+`ScheduledWorkAcrossReplicasIntegrationTest` proves that a run does not start while another replica holds the lock.
+
+The same burst went to a receiver that was not ready, and 401 events spent their attempts on `504` answers.
+A run now sends at most 5 requests a second, and it stops after 5 requests in a row that GitHub refuses.
+When the newest 10 redeliveries in view all failed, it sends only 3, to probe the receiver, and the other events keep their attempts.
+A `403` or `429` from GitHub ends the run.
+A run cannot see the answer to its own requests: GitHub lists a redelivery's result only after it delivers it, so the signal is the previous runs' redeliveries.
+
+The trigger is storage: the bundled broker calls `fsync` for each message, and a disk that a database or container runtime saturates delays every publish.
+Broker storage is a sizing decision outside this ADR.

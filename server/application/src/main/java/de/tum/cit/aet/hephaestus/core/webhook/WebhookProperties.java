@@ -125,8 +125,8 @@ public record WebhookProperties(
     }
 
     public record Publish(
-            @DefaultValue("9s") Duration timeout,
-            @DefaultValue("5") int maxRetries,
+            @DefaultValue("4s") Duration timeout,
+            @DefaultValue("2") int maxRetries,
             @DefaultValue("200ms") Duration retryBaseDelay) {
         public Publish {
             if (timeout.isZero() || timeout.isNegative()) {

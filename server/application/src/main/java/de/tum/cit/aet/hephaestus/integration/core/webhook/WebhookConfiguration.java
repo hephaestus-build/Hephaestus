@@ -2,7 +2,6 @@ package de.tum.cit.aet.hephaestus.integration.core.webhook;
 
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWebhookRole;
 import io.nats.client.Connection;
-import io.nats.client.JetStreamManagement;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.context.annotation.Bean;
@@ -27,8 +26,7 @@ import org.springframework.context.annotation.Import;
 public class WebhookConfiguration {
 
     @Bean
-    WebhookHealthIndicator webhookHealthIndicator(
-            @Qualifier("natsConnection") Connection connection, JetStreamManagement jsm) {
-        return new WebhookHealthIndicator(connection, jsm);
+    WebhookHealthIndicator webhookHealthIndicator(@Qualifier("natsConnection") Connection connection) {
+        return new WebhookHealthIndicator(connection);
     }
 }

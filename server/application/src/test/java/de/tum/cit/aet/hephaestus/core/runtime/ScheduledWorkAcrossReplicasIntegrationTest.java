@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import de.tum.cit.aet.hephaestus.Application;
 import de.tum.cit.aet.hephaestus.agent.handler.AgentHandlerTestDoubles;
 import de.tum.cit.aet.hephaestus.integration.core.oauth.state.OAuthStateNonceCleanupJob;
+import de.tum.cit.aet.hephaestus.integration.scm.github.app.GitHubWebhookRedelivery;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.RecordingScmEventListener;
 import de.tum.cit.aet.hephaestus.testconfig.SharedTestDoubles;
@@ -13,6 +14,7 @@ import de.tum.cit.aet.hephaestus.testconfig.TestAsyncConfiguration;
 import de.tum.cit.aet.hephaestus.testconfig.TestSecurityConfig;
 import java.lang.reflect.Method;
 import java.net.URL;
+import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -93,6 +95,9 @@ class ScheduledWorkAcrossReplicasIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private OAuthStateNonceCleanupJob nonceCleanup;
+
+    @Autowired
+    private GitHubWebhookRedelivery redelivery;
 
     @BeforeAll
     static void startSecondReplica(@Autowired Environment first) {
@@ -233,6 +238,42 @@ class ScheduledWorkAcrossReplicasIntegrationTest extends BaseIntegrationTest {
             jdbc.update("DELETE FROM oauth_state_nonce WHERE nonce = ?", nonce);
             jdbc.update("DELETE FROM shedlock WHERE name = ?", name);
         }
+    }
+
+    /**
+     * A GitHub redelivery run that starts while another replica's run holds the lock does not start its body, so
+     * two runs never redeliver the same events. A run that starts takes the lock, which moves {@code locked_at}.
+     */
+    @Test
+    void shouldSkipAGitHubRedeliveryRunWhileTheOtherContextHoldsItsLock() {
+        String name = "github-webhook-redelivery";
+        LockProvider secondLocks = secondReplica.getBean(LockProvider.class);
+        try {
+            jdbc.update("DELETE FROM shedlock WHERE name = ?", name);
+            SimpleLock held = secondLocks
+                    .lock(new LockConfiguration(Instant.now(), name, Duration.ofMinutes(1), Duration.ZERO))
+                    .orElseThrow();
+            Instant heldAt = lockedAt(name);
+
+            redelivery.redeliverFailed();
+
+            assertThat(lockedAt(name)).as("the run did not take the lock").isEqualTo(heldAt);
+            held.unlock();
+
+            redelivery.redeliverFailed();
+
+            assertThat(lockedAt(name))
+                    .as("the run took the lock once it was free")
+                    .isAfter(heldAt);
+        } finally {
+            jdbc.update("DELETE FROM shedlock WHERE name = ?", name);
+        }
+    }
+
+    private Instant lockedAt(String name) {
+        return Objects.requireNonNull(
+                        jdbc.queryForObject("SELECT locked_at FROM shedlock WHERE name = ?", Timestamp.class, name))
+                .toInstant();
     }
 
     private boolean nonceExists(String nonce) {

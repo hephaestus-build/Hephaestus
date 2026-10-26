@@ -25,8 +25,8 @@ import org.springframework.context.annotation.Primary;
  * via {@code @Import} from the webhook host config.
  *
  * <p>{@link WebhookStreamMonitor} and {@link WebhookPayloadCapacityCheck} are contributed here
- * rather than beside the health indicator: both read the broker, and both report on ingestion
- * rather than on the receiver's own liveness.
+ * rather than beside the health indicator: both read the broker, which the indicator does not, and
+ * both report on ingestion rather than on the receiver's own liveness.
  */
 class WebhookProducerBeans {
 
@@ -44,11 +44,11 @@ class WebhookProducerBeans {
 
     /**
      * The handle {@link WebhookJetStreamBootstrap} applies limit changes through. Separate from
-     * {@link #webhookJetStreamManagement} because the two want opposite timeouts: the health
-     * indicator and the monitor share that one and need it to fail fast, while bounding a stream
-     * that has outgrown its new limit sheds the excess before the broker answers and takes as long
-     * as the bytes require. Sharing one handle means either readiness waits on a delete or the
-     * delete reports a failure the broker is still completing.
+     * {@link #webhookJetStreamManagement} because the two want opposite timeouts: the monitor uses
+     * that one and needs it to fail fast, while bounding a stream that has outgrown its new limit
+     * sheds the excess before the broker answers and takes as long as the bytes require. Sharing one
+     * handle means either the monitor waits on a delete or the delete reports a failure the broker
+     * is still completing.
      */
     @Bean
     JetStreamManagement webhookAdminJetStreamManagement(
