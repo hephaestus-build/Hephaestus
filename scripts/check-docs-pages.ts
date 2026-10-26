@@ -217,15 +217,20 @@ async function pagesOf(directory: string): Promise<string[]> {
 		recursive: true,
 		withFileTypes: true,
 	});
-	return entries
-		.filter((entry) => entry.isFile() && /\.mdx?$/u.test(entry.name))
-		.map((entry) =>
-			path
-				.relative(repositoryRoot, path.join(entry.parentPath, entry.name))
-				.split(path.sep)
-				.join("/"),
-		)
-		.toSorted();
+	return (
+		entries
+			// A leading `_` marks a partial that pages import; Docusaurus does not publish it.
+			.filter(
+				(entry) => entry.isFile() && /\.mdx?$/u.test(entry.name) && !entry.name.startsWith("_"),
+			)
+			.map((entry) =>
+				path
+					.relative(repositoryRoot, path.join(entry.parentPath, entry.name))
+					.split(path.sep)
+					.join("/"),
+			)
+			.toSorted()
+	);
 }
 
 if (import.meta.main) {

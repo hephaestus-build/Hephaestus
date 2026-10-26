@@ -20,6 +20,7 @@ const sidebars: SidebarsConfig = {
 				"coding-guidelines",
 				"simplified-technical-english",
 				"documentation-guide",
+				"check-a-docs-page",
 				"structured-logging",
 				"brand-assets",
 				"api-error-handling",

@@ -10,11 +10,15 @@ The [writing standard](./simplified-technical-english.md) owns the sentences: vo
 The [product vocabulary](./practice-feedback-language.md) owns the product terms.
 Read this guide before you add a page or move a fact to another guide.
 
+The rules apply to a guide when all of its pages declare a `page_type`.
+Today, that is the user guide.
+In the admin and contributor guides, a new page and a page that declares its type follow the rules.
+
 ## The three guides
 
 Each fact goes in the guide of the reader who acts on it.
 
-| Guide | Reader | The reader's goal | Voice | Page types |
+| Guide | Reader | The reader's goal | [Voice](https://github.com/hephaestus-build/Hephaestus/blob/main/AGENTS.md) | Page types |
 | --- | --- | --- | --- | --- |
 | User (`docs/user/`) | A developer or a workspace admin who uses Hephaestus in the web app, on GitHub or GitLab, or in Slack | Get feedback on their work, understand it, act on it, and set up their workspace | Product voice | overview, tutorial, feature, reference |
 | Admin (`docs/admin/`) | An operator or an instance admin who installs, configures, upgrades, and secures an instance | Keep an instance available, safe, and current | STE | overview, tutorial, how-to, reference, explanation, troubleshooting |
@@ -102,7 +106,7 @@ page_type: how-to
 
 ### Feature
 
-- **Title:** the name of the area as the web app shows it, in sentence case, such as `Practice profile`.
+- **Title:** the name of the area as the web app shows it, such as `Practice profile`.
 - **First paragraph:** what the area gives the reader, in at most three sentences. If only some roles can use it, say which.
 - **Sections:**
   1. Concepts: a noun heading, and an explanation of what the reader sees.
@@ -151,30 +155,28 @@ Use the same name for the same section on every page.
 - Use a screenshot when the reader must find something on a screen and a sentence cannot point to it. [Google](https://developers.google.com/style/images) and [GitLab](https://docs.gitlab.com/development/documentation/styleguide/) give the same rule.
 - Never put a fact only in an image. The text must give it too.
 - A screenshot shows the current UI with synthetic data only. Do not show a real person, repository, organization, or secret. [PostHog](https://posthog.com/handbook/docs-and-wizard/docs-style-guide) gives the same rule.
-- Write alt text that says what the image shows, in at most 155 characters. Markdownlint rejects an image without alt text.
+- Write alt text that says what the image shows, in at most 155 characters, as [GitLab](https://docs.gitlab.com/development/documentation/styleguide/) sets. Markdownlint rejects an image without alt text.
 - Draw a diagram in Mermaid, not as an image, with `accTitle` and `accDescr`. `gate:diagrams` checks them.
 - Do not add an animated GIF.
 
 ## Callouts
 
 Docusaurus calls a callout an admonition.
-Use a callout only when the reader must not miss the text.
-GitLab: "Use them sparingly, and never have an alert box immediately follow another alert box."
+Each callout type has one STE meaning.
+The [writing standard](./simplified-technical-english.md#warnings-cautions-and-notes) defines what each one holds and where it goes.
 
-| Type | Use it for |
+| Callout | STE meaning |
 | --- | --- |
-| `:::note` | Information that helps the reader understand the text. It never holds a required action. |
-| `:::tip` | A faster or better way that the reader can skip. |
-| `:::caution` | A risk of damage, which includes loss of data or loss of access. State the risk, the result, and the action that prevents it. Put it before the step that it applies to. |
+| `:::note` | Note |
+| `:::tip` | Note that gives an optional, shorter way |
+| `:::caution` | Caution |
 
-- Write a title in brackets: `:::caution[Back up first]`.
-- Do not put two callouts in a row.
-- In the user guide, prefer a sentence. Use a caution only before a loss.
-- The [writing standard](./simplified-technical-english.md#warnings-cautions-and-notes) gives the words of a caution.
+Do not put two callouts in a row.
+[GitLab](https://docs.gitlab.com/development/documentation/styleguide/) gives the same rule.
 
 ## Code blocks
 
-- Give each code block its language, such as `sh`, `yaml`, `json`, or `text`. Markdownlint rejects a block without one.
+- Give each code block its language, such as `sh`, `bash`, `yaml`, `json`, or `text`. Markdownlint rejects a block without one.
 - A command block holds commands only. Do not add a prompt or the output.
 - Show output in a separate `text` block after the command block.
 - Write a placeholder in angle brackets, such as `<release>`. Under the block, say what the reader must put there.
@@ -189,17 +191,9 @@ GitLab: "Use them sparingly, and never have an alert box immediately follow anot
 - Do not rename a published page in a content change. A rename breaks links from outside the site. Rename pages only in a change to the guide's structure.
 - Do not put a date in a file name. A page states the current behavior. Git keeps the history.
 
-## Check a page
+## Checks
 
-Do these steps before you open a pull request that changes a page:
-
-1. Run `vp run lint:prose <path>` for each changed page. Fix each error.
-2. Run `vp run gate:docs-pages`.
-3. Run `vp run docs:lint`.
-4. Do each step of a how-to page or a tutorial on a running instance. Write the result that you saw, not the result that you expect.
-5. Run `vp run docs:dev`, and read the page in the light and the dark color scheme.
-6. If you changed links, the sidebar, or a component, run `vp run docs:build`. A broken link stops the build.
-
+[Check a docs page](./check-a-docs-page.md) gives the steps before a pull request.
 `gate:docs-pages` checks these rules in the user guide:
 
 - Each page has a `title`, a `description` of at most 160 characters, and a `page_type` that the guide allows. No page sets an `id`.
@@ -208,14 +202,14 @@ Do these steps before you open a pull request that changes a page:
 - Only a reference page links to the contributor guide.
 - No inline code names a repository command or a source path.
 
-In every guide, the gate checks these rules:
+In the admin and contributor guides, the gate checks on every page that a callout is a note, a tip, or a caution.
+It checks the other rules below on a page that declares its type:
 
 - A declared `page_type` is one that the guide allows.
 - A tutorial has numbered steps and a `Next steps` section. A how-to page has numbered steps and a `Check that it worked` section.
 - A `Troubleshooting` section is the last section.
-- A callout is a note, a tip, or a caution.
 
-A guide gets the full check after all its pages declare a type.
+A guide gets the full check when all its pages declare a type.
 Vale checks the sentences, as the [writing standard](./simplified-technical-english.md#machine-checks-and-human-review) describes.
 
 ## Sources
