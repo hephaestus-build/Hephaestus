@@ -211,7 +211,7 @@ spec:
   template:
     metadata:
       labels:
-        {{- include "hephaestus.labels" (dict "root" . "component" "worker") | nindent 8 }}
+        {{- include "hephaestus.podLabels" (dict "root" . "component" "worker") | nindent 8 }}
     spec:
       serviceAccountName: {{ $name }}
       # The one role that calls the Kubernetes API, with the Role above.

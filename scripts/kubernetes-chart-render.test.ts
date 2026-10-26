@@ -1820,6 +1820,22 @@ await test("every role that runs git writes the JGit configuration to an emptyDi
 	}
 });
 
+const podTemplate = (layers: readonly Layer[], component: string) =>
+	get(workload(rendered(layers), component), "spec", "template");
+
+await test("a release that changes neither image restarts neither PostgreSQL nor NATS", () => {
+	// A Pod template that names the release would roll both on every upgrade. The application roles
+	// report the release they run, so their Pods carry it on purpose.
+	const next = { release: { version: "v1.2.4", commit: "b".repeat(40) } };
+	for (const component of ["postgresql", "nats"]) {
+		assert.deepEqual(
+			podTemplate([...layersFor("small"), next], component),
+			podTemplate(layersFor("small"), component),
+			component,
+		);
+	}
+});
+
 await test("every revision migrates the database once, in a Job that only reaches PostgreSQL", () => {
 	const first = rendered([...layersFor("small"), workerLayer]);
 	const migration = first.find(

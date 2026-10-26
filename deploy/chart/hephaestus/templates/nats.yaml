@@ -60,7 +60,7 @@ spec:
   template:
     metadata:
       labels:
-        {{- include "hephaestus.labels" (dict "root" . "component" "nats") | nindent 8 }}
+        {{- include "hephaestus.podLabels" (dict "root" . "component" "nats") | nindent 8 }}
       annotations:
         checksum/config: {{ printf "%d-%d-%s" $maxFile (int64 .Values.nats.maxPayloadBytes) .Values.nats.jetstream.maxMemory | sha256sum }}
     spec:

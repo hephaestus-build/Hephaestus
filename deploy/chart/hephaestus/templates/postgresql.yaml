@@ -36,7 +36,7 @@ spec:
   template:
     metadata:
       labels:
-        {{- include "hephaestus.labels" (dict "root" . "component" "postgresql") | nindent 8 }}
+        {{- include "hephaestus.podLabels" (dict "root" . "component" "postgresql") | nindent 8 }}
       {{- if $backup }}
       # The backup configuration is a file of the Pod: a change restarts PostgreSQL with it.
       annotations:
