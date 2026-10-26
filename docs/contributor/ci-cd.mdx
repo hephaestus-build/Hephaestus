@@ -917,6 +917,9 @@ A stacked pull-request layer uses another branch's head, which published nothing
 If no such default-branch commit exists, the run builds every image itself. `detect-changes` resolves that commit once, with
 `scripts/resolve-alias-base.ts`, and hands it to the image jobs as `alias_base`.
 
+A pull request aliases only from a commit whose `CI/CD` push run has succeeded, because that run publishes the images under the commit's tag.
+Right after a merge, that run is still building, so the pull request builds every image itself.
+
 ## Parallelism and concurrency
 
 - `Quality` legs start from source. `Test` suites and `Build` gates start when `App Server: Package`

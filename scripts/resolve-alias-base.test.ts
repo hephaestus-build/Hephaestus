@@ -44,3 +44,27 @@ await test("a chain that reaches nothing published leaves the run every image to
 		undefined,
 	);
 });
+
+await test("a pull request does not alias from a default-branch commit whose run has not published", async () => {
+	const pending = { compare: async () => "identical", baseOf: never("the base chain") };
+	// Right after a merge the newest commit is still being built: build every image instead.
+	assert.equal(
+		await resolveAliasBase(main, "main", { ...pending, published: async () => false }),
+		undefined,
+	);
+	assert.equal(
+		await resolveAliasBase(main, "main", { ...pending, published: async () => true }),
+		main,
+	);
+	// A layer of a stack checks the commit it lands on.
+	const checked: string[] = [];
+	const published = async (commit: string) => {
+		checked.push(commit);
+		return false;
+	};
+	assert.equal(
+		await resolveAliasBase(sha("c"), "main", { ...chain(layers, [main]), published }),
+		undefined,
+	);
+	assert.deepEqual(checked, [main]);
+});

@@ -2217,6 +2217,11 @@ void describe("CI contract", () => {
 			"Resolve the commit unchanged images are aliased from",
 		);
 		assert.equal(resolve.get("run"), "node scripts/resolve-alias-base.ts");
+		// Only a pull request aliases, and only from a commit whose push run has published its images.
+		assert.equal(
+			resolve.getIn(["env", "ALIAS_IMAGES"]),
+			`\${{ github.event_name == 'pull_request' }}`,
+		);
 		assert.match(
 			String(orchestrator.getIn([...detect, "outputs", "alias-base"])),
 			/^\$\{\{ steps\.alias_base\.outputs\.commit \}\}$/u,
