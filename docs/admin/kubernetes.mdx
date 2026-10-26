@@ -239,6 +239,41 @@ Set `networkPolicy.workerGatewayPorts` to the container ports of the Gateway Pod
 A namespace without labels would admit every pod in it, so the chart refuses it.
 The same rule applies to `networkPolicy.metrics` when you set its namespace.
 
+### A model endpoint on the cluster's own ingress
+
+The worker reaches AI providers through `networkPolicy.externalEgress`, which leaves out private address ranges.
+If the host name of a model endpoint resolves to the cluster's own ingress, the connection ends at an ingress Pod with a private address, and the policy refuses it.
+An example is a model proxy that the same cluster serves.
+Add a NetworkPolicy that lets the worker Pods reach the ingress Pods.
+NetworkPolicies add up, so this policy does not change the chart's policies.
+Use the container ports of the ingress Pods, not the Service ports: the policy applies after address translation.
+For Traefik in the namespace `traefik`, with container ports 8000 and 8443:
+
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: worker-to-ingress
+  namespace: hephaestus
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: hephaestus
+      app.kubernetes.io/component: worker
+  policyTypes: ["Egress"]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: traefik
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: traefik
+      ports:
+        - { port: 8443, protocol: TCP }
+        - { port: 8000, protocol: TCP }
+```
+
 The management listener binds to the pod address.
 The kubelet probes it, and the metrics scraper can read it.
 No Service and no route expose it.
@@ -289,6 +324,25 @@ The application has no setting for more replicas.
 A lost NATS volume loses each provider delivery that the broker accepted and the server had not yet processed.
 That window is usually seconds, and it grows while the server is stopped or behind.
 Use a storage class whose volumes survive the loss of a node, and back up the volume as [Backup and restore](./backup-restore) describes for Compose.
+
+### Disk on one host
+
+Each upgrade pulls the images of the new release, and the chart removes no image.
+The kubelet removes unused images when the image filesystem is fuller than `imageGCHighThresholdPercent` (85 % by default), until it is below `imageGCLowThresholdPercent` (80 %).
+On one host, set lower thresholds and a maximum age, so that the images of old releases go before the disk fills.
+On k3s, put a KubeletConfiguration file whose name ends in `.conf` into `/var/lib/rancher/k3s/agent/etc/kubelet.conf.d/`, then run `sudo systemctl restart k3s`:
+
+```yaml
+apiVersion: kubelet.config.k8s.io/v1beta1
+kind: KubeletConfiguration
+imageGCHighThresholdPercent: 75
+imageGCLowThresholdPercent: 65
+imageMaximumGCAge: 168h
+```
+
+The thresholds count the whole filesystem, also data that is not an image.
+If other data keeps the disk above the low threshold, the kubelet logs that image garbage collection failed, and it removes every unused image.
+The kubelet never removes an image that a Pod uses.
 
 ## Pod security
 

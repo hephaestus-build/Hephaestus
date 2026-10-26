@@ -316,12 +316,38 @@ The kubelet's image garbage collection removes unused images.
 
 To move a Compose host to the chart:
 
-1. Disable the timer.
+1. Disable the timer: `sudo systemctl disable --now hephaestus-reconcile.timer`.
 2. Install the chart at the commit that the host runs, as [Kubernetes § Install](./kubernetes#install) describes, and move the data.
 3. Stop the Compose stacks with `docker compose stop`.
    Keep their volumes until the chart has run for one release cycle.
 4. Set `HEPHAESTUS_STACKS=chart` and the chart settings, and write `/etc/hephaestus/chart.yaml`.
-5. Enable the timer.
+5. Run the reconciler once from a tree that has the chart stack.
+   Each tick first adopts the tooling of the release that the host applied.
+   A host that applied a release from before the chart stack therefore runs tooling that refuses `HEPHAESTUS_STACKS=chart`.
+   Run the reconciler of a newer `main` commit by hand, with the settings of `hephaestus-reconcile.service`:
+
+   ```bash
+   COMMIT=<a main commit with the chart stack>
+   sudo git -C /var/lib/hephaestus/checkout fetch origin +refs/heads/main:refs/remotes/origin/main
+   sudo git -C /var/lib/hephaestus/checkout worktree add --detach /var/lib/hephaestus/switch "$COMMIT"
+   sudo systemd-run --unit=hephaestus-reconcile-switch --wait --collect -p Type=oneshot \
+     -p EnvironmentFile=/etc/hephaestus/reconcile.env \
+     -p StateDirectory=hephaestus -p StateDirectoryMode=0750 -p TimeoutStartSec=30min \
+     -p Environment=HELM_CACHE_HOME=/var/lib/hephaestus/helm/cache \
+     -p Environment=HELM_CONFIG_HOME=/var/lib/hephaestus/helm/config \
+     -p Environment=HELM_DATA_HOME=/var/lib/hephaestus/helm/data \
+     -p NoNewPrivileges=yes -p ProtectSystem=strict -p ProtectHome=yes -p PrivateTmp=yes \
+     -p ReadWritePaths=-/var/lib/node_exporter -p ReadWritePaths=/etc/systemd/system \
+     -p "RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6" -p RestrictSUIDSGID=yes \
+     -p RestrictRealtime=yes -p LockPersonality=yes \
+     -p SystemCallFilter=@system-service -p SystemCallErrorNumber=EPERM \
+     /usr/bin/env node /var/lib/hephaestus/switch/scripts/reconcile-deployment.ts
+   sudo git -C /var/lib/hephaestus/checkout worktree remove /var/lib/hephaestus/switch
+   ```
+
+   The run verifies the channel and the lock, applies the release that the channel names with Helm, and records it.
+   It then adopts the tooling and the unit of that release.
+6. Enable the timer: `sudo systemctl enable --now hephaestus-reconcile.timer`.
    A tick does nothing while the channel names the release that the host runs.
    The next promotion runs Helm.
 
