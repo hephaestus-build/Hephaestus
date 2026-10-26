@@ -337,14 +337,9 @@ class KubernetesSandboxRuntimeTest {
         var adapter = adapter();
         UUID jobId = UUID.randomUUID();
         String name = KubernetesSandboxBackend.jobName(jobId, 2);
-        String child = name + "-child";
-        watchedPod.set(child);
         CompletableFuture<SandboxResult> execution =
                 CompletableFuture.supplyAsync(() -> adapter.execute(spec(jobId)), background);
-        assertThat(startChild(name)).isEqualTo(child);
-        assertThat(watching.await(10, TimeUnit.SECONDS))
-                .as("fixture condition: the review waits on a registered watch of its Pod")
-                .isTrue();
+        String child = startWatchedChild(name);
 
         adapter.cancel(jobId);
 
@@ -442,13 +437,13 @@ class KubernetesSandboxRuntimeTest {
     }
 
     @Test
-    void shouldFailReviewWhoseWorkspaceDoesNotInitialize() {
+    void shouldFailReviewWhoseWorkspaceDoesNotInitialize() throws Exception {
         var adapter = adapter();
         UUID jobId = UUID.randomUUID();
         CompletableFuture<SandboxResult> execution =
                 CompletableFuture.supplyAsync(() -> adapter.execute(spec(jobId)), background);
         String name = KubernetesSandboxBackend.jobName(jobId, 2);
-        String child = startChild(name);
+        String child = startWatchedChild(name);
         setStatus(SANDBOXES, child, "Failed", List.of(exited(KubernetesPods.INITIALIZER, 1)), List.of());
 
         assertThatThrownBy(() -> execution.get(10, TimeUnit.SECONDS))
@@ -459,13 +454,13 @@ class KubernetesSandboxRuntimeTest {
     }
 
     @Test
-    void shouldEndAsAnInfrastructureFailureWhenTheNetworkPolicyNeverFiltersTheReviewPod() {
+    void shouldEndAsAnInfrastructureFailureWhenTheNetworkPolicyNeverFiltersTheReviewPod() throws Exception {
         var adapter = adapter();
         UUID jobId = UUID.randomUUID();
         CompletableFuture<SandboxResult> execution =
                 CompletableFuture.supplyAsync(() -> adapter.execute(spec(jobId)), background);
         String name = KubernetesSandboxBackend.jobName(jobId, 2);
-        String child = startChild(name);
+        String child = startWatchedChild(name);
         setStatus(SANDBOXES, child, "Failed", List.of(exited(KubernetesPods.ISOLATION, 1)), List.of());
 
         assertThatThrownBy(() -> execution.get(10, TimeUnit.SECONDS))
@@ -483,7 +478,7 @@ class KubernetesSandboxRuntimeTest {
         CompletableFuture<SandboxResult> execution =
                 CompletableFuture.supplyAsync(() -> adapter.execute(spec(jobId)), background);
         String name = KubernetesSandboxBackend.jobName(jobId, 2);
-        String child = startChild(name);
+        String child = startWatchedChild(name);
         setStatus(
                 SANDBOXES,
                 child,
@@ -507,7 +502,7 @@ class KubernetesSandboxRuntimeTest {
         CompletableFuture<SandboxResult> execution =
                 CompletableFuture.supplyAsync(() -> adapter.execute(spec(jobId)), background);
         String name = KubernetesSandboxBackend.jobName(jobId, 2);
-        String child = startChild(name);
+        String child = startWatchedChild(name);
         Pod pod = awaitPod(SANDBOXES, child);
         pod.setStatus(new PodStatusBuilder()
                 .withPhase("Failed")
@@ -537,7 +532,7 @@ class KubernetesSandboxRuntimeTest {
         CompletableFuture<SandboxResult> execution =
                 CompletableFuture.supplyAsync(() -> adapter.execute(spec(jobId)), background);
         String name = KubernetesSandboxBackend.jobName(jobId, 2);
-        String child = startChild(name);
+        String child = startWatchedChild(name);
         setStatus(
                 SANDBOXES,
                 child,
@@ -826,6 +821,19 @@ class KubernetesSandboxRuntimeTest {
             }
         }
         throw new AssertionError("Job " + name + " was not created");
+    }
+
+    /**
+     * Starts the Pod of {@code name}'s Job and returns once the review waits on a registered watch of it, so a status
+     * change that follows cannot fall between the wait's list and its watch (see {@link #watching}).
+     */
+    private String startWatchedChild(String name) throws InterruptedException {
+        watchedPod.set(name + "-child");
+        String child = startChild(name);
+        assertThat(watching.await(10, TimeUnit.SECONDS))
+                .as("fixture condition: the review waits on a registered watch of its Pod")
+                .isTrue();
+        return child;
     }
 
     /** Creates the Pod that the Job controller would create for the attempt's Job. The mock runs no Job controller. */
