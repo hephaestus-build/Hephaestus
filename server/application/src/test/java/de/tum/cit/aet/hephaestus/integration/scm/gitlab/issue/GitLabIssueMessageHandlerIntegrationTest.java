@@ -61,7 +61,7 @@ class GitLabIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
     // Native IDs from GitLab fixtures (positive, raw values)
     private static final long NATIVE_ISSUE_ID = 422296L;
     private static final int ISSUE_IID = 5;
-    private static final long NATIVE_USER_ID = 18024L;
+    private static final long NATIVE_USER_ID = 90001L;
 
     // Fixture values
     private static final String FIXTURE_ISSUE_TITLE = "Feature: Add user authentication";

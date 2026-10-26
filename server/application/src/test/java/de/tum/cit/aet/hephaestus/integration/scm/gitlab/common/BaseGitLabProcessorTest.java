@@ -146,18 +146,18 @@ class BaseGitLabProcessorTest extends BaseUnitTest {
         @Test
         void findsOrCreatesUserFromWebhook() {
             User user = new User();
-            user.setId(-18024L);
+            user.setId(-90001L);
             user.setLogin("ab12cde");
 
             GitLabWebhookUser dto =
-                    new GitLabWebhookUser(18024L, "ab12cde", "Max Mustermann", "https://avatar.url", null);
+                    new GitLabWebhookUser(90001L, "ab12cde", "Max Mustermann", "https://avatar.url", null);
 
             when(gitLabUserService.findOrCreateUser(dto, 1L)).thenReturn(user);
 
             User result = processor.callFindOrCreateUser(dto);
 
             assertThat(result).isNotNull();
-            assertThat(result.getId()).isEqualTo(-18024L);
+            assertThat(result.getId()).isEqualTo(-90001L);
             assertThat(result.getLogin()).isEqualTo("ab12cde");
         }
 
@@ -176,7 +176,7 @@ class BaseGitLabProcessorTest extends BaseUnitTest {
 
         @Test
         void returnsNullForNullUsername() {
-            GitLabWebhookUser dto = new GitLabWebhookUser(18024L, null, "Felix", null, null);
+            GitLabWebhookUser dto = new GitLabWebhookUser(90001L, null, "Felix", null, null);
             User result = processor.callFindOrCreateUser(dto);
             assertThat(result).isNull();
         }
@@ -188,10 +188,10 @@ class BaseGitLabProcessorTest extends BaseUnitTest {
         @Test
         void findsOrCreatesUserFromGraphQL() {
             User user = new User();
-            user.setId(-18024L);
+            user.setId(-90001L);
 
             GitLabUserLookup expectedLookup = GitLabUserLookup.of(
-                    "gid://gitlab/User/18024",
+                    "gid://gitlab/User/90001",
                     "ab12cde",
                     "Max Mustermann",
                     "https://avatar.url",
@@ -200,14 +200,14 @@ class BaseGitLabProcessorTest extends BaseUnitTest {
             when(gitLabUserService.findOrCreateUser(expectedLookup, 1L)).thenReturn(user);
 
             User result = processor.callFindOrCreateUser(
-                    "gid://gitlab/User/18024",
+                    "gid://gitlab/User/90001",
                     "ab12cde",
                     "Max Mustermann",
                     "https://avatar.url",
                     "https://gitlab.lrz.de/ab12cde");
 
             assertThat(result).isNotNull();
-            assertThat(result.getId()).isEqualTo(-18024L);
+            assertThat(result.getId()).isEqualTo(-90001L);
         }
 
         @Test
@@ -307,14 +307,14 @@ class BaseGitLabProcessorTest extends BaseUnitTest {
     class IdMapping {
 
         @ParameterizedTest(name = "toEntityId({0}) = {1}")
-        @CsvSource({"1, 1", "42, 42", "18024, 18024", "422296, 422296"})
+        @CsvSource({"1, 1", "42, 42", "90001, 90001", "422296, 422296"})
         void returnsRawIds(long rawId, long expectedEntityId) {
             assertThat(GitLabSyncConstants.toEntityId(rawId)).isEqualTo(expectedEntityId);
         }
 
         @ParameterizedTest(name = "extractEntityId(\"{0}\") = {1}")
         @CsvSource({
-            "gid://gitlab/User/18024, 18024",
+            "gid://gitlab/User/90001, 90001",
             "gid://gitlab/Issue/422296, 422296",
             "gid://gitlab/Project/246765, 246765",
             "gid://gitlab/Label/85907, 85907",

@@ -63,7 +63,7 @@ class GitLabIssueProcessorTest extends BaseUnitTest {
     private static final long RAW_ISSUE_ID = 422296L;
     private static final long ENTITY_ISSUE_ID = 100L;
     private static final int ISSUE_IID = 5;
-    private static final long RAW_USER_ID = 18024L;
+    private static final long RAW_USER_ID = 90001L;
     private static final long ENTITY_USER_ID = 200L;
     private static final Long PROVIDER_ID = 2L;
 
@@ -360,7 +360,7 @@ class GitLabIssueProcessorTest extends BaseUnitTest {
         @Test
         void processMissingIdSkips() {
             var attrs = new GitLabIssueEventDTO.ObjectAttributes(
-                    null, null, "Title", "desc", "opened", "open", false, 18024L, null, null, null, null, null, null,
+                    null, null, "Title", "desc", "opened", "open", false, 90001L, null, null, null, null, null, null,
                     null, null);
             GitLabIssueEventDTO event =
                     new GitLabIssueEventDTO("issue", "issue", createUser(), createProject(), attrs, null, null, null);
@@ -610,7 +610,7 @@ class GitLabIssueProcessorTest extends BaseUnitTest {
                     "2026-01-31T18:03:35Z",
                     "2026-01-31T18:03:35Z",
                     null,
-                    "gid://gitlab/User/18024",
+                    "gid://gitlab/User/90001",
                     "ab12cde",
                     "Max Mustermann",
                     "https://gitlab.lrz.de/uploads/avatar.png",
@@ -1386,7 +1386,7 @@ class GitLabIssueProcessorTest extends BaseUnitTest {
                 RAW_USER_ID,
                 "ab12cde",
                 "Max Mustermann",
-                "https://gitlab.lrz.de/uploads/-/system/user/avatar/18024/avatar.png",
+                "https://gitlab.lrz.de/uploads/-/system/user/avatar/90001/avatar.png",
                 null);
     }
 

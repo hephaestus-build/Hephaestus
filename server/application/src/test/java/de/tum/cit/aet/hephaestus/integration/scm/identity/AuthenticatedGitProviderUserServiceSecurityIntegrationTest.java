@@ -41,7 +41,7 @@ class AuthenticatedGitProviderUserServiceSecurityIntegrationTest extends BaseInt
         var identity = new Identity();
         identity.setAccount(account);
         identity.setProviderId(Objects.requireNonNull(provider.getId()));
-        identity.setProviderUserKey("18024");
+        identity.setProviderUserKey("90001");
         identity.setDisabledAt(Instant.now());
         identities.saveAndFlush(identity);
         assertThat(query.activeLinksForAccount(accountId))

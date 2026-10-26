@@ -291,7 +291,7 @@ class WorkspaceProvisioningServiceTest {
                     WebClient.builder());
             gitlab.enqueue(new MockResponse.Builder()
                     .addHeader("Content-Type", "application/json")
-                    .body("{\"id\":18024,\"username\":\"ab12cde\",\"name\":\"Student\""
+                    .body("{\"id\":90001,\"username\":\"ab12cde\",\"name\":\"Student\""
                             + (bot == null ? "" : ",\"bot\":" + bot)
                             + "}")
                     .build());
@@ -307,7 +307,7 @@ class WorkspaceProvisioningServiceTest {
 
             verify(userRepository)
                     .upsertUser(
-                            eq(18024L),
+                            eq(90001L),
                             eq(5L),
                             eq("ab12cde"),
                             any(),

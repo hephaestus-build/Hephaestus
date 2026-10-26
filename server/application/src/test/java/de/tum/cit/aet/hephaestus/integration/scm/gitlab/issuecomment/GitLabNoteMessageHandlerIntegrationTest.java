@@ -94,7 +94,7 @@ class GitLabNoteMessageHandlerIntegrationTest extends BaseIntegrationTest {
     private static final long NATIVE_NOTE_ID = 4406174L;
     private static final long NATIVE_ISSUE_ID = 422296L;
     private static final int ISSUE_IID = 5;
-    private static final long NATIVE_USER_ID = 18024L;
+    private static final long NATIVE_USER_ID = 90001L;
     private static final long NATIVE_MR_NOTE_ID = 4406178L;
     private static final long NATIVE_MR_ID = 334047L;
     private static final int MR_IID = 2;

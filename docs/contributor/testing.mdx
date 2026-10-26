@@ -102,6 +102,11 @@ vp run schema:nats
 
 Available examples include `label.created`, `repository.created`, `create`, `push`, and more – consult the folder before recording new payloads.
 
+Before you commit a recording, replace each person's identity with a synthetic one of the same shape.
+This includes the name, username, email address, numeric user ID and avatar URL.
+Use one synthetic identity for each person across all fixtures, so that a lookup that the tests exercise still matches.
+The test organization's own accounts (`HephaestusTest` and the maintainer account that recorded the payloads, `FelixTJDietrich`) can stay.
+
 `vp run schema:nats` only sees events an environment already subscribes to. To record any other GitHub event,
 add a temporary repository webhook in the `HephaestusTest` organization that subscribes to that event only.
 Its URL does not need to answer. Cause the event, and then save each delivery's `request.payload` from

@@ -200,7 +200,7 @@ class GitLabNoteMessageHandlerTest extends BaseUnitTest {
             GitLabNoteEventDTO event = createMergeRequestSystemNote(body);
             Repository repository = setupRepository();
             User author = new User();
-            author.setNativeId(18024L);
+            author.setNativeId(90001L);
             author.setLogin("ab12cde");
             PullRequest mergeRequest = new PullRequest();
             mergeRequest.setNativeId(334047L);
@@ -409,10 +409,10 @@ class GitLabNoteMessageHandlerTest extends BaseUnitTest {
 
     private GitLabWebhookUser createUser() {
         return new GitLabWebhookUser(
-                18024L,
+                90001L,
                 "ab12cde",
                 "Max Mustermann",
-                "https://gitlab.lrz.de/uploads/-/system/user/avatar/18024/avatar.png",
+                "https://gitlab.lrz.de/uploads/-/system/user/avatar/90001/avatar.png",
                 null);
     }
 

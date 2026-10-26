@@ -2,10 +2,10 @@
   "object_kind": "issue",
   "event_type": "confidential_issue",
   "user": {
-    "id": 18024,
+    "id": 90001,
     "name": "Muster, Max (Erika)",
     "username": "ab12cde",
-    "avatar_url": "https://gitlab.lrz.de/uploads/-/system/user/avatar/18024/avatar.png",
+    "avatar_url": "https://gitlab.lrz.de/uploads/-/system/user/avatar/90001/avatar.png",
     "email": "[REDACTED]"
   },
   "project": {
@@ -27,7 +27,7 @@
     "http_url": "https://gitlab.lrz.de/hephaestustest/demo-repository.git"
   },
   "object_attributes": {
-    "author_id": 18024,
+    "author_id": 90001,
     "closed_at": null,
     "confidential": true,
     "created_at": "2026-01-31 20:10:19 +0100",
@@ -37,7 +37,7 @@
     "id": 422298,
     "iid": 7,
     "last_edited_at": "2026-01-31 20:10:33 +0100",
-    "last_edited_by_id": 18024,
+    "last_edited_by_id": 90001,
     "milestone_id": null,
     "moved_to_id": null,
     "duplicated_to_id": null,
@@ -47,7 +47,7 @@
     "time_estimate": 0,
     "title": "Confidential: Security vulnerability in auth",
     "updated_at": "2026-01-31 20:10:33 +0100",
-    "updated_by_id": 18024,
+    "updated_by_id": 90001,
     "weight": null,
     "health_status": null,
     "type": "Issue",
@@ -84,7 +84,7 @@
     },
     "last_edited_by_id": {
       "previous": null,
-      "current": 18024
+      "current": 90001
     },
     "updated_at": {
       "previous": "2026-01-31 20:10:19 +0100",
@@ -92,7 +92,7 @@
     },
     "updated_by_id": {
       "previous": null,
-      "current": 18024
+      "current": 90001
     }
   },
   "repository": {

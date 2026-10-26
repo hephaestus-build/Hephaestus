@@ -204,7 +204,7 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
     private static final String NESTED_PROJECT = "hephaestustest/test-subgroup/nested-demo";
     private static final long NESTED_PROJECT_ID = 777L;
     private static final long SUBGROUP_ID = 319723L;
-    private static final long MEMBER_USER_ID = 18024L;
+    private static final long MEMBER_USER_ID = 90001L;
     private static final long REPOSITORY_NATIVE_ID = 246765L;
     private static final int MERGE_REQUEST_IID = 2;
     private static final String HOOK_MERGE_COMMIT = "b186370e62e2ae348df64fb187c13aff4008457b";

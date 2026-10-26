@@ -156,7 +156,7 @@ class GitLabIssueMessageHandlerTest extends BaseUnitTest {
                     "opened",
                     null,
                     false,
-                    18024L,
+                    90001L,
                     null,
                     null,
                     "2026-01-31 19:03:35 +0100",
@@ -210,7 +210,7 @@ class GitLabIssueMessageHandlerTest extends BaseUnitTest {
                     "opened",
                     "open",
                     true,
-                    18024L,
+                    90001L,
                     null,
                     null,
                     "2026-01-31 19:03:35 +0100",
@@ -267,7 +267,7 @@ class GitLabIssueMessageHandlerTest extends BaseUnitTest {
                     "opened",
                     "open",
                     false,
-                    18024L,
+                    90001L,
                     null,
                     null,
                     "2026-01-31 19:03:35 +0100",
@@ -330,7 +330,7 @@ class GitLabIssueMessageHandlerTest extends BaseUnitTest {
                 state,
                 action,
                 confidential,
-                18024L,
+                90001L,
                 null,
                 null,
                 "2026-01-31 19:03:35 +0100",
@@ -352,10 +352,10 @@ class GitLabIssueMessageHandlerTest extends BaseUnitTest {
 
     private GitLabWebhookUser createUser() {
         return new GitLabWebhookUser(
-                18024L,
+                90001L,
                 "ab12cde",
                 "Max Mustermann",
-                "https://gitlab.lrz.de/uploads/-/system/user/avatar/18024/avatar.png",
+                "https://gitlab.lrz.de/uploads/-/system/user/avatar/90001/avatar.png",
                 null);
     }
 

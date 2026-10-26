@@ -112,7 +112,7 @@ class GitLabDiscussionSyncServiceTest extends BaseUnitTest {
         pr.setNativeId(343218L);
         pr.setProvider(provider);
         reviewer = new User();
-        reviewer.setNativeId(31315L);
+        reviewer.setNativeId(90002L);
         reviewer.setLogin("erika.maria.sample");
         lenient()
                 .when(issueCommentProcessor.findOrCreateUser(any(), eq(PROVIDER_ID)))
@@ -131,7 +131,7 @@ class GitLabDiscussionSyncServiceTest extends BaseUnitTest {
                 createdAt,
                 "author",
                 Map.of(
-                        "id", "gid://gitlab/User/31315",
+                        "id", "gid://gitlab/User/90002",
                         "username", "erika.maria.sample",
                         "name", "Erika Sample"));
     }
@@ -274,7 +274,7 @@ class GitLabDiscussionSyncServiceTest extends BaseUnitTest {
                 "updatedAt",
                 "2026-04-15T10:23:58.766+02:00",
                 "author",
-                Map.of("id", "gid://gitlab/User/31315", "username", "erika.maria.sample")));
+                Map.of("id", "gid://gitlab/User/90002", "username", "erika.maria.sample")));
         if (position != null) {
             note.put("position", position);
         }
