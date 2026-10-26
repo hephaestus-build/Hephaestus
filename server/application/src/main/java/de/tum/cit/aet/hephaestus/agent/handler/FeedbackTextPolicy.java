@@ -91,6 +91,9 @@ final class FeedbackTextPolicy {
         if (text.codePoints().anyMatch(FeedbackTextPolicy::hidden)) return Rule.HIDDEN_CHARACTER;
         if (SLACK_SYNTAX.matcher(text).find()) return Rule.MENTION;
         var read = Reading.of(text);
+        // CommonMark decodes character references outside code, so `&#x202E;` renders the character the raw scan
+        // missed.
+        if (read.prose.codePoints().anyMatch(FeedbackTextPolicy::hidden)) return Rule.HIDDEN_CHARACTER;
         if (read.html) return Rule.HTML;
         if (read.image) return Rule.IMAGE;
         if (MENTION.matcher(read.prose).find()) return Rule.MENTION;

@@ -88,6 +88,22 @@ class FeedbackTextPolicyTest extends BaseUnitTest {
                 .isEqualTo(Rule.HIDDEN_CHARACTER);
     }
 
+    @ParameterizedTest
+    @ValueSource(
+            strings = {
+                "Keep the cause&#x202E; in the error.",
+                "Keep the cause&#8203; in the error.",
+                "Keep [the cause&#x202E;](" + SUPPLIED + ") in the error."
+            })
+    void shouldRefuseHiddenCharactersThatACharacterReferenceRenders(String text) {
+        assertThat(policy.broken(text)).isEqualTo(Rule.HIDDEN_CHARACTER);
+    }
+
+    @Test
+    void shouldPermitACharacterReferenceInCodeBecauseCodeRendersItLiterally() {
+        assertThat(policy.broken("Escape it as `&#x202E;` in the template.")).isNull();
+    }
+
     @Test
     void shouldReadSuppliedLinksOnlyFromCitedQuotes() {
         assertThat(policy.broken("The result summary links " + SUMMARY_ONLY + "."))
