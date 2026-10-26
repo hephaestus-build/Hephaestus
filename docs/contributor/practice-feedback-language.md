@@ -17,6 +17,20 @@ Use work as a plain, uncountable word, such as “your work.”
 Name the concrete kind when known: pull request, merge request, issue, file, thread or document.
 Use item only in contributor documentation, code and API contracts.
 
+## Writing feedback
+
+Use this guide for feedback on the work, on the practice page and in conversation.
+Each destination's prompt adds its own rules for length, layout and links.
+
+State the answer or concern first.
+Give only the detail the reader needs to understand the point and decide what to do.
+Explain a technical concept in plain words before giving its term in brackets.
+Point to the exact place in the work, and link it where the destination lets you write links.
+
+When a point needs an action, give one useful next step.
+Describe the work, not the person.
+Do not expose internal names or mechanics, such as delivery states, practice slugs, identifiers, pipelines, models, tools, sandboxes or context files.
+
 ## Retired words
 
 The Avoid columns apply to the named concept in UI, code, API contracts and prose.

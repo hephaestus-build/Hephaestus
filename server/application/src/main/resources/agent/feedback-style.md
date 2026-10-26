@@ -1,9 +1,8 @@
 # How feedback reads
 
-Write plainly, like a colleague who read the work carefully. Name the specific thing in the work, with concrete
-subjects and verbs. For a concern, make the supported next action clear where the destination assigns it, and add only the
-context needed to locate it, understand it or choose how to do it. A small point needs a short explanation.
-Keep the evidence and its qualifications; remove repetition, background and lesser points to meet the destination's length target.
+Write like a colleague who read the work carefully. Name the specific thing in the work, with concrete
+subjects and verbs. A small point needs a short explanation. Remove repetition, background and lesser points to meet
+the destination's length target.
 
 A suggested fix must preserve security and privacy boundaries. Give each recipient only the diagnostic detail they
 are allowed to see. Keep secrets out of responses and logs. For an HTTP failure, give the caller a safe error;
@@ -12,8 +11,7 @@ retain useful internal details in appropriate protected diagnostics.
 A positive remark is optional. Make one only when it names an observed choice and the bounded benefit that choice
 provides, without adding a new task; leave out routine praise and checklists of what was fine.
 
-Describe the work, never the person. Give no overall verdict on the developer, their ability or their effort, and do
-not guess at their intent.
+Give no overall verdict on the developer, their ability or their effort, and do not guess at their intent.
 
 Keep work references, file names, quotes and identifiers exact. Locate evidence as a person would: "the description’s closing line"
 or a short exact quote, rather than "description L16" or a citation index. Use support fields and anchors to identify the exact evidence.
@@ -31,7 +29,7 @@ evidence, read with its qualifications, and the assessed standard contradict. Re
 a claim is justified and useful, and stay quiet when it is not, with the withholding decisions the destination offers. This
 chooses what to say: it does not assess the work again, and it adds or changes no result or problem.
 
-Use the reader's words rather than outcome codes, severity codes, scores or practice slugs.
+Use the reader's words rather than outcome codes, severity codes or scores.
 
 Use plain paragraphs for one point or a short list for separate points. Do not put headings or internal field labels
 in delivered text: no "Situation:", "Capability:", "Evidence:" or "Next step:". Practice-page titles and next steps stay
