@@ -19,6 +19,7 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxBackend;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxCancelledException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxInfrastructureException;
+import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxInitializationException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxResult;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxSpec;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -275,15 +276,17 @@ class SandboxAttemptRunnerTest extends BaseUnitTest {
         }
 
         @Test
-        void shouldReportATimedOutInitializerWithItsTranscript() throws Exception {
+        void shouldFailATimedOutInitializerAsARetryableInfrastructureFailureWithItsTranscriptTail() {
             backend.initialized = new SandboxBackend.Observation(true, null);
-            backend.initializerTranscript = "cloning";
+            backend.initializerTranscript = "downloading";
 
-            SandboxResult result = runner.execute(createSpec());
-
-            assertThat(result.timedOut()).isTrue();
-            assertThat(result.exitCode()).isEqualTo(SandboxLayout.EXIT_KILLED);
-            assertThat(result.logs()).isEqualTo("cloning");
+            assertThatThrownBy(() -> runner.execute(createSpec()))
+                    .isInstanceOfSatisfying(SandboxInitializationException.class, failure -> {
+                        assertThat(failure).isInstanceOf(SandboxInfrastructureException.class);
+                        assertThat(failure.timedOut()).isTrue();
+                        assertThat(failure.exitCode()).isNull();
+                        assertThat(failure.transcriptTail()).isEqualTo("downloading");
+                    });
             assertThat(backend.calls).doesNotContain("observe ENDED").endsWith("remove");
         }
 
@@ -318,12 +321,50 @@ class SandboxAttemptRunnerTest extends BaseUnitTest {
 
         @Test
         void shouldFailWithoutRunningTheRuntimeWhenTheInitializerFails() {
-            backend.initialized = new SandboxBackend.Observation(false, 1);
+            backend.initialized = new SandboxBackend.Observation(false, 2);
+            backend.initializerTranscript = "tar: work: Cannot utime: Operation not permitted\n";
 
             assertThatThrownBy(() -> runner.execute(createSpec()))
-                    .isInstanceOf(SandboxException.class)
-                    .hasMessageContaining("initialization failed");
+                    .isInstanceOfSatisfying(SandboxInitializationException.class, failure -> {
+                        assertThat(failure).hasMessage("Sandbox workspace initialization failed: exit 2");
+                        assertThat(failure.exitCode()).isEqualTo(2);
+                        assertThat(failure.timedOut()).isFalse();
+                        assertThat(failure.transcriptTail())
+                                .isEqualTo("tar: work: Cannot utime: Operation not permitted");
+                    });
             assertThat(backend.calls).doesNotContain("observe ENDED").endsWith("remove");
+        }
+
+        @Test
+        void shouldKeepTheInitializerTranscriptOutOfTheLogButNameTheFailureInIt() {
+            backend.initialized = new SandboxBackend.Observation(false, 2);
+            backend.initializerTranscript = "tar: private-path-canary: Cannot utime\n";
+
+            Logger logger = (Logger) LoggerFactory.getLogger(SandboxAttemptRunner.class);
+            Level previous = logger.getLevel();
+            ListAppender<ILoggingEvent> appender = new ListAppender<>();
+            appender.start();
+            logger.addAppender(appender);
+            logger.setLevel(Level.TRACE);
+            try {
+                assertThatThrownBy(() -> runner.execute(createSpec()))
+                        .isInstanceOf(SandboxInitializationException.class);
+            } finally {
+                logger.setLevel(previous);
+                logger.detachAppender(appender);
+                appender.stop();
+            }
+
+            assertThat(appender.list).isNotEmpty().allSatisfy(event -> {
+                assertThat(event.getFormattedMessage()).doesNotContain("canary");
+                assertThat(String.valueOf(event.getKeyValuePairs())).doesNotContain("canary");
+            });
+            assertThat(appender.list)
+                    .filteredOn(event -> Level.ERROR.equals(event.getLevel()))
+                    .extracting(ILoggingEvent::getFormattedMessage)
+                    .containsExactly("Sandbox execution failed: errorType="
+                            + SandboxInitializationException.class.getName()
+                            + ", error=Sandbox workspace initialization failed: exit 2");
         }
 
         @Test

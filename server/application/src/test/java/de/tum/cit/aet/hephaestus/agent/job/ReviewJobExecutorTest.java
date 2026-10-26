@@ -36,6 +36,8 @@ import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerProperties;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxProperties;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxTestLimits;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ResourceLimits;
+import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxException;
+import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxInitializationException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxManager;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxResult;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxSpec;
@@ -164,6 +166,39 @@ class ReviewJobExecutorTest extends BaseUnitTest {
                         telemetry,
                         Optional.empty()),
                 recovery);
+    }
+
+    @Test
+    void shouldRetryAnInitializerFailureBeforeAnyModelCallAsTheInfrastructuresFailure() {
+        assertThat(ReviewJobExecutor.isRetryableExecutionFailure(new SandboxInitializationException(2, false, "")))
+                .isTrue();
+        assertThat(ReviewJobExecutor.isRetryableExecutionFailure(new SandboxInitializationException(null, true, "")))
+                .isTrue();
+        // A plain sandbox failure stays terminal: it would fail the same way on every attempt.
+        assertThat(ReviewJobExecutor.isRetryableExecutionFailure(new SandboxException("invalid spec")))
+                .isFalse();
+    }
+
+    @Test
+    void shouldRecordTheInitializersExitAndItsMaskedTailForTheOperator() throws Exception {
+        var failure = new SandboxInitializationException(
+                2, false, "tar: work: Cannot utime: Operation not permitted\nAuthorization: Bearer secret-token\n");
+
+        var diagnosis =
+                new JsonMapper().readTree(ReviewJobExecutor.initializationDiagnosis(new JsonMapper(), 1, failure));
+
+        assertThat(diagnosis.get("attempt").asInt()).isEqualTo(1);
+        assertThat(diagnosis.get("exitCode").asInt()).isEqualTo(2);
+        assertThat(diagnosis.get("timedOut").asBoolean()).isFalse();
+        assertThat(diagnosis.get("transcriptTail").asString())
+                .startsWith("tar: work: Cannot utime: Operation not permitted")
+                .doesNotContain("secret-token");
+        assertThat(new JsonMapper()
+                        .readTree(ReviewJobExecutor.initializationDiagnosis(
+                                new JsonMapper(), 0, new SandboxInitializationException(null, true, null)))
+                        .get("exitCode")
+                        .isNull())
+                .isTrue();
     }
 
     @Test

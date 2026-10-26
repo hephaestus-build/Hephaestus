@@ -24,6 +24,7 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxProperties;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ResourceLimits;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxCancelledException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxInfrastructureException;
+import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxInitializationException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxManager;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxResult;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxSpec;
@@ -1038,15 +1039,23 @@ public class ReviewJobExecutor {
 
         String errorMessage = preparation != null
                 ? preparation.message()
-                : e instanceof SandboxInfrastructureException
-                        ? "The sandbox infrastructure failed during execution."
-                        : e instanceof IOException
-                                ? "A file or network operation failed during execution."
-                                : e instanceof InterruptedException
-                                        ? "The worker interrupted execution."
-                                        : "The job failed during execution.";
+                : e instanceof SandboxInitializationException
+                        ? "The sandbox could not prepare its workspace."
+                        : e instanceof SandboxInfrastructureException
+                                ? "The sandbox infrastructure failed during execution."
+                                : e instanceof IOException
+                                        ? "A file or network operation failed during execution."
+                                        : e instanceof InterruptedException
+                                                ? "The worker interrupted execution."
+                                                : "The job failed during execution.";
         if (preparation == null) {
-            log.error("Agent job failed: jobId={}, error={}", jobId, errorMessage, e);
+            log.error(
+                    "Agent job failed: jobId={}, error={}, errorType={}, cause={}",
+                    jobId,
+                    errorMessage,
+                    e.getClass().getName(),
+                    e.getMessage(),
+                    e);
         }
 
         if (isRetryableExecutionFailure(e)) {
@@ -1083,12 +1092,40 @@ public class ReviewJobExecutor {
                         workerId,
                         objectMapper.writeValueAsString(diagnosis));
             }
+            if (updated > 0 && e instanceof SandboxInitializationException initialization) {
+                jobRepository.recordInitializationFailure(
+                        jobId,
+                        job.getWorkspaceId(),
+                        job.getAttempt(),
+                        workerId,
+                        initializationDiagnosis(objectMapper, job.getAttempt(), initialization));
+            }
             if (updated > 0 && sandboxExecutionStarted) billTerminatedJob(job, "execution failure");
             return updated;
         });
         String outcome = failed != null && failed > 0 ? ReviewJobStatus.FAILED.name() : "OWNERSHIP_LOST";
         if (preparation != null) jobTelemetry.preparationFailed(job, preparation, outcome);
         return failed != null && failed > 0 ? FailureOutcome.FAILED : FailureOutcome.OWNERSHIP_LOST;
+    }
+
+    /**
+     * What the operator needs to see why the initializer stopped: its exit, whether the deadline ended it, and the
+     * bounded, credential-masked tail of its transcript. An infrastructure detail, never feedback about the work.
+     */
+    static String initializationDiagnosis(
+            ObjectMapper objectMapper, int attempt, SandboxInitializationException initialization) {
+        var diagnosis = objectMapper
+                .createObjectNode()
+                .put("attempt", attempt)
+                .put("timedOut", initialization.timedOut())
+                .put("transcriptTail", initialization.transcriptTail());
+        Integer exitCode = initialization.exitCode();
+        if (exitCode == null) {
+            diagnosis.putNull("exitCode");
+        } else {
+            diagnosis.put("exitCode", exitCode);
+        }
+        return objectMapper.writeValueAsString(diagnosis);
     }
 
     private enum FailureOutcome {
