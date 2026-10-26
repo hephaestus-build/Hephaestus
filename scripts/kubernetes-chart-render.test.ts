@@ -1799,6 +1799,27 @@ await test("the 16 GiB profile runs a review and a Heph turn, and an upgrade, wi
 	);
 });
 
+await test("every role that runs git writes the JGit configuration to an emptyDir", () => {
+	// The root filesystem is read-only, so JGit's default $HOME/.config cannot hold its config lock.
+	const resources = rendered(layersFor("small"));
+	for (const role of ["server", "worker"]) {
+		const pod = workload(resources, role);
+		const home = String(envValue(pod, "XDG_CONFIG_HOME"));
+		const emptyDirs = new Set(
+			list(get(podSpec(pod), "volumes"))
+				.filter((volume) => get(volume, "emptyDir") !== undefined)
+				.map((volume) => get(volume, "name")),
+		);
+		const writable = list(get(container(pod), "volumeMounts")).filter(
+			(mount) => emptyDirs.has(get(mount, "name")) && get(mount, "readOnly") !== true,
+		);
+		assert.ok(
+			writable.some((mount) => home.startsWith(`${String(get(mount, "mountPath"))}/`)),
+			`${role}: XDG_CONFIG_HOME ${home} is not on a writable emptyDir`,
+		);
+	}
+});
+
 await test("every revision migrates the database once, in a Job that only reaches PostgreSQL", () => {
 	const first = rendered([...layersFor("small"), workerLayer]);
 	const migration = first.find(
