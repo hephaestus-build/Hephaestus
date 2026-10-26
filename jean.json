@@ -1,6 +1,0 @@
-{
-	"scripts": {
-		"setup": "node \"$JEAN_ROOT_PATH/scripts/jean-setup.ts\"",
-		"run": "node ./scripts/jean-public-test.ts start"
-	}
-}

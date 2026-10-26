@@ -474,7 +474,6 @@ export default defineConfig({
 			"dev:kubernetes:reset": run("node scripts/kubernetes-cluster.ts reset"),
 			"check:ports": run("node scripts/check-ports.ts"),
 			"dev:e2e:setup": run("node scripts/e2e-setup.ts"),
-			"dev:public-test": run("node scripts/jean-public-test.ts"),
 		},
 	},
 });
