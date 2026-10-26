@@ -470,6 +470,8 @@ export default defineConfig({
 			}),
 			// The chart on a local k3d cluster with this checkout's images: docs/contributor/local-development.mdx.
 			"dev:kubernetes": run("node scripts/kubernetes-cluster.ts dev"),
+			"dev:kubernetes:down": run("node scripts/kubernetes-cluster.ts down"),
+			"dev:kubernetes:reset": run("node scripts/kubernetes-cluster.ts reset"),
 			"check:ports": run("node scripts/check-ports.ts"),
 			"dev:e2e:setup": run("node scripts/e2e-setup.ts"),
 			"dev:public-test": run("node scripts/jean-public-test.ts"),

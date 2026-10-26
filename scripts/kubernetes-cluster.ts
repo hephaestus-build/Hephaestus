@@ -2,28 +2,36 @@
  * Installs the chart on a disposable cluster and checks that it runs: the CI cluster jobs and
  * `vp run dev:kubernetes` both use it, so that a developer runs what CI runs.
  *
- *   prepare  namespaces, Secrets, certificates and the operator's values for the images in a file
+ *   prepare  namespaces, Secrets, certificates and the operator's values for the images in a file;
+ *            a second run keeps every value. --gateway routes the release through k3s's Traefik
+ *   gateway  Traefik's Gateway provider and the Gateway `cluster`, on a k3d cluster that publishes 443
  *   install  `helm upgrade --install` with the dev profile and the prepared values, until ready
  *   verify   every workload ready, and each worker's isolation probe passed
+ *   request  one HTTPS request to the webapp and the API through that Gateway
  *   backup-drill  pgBackRest to a throwaway S3 server, then a point-in-time restore
  *   render   the manifests of those values for synthetic images, with backups on and with an external
  *            PostgreSQL, for a schema check without a cluster
- *   dev      a local k3d cluster with a registry, this checkout's images built and pushed, then the
- *            three steps above
+ *   dev      a local k3d cluster with a registry, this checkout's images built and pushed, the three
+ *            steps above, and a Gateway on https://hephaestus.localhost; a second run reuses the cluster
+ *   down     stops the dev cluster and keeps its data
+ *   reset    deletes the dev cluster, its data, its registry and the work directory
  *
  * The cluster is the caller's: the script creates none, except `dev`. Every generated value stays
  * in the work directory, which only the user can read; the script prints no secret value.
  */
 import { createHash, randomBytes } from "node:crypto";
-import { chmod, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { once } from "node:events";
+import { access, chmod, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { connect } from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { setTimeout as sleep } from "node:timers/promises";
 import { parseArgs } from "node:util";
 
 import { readInventory } from "./commit-image-lock.ts";
 import type { ChartImage } from "./kubernetes-chart.ts";
-import { asRecord, asString, parseJson } from "./lib/json.ts";
-import { output, run } from "./lib/process.ts";
+import { asRecord, asString, isRecord, parseJson } from "./lib/json.ts";
+import { output, run, succeeds } from "./lib/process.ts";
 import { parseResolvedImages } from "./resolve-release-images.ts";
 
 const ROOT = path.join(import.meta.dirname, "..");
@@ -35,6 +43,10 @@ export const SANDBOXES = "hephaestus-sandboxes";
 const GATEWAY_NAMESPACE = "gateway";
 const EXTERNAL_POSTGRESQL = "external-postgresql";
 const HOST = "hephaestus.cluster.test";
+/** The cluster and the host of `dev`. Browsers resolve every `*.localhost` name to the loopback address. */
+export const DEV_CLUSTER = "hephaestus";
+export const DEV_HOST = "hephaestus.localhost";
+const DEV_WORK = path.join(ROOT, ".context", "kubernetes-cluster");
 
 /** The Gateway API resource definitions that the route needs, at a pinned release and checksum. */
 const GATEWAY_API = {
@@ -120,6 +132,17 @@ export interface ValuesOptions {
 	api: Endpoint;
 	/** The host and CIDR of an operator's PostgreSQL; the bundled one when absent. */
 	externalPostgresql?: { host: string; cidr: string };
+	/** The Gateway that serves the route; a placeholder that no request reaches when absent. */
+	gateway?: Gateway;
+	/** A GitHub OAuth app's client ID and the first admins, for a cluster that someone signs in to. */
+	signIn?: { clientId: string; bootstrapAdmins: string };
+}
+
+/** The host that a Gateway serves, and the namespace and labels of its data plane's Pods. */
+export interface Gateway {
+	host: string;
+	namespace: string;
+	podLabels: Record<string, string>;
 }
 
 /** The operator's values for a test install: every required value, and the worker enabled. */
@@ -130,12 +153,15 @@ export function operatorValues(options: ValuesOptions): Record<string, unknown> 
 	return {
 		release: { version: "v0.0.0-cluster", commit: options.commit },
 		images: options.images,
-		host: HOST,
+		host: options.gateway?.host ?? HOST,
 		trustedProxies: String.raw`10\.\d{1,3}\.\d{1,3}\.\d{1,3}`,
 		secret: { name: `${RELEASE}-app` },
 		route: { parentRefs: [{ name: "cluster", namespace: GATEWAY_NAMESPACE }] },
 		networkPolicy: {
-			gateway: { namespace: GATEWAY_NAMESPACE, podLabels: { app: "gateway" } },
+			gateway: {
+				namespace: options.gateway?.namespace ?? GATEWAY_NAMESPACE,
+				podLabels: options.gateway?.podLabels ?? { app: "gateway" },
+			},
 			kubernetesApi: { cidr, port: options.api.port },
 		},
 		postgresql: {
@@ -154,6 +180,14 @@ export function operatorValues(options: ValuesOptions): Record<string, unknown> 
 			},
 			gitCache: { sizeLimit: "2Gi" },
 		},
+		...(options.signIn === undefined
+			? {}
+			: {
+					config: {
+						github: { oauthClientId: options.signIn.clientId },
+						auth: { bootstrapAdmins: options.signIn.bootstrapAdmins },
+					},
+				}),
 	};
 }
 
@@ -198,27 +232,110 @@ async function secret(
 	name: string,
 	namespaceName: string,
 	data: Record<string, string>,
+	type = "Opaque",
 ): Promise<void> {
 	await apply({
 		apiVersion: "v1",
 		kind: "Secret",
 		metadata: { name, namespace: namespaceName },
-		type: "Opaque",
+		type,
 		stringData: data,
 	});
+}
+
+/** A Secret's values, decoded; empty when it does not exist. A failed kubectl call throws. */
+async function secretData(name: string, namespaceName: string): Promise<Record<string, string>> {
+	const found = await kubectl([
+		"-n",
+		namespaceName,
+		"get",
+		"secret",
+		name,
+		"--ignore-not-found",
+		"-o",
+		"json",
+	]);
+	if (found.trim() === "") {
+		return {};
+	}
+	const { data } = asRecord(parseJson(found), "Secret");
+	return Object.fromEntries(
+		Object.entries(data === undefined ? {} : asRecord(data, "Secret data")).map(([key, value]) => [
+			key,
+			Buffer.from(asString(value, key), "base64").toString("utf8"),
+		]),
+	);
+}
+
+/**
+ * The existing values, and a generated value for each missing key: a run never rotates a value,
+ * because the database and the sessions keep the first ones. Only `reset` starts over.
+ */
+export function mergeSecret(
+	existing: Readonly<Record<string, string>>,
+	generated: Readonly<Record<string, string>>,
+): { data: Record<string, string>; added: string[] } {
+	return {
+		data: { ...generated, ...existing },
+		added: Object.keys(generated).filter((key) => !(key in existing)),
+	};
 }
 
 async function openssl(work: string, args: string[]): Promise<void> {
 	await run("openssl", args, { cwd: work, stdout: "ignore", stderr: "ignore" });
 }
 
-/** A certificate and key that the work directory's CA signs. */
+/** Below this many days of validity left, a run issues a certificate again. */
+const RENEW_DAYS = 30;
+
+/** Whether the work directory holds the certificate, valid for more than `RENEW_DAYS`. */
+async function fresh(work: string, name: string): Promise<boolean> {
+	return succeeds(
+		"openssl",
+		["x509", "-checkend", String(RENEW_DAYS * 86_400), "-noout", "-in", `${name}.crt`],
+		{ cwd: work },
+	);
+}
+
+/** The work directory's CA, made once: every certificate of the cluster and the browser trust it. */
+async function certificateAuthority(work: string): Promise<void> {
+	if (await fresh(work, "ca")) {
+		return;
+	}
+	// A new CA signs every certificate again.
+	for (const name of ["tls", "backup", "gateway"]) {
+		await rm(path.join(work, `${name}.crt`), { force: true });
+	}
+	await openssl(work, [
+		"req",
+		"-x509",
+		"-newkey",
+		"rsa:3072",
+		"-nodes",
+		"-days",
+		"3650",
+		"-subj",
+		"/CN=Hephaestus cluster test CA",
+		"-keyout",
+		"ca.key",
+		"-out",
+		"ca.crt",
+	]);
+}
+
+/**
+ * A certificate and key that the work directory's CA signs, issued again when it is missing or near
+ * its end. 397 days is the longest validity that browsers accept.
+ */
 async function certificate(
 	work: string,
 	name: string,
 	subject: string,
 	extension: string,
 ): Promise<void> {
+	if (await fresh(work, name)) {
+		return;
+	}
 	await writeFile(path.join(work, `${name}.ext`), `${extension}\n`);
 	await openssl(work, [
 		"req",
@@ -243,7 +360,7 @@ async function certificate(
 		"ca.key",
 		"-CAcreateserial",
 		"-days",
-		"7",
+		"397",
 		"-extfile",
 		`${name}.ext`,
 		"-out",
@@ -251,38 +368,23 @@ async function certificate(
 	]);
 }
 
-/** A CA, a server certificate for each of the hosts, and the backup client certificate. */
+/** The CA, a server certificate for each of the hosts, and the backup client certificate. */
 async function certificates(
 	work: string,
 	hosts: readonly string[],
 ): Promise<Record<string, string>> {
-	await openssl(work, [
-		"req",
-		"-x509",
-		"-newkey",
-		"rsa:3072",
-		"-nodes",
-		"-days",
-		"7",
-		"-subj",
-		"/CN=Hephaestus cluster test CA",
-		"-keyout",
-		"ca.key",
-		"-out",
-		"ca.crt",
-	]);
-	const issue = async (name: string, subject: string, extension: string) =>
-		certificate(work, name, subject, extension);
+	await certificateAuthority(work);
 	const [primary] = hosts;
 	if (primary === undefined) {
 		throw new Error("the PostgreSQL certificate needs a host name");
 	}
-	await issue(
+	await certificate(
+		work,
 		"tls",
 		`/CN=${primary}`,
 		`subjectAltName=${hosts.map((host) => `DNS:${host}`).join(",")}`,
 	);
-	await issue("backup", "/CN=hephaestus-backup", "extendedKeyUsage=clientAuth");
+	await certificate(work, "backup", "/CN=hephaestus-backup", "extendedKeyUsage=clientAuth");
 	const read = async (file: string) => readFile(path.join(work, file), "utf8");
 	return {
 		"ca.crt": await read("ca.crt"),
@@ -291,6 +393,15 @@ async function certificates(
 		"backup.crt": await read("backup.crt"),
 		"backup.key": await read("backup.key"),
 	};
+}
+
+/** Whether the cluster holds certificates of a CA that the work directory no longer has. */
+export async function lostCa(work: string): Promise<boolean> {
+	const hasCa = await access(path.join(work, "ca.key")).then(
+		() => true,
+		() => false,
+	);
+	return !hasCa && Object.keys(await secretData(`${RELEASE}-postgresql-tls`, NAMESPACE)).length > 0;
 }
 
 /** Installs the pinned Gateway API definitions on a cluster that has none; a cluster's own stay as they are. */
@@ -438,26 +549,83 @@ interface PrepareOptions {
 	commit: string;
 	/** The pod CIDR that holds an external PostgreSQL; the bundled one when absent. */
 	externalCidr?: string;
+	gateway?: Gateway;
+	signIn?: ValuesOptions["signIn"];
+	/** The GitHub OAuth app's client secret; the release Secret keeps an earlier one when absent. */
+	clientSecret?: string;
 }
 
-export async function prepare(options: PrepareOptions): Promise<void> {
+/** The Secret of the Gateway's certificate, in the Gateway's namespace. */
+const GATEWAY_TLS = "gateway-tls";
+
+/**
+ * The namespaces, the Secrets and the values of a release. A second run on the same cluster keeps
+ * every value and renews only a certificate near its end. It returns whether the client secret
+ * changed, which the server reads only at start.
+ */
+export async function prepare(options: PrepareOptions): Promise<{ rotated: boolean }> {
 	await mkdir(options.work, { recursive: true, mode: 0o700 });
 	await chmod(options.work, 0o700);
-	await gatewayApi(options.work);
+	// k3s installs the Gateway API definitions with Traefik, through a Helm chart that cannot adopt
+	// definitions that someone else installed first. `gateway` waits for them.
+	if (options.gateway === undefined) {
+		await gatewayApi(options.work);
+	}
 	await namespace(NAMESPACE);
 	await namespace(SANDBOXES);
 	await namespace(GATEWAY_NAMESPACE, {});
-	const application = applicationSecret();
+	if (await lostCa(options.work)) {
+		throw new Error(
+			`the cluster keeps its certificates, but ${options.work} lost the CA. Run vp run dev:kubernetes:reset`,
+		);
+	}
 	const externalHost = `postgresql.${EXTERNAL_POSTGRESQL}.svc`;
 	const hosts =
 		options.externalCidr === undefined
 			? [`${RELEASE}-postgresql.${NAMESPACE}.svc`]
 			: [externalHost];
 	const tls = await certificates(options.work, hosts);
-	await secret(`${RELEASE}-app`, NAMESPACE, application);
-	await secret(`${RELEASE}-postgresql-tls`, NAMESPACE, tls);
+	const tlsName = `${RELEASE}-postgresql-tls`;
+	const currentTls = await secretData(tlsName, NAMESPACE);
+	const renewed =
+		Object.keys(currentTls).length > 0 &&
+		Object.entries(tls).some(([key, value]) => currentTls[key] !== value);
+	await secret(tlsName, NAMESPACE, tls);
+	const statefulSet = `statefulset/${RELEASE}-postgresql`;
+	if (renewed && (await succeeds("kubectl", ["-n", NAMESPACE, "get", statefulSet]))) {
+		// PostgreSQL reads its certificate at start.
+		await kubectl(["-n", NAMESPACE, "rollout", "restart", statefulSet]);
+	}
+	const current = await secretData(`${RELEASE}-app`, NAMESPACE);
+	const { data } = mergeSecret(current, applicationSecret());
+	const previous = current.GITHUB_OAUTH_CLIENT_SECRET ?? "";
+	if (options.clientSecret !== undefined) {
+		data.GITHUB_OAUTH_CLIENT_SECRET = options.clientSecret;
+	} else if (options.signIn !== undefined && previous === "") {
+		throw new Error(
+			"the cluster has no GitHub client secret: set GITHUB_OAUTH_CLIENT_ID and GITHUB_OAUTH_CLIENT_SECRET",
+		);
+	}
+	await secret(`${RELEASE}-app`, NAMESPACE, data);
 	if (options.externalCidr !== undefined) {
-		await externalPostgresql(options.images.postgres, tls, application.DATABASE_PASSWORD ?? "");
+		await externalPostgresql(options.images.postgres, tls, data.DATABASE_PASSWORD ?? "");
+	}
+	if (options.gateway !== undefined) {
+		const { host } = options.gateway;
+		await certificate(
+			options.work,
+			"gateway",
+			`/CN=${host}`,
+			`subjectAltName=DNS:${host}\nextendedKeyUsage=serverAuth`,
+		);
+		const read = async (file: string) => readFile(path.join(options.work, file), "utf8");
+		// Traefik reads a changed certificate without a restart.
+		await secret(
+			GATEWAY_TLS,
+			GATEWAY_NAMESPACE,
+			{ "tls.crt": await read("gateway.crt"), "tls.key": await read("gateway.key") },
+			"kubernetes.io/tls",
+		);
 	}
 	const slices = parseJson(
 		await kubectl([
@@ -475,6 +643,8 @@ export async function prepare(options: PrepareOptions): Promise<void> {
 		images: options.images,
 		commit: options.commit,
 		api: apiEndpoint(slices),
+		...(options.gateway === undefined ? {} : { gateway: options.gateway }),
+		...(options.signIn === undefined ? {} : { signIn: options.signIn }),
 		...(options.externalCidr === undefined
 			? {}
 			: { externalPostgresql: { host: externalHost, cidr: options.externalCidr } }),
@@ -482,6 +652,10 @@ export async function prepare(options: PrepareOptions): Promise<void> {
 	await writeFile(path.join(options.work, "values.yaml"), `${JSON.stringify(values, null, 2)}\n`, {
 		mode: 0o600,
 	});
+	return {
+		rotated:
+			options.clientSecret !== undefined && previous !== "" && previous !== options.clientSecret,
+	};
 }
 
 export async function install(work: string, extra: readonly string[] = []): Promise<void> {
@@ -996,18 +1170,373 @@ async function buildLocal(registry: string): Promise<ChartImages> {
 	return chartImagesFrom(resolved, inventory.upstream);
 }
 
-/** Whether k3d has a cluster or a registry of the name. */
-async function k3dHas(kind: "cluster" | "registry", name: string): Promise<boolean> {
-	const listed = parseJson(await output("k3d", [kind, "list", "-o", "json"]));
-	return Array.isArray(listed) && listed.some((entry) => asRecord(entry, kind).name === name);
+/** Each tool that `dev` runs, the arguments that make it print its version, and where to get it. */
+const DEV_TOOLS: readonly (readonly [string, readonly string[], string])[] = [
+	["docker", ["--version"], "https://docs.docker.com/get-started/get-docker/"],
+	["k3d", ["version"], "https://k3d.io/stable/#installation"],
+	["kubectl", ["version", "--client"], "https://kubernetes.io/docs/tasks/tools/"],
+	["helm", ["version"], "https://helm.sh/docs/intro/install/"],
+	["pack", ["--version"], "https://github.com/buildpacks/pack/releases"],
+	["openssl", ["version"], "the system's package manager"],
+	["curl", ["--version"], "the system's package manager"],
+];
+
+/**
+ * The Docker memory that `dev` needs: the roles and two workers peak at about 6 GiB, a review
+ * sandbox adds 3. Docker Desktop reports about 97 % of its memory setting, so a setting of 10 GiB
+ * passes.
+ */
+export const DEV_MEMORY = 9.5 * 1024 ** 3;
+
+export interface DevCheck {
+	missing: readonly string[];
+	/** Docker's memory in bytes; undefined when the daemon does not answer. */
+	dockerMemory: number | undefined;
+	helmVersion: string | undefined;
+	/** The networks that no container uses, when Docker has no address pool left for a new one. */
+	unusedNetworks?: number;
+	/** Whether another program holds 127.0.0.1:443, which a new cluster publishes. */
+	portBusy?: boolean;
 }
 
+export type DevProblemKind = "tool" | "docker" | "memory" | "network" | "port" | "helm";
+
+export interface DevProblem {
+	kind: DevProblemKind;
+	message: string;
+}
+
+/** Each reason why `dev` cannot start, in words that say what to do. */
+export function devProblems(check: DevCheck): DevProblem[] {
+	const problems: DevProblem[] = DEV_TOOLS.filter(([tool]) => check.missing.includes(tool)).map(
+		([tool, , source]) => ({
+			kind: "tool",
+			message: `${tool} is not on PATH. Install it from ${source}.`,
+		}),
+	);
+	if (!check.missing.includes("docker")) {
+		if (check.dockerMemory === undefined || !Number.isFinite(check.dockerMemory)) {
+			problems.push({
+				kind: "docker",
+				message: "Docker does not answer. Start Docker Desktop or the Docker daemon.",
+			});
+		} else if (check.dockerMemory < DEV_MEMORY) {
+			const gib = (check.dockerMemory / 1024 ** 3).toFixed(1);
+			problems.push({
+				kind: "memory",
+				message:
+					`Docker has ${gib} GiB of memory; the cluster and a practice review need 10 GiB. ` +
+					"In Docker Desktop, set Settings > Resources > Memory to 10 GiB or more.",
+			});
+		}
+	}
+	if (check.unusedNetworks !== undefined) {
+		problems.push({
+			kind: "network",
+			message:
+				`Docker has no address pool left for the cluster network. ${check.unusedNetworks} networks ` +
+				"have no container, often from stopped Compose stacks. Run docker network prune to remove them.",
+		});
+	}
+	if (check.portBusy === true) {
+		problems.push({
+			kind: "port",
+			message:
+				"Another program listens on 127.0.0.1:443, where the cluster serves. Stop it. On macOS, " +
+				"sudo lsof -iTCP:443 -sTCP:LISTEN names it.",
+		});
+	}
+	if (check.helmVersion !== undefined && !check.helmVersion.startsWith("v4.")) {
+		problems.push({
+			kind: "helm",
+			message: `helm is ${check.helmVersion}; the chart needs Helm 4.`,
+		});
+	}
+	return problems;
+}
+
+async function preflight(): Promise<void> {
+	const missing = [];
+	for (const [tool, args] of DEV_TOOLS) {
+		if (!(await succeeds(tool, [...args]))) {
+			missing.push(tool);
+		}
+	}
+	const dockerMemory = missing.includes("docker")
+		? undefined
+		: await output("docker", ["info", "--format", "{{.MemTotal}}"]).then(Number, () => undefined);
+	const helmVersion = missing.includes("helm")
+		? undefined
+		: await output("helm", ["version", "--template", "{{.Version}}"]).then((version) =>
+				version.trim(),
+			);
+	const newCluster =
+		dockerMemory !== undefined &&
+		!(await succeeds("docker", ["network", "inspect", `k3d-${DEV_CLUSTER}`]));
+	const problems = devProblems({
+		missing,
+		dockerMemory,
+		helmVersion,
+		...(newCluster ? { ...(await networkPools()), portBusy: await portBusy(443) } : {}),
+	});
+	if (problems.length > 0) {
+		process.stderr.write(
+			`vp run dev:kubernetes cannot start:\n${problems.map((problem) => `  - ${problem.message}\n`).join("")}`,
+		);
+		process.exit(1);
+	}
+}
+
+/**
+ * The unused networks, when Docker cannot create the cluster network: each Compose project keeps a
+ * network until someone removes it, and the default address pools hold about 30.
+ */
+async function networkPools(): Promise<{ unusedNetworks?: number }> {
+	const probe = "hephaestus-preflight";
+	try {
+		const failure = await output("docker", ["network", "create", probe]).then(() => "", String);
+		if (!failure.includes("address pools")) {
+			return {};
+		}
+	} finally {
+		await succeeds("docker", ["network", "rm", probe]);
+	}
+	const unused = await output("docker", ["network", "ls", "--filter", "dangling=true", "--quiet"]);
+	return { unusedNetworks: unused.split("\n").filter(Boolean).length };
+}
+
+/**
+ * Whether a program accepts connections on the loopback port. A connection tells for any user; a
+ * trial bind does not, because macOS and Linux refuse a non-root bind to a port below 1024.
+ */
+async function portBusy(port: number): Promise<boolean> {
+	const socket = connect({ host: "127.0.0.1", port });
+	try {
+		await once(socket, "connect");
+		return true;
+	} catch {
+		return false;
+	} finally {
+		socket.destroy();
+	}
+}
+
+export type ClusterState = "absent" | "stopped" | "without-port" | "running";
+
+/** The state of the `dev` cluster in `k3d cluster list -o json`. */
+export function clusterState(listed: unknown): ClusterState {
+	const entry = (Array.isArray(listed) ? listed : [])
+		.map((item) => asRecord(item, "cluster"))
+		.find((item) => item.name === DEV_CLUSTER);
+	if (entry === undefined) {
+		return "absent";
+	}
+	const nodes = Array.isArray(entry.nodes) ? entry.nodes : [];
+	const published = nodes
+		.map((node) => asRecord(node, "node"))
+		.some(
+			(node) =>
+				node.role === "loadbalancer" &&
+				isRecord(node.portMappings) &&
+				"443/tcp" in node.portMappings,
+		);
+	if (!published) {
+		return "without-port";
+	}
+	return entry.serversRunning === 0 ? "stopped" : "running";
+}
+
+/** Whether k3d has a registry of the name. */
+async function k3dHasRegistry(name: string): Promise<boolean> {
+	const listed = parseJson(await output("k3d", ["registry", "list", "-o", "json"]));
+	return Array.isArray(listed) && listed.some((entry) => asRecord(entry, "registry").name === name);
+}
+
+/** k3s ships Traefik and the Gateway API definitions, with Traefik's Gateway provider off. */
+const TRAEFIK = { namespace: "kube-system", podLabels: { "app.kubernetes.io/name": "traefik" } };
+
+/** The Gateway that `dev` and the k3d CI job serve the release through. */
+export const TRAEFIK_GATEWAY: Gateway = { host: DEV_HOST, ...TRAEFIK };
+
+/** Traefik's Gateway provider, and the Gateway `cluster` on Traefik's HTTPS entry point. */
+export async function gateway(host: string): Promise<void> {
+	await apply({
+		apiVersion: "helm.cattle.io/v1",
+		kind: "HelmChartConfig",
+		metadata: { name: "traefik", namespace: TRAEFIK.namespace },
+		spec: {
+			valuesContent:
+				"providers:\n  kubernetesGateway:\n    enabled: true\ngateway:\n  enabled: false\n",
+		},
+	});
+	// `kubectl wait` fails at once while the GatewayClass does not exist yet, so a loop waits for it.
+	for (let attempt = 1; ; attempt += 1) {
+		if (
+			await succeeds("kubectl", [
+				"wait",
+				"--for=condition=Accepted",
+				"gatewayclass/traefik",
+				"--timeout=1s",
+			])
+		) {
+			break;
+		}
+		if (attempt === 30) {
+			throw new Error(
+				"Traefik accepted no GatewayClass in 5 minutes. See kubectl -n kube-system logs deployment/traefik",
+			);
+		}
+		await sleep(10_000);
+	}
+	await apply({
+		apiVersion: "gateway.networking.k8s.io/v1",
+		kind: "Gateway",
+		metadata: { name: "cluster", namespace: GATEWAY_NAMESPACE },
+		spec: {
+			gatewayClassName: "traefik",
+			listeners: [
+				{
+					name: "https",
+					protocol: "HTTPS",
+					// Traefik's HTTPS entry point; its Service publishes it on 443.
+					port: 8443,
+					hostname: host,
+					tls: { certificateRefs: [{ name: GATEWAY_TLS }] },
+					allowedRoutes: { namespaces: { from: "All" } },
+				},
+			],
+		},
+	});
+}
+
+/** One HTTPS request to the webapp and one to the API, through the Gateway on 127.0.0.1:443. */
+export async function request(work: string, host: string): Promise<void> {
+	for (const route of ["/", "/api/identity-providers"]) {
+		await run("curl", [
+			"--fail",
+			"--silent",
+			"--show-error",
+			"--output",
+			"/dev/null",
+			"--retry",
+			"10",
+			"--retry-all-errors",
+			"--cacert",
+			path.join(work, "ca.crt"),
+			"--resolve",
+			`${host}:443:127.0.0.1`,
+			`https://${host}${route}`,
+		]);
+	}
+	process.stdout.write(`https://${host} answered through the Gateway\n`);
+}
+
+/** A GitHub OAuth app and the first admins. A run stores them without the secret, which the release Secret holds. */
+export interface DevSignIn {
+	clientId: string;
+	bootstrapAdmins: string;
+	clientSecret?: string;
+}
+
+/**
+ * The GitHub OAuth app from the shell, or else the app of an earlier run, so that a run without the
+ * variables keeps the sign-in.
+ */
+export function devSignIn(
+	environment: NodeJS.ProcessEnv,
+	saved: DevSignIn | undefined,
+): DevSignIn | undefined {
+	const clientId = environment.GITHUB_OAUTH_CLIENT_ID ?? "";
+	const clientSecret = environment.GITHUB_OAUTH_CLIENT_SECRET ?? "";
+	if (clientId === "" && clientSecret === "") {
+		return saved === undefined
+			? undefined
+			: {
+					clientId: saved.clientId,
+					bootstrapAdmins: environment.HEPHAESTUS_AUTH_BOOTSTRAP_ADMINS ?? saved.bootstrapAdmins,
+				};
+	}
+	if (clientId === "" || clientSecret === "") {
+		throw new Error("set both GITHUB_OAUTH_CLIENT_ID and GITHUB_OAUTH_CLIENT_SECRET, or neither");
+	}
+	return {
+		clientId,
+		clientSecret,
+		bootstrapAdmins: environment.HEPHAESTUS_AUTH_BOOTSTRAP_ADMINS ?? saved?.bootstrapAdmins ?? "",
+	};
+}
+
+/** The OAuth app of an earlier run, from the work directory. */
+async function savedSignIn(file: string): Promise<DevSignIn | undefined> {
+	const saved = await readFile(file, "utf8").then(parseJson, () => undefined);
+	if (saved === undefined) {
+		return undefined;
+	}
+	const record = asRecord(saved, "saved sign-in");
+	return {
+		clientId: asString(record.clientId, "client ID"),
+		bootstrapAdmins: asString(record.bootstrapAdmins, "bootstrap admins"),
+	};
+}
+
+/** The commands that make a system trust the work directory's CA. */
+export function trustSteps(platform: NodeJS.Platform, ca: string): string[] {
+	const steps: string[] = [];
+	if (platform === "darwin") {
+		steps.push(
+			`security add-trusted-cert -r trustRoot -k ~/Library/Keychains/login.keychain-db "${ca}"`,
+		);
+	}
+	if (platform === "linux") {
+		steps.push(
+			`sudo cp "${ca}" /usr/local/share/ca-certificates/hephaestus-dev.crt`,
+			"sudo update-ca-certificates",
+		);
+	}
+	// mkcert installs a CA into the system store and into Firefox's and Chrome's own stores.
+	steps.push(`Or, with mkcert: CAROOT="${path.dirname(ca)}/mkcert" mkcert -install`);
+	return steps;
+}
+
+/** What `dev` prints when the release answers: where to open it, how to sign in, how to stop it. */
+export function devSummary(options: {
+	host: string;
+	ca: string;
+	signIn: boolean;
+	platform: NodeJS.Platform;
+}): string {
+	const url = `https://${options.host}`;
+	const signIn = options.signIn
+		? ["Sign in with GitHub."]
+		: [
+				"Sign-in needs a GitHub OAuth app. Create one with the homepage",
+				`${url} and the callback ${url}/api/login/oauth2/code/github, then run`,
+				"  GITHUB_OAUTH_CLIENT_ID=... GITHUB_OAUTH_CLIENT_SECRET=... \\",
+				"  HEPHAESTUS_AUTH_BOOTSTRAP_ADMINS=github:@<you> vp run dev:kubernetes",
+			];
+	return [
+		"",
+		`Hephaestus runs at ${url}`,
+		`The local CA ${options.ca} signed its certificate. To trust it once:`,
+		...trustSteps(options.platform, options.ca).map((step) => `  ${step}`),
+		...signIn,
+		"",
+		`Logs:        kubectl --context k3d-${DEV_CLUSTER} -n ${NAMESPACE} logs -f deployment/${RELEASE}-server`,
+		"Stop:        vp run dev:kubernetes:down    (keeps the data)",
+		"Start over:  vp run dev:kubernetes:reset   (deletes the cluster, its data and the CA)",
+		"",
+	].join("\n");
+}
+
+const DEV_REGISTRY = "k3d-hephaestus-registry.localhost";
+
 async function dev(work: string): Promise<void> {
-	const cluster = "hephaestus";
-	const registry = "k3d-hephaestus-registry.localhost";
+	await preflight();
+	const savedFile = path.join(work, "sign-in.json");
+	const signIn = devSignIn(process.env, await savedSignIn(savedFile));
 	const registryPort = "5111";
 	await mkdir(work, { recursive: true, mode: 0o700 });
-	if (!(await k3dHas("registry", registry))) {
+	if (!(await k3dHasRegistry(DEV_REGISTRY))) {
 		await run("k3d", [
 			"registry",
 			"create",
@@ -1016,47 +1545,115 @@ async function dev(work: string): Promise<void> {
 			registryPort,
 		]);
 	}
-	if (!(await k3dHas("cluster", cluster))) {
+	const state = clusterState(parseJson(await output("k3d", ["cluster", "list", "-o", "json"])));
+	if (state === "without-port") {
+		throw new Error(
+			`the cluster ${DEV_CLUSTER} publishes no HTTPS port: an older run created it. Run vp run dev:kubernetes:reset`,
+		);
+	}
+	if (state === "stopped") {
+		await run("k3d", ["cluster", "start", DEV_CLUSTER]);
+	}
+	if (state === "absent") {
 		// The chart takes only ghcr.io and docker.io references, as a release lock has them. The nodes
 		// pull ghcr.io from the local registry, which serves this checkout's builds by digest.
 		const mirrors = path.join(work, "registries.yaml");
 		await writeFile(
 			mirrors,
-			`mirrors:\n  ghcr.io:\n    endpoint:\n      - http://${registry}:5000\n`,
+			`mirrors:\n  ghcr.io:\n    endpoint:\n      - http://${DEV_REGISTRY}:5000\n`,
 		);
-		await run("k3d", [
-			"cluster",
-			"create",
-			cluster,
-			"--agents",
-			"1",
-			"--registry-use",
-			`${registry}:5000`,
-			"--registry-config",
-			mirrors,
-			"--k3s-arg",
-			"--kubelet-arg=pod-max-pids=4096@all",
-		]);
+		try {
+			await run("k3d", [
+				"cluster",
+				"create",
+				DEV_CLUSTER,
+				"--agents",
+				"1",
+				"--registry-use",
+				`${DEV_REGISTRY}:5000`,
+				"--registry-config",
+				mirrors,
+				"--port",
+				"127.0.0.1:443:443@loadbalancer",
+				"--k3s-arg",
+				"--kubelet-arg=pod-max-pids=4096@all",
+			]);
+		} catch (error) {
+			// A failed create can leave a half-made cluster that blocks the next one.
+			await succeeds("k3d", ["cluster", "delete", DEV_CLUSTER]);
+			throw new Error("k3d could not create the cluster", { cause: error });
+		}
+	}
+	// Every kubectl and helm call below talks to this cluster, whatever the current context is.
+	const kubeconfig = path.join(work, "kubeconfig");
+	await run("k3d", ["kubeconfig", "write", DEV_CLUSTER, "--output", kubeconfig], {
+		stdout: "ignore",
+	});
+	process.env.KUBECONFIG = kubeconfig;
+	// Before the builds, which take minutes.
+	if (await lostCa(work)) {
+		throw new Error(
+			`the cluster keeps its certificates, but ${work} lost the CA. Run vp run dev:kubernetes:reset`,
+		);
 	}
 	const images = await buildLocal(`localhost:${registryPort}`);
 	const inCluster = mapImages((name) =>
 		images[name].replace(`localhost:${registryPort}/`, "ghcr.io/"),
 	);
 	const head = await output("git", ["rev-parse", "HEAD"], { cwd: ROOT });
-	await prepare({ work, images: inCluster, commit: head.trim() });
+	const { rotated } = await prepare({
+		work,
+		images: inCluster,
+		commit: head.trim(),
+		gateway: TRAEFIK_GATEWAY,
+		...(signIn === undefined ? {} : { signIn }),
+		...(signIn?.clientSecret === undefined ? {} : { clientSecret: signIn.clientSecret }),
+	});
+	if (signIn !== undefined) {
+		const { clientSecret: _secret, ...stored } = signIn;
+		await writeFile(savedFile, `${JSON.stringify(stored)}\n`, { mode: 0o600 });
+	}
+	const ca = path.join(work, "ca.crt");
+	await mkdir(path.join(work, "mkcert"), { recursive: true });
+	await writeFile(path.join(work, "mkcert", "rootCA.pem"), await readFile(ca));
+	await gateway(DEV_HOST);
 	await install(work);
+	if (rotated) {
+		// The server reads the secret at start, and a changed Secret alone rolls no Pod.
+		await kubectl(["-n", NAMESPACE, "rollout", "restart", `deployment/${RELEASE}-server`]);
+	}
 	await verify();
+	await request(work, DEV_HOST);
+	process.stdout.write(
+		devSummary({ host: DEV_HOST, ca, signIn: signIn !== undefined, platform: process.platform }),
+	);
+}
+
+/** Deletes the dev cluster, its registry and the work directory, and says what it removed. */
+async function reset(work: string): Promise<void> {
+	await run("k3d", ["cluster", "delete", DEV_CLUSTER]);
+	await run("k3d", ["registry", "delete", DEV_REGISTRY]).catch(() => undefined);
+	await rm(work, { recursive: true, force: true });
+	process.stdout.write(
+		[
+			`Removed the cluster ${DEV_CLUSTER} with its data, the registry ${DEV_REGISTRY} with its images,`,
+			`and ${work} with the CA, the Secrets' copies and the saved OAuth app.`,
+			"A system that trusts the old CA keeps it; the next run makes a new one.",
+			"",
+		].join("\n"),
+	);
 }
 
 if (import.meta.main) {
 	const { positionals, values } = parseArgs({
 		allowPositionals: true,
 		options: {
-			work: { type: "string", default: path.join(ROOT, ".context", "kubernetes-cluster") },
+			work: { type: "string", default: DEV_WORK },
 			images: { type: "string" },
 			commit: { type: "string" },
 			"external-postgresql-cidr": { type: "string" },
 			"pod-cidr": { type: "string" },
+			gateway: { type: "boolean", default: false },
 			set: { type: "string", multiple: true, default: [] },
 		},
 	});
@@ -1076,6 +1673,7 @@ if (import.meta.main) {
 				work,
 				images,
 				commit: values.commit,
+				...(values.gateway ? { gateway: TRAEFIK_GATEWAY } : {}),
 				...(values["external-postgresql-cidr"] === undefined
 					? {}
 					: { externalCidr: values["external-postgresql-cidr"] }),
@@ -1093,8 +1691,27 @@ if (import.meta.main) {
 			await verify();
 			break;
 		}
+		case "gateway": {
+			await gateway(DEV_HOST);
+			break;
+		}
+		case "request": {
+			await request(work, DEV_HOST);
+			break;
+		}
 		case "dev": {
 			await dev(work);
+			break;
+		}
+		case "down": {
+			await run("k3d", ["cluster", "stop", DEV_CLUSTER]);
+			break;
+		}
+		case "reset": {
+			if (work !== DEV_WORK) {
+				throw new Error("reset deletes only the dev work directory; it takes no --work");
+			}
+			await reset(work);
 			break;
 		}
 		case "backup-drill": {
@@ -1113,7 +1730,7 @@ if (import.meta.main) {
 		}
 		default: {
 			throw new Error(
-				"usage: kubernetes-cluster <prepare|install|verify|backup-drill|render|dev> [--work dir]",
+				"usage: kubernetes-cluster <prepare|gateway|install|verify|request|backup-drill|render|dev|down|reset> [--work dir]",
 			);
 		}
 	}

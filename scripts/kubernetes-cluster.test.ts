@@ -12,6 +12,15 @@ import {
 	apiEndpoint,
 	applicationSecret,
 	chartImagesFrom,
+	clusterState,
+	DEV_CLUSTER,
+	DEV_HOST,
+	DEV_MEMORY,
+	devProblems,
+	devSignIn,
+	devSummary,
+	trustSteps,
+	mergeSecret,
 	NAMESPACE,
 	operatorValues,
 	RELEASE,
@@ -51,9 +60,8 @@ await test("the API endpoint is the address and port of the kubernetes Service's
 	assert.throws(() => apiEndpoint({ items: [] }), /no EndpointSlice/u);
 });
 
-await test("the generated Secret holds every key that the chart reads, and two runs share no value", () => {
+await test("the generated Secret holds every key that the chart reads", () => {
 	const first = applicationSecret();
-	const second = applicationSecret();
 	for (const key of [
 		"DATABASE_USERNAME",
 		"DATABASE_PASSWORD",
@@ -68,7 +76,20 @@ await test("the generated Secret holds every key that the chart reads, and two r
 	]) {
 		assert.ok((first[key] ?? "").length > 0, key);
 	}
-	assert.notEqual(first.DATABASE_PASSWORD, second.DATABASE_PASSWORD);
+});
+
+await test("a second run keeps every value of the Secret and adds only the keys it lacks", () => {
+	const first = mergeSecret({}, applicationSecret());
+	assert.deepEqual(first.added.toSorted(), Object.keys(applicationSecret()).toSorted());
+	const second = mergeSecret(first.data, applicationSecret());
+	assert.deepEqual(second, { data: first.data, added: [] });
+	// A cluster from before a key existed, with a value that the generator does not make.
+	const { WEBHOOK_ROUTING_SECRET: _missing, ...older } = first.data;
+	const third = mergeSecret({ ...older, GITHUB_OAUTH_CLIENT_SECRET: "kept" }, applicationSecret());
+	assert.deepEqual(third.added, ["WEBHOOK_ROUTING_SECRET"]);
+	assert.equal(third.data.DATABASE_PASSWORD, first.data.DATABASE_PASSWORD);
+	assert.equal(third.data.GITHUB_OAUTH_CLIENT_SECRET, "kept");
+	assert.ok((third.data.WEBHOOK_ROUTING_SECRET ?? "").length > 0);
 });
 
 /** `helm template` of the dev profile with the values that `prepare` writes. */
@@ -134,4 +155,134 @@ await test("the prepared values install two workers on the dev profile, with the
 		),
 		false,
 	);
+});
+
+await test("the dev values route the dev host through Traefik, and pass the GitHub OAuth app and first admins", () => {
+	const resources = render(
+		operatorValues({
+			images,
+			commit: "c".repeat(40),
+			api: { address: "172.18.0.3", port: 6443 },
+			gateway: {
+				host: DEV_HOST,
+				namespace: "kube-system",
+				podLabels: { "app.kubernetes.io/name": "traefik" },
+			},
+			signIn: { clientId: "Iv1.client", bootstrapAdmins: "github:@octocat" },
+		}),
+	);
+	const spec = (kind: string, name: string) => {
+		const resource = resources.find(
+			(candidate) =>
+				candidate.kind === kind && isRecord(candidate.metadata) && candidate.metadata.name === name,
+		);
+		assert.ok(isRecord(resource) && isRecord(resource.spec), `${kind} ${name}`);
+		return resource.spec;
+	};
+	assert.deepEqual(spec("HTTPRoute", `${RELEASE}-route`).hostnames, [DEV_HOST]);
+	const { ingress } = spec("NetworkPolicy", `${RELEASE}-server`);
+	assert.ok(Array.isArray(ingress) && isRecord(ingress[0]) && Array.isArray(ingress[0].from));
+	assert.deepEqual(ingress[0].from[0], {
+		namespaceSelector: { matchLabels: { "kubernetes.io/metadata.name": "kube-system" } },
+		podSelector: { matchLabels: { "app.kubernetes.io/name": "traefik" } },
+	});
+	const { template } = spec("Deployment", `${RELEASE}-server`);
+	assert.ok(
+		isRecord(template) && isRecord(template.spec) && Array.isArray(template.spec.containers),
+	);
+	const server: unknown = template.spec.containers[0];
+	assert.ok(isRecord(server) && Array.isArray(server.env));
+	const environment = new Map(
+		server.env.filter(isRecord).map((variable) => [variable.name, variable.value]),
+	);
+	assert.equal(environment.get("GITHUB_OAUTH_CLIENT_ID"), "Iv1.client");
+	assert.equal(environment.get("HEPHAESTUS_AUTH_BOOTSTRAP_ADMINS"), "github:@octocat");
+	assert.equal(environment.get("HEPHAESTUS_AUTH_ISSUER"), `https://${DEV_HOST}`);
+});
+
+await test("dev reports one problem of each kind, and none when all is in place", () => {
+	const ready = { missing: [], dockerMemory: DEV_MEMORY, helmVersion: "v4.3.1" };
+	const kinds = (check: Partial<Parameters<typeof devProblems>[0]>) =>
+		devProblems({ ...ready, ...check }).map((problem) => problem.kind);
+	assert.deepEqual(kinds({}), []);
+	assert.deepEqual(kinds({ missing: ["pack", "k3d"] }), ["tool", "tool"]);
+	// No Docker: no question about its memory, networks or port.
+	assert.deepEqual(kinds({ missing: ["docker"], dockerMemory: undefined }), ["tool"]);
+	assert.deepEqual(kinds({ dockerMemory: undefined }), ["docker"]);
+	assert.deepEqual(kinds({ dockerMemory: Number.NaN }), ["docker"]);
+	// Docker Desktop reports about 97 % of its setting.
+	assert.deepEqual(kinds({ dockerMemory: 0.97 * 10 * 1024 ** 3 }), []);
+	assert.deepEqual(kinds({ dockerMemory: 0.97 * 8 * 1024 ** 3 }), ["memory"]);
+	assert.deepEqual(kinds({ unusedNetworks: 25 }), ["network"]);
+	assert.deepEqual(kinds({ portBusy: true }), ["port"]);
+	assert.deepEqual(kinds({ portBusy: false }), []);
+	assert.deepEqual(kinds({ helmVersion: "v3.19.0" }), ["helm"]);
+	const [tool] = devProblems({ ...ready, missing: ["k3d"] });
+	assert.equal(tool?.message.includes("https://k3d.io"), true, "names where to get the tool");
+});
+
+/** A `k3d cluster list -o json` with another cluster and the dev cluster. */
+const listed = (serversRunning: number, ports: Record<string, unknown> | null) => [
+	{ name: "other", serversRunning: 1, nodes: [] },
+	{
+		name: DEV_CLUSTER,
+		serversRunning,
+		nodes: [
+			{ role: "loadbalancer", portMappings: { "6443/tcp": [{}], ...ports } },
+			{ role: "server", portMappings: null },
+		],
+	},
+];
+
+await test("the dev cluster is absent, stopped, running, or from a run that published no HTTPS port", () => {
+	assert.equal(clusterState([]), "absent");
+	assert.equal(clusterState(listed(1, null)), "without-port");
+	assert.equal(clusterState(listed(0, { "443/tcp": [{}] })), "stopped");
+	assert.equal(clusterState(listed(1, { "443/tcp": [{}] })), "running");
+});
+
+await test("sign-in takes the OAuth app from the shell, else keeps an earlier run's, and refuses half an app", () => {
+	const app = { GITHUB_OAUTH_CLIENT_ID: "Iv1.client", GITHUB_OAUTH_CLIENT_SECRET: "secret" };
+	assert.equal(devSignIn({}, undefined), undefined);
+	assert.deepEqual(devSignIn(app, undefined), {
+		clientId: "Iv1.client",
+		clientSecret: "secret",
+		bootstrapAdmins: "",
+	});
+	const saved = { clientId: "Iv1.saved", bootstrapAdmins: "github:@octocat" };
+	assert.deepEqual(devSignIn({}, saved), saved);
+	assert.deepEqual(devSignIn({ HEPHAESTUS_AUTH_BOOTSTRAP_ADMINS: "github:@hubot" }, saved), {
+		clientId: "Iv1.saved",
+		bootstrapAdmins: "github:@hubot",
+	});
+	assert.deepEqual(devSignIn(app, saved), {
+		clientId: "Iv1.client",
+		clientSecret: "secret",
+		bootstrapAdmins: "github:@octocat",
+	});
+	assert.throws(() => devSignIn({ GITHUB_OAUTH_CLIENT_ID: "Iv1.client" }, saved), /set both/u);
+	assert.throws(() => devSignIn({ GITHUB_OAUTH_CLIENT_SECRET: "secret" }, undefined), /set both/u);
+});
+
+await test("the summary gives the address, the trust steps for the system, and the OAuth app steps until the app is set", () => {
+	const options = { host: DEV_HOST, ca: "/work/ca.crt", platform: "darwin" as const };
+	const without = devSummary({ ...options, signIn: false });
+	assert.ok(without.includes(`https://${DEV_HOST}`));
+	assert.ok(without.includes(`https://${DEV_HOST}/api/login/oauth2/code/github`));
+	for (const step of trustSteps("darwin", "/work/ca.crt")) {
+		assert.ok(without.includes(step), step);
+	}
+	assert.equal(devSummary({ ...options, signIn: true }).includes("/api/login/oauth2"), false);
+	assert.equal(
+		trustSteps("darwin", "/work/ca.crt")[0]?.startsWith("security add-trusted-cert"),
+		true,
+	);
+	assert.ok(trustSteps("linux", "/work/ca.crt").includes("sudo update-ca-certificates"));
+	// Every system gets the mkcert route, which also covers the browsers' own stores.
+	for (const platform of ["darwin", "linux", "win32"] as const) {
+		assert.equal(
+			trustSteps(platform, "/work/ca.crt").at(-1)?.includes('CAROOT="/work/mkcert"'),
+			true,
+		);
+	}
 });
