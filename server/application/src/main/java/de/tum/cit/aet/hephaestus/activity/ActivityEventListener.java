@@ -439,13 +439,17 @@ public class ActivityEventListener {
                     reviewData.repositoryId());
             return;
         }
+        // A dismissal is final, so one stable date keys it once.
+        Instant occurredAt = reviewData.updatedAt() != null
+                ? reviewData.updatedAt()
+                : reviewData.submittedAt() != null ? reviewData.submittedAt() : Instant.now();
         safeRecord(
                 "review dismissed",
                 reviewData.id(),
                 () -> activityEventService.record(
                         scopeId,
                         ActivityEventType.REVIEW_DISMISSED,
-                        Instant.now(), // Use current time for dismissal
+                        occurredAt,
                         userRepository.getReferenceById(authorId),
                         repositoryRepository.getReferenceById(repositoryId),
                         ActivityTargetType.REVIEW,
@@ -557,7 +561,9 @@ public class ActivityEventListener {
                     commentData.repositoryId());
             return;
         }
-        Instant occurredAt = Instant.now(); // Use current time for edits
+        // The edit's own date keys it, so a redelivered edit is a duplicate. An undated edit happened about
+        // now, since it just arrived.
+        Instant occurredAt = commentData.updatedAt() != null ? commentData.updatedAt() : Instant.now();
         safeRecord(
                 "comment updated",
                 commentData.id(),
@@ -660,7 +666,9 @@ public class ActivityEventListener {
                     commentData.repositoryId());
             return;
         }
-        Instant occurredAt = Instant.now(); // Use current time for edits
+        // The edit's own date keys it, so a redelivered edit is a duplicate. An undated edit happened about
+        // now, since it just arrived.
+        Instant occurredAt = commentData.updatedAt() != null ? commentData.updatedAt() : Instant.now();
         safeRecord(
                 "review comment edited",
                 commentData.id(),
@@ -747,7 +755,7 @@ public class ActivityEventListener {
                 () -> activityEventService.record(
                         scopeId,
                         ActivityEventType.REVIEW_THREAD_RESOLVED,
-                        Instant.now(),
+                        threadData.resolvedAt() != null ? threadData.resolvedAt() : Instant.now(),
                         userRepository.getReferenceById(resolverId),
                         repositoryRepository.getReferenceById(repositoryId),
                         ActivityTargetType.REVIEW_THREAD,
@@ -1403,7 +1411,9 @@ public class ActivityEventListener {
                     commentData.repositoryId());
             return;
         }
-        Instant occurredAt = Instant.now(); // Use current time for edits
+        // The edit's own date keys it, so a redelivered edit is a duplicate. An undated edit happened about
+        // now, since it just arrived.
+        Instant occurredAt = commentData.updatedAt() != null ? commentData.updatedAt() : Instant.now();
         safeRecord(
                 "discussion comment edited",
                 commentData.id(),

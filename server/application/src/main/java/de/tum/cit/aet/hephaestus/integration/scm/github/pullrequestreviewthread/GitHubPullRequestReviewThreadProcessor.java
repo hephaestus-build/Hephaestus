@@ -49,6 +49,12 @@ public class GitHubPullRequestReviewThreadProcessor {
         return threadRepository
                 .findByNativeIdAndProviderId(threadId, Objects.requireNonNull(context.providerId()))
                 .map(thread -> {
+                    // A redelivered resolve changes nothing and records no second activity. Sync marks a
+                    // thread resolved without a date or an event, so a resolve after it still records one.
+                    if (thread.getState() == PullRequestReviewThread.State.RESOLVED && thread.getResolvedAt() != null) {
+                        log.debug("Skipped thread resolve: reason=alreadyResolved, threadId={}", threadId);
+                        return true;
+                    }
                     thread.setState(PullRequestReviewThread.State.RESOLVED);
                     thread.setResolvedAt(resolvedAt);
                     if (resolvedBy != null) {
@@ -80,6 +86,10 @@ public class GitHubPullRequestReviewThreadProcessor {
         return threadRepository
                 .findByNativeIdAndProviderId(threadId, Objects.requireNonNull(context.providerId()))
                 .map(thread -> {
+                    if (thread.getState() == PullRequestReviewThread.State.UNRESOLVED) {
+                        log.debug("Skipped thread unresolve: reason=alreadyUnresolved, threadId={}", threadId);
+                        return true;
+                    }
                     thread.setState(PullRequestReviewThread.State.UNRESOLVED);
                     thread.setResolvedBy(null);
                     thread.setResolvedAt(null);

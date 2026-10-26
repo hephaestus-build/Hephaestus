@@ -156,6 +156,7 @@ public final class ScmEventPayload {
             @Nullable String htmlUrl,
             @Nullable Long authorId,
             @Nullable Instant createdAt,
+            @Nullable Instant updatedAt,
             @Nullable Long issueId,
             @Nullable Long repositoryId) {
         public static CommentData from(IssueComment comment) {
@@ -165,6 +166,7 @@ public final class ScmEventPayload {
                     comment.getHtmlUrl(),
                     comment.getAuthor() != null ? comment.getAuthor().getId() : null,
                     comment.getCreatedAt(),
+                    comment.getUpdatedAt(),
                     comment.getIssue() != null ? comment.getIssue().getId() : null,
                     comment.getIssue() != null && comment.getIssue().getRepository() != null
                             ? comment.getIssue().getRepository().getId()
@@ -182,6 +184,7 @@ public final class ScmEventPayload {
             boolean humanAuthor,
             @NonNull Long pullRequestId,
             @Nullable Instant submittedAt,
+            @Nullable Instant updatedAt,
             @Nullable Long repositoryId) {
         public static Optional<ReviewData> from(PullRequestReview review) {
             PullRequest pr = review.getPullRequest();
@@ -199,6 +202,7 @@ public final class ScmEventPayload {
                     review.getAuthor() != null && review.getAuthor().getType() == User.Type.USER,
                     pr.getId(),
                     review.getSubmittedAt(),
+                    review.getUpdatedAt(),
                     pr.getRepository() != null ? pr.getRepository().getId() : null));
         }
     }
@@ -212,6 +216,7 @@ public final class ScmEventPayload {
             @Nullable Long reviewId,
             @Nullable Long authorId,
             @Nullable Instant createdAt,
+            @Nullable Instant updatedAt,
             @Nullable Long pullRequestId,
             @Nullable Long repositoryId) {
         public static ReviewCommentData from(PullRequestReviewComment comment) {
@@ -226,6 +231,7 @@ public final class ScmEventPayload {
                     comment.getReview() != null ? comment.getReview().getId() : null,
                     comment.getAuthor() != null ? comment.getAuthor().getId() : null,
                     comment.getCreatedAt(),
+                    comment.getUpdatedAt(),
                     pr != null ? pr.getId() : null,
                     pr != null && pr.getRepository() != null
                             ? pr.getRepository().getId()
@@ -238,6 +244,7 @@ public final class ScmEventPayload {
             PullRequestReviewThread.@NonNull State state,
             @Nullable String path,
             @Nullable Integer line,
+            @Nullable Instant resolvedAt,
             @NonNull Long pullRequestId) {
         public static Optional<ReviewThreadData> from(PullRequestReviewThread thread) {
             PullRequest pr = thread.getPullRequest();
@@ -246,7 +253,12 @@ public final class ScmEventPayload {
                 return Optional.empty();
             }
             return Optional.of(new ReviewThreadData(
-                    thread.getId(), thread.getState(), thread.getPath(), thread.getLine(), pr.getId()));
+                    thread.getId(),
+                    thread.getState(),
+                    thread.getPath(),
+                    thread.getLine(),
+                    thread.getResolvedAt(),
+                    pr.getId()));
         }
     }
 
@@ -347,6 +359,7 @@ public final class ScmEventPayload {
             boolean isAnswer,
             @Nullable Long authorId,
             @Nullable Instant createdAt,
+            @Nullable Instant updatedAt,
             @Nullable Long discussionId,
             @Nullable Long repositoryId) {
         public static DiscussionCommentData from(DiscussionComment comment) {
@@ -357,6 +370,7 @@ public final class ScmEventPayload {
                     comment.isAnswer(),
                     comment.getAuthor() != null ? comment.getAuthor().getId() : null,
                     comment.getCreatedAt(),
+                    comment.getUpdatedAt(),
                     comment.getDiscussion() != null ? comment.getDiscussion().getId() : null,
                     comment.getDiscussion() != null && comment.getDiscussion().getRepository() != null
                             ? comment.getDiscussion().getRepository().getId()

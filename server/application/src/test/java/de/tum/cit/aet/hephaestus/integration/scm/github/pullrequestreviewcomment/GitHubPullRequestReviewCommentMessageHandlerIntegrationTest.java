@@ -14,6 +14,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewcomment
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewcomment.PullRequestReviewCommentRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.events.ScmDomainEvent;
 import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequestreviewcomment.dto.GitHubPullRequestReviewCommentEventDTO;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
@@ -27,10 +28,16 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.test.context.event.ApplicationEvents;
+import org.springframework.test.context.event.RecordApplicationEvents;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
 
+@RecordApplicationEvents
 class GitHubPullRequestReviewCommentMessageHandlerIntegrationTest extends BaseIntegrationTest {
+
+    @Autowired
+    private ApplicationEvents publications;
 
     @Autowired
     private GitHubPullRequestReviewCommentMessageHandler handler;
@@ -222,10 +229,14 @@ class GitHubPullRequestReviewCommentMessageHandlerIntegrationTest extends BaseIn
         GitHubPullRequestReviewCommentEventDTO deleteEvent = loadPayload("pull_request_review_comment.deleted");
 
         handler.handleEvent(deleteEvent);
+        handler.handleEvent(deleteEvent);
 
         assertThat(commentRepository.findByNativeIdAndProviderId(
                         deleteEvent.comment().id(), gitProviderId()))
                 .isEmpty();
+        // The redelivered delete finds no comment and announces nothing.
+        assertThat(publications.stream(ScmDomainEvent.ReviewCommentDeleted.class))
+                .hasSize(1);
     }
 
     private GitHubPullRequestReviewCommentEventDTO loadPayload(String filename, String action) throws IOException {
