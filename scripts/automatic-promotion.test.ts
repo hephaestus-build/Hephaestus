@@ -6,6 +6,8 @@ import path from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
+import { isMap, isSeq, parseDocument } from "yaml";
+
 import { automaticPromotion, supersedingBuild } from "./automatic-promotion.ts";
 import { parseChannel } from "./reconcile-deployment.ts";
 
@@ -210,8 +212,8 @@ await test(
 			{ mode: 0o755 },
 		);
 		for (const [runs, comparison, expected, reads] of [
-			["list", "ahead", "apply=false\n", 3],
-			["fail", "ahead", "apply=true\n", 2],
+			["list", "ahead", `apply=true\ncommit=${later}\n`, 3],
+			["fail", "ahead", `apply=true\ncommit=${next}\n`, 2],
 			["identical", "identical", "apply=false\n", 1],
 			["behind", "behind", "apply=false\n", 1],
 		] as const) {
@@ -292,4 +294,20 @@ await test("the CLI fails closed for invalid channels but honors a valid hold wi
 	);
 	assert.equal(held.status, 0, held.stderr);
 	assert.equal(readFileSync(outputFile, "utf8"), "apply=false\n");
+});
+
+await test("every step after the policy deploys the commit the policy chose", () => {
+	const workflow = parseDocument(readFileSync(".github/workflows/promote.yml", "utf8"));
+	const steps = workflow.getIn(["jobs", "promote", "steps"]);
+	assert.ok(isSeq(steps));
+	const policy = steps.items.findIndex((item) => isMap(item) && item.get("id") === "policy");
+	assert.ok(policy !== -1);
+	const deploying = JSON.stringify(steps.toJSON().slice(policy + 1));
+	const reads = deploying.match(/inputs\.commit/gu) ?? [];
+	assert.ok(reads.length > 0);
+	assert.equal(
+		(deploying.match(/steps\.policy\.outputs\.commit \|\| inputs\.commit/gu) ?? []).length,
+		reads.length,
+		"a later step reads the requested commit instead of the promoted one",
+	);
 });

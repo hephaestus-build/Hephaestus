@@ -673,10 +673,25 @@ jobs:
           DIGESTS: ${{ toJSON(steps.digest.outputs) }}
         run: |
           set -euo pipefail
+          # Runs on main do not wait for each other, so an older commit's run can finish last. Only the
+          # run of the branch's current head moves the branch tag, checked just before it moves; every
+          # run keeps its commit tag. An unreadable head leaves the branch tag where it is.
+          stale=""
+          if [ "$GITHUB_EVENT_NAME" = push ]; then
+            head=$(git ls-remote "https://github.com/$GITHUB_REPOSITORY.git" "$GITHUB_REF" | cut -f1 || true)
+            if [[ ! "$head" =~ ^[0-9a-f]{40}$ ]]; then
+              echo "::warning::Could not read the head of $GITHUB_REF; the $GITHUB_REF_NAME tag stays where it is"
+              stale="$GITHUB_REF_NAME"
+            elif [ "$head" != "$GITHUB_SHA" ]; then
+              echo "$GITHUB_REF_NAME is at $head, so the $GITHUB_REF_NAME tag stays where it is"
+              stale="$GITHUB_REF_NAME"
+            fi
+          fi
           for name in $(jq -r '.[]' <<< "$IMAGES"); do
             repository="$INPUTS_REGISTRY/hephaestus-build/$name"
             reference="$repository@$(jq -er --arg name "$name" '.[$name]' <<< "$DIGESTS")"
-            tags=$(jq -er --arg prefix "$repository:" '.tags[] | select(startswith($prefix))' <<< "$DOCKER_METADATA_OUTPUT_JSON")
+            tags=$(jq -er --arg prefix "$repository:" --arg stale "$repository:$stale" \
+              '.tags[] | select(startswith($prefix)) | select(. != $stale)' <<< "$DOCKER_METADATA_OUTPUT_JSON")
             args=()
             while IFS= read -r tag; do args+=(--tag "$tag"); done <<< "$tags"
             docker buildx imagetools create --prefer-index=false "${args[@]}" \

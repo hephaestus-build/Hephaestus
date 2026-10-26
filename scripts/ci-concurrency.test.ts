@@ -10,7 +10,12 @@ import { asRecord, readJsonFile } from "./lib/json.ts";
 const workflow = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
 const repository = "hephaestus-build/Hephaestus";
 
-function context(event: string, branch = "changeset-release/main", owner = repository) {
+function context(
+	event: string,
+	branch = "changeset-release/main",
+	owner = repository,
+	sha = "0".repeat(40),
+) {
 	const prerequisites = workflow.getIn(["jobs", "all-ci-passed", "needs"]);
 	assert.ok(isSeq(prerequisites));
 	const needs = Object.fromEntries(
@@ -25,6 +30,7 @@ function context(event: string, branch = "changeset-release/main", owner = repos
 			workflow: "CI/CD",
 			repository,
 			event_name: event,
+			sha,
 			head_ref: event === "pull_request" ? branch : "",
 			ref_name: event === "pull_request" ? "42/merge" : branch,
 			ref: event === "pull_request" ? "refs/pull/42/merge" : `refs/heads/${branch}`,
@@ -69,6 +75,10 @@ void test("only same-repository Version PR triggers share a cancelable CI lane",
 	assert.notEqual(lane("pull_request", "feature"), lane("workflow_dispatch", "feature"));
 	assert.notEqual(versionPr, lane("workflow_dispatch", "main"));
 	assert.notEqual(lane("push", "main"), lane("workflow_dispatch", "main"));
+	// Each push to main has its own lane, so GitHub never replaces a pending run of another commit.
+	const push = (sha: string) =>
+		evaluate(group, context("push", "main", repository, sha)).toLowerCase();
+	assert.notEqual(push("a".repeat(40)), push("b".repeat(40)));
 	assert.notEqual(lane("merge_group", "gh-readonly-queue/main/pr-42"), versionPr);
 	assert.notEqual(
 		lane("merge_group", "gh-readonly-queue/main/pr-42"),

@@ -168,6 +168,8 @@ if (tool === 'docker' && args.includes('inspect')) process.stdout.write(process.
 						FAILURE: failure,
 						DIGEST: digest,
 						RUNNER_TEMP: directory,
+						// Not a push, so the publication reads no branch head from the network.
+						GITHUB_EVENT_NAME: "merge_group",
 						DOCKER_METADATA_OUTPUT_JSON:
 							failure === "invalidMetadata"
 								? "{"
@@ -899,3 +901,78 @@ if (tool === 'docker' && args.includes('--format')) {
 		assert.equal(await readFile(output, "utf8"), "");
 	},
 );
+
+void test("only the run of the branch's head moves the branch tag", async (t) => {
+	const reusable = parseDocument(
+		await readFile(".github/workflows/reusable-docker-build.yml", "utf8"),
+	);
+	const steps = reusable.getIn(["jobs", "merge", "steps"]);
+	assert.ok(isSeq(steps));
+	const publication: unknown = steps.items.find(
+		(item) => isMap(item) && item.get("name") === "Publish verified image tags",
+	);
+	assert.ok(isMap(publication));
+	const directory = await mkdtemp(path.join(tmpdir(), "branch-tag-"));
+	t.after(async () => rm(directory, { recursive: true, force: true }));
+	const log = path.join(directory, "calls");
+	const webapp = "ghcr.io/hephaestus-build/webapp";
+	const published = `sha256:${"a".repeat(64)}`;
+	const commit = "c".repeat(40);
+	for (const tool of ["docker", "git"]) {
+		await writeFile(
+			path.join(directory, tool),
+			`#!/usr/bin/env node
+const fs = require('node:fs');
+const args = process.argv.slice(2);
+if (require('node:path').basename(process.argv[1]) === 'git') {
+  if (process.env.HEAD === 'unreadable') process.exit(128);
+  process.stdout.write(process.env.HEAD + '\\trefs/heads/main\\n');
+  process.exit(0);
+}
+fs.appendFileSync(process.env.CALL_LOG, JSON.stringify(args.filter((arg, i) => args[i - 1] === '--tag')) + '\\n');
+const index = args.indexOf('--metadata-file');
+fs.writeFileSync(args[index + 1], JSON.stringify({ 'containerimage.descriptor': { digest: process.env.DIGEST } }));
+`,
+		);
+		await chmod(path.join(directory, tool), 0o755);
+	}
+	for (const [event, head, tags] of [
+		["push", commit, [`${webapp}:main`, `${webapp}:ci-7`, `${webapp}:${commit}`]],
+		["push", "d".repeat(40), [`${webapp}:ci-7`, `${webapp}:${commit}`]],
+		["push", "unreadable", [`${webapp}:ci-7`, `${webapp}:${commit}`]],
+		["merge_group", "d".repeat(40), [`${webapp}:${commit}`]],
+	] as const) {
+		await writeFile(log, "");
+		const metadata =
+			event === "push"
+				? [`${webapp}:main`, `${webapp}:ci-7`, `${webapp}:${commit}`]
+				: [`${webapp}:${commit}`];
+		const result: ReturnType<typeof spawnSync> = spawnSync(
+			"bash",
+			["-e", "-c", String(publication.get("run"))],
+			{
+				encoding: "utf8",
+				env: {
+					...process.env,
+					PATH: `${directory}${path.delimiter}${process.env.PATH ?? ""}`,
+					CALL_LOG: log,
+					DIGEST: published,
+					HEAD: head,
+					RUNNER_TEMP: directory,
+					GITHUB_EVENT_NAME: event,
+					GITHUB_REPOSITORY: "hephaestus-build/Hephaestus",
+					GITHUB_REF: "refs/heads/main",
+					GITHUB_REF_NAME: "main",
+					GITHUB_SHA: commit,
+					DOCKER_METADATA_OUTPUT_JSON: JSON.stringify({ tags: metadata }),
+					IMAGES: JSON.stringify(["webapp"]),
+					DIGESTS: JSON.stringify({ webapp: published }),
+					INPUTS_REGISTRY: "ghcr.io",
+				},
+			},
+		);
+		assert.equal(result.status, 0, String(result.stderr));
+		const calls = await readFile(log, "utf8");
+		assert.deepEqual(JSON.parse(calls.trim()), tags, `${event} at ${head}`);
+	}
+});

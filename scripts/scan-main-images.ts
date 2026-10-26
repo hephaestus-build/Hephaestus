@@ -28,8 +28,9 @@ import { PLATFORMS } from "./scan-upstream-images.ts";
 /**
  * The first-party images to scan, in inventory order.
  *
- * `reusable-docker-build.yml` tags every push with `github.ref_name`, so `<registry>/<owner>/<image>:main`
- * already names main's HEAD build and nothing new has to be published for this to have a subject.
+ * `reusable-docker-build.yml` moves the `github.ref_name` tag on the push run of main's head, so
+ * `<registry>/<owner>/<image>:main` names the newest main build that published, and nothing new has to
+ * be published for this to have a subject.
  */
 export function planSubjects(inventory: unknown, registry: string, tag: string): Subject[] {
 	const images = asArray(asRecord(inventory, "release image inventory").images, "images");

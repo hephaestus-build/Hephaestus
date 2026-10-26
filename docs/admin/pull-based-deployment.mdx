@@ -69,7 +69,8 @@ On such a host, a frozen promotion to a new target fails its version check.
 Promote that host once without **freeze** first, to a commit that includes this rule.
 
 An automatic promotion that would advance the channel checks the most recent successful CI/CD run of a push to `main` in the same repository.
-If that run's commit strictly descends from the requested commit, the promotion is skipped.
+If that run's commit strictly descends from the requested commit, the promotion moves the channel to that commit instead.
+The run's title still names the requested commit. The channel and the deployment record name the promoted one.
 If the lookup fails, the requested commit continues through the existing promotion checks.
 Manual promotions never do this lookup.
 

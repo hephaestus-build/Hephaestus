@@ -50,9 +50,8 @@ function qualifiedMainBuild(run: unknown, repository: string): string | undefine
 }
 
 /**
- * The latest successful main build, if it strictly descends from `commit`, makes
- * the request for `commit` obsolete. The lookup is optional: when the listing or a comparison fails,
- * the request stands.
+ * The latest successful main build, if it strictly descends from `commit`, is promoted in place of
+ * `commit`. The lookup is optional: when the listing or a comparison fails, the request stands.
  */
 export async function supersedingBuild(
 	repository: string,
@@ -106,15 +105,21 @@ if (import.meta.main) {
 				compare,
 			)
 		: undefined;
-	const apply = ahead && superseding === undefined;
-	if (apply) {
-		console.log(`Promoting ${commit}`);
-	} else if (superseding === undefined) {
+	// Runs on main finish in any order, and the promotion lock keeps one pending request: a request
+	// for an older build can replace the newer build's. It promotes the newer build, which descends
+	// from it and is therefore ahead of the channel too, so no build is left unpromoted.
+	const target = superseding ?? commit;
+	if (!ahead) {
 		console.log("Automatic promotion skipped: channel is frozen or already at a newer build.");
+	} else if (superseding === undefined) {
+		console.log(`Promoting ${commit}`);
 	} else {
 		console.log(
-			`Automatic promotion skipped: ${superseding} already passed CI/CD and descends from ${commit}.`,
+			`Promoting ${superseding}, which already passed CI/CD and descends from ${commit}.`,
 		);
 	}
-	await appendFile(requiredEnv(process.env, "GITHUB_OUTPUT"), `apply=${apply}\n`);
+	await appendFile(
+		requiredEnv(process.env, "GITHUB_OUTPUT"),
+		ahead ? `apply=true\ncommit=${target}\n` : "apply=false\n",
+	);
 }

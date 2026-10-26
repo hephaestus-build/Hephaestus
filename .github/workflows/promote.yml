@@ -93,9 +93,9 @@ jobs:
 
       # Unlike tooling, upstream image pins must come from the deployment target.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        if: ${{ steps.policy.outputs.apply != 'false' && inputs.commit != '' }}
+        if: ${{ steps.policy.outputs.apply != 'false' && (steps.policy.outputs.commit || inputs.commit) != '' }}
         with:
-          ref: ${{ inputs.commit }}
+          ref: ${{ steps.policy.outputs.commit || inputs.commit }}
           path: .promotion-inventory
           sparse-checkout: security
           persist-credentials: false
@@ -107,7 +107,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           CHANNEL: ${{ inputs.environment }}
           RELEASE: ${{ inputs.release }}
-          COMMIT: ${{ inputs.commit }}
+          COMMIT: ${{ steps.policy.outputs.commit || inputs.commit }}
           ALLOW_ROLLBACK: ${{ inputs.allow-rollback || false }}
           FREEZE: ${{ inputs.freeze || false }}
           REFRESH_DATABASE_IMAGE: ${{ inputs.refresh-database-image || false }}

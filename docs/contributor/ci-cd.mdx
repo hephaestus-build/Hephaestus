@@ -964,7 +964,7 @@ The `Create manifests` job in `reusable-docker-build.yml` accepts the image at `
 - Its cosign signature comes from `reusable-docker-build.yml` on the queue branch, with the `merge_group` trigger, at this commit.
 - Its build provenance attestation names this commit and was made by that queue run.
 
-The push then signs the index and each leaf again, verifies them, and moves the `main` tags.
+The push then signs the index and each leaf again, verifies them, and moves the `main` tags if its commit is still the head of `main`.
 It does not rebuild, re-attest, or rescan the image.
 The release verifier accepts only the default-branch signing identity, so the push signs the image again.
 The provenance stays the queue run's, because that run built the image.
@@ -1105,6 +1105,12 @@ Right after a merge, that run is still building, so the pull request builds ever
   GitHub's native `queue: max` can retain more pending runs, but the required Actionlint parser
   [does not yet support it](https://github.com/rhysd/actionlint/issues/657). Adopt it when a supported
   validator release is available. Do not suppress workflow syntax checks or add a custom queue.
+- `cicd.yml` gives each push to `main` a lane of its own, so no push run waits for or replaces
+  another. A replaced pending run left its commit without a verdict. It also showed as the latest
+  completed run, and the status badge counts a cancelled run as failing. Push runs on `main` can
+  thus finish out of order. Two rules keep that safe. A staging promotion for an older build promotes
+  the newest successful build that descends from it. A replaced promotion thus strands no build. The
+  image build moves the `main` tags only when its commit is the head of `main` as it publishes them.
 
 ## Workflow validation
 
