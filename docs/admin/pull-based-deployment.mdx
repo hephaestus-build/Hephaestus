@@ -308,8 +308,14 @@ The tick then fails, the metrics show the failure, and the applied record does n
 
 An upgrade that stops before it ends, for example at a reboot or at the unit's timeout, leaves the Helm release in a `pending-*` status.
 Helm then refuses every upgrade.
-The next tick finds that status and rolls the release back to its last deployed revision before it upgrades.
+The next tick finds that status and rolls the release back to the newest revision whose status is `deployed` or `superseded`, then upgrades.
 To do it by hand, read `helm history <release> --namespace <namespace>` and run `helm rollback <release> <revision> --namespace <namespace> --wait`.
+
+A release that Helm never finished, such as a first install that stopped, has no such revision.
+The tick then fails and names `helm uninstall <release> --namespace <namespace>`.
+The uninstall keeps the data volumes and Secrets ([Kubernetes § Uninstall](./kubernetes#uninstall)).
+After you run it, the next tick installs the release again.
+
 The reconciler removes no image on a chart host.
 The kubelet's image garbage collection removes unused images.
 

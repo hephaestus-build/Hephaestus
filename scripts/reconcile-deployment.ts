@@ -18,7 +18,7 @@ import path from "node:path";
 import { isCommit, parseInventory } from "./commit-image-lock.ts";
 import { commitChartValues, renderChartValues } from "./kubernetes-chart.ts";
 import { isSet, requiredEnv } from "./lib/env.ts";
-import { asRecord, asString, parseJson, readJsonFile } from "./lib/json.ts";
+import { asArray, asRecord, asString, parseJson, readJsonFile } from "./lib/json.ts";
 import { output, run, succeeds } from "./lib/process.ts";
 
 export type Stack = "proxy" | "core" | "app" | "chart";
@@ -1399,10 +1399,16 @@ function lockedImages(lockEnv: string): Record<string, string> {
 
 const HELM_PENDING = /^pending-(?:install|upgrade|rollback)$/u;
 
+/** The revision statuses of a release that Helm finished, which a rollback can return to. */
+const HELM_FINISHED = new Set(["deployed", "superseded"]);
+
 /**
  * Helm leaves a release in a pending status when its upgrade was killed, by the unit's timeout, a
- * reboot or a power cut, and then refuses every later upgrade. Rolling back to the last deployed
- * revision ends that state, so the tick that follows a cut-off upgrade repairs it.
+ * reboot or a power cut, and then refuses every later upgrade. Rolling back to the newest revision
+ * that Helm finished ends that state, so the tick that follows a cut-off upgrade repairs it. The
+ * revision before the stuck one can be a failed upgrade, so the rollback names its target. A release
+ * with no finished revision, such as a cut-off first install, has nothing to return to; only
+ * removing the release ends that state.
  */
 async function recoverPendingRelease(config: HostConfig, settings: ChartSettings): Promise<void> {
 	let status: string;
@@ -1425,22 +1431,50 @@ async function recoverPendingRelease(config: HostConfig, settings: ChartSettings
 		// No release yet, or a cluster Helm cannot read: the upgrade itself reports either.
 		return;
 	}
-	if (HELM_PENDING.test(status)) {
-		console.log(`Rolling back ${settings.release}: an earlier upgrade stopped in ${status}`);
-		await run(
-			settings.helm,
-			[
-				"rollback",
+	if (!HELM_PENDING.test(status)) {
+		return;
+	}
+	const history = asArray(
+		parseJson(
+			await output(settings.helm, [
+				"history",
 				settings.release,
 				"--namespace",
 				settings.namespace,
-				"--wait",
-				"--timeout",
-				`${config.waitTimeoutSeconds}s`,
-			],
-			{ stdin: "ignore" },
+				"--output",
+				"json",
+			]),
+		),
+		"helm history",
+	);
+	const finished = history
+		.map((entry) => asRecord(entry, "helm history entry"))
+		.filter((entry) => HELM_FINISHED.has(asString(entry.status, "helm history status")))
+		.map((entry) => entry.revision)
+		.filter((value): value is number => Number.isSafeInteger(value));
+	if (finished.length === 0) {
+		throw new Error(
+			`Helm left ${settings.release} in ${status} with no finished revision to return to. Run \`helm uninstall ${settings.release} --namespace ${settings.namespace}\`; the next tick installs it again.`,
 		);
 	}
+	const target = Math.max(...finished);
+	console.log(
+		`Rolling back ${settings.release} to revision ${target}: an earlier upgrade stopped in ${status}`,
+	);
+	await run(
+		settings.helm,
+		[
+			"rollback",
+			settings.release,
+			String(target),
+			"--namespace",
+			settings.namespace,
+			"--wait",
+			"--timeout",
+			`${config.waitTimeoutSeconds}s`,
+		],
+		{ stdin: "ignore" },
+	);
 }
 
 /**
