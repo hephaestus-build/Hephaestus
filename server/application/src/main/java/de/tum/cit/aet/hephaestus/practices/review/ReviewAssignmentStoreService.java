@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.practices.review;
 
 import de.tum.cit.aet.hephaestus.integration.core.spi.CandidateRefusal;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
+import de.tum.cit.aet.hephaestus.practices.review.model.ReviewItem;
 import de.tum.cit.aet.hephaestus.practices.spi.HistoryCustodyQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentId;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentStore;
@@ -18,6 +19,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -78,6 +80,17 @@ public class ReviewAssignmentStoreService implements ReviewAssignmentStore {
                 throw new IllegalStateException("The assignment already has an invocation.");
             item.setJobId(jobId);
         }
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Set<Long> endedPractices(long workspaceId, UUID reviewId, UUID jobId) {
+        return items
+                .findByWorkspaceIdAndReviewIdAndJobIdOrderByPracticeIdAscItemIdAsc(workspaceId, reviewId, jobId)
+                .stream()
+                .filter(member -> member.getState() != ReviewItemState.LISTED)
+                .map(ReviewItem::getPracticeId)
+                .collect(Collectors.toUnmodifiableSet());
     }
 
     @Override
