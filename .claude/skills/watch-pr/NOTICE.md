@@ -2,6 +2,7 @@
 
 The one-watcher rule, the stop conditions, the rate-limit fallback, and the advice to keep the pull
 request small are adapted from the `babysit-pr` skill in [tstack](https://github.com/t3dotgg/tstack).
+`scripts/pr-wait.ts`, behind `vp run pr:wait`, is a TypeScript port of its `pr-wait` script.
 The ready definition is this repository's own: the "Default" ruleset and the merge queue.
 
 tstack is distributed under this license:

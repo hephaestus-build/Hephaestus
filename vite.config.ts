@@ -447,6 +447,7 @@ export default defineConfig({
 				"node scripts/rm.ts webapp/src/api extension/src/api && vp run --filter webapp generate:api && vp run --filter extension generate:api",
 			),
 			"db:draft-changelog": run("node scripts/db-utils.ts draft-changelog"),
+			"pr:wait": run("node scripts/pr-wait.ts"),
 			"db:check-drift": run("node scripts/db-utils.ts check-drift"),
 			"db:generate-erd-docs": run("node scripts/db-utils.ts generate-erd"),
 			"schema:github": run("node scripts/update-github-schema.ts"),
