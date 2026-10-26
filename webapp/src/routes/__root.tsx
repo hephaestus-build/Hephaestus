@@ -38,7 +38,7 @@ import type { SurveyInvitation } from "@/api/types.gen";
 import { UserViewBanner } from "@/components/admin/users/UserViewBanner";
 import { ConfirmAccessDialog } from "@/components/auth/ConfirmAccessDialog";
 import { LoginDialog } from "@/components/auth/LoginDialog";
-import { NotFoundPage } from "@/components/common/NotFoundPage";
+import { PageError } from "@/components/common/PageError";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
 import Footer from "@/components/layout/Footer";
 import Header from "@/components/layout/Header";
@@ -66,8 +66,10 @@ import {
 	DialogTitle,
 	DialogDescription,
 } from "@/components/ui/dialog";
+import { Kbd } from "@/components/ui/kbd";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { Toaster } from "@/components/ui/sonner";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import environment from "@/environment";
 import { useConfirmAccess } from "@/hooks/use-confirm-access";
 import { useFeedbackAwaitingApproval } from "@/hooks/use-feedback-awaiting-approval";
@@ -88,6 +90,7 @@ import { useProviderColors } from "@/runtime/theme/provider-colors";
 import { exitUserView } from "@/runtime/user-view/session";
 import { workspaceAddressConfig, publicHref } from "@/runtime/workspace-address";
 import { isHephPanelExcludedRoute } from "./-heph-panel-route";
+import { showHephUnavailable } from "./-heph-unavailable";
 
 const GlobalHephPanel = lazy(async () => import("./-GlobalHephPanel"));
 
@@ -185,7 +188,11 @@ function RootLayout() {
 			<PublicLoginOverlay />
 			{userView && <UserViewConfirmAccess />}
 			{showHephPanel && (
-				<CatchBoundary getResetKey={() => 0} errorComponent={HephPanelUnavailable}>
+				<CatchBoundary
+					getResetKey={() => 0}
+					onCatch={() => showHephUnavailable({ again: false })}
+					errorComponent={HephPanelUnavailable}
+				>
 					<Suspense fallback={null}>
 						<GlobalHephPanel />
 					</Suspense>
@@ -196,7 +203,11 @@ function RootLayout() {
 	);
 }
 
-/** The page works without Heph, so a failed Heph panel renders nothing until the next load. */
+/**
+ * The panel's code did not load, often a file replaced by a deploy. `React.lazy` keeps that failure,
+ * so the toast from `onCatch` offers a page load, not a retry. A panel that fails after it loaded
+ * has its own boundary, in `-GlobalHephPanel.tsx`.
+ */
 function HephPanelUnavailable() {
 	return null;
 }
@@ -377,8 +388,12 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 	head: () => ({ meta: [{ title: "Hephaestus" }] }),
 	component: RootRoute,
 	// An address no route matches is `routes/$.tsx`, which sets a title; this serves a thrown `notFound()`.
-	notFoundComponent: NotFoundPage,
+	notFoundComponent: NotFound,
 });
+
+function NotFound() {
+	return <PageError cause="not-found" />;
+}
 
 function HeaderContainer() {
 	const openLogin = useLoginNavigation();
@@ -401,7 +416,7 @@ function HeaderContainer() {
 
 	return (
 		<Header
-			sidebarTrigger={isAuthenticated && <SidebarTrigger className="-ml-1" />}
+			sidebarTrigger={isAuthenticated && <SidebarToggle />}
 			version={environment.version}
 			environmentName={environment.deployment.name}
 			pullRequest={environment.deployment.pullRequest}
@@ -426,6 +441,25 @@ function HeaderContainer() {
 				void logout();
 			}}
 		/>
+	);
+}
+
+// The sidebar answers Cmd+B and Ctrl+B on every platform. The tooltip shows the key that the reader's
+// keyboard has.
+const SIDEBAR_SHORTCUT_LABEL = /Mac|iPhone|iPad|iPod/u.test(navigator.userAgent) ? "⌘B" : "Ctrl+B";
+
+function SidebarToggle() {
+	return (
+		<Tooltip>
+			<TooltipTrigger
+				render={<SidebarTrigger className="-ml-1" aria-keyshortcuts="Control+B Meta+B" />}
+			/>
+			<TooltipContent side="bottom">
+				<span className="flex items-center gap-2">
+					Toggle sidebar <Kbd>{SIDEBAR_SHORTCUT_LABEL}</Kbd>
+				</span>
+			</TooltipContent>
+		</Tooltip>
 	);
 }
 
@@ -605,6 +639,11 @@ function AppSidebarContainer() {
 			activeWorkspace={chromeWorkspace}
 			administrationWorkspace={administrationWorkspace}
 			administrationWorkspaceSlug={administrationWorkspaceSlug}
+			administrationWorkspaceError={
+				administrationWorkspaceSlug !== undefined && workspaceAccess.error !== undefined
+					? { error: workspaceAccess.error, onRetry: workspaceAccess.refetch }
+					: undefined
+			}
 			onWorkspaceChange={handleWorkspaceChange}
 			onAddWorkspace={handleAddWorkspace}
 			workspacesLoading={workspaceAccess.isLoading}

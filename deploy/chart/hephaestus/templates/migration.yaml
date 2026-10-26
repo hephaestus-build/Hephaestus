@@ -1,0 +1,74 @@
+{{- if ne (include "hephaestus.restoring" .) "true" }}
+{{- $name := include "hephaestus.name" (dict "root" . "component" "migration") }}
+# The release's database migration, once per revision: the server image in its migrate run mode
+# applies the changelog and exits. A plain Job, not a Helm hook: a pre-install hook would run before
+# the bundled PostgreSQL exists, and Helm does not manage hook resources as part of the release. The
+# new roles wait for the schema while the previous release serves.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ printf "%s-%d" $name .Release.Revision }}
+  labels:
+    {{- include "hephaestus.labels" (dict "root" . "component" "migration") | nindent 4 }}
+spec:
+  # A failed migration is the operator's to read, not to retry: `--wait-for-jobs` fails the upgrade.
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels:
+        {{- include "hephaestus.labels" (dict "root" . "component" "migration") | nindent 8 }}
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext:
+        {{- include "hephaestus.podSecurityContext" (dict "user" 1002 "group" 1001) | nindent 8 }}
+      # The bundled PostgreSQL starts with the first install, and a migration that finds no server
+      # fails at once. The wait holds the migration until the server accepts connections.
+      initContainers:
+        - name: wait-for-postgresql
+          image: {{ include "hephaestus.image" (dict "root" . "name" "postgres") | quote }}
+          imagePullPolicy: IfNotPresent
+          command:
+            - sh
+            - -c
+            - until pg_isready --quiet --host "$DATABASE_HOST" --port "$DATABASE_PORT"; do sleep 2; done
+          env:
+            - name: DATABASE_HOST
+              value: {{ include "hephaestus.databaseHost" . | quote }}
+            - name: DATABASE_PORT
+              value: {{ include "hephaestus.databasePort" . | quote }}
+            # Without a user name, libpq asks the system for the name of the Pod's user, which the image
+            # does not know, and pg_isready never dials the server.
+            {{- include "hephaestus.secretEnv" (dict "root" . "env" "PGUSER" "key" "DATABASE_USERNAME") | nindent 12 }}
+          resources:
+            requests: { cpu: 50m, memory: 32Mi, ephemeral-storage: 16Mi }
+            limits: { cpu: 200m, memory: 64Mi, ephemeral-storage: 64Mi }
+          securityContext:
+            {{- include "hephaestus.containerSecurityContext" . | nindent 12 }}
+      containers:
+        - name: migration
+          image: {{ include "hephaestus.image" (dict "root" . "name" "application-server") | quote }}
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: prod,migrate
+            - name: DATABASE_URL
+              value: {{ include "hephaestus.databaseUrl" . | quote }}
+            {{- include "hephaestus.secretEnv" (dict "root" . "env" "DATABASE_USERNAME") | nindent 12 }}
+            {{- include "hephaestus.secretEnv" (dict "root" . "env" "DATABASE_PASSWORD") | nindent 12 }}
+          resources:
+            {{- toYaml .Values.migration.resources | nindent 12 }}
+          securityContext:
+            {{- include "hephaestus.containerSecurityContext" . | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            {{- include "hephaestus.postgresqlCaMount" . | nindent 12 }}
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 256Mi
+        {{- include "hephaestus.postgresqlCaVolume" . | nindent 8 }}
+{{- end }}

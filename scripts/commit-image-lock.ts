@@ -2,7 +2,6 @@
 import { requiredEnv } from "./lib/env.ts";
 import { asArray, asRecord, asString, asStringArray, readJsonFile } from "./lib/json.ts";
 import { output, run } from "./lib/process.ts";
-import { isCommit } from "./reconcile-deployment.ts";
 
 export interface ImageInventory {
 	readonly images: readonly string[];
@@ -14,6 +13,11 @@ export interface ImageInventory {
 }
 
 export const DIGEST = /^sha256:[0-9a-f]{64}$/u;
+
+/** A whole commit, never an abbreviation, which a later object could come to share. */
+export function isCommit(value: string): boolean {
+	return /^[0-9a-f]{40}$/u.test(value);
+}
 
 export function environmentKey(image: string): string {
 	return `HEPHAESTUS_IMAGE_${image.toUpperCase().replaceAll("-", "_")}`;

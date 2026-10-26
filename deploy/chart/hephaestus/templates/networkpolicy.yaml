@@ -1,0 +1,201 @@
+{{- /* Always rendered. No value turns network policy off. */}}
+{{- $policy := .Values.networkPolicy }}
+{{- $root := . }}
+{{- $gateway := dict "namespace" (required "networkPolicy.gateway.namespace is required: name the namespace of the Gateway data plane" $policy.gateway.namespace) "podLabels" $policy.gateway.podLabels }}
+{{- if not .Values.postgresql.bundled }}
+{{- $_ := required "postgresql.external.cidr is required for the egress rule when postgresql.bundled is false" .Values.postgresql.external.cidr }}
+{{- end }}
+{{- if not .Values.nats.bundled }}
+{{- $_ := required "nats.external.cidr is required for the egress rule when nats.bundled is false" .Values.nats.external.cidr }}
+{{- end }}
+# Every pod of the release starts with no ingress and no egress. The policies below open only the
+# paths that the Compose topology uses.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "hephaestus.name" (dict "root" . "component" "default-deny") }}
+  labels:
+    {{- include "hephaestus.labels" (dict "root" . "component" "network") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: hephaestus
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  policyTypes: ["Ingress", "Egress"]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "hephaestus.name" (dict "root" . "component" "dns") }}
+  labels:
+    {{- include "hephaestus.labels" (dict "root" . "component" "network") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: hephaestus
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  policyTypes: ["Egress"]
+  egress:
+    - to:
+        {{- include "hephaestus.peer" $policy.dns | nindent 8 }}
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "hephaestus.name" (dict "root" . "component" "server") }}
+  labels:
+    {{- include "hephaestus.labels" (dict "root" . "component" "network") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "hephaestus.selectorLabels" (dict "root" . "component" "server") | nindent 6 }}
+  policyTypes: ["Ingress", "Egress"]
+  ingress:
+    - from:
+        {{- include "hephaestus.peer" $gateway | nindent 8 }}
+        {{- if .Values.worker.enabled }}
+        {{- include "hephaestus.componentPeer" (dict "root" . "component" "worker") | nindent 8 }}
+        {{- end }}
+      ports:
+        - port: http
+          protocol: TCP
+    {{- include "hephaestus.policy.metricsIngress" . | nindent 4 }}
+  egress:
+    {{- include "hephaestus.policy.databaseEgress" . | nindent 4 }}
+    {{- include "hephaestus.policy.natsEgress" . | nindent 4 }}
+    {{- include "hephaestus.policy.externalEgress" . | nindent 4 }}
+    {{- if .Values.config.email.host }}
+    # Mail submission, only when email is configured. Notifications are sent from this role.
+    - to:
+        - ipBlock:
+            cidr: {{ $policy.externalEgress.cidr }}
+            {{- with $policy.externalEgress.except }}
+            except:
+              {{- toYaml . | nindent 14 }}
+            {{- end }}
+      ports:
+        - port: {{ .Values.config.email.port }}
+          protocol: TCP
+    {{- end }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "hephaestus.name" (dict "root" . "component" "webhook") }}
+  labels:
+    {{- include "hephaestus.labels" (dict "root" . "component" "network") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "hephaestus.selectorLabels" (dict "root" . "component" "webhook") | nindent 6 }}
+  policyTypes: ["Ingress", "Egress"]
+  ingress:
+    - from:
+        {{- include "hephaestus.peer" $gateway | nindent 8 }}
+      ports:
+        - port: http
+          protocol: TCP
+    {{- include "hephaestus.policy.metricsIngress" . | nindent 4 }}
+  # The receiver verifies, reads connection rows and publishes. It calls no provider.
+  egress:
+    {{- include "hephaestus.policy.databaseEgress" . | nindent 4 }}
+    {{- include "hephaestus.policy.natsEgress" . | nindent 4 }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "hephaestus.name" (dict "root" . "component" "migration") }}
+  labels:
+    {{- include "hephaestus.labels" (dict "root" . "component" "network") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "hephaestus.selectorLabels" (dict "root" . "component" "migration") | nindent 6 }}
+  policyTypes: ["Ingress", "Egress"]
+  # The migration reads and writes the database alone.
+  egress:
+    {{- include "hephaestus.policy.databaseEgress" . | nindent 4 }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "hephaestus.name" (dict "root" . "component" "webapp") }}
+  labels:
+    {{- include "hephaestus.labels" (dict "root" . "component" "network") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "hephaestus.selectorLabels" (dict "root" . "component" "webapp") | nindent 6 }}
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        {{- include "hephaestus.peer" $gateway | nindent 8 }}
+      ports:
+        - port: http
+          protocol: TCP
+{{- if .Values.postgresql.bundled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "hephaestus.name" (dict "root" . "component" "postgresql") }}
+  labels:
+    {{- include "hephaestus.labels" (dict "root" . "component" "network") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "hephaestus.selectorLabels" (dict "root" . "component" "postgresql") | nindent 6 }}
+  {{- if .Values.postgresql.backup.enabled }}
+  policyTypes: ["Ingress", "Egress"]
+  {{- else }}
+  policyTypes: ["Ingress"]
+  {{- end }}
+  ingress:
+    - from:
+        {{- range $component := list "server" "webhook" "worker" "migration" }}
+        {{- include "hephaestus.componentPeer" (dict "root" $root "component" $component) | nindent 8 }}
+        {{- end }}
+      ports:
+        - port: 5432
+          protocol: TCP
+    {{- if .Values.postgresql.backup.enabled }}
+    # pgBackRest's TLS server, for the backup Jobs only.
+    - from:
+        {{- include "hephaestus.componentPeer" (dict "root" $root "component" "postgresql-backup") | nindent 8 }}
+      ports:
+        - port: 8432
+          protocol: TCP
+  # The WAL archive push, to the repository only.
+  egress:
+    {{- include "hephaestus.policy.backupEgress" . | nindent 4 }}
+    {{- end }}
+{{- end }}
+{{- if .Values.nats.bundled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "hephaestus.name" (dict "root" . "component" "nats") }}
+  labels:
+    {{- include "hephaestus.labels" (dict "root" . "component" "network") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "hephaestus.selectorLabels" (dict "root" . "component" "nats") | nindent 6 }}
+  policyTypes: ["Ingress"]
+  # The worker role runs no NATS client.
+  ingress:
+    - from:
+        {{- range $component := list "server" "webhook" }}
+        {{- include "hephaestus.componentPeer" (dict "root" $root "component" $component) | nindent 8 }}
+        {{- end }}
+      ports:
+        - port: 4222
+          protocol: TCP
+{{- end }}
+{{- /* The worker's own policies sit in worker.yaml with the sandbox namespaces they pair with. */}}

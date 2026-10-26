@@ -52,7 +52,7 @@ It can capture evidence only for images that its run published.
 
 | Job                                                                     | Checks                                                                                                                                                                                                    | Local command                                                            |
 | ----------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| Quality → App Server                                                    | Spotless and PMD, NullAway policy, the PMD canary when PMD inputs changed, source-use contracts, setting delivery per runtime role                                                                        | `vp run gate:server`, `gate:java-nullness`, `gate:contracts`, `gate:env` |
+| Quality → App Server | Spotless and PMD, NullAway policy, the test analysis (`gate:server-test-analysis`), the PMD canary when PMD inputs changed, source-use contracts, setting delivery per runtime role. On a pull request that changes Gradle inputs, the verification metadata check | `vp run gate:server`, `gate:java-nullness`, `gate:contracts`, `gate:env`, `node scripts/check-gradle-verification-metadata.ts` |
 | Quality → Tooling and Docs                                              | toolchain and agent-runtime pins, the runner and lint contracts, `gate:agents`, load-test format and syntax, agent specs, instruction mirrors, docs format and `docs:lint`, Mermaid parse                 | `vp run gate:agents`, `gate:docs`, `test:agents`                         |
 | Quality → Webapp                                                        | `vp check`, presentational components, story prose, docs color tokens, unit tests, Vite build with a `routeTree.gen.ts` diff                                                                              | `vp run check:webapp`, `test:webapp`, `build:webapp`                     |
 | Quality → Webapp: Stories                                               | Storybook interaction tests, `export:assets` diff, Storybook build, Chromatic                                                                                                                             | `vp run test:webapp:stories`                                             |
@@ -60,18 +60,17 @@ It can capture evidence only for images that its run published.
 | Quality → Windows                                                       | Every gate that needs neither Gradle, Docker nor the agent sandbox, on `windows-latest`, uncached                                                                                                         | `vp run --no-cache ci:windows`                                           |
 | Quality → Clean install                                                 | `vp install --frozen-lockfile` on a runner with Node and the launcher and nothing else, then `gate:toolchain` and the hooks path                                                                          | `vp install`                                                             |
 | Build → App Server: Package                                             | `./gradlew :application:bootJar :application:testClasses`. Uploads the classes and JARs once                                                                                                              | —                                                                        |
-| Build → App Server: Generated artifacts                                 | `generate:api` diff against the packaged JAR. `db:check-drift`, which replays `master.xml` and diffs the JPA model. ERD diff                                                                              | `vp run generate:api`, `db:check-drift`, `db:generate-erd-docs`          |
+| Build → App Server: Generated artifacts                                 | `generate:api` diff against the packaged JAR. [API compatibility](#api-compatibility) with the previous stable release. `db:check-drift`, which replays `master.xml` and diffs the JPA model. ERD diff | `vp run generate:api`, `gate:api-compatibility`, `db:check-drift`, `db:generate-erd-docs` |
 | Build → App Server: Database                                            | Gradle `databaseTest` task against PostgreSQL                                                                                                                                                             | —                                                                        |
-| Build → App Server: PostgreSQL drill                                    | `test:postgres-restore` and `test:postgres-pitr`, one job each, beside `databaseTest`                                                                                                                     | `vp run test:postgres-restore`, `test:postgres-pitr`                     |
+| Build → App Server: PostgreSQL drills                                   | `test:postgres-restore`, then `test:postgres-pitr`, in one job beside `databaseTest`. **Re-run failed jobs** repeats both drills                                                                          | `vp run test:postgres-restore`, `test:postgres-pitr`                     |
 | Build → Webapp: E2E                                                     | Playwright against the packaged JAR                                                                                                                                                                       | `vp run --filter webapp test:e2e`                                        |
 | Build → Extension: E2E                                                  | Playwright with the extension's `e2e` build — not the production zip — against the packaged JAR                                                                                                           | `vp run test:extension:e2e`                                              |
-| Build → App Server image                                                | `pack build` from the packaged JAR, signed, attested and policy-scanned                                                                                                                                   | —                                                                        |
 | Test → App Server: Unit and architecture, App Server: Integration       | the package job's compiled classes, without compiling again                                                                                                                                               | `vp run test:server:verification`, `test:server:integration`             |
 | Dependency review → New dependency risk                                          | informational dependency review. Pull requests that change a dependency input. Independent of CI Status Gate                                                                                                                                                           | —                                                                        |
-| Security → Dependencies, secrets, and policy                            | Trivy filesystem scan, dependency vulnerability gate, TruffleHog, `security.txt` expiry, changelog immutability guard, legacy-reference guards                                                            | —                                                                        |
+| Security → Dependencies, secrets, and policy                            | Trivy filesystem scan, dependency vulnerability gate, TruffleHog, `security.txt` expiry, changelog immutability and compatibility guards, legacy-reference guards                                                            | —                                                                        |
 | Changesets → Verify changesets                                          | policy tests, verified-revert detection, release-note presence, `MIGRATION.md` freeze                                                                                                                     | `vp run gate:changesets`                                                 |
-| Compose → Render compose stacks                                         | the self-hosted, preview and reference stacks render                                                                                                                                                      | `vp run gate:preview-stack`                                              |
-| Docker → Webapp, Agent: Pi, Postgres (pg_partman), Tag unchanged images | Dockerfile images. Aliases for unchanged ones                                                                                                                                                             | —                                                                        |
+| Compose → Render compose stacks                                         | the self-hosted and reference stacks render                                                                                                                                                               | —                                                                        |
+| Docker → Images, Tag unchanged images                                   | One build job per platform builds every image of the run and scans it. The Dockerfile images use `docker buildx bake`. The App Server image uses `pack build` from the packaged JAR. One manifest job merges, attests and signs them. Aliases for unchanged images           | —                                                                        |
 | Supported-host boot smoke                                               | `docker/self-host/setup.sh`, then PostgreSQL, NATS and the application server from this run's own images, waiting for the application to report healthy                                                   | —                                                                        |
 | Actionlint, Zizmor                                                      | workflow lint with ShellCheck warnings. Zizmor at medium confidence                                                                                                                                       | —                                                                        |
 | PR → Validate PR                                                        | Conventional Commit title. Every commit’s primary author resolves to the PR author’s GitHub account (including bot accounts) or a listed review-policy maintainer. The PR body follows attribution policy | —                                                                        |
@@ -117,6 +116,61 @@ A leg runs when the change
 detection in `cicd.yml` says its scope changed. The Windows leg uses the tooling scope.
 Both it and the tooling leg prove the hook dispatcher on rejected and accepted commits.
 
+### API compatibility
+
+A browser tab can run the SPA of one release against the server of the next release for days.
+The Chrome extension can be older.
+Thus, `server/openapi.yaml` must stay compatible with the previous stable release.
+`vp run gate:api-compatibility` compares the two specs with
+[`oasdiff breaking`](https://github.com/oasdiff/oasdiff/blob/main/docs/BREAKING-CHANGES.md).
+It fails on each change at the `ERR` level.
+It shows `WARN` changes, but they do not fail it.
+
+- **Where it runs.** `Build → App Server: Generated artifacts` runs it on the spec that the job generates from the packaged JAR.
+  The job runs for each pull request and merge group that changes the contracts.
+  It also runs for the push of each version commit, which [gates the release](./release-management.mdx#the-flow).
+  The release workflow does not run the check again.
+- **The base.** The base is the highest `vX.Y.Z` tag on `origin`.
+  A release creates its tag only when it is published.
+  The pattern does not select a pre-release tag such as `v0.10.0-rc.1`.
+  The CI checkout has one commit and no tags, so the script fetches the base tag with `--depth=1`.
+  To compare with a different release, add `--base vX.Y.Z`.
+- **The tool.** The script downloads oasdiff from its GitHub release into a cache directory that Git ignores.
+  Before each use, it verifies the archive against the SHA-256 that `scripts/check-api-compatibility.ts` pins for each platform.
+  To update oasdiff, change the version and all checksums together.
+  Compare each checksum in the release's `checksums.txt` with the asset digest on the release page.
+
+A new value in a response enum is an `ERR` change, because an older tab cannot show it.
+Its vocabulary maps have no text for the value, and its generated schemas reject a Heph live event that carries it.
+oasdiff accepts the removal of an operation or parameter that the base release marks `deprecated`.
+This agrees with the [deprecation policy](/admin/compatibility-policy#deprecation-policy).
+
+#### Accept a deliberate break
+
+Before 1.0, a release can break the API deliberately.
+From 1.0, a break needs a major release, so the gate fails on any entry when the base is `v1.0.0` or later.
+To accept a break before 1.0:
+
+1. Add the break's line to `server/openapi-accepted-breaks.txt`.
+   The line is the message of the gate's annotation in CI: `in API <method> <path> <change text>`.
+   The local report shows the same parts on two lines.
+   Above it, write a `#` comment with the reason and the pull request.
+2. Write a `minor` changeset that tells API clients what changed.
+   See [Writing changesets](./release-management.mdx#writing-changesets).
+
+The diff of the file shows each accepted break in review.
+
+An entry is obsolete when no break against the current base has that line.
+This occurs when the release that contains the break is published, because that release becomes the base.
+The gate then shows one warning that lists them.
+Remove them in your next change to the file.
+They do not fail the gate, so a published release does not stop unrelated pull requests.
+The Version PR cannot remove them, because its own runs still compare with the previous release.
+
+A published release moves the base, so a run that passed can fail when it runs again, for example in the merge queue.
+This occurs when `main` removes an endpoint that the new base added.
+List the break or restore the endpoint, then run the job again.
+
 ### Merge policy
 
 Pull requests targeting `main` merge through GitHub's merge queue after these GitHub
@@ -126,7 +180,7 @@ the pull request. Each required context is bound to the GitHub Actions integrati
 accepting a same-named external status.
 
 A merge group is a diff, so it selects its jobs from the paths it touches —
-[Path filters](#path-filters). It has no preview, so `Build` and `Docker` are filtered there too.
+[Path filters](#path-filters). It has no `preview` label, so `Build` and `Docker` are filtered there too.
 `any-code` is the union of source filters and reaches `docs/**` through the tooling filter.
 Thus, a documentation-only group starts `Quality`, `Security`, `Build`, and `Docker`, even when their internal jobs skip.
 
@@ -290,8 +344,23 @@ Dependency Dashboard approval. Native
 bound routine update concurrency. The hourly limit only restricts PR creation. Vulnerability alerts
 remain ungrouped and bypass those gates and limits.
 
+pnpm's `minimumReleaseAge` in `pnpm-workspace.yaml` still applies to a version that a lockfile update newly resolves.
+A fix younger than that age opens as a pull request with a failed lockfile update.
+To take it earlier, a maintainer adds the version to `minimumReleaseAgeExclude`.
+
 Lockfile maintenance runs on Mondays. `renovate.json` owns the managed ecosystems and extraction
 rules. `scripts/renovate-config.test.ts` exercises each custom manager against its source.
+
+Renovate runs as the Mend-hosted app on the [Community plan](https://docs.renovatebot.com/mend-hosted/overview/#resources-and-scheduling).
+A job has 3 GB of memory and 30 minutes.
+A job that exceeds a limit stops before it writes pull requests or the Dependency Dashboard.
+Mend then [runs the repository only weekly](https://docs.renovatebot.com/mend-hosted/job-scheduling/).
+
+If the Dependency Dashboard stops changing, read the latest job on the [Mend Developer Portal](https://developer.mend.io/github/hephaestus-build/Hephaestus).
+The job page shows its status, such as `kernel-out-of-memory`, and its log.
+After you fix the cause, select **Retry** on that job.
+A successful job returns the repository to the normal schedule.
+`trustLockfile` in `pnpm-workspace.yaml` keeps the pnpm lockfile updates in a job inside the memory limit.
 
 The Node,
 pnpm and Pi SDK pins are grouped, so a version stated in several managed files moves in one pull
@@ -400,7 +469,10 @@ Gradle can read an older version's POM or module descriptor while it selects a p
 Metadata generation also only adds entries. It keeps the entry of a version that no build downloads any more.
 OSV reports both kinds as dependencies.
 
-[Updating Java dependencies](local-development.mdx#updating-java-dependencies) removes the entries that no build downloads.
+Quality → App Server checks this file on a pull request that changes Gradle inputs.
+It fails on an entry that a clean dependency resolution does not download.
+The merge group skips this check, because the pull request already decides it.
+[Updating Java dependencies](local-development.mdx#updating-java-dependencies) gives the command that removes it.
 Do not remove an entry that a fresh build reads: dependency verification then fails.
 
 Reproduce the distinction for the Gradle sources from the repository root with the
@@ -442,7 +514,6 @@ Do not alter dependency submission or disable checksum verification to change it
 
 | Environment       | Eligibility                                 | Deploys on                        | Approval          |
 | ----------------- | ------------------------------------------- | --------------------------------- | ----------------- |
-| Preview (Coolify) | same-repository PR with the `preview` label | every push, once its CI run ends  | none              |
 | Staging           | qualified commits of `main`                 | automatic promotion policy        | none              |
 | Production        | a published release                         | manual promotion                  | required reviewer |
 
@@ -470,135 +541,34 @@ The `proxy` stack publishes :80 and :443. If the host already has an edge, set `
 This omits `proxy` from both render and deploy. Anything else, including an unset variable, deploys all
 three.
 
-Staging sets it because it shares a host with Coolify for preview deployments.
-Coolify's proxy holds both ports.
+Staging sets it because Coolify's proxy on its host holds both ports.
 A second edge would fail the deploy because a port is already allocated.
 
-Preview environments do not need to be created in advance. The preview workflow registers
-`preview/pr-N` as a transient GitHub environment when Coolify accepts the first deployment.
+## The `preview` label
 
-## Preview deployments
+The label builds images only.
+There is no deployed preview until previews move to the staging cluster.
 
-Add the `preview` label to a same-repository pull request. Every push redeploys when its CI/CD run
-completes, whether the tests passed or not. The published images decide, not the test verdict.
-
-CI builds a pull request's images only when the run needs them: for the `preview` label, for the supported-host boot smoke, or for release evidence.
+On a same-repository pull request, the label makes CI build, scan and publish every image at the head commit.
+Without it, CI builds a pull request's images only for the supported-host boot smoke, the Kubernetes cluster jobs or release evidence.
 The merge group builds every other changed image before it lands.
+Thus, the label shows an image build or scan failure on the pull request, before the merge queue finds it.
 `Detect changes` reads the label live, as for `ci:full` ([Two verification tiers](#two-verification-tiers)).
 If it cannot read the label, a pull request that is not a draft builds its images.
 
-A label added after CI published the head's images deploys at once.
-If the label comes before the run starts, the comment says that the preview waits for CI, and the completion of that run deploys it.
-If the label comes after the run started, use **Re-run all jobs** on that run, or push a commit.
+If you add the label after the run started, use **Re-run all jobs** on that run, or push a commit.
 **Re-run failed jobs** keeps the earlier `Detect changes` result, so it does not see the label.
-
-This is later than a deploy as soon as the images are ready.
-A push previews only when its slowest CI job ends, tests included.
-Checking after the run ends avoids reporting a build that is still running as a missing image.
 
 `Docker` rebuilds images whose inputs changed.
 Its `Tag unchanged images` job aliases the base commit's verified digests for the rest.
 Thus, every image exists at the head SHA.
 
-An alias serves a preview, never release evidence.
+An alias is never release evidence.
 If the base commit's image is still publishing, it uses the merged pull request's candidate, which carries only `linux/amd64`.
 Either way, the alias is an image that another commit's run built.
 That is why the Version PR's branch builds every image itself instead.
 
-A draft deploys like any other pull request.
-Unfinished work commonly needs review, so the label is the sole opt-in.
-
-A sticky comment carries the URL, and GitHub records each accepted update as the transient
-environment `preview/pr-N`. The deployment opens when the pull request is admitted and its images are published, not when the stack is ready.
-It is `queued` until the last recheck and `in_progress` while Coolify builds, then becomes `success`.
-Thus, the pull request's **View deployment** link and run log remain reachable while Coolify builds.
-
-While CI is still publishing, there is no deployment record. A wait therefore holds no slot, and the previous preview stays live.
-A run that a newer push supersedes, or whose
-label is removed while it works, ends `inactive` rather than `failure`. Neither is a fault.
-
-Remove the `preview` label to tear the stack down and free the slot. Closing or merging the pull
-request does the same thing. Converting it back to draft does not — a draft is a thing you can
-preview.
-
-The environment itself outlives the deployments recorded in it. Deletion needs repository administration, which `GITHUB_TOKEN` cannot receive.
-`administration` is not a workflow-requestable permission scope.
-Thus, after the pull request closes, a `preview/pr-N` entry remains in repository settings with only retired deployments. Removing them is a
-maintainer action:
-
-```bash
-gh api -X DELETE "repos/hephaestus-build/Hephaestus/environments/preview%2Fpr-<n>"
-```
-
-Automating it would mean giving a scheduled workflow an administration-scoped credential, which is a
-larger grant than tidy settings are worth.
-
-Deployments are serialized, never parallel, and each one deploys the pull request's *current* head.
-A burst of pushes therefore produces one deployment of the newest commit rather than one per commit.
-If you push while a deployment is in flight, that run stands down rather than deploying a commit that
-is no longer the head. The new push's CI run starts the next deployment and nothing needs relabeling.
-A CI run that a newer push cancelled deploys nothing.
-
-CI's `workflow_run` completion starts the deploy.
-The App Server image can publish late in the run, so a timed wait can end before it is ready.
-
-A preview runs its own PostgreSQL seeded from staging and reads staging's event stream. What is
-switched off in the copy, how sign-in works, and how the sandbox is enforced are in
-[`docker/preview/README.md`](https://github.com/hephaestus-build/Hephaestus/blob/main/docker/preview/README.md).
-
-Same-repository pull requests can preview while targeting a stacked branch. The controller routes
-them to the default branch's Coolify application and checks their migrations against the default
-branch. The trusted workflow and admission boundary are defined in
-[ADR 0035](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0035-pull-request-previews-are-label-gated.md).
-
-### What a preview keeps from staging
-
-The preview retains accounts, workspaces, items, results, problems, feedback, and AI catalog metadata for reads.
-This includes model prices, grants, and bindings.
-Each connection keeps its staging state. What the clone is stripped of, and what the seed loader verifies before it lets the
-preview boot, is
-[`docker/preview/README.md` § Security boundary](https://github.com/hephaestus-build/Hephaestus/blob/main/docker/preview/README.md#security-boundary).
-
-None of staging's provider credentials are among what it keeps, so a preview reaches no model and no
-provider on staging's account. To give one AI access, add a **preview-only provider key** through
-the preview's own AI models administration and enable that connection. Instance and workspace
-connections both work, and a preview talking to a different endpoint gets a connection of its own.
-There is no provider-key environment variable and no fallback to staging's key, and enabling a
-connection does not switch practice review execution on.
-
-Seeding happens once per preview, so a preview seeded before this policy was installed still holds
-what the policy now clears. **Recreate it, including its private database volume** — a normal
-redeploy preserves an already-seeded database — and configure its AI access again afterwards.
-
-### When the comment says nothing deployed
-
-| Comment says                                      | What to do                                                                                                                                      |
-| ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| does not carry the `preview` label                | Add the label                                                                                                                                   |
-| CI has not published images for …                 | If that commit's CI run started after the label was added, nothing: the preview deploys when it finishes. Otherwise, use **Re-run all jobs** on that run, or push a commit |
-| is behind `main` on schema                        | Merge `main` in. The next push previews automatically                                                                                           |
-| comes from a fork                                 | Push the branch to this repository                                                                                                              |
-| was opened by a … , not a repository collaborator | Nothing. Previews need push access                                                                                                              |
-| changes trusted deployment policy                 | Land that change first — a preview never runs a pull request's own edits to `.github/workflows/**`, `.github/actions/**` or `docker/preview/**` |
-
-### When the preview failed
-
-| Comment says                                              | What it means                                                                                                 |
-| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| CI finished … without publishing this commit's images     | An image build failed or did not run. Open the linked CI run. Re-run it, or push, to retry.                   |
-| Coolify reported a failed preview deployment              | The stack did not start. Open the deployment log link in the comment.                                         |
-| Coolify finished, but the preview did not return HTTP 2xx | Containers started but the app never became healthy.                                                          |
-| Timed out waiting for Coolify …                           | The deploy outlasted its budget. The next push retries.                                                       |
-| The preview host is full (n/m)                            | Drop the label from one of the named pull requests                                                            |
-
-`cleanup-preview.yml` sends the signed close event and marks the GitHub deployment inactive. If
-Coolify rejects the event the job fails and `reconcile-previews.yml` retries nightly, starting from
-the deployment inventory.
-
-Operator configuration, host capacity and secret scopes live in
-[`docker/preview/README.md`](https://github.com/hephaestus-build/Hephaestus/blob/main/docker/preview/README.md).
-Why the label is the authority, and which alternatives were priced and declined, is
-[ADR 0035](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0035-pull-request-previews-are-label-gated.md).
+A draft with the label also builds its images.
 
 ## Workflows
 
@@ -613,8 +583,8 @@ Why the label is the authority, and which alternatives were priced and declined,
 | `cache-gradle.yml`                    | Main push changing Gradle inputs, or dispatch                                 | The only Gradle cache producer: builds what the server jobs restore                                                                                                                                                              |
 | `ci-build.yml`                        | Called by cicd.yml                                                            | Runs the OpenAPI, schema, database and browser E2E gates against the server artifact packaged by cicd.yml                                                                                                                        |
 | `ci-tests.yml`                        | Called by cicd.yml                                                            | The server unit, architecture and integration suites, on the package job's compiled classes                                                                                                                                     |
-| `ci-docker-build.yml`                 | Called by cicd.yml                                                            | Dockerfile image builds (webapp, agent, PostgreSQL) and aliases for unchanged images                                                                                                                                             |
-| `reusable-docker-build.yml`           | Called by cicd.yml and ci-docker-build.yml                                    | Builds each requested platform natively, merges the index, signs, attests, and blocks on the release vulnerability policy for each platform                                                                                       |
+| `ci-docker-build.yml`                 | Called by cicd.yml                                                            | Every image build of the run (App Server, webapp, agent, PostgreSQL) and aliases for unchanged images                                                                                                                            |
+| `reusable-docker-build.yml`           | Called by ci-docker-build.yml                                                 | Builds every requested image in one job per platform, natively, and blocks on the release vulnerability policy there. One job merges each index, attests, signs and tags it                                                       |
 | `ci-security-scan.yml`                | Called by cicd.yml                                                            | Trivy dependency scan, secret detection and repository policy checks                                                                                                                                                             |
 | `dependency-review.yml`               | PR changing a dependency input                                                | Reports introduced dependency advisories independently of the required CI verdict                                                                                                                                                |
 | `dependency-graph.yml`                | PR changing a dependency input, push to main                                  | Resolves and uploads the verified Gradle dependency graph with read-only permissions                                                                                                                                             |
@@ -633,13 +603,10 @@ Why the label is the authority, and which alternatives were priced and declined,
 | `delivery-metrics.yml`                | Weekly, manual                                                                | Reports lead time, deployment frequency, and change fail, recovery and rework proxies. See [Delivery Metrics](./delivery-metrics.mdx)                                                                                                 |
 | `ci-server-clean-reference.yml`       | Weekly, manual                                                                | Records cold server phases and compares generated JARs                                                                                                                                                                           |
 | `scorecard-ratchet.yml`               | Push to main, branch-protection change, weekly, manual                        | Fails when a Scorecard check drops below the committed baseline. A push fails only for the checks its own commit decides                                                                                                         |
-| `deploy-preview.yml`                  | `preview` label added, reopen or ready-for-review, or CI/CD completion, on a labelled PR | Deploys this commit's attested CI images once they exist, and registers the native GitHub deployment                                                                                                                  |
-| `cleanup-preview.yml`                 | Label removed, or PR closed                                                   | Removes and verifies resources, then retains a cleanup tombstone                                                                                                                                                                 |
-| `reconcile-previews.yml`              | Nightly, manual                                                               | Re-sends teardown for any preview environment whose pull request is closed or unlabelled                                                                                                                                         |
 | `cd-docs.yml`, `cd-docs-teardown.yml` | `docs/**` on push and pull requests. PR closed                                | Publishes the docs site and its pull-request previews                                                                                                                                                                            |
 | `version-pr.yml`                      | Successful CI/CD completion for the current main tip                          | Maintains the accumulating Version PR (changesets). Its own pull-request CI/CD run, release evidence preflight included, validates it                                                                                            |
 | `release.yml`                         | Successful CI/CD push on `main`                                               | Publishes the release and promotes the moving series and latest image tags                                                                                                                                                       |
-| `release-upgrade.yml`                 | Called by `release.yml`, weekly                                               | Boots the previous stable release with seeded data, then the candidate against the same database                                                                                                                                 |
+| `release-upgrade.yml`                 | Called by `release.yml`, weekly                                               | Boots the previous stable release with seeded data, then the candidate against the same database. See [Seeded release upgrade](./database-migration#ci-validation) |
 | `promote.yml`                         | Manual dispatch, or automatically for staging                                 | Records the GitHub deployment of the promoted source and signs the channel a host follows. Hosts pull and apply it themselves                                                                                                    |
 
 ### Commits a workflow makes
@@ -681,10 +648,6 @@ image builder also uses the external login action because its registry is a call
 
 Browser E2E boots the packaged JAR without
 Gradle, so it sets up Java directly. OpenAPI autocommit builds the JAR and uses `setup-caches`.
-
-Preview controllers keep their trusted sparse bootstrap checkouts explicit: a repository-local
-action is unavailable before checkout. Their inventory job uses `github-script`'s bundled Node.
-Controller jobs that invoke Node scripts use `setup-toolchain` without a package install.
 
 Commit, branch and pull request image tags are published only after their immutable digest passes
 signature and provenance verification. Index assembly uses a run-specific staging tag. Final tag
@@ -771,7 +734,7 @@ A pull request runs the **fast tier**. A merge group, a push and a dispatch also
 
 | Tier | Jobs |
 | --- | --- |
-| Fast (pull request and queue) | Detect changes, the quality legs, unit and architecture tests, packaging, generated-artifact drift, [the images it needs](#preview-deployments), Security, Changesets, Compose, Actionlint, Zizmor |
+| Fast (pull request and queue) | Detect changes, the quality legs, unit and architecture tests, packaging, generated-artifact drift, [the images it needs](#the-preview-label), Security, Changesets, Compose, Actionlint, Zizmor |
 | Queue (merge group, push, dispatch) | the integration shards, the database contract tests, the PostgreSQL drills, webapp and extension E2E |
 
 Path filters and the main-push rules in [Path filters](#path-filters) still select within each tier.
@@ -791,7 +754,7 @@ When both tiers ran on each pull request, a merged change paid for the queue tie
 The queue tier is most of a run's runner time, and GitHub's runner concurrency limit is shared by the queue and every pull request.
 
 A queue-tier failure removes the entry from the queue, and the failure comment links the run.
-So does an image build or scan failure, because a pull request builds images only for a preview, the boot smoke or release evidence.
+So does an image build or scan failure, because a pull request builds images only for the `preview` label, the boot smoke or release evidence.
 Fix the failure and queue the pull request again.
 
 A draft pull request runs the fast tier and builds no image. So it gets no host smoke and no image
@@ -800,7 +763,7 @@ scan. The `preview` label still builds its images, and a release candidate alway
 For a draft, the automatic queue tier for the tier's own inputs is off, but `ci:full` still opts in.
 `CI Status Gate` still reports, so required checks resolve on a draft.
 Marking the pull request ready for review (`ready_for_review`) starts an ordinary pull-request run,
-with the images that such a run builds ([Preview deployments](#preview-deployments)). That run is never skipped as a duplicate of the draft's run.
+with the images that such a run builds ([The `preview` label](#the-preview-label)). That run is never skipped as a duplicate of the draft's run.
 A re-run replays the event of its run, so a re-run of a draft's run builds no image, even after
 the pull request is ready. Re-run the ready run instead.
 
@@ -846,14 +809,14 @@ They skip API, schema, database, and browser jobs inside `Build`.
 Release-version pushes repeat those checks. Main still packages and publishes images.
 
 A same-repository pull request with the `preview` label, or with the supported-host boot smoke, also runs `Build` and `Docker` regardless of paths.
-A preview and the smoke need every image at the head SHA. No other event has a preview.
+The label and the smoke need every image at the head SHA. No other event reads the label.
 Any other pull request builds no image. The merge group builds every changed image before it lands.
 
 | Selects                    | Paths                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Quality → Webapp           | `webapp/**`, `docs/images/readme/**`, `docs/src/css/custom.css`, the root oxlint and oxfmt configs, the four `scripts/check-*` files it runs, root package files                                                                                                                                                                                                                                                                  |
 | Quality → Extension        | `extension/**`. Webapp files imported by path: vocabulary registries, trace formatting, status definitions, sign-in providers, text helpers, and their imports. Webapp lint plugin and stylesheet. Root oxlint and oxfmt configs, `scripts/install-browser-deps.ts`, and root package files                                                                                                                                       |
-| Quality → App Server       | `server/**` except `AGENTS.md` and `CLAUDE.md`, `scripts/run-gradlew.ts`, `docker/compose.app.yaml`, `docker/compose.core.yaml`, root package files                                                                                                                                                                                                                                                                               |
+| Quality → App Server       | `server/**` except `AGENTS.md` and `CLAUDE.md`, `scripts/run-gradlew.ts`, `scripts/check-gradle-verification-metadata.ts`, `docker/compose.app.yaml`, `docker/compose.core.yaml`, root package files                                                                                                                                                                                                                                                                               |
 | Quality → Tooling and Docs | `scripts/**`, `docker/agents/**`, `load-tests/**`, `docs/**`, tsconfigs, oxlint and oxfmt configs, `.changeset/**`, `commitlint.config.ts`, instruction files, `renovate.json`, `openapitools.json`                                                                                                                                                                                                                               |
 | Every quality leg          | `vite.config.ts`, `.vite-hooks/**`, `.java-version`, `cicd.yml`, `ci-quality-gates.yml`, `ci-quality-leg.yml` and the setup actions: the task graph, the hooks and the JDK decide every leg's verdict, so a change to one runs all of them                                                                                                                                                                                        |
 | Build artifact gates       | contracts: the App Server paths, `docker/postgres/**`, or either generated client and its generator config (`api-clients`). E2E: webapp source and the server main sources. Extension E2E: `extension/**`, the vocabulary registries and the server main sources. Image: `server/application/src/main/**`, the Gradle build scripts, catalog, locks and wrapper, `server/application/project.toml`, `server/generated-clients/**` |
@@ -866,12 +829,13 @@ Any other pull request builds no image. The merge group builds every changed ima
 
 ## Docker layer caching
 
-Dockerfile builds import `<image>:cache-main-<platform>` from `ghcr.io`.
+The Dockerfile images are targets of `docker/docker-bake.hcl`, built for one platform in one `docker buildx bake` call.
+Each imports `<image>:cache-main-<platform>` from `ghcr.io`.
 Only pushes to `main` and merge groups write it, with every intermediate layer.
 A pull request reuses those layers and writes nothing.
 
-amd64 builds on `ubuntu-24.04`, arm64 on `ubuntu-24.04-arm`. No emulation. The buildpacks
-path (`App Server image`) does not use this cache. Dockerfile builds always bypass the cache for
+amd64 builds on `ubuntu-24.04`, arm64 on `ubuntu-24.04-arm`. No emulation. The App Server
+image, built with Buildpacks, does not use this cache. Dockerfile builds always bypass the cache for
 the `os-packages` and exported `runtime` stages. [OS package updates](vulnerability-remediation.mdx#os-package-updates-in-first-party-images)
 owns that contract and the local build commands.
 
@@ -885,7 +849,7 @@ well, because `packages: read` alone buys nothing.
 
 A pull request from a fork gets a read-only `GITHUB_TOKEN`, so `cicd.yml` passes `publish: false`
 to both image workflows. That build compiles the image and stops: no login, no push, no signature,
-no attestation, no policy scan and no alias moves. Forks therefore get no preview and no boot smoke.
+no attestation, no policy scan and no alias moves. Forks therefore get no published images and no boot smoke.
 The release path exercises their code once it is on `main`.
 
 When release preflight is required, it owns image vulnerability scanning for both architectures.
@@ -938,6 +902,15 @@ So the suites wait for packaging rather than compile the same sources in each of
 The package artifact is kept for one day, so a failed job re-run after that day fails on its download.
 Re-run all jobs instead.
 
+The package job compiles the tests without Error Prone and NullAway (`-PtestAnalysis=false`).
+The analysis can fail the build, but it does not change the bytecode that javac writes.
+Thus, the suites start sooner and still test the same classes.
+
+The server quality leg compiles the tests with the analysis (`gate:server-test-analysis`), and a finding fails that leg.
+That leg runs whenever a Java compile input can change: `server/**`, `.java-version` or the setup actions.
+A push to `main` runs Quality only for a version bump. Its merge group ran the analysis on the same tree.
+Locally, every server test task compiles the tests with the analysis.
+
 The PostgreSQL backup-restore and PITR drills apply the migrations from that same executable JAR.
 Spring Boot's launcher runs the Liquibase bundled in the JAR against the changelog in the JAR, from an empty directory and with a minimal environment.
 Thus, a drill restores the schema that the release ships, not the checkout's resources.
@@ -954,15 +927,16 @@ and release preflight wait for the image producers, not the API, database or bro
 final CI gate still requires all of them. An early image verdict cannot approve a failed artifact gate.
 
 A default-branch push reuses the packaged server when a successful merge group
-validated the exact same commit. The source must be this repository's `cicd.yml` run, with successful
-artifact gates, tests, security checks, both server image builds and final gate. Release preflight
+validated the exact same commit. The source must be this repository's `cicd.yml` run.
+Its artifact gates, tests, security checks, both platform image builds and final gate must have succeeded.
+Its `Create manifests` job must have attested the App Server image. Release preflight
 does not change the packaged Java artifact, so its absence in ordinary merge groups does not force
 a rebuild. Release candidates still require release preflight.
 
-The latest attempt of each job counts, so an arm64 server image build that flaked and passed on a
+The latest attempt of each job counts, so an arm64 image build that flaked and passed on a
 re-run does not block reuse. A queue run whose arm64 build stays failed fails its gate, so its
 commit does not merge. `main` packages the server again when the merge group did not rebuild the
-server image, because that queue run has no server image builds.
+App Server image, because that queue run attested no App Server image.
 
 The immutable artifact ID and its SHA-256 digest bind the download to that run. Missing, expired or
 unavailable source evidence falls back to packaging. A corrupt download fails rather than being used.
@@ -974,7 +948,7 @@ Release publication still generates fresh vulnerability evidence and signatures.
 A default-branch push reuses each image that its successful merge group published for the same commit.
 `detect-changes` resolves that run with `scripts/resolve-queue-run.ts`.
 The run must have a successful `CI Status Gate`, which covers its image builds and per-platform scans.
-The `reuse` job in `reusable-docker-build.yml` accepts the image at `<image>:<commit>` only when all these checks pass:
+The `Create manifests` job in `reusable-docker-build.yml` accepts the image at `<image>:<commit>` only when all these checks pass:
 
 - Its platform leaves are exactly the platforms that the push requests.
 - Its cosign signature comes from `reusable-docker-build.yml` on the queue branch, with the `merge_group` trigger, at this commit.
@@ -984,15 +958,24 @@ The push then signs the index and each leaf again, verifies them, and moves the 
 It does not rebuild, re-attest, or rescan the image.
 The release verifier accepts only the default-branch signing identity, so the push signs the image again.
 The provenance stays the queue run's, because that run built the image.
-A missing or unverifiable image is built and scanned as before.
+
+An image that the queue run did not publish is built and scanned as before.
 Examples are a direct push, an image that the merge group did not rebuild, and a lookup that failed.
+An image that the queue run published but that fails a check fails the push, which then publishes no image.
+Thus, `main` never ships a different image in place of one that its merge group built and tested.
 
-`resolve-queue-run.ts` also lists the images whose `Create manifest` job succeeded in the queue run.
-The push runs the `reuse` job only for those images.
-For any other image, the build starts at once, without a job that waits for a runner only to find nothing to reuse.
+After a transient failure, such as a registry or API timeout, **Re-run failed jobs** repeats the manifest job and the jobs that follow it.
+After a persistent failure, merge a new commit through the queue.
+Its merge group builds, scans and signs the images again, and its push publishes them for `main`, staging and the release.
 
-A merge group adds one arm64 build job, which also scans that platform, for each image that it rebuilds.
-That is four jobs when it rebuilds all images.
+`resolve-queue-run.ts` also lists the images whose attestation step succeeded in the queue run's `Create manifests` job.
+The push reuses only those images, and its build jobs build the rest at once.
+When the queue run published every image, a push that is not a version bump builds and scans nothing.
+It then skips `App Server: Package` and `Image advisory database`.
+It runs `Detect changes`, `Docker / Images / Create manifests` and `CI Status Gate`.
+Thus, it holds few of the runners that a waiting merge group needs.
+
+A merge group adds one arm64 build job, which builds and scans that platform for every image that it rebuilds.
 The push reuses those images and no longer builds or scans them on either architecture.
 It still builds and scans both platforms of each image that the merge group did not rebuild, as before.
 The webapp records its branch at build time, so a merge group builds it with the default branch's name.
@@ -1003,6 +986,9 @@ An unchanged pull-request image is not rebuilt.
 A stacked pull-request layer uses another branch's head, which published nothing.
 If no such default-branch commit exists, the run builds every image itself. `detect-changes` resolves that commit once, with
 `scripts/resolve-alias-base.ts`, and hands it to the image jobs as `alias_base`.
+
+A pull request aliases only from a commit whose `CI/CD` push run has succeeded, because that run publishes the images under the commit's tag.
+Right after a merge, that run is still building, so the pull request builds every image itself.
 
 ## Parallelism and concurrency
 
@@ -1023,9 +1009,11 @@ If no such default-branch commit exists, the run builds every image itself. `det
   the tier runs whole. The weekly [server profiles](#server-profiles) run the same shards.
 - Pull requests build `linux/amd64`. Merge groups, pushes to `main`, dispatches, and every run on
   the Version PR's branch build `linux/amd64` and `linux/arm64`. Both lists take the same build,
-  merge, signing, attestation and per-platform scan path. Pull requests and merge groups build only
-  changed images and alias the rest. The Version PR's branch builds them all. `detect-changes`
-  decides both once, as `platforms` and `all-images`, and hands them to every image build in the run.
+  merge, signing, attestation and per-platform scan path. Pull requests build only changed images
+  and alias the rest. Merge groups build only changed images and alias nothing. A merge group that
+  runs the Kubernetes legs builds every image. Those legs install every image under the group's
+  commit. The Version PR's branch builds them all. `detect-changes` decides both once, as
+  `platforms` and `all-images`, and hands them to every image build in the run.
 - A job's `timeout-minutes` is a hang detector of at least 15 minutes.
   This holds whatever the job's usual duration is.
   GitHub documents only that it cancels a job that runs longer than its limit
@@ -1049,8 +1037,12 @@ If no such default-branch commit exists, the run builds every image itself. `det
 
 - `Security` starts from `Detect changes`. Only `Pinned upstream images` reads the advisory
   snapshot, so only it waits for `Image advisory database`.
-- Quality legs run independently. The image matrix in `reusable-docker-build.yml` uses
-  `fail-fast: true`.
+- Quality legs run independently. The platform matrix in `reusable-docker-build.yml` uses
+  `fail-fast: false`. One platform's refusal does not cancel the scan of the other platform.
+- All images of a run share one build job per platform and one manifest job.
+  Each job pays a runner's setup.
+  The App Server image is built from the packaged JAR.
+  Thus, the build jobs start when `App Server: Package` uploads it, and the Dockerfile images wait with them.
 - A push to a pull request cancels the earlier runs of that pull request, and no other runs.
   A superseded run validates a commit that nobody merges, and it holds runners that other pull requests wait for.
   Each workflow that runs on `pull_request` or `pull_request_target` declares this at the top level:
@@ -1309,6 +1301,7 @@ vp run typecheck:agents      # Agent + practice script TypeScript
 | Lint errors (agent runtime, practice scripts, `scripts/`) | Run `vp run fix:agents`, then fix what remains |
 | TypeScript errors                                         | Run `vp run typecheck` to see details          |
 | OpenAPI out of sync                                       | Run `vp run generate:api`                      |
+| Breaking API change                                       | See [API compatibility](#api-compatibility)    |
 | Database schema drift                                     | Run `vp run db:draft-changelog`                |
 
 ## Adding a new service
@@ -1324,8 +1317,14 @@ Extend the pipeline at the ownership boundary that changed. Do not copy an exist
    Use `frozen` for any job that calls `vp`, because Vite+ loads the task graph from workspace configs. `none` only for jobs that run
    `node scripts/…` or shell alone. Java jobs use a validated `setup-caches`
    type. Browser jobs use `setup-browsers`.
-4. Add image builds through `reusable-docker-build.yml`. Keep image metadata, immutable tags,
-   attestations, and signing in that workflow rather than reproducing them in the caller.
+4. Add a Dockerfile image as a target of `docker/docker-bake.hcl` and an input of
+   `reusable-docker-build.yml`. Keep image metadata, immutable tags, attestations, and signing in
+   that workflow rather than reproducing them in the caller. In that workflow, also add the image to:
+   - `IMAGE_NAMES`, the one list that the image selection and every name check read, and a boolean input of the same name.
+   - A metadata step, its `bake-file-labels` entry, and the image list of the merge job's metadata step.
+   - A digest output and an `Attest the <image> image` step.
+   - `imageAttestations` in `scripts/resolve-server-build.ts`, so that a push can reuse the image.
+   - Its `*_changed` input in `ci-docker-build.yml` and `security/release-images.json`.
 5. Pass the change-detection output from `cicd.yml` to every reusable workflow that needs it.
 
 `scripts/ci-contract.test.ts` owns the workflow invariants. Extend it when the service introduces one.

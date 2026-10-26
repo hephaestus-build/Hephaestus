@@ -37,6 +37,8 @@ import org.springframework.security.oauth2.client.web.OAuth2AuthorizationRequest
 import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.intercept.AuthorizationFilter;
+import org.springframework.web.client.RestClient;
+import org.springframework.web.reactive.function.client.WebClient;
 
 /**
  * Wires the OAuth login flow on a dedicated, medium-precedence
@@ -71,9 +73,16 @@ public class AuthSecurityConfig {
     private static final String GITHUB_USERINFO_PREFIX = "https://api.github.com";
 
     private final LoginProviderRepository loginProviderRepository;
+    private final RestClient.Builder restClients;
+    private final WebClient.Builder webClients;
 
-    public AuthSecurityConfig(LoginProviderRepository loginProviderRepository) {
+    public AuthSecurityConfig(
+            LoginProviderRepository loginProviderRepository,
+            RestClient.Builder restClients,
+            WebClient.Builder webClients) {
         this.loginProviderRepository = loginProviderRepository;
+        this.restClients = restClients;
+        this.webClients = webClients;
     }
 
     @Bean
@@ -126,8 +135,8 @@ public class AuthSecurityConfig {
      */
     @Bean
     public OAuth2UserService<OAuth2UserRequest, OAuth2User> oauthUserService() {
-        var github = new GitHubEmailOAuth2UserService();
-        var outline = new OutlineAuthInfoUserService();
+        var github = new GitHubEmailOAuth2UserService(restClients);
+        var outline = new OutlineAuthInfoUserService(webClients);
         var fallback = new DefaultOAuth2UserService();
         return request -> {
             ClientRegistration registration = request.getClientRegistration();

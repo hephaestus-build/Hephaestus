@@ -31,6 +31,9 @@ import { useIsMobile } from "@/hooks/use-mobile";
  *    https://github.com/shadcn-ui/ui/issues/11533
  * 3. The user-visible text is sentence case ("Toggle sidebar"), and the mobile sheet is named
  *    "Navigation" so it matches the "Close navigation" button in `AppSidebar`.
+ * 4. The Cmd/Ctrl+B shortcut ignores a keystroke typed into an editable element: upstream calls
+ *    `preventDefault` there too, which takes the key from the field, such as Ctrl+B that moves the
+ *    cursor back one character on a Mac.
  */
 const SIDEBAR_WIDTH = "16rem";
 const SIDEBAR_WIDTH_MOBILE = "18rem";
@@ -99,7 +102,14 @@ function SidebarProvider({
 	// Adds a keyboard shortcut to toggle the sidebar.
 	useEffect(() => {
 		const handleKeyDown = (event: KeyboardEvent) => {
-			if (event.key === SIDEBAR_KEYBOARD_SHORTCUT && (event.metaKey || event.ctrlKey)) {
+			if (
+				event.key === SIDEBAR_KEYBOARD_SHORTCUT &&
+				(event.metaKey || event.ctrlKey) &&
+				!(
+					event.target instanceof Element &&
+					event.target.closest("input, textarea, select, [contenteditable]") !== null
+				)
+			) {
 				event.preventDefault();
 				onShortcut();
 			}

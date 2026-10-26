@@ -91,7 +91,8 @@ Rotate the credential key with the documented online procedure.
 :::
 
 1. Set each encryption key to exactly 32 printable, non-space ASCII characters.
-2. Keep both keys with the database backup.
+2. Keep both keys with the backup set, in separate storage with separate credentials.
+   [Keep the required keys outside the cluster](./secret-custody#keep-the-required-keys-outside-the-cluster) gives the rule.
 
 The supported self-host setup generates the master key and copies it into an empty credential-key setting.
 These settings are separate even when their initial values match.

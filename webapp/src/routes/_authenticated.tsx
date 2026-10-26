@@ -1,7 +1,7 @@
 import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
 import { currentTenantSlug } from "@/runtime/workspace-address";
 
-import { Spinner } from "@/components/ui/spinner";
+import { PageSkeleton } from "@/components/layout/PageSkeleton";
 import { consentIsPending, resolveCurrentUser } from "@/runtime/auth/guard";
 import { getUserViewSession } from "@/runtime/user-view/session";
 
@@ -41,10 +41,6 @@ export const Route = createFileRoute("/_authenticated")({
 			}
 		}
 	},
-	pendingComponent: () => (
-		<div className="flex h-96 items-center justify-center">
-			<Spinner className="size-8" />
-		</div>
-	),
+	pendingComponent: PageSkeleton,
 	component: Outlet,
 });

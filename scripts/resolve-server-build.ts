@@ -8,11 +8,10 @@ const requiredJobs = [
 	"App Server: Package",
 	"Build / App Server: Generated artifacts",
 	"Build / App Server: Database",
-	"Build / App Server: PostgreSQL drill (backup-restore)",
-	"Build / App Server: PostgreSQL drill (pitr)",
+	"Build / App Server: PostgreSQL drills",
 	"Build / Webapp: E2E",
-	"App Server image / Build linux/amd64 Docker Image",
-	"App Server image / Build linux/arm64 Docker Image",
+	"Docker / Images / Build linux/amd64 images",
+	"Docker / Images / Build linux/arm64 images",
 	"Test / App Server: Unit and architecture",
 	"Test / App Server: Integration (application)",
 	"Test / App Server: Integration (providers)",
@@ -81,14 +80,15 @@ function serverBuildArtifact(
 type Api = (path: string) => Promise<unknown>;
 
 /**
- * The job that publishes each image's index in a CI/CD run, by the image key that the image builds
- * of a default-branch push read from `reuse_images`.
+ * The job that publishes every image of a CI/CD run, and the step that attests each image it built,
+ * by the image key that the image builds of a default-branch push read from `reuse_images`.
  */
-export const imageManifests = {
-	"application-server": "App Server image / Create manifest",
-	webapp: "Docker / Webapp / Create manifest",
-	"agent-pi": "Docker / Agent: Pi / Create manifest",
-	postgres: "Docker / Postgres (pg_partman) / Create manifest",
+export const imageManifestJob = "Docker / Images / Create manifests";
+export const imageAttestations = {
+	"application-server": "Attest the application-server image",
+	webapp: "Attest the webapp image",
+	"agent-pi": "Attest the agent-pi image",
+	postgres: "Attest the postgres image",
 } as const;
 
 /**
@@ -157,10 +157,23 @@ export async function resolveQueueRun(
 		return undefined;
 	}
 	const { runId, jobs } = first.value;
-	const images = Object.entries(imageManifests)
-		.filter(([, name]) => jobs.some((job) => job.name === name && job.conclusion === "success"))
+	return { runId, images: publishedImages(jobs) };
+}
+
+/** The images whose index a run published: those its successful manifest job attested. */
+function publishedImages(jobs: readonly Record<string, unknown>[]): string[] {
+	const manifests = jobs.find(
+		(job) => job.name === imageManifestJob && job.conclusion === "success",
+	);
+	const steps = manifests === undefined ? [] : asArray(manifests.steps, "manifest job steps");
+	return Object.entries(imageAttestations)
+		.filter(([, name]) =>
+			steps.some((value) => {
+				const step = asRecord(value, "manifest job step");
+				return step.name === name && step.conclusion === "success";
+			}),
+		)
 		.map(([image]) => image);
-	return { runId, images };
 }
 
 export async function resolveServerBuild(
@@ -170,13 +183,18 @@ export async function resolveServerBuild(
 	api: Api,
 ): Promise<{ runId: number; artifactId: number } | undefined> {
 	const root = `repos/${repository}/actions`;
-	for await (const { runId, repositoryId } of queueRuns(
+	for await (const { runId, repositoryId, jobs } of queueRuns(
 		repository,
 		commit,
 		defaultBranch,
 		api,
 		requiredJobs,
 	)) {
+		// The platform builds also succeed when a run built only Dockerfile images, so the run must
+		// have published an App Server image from this JAR.
+		if (!publishedImages(jobs).includes("application-server")) {
+			continue;
+		}
 		const artifactPages = asArray(
 			await api(`${root}/runs/${runId}/artifacts?per_page=100`),
 			"artifact pages",

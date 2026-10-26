@@ -5,8 +5,8 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ItemEventState;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewRequestReason;
 import de.tum.cit.aet.hephaestus.practices.review.model.Review;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.Page;
@@ -20,8 +20,10 @@ public interface ItemTraceRepository extends Repository<Review, UUID> {
             + "(SELECT r.id FROM review r WHERE r.workspace_id=item_event.workspace_id"
             + " AND r.event_id=item_event.id) AS reviewId";
 
-    @Query(value = "SELECT " + EVENT_COLUMNS + " FROM item_event WHERE workspace_id=:ws AND id=:id", nativeQuery = true)
-    Optional<EventRow> event(long ws, UUID id);
+    @Query(
+            value = "SELECT " + EVENT_COLUMNS + " FROM item_event WHERE workspace_id=:ws AND id IN (:ids)",
+            nativeQuery = true)
+    List<EventRow> events(long ws, Collection<UUID> ids);
 
     @Query(value = """
         SELECT q.* FROM review q WHERE q.workspace_id=:ws AND q.id IN (

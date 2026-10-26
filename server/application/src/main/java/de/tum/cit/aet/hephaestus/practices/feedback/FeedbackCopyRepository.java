@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.practices.feedback;
 
 import jakarta.persistence.LockModeType;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -31,6 +32,15 @@ public interface FeedbackCopyRepository extends JpaRepository<FeedbackCopy, UUID
            OR external_ref IS NOT NULL OR state IN ('WRITE_STARTED','POSTED','RETRACTED')))
         """, nativeQuery = true)
     boolean hasWriteFence(@Param("workspaceId") long workspaceId, @Param("feedbackId") UUID feedbackId);
+
+    /** The pieces among {@code feedbackIds} with a write fence: {@link #hasWriteFence} for many. */
+    @Query(value = """
+        SELECT DISTINCT feedback_id FROM feedback_copy WHERE workspace_id = :workspaceId
+         AND feedback_id IN (:feedbackIds) AND (write_started_at IS NOT NULL OR posted_at IS NOT NULL
+           OR external_ref IS NOT NULL OR state IN ('WRITE_STARTED','POSTED','RETRACTED'))
+        """, nativeQuery = true)
+    List<UUID> writeFencedFeedbackIds(
+            @Param("workspaceId") long workspaceId, @Param("feedbackIds") Collection<UUID> feedbackIds);
 
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query(value = """

@@ -236,21 +236,21 @@ management:
             probes:
                 enabled: true
                 add-additional-paths: true
-            # Operational dependencies affect readiness, not process liveness. This group replaces the
-            # auto-configured readiness probe, which contains readinessState alone — on the
-            # webhook-only container that reduces the probe to "the Spring context started", and both
-            # the container healthcheck and Traefik read it.
+            # Readiness answers whether this Pod can serve, never whether a remote dependency is up: a
+            # broker outage would take every Pod out of rotation at once, and a receiver out of rotation
+            # cannot answer a provider's delivery with the 503 that makes the provider retry. `webhook` and
+            # `integrationConsumer` (NATS) stay in /actuator/health and the metrics, which ADR 0008's
+            # webhook-server-down alert reads.
             #
-            # `webhook` is what makes ADR 0008's webhook-server-down alert able to fire: there it is
-            # the ONLY contributor that knows about NATS, so without it a total ingestion outage reads
-            # as 200. On a combined-role container it adds no new exposure — `integrationConsumer`
-            # already reports DOWN on the same disconnect.
+            # `practiceReview` is the worker's own configuration. `kubernetesSandbox` holds a Kubernetes
+            # worker unready until its isolation probe passed, so a rollout drains an old worker only after
+            # the new one proved the cluster.
             group:
                 readiness:
-                    include: readinessState,integrationConsumer,webhook,practiceReview,catalogProvenanceBackfillStartup
+                    include: readinessState,practiceReview,kubernetesSandbox
             # Most of the group is role-gated, and the default (true) aborts the refresh wherever a
-            # named contributor is absent — so every container the compose files ship, plus any deploy
-            # with NATS off, plus the specs and test profiles. What it removes is a spelling check, and
+            # named contributor is absent — so every container that is not a Kubernetes worker, plus the
+            # specs and test profiles. What it removes is a spelling check, and
             # WebhookIngestionCannotFailSilentlyTest runs that against every role at once rather than
             # each container against only its own.
             validate-group-membership: false
@@ -615,6 +615,18 @@ hephaestus:
 
 
     sandbox:
+        # docker (default) or kubernetes. A worker runs one runtime and never falls back to the other.
+        runtime: ${HEPHAESTUS_SANDBOX_RUNTIME:docker}
+        # Read only when runtime is kubernetes. The chart sets each value: docs/admin/runtime-roles.mdx.
+        kubernetes:
+            namespace: ${HEPHAESTUS_SANDBOX_KUBERNETES_NAMESPACE:}
+            pod-name: ${HEPHAESTUS_SANDBOX_KUBERNETES_POD_NAME:}
+            pod-ip: ${HEPHAESTUS_SANDBOX_KUBERNETES_POD_IP:}
+            runtime-class-name: ${HEPHAESTUS_SANDBOX_KUBERNETES_RUNTIME_CLASS_NAME:}
+            seccomp-profile: ${HEPHAESTUS_SANDBOX_KUBERNETES_SECCOMP_PROFILE:}
+            node-selector: ${HEPHAESTUS_SANDBOX_KUBERNETES_NODE_SELECTOR:}
+            tolerations: ${HEPHAESTUS_SANDBOX_KUBERNETES_TOLERATIONS:}
+            probe-interval: ${HEPHAESTUS_SANDBOX_KUBERNETES_PROBE_INTERVAL:15m}
         # The LLM proxy's gate: docs/admin/runtime-roles.mdx § Worker pod env vars.
         docker:
             host: ${SANDBOX_DOCKER_HOST:unix:///var/run/docker.sock}
@@ -805,7 +817,6 @@ hephaestus:
         consumer:
             # Lets JetStream delete a durable nothing has been BOUND to for this long — see
             # NatsConsumerProperties for what boundness measures and why 0 is the only value below 1h.
-            # Disposable stacks set something far shorter (docker/preview/compose.app.yaml).
             # A bare number is hours.
             inactive-threshold: ${HEPHAESTUS_INTEGRATION_CONSUMER_INACTIVE_THRESHOLD:30d}
         # ─── GitHub authentication (GitHubProperties) ───
@@ -967,6 +978,9 @@ logging:
         # Tomcat logs an unparseable request with its raw target, query string included, once at INFO
         # and then at DEBUG. An unsubscribe or OAuth link carries its token in that query.
         org.apache.coyote.http11.Http11Processor: WARN
+        # The Kubernetes client logs a failed exec upgrade with its URL, which carries every argument of the
+        # command a turn sandbox ran. KubernetesExecSandboxes logs that failure by class and status instead.
+        io.fabric8.kubernetes.client.dsl.internal.core.v1.PodOperationsImpl: "OFF"
         # Spring's generic web DEBUG logger includes decoded request/response bodies. Vendor OAuth and
         # installation-token responses can contain credentials, so keep the body logger closed even when
         # a broader org.springframework.web package is raised to DEBUG for local troubleshooting.

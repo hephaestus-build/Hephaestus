@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.job;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.AdditionalMatchers.aryEq;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
@@ -11,10 +12,14 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.config.FrozenModel;
@@ -36,6 +41,7 @@ import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerProperties;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxProperties;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxTestLimits;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ResourceLimits;
+import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxInitializationException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxManager;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxResult;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxSpec;
@@ -74,6 +80,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.mockito.ArgumentCaptor;
+import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.core.task.AsyncTaskExecutor;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
@@ -164,6 +171,102 @@ class ReviewJobExecutorTest extends BaseUnitTest {
                         telemetry,
                         Optional.empty()),
                 recovery);
+    }
+
+    @Test
+    void shouldRequeueAnAttemptWhoseInitializerFailedBeforeAnyModelCall() {
+        var job = configuredJob();
+        recovery = mock(ReviewJobRecovery.class);
+        when(recovery.retryUnadmitted(any(), eq("worker-1"), anyBoolean())).thenReturn(true);
+
+        assertThat(runFailingInitializer(job).processJob(job.getId()))
+                .isEqualTo(ReviewJobExecutor.StartOutcome.STARTED);
+
+        verify(recovery).retryUnadmitted(any(), eq("worker-1"), anyBoolean());
+        verify(jobs, never()).transitionStatusOwnedBy(any(), eq(ReviewJobStatus.FAILED), any(), any(), any(), anyInt());
+        verify(jobs, never()).recordInitializationFailure(any(), anyLong(), anyInt(), any(), any());
+    }
+
+    @Test
+    void shouldFailTheJobAndRecordTheInitializersExitOnceWhenNoAttemptIsLeft() throws Exception {
+        var job = configuredJob();
+        recovery = mock(ReviewJobRecovery.class);
+        // The retry cap is spent: the recovery refuses another attempt.
+        when(recovery.retryUnadmitted(any(), eq("worker-1"), anyBoolean())).thenReturn(false);
+        when(jobs.transitionStatusOwnedBy(
+                        eq(job.getId()), eq(ReviewJobStatus.FAILED), any(), any(), eq("worker-1"), anyInt()))
+                .thenReturn(1);
+
+        assertThat(runFailingInitializer(job).processJob(job.getId()))
+                .isEqualTo(ReviewJobExecutor.StartOutcome.STARTED);
+
+        var diagnosis = ArgumentCaptor.forClass(String.class);
+        verify(jobs, times(1))
+                .recordInitializationFailure(
+                        eq(job.getId()),
+                        eq(job.getWorkspaceId()),
+                        eq(job.getAttempt()),
+                        eq("worker-1"),
+                        diagnosis.capture());
+        var recorded = new JsonMapper().readTree(diagnosis.getValue());
+        assertThat(recorded.get("exitCode").asInt()).isEqualTo(2);
+        assertThat(recorded.get("transcriptTail").asString()).contains("Cannot utime");
+    }
+
+    /** An attempt that reaches the sandbox, whose initializer then exits with 2. */
+    private ReviewJobExecutor runFailingInitializer(ReviewJob job) {
+        when(jobs.findByIdQueuedForUpdateSkipLocked(any(), any())).thenReturn(Optional.of(job));
+        when(jobs.findById(job.getId())).thenReturn(Optional.of(job));
+        when(policy.permitsReview(job)).thenReturn(true);
+        var binding = mock(WorkspaceAgentBinding.class);
+        when(binding.getDataHandlingTier()).thenReturn(DataHandlingTier.UNDECLARED);
+        when(binding.getMaxConcurrentJobs()).thenReturn(1);
+        when(policy.binding(job)).thenReturn(Optional.of(binding));
+        when(budgets.decide(job.getWorkspaceId())).thenReturn(LlmBudgetDecision.ALLOWED);
+        when(assignments.load(job)).thenReturn(List.of(RuntimeReviewTestData.assignment(null, null)));
+        when(handler.prepareInputs(job)).thenReturn(new PreparedJobInputs(Map.of(), List.of(), List.of(), null, null));
+        when(jwtIssuer.issueForJobUntil(eq(job.getId()), eq(job.getWorkspaceId()), anyInt(), any(), any()))
+                .thenReturn("issued-job-token");
+        when(practiceAgent.buildSandboxSpec(any()))
+                .thenReturn(new PracticeSandboxSpec(
+                        "practice-runtime", List.of(), Map.of(), Map.of(), "issued-job-token", null));
+        when(jobs.updateCapture(any(), anyLong(), any(), anyInt(), any())).thenReturn(1);
+        when(jobs.markExecutionStarted(eq(job.getId()), eq("worker-1"), anyInt(), any()))
+                .thenReturn(1);
+        when(sandbox.execute(any()))
+                .thenThrow(new SandboxInitializationException(
+                        2, false, "tar: work: Cannot utime: Operation not permitted\n"));
+        var pool = mock(AsyncTaskExecutor.class);
+        doAnswer(invocation -> {
+                    Runnable work = invocation.getArgument(0);
+                    work.run();
+                    return null;
+                })
+                .when(pool)
+                .execute(any(Runnable.class));
+        return executor(pool);
+    }
+
+    @Test
+    void shouldRecordTheInitializersExitAndItsMaskedTailForTheOperator() throws Exception {
+        var failure = new SandboxInitializationException(
+                2, false, "tar: work: Cannot utime: Operation not permitted\nAuthorization: Bearer secret-token\n");
+
+        var diagnosis =
+                new JsonMapper().readTree(ReviewJobExecutor.initializationDiagnosis(new JsonMapper(), 1, failure));
+
+        assertThat(diagnosis.get("attempt").asInt()).isEqualTo(1);
+        assertThat(diagnosis.get("exitCode").asInt()).isEqualTo(2);
+        assertThat(diagnosis.get("timedOut").asBoolean()).isFalse();
+        assertThat(diagnosis.get("transcriptTail").asString())
+                .startsWith("tar: work: Cannot utime: Operation not permitted")
+                .doesNotContain("secret-token");
+        assertThat(new JsonMapper()
+                        .readTree(ReviewJobExecutor.initializationDiagnosis(
+                                new JsonMapper(), 0, new SandboxInitializationException(null, true, null)))
+                        .get("exitCode")
+                        .isNull())
+                .isTrue();
     }
 
     @Test
@@ -662,13 +765,29 @@ class ReviewJobExecutorTest extends BaseUnitTest {
                 .when(pool)
                 .execute(any(Runnable.class));
         var executor = executor(pool);
+        var logger = (Logger) LoggerFactory.getLogger(ReviewJobExecutor.class);
+        var appender = new ListAppender<ILoggingEvent>();
+        appender.start();
+        logger.addAppender(appender);
 
-        assertThat(executor.processJob(job.getId())).isEqualTo(ReviewJobExecutor.StartOutcome.STARTED);
+        try {
+            assertThat(executor.processJob(job.getId())).isEqualTo(ReviewJobExecutor.StartOutcome.STARTED);
+        } finally {
+            logger.detachAppender(appender);
+        }
 
         assertThat(executor.computeCapacity()).isEqualTo(1);
         verify(workerCapacity).releaseReview();
         assertThat(MDC.get("job.id")).isNull();
         verifyNoInteractions(sandbox);
+        // A preparation failure names its stage, kind and exception types in the log line, never its message.
+        assertThat(appender.list)
+                .map(ILoggingEvent::getFormattedMessage)
+                .anySatisfy(line -> assertThat(line)
+                        .startsWith("Review preparation failed: jobId=" + job.getId())
+                        .contains("stage=INPUTS", "kind=INPUT_PREPARATION")
+                        .contains("exceptionTypes=[" + JobPreparationException.class.getName())
+                        .doesNotContain("Input preparation failed"));
     }
 
     @Test

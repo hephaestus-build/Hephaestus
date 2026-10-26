@@ -148,8 +148,40 @@ export const REVIEW_STOP_REASON_SENTENCES: Record<ReviewStopReason, string> = {
 	CONTRACT_CHANGED: "Hephaestus was upgraded while it waited, so it stopped.",
 };
 
+/** The wire values of the server's `CandidateRefusal`; each withholds an observation that failed that check. */
+const CANDIDATE_REFUSALS = [
+	"malformed_candidate",
+	"outcome_problem_mismatch",
+	"warrant_outcome_mismatch",
+	"result_citations_required",
+	"met_coverage_incomplete",
+	"coverage_inconsistent",
+	"example_outcome_mismatch",
+	"example_overlaps_problem",
+	"basis_citation_out_of_range",
+	"duplicate_problem_key",
+	"basis_state_unsupported",
+	"basis_revision_unsupported",
+	"quote_unverified",
+	"source_unavailable",
+	"basis_witness_missing",
+	"duty_quote_unverified",
+] as const;
+
+const CANDIDATE_REFUSAL_SENTENCE =
+	"The candidate observation failed one of Hephaestus’s checks, so it was not recorded.";
+
 const REVIEW_WITHHELD_REASON_SENTENCES: Readonly<Record<string, string>> = {
 	...REVIEW_STOP_REASON_SENTENCES,
+	...Object.fromEntries(CANDIDATE_REFUSALS.map((code) => [code, CANDIDATE_REFUSAL_SENTENCE])),
+	readiness_refused: "Evidence that this practice requires could not be captured.",
+	ROLE_UNAVAILABLE: "No eligible person holds the role that this practice is about on this work.",
+	ROLE_AMBIGUOUS:
+		"More than one eligible person holds the role that this practice is about, and Hephaestus does not guess which one.",
+	OUTSIDE_REVIEW_SCOPE: "This work or this person is outside the workspace’s review scope.",
+	WORKSPACE_INACTIVE: "The workspace was not active when the candidate observation arrived.",
+	COPY_AUTHORITY_UNAVAILABLE:
+		"Hephaestus could not confirm the record of whose data this review copied, so the candidate observation was not recorded.",
 	LEGACY_AMBIGUOUS_RESULTS:
 		"This review keeps several historical observations for the same practice and work without choosing one as its answer.",
 	LEGACY_REUSE_UNBOUND:

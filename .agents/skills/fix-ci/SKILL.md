@@ -28,7 +28,9 @@ A queue-tier failure (integration, database, drills, browser suites) first shows
 the merge queue, with a comment that links the failed run. Read that run like a pull-request run.
 To reproduce it on the pull request, add the `ci:full` label
 ([Two verification tiers](../../../docs/contributor/ci-cd.mdx#two-verification-tiers)).
-An image build or scan failure also first shows there, because a pull request builds images only for a preview.
+
+An image build or scan failure also first shows there.
+A pull request builds images only for the `preview` label, the boot smoke or release evidence.
 To reproduce it on the pull request, add the `preview` label.
 If you fix only 2 of 5 failures, you waste a push cycle and a full CI run.
 

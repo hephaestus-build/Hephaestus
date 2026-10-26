@@ -73,94 +73,130 @@ This handles resets per process.
 `runtime_role` above is an operator-supplied target label, not an application meter label.
 `workspace.id` and `job.id` remain log fields.
 
-### Example alert rules
-
-These rules use the **exported Prometheus names**, not the dotted Micrometer names. The receiver
-exports stream poll age. Server consumers export poison counts. Budget admission and committed
-agent-job outcomes can occur in different roles, so their rules aggregate all scraped roles.
-
-The poll-age threshold is three times the default 60-second monitor interval.
-A failed scrape and a missing poll-age series are separate alerts.
-`NaN` means a stream has never been polled successfully, not that its age is zero.
-
-1. Use the rules below as `hephaestus-alerts.yml`.
-2. Adjust windows, thresholds, and routing to your traffic and recovery objectives.
-3. If you change the monitor interval, increase the poll-age threshold.
+Example `prometheus.yml` for the [Helm chart](./kubernetes.mdx), with the release in the namespace `hephaestus`:
 
 ```yaml
-groups:
-  - name: hephaestus
-    rules:
-      - alert: HephaestusMetricsUnavailable
-        expr: up{job="hephaestus"} == 0
-        for: 2m
-        labels:
-          severity: warning
-        annotations:
-          summary: A Hephaestus metrics target cannot be scraped
-      - alert: HephaestusConsumerPoison
-        expr: sum by (kind) (increase(integration_consumer_poison_total{job="hephaestus"}[10m])) > 0
-        labels:
-          severity: warning
-        annotations:
-          summary: An integration event reached the poison retry limit
-      - alert: HephaestusStreamPollStale
-        expr: >-
-          webhook_stream_poll_age_seconds{job="hephaestus",runtime_role="webhook"} > 180
-          or webhook_stream_poll_age_seconds{job="hephaestus",runtime_role="webhook"}
-          != webhook_stream_poll_age_seconds{job="hephaestus",runtime_role="webhook"}
-        for: 2m
-        labels:
-          severity: warning
-        annotations:
-          summary: Webhook stream gauges are stale or have never been refreshed
-      - alert: HephaestusStreamPollMissing
-        expr: >-
-          up{job="hephaestus",runtime_role="webhook"} == 1
-          unless on (job, instance)
-          webhook_stream_poll_age_seconds{job="hephaestus",runtime_role="webhook"}
-        for: 5m
-        labels:
-          severity: warning
-        annotations:
-          summary: A scraped webhook receiver exports no stream poll age
-      - alert: HephaestusWebhookPublishFailing
-        expr: sum(increase(webhook_publish_total{job="hephaestus",outcome="failure"}[10m])) > 0
-        for: 10m
-        labels:
-          severity: warning
-        annotations:
-          summary: The webhook receiver cannot store deliveries on the broker
-      - alert: HephaestusWebhookEventsUnrecovered
-        expr: max(github_webhook_unrecovered{job="hephaestus"}) > 0
-        labels:
-          severity: warning
-        annotations:
-          summary: GitHub events failed every delivery attempt and were not received
-      - alert: HephaestusBudgetExhausted
-        expr: sum(increase(llm_budget_exhausted_total{job="hephaestus"}[10m])) > 0
-        labels:
-          severity: warning
-        annotations:
-          summary: A workspace crossed the instance-funded monthly budget cap
-      - alert: HephaestusBudgetBlocked
-        expr: sum by (surface, cap) (increase(llm_budget_blocked_total{job="hephaestus"}[10m])) > 0
-        labels:
-          severity: warning
-        annotations:
-          summary: LLM budget admission refused work
-      - alert: HephaestusAgentJobsFailing
-        expr: sum(increase(review_job_total{job="hephaestus",outcome=~"failed|timed_out"}[15m])) >= 3
-        labels:
-          severity: warning
-        annotations:
-          summary: At least three agent jobs failed or timed out in fifteen minutes
+scrape_configs:
+  - job_name: hephaestus
+    scrape_interval: 30s
+    scrape_timeout: 10s
+    metrics_path: /actuator/prometheus
+    kubernetes_sd_configs:
+      - role: pod
+        namespaces:
+          names: [hephaestus]
+    relabel_configs:
+      - source_labels:
+          - __meta_kubernetes_pod_label_app_kubernetes_io_name
+          - __meta_kubernetes_pod_container_port_name
+        regex: hephaestus;management
+        action: keep
+      - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_component]
+        target_label: runtime_role
+      - source_labels: [__meta_kubernetes_namespace]
+        target_label: namespace
+      - source_labels: [__meta_kubernetes_pod_name]
+        target_label: pod
+rule_files:
+  - hephaestus-alerts.yml
 ```
 
-1. Enable stream rules only where you expect the webhook stream monitor.
-2. To detect an individually missing stream, add an `absent_over_time` rule for each expected `stream` and receiver target.
+Each pod of the server, the webhook role and the worker is then one target.
+The `app.kubernetes.io/component` label of the pod gives `runtime_role`.
+Set `networkPolicy.metrics` to the namespace and the pod labels of this Prometheus ([Network policy](./kubernetes.mdx#network-policy)).
+With the Prometheus Operator, a PodMonitor must give the same labels.
+Set `job` to `hephaestus` with a relabeling.
 
-   The example missing-series rule detects loss of the whole monitor.
+### Alert rules
+
+The release checkout contains the alert rules in `deploy/observability/hephaestus-alerts.yml`.
+Load that file as it is, from the release that you run: `https://github.com/hephaestus-build/Hephaestus/blob/v<version>/deploy/observability/hephaestus-alerts.yml`.
+With the Prometheus Operator, put the `groups` list of the file into the `spec.groups` of a PrometheusRule.
+[Alert response](./production-operations-runbook.mdx#alert-response) gives the response to each alert.
+
+The rule file is the home of each threshold, window, and summary.
+This section gives the reason for each threshold.
+`hephaestus-alerts.test.yml` beside the rules contains a `promtool` unit test for each alert.
+Each test gives series that fire the alert and series that do not.
+CI runs these tests for each change to the rules.
+
+Each alert has one of two `severity` labels:
+
+- `critical`: data is at risk now. A full PostgreSQL volume, a failing WAL archive, or a stale backup is critical. Send these alerts to a person at once.
+- `warning`: a fault needs work during working hours. All other alerts are warnings.
+
+The rules read the exported Prometheus names, not the dotted Micrometer names.
+The rules of the group `hephaestus` read the application's metrics.
+Budget admission and committed agent-job outcomes can occur in different roles, so their rules aggregate all scraped roles.
+They need these target labels from the scrape configuration:
+
+- `job="hephaestus"` on each target of the runtime roles.
+- `runtime_role`, with the value `server`, `worker` or `webhook`.
+- A different `instance` on each target.
+
+`HephaestusMetricsUnavailable` fires only for a target that Prometheus still discovers.
+When service discovery loses all targets of a role, no `up` series remains.
+To detect that, add a rule for each role that you run, for example `absent(up{job="hephaestus",runtime_role="server"})`.
+
+The rules of the group `hephaestus-kubernetes` read cluster metrics.
+Each rule needs its exporter, scraped by the same Prometheus:
+
+| Exporter | Metrics | Alerts |
+| --- | --- | --- |
+| [kube-state-metrics](https://github.com/kubernetes/kube-state-metrics/blob/main/docs/metrics/workload/cronjob-metrics.md) | `kube_cronjob_status_last_successful_time`, `kube_cronjob_created` | `HephaestusBackupStale` |
+| The kubelet's `/metrics` endpoint, with a storage driver that reports volume statistics | `kubelet_volume_stats_available_bytes`, `kubelet_volume_stats_capacity_bytes` | `HephaestusPostgresVolumeFilling`, `HephaestusJetStreamVolumeFilling` |
+| [node-exporter](https://github.com/prometheus/node_exporter) on each node | `node_filesystem_avail_bytes`, `node_filesystem_size_bytes`, `node_filesystem_readonly` | `HephaestusNodeDiskFilling` |
+| [cert-manager](https://cert-manager.io/docs/devops-tips/prometheus-metrics/) | `certmanager_certificate_expiration_timestamp_seconds` | `HephaestusCertificateExpiring` |
+
+A rule whose exporter is not scraped has no series and never fires.
+Before you rely on a rule, query its metrics in Prometheus.
+The kube-state-metrics, kubelet and cert-manager rules have no series outside Kubernetes.
+
+The rules find the release's objects by the names that the chart gives them: `data-<release>-postgresql-0`, `data-<release>-nats-0`, and the CronJobs `<release>-postgresql-backup-full` and `<release>-postgresql-backup-diff`.
+Another application in the cluster can use the same names, for example another PostgreSQL chart.
+To limit these rules to the release, add a matcher for its namespace, for example `namespace="hephaestus"`.
+Do the same for `HephaestusCertificateExpiring`, which covers every certificate that cert-manager manages in the cluster.
+The chart shortens a name above 52 characters.
+For a release name longer than 34 characters, change the name patterns of these rules.
+
+| Alert | Signal | Why this threshold |
+| --- | --- | --- |
+| `HephaestusMetricsUnavailable` | `up` | Several failed scrapes in a row, not one missed scrape |
+| `HephaestusConsumerPoison` | `integration_consumer_poison_total` | Each poison event is a delivery that the application stopped retrying |
+| `HephaestusStreamPollStale` | `webhook_stream_poll_age_seconds` | Three times the default 60-second monitor interval. `NaN` means a stream was never polled successfully, not an age of zero |
+| `HephaestusStreamPollMissing` | No `webhook_stream_poll_age_seconds` from a scraped receiver | The stream monitor is gone, which a failed scrape does not show |
+| `HephaestusStreamBacklog` | `webhook_stream_consumer_pending`: events that the broker did not deliver to a consumer | Under steady load, a few events wait between two fetches. A backlog above that level at each evaluation for 15 minutes shows consumers that fall behind or do not fetch. At its bound, the stream removes its oldest message, also when a consumer still needs it. The gauge counts an event once for each consumer that it matches |
+| `HephaestusWebhookPublishFailing` | `webhook_publish_total{outcome="failure"}` | GitHub redelivery covers a short stall of the broker, not a long one |
+| `HephaestusWebhookRedeliveryNotRunning` | `github_webhook_redelivery_total` | Redelivery requests that GitHub refused or that could not read the App's deliveries. One refusal can be a race. Three in 30 minutes are not |
+| `HephaestusWebhookEventsUnrecovered` | `github_webhook_unrecovered` | Each counted event failed all four delivery attempts |
+| `HephaestusBudgetExhausted` | `llm_budget_exhausted_total` | A workspace crossed the instance-funded monthly cap |
+| `HephaestusBudgetBlocked` | `llm_budget_blocked_total` | Admission refused work at a cap |
+| `HephaestusAgentJobsFailing` | `agent_job_total` with `failed` or `timed_out` | One failure can come from one review. Several in a short time point to the platform. Cancellations do not count |
+| `HephaestusAgentQueueStalled` | `agent_queue_oldest_age_seconds` | A practice review usually runs for 10 to 16 minutes. A wait of several review durations shows that no worker claims work |
+| `HephaestusSandboxIsolationFailed` | `sandbox_isolation_passed` of a worker | A later probe failed, and the worker starts no sandbox until a probe passes. The wait covers the first probe at the start |
+| `HephaestusWalArchiveFailing` | `database_wal_archive_failing` | PostgreSQL retries a failed segment about once each minute, so a short fault of the bucket clears itself. A longer failure stops point-in-time recovery after the last archived segment |
+| `HephaestusBackupStale` | The newest successful full or differential backup of a release, or the creation time of CronJobs with no successful backup | A differential backup runs each day. The hours above one day let a full backup run |
+| `HephaestusPostgresVolumeFilling` | Free space of the PostgreSQL volume | A failed WAL archive fills the volume. The warning gives time to repair the archive. The critical level comes shortly before PostgreSQL stops |
+| `HephaestusJetStreamVolumeFilling` | Free space of the JetStream volume | The volume is `max_file` plus 25 %, so a broker at its storage budget leaves 20 % free. Below the threshold, something outside the budget fills the volume. A full file system wedges the broker |
+| `HephaestusNodeDiskFilling` | Free space of a writable node file system, not the volumes that the kubelet mounts for pods | The kubelet's image garbage collection starts at 85 % use and frees space to 80 %. When the space stays low, eviction comes next. The volume rules cover pod volumes |
+| `HephaestusCertificateExpiring` | `certmanager_certificate_expiration_timestamp_seconds` | cert-manager renews a certificate when one third of its lifetime remains: 15 days of a 45-day certificate. For a certificate with a lifetime of less than 21 days, lower the threshold. cert-manager reports 0 for a certificate that it did not issue yet. Therefore, the alert also fires when a first issuance takes longer than its wait |
+
+The WAL archive rule reads the server's [WAL archive metrics](#wal-archive-metrics).
+It also applies to an external PostgreSQL that archives its WAL.
+No rule reads the age of the last archived segment.
+PostgreSQL switches a segment only after WAL activity, so an idle database archives nothing, and an age rule would fire falsely.
+An archive command that hangs without a failure stops the next backup, because pgBackRest waits for the backup's WAL in the archive.
+`HephaestusBackupStale` and `HephaestusPostgresVolumeFilling` then fire.
+
+To adapt the rules:
+
+1. Adjust windows, thresholds, and routing to your traffic and recovery objectives.
+2. If you change the monitor interval, increase the poll-age threshold.
+3. If you change `postgresql.backup.schedule`, change the age of `HephaestusBackupStale`.
+4. Enable stream rules only where you expect the webhook stream monitor.
+5. To detect an individually missing stream, add an `absent_over_time` rule for each expected `stream` and receiver target.
+
+   The missing-series rule detects loss of the whole monitor.
    Counters created on their first event can be absent before that event.
    An `increase` rule needs at least two samples.
    It cannot recover an event that occurred before its first sample.
@@ -168,27 +204,46 @@ groups:
 
    Poison counts mean the application stopped retrying a delivery.
    They are not a durable dead-letter queue.
-   Failed outcomes exclude deliberate cancellation.
-   See [Webhook ingestion operations](./webhook-ingestion-operations.mdx#what-to-alert-on) and [Alert response](./production-operations-runbook.mdx#alert-response) for response steps.
+   See [Webhook ingestion operations](./webhook-ingestion-operations.mdx#what-to-alert-on).
 
-3. Validate the config with:
+6. Validate the config with:
 
    ```bash
    promtool check config prometheus.yml
    ```
 
-4. Validate the rules with:
+7. Validate the rules and run their tests with:
 
    ```bash
    promtool check rules hephaestus-alerts.yml
+   promtool test rules hephaestus-alerts.test.yml
    ```
 
-5. Before relying on them, test rule evaluation in your monitoring stack.
-6. Before relying on the rules, test the notification route.
+   A changed threshold also needs a changed test.
+
+8. Before you rely on the rules, test the notification route.
 
 Prometheus evaluates rules.
 Your Alertmanager or equivalent controls notification delivery, grouping, and silences.
 See the [Prometheus alerting guidance](https://prometheus.io/docs/practices/alerting/).
+
+## Database statement statistics
+
+The bundled PostgreSQL image loads [`pg_stat_statements`](https://www.postgresql.org/docs/current/pgstatstatements.html).
+It records the run count and time of each statement for all databases.
+To read the statistics, create the extension once in the `postgres` database.
+Then the application schema stays unchanged.
+From `/opt/hephaestus/docker/self-host`, run:
+
+```bash
+docker compose --env-file .env --env-file release-lock.env exec postgres \
+  psql -U root -d postgres -c 'CREATE EXTENSION IF NOT EXISTS pg_stat_statements'
+docker compose --env-file .env --env-file release-lock.env exec postgres \
+  psql -U root -d postgres -c 'SELECT calls, round(mean_exec_time) AS mean_ms, round(total_exec_time) AS total_ms, left(query, 120) AS query FROM pg_stat_statements ORDER BY total_exec_time DESC LIMIT 20'
+```
+
+For most statements, the statistics replace constants with placeholders.
+A clean restart keeps them, and `SELECT pg_stat_statements_reset()` clears them.
 
 ## Reading log records
 
@@ -301,8 +356,8 @@ Delivery is optional. Jobs that do not complete successfully may have no deliver
 
 | Prometheus name               | Type      | Labels    | Meaning                                                         |
 | ----------------------------- | --------- | --------- | --------------------------------------------------------------- |
-| `review_job_total`            | Counter   | `outcome` | Committed terminal transitions                                  |
-| `review_job_duration_seconds` | Histogram | `phase`   | Queue, execution-attempt, delivery-attempt, and total durations |
+| `agent_job_total`             | Counter   | `outcome` | Committed terminal transitions                                  |
+| `agent_job_duration_seconds`  | Histogram | `phase`   | Queue, execution-attempt, delivery-attempt, and total durations |
 
 `outcome` is one of `completed`, `failed`, `timed_out`, or `cancelled`. `phase` is one of `queue`,
 `execution`, `delivery`, or `total`. Identifiers, model and provider names, worker IDs, and exception text are not
@@ -415,6 +470,28 @@ The [personal-data map](./dsms/personal-data-map.md) lists the erasure and reten
 For export generation, `success` and the affected count are published only after the export commits.
 A failed attempt reports `failure` even if the database is unavailable and cannot save the failed
 status. Consult the server log when an export remains queued or processing after a reported failure.
+
+## WAL archive metrics
+
+The server role reads `pg_stat_archiver` and `archive_mode` from the database every 30 seconds.
+A scrape does not query the database.
+
+| Prometheus name                              | Type    | Meaning                                                                          |
+| -------------------------------------------- | ------- | -------------------------------------------------------------------------------- |
+| `database_wal_archive_failing`               | Gauge   | `1` when a failed archive attempt came after the last archived segment, else `0` |
+| `database_wal_archive_sample_failures_total` | Counter | Reads of the archiver statistics that failed                                     |
+
+The gauge makes no claim that the server did not check:
+
+- Before the first read, the gauge is `NaN`.
+- While `archive_mode` is `off`, the gauge is `NaN`. A database without archiving is not reported as healthy or as failing.
+- After a read that failed, the gauge is `NaN` until the next read, and the sample counter increases.
+  The last value is not kept, because it could report a healthy archive that the server did not check.
+  `HephaestusWalArchiveFailing` keeps firing for 10 minutes after the value goes missing.
+  Thus, a failed read does not resolve it.
+
+The bundled PostgreSQL archives its WAL only when `postgresql.backup.enabled` is `true`.
+The Compose stacks archive with the backup overlay.
 
 ## Correlating a request
 

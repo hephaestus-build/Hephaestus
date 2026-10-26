@@ -21,6 +21,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.events.EventContext;
 import de.tum.cit.aet.hephaestus.integration.scm.events.ScmDomainEvent;
 import de.tum.cit.aet.hephaestus.integration.scm.events.ScmEventPayload;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.BaseGitHubProcessor;
+import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubMisfiledWork;
 import de.tum.cit.aet.hephaestus.integration.scm.github.label.dto.GitHubLabelDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequest.dto.GitHubPullRequestDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.github.user.GitHubUserProcessor;
@@ -65,6 +66,7 @@ public class GitHubPullRequestProcessor extends BaseGitHubProcessor {
     private final CommitAuthorResolver commitAuthorResolver;
     private final ApplicationEventPublisher eventPublisher;
     private final TeamRepository teamRepository;
+    private final GitHubMisfiledWork misfiledWork;
 
     public GitHubPullRequestProcessor(
             PullRequestRepository pullRequestRepository,
@@ -76,9 +78,11 @@ public class GitHubPullRequestProcessor extends BaseGitHubProcessor {
             UserRepository userRepository,
             GitHubUserProcessor gitHubUserProcessor,
             ApplicationEventPublisher eventPublisher,
-            TeamRepository teamRepository) {
+            TeamRepository teamRepository,
+            GitHubMisfiledWork misfiledWork) {
         super(userRepository, labelRepository, milestoneRepository, gitHubUserProcessor);
         this.teamRepository = teamRepository;
+        this.misfiledWork = misfiledWork;
         this.pullRequestRepository = pullRequestRepository;
         this.issueRepository = issueRepository;
         this.commitRepository = commitRepository;
@@ -127,6 +131,12 @@ public class GitHubPullRequestProcessor extends BaseGitHubProcessor {
             return null;
         }
 
+        Long providerId = Objects.requireNonNull(context.providerId(), "Pull request processing requires a provider");
+        var relocation = misfiledWork.relocate(
+                repository, providerId, dbId, dto.number(), "PULL_REQUEST", ScmItemEvents.PULL_REQUEST);
+        if (relocation == GitHubMisfiledWork.Outcome.SKIPPED) return null;
+        boolean moved = relocation == GitHubMisfiledWork.Outcome.MOVED;
+
         // Check if this is an update (for event publishing purposes)
         Optional<PullRequest> existingOpt =
                 pullRequestRepository.findForUpdateByRepositoryIdAndNumber(repository.getId(), dto.number());
@@ -155,17 +165,15 @@ public class GitHubPullRequestProcessor extends BaseGitHubProcessor {
             }
         }
 
-        Long providerId = Objects.requireNonNull(context.providerId(), "Pull request processing requires a provider");
-
         // Skip the core upsert if existing data is as new (prevents stale webhooks from
         // overwriting).
-        // Skip stale check for promotions — the entity needs all PR fields populated by the upsert.
+        // Skip stale check for promotions and moves — the entity needs all PR fields populated by the upsert.
         // The facts only the GraphQL sync carries still land: a webhook stored GitHub's updated_at
         // first, and the sync row that follows carries the same moment with more in it. So do
         // review
         // requests received within the same second (sync-lifecycle.md § Reviewer lists are dated
         // snapshots).
-        if (!isNew && !promotedFromIssue) {
+        if (!isNew && !promotedFromIssue && !moved) {
             PullRequest existing = existingOpt.get();
             if (existing.getUpdatedAt() != null
                     && dto.updatedAt() != null

@@ -59,9 +59,12 @@ const docsSources = "'docs/**/*.{js,jsx,ts,tsx,json,jsonc,css}'";
 // Two passes: a negation applies to the whole invocation, so `!*/**` would also drop the nested set.
 const rootConfigSources = "'*.{json,jsonc,ts,code-workspace}' '!*/**'";
 const nestedConfigSources = "'{.changeset,.vscode,scripts,.vale}/*.{cjs,json}'";
+// The chart's plain JSON and YAML. Its templates are Go templates, not YAML; Helm rendering judges them.
+const chartConfigSources = "'deploy/chart/**/*.{json,yaml}' '!deploy/chart/**/templates/**'";
+const alertRuleSources = "'deploy/observability/*.yml'";
 // `as const` keeps the command a literal type, so `cached` can still read what it runs.
 const configFormatCommand = (mode: "--check" | "--write") =>
-	`vp fmt ${mode} ${rootConfigSources} && vp fmt ${mode} ${nestedConfigSources}` as const;
+	`vp fmt ${mode} ${rootConfigSources} && vp fmt ${mode} ${nestedConfigSources} && vp fmt ${mode} ${chartConfigSources} && vp fmt ${mode} ${alertRuleSources}` as const;
 // Every tree the root config governs: `webapp/` and `docs/` carry their own configs and gates, and
 // `security/semgrep/` holds fixtures that are wrong on purpose.
 const oxlintTargets =
@@ -102,7 +105,6 @@ const policyGates = [
 	"gate:instructions",
 	"gate:prose",
 	"gate:contracts",
-	"gate:preview-stack",
 	"gate:env",
 	"gate:quarantine",
 	"gate:configuration-reference",
@@ -127,10 +129,10 @@ const checkTasks = [
 	...docsGates,
 	...loadGates,
 ];
-// What the Windows runner cannot run: Gradle against a JDK it does not provision, Docker, and the
+// What the Windows runner cannot run: Gradle against a JDK it does not provision, and the
 // agent specs, which run the Linux sandbox runtime. Everything else is expected to pass there; a
 // gate that fails on Windows is a portability defect, not a reason to add it here.
-const linuxOnly = new Set(["gate:server", "gate:agent-tests", "gate:preview-stack"]);
+const linuxOnly = new Set(["gate:server", "gate:agent-tests"]);
 
 export default defineConfig({
 	fmt,
@@ -233,9 +235,6 @@ export default defineConfig({
 			"gate:runner-contract": run("node --test scripts/check-runner-contract.ts"),
 			"gate:lint-contract": run("node --test scripts/check-lint-contract.ts"),
 			"gate:agent-runtime-pins": cached("node scripts/check-agent-runtime-pins.ts"),
-			"gate:preview-stack": run(
-				"node scripts/check-preview-stack.ts && node --test scripts/check-preview-stack.test.ts",
-			),
 			"gate:env": run(
 				"node scripts/check-env-defaults.ts && node scripts/check-env-roles.ts && node --test scripts/check-env-roles.test.ts scripts/self-host-setup.test.ts",
 			),
@@ -265,7 +264,12 @@ export default defineConfig({
 			"gate:server": run(
 				`${gradlew} :spotlessCheck :application:spotlessCheck :application:pmdMain --quiet`,
 			),
+			// After `gate:server`: one Gradle build per checkout, and `compileJava` is then up to date.
+			"gate:server-test-analysis": run(`${gradlew} :application:compileTestJava --quiet`, {
+				dependsOn: ["gate:server"],
+			}),
 			"gate:pmd-canary": run("node scripts/check-pmd-canary.ts"),
+			"gate:api-compatibility": run("node scripts/check-api-compatibility.ts"),
 			"test:server:selection": run("node scripts/verify-server-test-selection.ts"),
 			"test:server:unit": run(
 				`${gradlew} :application:test :application:jacocoTestCoverageVerification`,
@@ -340,9 +344,18 @@ export default defineConfig({
 			"test:agents": run(
 				`node --test --test-concurrency=${nodeTestConcurrency} server/application/src/test/resources/agent/*.spec.ts docker/agents/practice-scripts/*.test.ts docker/agents/practice-scripts/lib/core/**/*.test.ts docker/agents/practice-scripts/kits/**/*.test.ts docker/agents/pi/*.test.ts`,
 			),
+			// The chart suites alone, for a chart change. test:tooling already runs both in the normal
+			// graph; the render suite needs the Helm CLI that .github/actions/setup-helm pins.
+			"test:kubernetes:chart": run(
+				"node --test scripts/kubernetes-chart.test.ts scripts/kubernetes-chart-render.test.ts",
+			),
 			"test:tooling": run(
 				`node --test --test-concurrency=${nodeTestConcurrency} scripts/*.test.ts scripts/api-generator/*.test.ts server/application/src/test/resources/integration/scm/sarif/*.test.ts`,
 			),
+
+			// The Prometheus alert rules that operators load: promtool's checks and unit tests, in Docker.
+			"gate:alerts": group(["test:alerts"]),
+			"test:alerts": run("node scripts/check-alert-rules.ts"),
 
 			// Load tests
 			"gate:load-format": cached(`vp fmt --check ${loadSources}`),
@@ -367,21 +380,25 @@ export default defineConfig({
 			"docs:serve": run("vp run --filter docs serve"),
 
 			// What each CI job runs.
-			"ci:server": group([...serverGates, "gate:contracts", "gate:env"]),
+			// The package job compiles the tests without the analysis; this leg runs it.
+			"ci:server": group([
+				...serverGates,
+				"gate:server-test-analysis",
+				"gate:contracts",
+				"gate:env",
+			]),
 			// Render docs after the checks: lint cannot detect broken theme contexts during static rendering.
 			"ci:tooling": run("vp run verification:docs-build", {
 				dependsOn: [
 					// Excluded here because another job or workflow runs them; the Windows leg re-runs what it can.
 					...policyGates.filter(
-						(gate) =>
-							!["gate:contracts", "gate:env", "gate:changesets", "gate:preview-stack"].includes(
-								gate,
-							),
+						(gate) => !["gate:contracts", "gate:env", "gate:changesets"].includes(gate),
 					),
 					...agentGates,
 					...docsGates,
 					...loadGates,
 					"gate:load-syntax",
+					"gate:alerts",
 				],
 			}),
 			"ci:webapp:static": group([...webappGates, "gate:docs-tokens", "verification:webapp-tests"]),
@@ -451,6 +468,10 @@ export default defineConfig({
 			"dev:server:e2e": run(`${gradlew} :application:bootRun -Pprofiles=e2e`, {
 				dependsOn: ["dev:compose:e2e"],
 			}),
+			// The chart on a local k3d cluster with this checkout's images: docs/contributor/local-development.mdx.
+			"dev:kubernetes": run("node scripts/kubernetes-cluster.ts dev"),
+			"dev:kubernetes:down": run("node scripts/kubernetes-cluster.ts down"),
+			"dev:kubernetes:reset": run("node scripts/kubernetes-cluster.ts reset"),
 			"check:ports": run("node scripts/check-ports.ts"),
 			"dev:e2e:setup": run("node scripts/e2e-setup.ts"),
 			"dev:public-test": run("node scripts/jean-public-test.ts"),

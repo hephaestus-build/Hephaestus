@@ -17,10 +17,38 @@ import { test } from "node:test";
 
 import { isMap, isSeq, parseDocument } from "yaml";
 
+import { parseInventory } from "./commit-image-lock.ts";
+import { chartValues, releaseValuesLines } from "./kubernetes-chart.ts";
+import { asRecord, parseJson } from "./lib/json.ts";
+import { lockFromEvidence } from "./release-image-lock.ts";
+
 const release = "v0.93.0";
 const commit = "c".repeat(40);
 const repository = "ghcr.io/hephaestus-build/webapp";
 const indexDigest = `sha256:${"a".repeat(64)}`;
+const chart = {
+	repository: "ghcr.io/hephaestus-build/charts/hephaestus",
+	version: release.slice(1),
+	digest: `sha256:${"b".repeat(64)}`,
+};
+const chartPackage = `hephaestus-${chart.version}.tgz`;
+/**
+ * The other images that the chart runs, as upstream pins: their evidence needs no attestation and
+ * no alias, so webapp stays the one first-party image that this suite promotes.
+ */
+const upstream = ["agent-pi", "application-server", "nats", "postgres"].map((name, index) => ({
+	name,
+	repository: `docker.io/library/${name}`,
+	tag: "1",
+	digest: `sha256:${"de34".charAt(index).repeat(64)}`,
+}));
+/** The release image inventory of the fixture checkout and its evidence. */
+const inventory = { schemaVersion: 1, images: ["webapp"], upstream };
+const jointLock = `release-${release}.chart.json`;
+/** A synthetic Cosign bundle: a JSON object naming the signed bytes. It proves nothing about Sigstore. */
+const bundle = (bytes: string | Uint8Array) => JSON.stringify({ sha256: hash(bytes) });
+const sign = async (file: string) =>
+	writeFile(`${file}.sigstore.json`, bundle(await readFile(file)));
 const platforms = ["amd64", "arm64"];
 const root = path.resolve(import.meta.dirname, "..");
 const hash = (bytes: string | Uint8Array) => createHash("sha256").update(bytes).digest("hex");
@@ -54,6 +82,16 @@ const writer = jobSteps("tag-images", [
 	"Create the draft release",
 	"Upload release image lock to GitHub Release",
 ]);
+// The producer: chart push behind the release-state guard, the joint lock and its projection,
+// the two lock signatures and the chart's registry signature, and the fail-fast verification.
+const producer = jobSteps("tag-images", [
+	"Publish the chart by digest",
+	"Write release image lock",
+	"Sign release image lock",
+	"Verify signature with the deploy-side identity (fail fast)",
+]);
+/** The v0.94.7 lock reader, byte-exact; hosts one release behind verify a new release with it. */
+const previousReader = path.join(root, "scripts/fixtures/release-v0.94.7/release-image-lock.ts");
 /** Remote release, tag and registry state; everything else in the archive is a release asset. */
 const remoteState: ReadonlySet<string> = new Set([
 	"state",
@@ -61,6 +99,10 @@ const remoteState: ReadonlySet<string> = new Set([
 	"releases",
 	"tags",
 	"tag-objects",
+	"chart-registry",
+	"chart-metadata",
+	"chart-tags",
+	"chart-signatures",
 ]);
 
 // Only remote services are fixtures. The steps run the real lock, checksum, SBOM and policy
@@ -78,7 +120,11 @@ const option = flag => args[args.indexOf(flag) + 1];
 const write = (name, value) => fs.writeFileSync(path.join(store, name), JSON.stringify(value));
 fs.appendFileSync(process.env.CALL_LOG, JSON.stringify([tool, ...args]) + '\n');
 if (tool === 'gh') {
-  if (args[0] === 'attestation') process.exit(0);
+  if (args[0] === 'attestation') {
+    // The chart package has no release attestation in this scenario; images keep theirs.
+    if (process.env.CHART_ATTESTATION_MISSING === 'true' && args[2].endsWith('.tgz')) { console.error('no matching attestations found'); process.exit(1); }
+    process.exit(0);
+  }
   if (args[0] === 'api') {
     if (process.env.AUTHORITY_UNAVAILABLE === 'true') throw new Error('Release authority unavailable');
     const endpoint = args.find(arg => arg.startsWith('repos/')) ?? '';
@@ -104,7 +150,7 @@ if (tool === 'gh') {
   if (['view', 'upload', 'edit'].includes(args[1]) && current === null) { console.error('release not found'); process.exit(1); }
   if (args[1] === 'download') {
     for (const file of fs.readdirSync(store)) {
-      if (!['state', 'aliases', 'releases', 'tags', 'tag-objects'].includes(file)) fs.copyFileSync(path.join(store, file), path.join(option('--dir'), file));
+      if (!['state', 'aliases', 'releases', 'tags', 'tag-objects', 'chart-registry', 'chart-metadata', 'chart-tags', 'chart-signatures'].includes(file)) fs.copyFileSync(path.join(store, file), path.join(option('--dir'), file));
     }
   } else if (args[1] === 'view') {
     if (args.includes('--jq')) {
@@ -130,15 +176,53 @@ if (tool === 'gh') {
     if (!(args[2] in tags)) write('tags', {...tags, [args[2]]: {type:'commit', sha:current.targetCommitish}});
   } else throw new Error('Unexpected gh command');
 } else if (tool === 'cosign') {
+  // A synthetic bundle is a JSON object naming the signed bytes, as keyless-sign.ts requires one.
   if (args[0] === 'verify-blob') {
     const bytes = fs.readFileSync(args.at(-1));
-    const signedHash = fs.readFileSync(option('--bundle'), 'utf8');
+    const signedHash = JSON.parse(fs.readFileSync(option('--bundle'), 'utf8')).sha256;
     if (crypto.createHash('sha256').update(bytes).digest('hex') !== signedHash) throw new Error('Signature mismatch');
+  } else if (args[0] === 'sign-blob') {
+    const bytes = fs.readFileSync(args.at(-1));
+    fs.writeFileSync(option('--bundle'), JSON.stringify({sha256: crypto.createHash('sha256').update(bytes).digest('hex')}));
   } else if (args[0] === 'verify-attestation') {
     const subject = read('manifest.json').subjects.find(subject => args.at(-1).endsWith(subject.digest));
     const predicate = read('webapp-' + subject.platform.replace('/', '-') + '.spdx.json');
     console.log(JSON.stringify({payload:Buffer.from(JSON.stringify({predicate})).toString('base64')}));
-  } else if (args[0] !== 'verify') throw new Error('Unexpected cosign command');
+  } else if (args[0] === 'sign') {
+    // The registry keeps a signature beside the chart digest that the release signed.
+    write('chart-signatures', [...read('chart-signatures'), args.at(-1)]);
+  } else if (args[0] === 'verify') {
+    // A chart digest verifies only with its registry signature; image signatures are not modelled.
+    if (args[1] in read('chart-registry') && !read('chart-signatures').includes(args[1])) { console.error('Error: no signatures found'); process.exit(1); }
+  } else throw new Error('Unexpected cosign command');
+} else if (tool === 'helm') {
+  // The registry holds chart packages by manifest reference; a pull by any other digest misses.
+  if (args[0] === 'pull') {
+    const packages = read('chart-registry');
+    const reference = args[1].replace(/^oci:\/\//, '');
+    if (!(reference in packages)) { console.error('Error: ' + reference + ': not found'); process.exit(1); }
+    const name = reference.split('/').at(-1).split('@')[0] + '-' + packages[reference].version + '.tgz';
+    fs.writeFileSync(path.join(option('--destination'), name), Buffer.from(packages[reference].bytes, 'base64'));
+  } else if (args[0] === 'show' && args[1] === 'chart') {
+    process.stdout.write(fs.readFileSync(path.join(store, 'chart-metadata'), 'utf8'));
+  } else if (args[0] === 'show' && args[1] === 'values') {
+    // A package holds the values.yaml it was made from, after one line that names the package.
+    process.stdout.write(fs.readFileSync(args[2], 'utf8').split('\n').slice(1).join('\n') + '\n');
+  } else if (args[0] === 'version' || (args[0] === 'registry' && args[1] === 'login')) {
+    fs.readFileSync(0);
+  } else if (args[0] === 'package') {
+    fs.writeFileSync(path.join(option('--destination'), 'hephaestus-' + option('--version') + '.tgz'), 'packaged at ' + option('--app-version') + '\n' + fs.readFileSync(path.join(args[1], 'values.yaml'), 'utf8'));
+  } else if (args[0] === 'push') {
+    // A push writes the version tag; the registry answers with the manifest digest on stdout.
+    const bytes = fs.readFileSync(args[1]);
+    const digest = 'sha256:' + crypto.createHash('sha256').update(bytes).digest('hex');
+    const packages = read('chart-registry');
+    const name = args[2].replace(/^oci:\/\//, '') + '/hephaestus';
+    const version = path.basename(args[1]).replace(/^hephaestus-|\.tgz$/g, '');
+    write('chart-registry', {...packages, [name + '@' + digest]: {version, bytes: bytes.toString('base64')}});
+    write('chart-tags', {...read('chart-tags'), [name + ':' + version]: digest});
+    console.log('Pushed: ' + name + ':' + version + '\nDigest: ' + digest);
+  } else throw new Error('Unexpected helm command');
 } else if (tool === 'docker') {
   if (args.includes('--raw')) {
     console.log(JSON.stringify({manifests:read('manifest.json').subjects.map(subject => ({digest:subject.digest, platform:{os:'linux', architecture:subject.platform.split('/')[1]}}))}));
@@ -167,9 +251,10 @@ async function fixture(directory: string, source = commit) {
 		await mkdir(folder);
 	}
 	await symlink(path.join(root, "scripts"), path.join(directory, "scripts"), "dir");
+	await symlink(path.join(root, "deploy"), path.join(directory, "deploy"), "dir");
 	const json = async (name: string, value: unknown) =>
 		writeFile(path.join(archive, name), JSON.stringify(value));
-	for (const tool of ["gh", "cosign", "docker"]) {
+	for (const tool of ["gh", "cosign", "docker", "helm"]) {
 		await writeFile(path.join(bin, tool), transport, { mode: 0o755 });
 	}
 	const environment = {
@@ -184,41 +269,60 @@ async function fixture(directory: string, source = commit) {
 		VERSION: release.slice(1),
 		SERIES: "0.93",
 	};
-	const subjects = platforms.map((architecture, index) => ({
-		image: "webapp",
-		repository,
-		provenance: "first-party",
-		indexDigest,
-		digest: `sha256:${String(index + 1).repeat(64)}`,
-		platform: `linux/${architecture}`,
-	}));
-	await json("manifest.json", { schemaVersion: 1, release, commit: source, subjects });
-	await json("release-images.json", { schemaVersion: 1, images: ["webapp"], upstream: [] });
+	const subjects = [
+		...platforms.map((architecture, index) => ({
+			image: "webapp",
+			repository,
+			provenance: "first-party",
+			indexDigest,
+			digest: `sha256:${String(index + 1).repeat(64)}`,
+			platform: `linux/${architecture}`,
+		})),
+		...upstream.flatMap((pin) =>
+			platforms.map((architecture, index) => ({
+				image: pin.name,
+				repository: pin.repository,
+				provenance: "upstream",
+				indexDigest: pin.digest,
+				digest: `sha256:${String(index + 5).repeat(64)}`,
+				platform: `linux/${architecture}`,
+			})),
+		),
+	];
+	const manifest = { schemaVersion: 1, release, commit: source, subjects };
+	await json("manifest.json", manifest);
+	await json("release-images.json", inventory);
+	// The checkout's inventory, which the release scripts read beside the evidence.
+	await mkdir(path.join(directory, "security"));
+	await writeFile(
+		path.join(directory, "security", "release-images.json"),
+		JSON.stringify(inventory),
+	);
 	await json("vulnerability-policy.json", {
 		schemaVersion: 3,
 		componentInventories: [],
 		goAdvisories: [],
 		exceptions: [],
 	});
-	await json(`release-${release}.json`, {
-		schemaVersion: 1,
-		release,
-		commit: source,
-		images: [
-			{
-				image: "webapp",
-				repository,
-				provenance: "first-party",
-				indexDigest,
-				platforms: Object.fromEntries(
-					subjects.map((subject) => [subject.platform, subject.digest]),
-				),
-			},
+	// Both locks come from the release's own producer: one joint lock, and its schema 1 projection.
+	await writeFile(path.join(directory, "chart.json"), JSON.stringify(chart));
+	const produced = spawnSync(
+		process.execPath,
+		[
+			path.join(root, "scripts/release-image-lock.ts"),
+			"write",
+			path.join(archive, "manifest.json"),
+			path.join(directory, "chart.json"),
+			release,
+			path.join(archive, jointLock),
+			path.join(archive, `release-${release}.json`),
 		],
-	});
+		{ encoding: "utf8", env: environment, timeout: 30_000 },
+	);
+	assert.equal(produced.status, 0, produced.stderr);
 	for (const subject of subjects) {
-		const prefix = `webapp-${subject.platform.replace("/", "-")}`;
-		const reference = `${repository}@${subject.digest}`;
+		const prefix = `${subject.image}-${subject.platform.replace("/", "-")}`;
+		const reference = `${subject.repository}@${subject.digest}`;
 		const artifact = {
 			name: "example",
 			version: "1.0.0",
@@ -230,7 +334,7 @@ async function fixture(directory: string, source = commit) {
 		await json(`${prefix}.syft.json`, {
 			source: {
 				type: "image",
-				name: repository,
+				name: subject.repository,
 				version: subject.digest,
 				metadata: {
 					userInput: reference,
@@ -248,7 +352,11 @@ async function fixture(directory: string, source = commit) {
 			dataLicense: "CC0-1.0",
 			documentNamespace: "https://example.invalid/sbom",
 			packages: [
-				{ name: repository, versionInfo: subject.digest, primaryPackagePurpose: "CONTAINER" },
+				{
+					name: subject.repository,
+					versionInfo: subject.digest,
+					primaryPackagePurpose: "CONTAINER",
+				},
 				{
 					name: artifact.name,
 					versionInfo: artifact.version,
@@ -259,7 +367,9 @@ async function fixture(directory: string, source = commit) {
 		await json(`${prefix}.cdx.json`, {
 			bomFormat: "CycloneDX",
 			specVersion: "1.7",
-			metadata: { component: { type: "container", name: repository, version: subject.digest } },
+			metadata: {
+				component: { type: "container", name: subject.repository, version: subject.digest },
+			},
 			components: [artifact],
 		});
 		for (const kind of ["trivy", "license"]) {
@@ -277,12 +387,27 @@ async function fixture(directory: string, source = commit) {
 		files.map(async (file) => `${hash(await readFile(path.join(archive, file)))}  ${file}\n`),
 	);
 	await writeFile(path.join(archive, "SHA256SUMS"), checksums.join(""));
-	for (const file of ["SHA256SUMS", `release-${release}.json`]) {
-		await writeFile(
-			path.join(archive, `${file}.sigstore.json`),
-			hash(await readFile(path.join(archive, file))),
-		);
+	for (const file of ["SHA256SUMS", `release-${release}.json`, jointLock]) {
+		await sign(path.join(archive, file));
 	}
+	// The chart is not evidence: the registry, not the release, holds the package and its signature.
+	// Its values pin the images of the lock that the evidence makes.
+	const pinned = releaseValuesLines(
+		chartValues(lockFromEvidence(manifest, release), parseInventory(inventory)),
+	);
+	const packageBytes = `hephaestus chart ${chart.version} from ${source}\n${pinned}`;
+	await json("chart-signatures", [`${chart.repository}@${chart.digest}`]);
+	await json("chart-tags", {});
+	await json("chart-registry", {
+		[`${chart.repository}@${chart.digest}`]: {
+			version: chart.version,
+			bytes: Buffer.from(packageBytes).toString("base64"),
+		},
+	});
+	await writeFile(
+		path.join(archive, "chart-metadata"),
+		`apiVersion: v2\nname: hephaestus\nversion: ${chart.version}\nappVersion: ${chart.version}\n`,
+	);
 	for (const architecture of platforms) {
 		await writeFile(
 			path.join(smoke, `host-smoke-${architecture}.json`),
@@ -311,6 +436,7 @@ async function fixture(directory: string, source = commit) {
 		if (job === publication) {
 			await rm(path.join(directory, "evidence"), { recursive: true, force: true });
 			await rm(path.join(directory, "release-lock.env"), { force: true });
+			await rm(path.join(directory, "chart"), { recursive: true, force: true });
 		}
 		await writeFile(environment.CALL_LOG, "");
 		let status: number | null = 0;
@@ -340,7 +466,7 @@ async function fixture(directory: string, source = commit) {
 			),
 		);
 	};
-	return { archive, smoke, json, run, assets };
+	return { archive, smoke, json, run, assets, manifest };
 }
 
 const authorityRefusal = /Only the current stable release/u;
@@ -356,7 +482,72 @@ const refusalReasons = new Map([
 	["authority-malformed", /boolean draft and prerelease flags/u],
 	["authority-malformed-draft", /boolean draft and prerelease flags/u],
 	["version-mismatch", /Release version does not match verified evidence/u],
+	["unsigned-chart", /no signatures found/u],
+	["unpinned-chart", /hephaestus-0\.93\.0\.tgz does not pin the v0\.93\.0 images/u],
+	["unlocked-chart-digest", /not found/u],
+	["missing-joint-lock", /ENOENT/u],
+	["projection-mismatch", /the schema 1 lock is not the projection of the joint lock/u],
+	["foreign-chart-version", /is not the hephaestus chart 0\.93\.0/u],
+	["chart-attestation-missing", /no matching attestations found/u],
 ]);
+
+/**
+ * The chart half of a published release, changed the way each chart scenario needs before the
+ * retry verifies it: the registry, the chart metadata, or the joint lock. Other scenarios change none.
+ */
+async function tamperChartAssets(
+	scenario: string,
+	archive: string,
+	json: (name: string, value: unknown) => Promise<void>,
+): Promise<void> {
+	if (scenario === "unsigned-chart") {
+		await json("chart-signatures", []);
+	}
+	if (scenario === "unpinned-chart") {
+		// A signed chart at the locked digest whose values pin another webapp than the joint lock.
+		const reference = `${chart.repository}@${chart.digest}`;
+		const registry = asRecord(
+			parseJson(await readFile(path.join(archive, "chart-registry"), "utf8")),
+			"chart registry",
+		);
+		const entry = asRecord(registry[reference], "locked chart");
+		const bytes = Buffer.from(String(entry.bytes), "base64")
+			.toString("utf8")
+			.replace(
+				`webapp: "${repository}@${indexDigest}"`,
+				`webapp: "${repository}@sha256:${"9".repeat(64)}"`,
+			);
+		await json("chart-registry", {
+			[reference]: { ...entry, bytes: Buffer.from(bytes).toString("base64") },
+		});
+	}
+	if (scenario === "unlocked-chart-digest") {
+		await json("chart-registry", {
+			[`${chart.repository}@sha256:${"c".repeat(64)}`]: { version: chart.version, bytes: "" },
+		});
+	}
+	if (scenario === "foreign-chart-version") {
+		await writeFile(
+			path.join(archive, "chart-metadata"),
+			`apiVersion: v2\nname: hephaestus\nversion: 0.93.1\nappVersion: 0.93.1\n`,
+		);
+	}
+	if (scenario === "missing-joint-lock") {
+		// The schema 1 lock alone is valid history, but this release must name its chart.
+		await rm(path.join(archive, jointLock));
+		await rm(path.join(archive, `${jointLock}.sigstore.json`));
+	}
+	if (scenario === "projection-mismatch") {
+		// A correctly signed joint lock whose images are not the ones the schema 1 lock names.
+		const lock = path.join(archive, jointLock);
+		const joint = asRecord(parseJson(await readFile(lock, "utf8")), "joint lock");
+		await writeFile(
+			lock,
+			JSON.stringify(joint).replaceAll(indexDigest, `sha256:${"9".repeat(64)}`),
+		);
+		await sign(lock);
+	}
+}
 
 for (const scenario of [
 	"draft",
@@ -375,6 +566,13 @@ for (const scenario of [
 	"authority-malformed",
 	"authority-malformed-draft",
 	"version-mismatch",
+	"unsigned-chart",
+	"unpinned-chart",
+	"unlocked-chart-digest",
+	"missing-joint-lock",
+	"projection-mismatch",
+	"foreign-chart-version",
+	"chart-attestation-missing",
 ]) {
 	void test(
 		`release publication: ${scenario}`,
@@ -388,6 +586,21 @@ for (const scenario of [
 				assert.equal(result.status, 0, result.output);
 				assert.match(result.calls, /"upload"/u);
 				assert.match(result.calls, /"edit"/u);
+				// The chart is pulled by its locked digest, never by a tag, and its attestation checked.
+				assert.match(
+					result.calls,
+					/\["helm","pull","oci:\/\/ghcr\.io\/hephaestus-build\/charts\/hephaestus@sha256:b{64}","--destination",/u,
+				);
+				assert.doesNotMatch(result.calls, /charts\/hephaestus:/u);
+				// Its signature is the registry signature of that digest, by the release workflow.
+				assert.match(
+					result.calls,
+					/\["cosign","verify","ghcr\.io\/hephaestus-build\/charts\/hephaestus@sha256:b{64}","--certificate-identity","https:\/\/github\.com\/hephaestus-build\/Hephaestus\/\.github\/workflows\/release\.yml@refs\/heads\/main",/u,
+				);
+				assert.match(
+					result.calls,
+					/\["gh","attestation","verify","[^"]*\/chart\/hephaestus-0\.93\.0\.tgz","--repo","hephaestus-build\/Hephaestus","--signer-workflow","hephaestus-build\/Hephaestus\/\.github\/workflows\/release\.yml"/u,
+				);
 				assert.deepEqual(
 					await readFile(path.join(archive, "host-smoke-arm64.json")),
 					await readFile(path.join(smoke, "host-smoke-arm64.json")),
@@ -434,7 +647,7 @@ for (const scenario of [
 				const lock = path.join(archive, `release-${release}.json`);
 				const contents = await readFile(lock, "utf8");
 				await writeFile(lock, contents.replace(commit, "d".repeat(40)));
-				await writeFile(`${lock}.sigstore.json`, hash(await readFile(lock)));
+				await sign(lock);
 			}
 			if (scenario === "newer-patch" || scenario === "newer-minor") {
 				const newer = scenario === "newer-patch" ? "v0.93.1" : "v0.100.0";
@@ -468,12 +681,16 @@ for (const scenario of [
 			if (scenario === "version-mismatch") {
 				await json("releases", [{ tag_name: "v0.93.1", draft: false, prerelease: false }]);
 			}
+			await tamperChartAssets(scenario, archive, json);
 			const before = await assets();
 			const aliasesBefore = await readFile(path.join(archive, "aliases"), "utf8");
 			const retry = await run(
 				scenario === "version-mismatch"
 					? { VERSION: "0.93.1" }
-					: { AUTHORITY_UNAVAILABLE: String(scenario === "authority-unavailable") },
+					: {
+							AUTHORITY_UNAVAILABLE: String(scenario === "authority-unavailable"),
+							CHART_ATTESTATION_MISSING: String(scenario === "chart-attestation-missing"),
+						},
 			);
 			assert.equal(retry.status === 0, scenario === "retry", retry.output);
 			assert.match(retry.calls, /"verify-blob"/u);
@@ -523,6 +740,7 @@ async function laterEvidence(directory: string) {
 		SHA: later,
 		ASSET: `evidence/release-${release}.json`,
 		ATTESTATION: attestation,
+		JOINT: `evidence/${jointLock}`,
 		MIGRATIONS: "false",
 		RELEASE_NOTES: `## ${release.slice(1)}`,
 	};
@@ -582,6 +800,10 @@ for (const scenario of ["absent", "same-source-draft", ...writerRefusals.keys()]
 				assert.deepEqual(
 					await readFile(path.join(archive, `release-${release}.intoto.jsonl`)),
 					await readFile(evidence.ATTESTATION),
+				);
+				assert.deepEqual(
+					await readFile(path.join(archive, jointLock)),
+					await readFile(path.join(directory, evidence.JOINT)),
 				);
 				return;
 			}
@@ -658,4 +880,156 @@ for (const scenario of ["annotated-tag-retry", ...sourceRefusals.keys()]) {
 			assert.match(result.output, reason);
 		},
 	);
+}
+
+const producerRefusals = new Map([
+	["published", /v0\.93\.0 is published; this step accepts only absent or draft/u],
+	["other-source-draft", /draft v0\.93\.0 targets f{40}, not c{40}/u],
+]);
+
+for (const scenario of ["absent", "same-source-draft", ...producerRefusals.keys()]) {
+	void test(`release producer: ${scenario}`, { skip: process.platform === "win32" }, async (t) => {
+		const directory = await mkdtemp(path.join(tmpdir(), "release-producer-"));
+		t.after(async () => rm(directory, { recursive: true, force: true }));
+		const { archive, json, run, manifest } = await fixture(directory);
+		// The job's own workspace: the verified evidence manifest, nothing signed yet.
+		await mkdir(path.join(directory, "evidence"));
+		await copyFile(
+			path.join(archive, "manifest.json"),
+			path.join(directory, "evidence", "manifest.json"),
+		);
+		await rm(path.join(directory, "chart.json"));
+		if (scenario === "absent") {
+			await json("state", null);
+		}
+		if (scenario === "published") {
+			await json("state", { isDraft: false, isImmutable: true, targetCommitish: commit });
+			await json("tags", { [release]: { type: "commit", sha: commit } });
+		}
+		if (scenario === "other-source-draft") {
+			await json("state", { isDraft: true, isImmutable: false, targetCommitish: later });
+		}
+		const registryBefore = await readFile(path.join(archive, "chart-registry"), "utf8");
+		const result = await run(
+			{
+				SHA: commit,
+				ACTOR: "release-bot",
+				GH_TOKEN: "github-token",
+				REGISTRY_TOKEN: "registry-token",
+				GITHUB_OUTPUT: path.join(directory, "outputs"),
+				ASSET: `release-${release}.json`,
+				JOINT: jointLock,
+				CHART_PACKAGE: path.join(directory, "chart", chartPackage),
+			},
+			producer,
+		);
+		assert.doesNotMatch(
+			result.calls,
+			/registry-token/u,
+			"the registry token travels on stdin only",
+		);
+		const reason = producerRefusals.get(scenario);
+		if (reason !== undefined) {
+			// The release-state guard runs before the push, so no chart version tag moves.
+			assert.notEqual(result.status, 0);
+			assert.match(result.output, reason);
+			assert.doesNotMatch(result.calls, /"helm"/u);
+			assert.equal(await readFile(path.join(archive, "chart-tags"), "utf8"), "{}");
+			assert.equal(await readFile(path.join(archive, "chart-registry"), "utf8"), registryBefore);
+			return;
+		}
+		assert.equal(result.status, 0, result.output);
+		const calls = result.calls.trimEnd().split("\n");
+		const push = calls.findIndex((call) => call.startsWith('["helm","push"'));
+		assert.ok(
+			push > 0 && calls.slice(0, push).some((call) => call.startsWith('["gh",')),
+			"guard before push",
+		);
+		// One joint lock, and a schema 1 lock that is exactly its projection.
+		const tags = asRecord(
+			parseJson(await readFile(path.join(archive, "chart-tags"), "utf8")),
+			"chart tags",
+		);
+		const joint = asRecord(
+			parseJson(await readFile(path.join(directory, jointLock), "utf8")),
+			"joint",
+		);
+		const legacy = asRecord(
+			parseJson(await readFile(path.join(directory, `release-${release}.json`), "utf8")),
+			"lock",
+		);
+		assert.deepEqual(joint.chart, {
+			repository: chart.repository,
+			version: chart.version,
+			digest: tags[`${chart.repository}:${chart.version}`],
+		});
+		assert.deepEqual(Object.keys(legacy).toSorted(), [
+			"commit",
+			"images",
+			"release",
+			"schemaVersion",
+		]);
+		const { chart: _chart, ...projection } = joint;
+		assert.equal(legacy.commit, commit);
+		assert.deepEqual(legacy, { ...projection, schemaVersion: 1 });
+		// The pushed package pins the evidence's index digests, the ones both locks name.
+		const pushed = `${chart.repository}@${String(tags[`${chart.repository}:${chart.version}`])}`;
+		const registry = asRecord(
+			parseJson(await readFile(path.join(archive, "chart-registry"), "utf8")),
+			"chart registry",
+		);
+		const packaged = Buffer.from(
+			String(asRecord(registry[pushed], "pushed chart").bytes),
+			"base64",
+		).toString("utf8");
+		assert.match(packaged, /^release:\n {2}version: "v0\.93\.0"\n {2}commit: "c{40}"\nimages:\n/mu);
+		for (const subject of manifest.subjects) {
+			if (
+				["agent-pi", "application-server", "nats", "postgres", "webapp"].includes(subject.image)
+			) {
+				assert.ok(
+					packaged.includes(`  ${subject.image}: "${subject.repository}@${subject.indexDigest}"\n`),
+					subject.image,
+				);
+			}
+		}
+		// The chart digest is signed in the registry, after the push, with no bundle beside it.
+		const signing = calls.indexOf(`["cosign","sign","--yes","${pushed}"]`);
+		assert.ok(signing > push, "the pushed digest is signed");
+		assert.deepEqual(parseJson(await readFile(path.join(archive, "chart-signatures"), "utf8")), [
+			`${chart.repository}@${chart.digest}`,
+			pushed,
+		]);
+		for (const file of [`release-${release}.json`, jointLock]) {
+			const signature = asRecord(
+				parseJson(await readFile(path.join(directory, `${file}.sigstore.json`), "utf8")),
+				file,
+			);
+			assert.equal(typeof signature.sha256, "string", file);
+		}
+		// The archived v0.94.7 reader of a host one release behind: it accepts the schema 1 lock this
+		// producer wrote, with the environment the current reader writes, and refuses the joint lock.
+		// This proves the old parser and its CLI, not the old reconciler or a Docker host.
+		const previous = (lock: string, output: string) =>
+			spawnSync(
+				process.execPath,
+				[
+					previousReader,
+					path.join(directory, lock),
+					path.join(directory, "evidence", "manifest.json"),
+					release,
+					path.join(directory, output),
+				],
+				{ encoding: "utf8", timeout: 30_000 },
+			);
+		const accepted = previous(`release-${release}.json`, "previous.env");
+		assert.equal(accepted.status, 0, accepted.stderr);
+		assert.equal(
+			await readFile(path.join(directory, "previous.env"), "utf8"),
+			await readFile(path.join(directory, "release-lock.env"), "utf8"),
+		);
+		const refused = previous(jointLock, "refused.env");
+		assert.notEqual(refused.status, 0);
+		assert.match(refused.stderr, /lock has missing or extra fields/u);
+	});
 }

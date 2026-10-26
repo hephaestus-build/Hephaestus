@@ -205,7 +205,7 @@ export function SilentModeCard({
 					<form onSubmit={confirmRelease} className="grid gap-4">
 						<Field data-invalid={mismatch}>
 							<FieldLabel htmlFor="silent-mode-release-confirm">
-								Type <span className="font-mono font-medium">{RELEASE_CONFIRM_WORD}</span> to
+								Enter <span className="font-mono font-medium">{RELEASE_CONFIRM_WORD}</span> to
 								confirm
 							</FieldLabel>
 							<Input
@@ -224,7 +224,7 @@ export function SilentModeCard({
 							/>
 							{mismatch && (
 								<FieldError id="silent-mode-release-error">
-									That does not match. Type “{RELEASE_CONFIRM_WORD}” exactly.
+									That does not match. Enter “{RELEASE_CONFIRM_WORD}” exactly.
 								</FieldError>
 							)}
 						</Field>

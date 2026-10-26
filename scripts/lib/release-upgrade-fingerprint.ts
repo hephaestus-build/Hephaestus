@@ -77,3 +77,61 @@ export function preservationSql(layout: PeopleLayout, preserved?: PreservedPeopl
 	 UNION ALL SELECT 'connection', concat_ws('|',id,workspace_id,kind,state) FROM connection
 	 ) fixture ORDER BY kind,value;`;
 }
+
+/** A webhook delivery as the receiver of one release stored it in JetStream, with the delivery id replaced. */
+export interface StoredDelivery {
+	readonly subject: string;
+	/** `name: value` lines. */
+	readonly headers: readonly string[];
+	readonly body: string;
+}
+
+/**
+ * Why the server of the previous release could not read what the candidate's receiver publishes, or `undefined`. The
+ * subject and the body must be equal. The candidate may add a header, but must keep each header of the previous
+ * release with its value.
+ */
+export function deliveryDifference(
+	previous: StoredDelivery,
+	candidate: StoredDelivery,
+): string | undefined {
+	if (previous.subject !== candidate.subject) {
+		return `subject ${previous.subject} became ${candidate.subject}`;
+	}
+	if (previous.body !== candidate.body) {
+		return "the body changed";
+	}
+	const missing = previous.headers.filter((header) => !candidate.headers.includes(header));
+	return missing.length === 0 ? undefined : `headers removed or changed: ${missing.join(", ")}`;
+}
+
+/** How a migration that an event trigger was to stop after `applied` of `pending` new change sets ended. */
+export type PartialMigration =
+	| { readonly kind: "stopped"; readonly reached: number }
+	| { readonly kind: "complete" }
+	| { readonly kind: "failed"; readonly reason: string };
+
+export function partialMigration(
+	exitStatus: number | null,
+	stoppedByTrigger: boolean,
+	reached: number,
+	applied: number,
+	pending: number,
+): PartialMigration {
+	// The trigger fires only on DDL, so a migration without DDL after change set `applied` runs to the end.
+	if (exitStatus === 0) {
+		return reached === pending
+			? { kind: "complete" }
+			: { kind: "failed", reason: `it exited 0 after ${reached} of ${pending} change sets` };
+	}
+	if (!stoppedByTrigger) {
+		return { kind: "failed", reason: "it failed for another reason than the test trigger" };
+	}
+	if (reached < applied || reached >= pending) {
+		return {
+			kind: "failed",
+			reason: `it stopped after ${reached} of ${pending} change sets, expected ${applied} or more`,
+		};
+	}
+	return { kind: "stopped", reached };
+}

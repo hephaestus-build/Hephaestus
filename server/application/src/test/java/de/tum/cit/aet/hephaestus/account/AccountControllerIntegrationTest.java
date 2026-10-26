@@ -64,7 +64,7 @@ class AccountControllerIntegrationTest extends RealAuthIntegrationTest {
                 .uri("/user/settings")
                 .headers(headers -> headers.setBearerAuth(token(account)))
                 .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(new UserSettingsDTO(false, "Europe/Berlin"))
+                .bodyValue(new UpdateUserSettingsDTO(false, "Europe/Berlin"))
                 .exchange()
                 .expectStatus()
                 .isOk()
@@ -87,7 +87,7 @@ class AccountControllerIntegrationTest extends RealAuthIntegrationTest {
     }
 
     @Test
-    void shouldRejectAnUnknownTimeZoneAndClearTheTimeZoneWhenNull() {
+    void shouldRejectAnUnknownTimeZoneWithoutChangingTheSavedOne() {
         var account = accounts.save(new Account("Time zone developer"));
         long accountId = Objects.requireNonNull(account.getId());
         accountDirectory.setTimeZone(accountId, "Europe/Berlin");
@@ -95,31 +95,33 @@ class AccountControllerIntegrationTest extends RealAuthIntegrationTest {
                 .uri("/user/settings")
                 .headers(headers -> headers.setBearerAuth(token(account)))
                 .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(new UserSettingsDTO(false, "Mars/Olympus"))
+                .bodyValue(new UpdateUserSettingsDTO(false, "Mars/Olympus"))
                 .exchange()
                 .expectStatus()
                 .isBadRequest()
                 .expectBody(Void.class);
         assertThat(accountDirectory.timeZone(accountId)).contains(ZoneId.of("Europe/Berlin"));
+    }
+
+    @Test
+    void shouldKeepTheSavedTimeZoneWhenTheRequestHasNone() {
+        var account = accounts.save(new Account("Earlier tab developer"));
+        long accountId = Objects.requireNonNull(account.getId());
+        accountDirectory.setTimeZone(accountId, "Europe/Berlin");
         client.post()
                 .uri("/user/settings")
                 .headers(headers -> headers.setBearerAuth(token(account)))
                 .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(new UserSettingsDTO(false, null))
-                .exchange()
-                .expectStatus()
-                .isOk()
-                .expectBody(Void.class);
-        client.get()
-                .uri("/user/settings")
-                .headers(headers -> headers.setBearerAuth(token(account)))
+                .bodyValue("{\"practiceFeedbackDeliveryEnabled\":false}")
                 .exchange()
                 .expectStatus()
                 .isOk()
                 .expectBody()
                 .jsonPath("$.timeZone")
-                .doesNotExist();
-        assertThat(accountDirectory.timeZone(accountId)).isEmpty();
+                .isEqualTo("Europe/Berlin");
+        var saved = accounts.findById(accountId).orElseThrow();
+        assertThat(saved.getTimeZone()).isEqualTo("Europe/Berlin");
+        assertThat(saved.isFeedbackDeliveryEnabled()).isFalse();
     }
 
     private void link(Account account, IdentityProviderType type, String url, String key) {

@@ -1,4 +1,4 @@
-import { type ReactNode, useState } from "react";
+import { type ComponentProps, type ReactNode, useState } from "react";
 
 import {
 	AlertDialog,
@@ -25,6 +25,11 @@ export interface ConfirmDialogProps<T> {
 	onConfirm: (subject: T) => void;
 	/** Clears `subject`. Called on dismissal *and* right after `onConfirm`. */
 	onClose: () => void;
+	/**
+	 * Where focus goes once the dialog closes. Give the control that opened it when the dialog has no
+	 * trigger and that control was not focused, such as a select whose list was open.
+	 */
+	finalFocus?: ComponentProps<typeof AlertDialogContent>["finalFocus"];
 }
 
 /**
@@ -53,6 +58,7 @@ export function ConfirmDialog<T>({
 	cancelLabel = "Cancel",
 	onConfirm,
 	onClose,
+	finalFocus,
 }: ConfirmDialogProps<T>) {
 	const shown = useLastNonNull(subject);
 
@@ -65,7 +71,7 @@ export function ConfirmDialog<T>({
 				}
 			}}
 		>
-			<AlertDialogContent>
+			<AlertDialogContent finalFocus={finalFocus}>
 				{shown != null && (
 					<>
 						<AlertDialogHeader>

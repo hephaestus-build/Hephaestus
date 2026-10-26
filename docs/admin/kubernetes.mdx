@@ -1,0 +1,744 @@
+---
+id: kubernetes
+title: Kubernetes
+description: Install Hephaestus on a Kubernetes cluster with its Helm chart, and operate the release there.
+---
+
+# Kubernetes
+
+The Helm chart installs Hephaestus on a Kubernetes cluster.
+From 1.0, the chart is the supported deployment: [ADR 0058](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0058-the-helm-chart-is-the-only-supported-deployment-from-1-0.md) records the decision, and the [compatibility policy](./compatibility-policy#support-for-1x) gives the terms.
+The worker runs practice reviews and Heph turns. The `small.yaml` profile enables it, and [Install](#install) ends when it is ready.
+
+Each release publishes the chart as a signed OCI artifact, `oci://ghcr.io/hephaestus-build/charts/hephaestus`.
+The chart source is in `deploy/chart/hephaestus/` of the repository.
+It uses the standard Helm chart format: `Chart.yaml`, `values.yaml`, `values.schema.json`, and `templates/`.
+It uses only stable Kubernetes APIs and the Gateway API `HTTPRoute` resource of version `v1`.
+
+## Supported clusters
+
+Hephaestus supports the chart on a cluster with these items:
+
+- A [conformant](https://www.cncf.io/training/certification/software-conformance/) Kubernetes cluster at a minor version that the [Kubernetes project supports](https://kubernetes.io/releases/) when the Hephaestus release ships.
+  The chart refuses a cluster below 1.34.
+- A network plugin that enforces NetworkPolicy for egress and for ingress.
+  The worker's isolation probe stops the worker on a plugin that does not ([Sandbox prerequisites](#sandbox-prerequisites)).
+- A Gateway API controller for `HTTPRoute` `v1` with the four features in [Gateway routes](#gateway-routes).
+- A storage class for `ReadWriteOnce` volumes, for the bundled PostgreSQL and NATS.
+
+CI installs and upgrades the chart on Kubernetes 1.34, the lowest version that the chart takes, and on the latest minor version.
+Each commit to `main` runs both on `amd64` and on `arm64`.
+One more run uses three nodes, Calico for network policy, and an external PostgreSQL.
+Each run starts two workers, and each worker passes its isolation probe on that cluster.
+On the latest minor version, the `amd64` run also backs up to an S3 server and restores to a point in time, as [Backup and restore](#backup-and-restore) describes.
+When a Kubernetes minor version reaches its end of life upstream, the next Hephaestus release can drop it.
+
+## What the chart runs
+
+| Component | Kind | Role or image |
+| --- | --- | --- |
+| `server` | Deployment, 1 replica, or 0 while stopped | Server role. |
+| `migration` | Job, one for each Helm revision | The server image in its migrate run mode. It applies the release's database migrations and exits. |
+| `webhook` | Deployment, 1 to 3 replicas, or 0 while stopped | Webhook role, as in [Runtime roles](./runtime-roles). |
+| `webapp` | Deployment | The SPA, from the non-root webapp image. |
+| `worker` | Deployment, 2 replicas by default, optional | Worker role: practice reviews and Heph, in sandboxes ([Worker](#worker)). |
+| `postgresql` | StatefulSet, optional | The release PostgreSQL image, with `pg_partman` and pgBackRest. |
+| `postgresql-backup` | CronJobs, optional | Full and differential pgBackRest backups ([Backup and restore](#backup-and-restore)). |
+| `nats` | StatefulSet, optional | One NATS JetStream server. |
+| `route` | HTTPRoute | `/`, `/api`, `/webhooks`, and Slack interactivity. |
+
+The migration Job is the only migration owner.
+No role runs Liquibase: each new Pod waits for the schema before it starts, for up to 10 minutes, while the previous release serves.
+The Job is a plain part of the release and not a Helm hook, because a hook would run before the bundled PostgreSQL exists.
+[Runtime roles](./runtime-roles) describes the run mode and the wait.
+
+The server has one replica and the `Recreate` update strategy.
+Each server replica without a configured token key ring signs worker tokens with its own key.
+Two server versions never serve the same schema at the same time.
+
+The `Recreate` strategy applies only to the server.
+The webhook role and the worker also connect to the database, and their rollouts do not wait for the server.
+[Database maintenance](#database-maintenance) gives the order of the roles for a change of the database or of a schema that needs every role stopped.
+
+## Verify the release chart
+
+The chart package of a release names the release version, the source commit, and the release's five images by digest.
+Thus, you give Helm only your own values.
+The chart version and its `appVersion` are the release version without the leading `v`.
+The chart source in the repository names no image, tag, or registry.
+No release has published the chart yet.
+
+You need [Cosign](https://docs.sigstore.dev/cosign/system_config/installation/) 3.1 or later, the Helm CLI, `curl`, and `jq`.
+The release signs the chart with Cosign 3.1 in the Sigstore bundle format.
+Cosign 2 reads that format only from version 2.6 and only with `--new-bundle-format`, and CI does not test it.
+You do not need Node.js or a checkout of the repository.
+Use the Helm version that [`.github/actions/setup-helm`](https://github.com/hephaestus-build/Hephaestus/blob/main/.github/actions/setup-helm/action.yml) pins.
+CI and the release workflow install that version.
+Contributors also need it: see the [local development prerequisites](/contributor/local-development#prerequisites).
+The pin is a build tool, not a qualified Helm version for an installation.
+No Helm plugin is necessary.
+
+Run these commands in the directory of your `site.yaml`.
+If one command fails, stop: do not install the chart.
+
+```bash
+VERSION=X.Y.Z
+CHART=ghcr.io/hephaestus-build/charts/hephaestus
+# 1. The chart digest, from the joint lock of the release.
+DIGEST=$(curl -fsSL "https://github.com/hephaestus-build/Hephaestus/releases/download/v$VERSION/release-v$VERSION.chart.json" |
+  jq -er .chart.digest)
+# 2. The release workflow signed that digest.
+cosign verify "$CHART@$DIGEST" \
+  --certificate-identity 'https://github.com/hephaestus-build/Hephaestus/.github/workflows/release.yml@refs/heads/main' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+# 3. The one pull: Helm gets the chart by that digest, never by a tag.
+helm pull "oci://$CHART@$DIGEST" --untar --untardir "chart-$VERSION"
+# 4. The signed chart is the chart of this release.
+helm show chart "chart-$VERSION/hephaestus" | grep -qx "version: $VERSION"
+```
+
+Step 2 proves that the release workflow made the chart.
+That identity is the same for every release, so step 4 binds the chart to the release that you asked for.
+The digest from step 1 needs no other check: steps 2 and 4 refuse every other chart.
+A version tag can move, and it is not a release signal.
+
+The `chart-$VERSION/hephaestus` directory is the verified chart, with its `profiles/`.
+Step 3 stops if that directory already exists.
+[Install](#install) and [Upgrades](#upgrades) use it.
+[Release assets](./release-image-lock#release-assets) gives the purpose of each signed asset of a release.
+
+## Create the Secret
+
+The chart reads secret values only from one Secret in the release namespace.
+It never writes a secret value.
+Set `secret.name` to the name of that Secret.
+The chart reads fixed key names from it.
+
+[Secret custody and rotation](./secret-custody#inventory) lists each key, the roles that read it, and the command that generates it.
+That page also tells you which keys to keep outside the cluster for a restore, and how to replace each key.
+
+### PostgreSQL TLS Secret
+
+Each role connects to PostgreSQL with `sslmode=verify-full`.
+The role verifies the server certificate against a CA, and it checks that the certificate names the host that the role connects to.
+Set `postgresql.tls.existingSecret` to an existing Secret in the release namespace.
+The chart refuses to render without it.
+The chart creates no certificate, no key, and no CA.
+
+| Key | Bundled PostgreSQL | External PostgreSQL | Mounted in |
+| --- | --- | --- | --- |
+| `ca.crt` | Yes | Yes | Server, webhook, worker |
+| `tls.crt`, `tls.key` | Yes | No | Bundled PostgreSQL only |
+| `backup.crt`, `backup.key` | With backups | No | Backup Jobs only |
+
+The server, the webhook role, and the worker receive only `ca.crt`, read-only, at `/etc/hephaestus/postgresql-ca`.
+No application role receives a private key.
+Do not put the private key of the CA in this Secret.
+
+For the bundled PostgreSQL, the certificate in `tls.crt` must name `<release>-postgresql.<release namespace>.svc`.
+`<release>-postgresql` follows the object name rule in [Install](#install).
+The roles connect to exactly this name, without a cluster domain.
+The chart mounts `tls.crt` and `tls.key` into the PostgreSQL pod with the mode `0440`.
+The files belong to root and to the group 999, and PostgreSQL accepts a key with these permissions.
+
+[TLS certificates](./secret-custody#tls-certificates) gives the renewal of each certificate. A new CA needs the [database maintenance](#database-maintenance) procedure.
+
+## Gateway routes
+
+The Gateway API is a platform prerequisite of the chart.
+The platform operator installs and operates these items:
+
+- The Gateway API resource definitions and a Gateway controller.
+- The Gateway, its TLS certificate, and its HTTP to HTTPS redirect.
+
+The chart installs none of them.
+It attaches one `HTTPRoute` to the Gateways in `route.parentRefs`.
+`route.parentRefs` must name at least one Gateway.
+
+| Request path | Backend | Path change |
+| --- | --- | --- |
+| `/webhooks/slack/interactivity` | `server` | None |
+| `/webhooks` and below | `webhook` | None |
+| `/api` and below | `server` | `/api` is removed |
+| All other paths | `webapp` | None. The webapp serves the SPA for an unknown path. |
+
+The server serves the API without the `/api` prefix, as behind Traefik in Compose.
+A standard `Ingress` cannot remove a path prefix, so the chart does not use one.
+
+The Gateway controller must support these `HTTPRoute` features:
+
+- `URLRewrite` with `ReplacePrefixMatch`, for `/api`.
+- `ResponseHeaderModifier`, for `Strict-Transport-Security` on each rule.
+- `HTTPRouteRequestTimeout`, for `timeouts.request` on `/api`.
+- `HTTPRouteBackendTimeout`, for `timeouts.backendRequest` on `/api`.
+
+If the controller does not support a feature, the route does not work as described.
+The chart cannot detect this. Confirm all four features for the controller that you select.
+
+The `/api` rule sets both `timeouts.request` and `timeouts.backendRequest` to `0s`.
+The Heph live stream stays open for much longer than one request.
+The two timeouts are separate: the request timeout covers the client request, and the backend timeout covers the full backend response.
+If a rule omits one of them, the controller selects that behavior.
+A zero value asks the controller to disable the timeout.
+A controller that cannot disable it can use its longest possible value instead.
+Thus, the `0s` values do not guarantee a stream without a time limit.
+The other three rules set no timeout and no retry.
+
+Set `trustedProxies` to a Tomcat regular expression that matches only the Gateway data plane addresses.
+The server does not start in production with a blank value.
+
+The Gateway API has no portable request body limit or idle timeout.
+Configure these values on the Gateway:
+
+- A request body limit of 25 MiB on `/webhooks` and `/api`.
+- An idle timeout of more than 20 seconds for the Heph live stream.
+
+An idle timeout of more than 20 seconds does not replace the request and backend timeouts.
+No Gateway controller or version is qualified yet.
+A qualification must include these tests on the selected controller and its idle settings:
+
+- A long Heph live stream.
+- A long WebSocket connection through the Gateway.
+- A cancellation by the client during a stream.
+
+## Network policy
+
+Network policy is always on. No value turns it off.
+Each pod of the release starts with no ingress and no egress.
+The chart then opens only these paths:
+
+| From | To | Port |
+| --- | --- | --- |
+| `networkPolicy.gateway` pods | `server`, `webhook`, `webapp` | 8080 |
+| `server`, `webhook`, `worker` | PostgreSQL | 5432, or the external port |
+| `server`, `webhook` | NATS | 4222, or the external port |
+| `server`, `worker` | `networkPolicy.externalEgress` | 443 |
+| `server`, if `config.email.host` is set | `networkPolicy.externalEgress` | `config.email.port` |
+| `worker` | `server` | 8080 |
+| `worker` | The Kubernetes API, `networkPolicy.kubernetesApi` | Its port |
+| Review sandboxes and Heph hosts | `worker` | 8081, the sandbox gateway |
+| PostgreSQL and the backup Jobs, with backups on | `postgresql.backup.s3`, or `networkPolicy.externalEgress` | `postgresql.backup.s3.port` |
+| The backup Jobs, with backups on | PostgreSQL | 8432, the pgBackRest TLS server |
+| All pods | `networkPolicy.dns` pods | 53 |
+| `networkPolicy.metrics` pods | All application roles | 9090 |
+
+Sandboxes are in the sandbox namespace, where every pod also starts with no ingress and no egress.
+Turn sandboxes get no other path.
+
+`networkPolicy.gateway` must name the namespace and at least one pod label of the Gateway data plane.
+A namespace without labels would admit every pod in it, so the chart refuses it.
+The same rule applies to `networkPolicy.metrics` when you set its namespace.
+
+The management listener binds to the pod address.
+The kubelet probes it, and the metrics scraper can read it.
+No Service and no route expose it.
+
+The external egress rule excludes private, link-local, and shared address ranges by default.
+An external database or broker in a private range needs `postgresql.external.cidr` or `nats.external.cidr`.
+
+A rendered policy does not show enforcement.
+Each network plugin needs its own positive and negative traffic tests before the chart is supported.
+
+Network policy controls which pods can connect. It does not encrypt traffic.
+The connections to PostgreSQL use TLS ([PostgreSQL TLS Secret](#postgresql-tls-secret)).
+These internal channels send plain text:
+
+- The connections from the server and the webhook role to the bundled NATS.
+- The connection from the worker to the server.
+- The connections from sandboxes to the worker gateway.
+
+The bundled PostgreSQL still accepts a connection without TLS.
+The roles never use one, and network policy admits only the roles.
+
+On a cluster with several nodes, these channels cross the node network.
+Use a network plugin that encrypts traffic between nodes, for example WireGuard in Calico or Cilium, when that network is not private to the cluster.
+
+## Storage and retention
+
+| Data | Bound | Setting |
+| --- | --- | --- |
+| PostgreSQL | Volume size | `postgresql.persistence.size` |
+| JetStream | Broker `max_file` and stream storage budget | `nats.jetstream.maxFileBytes` |
+| JetStream volume | `max_file` plus 25 % | Derived from `nats.jetstream.maxFileBytes` |
+| Webhook streams | Age and size for each stream | `webhook.stream.*` |
+| Server Git mirrors | `emptyDir` size limit on the node | `server.gitCache.sizeLimit` |
+| Worker Git mirrors | `emptyDir` size limit on the node, per worker | `worker.gitCache.sizeLimit` |
+| AI spend ledger | Retention | `config.llmUsageRetention` |
+| Temporary files | `emptyDir` size limit | Fixed in the templates |
+
+One value sets both the broker `max_file` and the webhook role's stream storage budget.
+The webhook role refuses to start when the stream bounds add up to more than that budget.
+[Webhook ingestion operations](./webhook-ingestion-operations) gives the durability guarantee.
+
+The Git mirrors are caches.
+A restarted server or worker clones them again, so they use node storage and no volume claim.
+The node needs that much free ephemeral storage, and the container limits include it.
+
+The bundled NATS is one JetStream server, and every stream has one replica.
+The application has no setting for more replicas.
+A lost NATS volume loses each provider delivery that the broker accepted and the server had not yet processed.
+That window is usually seconds, and it grows while the server is stopped or behind.
+Use a storage class whose volumes survive the loss of a node, and back up the volume as [Backup and restore](./backup-restore) describes for Compose.
+
+## Pod security
+
+Each pod meets the Kubernetes Restricted Pod Security Standard:
+
+- A non-root user, `RuntimeDefault` seccomp, and no privilege escalation.
+- All capabilities dropped and a read-only root filesystem.
+- No host path, host network, or container runtime socket.
+- No service account token, except on the worker. Its Role reaches only the sandbox namespace.
+
+The webapp runs as user and group 101 and listens on port 8080.
+Its only writable path is a 16 MiB volume at `/tmp/hephaestus-webapp`.
+The image writes its generated files, its nginx PID file, and its temporary directories there.
+`/tmp` itself and the assets stay read-only.
+
+The bundled PostgreSQL runs as the image user 999 and owns its volume through `fsGroup`.
+The volume is at `/var/lib/postgresql`, as [ADR 0038](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0038-postgresql-18-release-baseline.md) decides.
+The image keeps its versioned data directory below it, and the chart does not set `PGDATA`.
+The image's entrypoint starts PostgreSQL with `ssl=on` and the certificate and key from the TLS Secret, read-only at `/etc/postgresql/tls`.
+No real volume driver has shown this configuration yet.
+First initialization, restart, and restore need a start of the release image on a volume before this path counts as working.
+
+Every container of the release has CPU, memory, and ephemeral storage requests and limits.
+The schema refuses a zero value.
+Sandbox containers have CPU and memory limits, and no disk limit, as on Docker ([Known limits](#known-limits)).
+They request their whole memory limit and a tenth of their CPU limit, because the CPU limit is a share of CPU time, not a reserved core ([Sizing](./sizing#review-sandbox-limits)).
+
+## Profiles
+
+Four values files in `profiles/` set capacity for one use.
+All four use the same templates.
+Each release chart contains them in `chart-$VERSION/hephaestus/profiles/` after you [verify the release chart](#verify-the-release-chart).
+Give the profile as the first `-f` file, before your own values, as [Install](#install) shows.
+
+| Profile | Use | PostgreSQL and NATS |
+| --- | --- | --- |
+| `dev.yaml` | One workstation cluster | Bundled, small volumes |
+| `preview.yaml` | One pull request preview | Bundled, small volumes |
+| `small.yaml` | One small cluster, for example one k3s node | Bundled, Compose limits |
+| `small-16gib.yaml`, on top of `small.yaml` | One k3s node of 16 GiB | Bundled, Compose limits |
+
+`small.yaml` fits one node of 4 vCPU, 32 GiB and 150 GiB of disk, with one worker that runs one review at a time.
+A chart test adds up what that node holds during an upgrade, with backups on:
+
+| Part | Memory | CPU requests | Disk |
+| --- | --- | --- | --- |
+| Server, webhook role, worker, webapp, PostgreSQL with pgBackRest, NATS | 7.9 GiB | 1.25 | The volumes of PostgreSQL and NATS, and bounded caches |
+| An upgrade: the new webhook, webapp and worker Pods beside the old ones, the migration Job, the stanza Job and one backup | 5.1 GiB | 1.0 | The new Pods' caches |
+| The sandbox quota: one review, the Heph hosts and the turn sandboxes of the old and the new worker while the old one drains, and the new worker's isolation probe | 16 GiB | 1.2 | No limit, as on Docker |
+| Total, against the node less what k3s requests | 29 GiB of 31 GiB | 3.45 of 3.75 | 83 GiB of the 110 GiB left beside images and review workspaces |
+
+The table gives the measured resident memory of each role and the chart's sizes.
+Each JVM role requests all of its memory limit, because the heap is sized from the limit, and the limit is the measurement plus headroom.
+NATS requests less than its limit, because JetStream's caches grow above the request.
+
+| Role | Measured | Request | Limit |
+| --- | --- | --- | --- |
+| Server | 1.5 GiB | 2.5 GiB | 2.5 GiB |
+| Worker | 0.8 to 1.4 GiB | 2 GiB | 2 GiB |
+| Webhook role | 1.0 GiB | 1.25 GiB | 1.25 GiB |
+| NATS, with JetStream's memory and file caches | 1.3 to 2.7 GiB | 1.5 GiB | 3 GiB |
+
+The server's and the worker's caches have a bound of 10 GiB each, so that the node does not run out of disk and evict a draining worker.
+On a node of 16 GiB, the Pods of an upgrade with `small.yaml` alone do not fit beside a running review: they stay pending, the previous release keeps serving, and the upgrade rolls back when its timeout ends.
+
+For one node of 16 GiB, apply `small-16gib.yaml` after `small.yaml`:
+
+```bash
+--values deploy/chart/hephaestus/profiles/small.yaml \
+--values deploy/chart/hephaestus/profiles/small-16gib.yaml
+```
+
+It keeps every sandbox at its full size, and changes these items:
+
+- The worker upgrades by `Recreate`. Each upgrade stops the worker first, so reviews and Heph turns stop for the drain, at most 10 minutes, and for the new worker's start and isolation probe.
+- The webhook role keeps its rolling update: it receives provider deliveries during an upgrade.
+- The worker runs one review and one Heph turn at a time.
+- NATS requests 512 MiB and keeps its limit of 3 GiB.
+
+A chart test adds up what one node of 16 GiB holds, with backups on:
+
+| State | Memory | CPU requests |
+| --- | --- | --- |
+| Steady: every role, one backup, one review, the Heph host, two pooled turn sandboxes and one running turn | 15.1 GiB of 15.4 GiB | 1.85 of 3.75 |
+| The same, with the isolation probe | 16.6 GiB: the probe waits for room, and the worker keeps its last proof | — |
+| An upgrade: the old worker gone, the webhook and webapp surge, the migration and stanza Jobs, the new worker's probe, and the old worker's pooled turn sandboxes | 13.4 GiB of 15.4 GiB | 2.40 of 3.75 |
+
+Staging measured these values on one node of 16 GiB with k3s 1.37:
+
+- At rest, the release requests 10.3 GiB of 15.6 GiB and uses about 5.9 GiB on the host: the server 2.0 GiB, the worker 1.3 GiB, the webhook role 0.8 GiB, PostgreSQL 0.7 GiB and NATS 60 MiB.
+- An upgrade that recreated the worker and restarted PostgreSQL stopped reviews for about 4 minutes, with the isolation probe. The webhook role kept receiving.
+- A point-in-time restore of a database of 1.8 GB took 152 s. The release served again 5 minutes 41 seconds after the restore started.
+- The peak during a review and a Heph turn is not measured yet.
+
+For a cluster with several nodes, start from `small.yaml`, and set the workers, their reviews, their quota and the external services in your own values file.
+
+[ADR 0035](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0035-pull-request-previews-are-label-gated.md) owns what a preview can run.
+The preview profile sets only capacity.
+
+## External PostgreSQL and NATS
+
+Set `postgresql.bundled=false` to use your PostgreSQL server.
+That server must have the `pg_partman` extension.
+The chart connects to `postgresql.external.host` and `postgresql.external.port` with `sslmode=verify-full`.
+The server certificate must name that host.
+The Secret in `postgresql.tls.existingSecret` needs only `ca.crt`, the CA that signed the server certificate.
+The chart has no setting for a connection without certificate verification or without TLS.
+
+Set `nats.bundled=false` to use your NATS JetStream broker.
+Put the broker on a private network that only this release can reach.
+The released NATS client verifies the certificate chain of a `tls://` broker, but not the host name in the certificate.
+Thus, TLS alone does not prevent a connection to another broker that has a certificate from the same CA.
+The bundled broker stays inside the release namespace, and network policy admits only the server and the webhook role.
+The application has no setting for the stream replica count.
+A three-server JetStream cluster therefore keeps one replica of each stream.
+
+## Install
+
+1. Create the release namespace and the sandbox namespace, and label both with the Restricted Pod Security level.
+   Use the sandbox namespace for this release alone.
+
+   ```bash
+   kubectl create namespace hephaestus
+   kubectl create namespace hephaestus-sandboxes
+   kubectl label namespace hephaestus hephaestus-sandboxes pod-security.kubernetes.io/enforce=restricted
+   ```
+
+2. Create the [Secret](#create-the-secret) and the [PostgreSQL TLS Secret](#postgresql-tls-secret).
+3. Write your values file, `site.yaml`, with `host`, `trustedProxies`, `secret.name`, `postgresql.tls.existingSecret`, `route.parentRefs`, and `networkPolicy.gateway` with its pod labels.
+   Do not set `release` or `images`: the release chart sets them.
+4. Enable reviews.
+   `small.yaml` enables the worker, and the chart does not render it without the sandbox namespace and the Kubernetes API endpoint.
+   Find the endpoint that the network plugin sees:
+
+   ```bash
+   kubectl get endpointslices --namespace default --selector kubernetes.io/service-name=kubernetes
+   ```
+
+   On a single k3s node, `PORTS` is `6443` and `ENDPOINTS` is the node's internal address, for example `192.168.5.15`.
+   Add both values to `site.yaml`:
+
+   ```yaml
+   worker:
+     sandbox:
+       namespace: hephaestus-sandboxes
+   networkPolicy:
+     kubernetesApi:
+       cidr: 192.168.5.15/32
+       port: 6443
+   ```
+
+   Use `/128` for an IPv6 address.
+   If `ENDPOINTS` lists more than one address, one for each control plane node, set a CIDR that holds all of them.
+
+5. [Verify the release chart](#verify-the-release-chart).
+6. Install the verified chart with a [profile](#profiles) and your values:
+
+   ```bash
+   helm upgrade --install hephaestus "chart-$VERSION/hephaestus" -n hephaestus \
+     -f "chart-$VERSION/hephaestus/profiles/small.yaml" -f site.yaml \
+     --rollback-on-failure --wait=watcher --wait-for-jobs --timeout 20m
+   ```
+
+7. Follow the migration Job's log until the migrations are complete: `kubectl --namespace hephaestus logs job/hephaestus-migration-1`.
+8. Wait until the worker is ready. A worker is ready only after its [isolation probe](#sandbox-prerequisites) passed.
+
+   ```bash
+   kubectl --namespace hephaestus rollout status deployment/hephaestus-worker
+   ```
+
+   If the worker does not become ready, read [Troubleshooting](#troubleshooting).
+
+The schema refuses an unknown key, an image tag, and a value outside its bounds.
+Each object name is `<release>-<component>`, with at most 52 characters.
+A StatefulSet revision label adds up to 11 characters to its name, and a label value has at most 63.
+If a name is longer, the chart keeps its start and adds 8 characters of a hash of the full name.
+The same release always gets the same names.
+The `app.kubernetes.io/instance` label always holds the full release name.
+
+`config.auth.assuranceEnforced` controls the passkey and recent sign-in checks for administration.
+Its default is `true`, as in the application.
+The chart never changes it from the environment name.
+To turn it off, for example on a staging instance, set it to `false` yourself.
+
+These values set the server's settings of the same meaning ([Production setup](./production-setup)):
+
+| Value | Setting | Default |
+| --- | --- | --- |
+| `config.researchOrganization` | `HEPHAESTUS_RESEARCH_ORGANIZATION` | Empty |
+| `config.publicActivity.enabled` | `HEPHAESTUS_PUBLIC_ACTIVITY_ENABLED` | `false` |
+| `config.publicActivity.repositoryVisibilityMaxAge` | `HEPHAESTUS_PUBLIC_ACTIVITY_REPOSITORY_VISIBILITY_MAX_AGE` | `48h` |
+| `config.llmDisplayCurrency` | `HEPHAESTUS_LLM_DISPLAY_CURRENCY`: empty or `EUR` | Empty |
+| `config.auth.passkeys.instanceAdminRequired` | `HEPHAESTUS_AUTH_PASSKEYS_INSTANCE_ADMIN_REQUIRED` | `true` |
+| `config.auth.passkeys.workspaceAdminRequired` | `HEPHAESTUS_AUTH_PASSKEYS_WORKSPACE_ADMIN_REQUIRED` | `false` |
+| `config.auth.passkeys.rpId` | `HEPHAESTUS_AUTH_PASSKEYS_RP_ID` | Empty: the host |
+| `config.auth.passkeys.allowedOrigins` | `HEPHAESTUS_AUTH_PASSKEYS_ALLOWED_ORIGINS` | Empty: the host |
+| `config.email.tls` | `starttls` sets `SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE` and `_REQUIRED`; `implicit` sets `SPRING_MAIL_PROPERTIES_MAIL_SMTP_SSL_ENABLE`. `SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH` is on when `config.email.username` is set. | `starttls` |
+| `config.monitoring.runOnStartup` | `MONITORING_RUN_ON_STARTUP` | `true` |
+| `config.monitoring.timeframeDays` | `MONITORING_TIMEFRAME` | `7` |
+| `config.monitoring.syncCron` | `MONITORING_SYNC_CRON`, a Spring cron expression with six fields | `0 0 * * * *` |
+| `config.monitoring.cooldownMinutes` | `MONITORING_SYNC_COOLDOWN_IN_MINUTES` | `60` |
+
+## Worker
+
+The worker role runs every review sandbox, the Heph host, and every turn sandbox.
+The chart's default disables the worker, and `small.yaml` enables it.
+Prepare the [sandbox prerequisites](#sandbox-prerequisites).
+Set `worker.sandbox.namespace` and `networkPolicy.kubernetesApi` ([Install](#install), step 4).
+The chart refuses a worker without them.
+
+The chart runs the workers as one Deployment:
+
+- Two replicas by default, spread across nodes where the cluster has several. `worker.replicas` sets the count.
+- A rollout starts all new workers before an old one stops, and a PodDisruptionBudget lets a node drain take one worker at a time. `worker.rolloutStrategy=Recreate` stops the old workers first, for a node that cannot hold both ([Profiles](#profiles)).
+- A stopping worker claims no new work and serves its running attempts for `worker.drainTimeoutSeconds`, 3600 by default.
+  A practice review usually takes 10 to 16 minutes. An attempt that outlasts the drain is tried again.
+- A worker on a lost node is replaced after 60 seconds.
+- `AGENT_ENABLED=true` on the workers and the server, so that the server submits practice reviews and the workers run them. Without a worker, the server submits none.
+- `worker.reviews` sets the reviews that one worker runs at once, and `worker.hephTurns` the Heph turns (`HEPHAESTUS_WORKER_CAPACITY_MENTOR_MAX`, `auto` by default). Each running turn holds a turn sandbox of 1 GiB beside the 2 pooled ones, so the sandbox quota must hold them ([Runtime roles § Heph capacity](./runtime-roles#heph-capacity)). `small.yaml` sets 1.
+- The settings `HEPHAESTUS_SANDBOX_RUNTIME=kubernetes`, the sandbox namespace, and the pod name and address from the Downward API ([Runtime roles § Sandbox runtime](./runtime-roles#sandbox-runtime)).
+- The existing gateway setting `SANDBOX_API_PORT`, with the value 8081.
+
+The sandbox namespace is the one that you created for this release.
+The chart creates no namespace.
+It writes these objects into it:
+
+- A quota for all sandboxes. Set `worker.sandbox.quota.enabled=false` to manage the quota yourself.
+- A deny-all policy for ingress and egress.
+- One more policy that lets review and host sandboxes reach port 8081 of the worker Pods, and nothing else.
+  Those sandboxes carry the label `hephaestus.build/sandbox-kind` from the runtime.
+  Turn sandboxes get no other policy, so they have no network.
+  The worker policy admits the same sandboxes on the same port.
+- The worker's Role and RoleBinding.
+
+The workers remove what no attempt and no worker uses in the sandbox namespace.
+Do not share it with another release or another application.
+A sandbox's credential, not the network, binds it to the worker that started it.
+
+The worker reaches the Kubernetes API only at `networkPolicy.kubernetesApi`.
+Set the address and port that the selected network plugin sees after address translation.
+The plugins that CI runs, k3s's kube-router and Calico, see the endpoint of the `kubernetes` Service ([Install](#install), step 4).
+The chart has no default for them, because only the running cluster knows them.
+
+The worker's service account has these permissions in the sandbox namespace, and none elsewhere:
+
+- Pods: `get`, `list`, `watch`, `create`, `delete`, and `patch`. A cancellation or a timeout patches the deadline of the sandbox's Pod.
+- `pods/log`: `get`.
+- `pods/exec`: `get` and `create`. The client opens an exec as a WebSocket `GET`, and the API server also authorizes it as `create`.
+- Jobs: `get`, `list`, `watch`, `create`, and `delete`.
+
+A practice review attempt runs as one Job.
+The Job ends at the attempt's upload deadline plus two minutes, also when its worker is gone, and Kubernetes removes it 15 minutes after it ends.
+The review-ledger worker identity stays per process.
+The chart does not set `HEPHAESTUS_WORKER_ID`.
+
+### Sandbox prerequisites
+
+The sandbox nodes need these items:
+
+1. A network plugin that enforces NetworkPolicy, for egress as well as ingress.
+2. The sandbox namespace with the label `pod-security.kubernetes.io/enforce=restricted`.
+
+These settings are optional:
+
+- `worker.runtime.runtimeClassName`: a RuntimeClass for sandbox Pods. gVisor (`runsc`) is recommended for workloads from people that you do not trust.
+- `worker.runtime.seccompProfile`: the bundled `sandbox/agent-seccomp-profile.json` as a Localhost profile. Put the file below the kubelet's seccomp directory on every sandbox node, and set its relative path. Without it, sandbox Pods use `RuntimeDefault`.
+- `worker.runtime.nodeSelector` and `worker.runtime.tolerations`: the nodes of sandbox Pods.
+- A kubelet `podPidsLimit` on the sandbox nodes.
+
+Each worker runs the isolation probe in the sandbox namespace at its start, and then every `worker.runtime.probeInterval`, 15 minutes by default.
+The probe checks these items on the running cluster:
+
+- The API server refuses, in a dry run, a Pod that the Baseline standard admits and the Restricted standard refuses.
+- A Pod with the labels of a review sandbox reaches the worker's gateway port.
+  It does not reach the worker's management port, the Kubernetes API, or the cluster DNS server.
+- A Pod of no sandbox kind does not reach the gateway port. Turn sandboxes have the same policy.
+- The probe Pods have no service account token, a read-only root filesystem, and a non-root user.
+- A named RuntimeClass exists: without it, no probe Pod runs.
+
+The worker starts no sandbox while one of these items fails.
+At its start, the worker then logs each failed item and stops, and Kubernetes starts it again.
+On a later probe, it logs each failed item, reports itself not ready, and starts no new sandbox until a probe passes again.
+A later probe whose Pods cannot start, because the sandbox quota is full or the nodes have no room, proves nothing: the worker logs a warning and keeps its last passing proof.
+
+The probe also records the isolation tier of the cluster, which is not a requirement:
+
+| Item | Effect |
+| --- | --- |
+| RuntimeClass | The runtime that isolates sandboxes from the node kernel, or the cluster's default. |
+| User namespaces | When a Pod with `hostUsers: false` runs in a user namespace of its own, every sandbox Pod runs that way. The root of a sandbox is then no user of the node. |
+| Process limit | The number of processes that a sandbox Pod could start before the node refused one, or no limit. |
+
+The worker's log and the metrics `sandbox.isolation.passed`, `sandbox.isolation.user_namespaces` and `sandbox.isolation.process_limit` show the tier.
+The probe Pods use the agent image and the sandbox configuration, and the worker deletes them when the probe ends.
+
+Some network plugins apply the policy of a new Pod a few seconds after the Pod starts.
+Each sandbox Pod therefore starts with an init container that waits, at most 60 seconds, until it cannot reach the Kubernetes API.
+
+Kubernetes has no field for two Docker sandbox settings.
+`/tmp`, `/run` and a turn sandbox's `/workspace` are not `noexec`, and a sandbox Pod keeps `/dev/shm` in its private IPC namespace.
+[ADR 0041](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0041-compose-1x-kubernetes-2.md#update--2026-10-24-the-kubernetes-runtime) records why.
+
+Every container command and every exec starts through `prlimit` from the agent image.
+`prlimit` sets the `nofile` limit to 1024 and the `core` limit to 0, both soft and hard.
+A sandbox process cannot raise them.
+
+## Backup and restore
+
+With `postgresql.backup.enabled=true`, the bundled PostgreSQL archives its WAL to one S3-compatible bucket with pgBackRest, as the [Compose backup overlay](./backup-restore#automated-off-host-backup-self-host-compose) does.
+The repository is encrypted with `BACKUP_CIPHER_PASS`.
+A CronJob takes a full backup each Sunday at 02:15 UTC, and another takes a differential backup on the other days at the same time.
+`postgresql.backup.retentionFull` full backup chains stay, 2 by default.
+A Job of each release creates the repository's stanza, so that the WAL archive works from the install.
+
+The backup Jobs do not mount the PostgreSQL volume.
+They read the data directory through the pgBackRest TLS server in the PostgreSQL Pod.
+That server admits only a client certificate for the common name `hephaestus-backup` that `ca.crt` signed.
+
+To prepare backups:
+
+1. Create the bucket for this instance alone, and an identity with read, write and delete rights in it.
+2. Add `BACKUP_S3_KEY`, `BACKUP_S3_KEY_SECRET` and `BACKUP_CIPHER_PASS` to the release Secret. Generate the passphrase and keep a copy as [Secret custody](./secret-custody#keep-the-required-keys-outside-the-cluster) describes.
+3. Add `backup.crt` and `backup.key` to the PostgreSQL TLS Secret: a client certificate for `hephaestus-backup`.
+4. Set `postgresql.backup.enabled=true` and `postgresql.backup.s3` with the bucket, the endpoint host name and the region. Set `cidr` and `port` when the endpoint is in a private address range.
+   When a private CA signs the endpoint's certificate, add it to the PostgreSQL TLS Secret as `s3-ca.crt`, and set `postgresql.backup.s3.privateCa=true`.
+5. Upgrade the release, and check that the stanza Job completed.
+
+[Backup bucket credentials](./secret-custody#backup-bucket-credentials) and [Backup cipher passphrase](./secret-custody#backup-cipher-passphrase) give the rotation of these values.
+
+A failed WAL archive keeps the WAL on the PostgreSQL volume until the volume is full.
+The [alert rules](./observability.mdx#alert-rules) watch the WAL archive, the age of the latest backup and the free space of the volume.
+
+### Restore
+
+A restore replaces the bundled database with a backup.
+It loses every change after the backup or the time that you select.
+The restored database is readable only with the keys that sealed its values.
+Keep them as [Secret custody](./secret-custody#keep-the-required-keys-outside-the-cluster) describes.
+Restore the NATS JetStream data separately, as [Backup and restore](./backup-restore) describes.
+
+1. Upgrade the release with `postgresql.backup.restore.enabled=true`.
+   Set `postgresql.backup.restore.time` to restore the database as it was at that time, for example `2026-10-24 18:00:00+00`.
+   Leave it empty to restore the latest backup and every archived WAL segment.
+   While the setting is on, the server, the webhook role, the workers and PostgreSQL stop, and the backups pause.
+2. Wait for the Job `<release>-postgresql-backup-restore-<revision>` to complete:
+
+   ```bash
+   kubectl --namespace hephaestus wait --for=condition=complete \
+     job/hephaestus-postgresql-backup-restore-<revision> --timeout=30m
+   ```
+
+   The Job retries while PostgreSQL still shuts down.
+3. Upgrade the release again with `postgresql.backup.restore.enabled=false`.
+   PostgreSQL replays the WAL up to the target, and the other roles start.
+
+The restored database has the database password that it had at the backup.
+If `DATABASE_PASSWORD` changed since then, put the old value back in the Secret before step 3.
+Rehearse a restore on a copy of the instance before you need one.
+
+## Upgrades
+
+An upgrade to a new release is one `helm upgrade`, with the new release's chart, its profile, and your own values.
+First, [verify the release chart](#verify-the-release-chart) of the new release.
+Then upgrade:
+
+```bash
+helm upgrade --install hephaestus "chart-$VERSION/hephaestus" -n hephaestus \
+  -f "chart-$VERSION/hephaestus/profiles/small.yaml" -f site.yaml \
+  --rollback-on-failure --wait=watcher --wait-for-jobs --timeout 20m
+```
+
+The migration Job of the new revision and the new Pods start together.
+The new Pods wait for the migrated schema, and the previous release serves until they are ready.
+`--wait-for-jobs` fails the upgrade when the migration fails, and `--rollback-on-failure` then returns the Deployments to the previous revision.
+The timeout is longer than the 10 minutes that a new Pod waits for the schema.
+The server stops before its new version starts (`Recreate`).
+The webhook role and the workers roll: new workers prove the cluster with the isolation probe before an old worker drains.
+An old worker drains for up to `worker.drainTimeoutSeconds`, 60 minutes by default, and Kubernetes no longer counts it while it terminates.
+Start the next upgrade only after the old worker is gone: `kubectl --namespace hephaestus get pods -l app.kubernetes.io/component=worker` shows no `Terminating` Pod.
+A review runs for up to 3 hours.
+When the drain ends first, the review stops: an attempt that was not yet admitted runs again on another worker and spends one of its attempts, and an admitted one keeps its results.
+Read the release notes before the upgrade.
+A release whose migration needs every database role stopped says so, and then the [database maintenance](#database-maintenance) procedure applies instead.
+
+Roll forward to fix a failed upgrade.
+`helm rollback` and an older image do not undo a migration: restore the database from the backup taken before the upgrade ([Restore](#restore)).
+
+### Database maintenance
+
+Use this procedure when the release notes require it, before you change PostgreSQL itself, or before you change the CA in its TLS Secret.
+The server, the webhook role and the workers are the database roles.
+Each phase is one `helm upgrade` with the replica counts of that phase:
+
+| Phase | `server.replicas` | `webhook.replicas` | `worker.replicas` | Before the next phase |
+| --- | --- | --- | --- | --- |
+| 1. Stop the writers | 0 | 0 | 0 | The old pods of the three roles are gone. The worker's sandbox pods are gone. |
+| 2. Change the database | 0 | 0 | 0 | PostgreSQL and NATS are ready and accept connections. |
+| 3. Migrate | 1 | 0 | 0 | The migration Job of the revision completed. The server is ready. |
+| 4. Restore | 1 | The prior count | The prior count | The pods of the three roles are ready. |
+
+Phase 1 uses the verified chart and the values of the current release, with only the three counts changed.
+Phase 2 applies the change.
+The change can be the new release values, a new PostgreSQL configuration, or a new CA in the TLS Secret and a restart of PostgreSQL.
+Phase 3 runs the new release's migration Job and starts its server alone.
+
+Before phase 1, record the current `webhook.replicas` and `worker.replicas`, and back up the database and the NATS JetStream data.
+A count of 0 is a desired state: check on the cluster that the pods stopped, that the sandbox Pods and Jobs are gone, and that the migrations completed before the next phase.
+Set `worker.replicas=0` to stop the workers; `worker.enabled=false` removes the worker objects.
+While `webhook.replicas` is 0, provider deliveries reach no receiver, and each provider decides whether it retries.
+
+## Uninstall
+
+1. Delete the sandbox namespace first.
+   This stops every sandbox at once.
+   If you remove the release first, its network policies go, and the Heph hosts and turn sandboxes that are left run without them.
+
+   ```bash
+   kubectl delete namespace hephaestus-sandboxes
+   ```
+
+2. Remove the release. Running reviews stop.
+
+   ```bash
+   helm uninstall hephaestus --namespace hephaestus
+   ```
+
+3. These items stay:
+   - The PostgreSQL and NATS volumes.
+   - The Secrets that you created.
+   - The backups in the S3 bucket.
+4. To remove the data too, delete the release namespace: `kubectl delete namespace hephaestus`.
+   A PersistentVolume with the `Retain` reclaim policy stays until you delete it.
+
+## Troubleshooting
+
+| Symptom | Cause and check |
+| --- | --- |
+| A worker stays unready, and its log says that the cluster does not hold the sandbox boundary | The isolation probe failed. The log names each failed check. A failed egress check usually means that the network plugin does not enforce NetworkPolicy, or that `networkPolicy.kubernetesApi` names an address that the plugin does not see. |
+| A worker log says that the network policy did not filter a sandbox Pod in time | The network plugin applied the policy of a new Pod more than 60 seconds after the Pod started. The attempt is tried again. |
+| A sandbox Pod stays `Pending` with a quota error | The sandbox namespace's quota is full. Raise `worker.sandbox.quota`, or lower the workers' capacity. |
+| A new Pod restarts during an upgrade, and its log names a pending change set | It waited 10 minutes for the schema. Check the migration Job's log. A longer migration needs the [database maintenance](#database-maintenance) procedure. |
+| A backup Job fails with `unable to find primary cluster` | The Job cannot reach pgBackRest's TLS server on port 8432 of the PostgreSQL Service, or its client certificate is not for `hephaestus-backup` from `ca.crt`. |
+| PostgreSQL's volume fills | A failed WAL archive keeps the WAL on the volume. Check the latest backup Job's log and the bucket's credentials. |
+| A practice review fails with "The sandbox could not prepare its workspace." | The sandbox's initializer failed before any model call. The job runs again within its retry limit, so a failure that repeats on every attempt uses all of them. The worker log names the initializer's exit code. After the last attempt, read the exit code and the last lines of the initializer's log on the job: `kubectl --namespace hephaestus exec hephaestus-postgresql-0 -c postgresql -- psql -U "$DATABASE_USERNAME" -d hephaestus -c "SELECT capture->'initializationFailure' FROM review_job WHERE id='<job id>'"`. Known credential formats in those lines are masked. |
+
+`kubectl --namespace <release namespace> logs deployment/<release>-worker` shows a worker's probe result and its isolation tier.
+The worker's `/actuator/prometheus` on its management port shows the same tier in the `sandbox_isolation_*` metrics.
+
+## Known limits
+
+- NATS JetStream runs as one server with one replica of each stream. A lost NATS volume loses the provider deliveries that the server had not processed ([Storage and retention](#storage-and-retention)).
+- PostgreSQL runs as one instance. A lost node stops the release until PostgreSQL runs again; a lost volume needs a [restore](#restore).
+- The server runs as one replica until the server processes provider events in order across replicas.
+- The worker records the isolation tier in its log and metrics, not with each review. A record for each review needs a schema change.
+- Turn sandboxes take their commands through `pods/exec` until they pull them through the gateway, as the Heph host does.
+- Sandboxes have no disk limit, as on Docker. A review that fills the node's disk puts the node under disk pressure.
+- The chart has no migration from a Compose installation yet.
+
+## What CI does not show
+
+A successful install in CI does not show that your cluster isolates sandboxes.
+The worker's isolation probe checks that on your cluster, at each start and on its schedule.
+CI does not qualify your Gateway controller: check its four `HTTPRoute` features, its body limit and its idle timeout yourself, and rehearse a [restore](#restore) on your own cluster.

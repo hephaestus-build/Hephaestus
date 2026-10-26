@@ -70,6 +70,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.web.reactive.function.client.ClientResponse;
+import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -778,10 +779,11 @@ class GitLabMergeRequestSyncServiceTest extends BaseUnitTest {
                         .withContentInclusion(JsonInclude.Include.NON_NULL))
                 .build();
         var config = new GitLabGraphQlConfig(new GitLabRateLimitTracker(new SimpleMeterRegistry()));
-        var webClient = config.gitLabGraphQlWebClient(
-                omittingNulls,
-                new GitLabCredentialHealthFilter(
-                        new StaticListableBeanFactory().getBeanProvider(GitLabCredentialHealth.class)));
+        // The application's builder carries the credential health filter through its customizer.
+        var health = new GitLabCredentialHealthFilter(
+                new StaticListableBeanFactory().getBeanProvider(GitLabCredentialHealth.class));
+        var webClient =
+                config.gitLabGraphQlWebClient(omittingNulls, WebClient.builder().filter(health.filter()));
         return config.gitLabGraphQlClient(
                         webClient,
                         new SilentModeGraphQlClientFactory(

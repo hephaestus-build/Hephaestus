@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.practices.spi;
 
 import java.time.Instant;
+import java.util.Collection;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -9,7 +10,8 @@ import java.util.UUID;
 public interface ReviewRuntimeQuery {
     Optional<ReviewRuntimeSnapshot> runtime(long workspaceId, UUID reviewId);
 
-    Map<ReviewJobStatus, Long> jobCounts(long workspaceId, UUID reviewId);
+    /** Each review's jobs counted by status, for many reviews in one read; a review without jobs is absent. */
+    Map<UUID, Map<ReviewJobStatus, Long>> jobCounts(long workspaceId, Collection<UUID> reviewIds);
 
     Set<UUID> activeJobIds(long workspaceId, UUID reviewId);
 

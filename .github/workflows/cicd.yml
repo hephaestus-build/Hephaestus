@@ -52,6 +52,7 @@ jobs:
       agent-images: ${{ steps.filter.outputs.agent-images }}
       postgres-image: ${{ steps.filter.outputs.postgres-image }}
       supported-host-smoke: ${{ steps.filter.outputs.supported-host-smoke }}
+      kubernetes: ${{ steps.filter.outputs.kubernetes }}
       docs: ${{ steps.filter.outputs.docs }}
       ci-config: ${{ steps.filter.outputs.ci-config }}
       quality-config: ${{ steps.filter.outputs.quality-config }}
@@ -61,6 +62,7 @@ jobs:
       release-images: ${{ steps.filter.outputs.release-images }}
       docker-config: ${{ steps.filter.outputs.docker-config }}
       pmd-canary: ${{ steps.filter.outputs.pmd-canary }}
+      gradle-dependencies: ${{ steps.filter.outputs.gradle-dependencies }}
       version-bump: ${{ steps.version_bump.outputs.changed }}
       version: ${{ steps.version.outputs.version }}
       release-candidate: ${{ steps.release_candidate.outputs.release-candidate }}
@@ -75,15 +77,18 @@ jobs:
       # The successful merge-queue run of a default-branch push's exact commit, whose images the push
       # reuses instead of rebuilding; empty after a direct push, which builds every image.
       queue-run: ${{ steps.queue_run.outputs.run-id }}
-      # The images that run published. The push builds any other image at once, without a reuse job
-      # that would find nothing: the queue run did not build it.
+      # The images that run published. The push builds any other image; the queue run did not build it.
       queue-images: ${{ steps.queue_run.outputs.images || '[]' }}
+      # The queue run published every image, so a push that is no version bump builds and scans
+      # nothing: it needs neither the packaged server nor an advisory snapshot.
+      queue-images-complete: ${{ steps.queue_run.outputs.complete == 'true' && steps.version_bump.outputs.changed != 'true' }}
       # The commit an unchanged image is aliased from; scripts/resolve-alias-base.ts says how it is
       # found and docs/contributor/ci-cd.mdx the rule.
       alias-base: ${{ steps.alias_base.outputs.commit }}
       # A release candidate publishes its complete image set under its own commit identity.
-      # Ordinary PRs can reuse unchanged images when their base has published artifacts.
-      all-images: ${{ steps.alias_base.outputs.commit == '' || steps.release_candidate.outputs.release-candidate == 'true' }}
+      # Ordinary PRs can reuse unchanged images when their base has published artifacts. A merge
+      # group aliases nothing, so one that runs the Kubernetes legs builds every image they install.
+      all-images: ${{ steps.alias_base.outputs.commit == '' || steps.release_candidate.outputs.release-candidate == 'true' || (github.event_name == 'merge_group' && steps.filter.outputs.kubernetes == 'true') }}
       # A push and a dispatch validate a commit whole; a pull request and a merge group are each a
       # diff, which paths-filter reads for a group from `merge_group.base_sha..head_sha` without
       # being told.
@@ -93,24 +98,25 @@ jobs:
       # database tests, PostgreSQL drills and browser suites. An unreadable label runs it too.
       # ci-cd.mdx § Two verification tiers says why.
       queue-tier: ${{ github.event_name != 'pull_request' || steps.opt_in.outputs.full != 'false' || (github.event.pull_request.draft != true && (steps.filter.outputs.queue-tier-inputs == 'true' || steps.filter.outputs.test-config == 'true' || steps.filter.outputs.build-config == 'true')) }}
-      # A draft runs the fast tier and builds no image: no preview, no host smoke, no image scan,
-      # unless it carries `preview`. A release candidate always builds its evidence. Marking it
+      # A draft runs the fast tier and builds no image: no host smoke, no image scan, unless it
+      # carries `preview`. A release candidate always builds its evidence. Marking it
       # ready starts the ordinary run. ci-cd.mdx § Two verification tiers.
       draft: ${{ github.event_name == 'pull_request' && github.event.pull_request.draft == true && steps.opt_in.outputs.preview != 'true' && steps.release_candidate.outputs.release-candidate != 'true' }}
       publishable: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
-      # A same-repository pull request needs every image at its head tag for its preview or the host
-      # boot smoke. An unreadable `preview` label counts as present, except on a draft.
-      head-images: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && (steps.opt_in.outputs.preview == 'true' || (github.event.pull_request.draft != true && (steps.opt_in.outputs.preview != 'false' || steps.filter.outputs.supported-host-smoke == 'true'))) }}
+      # A same-repository pull request needs every image at its head tag for the `preview` label, the
+      # host boot smoke or the Kubernetes cluster jobs. An unreadable `preview` label counts as present,
+      # except on a draft.
+      head-images: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && (steps.opt_in.outputs.preview == 'true' || (github.event.pull_request.draft != true && (steps.opt_in.outputs.preview != 'false' || steps.filter.outputs.supported-host-smoke == 'true' || steps.filter.outputs.kubernetes == 'true'))) }}
       # Whether this run builds images at all: every event except a pull request, unless that pull
       # request is a release candidate or needs head images. The merge group builds every other
-      # changed image before it lands. ci-cd.mdx § Preview deployments.
-      images: ${{ github.event_name != 'pull_request' || steps.release_candidate.outputs.release-candidate == 'true' || (github.event.pull_request.head.repo.full_name == github.repository && (steps.opt_in.outputs.preview == 'true' || (github.event.pull_request.draft != true && (steps.opt_in.outputs.preview != 'false' || steps.filter.outputs.supported-host-smoke == 'true')))) }}
+      # changed image before it lands. ci-cd.mdx § The `preview` label.
+      images: ${{ github.event_name != 'pull_request' || steps.release_candidate.outputs.release-candidate == 'true' || (github.event.pull_request.head.repo.full_name == github.repository && (steps.opt_in.outputs.preview == 'true' || (github.event.pull_request.draft != true && (steps.opt_in.outputs.preview != 'false' || steps.filter.outputs.supported-host-smoke == 'true' || steps.filter.outputs.kubernetes == 'true')))) }}
       # A skipped duplicate would skip the image builds the release evidence preflight needs, and
       # the gate refuses to pass the Version PR without one.
       # A re-run after `ci:full` was added repeats a tree whose fast tier already passed, so only a
       # run without the opt-in may be skipped as a duplicate.
       # A pull request marked ready repeats the draft's tree but builds what the draft skipped.
-      # A labelled preview repeats a tree whose earlier run may have built no image.
+      # A run with the `preview` label repeats a tree whose earlier run may have built no image.
       should_skip: ${{ steps.skip_check.outputs.should_skip == 'true' && steps.release_candidate.outputs.release-candidate != 'true' && steps.opt_in.outputs.full == 'false' && steps.opt_in.outputs.preview == 'false' && github.event.action != 'ready_for_review' }}
     timeout-minutes: 15
     steps:
@@ -118,6 +124,15 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+
+      # Scorecard's Binary-Artifacts check exempts the committed `gradle-wrapper.jar` only when it finds
+      # `gradle/actions/wrapper-validation@` in a workflow file AND a successful run of that same file at
+      # the latest commit. A reusable workflow produces no run under its own name, so this has to live in
+      # a workflow that is triggered directly, in a job that runs unconditionally, so every commit on the
+      # default branch has one. `setup-caches` still validates the wrapper wherever Gradle actually
+      # runs. A job of its own would pay a runner's setup for a five-second check.
+      - name: Validate the Gradle wrapper
+        uses: gradle/actions/wrapper-validation@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
 
       # The version this ref carries, which the release evidence preflight needs to resolve the
       # namespace and signing identity a release of it would use.
@@ -206,6 +221,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          ALIAS_IMAGES: ${{ github.event_name == 'pull_request' }}
         run: node scripts/resolve-alias-base.ts
 
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
@@ -302,6 +318,7 @@ jobs:
               - 'pnpm-workspace.yaml'
             application-server:
               - 'server/**'
+              - 'scripts/check-gradle-verification-metadata.ts'
               - 'scripts/e2e-identity-seed-database.ts'
               - 'scripts/e2e-setup.ts'
               - 'scripts/lib/json.ts'
@@ -311,10 +328,6 @@ jobs:
               # gate:env validates these deployment inputs against application.yml.
               - 'docker/compose.app.yaml'
               - 'docker/compose.core.yaml'
-              # PreviewSeedPolicyIntegrationTest runs this file's clone policy against the migrated
-              # schema; a preview cannot rehearse it, because the controller refuses to deploy a
-              # head that changes docker/preview/.
-              - 'docker/preview/compose.app.yaml'
               # The generated configuration reference reads these, and its drift check runs on this leg.
               - 'docker/compose.proxy.yaml'
               - 'docker/self-host/compose*.yaml'
@@ -324,6 +337,10 @@ jobs:
               - 'scripts/generate-configuration-reference.ts'
               - 'scripts/lib/configuration-reference.ts'
               - 'scripts/lib/application-jar.ts'
+              # The API compatibility gate runs on this leg.
+              - 'scripts/check-api-compatibility.ts'
+              - 'scripts/lib/pinned-binary.ts'
+              - 'scripts/plan-release.ts'
               - '!server/**/AGENTS.md'
               - '!server/**/CLAUDE.md'
             tooling:
@@ -332,8 +349,12 @@ jobs:
               - 'scripts/**'
               - 'security/semgrep/**'
               - 'docker/agents/**'
+              # test:tooling renders this chart with the real Helm CLI on this leg and on Windows.
+              - 'deploy/chart/**'
               # format:load:check and test:load:syntax run on this leg.
               - 'load-tests/**'
+              # test:alerts runs promtool on these rules on this leg.
+              - 'deploy/observability/**'
               # The catalog and guidance tests in scripts/ judge these bundled server resources.
               - 'server/application/src/main/resources/practices/default-catalog.json'
               - 'server/application/src/main/resources/practices/default-catalog.schema.json'
@@ -470,6 +491,19 @@ jobs:
               - 'server/application/src/main/java/**/Application.java'
               - '.github/workflows/cicd.yml'
               - '.github/workflows/ci-build.yml'
+            # What a cluster install of the chart exercises: the chart, its script, the worker's
+            # sandbox runtime and what it binds, and the agent image that its sandboxes run.
+            kubernetes:
+              - 'deploy/chart/**'
+              - 'scripts/kubernetes-cluster.ts'
+              - 'scripts/resolve-release-images.ts'
+              - 'server/application/src/main/java/**/agent/sandbox/**'
+              - 'server/application/src/main/java/**/agent/gateway/**'
+              - 'server/application/src/main/resources/application*.yml'
+              - 'docker/agents/**'
+              - 'docker/postgres/**'
+              - '.github/workflows/ci-kubernetes.yml'
+              - '.github/actions/setup-kubernetes-tools/**'
             docs:
               - 'docs/**'
             # Changes the queue tier judges best before the queue: migrations, which the database
@@ -498,6 +532,7 @@ jobs:
               - '.github/actions/setup-toolchain/**'
               - '.github/actions/setup-caches/**'
               - '.github/actions/setup-browsers/**'
+              - '.github/actions/setup-helm/**'
             build-config:
               - '.github/workflows/cicd.yml'
               - '.java-version'
@@ -541,6 +576,7 @@ jobs:
             docker-config:
               - '.github/workflows/ci-docker-build.yml'
               - '.github/workflows/reusable-docker-build.yml'
+              - 'docker/docker-bake.hcl'
             pmd-canary:
               - 'scripts/check-pmd-canary.ts'
               - 'scripts/check-pmd-canary.test.ts'
@@ -563,27 +599,17 @@ jobs:
               - 'scripts/run-gradlew.ts'
               - '.github/workflows/ci-quality-gates.yml'
               - '.github/workflows/ci-quality-leg.yml'
+            gradle-dependencies:
+              - 'server/**/*.gradle.kts'
+              - 'server/**/gradle.lockfile'
+              - 'server/*-gradle.lockfile'
+              - 'server/gradle.properties'
+              - 'server/gradle/**'
+              - 'server/gradlew*'
+              - 'scripts/check-gradle-verification-metadata.ts'
 
   # `Actionlint` is a required context, and a required context that skips still satisfies the
   # ruleset — docs/contributor/ci-cd.mdx § Merge policy says why.
-  # Scorecard's Binary-Artifacts check exempts the committed `gradle-wrapper.jar` only when it finds
-  # `gradle/actions/wrapper-validation@` in a workflow file AND a successful run of that same file at
-  # the latest commit. A reusable workflow produces no run under its own name, so this has to live in
-  # a workflow that is triggered directly — and unconditionally, so every commit on the default
-  # branch has one. `setup-caches` still validates the wrapper wherever Gradle actually runs; this is
-  # the same guarantee, stated where a reader and a scanner can both see it.
-  gradle-wrapper:
-    name: "Gradle wrapper"
-    timeout-minutes: 15
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: gradle/actions/wrapper-validation@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
-
   workflow-lint:
     name: "Actionlint"
     timeout-minutes: 15
@@ -676,13 +702,14 @@ jobs:
       application_server_changed: ${{ (needs.detect-changes.outputs.application-server == 'true' || needs.detect-changes.outputs.quality-config == 'true' || needs.detect-changes.outputs.unfiltered == 'true') && 'true' || 'false' }}
       tooling_changed: ${{ (needs.detect-changes.outputs.tooling == 'true' || needs.detect-changes.outputs.quality-config == 'true' || needs.detect-changes.outputs.unfiltered == 'true') && 'true' || 'false' }}
       pmd_canary: ${{ (needs.detect-changes.outputs.pmd-canary == 'true' || needs.detect-changes.outputs.unfiltered == 'true') && 'true' || 'false' }}
+      gradle_dependencies: ${{ needs.detect-changes.outputs.gradle-dependencies }}
 
   # Package once; artifact checks and the image independently consume the same JAR.
   server-package:
     name: "App Server: Package"
     needs: [detect-changes]
     if: |
-      needs.detect-changes.outputs.should_skip != 'true' && (
+      needs.detect-changes.outputs.should_skip != 'true' && needs.detect-changes.outputs.queue-images-complete != 'true' && (
         needs.detect-changes.outputs.unfiltered == 'true' ||
         needs.detect-changes.outputs.head-images == 'true' ||
         needs.detect-changes.outputs.any-code == 'true' ||
@@ -729,7 +756,9 @@ jobs:
       - name: Package the server
         if: steps.reuse.outputs.artifact-id == ''
         working-directory: server
-        run: ./gradlew :application:bootJar :application:testClasses
+        # The suites wait for these classes. The test analysis does not change them, so it runs in
+        # the server quality leg instead of here.
+        run: ./gradlew :application:bootJar :application:testClasses -PtestAnalysis=false
       - name: Validate the packaged server
         working-directory: server
         run: |
@@ -764,7 +793,8 @@ jobs:
     name: "Image advisory database"
     needs: [detect-changes]
     if: |
-      needs.detect-changes.outputs.should_skip != 'true' && needs.detect-changes.outputs.draft != 'true' && (
+      needs.detect-changes.outputs.should_skip != 'true' && needs.detect-changes.outputs.draft != 'true' &&
+      needs.detect-changes.outputs.queue-images-complete != 'true' && (
         needs.detect-changes.outputs.release-preflight == 'true' ||
         needs.detect-changes.outputs.release-images == 'true' ||
         (needs.detect-changes.outputs.publishable == 'true' && needs.detect-changes.outputs.images == 'true' && (
@@ -800,31 +830,6 @@ jobs:
           path: ${{ steps.database.outputs.database-directory }}
           if-no-files-found: error
           retention-days: 1
-
-  application-server-image:
-    name: "App Server image"
-    needs: [detect-changes, server-package, vulnerability-database]
-    if: ${{ !cancelled() && needs.detect-changes.result == 'success' && needs.detect-changes.outputs.draft != 'true' && (needs.vulnerability-database.result == 'success' || needs.vulnerability-database.result == 'skipped') && needs.server-package.result == 'success' && needs.detect-changes.outputs.images == 'true' && (needs.detect-changes.outputs.application-server-image == 'true' || needs.detect-changes.outputs.supported-host-smoke == 'true' || needs.detect-changes.outputs.all-images == 'true') }}
-    uses: ./.github/workflows/reusable-docker-build.yml
-    permissions:
-      contents: read
-      packages: write
-      id-token: write
-      attestations: write
-      artifact-metadata: write
-    with:
-      database-artifact: ${{ needs.vulnerability-database.outputs.artifact-id }}
-      image-name: "hephaestus-build/application-server"
-      use-buildpacks: true
-      application-artifact: server-build-${{ github.run_id }}
-      project-descriptor: "server/application/project.toml"
-      # renovate: datasource=docker depName=paketobuildpacks/ubuntu-noble-run-tiny
-      run-image: "paketobuildpacks/ubuntu-noble-run-tiny@sha256:dc90cbdbbff35916ff5a26409f29f0525cbc7fa76cc317adca856c4127ebf2ba"
-      registry: "ghcr.io"
-      publish: ${{ needs.detect-changes.outputs.publishable == 'true' }}
-      platforms: ${{ needs.detect-changes.outputs.platforms }}
-      reuse-run: ${{ contains(fromJSON(needs.detect-changes.outputs.queue-images), 'application-server') && needs.detect-changes.outputs.queue-run || '' }}
-      scan-images: ${{ needs.detect-changes.outputs.release-preflight != 'true' }}
 
   Build:
     uses: ./.github/workflows/ci-build.yml
@@ -941,19 +946,17 @@ jobs:
     permissions:
       contents: read
 
+  # Every image of the run: one build job per platform and one manifest job. The application-server
+  # image is built from the package job's executable JAR, so the job waits for it.
+  # The `preview` label and the host boot smoke need every image at the head tag; unchanged images
+  # are aliased here. Other runs' image builds stay path-filtered.
   Docker:
     uses: ./.github/workflows/ci-docker-build.yml
-    needs: [detect-changes, vulnerability-database]
-    # A preview and the host boot smoke need every image at the head tag; unchanged images are
-    # aliased here and the application image is built by Build. Other runs' image builds stay
-    # path-filtered.
+    needs: [detect-changes, vulnerability-database, server-package]
     if: |
-      !cancelled() && needs.detect-changes.result == 'success' && (needs.vulnerability-database.result == 'success' || needs.vulnerability-database.result == 'skipped') &&
-      needs.detect-changes.outputs.should_skip != 'true' && needs.detect-changes.outputs.draft != 'true' && needs.detect-changes.outputs.images == 'true' && (
-        needs.detect-changes.outputs.unfiltered == 'true' ||
-        needs.detect-changes.outputs.head-images == 'true' ||
-        needs.detect-changes.outputs.any-code == 'true' ||
-        needs.detect-changes.outputs.ci-config == 'true'
+      !cancelled() && needs.detect-changes.result == 'success' && (needs.vulnerability-database.result == 'success' || needs.vulnerability-database.result == 'skipped') && (
+        (needs.detect-changes.outputs.should_skip != 'true' && needs.detect-changes.outputs.draft != 'true' && needs.detect-changes.outputs.images == 'true' && (needs.detect-changes.outputs.unfiltered == 'true' || needs.detect-changes.outputs.head-images == 'true' || needs.detect-changes.outputs.any-code == 'true' || needs.detect-changes.outputs.ci-config == 'true')) ||
+        (needs.detect-changes.outputs.draft != 'true' && (needs.server-package.result == 'success' || (needs.server-package.result == 'skipped' && needs.detect-changes.outputs.queue-images-complete == 'true')) && needs.detect-changes.outputs.images == 'true' && (needs.detect-changes.outputs.application-server-image == 'true' || needs.detect-changes.outputs.supported-host-smoke == 'true' || needs.detect-changes.outputs.all-images == 'true'))
       )
     permissions:
       contents: read
@@ -974,18 +977,26 @@ jobs:
       agent_images_changed: ${{ (needs.detect-changes.outputs.agent-images == 'true' || needs.detect-changes.outputs.docker-config == 'true' || needs.detect-changes.outputs.all-images == 'true') && 'true' || 'false' }}
       postgres_image_changed: ${{ (needs.detect-changes.outputs.postgres-image == 'true' || needs.detect-changes.outputs.docker-config == 'true' || needs.detect-changes.outputs.all-images == 'true') && 'true' || 'false' }}
       alias_base: ${{ needs.detect-changes.outputs.alias-base }}
+      dockerfile_images: ${{ (needs.detect-changes.outputs.should_skip != 'true' && needs.detect-changes.outputs.draft != 'true' && needs.detect-changes.outputs.images == 'true' && (needs.detect-changes.outputs.unfiltered == 'true' || needs.detect-changes.outputs.head-images == 'true' || needs.detect-changes.outputs.any-code == 'true' || needs.detect-changes.outputs.ci-config == 'true')) && 'true' || 'false' }}
+      application_server_image: ${{ (needs.detect-changes.outputs.draft != 'true' && (needs.server-package.result == 'success' || (needs.server-package.result == 'skipped' && needs.detect-changes.outputs.queue-images-complete == 'true')) && needs.detect-changes.outputs.images == 'true' && (needs.detect-changes.outputs.application-server-image == 'true' || needs.detect-changes.outputs.supported-host-smoke == 'true' || needs.detect-changes.outputs.all-images == 'true')) && 'true' || 'false' }}
+      application-artifact: server-build-${{ github.run_id }}
+      project-descriptor: "server/application/project.toml"
+      # renovate: datasource=docker depName=paketobuildpacks/ubuntu-noble-run-tiny
+      run-image: "paketobuildpacks/ubuntu-noble-run-tiny@sha256:dc90cbdbbff35916ff5a26409f29f0525cbc7fa76cc317adca856c4127ebf2ba"
 
   Supported-host-smoke:
     name: "Supported-host boot smoke"
-    # `Docker` publishes no output this job reads, but it is what puts `postgres:<head sha>` in the
-    # registry — by building it, or by aliasing the base image when the diff left it alone.
-    needs: [detect-changes, application-server-image, Docker]
+    # `Docker` builds the application-server image this job boots by digest, and puts the other
+    # images at the head tag — by building them, or by aliasing the base image when the diff left
+    # one alone.
+    needs: [detect-changes, Docker]
     # A fork pull request builds its images without publishing them, so there is nothing to pull
     # and no boot to check; the release path exercises a fork's install path once it is on `main`.
     if: >-
       needs.detect-changes.outputs.head-images == 'true' &&
       needs.detect-changes.outputs.should_skip != 'true' &&
-      needs.detect-changes.outputs.supported-host-smoke == 'true'
+      needs.detect-changes.outputs.supported-host-smoke == 'true' &&
+      needs.Docker.outputs.application-server-digest != ''
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
@@ -1017,7 +1028,7 @@ jobs:
       - name: Boot the operator installation path
         working-directory: docker/self-host
         env:
-          APPLICATION_DIGEST: ${{ needs.application-server-image.outputs.manifest-digest }}
+          APPLICATION_DIGEST: ${{ needs.Docker.outputs.application-server-digest }}
           AGENT_PI_DIGEST: ${{ steps.images.outputs.agent-pi-digest }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
@@ -1039,13 +1050,31 @@ jobs:
             --wait-timeout 600 postgres nats-server application-server application-worker
           node ../../scripts/sandbox-isolation-probe.ts --env-file .env --env-file smoke-lock.env
 
+  # The chart on real clusters with this run's images, when the chart or the sandbox runtime changed,
+  # and on every main commit. `Docker` puts every image under the head commit's tag, by building it or,
+  # in a pull request, by aliasing the base image; a fork publishes none, so there is nothing to install.
+  Kubernetes:
+    needs: [detect-changes, Docker]
+    if: >-
+      !cancelled() && needs.Docker.result == 'success' &&
+      needs.detect-changes.outputs.should_skip != 'true' &&
+      needs.detect-changes.outputs.publishable == 'true' &&
+      (github.event_name == 'push' || needs.detect-changes.outputs.kubernetes == 'true')
+    uses: ./.github/workflows/ci-kubernetes.yml
+    permissions:
+      contents: read
+    with:
+      commit: ${{ github.event.pull_request.head.sha || github.sha }}
+      # The arm64 clusters run on main only, which has the arm64 images of its merge group.
+      arm64: ${{ github.event_name == 'push' && contains(needs.detect-changes.outputs.platforms, 'linux/arm64') }}
+
   # Validate the built images before release; signatures and attestations are added at publication.
   # Every release candidate needs evidence for its own tree, including a merge group's aggregate.
   # release-management.mdx owns the evidence contract.
   Release-preflight:
     name: "Release evidence preflight"
-    needs: [detect-changes, application-server-image, Docker, vulnerability-database]
-    if: ${{ !cancelled() && needs.detect-changes.result == 'success' && (needs.vulnerability-database.result == 'success' || needs.vulnerability-database.result == 'skipped') && needs.application-server-image.result == 'success' && needs.Docker.result == 'success' && (needs.detect-changes.outputs.release-preflight == 'true') }}
+    needs: [detect-changes, Docker, vulnerability-database]
+    if: ${{ !cancelled() && needs.detect-changes.result == 'success' && (needs.vulnerability-database.result == 'success' || needs.vulnerability-database.result == 'skipped') && needs.Docker.result == 'success' && (needs.detect-changes.outputs.release-preflight == 'true') }}
     timeout-minutes: 45
     runs-on: ubuntu-latest
     permissions:
@@ -1116,12 +1145,10 @@ jobs:
       [
         detect-changes,
         vulnerability-database,
-        gradle-wrapper,
         workflow-lint,
         zizmor,
         Quality,
         server-package,
-        application-server-image,
         Build,
         upstream-images,
         Security,
@@ -1130,6 +1157,7 @@ jobs:
         Compose,
         Docker,
         Supported-host-smoke,
+        Kubernetes,
         Release-preflight,
       ]
     if: always()
@@ -1144,7 +1172,6 @@ jobs:
           echo "zizmor:        ${{ needs.zizmor.result }}"
           echo "Quality:        ${{ needs.Quality.result }}"
           echo "Package:        ${{ needs.server-package.result }}"
-          echo "Server image:   ${{ needs.application-server-image.result }}"
           echo "Build:          ${{ needs.Build.result }}"
           echo "Upstream:       ${{ needs.upstream-images.result }}"
           echo "Security:       ${{ needs.Security.result }}"
@@ -1153,6 +1180,7 @@ jobs:
           echo "Compose:        ${{ needs.Compose.result }}"
           echo "Docker:         ${{ needs.Docker.result }}"
           echo "Host smoke:     ${{ needs.Supported-host-smoke.result }}"
+          echo "Kubernetes:     ${{ needs.Kubernetes.result }}"
           echo "Preflight:      ${{ needs.Release-preflight.result }}"
           echo "Release candidate: ${{ needs.detect-changes.outputs.release-candidate == 'true' }}"
 

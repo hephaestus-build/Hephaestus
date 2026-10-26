@@ -48,6 +48,7 @@ import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mock.env.MockEnvironment;
+import org.springframework.web.reactive.function.client.WebClient;
 
 @ExtendWith(MockitoExtension.class)
 @Tag("unit")
@@ -107,7 +108,8 @@ class WorkspaceProvisioningServiceTest {
                 workspaceMembershipService,
                 connectionService,
                 List.of(),
-                new ScmServerEndpointPolicy(new MockEnvironment()));
+                new ScmServerEndpointPolicy(new MockEnvironment(), WebClient.builder()),
+                WebClient.builder());
     }
 
     @Test
@@ -251,7 +253,8 @@ class WorkspaceProvisioningServiceTest {
                 workspaceMembershipService,
                 connectionService,
                 List.of(),
-                new ScmServerEndpointPolicy(new MockEnvironment()));
+                new ScmServerEndpointPolicy(new MockEnvironment(), WebClient.builder()),
+                WebClient.builder());
         when(workspaceRepository.findAllByAccountLoginIgnoreCase("hephaestustest"))
                 .thenReturn(List.of(gitlabWorkspace, githubDuplicate));
         when(connectionService.findActive(10L, IntegrationKind.GITLAB)).thenReturn(Optional.of(mock(Connection.class)));
@@ -284,7 +287,8 @@ class WorkspaceProvisioningServiceTest {
                     workspaceMembershipService,
                     connectionService,
                     List.of(),
-                    new ScmServerEndpointPolicy(environment));
+                    new ScmServerEndpointPolicy(environment, WebClient.builder()),
+                    WebClient.builder());
             gitlab.enqueue(new MockResponse.Builder()
                     .addHeader("Content-Type", "application/json")
                     .body("{\"id\":18024,\"username\":\"ga84xah\",\"name\":\"Student\""

@@ -1,6 +1,6 @@
 # ADR 0035: Pull request previews are label-gated and driven from the default branch
 
-**Status:** Accepted (amended 2026-09-03 #1719 — agent execution host superseded by [0041](0041-compose-1x-kubernetes-2.md); 2026-09-17 — previews only for pull requests targeting `main`, and the concurrency groups; 2026-10-16 — stacked previews restored; 2026-10-18 — pushes deploy on CI completion)
+**Status:** Accepted (amended 2026-09-03 #1719 — agent execution host superseded by [0041](0041-compose-1x-kubernetes-2.md); 2026-09-17 — previews only for pull requests targeting `main`, and the concurrency groups; 2026-10-16 — stacked previews restored; 2026-10-18 — pushes deploy on CI completion; 2026-10-25 — the Coolify preview path goes, [ADR 0058](0058-the-helm-chart-is-the-only-supported-deployment-from-1-0.md), and the mechanism is superseded by [ADR 0059](0059-previews-run-on-the-staging-cluster.md))
 **Date:** 2026-08-28
 **Authors:** Felix T.J. Dietrich
 **Builds on:** [ADR 0037](0037-node-24-and-pnpm-12-are-the-javascript-toolchain.md) (the runtime the controller is written for)
@@ -273,3 +273,20 @@ published. Triggering on image publication would need either a registry event, w
 This update also corrects a fact in § Decision. Converting a pull request to draft does not tear
 the stack down. Cleanup runs only when the label is removed or the pull request closes, and a draft
 previews like any other pull request (`docs/contributor/ci-cd.mdx` § Preview deployments).
+
+## Update — 2026-10-25: the Coolify preview path goes ([ADR 0058](0058-the-helm-chart-is-the-only-supported-deployment-from-1-0.md))
+
+Under ADR 0058 § Supported deployment, a Coolify preview tests a Compose topology that the project no longer ships.
+The project deletes the Coolify preview path, its scripts, and its workflows.
+Previews return as one namespace for each pull request on the staging k3s, as the next update and ADR 0059 state.
+Until then, pull requests have no preview.
+
+## Update — 2026-10-25: previews run on the staging cluster ([ADR 0059](0059-previews-run-on-the-staging-cluster.md))
+
+ADR 0059 supersedes the mechanism of this decision.
+A preview is a namespace on the staging k3s, and Flux Operator reconciles it from the list of labelled pull requests.
+These parts no longer apply: the Coolify deployment, the synthetic webhook, the admission and lifecycle concurrency groups, the protected-path and Compose render checks, the attestation check, the author-association and head rechecks, and the copy of staging's data.
+The mechanism parts of the updates of 2026-09-17, 2026-10-16, and 2026-10-18 also no longer apply.
+ADR 0059 § What changes from ADR 0035 lists the policy changes: drafts lose their preview, and a push can make a preview unavailable while CI publishes.
+
+This decision keeps its label policy. ADR 0059 § What stays from ADR 0035 owns the kept policy.

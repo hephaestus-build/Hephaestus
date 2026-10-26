@@ -106,6 +106,14 @@ mock.module("node:child_process", { exports: {
 					),
 				);
 				assert.match(readFileSync(output, "utf8"), /^previous-app=.*@sha256:[a-f0-9]{64}$/mu);
+				assert.match(
+					readFileSync(output, "utf8"),
+					new RegExp(`^previous-version=${version}$`, "mu"),
+				);
+				assert.match(
+					readFileSync(output, "utf8"),
+					/^previous-agent=.*\/agent-pi@sha256:[a-f0-9]{64}$/mu,
+				);
 				assert.match(readFileSync(output, "utf8"), /^candidate-app=.*@sha256:[a-f0-9]{64}$/mu);
 			} finally {
 				rmSync(directory, { recursive: true, force: true });
@@ -354,7 +362,15 @@ mock.module("node:child_process", { exports: {
 					"postgres-image",
 					...args,
 				],
-				{ encoding: "utf8", timeout: 15_000, env: process.env },
+				{
+					encoding: "utf8",
+					timeout: 15_000,
+					env: {
+						...process.env,
+						PREVIOUS_VERSION: "0.94.7",
+						PREVIOUS_AGENT_IMAGE: "agent-image",
+					},
+				},
 			);
 			assert.equal(result.status, 1, result.stdout + result.stderr);
 			assert.ok(result.stderr.includes(expectedError), result.stderr);
@@ -372,3 +388,13 @@ mock.module("node:child_process", { exports: {
 		}
 	});
 }
+
+await test("the latest path refuses to run without the previous release version", () => {
+	const result = spawnSync(
+		process.execPath,
+		["scripts/release-upgrade-test.ts", "old-image", "target-image", "postgres-image", "latest"],
+		{ encoding: "utf8", timeout: 15_000, env: { ...process.env, PREVIOUS_VERSION: "" } },
+	);
+	assert.equal(result.status, 1, result.stdout + result.stderr);
+	assert.match(result.stderr, /The latest path needs PREVIOUS_VERSION/u);
+});

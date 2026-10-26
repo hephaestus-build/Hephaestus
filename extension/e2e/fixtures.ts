@@ -1,3 +1,5 @@
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 
 import {
@@ -10,6 +12,8 @@ import {
 	type Worker,
 } from "@playwright/test";
 import { z } from "zod";
+
+import { required } from "~/testing/required";
 
 import {
 	gitHubIssue,
@@ -29,7 +33,10 @@ import {
 declare const chrome: {
 	scripting: { getRegisteredContentScripts: () => Promise<unknown[]> };
 	tabs: { query: (query: { url: string }) => Promise<{ id?: number }[]> };
-	runtime: { sendMessage: (message: unknown) => Promise<unknown> };
+	runtime: {
+		sendMessage: (message: unknown) => Promise<unknown>;
+		getContexts: (filter: { contextTypes: string[] }) => Promise<{ documentUrl?: string }[]>;
+	};
 	permissions: { remove: (permissions: { origins: string[] }) => Promise<boolean> };
 };
 
@@ -41,8 +48,8 @@ export const SERVER_URL = process.env.E2E_SERVER_URL ?? "http://127.0.0.1:8080";
 /** Only used for links out; the suite never loads it. */
 export const WEB_APP_URL = process.env.E2E_WEB_APP_URL ?? "http://localhost:4200";
 
-async function fulfilProviders(context: BrowserContext): Promise<void> {
-	await context.route(`${GITLAB_ORIGIN}/**`, async (route) => {
+async function fulfilProviders(page: Page): Promise<void> {
+	await page.route(`${GITLAB_ORIGIN}/**`, async (route) => {
 		const url = new URL(route.request().url());
 		let body: string;
 		if (url.pathname.endsWith("/-/merge_requests")) {
@@ -59,7 +66,7 @@ async function fulfilProviders(context: BrowserContext): Promise<void> {
 		}
 		await route.fulfill({ contentType: "text/html", body });
 	});
-	await context.route(`${GITHUB_ORIGIN}/**`, async (route) => {
+	await page.route(`${GITHUB_ORIGIN}/**`, async (route) => {
 		const url = new URL(route.request().url());
 		let body = gitHubRepositoryHome();
 		if (/\/(?:pulls|issues)$/u.test(url.pathname)) {
@@ -77,14 +84,71 @@ async function fulfilProviders(context: BrowserContext): Promise<void> {
 	});
 }
 
+/**
+ * A tab for the fixture provider pages, which it serves itself. The routes belong to the tab: a context route
+ * also intercepts the windows the extension opens, and Playwright can leave their requests paused.
+ */
+export async function providerPage(context: BrowserContext): Promise<Page> {
+	const page = await context.newPage();
+	await fulfilProviders(page);
+	return page;
+}
+
+const profiles = new WeakMap<BrowserContext, string>();
+
+/**
+ * Runs `use` on the extension page that the worker opened in its own window, once Chrome has loaded it. Playwright attaches to a
+ * new window while Chrome creates it. When the worker navigates the window during that attach, Playwright can miss
+ * the commit and never report the page, although the page loads and runs. A second connection attaches to the
+ * loaded window instead.
+ */
+export async function withExtensionWindow(
+	context: BrowserContext,
+	worker: Worker,
+	address: RegExp,
+	use: (window: Page) => Promise<void>,
+): Promise<void> {
+	await expect
+		.poll(async () => {
+			const tabs = await worker.evaluate(async () =>
+				chrome.runtime.getContexts({ contextTypes: ["TAB"] }),
+			);
+			return tabs.some((tab) => tab.documentUrl !== undefined && address.test(tab.documentUrl));
+		})
+		.toBe(true);
+	const profile = required(profiles.get(context), "browser profile");
+	// Chrome writes the port it chose for `--remote-debugging-port=0` to this file.
+	const activePort = await readFile(path.join(profile, "DevToolsActivePort"), "utf8");
+	const port = required(activePort.split("\n")[0], "DevTools port");
+	const devtools = await chromium.connectOverCDP(`http://127.0.0.1:${port}`);
+	try {
+		await use(
+			required(
+				devtools
+					.contexts()
+					.flatMap((connected) => connected.pages())
+					.find((page) => address.test(page.url())),
+				"extension window",
+			),
+		);
+	} finally {
+		await devtools.close();
+	}
+}
+
 export const test = base.extend<{ context: BrowserContext; worker: Worker }>({
 	// oxlint-disable-next-line no-empty-pattern -- Playwright reads a fixture's dependencies from this pattern; it has none.
 	context: async ({}, use) => {
-		const context = await chromium.launchPersistentContext("", {
+		const profile = await mkdtemp(path.join(os.tmpdir(), "hephaestus-extension-"));
+		const context = await chromium.launchPersistentContext(profile, {
 			channel: "chromium",
-			args: [`--disable-extensions-except=${BUNDLE}`, `--load-extension=${BUNDLE}`],
+			args: [
+				`--disable-extensions-except=${BUNDLE}`,
+				`--load-extension=${BUNDLE}`,
+				"--remote-debugging-port=0",
+			],
 		});
-		await fulfilProviders(context);
+		profiles.set(context, profile);
 		// The worker registers the provider script for the granted origins as it starts; a page
 		// opened before that would never get it.
 		const worker = context.serviceWorkers()[0] ?? (await context.waitForEvent("serviceworker"));
@@ -100,6 +164,7 @@ export const test = base.extend<{ context: BrowserContext; worker: Worker }>({
 			.toBe(1);
 		await use(context);
 		await context.close();
+		await rm(profile, { recursive: true, force: true });
 	},
 	worker: async ({ context }, use) => {
 		const worker = context.serviceWorkers()[0] ?? (await context.waitForEvent("serviceworker"));

@@ -46,14 +46,23 @@ jobs:
       matrix:
         path: [latest, baseline, refusal]
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.candidate-source-sha || inputs.candidate-sha || github.sha }}
+          # The release tags select the previous release on a scheduled or manual run.
+          fetch-depth: 0
           persist-credentials: false
 
-      - uses: ./.github/actions/setup-toolchain
+      # Only the latest path reads the migration guide and the NATS stream through the locked dependencies.
+      - if: matrix.path == 'latest'
+        uses: ./.github/actions/setup-toolchain
+        with:
+          install: "frozen"
+
+      - if: matrix.path != 'latest'
+        uses: ./.github/actions/setup-toolchain
         with:
           install: "none"
 
@@ -81,6 +90,8 @@ jobs:
         env:
           UPGRADE_PATH: ${{ matrix.path }}
           PREVIOUS_APP: ${{ steps.images.outputs.previous-app }}
+          PREVIOUS_VERSION: ${{ steps.images.outputs.previous-version }}
+          PREVIOUS_AGENT_IMAGE: ${{ steps.images.outputs.previous-agent }}
           CANDIDATE_APP: ${{ steps.images.outputs.candidate-app }}
           POSTGRES_IMAGE: ${{ steps.images.outputs.postgres }}
         run: node scripts/release-upgrade-test.ts "$PREVIOUS_APP" "$CANDIDATE_APP" "$POSTGRES_IMAGE" "$UPGRADE_PATH"

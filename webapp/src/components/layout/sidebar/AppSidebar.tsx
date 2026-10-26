@@ -3,6 +3,7 @@ import type { MouseEvent, ReactNode } from "react";
 
 import type { IntegrationCatalogEntry, WorkspaceListItem, Workspace } from "@/api/types.gen";
 import { NoWorkspace } from "@/components/common/NoWorkspace";
+import { Button } from "@/components/ui/button";
 import {
 	Sidebar,
 	SidebarContent,
@@ -16,6 +17,13 @@ import {
 	SidebarTrigger,
 	useSidebar,
 } from "@/components/ui/sidebar";
+import {
+	PROBLEM_COPY,
+	type ProblemCopy,
+	problemIsRetryable,
+	problemKindOf,
+	problemStatusOf,
+} from "@/lib/problem-detail";
 
 import { NavAdmin } from "./NavAdmin";
 import { NavContextHeader } from "./NavContextHeader";
@@ -44,6 +52,8 @@ export interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
 	/** The verified target identity remains even while its metadata is pending or refused. */
 	administrationWorkspaceSlug?: string;
 	administrationWorkspace?: Pick<Workspace, "displayName" | "providerType">;
+	/** Why the administration workspace's details did not load, and how to read them again. Read only without those details. */
+	administrationWorkspaceError?: { error: unknown; onRetry: () => void };
 	onWorkspaceChange?: (workspace: WorkspaceListItem) => void;
 	onAddWorkspace?: () => void;
 	workspacesLoading?: boolean;
@@ -62,6 +72,7 @@ export function AppSidebar({
 	activeWorkspace,
 	administrationWorkspace,
 	administrationWorkspaceSlug,
+	administrationWorkspaceError,
 	onWorkspaceChange,
 	onAddWorkspace,
 	workspacesLoading = false,
@@ -103,7 +114,27 @@ export function AppSidebar({
 				scmProviderType={administrationWorkspace.providerType === "GITLAB" ? "GITLAB" : "GITHUB"}
 			/>
 		);
-	} else if (workspacesLoading) {
+	} else if (!workspacesLoading && administrationWorkspaceError !== undefined) {
+		// The page reads the same workspace and announces the failure as an alert. The sidebar only
+		// says why its links are missing, so the reader does not hear the failure twice.
+		const { error, onRetry } = administrationWorkspaceError;
+		const copy: ProblemCopy = PROBLEM_COPY[problemKindOf(problemStatusOf(error))];
+		sidebarContent = (
+			<SidebarGroup className="gap-2 px-4 group-data-[collapsible=icon]:hidden">
+				<p className="text-sm text-muted-foreground">
+					{copy.retitle?.("the workspace details") ?? "We could not load the workspace details"}
+				</p>
+				{problemIsRetryable(error) && (
+					<div>
+						<Button variant="outline" size="xs" onClick={onRetry}>
+							Retry
+						</Button>
+					</div>
+				)}
+			</SidebarGroup>
+		);
+	} else if (workspacesLoading || administrationWorkspaceSlug !== undefined) {
+		// Also an administration target whose details have neither arrived nor failed: still loading.
 		sidebarContent = (
 			<SidebarGroup>
 				<SidebarMenu>
@@ -113,12 +144,6 @@ export function AppSidebar({
 						</SidebarMenuItem>
 					))}
 				</SidebarMenu>
-			</SidebarGroup>
-		);
-	} else if (administrationWorkspaceSlug !== undefined) {
-		sidebarContent = (
-			<SidebarGroup>
-				<p className="text-sm text-muted-foreground">Workspace details are unavailable.</p>
 			</SidebarGroup>
 		);
 	} else if (activeWorkspace) {

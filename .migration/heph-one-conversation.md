@@ -68,13 +68,6 @@ Then select **Reconnect Slack** in each Hephaestus workspace that uses it.
 Until then, Heph cannot add 👀 to a question.
 See [Update an existing Slack app](https://docs.hephaestus.build/admin/production-setup#update-an-existing-slack-app).
 
-**Preview environments.**
-
-The seed policy now parks copied Heph work before a preview can run it.
-The seed loader rejects the earlier seed marker.
-Save any preview changes that you need, then recreate the preview through the normal preview procedure.
-Do not change the marker or rerun the seed policy over new preview work.
-
 **Configuration.**
 
 - With Slack enabled, the application server now answers Slack interactivity, the App Home and Heph buttons.

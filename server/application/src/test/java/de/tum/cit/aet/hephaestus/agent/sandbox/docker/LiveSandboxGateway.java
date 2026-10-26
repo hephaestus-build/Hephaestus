@@ -15,17 +15,26 @@ import org.springframework.web.context.support.AnnotationConfigWebApplicationCon
 import org.springframework.web.servlet.DispatcherServlet;
 import org.springframework.web.servlet.config.annotation.DelegatingWebMvcConfiguration;
 
-/** Runs the production transfer controllers for Docker transport tests. */
+/** Runs the production transfer controllers for sandbox transport tests. */
 public final class LiveSandboxGateway implements AutoCloseable {
     private static final Logger log = LoggerFactory.getLogger(LiveSandboxGateway.class);
     private final SandboxGatewaySessions sessions = new SandboxGatewaySessions();
     private final Tomcat tomcat = new Tomcat();
     private final Path directory;
 
+    /** On a free port, as the Docker tests use it. */
     public LiveSandboxGateway() throws Exception {
+        this(0);
+    }
+
+    /**
+     * On the given port, or a free one for {@code 0}. The connector binds every address of this host, so a sandbox
+     * reaches it at whatever address its runtime gives it.
+     */
+    public LiveSandboxGateway(int port) throws Exception {
         directory = Files.createTempDirectory("live-sandbox-gateway-");
         tomcat.setBaseDir(directory.toString());
-        tomcat.setPort(0);
+        tomcat.setPort(port);
         tomcat.getConnector();
         var context = tomcat.addContext("", directory.toString());
         var spring = new AnnotationConfigWebApplicationContext();
@@ -42,8 +51,7 @@ public final class LiveSandboxGateway implements AutoCloseable {
                 },
                 null);
         tomcat.start();
-        // Runs on the host, so a sandbox reaches it through host.docker.internal, which needs internet access.
-        log.info("Live sandbox gateway: http://host.docker.internal:{}/internal/llm/runtime", port());
+        log.info("Live sandbox gateway listening on port {} of every address (requested port {})", port(), port);
     }
 
     public int port() {

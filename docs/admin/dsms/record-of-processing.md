@@ -335,6 +335,15 @@ Pending delivery blocks both passes. Row deletion sets the job reference of a re
 1. Monitor the backlog.
 2. For individual requests, use verified person erasure.
 
+Evidence-copy receipts (`person_evidence_copy`)
+
+A receipt records the copy of review inputs that one attempt made on a worker volume. It names the provider identities and repositories that the copy contains, and the earlier jobs whose words it copied. The receipt outlives the copy. While its review job row is retained, Hephaestus uses it for two purposes:
+
+- Person erasure finds the copies and the copied words of the erased person.
+- A later review can copy the job's words only while the receipt vouches for them. An erased or purged receipt keeps refusing those words.
+
+When retention deletes the review job row, 90 days after the job ends (`AGENT_ROW_RETENTION`), neither purpose remains: no result reaches the receipt any more. The same retention run asks the worker volume that holds the copy to confirm its removal. The worker then clears the identities, and a later run deletes the receipt. From then on, a capture that copies history whose chain reaches that job can no longer vouch for all of the history's words, so a review that copies from that capture keeps the facts and leaves out the prose. Erasure still finds those words through the later receipts, which keep the identities they inherited. A worker volume that is offline keeps the identities until it returns and confirms. Before that, person erasure clears the identities of the receipts that name the person, and workspace purge clears all receipts of the workspace.
+
 Source evidence retention
 
 Retention separates durable verification results from temporary worker inputs. The [source governance decision](./item-source-governance.md) owns the retention and erasure boundaries. A digest is an integrity identifier, not authorization. Extended evaluation retention requires a separate approved purpose and tenant-safe authorization.
@@ -488,8 +497,10 @@ Federated identity links to GitHub user ID / gitlab.lrz.de `sub` minimize collec
 
 PostgreSQL data at rest relies on the host's filesystem and access-control protections. The general store has no application-level at-rest encryption. Two platform-level keys seal secrets at rest with AES-256-GCM:
 
-- `HEPHAESTUS_SECURITY_ENCRYPTION_KEY` protects workspace LLM API keys, login-provider OAuth client secrets, Outline webhook signing secrets, sandbox job tokens and JWT signing keys.
+- `HEPHAESTUS_SECURITY_ENCRYPTION_KEY` protects LLM API keys, login-provider OAuth client secrets, Outline webhook signing secrets and JWT signing keys.
 - `HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY` protects integration connection credentials. These include GitHub and GitLab tokens, Slack bot tokens, Outline API keys, and their OAuth access and refresh tokens. This key is versioned and supports online rotation.
+
+[What the database seals](../secret-custody.mdx#what-the-database-seals) owns the full list.
 
 Compromise of the first key exposes workspace secrets and session-token signing. Compromise of the second exposes every connected provider's credential. Key injection is deployment-specific and requires verification against the active role.
 

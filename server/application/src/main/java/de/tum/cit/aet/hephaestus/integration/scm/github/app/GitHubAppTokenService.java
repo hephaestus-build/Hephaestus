@@ -71,7 +71,7 @@ public class GitHubAppTokenService {
     // This is an in-memory set that all threads see immediately, bypassing DB transaction isolation.
     private final Set<Long> suspendedInstallations = ConcurrentHashMap.newKeySet();
 
-    public GitHubAppTokenService(GitHubProperties gitHubProperties) {
+    public GitHubAppTokenService(GitHubProperties gitHubProperties, WebClient.Builder webClients) {
         long appId = gitHubProperties.app().id();
         Resource privateKeyRes = gitHubProperties.app().privateKeyLocation();
         String privateKeyPem = gitHubProperties.app().privateKey();
@@ -79,7 +79,7 @@ public class GitHubAppTokenService {
         this.credentialsConfigured = isKeyMaterialPresent(appId, privateKeyRes, privateKeyPem);
         this.privateKey = credentialsConfigured ? loadKey(privateKeyRes, privateKeyPem) : generateEphemeralRsaKey();
         HttpClient httpClient = HttpClient.create().resolver(DefaultAddressResolverGroup.INSTANCE);
-        this.webClient = WebClient.builder()
+        this.webClient = webClients
                 .clientConnector(new ReactorClientHttpConnector(httpClient))
                 .baseUrl(GITHUB_API_BASE_URL)
                 .defaultHeader(HttpHeaders.ACCEPT, "application/vnd.github+json")

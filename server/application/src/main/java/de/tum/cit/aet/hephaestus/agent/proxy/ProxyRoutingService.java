@@ -61,11 +61,11 @@ class ProxyRoutingService {
         var job = agentJobRepository
                 .findById(jwt.jobId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Review attempt unavailable"));
+        if (job.getWorkspaceId() != jwt.workspaceId())
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Review attempt unavailable");
         if (job.getStatus() != ReviewJobStatus.RUNNING
                 || job.getAttempt() != jwt.attempt()
-                || job.getWorkspaceId() != jwt.workspaceId()
-                || !Objects.equals(job.getWorkerId(), identity.workerId()))
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Review attempt unavailable");
+                || !Objects.equals(job.getWorkerId(), identity.workerId())) throw attemptEnded();
         var snapshot = ConfigSnapshot.fromJson(job.getConfigSnapshot(), objectMapper);
         // The live checks above decide whether this attempt may call at all; the signed deadline decides until when.
         Instant workDeadline = jwt.workDeadline();
@@ -95,7 +95,12 @@ class ProxyRoutingService {
                 workerId,
                 kind,
                 model == null ? FrozenCharge.UNKNOWN : FrozenCharge.of(model));
-        if (!running) throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Review attempt unavailable");
+        if (!running) throw attemptEnded();
+    }
+
+    /** The refusal that the authentication filter also gives an attempt that no longer runs, so its runner stops. */
+    static ResponseStatusException attemptEnded() {
+        return new ResponseStatusException(HttpStatus.CONFLICT, JobTokenAuthenticationFilter.ATTEMPT_ENDED);
     }
 
     /**

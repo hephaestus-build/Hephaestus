@@ -2,6 +2,8 @@ package de.tum.cit.aet.hephaestus.practices.review;
 
 import de.tum.cit.aet.hephaestus.evidence.CitationSide;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
+import de.tum.cit.aet.hephaestus.practices.DefinitionTestFixtures;
+import de.tum.cit.aet.hephaestus.practices.PracticeVersionService;
 import de.tum.cit.aet.hephaestus.practices.review.model.Review;
 import de.tum.cit.aet.hephaestus.practices.review.model.ReviewItem;
 import de.tum.cit.aet.hephaestus.practices.review.model.ReviewPractice;
@@ -23,6 +25,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ResultCandidate;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultEvidence;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentId;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewItemState;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewMethod;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewOrigin;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewPracticeStatus;
@@ -49,6 +52,7 @@ public class ReviewAdmissionData {
     private final ReviewItemRepository items;
     private final JsonMapper json;
     private final JdbcClient jdbc;
+    private final PracticeVersionService versions;
 
     public record Pending(
             ReviewIntegrationData.Scenario scenario,
@@ -135,6 +139,47 @@ public class ReviewAdmissionData {
                 .detail(detail)
                 .build());
         return new Pending(scenario, review, job, developerId);
+    }
+
+    /** Adds another practice to the pending review, withheld for {@code reason} without running. */
+    @Transactional
+    public void withheld(Pending pending, String reason) {
+        var scenario = pending.scenario();
+        var practice = versions.create(new PracticeVersionService.NewPractice(
+                scenario.workspace(),
+                "s5-withheld-" + UUID.randomUUID().toString().substring(0, 8),
+                scenario.item().getKind(),
+                DefinitionTestFixtures.definition(),
+                null,
+                0,
+                scenario.account().getId()));
+        var pinned = practices
+                .findByWorkspaceIdAndReviewIdAndPracticeId(
+                        scenario.workspace().getId(),
+                        pending.review().getId(),
+                        scenario.practice().getId())
+                .orElseThrow();
+        practices.saveAndFlush(ReviewPractice.builder()
+                .workspaceId(scenario.workspace().getId())
+                .reviewId(pending.review().getId())
+                .practiceId(practice.getId())
+                .practiceVersionId(practice.getCurrentVersion().getId())
+                .status(ReviewPracticeStatus.WITHHELD)
+                .reason(reason)
+                .itemsListed(1)
+                .listingComplete(true)
+                .method(pinned.getMethod())
+                .build());
+        items.saveAndFlush(ReviewItem.builder()
+                .workspaceId(scenario.workspace().getId())
+                .reviewId(pending.review().getId())
+                .practiceId(practice.getId())
+                .itemId(scenario.item().getId())
+                .itemVersion(pending.review().getItemVersion())
+                .state(ReviewItemState.WITHHELD)
+                .reason(reason)
+                .detail(json.createObjectNode())
+                .build());
     }
 
     @Transactional

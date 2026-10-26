@@ -1,12 +1,13 @@
 /**
- * Writes `run-id`, the successful merge-queue CI/CD run of this push's exact commit, and `images`,
- * the JSON list of the images it published, which the push may reuse instead of rebuilding them.
- * Writes nothing when there is no such run, as after a direct push, and every image is then built.
+ * Writes `run-id`, the successful merge-queue CI/CD run of this push's exact commit, `images`, the
+ * JSON list of the images it published, which the push may reuse instead of rebuilding them, and
+ * `complete`, whether that is every image CI builds. Writes nothing when there is no such run, as
+ * after a direct push, and every image is then built.
  */
 import { appendFile } from "node:fs/promises";
 
 import { requiredEnv } from "./lib/env.ts";
-import { ghApi, resolveQueueRun } from "./resolve-server-build.ts";
+import { ghApi, imageAttestations, resolveQueueRun } from "./resolve-server-build.ts";
 
 const run = await resolveQueueRun(
 	requiredEnv(process.env, "GITHUB_REPOSITORY"),
@@ -17,6 +18,6 @@ const run = await resolveQueueRun(
 if (run !== undefined) {
 	await appendFile(
 		requiredEnv(process.env, "GITHUB_OUTPUT"),
-		`run-id=${run.runId}\nimages=${JSON.stringify(run.images)}\n`,
+		`run-id=${run.runId}\nimages=${JSON.stringify(run.images)}\ncomplete=${Object.keys(imageAttestations).every((image) => run.images.includes(image))}\n`,
 	);
 }

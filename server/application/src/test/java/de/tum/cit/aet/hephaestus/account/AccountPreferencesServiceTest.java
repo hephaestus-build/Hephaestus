@@ -15,17 +15,25 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 class AccountPreferencesServiceTest extends BaseUnitTest {
 
+    private final AccountRepository accounts = mock(AccountRepository.class);
+    private final Account account = new Account("Octocat");
+    private final AccountPreferencesService service =
+            new AccountPreferencesService(new AccountDirectoryService(accounts, Clock.systemUTC(), event -> {}));
+
+    AccountPreferencesServiceTest() {
+        account.setId(42L);
+        account.setTimeZone("Europe/Berlin");
+        when(accounts.findByIdForUpdate(42L)).thenReturn(Optional.of(account));
+        when(accounts.findById(42L)).thenReturn(Optional.of(account));
+    }
+
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     void shouldChangeAccountDeliveryChoiceWhenSettingsAreSaved(boolean enabled) {
-        var accounts = mock(AccountRepository.class);
-        var account = new Account("Octocat");
-        account.setId(42L);
-        when(accounts.findByIdForUpdate(42L)).thenReturn(Optional.of(account));
-        var result = new AccountPreferencesService(
-                        new AccountDirectoryService(accounts, Clock.systemUTC(), event -> {}))
-                .updateUserSettings(42L, new UserSettingsDTO(enabled, null));
+        var result = service.updateUserSettings(42L, new UpdateUserSettingsDTO(enabled, "Asia/Tokyo"));
         assertThat(result.practiceFeedbackDeliveryEnabled()).isEqualTo(enabled);
         assertThat(account.isFeedbackDeliveryEnabled()).isEqualTo(enabled);
+        assertThat(result.timeZone()).isEqualTo("Asia/Tokyo");
+        assertThat(account.getTimeZone()).isEqualTo("Asia/Tokyo");
     }
 }

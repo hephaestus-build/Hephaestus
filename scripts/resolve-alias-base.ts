@@ -6,6 +6,10 @@
  * nothing and belongs to no merged pull request, so the chain of bases is walked until a commit the
  * default branch contains. A run that reaches none has nothing to alias and builds every image
  * itself.
+ *
+ * A pull request aliases only from a default-branch commit whose own run has published its images.
+ * Right after a merge, the default branch's newest commit is still being built, so the run builds
+ * every image itself instead of aliasing images that do not exist yet.
  */
 import { appendFile } from "node:fs/promises";
 
@@ -19,6 +23,8 @@ export interface BaseChain {
 	compare: (base: string, head: string) => Promise<string>;
 	/** The base of the open pull request whose head is `commit`, when a pull request has that head. */
 	baseOf: (commit: string) => Promise<string | undefined>;
+	/** Whether the default branch's run of `commit` published its images; absent when aliasing nothing. */
+	published?: (commit: string) => Promise<boolean>;
 }
 
 /** A stack deeper than this, or a chain of bases that loops, is given up on rather than followed. */
@@ -33,7 +39,7 @@ export async function resolveAliasBase(
 	for (let layer = 0; commit !== undefined && layer < LAYER_LIMIT; layer += 1) {
 		const status = await chain.compare(commit, defaultBranch);
 		if (status === "identical" || status === "ahead") {
-			return commit;
+			return chain.published === undefined || (await chain.published(commit)) ? commit : undefined;
 		}
 		commit = await chain.baseOf(commit);
 	}
@@ -42,6 +48,8 @@ export async function resolveAliasBase(
 
 if (import.meta.main) {
 	const repository = requiredEnv(process.env, "GITHUB_REPOSITORY");
+	// Only a pull request aliases images; a merge group reads the base for its diff alone.
+	const aliases = process.env.ALIAS_IMAGES === "true";
 	const commit = await resolveAliasBase(
 		requiredEnv(process.env, "BASE_SHA"),
 		requiredEnv(process.env, "DEFAULT_BRANCH"),
@@ -63,6 +71,21 @@ if (import.meta.main) {
 				}
 				return undefined;
 			},
+			// The push run succeeds only after it has published every image under the commit's tag.
+			published: aliases
+				? async (head): Promise<boolean> => {
+						const runs = asRecord(
+							parseJson(
+								await output("gh", [
+									"api",
+									`repos/${repository}/actions/workflows/cicd.yml/runs?event=push&head_sha=${head}&status=success&per_page=1`,
+								]),
+							),
+							"workflow runs",
+						);
+						return asArray(runs.workflow_runs, "workflow runs").length > 0;
+					}
+				: undefined,
 		},
 	);
 	await appendFile(requiredEnv(process.env, "GITHUB_OUTPUT"), `commit=${commit ?? ""}\n`);

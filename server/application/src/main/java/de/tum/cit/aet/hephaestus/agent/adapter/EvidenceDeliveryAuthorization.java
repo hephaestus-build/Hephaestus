@@ -50,7 +50,7 @@ public class EvidenceDeliveryAuthorization implements EvidenceAuthorization {
     }
 
     @Override
-    public <T> T asOneRead(long workspaceId, SourceUsePurpose purpose, Supplier<T> read) {
+    public <T> T asOneRead(long workspaceId, Supplier<T> read) {
         return access.asOneRead(workspaceId, read);
     }
 

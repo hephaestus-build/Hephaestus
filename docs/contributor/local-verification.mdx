@@ -17,6 +17,8 @@ CI also checks release-note presence and changes against the tested merge base.
 Before you request review, run `verify`.
 `vp run` with no task name lists every task, and `vite.config.ts` is where each one is defined.
 
+On first use, the script tests in `check` download two pinned tools, Vale and oasdiff, into a local cache.
+
 ## Dependency installation
 
 After changing dependency declarations, the lockfile, package-manager settings, or declared patches,

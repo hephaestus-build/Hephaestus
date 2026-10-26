@@ -41,14 +41,15 @@ public class GitHubInstallationRepositoryEnumerationService {
     private final GitHubAppTokenService gitHubAppTokenService;
     private final WebClient webClient;
 
-    public GitHubInstallationRepositoryEnumerationService(GitHubAppTokenService gitHubAppTokenService) {
+    public GitHubInstallationRepositoryEnumerationService(
+            GitHubAppTokenService gitHubAppTokenService, WebClient.Builder webClients) {
         this.gitHubAppTokenService = gitHubAppTokenService;
 
         ExchangeStrategies strategies = ExchangeStrategies.builder()
                 .codecs(config -> config.defaultCodecs().maxInMemorySize(MAX_BUFFER_SIZE))
                 .build();
 
-        this.webClient = WebClient.builder()
+        this.webClient = webClients
                 .clientConnector(WebClientConnectors.systemDns())
                 .baseUrl(GITHUB_API_BASE_URL)
                 .defaultHeader(HttpHeaders.ACCEPT, "application/vnd.github+json")

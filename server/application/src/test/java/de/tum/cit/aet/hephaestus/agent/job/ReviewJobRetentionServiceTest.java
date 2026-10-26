@@ -9,6 +9,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceFolderPersonDataCatalog;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
@@ -32,6 +33,9 @@ class ReviewJobRetentionServiceTest extends BaseUnitTest {
     private ReviewCompositionBasisRepository basisRepository;
 
     @Mock
+    private EvidenceFolderPersonDataCatalog evidenceCopies;
+
+    @Mock
     private TransactionTemplate transactionTemplate;
 
     private SimpleMeterRegistry meterRegistry;
@@ -49,7 +53,13 @@ class ReviewJobRetentionServiceTest extends BaseUnitTest {
             return cb.doInTransaction(mock(TransactionStatus.class));
         });
         service = new ReviewJobRetentionService(
-                jobRepository, basisRepository, AGENT_PROPS, Clock.systemUTC(), transactionTemplate, meterRegistry);
+                jobRepository,
+                basisRepository,
+                evidenceCopies,
+                AGENT_PROPS,
+                Clock.systemUTC(),
+                transactionTemplate,
+                meterRegistry);
     }
 
     @Test
@@ -62,5 +72,19 @@ class ReviewJobRetentionServiceTest extends BaseUnitTest {
         var order = inOrder(basisRepository, jobRepository);
         order.verify(basisRepository, times(2)).deleteUnusable(any(), eq(BATCH_SIZE));
         order.verify(jobRepository).stripTerminalPayloads(any(), eq(BATCH_SIZE));
+    }
+
+    @Test
+    @DisplayName("receipts of deleted review jobs are retired after the rows are deleted, batch by batch")
+    void retiresReceiptsAfterDeletingOldRows() {
+        when(jobRepository.deleteUnreferencedTerminalRowsOlderThan(any(), anyInt()))
+                .thenReturn(4);
+        when(evidenceCopies.retireReceiptsOfDeletedJobs(anyInt())).thenReturn(BATCH_SIZE, 2);
+
+        service.runRetention();
+
+        var order = inOrder(jobRepository, evidenceCopies);
+        order.verify(jobRepository).deleteUnreferencedTerminalRowsOlderThan(any(), eq(BATCH_SIZE));
+        order.verify(evidenceCopies, times(2)).retireReceiptsOfDeletedJobs(BATCH_SIZE);
     }
 }

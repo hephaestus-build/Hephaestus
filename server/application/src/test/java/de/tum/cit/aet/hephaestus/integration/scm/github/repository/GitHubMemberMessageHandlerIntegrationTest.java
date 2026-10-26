@@ -79,7 +79,7 @@ class GitHubMemberMessageHandlerIntegrationTest extends BaseIntegrationTest {
 
         // Create repository
         testRepository = new Repository();
-        testRepository.setNativeId(1000663383L);
+        testRepository.setNativeId(998279771L);
         testRepository.setProvider(gitProvider);
         testRepository.setName("TestRepository");
         testRepository.setNameWithOwner("HephaestusTest/TestRepository");

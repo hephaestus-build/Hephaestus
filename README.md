@@ -23,8 +23,8 @@
 </div>
 
 Hephaestus is an open-source AI mentor for software teams.
-It checks the issues, pull requests, and reviews that your team already writes against the engineering practices that you choose.
-Each developer gets feedback with evidence and a next step.
+It checks the issues, pull and merge requests, and reviews that your team already writes against the engineering practices that your workspace adopts.
+Each developer gets feedback with evidence and, where something needs attention, a next step.
 
 Every piece of feedback names its practice and points back to the reviewed work.
 Developers can ask why, disagree, or discuss the next step.
@@ -48,7 +48,7 @@ People keep responsibility for the harder judgment and the relationships.
 > Until 1.0, a *minor* release can change configuration or the API in ways that need you to act.
 > Read the release notes before every upgrade.
 >
-> Version 1.0 makes upgrades, configuration, Compose, and the REST API predictable:
+> Version 1.0 makes upgrades, configuration, the Helm chart, and the REST API predictable:
 > [compatibility policy](https://docs.hephaestus.build/admin/compatibility-policy) ·
 > [1.0 milestone](https://github.com/hephaestus-build/Hephaestus/milestone/5).
 

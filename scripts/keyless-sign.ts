@@ -15,7 +15,19 @@ interface Dependencies {
 	random?: () => number;
 }
 
-function signingFiles(args: readonly string[]): { input: string; bundle?: string } {
+/**
+ * An OCI subject by digest: the registry keeps it immutable, so there is no file to watch. It starts
+ * with a registry name, never with `-`, so cosign cannot read it as a flag.
+ */
+const ociDigest = /^[a-z0-9][^\s@]*@sha256:[a-f0-9]{64}$/u;
+
+const isDigestSign = (args: readonly string[]) =>
+	args.length === 3 && args[0] === "sign" && args[1] === "--yes" && ociDigest.test(args[2] ?? "");
+
+function signingFiles(args: readonly string[]): { input?: string; bundle?: string } {
+	if (isDigestSign(args)) {
+		return {};
+	}
 	if (
 		args.length === 7 &&
 		args[0] === "attest" &&
@@ -23,7 +35,7 @@ function signingFiles(args: readonly string[]): { input: string; bundle?: string
 		args[2] === "--type" &&
 		args[3] === "spdxjson" &&
 		args[4] === "--predicate" &&
-		/^[^\s]+@sha256:[a-f0-9]{64}$/u.test(args[6] ?? "")
+		ociDigest.test(args[6] ?? "")
 	) {
 		return { input: args[5] ?? "" };
 	}
@@ -39,10 +51,13 @@ function signingFiles(args: readonly string[]): { input: string; bundle?: string
 			return { input, bundle };
 		}
 	}
-	throw new Error("Expected a release keyless attest or sign-blob command");
+	throw new Error("Expected a release keyless attest, sign or sign-blob command");
 }
 
-async function digest(file: string): Promise<string> {
+async function digest(file: string | undefined): Promise<string | undefined> {
+	if (file === undefined) {
+		return undefined;
+	}
 	const info = await lstat(file);
 	if (!info.isFile() || info.isSymbolicLink()) {
 		throw new Error("Signing input must be a regular file");

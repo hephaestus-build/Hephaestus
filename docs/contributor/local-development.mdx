@@ -35,7 +35,12 @@ Install and configure the following tools before you attempt a local build:
 
    After `vp install`, `vp --version` prints the pinned `vite-plus`.
 
-4. **NATS CLI (optional)** – Helpful when inspecting the webhook/sync event stream (NATS is disabled by default locally). The agent job queue runs on PostgreSQL and needs no NATS.
+4. **Helm CLI** – Required by `vp run check` and the pre-push hook: the tooling tests render the
+   chart with the real `helm` on your PATH. Install the version that
+   [`.github/actions/setup-helm/action.yml`](https://github.com/hephaestus-build/Hephaestus/blob/main/.github/actions/setup-helm/action.yml)
+   pins. That file is the one home of the version and its checksums. CI installs the same version.
+   Verify it with `helm version`.
+5. **NATS CLI (optional)** – Helpful when inspecting the webhook/sync event stream (NATS is disabled by default locally). The agent job queue runs on PostgreSQL and needs no NATS.
 
 If you push branches to the repository instead of a fork, also configure commit signing.
 [CONTRIBUTING.md § Signed Commits](https://github.com/hephaestus-build/Hephaestus/blob/main/CONTRIBUTING.md#signed-commits) has the setup.
@@ -398,6 +403,94 @@ Manual database edits are a last resort.
 - **Logins do not survive a server restart locally:** set `HEPHAESTUS_AUTH_STATE_COOKIE_KEY` (base64 32-byte. `openssl rand -base64 32`) in `server/.env` — otherwise an ephemeral per-boot key is used.
 - **Reset everything:** `vp run dev:reset` (see Running the stack). On next login the account and identity link are recreated.
 
+### Kubernetes
+
+`vp run dev:kubernetes` installs the chart on a local [k3d](https://k3d.io) cluster with the images of this checkout.
+It needs Docker with at least 10 GiB of memory, `k3d`, `kubectl`, Helm 4, the [`pack` CLI](https://github.com/buildpacks/pack/releases), `openssl` and `curl`.
+The cluster uses about 6 GiB, and a practice review 3 GiB more.
+The command checks these first and names each missing item.
+On macOS, `brew install k3d helm kubectl` installs three of the tools.
+If the `buildpacks/tap/pack` formula fails, use the `pack` release archive.
+
+The native stack (`vp run dev`) is the default inner loop.
+It reloads the webapp at once.
+Your IDE starts and debugs the JVM.
+It has no NetworkPolicy, no Jobs, no Gateway and no Kubernetes sandbox backend.
+
+Use the cluster before you push a change to one of these:
+
+- The Helm chart (`deploy/chart/`) or its script (`scripts/kubernetes-cluster.ts`).
+- The Kubernetes sandbox backend or the agent gateway of the worker.
+- A runtime role, or a setting that a role binds at start.
+- The agent or PostgreSQL image.
+
+CI runs the cluster jobs for these paths, and `vp run check:affected` reminds you of them.
+A cold `vp run dev:kubernetes` took about 5 minutes on an Apple silicon Mac, and a warm run about 3.
+Debug a defect in the native stack when you can.
+In the cluster, follow the logs of a role with the `kubectl` command that `dev:kubernetes` prints.
+
+`vp run dev:kubernetes` does these steps:
+
+1. It creates the k3d cluster `hephaestus` with two nodes and publishes port 443 on the loopback address only.
+   Port 443 must be free. The check stops the command when a program holds it.
+   It also creates a local registry, which the nodes use as a mirror of `ghcr.io`.
+2. It builds the server, webapp, agent and PostgreSQL images, and pushes them to that registry.
+3. It creates the namespaces, a Secret with generated values, and the certificates.
+   It keeps them in the folder `kubernetes-cluster` of the gitignored `.context` folder.
+4. It turns on the Gateway provider of the Traefik that k3s ships, and creates the Gateway `cluster`.
+5. It installs the chart with the dev profile and two workers.
+   It waits until each worker has passed its isolation probe.
+6. It sends a request to the webapp and the API through the Gateway.
+   Then it prints the URL, `https://hephaestus.localhost`, and how to sign in.
+
+The local CA `ca.crt` in the `kubernetes-cluster` work folder signed the certificate.
+The command prints its path and the commands that make your system trust it.
+Below, `$WORK` is the work folder. On macOS:
+
+```bash
+security add-trusted-cert -r trustRoot -k ~/Library/Keychains/login.keychain-db "$WORK/ca.crt"
+```
+
+On Debian or Ubuntu:
+
+```bash
+sudo cp "$WORK/ca.crt" /usr/local/share/ca-certificates/hephaestus-dev.crt
+sudo update-ca-certificates
+```
+
+Firefox, and Chrome on Linux, keep their own stores.
+If you use [mkcert](https://github.com/FiloSottile/mkcert), `CAROOT="$WORK/mkcert" mkcert -install` adds the CA to those stores too.
+A certificate lasts 397 days. A run issues it again when fewer than 30 days remain.
+
+The chart runs the `prod` profile, so the passwordless dev sign-in is off.
+To sign in, create a GitHub OAuth app for the cluster.
+Use the homepage `https://hephaestus.localhost` and the callback `https://hephaestus.localhost/api/login/oauth2/code/github`.
+Then give its values to the command:
+
+```bash
+GITHUB_OAUTH_CLIENT_ID=... GITHUB_OAUTH_CLIENT_SECRET=... \
+  HEPHAESTUS_AUTH_BOOTSTRAP_ADMINS=github:@you vp run dev:kubernetes
+```
+
+A second run reuses the cluster, the registry, the Secrets and the database.
+It keeps every value of the Secrets, and adds only a key that a newer checkout needs.
+It also keeps the OAuth app, so you give the variables only once.
+Give both again to change the app, or `HEPHAESTUS_AUTH_BOOTSTRAP_ADMINS` alone to change the first admins.
+`vp run dev:kubernetes:reset` removes the app with the cluster.
+Every `kubectl` and `helm` call of the command uses the cluster `k3d-hephaestus`, whatever your current context is.
+
+| Command | Does |
+|---|---|
+| `vp run dev:kubernetes:down` | Stops the cluster and keeps its data. The next `dev:kubernetes` starts it again. It fails if no cluster exists. |
+| `vp run dev:kubernetes:reset` | Deletes the cluster, its data, the registry and the work folder with the CA. It prints what it removed. It succeeds if no cluster exists. The next run makes a new CA, so trust it again. |
+
+If Docker has no free address pool for the cluster network, the command stops before k3d starts.
+Stopped Compose stacks of other worktrees keep their networks.
+The command then tells you to run `docker network prune`, which removes the networks that no container uses.
+
+The CI cluster jobs run the same script (`scripts/kubernetes-cluster.ts`) with the images of their run.
+The k3d job also serves the release through the same Gateway, and sends the same HTTPS requests.
+
 ### Webhook receiver
 
 The webhook receiver lives in the Java server (`integration.core.webhook` package). In local
@@ -408,14 +501,15 @@ so `vp run dev:server` exposes the unified `/webhooks/{kind}` endpoint (kinds: `
 Production runs the receiver in its own container — [Runtime roles](../admin/runtime-roles#monolith-vs-split-pod)
 and [ADR 0008](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0008-webhook-runtime-role.md).
 
-When you run `docker/compose.core.yaml` set the webhook secret up front so signature checks
-succeed (the same secret is used by both auto-registration and the receiver):
+Set the webhook secret before the first start, so that signature checks succeed.
+Auto-registration and the receiver use the same secret.
+In the native stack, add it to `server/.env`:
 
 ```bash
-cp docker/.env.example docker/.env
-export WEBHOOK_SECRET=$(openssl rand -hex 32)
-echo "WEBHOOK_SECRET=$WEBHOOK_SECRET" >> docker/.env
+echo "WEBHOOK_SECRET=$(openssl rand -hex 32)" >> server/.env
 ```
+
+`vp run dev:kubernetes` generates it in the release Secret.
 
 The value must match the secret configured on your GitHub and GitLab webhooks (validated through
 `X-Hub-Signature-256` for GitHub. `X-Gitlab-Token`, or `webhook-signature` for a hook with a signing
@@ -473,6 +567,8 @@ vp run generate:api   # regenerates server/openapi.yaml from the packaged JAR, t
 `vp run generate:api:client` regenerates the clients alone from the committed
 spec: this one and the Chrome extension's `extension/src/api/**`. Commit the spec and both clients
 with the change.
+CI fails a change that breaks a client of the previous release.
+See [API compatibility](./ci-cd.mdx#api-compatibility).
 
 Both clients use the generator in `scripts/api-generator/`.
 That workspace supplies the TypeScript 6 compiler API required by the stable generator.
@@ -516,16 +612,22 @@ classpaths are separate from the application runtime. Restore your usual Gradle 
 
 Gradle does not remove the verification entry of a version that no build downloads any more.
 OSV Scanner reports such an entry as a dependency — [Gradle dependency inventory](ci-cd.mdx#gradle-dependency-inventory-and-the-vulnerabilities-exclusion).
-After an update that replaces versions, remove those entries:
+After an update that replaces versions, run:
 
-1. Set `GRADLE_USER_HOME` to an empty temporary directory.
-2. Run `dependencies buildEnvironment :generated-clients:jar` and the tasks of the `Build what the server jobs restore` step in `.github/workflows/cache-gradle.yml`.
-   Use `--no-configuration-cache`.
-3. Delete each `<component>` that is not in `caches/modules-2/files-2.1` of that home.
-   Keep `org.gradle:github-dependency-graph-gradle-plugin`.
-   The dependency-graph workflows inject it through `gradle/actions`, so a local build does not download it.
-4. Run the verification run above.
-   A deletion trusts no new artifact, but the verification run fails if a build still needs the entry.
+```sh
+node scripts/check-gradle-verification-metadata.ts --write
+```
+
+It resolves every server dependency in an empty Gradle home with strict verification.
+Then it deletes each component that the resolution did not download.
+The deletion adds no checksum to trust.
+If a CI task reads a reported component, add that task to the script instead of deleting the entry.
+Without `--write`, the command fails on such a component, as Quality → App Server does on a pull request.
+
+Run `--write` on Linux, as CI does.
+Another operating system can resolve a different set of components.
+The script compares whole components.
+It does not report an unused artifact inside a component that the build still downloads, such as the native JAR of another platform.
 
 For a Gradle wrapper update, also run the build with `--warning-mode all` and review plugin
 compatibility before accepting a new major. Do not suppress upstream deprecations to make the

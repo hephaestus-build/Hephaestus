@@ -209,6 +209,35 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: node scripts/verify-release-evidence.ts evidence --verify-signatures
 
+      - uses: ./.github/actions/setup-helm
+
+      # The chart is packaged from a copy of this checkout, the released commit, at the release
+      # version. Its values pin the images of the verified evidence; the lock that names the
+      # package's digest is written after the push.
+      - name: Publish the chart by digest
+        id: chart
+        env:
+          ACTOR: ${{ github.actor }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: ${{ needs.release.outputs.tag_name }}
+          SHA: ${{ needs.release.outputs.sha }}
+          VERSION: ${{ needs.release.outputs.version }}
+        run: |
+          set -euo pipefail
+          # The push writes the chart's version tag. Only an absent release or this commit's own
+          # draft may take it; a published release keeps the chart its signed lock names.
+          state=$(node scripts/plan-release.ts --source "$TAG_NAME" "$SHA" absent draft) || {
+            echo "$state"; exit 1; }
+          printf '%s' "$REGISTRY_TOKEN" | helm registry login ghcr.io --username "$ACTOR" --password-stdin
+          mkdir "$RUNNER_TEMP/chart"
+          node scripts/release-chart.ts publish "v${VERSION}" deploy/chart/hephaestus evidence/manifest.json \
+            security/release-images.json "$RUNNER_TEMP/chart" > "$RUNNER_TEMP/chart.json"
+          echo "package=$RUNNER_TEMP/chart/hephaestus-${VERSION}.tgz" >> "$GITHUB_OUTPUT"
+          jq . "$RUNNER_TEMP/chart.json"
+
+      # One typed joint lock from the verified evidence and the pushed chart. The schema 1 lock that
+      # hosts on earlier releases read is derived from it and keeps its name and shape.
       - name: Write release image lock
         id: pin
         env:
@@ -216,28 +245,32 @@ jobs:
         run: |
           set -euo pipefail
           ASSET="release-v${VERSION}.json"
-          jq '{schemaVersion, release, commit,
-            images: [.subjects[]]
-              | group_by(.image)
-              | map({image: .[0].image, repository: .[0].repository, provenance: .[0].provenance,
-                  indexDigest: .[0].indexDigest,
-                  platforms: (map({key: .platform, value: .digest}) | from_entries)})}' \
-            evidence/manifest.json > "$ASSET"
+          JOINT="release-v${VERSION}.chart.json"
+          node scripts/release-image-lock.ts write evidence/manifest.json "$RUNNER_TEMP/chart.json" \
+            "v${VERSION}" "$JOINT" "$ASSET"
           node scripts/release-image-lock.ts "$ASSET" evidence/manifest.json \
-            "v${VERSION}" /tmp/release-lock.env
+            "v${VERSION}" "$RUNNER_TEMP/release-lock.env"
+          node scripts/release-image-lock.ts projection "$JOINT" "$ASSET" "v${VERSION}"
           echo "asset-path=$ASSET" >> "$GITHUB_OUTPUT"
-          jq . "$ASSET"
+          echo "joint-path=$JOINT" >> "$GITHUB_OUTPUT"
+          jq . "$ASSET" "$JOINT"
 
       - name: Generate subject checksums
         id: subjects
         env:
           ASSET: ${{ steps.pin.outputs.asset-path }}
+          JOINT: ${{ steps.pin.outputs.joint-path }}
+          CHART_PACKAGE: ${{ steps.chart.outputs.package }}
         run: |
           set -euo pipefail
           while IFS=$'\t' read -r image _ digest; do
             printf '%s  %s\n' "${digest#sha256:}" "$image"
           done < release-images.tsv > subjects.sha256
-          sha256sum "$ASSET" >> subjects.sha256
+          # The chart, as its OCI manifest and as its package bytes, is a subject of the release.
+          jq -r '"\(.chart.digest | ltrimstr("sha256:"))  \(.chart.repository)"' "$JOINT" >> subjects.sha256
+          printf '%s  %s\n' "$(sha256sum "$CHART_PACKAGE" | cut -d' ' -f1)" "$(basename "$CHART_PACKAGE")" \
+            >> subjects.sha256
+          sha256sum "$ASSET" "$JOINT" >> subjects.sha256
           cat subjects.sha256
           # purl namespace/name are canonically lowercase; derive them from the run
           # context so the attestation follows a repository transfer (issue #1599).
@@ -252,23 +285,39 @@ jobs:
           predicate: |
             { "purl": "pkg:github/${{ steps.subjects.outputs.purl-repository }}@${{ needs.release.outputs.tag_name }}" }
 
+      # Both locks, each with its own bundle, and the chart's digest in the registry, all with the
+      # release workflow identity. Operators verify the chart with `cosign verify` on that digest.
       - name: Sign release image lock
         env:
           ASSET: ${{ steps.pin.outputs.asset-path }}
+          JOINT: ${{ steps.pin.outputs.joint-path }}
         run: |
           set -euo pipefail
-          node scripts/keyless-sign.ts sign-blob --yes --bundle "${ASSET}.sigstore.json" "$ASSET"
+          for lock in "$ASSET" "$JOINT"; do
+            node scripts/keyless-sign.ts sign-blob --yes --bundle "${lock}.sigstore.json" "$lock"
+          done
+          chart=$(jq -er '"\(.chart.repository)@\(.chart.digest)"' "$JOINT")
+          node scripts/keyless-sign.ts sign --yes "$chart"
 
       - name: Verify signature with the deploy-side identity (fail fast)
         env:
           ASSET: ${{ steps.pin.outputs.asset-path }}
+          JOINT: ${{ steps.pin.outputs.joint-path }}
+          VERSION: ${{ needs.release.outputs.version }}
         run: |
           set -euo pipefail
-          cosign verify-blob \
-            --bundle "${ASSET}.sigstore.json" \
-            --certificate-identity '${{ github.server_url }}/${{ github.repository }}/.github/workflows/release.yml@refs/heads/main' \
-            --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
-            "$ASSET"
+          for lock in "$ASSET" "$JOINT"; do
+            cosign verify-blob \
+              --bundle "${lock}.sigstore.json" \
+              --certificate-identity '${{ github.server_url }}/${{ github.repository }}/.github/workflows/release.yml@refs/heads/main' \
+              --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
+              "$lock"
+          done
+          # The chart the joint lock names: its registry signature, and the package pulled back by digest,
+          # whose values must pin exactly the lock's images.
+          mkdir "$RUNNER_TEMP/chart-verified"
+          node scripts/release-chart.ts verify "$JOINT" "v${VERSION}" security/release-images.json \
+            "$RUNNER_TEMP/chart-verified"
 
       # First and only write to the release surface: every step above fails without creating one,
       # so a rejected release leaves no draft to delete and no tag — a draft materialises none —
@@ -320,6 +369,7 @@ jobs:
           SHA: ${{ needs.release.outputs.sha }}
           ASSET: ${{ steps.pin.outputs.asset-path }}
           ATTESTATION: ${{ steps.release-attestation.outputs.bundle-path }}
+          JOINT: ${{ steps.pin.outputs.joint-path }}
         run: |
           set -euo pipefail
           # Assets replace those of this commit's own draft only.
@@ -331,7 +381,7 @@ jobs:
           # --clobber so a re-run over a resumed draft replaces its assets instead of failing on
           # every name that already exists.
           gh release upload "$TAG_NAME" \
-            "$ASSET" "${ASSET}.sigstore.json" "$provenance" evidence/* \
+            "$ASSET" "${ASSET}.sigstore.json" "$provenance" "$JOINT" "${JOINT}.sigstore.json" evidence/* \
             --clobber \
             --repo "${{ github.repository }}"
 
@@ -484,6 +534,9 @@ jobs:
         with:
           cosign-release: v3.1.4
 
+      # Verifying the durable assets pulls the chart by its locked digest.
+      - uses: ./.github/actions/setup-helm
+
       - name: Log in to GitHub Container Registry
         uses: ./.github/actions/ghcr-login
         with:
@@ -537,6 +590,22 @@ jobs:
             echo "::error::Release lock does not cover the qualified source commit"; exit 1; }
           node scripts/release-image-lock.ts "evidence/$lock" evidence/manifest.json \
             "$TAG_NAME" "$RUNNER_TEMP/release-lock.env"
+          # The joint lock: signed with the same identity, and exactly the schema 1 lock plus the chart.
+          joint="release-${TAG_NAME}.chart.json"
+          cosign verify-blob \
+            --bundle "evidence/$joint.sigstore.json" \
+            --certificate-identity '${{ github.server_url }}/${{ github.repository }}/.github/workflows/release.yml@refs/heads/main' \
+            --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
+            "evidence/$joint"
+          node scripts/release-image-lock.ts projection "evidence/$joint" "evidence/$lock" "$TAG_NAME"
+          # The chart by the locked digest: its registry signature, metadata, values that pin exactly the
+          # lock's images, and the release attestation that release.yml made for it.
+          mkdir "$RUNNER_TEMP/chart"
+          package=$(node scripts/release-chart.ts verify "evidence/$joint" "$TAG_NAME" \
+            security/release-images.json "$RUNNER_TEMP/chart")
+          gh attestation verify "$package" --repo "${{ github.repository }}" \
+            --signer-workflow "${{ github.repository }}/.github/workflows/release.yml" \
+            --predicate-type https://in-toto.io/attestation/release/v0.1
           node scripts/verify-release-evidence.ts evidence --verify-signatures
           gh attestation verify "evidence/$lock" \
             --bundle "evidence/release-${TAG_NAME}.intoto.jsonl" \

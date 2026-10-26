@@ -595,6 +595,8 @@ services:
         aliases:
           - postgres
     restart: unless-stopped
+    # The image sizes its memory settings from this limit (docs/admin/sizing.mdx).
+    mem_limit: ${POSTGRES_MEM_LIMIT:-4g}
     volumes:
       - postgresql-data:/var/lib/postgresql
     healthcheck:

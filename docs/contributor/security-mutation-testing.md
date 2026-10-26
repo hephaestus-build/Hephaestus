@@ -32,6 +32,9 @@ In CI, a separate step first compiles the application and its tests, with a limi
 The command then has its own limit of eight minutes, and the job has a limit of twenty minutes.
 Local runs have no wrapper timeout.
 
+CI compiles the tests without Error Prone and NullAway (`testAnalysis=false`), because the analysis does not change their bytecode.
+The [Quality → App Server](ci-cd.mdx#build-once) job runs that analysis.
+
 ## Triage
 
 The pull-request author reviews reported survivors and uncovered mutations in affected code. The

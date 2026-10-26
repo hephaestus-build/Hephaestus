@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.common.ProcessingContext
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issuetype.IssueType;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmItemEvents;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.label.Label;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.label.LabelRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.milestone.Milestone;
@@ -18,6 +19,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.events.EventContext;
 import de.tum.cit.aet.hephaestus.integration.scm.events.ScmDomainEvent;
 import de.tum.cit.aet.hephaestus.integration.scm.events.ScmEventPayload;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.BaseGitHubProcessor;
+import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubMisfiledWork;
 import de.tum.cit.aet.hephaestus.integration.scm.github.issue.dto.GitHubIssueDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.github.issue.dto.GitHubIssueTypeDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.github.issuetype.GitHubIssueTypeSyncService;
@@ -56,6 +58,7 @@ public class GitHubIssueProcessor extends BaseGitHubProcessor {
     private final OrganizationRepository organizationRepository;
     private final GitHubIssueTypeSyncService issueTypeSyncService;
     private final ApplicationEventPublisher eventPublisher;
+    private final GitHubMisfiledWork misfiledWork;
 
     public GitHubIssueProcessor(
             IssueRepository issueRepository,
@@ -66,13 +69,15 @@ public class GitHubIssueProcessor extends BaseGitHubProcessor {
             OrganizationRepository organizationRepository,
             GitHubIssueTypeSyncService issueTypeSyncService,
             GitHubUserProcessor gitHubUserProcessor,
-            ApplicationEventPublisher eventPublisher) {
+            ApplicationEventPublisher eventPublisher,
+            GitHubMisfiledWork misfiledWork) {
         super(userRepository, labelRepository, milestoneRepository, gitHubUserProcessor);
         this.issueRepository = issueRepository;
         this.pullRequestRepository = pullRequestRepository;
         this.organizationRepository = organizationRepository;
         this.issueTypeSyncService = issueTypeSyncService;
         this.eventPublisher = eventPublisher;
+        this.misfiledWork = misfiledWork;
     }
 
     /**
@@ -145,6 +150,9 @@ public class GitHubIssueProcessor extends BaseGitHubProcessor {
             log.debug("Skipped issue processing: reason=pullRequest, issueNumber={}", dto.number());
             return null;
         }
+
+        if (misfiledWork.relocate(repository, providerId, dbId, dto.number(), "ISSUE", ScmItemEvents.ISSUE)
+                == GitHubMisfiledWork.Outcome.SKIPPED) return null;
 
         // Compare by natural key (repository_id, number), not dbId — the same issue can arrive
         // with different provider IDs from different sources.

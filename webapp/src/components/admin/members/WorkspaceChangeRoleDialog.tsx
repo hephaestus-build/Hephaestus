@@ -1,4 +1,4 @@
-import { ConfirmDialog } from "@/components/common/ConfirmDialog";
+import { ConfirmDialog, type ConfirmDialogProps } from "@/components/common/ConfirmDialog";
 
 import type { WorkspaceRoleChange } from "./workspace-members";
 
@@ -8,6 +8,8 @@ export interface WorkspaceChangeRoleDialogProps {
 	onConfirm: (change: WorkspaceRoleChange) => void;
 	/** Clears `change`. Called on dismissal and right after `onConfirm`. */
 	onClose: () => void;
+	/** The member's Role menu, which the change came from. */
+	finalFocus?: ConfirmDialogProps<WorkspaceRoleChange>["finalFocus"];
 }
 
 /** `roleChangeAsksFirst` admits only these three: someone becomes an owner, or you lower your own role. */
@@ -49,6 +51,7 @@ export function WorkspaceChangeRoleDialog({
 	change,
 	onConfirm,
 	onClose,
+	finalFocus,
 }: WorkspaceChangeRoleDialogProps) {
 	return (
 		<ConfirmDialog
@@ -59,6 +62,7 @@ export function WorkspaceChangeRoleDialog({
 			confirmVariant={(shown) => (copyFor(shown).lowers ? "default" : "destructive")}
 			onConfirm={onConfirm}
 			onClose={onClose}
+			finalFocus={finalFocus}
 		/>
 	);
 }

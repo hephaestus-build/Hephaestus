@@ -8,7 +8,14 @@ import { test } from "node:test";
 
 import { parse } from "jsonc-parser";
 
-import { changedPaths, commandsFor, parseBase, scopesFor } from "./check-affected.ts";
+import {
+	changedPaths,
+	clusterGlobs,
+	commandsFor,
+	parseBase,
+	scopesFor,
+	touchesCluster,
+} from "./check-affected.ts";
 import { environmentForGitFixture } from "./lib/git-environment.ts";
 import { asArray, asRecord, asString, at } from "./lib/json.ts";
 
@@ -354,4 +361,26 @@ await test("discovers committed, staged, unstaged, untracked, deleted, and renam
 	} finally {
 		await rm(directory, { recursive: true, force: true });
 	}
+});
+
+await test("a change that the CI cluster jobs exercise gets the cluster reminder, from the CI path filter", () => {
+	const globs = clusterGlobs(
+		readFileSync(new URL("../.github/workflows/cicd.yml", import.meta.url), "utf8"),
+	);
+	assert.ok(globs.includes("deploy/chart/**"));
+	for (const file of [
+		"deploy/chart/hephaestus/templates/worker.yaml",
+		"scripts/kubernetes-cluster.ts",
+		"server/application/src/main/resources/application-prod.yml",
+	]) {
+		assert.equal(touchesCluster([file], globs), true, file);
+	}
+	assert.equal(touchesCluster(["webapp/src/main.tsx", "docs/contributor/ci-cd.mdx"], globs), false);
+	assert.throws(
+		() =>
+			clusterGlobs(
+				"jobs:\n  changes:\n    steps:\n      - with:\n          filters: |\n            docs:\n              - 'docs/**'\n",
+			),
+		/no kubernetes/u,
+	);
 });

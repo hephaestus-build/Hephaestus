@@ -75,7 +75,8 @@ Manual promotions never do this lookup.
 
 ## Requirements
 
-1. Install Docker Engine and Docker Compose in the [tested versions](./install#tested-versions).
+1. For Compose stacks, install Docker Engine and Docker Compose in the [tested versions](./install#tested-versions).
+   For the chart, see [Follow a channel with the chart](#follow-a-channel-with-the-chart).
 2. Install `git` and Cosign in the [tested version](./install#tested-versions).
 3. Install the Node.js version pinned in `package.json#devEngines.runtime`.
 4. Verify downloaded tools against their published checksums.
@@ -237,6 +238,102 @@ Do not change the checkout underneath a tick.
    `HEPHAESTUS_STACKS` selects the host's managed Compose projects.
 
 4. If another proxy supplies ingress, omit `proxy` and use `core app`.
+
+## Follow a channel with the chart
+
+A host can apply its channel with the [Helm chart](./kubernetes) instead of Compose stacks.
+The host must follow a commit channel.
+The reconciler verifies the signed channel and its commit lock, as for Compose.
+Then it runs one `helm upgrade --install` of the commit's chart with the images that the lock names.
+
+A release channel applies the signed chart package of the release ([ADR 0058](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0058-the-helm-chart-is-the-only-supported-deployment-from-1-0.md)).
+The chart stack cannot verify that package yet, so it refuses a release channel and applies nothing.
+To run a release on the chart, follow [Kubernetes § Upgrades](./kubernetes#upgrades).
+
+### Requirements for the chart
+
+1. A cluster and the platform items that [Kubernetes](./kubernetes#supported-clusters) lists.
+2. The namespaces, the Secrets and the values that [Kubernetes § Install](./kubernetes#install) describes.
+3. Helm 4.3.1.
+   Install the pinned binary and verify its checksum.
+   On `amd64`:
+
+   ```bash
+   curl -fsSLO https://get.helm.sh/helm-v4.3.1-linux-amd64.tar.gz
+   echo "0403a88ae20913d11b10a2467b50087721fea7581736da6b9d3992f5357fe54b  helm-v4.3.1-linux-amd64.tar.gz" \
+     | sha256sum --check
+   tar -xzf helm-v4.3.1-linux-amd64.tar.gz linux-amd64/helm
+   sudo install -m 755 linux-amd64/helm /usr/local/bin/helm
+   ```
+
+   On `arm64`, use `linux-arm64` and the checksum `8cf8f66ecbc252ac8f7f06cca68aba88508ddfde3a6a34feb1678ad1694b4f88`.
+
+### Settings for the chart
+
+Set these values in `/etc/hephaestus/reconcile.env`:
+
+| Setting | Default | Value |
+| --- | --- | --- |
+| `HEPHAESTUS_STACKS` | None | `chart`. It takes no other stack. |
+| `HEPHAESTUS_CHART_RELEASE` | `hephaestus` | The Helm release name. |
+| `HEPHAESTUS_CHART_NAMESPACE` | `hephaestus` | The release namespace. |
+| `HEPHAESTUS_CHART_PROFILE` | `small` | One or more values files in the chart's `profiles/`, without `.yaml`, separated by spaces or commas. Each profile applies over the one before it, for example `"small small-16gib"`. The reconciler refuses a profile that the release does not have. |
+| `HEPHAESTUS_HELM` | `helm` | The path of the Helm binary, for example `/usr/local/bin/helm`. |
+| `KUBECONFIG` | None | The cluster's kubeconfig. On k3s, `/etc/rancher/k3s/k3s.yaml`. |
+| `HEPHAESTUS_WAIT_TIMEOUT` | `1200` on a chart host | The Helm timeout in seconds. It must be longer than the 10 minutes that a new Pod waits for the schema. |
+
+Put your values from [Kubernetes § Install](./kubernetes#install) in `/etc/hephaestus/chart.yaml`.
+Set its ownership to `root:root` and its mode to `0600`.
+Do not set `images` or `release` in it.
+The reconciler writes them from the verified commit lock to `/var/lib/hephaestus/chart/<commit>.images.yaml`.
+That file is the last values file, so it overrides any image in your file.
+
+Each apply runs this command:
+
+```bash
+helm upgrade --install <release> <commit tree>/deploy/chart/hephaestus \
+  --namespace <namespace> \
+  --values <commit tree>/deploy/chart/hephaestus/profiles/<first profile>.yaml \
+  --values <commit tree>/deploy/chart/hephaestus/profiles/<next profile>.yaml \
+  --values /etc/hephaestus/chart.yaml \
+  --values /var/lib/hephaestus/chart/<commit>.images.yaml \
+  --rollback-on-failure --wait=watcher --wait-for-jobs --timeout <timeout>s
+```
+
+The revision's Job migrates the database.
+If the migration or a Pod fails, Helm returns the workloads to their previous revision.
+Helm does not roll back the database.
+The tick then fails, the metrics show the failure, and the applied record does not move.
+
+An upgrade that stops before it ends, for example at a reboot or at the unit's timeout, leaves the Helm release in a `pending-*` status.
+Helm then refuses every upgrade.
+The next tick finds that status and rolls the release back to its last deployed revision before it upgrades.
+To do it by hand, read `helm history <release> --namespace <namespace>` and run `helm rollback <release> <revision> --namespace <namespace> --wait`.
+The reconciler removes no image on a chart host.
+The kubelet's image garbage collection removes unused images.
+
+### Switch a host between Compose and the chart
+
+To move a Compose host to the chart:
+
+1. Disable the timer.
+2. Install the chart at the commit that the host runs, as [Kubernetes § Install](./kubernetes#install) describes, and move the data.
+3. Stop the Compose stacks with `docker compose stop`.
+   Keep their volumes until the chart has run for one release cycle.
+4. Set `HEPHAESTUS_STACKS=chart` and the chart settings, and write `/etc/hephaestus/chart.yaml`.
+5. Enable the timer.
+   A tick does nothing while the channel names the release that the host runs.
+   The next promotion runs Helm.
+
+To move the host back to Compose:
+
+1. Disable the timer.
+2. Stop the cluster.
+   On k3s, run `sudo systemctl stop k3s`.
+3. Set `HEPHAESTUS_STACKS` to the Compose stacks that the host had, for example `"core app"`.
+4. Start each stack, for example `sudo docker compose --project-name app start`, then enable the timer.
+
+Data that the chart wrote after the switch is not in the Compose database.
 
 ## Operating it
 
@@ -518,4 +615,5 @@ migrations are forward-only. Older images may be incompatible with the migrated 
 fix, or follow [Rollback](./upgrade#rollback) if database recovery is needed.
 
 **It does not manage anything it does not own.** The reconciler touches only the Compose projects
-named in `HEPHAESTUS_STACKS`. Containers belonging to anything else on the host are left alone.
+named in `HEPHAESTUS_STACKS`, or the one Helm release of a chart host. Containers belonging to
+anything else on the host are left alone.

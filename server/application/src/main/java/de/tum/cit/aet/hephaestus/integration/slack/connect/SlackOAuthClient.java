@@ -39,11 +39,11 @@ public class SlackOAuthClient {
     public SlackOAuthClient(
             @Value("${hephaestus.integration.slack.client-id:}") String clientId,
             @Value("${hephaestus.integration.slack.client-secret:}") String clientSecret,
-            @Value("${hephaestus.integration.slack.api-base:https://slack.com}") String apiBase) {
+            @Value("${hephaestus.integration.slack.api-base:https://slack.com}") String apiBase,
+            RestClient.Builder restClients) {
         this.clientId = clientId == null ? "" : clientId;
         this.clientSecret = clientSecret == null ? "" : clientSecret;
-        this.restClient =
-                RestClient.builder().baseUrl(stripTrailingSlash(apiBase)).build();
+        this.restClient = restClients.baseUrl(stripTrailingSlash(apiBase)).build();
     }
 
     /**

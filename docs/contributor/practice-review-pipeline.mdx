@@ -121,6 +121,10 @@ It is withheld in the same way.
 The check does not require a declared event to have occurred, so a requested review still bypasses event selection.
 Scans review files and repositories, not the practice's item kind, so this check does not apply to them.
 
+`source_contract_unsupported` and `item_capability_unsupported` mean that the stored practice does not fit the work.
+An example is a practice version from an older catalog.
+A workspace admin must fix the practice, so the review closes as Partial.
+
 If no practice can be captured, the review records a readiness refusal and the sandbox does not start.
 
 An optional read must name a supported source.

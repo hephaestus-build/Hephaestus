@@ -30,6 +30,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.PrivateFeedbackProgress;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -269,6 +270,11 @@ public class FeedbackStoreService implements FeedbackStore, ConversationClaims {
 
     public FeedbackCheck check(Feedback row, boolean approval) {
         return policy.check(row, FeedbackCheckStage.EGRESS, approval);
+    }
+
+    /** {@link #check} for the pieces of one workspace, keyed by feedback id. */
+    public Map<UUID, FeedbackCheck> checkAll(long workspaceId, List<Feedback> rows, boolean approval) {
+        return policy.checkAll(workspaceId, rows, FeedbackCheckStage.EGRESS, approval);
     }
 
     public Feedback lock(long workspaceId, UUID id) {

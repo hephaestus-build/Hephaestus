@@ -132,6 +132,9 @@ The same name is the source capture code that causes it.
 | **Context document**           | One JSON document about the developer or the workspace in Heph's context folder.            | inputs/context/*.json          |
 | **Context loader**             | The integration part that stages a heavy item, such as a repository, into a context folder on request. | ContextLoader, load_context |
 | **Turn sandbox**               | The sandbox that holds Heph's context folder for one turn attempt, with no network and no credentials. | TurnSandboxes               |
+| **Sandbox namespace**          | The Kubernetes namespace that an operator creates for the sandboxes of one release alone.   | worker.sandbox.namespace       |
+| **Isolation probe**            | A worker's check, with real Pods, that the cluster holds the sandbox boundary. No sandbox starts while it fails. | KubernetesIsolationProbe |
+| **Isolation tier**             | What the isolation probe records without gating: the runtime class, user namespaces and the process limit. | sandbox.isolation.*     |
 
 The job folder of a review is the context folder of that review.
 The [Heph runtime](./unified-pi-runtime.mdx) owns turns, the Heph host, context documents, context loaders and turn sandboxes.

@@ -117,14 +117,14 @@ public class WorkerDrainCoordinator implements SmartLifecycle {
         Duration timeout = properties.drain().timeout();
         boolean complete = executor.map(e -> drainExecutor(e, timeout)).orElse(true);
         if (complete) {
-            log.info("Worker drain finished: owned job states settled and container stop calls returned.");
+            log.info("Worker drain finished: owned job states settled and sandbox stop calls returned.");
         } else {
-            log.warn("Worker drain incomplete: a job state was not settled, or a container stop failed or"
+            log.warn("Worker drain incomplete: a job state was not settled, or a sandbox stop failed or"
                     + " did not return.");
         }
     }
 
-    /** Drains the executor; false if a job was left unsettled or a container stop did not return. */
+    /** Drains the executor; false if a job was left unsettled or a sandbox stop did not return. */
     private boolean drainExecutor(ReviewJobExecutor exec, Duration timeout) {
         if (timeout.isZero()) {
             log.info("Drain mode IMMEDIATE — cancelling in-flight jobs without waiting.");

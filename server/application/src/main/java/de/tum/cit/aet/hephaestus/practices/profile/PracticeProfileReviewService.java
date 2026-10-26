@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.practices.result.ResultPresentation;
 import de.tum.cit.aet.hephaestus.practices.result.ResultRepository;
 import de.tum.cit.aet.hephaestus.practices.result.ResultView;
 import de.tum.cit.aet.hephaestus.practices.result.ResultViewQuery;
+import de.tum.cit.aet.hephaestus.practices.result.dto.ResultListDTO;
 import de.tum.cit.aet.hephaestus.practices.review.ProductItemRepository;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewSummaryQueryService;
 import de.tum.cit.aet.hephaestus.practices.review.dto.OutcomeVectorDTO;
@@ -21,8 +22,11 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -102,15 +106,26 @@ public class PracticeProfileReviewService {
                 ws.id(),
                 account.get(),
                 shown.stream().map(v -> v.getFirst().review().getId()).toList());
+        // The page's references, observation rows and own feedback are each read once for all of its reviews.
+        var shownRows = shown.stream().flatMap(List::stream).toList();
+        var refs = reviews.refs(
+                ws.id(), shown.stream().map(v -> v.getFirst().review()).toList());
+        var listed = presentation.lists(ws.id(), shownRows, permitted).stream()
+                .collect(Collectors.toMap(ResultListDTO::id, Function.identity()));
+        var feedback = presentation.ownFeedback(
+                ws.id(), shownRows.stream().map(ResultView::result).toList());
         return new PageImpl<>(
                 shown.stream()
                         .map(v -> {
                             var review = v.getFirst().review();
                             var place = Objects.requireNonNull(places.get(review.getId()));
                             return new ProfileReviewDTO(
-                                    reviews.ref(review),
-                                    presentation.lists(ws.id(), v, permitted),
-                                    feedback(v),
+                                    Objects.requireNonNull(refs.get(review.getId())),
+                                    v.stream()
+                                            .map(r -> Objects.requireNonNull(
+                                                    listed.get(r.result().getId())))
+                                            .toList(),
+                                    feedbackOf(v, feedback),
                                     place.position(),
                                     place.total());
                         })
@@ -133,14 +148,14 @@ public class PracticeProfileReviewService {
         return new ProfileReviewDetailDTO(
                 reviews.ref(review),
                 presentation.lists(ws.id(), projected, permitted),
-                feedback(projected),
+                feedbackOf(projected, presentation.ownFeedback(ws.id(), rows)),
                 trace,
                 new OutcomeVectorDTO(counts.met(), counts.notMet(), counts.doesNotApply(), counts.couldNotDetermine()));
     }
 
-    private List<OwnFeedbackRefDTO> feedback(List<ResultView> v) {
+    private static List<OwnFeedbackRefDTO> feedbackOf(List<ResultView> v, Map<UUID, List<OwnFeedbackRefDTO>> feedback) {
         return v.stream()
-                .flatMap(r -> presentation.ownFeedback(r.result()).stream())
+                .flatMap(r -> feedback.getOrDefault(r.result().getId(), List.of()).stream())
                 .distinct()
                 .toList();
     }

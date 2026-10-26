@@ -18,30 +18,40 @@ class WorkerDatabasePoolTest extends BaseUnitTest {
 
     @Test
     void shouldKeepApplicationPoolWhenWorkerProfileIsNotActive() throws IOException {
-        assertThat(poolSize(false, null)).isEqualTo(20);
+        assertThat(poolSize(null, null)).isEqualTo(20);
     }
 
     @Test
     void shouldRaisePoolForConcurrentEvidencePreparationWhenWorkerProfileIsActive() throws IOException {
-        assertThat(poolSize(true, null)).isEqualTo(32);
+        assertThat(poolSize("worker", null)).isEqualTo(32);
     }
 
     @Test
     void shouldUseOperatorPoolSizeWhenWorkerReceivesOverride() throws IOException {
-        assertThat(poolSize(true, "48")).isEqualTo(48);
+        assertThat(poolSize("worker", "48")).isEqualTo(48);
     }
 
-    private static int poolSize(boolean worker, @Nullable String override) throws IOException {
+    @Test
+    void shouldGiveTheReceiverTwoConnectionsWhenWebhookProfileIsActive() throws IOException {
+        assertThat(poolSize("webhook", null)).isEqualTo(2);
+    }
+
+    @Test
+    void shouldUseOperatorPoolSizeWhenWebhookReceivesOverride() throws IOException {
+        assertThat(poolSize("webhook", "6")).isEqualTo(6);
+    }
+
+    private static int poolSize(@Nullable String profile, @Nullable String override) throws IOException {
         var loader = new YamlPropertySourceLoader();
         var environment = new MockEnvironment();
         var sources = environment.getPropertySources();
         // The first document of application.yml is the one no profile activates.
         sources.addLast(loader.load("application", new ClassPathResource("application.yml"))
                 .getFirst());
-        if (worker) {
+        if (profile != null) {
             sources.addAfter(
                     MockPropertySource.MOCK_PROPERTIES_PROPERTY_SOURCE_NAME,
-                    loader.load("worker", new ClassPathResource("application-worker.yml"))
+                    loader.load(profile, new ClassPathResource("application-" + profile + ".yml"))
                             .getFirst());
         }
         if (override != null) {

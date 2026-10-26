@@ -50,7 +50,7 @@ Out of scope:
 
 Independent of this reporting channel, the project runs:
 
-- **Dependency updates**: [Renovate](https://docs.renovatebot.com/) proposes vulnerability fixes without dashboard approval or a minimum release age ([`renovate.json`](renovate.json))
+- **Dependency updates**: [Renovate](https://docs.renovatebot.com/) proposes vulnerability fixes without dashboard approval or its own minimum release age ([`renovate.json`](renovate.json)). pnpm's minimum release age still applies to a newly resolved npm version ([CI/CD](https://docs.hephaestus.build/contributor/ci-cd))
 - **Dependency & secret scanning in CI**: Trivy filesystem scan and TruffleHog ([`ci-security-scan.yml`](.github/workflows/ci-security-scan.yml))
 - **Static analysis**: compiler checks and repository-specific Semgrep rules; these do not provide comprehensive interprocedural security analysis
 - **Native alerts**: GitHub secret scanning and Dependabot dependency alerts

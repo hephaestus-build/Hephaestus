@@ -155,6 +155,13 @@ jobs:
           BASE: ${{ steps.baseline.outputs.base }}
         run: node scripts/check-changelog-immutability.ts "$BASE"
 
+      # Changelogs since the latest release tag, so it needs the tags that fetch-depth: 0 brings.
+      - name: Changelog compatibility guard
+        id: changelog-compatibility
+        continue-on-error: true
+        if: always()
+        run: node scripts/check-changelog-compatibility.ts
+
       - name: Assert no legacy agent-image references
         id: legacy-image-policy
         continue-on-error: true
@@ -205,12 +212,13 @@ jobs:
           SECURITY: ${{ steps.security.outcome }}
           BASELINE: ${{ steps.baseline.outcome }}
           CHANGELOG: ${{ steps.changelog-policy.outcome }}
+          CHANGELOG_COMPATIBILITY: ${{ steps.changelog-compatibility.outcome }}
           LEGACY_IMAGE: ${{ steps.legacy-image-policy.outcome }}
           RELEASE_CHANNEL: ${{ steps.release-channel-policy.outcome }}
           LEGACY_PIN: ${{ steps.legacy-pin-policy.outcome }}
         run: |
           failed=false
-          for result in "$SECURITY" "$BASELINE" "$CHANGELOG" "$LEGACY_IMAGE" "$RELEASE_CHANNEL" "$LEGACY_PIN"; do
+          for result in "$SECURITY" "$BASELINE" "$CHANGELOG" "$CHANGELOG_COMPATIBILITY" "$LEGACY_IMAGE" "$RELEASE_CHANNEL" "$LEGACY_PIN"; do
             if [ "$result" = "failure" ] || [ "$result" = "cancelled" ]; then failed=true; fi
           done
           if [ "$failed" = "true" ]; then

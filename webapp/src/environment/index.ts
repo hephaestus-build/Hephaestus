@@ -66,10 +66,9 @@ const deploymentEnvironment = env("DEPLOYMENT_ENVIRONMENT") || "local";
  * Which pull request this preview is of. Every preview shares the name "Preview", so without this
  * the header pill cannot say which one you are looking at.
  *
- * Coolify routes a preview at `pr<id>.<domain>` and passes no pull request variable of its own, so
- * the hostname is where the number is — and the client URL is the one place that hostname is
- * already present in the runtime config. Read only on a preview, so no other deployment can be
- * given a pull request by a host that happens to be named this way.
+ * A preview's host is `pr<id>.<domain>` or `pr-<id>.<domain>`, and the client URL is the one place
+ * the runtime config already carries that host. Read only on a preview, so no other deployment can
+ * be given a pull request by a host that happens to be named this way.
  */
 const previewPullRequest = ((): number | undefined => {
 	if (deploymentEnvironment !== "preview") {

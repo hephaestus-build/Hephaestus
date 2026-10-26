@@ -1,0 +1,53 @@
+name: Setup Kubernetes tools
+description: Install the pinned k3d, kind and kubeconform after a checksum check, and put them first on PATH
+runs:
+  using: composite
+  steps:
+    - name: Install k3d, kind and kubeconform
+      shell: bash
+      env:
+        # The one version of each tool for the chart's cluster jobs. Each SHA-256 below is the value
+        # that the tool's release publishes beside that file for this version.
+        K3D_VERSION: v5.9.0
+        KIND_VERSION: v0.33.0
+        KUBECONFORM_VERSION: v0.8.0
+        RUNNER_PLATFORM: ${{ runner.os }}/${{ runner.arch }}
+      run: |
+        set -euo pipefail
+        case "$RUNNER_PLATFORM" in
+          Linux/X64) arch=amd64
+            k3d_sum=06d8f25bc3a971c4eb29e0ff08429b180402db0f4dec838c9eac427e296800a0
+            kind_sum=aee6151561422756b764a4ae28e7f44cda5af5a9eead3cc9985112b1de8d8e0d
+            kubeconform_sum=9bc2bffbf71f261128533edaf912153948b7ff238f9a531ae6d34466ec287883 ;;
+          Linux/ARM64) arch=arm64
+            k3d_sum=03cde5cf23e6e8e67de5a039ecf26e5b85aca82fba3e5d13dadf904cd218a250
+            kind_sum=20022bee6cfcd5086cb7234d218e3454e6090022f2a8f55d1fa7fcf42c3867a2
+            kubeconform_sum=1f53fc8e81258197a35e8603054162a5af1de8c5af13746c71ab680d9534ed87 ;;
+          *) echo "::error::No pinned Kubernetes tools for $RUNNER_PLATFORM"; exit 1 ;;
+        esac
+        work=$(mktemp -d "$RUNNER_TEMP/kubernetes-tools.XXXXXX")
+        trap 'rm -rf "$work"' EXIT
+        install_dir="$RUNNER_TEMP/kubernetes-tools/bin"
+        mkdir -p "$install_dir"
+        fetch() {
+          curl -fsSL --proto '=https' --retry 5 --retry-all-errors --retry-delay 2 --retry-max-time 300 \
+            --connect-timeout 15 --max-time 120 -o "$work/$1" "$2"
+          actual=$(sha256sum "$work/$1" | cut -d' ' -f1)
+          if [ "$actual" != "$3" ]; then
+            echo "::error::$1 has SHA-256 $actual, not the pinned $3"
+            exit 1
+          fi
+        }
+        fetch k3d "https://github.com/k3d-io/k3d/releases/download/$K3D_VERSION/k3d-linux-$arch" "$k3d_sum"
+        fetch kind "https://github.com/kubernetes-sigs/kind/releases/download/$KIND_VERSION/kind-linux-$arch" "$kind_sum"
+        fetch kubeconform.tar.gz \
+          "https://github.com/yannh/kubeconform/releases/download/$KUBECONFORM_VERSION/kubeconform-linux-$arch.tar.gz" \
+          "$kubeconform_sum"
+        # Only the binary leaves the archive.
+        tar -xzf "$work/kubeconform.tar.gz" -C "$work" kubeconform
+        install -m 0755 "$work/k3d" "$install_dir/k3d"
+        install -m 0755 "$work/kind" "$install_dir/kind"
+        install -m 0755 "$work/kubeconform" "$install_dir/kubeconform"
+        echo "$install_dir" >> "$GITHUB_PATH"
+        "$install_dir/k3d" version | grep -q "k3d version $K3D_VERSION"
+        "$install_dir/kind" version | grep -q "kind $KIND_VERSION"

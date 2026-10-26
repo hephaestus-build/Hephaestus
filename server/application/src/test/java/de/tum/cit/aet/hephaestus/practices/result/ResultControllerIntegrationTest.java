@@ -12,6 +12,7 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -163,7 +164,7 @@ class ResultControllerIntegrationTest extends BaseIntegrationTest {
         assertThat(communication.boundFeedback(other.workspace().getId(), result.getId()))
                 .isEmpty();
         assertThat(communication.ownFeedback(
-                        ws, Objects.requireNonNull(other.account().getId()), result.getId()))
+                        ws, Objects.requireNonNull(other.account().getId()), List.of(result.getId())))
                 .isEmpty();
         jdbc.sql("INSERT INTO feedback_decision(id,workspace_id,feedback_id,action,actor_account_id,note,decided_at)"
                         + " VALUES(:id,:ws,:feedback,'RESTORE',:actor,'Restore this note.',:at)")

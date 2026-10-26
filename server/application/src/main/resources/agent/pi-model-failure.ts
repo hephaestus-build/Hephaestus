@@ -113,11 +113,34 @@ export function modelFailure(message: unknown): ModelFailure {
 }
 
 /**
- * Whether the gateway refused this attempt's credential: the attempt ended, was requeued or moved to another worker,
- * so nothing it does can still be admitted.
+ * The body of the gateway's `409` for an attempt that no longer runs: it ended, was requeued or moved to another
+ * worker. No provider sends it, so it tells that refusal apart from a provider's own `401` or `409`. It is the text of
+ * `JobTokenAuthenticationFilter.ATTEMPT_ENDED`.
  */
-export function refusesAttempt(failure: ModelFailure): boolean {
-	return failure.kind === "HTTP_ERROR" && failure.status === 401;
+export const ATTEMPT_ENDED = "This attempt no longer runs on this worker.";
+
+/** Whether the gateway refused this call because the attempt no longer runs, so nothing it does can be admitted. */
+export function refusesAttempt(message: unknown): boolean {
+	const failure = modelFailure(message);
+	return (
+		failure.kind === "HTTP_ERROR" &&
+		failure.status === 409 &&
+		isRecord(message) &&
+		typeof message.errorMessage === "string" &&
+		message.errorMessage.includes(ATTEMPT_ENDED)
+	);
+}
+
+/** Ends the runner when the gateway refused a failed call because the attempt no longer runs. */
+export function stopIfAttemptRefused(
+	stopReason: string,
+	message: unknown,
+	exit: (code: number) => void = (code) => process.exit(code),
+): void {
+	if (stopReason === "error" && refusesAttempt(message)) {
+		console.error("[pi-runner] STOPPED: the gateway refused this attempt; it no longer runs");
+		exit(1);
+	}
 }
 
 /** A message's call span, or null when it has no readable one: a response time beyond the span is dropped. */

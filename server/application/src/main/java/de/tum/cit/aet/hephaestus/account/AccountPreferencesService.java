@@ -15,15 +15,21 @@ public class AccountPreferencesService {
 
     @Transactional(readOnly = true)
     public UserSettingsDTO getUserSettings(long accountId) {
-        return new UserSettingsDTO(
-                accounts.find(accountId).orElseThrow().feedbackDeliveryEnabled(),
-                accounts.timeZone(accountId).map(ZoneId::getId).orElse(null));
+        return settings(accountId);
     }
 
     @Transactional
-    public UserSettingsDTO updateUserSettings(long accountId, UserSettingsDTO settings) {
+    public UserSettingsDTO updateUserSettings(long accountId, UpdateUserSettingsDTO settings) {
         accounts.setFeedbackDeliveryEnabled(accountId, settings.practiceFeedbackDeliveryEnabled());
-        accounts.setTimeZone(accountId, settings.timeZone());
-        return new UserSettingsDTO(settings.practiceFeedbackDeliveryEnabled(), settings.timeZone());
+        if (settings.timeZone() != null) {
+            accounts.setTimeZone(accountId, settings.timeZone());
+        }
+        return settings(accountId);
+    }
+
+    private UserSettingsDTO settings(long accountId) {
+        return new UserSettingsDTO(
+                accounts.find(accountId).orElseThrow().feedbackDeliveryEnabled(),
+                accounts.timeZone(accountId).map(ZoneId::getId).orElse(null));
     }
 }

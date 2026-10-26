@@ -86,6 +86,7 @@ public class GitHubWebhookRedelivery {
             GitHubAppTokenService tokens,
             Clock clock,
             MeterRegistry meterRegistry,
+            RestClient.Builder restClients,
             @Value("${hephaestus.integration.github.app.api-base-url:" + GITHUB_API_BASE_URL + "}") String apiBaseUrl) {
         this.tokens = tokens;
         this.clock = clock;
@@ -93,7 +94,7 @@ public class GitHubWebhookRedelivery {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(TIMEOUT);
         factory.setReadTimeout(TIMEOUT);
-        this.api = RestClient.builder()
+        this.api = restClients
                 .requestFactory(factory)
                 .baseUrl(apiBaseUrl)
                 .defaultHeader(HttpHeaders.ACCEPT, "application/vnd.github+json")
@@ -229,8 +230,9 @@ public class GitHubWebhookRedelivery {
             return !redelivery;
         }
 
+        /** GitHub counts only a 2xx answer as delivered; a redirect is a failed delivery. */
         boolean succeeded() {
-            return statusCode >= 200 && statusCode < 400;
+            return statusCode / 100 == 2;
         }
 
         /**

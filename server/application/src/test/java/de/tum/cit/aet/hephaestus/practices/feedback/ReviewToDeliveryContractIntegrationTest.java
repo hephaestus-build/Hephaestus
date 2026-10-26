@@ -48,7 +48,6 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
-import de.tum.cit.aet.hephaestus.integration.scm.github.common.RateLimitObservationSink;
 import de.tum.cit.aet.hephaestus.practices.feedback.decision.FeedbackContentDigest;
 import de.tum.cit.aet.hephaestus.practices.feedback.decision.FeedbackDecisionService;
 import de.tum.cit.aet.hephaestus.practices.feedback.delivery.FeedbackSendRecovery;
@@ -112,9 +111,6 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private ReviewAdmissionData admissions;
-
-    @Autowired
-    private RateLimitObservationSink rateLimits;
 
     @Autowired
     private ResultAdmissionService admission;
@@ -585,8 +581,6 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
         connection.setCredentials(new BearerToken("contract-token-" + installation, null), credentials);
         connection.setState(IntegrationState.ACTIVE);
         connections.saveAndFlush(connection);
-        // GitHub has reported this scope's budget, so the provider sends no REST probe off the machine.
-        rateLimits.updateFromRestRateLimit(workspace.getId(), 5000, 5000, null, Instant.now());
         var now = Instant.now();
         var repository = new Repository();
         repository.setNativeId(ThreadLocalRandom.current().nextLong(1, Long.MAX_VALUE));

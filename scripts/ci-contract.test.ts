@@ -12,6 +12,7 @@ import { parse as parseJsonc } from "jsonc-parser";
 import { minimatch } from "minimatch";
 import { type Document, isMap, isScalar, isSeq, parseDocument, visit, type YAMLMap } from "yaml";
 
+import { commandsFor, scopesFor } from "./check-affected.ts";
 import { evaluate as evaluateVulnerabilityPolicy } from "./check-release-vulnerabilities.ts";
 import { isSet } from "./lib/env.ts";
 import { environmentForGitFixture } from "./lib/git-environment.ts";
@@ -100,9 +101,18 @@ async function readSources(files: string[]): Promise<Map<string, string>> {
 const TASK_INVOCATION =
 	/\bvp run (?:(?:--(?!filter\b)[\w-]+|\$\{\{ *matrix\.\w+ *\}\}) +)*(?<name>(?:[\w:-]|\$\{\{ *matrix\.\w+ *\}\})+)/gu;
 
-// The two gates `check` cannot run: the k6 syntax check needs the pinned container, and the PMD
-// canary runs only when CI decides PMD inputs changed. Every other CI gate is part of `check`.
-const CI_ONLY_GATES = new Set(["gate:load-syntax", "gate:pmd-canary"]);
+// The gates outside `check`: the k6 syntax check and the alert rule tests need pinned containers, and
+// the PMD canary runs only when CI decides PMD inputs changed. The server test analysis compiles every
+// test, and `check` does not, so the pre-push hook stays fast; every local server test task runs it.
+// The API compatibility check judges the spec that CI generates from the packaged server against a base
+// that moves with each release. Every other CI gate is part of `check`.
+const CI_ONLY_GATES = new Set([
+	"gate:alerts",
+	"gate:api-compatibility",
+	"gate:load-syntax",
+	"gate:pmd-canary",
+	"gate:server-test-analysis",
+]);
 
 // Assignment names exclude '=' so each token has only one possible split.
 const VP_INVOCATION =
@@ -553,32 +563,50 @@ void describe("CI contract", () => {
 		const reusable = parseDocument(
 			await readFile(".github/workflows/reusable-docker-build.yml", "utf8"),
 		);
-		const build = namedStep(reusable, ["jobs", "build"], "Build and push (Dockerfile)");
-		assert.equal(build.getIn(["with", "no-cache-filters"]), "os-packages,runtime");
-		assert.match(String(build.getIn(["with", "cache-from"])), /cache-main-/u);
-		assert.match(String(build.getIn(["with", "cache-to"])), /mode=max/u);
+		const build = namedStep(reusable, ["jobs", "build"], "Build and push the Dockerfile images");
+		assert.equal(String(build.getIn(["with", "files"])).split("\n")[0], "./docker/docker-bake.hcl");
 		// Only trusted runs write the shared cache: main, and the merge group whose images main reuses.
-		assert.match(
-			String(build.getIn(["with", "cache-to"])),
-			/^\$\{\{ \(github\.ref == 'refs\/heads\/main' \|\| github\.event_name == 'merge_group'\) && format\(/u,
+		assert.equal(
+			build.getIn(["env", "WRITE_CACHE"]),
+			`\${{ github.ref == 'refs/heads/main' || github.event_name == 'merge_group' }}`,
 		);
-
-		const caller = parseDocument(await readFile(".github/workflows/ci-docker-build.yml", "utf8"));
-		const jobs = caller.get("jobs");
-		assert.ok(isMap(jobs));
+		const bake = await readFile("docker/docker-bake.hcl", "utf8");
+		assert.match(
+			bake,
+			/target "image" \{\n(?:\s*#.*\n)*\s*no-cache-filter = \["os-packages", "runtime"\]/u,
+		);
+		const targets = [...bake.matchAll(/^target "(?<name>[a-z-]+)" \{\n(?<body>(?:.*\n)*?)\}/gmu)]
+			.map(({ groups }) => ({ name: groups?.name ?? "", body: groups?.body ?? "" }))
+			.filter(({ name }) => name !== "image");
+		assert.deepEqual(
+			targets.map(({ name }) => name),
+			["webapp", "agent-pi", "postgres"],
+		);
 		const dockerfiles = new Set(await posixGlob("{docker,webapp}/**/Dockerfile"));
 		assert.ok(dockerfiles.size > 0);
-		for (const entry of jobs.items) {
-			assert.ok(isMap(entry.value));
-			const file = entry.value.getIn(["with", "docker-file"]);
-			if (typeof file !== "string") {
-				continue;
-			}
-			dockerfiles.delete(file.replace(/^\.\//u, ""));
+		for (const { name, body } of targets) {
+			assert.match(body, new RegExp(`inherits\\s*= \\["image", "${name}-metadata"\\]`, "u"));
+			assert.ok(
+				body.includes(
+					`cache-from = ["type=registry,ref=\${repository("${name}")}:cache-main-\${PLATFORM_PAIR}"]`,
+				),
+				name,
+			);
+			assert.ok(
+				body.includes(
+					`cache-to   = WRITE_CACHE == "true" ? ["type=registry,ref=\${repository("${name}")}:cache-main-\${PLATFORM_PAIR},mode=max"] : []`,
+				),
+				name,
+			);
+			const context = /context\s*= "(?<path>[^"]+)"/u.exec(body)?.groups?.path;
+			const dockerfilePath = /dockerfile = "(?<path>[^"]+)"/u.exec(body)?.groups?.path;
+			assert.ok(context !== undefined && dockerfilePath !== undefined, name);
+			const file = path.posix.join(context, dockerfilePath);
+			dockerfiles.delete(file);
 			const dockerfile = await readFile(file, "utf8");
 			const stages = dockerfile.split(/^FROM /mu);
 			const packages = stages.find((stage) => /^.* AS os-packages$/mu.test(stage));
-			assert.ok(packages !== undefined, `${file} must have the stage named by no-cache-filters`);
+			assert.ok(packages !== undefined, `${file} must have the stage named by no-cache-filter`);
 			assert.match(stages.at(-1) ?? "", /^os-packages AS runtime$/mu);
 			assert.match(packages, /^RUN .*?(?:apt-get|apk)/msu);
 			assert.doesNotMatch(packages, /^COPY |^ARG SOURCE_COMMIT/mu);
@@ -589,7 +617,23 @@ void describe("CI contract", () => {
 				assert.doesNotMatch(stage, /\b(?:apt-get|apk) (?:update|upgrade|install|add)\b/u);
 			}
 		}
-		assert.deepEqual([...dockerfiles], [], "every Dockerfile must use the shared build workflow");
+		assert.deepEqual(
+			[...dockerfiles],
+			[],
+			"every Dockerfile must be a target of docker/docker-bake.hcl",
+		);
+		// The bake file decides how every Dockerfile image builds, so a change to it rebuilds them all.
+		const orchestrator = await readFile(".github/workflows/cicd.yml", "utf8");
+		assert.match(
+			pathFilter(orchestrator, "docker-config"),
+			/^ {14}- 'docker\/docker-bake\.hcl'$/mu,
+		);
+		for (const input of ["webapp_changed", "agent_images_changed", "postgres_image_changed"]) {
+			assert.match(
+				job(orchestrator, "Docker"),
+				new RegExp(`${input}: .*docker-config == 'true'`, "u"),
+			);
+		}
 	});
 
 	void test("the webapp image copies every file its Vite config reads", async () => {
@@ -1012,12 +1056,7 @@ void describe("CI contract", () => {
 			evaluateTierOutput(skip, "pull_request", { full: "false", action: "ready_for_review" }),
 			"false",
 		);
-		for (const name of [
-			"vulnerability-database",
-			"application-server-image",
-			"upstream-images",
-			"Docker",
-		]) {
+		for (const name of ["vulnerability-database", "upstream-images", "Docker"]) {
 			assert.match(
 				String(orchestrator.getIn(["jobs", name, "if"])),
 				/needs\.detect-changes\.outputs\.draft != 'true'/u,
@@ -1294,7 +1333,7 @@ void describe("CI contract", () => {
 		const reusable = parseDocument(
 			await readFile(".github/workflows/reusable-docker-build.yml", "utf8"),
 		);
-		for (const name of ["reuse", "build", "merge"]) {
+		for (const name of ["build", "merge"]) {
 			const registry = step(reusable, ["jobs", name], "docker/login-action");
 			assert.equal(registry.get("registry"), `\${{ inputs.registry }}`);
 		}
@@ -1306,12 +1345,10 @@ void describe("CI contract", () => {
 			workflow.getIn(["jobs", "detect-changes", "outputs", "release-preflight"]),
 			`\${{ (github.event_name == 'workflow_dispatch' && inputs.release-preflight) || steps.release_candidate.outputs.release-candidate == 'true' }}`,
 		);
-		for (const name of ["application-server-image", "Docker"]) {
-			assert.equal(
-				workflow.getIn(["jobs", name, "with", "scan-images"]),
-				`\${{ needs.detect-changes.outputs.release-preflight != 'true' }}`,
-			);
-		}
+		assert.equal(
+			workflow.getIn(["jobs", "Docker", "with", "scan-images"]),
+			`\${{ needs.detect-changes.outputs.release-preflight != 'true' }}`,
+		);
 		for (const file of ["ci-docker-build.yml", "reusable-docker-build.yml"]) {
 			const reusable = parseDocument(await readFile(`.github/workflows/${file}`, "utf8"));
 			assert.equal(
@@ -1331,7 +1368,7 @@ void describe("CI contract", () => {
 		);
 		assert.equal(
 			namedStep(docker, ["jobs", "build"], "Enforce the release vulnerability policy").get("if"),
-			"inputs.publish && inputs.scan-images",
+			`\${{ !cancelled() && steps.prep.outcome == 'success' && inputs.publish && inputs.scan-images }}`,
 		);
 	});
 
@@ -1493,7 +1530,7 @@ void describe("CI contract", () => {
 		);
 	});
 
-	void test("security mutation checks follow their Gradle launcher and toolchain inputs", async () => {
+	void test("security mutation checks follow their Gradle inputs and compile the tests once", async () => {
 		const workflow = parseDocument(
 			await readFile(".github/workflows/security-mutation.yml", "utf8"),
 		);
@@ -1507,6 +1544,64 @@ void describe("CI contract", () => {
 		]) {
 			assert.ok(paths.includes(input), `security mutation checks must include ${input}`);
 		}
+		// The compile step and PIT share one value, so PIT does not recompile the tests.
+		assert.equal(
+			workflow.getIn(["jobs", "pitest", "env", "ORG_GRADLE_PROJECT_testAnalysis"]),
+			"false",
+		);
+	});
+
+	void test("a failed image build still lets every other image build and report, but hands over nothing", async () => {
+		const workflow = parseDocument(
+			await readFile(".github/workflows/reusable-docker-build.yml", "utf8"),
+		);
+		const build = ["jobs", "build"];
+		for (const name of [
+			"Set up pack",
+			"Download the executable JAR",
+			"Build with Buildpacks and CDS",
+			"Export digests",
+			"Enforce the release vulnerability policy",
+		]) {
+			assert.match(
+				String(namedStep(workflow, build, name).get("if")),
+				/^\$\{\{ !cancelled\(\) && steps\.prep\.outcome == 'success' && /u,
+				name,
+			);
+		}
+		// The export reads each image's digest, never the whole bake metadata: its provenance records
+		// exceed what a process environment can hold.
+		const exported = namedStep(workflow, build, "Export digests");
+		assert.equal(exported.hasIn(["env", "BAKE_METADATA"]), false);
+		for (const [variable, target] of [
+			["WEBAPP_DIGEST", ".webapp"],
+			["AGENT_PI_DIGEST", "['agent-pi']"],
+			["POSTGRES_DIGEST", ".postgres"],
+		] as const) {
+			assert.equal(
+				exported.getIn(["env", variable]),
+				`\${{ steps.bake.outputs.metadata && fromJSON(steps.bake.outputs.metadata)${target}['containerimage.digest'] || '' }}`,
+			);
+		}
+		// The handover runs only when every step succeeded, and the manifest job needs the build.
+		assert.equal(namedStep(workflow, build, "Upload digests").get("if"), "inputs.publish");
+		assert.equal(workflow.getIn(["jobs", "merge", "needs"]), "build");
+	});
+
+	void test("every CI/CD run validates the Gradle wrapper in a job without a condition", async () => {
+		// Scorecard exempts the committed wrapper JAR only for a successful run of this file at the
+		// latest commit that contains the validation action.
+		const workflow = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
+		assert.equal(workflow.getIn(["jobs", "detect-changes", "if"]), undefined);
+		assert.equal(workflow.getIn(["jobs", "detect-changes", "needs"]), undefined);
+		const steps = workflow.getIn(["jobs", "detect-changes", "steps"]);
+		assert.ok(isSeq(steps));
+		const validation = steps.items.find(
+			(item) =>
+				isMap(item) && String(item.get("uses")).startsWith("gradle/actions/wrapper-validation@"),
+		);
+		assert.ok(isMap(validation), "Detect changes validates the Gradle wrapper");
+		assert.equal(validation.get("if"), undefined);
 	});
 
 	void test("changes to the PMD canary exercise it even without server source changes", async () => {
@@ -1587,6 +1682,15 @@ void describe("CI contract", () => {
 		assert.ok(isSet(packaging));
 		assert.match(packaging, /:application:bootJar/u);
 		assert.match(packaging, /:application:testClasses/u);
+		// The suites wait for these classes, and the analysis does not change them, so it runs in
+		// the server quality leg, after that leg's other Gradle gate: one build per checkout.
+		assert.match(packaging, / -PtestAnalysis=false(?:\s|$)/u);
+		const config = await readFile("vite.config.ts", "utf8");
+		assert.match(config, /"ci:server": group\(\[[^\]]*"gate:server-test-analysis"/u);
+		assert.match(
+			config,
+			/"gate:server-test-analysis": run\(`\$\{gradlew\} :application:compileTestJava --quiet`, \{\s*dependsOn: \["gate:server"\],/u,
+		);
 		assert.equal((packageJob.match(/actions\/upload-artifact@/gu) ?? []).length, 1);
 		assert.match(packageJob, /overwrite: true/u);
 		for (const name of ["server-api", "server-database", "postgres-drill"]) {
@@ -1611,14 +1715,14 @@ void describe("CI contract", () => {
 		);
 		assert.ok(isMap(restored));
 		assert.equal(restored.get("id"), "server");
-		assert.equal(
-			namedStep(
-				drill,
-				["jobs", "postgres-drill"],
-				`Run the PostgreSQL \${{ matrix.drill }} drill`,
-			).getIn(["env", "HEPHAESTUS_APPLICATION_JAR"]),
-			`\${{ steps.server.outputs.executable-jar }}`,
-		);
+		for (const drillName of ["backup-restore", "pitr"]) {
+			assert.equal(
+				namedStep(drill, ["jobs", "postgres-drill"], `Run the PostgreSQL ${drillName} drill`).getIn(
+					["env", "HEPHAESTUS_APPLICATION_JAR"],
+				),
+				`\${{ steps.server.outputs.executable-jar }}`,
+			);
+		}
 		const changedPaths = step(
 			parseDocument(orchestrator),
 			["jobs", "detect-changes"],
@@ -1696,9 +1800,11 @@ void describe("CI contract", () => {
 				new RegExp(`needs\\.detect-changes\\.outputs\\.${escapeRegExp(filter)} == 'true'`, "u"),
 			);
 		}
-		const image = job(orchestrator, "application-server-image");
-		assert.match(image, /needs: \[detect-changes, server-package, vulnerability-database\]/u);
-		assert.match(image, /use-buildpacks: true/u);
+		// The application-server image is built from this run's packaged JAR, never recompiled.
+		const image = job(orchestrator, "Docker");
+		assert.match(image, /needs: \[detect-changes, vulnerability-database, server-package\]/u);
+		assert.match(image, /application-artifact: server-build-\$\{\{ github\.run_id \}\}/u);
+		assert.match(image, /needs\.server-package\.result == 'success'/u);
 
 		// The suites run the packaged classes rather than compiling the tests once per job.
 		const tests = await readFile(".github/workflows/ci-tests.yml", "utf8");
@@ -1750,21 +1856,21 @@ void describe("CI contract", () => {
 
 	void test("image consumers do not wait for unrelated artifact checks, but the final verdict does", async () => {
 		const workflow = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
-		for (const name of ["Build", "application-server-image"]) {
-			const dependencies = workflow.getIn(["jobs", name, "needs"]);
-			assert.ok(isSeq(dependencies));
-			assert.deepEqual(dependencies.toJSON(), [
-				"detect-changes",
-				"server-package",
-				...(name === "application-server-image" ? ["vulnerability-database"] : []),
-			]);
-		}
+		const build = workflow.getIn(["jobs", "Build", "needs"]);
+		assert.ok(isSeq(build));
+		assert.deepEqual(build.toJSON(), ["detect-changes", "server-package"]);
+		const docker = workflow.getIn(["jobs", "Docker", "needs"]);
+		assert.ok(isSeq(docker));
+		assert.deepEqual(docker.toJSON(), [
+			"detect-changes",
+			"vulnerability-database",
+			"server-package",
+		]);
 		for (const name of ["Supported-host-smoke", "Release-preflight"]) {
 			const dependencies = workflow.getIn(["jobs", name, "needs"]);
 			assert.ok(isSeq(dependencies));
 			assert.deepEqual(dependencies.toJSON(), [
 				"detect-changes",
-				"application-server-image",
 				"Docker",
 				...(name === "Release-preflight" ? ["vulnerability-database"] : []),
 			]);
@@ -1773,7 +1879,6 @@ void describe("CI contract", () => {
 		assert.ok(isSeq(gate));
 		for (const name of [
 			"server-package",
-			"application-server-image",
 			"Build",
 			"Test",
 			"Docker",
@@ -2042,9 +2147,14 @@ void describe("CI contract", () => {
 			"server-tests runs the suites for every unfiltered event",
 		);
 
-		assert.doesNotMatch(
-			String(workflow.getIn(["jobs", "detect-changes", "outputs", "all-images"])),
-			/event_name/u,
+		// The image set may name one event, the merge group, whose Kubernetes legs install every image.
+		assert.deepEqual(
+			[
+				...String(workflow.getIn(["jobs", "detect-changes", "outputs", "all-images"])).matchAll(
+					/github\.event_name (?<operator>[!=]=) '(?<event>\w+)'/gu,
+				),
+			].map(({ groups }) => `${String(groups?.operator)} ${String(groups?.event)}`),
+			["== merge_group"],
 		);
 		// The caller owns which commit a run is a diff from; `ci-build.yml` derives nothing from
 		// the event.
@@ -2059,23 +2169,16 @@ void describe("CI contract", () => {
 		// The platform list is one decision, taken in cicd.yml and handed to every image build, so
 		// a run cannot evidence one image on both platforms and its sibling on one. The test below
 		// owns what that decision is; this owns that nothing decides it locally.
-		for (const image of [
-			job(docker, "webapp-build"),
-			job(docker, "agent-pi-build"),
-			job(docker, "postgres-build"),
-		]) {
-			assert.match(image, /platforms: \$\{\{ inputs\.platforms \}\}/u);
-			assert.doesNotMatch(image, /^\s+tags:/mu);
-		}
+		const images = job(docker, "images");
+		assert.match(images, /platforms: \$\{\{ inputs\.platforms \}\}/u);
+		assert.doesNotMatch(images, /^\s+tags:/mu);
 		// Required, and with no default: a caller that forgets it fails to start, rather than
 		// silently publishing one architecture where a release needs two.
 		assert.match(docker, /^ {6}platforms:\n(?: {8}.*\n)*? {8}required: true$/mu);
-		for (const caller of ["application-server-image", "Docker"]) {
-			assert.match(
-				job(source, caller),
-				/platforms: \$\{\{ needs\.detect-changes\.outputs\.platforms \}\}/u,
-			);
-		}
+		assert.match(
+			job(source, "Docker"),
+			/platforms: \$\{\{ needs\.detect-changes\.outputs\.platforms \}\}/u,
+		);
 		for (const text of [source, docker]) {
 			assert.doesNotMatch(text, /single[-_]arch/u);
 		}
@@ -2101,7 +2204,7 @@ void describe("CI contract", () => {
 			`\${{ fromJSON(inputs.platforms) }}`,
 		);
 		assert.equal(
-			namedStep(parsed, ["jobs", "merge"], "Create manifest and push").getIn(["env", "PLATFORMS"]),
+			namedStep(parsed, ["jobs", "merge"], "Create manifests and push").getIn(["env", "PLATFORMS"]),
 			`\${{ inputs.platforms }}`,
 		);
 		// Each platform builds natively on its own runner; no emulation.
@@ -2121,6 +2224,11 @@ void describe("CI contract", () => {
 			"Resolve the commit unchanged images are aliased from",
 		);
 		assert.equal(resolve.get("run"), "node scripts/resolve-alias-base.ts");
+		// Only a pull request aliases, and only from a commit whose push run has published its images.
+		assert.equal(
+			resolve.getIn(["env", "ALIAS_IMAGES"]),
+			`\${{ github.event_name == 'pull_request' }}`,
+		);
 		assert.match(
 			String(orchestrator.getIn([...detect, "outputs", "alias-base"])),
 			/^\$\{\{ steps\.alias_base\.outputs\.commit \}\}$/u,
@@ -2179,12 +2287,10 @@ void describe("CI contract", () => {
 			String(orchestrator.getIn(["jobs", "detect-changes", "outputs", "publishable"])),
 			/^\$\{\{ github\.event_name != 'pull_request' \|\| github\.event\.pull_request\.head\.repo\.full_name == github\.repository \}\}$/u,
 		);
-		for (const caller of ["application-server-image", "Docker"]) {
-			assert.match(
-				String(orchestrator.getIn(["jobs", caller, "with", "publish"])),
-				/^\$\{\{ needs\.detect-changes\.outputs\.publishable == 'true' \}\}$/u,
-			);
-		}
+		assert.match(
+			String(orchestrator.getIn(["jobs", "Docker", "with", "publish"])),
+			/^\$\{\{ needs\.detect-changes\.outputs\.publishable == 'true' \}\}$/u,
+		);
 
 		const reusable = parseDocument(
 			await readFile(".github/workflows/reusable-docker-build.yml", "utf8"),
@@ -2198,33 +2304,37 @@ void describe("CI contract", () => {
 		assert.equal(declaration.get("default"), undefined);
 
 		const build = ["jobs", "build"];
-		for (const name of ["Log in to Container Registry", "Export digest", "Upload digest"]) {
+		for (const name of ["Log in to Container Registry", "Export digests", "Upload digests"]) {
 			assert.match(
 				String(namedStep(reusable, build, name).get("if")),
 				/inputs\.publish/u,
 				`${name} writes to the registry and must be gated on publish`,
 			);
 		}
-		assert.match(
-			String(namedStep(reusable, build, "Set up Docker Buildx").getIn(["with", "driver"])),
-			/^\$\{\{ inputs\.use-buildpacks && 'docker' \|\| 'docker-container' \}\}$/u,
+		// BuildKit builds the Dockerfile images in a container; Buildpacks use the daemon directly.
+		assert.equal(
+			namedStep(reusable, build, "Set up Docker Buildx").getIn(["with", "driver"]),
+			"docker-container",
 		);
 		assert.equal(
 			namedStep(reusable, ["jobs", "merge"], "Set up Docker Buildx").getIn(["with", "driver"]),
 			"docker",
 		);
-		const buildx = namedStep(reusable, build, "Build and push (Dockerfile)");
-		const inputs = buildx.get("with");
+		const bake = namedStep(reusable, build, "Build and push the Dockerfile images");
+		const inputs = bake.get("with");
 		assert.ok(isMap(inputs));
-		assert.match(String(inputs.get("push")), /^\$\{\{ inputs\.publish \}\}$/u);
 		// An untagged local image is one nothing can name, so a fork loads nothing into the daemon.
-		assert.equal(inputs.has("load"), false);
-		assert.equal(inputs.has("tags"), false);
-		assert.match(String(inputs.get("outputs")), /inputs\.publish &&/u);
+		for (const input of ["push", "load", "tags"]) {
+			assert.equal(inputs.has(input), false, input);
+		}
+		assert.equal(bake.getIn(["env", "PUBLISH"]), `\${{ inputs.publish }}`);
+		// Without publication each target exports to the build cache only.
+		const definition = await readFile("docker/docker-bake.hcl", "utf8");
+		assert.equal((definition.match(/: \["type=cacheonly"\]/gu) ?? []).length, 3);
 		assert.match(String(reusable.getIn(["jobs", "merge", "if"])), /inputs\.publish/u);
-		assert.match(
-			String(namedStep(reusable, build, "Resolve the platform subject").get("if")),
-			/inputs\.publish/u,
+		assert.equal(
+			namedStep(reusable, build, "Enforce the release vulnerability policy").get("if"),
+			`\${{ !cancelled() && steps.prep.outcome == 'success' && inputs.publish && inputs.scan-images }}`,
 		);
 
 		const docker = parseDocument(await readFile(".github/workflows/ci-docker-build.yml", "utf8"));
@@ -2325,6 +2435,8 @@ void describe("CI contract", () => {
 		// A fork publishes no images, so there is nothing for this job to pull. The smoke selects the
 		// head images itself, so it does not wait for a preview label.
 		assert.match(condition, /needs\.detect-changes\.outputs\.head-images == 'true'/u);
+		// Without the server image (a failed package) a boot would only repeat that failure.
+		assert.match(condition, /needs\.Docker\.outputs\.application-server-digest != ''/u);
 		const headImages = String(
 			orchestrator.getIn(["jobs", "detect-changes", "outputs", "head-images"]),
 		);
@@ -2338,7 +2450,7 @@ void describe("CI contract", () => {
 		const smoke = job(source, "Supported-host-smoke");
 		assert.match(
 			smoke,
-			/APPLICATION_DIGEST: \$\{\{ needs\.application-server-image\.outputs\.manifest-digest \}\}/u,
+			/APPLICATION_DIGEST: \$\{\{ needs\.Docker\.outputs\.application-server-digest \}\}/u,
 		);
 		// The worker pulls and checks this commit's own agent image, never a placeholder.
 		assert.match(smoke, /scripts\/resolve-release-images\.ts "\$HEAD_SHA"/u);
@@ -2369,7 +2481,7 @@ void describe("CI contract", () => {
 			/scripts\/prepare-host-smoke-env\.ts/u,
 		);
 		// The paths that trigger the smoke also have to rebuild the images it boots.
-		assert.match(job(source, "application-server-image"), /if:.*supported-host-smoke/u);
+		assert.match(job(source, "Docker"), /application_server_image: .*supported-host-smoke/u);
 		assert.match(source, /application_server_changed:.*supported-host-smoke/u);
 		assertNeeds(source, "all-ci-passed", "Supported-host-smoke");
 	});
@@ -2494,40 +2606,37 @@ void describe("CI contract", () => {
 		assert.equal(workflow.hasIn(["jobs", "scan"]), false);
 		// One platform's refusal must not cancel the other's scan or its evidence.
 		assert.equal(workflow.getIn(["jobs", "build", "strategy", "fail-fast"]), false);
-		const needs = workflow.getIn(["jobs", "merge", "needs"]);
-		assert.ok(isSeq(needs));
-		assert.deepEqual(needs.toJSON(), ["reuse", "build"]);
+		assert.equal(workflow.getIn(["jobs", "merge", "needs"]), "build");
 		const build = ["jobs", "build"];
 		const steps = workflow.getIn([...build, "steps"]);
 		assert.ok(isSeq(steps));
 		const names = asArray(steps.toJSON(), "steps").map((item) => asRecord(item, "step").name);
 		const at = (name: string) => names.indexOf(name);
-		// Scanned after the digest is exported and before it is handed to the merge.
-		assert.ok(at("Export digest") < at("Resolve the platform subject"));
-		assert.ok(at("Enforce the release vulnerability policy") < at("Upload digest"));
-		const subject = namedStep(workflow, build, "Resolve the platform subject");
-		assert.equal(subject.get("run"), "node scripts/resolve-image-scan-subject.ts");
-		assert.equal(
-			subject.getIn(["env", "DIGEST_DIRECTORY"]),
-			`\${{ runner.temp }}/digests/\${{ steps.prep.outputs.platform_pair }}`,
-		);
-		assert.equal(subject.getIn(["env", "SCAN_PLATFORM"]), `\${{ matrix.platform }}`);
+		// Scanned after the digests are exported and before they are handed to the merge.
+		assert.ok(at("Export digests") < at("Enforce the release vulnerability policy"));
+		assert.ok(at("Enforce the release vulnerability policy") < at("Upload digests"));
 		const enforce = namedStep(workflow, build, "Enforce the release vulnerability policy");
+		assert.match(String(enforce.get("run")), /node scripts\/resolve-image-scan-subject\.ts/u);
 		// The same script and the same policy file the release and the rescan call. A second
 		// copy of the policy is the failure this gate exists to prevent.
 		assert.match(
 			String(enforce.get("run")),
-			/node scripts\/check-release-vulnerabilities\.ts "\$IMAGE" "\$SCAN_PLATFORM"[\s\S]*security\/vulnerability-policy\.json/u,
+			/node scripts\/check-release-vulnerabilities\.ts "\$image" "\$SCAN_PLATFORM"[\s\S]*security\/vulnerability-policy\.json/u,
 		);
 		assert.equal(enforce.getIn(["env", "SCAN_PLATFORM"]), `\${{ matrix.platform }}`);
 		assert.doesNotMatch(String(enforce.get("run")), /github\.(?:run_id|run_attempt)/u);
 		// A gate that cannot say what it rejected is not finished.
-		const report = namedStep(workflow, build, "Upload the vulnerability policy result");
+		const report = namedStep(workflow, build, "Upload the vulnerability policy results");
 		assert.equal(
 			report.getIn(["with", "name"]),
-			`vulnerability-policy-\${{ steps.subject.outputs.report-stem }}-\${{ github.run_attempt }}`,
+			`vulnerability-policy-\${{ steps.prep.outputs.platform_pair }}-\${{ github.run_attempt }}`,
 		);
-		assert.equal(report.get("if"), `\${{ !cancelled() && steps.subject.outcome == 'success' }}`);
+		assert.equal(
+			report.get("if"),
+			`\${{ !cancelled() && (steps.scan.outcome == 'success' || steps.scan.outcome == 'failure') }}`,
+		);
+		// Every image is scanned before the step fails, so one refusal does not hide another's.
+		assert.match(String(enforce.get("run")), /refused\+=\("\$name"\)/u);
 		assert.match(job(reusable, "build"), /uses: \.\/\.github\/actions\/download-trivy-db/u);
 		// The scanners pull through the registry login, not with the token in their environment.
 		assert.equal(enforce.hasIn(["env", "TRIVY_PASSWORD"]), false);
@@ -2784,8 +2893,10 @@ void describe("CI contract", () => {
 			capture.indexOf("node scripts/verify-release-evidence.ts evidence --verify-signatures") >
 				checksumSigning,
 		);
-		assert.equal((capture.match(/node scripts\/keyless-sign\.ts /gu) ?? []).length, 3);
-		assert.doesNotMatch(capture, /(?:^|\n)\s*cosign (?:attest|sign-blob) /u);
+		// The SBOM attestations, the evidence checksums, the two locks and the chart digest.
+		assert.equal((capture.match(/node scripts\/keyless-sign\.ts /gu) ?? []).length, 4);
+		assert.match(capture, /node scripts\/keyless-sign\.ts sign --yes "\$chart"/u);
+		assert.doesNotMatch(capture, /(?:^|\n)\s*cosign (?:attest|sign|sign-blob) /u);
 		const verifier = await readFile("scripts/verify-release-evidence.ts", "utf8");
 		// Template literals are elided so this test can quote the source lines it expects without
 		// carrying interpolations of its own.
@@ -3223,7 +3334,7 @@ void describe("CI contract", () => {
 		const complete = String(workflow.getIn([...detection, "outputs", "all-images"]));
 		assert.match(
 			complete,
-			/^\$\{\{ steps\.alias_base\.outputs\.commit == '' \|\| steps\.release_candidate\.outputs\.release-candidate == 'true' \}\}$/u,
+			/^\$\{\{ steps\.alias_base\.outputs\.commit == '' \|\| steps\.release_candidate\.outputs\.release-candidate == 'true' \|\| \(github\.event_name == 'merge_group' && steps\.filter\.outputs\.kubernetes == 'true'\) \}\}$/u,
 		);
 		// A run builds every image when it resolved no commit to alias from, so which events can
 		// resolve one is read from the resolver's own condition rather than restated here.
@@ -3262,8 +3373,11 @@ void describe("CI contract", () => {
 
 		// One home for that decision too: an input that selects an image reads it, and no input
 		// re-tests the event on its own. The package and server image selectors read it directly.
-		for (const name of ["server-package", "application-server-image"]) {
-			const condition = String(workflow.getIn(["jobs", name, "if"]));
+		for (const at of [
+			["jobs", "server-package", "if"],
+			["jobs", "Docker", "with", "application_server_image"],
+		]) {
+			const condition = String(workflow.getIn(at));
 			assert.match(condition, /needs\.detect-changes\.outputs\.all-images == 'true'/u);
 			assert.doesNotMatch(condition, /github\.event_name/u);
 		}
@@ -3304,6 +3418,22 @@ void describe("CI contract", () => {
 				`${image} must not re-test the event its caller already decided on`,
 			);
 		}
+
+		// Only a pull request aliases, so a merge group that runs the Kubernetes legs, which install
+		// every image under the run's commit, must build them all.
+		assert.match(alias, /github\.event_name == 'pull_request'/u);
+		assert.match(
+			String(workflow.getIn([...detection, "outputs", "kubernetes"])),
+			/^\$\{\{ steps\.filter\.outputs\.kubernetes \}\}$/u,
+		);
+		assert.match(
+			String(workflow.getIn(["jobs", "Kubernetes", "if"])),
+			/\(github\.event_name == 'push' \|\| needs\.detect-changes\.outputs\.kubernetes == 'true'\)/u,
+		);
+		assert.match(
+			complete,
+			/\(github\.event_name == 'merge_group' && steps\.filter\.outputs\.kubernetes == 'true'\)/u,
+		);
 	});
 
 	void test("rescans main's images weekly and reports drift to an issue, not a status", async () => {
@@ -4193,10 +4323,6 @@ void test("a workflow triggered by main does not cancel the run main is judged b
 const UNCANCELLED_PULL_REQUEST_RUNS: Record<string, string> = {
 	".github/workflows/cd-docs-teardown.yml":
 		"It deletes the docs and Storybook previews; a teardown cancelled halfway leaves them published.",
-	".github/workflows/cleanup-preview.yml":
-		"A teardown cancelled halfway leaves preview resources behind.",
-	".github/workflows/deploy-preview.yml":
-		"A deploy cancelled halfway leaves a partly replaced preview.",
 	".github/workflows/openapi-autocommit.yml":
 		"Any label starts it, so an unrelated label would cancel the run that commits the regeneration.",
 	".github/workflows/review-policy.yml":
@@ -4375,7 +4501,10 @@ void test("pnpm reuses only trusted native verification verdicts and still runs 
 	for (const declaration of [locate, restore, install, proof]) {
 		assert.equal(declaration.get("if"), "inputs.install == 'frozen'");
 	}
-	assert.equal(install.get("run"), "pnpm install --frozen-lockfile --ignore-scripts");
+	assert.equal(
+		install.get("run"),
+		"pnpm install --frozen-lockfile --ignore-scripts --no-trust-lockfile",
+	);
 	assert.match(String(locate.get("run")), /\$\(pnpm cache path\)/u);
 	assert.match(
 		String(locate.get("run")),
@@ -4871,4 +5000,186 @@ void test("the log collection example reads only tagged entries and indexes only
 		/stage\.structured_metadata\s*\{\s*values\s*=\s*\{\s*trace_id\s*=\s*"",?\s*\}/u,
 	);
 	assert.doesNotMatch(alloy, /stage\.labels/u);
+});
+
+/**
+ * The SHA-256 that get.helm.sh publishes beside each v4.3.1 archive (`<archive>.sha256sum`), keyed
+ * by the runner platform the installer maps to it.
+ */
+const HELM_ARCHIVES = new Map([
+	[
+		"Linux/X64",
+		["linux-amd64", "tar.gz", "0403a88ae20913d11b10a2467b50087721fea7581736da6b9d3992f5357fe54b"],
+	],
+	[
+		"Linux/ARM64",
+		["linux-arm64", "tar.gz", "8cf8f66ecbc252ac8f7f06cca68aba88508ddfde3a6a34feb1678ad1694b4f88"],
+	],
+	[
+		"macOS/X64",
+		["darwin-amd64", "tar.gz", "34bec4eba761ba5c16d1965ee6b8f5b0abe5993974a802274e2a4f0418893d89"],
+	],
+	[
+		"macOS/ARM64",
+		["darwin-arm64", "tar.gz", "6b4e61c8cd27d99e5a801e63ff25dd5c70b36875c2cd659d3e9ce6b76fc23198"],
+	],
+	[
+		"Windows/X64",
+		["windows-amd64", "zip", "fcfd7b796dcf0f225abc40b5636a3b01f55f3de2fb1dfb18475df94e62c14112"],
+	],
+] as const);
+
+void test("one pinned Helm installer verifies the official archive before it extracts the binary", async () => {
+	const action = parseDocument(await readFile(".github/actions/setup-helm/action.yml", "utf8"));
+	const install = namedStep(action, ["runs"], "Install Helm");
+	assert.equal(install.getIn(["env", "HELM_VERSION"]), "v4.3.1");
+	assert.equal(install.getIn(["env", "RUNNER_PLATFORM"]), `\${{ runner.os }}/\${{ runner.arch }}`);
+	const script = runScript(action, ["runs"], "Install Helm");
+	for (const [platform, [name, format, checksum]] of HELM_ARCHIVES) {
+		assert.match(
+			script,
+			new RegExp(
+				`^\\s*${escapeRegExp(platform)}\\) platform=${name} format=${escapeRegExp(format)} binary=helm(?:\\.exe)?\\n\\s*checksum=${checksum} ;;$`,
+				"mu",
+			),
+			platform,
+		);
+	}
+	// A closed mapping: any other runner fails, and no checksum exists that the table above lacks.
+	assert.equal((script.match(/checksum=[a-f0-9]{64}/gu) ?? []).length, HELM_ARCHIVES.size);
+	assert.match(
+		script,
+		/^\s*\*\) echo "::error::No pinned Helm archive for \$RUNNER_PLATFORM"; exit 1 ;;$/mu,
+	);
+	// The official host only, bounded, and the archive is compared before it is opened.
+	assert.match(
+		script,
+		/--max-time 120 -o "\$work\/\$archive" "https:\/\/get\.helm\.sh\/\$archive"/u,
+	);
+	assert.equal((script.match(/https:\/\//gu) ?? []).length, 1);
+	const compared = script.indexOf('if [ "$actual" != "$checksum" ]; then');
+	assert.ok(compared > 0, "the archive checksum must be compared");
+	for (const extraction of ["unzip -q", "tar -xzf"]) {
+		assert.ok(script.indexOf(extraction) > compared, `${extraction} must follow the checksum`);
+	}
+	assert.match(script, /unzip -q "\$work\/\$archive" "\$platform\/\$binary" -d "\$work"/u);
+	assert.match(script, /tar -xzf "\$work\/\$archive" -C "\$work" "\$platform\/\$binary"/u);
+	assert.match(script, /trap 'rm -rf "\$work"' EXIT/u);
+	// Its own directory under the runner's temporary space, first on PATH, never a system location.
+	assert.match(script, /install_dir="\$runner_temp\/helm-\$HELM_VERSION\/bin"/u);
+	assert.match(
+		script,
+		/installed=\$\("\$install_dir\/\$binary" version --template '\{\{\.Version\}\}'\)/u,
+	);
+	assert.match(script, /cygpath -w "\$install_dir" >> "\$GITHUB_PATH"/u);
+	assert.doesNotMatch(script, /\bsudo\b|\/usr\/local\/bin|\bhelm version --short\b/u);
+	// The PATH check reads the one version from the install step instead of repeating it.
+	const check = namedStep(action, ["runs"], "Check the Helm on PATH");
+	assert.equal(check.getIn(["env", "HELM_VERSION"]), `\${{ steps.install.outputs.version }}`);
+	assert.match(
+		runScript(action, ["runs"], "Check the Helm on PATH"),
+		/\*\/helm-"\$HELM_VERSION"\/bin\/helm \|/u,
+	);
+	for (const file of await posixGlob(".github/{actions,workflows}/**/*.{yml,yaml}")) {
+		if (file !== ".github/actions/setup-helm/action.yml") {
+			assert.doesNotMatch(await readFile(file, "utf8"), /get\.helm\.sh|HELM_VERSION/u, file);
+		}
+	}
+});
+
+/** A workflow step that runs Helm, directly or through the chart release script. */
+const usesHelm = (item: unknown) =>
+	isMap(item) &&
+	typeof item.get("run") === "string" &&
+	/\bhelm\b|release-chart\.ts/u.test(String(item.get("run")));
+const installsHelm = (item: unknown) =>
+	isMap(item) && item.get("uses") === "./.github/actions/setup-helm";
+
+void test("every job that runs Helm installs the pinned one first, and the render gate runs on Linux and Windows", async () => {
+	const release = parseDocument(await readFile(".github/workflows/release.yml", "utf8"));
+	const helmJobs: string[] = [];
+	const jobs = release.get("jobs");
+	assert.ok(isMap(jobs));
+	for (const pair of jobs.items) {
+		const steps = isMap(pair.value) ? pair.value.get("steps") : undefined;
+		if (!isSeq(steps)) {
+			continue;
+		}
+		const first = steps.items.findIndex(usesHelm);
+		const installer = steps.items.findIndex(installsHelm);
+		if (first === -1) {
+			assert.equal(installer, -1, `${String(pair.key)} installs Helm it never runs`);
+			continue;
+		}
+		helmJobs.push(String(pair.key));
+		assert.ok(
+			installer !== -1 && installer < first,
+			`${String(pair.key)} runs Helm before the installer`,
+		);
+	}
+	assert.deepEqual(helmJobs, ["tag-images", "publish-release"]);
+
+	const leg = parseDocument(await readFile(".github/workflows/ci-quality-leg.yml", "utf8"));
+	const setup = namedStep(leg, ["jobs", "quality"], "Setup Helm");
+	assert.equal(setup.get("uses"), "./.github/actions/setup-helm");
+	assert.equal(setup.get("if"), "inputs.leg == 'tooling' || inputs.leg == 'windows'");
+	const legSteps = leg.getIn(["jobs", "quality", "steps"]);
+	assert.ok(isSeq(legSteps));
+	assert.ok(
+		legSteps.items.indexOf(setup) <
+			legSteps.items.indexOf(namedStep(leg, ["jobs", "quality"], "Quality gates")),
+		"Helm is installed before the gates",
+	);
+
+	const tasks = await loadTasks();
+	const dependencies = (entry: string) =>
+		asArray(asRecord(tasks[entry], entry).dependsOn, `${entry} dependencies`);
+	// The universal tooling suite owns both chart suites, the real Helm render included: its glob
+	// matches them, and it reaches every quality entry that the Helm installer serves.
+	const tooling = commandsOf(tasks["test:tooling"]).join(" ");
+	const toolingGlobs = [...tooling.matchAll(/(?<glob>\S+\.test\.ts)/gu)].map(
+		(match) => match.groups?.glob ?? "",
+	);
+	for (const file of [
+		"scripts/kubernetes-chart.test.ts",
+		"scripts/kubernetes-chart-render.test.ts",
+	]) {
+		assert.ok(existsSync(file), `${file} exists`);
+		assert.ok(
+			toolingGlobs.some((testGlob) => minimatch(file, testGlob)),
+			`test:tooling must run ${file}`,
+		);
+	}
+	assert.ok(dependencies("gate:tooling-tests").includes("test:tooling"));
+	assert.ok(dependencies("gate:agents").includes("gate:tooling-tests"));
+	for (const entry of ["quality", "ci:tooling", "ci:windows", "affected:agents"]) {
+		assert.ok(dependencies(entry).includes("gate:agents"), `${entry} must run gate:agents`);
+	}
+	// The convenience entry runs the two suites directly; the normal graph never runs them twice.
+	const chartTests = asRecord(tasks["test:kubernetes:chart"], "test:kubernetes:chart");
+	assert.deepEqual(commandsOf(chartTests), [
+		"node --test scripts/kubernetes-chart.test.ts scripts/kubernetes-chart-render.test.ts",
+	]);
+	assert.equal(chartTests.cache, false, "real Helm subprocesses are never cached");
+	assert.equal(tasks["gate:kubernetes-chart"], undefined);
+	for (const [name, task] of Object.entries(tasks)) {
+		const dependsOn = isRecord(task) && Array.isArray(task.dependsOn) ? task.dependsOn : [];
+		assert.ok(!dependsOn.includes("test:kubernetes:chart"), `${name} runs the chart suites again`);
+	}
+	// A chart change selects the scoped set that contains the render suite.
+	const chartChange = scopesFor(["deploy/chart/hephaestus/values.yaml"]);
+	assert.deepEqual(chartChange, ["agents"]);
+	assert.deepEqual(commandsFor(chartChange), [["run", "affected:agents"]]);
+	// The chart's plain JSON and YAML are formatted and checked; Helm judges its Go templates.
+	for (const entry of ["format:config", "gate:config-format"]) {
+		assert.match(
+			commandsOf(tasks[entry]).join(" "),
+			/vp fmt --(?:write|check) 'deploy\/chart\/\*\*\/\*\.\{json,yaml\}' '!deploy\/chart\/\*\*\/templates\/\*\*'/u,
+			entry,
+		);
+	}
+
+	const detection = job(await readFile(".github/workflows/cicd.yml", "utf8"), "detect-changes");
+	assert.match(pathFilter(detection, "tooling"), /- 'deploy\/chart\/\*\*'/u);
+	assert.match(pathFilter(detection, "quality-config"), /- '\.github\/actions\/setup-helm\/\*\*'/u);
 });

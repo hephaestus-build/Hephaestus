@@ -186,6 +186,32 @@ void test("supports only the release keyless immutable attestation command", asy
 	await assert.rejects(keylessSign([...args, "--key", "other"]), /Expected a release keyless/u);
 });
 
+void test("signs an OCI subject only by digest, with no bundle and no key", async () => {
+	const reference = `ghcr.io/owned/charts/hephaestus@sha256:${"a".repeat(64)}`;
+	const calls: string[][] = [];
+	await keylessSign(["sign", "--yes", reference], {
+		execute: async (actual) => {
+			calls.push(actual);
+		},
+	});
+	assert.deepEqual(calls, [["sign", "--yes", reference]]);
+	for (const args of [
+		["sign", "--yes", "ghcr.io/owned/charts/hephaestus:1.2.3"],
+		["sign", "--yes", `${reference}@sha256:${"b".repeat(64)}`],
+		["sign", reference],
+		["sign", "--yes", "--key", "other", reference],
+		["sign", "--yes", "--recursive", reference],
+		// A subject that starts with `-` would reach cosign as a flag.
+		["sign", "--yes", `--x@sha256:${"a".repeat(64)}`],
+	]) {
+		await assert.rejects(
+			keylessSign(args, { execute: async () => assert.fail("must not sign") }),
+			/Expected a release keyless/u,
+			args.join(" "),
+		);
+	}
+});
+
 void test("retry launches distinct processes with identical signing arguments", async (t) => {
 	const { args, bundle, input } = await fixture(t);
 	const log = path.join(path.dirname(input), "calls.jsonl");

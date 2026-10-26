@@ -19,6 +19,8 @@ import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -51,10 +53,13 @@ public class ReviewRuntimeQueryAdapter implements ReviewRuntimeQuery {
     }
 
     @Override
-    public Map<ReviewJobStatus, Long> jobCounts(long workspaceId, UUID reviewId) {
-        return runtime.jobCounts(workspaceId, reviewId).stream()
-                .collect(Collectors.toMap(
-                        ReviewRuntimeRepository.JobStateCount::status, ReviewRuntimeRepository.JobStateCount::count));
+    public Map<UUID, Map<ReviewJobStatus, Long>> jobCounts(long workspaceId, Collection<UUID> reviewIds) {
+        if (reviewIds.isEmpty()) return Map.of();
+        Map<UUID, Map<ReviewJobStatus, Long>> counts = new HashMap<>();
+        runtime.jobCounts(workspaceId, reviewIds)
+                .forEach(row -> counts.computeIfAbsent(row.reviewId(), ignored -> new EnumMap<>(ReviewJobStatus.class))
+                        .put(row.status(), row.count()));
+        return counts;
     }
 
     @Override

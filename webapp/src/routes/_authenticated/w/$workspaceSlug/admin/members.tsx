@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 
@@ -80,6 +80,9 @@ function AdminMembersContainer() {
 	} = useWorkspaceAccess();
 	const { getUserId } = useAuth();
 	const [roleChange, setRoleChange] = useState<WorkspaceRoleChange | null>(null);
+	// The Role menu the waiting change came from. The dialog opens while focus is still in that menu's
+	// closing list, so without it focus would return there.
+	const roleChangeTrigger = useRef<HTMLElement>(null);
 
 	const view: WorkspaceMembersTableView = {
 		q: search.q ?? "",
@@ -172,7 +175,11 @@ function AdminMembersContainer() {
 		}
 	};
 
-	const handleRoleChange = (member: WorkspaceMemberRow, role: WorkspaceRole) => {
+	const handleRoleChange = (
+		member: WorkspaceMemberRow,
+		role: WorkspaceRole,
+		trigger: HTMLElement,
+	) => {
 		const accountId = member.membership.account.id;
 		const change: WorkspaceRoleChange = {
 			accountId,
@@ -182,6 +189,7 @@ function AdminMembersContainer() {
 			own: accountId === getUserId(),
 		};
 		if (roleChangeAsksFirst(change)) {
+			roleChangeTrigger.current = trigger;
 			setRoleChange(change);
 		} else {
 			sendRoleChange(change);
@@ -248,6 +256,7 @@ function AdminMembersContainer() {
 				change={roleChange}
 				onConfirm={sendRoleChange}
 				onClose={() => setRoleChange(null)}
+				finalFocus={roleChangeTrigger}
 			/>
 		</>
 	);

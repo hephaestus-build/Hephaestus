@@ -245,7 +245,7 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
                 .extracting(ProxyIdentity::description)
                 .isEqualTo("job:" + job.getId());
 
-        assertThat(answerToTokenCall("dead-attempt")).isEqualTo(401);
+        assertThat(answerToTokenCall("dead-attempt")).isEqualTo(409);
         assertThat(servedAs.get()).isNull();
     }
 
@@ -267,7 +267,7 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
                 .isEqualTo("job:" + job.getId());
         MockHttpServletRequest stale = request("POST", path, GATEWAY_PORT);
         stale.addHeader("Authorization", "Bearer dead-attempt");
-        assertThat(answerTo(stale)).isEqualTo(401);
+        assertThat(answerTo(stale)).isEqualTo(409);
         assertThat(servedAs.get()).isNull();
         assertThat(answerTo("POST", path, GATEWAY_PORT)).isEqualTo(401);
         assertThat(answerTo("GET", path, GATEWAY_PORT)).isEqualTo(404);
@@ -618,7 +618,11 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
                 (ignoredRequest, ignoredResponse) ->
                         servedAs.set(SecurityContextHolder.getContext().getAuthentication()));
 
-        if (response.getStatus() != 429) {
+        if (response.getStatus() == 409) {
+            assertThat(response.getContentAsString())
+                    .as("an attempt that no longer runs learns only that")
+                    .isEqualTo(JobTokenAuthenticationFilter.ATTEMPT_ENDED);
+        } else if (response.getStatus() != 429) {
             assertThat(response.getContentAsByteArray())
                     .as("a hidden route reveals nothing in its body")
                     .isEmpty();

@@ -56,8 +56,8 @@ export function stepUpChallengeOf(err: unknown): StepUpChallenge | undefined {
  * stays refused. The client's retries and the error guidance both read this one answer.
  */
 export function problemIsRetryable(err: unknown): boolean {
-	const status = problemStatusOf(err);
-	return status === undefined || status === 429 || status >= 500;
+	const kind = problemKindOf(problemStatusOf(err));
+	return kind === "no-answer" || kind === "rate-limited" || kind === "server";
 }
 
 /**
@@ -82,3 +82,65 @@ export function problemStatusOf(err: unknown): number | undefined {
 	}
 	return undefined;
 }
+
+/** What a failed request means for the reader, by its status. */
+export type ProblemKind =
+	| "no-answer"
+	| "signed-out"
+	| "no-access"
+	| "not-found"
+	| "conflict"
+	| "rate-limited"
+	| "server"
+	| "rejected";
+
+export function problemKindOf(status: number | undefined): ProblemKind {
+	if (status === undefined) {
+		return "no-answer";
+	}
+	if (status === 401) {
+		return "signed-out";
+	}
+	if (status === 403) {
+		return "no-access";
+	}
+	if (status === 404) {
+		return "not-found";
+	}
+	if (status === 409) {
+		return "conflict";
+	}
+	if (status === 429) {
+		return "rate-limited";
+	}
+	return status >= 500 ? "server" : "rejected";
+}
+
+export interface ProblemCopy {
+	/** What happened, used when the server gave no wording of its own. */
+	cause?: string;
+	/** What the reader does next. */
+	next: string;
+	/** Re-words a "We could not load X" title when the failure is not a load failure. */
+	retitle?: (what: string) => string;
+}
+
+/** The one home for these words, whether a region's alert or a whole page shows the failure. */
+export const PROBLEM_COPY = {
+	"no-answer": { next: "Check your connection, then try again." },
+	"signed-out": { next: "Your session has expired. Sign in again to continue." },
+	"no-access": {
+		next: "Ask a workspace admin or instance admin for access.",
+		retitle: (what: string) => `You do not have access to ${what}`,
+	},
+	"not-found": {
+		next: "It may have been deleted or moved. Go back to continue.",
+		retitle: (what: string) => `We could not find ${what}`,
+	},
+	conflict: {
+		next: "Something else changed this first. Reload the page to see the current state.",
+	},
+	"rate-limited": { cause: "Too many requests.", next: "Wait a moment, then try again." },
+	server: { cause: "The server had a problem.", next: "Try again in a moment." },
+	rejected: { cause: "The request was not accepted.", next: "Reload the page and try again." },
+} satisfies Record<ProblemKind, ProblemCopy>;

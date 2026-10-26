@@ -570,7 +570,10 @@ describe("workspace members route", () => {
 		await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
 
 		await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
-		within(screen.getByRole("combobox", { name: "Role of The Octocat" })).getByText("Admin");
+		const role = screen.getByRole("combobox", { name: "Role of The Octocat" });
+		within(role).getByText("Admin");
+		// Focus returns to the member's Role menu, not to an option of its closed list.
+		await waitFor(() => expect(document.activeElement).toBe(role));
 		expect(assigns).toBe(0);
 	});
 
@@ -599,7 +602,7 @@ describe("workspace members route", () => {
 
 		await screen.findByText("We could not change the role");
 		screen.getByText("A workspace needs at least one owner.");
-		expect(screen.queryByRole("alertdialog")).toBeNull();
+		await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
 	});
 
 	it("offers an admin no Owner role and leaves an owner's row read-only", async () => {

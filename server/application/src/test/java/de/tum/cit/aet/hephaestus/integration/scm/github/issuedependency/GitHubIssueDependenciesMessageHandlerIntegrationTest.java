@@ -122,7 +122,9 @@ class GitHubIssueDependenciesMessageHandlerIntegrationTest extends BaseIntegrati
     @Test
     void shouldNotStoreABlockerFromAnotherRepositoryUnderTheDeliveringOne() throws IOException {
         ObjectNode payload = (ObjectNode) objectMapper.readTree(fixture("blocked_by_added"));
-        ((ObjectNode) payload.required("blocking_issue_repo")).put("full_name", "HephaestusTest/Unsynchronized");
+        ((ObjectNode) payload.required("blocking_issue_repo"))
+                .put("id", 1L)
+                .put("full_name", "HephaestusTest/Unsynchronized");
 
         handler.handleEvent(objectMapper.treeToValue(payload, GitHubIssueDependenciesEventDTO.class));
 

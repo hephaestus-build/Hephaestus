@@ -10,6 +10,8 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureException;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.stream.Stream;
+import org.eclipse.jgit.api.errors.JGitInternalException;
+import org.eclipse.jgit.api.errors.TransportException;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -32,6 +34,12 @@ class PreparationFailureTest {
                 Arguments.of(new CannotCreateTransactionException("database"), PreparationFailure.Kind.DATABASE),
                 Arguments.of(new JobPreparationException("metadata"), PreparationFailure.Kind.INPUT_PREPARATION),
                 Arguments.of(new IllegalStateException("unknown"), PreparationFailure.Kind.UNKNOWN),
+                Arguments.of(
+                        new JGitInternalException("lock", new IOException("config.lock")),
+                        PreparationFailure.Kind.REPOSITORY),
+                Arguments.of(
+                        new JobPreparationException("checkout", new TransportException("fetch")),
+                        PreparationFailure.Kind.REPOSITORY),
                 Arguments.of(
                         new JobPreparationException("folder", new UncheckedIOException(new IOException("file"))),
                         PreparationFailure.Kind.IO),

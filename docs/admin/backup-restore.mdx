@@ -5,6 +5,10 @@ description: What to back up on a self-hosted instance, and how to restore it.
 ---
 
 This page applies to the [self-host compose stack](./install).
+
+On the Helm chart, [Kubernetes](./kubernetes#backup-and-restore) owns backup and restore.
+[Secret custody and rotation](./secret-custody#keep-the-required-keys-outside-the-cluster) lists the keys that a chart restore needs.
+
 PostgreSQL holds application state.
 The server and worker keep repository mirrors and inputs for active attempts on disk.
 These files are disposable.

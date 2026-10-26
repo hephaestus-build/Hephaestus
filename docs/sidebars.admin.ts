@@ -9,6 +9,7 @@ const sidebars: SidebarsConfig = {
 			collapsed: false,
 			items: [
 				{ type: "doc", id: "install", label: "Docker Compose on one host" },
+				"kubernetes",
 				"pull-based-deployment",
 				"runtime-roles",
 				"reference-deployment",
@@ -78,6 +79,7 @@ const sidebars: SidebarsConfig = {
 				"threat-model",
 				"network-egress",
 				"data-retention",
+				"secret-custody",
 				"credential-key-rotation",
 				"release-image-lock",
 				"legal-pages",

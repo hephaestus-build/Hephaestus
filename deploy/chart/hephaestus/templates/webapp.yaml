@@ -1,0 +1,97 @@
+{{- $name := include "hephaestus.name" (dict "root" . "component" "webapp") }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "hephaestus.labels" (dict "root" . "component" "webapp") | nindent 4 }}
+automountServiceAccountToken: false
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "hephaestus.labels" (dict "root" . "component" "webapp") | nindent 4 }}
+spec:
+  selector:
+    {{- include "hephaestus.selectorLabels" (dict "root" . "component" "webapp") | nindent 4 }}
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "hephaestus.labels" (dict "root" . "component" "webapp") | nindent 4 }}
+spec:
+  replicas: {{ .Values.webapp.replicas }}
+  selector:
+    matchLabels:
+      {{- include "hephaestus.selectorLabels" (dict "root" . "component" "webapp") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "hephaestus.labels" (dict "root" . "component" "webapp") | nindent 8 }}
+    spec:
+      serviceAccountName: {{ $name }}
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      # The image's non-root user. It listens on 8080 and writes only below /tmp/hephaestus-webapp.
+      # fsGroup 101 gives that user the volume.
+      securityContext:
+        {{- include "hephaestus.podSecurityContext" (dict "user" 101 "group" 101) | nindent 8 }}
+      containers:
+        - name: webapp
+          image: {{ include "hephaestus.image" (dict "root" . "name" "webapp") | quote }}
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: APPLICATION_VERSION
+              value: {{ trimPrefix "v" .Values.release.version | quote }}
+            - name: APPLICATION_CLIENT_URL
+              value: {{ printf "https://%s" .Values.host | quote }}
+            - name: APPLICATION_SERVER_URL
+              value: {{ printf "https://%s/api" .Values.host | quote }}
+            - name: LEGAL_PROFILE
+              value: {{ .Values.webapp.legalProfile | quote }}
+            - name: DEPLOYMENT_ENVIRONMENT
+              value: {{ .Values.deploymentEnvironment | quote }}
+          ports:
+            - name: http
+              containerPort: 8080
+          startupProbe:
+            httpGet:
+              path: /
+              port: http
+            periodSeconds: 2
+            failureThreshold: 30
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            periodSeconds: 15
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 5
+          {{- include "hephaestus.preStop" . | nindent 10 }}
+          resources:
+            {{- toYaml .Values.webapp.resources | nindent 12 }}
+          securityContext:
+            {{- include "hephaestus.containerSecurityContext" . | nindent 12 }}
+          volumeMounts:
+            # The image's one writable subtree: the generated index, configuration and discovery
+            # files, the nginx PID file and its temporary directories. /tmp itself and the assets
+            # stay read-only.
+            - name: runtime
+              mountPath: /tmp/hephaestus-webapp
+      volumes:
+        - name: runtime
+          emptyDir:
+            sizeLimit: 16Mi

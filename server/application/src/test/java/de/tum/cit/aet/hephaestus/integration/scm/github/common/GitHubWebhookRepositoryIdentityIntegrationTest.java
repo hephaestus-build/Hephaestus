@@ -109,6 +109,29 @@ class GitHubWebhookRepositoryIdentityIntegrationTest extends BaseIntegrationTest
         });
     }
 
+    @Test
+    void shouldSelectTheRepositoryByItsGitHubIdWhenItsStoredNameIsStale() {
+        var renamed = repository(github, nativeId, owner + "/sibling");
+
+        var context = contexts.forWebhookEvent(event(renamed.getNativeId(), owner + "/target"));
+
+        assertThat(context)
+                .hasValueSatisfying(selected -> assertThat(
+                                Objects.requireNonNull(selected.repository()).getId())
+                        .isEqualTo(renamed.getId()));
+    }
+
+    @Test
+    void shouldIgnoreTheRepositoryThatHeldTheNameBeforeARenameWhenAnotherRepositoryTakesIt() {
+        var renamedAway = repository(github, nativeId, owner + "/target");
+
+        var context = contexts.forWebhookEvent(event(nativeId + 1, owner + "/target"));
+
+        assertThat(context)
+                .as("a delivery for the new repository must not select row %s", renamedAway.getId())
+                .isEmpty();
+    }
+
     private Repository repository(IdentityProvider provider, long providerNativeId, String path) {
         var repository = new Repository();
         repository.setProvider(provider);

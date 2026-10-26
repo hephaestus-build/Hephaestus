@@ -136,7 +136,6 @@ It does not upload or replace host secrets.
 See [pull-based deployment](./pull-based-deployment.mdx).
 
 For the single-host installer, set these values in its one `.env` file.
-Previews keep subdomains off and use their existing proxy.
 
 With DNS-01 and a nonempty base domain, Traefik requests the apex and `*.<base>` certificate
 through its default TLS store, even while workspace subdomains stay off.

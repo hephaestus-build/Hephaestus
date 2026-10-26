@@ -72,7 +72,12 @@ public class CredentialMaskingCustomizer implements StructuredLoggingJsonMembers
         String name = path.name();
         if (name != null && SECRET_FIELDS.contains(name)) return MASK;
         if (!(value instanceof CharSequence text)) return value;
-        String masked = text.toString();
+        return maskCredentials(text.toString());
+    }
+
+    /** The text with every credential format this customizer knows replaced by its mask. */
+    public static String maskCredentials(String text) {
+        String masked = text;
         for (Mask rule : VALUE_MASKS) {
             masked = rule.pattern().matcher(masked).replaceAll(rule.replacement());
         }

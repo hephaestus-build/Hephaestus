@@ -1,13 +1,12 @@
 import { execFileSync, spawnSync } from "node:child_process";
-import { createHash } from "node:crypto";
-import { cp, mkdir, mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { unzipSync } from "fflate";
 import { stringify } from "yaml";
 
 import { asArray, asRecord, asString, parseJson } from "./json.ts";
+import { installPinnedBinary } from "./pinned-binary.ts";
 import { CAPTURE_LIMIT_BYTES } from "./process.ts";
 import {
 	approvedWords,
@@ -33,31 +32,6 @@ export function assetFor(platform: string, arch: string) {
 	};
 }
 
-export function verifyArchive(bytes: Uint8Array, sha256: string): void {
-	if (createHash("sha256").update(bytes).digest("hex") !== sha256) {
-		throw new Error(
-			"Vale archive checksum differs. Remove the cache file, then download the pinned archive again.",
-		);
-	}
-}
-
-/** Only the named executable leaves the verified archive; no archive path is extracted to disk. */
-export function executableFromArchive(bytes: Uint8Array, windows: boolean): Uint8Array {
-	if (windows) {
-		const executable = unzipSync(bytes, { filter: (entry) => entry.name === "vale.exe" })[
-			"vale.exe"
-		];
-		if (executable === undefined) {
-			throw new Error("Vale archive has no vale.exe. Use the pinned Windows archive.");
-		}
-		return executable;
-	}
-	return execFileSync("tar", ["-xzOf", "-", "vale"], {
-		input: bytes,
-		maxBuffer: CAPTURE_LIMIT_BYTES,
-	});
-}
-
 export async function installValeBinary(options: {
 	cache: string;
 	version: string;
@@ -65,60 +39,8 @@ export async function installValeBinary(options: {
 	url: string;
 	windows: boolean;
 }): Promise<string> {
-	const { cache, version, asset, url, windows } = options;
-	const directory = path.join(cache, `vale-${version}-${asset.sha256}`);
-	const name = windows ? "vale.exe" : "vale";
-	const binary = path.join(directory, name);
-	const archive = path.join(directory, asset.name);
-	const verifyInstallation = async () => {
-		const bytes = await readFile(archive);
-		verifyArchive(bytes, asset.sha256);
-		const expected = executableFromArchive(bytes, windows);
-		const executable = await readFile(binary);
-		if (!executable.equals(expected)) {
-			throw new Error(
-				"Vale executable differs from the pinned archive. Remove its cache directory.",
-			);
-		}
-	};
-
-	try {
-		await verifyInstallation();
-		return binary;
-	} catch (error) {
-		if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) {
-			throw error;
-		}
-	}
-
-	const response = await fetch(`${url}${asset.name}`, {
-		signal: AbortSignal.timeout(120_000),
-	});
-	if (!response.ok) {
-		throw new Error(`Vale download returned ${response.status}. Retry the pinned release URL.`);
-	}
-	const bytes = new Uint8Array(await response.arrayBuffer());
-	verifyArchive(bytes, asset.sha256);
-	const executable = executableFromArchive(bytes, windows);
-	await mkdir(cache, { recursive: true });
-	const temporary = await mkdtemp(path.join(cache, "install-"));
-	try {
-		await writeFile(path.join(temporary, asset.name), bytes);
-		await writeFile(path.join(temporary, name), executable, { mode: 0o700 });
-		// A nonempty directory cannot be replaced. No staging executable is run.
-		try {
-			await rename(temporary, directory);
-		} catch (error) {
-			try {
-				await verifyInstallation();
-			} catch {
-				throw error;
-			}
-		}
-	} finally {
-		await rm(temporary, { recursive: true, force: true });
-	}
-	return binary;
+	const { windows, ...pin } = options;
+	return installPinnedBinary({ ...pin, executable: windows ? "vale.exe" : "vale" });
 }
 
 export interface Vale {

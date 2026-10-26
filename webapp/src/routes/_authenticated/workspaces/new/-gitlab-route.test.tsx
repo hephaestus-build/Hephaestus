@@ -370,6 +370,24 @@ describe("GitLab workspace wizard: workspace address", () => {
 			expect(requests.create.map((body) => body.workspaceSlug)).toStrictEqual(["qa-team"]);
 		},
 	);
+
+	it("submits on Enter in a field, focuses the field to fix, and sends a typed slug in lowercase", async () => {
+		const user = userEvent.setup();
+		const requests = serveGitLab();
+		renderRouteAt("/workspaces/new/gitlab");
+		await configure(user);
+
+		const slugField = screen.getByRole<HTMLInputElement>("textbox", { name: "URL slug" });
+		await user.clear(slugField);
+		await user.type(screen.getByRole("textbox", { name: "Display name" }), "{Enter}");
+		expect(document.activeElement).toBe(slugField);
+		expect(slugField.getAttribute("aria-invalid")).toBe("true");
+		expect(requests.create).toStrictEqual([]);
+
+		await user.type(slugField, "QA Team{Enter}");
+		await screen.findByText("Workspace “Hephaestus” created");
+		expect(requests.create.map((body) => body.workspaceSlug)).toStrictEqual(["qa-team"]);
+	});
 });
 
 /** Validates a token, chooses `group` and arrives at the configure step. */
@@ -423,11 +441,12 @@ describe("GitLab workspace wizard: projects to monitor", () => {
 		await user.click(await screen.findByRole("checkbox", { name: "Web" }));
 
 		// A search reads its first page again, and what was chosen on other pages stays chosen.
-		await user.type(screen.getByRole("searchbox", { name: "Search projects" }), "api");
-		await user.click(screen.getByRole("button", { name: "Search" }));
+		// Enter in the search searches and does not create the workspace.
+		await user.type(screen.getByRole("searchbox", { name: "Search projects" }), "api{Enter}");
 		await waitFor(() => {
 			expect(screen.queryByRole("checkbox", { name: "Web" })).toBeNull();
 		});
+		expect(requests.create).toStrictEqual([]);
 		const api = await screen.findByRole("checkbox", { name: "API" });
 		expect(api.getAttribute("aria-checked")).toBe("true");
 		screen.getByText("2 projects selected");
