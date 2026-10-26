@@ -1,0 +1,140 @@
+package de.tum.cit.aet.hephaestus.integration.core.webhook;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
+
+import de.tum.cit.aet.hephaestus.core.webhook.WebhookProperties;
+import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
+import de.tum.cit.aet.hephaestus.integration.core.spi.SubjectKeyDeriver;
+import de.tum.cit.aet.hephaestus.integration.core.spi.WebhookSignatureVerifier;
+import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import io.nats.client.Connection;
+import io.nats.client.Nats;
+import io.nats.client.api.StorageType;
+import io.nats.client.api.StreamConfiguration;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.health.contributor.Status;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.testcontainers.containers.GenericContainer;
+import org.testcontainers.containers.wait.strategy.Wait;
+import org.testcontainers.utility.DockerImageName;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+
+/**
+ * A broker that stops answering, as one on a saturated disk does: the receiver answers {@code 503} before GitHub
+ * stops waiting (10 seconds), and its health indicator, which asks the broker nothing, stays UP. Its own broker,
+ * because the test pauses it.
+ */
+class WebhookPublishStallIntegrationTest extends BaseIntegrationTest {
+
+    /** GitHub fails a delivery that gets no answer in this time, and never retries it itself. */
+    private static final Duration GITHUB_RESPONSE_WINDOW = Duration.ofSeconds(10);
+
+    /** The publish settings a deployment binds from application.yml. */
+    @Autowired
+    private WebhookProperties properties;
+
+    private GenericContainer<?> broker;
+    private Connection connection;
+
+    @BeforeEach
+    @SuppressWarnings("resource") // stopped in stopBroker
+    void startBroker() throws Exception {
+        broker = new GenericContainer<>(DockerImageName.parse("nats:2.10-alpine"))
+                .withCommand("-js")
+                .withExposedPorts(4222)
+                .waitingFor(Wait.forLogMessage(".*Server is ready.*", 1));
+        broker.start();
+        connection = Nats.connect("nats://" + broker.getHost() + ":" + broker.getMappedPort(4222));
+        connection
+                .jetStreamManagement()
+                .addStream(StreamConfiguration.builder()
+                        .name("github")
+                        .subjects("github.>")
+                        .storageType(StorageType.File)
+                        .build());
+    }
+
+    @AfterEach
+    void stopBroker() throws InterruptedException {
+        if (connection != null) connection.close();
+        if (broker != null) broker.stop();
+    }
+
+    @Test
+    void shouldAnswer503BeforeGitHubStopsWaitingWhileTheBrokerStalls() throws IOException {
+        JetStreamPublisher publisher = new JetStreamPublisher(
+                connection.jetStream(),
+                new WebhookProducerBeans().webhookPublishRetry(properties),
+                properties,
+                new SimpleMeterRegistry());
+        WebhookIngestPipeline pipeline = new WebhookIngestPipeline(
+                List.of(new AcceptingVerifier()), List.of(new FixedSubject()), publisher, new ObjectMapper());
+        WebhookHealthIndicator health = new WebhookHealthIndicator(connection);
+        assertThat(deliver(pipeline, "first").getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);
+
+        broker.getDockerClient().pauseContainerCmd(broker.getContainerId()).exec();
+        try {
+            CompletableFuture<ResponseEntity<?>> answer =
+                    CompletableFuture.supplyAsync(() -> deliver(pipeline, "during-the-stall"));
+
+            await().atMost(GITHUB_RESPONSE_WINDOW).until(answer::isDone);
+            assertThat(answer.join().getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
+            assertThat(health.health().getStatus()).isEqualTo(Status.UP);
+        } finally {
+            broker.getDockerClient()
+                    .unpauseContainerCmd(broker.getContainerId())
+                    .exec();
+        }
+    }
+
+    private static ResponseEntity<?> deliver(WebhookIngestPipeline pipeline, String delivery) {
+        return pipeline.handle(
+                IntegrationKind.GITHUB,
+                "{\"action\":\"opened\"}".getBytes(StandardCharsets.UTF_8),
+                Map.of("X-GitHub-Event", "pull_request", "X-GitHub-Delivery", delivery));
+    }
+
+    private static final class AcceptingVerifier implements WebhookSignatureVerifier {
+
+        @Override
+        public IntegrationKind kind() {
+            return IntegrationKind.GITHUB;
+        }
+
+        @Override
+        public VerificationResult verify(WebhookRequest request) {
+            return new VerificationResult.Verified();
+        }
+    }
+
+    private static final class FixedSubject implements SubjectKeyDeriver {
+
+        @Override
+        public IntegrationKind kind() {
+            return IntegrationKind.GITHUB;
+        }
+
+        @Override
+        public String deriveSubject(JsonNode payload, Map<String, String> headers) {
+            return "github.acme.repo.pull_request";
+        }
+
+        @Override
+        public String deriveDedupKey(byte[] body, Map<String, String> headers) {
+            return "github-" + headers.get("X-GitHub-Delivery");
+        }
+    }
+}

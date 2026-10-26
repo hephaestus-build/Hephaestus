@@ -742,8 +742,13 @@ hephaestus:
             validity-days: ${WEBHOOK_TOKEN_ROTATION_VALIDITY_DAYS:90}
         # ─── Inbound receiver (integration.webhook.*) ───
         publish:
-            timeout: 9s          # fits within GitHub's 10s response budget
-            max-retries: 5
+            # Every attempt and its backoff must end inside the provider's 10s response window
+            # (GitHub, GitLab). After that the provider has failed the delivery, and a later attempt
+            # only holds a request thread against a broker that is already slow. A second attempt
+            # carries the same Nats-Msg-Id, so a first attempt that stored late is answered as a
+            # duplicate, not stored twice. max-retries counts attempts, including the first.
+            timeout: 4s
+            max-retries: 2
             retry-base-delay: 200ms
         stream:
             # Must be >= the max vendor replay tolerance (5m: GitLab whsec + Slack v0). GitHub has

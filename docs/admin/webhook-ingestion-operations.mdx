@@ -35,24 +35,65 @@ as described by [NATS replicated storage](https://docs.nats.io/nats-concepts/jet
 That profile may use a longer sync interval after an assessment of its failure model and latency budget.
 Keep `always` to protect acknowledgments from a correlated, unclean shutdown of the whole cluster.
 
+## While the broker is slow
+
+The receiver answers `202` only after JetStream acknowledges the delivery.
+If the broker does not acknowledge in time, the receiver answers `503`.
+It never accepts a delivery that it has not stored.
+
+- Each publish attempt waits `hephaestus.webhook.publish.timeout` (4 seconds by default).
+  The receiver makes `hephaestus.webhook.publish.max-retries` attempts (2 by default), including the first.
+  All attempts end before the 10-second response window of GitHub and GitLab.
+  After that window, the provider has already failed the delivery, and another attempt only holds a request thread.
+- A second attempt carries the same `Nats-Msg-Id`.
+  If the first attempt was stored late, the broker answers the second one as a duplicate, and the receiver answers `202`.
+- The receiver's health check reads only the state of the NATS connection.
+  It makes no request to the broker, so it stays fast while the broker is slow.
+  The stream gauges below report a broker that does not answer.
+
+Slow storage under the broker is the usual cause.
+The bundled broker calls `fsync` for each message, so every publish waits for the disk.
+Give the JetStream volume storage that is not shared with a busy database or container runtime.
+See [Troubleshooting](./troubleshooting.mdx).
+
 ## Failed GitHub deliveries
 
 When the broker is slow or down, the receiver cannot store a delivery in time, and GitHub records the delivery as failed.
-Every 10 minutes, the server reads the GitHub App's deliveries of the past hour from the
+Every 10 minutes, the server reads the GitHub App's deliveries of the past two hours from the
 [GitHub App webhook API](https://docs.github.com/en/rest/apps/webhooks).
-For each event with no successful delivery, it asks GitHub to redeliver the latest attempt.
+For each event with no successful delivery, it asks GitHub to redeliver the latest attempt once the next redelivery is due.
 This is the procedure that GitHub [recommends](https://docs.github.com/en/webhooks/using-webhooks/automatically-redelivering-failed-deliveries-for-a-github-app-webhook).
 
+- Runs never overlap, also across server replicas: each run holds a lock for 9 minutes.
+  A run sends requests for at most 5 minutes, and at most 5 a second.
+  It stops after GitHub refuses 5 requests in a row.
+  Due redeliveries that do not fit wait for the next run, the oldest events first.
+- If the newest 10 redeliveries all failed, the receiver is not taking deliveries.
+  A run then sends only 3 redeliveries, to probe it, and counts `outcome=paused`.
+  The other events keep their attempts until a probe succeeds.
+- If GitHub answers `403` or `429` to a request, the run stops, and the rest wait for the next run.
 - An event whose latest answer was a client error (`4xx`) is not redelivered. The receiver refused it on purpose, for example for a bad signature or an oversized payload.
-- An event gets at most four attempts, all within one hour of its original delivery: the original and three redeliveries.
+- An event gets at most six attempts: the original and five redeliveries.
+  The redeliveries are due 0, 10, 20, 40 and 80 minutes after the original delivery.
+  The gaps double, so the attempts outlast a broker stall of up to 80 minutes.
+  A stall that still lasts gets few requests.
 - A redelivery keeps its `X-GitHub-Delivery` identifier. The stream discards a copy of a delivery that it already stored within `hephaestus.webhook.stream.duplicate-window` (10 minutes by default).
 - A slow broker can still store a delivery after GitHub stopped waiting for it. If its redelivery comes after the duplicate window, the event is processed twice. A late copy can restate an older reviewer list until the next sync reads the list again. [Reviewer lists are dated snapshots](/contributor/sync-lifecycle#reviewer-lists-are-dated-snapshots) explains this.
 - Silent mode does not stop redelivery. A redelivery sends nothing to people. It only asks GitHub to send the event to the receiver again.
 
 The job needs the GitHub App credentials and runs in the server role.
-An event that failed all four attempts is counted in `github.webhook.unrecovered`.
-For an outage longer than one hour, redeliver older failed deliveries in the GitHub App settings under **Advanced** → **Recent Deliveries**, within three days.
+An event that failed all six attempts is counted in `github.webhook.unrecovered`.
+For an outage longer than that, redeliver older failed deliveries in the GitHub App settings under **Advanced** → **Recent Deliveries**, within three days.
 After that, only the reconciliation sync recovers their effect.
+
+## Which providers deliver again
+
+| Provider | Delivers a failed event again | What else recovers it |
+| --- | --- | --- |
+| GitHub | Hephaestus asks GitHub to redeliver, on the schedule above. | Manual redelivery for three days, then reconciliation. |
+| GitLab | No. GitLab does not retry a failed webhook. It disables a hook after 4 failures in a row, for 1 minute up to 24 hours, and for good after 40. See [GitLab webhooks](https://docs.gitlab.com/user/project/integrations/webhooks/). | Reconciliation over `MONITORING_TIMEFRAME` days. |
+| Slack | Yes. Slack retries 3 times: at once, after 1 minute and after 5 minutes. With [Delayed Events](https://docs.slack.dev/apis/events-api/) turned on in the Slack app, it also retries every hour for 24 hours. The receiver answers Slack within 2 seconds and stores a retry once, by its `event_id`. | Reconciliation of monitored channels. |
+| Outline | No. Outline waits 5 seconds and does not retry. It disables a subscription when 80 % of its deliveries in 24 hours fail. | Reconciliation of the Outline connection. |
 
 ## What to alert on
 
@@ -79,8 +120,8 @@ These meters describe deliveries that never reached the stream and their recover
 | Metric                           | Type    | Role     | What it means                                                                                                                 |
 | -------------------------------- | ------- | -------- | ----------------------------------------------------------------------------------------------------------------------------- |
 | `webhook.publish`                | counter | webhook  | Publishes the broker acknowledged (`outcome=success`) or did not acknowledge in time (`outcome=failure`). A failure is a delivery the provider records as failed. |
-| `github.webhook.redelivery`      | counter | server   | Redelivery requests that GitHub accepted (`outcome=requested`) or refused (`outcome=refused`), and runs that could not read the deliveries (`outcome=unavailable`). |
-| `github.webhook.unrecovered`     | gauge   | server   | GitHub events of the past hour that failed all four attempts. Above zero means events that Hephaestus did not receive.        |
+| `github.webhook.redelivery`      | counter | server   | Redelivery requests that GitHub accepted (`requested`) or refused (`refused`). Runs that could not read the deliveries (`unavailable`), only probed a failing receiver (`paused`), or stopped listing at a bound (`truncated`). |
+| `github.webhook.unrecovered`     | gauge   | server   | GitHub events of the past two hours that failed all six attempts. Above zero means events that Hephaestus did not receive.        |
 
 **No metric counts deliveries that the stream removed.**
 A delivery is lost when the stream removes it before its required consumer acknowledges it.
@@ -259,7 +300,7 @@ A full stream therefore causes a total ingestion outage.
 
 A wedged broker has these symptoms:
 
-- The receiver's readiness probe is DOWN.
+- `webhook.publish` counts `outcome=failure`, and providers receive `503`.
 - `webhook.stream.poll.age` grows or shows `NaN`.
 - The NATS container logs write errors.
 - `docker compose --env-file .env --env-file release-lock.env ps` shows `nats-server` unhealthy but running.
@@ -305,7 +346,7 @@ The container therefore remains in that state indefinitely.
 
 7. **Account for what was lost.** Deliveries that arrived while the broker could not write were
    dropped at the edge. The provider saw a 503 or a timeout. Hephaestus redelivers failed GitHub App
-   deliveries of the past hour. Redeliver older GitHub deliveries in the App settings, within three days.
+   deliveries of the past two hours. Redeliver older GitHub deliveries in the App settings, within three days.
 8. Under **Administration → Integrations → GitHub/GitLab**, select **Sync now** on the workspace connection.
    It fetches what falls inside `MONITORING_TIMEFRAME` again. Anything older than that window is gone.
 
