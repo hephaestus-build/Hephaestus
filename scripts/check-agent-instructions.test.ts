@@ -92,9 +92,12 @@ await test("an AGENTS.md under an agent root is a skill's payload, not a tree th
 	assert.deepEqual(
 		analyse(
 			snapshot({
+				".agents/skills/x/SKILL.md": "---\nname: x\n---\n",
+				".claude/skills/x/SKILL.md": "---\nname: x\n---\n",
 				".agents/skills/x/AGENTS.md": "# Vendored\n",
 				".claude/skills/x/AGENTS.md": "# Vendored\n",
 			}),
+			["x"],
 		),
 		[],
 	);
@@ -566,6 +569,7 @@ await test("a skill mirrored for Codex is required to be identical, not forbidde
 				".claude/skills/gh-stack/SKILL.md": skill,
 				".agents/skills/gh-stack/SKILL.md": skill,
 			}),
+			["gh-stack"],
 		),
 		[],
 	);
@@ -576,6 +580,7 @@ await test("a skill mirrored for Codex is required to be identical, not forbidde
 					".claude/skills/gh-stack/SKILL.md": skill,
 					".agents/skills/gh-stack/SKILL.md": `${skill}\nCodex-only paragraph.\n`,
 				}),
+				["gh-stack"],
 			),
 		),
 		/has drifted from \.claude\/skills\/gh-stack\/SKILL\.md/u,
@@ -600,10 +605,37 @@ await test("a skill Codex is meant to have cannot quietly become one copy", () =
 	}
 });
 
-await test("a Codex skill with no Claude Code counterpart is reported", () => {
+await test("a Codex copy of a skill that CODEX_SKILLS does not list is reported, even when identical", () => {
+	// A skills CLI install writes both directories, which is how the knowledge packs gained copies.
+	const skill = "---\nname: shadcn\n---\n\n# shadcn\n";
 	assert.match(
-		only(analyse(snapshot({ ".agents/skills/gh-stack/SKILL.md": "---\nname: gh-stack\n---\n" }))),
-		/has no counterpart at \.claude\/skills\/gh-stack\/SKILL\.md/u,
+		only(
+			analyse(
+				snapshot({
+					".claude/skills/shadcn/SKILL.md": skill,
+					".agents/skills/shadcn/SKILL.md": skill,
+					".agents/skills/shadcn/rules/forms.md": "# Forms\n",
+				}),
+			),
+		),
+		/\.agents\/skills\/shadcn\/ is a Codex copy of a skill that CODEX_SKILLS does not list/u,
+	);
+});
+
+await test("a Codex file of a listed skill with no Claude Code counterpart is reported", () => {
+	const skill = "---\nname: gh-stack\n---\n";
+	assert.match(
+		only(
+			analyse(
+				snapshot({
+					".claude/skills/gh-stack/SKILL.md": skill,
+					".agents/skills/gh-stack/SKILL.md": skill,
+					".agents/skills/gh-stack/extra.md": "# Extra\n",
+				}),
+				["gh-stack"],
+			),
+		),
+		/has no counterpart at \.claude\/skills\/gh-stack\/extra\.md/u,
 	);
 });
 

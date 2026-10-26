@@ -792,16 +792,29 @@ function unmirrored(repo: Repo, expected: readonly string[]): readonly string[] 
 			);
 		}
 	}
+	const unlisted = new Set<string>();
 	for (const file of repo.present.values()) {
 		const original = mirrorOf(file.path);
 		if (original === undefined || file.kind !== "text") {
+			continue;
+		}
+		// A skills CLI install writes both directories, so an identical copy of any skill can appear.
+		const [skill = ""] = file.path.slice(CODEX_SKILLS_ROOT.length + 1).split("/");
+		if (!expected.includes(skill)) {
+			if (!unlisted.has(skill)) {
+				unlisted.add(skill);
+				failures.push(
+					`${CODEX_SKILLS_ROOT}/${skill}/ is a Codex copy of a skill that CODEX_SKILLS does not list.\n` +
+						`  Delete it, or add "${skill}" to CODEX_SKILLS if Codex should have it.`,
+				);
+			}
 			continue;
 		}
 		const source = readable(repo, original);
 		if (source.kind === "absent") {
 			// A listed skill's missing half is reported by the loop above, in the terms that name why
 			// the pair exists at all.
-			if (expected.includes(basename(dirname(file.path)))) {
+			if (basename(file.path) === "SKILL.md") {
 				continue;
 			}
 			failures.push(
