@@ -201,7 +201,7 @@ class GitLabNoteMessageHandlerTest extends BaseUnitTest {
             Repository repository = setupRepository();
             User author = new User();
             author.setNativeId(18024L);
-            author.setLogin("ga84xah");
+            author.setLogin("ab12cde");
             PullRequest mergeRequest = new PullRequest();
             mergeRequest.setNativeId(334047L);
             mergeRequest.setProvider(repository.getProvider());
@@ -410,8 +410,8 @@ class GitLabNoteMessageHandlerTest extends BaseUnitTest {
     private GitLabWebhookUser createUser() {
         return new GitLabWebhookUser(
                 18024L,
-                "ga84xah",
-                "Felix Dietrich",
+                "ab12cde",
+                "Max Mustermann",
                 "https://gitlab.lrz.de/uploads/-/system/user/avatar/18024/avatar.png",
                 null);
     }

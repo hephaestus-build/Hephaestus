@@ -83,7 +83,7 @@ class GitLabUserTypeIntegrationTest extends BaseIntegrationTest {
 
         Map<Long, GitLabUserLookup> reported = canonicalUsers(List.of(
                 node(SERVICE_ACCOUNT, "heph_introcourse_tutor_e2e", true),
-                node(STUDENT, "ga84xah", false),
+                node(STUDENT, "ab12cde", false),
                 node(TOKEN_BOT, "group_319719_bot_8abdb42c", false)));
         reported.values().forEach(this::store);
 
@@ -133,7 +133,7 @@ class GitLabUserTypeIntegrationTest extends BaseIntegrationTest {
     @Test
     void shouldRecordAFirstSeenAccountWhoseTypeIsUnknownAsAUser() {
         transactionTemplate.executeWithoutResult(status -> gitLabUserService.findOrCreateUser(
-                new GitLabWebhookUser(STUDENT, "ga84xah", "Student", null, null), providerId));
+                new GitLabWebhookUser(STUDENT, "ab12cde", "Student", null, null), providerId));
 
         assertThat(type(STUDENT)).isEqualTo(User.Type.USER);
     }

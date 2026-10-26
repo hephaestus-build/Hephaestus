@@ -8,8 +8,8 @@
   "checkout_sha": "a4bf10d93a2d136f1db911b6f1c03d26d835a44f",
   "message": null,
   "user_id": 18024,
-  "user_name": "Dietrich, Felix (Timotheus Johannes)",
-  "user_username": "ga84xah",
+  "user_name": "Muster, Max (Erika)",
+  "user_username": "ab12cde",
   "user_email": "",
   "user_avatar": "https://gitlab.lrz.de/uploads/-/system/user/avatar/18024/avatar.png",
   "project_id": 246765,
@@ -39,8 +39,8 @@
       "timestamp": "2026-01-31T18:45:47+01:00",
       "url": "https://gitlab.lrz.de/hephaestustest/demo-repository/-/commit/9c5dedd52046bb5213189afc25f75e608a98d462",
       "author": {
-        "name": "Dietrich, Felix (Timotheus Johannes)",
-        "email": "felixtj.dietrich@tum.de"
+        "name": "Muster, Max (Erika)",
+        "email": "max.muster@tum.de"
       },
       "added": [
         "README.md"
@@ -55,8 +55,8 @@
       "timestamp": "2026-01-31T18:46:23+01:00",
       "url": "https://gitlab.lrz.de/hephaestustest/demo-repository/-/commit/e624090df3bade1845de8a3612d753f873374822",
       "author": {
-        "name": "Dietrich, Felix (Timotheus Johannes)",
-        "email": "felixtj.dietrich@tum.de"
+        "name": "Muster, Max (Erika)",
+        "email": "max.muster@tum.de"
       },
       "added": [
         "CONTRIBUTING.md"
@@ -71,8 +71,8 @@
       "timestamp": "2026-01-31T18:46:43+01:00",
       "url": "https://gitlab.lrz.de/hephaestustest/demo-repository/-/commit/a4bf10d93a2d136f1db911b6f1c03d26d835a44f",
       "author": {
-        "name": "Dietrich, Felix (Timotheus Johannes)",
-        "email": "felixtj.dietrich@tum.de"
+        "name": "Muster, Max (Erika)",
+        "email": "max.muster@tum.de"
       },
       "added": [
         "CONTRIBUTING.md"

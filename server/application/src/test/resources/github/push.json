@@ -111,7 +111,7 @@
   },
   "pusher": {
     "name": "FelixTJDietrich",
-    "email": "felix_dietrich@gmx.de"
+    "email": "max_muster@example.com"
   },
   "organization": {
     "login": "HephaestusTest",
@@ -166,13 +166,13 @@
       "timestamp": "2025-11-02T01:23:58+01:00",
       "url": "https://github.com/HephaestusTest/TestRepository/commit/5e25fac12d5c56488a01b1e4375828fe7d30d64e",
       "author": {
-        "name": "Felix T.J. Dietrich",
-        "email": "felix_dietrich@gmx.de",
+        "name": "Max E. Muster",
+        "email": "max_muster@example.com",
         "username": "FelixTJDietrich"
       },
       "committer": {
-        "name": "Felix T.J. Dietrich",
-        "email": "felix_dietrich@gmx.de",
+        "name": "Max E. Muster",
+        "email": "max_muster@example.com",
         "username": "FelixTJDietrich"
       },
       "added": [
@@ -190,13 +190,13 @@
     "timestamp": "2025-11-02T01:23:58+01:00",
     "url": "https://github.com/HephaestusTest/TestRepository/commit/5e25fac12d5c56488a01b1e4375828fe7d30d64e",
     "author": {
-      "name": "Felix T.J. Dietrich",
-      "email": "felix_dietrich@gmx.de",
+      "name": "Max E. Muster",
+      "email": "max_muster@example.com",
       "username": "FelixTJDietrich"
     },
     "committer": {
-      "name": "Felix T.J. Dietrich",
-      "email": "felix_dietrich@gmx.de",
+      "name": "Max E. Muster",
+      "email": "max_muster@example.com",
       "username": "FelixTJDietrich"
     },
     "added": [

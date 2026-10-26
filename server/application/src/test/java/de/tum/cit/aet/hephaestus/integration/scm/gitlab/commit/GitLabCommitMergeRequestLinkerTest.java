@@ -307,8 +307,8 @@ class GitLabCommitMergeRequestLinkerTest extends BaseUnitTest {
 
     @Test
     void harvestedAuthorPairs_backfillCommitContributorUserId() {
-        Map<String, Object> commit1 = commitNode("sha-1", "go35kin@mytum.de", "00000000014C41E0");
-        Map<String, Object> commit2 = commitNode("sha-2", "go35kin@tum.de", null);
+        Map<String, Object> commit1 = commitNode("sha-1", "gh78ijk@mytum.de", "00000000014C41E0");
+        Map<String, Object> commit2 = commitNode("sha-2", "gh78ijk@tum.de", null);
         Map<String, Object> mr = mrNodeWithCommits(42, List.of(commit1, commit2));
 
         ClientGraphQlResponse page = mockMrsPage(List.of(mr), new GitLabPageInfo(false, null));
@@ -328,8 +328,8 @@ class GitLabCommitMergeRequestLinkerTest extends BaseUnitTest {
 
         assertThat(result.status()).isEqualTo(SyncResult.Status.COMPLETED);
         // Direct pair (sha-1) plus dominant-login fallback (sha-2) reach the repository.
-        verify(commitContributorRepository).backfillUserIdByEmail(eq("go35kin@mytum.de"), eq(901L));
-        verify(commitContributorRepository).backfillUserIdByEmail(eq("go35kin@tum.de"), eq(901L));
+        verify(commitContributorRepository).backfillUserIdByEmail(eq("gh78ijk@mytum.de"), eq(901L));
+        verify(commitContributorRepository).backfillUserIdByEmail(eq("gh78ijk@tum.de"), eq(901L));
     }
 
     @Test

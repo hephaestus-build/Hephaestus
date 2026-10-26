@@ -3,8 +3,8 @@
   "event_type": "merge_request",
   "user": {
     "id": 18024,
-    "name": "Dietrich, Felix (Timotheus Johannes)",
-    "username": "ga84xah",
+    "name": "Muster, Max (Erika)",
+    "username": "ab12cde",
     "avatar_url": "https://gitlab.lrz.de/uploads/-/system/user/avatar/18024/avatar.png",
     "email": "[REDACTED]"
   },
@@ -71,8 +71,8 @@
       "timestamp": "2026-01-31T19:26:43+01:00",
       "url": "https://gitlab.lrz.de/hephaestustest/demo-repository/-/commit/b27018d3e0f8765e20451a9fd7cf50ef91d2d1d4",
       "author": {
-        "name": "Dietrich, Felix (Timotheus Johannes)",
-        "email": "felixtj.dietrich@tum.de"
+        "name": "Muster, Max (Erika)",
+        "email": "max.muster@tum.de"
       }
     },
     "reviewer_ids": [],

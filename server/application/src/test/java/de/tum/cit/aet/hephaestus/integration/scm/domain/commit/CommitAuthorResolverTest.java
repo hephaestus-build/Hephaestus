@@ -71,7 +71,7 @@ class CommitAuthorResolverTest extends BaseUnitTest {
 
         @Test
         void shouldReturnNullForPersonalEmail() {
-            String login = CommitAuthorResolver.extractLoginFromNoreply("felix_dietrich@gmx.de");
+            String login = CommitAuthorResolver.extractLoginFromNoreply("max_muster@example.com");
             assertThat(login).isNull();
         }
 
@@ -170,16 +170,16 @@ class CommitAuthorResolverTest extends BaseUnitTest {
 
         @Test
         void shouldFallBackToEmailLocalPartLoginForTumStyleAddress() {
-            when(userRepository.findByEmail("ge27coy@mytum.de")).thenReturn(Optional.empty());
+            when(userRepository.findByEmail("ef56ghi@mytum.de")).thenReturn(Optional.empty());
 
             User user = createUser(101L);
-            when(userRepository.findByLogin("ge27coy")).thenReturn(Optional.of(user));
+            when(userRepository.findByLogin("ef56ghi")).thenReturn(Optional.of(user));
 
-            Long result = resolver.resolveByEmail("ge27coy@mytum.de", null);
+            Long result = resolver.resolveByEmail("ef56ghi@mytum.de", null);
 
             assertThat(result).isEqualTo(101L);
-            verify(userRepository).findByEmail("ge27coy@mytum.de");
-            verify(userRepository).findByLogin("ge27coy");
+            verify(userRepository).findByEmail("ef56ghi@mytum.de");
+            verify(userRepository).findByLogin("ef56ghi");
         }
 
         @Test
@@ -253,16 +253,17 @@ class CommitAuthorResolverTest extends BaseUnitTest {
 
         @Test
         void shouldMatchFirstnameLastnameAgainstUserName() {
-            when(userRepository.findByEmailAndProviderId("erik.kiessig@tum.de", 3L))
+            when(userRepository.findByEmailAndProviderId("jonas.beispiel@tum.de", 3L))
                     .thenReturn(Optional.empty());
 
             User user = createUser(5202L);
-            when(userRepository.findAllByNameAndProviderId("Erik Kiessig", 3L)).thenReturn(List.of(user));
+            when(userRepository.findAllByNameAndProviderId("Jonas Beispiel", 3L))
+                    .thenReturn(List.of(user));
 
-            Long result = resolver.resolveByEmail("erik.kiessig@tum.de", 3L);
+            Long result = resolver.resolveByEmail("jonas.beispiel@tum.de", 3L);
 
             assertThat(result).isEqualTo(5202L);
-            verify(userRepository).findAllByNameAndProviderId("Erik Kiessig", 3L);
+            verify(userRepository).findAllByNameAndProviderId("Jonas Beispiel", 3L);
         }
 
         @Test
@@ -306,13 +307,13 @@ class CommitAuthorResolverTest extends BaseUnitTest {
         @Test
         void shouldPreferLoginMatchOverDisplayName() {
             // Login-style local-parts skip strategy 4 entirely.
-            when(userRepository.findByEmailAndProviderId("go98tod@mytum.de", 3L))
+            when(userRepository.findByEmailAndProviderId("cd34efg@mytum.de", 3L))
                     .thenReturn(Optional.empty());
 
             User user = createUser(4875L);
-            when(userRepository.findByLoginAndProviderId("go98tod", 3L)).thenReturn(Optional.of(user));
+            when(userRepository.findByLoginAndProviderId("cd34efg", 3L)).thenReturn(Optional.of(user));
 
-            Long result = resolver.resolveByEmail("go98tod@mytum.de", 3L);
+            Long result = resolver.resolveByEmail("cd34efg@mytum.de", 3L);
 
             assertThat(result).isEqualTo(4875L);
             verify(userRepository, never()).findAllByNameAndProviderId(anyString(), anyLong());
@@ -337,43 +338,45 @@ class CommitAuthorResolverTest extends BaseUnitTest {
 
         @Test
         void shouldBackfillEmailWhenStrategy3Resolves() {
-            when(userRepository.findByEmailAndProviderId("go98tod@mytum.de", 3L))
+            when(userRepository.findByEmailAndProviderId("cd34efg@mytum.de", 3L))
                     .thenReturn(Optional.empty());
 
             User user = createUser(4875L);
-            when(userRepository.findByLoginAndProviderId("go98tod", 3L)).thenReturn(Optional.of(user));
+            when(userRepository.findByLoginAndProviderId("cd34efg", 3L)).thenReturn(Optional.of(user));
 
-            Long result = resolver.resolveAndBackfillByEmail("go98tod@mytum.de", 3L);
+            Long result = resolver.resolveAndBackfillByEmail("cd34efg@mytum.de", 3L);
 
             assertThat(result).isEqualTo(4875L);
-            verify(userRepository).backfillEmailIfNull(4875L, "go98tod@mytum.de");
+            verify(userRepository).backfillEmailIfNull(4875L, "cd34efg@mytum.de");
         }
 
         @Test
         void shouldBackfillEmailWhenStrategy4Resolves() {
-            when(userRepository.findByEmailAndProviderId("erik.kiessig@tum.de", 3L))
+            when(userRepository.findByEmailAndProviderId("jonas.beispiel@tum.de", 3L))
                     .thenReturn(Optional.empty());
 
             User user = createUser(5202L);
-            when(userRepository.findAllByNameAndProviderId("Erik Kiessig", 3L)).thenReturn(List.of(user));
+            when(userRepository.findAllByNameAndProviderId("Jonas Beispiel", 3L))
+                    .thenReturn(List.of(user));
 
-            Long result = resolver.resolveAndBackfillByEmail("erik.kiessig@tum.de", 3L);
+            Long result = resolver.resolveAndBackfillByEmail("jonas.beispiel@tum.de", 3L);
 
             assertThat(result).isEqualTo(5202L);
-            verify(userRepository).backfillEmailIfNull(5202L, "erik.kiessig@tum.de");
+            verify(userRepository).backfillEmailIfNull(5202L, "jonas.beispiel@tum.de");
         }
 
         @Test
         void shouldLowercaseEmailBeforeBackfilling() {
-            when(userRepository.findByEmailAndProviderId("Erik.Kiessig@TUM.de", 3L))
+            when(userRepository.findByEmailAndProviderId("Jonas.Beispiel@TUM.de", 3L))
                     .thenReturn(Optional.empty());
 
             User user = createUser(5202L);
-            when(userRepository.findAllByNameAndProviderId("Erik Kiessig", 3L)).thenReturn(List.of(user));
+            when(userRepository.findAllByNameAndProviderId("Jonas Beispiel", 3L))
+                    .thenReturn(List.of(user));
 
-            resolver.resolveAndBackfillByEmail("Erik.Kiessig@TUM.de", 3L);
+            resolver.resolveAndBackfillByEmail("Jonas.Beispiel@TUM.de", 3L);
 
-            verify(userRepository).backfillEmailIfNull(5202L, "erik.kiessig@tum.de");
+            verify(userRepository).backfillEmailIfNull(5202L, "jonas.beispiel@tum.de");
         }
 
         @Test
@@ -419,14 +422,14 @@ class CommitAuthorResolverTest extends BaseUnitTest {
 
         @Test
         void shouldNotThrowWhenBackfillFails() {
-            when(userRepository.findByEmailAndProviderId("go98tod@mytum.de", 3L))
+            when(userRepository.findByEmailAndProviderId("cd34efg@mytum.de", 3L))
                     .thenReturn(Optional.empty());
 
             User user = createUser(4875L);
-            when(userRepository.findByLoginAndProviderId("go98tod", 3L)).thenReturn(Optional.of(user));
-            when(userRepository.backfillEmailIfNull(4875L, "go98tod@mytum.de")).thenThrow(new RuntimeException("boom"));
+            when(userRepository.findByLoginAndProviderId("cd34efg", 3L)).thenReturn(Optional.of(user));
+            when(userRepository.backfillEmailIfNull(4875L, "cd34efg@mytum.de")).thenThrow(new RuntimeException("boom"));
 
-            Long result = resolver.resolveAndBackfillByEmail("go98tod@mytum.de", 3L);
+            Long result = resolver.resolveAndBackfillByEmail("cd34efg@mytum.de", 3L);
 
             // Resolution must still succeed even if the opportunistic backfill failed.
             assertThat(result).isEqualTo(4875L);
@@ -440,13 +443,13 @@ class CommitAuthorResolverTest extends BaseUnitTest {
 
         @Test
         void shouldAcceptLoginStyleAddress() {
-            assertThat(CommitAuthorResolver.isBackfillEligible("ge27coy@mytum.de"))
+            assertThat(CommitAuthorResolver.isBackfillEligible("ef56ghi@mytum.de"))
                     .isTrue();
         }
 
         @Test
         void shouldAcceptFirstnameLastnameAddress() {
-            assertThat(CommitAuthorResolver.isBackfillEligible("erik.kiessig@tum.de"))
+            assertThat(CommitAuthorResolver.isBackfillEligible("jonas.beispiel@tum.de"))
                     .isTrue();
         }
 
@@ -485,14 +488,14 @@ class CommitAuthorResolverTest extends BaseUnitTest {
 
         @Test
         void shouldCapitaliseSingleDot() {
-            assertThat(CommitAuthorResolver.dottedLocalPartToDisplayName("erik.kiessig"))
-                    .isEqualTo("Erik Kiessig");
+            assertThat(CommitAuthorResolver.dottedLocalPartToDisplayName("jonas.beispiel"))
+                    .isEqualTo("Jonas Beispiel");
         }
 
         @Test
         void shouldLowercaseRemainingCharacters() {
-            assertThat(CommitAuthorResolver.dottedLocalPartToDisplayName("ERIK.KIESSIG"))
-                    .isEqualTo("Erik Kiessig");
+            assertThat(CommitAuthorResolver.dottedLocalPartToDisplayName("JONAS.BEISPIEL"))
+                    .isEqualTo("Jonas Beispiel");
         }
 
         @Test
@@ -503,17 +506,17 @@ class CommitAuthorResolverTest extends BaseUnitTest {
 
         @Test
         void shouldReturnNullForEmptyToken() {
-            assertThat(CommitAuthorResolver.dottedLocalPartToDisplayName("erik..kiessig"))
+            assertThat(CommitAuthorResolver.dottedLocalPartToDisplayName("jonas..beispiel"))
                     .isNull();
-            assertThat(CommitAuthorResolver.dottedLocalPartToDisplayName(".kiessig"))
+            assertThat(CommitAuthorResolver.dottedLocalPartToDisplayName(".beispiel"))
                     .isNull();
-            assertThat(CommitAuthorResolver.dottedLocalPartToDisplayName("erik."))
+            assertThat(CommitAuthorResolver.dottedLocalPartToDisplayName("jonas."))
                     .isNull();
         }
 
         @Test
         void shouldReturnNullForInputWithoutDot() {
-            assertThat(CommitAuthorResolver.dottedLocalPartToDisplayName("ge27coy"))
+            assertThat(CommitAuthorResolver.dottedLocalPartToDisplayName("ef56ghi"))
                     .isNull();
         }
 

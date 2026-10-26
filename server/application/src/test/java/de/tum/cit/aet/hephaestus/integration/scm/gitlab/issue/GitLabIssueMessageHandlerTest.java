@@ -353,8 +353,8 @@ class GitLabIssueMessageHandlerTest extends BaseUnitTest {
     private GitLabWebhookUser createUser() {
         return new GitLabWebhookUser(
                 18024L,
-                "ga84xah",
-                "Felix Dietrich",
+                "ab12cde",
+                "Max Mustermann",
                 "https://gitlab.lrz.de/uploads/-/system/user/avatar/18024/avatar.png",
                 null);
     }

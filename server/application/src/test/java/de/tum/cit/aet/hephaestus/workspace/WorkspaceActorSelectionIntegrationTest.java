@@ -76,7 +76,7 @@ class WorkspaceActorSelectionIntegrationTest extends AbstractWorkspaceIntegratio
                 userRepository.saveAndFlush(TestUserFactory.createUser(4_001L, "felix-saas", ensureGitLabProvider()));
         User selfHostedActor = userRepository.saveAndFlush(TestUserFactory.createUser(
                 4_002L,
-                "ga84xah",
+                "ab12cde",
                 gitProviderRepository.save(
                         new IdentityProvider(IdentityProviderType.GITLAB, "https://gitlab.lrz.de"))));
         Account account = persistAccount("Two GitLab instances");

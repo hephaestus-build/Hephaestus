@@ -291,7 +291,7 @@ class WorkspaceProvisioningServiceTest {
                     WebClient.builder());
             gitlab.enqueue(new MockResponse.Builder()
                     .addHeader("Content-Type", "application/json")
-                    .body("{\"id\":18024,\"username\":\"ga84xah\",\"name\":\"Student\""
+                    .body("{\"id\":18024,\"username\":\"ab12cde\",\"name\":\"Student\""
                             + (bot == null ? "" : ",\"bot\":" + bot)
                             + "}")
                     .build());
@@ -300,7 +300,7 @@ class WorkspaceProvisioningServiceTest {
             when(userRepository.findByLoginAndProviderId("course", 5L)).thenReturn(Optional.empty());
             User owner = new User();
             owner.setId(7L);
-            when(userRepository.findByLoginAndProviderId("ga84xah", 5L)).thenReturn(Optional.of(owner));
+            when(userRepository.findByLoginAndProviderId("ab12cde", 5L)).thenReturn(Optional.of(owner));
 
             assertThat(service.resolveOrCreateGitLabUser("pat", origin, "course"))
                     .isEqualTo(7L);
@@ -309,7 +309,7 @@ class WorkspaceProvisioningServiceTest {
                     .upsertUser(
                             eq(18024L),
                             eq(5L),
-                            eq("ga84xah"),
+                            eq("ab12cde"),
                             any(),
                             any(),
                             any(),

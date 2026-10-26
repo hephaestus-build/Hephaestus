@@ -147,10 +147,10 @@ class BaseGitLabProcessorTest extends BaseUnitTest {
         void findsOrCreatesUserFromWebhook() {
             User user = new User();
             user.setId(-18024L);
-            user.setLogin("ga84xah");
+            user.setLogin("ab12cde");
 
             GitLabWebhookUser dto =
-                    new GitLabWebhookUser(18024L, "ga84xah", "Felix Dietrich", "https://avatar.url", null);
+                    new GitLabWebhookUser(18024L, "ab12cde", "Max Mustermann", "https://avatar.url", null);
 
             when(gitLabUserService.findOrCreateUser(dto, 1L)).thenReturn(user);
 
@@ -158,7 +158,7 @@ class BaseGitLabProcessorTest extends BaseUnitTest {
 
             assertThat(result).isNotNull();
             assertThat(result.getId()).isEqualTo(-18024L);
-            assertThat(result.getLogin()).isEqualTo("ga84xah");
+            assertThat(result.getLogin()).isEqualTo("ab12cde");
         }
 
         @Test
@@ -169,7 +169,7 @@ class BaseGitLabProcessorTest extends BaseUnitTest {
 
         @Test
         void returnsNullForNullUserId() {
-            GitLabWebhookUser dto = new GitLabWebhookUser(null, "ga84xah", "Felix", null, null);
+            GitLabWebhookUser dto = new GitLabWebhookUser(null, "ab12cde", "Felix", null, null);
             User result = processor.callFindOrCreateUser(dto);
             assertThat(result).isNull();
         }
@@ -192,19 +192,19 @@ class BaseGitLabProcessorTest extends BaseUnitTest {
 
             GitLabUserLookup expectedLookup = GitLabUserLookup.of(
                     "gid://gitlab/User/18024",
-                    "ga84xah",
-                    "Felix Dietrich",
+                    "ab12cde",
+                    "Max Mustermann",
                     "https://avatar.url",
-                    "https://gitlab.lrz.de/ga84xah",
+                    "https://gitlab.lrz.de/ab12cde",
                     null);
             when(gitLabUserService.findOrCreateUser(expectedLookup, 1L)).thenReturn(user);
 
             User result = processor.callFindOrCreateUser(
                     "gid://gitlab/User/18024",
-                    "ga84xah",
-                    "Felix Dietrich",
+                    "ab12cde",
+                    "Max Mustermann",
                     "https://avatar.url",
-                    "https://gitlab.lrz.de/ga84xah");
+                    "https://gitlab.lrz.de/ab12cde");
 
             assertThat(result).isNotNull();
             assertThat(result.getId()).isEqualTo(-18024L);
@@ -212,13 +212,13 @@ class BaseGitLabProcessorTest extends BaseUnitTest {
 
         @Test
         void returnsNullForInvalidGlobalId() {
-            User result = processor.callFindOrCreateUser("invalid", "ga84xah", "Felix", null, null);
+            User result = processor.callFindOrCreateUser("invalid", "ab12cde", "Felix", null, null);
             assertThat(result).isNull();
         }
 
         @Test
         void returnsNullForNullGlobalId() {
-            User result = processor.callFindOrCreateUser(null, "ga84xah", "Felix", null, null);
+            User result = processor.callFindOrCreateUser(null, "ab12cde", "Felix", null, null);
             assertThat(result).isNull();
         }
     }

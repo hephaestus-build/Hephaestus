@@ -8,8 +8,8 @@
   "checkout_sha": "b186370e62e2ae348df64fb187c13aff4008457b",
   "message": "Test tag for webhook fixture",
   "user_id": 18024,
-  "user_name": "Dietrich, Felix (Timotheus Johannes)",
-  "user_username": "ga84xah",
+  "user_name": "Muster, Max (Erika)",
+  "user_username": "ab12cde",
   "user_email": "",
   "user_avatar": "https://gitlab.lrz.de/uploads/-/system/user/avatar/18024/avatar.png",
   "project_id": 246765,
@@ -39,8 +39,8 @@
       "timestamp": "2026-01-31T19:04:06+01:00",
       "url": "https://gitlab.lrz.de/hephaestustest/demo-repository/-/commit/b186370e62e2ae348df64fb187c13aff4008457b",
       "author": {
-        "name": "Dietrich, Felix (Timotheus Johannes)",
-        "email": "felixtj.dietrich@tum.de"
+        "name": "Muster, Max (Erika)",
+        "email": "max.muster@tum.de"
       },
       "added": [
         "src/auth.ts"

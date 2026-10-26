@@ -427,10 +427,10 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
                         MEMBER_USER_ID,
                         new GitLabUserLookup(
                                 "gid://gitlab/User/" + MEMBER_USER_ID,
-                                "ga84xah",
-                                "Felix Dietrich",
+                                "ab12cde",
+                                "Max Mustermann",
                                 null,
-                                SERVER_URL + "/ga84xah",
+                                SERVER_URL + "/ab12cde",
                                 null,
                                 null)))
                 .when(gitLabUserService)
@@ -745,7 +745,7 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
                 .orElseThrow()
                 .getId();
         TeamMembership.Id membershipId = new TeamMembership.Id(subgroup.getId(), userId);
-        assertThat(userRepository.findById(userId).orElseThrow().getName()).isEqualTo("Felix Dietrich");
+        assertThat(userRepository.findById(userId).orElseThrow().getName()).isEqualTo("Max Mustermann");
 
         // A removal GitLab contradicts keeps the access GitLab reports.
         ObjectNode removal = (ObjectNode) fixture("gitlab/member.add.json");
@@ -2215,10 +2215,10 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
                             new GitLabMergeRequestReadinessReader.Merge(
                                     new GitLabMergeRequestProcessor.SyncUserData(
                                             "gid://gitlab/User/" + MEMBER_USER_ID,
-                                            "ga84xah",
-                                            "Felix Dietrich",
+                                            "ab12cde",
+                                            "Max Mustermann",
                                             null,
-                                            SERVER_URL + "/ga84xah",
+                                            SERVER_URL + "/ab12cde",
                                             null,
                                             null),
                                     MERGED_AT,
@@ -2390,7 +2390,7 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
     private static GitLabGroupMemberResponse member(String access, int level) {
         return new GitLabGroupMemberResponse(
                 new GitLabGroupMemberResponse.GitLabMemberUser(
-                        "gid://gitlab/User/" + MEMBER_USER_ID, "ga84xah", "Felix Dietrich", null, null, null),
+                        "gid://gitlab/User/" + MEMBER_USER_ID, "ab12cde", "Max Mustermann", null, null, null),
                 new GitLabGroupMemberResponse.GitLabAccessLevel(access, level));
     }
 

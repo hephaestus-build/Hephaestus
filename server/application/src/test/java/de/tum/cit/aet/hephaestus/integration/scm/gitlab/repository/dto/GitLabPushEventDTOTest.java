@@ -37,7 +37,7 @@ class GitLabPushEventDTOTest extends BaseUnitTest {
             assertThat(dto.commits().get(0).id()).isEqualTo("9c5dedd52046bb5213189afc25f75e608a98d462");
             assertThat(dto.commits().get(0).message()).isEqualTo("Initial commit");
             assertThat(dto.commits().get(0).author()).isNotNull();
-            assertThat(dto.commits().get(0).author().name()).isEqualTo("Dietrich, Felix (Timotheus Johannes)");
+            assertThat(dto.commits().get(0).author().name()).isEqualTo("Muster, Max (Erika)");
             assertThat(dto.commits().get(0).added()).containsExactly("README.md");
             assertThat(dto.commits().get(0).changedFilesCount()).isEqualTo(1);
 

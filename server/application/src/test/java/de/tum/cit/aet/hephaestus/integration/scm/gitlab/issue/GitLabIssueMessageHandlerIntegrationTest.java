@@ -68,7 +68,7 @@ class GitLabIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
     private static final String FIXTURE_ISSUE_BODY = "Implement OAuth2 authentication flow";
     private static final String FIXTURE_ISSUE_HTML_URL =
             "https://gitlab.lrz.de/hephaestustest/demo-repository/-/issues/5";
-    private static final String FIXTURE_AUTHOR_LOGIN = "ga84xah";
+    private static final String FIXTURE_AUTHOR_LOGIN = "ab12cde";
     private static final String FIXTURE_LABEL_NAME = "enhancement";
     private static final String FIXTURE_LABEL_COLOR = "#a2eeef";
 
@@ -549,7 +549,7 @@ class GitLabIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
                         .orElseThrow();
                 assertThat(author.getLogin()).isEqualTo(FIXTURE_AUTHOR_LOGIN);
                 assertThat(author.getProvider().getType()).isEqualTo(IdentityProviderType.GITLAB);
-                assertThat(author.getHtmlUrl()).isEqualTo("https://gitlab.lrz.de/ga84xah");
+                assertThat(author.getHtmlUrl()).isEqualTo("https://gitlab.lrz.de/ab12cde");
             });
         }
 

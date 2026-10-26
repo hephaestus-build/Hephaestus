@@ -611,10 +611,10 @@ class GitLabIssueProcessorTest extends BaseUnitTest {
                     "2026-01-31T18:03:35Z",
                     null,
                     "gid://gitlab/User/18024",
-                    "ga84xah",
-                    "Felix Dietrich",
+                    "ab12cde",
+                    "Max Mustermann",
                     "https://gitlab.lrz.de/uploads/avatar.png",
-                    "https://gitlab.lrz.de/ga84xah",
+                    "https://gitlab.lrz.de/ab12cde",
                     null,
                     0,
                     null,
@@ -1301,8 +1301,8 @@ class GitLabIssueProcessorTest extends BaseUnitTest {
     private User createUserEntity() {
         User user = new User();
         user.setId(ENTITY_USER_ID);
-        user.setLogin("ga84xah");
-        user.setName("Felix Dietrich");
+        user.setLogin("ab12cde");
+        user.setName("Max Mustermann");
         return user;
     }
 
@@ -1384,8 +1384,8 @@ class GitLabIssueProcessorTest extends BaseUnitTest {
     private GitLabWebhookUser createUser() {
         return new GitLabWebhookUser(
                 RAW_USER_ID,
-                "ga84xah",
-                "Felix Dietrich",
+                "ab12cde",
+                "Max Mustermann",
                 "https://gitlab.lrz.de/uploads/-/system/user/avatar/18024/avatar.png",
                 null);
     }

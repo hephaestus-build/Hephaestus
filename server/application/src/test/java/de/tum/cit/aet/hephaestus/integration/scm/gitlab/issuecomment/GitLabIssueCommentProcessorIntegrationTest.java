@@ -207,10 +207,10 @@ class GitLabIssueCommentProcessorIntegrationTest extends BaseIntegrationTest {
                 body,
                 "https://gitlab.lrz.de/hephaestustest/demo-repository/-/issues/5#note_" + NATIVE_NOTE_ID,
                 "gid://gitlab/User/18024",
-                "ga84xah",
-                "Felix Dietrich",
+                "ab12cde",
+                "Max Mustermann",
                 "https://gitlab.lrz.de/uploads/-/system/user/avatar/18024/avatar.png",
-                "https://gitlab.lrz.de/ga84xah",
+                "https://gitlab.lrz.de/ab12cde",
                 null,
                 createdAt,
                 updatedAt);
