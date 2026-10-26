@@ -281,7 +281,7 @@
 			"customType": "regex",
 			"managerFilePatterns": ["/^\\.github/workflows/ci-kubernetes\\.yml$/"],
 			"matchStrings": [
-				"(?:image|NODE_IMAGE): (?<depName>docker\\.io/(?:rancher/k3s|kindest/node)):(?<currentValue>v[0-9][^@\\s]*)@(?<currentDigest>sha256:[a-f0-9]{64})"
+				"(?<depName>docker\\.io/(?:rancher/k3s|kindest/node)):(?<currentValue>v[0-9][^@\\s\"]*)@(?<currentDigest>sha256:[a-f0-9]{64})"
 			],
 			"datasourceTemplate": "docker",
 			"versioningTemplate": "regex:^v(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)(?:-k3s(?<build>\\d+))?$"

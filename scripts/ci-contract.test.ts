@@ -5218,15 +5218,20 @@ void test("a cluster leg is named for its distribution, minor and architecture, 
 		assert.doesNotMatch(name(String(entry.key)), /sha256|@|\d+\.\d+\.\d+/u);
 	}
 	assert.equal(name("schema"), "Chart");
-	assert.match(name("k3d"), /^k3s \$\{\{ matrix\.cluster\.minor \}\} \$\{\{ matrix\.arch \}\}$/u);
-	const clusters = workflow.getIn(["jobs", "k3d", "strategy", "matrix", "cluster"]);
-	assert.ok(isSeq(clusters));
-	for (const cluster of clusters.items) {
-		assert.ok(isMap(cluster));
-		const minor = String(cluster.get("minor"));
+	assert.match(name("k3d"), /^k3s \$\{\{ matrix\.minor \}\} \$\{\{ matrix\.arch \}\}$/u);
+	const matrix = workflow.getIn(["jobs", "k3d", "strategy", "matrix"]);
+	assert.ok(isMap(matrix));
+	// GitHub applies `include` after `exclude`, so an include could add an excluded minor back.
+	assert.equal(matrix.get("include"), undefined);
+	const minors = matrix.get("minor");
+	assert.ok(isSeq(minors));
+	const images: unknown = JSON.parse(String(workflow.getIn(["jobs", "k3d", "env", "K3S_IMAGES"])));
+	assert.ok(typeof images === "object" && images !== null);
+	assert.deepEqual(Object.keys(images), minors.items.map(String));
+	for (const [minor, image] of Object.entries(images)) {
 		assert.match(minor, /^1\.\d+$/u);
 		assert.match(
-			String(cluster.get("image")),
+			String(image),
 			new RegExp(
 				`^docker\\.io/rancher/k3s:v${minor.replace(".", String.raw`\.`)}\\.\\d+-k3s\\d+@sha256:[a-f0-9]{64}$`,
 				"u",
@@ -5241,5 +5246,62 @@ void test("a cluster leg is named for its distribution, minor and architecture, 
 			`^docker\\.io/kindest/node:v${kind.groups.minor.replace(".", String.raw`\.`)}\\.\\d+@sha256:[a-f0-9]{64}$`,
 			"u",
 		),
+	);
+});
+
+void test("a pull request runs the chart and the latest k3s; the floor, kind and the drill wait for the queue", async () => {
+	const kubernetes = parseDocument(await readFile(".github/workflows/ci-kubernetes.yml", "utf8"));
+	const cicd = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
+	const queue = String(cicd.getIn(["jobs", "Kubernetes", "with", "queue"]));
+	assert.doesNotMatch(queue, /pull_request/u, "a pull request must not run the queue's legs");
+	for (const event of ["merge_group", "push", "workflow_dispatch"]) {
+		assert.match(queue, new RegExp(`github\\.event_name == '${event}'`, "u"));
+	}
+	assert.equal(kubernetes.getIn(["jobs", "calico", "if"]), "inputs.queue");
+	const exclude = kubernetes.getIn(["jobs", "k3d", "strategy", "matrix", "exclude"]);
+	assert.ok(isSeq(exclude));
+	assert.ok(
+		exclude.items.some(
+			(entry) =>
+				isMap(entry) &&
+				/^\$\{\{ !inputs\.queue && '1\.35' \|\| 'none' \}\}$/u.test(String(entry.get("minor"))),
+		),
+	);
+	const steps = kubernetes.getIn(["jobs", "k3d", "steps"]);
+	assert.ok(isSeq(steps));
+	const drill = steps.items.find(
+		(item) => isMap(item) && item.get("name") === "Back up, then restore to a point in time",
+	);
+	assert.ok(isMap(drill));
+	// arm64 runs the lowest minor alone, which only the queue runs.
+	assert.ok(
+		exclude.items.some(
+			(entry) => isMap(entry) && entry.get("minor") === "1.37" && entry.get("arch") === "arm64",
+		),
+	);
+	// kubeconform validates the render on the lowest and the latest minor of the legs.
+	const schemaSteps = kubernetes.getIn(["jobs", "schema", "steps"]);
+	assert.ok(isSeq(schemaSteps));
+	const lintStep = schemaSteps.items.find(
+		(item) => isMap(item) && String(item.get("name")).startsWith("Lint the chart"),
+	);
+	assert.ok(isMap(lintStep));
+	const lint = String(lintStep.get("run"));
+	const legMinors = kubernetes.getIn(["jobs", "k3d", "strategy", "matrix", "minor"]);
+	assert.ok(isSeq(legMinors));
+	assert.match(
+		lint,
+		new RegExp(
+			`for version in ${legMinors.items.map((minor) => `${String(minor)}\\.0`).join(" ")}; do`,
+			"u",
+		),
+	);
+	// The drill runs on the latest minor, in the queue only.
+	const minors = kubernetes.getIn(["jobs", "k3d", "strategy", "matrix", "minor"]);
+	assert.ok(isSeq(minors));
+	const latest = String(minors.items.at(-1));
+	assert.equal(
+		String(drill.get("if")),
+		`\${{ inputs.queue && matrix.minor == '${latest}' && matrix.arch == 'amd64' }}`,
 	);
 });

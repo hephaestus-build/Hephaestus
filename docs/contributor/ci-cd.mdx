@@ -1022,6 +1022,10 @@ Right after a merge, that run is still building, so the pull request builds ever
 - A Kubernetes cluster leg is named for its distribution, minor and architecture, such as
   `k3s 1.37 amd64`. Its check history thus survives an image update. The job summary names the
   pinned node image. Renovate updates the image within its minor. A new minor is a workflow change.
+- A pull request that matches the `kubernetes` filter runs `Chart` and the latest k3s on amd64.
+  The merge queue also runs the lowest supported minor on amd64 and arm64, `kind 1.37 Calico` and
+  the backup drill. It tests the commit that `main` receives, so a pull request does not repeat
+  them. arm64 hosts run the lowest minor, and only the queue builds arm64 images.
 - A job's `timeout-minutes` is a hang detector of at least 15 minutes.
   This holds whatever the job's usual duration is.
   GitHub documents only that it cancels a job that runs longer than its limit
