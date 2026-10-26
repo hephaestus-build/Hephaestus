@@ -4,7 +4,7 @@
 
 **Please do not report security vulnerabilities through public GitHub issues, discussions, or pull requests.**
 
-Report privately via [GitHub private vulnerability reporting](https://github.com/hephaestus-build/Hephaestus/security/advisories/new) — it keeps the report confidential and credits you in the resulting advisory. If you cannot use GitHub, email [felixtj.dietrich@tum.de](mailto:felixtj.dietrich@tum.de) with the subject "Hephaestus Security Vulnerability Report".
+Report privately via [GitHub private vulnerability reporting](https://github.com/hephaestus-build/Hephaestus/security/advisories/new) — it keeps the report confidential and credits you in the resulting advisory. If you cannot use GitHub, email [security@hephaestus.build](mailto:security@hephaestus.build) with the subject "Hephaestus Security Vulnerability Report".
 
 Please include as much as you can:
 

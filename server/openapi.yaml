@@ -1,8 +1,9 @@
 openapi: 3.1.0
 info:
   contact:
-    email: felixtj.dietrich@tum.de
-    name: Felix T.J. Dietrich
+    email: security@hephaestus.build
+    name: Hephaestus
+    url: https://github.com/hephaestus-build/Hephaestus
   description: API documentation for Hephaestus. Practice review bigint ids and monetary
     amounts are decimal strings. Monetary fields are USD; clients read server-computed
     totals and budget decisions. Provider mirror ids retain their numeric contract.
