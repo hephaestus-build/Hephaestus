@@ -151,7 +151,11 @@ const WITHDRAWN_READY: StatusDef = {
 export function deliveryOutcome(feedback: DeliveryFacts): StatusDef {
 	const { destination, state, stopReason } = feedback;
 	if (isPartialDelivery(feedback) && !feedback.withdrawn) {
-		return { ...DELIVERY_STATE_DEFS[state], description: partialDeliveryDescription(feedback) };
+		return {
+			...DELIVERY_STATE_DEFS[state],
+			label: "Partly delivered",
+			description: partialDeliveryDescription(feedback),
+		};
 	}
 	if (feedback.withdrawn && state === "READY") {
 		return WITHDRAWN_READY;
