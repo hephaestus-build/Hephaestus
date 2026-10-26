@@ -15,7 +15,8 @@ import {
 } from "node:fs/promises";
 import path from "node:path";
 
-import { type ChartImage, type ChartValues, renderChartValues } from "./kubernetes-chart.ts";
+import { isCommit, parseInventory } from "./commit-image-lock.ts";
+import { commitChartValues, renderChartValues } from "./kubernetes-chart.ts";
 import { isSet, requiredEnv } from "./lib/env.ts";
 import { asRecord, asString, parseJson, readJsonFile } from "./lib/json.ts";
 import { output, run, succeeds } from "./lib/process.ts";
@@ -100,14 +101,11 @@ export type Decision =
 
 export const RELEASE_TAG = /^v(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)$/u;
 const CHANNEL_NAME = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
-const COMMIT_SHA = /^[0-9a-f]{40}$/u;
 const SHA256_HEX = /^[0-9a-f]{64}$/u;
 const IMAGE_KEY = /^HEPHAESTUS_IMAGE_[A-Z0-9_]+$/u;
 const IMAGE_DIGEST = /^[^\s@]+@sha256:[0-9a-f]{64}$/u;
 
-export function isCommit(value: string): boolean {
-	return COMMIT_SHA.test(value);
-}
+export { isCommit } from "./commit-image-lock.ts";
 
 /** What a channel may ask a host to run: a published release, or a commit of the default branch. */
 export function isTarget(value: string): boolean {
@@ -719,36 +717,6 @@ export async function profileFiles(
 }
 
 /**
- * The chart's release and images, taken from the verified lock alone: the chart runs nothing that
- * the channel's signature or the release lock does not name. A commit channel has no version, so
- * the instance reports its commit as a prerelease of 0.0.0.
- */
-export function chartImageValues(lockEnv: string, release: string): ChartValues {
-	const commit = lockedReleaseCommit(lockEnv);
-	const reference = (name: ChartImage): string => {
-		// The lock's key for an image, as release-image-lock and commit-image-lock write it.
-		const values = lockValues(
-			lockEnv,
-			`HEPHAESTUS_IMAGE_${name.toUpperCase().replaceAll("-", "_")}`,
-		);
-		if (values.length !== 1 || !IMAGE_DIGEST.test(values[0] ?? "")) {
-			throw new Error(`the lock names no single ${name} digest, which the chart runs`);
-		}
-		return values[0] ?? "";
-	};
-	return {
-		release: { version: RELEASE_TAG.test(release) ? release : `v0.0.0-${commit}`, commit },
-		images: {
-			"agent-pi": reference("agent-pi"),
-			"application-server": reference("application-server"),
-			nats: reference("nats"),
-			postgres: reference("postgres"),
-			webapp: reference("webapp"),
-		},
-	};
-}
-
-/**
  * One `helm upgrade --install` of the release tree's chart: the profiles in order, the operator's
  * site values, and last the lock's images and release, so that no site value can run an image the
  * lock does not name.
@@ -803,7 +771,11 @@ function hostConfig(environment: NodeJS.ProcessEnv): HostConfig {
 		throw new Error("HEPHAESTUS_CHANNEL must contain lowercase letters, digits, and hyphens");
 	}
 	const stateDirectory = environment.STATE_DIRECTORY ?? "/var/lib/hephaestus";
-	const waitTimeoutSeconds = Number(environment.HEPHAESTUS_WAIT_TIMEOUT ?? 600);
+	const stacks = parseStacks(environment.HEPHAESTUS_STACKS);
+	// A new chart Pod waits up to 10 minutes for the migrated schema, so Helm needs more than that.
+	const waitTimeoutSeconds = Number(
+		environment.HEPHAESTUS_WAIT_TIMEOUT ?? (stacks.includes("chart") ? 1200 : 600),
+	);
 	if (!Number.isSafeInteger(waitTimeoutSeconds) || waitTimeoutSeconds <= 0) {
 		throw new Error("HEPHAESTUS_WAIT_TIMEOUT must be a positive integer");
 	}
@@ -811,7 +783,6 @@ function hostConfig(environment: NodeJS.ProcessEnv): HostConfig {
 	if (!Number.isFinite(minimumFreeGiB) || minimumFreeGiB <= 0) {
 		throw new Error("HEPHAESTUS_MIN_FREE_GIB must be a positive number");
 	}
-	const stacks = parseStacks(environment.HEPHAESTUS_STACKS);
 	return {
 		channel,
 		stacks,
@@ -851,7 +822,7 @@ export async function readApplied(file: string): Promise<AppliedState | undefine
 		if (applied.channelIdentity !== undefined && !SHA256_HEX.test(applied.channelIdentity)) {
 			throw new Error("applied.channelIdentity must be a SHA-256 digest");
 		}
-		if (applied.commit !== undefined && !COMMIT_SHA.test(applied.commit)) {
+		if (applied.commit !== undefined && !isCommit(applied.commit)) {
 			throw new Error("applied.commit must be a Git commit");
 		}
 		if (applied.previous !== undefined && !isTarget(applied.previous)) {
@@ -873,9 +844,9 @@ export async function readApplied(file: string): Promise<AppliedState | undefine
 }
 
 /** Renamed into place: a scrape landing mid-write would otherwise publish a truncated series. */
-async function writeAtomic(file: string, contents: string, mode = 0o644): Promise<void> {
+async function writeAtomic(file: string, contents: string): Promise<void> {
 	const temporary = `${file}.tmp`;
-	await writeFile(temporary, contents, { mode });
+	await writeFile(temporary, contents);
 	await rename(temporary, file);
 }
 
@@ -1052,7 +1023,7 @@ async function recordUnchanged(
 				now: startedAt,
 				lastSuccessAt: new Date(applied.appliedAt),
 				toolingPending: appliedCommit(applied) === undefined,
-				freeBytes: await readableFreeBytes(),
+				freeBytes: config.chart === undefined ? await readableFreeBytes() : undefined,
 			}),
 		);
 	}
@@ -1286,6 +1257,7 @@ export async function main(unitsDirectory = SYSTEMD_UNITS): Promise<void> {
 	}
 
 	const { channel, channelCommit, channelIdentity } = await fetchSignedChannel(config);
+	refuseReleaseChannelOnChart(config, channel);
 	const advances =
 		applied && channelCommit !== applied.channelCommit
 			? await succeeds(
@@ -1387,7 +1359,7 @@ export async function main(unitsDirectory = SYSTEMD_UNITS): Promise<void> {
 				success: true,
 				now: finishedAt,
 				lastSuccessAt: finishedAt,
-				freeBytes: await readableFreeBytes(),
+				freeBytes: config.chart === undefined ? await readableFreeBytes() : undefined,
 			}),
 		);
 	}
@@ -1403,8 +1375,76 @@ export async function main(unitsDirectory = SYSTEMD_UNITS): Promise<void> {
 	}
 }
 
+/** ADR 0058: a release applies its signed chart package, which the chart stack cannot verify yet. */
+function refuseReleaseChannelOnChart(config: HostConfig, channel: Channel): void {
+	if (config.chart !== undefined && channel.images === undefined) {
+		throw new Error(
+			`a release channel applies the signed chart package; the chart stack does not support that yet, so ${config.channel} must be a commit channel`,
+		);
+	}
+}
+
+/** The images a verified lock names, by the `HEPHAESTUS_IMAGE_*` keys that the lock writers use. */
+function lockedImages(lockEnv: string): Record<string, string> {
+	const images: Record<string, string> = {};
+	for (const line of lockEnv.split("\n")) {
+		const separator = line.indexOf("=");
+		const key = line.slice(0, separator);
+		if (separator > 0 && IMAGE_KEY.test(key)) {
+			images[key] = line.slice(separator + 1).trim();
+		}
+	}
+	return images;
+}
+
+const HELM_PENDING = /^pending-(?:install|upgrade|rollback)$/u;
+
 /**
- * Installs or upgrades the release tree's chart with the lock's images. Helm migrates in the
+ * Helm leaves a release in a pending status when its upgrade was killed, by the unit's timeout, a
+ * reboot or a power cut, and then refuses every later upgrade. Rolling back to the last deployed
+ * revision ends that state, so the tick that follows a cut-off upgrade repairs it.
+ */
+async function recoverPendingRelease(config: HostConfig, settings: ChartSettings): Promise<void> {
+	let status: string;
+	try {
+		const info = asRecord(
+			parseJson(
+				await output(settings.helm, [
+					"status",
+					settings.release,
+					"--namespace",
+					settings.namespace,
+					"--output",
+					"json",
+				]),
+			),
+			"helm status",
+		);
+		status = asString(asRecord(info.info, "helm status info").status, "helm status");
+	} catch {
+		// No release yet, or a cluster Helm cannot read: the upgrade itself reports either.
+		return;
+	}
+	if (HELM_PENDING.test(status)) {
+		console.log(`Rolling back ${settings.release}: an earlier upgrade stopped in ${status}`);
+		await run(
+			settings.helm,
+			[
+				"rollback",
+				settings.release,
+				"--namespace",
+				settings.namespace,
+				"--wait",
+				"--timeout",
+				`${config.waitTimeoutSeconds}s`,
+			],
+			{ stdin: "ignore" },
+		);
+	}
+}
+
+/**
+ * Installs or upgrades the release tree's chart with the commit lock's images. Helm migrates in the
  * revision's Job, waits for every Pod and that Job, and rolls back to the previous revision when
  * either fails; the thrown error then fails this tick as a failed Compose apply does.
  */
@@ -1416,16 +1456,23 @@ async function applyChart(
 	releaseTree: string,
 	lockEnv: string,
 ): Promise<void> {
+	const values = commitChartValues(
+		lockedImages(lockEnv),
+		parseInventory(await readJsonFile(path.join(releaseTree, "security/release-images.json"))),
+		lockedReleaseCommit(lockEnv),
+	);
+	const profiles = await profileFiles(settings, releaseTree);
 	const directory = path.join(config.stateDirectory, "chart");
-	await mkdir(directory, { recursive: true, mode: 0o700 });
+	await mkdir(directory, { recursive: true });
 	const imagesFile = path.join(directory, `${release}.images.yaml`);
-	await writeAtomic(imagesFile, renderChartValues(chartImageValues(lockEnv, release)), 0o600);
+	await writeAtomic(imagesFile, renderChartValues(values));
+	await recoverPendingRelease(config, settings);
 	await run(
 		settings.helm,
 		helmArguments(
 			settings,
 			releaseTree,
-			await profileFiles(settings, releaseTree),
+			profiles,
 			imagesFile,
 			path.join(config.secretsDirectory, "chart.yaml"),
 			config.waitTimeoutSeconds,
@@ -1562,7 +1609,7 @@ function locksDirectory(config: HostConfig): string {
 
 /** The accepted source commit a record names: kept since it was recorded, or the release itself. */
 export function appliedCommit(applied: AppliedState): string | undefined {
-	return applied.commit ?? (COMMIT_SHA.test(applied.release) ? applied.release : undefined);
+	return applied.commit ?? (isCommit(applied.release) ? applied.release : undefined);
 }
 
 /**
@@ -1745,7 +1792,10 @@ async function reportFailure(): Promise<void> {
 			lastSuccessAt: applied ? new Date(applied.appliedAt) : undefined,
 			// Pending is a fact about the record, so a failed run must not read as the apply that ends it.
 			toolingPending: applied !== undefined && appliedCommit(applied) === undefined,
-			freeBytes: await readableFreeBytes(),
+			// The free space is Docker's root, which a chart host does not use.
+			freeBytes: (process.env.HEPHAESTUS_STACKS ?? "").split(/[\s,]+/u).includes("chart")
+				? undefined
+				: await readableFreeBytes(),
 		}),
 	);
 }

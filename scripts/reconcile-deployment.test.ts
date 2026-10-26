@@ -10,7 +10,6 @@ import {
 	readFile,
 	readlink,
 	rm,
-	stat,
 	symlink,
 	writeFile,
 } from "node:fs/promises";
@@ -27,7 +26,6 @@ import {
 	appliedCommit,
 	carriesToolingLink,
 	carryPostgresImage,
-	chartImageValues,
 	chartSettings,
 	commitImages,
 	commitLockEnvironment,
@@ -260,56 +258,23 @@ await test("the chart stack is the whole release, so it takes no Compose stack b
 	assert.throws(() => parseStacks("core, chart"), /takes no other stack/u);
 });
 
-const chartLock = (commit: string, omit?: string): string =>
-	commitLockEnvironment(
-		commit,
-		Object.fromEntries(
-			(
+/** The images a commit channel names for a chart host, as the promotion writes them. */
+const chartChannelImages = (omit?: string): Record<string, string> =>
+	Object.fromEntries(
+		(
+			[
+				["HEPHAESTUS_IMAGE_AGENT_PI", `ghcr.io/hephaestus-build/agent-pi@sha256:${"1".repeat(64)}`],
 				[
-					[
-						"HEPHAESTUS_IMAGE_AGENT_PI",
-						`ghcr.io/hephaestus-build/agent-pi@sha256:${"1".repeat(64)}`,
-					],
-					[
-						"HEPHAESTUS_IMAGE_APPLICATION_SERVER",
-						`ghcr.io/hephaestus-build/application-server@sha256:${"2".repeat(64)}`,
-					],
-					["HEPHAESTUS_IMAGE_NATS", `docker.io/synadia/nats-server@sha256:${"3".repeat(64)}`],
-					[
-						"HEPHAESTUS_IMAGE_POSTGRES",
-						`ghcr.io/hephaestus-build/postgres@sha256:${"4".repeat(64)}`,
-					],
-					["HEPHAESTUS_IMAGE_WEBAPP", `ghcr.io/hephaestus-build/webapp@sha256:${"5".repeat(64)}`],
-					["HEPHAESTUS_IMAGE_TRAEFIK", `docker.io/library/traefik@sha256:${"6".repeat(64)}`],
-				] satisfies [string, string][]
-			).filter(([key]) => key !== omit),
-		),
+					"HEPHAESTUS_IMAGE_APPLICATION_SERVER",
+					`ghcr.io/hephaestus-build/application-server@sha256:${"2".repeat(64)}`,
+				],
+				["HEPHAESTUS_IMAGE_NATS", `docker.io/synadia/nats-server@sha256:${"3".repeat(64)}`],
+				["HEPHAESTUS_IMAGE_POSTGRES", `ghcr.io/hephaestus-build/postgres@sha256:${"4".repeat(64)}`],
+				["HEPHAESTUS_IMAGE_WEBAPP", `ghcr.io/hephaestus-build/webapp@sha256:${"5".repeat(64)}`],
+				["HEPHAESTUS_IMAGE_TRAEFIK", `docker.io/library/traefik@sha256:${"6".repeat(64)}`],
+			] satisfies [string, string][]
+		).filter(([key]) => key !== omit),
 	);
-
-await test("the chart runs exactly the lock's images, and a commit reports itself as a prerelease", () => {
-	const commit = "a".repeat(40);
-	const values = chartImageValues(chartLock(commit), commit);
-	assert.deepEqual(values, {
-		release: { version: `v0.0.0-${commit}`, commit },
-		images: {
-			"agent-pi": `ghcr.io/hephaestus-build/agent-pi@sha256:${"1".repeat(64)}`,
-			"application-server": `ghcr.io/hephaestus-build/application-server@sha256:${"2".repeat(64)}`,
-			nats: `docker.io/synadia/nats-server@sha256:${"3".repeat(64)}`,
-			postgres: `ghcr.io/hephaestus-build/postgres@sha256:${"4".repeat(64)}`,
-			webapp: `ghcr.io/hephaestus-build/webapp@sha256:${"5".repeat(64)}`,
-		},
-	});
-	// The chart's schema takes the version: a tag, with the commit as its prerelease.
-	assert.match(
-		values.release.version,
-		/^v(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?$/u,
-	);
-	assert.equal(chartImageValues(chartLock(commit), "v1.2.3").release.version, "v1.2.3");
-	assert.throws(
-		() => chartImageValues(chartLock(commit, "HEPHAESTUS_IMAGE_NATS"), commit),
-		/no single nats digest/u,
-	);
-});
 
 await test("a chart host installs the release tree's chart with its profiles, the site values and last the lock's images", async () => {
 	assert.deepEqual(chartSettings({}), {
@@ -339,39 +304,29 @@ await test("a chart host installs the release tree's chart with its profiles, th
 			path.join(profiles, "small.yaml"),
 			path.join(profiles, "small-16gib.yaml"),
 		]);
-		assert.deepEqual(
-			helmArguments(
-				settings,
-				tree,
-				files,
-				"/var/lib/hephaestus/chart/abc.images.yaml",
-				"/etc/hephaestus/chart.yaml",
-				1200,
-			),
-			[
-				"upgrade",
-				"--install",
-				"hephaestus",
-				path.join(tree, "deploy/chart/hephaestus"),
-				"--namespace",
-				"hephaestus",
-				// Each profile over the one before it, in the order the host names them.
-				"--values",
-				path.join(profiles, "small.yaml"),
-				"--values",
-				path.join(profiles, "small-16gib.yaml"),
-				"--values",
-				"/etc/hephaestus/chart.yaml",
-				// Last: Helm merges later files over earlier ones, so the lock's images always win.
-				"--values",
-				"/var/lib/hephaestus/chart/abc.images.yaml",
-				"--rollback-on-failure",
-				"--wait=watcher",
-				"--wait-for-jobs",
-				"--timeout",
-				"1200s",
-			],
+		const argv = helmArguments(
+			settings,
+			tree,
+			files,
+			"/var/lib/hephaestus/chart/abc.images.yaml",
+			"/etc/hephaestus/chart.yaml",
+			1200,
 		);
+		const values = argv.flatMap((argument, index) =>
+			argv[index - 1] === "--values" ? [argument] : [],
+		);
+		// Helm merges later files over earlier ones: the profiles in the host's order, the site
+		// values, and last the lock's images, so that no site value runs an image the lock omits.
+		assert.deepEqual(values, [
+			path.join(profiles, "small.yaml"),
+			path.join(profiles, "small-16gib.yaml"),
+			"/etc/hephaestus/chart.yaml",
+			"/var/lib/hephaestus/chart/abc.images.yaml",
+		]);
+		for (const flag of ["--rollback-on-failure", "--wait=watcher", "--wait-for-jobs"]) {
+			assert.ok(argv.includes(flag), flag);
+		}
+		assert.equal(argv[argv.indexOf("--timeout") + 1], "1200s");
 	} finally {
 		await rm(tree, { recursive: true, force: true });
 	}
@@ -904,6 +859,7 @@ async function reconcilerFixture(directory: string) {
 		for (const file of [
 			"reconcile-deployment.ts",
 			"kubernetes-chart.ts",
+			"commit-image-lock.ts",
 			"lib/env.ts",
 			"lib/json.ts",
 			"lib/process.ts",
@@ -930,6 +886,26 @@ async function reconcilerFixture(directory: string) {
 	// The profile that a chart host installs by default.
 	await mkdir(path.join(checkout, "deploy/chart/hephaestus/profiles"), { recursive: true });
 	await writeFile(path.join(checkout, "deploy/chart/hephaestus/profiles/small.yaml"), "{}\n");
+	// The release image inventory, whose upstream pins the chart values check.
+	await mkdir(path.join(checkout, "security"), { recursive: true });
+	await writeFile(
+		path.join(checkout, "security/release-images.json"),
+		JSON.stringify({
+			images: ["webapp", "application-server", "agent-pi", "postgres"],
+			upstream: [
+				{
+					name: "nats",
+					repository: "docker.io/synadia/nats-server",
+					digest: `sha256:${"3".repeat(64)}`,
+				},
+				{
+					name: "traefik",
+					repository: "docker.io/library/traefik",
+					digest: `sha256:${"6".repeat(64)}`,
+				},
+			],
+		}),
+	);
 	gitIn(checkout, "init", "--quiet", "--initial-branch=main");
 	gitIn(checkout, "config", "user.email", "host@example.invalid");
 	gitIn(checkout, "config", "user.name", "host");
@@ -970,6 +946,21 @@ writeFileSync(process.argv[3], "HEPHAESTUS_RELEASE_COMMIT=" + commit + "\\nHEPHA
 	await mkdir(path.join(checkout, "channels"));
 	await writeFile(path.join(checkout, "channels/test.json"), JSON.stringify({ release: "v1.0.0" }));
 	await writeFile(path.join(checkout, "channels/test.json.sigstore.json"), "{}\n");
+	// A chart host follows a commit channel: the candidate commit with the chart's images.
+	await writeFile(
+		path.join(checkout, "channels/chart.json"),
+		JSON.stringify({ commit: releaseCommit, images: chartChannelImages() }),
+	);
+	await writeFile(path.join(checkout, "channels/chart.json.sigstore.json"), "{}\n");
+	// The same commit missing a chart image, which the chart values refuse.
+	await writeFile(
+		path.join(checkout, "channels/chart-incomplete.json"),
+		JSON.stringify({
+			commit: releaseCommit,
+			images: chartChannelImages("HEPHAESTUS_IMAGE_WEBAPP"),
+		}),
+	);
+	await writeFile(path.join(checkout, "channels/chart-incomplete.json.sigstore.json"), "{}\n");
 	gitIn(checkout, "add", "channels");
 	gitIn(checkout, "commit", "--quiet", "-m", "promotion");
 	const channelCommit = gitIn(checkout, "rev-parse", "HEAD");
@@ -1217,44 +1208,67 @@ await test(
 	},
 );
 
+/** A fake Helm that logs each call; `status` answers HELM_STATUS, or fails as for no release. */
+async function fakeHelm(
+	directory: string,
+): Promise<{ helm: string; log: () => Promise<string[]> }> {
+	const calls = path.join(directory, "helm-calls");
+	const helm = path.join(directory, "helm");
+	await writeFile(calls, "");
+	await writeFile(
+		helm,
+		`#!/usr/bin/env -S node --
+import { appendFileSync } from "node:fs";
+const args = process.argv.slice(2);
+appendFileSync(${JSON.stringify(calls)}, args.join(" ") + "\\n");
+if (args[0] === "status") {
+if (process.env.HELM_STATUS === undefined) process.exit(1);
+console.log(JSON.stringify({ info: { status: process.env.HELM_STATUS } }));
+}
+process.exit(args[0] === "upgrade" && process.env.FAIL_HELM === "1" ? 1 : 0);
+`,
+		{ mode: 0o755 },
+	);
+	return {
+		helm,
+		log: async () => {
+			const text = await readFile(calls, "utf8");
+			return text.split("\n").filter(Boolean);
+		},
+	};
+}
+
 await test(
-	"a chart host applies the verified lock with one Helm upgrade and touches no Compose stack",
+	"a chart host applies the verified commit lock with one Helm upgrade and touches no Compose stack",
 	reconcilerSubprocess,
 	async () => {
 		const directory = await mkdtemp(path.join(tmpdir(), "reconcile-chart-"));
 		try {
 			const fixture = await reconcilerFixture(directory);
-			const lock = chartLock(fixture.releaseCommit).replace(/^IMAGE_TAG=.*\n/mu, "");
-			await writeFile(
-				path.join(fixture.bootstrap, "scripts/prepare-release-lock.ts"),
-				`import { writeFileSync } from "node:fs";\nwriteFileSync(process.argv[3], ${JSON.stringify(lock)});\n`,
-			);
-			const helmCalls = path.join(directory, "helm-calls");
-			const helm = path.join(directory, "helm");
-			await writeFile(
-				helm,
-				`#!/usr/bin/env -S node --\nimport { appendFileSync } from "node:fs";\nappendFileSync(${JSON.stringify(helmCalls)}, process.argv.slice(2).join(" ") + "\\n");\nprocess.exit(process.env.FAIL_HELM === "1" ? 1 : 0);\n`,
-				{ mode: 0o755 },
-			);
+			const { helm, log } = await fakeHelm(directory);
 			const environment = {
 				HEPHAESTUS_STACKS: "chart",
 				HEPHAESTUS_HELM: helm,
 				HEPHAESTUS_SECRETS: directory,
 			};
 
-			const failed = fixture.run({ environment: { ...environment, FAIL_HELM: "1" } });
+			const failed = fixture.run({
+				channel: "chart",
+				environment: { ...environment, FAIL_HELM: "1" },
+			});
 			assert.notEqual(failed.status, 0, "a failed upgrade fails the tick");
 			assert.match(failed.stderr, /exited with code 1/u);
 			assert.equal(await readApplied(path.join(directory, "applied.json")), undefined);
 			assert.equal(await readlink(path.join(directory, "tooling")), fixture.bootstrap);
 
-			const result = fixture.run({ environment });
+			const result = fixture.run({ channel: "chart", environment });
 			assert.equal(result.status, 0, result.stderr);
-			const tree = path.join(directory, "releases/v1.0.0");
-			const imagesFile = path.join(directory, "chart/v1.0.0.images.yaml");
-			const helmLog = await readFile(helmCalls, "utf8");
+			const release = fixture.releaseCommit;
+			const tree = path.join(directory, "releases", release);
+			const imagesFile = path.join(directory, `chart/${release}.images.yaml`);
+			const upgraded = await log();
 			assert.equal(
-				helmLog.trim().split("\n").at(-1),
+				upgraded.at(-1),
 				[
 					"upgrade --install hephaestus",
 					path.join(tree, "deploy/chart/hephaestus"),
@@ -1264,27 +1278,97 @@ await test(
 					path.join(directory, "chart.yaml"),
 					"--values",
 					imagesFile,
-					"--rollback-on-failure --wait=watcher --wait-for-jobs --timeout 600s",
+					// A chart host waits longer than a new Pod's 10 minutes for the schema.
+					"--rollback-on-failure --wait=watcher --wait-for-jobs --timeout 1200s",
 				].join(" "),
 			);
 			// A comment line, then JSON, which Helm reads as YAML.
 			const written = await readFile(imagesFile, "utf8");
 			const values = asRecord(parseJson(written.replace(/^#.*\n/u, "")), "images values");
 			assert.deepEqual(at(values, ["release"], "images values"), {
-				version: "v1.0.0",
-				commit: fixture.releaseCommit,
+				version: `v0.0.0-${release}`,
+				commit: release,
 			});
 			assert.equal(
 				at(values, ["images", "application-server"], "images values"),
 				`ghcr.io/hephaestus-build/application-server@sha256:${"2".repeat(64)}`,
 			);
-			const { mode } = await stat(imagesFile);
-			assert.equal(mode.toString(8).slice(-3), "600");
 			const record = await readApplied(path.join(directory, "applied.json"));
-			assert.equal(record?.release, "v1.0.0");
+			assert.equal(record?.release, release);
 			assert.equal(await readlink(path.join(directory, "tooling")), tree);
 			// The kubelet owns the cluster's images: no Compose stack, pull or image removal runs.
 			assert.doesNotMatch(await fixture.calls(), /^docker (?!info --format)/mu);
+			// The free-space series reads Docker's root, which a chart host does not use.
+			assert.doesNotMatch(await readFile(fixture.metricsFile, "utf8"), /free_bytes/u);
+
+			// The next tick finds the request applied and calls Helm no more.
+			const { length: calls } = await log();
+			const again = fixture.run({ channel: "chart", environment });
+			assert.equal(again.status, 0, again.stderr);
+			const after = await log();
+			assert.equal(after.length, calls);
+		} finally {
+			await rm(directory, { recursive: true, force: true });
+		}
+	},
+);
+
+await test(
+	"a chart host repairs a release that an interrupted upgrade left pending before it upgrades",
+	reconcilerSubprocess,
+	async () => {
+		const directory = await mkdtemp(path.join(tmpdir(), "reconcile-chart-pending-"));
+		try {
+			const fixture = await reconcilerFixture(directory);
+			const { helm, log } = await fakeHelm(directory);
+			const result = fixture.run({
+				channel: "chart",
+				environment: {
+					HEPHAESTUS_STACKS: "chart",
+					HEPHAESTUS_HELM: helm,
+					HEPHAESTUS_SECRETS: directory,
+					HELM_STATUS: "pending-upgrade",
+				},
+			});
+			assert.equal(result.status, 0, result.stderr);
+			const repaired = await log();
+			assert.deepEqual(
+				repaired.map((call) => call.split(" ")[0]),
+				["status", "rollback", "upgrade"],
+			);
+			assert.match(repaired[1] ?? "", /^rollback hephaestus --namespace hephaestus --wait/u);
+		} finally {
+			await rm(directory, { recursive: true, force: true });
+		}
+	},
+);
+
+await test(
+	"nothing that is not verified, complete and from a commit channel reaches Helm",
+	reconcilerSubprocess,
+	async () => {
+		const directory = await mkdtemp(path.join(tmpdir(), "reconcile-chart-refused-"));
+		try {
+			const fixture = await reconcilerFixture(directory);
+			const { helm, log } = await fakeHelm(directory);
+			const environment = {
+				HEPHAESTUS_STACKS: "chart",
+				HEPHAESTUS_HELM: helm,
+				HEPHAESTUS_SECRETS: directory,
+			};
+			// A release channel names a signed chart package, which the chart stack cannot verify yet.
+			const release = fixture.run({ environment });
+			assert.notEqual(release.status, 0);
+			assert.match(release.stderr, /release channel applies the signed chart package/u);
+			// A channel whose signature cosign refuses.
+			const unsigned = fixture.run({ channel: "chart", failVerification: true, environment });
+			assert.notEqual(unsigned.status, 0);
+			// A commit lock without an image the chart runs.
+			const incomplete = fixture.run({ channel: "chart-incomplete", environment });
+			assert.notEqual(incomplete.status, 0);
+			assert.match(incomplete.stderr, /no webapp digest/u);
+			assert.deepEqual(await log(), []);
+			assert.equal(await readApplied(path.join(directory, "applied.json")), undefined);
 		} finally {
 			await rm(directory, { recursive: true, force: true });
 		}

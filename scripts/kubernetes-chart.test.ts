@@ -7,7 +7,12 @@ import Ajv from "ajv";
 import { parse } from "yaml";
 
 import { parseInventory } from "./commit-image-lock.ts";
-import { chartImages, chartValues, releaseValuesFile } from "./kubernetes-chart.ts";
+import {
+	chartImages,
+	chartValues,
+	commitChartValues,
+	releaseValuesFile,
+} from "./kubernetes-chart.ts";
 import { asRecord, isRecord, parseJson, readJsonFileSync } from "./lib/json.ts";
 import { parseReleaseImageLock } from "./release-image-lock.ts";
 
@@ -192,6 +197,51 @@ await test("a lock that does not cover exactly the release image inventory is re
 				inventory,
 			),
 		/nats is locked at sha256:e{64}, not the inventory pin/u,
+	);
+});
+
+await test("a commit lock names the chart images by digest, its upstream images at the inventory pins", () => {
+	const commit = "c".repeat(40);
+	const nats = inventory.upstream.find((entry) => entry.name === "nats");
+	assert.ok(nats);
+	const images = {
+		HEPHAESTUS_IMAGE_AGENT_PI: `ghcr.io/hephaestus-build/agent-pi@${digest("1")}`,
+		HEPHAESTUS_IMAGE_APPLICATION_SERVER: `ghcr.io/hephaestus-build/application-server@${digest("2")}`,
+		HEPHAESTUS_IMAGE_NATS: `${nats.repository}@${nats.digest}`,
+		HEPHAESTUS_IMAGE_POSTGRES: `ghcr.io/hephaestus-build/postgres@${digest("4")}`,
+		HEPHAESTUS_IMAGE_WEBAPP: `ghcr.io/hephaestus-build/webapp@${digest("5")}`,
+		// The Compose edge, which the chart does not run.
+		HEPHAESTUS_IMAGE_TRAEFIK: `docker.io/library/traefik@${digest("6")}`,
+	};
+	const values = commitChartValues(images, inventory, commit);
+	assert.deepEqual(Object.keys(values.images), [...chartImages]);
+	assert.equal(values.images.postgres, images.HEPHAESTUS_IMAGE_POSTGRES);
+	// The chart's schema takes the version: a tag, with the commit as its prerelease.
+	assert.equal(values.release.version, `v0.0.0-${commit}`);
+	assert.match(
+		values.release.version,
+		/^v(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?$/u,
+	);
+
+	const { HEPHAESTUS_IMAGE_WEBAPP: _webapp, ...withoutWebapp } = images;
+	assert.throws(() => commitChartValues(withoutWebapp, inventory, commit), /no webapp digest/u);
+	assert.throws(
+		() =>
+			commitChartValues(
+				{ ...images, HEPHAESTUS_IMAGE_NATS: `${nats.repository}@${digest("e")}` },
+				inventory,
+				commit,
+			),
+		/nats is locked at .*, not the inventory pin/u,
+	);
+	assert.throws(
+		() =>
+			commitChartValues(
+				{ ...images, HEPHAESTUS_IMAGE_WEBAPP: "ghcr.io/hephaestus-build/webapp:main" },
+				inventory,
+				commit,
+			),
+		/no webapp digest/u,
 	);
 });
 
