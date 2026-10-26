@@ -20,7 +20,7 @@ The [migration guide](https://github.com/hephaestus-build/Hephaestus/blob/main/M
 4. Make a database backup and verify that it restores, as [Backup & restore](./backup-restore) describes.
 5. Keep the signed release lock and the `.env` of your current release with the backup.
 
-:::caution CAUTION: Stop every role
+:::caution[CAUTION: Stop every role]
 Several changes on the way to 1.0 need every runtime role stopped before the migration.
 A server, worker, or webhook server of the old release fails when it reads the new schema or the data that the new release writes.
 Stop `application-server`, `application-worker`, and `webhook-server` before you start any role of the new release.

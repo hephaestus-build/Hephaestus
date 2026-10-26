@@ -59,7 +59,7 @@ offer to fine-grained tokens.
 | Issue types (`issue_types`)        | Organization | Read         | Issue-type sync stays empty                                                         |
 | Metadata (`metadata`)              | Repository   | Read         | Always included                                                                     |
 
-:::caution CAUTION: A missing permission does not fail the connection
+:::caution[CAUTION: A missing permission does not fail the connection]
 
 GitHub accepts a fine-grained token without any of these permissions.
 Without Contents, Pull requests, Issues, Discussions, Members, Projects, or Issue types, the corresponding sync stays empty, as the table describes.
@@ -345,7 +345,7 @@ Only the GitHub App's credentials belong in `GH_APP_CLIENT_ID` / `GH_APP_CLIENT_
 
 ### Install and configure
 
-:::caution CAUTION: Preserve the existing webhook secret
+:::caution[CAUTION: Preserve the existing webhook secret]
 
 On an existing instance, replacing `WEBHOOK_SECRET` breaks other configured webhooks.
 Set the new App's webhook secret to the existing `WEBHOOK_SECRET`.
@@ -487,7 +487,7 @@ Follow GitHub's [delivery troubleshooting guide](https://docs.github.com/en/webh
 
 ## Verify it works
 
-:::caution CAUTION: Use a dedicated App for the secret test
+:::caution[CAUTION: Use a dedicated App for the secret test]
 
 The wrong-secret test changes GitHub's secret and rejects real events.
 Run it only on a **dedicated test App**, never a shared staging App.
