@@ -598,6 +598,8 @@ At the busy rate of 750 MB a day that is about 5 GB, below half of the 10 GiB Gi
 `WebhookIngestionCannotFailSilentlyTest` holds the default, `docker/.env.example` and the chart's values to that rule.
 `webhook.stream.bytes.utilization` above 0.5 for an hour is now an alert, `HephaestusWebhookStreamNearByteBound`: the age is too long for the volume.
 An existing stream gets the shorter age only on a start with `allow-destructive-limit-updates`, as "Limits may be corrected in place" requires.
+The Helm chart sets that flag and the update timeout through `webhook.stream.allowDestructiveLimitUpdates` and `webhook.stream.limitUpdateTimeout`.
+How long the update takes on a large stream on a slow disk is unmeasured.
 
 Considered and rejected:
 

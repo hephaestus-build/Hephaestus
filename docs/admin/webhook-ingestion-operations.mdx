@@ -191,8 +191,11 @@ To apply the new age once:
 1. Check that `webhook.stream.consumer.pending` and `webhook.stream.consumer.ack.pending` are near zero.
    The messages that the new age deletes were then delivered already.
 2. Set `HEPHAESTUS_WEBHOOK_STREAM_ALLOW_DESTRUCTIVE_LIMIT_UPDATES=true` and restart the webhook receiver.
-   On a full stream, the broker deletes several gigabytes before it answers.
-   If the log reports a timeout, raise `HEPHAESTUS_WEBHOOK_STREAM_LIMIT_UPDATE_TIMEOUT` and restart again.
+   On the Helm chart, set `webhook.stream.allowDestructiveLimitUpdates` instead.
+   The broker deletes the old messages before it answers.
+   How long that takes on a large stream on a slow disk is unmeasured.
+   With several webhook receivers, the others keep publishing while one applies the limit.
+   If the log reports a timeout, raise `HEPHAESTUS_WEBHOOK_STREAM_LIMIT_UPDATE_TIMEOUT` (chart: `webhook.stream.limitUpdateTimeout`) and restart again.
 3. Look for `Reconciled JetStream stream limits and DELETED stored messages` in the log.
 4. Set the flag back to `false`.
 
@@ -200,8 +203,10 @@ Scheduled sync (`MONITORING_SYNC_CRON`, hourly by default in production) fetches
 Other means can recover a delivery removed inside that window.
 Nothing can recover one removed outside it.
 
-1. Size the byte bound against **the cost of a removed message**, not the age ceiling.
-2. **If you raise `MONITORING_TIMEFRAME`, raise the byte bounds with it.**
+1. The age bound removes messages in steady state.
+   A deployment that was offline gets back what it missed inside `MONITORING_TIMEFRAME` days through reconciliation.
+2. The byte bound only protects the disk.
+   Keep it above twice your daily GitHub volume times the age, so the age binds first.
 
 Streams carrying personal message content — `slack` and `outline` — are capped at 72 hours regardless
 of volume. PostgreSQL is the system of record. An erasure request cannot reach inside a broker

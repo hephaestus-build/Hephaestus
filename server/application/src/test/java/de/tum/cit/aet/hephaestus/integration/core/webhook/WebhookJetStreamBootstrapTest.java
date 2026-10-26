@@ -224,6 +224,35 @@ class WebhookJetStreamBootstrapTest extends BaseUnitTest {
     }
 
     @Test
+    void appliesTheSevenDayCutToAFullStreamOnTheStartTheOperatorAllowsIt(CapturedOutput output) throws Exception {
+        // An upgraded stream: 180 days of history, the oldest a month old.
+        StreamInfo info = existing(
+                builder -> builder.maxAge(Duration.ofDays(180)),
+                state(GIBIBYTE / 2, 10, 1, ZonedDateTime.now(ZoneOffset.UTC).minusDays(30)));
+        JetStreamManagement jsm = mock(JetStreamManagement.class);
+        when(jsm.getStreamInfo(anyString())).thenReturn(info);
+        WebhookProperties.Stream shipped = properties.stream();
+        WebhookProperties allowed = WebhookPropertiesFixture.with(new WebhookProperties.Stream(
+                shipped.duplicateWindow(),
+                shipped.maxAge(),
+                shipped.maxAgeByStream(),
+                shipped.maxBytes(),
+                shipped.maxBytesByStream(),
+                shipped.storageBudget(),
+                true,
+                shipped.limitUpdateTimeout(),
+                shipped.monitorInterval()));
+
+        new WebhookJetStreamBootstrap(jsm, allowed).bootstrap();
+
+        ArgumentCaptor<StreamConfiguration> captor = ArgumentCaptor.forClass(StreamConfiguration.class);
+        verify(jsm, times(4)).updateStream(captor.capture());
+        assertThat(captor.getAllValues())
+                .allSatisfy(config -> assertThat(config.getMaxAge()).isEqualTo(Duration.ofDays(7)));
+        assertThat(output.getAll()).contains("DELETED stored messages");
+    }
+
+    @Test
     void appliesARetentionCutThatReachesNothingStored() throws Exception {
         StreamInfo info = existing(
                 builder -> builder.maxAge(Duration.ofDays(365)),
