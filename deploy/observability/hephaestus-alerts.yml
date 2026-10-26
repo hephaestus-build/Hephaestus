@@ -60,6 +60,18 @@ groups:
           severity: warning
         annotations:
           summary: GitHub refuses redeliveries, or the deliveries of the GitHub App cannot be read
+      - alert: HephaestusWebhookRedeliveriesRequested
+        expr: >-
+          sum by (namespace) (increase(github_webhook_redelivery_total{job="hephaestus",outcome="requested"}[1h])) >= 3
+          and on (namespace)
+          sum by (namespace) (increase(github_webhook_redelivery_total{job="hephaestus",outcome="requested"}[1h]))
+          / on (namespace)
+          sum by (namespace) (increase(webhook_publish_total{job="hephaestus",stream="github",outcome="success"}[1h]))
+          > 0.05
+        labels:
+          severity: warning
+        annotations:
+          summary: The server asked GitHub to redeliver more than 5 % of the received GitHub deliveries in one hour
       - alert: HephaestusWebhookEventsUnrecovered
         expr: max(github_webhook_unrecovered{job="hephaestus"}) > 0
         labels:
@@ -74,16 +86,43 @@ groups:
           summary: A workspace crossed the instance-funded monthly budget cap
       - alert: HephaestusBudgetBlocked
         expr: sum by (surface, cap) (increase(llm_budget_blocked_total{job="hephaestus"}[10m])) > 0
+        for: 15m
         labels:
           severity: warning
         annotations:
-          summary: LLM budget admission refused work
+          summary: LLM budget admission kept refusing work for 15 minutes
       - alert: HephaestusAgentJobsFailing
-        expr: sum(increase(agent_job_total{job="hephaestus",outcome=~"failed|timed_out"}[15m])) >= 3
+        expr: sum(increase(agent_job_total{job="hephaestus",outcome=~"failed|timed_out"}[1h])) >= 3
         labels:
           severity: warning
         annotations:
-          summary: At least three agent jobs failed or timed out in fifteen minutes
+          summary: At least three agent jobs failed or timed out in one hour
+      - alert: HephaestusReviewSandboxFailing
+        expr: sum(increase(agent_job_infra_retry_requeued_total{job="hephaestus",cause="sandbox"}[1h])) >= 3
+        labels:
+          severity: warning
+        annotations:
+          summary: Review sandboxes failed to start, initialize or finish at least three times in one hour
+      - alert: HephaestusReviewUnreachable
+        expr: >-
+          sum by (cause) (increase(agent_job_infra_retry_requeued_total{job="hephaestus",cause=~"server_unreachable|provider_unreachable"}[1h])) >= 3
+        labels:
+          severity: warning
+        annotations:
+          summary: Review sandboxes failed to reach the server or the model provider at least three times in one hour
+      - alert: HephaestusReviewPreparationFailing
+        expr: sum(increase(agent_job_infra_retry_requeued_total{job="hephaestus",cause="preparation"}[30m])) >= 5
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: Review attempts kept failing before their sandbox started, so they run again
+      - alert: HephaestusReviewWorkerLost
+        expr: sum(increase(agent_job_orphan_failed_total{job="hephaestus"}[1h])) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: A review failed because its workers stopped during every attempt
       - alert: HephaestusAgentQueueStalled
         expr: max(agent_queue_oldest_age_seconds{job="hephaestus"}) > 3600
         for: 5m
@@ -99,22 +138,45 @@ groups:
         annotations:
           summary: A worker's sandbox isolation probe failed, so the worker starts no sandbox
       - alert: HephaestusWalArchiveFailing
-        expr: max(database_wal_archive_failing{job="hephaestus"}) == 1
+        expr: >-
+          max(database_wal_archive_failing{job="hephaestus"}) == 1
+          or sum(increase(database_wal_archive_sample_failures_total{job="hephaestus"}[5m])) > 0
         for: 10m
-        # A failed read makes the gauge NaN until the next read. The alert stays firing through it.
-        keep_firing_for: 10m
         labels:
           severity: critical
         annotations:
-          summary: PostgreSQL cannot archive its WAL, so backups and point-in-time recovery stop
+          summary: PostgreSQL cannot archive its WAL, or the server cannot read whether it can
 
   # Kubernetes and cluster metrics: kube-state-metrics, the kubelet, node-exporter and cert-manager.
-  # The PVC and CronJob names are those that the chart gives a release. Add a namespace matcher to
+  # The PVC and CronJob names are those that the chart gives a release. The webhook rules select the
+  # Deployment by the chart's labels, which kube-state-metrics exports only when they are allowed. Add a namespace matcher to
   # limit a rule to the release namespace.
   - name: hephaestus-kubernetes
     rules:
-      - alert: HephaestusBackupStale
+      - alert: HephaestusWebhookReceiverDown
         expr: >-
+          kube_deployment_status_replicas_available == 0
+          and on (namespace, deployment) kube_deployment_spec_replicas > 0
+          and on (namespace, deployment)
+          kube_deployment_labels{label_app_kubernetes_io_name="hephaestus",label_app_kubernetes_io_component="webhook"}
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: No webhook receiver of the release is available, so provider deliveries fail
+      - alert: HephaestusWebhookReceiverUnready
+        expr: >-
+          kube_deployment_status_replicas_unavailable > 0
+          and on (namespace, deployment) kube_deployment_status_replicas_available > 0
+          and on (namespace, deployment)
+          kube_deployment_labels{label_app_kubernetes_io_name="hephaestus",label_app_kubernetes_io_component="webhook"}
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: A webhook receiver replica stayed unavailable for 15 minutes while another serves
+      - alert: HephaestusBackupStale
+        expr: |-
           time() - max by (namespace, release) (
             label_replace(
               kube_cronjob_status_last_successful_time{cronjob=~".+-postgresql-backup-(full|diff)"},
@@ -122,6 +184,8 @@ groups:
             )
           ) > 30 * 3600
           or
+          # kube-state-metrics exports no last-success time before a CronJob's first success: count from its
+          # creation instead.
           (
             time() - min by (namespace, release) (
               label_replace(
@@ -144,11 +208,15 @@ groups:
           kubelet_volume_stats_available_bytes{persistentvolumeclaim=~"data-.+-postgresql-0"}
           / kubelet_volume_stats_capacity_bytes{persistentvolumeclaim=~"data-.+-postgresql-0"}
           < 0.15
+          and
+          kubelet_volume_stats_available_bytes{persistentvolumeclaim=~"data-.+-postgresql-0"}
+          / kubelet_volume_stats_capacity_bytes{persistentvolumeclaim=~"data-.+-postgresql-0"}
+          >= 0.05
         for: 5m
         labels:
           severity: warning
         annotations:
-          summary: The PostgreSQL volume has less than 15 % free space
+          summary: The PostgreSQL volume has between 5 % and 15 % free space
       - alert: HephaestusPostgresVolumeFilling
         expr: >-
           kubelet_volume_stats_available_bytes{persistentvolumeclaim=~"data-.+-postgresql-0"}

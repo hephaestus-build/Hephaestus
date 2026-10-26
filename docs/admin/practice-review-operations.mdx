@@ -181,6 +181,11 @@ Use them for alerts instead of application logs.
 - **`agent.queue.health.sampler.failures`** — failed samples.
   Gauges keep their last-good value instead of a false empty-queue report.
 - **`agent.job.claim.latency`** — time from a job's eligibility to its claim.
+- **`agent.job.infra.retry.requeued`** — attempts that run again after a retryable failure, tagged by `cause`.
+  `preparation`: the attempt failed before its sandbox started.
+  `sandbox`: the sandbox could not start, initialize or finish.
+  `server_unreachable` and `provider_unreachable`: the sandbox could not reach the server's gateway or the model provider.
+- **`agent.job.orphan.failed`** — jobs that failed because their workers stopped during every attempt.
 - **`agent.job.execution.duration`** — tagged by `jobType` and outcome `status`.
 - **`agent.job.delivery.recovered`** — deliveries stopped by an executor crash and successfully retried.
 - **`agent.job.retention.stripped`** / **`agent.job.retention.deleted`** — rows pruned by the retention sweep.

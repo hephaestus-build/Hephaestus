@@ -53,8 +53,10 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -161,7 +163,7 @@ public class ReviewJobExecutor {
     private final RetryTemplate terminalPersistRetries = retryTemplate(TERMINAL_PERSIST_POLICY);
     private final RetryTemplate requeueRetries = retryTemplate(REQUEUE_REJECTED_CLAIM_POLICY);
 
-    private final Counter infraRetryRequeued;
+    private final Map<RequeueCause, Counter> infraRetryRequeued = new EnumMap<>(RequeueCause.class);
     private final ReviewJobTelemetry jobTelemetry;
     private final AtomicBoolean running = new AtomicBoolean(false);
     private volatile @Nullable Thread pollThread;
@@ -221,9 +223,15 @@ public class ReviewJobExecutor {
         this.capacityState = capacityState;
         this.workerId = workerProperties.resolvedWorkerId();
 
-        this.infraRetryRequeued = Counter.builder(AgentMetrics.AGENT_JOB_INFRA_RETRY_REQUEUED)
-                .description("Jobs requeued (not failed) after a retryable preparation or infrastructure failure")
-                .register(meterRegistry);
+        for (RequeueCause cause : RequeueCause.values()) {
+            infraRetryRequeued.put(
+                    cause,
+                    Counter.builder(AgentMetrics.AGENT_JOB_INFRA_RETRY_REQUEUED)
+                            .description("Jobs requeued (not failed) after a retryable preparation or infrastructure"
+                                    + " failure, by cause")
+                            .tag("cause", cause.tag())
+                            .register(meterRegistry));
+        }
     }
 
     @EventListener(ApplicationReadyEvent.class)
@@ -749,12 +757,12 @@ public class ReviewJobExecutor {
         // address the server has since moved away from; or no practice was reached at all because
         // every model call went unanswered. Neither leaves anything to deliver, and neither is a
         // fact a second attempt would repeat. Past the retry cap both fall through and terminalize.
-        String unreachable = unreachableReason(result.exitCode());
-        if (unreachable != null && requeueForAnotherAttempt(job, true)) {
+        RequeueCause unreachable = unreachableReason(result.exitCode());
+        if (unreachable != null && requeueForAnotherAttempt(job, true, unreachable)) {
             log.warn(
                     "Requeuing job {} ({}): nothing it measured can be delivered from here (attempt {})",
                     jobId,
-                    unreachable,
+                    unreachable.tag(),
                     job.getAttempt() + 1);
             return null;
         }
@@ -1069,7 +1077,8 @@ public class ReviewJobExecutor {
 
         if (isRetryableExecutionFailure(e)) {
             int currentRetryCount = job.getAttempt();
-            if (requeueForAnotherAttempt(job, sandboxExecutionStarted)) {
+            RequeueCause cause = preparation != null ? RequeueCause.PREPARATION : RequeueCause.SANDBOX;
+            if (requeueForAnotherAttempt(job, sandboxExecutionStarted, cause)) {
                 log.warn(
                         "Requeuing job {} after retryable preparation or infrastructure failure (attempt {}): {}",
                         jobId,
@@ -1159,21 +1168,37 @@ public class ReviewJobExecutor {
                 || e instanceof IOException;
     }
 
-    private static @Nullable String unreachableReason(int exitCode) {
+    private static @Nullable RequeueCause unreachableReason(int exitCode) {
         if (exitCode == SandboxLayout.EXIT_SERVER_UNREACHABLE) {
-            return "server-unreachable";
+            return RequeueCause.SERVER_UNREACHABLE;
         }
         if (exitCode == SandboxLayout.EXIT_PROVIDER_UNREACHABLE) {
-            return "provider-unreachable";
+            return RequeueCause.PROVIDER_UNREACHABLE;
         }
         return null;
     }
 
+    /** Why an attempt runs again: each cause asks the operator to look somewhere else. */
+    enum RequeueCause {
+        /** Before the sandbox started: the reviewed source, its inputs or the database. */
+        PREPARATION,
+        /** The sandbox could not start, initialize or finish, or a file or network operation failed in it. */
+        SANDBOX,
+        /** The sandbox could not reach the server's gateway. */
+        SERVER_UNREACHABLE,
+        /** No model call of the run was answered. */
+        PROVIDER_UNREACHABLE;
+
+        String tag() {
+            return name().toLowerCase(Locale.ROOT);
+        }
+    }
+
     // Bill within the requeue transaction before it clears usage counters.
-    private boolean requeueForAnotherAttempt(ReviewJob job, boolean bill) {
+    private boolean requeueForAnotherAttempt(ReviewJob job, boolean bill, RequeueCause cause) {
         Boolean updated = transactionTemplate.execute(status -> recovery.retryUnadmitted(job, workerId, bill));
         if (!Boolean.TRUE.equals(updated)) return false;
-        infraRetryRequeued.increment();
+        Objects.requireNonNull(infraRetryRequeued.get(cause)).increment();
         return true;
     }
 

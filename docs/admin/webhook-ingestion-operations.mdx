@@ -115,11 +115,11 @@ The receiver exports these Micrometer meters on its private management listener.
 | `webhook.stream.messages`                        | gauge       | Messages stored.                                                                                                        |
 | `webhook.stream.consumers`                       | gauge       | Durable consumers on the stream.                                                                                        |
 
-These meters describe deliveries that never reached the stream and their recovery. They are not tagged by `stream`:
+These meters describe the publishes to the stream, the deliveries that never reached it, and their recovery. Only `webhook.publish` is tagged by `stream`:
 
 | Metric                           | Type    | Role     | What it means                                                                                                                 |
 | -------------------------------- | ------- | -------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `webhook.publish`                | counter | webhook  | Publishes the broker acknowledged (`outcome=success`) or did not acknowledge in time (`outcome=failure`). A failure is a delivery the provider records as failed. |
+| `webhook.publish`                | counter | webhook  | Publishes the broker acknowledged (`outcome=success`) or did not acknowledge in time (`outcome=failure`), by `stream`. A failure is a delivery the provider records as failed. |
 | `github.webhook.redelivery`      | counter | server   | Redelivery requests that GitHub accepted (`requested`) or refused (`refused`). Runs that could not read the deliveries (`unavailable`), only probed a failing receiver (`paused`), or stopped listing at a bound (`truncated`). |
 | `github.webhook.unrecovered`     | gauge   | server   | GitHub events of the past two hours that failed all six attempts. Above zero means events that Hephaestus did not receive.        |
 
