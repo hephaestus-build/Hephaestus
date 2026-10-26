@@ -588,6 +588,27 @@ class GitLabLineNoteWriterTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldMentionNoOneInALocationCommentWhenThePathOrNoteNamesSomeone() {
+        when(gitLabProvider.forScope(1L)).thenReturn(client);
+        stubDiscussions(List.of(), BOT);
+        when(diffVersions.read(eq(1L), any(), any())).thenReturn(WITHOUT_CITED_LINE);
+        rest.createAsAsked(987654, "DiscussionNote", 1);
+        LineNote note = ScmFeedbackFixtures.line(
+                ScmFeedbackFixtures.range("src/@types/index.d.ts", 3, 7), "Ask @alice", MARKER, "result:a:0");
+
+        channel.postImmutablePackage(
+                ScmFeedbackFixtures.target(
+                        new IntegrationRef(IntegrationKind.GITLAB, 1L, null), "group/project!42", REVIEWED),
+                List.of(note),
+                fence);
+
+        assertThat(rest.calls()).singleElement().satisfies(call -> assertThat((String) call.json().get("body"))
+                .contains("/src/%40types/index.d.ts#L3-7")
+                .contains("Ask `@alice`")
+                .doesNotContain(" @alice"));
+    }
+
+    @Test
     void shouldKeepAHostileFileNameInsideTheEncodedAddressAndOutOfTheCommentText() {
         stubResolvedMr();
         stubDiscussions(List.of(), BOT);

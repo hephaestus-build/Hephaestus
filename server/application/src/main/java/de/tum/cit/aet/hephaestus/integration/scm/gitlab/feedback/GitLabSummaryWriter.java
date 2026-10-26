@@ -16,6 +16,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryHandle;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryLookup;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryWriter;
 import de.tum.cit.aet.hephaestus.integration.scm.feedback.ScmFeedbackTargetResolver;
+import de.tum.cit.aet.hephaestus.integration.scm.feedback.ProviderMentions;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlClientProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.feedback.GitLabMrResolver.MrCoordinates;
 import java.util.List;
@@ -72,7 +73,7 @@ public class GitLabSummaryWriter implements SummaryWriter {
         } catch (RuntimeException e) {
             throw new FeedbackNotSentException("GitLab note not sent: " + e.getMessage(), e);
         }
-        String body = escapeSlashCommands(content.externalBody());
+        String body = gitLabBody(content.externalBody());
 
         ClientGraphQlResponse response;
         try {
@@ -153,7 +154,7 @@ public class GitLabSummaryWriter implements SummaryWriter {
             return CopyUpdateReceipt.transientFailure(
                     content.copyId(), "The GitLab rate limit is critical for scope " + scopeId);
         }
-        String body = escapeSlashCommands(content.externalBody());
+        String body = gitLabBody(content.externalBody());
 
         ClientGraphQlResponse response;
         try {
@@ -235,7 +236,7 @@ public class GitLabSummaryWriter implements SummaryWriter {
         if (marker == null || marker.isBlank()) {
             return SummaryLookup.unknown();
         }
-        String expectedBody = escapeSlashCommands(expected.externalBody());
+        String expectedBody = gitLabBody(expected.externalBody());
         long scopeId = target.integration().workspaceId();
         if (gitLabProvider.isRateLimitCritical(scopeId)) {
             return SummaryLookup.unknown();
@@ -333,6 +334,11 @@ public class GitLabSummaryWriter implements SummaryWriter {
                         || e.contains("does not exist")
                         || e.contains("could not be found")
                         || e.contains("couldn't be found"));
+    }
+
+    /** The body as GitLab receives it: no quick action runs and no one is mentioned. */
+    static String gitLabBody(String body) {
+        return escapeSlashCommands(ProviderMentions.escape(body));
     }
 
     static String escapeSlashCommands(String body) {

@@ -141,7 +141,7 @@ class GitLabSummaryWriterTest extends BaseUnitTest {
     }
 
     @Test
-    void updateSummaryEscapesSlashCommands() {
+    void updateSummaryEscapesSlashCommandsAndMentions() {
         FeedbackTarget target = gitlabTarget();
         when(gitLabProvider.isRateLimitCritical(1L)).thenReturn(false);
 
@@ -169,11 +169,12 @@ class GitLabSummaryWriterTest extends BaseUnitTest {
         channel.updateSummary(
                 target,
                 new SummaryHandle("gid://gitlab/Note/1", null),
-                ScmFeedbackFixtures.summary("/merge now\nrest", "marker"));
+                ScmFeedbackFixtures.summary("/merge now\nrest for @group/sub", "marker"));
 
         ArgumentCaptor<Object> bodyCaptor = ArgumentCaptor.forClass(Object.class);
         verify(spec).variable(eq("body"), bodyCaptor.capture());
-        assertThat(bodyCaptor.getValue().toString()).contains("`/merge`");
+        // GitLab notifies a name added in an edit, so an edited summary mentions no one either.
+        assertThat(bodyCaptor.getValue().toString()).contains("`/merge`").contains("rest for `@group/sub`");
     }
 
     @Test

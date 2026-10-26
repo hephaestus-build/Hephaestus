@@ -26,6 +26,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryContent;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryHandle;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryLookup;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmVersion;
+import de.tum.cit.aet.hephaestus.integration.scm.feedback.ProviderMentions;
 import de.tum.cit.aet.hephaestus.integration.scm.feedback.ScmFeedbackFormatter;
 import de.tum.cit.aet.hephaestus.integration.scm.feedback.ScmFeedbackTargetResolver;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubGraphQlClientProvider;
@@ -526,7 +527,7 @@ public class GitHubLineNoteWriter implements LineNoteWriter {
     }
 
     private static String postedBody(LineNote item) {
-        String body = item.body() + "\n\n" + item.writeMarker();
+        String body = ProviderMentions.escape(item.body()) + "\n\n" + item.writeMarker();
         return body + "\n" + ScmFeedbackFormatter.deliveryTag(item.writeKey());
     }
 

@@ -629,7 +629,7 @@ public class GitLabLineNoteWriter implements LineNoteWriter {
     // A range copy names its placement; a body without it is an end-line copy, as written before ranges.
     private static String lineBody(LineNote item) {
         if (!ranged(item.anchor())) return postedBody(item);
-        return GitLabSummaryWriter.escapeSlashCommands(item.body())
+        return GitLabSummaryWriter.gitLabBody(item.body())
                 + "\n"
                 + item.writeMarker()
                 + "\n"
@@ -673,7 +673,7 @@ public class GitLabLineNoteWriter implements LineNoteWriter {
     }
 
     private static String postedBody(LineNote item) {
-        String body = GitLabSummaryWriter.escapeSlashCommands(item.body());
+        String body = GitLabSummaryWriter.gitLabBody(item.body());
         body = body + "\n" + item.writeMarker();
         String key = item.writeKey();
         return body + "\n" + ScmFeedbackFormatter.deliveryTag(key);

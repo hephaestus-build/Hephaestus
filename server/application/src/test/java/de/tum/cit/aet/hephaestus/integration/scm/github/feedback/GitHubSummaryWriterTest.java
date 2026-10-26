@@ -82,12 +82,13 @@ class GitHubSummaryWriterTest extends BaseUnitTest {
         ClientGraphQlResponse response = mockGraphQlResponse("addComment.commentEdge.node.id", "IC_comment456");
         when(spec.execute()).thenReturn(Mono.just(response));
 
-        SummaryHandle handle = channel.postSummary(target, ScmFeedbackFixtures.summary("body\n\nmarker", "marker"));
+        SummaryHandle handle =
+                channel.postSummary(target, ScmFeedbackFixtures.summary("body for @alice\n\nmarker", "marker"));
 
         assertNotNull(handle);
         assertThat(handle.externalRef()).isEqualTo("IC_comment456");
         assertThat(handle.url()).isEqualTo("https://github.com/owner/repo/pull/42#issuecomment-987654");
-        verify(spec).variable("body", "body\n\nmarker");
+        verify(spec).variable("body", "body for `@alice`\n\nmarker");
     }
 
     @Test
