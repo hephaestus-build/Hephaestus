@@ -162,59 +162,12 @@ Commit types never affect version changes.
 The [release management guide](https://docs.hephaestus.build/contributor/release-management) has the procedure.
 The [compatibility policy](https://docs.hephaestus.build/admin/compatibility-policy) defines what a version number promises.
 
-### Allowed Types
+### Types and Scopes
 
-- `fix`: A bug fix
-- `feat`: A new feature
-- `docs`: Documentation only changes
-- `style`: Changes that do not affect the meaning of the code
-- `refactor`: A code change that neither fixes a bug nor adds a feature
-- `perf`: A code change that improves performance
-- `test`: Adding missing tests or correcting existing tests
-- `build`: Changes that affect the build system or external dependencies
-- `ci`: Changes to our CI configuration files and scripts
-- `chore`: Other changes that do not modify src or test files
-- `revert`: Reverts a previous commit
-
-### Recommended Scopes
-
-**Service scopes** (where the code lives):
-
-- `webapp`: React frontend
-- `extension`: Chrome extension
-- `server`: Java application server (includes the worker that runs the Heph host, and the webhook receiver)
-- `docs`: Documentation
-
-**Infrastructure scopes** (affect runtime):
-
-- `deps`: Production dependencies (security patches, bug fixes)
-- `security`: Security fixes are critical
-- `db`: Database migrations affect runtime
-- `docker`: Dockerfiles, production compose files
-
-**Infrastructure scopes** (tooling and process):
-
-- `ci`: CI/CD workflows
-- `config`: Tooling configuration (renovate, oxfmt, oxlint, tsconfig, etc.)
-- `deps-dev`: Dev dependencies only
-- `scripts`: Helper scripts
-- `release`: Release engineering (also used by the automated Version PR)
-
-> ⚠️ **`config` scope warning:** Only use for tooling config files like `.github/renovate.json`, `.oxfmtrc.json`, `webapp/.oxlintrc.json`. Do NOT use for:
-> - Runtime config (`application.yml`) → use `server`
-> - Dockerfiles → use service scope (`webapp`, `server`, etc.)
-> - Production compose files → use `docker`
-
-**Feature scopes** (domain-specific):
-
-- `activity`: Activity and Workspace activity
-- `auth`: Authentication / identity (Account, IdentityLink, JWT, oauth2Login)
-- `integration`: Cross-cutting integration framework (webhook, oauth, registry, SPI)
-- `scm`: Source-control management (GitHub, GitLab)
-- `mentor`: AI mentor (Heph)
-- `notifications`: Email/notification system
-- `teams`: Team and membership management
-- `workspace`: Workspace management
+A title with a type or scope outside `commitlint.config.ts` fails, and the message lists the allowed values.
+Pick the scope by where the change lives: a service, runtime infrastructure, tooling, or a product area.
+Use `config` only for tooling configuration.
+Runtime configuration such as `application.yml` uses `server`, and a Dockerfile uses its service scope.
 
 ### Examples
 
