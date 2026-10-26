@@ -19,7 +19,10 @@
 	--ifm-font-color-base: oklch(0.141 0.005 285.823);
 	--ifm-navbar-background-color: oklch(1 0 0);
 	--ifm-toc-border-color: oklch(0.92 0.004 286.32);
-	--ifm-code-font-size: 95%;
+	--ifm-code-font-size: 87.5%;
+	--ifm-font-family-monospace:
+		ui-monospace, SFMono-Regular, "SF Mono", "JetBrains Mono", Menlo, Consolas, "Liberation Mono",
+		monospace;
 	--docusaurus-highlighted-code-line-bg: oklch(0.623 0.214 259.815 / 0.08);
 }
 
@@ -42,7 +45,8 @@
 }
 
 /*
- * Every override below re-points an Infima default at a value the web app already uses.
+ * Each colour and radius override below re-points an Infima default at a value the web app already
+ * uses; the spacing and type values are the docs' own.
  * `scripts/check-docs-tokens.ts` pins the ones copied from `webapp/src/styles/theme-tokens.css`.
  */
 :root {
@@ -62,6 +66,14 @@
 	--ifm-alert-shadow: none;
 	--ifm-alert-border-left-width: 3px;
 	--ifm-pre-border-radius: 0.75rem;
+	/* Chrome reads at 14px so the prose column carries the weight, as the app's sidebar does. */
+	--ifm-menu-link-padding-vertical: 0.3rem;
+	--ifm-menu-color-background-active: color-mix(in oklab, var(--ifm-color-primary) 9%, transparent);
+	--ifm-navbar-item-padding-horizontal: 0.6rem;
+	--ifm-toc-padding-vertical: 0.25rem;
+	--ifm-code-background: var(--ifm-color-emphasis-100);
+	--ifm-code-padding-horizontal: 0.35em;
+	--ifm-heading-font-weight: 650;
 }
 
 [data-theme="dark"] {
@@ -75,6 +87,10 @@
 	--ifm-color-emphasis-800: oklch(0.87 0.01 286.067);
 	/* White on the dark-mode primary is only ~2.6:1; the search hit keeps the darker blue. */
 	--search-local-highlight-color: oklch(0.546 0.245 262.881);
+}
+
+[data-theme="dark"] .theme-admonition.alert {
+	--heph-admonition-accent: var(--ifm-alert-border-color);
 }
 
 /* Infima's footer is a fixed navy slab that matches neither mode. */
@@ -103,6 +119,15 @@
 	border-bottom: 1px solid var(--ifm-toc-border-color);
 }
 
+/* Only above the mobile breakpoint: a backdrop filter makes the navbar the containing block of the
+   fixed mobile menu inside it, which then collapses to the navbar's height. */
+@media (min-width: 997px) {
+	.navbar {
+		background-color: color-mix(in oklab, var(--ifm-navbar-background-color) 85%, transparent);
+		backdrop-filter: saturate(1.4) blur(12px);
+	}
+}
+
 .navbar__title {
 	font-weight: 600;
 }
@@ -113,18 +138,110 @@
 }
 
 .markdown > h2 {
-	font-size: 1.75rem;
-	font-weight: 600;
+	margin-top: 2.75rem;
+	font-size: 1.6rem;
 	letter-spacing: -0.02em;
 }
 
 .markdown > h3 {
-	font-weight: 600;
+	font-size: 1.25rem;
 	letter-spacing: -0.01em;
+}
+
+/* Above the 17px body, so a level-four heading still reads as a heading. */
+.markdown > h4 {
+	font-size: 1.125rem;
+}
+
+/*
+ * A reading measure instead of the full column, still wide enough for the admin guide's tables and
+ * commands. Breadcrumbs, the page footer and the pager share it, so they keep the text's edges.
+ */
+article:has(> .theme-doc-markdown),
+article:has(> .theme-doc-markdown) ~ .pagination-nav {
+	max-width: 45rem;
+	/* The column is wider than the text: centre the text between the sidebar and the TOC. */
+	margin-inline: auto;
+}
+
+.theme-doc-markdown {
+	font-size: 1.0625rem;
+	line-height: 1.7;
+}
+
+/* A link in running text must not rely on colour alone (WCAG 1.4.1). */
+.markdown :is(p, li, td, blockquote) a:not(.hash-link) {
+	text-decoration: underline;
+	text-decoration-color: color-mix(in oklab, currentColor 40%, transparent);
+	text-decoration-thickness: 1px;
+	text-underline-offset: 0.2em;
+}
+
+.markdown :is(p, li, td, blockquote) a:not(.hash-link):hover {
+	text-decoration-color: currentColor;
+}
+
+.markdown :not(pre) > code {
+	border-color: var(--ifm-color-emphasis-200);
+	vertical-align: baseline;
+}
+
+.menu,
+.table-of-contents,
+.theme-doc-footer,
+.navbar__item {
+	font-size: 0.875rem;
+}
+
+.menu__link {
+	line-height: 1.35;
+}
+
+.menu__link--active:not(.menu__link--sublist) {
+	font-weight: 550;
+}
+
+.table-of-contents__link--active {
+	font-weight: 550;
+}
+
+.pagination-nav__link {
+	border-color: var(--ifm-toc-border-color);
+}
+
+/*
+ * Infima tints the whole callout in the type's colour and shouts its title. Here the page colour
+ * stays, the type shows in the bar, the tint and the icon, and the title keeps its own case:
+ * `i18n/en/code.json` names an untitled callout, and a title carries its STE label (CAUTION).
+ * Infima's light-mode type colours are too pale for a bar or an icon (3:1, WCAG 1.4.11).
+ */
+.theme-admonition.alert {
+	--heph-admonition-accent: color-mix(in oklab, var(--ifm-alert-border-color) 60%, black);
+	--ifm-alert-background-color: color-mix(
+		in oklab,
+		var(--ifm-alert-border-color) 7%,
+		var(--ifm-background-color)
+	);
+	--ifm-alert-foreground-color: var(--ifm-font-color-base);
+	--ifm-alert-padding-vertical: 0.9rem;
+	--ifm-alert-padding-horizontal: 1.1rem;
+	border: 1px solid color-mix(in oklab, var(--heph-admonition-accent) 35%, transparent);
+	border-left: var(--ifm-alert-border-left-width) solid var(--heph-admonition-accent);
+	font-size: 0.95rem;
+}
+
+.theme-admonition > :first-child {
+	font-size: 0.95rem;
+	text-transform: none;
+}
+
+.theme-admonition > :first-child svg {
+	fill: var(--heph-admonition-accent);
 }
 
 .theme-code-block {
 	border: 1px solid var(--ifm-toc-border-color);
+	box-shadow: none;
 }
 
 /* An icon link, the way the app's own header links to GitHub. */
