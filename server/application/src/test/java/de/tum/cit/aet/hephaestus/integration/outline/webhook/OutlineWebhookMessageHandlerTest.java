@@ -24,6 +24,7 @@ import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineDocumentEvent
 import de.tum.cit.aet.hephaestus.integration.outline.sync.OutlineDocumentSyncScheduler;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.nats.client.Message;
+import io.nats.client.impl.Headers;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Optional;
@@ -48,6 +49,7 @@ import tools.jackson.databind.json.JsonMapper;
 class OutlineWebhookMessageHandlerTest extends BaseUnitTest {
 
     private static final long CONNECTION_ID = 7L;
+    private static final String ROUTE = "key/route";
 
     @Mock
     private ConnectionService connectionService;
@@ -80,7 +82,7 @@ class OutlineWebhookMessageHandlerTest extends BaseUnitTest {
             @Nullable String payloadId,
             @Nullable String actorId,
             @Nullable String createdAt) {
-        Message msg = mock(Message.class);
+        Message msg = routedMessage(ROUTE);
         String payload = payloadId == null ? "{}" : "{\"id\":\"" + payloadId + "\"}";
         StringBuilder body = new StringBuilder("{\"webhookSubscriptionId\":\"")
                 .append(subscriptionId)
@@ -98,9 +100,16 @@ class OutlineWebhookMessageHandlerTest extends BaseUnitTest {
         return msg;
     }
 
+    /** A message the receiver published from a delivery verified on {@code route}. */
+    private static Message routedMessage(String route) {
+        Message msg = mock(Message.class);
+        lenient().when(msg.getHeaders()).thenReturn(new Headers().add(OutlineWebhookController.HEADER_ROUTE, route));
+        return msg;
+    }
+
     private void resolves(String subscriptionId, long workspaceId) {
         when(connectionService.findOutlineSubscription(subscriptionId))
-                .thenReturn(Optional.of(new OutlineSubscription(workspaceId, "https://wiki.example.com", "secret")));
+                .thenReturn(Optional.of(new OutlineSubscription(workspaceId, "https://wiki.example.com", ROUTE)));
         lenient().when(connection.getId()).thenReturn(CONNECTION_ID);
         lenient()
                 .when(connectionService.findActive(workspaceId, IntegrationKind.OUTLINE))
@@ -108,9 +117,19 @@ class OutlineWebhookMessageHandlerTest extends BaseUnitTest {
     }
 
     @Test
+    void aDeliveryOnAnotherRouteIsNotPersistedOrRefreshed() {
+        when(connectionService.findOutlineSubscription("sub-1"))
+                .thenReturn(Optional.of(new OutlineSubscription(42L, "https://wiki.example.com", "key/other-route")));
+
+        handler().onMessage(message("sub-1", "documents.update", "doc-9"));
+
+        verifyNoInteractions(syncScheduler, documentEventRepository);
+    }
+
+    @Test
     void removedOriginIsNotPersistedOrRefreshed() {
         when(connectionService.findOutlineSubscription("sub-1"))
-                .thenReturn(Optional.of(new OutlineSubscription(42L, "https://removed.example.com", "secret")));
+                .thenReturn(Optional.of(new OutlineSubscription(42L, "https://removed.example.com", ROUTE)));
 
         handler().onMessage(message("sub-1", "documents.update", "doc-9"));
 
@@ -246,7 +265,7 @@ class OutlineWebhookMessageHandlerTest extends BaseUnitTest {
     @Test
     void missingActiveConnection_skipsTheEventRowButStillRoutes() {
         when(connectionService.findOutlineSubscription("sub-1"))
-                .thenReturn(Optional.of(new OutlineSubscription(42L, "https://wiki.example.com", "secret")));
+                .thenReturn(Optional.of(new OutlineSubscription(42L, "https://wiki.example.com", ROUTE)));
         when(connectionService.findActive(42L, IntegrationKind.OUTLINE)).thenReturn(Optional.empty());
 
         handler().onMessage(message("sub-1", "documents.update", "doc-9"));
@@ -262,7 +281,7 @@ class OutlineWebhookMessageHandlerTest extends BaseUnitTest {
     @ParameterizedTest(name = "malformed body [{index}] is acked without crash or dispatch")
     @MethodSource("malformedBodies")
     void malformedBody_isAcknowledgedWithoutCrashOrDispatch(byte[] body) {
-        Message msg = mock(Message.class);
+        Message msg = routedMessage(ROUTE);
         when(msg.getData()).thenReturn(body);
 
         handler().onMessage(msg);
@@ -276,7 +295,7 @@ class OutlineWebhookMessageHandlerTest extends BaseUnitTest {
         // payload.model is a JSON string, not the expected object — parseModel's field lookups on a
         // scalar node must degrade to "no usable model", not throw.
         resolves("sub-1", 42L);
-        Message msg = mock(Message.class);
+        Message msg = routedMessage(ROUTE);
         String body = "{\"webhookSubscriptionId\":\"sub-1\",\"event\":\"documents.update\","
                 + "\"payload\":{\"id\":\"doc-9\",\"model\":\"not-an-object\"}}";
         when(msg.getData()).thenReturn(body.getBytes(StandardCharsets.UTF_8));
@@ -289,7 +308,7 @@ class OutlineWebhookMessageHandlerTest extends BaseUnitTest {
     @Test
     void documentEventWithUsableModel_passesItThrough() {
         resolves("sub-1", 42L);
-        Message msg = mock(Message.class);
+        Message msg = routedMessage(ROUTE);
         String body = "{\"webhookSubscriptionId\":\"sub-1\",\"event\":\"documents.update\","
                 + "\"payload\":{\"id\":\"doc-9\",\"model\":{\"id\":\"doc-9\",\"collectionId\":\"col-1\","
                 + "\"title\":\"Doc\",\"url\":\"/doc/doc-9\"}}}";
@@ -308,7 +327,7 @@ class OutlineWebhookMessageHandlerTest extends BaseUnitTest {
     @Test
     void documentEventWithModelMissingCollectionId_fallsBackToNull() {
         resolves("sub-1", 42L);
-        Message msg = mock(Message.class);
+        Message msg = routedMessage(ROUTE);
         String body = "{\"webhookSubscriptionId\":\"sub-1\",\"event\":\"documents.update\","
                 + "\"payload\":{\"id\":\"doc-9\",\"model\":{\"id\":\"doc-9\",\"title\":\"Doc\"}}}";
         when(msg.getData()).thenReturn(body.getBytes(StandardCharsets.UTF_8));

@@ -14,6 +14,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SubjectKeyDeriver;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SubjectParser;
 import de.tum.cit.aet.hephaestus.integration.core.spi.WebhookSignatureVerifier;
+import de.tum.cit.aet.hephaestus.integration.core.webhook.IntegrationKindRouting;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.util.List;
 import java.util.Locale;
@@ -67,6 +68,22 @@ class IntegrationFrameworkBootstrapTest extends BaseUnitTest {
                 List.of(webhookSignatureVerifier(IntegrationKind.SLACK)),
                 List.of(subjectKeyDeriver(IntegrationKind.SLACK)),
                 List.of(subjectParser(IntegrationKind.SLACK)));
+
+        assertThatCode(bootstrap::validate).doesNotThrowAnyException();
+    }
+
+    @Test
+    void aKindWithItsOwnReceiverEndpointNeedsNoSharedPathVerifier() {
+        // Outline posts to its route endpoint, not to /webhooks/{kind}.
+        IntegrationManifestRegistry registry = new IntegrationManifestRegistry(
+                List.of(manifest(IntegrationKind.OUTLINE, Set.of(Capability.WEBHOOK_INGEST))));
+        IntegrationFrameworkBootstrap bootstrap = bootstrap(
+                registry,
+                List.of(credentialProvider(IntegrationKind.OUTLINE)),
+                List.of(lifecycleListener(IntegrationKind.OUTLINE)),
+                List.of(),
+                List.of(subjectKeyDeriver(IntegrationKind.OUTLINE)),
+                List.of(subjectParser(IntegrationKind.OUTLINE)));
 
         assertThatCode(bootstrap::validate).doesNotThrowAnyException();
     }
@@ -154,6 +171,7 @@ class IntegrationFrameworkBootstrapTest extends BaseUnitTest {
                 // about them.
                 new ReviewContractValidator(
                         new ItemDescriptorRegistry(List.of()), new IntegrationMessageHandlerRegistry(List.of())),
+                new IntegrationKindRouting(),
                 webhookRoleEnabled);
     }
 

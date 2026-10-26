@@ -9,20 +9,16 @@ import com.nimbusds.jose.crypto.MACVerifier;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
 import de.tum.cit.aet.hephaestus.core.security.ScmOrigin;
+import de.tum.cit.aet.hephaestus.core.webhook.RoutingKeys;
 import de.tum.cit.aet.hephaestus.core.webhook.WebhookProperties;
 import java.nio.charset.StandardCharsets;
-import java.security.GeneralSecurityException;
 import java.security.MessageDigest;
 import java.text.ParseException;
-import java.util.Base64;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.regex.Pattern;
-import javax.crypto.Mac;
-import javax.crypto.spec.SecretKeySpec;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 
@@ -105,37 +101,33 @@ public class GitLabRouteCredential {
         }
     }
 
-    @SuppressWarnings("ArrayRecordComponent") // HMAC key bytes; never compared, hashed or printed
-    private record SigningKey(String keyId, byte[] secret) {}
-
-    private final @Nullable SigningKey current;
-    private final @Nullable SigningKey previous;
+    private final RoutingKeys keys;
 
     public GitLabRouteCredential(WebhookProperties properties) {
         WebhookProperties.Routing routing = properties.routing();
-        this.current = signingKey(routing.secret());
-        this.previous = signingKey(routing.previousSecret());
+        this.keys = new RoutingKeys(routing, "hephaestus-gitlab-route-key");
     }
 
     /** Whether new connection-scoped hooks can be registered. */
     public boolean isConfigured() {
-        return current != null;
+        return keys.current().isPresent();
     }
 
     /** Whether {@code keyId} names a key the receiver still accepts. */
     public boolean isAccepted(String keyId) {
-        return keyFor(keyId).isPresent();
+        return keys.accepted(keyId).isPresent();
     }
 
     /** The token for {@code route} under the current key. */
     public Issued issue(Route route) {
-        SigningKey key = Objects.requireNonNull(current, "hephaestus.webhook.routing.secret is not configured");
+        RoutingKeys.Key key = keys.current()
+                .orElseThrow(() -> new IllegalStateException("hephaestus.webhook.routing.secret is not configured"));
         if (!isWellFormed(route)) {
             throw new IllegalArgumentException("GitLab route cannot be signed: connectionId=" + route.connectionId());
         }
         JWSHeader header = new JWSHeader.Builder(JWSAlgorithm.HS256)
                 .type(TYPE)
-                .keyID(key.keyId())
+                .keyID(key.id())
                 .build();
         JWTClaimsSet claims = new JWTClaimsSet.Builder()
                 .issuer(ISSUER)
@@ -157,7 +149,7 @@ public class GitLabRouteCredential {
             throw new IllegalArgumentException(
                     "GitLab route credential too long: connectionId=" + route.connectionId());
         }
-        return new Issued(token, key.keyId(), routeId(key, route));
+        return new Issued(token, key.id(), routeId(key, route));
     }
 
     /**
@@ -170,7 +162,7 @@ public class GitLabRouteCredential {
         if (token == null || token.isBlank() || token.length() > MAX_TOKEN_LENGTH) {
             return Optional.empty();
         }
-        Optional<SigningKey> key = keyFor(keyId);
+        Optional<RoutingKeys.Key> key = keys.accepted(keyId);
         if (key.isEmpty()) {
             return Optional.empty();
         }
@@ -221,38 +213,8 @@ public class GitLabRouteCredential {
                 && route.groupPath().chars().noneMatch(Character::isISOControl);
     }
 
-    private Optional<SigningKey> keyFor(String keyId) {
-        if (current != null && current.keyId().equals(keyId)) {
-            return Optional.of(current);
-        }
-        if (previous != null && previous.keyId().equals(keyId)) {
-            return Optional.of(previous);
-        }
-        return Optional.empty();
-    }
-
-    private static @Nullable SigningKey signingKey(@Nullable String secret) {
-        if (secret == null) {
-            return null;
-        }
-        byte[] bytes = secret.getBytes(StandardCharsets.UTF_8);
-        return new SigningKey(mac(bytes, "hephaestus-gitlab-route-key").substring(0, 16), bytes);
-    }
-
     /** Names {@code route} under {@code key} without revealing the key: a MAC over exactly the claims a token binds. */
-    private static String routeId(SigningKey key, Route route) {
-        return mac(key.secret(), "hephaestus-gitlab-route-id\n" + route.canonical())
-                .substring(0, ROUTE_ID_LENGTH);
-    }
-
-    private static String mac(byte[] secret, String message) {
-        try {
-            Mac mac = Mac.getInstance("HmacSHA256");
-            mac.init(new SecretKeySpec(secret, "HmacSHA256"));
-            byte[] tag = mac.doFinal(message.getBytes(StandardCharsets.UTF_8));
-            return Base64.getUrlEncoder().withoutPadding().encodeToString(tag);
-        } catch (GeneralSecurityException e) {
-            throw new IllegalStateException("HmacSHA256 unavailable", e);
-        }
+    private static String routeId(RoutingKeys.Key key, Route route) {
+        return key.mac("hephaestus-gitlab-route-id\n" + route.canonical()).substring(0, ROUTE_ID_LENGTH);
     }
 }

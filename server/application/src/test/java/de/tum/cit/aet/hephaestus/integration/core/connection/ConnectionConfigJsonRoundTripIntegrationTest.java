@@ -250,16 +250,11 @@ class ConnectionConfigJsonRoundTripIntegrationTest extends BaseIntegrationTest {
         assertThat(cfg.enabledStreams()).containsExactly("messages");
     }
 
-    /**
-     * The webhook signing secret must survive the JSONB round-trip. This is the persistence half of
-     * the API-boundary redaction in {@code ConnectionDetailDTO}: Hibernate serializes this column
-     * with the same Jackson {@code ObjectMapper}, so had we redacted with {@code @JsonIgnore} on the
-     * record component instead, this test would fail — the stored secret would be destroyed on write.
-     */
+    /** The webhook route survives the JSONB round-trip: the receiver derives the subscription's secret from it. */
     @Test
-    void outlineConfig_roundTrips_includingTheWebhookSecret() {
+    void outlineConfig_roundTrips_includingTheWebhookRoute() {
         ConnectionConfig.OutlineConfig original = new ConnectionConfig.OutlineConfig(
-                "https://outline.example.com", "sub-abc", "ENC:v2:ciphertext", Set.of("documents"));
+                "https://outline.example.com", "sub-abc", "key/route", Set.of("documents"));
         Long id = persistAndClear(IntegrationKind.OUTLINE, "https://outline.example.com", original);
 
         Connection reloaded = connectionRepository.findById(id).orElseThrow();
@@ -267,14 +262,14 @@ class ConnectionConfigJsonRoundTripIntegrationTest extends BaseIntegrationTest {
         ConnectionConfig.OutlineConfig cfg = (ConnectionConfig.OutlineConfig) reloaded.getConfig();
         assertThat(cfg.serverUrl()).isEqualTo("https://outline.example.com");
         assertThat(cfg.webhookSubscriptionId()).isEqualTo("sub-abc");
-        assertThat(cfg.webhookSecret()).isEqualTo("ENC:v2:ciphertext");
+        assertThat(cfg.webhookRoute()).isEqualTo("key/route");
         assertThat(cfg.enabledStreams()).containsExactly("documents");
 
         assertDiscriminator(id, "OUTLINE");
     }
 
     /**
-     * The unauthenticated webhook hot path resolves its signing secret through the JSONB expression
+     * The Outline consumer resolves a delivery's subscription through the JSONB expression
      * index {@code ix_connection_outline_subscription}. Exercised against real Postgres because the
      * {@code ->>} operator, the quoted projection aliases, and the ACTIVE/OUTLINE predicates only
      * exist in native SQL — a mock cannot tell us the query parses, let alone that it isolates
@@ -284,22 +279,22 @@ class ConnectionConfigJsonRoundTripIntegrationTest extends BaseIntegrationTest {
     void outlineSubscriptionLookup_isKeyedOnTheSubscriptionAndNeverCrossesWorkspaces() {
         Workspace other = workspaceRepository.save(WorkspaceTestFixtures.activeWorkspace("conn-roundtrip-b"));
 
-        persistActiveOutline(workspace, "sub-a", "secret-a");
-        persistActiveOutline(other, "sub-b", "secret-b");
+        persistActiveOutline(workspace, "sub-a", "key/route-a");
+        persistActiveOutline(other, "sub-b", "key/route-b");
         entityManager.flush();
         entityManager.clear();
 
         var a = connectionRepository.findOutlineSubscriptionsBySubscriptionId("sub-a");
         assertThat(a).hasSize(1);
         assertThat(a.getFirst().getWorkspaceId()).isEqualTo(workspace.getId());
-        assertThat(a.getFirst().getSigningSecret()).isEqualTo("secret-a");
+        assertThat(a.getFirst().getRoute()).isEqualTo("key/route-a");
 
         var b = connectionRepository.findOutlineSubscriptionsBySubscriptionId("sub-b");
         assertThat(b).hasSize(1);
         assertThat(b.getFirst().getWorkspaceId()).isEqualTo(other.getId());
-        assertThat(b.getFirst().getSigningSecret()).isEqualTo("secret-b");
+        assertThat(b.getFirst().getRoute()).isEqualTo("key/route-b");
 
-        // A forged id matches nothing: the delivery is rejected before any HMAC comparison.
+        // A forged id matches nothing.
         assertThat(connectionRepository.findOutlineSubscriptionsBySubscriptionId("forged"))
                 .isEmpty();
     }
@@ -322,12 +317,12 @@ class ConnectionConfigJsonRoundTripIntegrationTest extends BaseIntegrationTest {
                 .isEmpty();
     }
 
-    private void persistActiveOutline(Workspace ws, String subscriptionId, String secret) {
+    private void persistActiveOutline(Workspace ws, String subscriptionId, String route) {
         Connection conn = new Connection(
                 ws,
                 IntegrationKind.OUTLINE,
                 "https://outline.example.com/" + subscriptionId,
-                new ConnectionConfig.OutlineConfig("https://outline.example.com", subscriptionId, secret, Set.of()));
+                new ConnectionConfig.OutlineConfig("https://outline.example.com", subscriptionId, route, Set.of()));
         conn.setState(IntegrationState.ACTIVE);
         connectionRepository.save(conn);
     }

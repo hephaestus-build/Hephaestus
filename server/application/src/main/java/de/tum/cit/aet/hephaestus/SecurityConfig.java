@@ -213,7 +213,7 @@ public class SecurityConfig {
                         "/webhooks/gitlab/connections/**",
                         "/webhooks/slack",
                         "/webhooks/slack/interactivity",
-                        "/webhooks/outline",
+                        "/webhooks/outline/**",
                         "/oauth/callback/**")
                 .sessionManagement(sessions -> sessions.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .csrf(csrf -> csrf.disable())

@@ -15,8 +15,6 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService.O
 import de.tum.cit.aet.hephaestus.integration.core.consumer.ConsumerSubjectMath;
 import de.tum.cit.aet.hephaestus.integration.core.spi.EventTypeKey;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
-import de.tum.cit.aet.hephaestus.integration.core.spi.WebhookSecretSource;
-import de.tum.cit.aet.hephaestus.integration.core.spi.WebhookSecretSource.SecretLookup;
 import de.tum.cit.aet.hephaestus.integration.core.spi.WebhookSignatureVerifier.VerificationResult;
 import de.tum.cit.aet.hephaestus.integration.core.spi.WebhookSignatureVerifier.WebhookRequest;
 import de.tum.cit.aet.hephaestus.integration.outline.client.model.OutlineDocumentModel;
@@ -25,6 +23,7 @@ import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineDocumentEvent
 import de.tum.cit.aet.hephaestus.integration.outline.sync.OutlineDocumentSyncScheduler;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.nats.client.Message;
+import io.nats.client.impl.Headers;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -55,7 +54,7 @@ import tools.jackson.databind.json.JsonMapper;
  * a self-hosted Outline instance's {@code webhook_deliveries} table rather than hand-authored.
  *
  * <p>For each fixture: (1) the raw bytes verify under a signature computed over them with a test
- * secret — proving the verifier's HMAC-over-exact-bytes contract survives real Outline JSON
+ * route secret — proving the verifier's HMAC-over-exact-bytes contract survives real Outline JSON
  * formatting/whitespace; (2) the publisher-side subject the deriver builds falls under the
  * consumer-side subscription filter and the parser collapses it onto the handler's single logical key;
  * (3) the handler routes on the fixture's real {@code event} + {@code payload.id} — every committed
@@ -72,6 +71,7 @@ class OutlineWebhookFixtureRoutingTest extends BaseUnitTest {
     private static final Clock CLOCK = Clock.fixed(NOW, ZoneOffset.UTC);
     private static final long WORKSPACE_ID = 42L;
     private static final long CONNECTION_ID = 7L;
+    private static final String ROUTE = "key/route";
 
     private static final JsonMapper MAPPER = JsonMapper.builder().build();
     private static final OutlineSubjectKeyDeriver DERIVER = new OutlineSubjectKeyDeriver(MAPPER);
@@ -128,12 +128,12 @@ class OutlineWebhookFixtureRoutingTest extends BaseUnitTest {
     }
 
     private void verifySignatureOverRealBytes(byte[] body) {
-        WebhookSecretSource secretSource = fixedSecretSource();
-        OutlineWebhookSignatureVerifier verifier = new OutlineWebhookSignatureVerifier(secretSource, CLOCK);
+        OutlineWebhookSignatureVerifier verifier = new OutlineWebhookSignatureVerifier(CLOCK);
         long ts = NOW.toEpochMilli();
         String header = "t=" + ts + ",s=" + sign(ts, body, TEST_SECRET);
 
-        VerificationResult result = verifier.verify(new WebhookRequest(body, Map.of("Outline-Signature", header)));
+        VerificationResult result =
+                verifier.verify(new WebhookRequest(body, Map.of("Outline-Signature", header)), TEST_SECRET);
 
         assertThat(result).isInstanceOf(VerificationResult.Verified.class);
     }
@@ -159,7 +159,7 @@ class OutlineWebhookFixtureRoutingTest extends BaseUnitTest {
             String actorId,
             String createdAtRaw) {
         when(connectionService.findOutlineSubscription(subscriptionId))
-                .thenReturn(Optional.of(new OutlineSubscription(WORKSPACE_ID, "https://wiki.example.com", "secret")));
+                .thenReturn(Optional.of(new OutlineSubscription(WORKSPACE_ID, "https://wiki.example.com", ROUTE)));
         lenient().when(connection.getId()).thenReturn(CONNECTION_ID);
         lenient()
                 .when(connectionService.findActive(WORKSPACE_ID, IntegrationKind.OUTLINE))
@@ -177,6 +177,7 @@ class OutlineWebhookFixtureRoutingTest extends BaseUnitTest {
         // full real envelope (rather than a hand-built minimal one) exercises the actual JSON shape.
         Message message = mock(Message.class);
         when(message.getData()).thenReturn(rawBody);
+        when(message.getHeaders()).thenReturn(new Headers().add(OutlineWebhookController.HEADER_ROUTE, ROUTE));
 
         handler.onMessage(message);
 
@@ -209,25 +210,6 @@ class OutlineWebhookFixtureRoutingTest extends BaseUnitTest {
         } else {
             throw new AssertionError("Unhandled fixture event prefix: " + event);
         }
-    }
-
-    private static WebhookSecretSource fixedSecretSource() {
-        return new WebhookSecretSource() {
-            @Override
-            public IntegrationKind kind() {
-                return IntegrationKind.OUTLINE;
-            }
-
-            @Override
-            public Scope scope() {
-                return Scope.SUBSCRIPTION;
-            }
-
-            @Override
-            public Optional<byte[]> getSecret(SecretLookup lookup) {
-                return Optional.of(TEST_SECRET);
-            }
-        };
     }
 
     private static String sign(long timestampMillis, byte[] body, byte[] secret) {

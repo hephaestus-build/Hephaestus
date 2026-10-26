@@ -122,17 +122,8 @@ services:
     expose:
       - "9090"
     environment:
-      DATABASE_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
       APPLICATION_HOST_URL: https://${APP_HOSTNAME:?Set APP_HOSTNAME in .env}
       HEPHAESTUS_TRUSTED_PROXIES: ${HEPHAESTUS_TRUSTED_PROXIES:-172\.29\.47\.2}
-    depends_on:
-      # Both live in this one project, so ordering can be expressed here — the
-      # reference deploys them as separate projects and cannot.
-      postgres:
-        condition: service_healthy
-      # Start after this release's migration rather than wait for it at start.
-      database-migration:
-        condition: service_completed_successfully
 
   postgres:
     environment:

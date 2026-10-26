@@ -1,6 +1,6 @@
 # ADR 0008: Webhook as a third runtime role (`webhook-server` container)
 
-**Status:** Accepted (amended 2026-08-22 — webhook ingestion cannot fail silently; 2026-09-17 — receiver surface corrected; 2026-09-26 — the loss counter is withdrawn; 2026-10-09 — mentor schedulers, [ADR 0057](0057-one-heph-conversation-per-developer.md); 2026-10-27 — one publish deadline)
+**Status:** Accepted (amended 2026-08-22 — webhook ingestion cannot fail silently; 2026-09-17 — receiver surface corrected; 2026-09-26 — the loss counter is withdrawn; 2026-10-09 — mentor schedulers, [ADR 0057](0057-one-heph-conversation-per-developer.md); 2026-10-26 — the receiver has no database, [ADR 0066](0066-the-webhook-receiver-has-no-database.md); 2026-10-27 — one publish deadline)
 **Date:** 2026-05-20
 **Authors:** Webhook substrate epic (#1110)
 
@@ -111,6 +111,8 @@ Option 1. Concretely:
 - **DB connection retained on the webhook pod.** Cheaper than gating every workspace-context
   bean; the receiver itself never touches the DB. Operational cost: ~150 MB extra heap and one
   Hikari pool — acceptable.
+  (Superseded by [ADR 0066](0066-the-webhook-receiver-has-no-database.md): the webhook role scans only the
+  receiver's components and has no database.)
 - **Endpoints `/gitlab` and `/github` (no `/webhooks` prefix on controllers).** Traefik already
   strips the `/webhooks` prefix; preserving the controller paths keeps existing provider
   registrations valid (GitLab rate-limits webhook re-registration at 5 req/min per group).
@@ -145,6 +147,8 @@ the receiver still has known failure windows that we are NOT solving here:
   requires a JPA `DataSource` bean. The receiver itself never writes to the DB; the connection
   exists only to satisfy bean wiring. Followup: make the workspace-context filter
   profile-conditional so the webhook pod can boot without Postgres.
+
+  > Resolved by [ADR 0066](0066-the-webhook-receiver-has-no-database.md): the webhook pod has no DataSource.
 
 ## Observability
 

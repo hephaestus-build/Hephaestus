@@ -1,8 +1,8 @@
 services:
   # ─────────────────────────────────────────────────────────────────────────────
   # webhook-server — inbound webhook receiver (same image as application-server,
-  # activated with SPRING_PROFILES_ACTIVE=prod,webhook so only the
-  # integration.core.webhook beans load). Deployed as a separate container from
+  # activated with SPRING_PROFILES_ACTIVE=prod,webhook so only the receiver's
+  # components load; it has no database, see ADR 0066). Deployed as a separate container from
   # application-server so an app-server restart doesn't drop incoming webhooks
   # (push events aren't manually redeliverable on GitHub/GitLab). See ADR 0008.
   # ─────────────────────────────────────────────────────────────────────────────
@@ -63,33 +63,16 @@ services:
       WEBHOOK_SECRET: ${WEBHOOK_SECRET:?Set WEBHOOK_SECRET to at least 32 printable ASCII characters}
       WEBHOOK_ROUTING_SECRET: ${WEBHOOK_ROUTING_SECRET:?Set WEBHOOK_ROUTING_SECRET to at least 32 printable ASCII characters, different from WEBHOOK_SECRET}
       WEBHOOK_ROUTING_PREVIOUS_SECRET: ${WEBHOOK_ROUTING_PREVIOUS_SECRET:-}
-      # DataSource for the JPA layer (connection credentials used by the HMAC
-      # path reads); the auth web layer and workspace-context filter are gated off this role.
-      # Internal, trusted docker-network DB: skip TLS. pgJDBC doesn't validate Postgres' self-signed cert
-      # so it adds no authentication, only the SSL handshake's NIO direct buffers that OOM the JVM off-heap
-      # default; confidentiality is fine to drop here (creds already sit in plaintext compose env).
-      DATABASE_URL: postgresql://postgres:5432/hephaestus?sslmode=disable
-      DATABASE_USERNAME: root
-      DATABASE_PASSWORD: root
-      # Connection credentials are decrypted on every role.
-      HEPHAESTUS_SECURITY_ENCRYPTION_KEY: ${HEPHAESTUS_SECURITY_ENCRYPTION_KEY:?Set HEPHAESTUS_SECURITY_ENCRYPTION_KEY to exactly 32 printable ASCII characters}
-      HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY: ${HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY:?Set HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY to exactly 32 printable ASCII characters}
-      HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY_VERSION: ${HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY_VERSION:-1}
-      HEPHAESTUS_SECURITY_PRIOR_CREDENTIAL_ENCRYPTION_KEY: ${HEPHAESTUS_SECURITY_PRIOR_CREDENTIAL_ENCRYPTION_KEY:-}
-      HEPHAESTUS_SECURITY_PRIOR_CREDENTIAL_ENCRYPTION_KEY_VERSION: ${HEPHAESTUS_SECURITY_PRIOR_CREDENTIAL_ENCRYPTION_KEY_VERSION:-}
-      HEPHAESTUS_SECURITY_CREDENTIAL_ROTATION_ENABLED: ${HEPHAESTUS_SECURITY_CREDENTIAL_ROTATION_ENABLED:-false}
+      # The receiver holds no database and no stored secret (ADR 0066), so it gets neither database
+      # settings nor encryption keys, and a PostgreSQL outage does not stop reception.
       # Slack Events API deliveries are received by this pod under /webhooks/slack and published to
       # NATS. Interactivity (/webhooks/slack/interactivity) is routed to application-server, which
       # commits consent before acknowledging Slack; OAuth/admin and mentor replies stay there too.
       HEPHAESTUS_INTEGRATION_SLACK_ENABLED: ${HEPHAESTUS_INTEGRATION_SLACK_ENABLED:-false}
       HEPHAESTUS_INTEGRATION_SLACK_SIGNING_SECRET: ${HEPHAESTUS_INTEGRATION_SLACK_SIGNING_SECRET:-}
-      # Outline change notifications arrive here under /webhooks/outline. The flag gates
-      # OutlineWebhookSignatureVerifier + OutlineWebhookSecretSource; without it WebhookIngestPipeline
-      # has no verifier for the kind and answers 501 to EVERY delivery, which Outline counts as a
-      # failure and auto-disables the subscription after 25 of them. No signing secret here: Outline's
-      # secret is per-subscription (minted by OutlineWebhookRegistrar on the server pod, stored
-      # encrypted on the connection row) and is read back through JPA, not from the environment.
-      # Keep in lockstep with application-server's value.
+      # Outline change notifications arrive here under /webhooks/outline/{keyId}/{routeId}. The receiver
+      # derives each subscription's signing secret from WEBHOOK_ROUTING_SECRET and the route, so there is
+      # no Outline secret here. Keep the flag in lockstep with application-server's value.
       HEPHAESTUS_INTEGRATION_OUTLINE_ENABLED: ${HEPHAESTUS_INTEGRATION_OUTLINE_ENABLED:-false}
       HEPHAESTUS_INTEGRATION_OUTLINE_ALLOWED_ORIGINS: ${HEPHAESTUS_INTEGRATION_OUTLINE_ALLOWED_ORIGINS:-}
       # application-prod.yml binds host-url=${APPLICATION_HOST_URL} with no YAML default; compose always
@@ -108,12 +91,7 @@ services:
       # thc healthcheck target: readiness. It asks no remote dependency, so a slow broker keeps it UP.
       THC_PORT: "8080"
       THC_PATH: /readyz
-    # nats-server only: `postgres` belongs to compose.app.yaml, and depends_on is project-scoped, so
-    # naming it here orders nothing and makes this file refuse to render. Cross-project ordering is
-    # the deployment workflow's; docker/self-host/compose.single-host.yaml merges all three projects
-    # into one and does declare it. Losing the ordering is safe here: `restart: unless-stopped`
-    # carries the receiver over a database that is not up yet, and its readiness group names no `db`
-    # contributor, so ingestion health stays honest while it waits.
+    # nats-server only: the receiver has no database (ADR 0066).
     depends_on:
       nats-server:
         condition: service_healthy

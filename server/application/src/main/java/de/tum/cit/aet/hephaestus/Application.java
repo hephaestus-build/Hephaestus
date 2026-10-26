@@ -7,7 +7,6 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.metrics.buffering.BufferingApplicationStartup;
 import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
 import org.springframework.boot.mail.autoconfigure.MailSenderAutoConfiguration;
-import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.resilience.annotation.EnableResilientMethods;
 
 /**
@@ -27,7 +26,6 @@ import org.springframework.resilience.annotation.EnableResilientMethods;
  */
 @SpringBootApplication(exclude = MailSenderAutoConfiguration.class)
 @ConfigurationPropertiesScan
-@EnableCaching
 @EnableResilientMethods
 public class Application {
 

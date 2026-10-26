@@ -61,6 +61,12 @@ public interface SlackMonitoredChannelRepository extends JpaRepository<SlackMoni
     List<SlackMonitoredChannel> findForHistorySync(
             @Param("workspaceId") Long workspaceId, @Param("consentState") ConsentState consentState);
 
+    /** The ids of a workspace's channels in one consent state. */
+    @Query("SELECT c.slackChannelId FROM SlackMonitoredChannel c "
+            + "WHERE c.workspaceId = :workspaceId AND c.consentState = :consentState")
+    List<String> findChannelIds(
+            @Param("workspaceId") Long workspaceId, @Param("consentState") ConsentState consentState);
+
     /** Every allow-listed channel for a workspace that is not terminally revoked — the metadata-refresh set. */
     List<SlackMonitoredChannel> findByWorkspaceIdAndConsentStateNot(Long workspaceId, ConsentState consentState);
 

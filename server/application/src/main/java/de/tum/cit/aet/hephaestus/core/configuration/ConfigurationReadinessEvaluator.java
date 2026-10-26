@@ -66,14 +66,16 @@ public final class ConfigurationReadinessEvaluator {
                 serverRole.valid() && workerRole.valid() && webhookRole.valid() && (server || worker || webhook),
                 "At least one runtime role must be enabled.",
                 "runtime-roles");
-        addDatabaseFacts(facts);
+        // The webhook receiver holds no database and no stored secrets (ADR 0066).
+        boolean database = server || worker;
+        addDatabaseFacts(facts, roles(RuntimeRole.SERVER, RuntimeRole.WORKER), database);
         add(
                 facts,
                 "security.credential-encryption",
                 "hephaestus.security.credential-encryption-key",
-                allRoles(),
+                roles(RuntimeRole.SERVER, RuntimeRole.WORKER),
                 ConfigurationRequirement.REQUIRED,
-                true,
+                database,
                 this::validEncryptionKey,
                 "A 32-character printable ASCII key is required to encrypt stored integration credentials.",
                 "credential-encryption");
@@ -81,9 +83,9 @@ public final class ConfigurationReadinessEvaluator {
                 facts,
                 "security.value-encryption",
                 "hephaestus.security.encryption-key",
-                allRoles(),
+                roles(RuntimeRole.SERVER, RuntimeRole.WORKER),
                 ConfigurationRequirement.REQUIRED,
-                true,
+                database,
                 this::validEncryptionKey,
                 "A 32-character printable ASCII key is required to seal JWT signing keys and other encrypted values.",
                 "credential-encryption");
@@ -214,18 +216,18 @@ public final class ConfigurationReadinessEvaluator {
     /** The database migration run mode reads the database settings and nothing else. */
     public List<ConfigurationFactDTO> evaluateMigration() {
         List<ConfigurationFactDTO> facts = new ArrayList<>();
-        addDatabaseFacts(facts);
+        addDatabaseFacts(facts, allRoles(), true);
         return List.copyOf(facts);
     }
 
-    private void addDatabaseFacts(List<ConfigurationFactDTO> facts) {
+    private void addDatabaseFacts(List<ConfigurationFactDTO> facts, List<RuntimeRole> roles, boolean applicable) {
         add(
                 facts,
                 "database.url",
                 "spring.datasource.url",
-                allRoles(),
+                roles,
                 ConfigurationRequirement.REQUIRED,
-                true,
+                applicable,
                 this::validJdbcPostgres,
                 "A PostgreSQL JDBC URL is required.",
                 "database");
@@ -233,9 +235,9 @@ public final class ConfigurationReadinessEvaluator {
                 facts,
                 "database.username",
                 "spring.datasource.username",
-                allRoles(),
+                roles,
                 ConfigurationRequirement.REQUIRED,
-                true,
+                applicable,
                 ConfigurationReadinessEvaluator::notBlank,
                 "A database username is required.",
                 "database");
@@ -243,9 +245,9 @@ public final class ConfigurationReadinessEvaluator {
                 facts,
                 "database.password",
                 "spring.datasource.password",
-                allRoles(),
+                roles,
                 ConfigurationRequirement.REQUIRED,
-                true,
+                applicable,
                 ConfigurationReadinessEvaluator::notBlank,
                 "A database password is required.",
                 "database");

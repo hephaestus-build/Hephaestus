@@ -161,7 +161,7 @@ class GitLabRouteCredentialTest {
         GitLabRouteCredential credential = credential(null, null);
 
         assertThat(credential.isConfigured()).isFalse();
-        assertThatThrownBy(() -> credential.issue(ROUTE)).isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> credential.issue(ROUTE)).isInstanceOf(IllegalStateException.class);
     }
 
     private void assertRejected(GitLabRouteCredential credential, String token) {

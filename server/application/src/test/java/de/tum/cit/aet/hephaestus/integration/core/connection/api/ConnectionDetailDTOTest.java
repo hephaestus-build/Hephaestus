@@ -24,11 +24,8 @@ import org.springframework.test.util.ReflectionTestUtils;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * The {@link ConnectionDetailDTO} javadoc promises the payload "NEVER carries credentials". That
- * held vacuously until {@code OutlineConfig.webhookSecret} — the AES-GCM ciphertext of the live HMAC
- * signing secret — joined the sealed config, at which point {@code GET /connections/{id}} started
- * handing it to every workspace admin's browser. These tests pin the redaction and the invariant
- * that a future secret-shaped config component cannot be added without listing it.
+ * The {@link ConnectionDetailDTO} javadoc promises the payload "NEVER carries credentials". These tests pin the
+ * redaction and the invariant that a future secret-shaped config component cannot be added without listing it.
  */
 @Tag("unit")
 class ConnectionDetailDTOTest {
@@ -36,27 +33,16 @@ class ConnectionDetailDTOTest {
     private final ObjectMapper mapper = new ObjectMapper();
 
     @Test
-    void outlineConfig_dropsTheWebhookSecretButKeepsTheRestOfTheConfig() {
-        Connection connection = outlineConnection(new ConnectionConfig.OutlineConfig(
-                "https://o.test", "sub-1", "ENC:v2:super-secret", Set.of("documents")));
+    void outlineConfig_carriesItsRouteAndNoSecret() {
+        Connection connection = outlineConnection(
+                new ConnectionConfig.OutlineConfig("https://o.test", "sub-1", "key/route", Set.of("documents")));
 
         ConnectionDetailDTO dto = ConnectionDetailDTO.from(connection, manifests(), mapper);
 
-        assertThat(dto.config()).doesNotContainKey("webhookSecret");
         assertThat(dto.config()).containsEntry("serverUrl", "https://o.test");
         assertThat(dto.config()).containsEntry("webhookSubscriptionId", "sub-1");
+        assertThat(dto.config()).containsEntry("webhookRoute", "key/route");
         assertThat(dto.config()).containsEntry("type", "OUTLINE");
-    }
-
-    @Test
-    void theSerializedResponseBodyContainsNoTraceOfTheSecret() {
-        Connection connection = outlineConnection(
-                new ConnectionConfig.OutlineConfig("https://o.test", "sub-1", "ENC:v2:super-secret", Set.of()));
-
-        String json = mapper.writeValueAsString(ConnectionDetailDTO.from(connection, manifests(), mapper));
-
-        assertThat(json).doesNotContain("webhookSecret").doesNotContain("ENC:v2:super-secret");
-        assertThat(json).contains("sub-1");
     }
 
     @Test

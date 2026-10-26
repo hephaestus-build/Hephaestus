@@ -60,16 +60,11 @@ public record ConnectionDetailDTO(
      * <p>GitLab token metadata is also omitted here: its safe dates have typed DTO fields, not a
      * second free-form wire representation. It contains no token value.
      *
-     * <p>Currently {@code webhookSecret} on {@code OutlineConfig}: the AES-GCM ciphertext of the
-     * live HMAC signing secret of the workspace's Outline change-notification subscription. Leaking
-     * it to the browser (and to every logging proxy in between) hands an attacker the material to
-     * forge signed deliveries.
-     *
      * <p>{@code ConnectionDetailDTOTest#everySecretShapedConfigComponentIsRegisteredAsSensitive}
      * reflects over every {@code ConnectionConfig} subtype and fails if a
      * new secret-shaped component is added without being listed here.
      */
-    public static final Set<String> SENSITIVE_CONFIG_KEYS = Set.of("webhooksecret", "tokenmetadata");
+    public static final Set<String> SENSITIVE_CONFIG_KEYS = Set.of("tokenmetadata");
 
     @SuppressWarnings("unchecked")
     public static ConnectionDetailDTO from(Connection c, IntegrationManifestRegistry manifests, ObjectMapper mapper) {

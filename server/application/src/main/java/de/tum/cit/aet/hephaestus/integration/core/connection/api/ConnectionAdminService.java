@@ -191,7 +191,7 @@ public class ConnectionAdminService {
                 new ConnectionConfig.OutlineConfig(
                         userInput.getOrDefault("server_url", null),
                         /* webhookSubscriptionId */ null,
-                        /* webhookSecret */ null,
+                        /* webhookRoute */ null,
                         enabledStreams);
         };
     }

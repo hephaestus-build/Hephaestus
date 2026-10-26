@@ -4,3 +4,5 @@ org.springframework.boot.sql.init.dependency.DatabaseInitializerDetector=\
 de.tum.cit.aet.hephaestus.core.database.MigratedSchemaWait$Detector
 org.springframework.boot.diagnostics.FailureAnalyzer=\
 de.tum.cit.aet.hephaestus.core.database.LiquibaseRefusalFailureAnalyzer
+org.springframework.context.ApplicationContextInitializer=\
+de.tum.cit.aet.hephaestus.core.runtime.WebhookReceiverScope$Initializer

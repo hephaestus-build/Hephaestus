@@ -334,8 +334,8 @@ services:
       # Outline (documentation content source). Every Outline bean is @ConditionalOnProperty with
       # matchIfMissing=false, so an unset flag means no admin surface, no sync, no content projection.
       # Inbound change notifications are verified on webhook-server, which needs the same flag — but
-      # NOT a secret: Outline's webhook secret is per-subscription, minted by OutlineWebhookRegistrar
-      # and stored encrypted on the connection row (unlike Slack's one global signing secret).
+      # NOT a secret: each subscription's secret is derived from WEBHOOK_ROUTING_SECRET and its route
+      # (ADR 0066), unlike Slack's one global signing secret.
       HEPHAESTUS_INTEGRATION_OUTLINE_ENABLED: ${HEPHAESTUS_INTEGRATION_OUTLINE_ENABLED:-false}
       HEPHAESTUS_INTEGRATION_OUTLINE_ALLOWED_ORIGINS: ${HEPHAESTUS_INTEGRATION_OUTLINE_ALLOWED_ORIGINS:-}
       # Link-only login provider (Slack-style): attaches a member's Outline identity to their

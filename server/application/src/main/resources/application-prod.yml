@@ -84,13 +84,12 @@ hephaestus:
     #
     # Outline: per-workspace API key, pasted by a workspace admin and encrypted at rest in the
     # same `connection` table (Outline keys are session-scoped and cannot self-rotate, so there
-    # is no refresh flow — a lapsed key is re-entered by hand). Its webhook secret is
-    # PER-SUBSCRIPTION, minted by OutlineWebhookRegistrar when it registers the subscription and
-    # stored on that same connection row — so, unlike Slack, there is NO global signing secret
-    # env var and the webhook-server verifies deliveries by reading the row through JPA.
+    # is no refresh flow — a lapsed key is re-entered by hand). Each subscription's webhook secret
+    # is derived from WEBHOOK_ROUTING_SECRET and the subscription's route (ADR 0066), so there is
+    # NO Outline signing secret env var.
     # HEPHAESTUS_INTEGRATION_OUTLINE_ENABLED gates every Outline bean (matchIfMissing=false) and
     # must be set on application-server, application-worker (the agent context is assembled
-    # there) and webhook-server (which otherwise answers 501 to every delivery).
+    # there) and webhook-server (which otherwise has no Outline endpoint).
     # OUTLINE_OAUTH_* additionally seeds the link-only login provider; OUTLINE_OAUTH_BASE_URL is
     # required whenever OUTLINE_OAUTH_CLIENT_ID is set (a blank base URL logs an ERROR and skips the seed).
     # Everything binds from env in the base application.yml — Outline needs no prod-only override.

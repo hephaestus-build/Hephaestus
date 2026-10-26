@@ -118,6 +118,26 @@ class ConfigurationReadinessEvaluatorTest extends BaseUnitTest {
         assertStatus(facts, "webhook.routing-secret", ConfigurationStatus.SATISFIED);
         assertStatus(facts, "auth.login-provider", ConfigurationStatus.NOT_APPLICABLE);
         assertStatus(facts, "agent.image-contract", ConfigurationStatus.NOT_APPLICABLE);
+        assertStatus(facts, "database.url", ConfigurationStatus.NOT_APPLICABLE);
+        assertStatus(facts, "security.credential-encryption", ConfigurationStatus.NOT_APPLICABLE);
+        assertStatus(facts, "security.value-encryption", ConfigurationStatus.NOT_APPLICABLE);
+    }
+
+    @Test
+    void shouldStartAProductionWebhookRoleWithoutDatabaseSettingsOrEncryptionKeys() {
+        Map<String, Object> properties = role(false, true);
+        properties.put("hephaestus.runtime.server.enabled", false);
+        properties.remove("spring.datasource.url");
+        properties.remove("spring.datasource.username");
+        properties.remove("spring.datasource.password");
+        properties.remove("hephaestus.security.encryption-key");
+        properties.remove("hephaestus.security.credential-encryption-key");
+        MockEnvironment environment = environment(properties);
+        environment.setActiveProfiles("prod");
+
+        assertThatCode(() -> new ProductionConfigurationEnvironmentPostProcessor()
+                        .postProcessEnvironment(environment, new SpringApplication(Object.class)))
+                .doesNotThrowAnyException();
     }
 
     @ParameterizedTest

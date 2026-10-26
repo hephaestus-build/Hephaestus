@@ -189,6 +189,11 @@ The pipeline selects that adapter's `WebhookSignatureVerifier` and `SubjectKeyDe
 It publishes the verified envelope to JetStream.
 `@ConditionalOnWebhookRole` gates all these operations.
 
+A process that runs only the webhook role scans only `core.runtime.WebhookReceiverScope` and has no database (ADR 0066).
+A receiver component outside an adapter's `webhook` package goes on that list.
+It must not read PostgreSQL.
+`WebhookReceiverScopeArchitectureTest` checks the list, and `WebhookRoleContextIntegrationTest` boots the role without a database.
+
 Configuration binds to
 `hephaestus.webhook.*` through `core.webhook.WebhookProperties`, shared with auto-registration in
 `integration/scm/gitlab/workspace/GitLabWebhookService`.

@@ -122,11 +122,8 @@ public interface ConnectionRepository extends JpaRepository<Connection, Long> {
      * indexed probe on {@code ix_connection_outline_subscription} (a partial expression index on
      * {@code (config ->> 'webhookSubscriptionId') WHERE kind='OUTLINE' AND state='ACTIVE'}).
      *
-     * <p><b>This runs on the unauthenticated webhook hot path</b>, before the HMAC comparison: the
-     * subscription id is attacker-controlled input from the request body. It must therefore cost
-     * O(1) regardless of how many workspaces have Outline connected — a per-workspace loop would
-     * make every forged POST an unauthenticated 1+N query amplifier ({@code /webhooks/**} is exempt
-     * from the auth rate limiter).
+     * <p>It runs once per consumed delivery, and the subscription id comes from the delivery body. It
+     * must therefore cost O(1) regardless of how many workspaces have Outline connected.
      *
      * <p>Native, not JPQL: JPQL cannot express the Postgres {@code ->>} JSONB operator, and the
      * predicate must be literally {@code kind = 'OUTLINE' AND state = 'ACTIVE'} for the planner to
@@ -142,7 +139,7 @@ public interface ConnectionRepository extends JpaRepository<Connection, Long> {
     @Query(value = """
         SELECT c.workspace_id AS "workspaceId",
                c.config ->> 'serverUrl' AS "serverUrl",
-               c.config ->> 'webhookSecret' AS "signingSecret"
+               c.config ->> 'webhookRoute' AS "route"
         FROM connection c
         WHERE c.kind = 'OUTLINE'
           AND c.state = 'ACTIVE'
@@ -152,7 +149,7 @@ public interface ConnectionRepository extends JpaRepository<Connection, Long> {
             @Param("subscriptionId") String subscriptionId);
 
     /**
-     * The (workspace, encrypted signing secret) pair behind one Outline change-notification
+     * The (workspace, server, route) behind one Outline change-notification
      * subscription. Aliases in the native query above are quoted so the JDBC column labels match
      * these getters exactly (Postgres folds unquoted identifiers to lower-case).
      */
@@ -163,7 +160,7 @@ public interface ConnectionRepository extends JpaRepository<Connection, Long> {
         String getServerUrl();
 
         @Nullable
-        String getSigningSecret();
+        String getRoute();
     }
 
     /**

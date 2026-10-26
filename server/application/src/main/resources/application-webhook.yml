@@ -1,26 +1,22 @@
 # Activated by SPRING_PROFILES_ACTIVE=prod,webhook on the webhook-server container.
-# Keeps the integration.webhook beans + the NATS Connection bean; disables every
-# server-only and worker-only cluster so an application-server restart cannot
-# interrupt webhook reception (push events are not manually redeliverable).
-# See ADR 0008 for the gated bean inventory.
+# The receiver runs alone so an application-server restart cannot interrupt webhook reception
+# (ADR 0008), and it scans only core.runtime.WebhookReceiverScope, so it has no database (ADR 0066).
 spring:
     config:
         activate:
             on-profile: webhook
 
-    # The receiver never migrates; it waits at start until the schema is current.
-    liquibase:
-        enabled: false
-
-    # Only an Outline delivery reads the database, with one indexed query; the other receivers read nothing.
-    datasource:
-        hikari:
-            maximum-pool-size: ${HIKARI_MAXIMUM_POOL_SIZE:2}
-            minimum-idle: 1
-
-    jpa:
-        hibernate:
-            ddl-auto: none
+    # The receiver holds no database (ADR 0066): core.runtime.WebhookReceiverScope keeps every component that
+    # needs one out of the scan, and these remove the auto-configured DataSource, JPA, Liquibase and the
+    # event publication registry, which would otherwise connect at start.
+    autoconfigure:
+        exclude:
+            - org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration
+            - org.springframework.boot.hibernate.autoconfigure.HibernateJpaAutoConfiguration
+            - org.springframework.boot.data.jpa.autoconfigure.DataJpaRepositoriesAutoConfiguration
+            - org.springframework.boot.liquibase.autoconfigure.LiquibaseAutoConfiguration
+            - org.springframework.modulith.events.jdbc.JdbcEventPublicationAutoConfiguration
+            - org.springframework.modulith.events.config.EventPublicationAutoConfiguration
 
 
 hephaestus:

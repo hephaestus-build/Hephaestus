@@ -54,6 +54,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             assignment("core.database.PracticeV1ReviewJobsIntegrationTest", "practice-upgrade-history"),
             assignment("integration.core.oauth.SlackOAuthCallbackConflictIntegrationTest", "slack-signed"),
             assignment("integration.core.sync.api.SyncControllerIntegrationTest", "sync-controller-focused"),
+            assignment("integration.core.webhook.WebhookRoleContextIntegrationTest", "webhook-role"),
             assignment("integration.outline.OutlineFrameworkRegistrationIntegrationTest", "outline-enabled"),
             assignment(
                     "integration.outline.collection.OutlineCollectionAdminControllerIntegrationTest",
@@ -138,6 +139,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
                     "real credential storage, lifecycle locks and attention with only"
                             + " irreversible upstream token rotation mocked"),
             Map.entry("heph-live", "worker role with a real Heph host container, the agent image and a live model"),
+            Map.entry("webhook-role", "the webhook role alone, with real JetStream and no database"),
             Map.entry("outline-enabled", "enabled Outline integration wiring"),
             Map.entry("outline-origin", "enabled Outline integration wiring with one allowed document origin"),
             Map.entry(
@@ -230,7 +232,10 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             Map.entry("sync-controller-focused", "controlled sync provider and runner behavior"));
 
     private static final Set<String> SPRING_BOOT_TESTS = names(
-            "StartupBudgetIntegrationTest", "testconfig.BaseIntegrationTest", "testconfig.RealAuthIntegrationTest");
+            "StartupBudgetIntegrationTest",
+            "integration.core.webhook.WebhookRoleContextIntegrationTest",
+            "testconfig.BaseIntegrationTest",
+            "testconfig.RealAuthIntegrationTest");
 
     private static final Set<String> JSON_TESTS = names(
             "integration.MultiVersionFixtureTest",
@@ -247,6 +252,7 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
             "agent.practice.live.PracticeScriptLiveLlmTest",
             "core.auth.clientsession.ClientSessionMigratedSchemaTest",
             "integration.schema.ProductionSchemaContractIntegrationTest",
+            "integration.core.webhook.WebhookRoleContextIntegrationTest",
             "integration.scm.gitlab.workspace.GitLabWorkspaceEventRoutingIntegrationTest",
             "practices.feedback.FeedbackPrivateHistoryIntegrationTest",
             "testconfig.BaseIntegrationTest",
