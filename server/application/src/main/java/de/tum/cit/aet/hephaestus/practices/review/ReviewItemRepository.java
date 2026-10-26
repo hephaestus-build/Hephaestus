@@ -93,7 +93,7 @@ public interface ReviewItemRepository extends JpaRepository<ReviewItem, ReviewIt
         SELECT m.practice_id FROM review_item m JOIN review r ON r.id=m.review_id AND
         r.workspace_id=m.workspace_id JOIN review_practice p ON p.review_id=m.review_id AND
         p.workspace_id=m.workspace_id AND p.practice_id=m.practice_id WHERE m.workspace_id=:workspaceId
-        AND m.review_id=:reviewId AND m.item_id=:itemId AND m.state='LISTED' AND p.status='READY'
+        AND m.review_id=:reviewId AND m.item_id=:itemId AND m.state='LISTED' AND p.status IN ('QUEUED','READY')
         AND r.status IN ('QUEUED','RUNNING') AND NOT
         COALESCE((r.checks->>'cancellationRequested')::boolean,false) ORDER BY m.practice_id
         """, nativeQuery = true)

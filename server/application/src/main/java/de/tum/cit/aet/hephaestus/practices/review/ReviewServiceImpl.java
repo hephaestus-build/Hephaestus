@@ -252,7 +252,6 @@ public class ReviewServiceImpl implements ReviewService {
                     .practiceId(practice.getId())
                     .practiceVersionId(version.getId())
                     .method(method)
-                    .status(ReviewPracticeStatus.READY)
                     .build());
             if (request.kind() == ReviewKind.ITEM) {
                 var roles = plan.roles();

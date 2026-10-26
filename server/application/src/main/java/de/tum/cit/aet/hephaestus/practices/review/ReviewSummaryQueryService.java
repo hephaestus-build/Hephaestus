@@ -162,6 +162,7 @@ public class ReviewSummaryQueryService {
                                     .sum()),
                             Math.toIntExact(jobs.getOrDefault(ReviewJobStatus.QUEUED, 0L)
                                     + jobs.getOrDefault(ReviewJobStatus.RUNNING, 0L)),
+                            Math.toIntExact(jobs.getOrDefault(ReviewJobStatus.RUNNING, 0L)),
                             model));
         }
         return summaries;
@@ -337,6 +338,7 @@ public class ReviewSummaryQueryService {
                 s.feedback(),
                 s.jobCount(),
                 s.activeJobCount(),
+                s.runningJobCount(),
                 s.model(),
                 runtimeDTO,
                 usage(ws, id),

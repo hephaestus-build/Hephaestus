@@ -4094,6 +4094,7 @@ export const zReview = z.object({
     practices: z.array(zReviewPractice),
     requestedBy: zAccountRef.nullable(),
     results: zReviewResultCounts,
+    runningJobCount: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
     startedBy: zItemEvent.nullable(),
     status: z.enum([
         'QUEUED',
@@ -4227,6 +4228,7 @@ export const zReviewSummary = z.object({
     practices: z.array(zReviewPractice),
     requestedBy: zAccountRef.nullable(),
     results: zReviewResultCounts,
+    runningJobCount: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
     startedBy: zItemEvent.nullable(),
     status: z.enum([
         'QUEUED',
@@ -4348,6 +4350,7 @@ export const zReviewDetail = z.object({
     practices: z.array(zReviewPractice),
     requestedBy: zAccountRef.nullable(),
     results: zReviewResultCounts,
+    runningJobCount: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
     runtime: zReviewRuntime.nullable(),
     stageTiming: z.array(zReviewStageTiming),
     startedBy: zItemEvent.nullable(),

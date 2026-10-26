@@ -542,6 +542,59 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
     @Test
     void shouldRetainMissingRoleWithholdingWithoutGrantingAnonymousModelAuthority() {
         var workspace = scenario.workspace().getId();
+        var id = requestSelectedVersion();
+        assertThat(reviews.findById(id).orElseThrow().getStatus()).isEqualTo(ReviewStatus.PARTIAL);
+        var held = pinnedPractices
+                .findByWorkspaceIdAndReviewIdAndPracticeId(
+                        workspace, id, scenario.practice().getId())
+                .orElseThrow();
+        assertThat(held.getStatus()).isEqualTo(ReviewPracticeStatus.WITHHELD);
+        assertThat(held.getReason()).isEqualTo("ROLE_UNAVAILABLE");
+        assertThat(executable.executable(workspace, id, scenario.item().getId()))
+                .isEmpty();
+        assertThat(results.findByWorkspaceIdAndReviewIdOrderByRecordedAtAscIdAsc(workspace, id))
+                .isEmpty();
+    }
+
+    @Test
+    void shouldQueueANewItemPracticeAndKeepItSelectableForItsJob() {
+        var definition = DefinitionTestFixtures.definition();
+        scenario = data.scenario(new PracticeDefinition(
+                definition.name(),
+                definition.reviewOn(),
+                definition.appliesWhen(),
+                null,
+                definition.reads(),
+                definition.reviewedBy(),
+                definition.criteria(),
+                definition.script(),
+                definition.scan(),
+                definition.lineNotes(),
+                definition.guidance()));
+        var workspace = scenario.workspace().getId();
+        when(models.models(eq(workspace), anyList()))
+                .thenReturn(List.of(
+                        new BoundModelSlot("chat", ModelKind.CHAT, null),
+                        new BoundModelSlot("decision", ModelKind.DECISION, null),
+                        new BoundModelSlot("embedding", ModelKind.EMBEDDING, null),
+                        new BoundModelSlot("reranking", ModelKind.RERANKING, null),
+                        new BoundModelSlot(
+                                "review",
+                                ModelKind.CHAT,
+                                new FrozenModel("instance:1", "OPENAI_COMPLETIONS", "test-model", null, Map.of()))));
+        var id = requestSelectedVersion();
+        var queued = pinnedPractices
+                .findByWorkspaceIdAndReviewIdAndPracticeId(
+                        workspace, id, scenario.practice().getId())
+                .orElseThrow();
+        assertThat(queued.getStatus()).isEqualTo(ReviewPracticeStatus.QUEUED);
+        assertThat(executable.executable(workspace, id, scenario.item().getId()))
+                .containsExactly(new ReviewAssignmentId(
+                        id, scenario.practice().getId(), scenario.item().getId()));
+    }
+
+    private UUID requestSelectedVersion() {
+        var workspace = scenario.workspace().getId();
         var ref = productItems.require(workspace, scenario.item().getId());
         var pinned = ItemFixtures.snapshot(ref, Map.of("state", "OPEN", "draft", "false"))
                 .version(new ItemVersion("selected-version", null))
@@ -563,7 +616,7 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
                         new BoundModelSlot("embedding", ModelKind.EMBEDDING, null),
                         new BoundModelSlot("reranking", ModelKind.RERANKING, null),
                         new BoundModelSlot("review", ModelKind.CHAT, null)));
-        var id = service.request(new ReviewRequest(
+        return service.request(new ReviewRequest(
                 workspace,
                 ref.itemId(),
                 ReviewKind.ITEM,
@@ -577,16 +630,6 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
                 null,
                 List.of(scenario.practice().getId()),
                 false));
-        assertThat(reviews.findById(id).orElseThrow().getStatus()).isEqualTo(ReviewStatus.PARTIAL);
-        var held = pinnedPractices
-                .findByWorkspaceIdAndReviewIdAndPracticeId(
-                        workspace, id, scenario.practice().getId())
-                .orElseThrow();
-        assertThat(held.getStatus()).isEqualTo(ReviewPracticeStatus.WITHHELD);
-        assertThat(held.getReason()).isEqualTo("ROLE_UNAVAILABLE");
-        assertThat(executable.executable(workspace, id, ref.itemId())).isEmpty();
-        assertThat(results.findByWorkspaceIdAndReviewIdOrderByRecordedAtAscIdAsc(workspace, id))
-                .isEmpty();
     }
 
     @Test

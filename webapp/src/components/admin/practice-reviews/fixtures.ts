@@ -2422,6 +2422,7 @@ function toReview(review: ReviewSpec): ReviewSummary {
 		feedback: feedbackCounts(review.feedback.map((item) => item.state)),
 		jobCount: review.jobs ?? 1,
 		activeJobCount: review.status === "RUNNING" || review.status === "QUEUED" ? 1 : 0,
+		runningJobCount: review.status === "RUNNING" ? 1 : 0,
 		model: MODEL,
 	};
 }
@@ -2587,8 +2588,23 @@ export const reviewDetailQueued: ReviewDetail = standaloneReview(
 		orderedAt: minutesBefore(2),
 		completedAt: null,
 		activeJobCount: 1,
+		runningJobCount: 0,
 	},
 	(summary) => jobsOf(summary, 1),
+);
+
+/** A started review whose only invocation still waits for a worker, as behind a concurrency limit. */
+export const reviewDetailWaitingForWorker: ReviewDetail = standaloneReview(
+	"0a0a0a0a-1111-4111-8111-000000000003",
+	{
+		status: "RUNNING",
+		createdAt: minutesBefore(20),
+		orderedAt: minutesBefore(20),
+		completedAt: null,
+		activeJobCount: 1,
+		runningJobCount: 0,
+	},
+	(summary) => jobsOf({ ...summary, status: "QUEUED" }, 1),
 );
 
 export const reviewDetailBackingOff: ReviewDetail = standaloneReview(
@@ -2599,6 +2615,7 @@ export const reviewDetailBackingOff: ReviewDetail = standaloneReview(
 		orderedAt: minutesBefore(20),
 		completedAt: null,
 		activeJobCount: 1,
+		runningJobCount: 0,
 	},
 	(summary) => {
 		const [first] = jobsOf({ ...summary, status: "FAILED" }, 1);

@@ -22503,6 +22503,11 @@ components:
           - type: "null"
         results:
           $ref: "#/components/schemas/ReviewResultCounts"
+        runningJobCount:
+          type: integer
+          format: int32
+          description: Active invocations that a worker runs now; the others wait
+            for a worker
         startedBy:
           anyOf:
           - $ref: "#/components/schemas/ItemEvent"
@@ -22564,6 +22569,7 @@ components:
       - practices
       - requestedBy
       - results
+      - runningJobCount
       - startedBy
       - status
       - stopReason
@@ -22900,6 +22906,11 @@ components:
           - type: "null"
         results:
           $ref: "#/components/schemas/ReviewResultCounts"
+        runningJobCount:
+          type: integer
+          format: int32
+          description: Active invocations that a worker runs now; the others wait
+            for a worker
         runtime:
           anyOf:
           - $ref: "#/components/schemas/ReviewRuntime"
@@ -22972,6 +22983,7 @@ components:
       - practices
       - requestedBy
       - results
+      - runningJobCount
       - runtime
       - stageTiming
       - startedBy
@@ -24616,6 +24628,11 @@ components:
           - type: "null"
         results:
           $ref: "#/components/schemas/ReviewResultCounts"
+        runningJobCount:
+          type: integer
+          format: int32
+          description: Active invocations that a worker runs now; the others wait
+            for a worker
         startedBy:
           anyOf:
           - $ref: "#/components/schemas/ItemEvent"
@@ -24677,6 +24694,7 @@ components:
       - practices
       - requestedBy
       - results
+      - runningJobCount
       - startedBy
       - status
       - stopReason

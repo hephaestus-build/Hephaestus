@@ -50,6 +50,11 @@ public record ReviewSummaryDTO(
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) int jobCount,
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) int activeJobCount,
 
+        @Schema(
+                requiredMode = Schema.RequiredMode.REQUIRED,
+                description = "Active invocations that a worker runs now; the others wait for a worker")
+        int runningJobCount,
+
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) @Nullable
         String model) {
     public ReviewSummaryDTO {

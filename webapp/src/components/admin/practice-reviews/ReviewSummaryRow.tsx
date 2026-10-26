@@ -9,6 +9,7 @@ import { RecordTimeCell } from "@/components/practice-vocabulary/RecordTable";
 import { REVIEW_ORIGIN_DEFS } from "@/components/practice-vocabulary/review-origin-defs";
 import {
 	REVIEW_STATUS_DEFS,
+	shownReviewStatus,
 	REVIEW_STOP_REASON_SENTENCES,
 } from "@/components/practice-vocabulary/review-status-defs";
 import { ReviewStatusBadge } from "@/components/practice-vocabulary/ReviewStatusBadge";
@@ -57,7 +58,7 @@ export function ReviewSummaryRow({ review, open = false, request }: ReviewSummar
 			}
 		>
 			<RecordTimeCell
-				status={REVIEW_STATUS_DEFS[review.status]}
+				status={REVIEW_STATUS_DEFS[shownReviewStatus(review)]}
 				at={review.createdAt}
 				statusTooltip={false}
 			/>

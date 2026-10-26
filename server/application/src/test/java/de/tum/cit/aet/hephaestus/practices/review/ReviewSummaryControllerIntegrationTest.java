@@ -393,10 +393,11 @@ class ReviewSummaryControllerIntegrationTest extends BaseIntegrationTest {
                 .isEqualTo(1)
                 .jsonPath("$.running")
                 .isEqualTo(1);
+        // Only a claimed invocation runs; a waiting or held one shows its review as queued.
         for (var expected : List.of(
-                List.of("WAITING", waiting.getReviewId().toString()),
-                List.of("HELD", held.getReviewId().toString()),
-                List.of("RUNNING", running.getReviewId().toString()))) {
+                List.of("WAITING", waiting.getReviewId().toString(), "0"),
+                List.of("HELD", held.getReviewId().toString(), "0"),
+                List.of("RUNNING", running.getReviewId().toString(), "1"))) {
             get("/practices/reviews?queueState=" + expected.getFirst())
                     .expectStatus()
                     .isOk()
@@ -404,7 +405,11 @@ class ReviewSummaryControllerIntegrationTest extends BaseIntegrationTest {
                     .jsonPath("$.totalElements")
                     .isEqualTo(1)
                     .jsonPath("$.content[0].id")
-                    .isEqualTo(expected.getLast());
+                    .isEqualTo(expected.get(1))
+                    .jsonPath("$.content[0].activeJobCount")
+                    .isEqualTo(1)
+                    .jsonPath("$.content[0].runningJobCount")
+                    .isEqualTo(Integer.parseInt(expected.getLast()));
         }
     }
 

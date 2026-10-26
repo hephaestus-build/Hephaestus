@@ -668,6 +668,7 @@ describe("a review's trace while the review runs", () => {
 			status,
 			completedAt: active ? null : base.createdAt,
 			activeJobCount: active ? 1 : 0,
+			runningJobCount: status === "RUNNING" ? 1 : 0,
 		};
 	}
 
@@ -873,6 +874,7 @@ describe("another review of the work from a review's sheet", () => {
 			status,
 			completedAt: active ? null : base.createdAt,
 			activeJobCount: active ? 1 : 0,
+			runningJobCount: status === "RUNNING" ? 1 : 0,
 		};
 	}
 
@@ -1058,6 +1060,7 @@ describe("the way to a review an accepted ask created", () => {
 			status,
 			completedAt: active ? null : base.createdAt,
 			activeJobCount: active ? 1 : 0,
+			runningJobCount: status === "RUNNING" ? 1 : 0,
 		};
 	}
 
