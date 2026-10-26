@@ -60,7 +60,7 @@ It can capture evidence only for images that its run published.
 | Quality → Windows                                                       | Every gate that needs neither Gradle, Docker nor the agent sandbox, on `windows-latest`, uncached                                                                                                         | `vp run --no-cache ci:windows`                                           |
 | Quality → Clean install                                                 | `vp install --frozen-lockfile` on a runner with Node and the launcher and nothing else, then `gate:toolchain` and the hooks path                                                                          | `vp install`                                                             |
 | Build → App Server: Package                                             | `./gradlew :application:bootJar :application:testClasses`. Uploads the classes and JARs once                                                                                                              | —                                                                        |
-| Build → App Server: Generated artifacts                                 | `generate:api` diff against the packaged JAR. `db:check-drift`, which replays `master.xml` and diffs the JPA model. ERD diff                                                                              | `vp run generate:api`, `db:check-drift`, `db:generate-erd-docs`          |
+| Build → App Server: Generated artifacts                                 | `generate:api` diff against the packaged JAR. [API compatibility](#api-compatibility) with the previous stable release. `db:check-drift`, which replays `master.xml` and diffs the JPA model. ERD diff | `vp run generate:api`, `gate:api-compatibility`, `db:check-drift`, `db:generate-erd-docs` |
 | Build → App Server: Database                                            | Gradle `databaseTest` task against PostgreSQL                                                                                                                                                             | —                                                                        |
 | Build → App Server: PostgreSQL drills                                   | `test:postgres-restore`, then `test:postgres-pitr`, in one job beside `databaseTest`. **Re-run failed jobs** repeats both drills                                                                          | `vp run test:postgres-restore`, `test:postgres-pitr`                     |
 | Build → Webapp: E2E                                                     | Playwright against the packaged JAR                                                                                                                                                                       | `vp run --filter webapp test:e2e`                                        |
@@ -115,6 +115,61 @@ The job summary contains the report, including cache hits and miss reasons.
 A leg runs when the change
 detection in `cicd.yml` says its scope changed. The Windows leg uses the tooling scope.
 Both it and the tooling leg prove the hook dispatcher on rejected and accepted commits.
+
+### API compatibility
+
+A browser tab can run the SPA of one release against the server of the next release for days.
+The Chrome extension can be older.
+Thus, `server/openapi.yaml` must stay compatible with the previous stable release.
+`vp run gate:api-compatibility` compares the two specs with
+[`oasdiff breaking`](https://github.com/oasdiff/oasdiff/blob/main/docs/BREAKING-CHANGES.md).
+It fails on each change at the `ERR` level.
+It shows `WARN` changes, but they do not fail it.
+
+- **Where it runs.** `Build → App Server: Generated artifacts` runs it on the spec that the job generates from the packaged JAR.
+  The job runs for each pull request and merge group that changes the contracts.
+  It also runs for the push of each version commit, which [gates the release](./release-management.mdx#the-flow).
+  The release workflow does not run the check again.
+- **The base.** The base is the highest `vX.Y.Z` tag on `origin`.
+  A release creates its tag only when it is published.
+  The pattern does not select a pre-release tag such as `v0.10.0-rc.1`.
+  The CI checkout has one commit and no tags, so the script fetches the base tag with `--depth=1`.
+  To compare with a different release, add `--base vX.Y.Z`.
+- **The tool.** The script downloads oasdiff from its GitHub release into a cache directory that Git ignores.
+  Before each use, it verifies the archive against the SHA-256 that `scripts/check-api-compatibility.ts` pins for each platform.
+  To update oasdiff, change the version and all checksums together.
+  Compare each checksum in the release's `checksums.txt` with the asset digest on the release page.
+
+A new value in a response enum is an `ERR` change, because an older tab cannot show it.
+Its vocabulary maps have no text for the value, and its generated schemas reject a Heph live event that carries it.
+oasdiff accepts the removal of an operation or parameter that the base release marks `deprecated`.
+This agrees with the [deprecation policy](/admin/compatibility-policy#deprecation-policy).
+
+#### Accept a deliberate break
+
+Before 1.0, a release can break the API deliberately.
+From 1.0, a break needs a major release, so the gate fails on any entry when the base is `v1.0.0` or later.
+To accept a break before 1.0:
+
+1. Add the break's line to `server/openapi-accepted-breaks.txt`.
+   The line is the message of the gate's annotation in CI: `in API <method> <path> <change text>`.
+   The local report shows the same parts on two lines.
+   Above it, write a `#` comment with the reason and the pull request.
+2. Write a `minor` changeset that tells API clients what changed.
+   See [Writing changesets](./release-management.mdx#writing-changesets).
+
+The diff of the file shows each accepted break in review.
+
+An entry is obsolete when no break against the current base has that line.
+This occurs when the release that contains the break is published, because that release becomes the base.
+The gate then shows one warning that lists them.
+Remove them in your next change to the file.
+They do not fail the gate, so a published release does not stop unrelated pull requests.
+The Version PR cannot remove them, because its own runs still compare with the previous release.
+
+A published release moves the base, so a run that passed can fail when it runs again, for example in the merge queue.
+This occurs when `main` removes an endpoint that the new base added.
+List the break or restore the endpoint, then run the job again.
 
 ### Merge policy
 
@@ -1246,6 +1301,7 @@ vp run typecheck:agents      # Agent + practice script TypeScript
 | Lint errors (agent runtime, practice scripts, `scripts/`) | Run `vp run fix:agents`, then fix what remains |
 | TypeScript errors                                         | Run `vp run typecheck` to see details          |
 | OpenAPI out of sync                                       | Run `vp run generate:api`                      |
+| Breaking API change                                       | See [API compatibility](#api-compatibility)    |
 | Database schema drift                                     | Run `vp run db:draft-changelog`                |
 
 ## Adding a new service

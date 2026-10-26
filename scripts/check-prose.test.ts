@@ -18,6 +18,7 @@ import {
 	issueFormAlerts,
 } from "./check-prose.ts";
 import { environmentForGitFixture } from "./lib/git-environment.ts";
+import { executableFromArchive, verifyArchive } from "./lib/pinned-binary.ts";
 import { output } from "./lib/process.ts";
 import {
 	approvedWords,
@@ -30,11 +31,9 @@ import { uiAlerts, uiRuleName } from "./lib/ui-text.ts";
 import {
 	assetFor,
 	installValeBinary,
-	executableFromArchive,
 	prepareVale,
 	parseValeAlerts,
 	valeAlerts,
-	verifyArchive,
 } from "./lib/vale.ts";
 
 await test("STE paths are explicit, unique, and grow only", () => {
@@ -101,13 +100,26 @@ await test("Vale pins cover every supported OS and reject changed archives", () 
 	}
 	assert.throws(() => assetFor("linux", "ia32"));
 	const bytes = new Uint8Array([1, 2, 3]);
-	verifyArchive(bytes, createHash("sha256").update(bytes).digest("hex"));
-	assert.throws(() => verifyArchive(bytes, "0".repeat(64)), /checksum/u);
+	verifyArchive(bytes, {
+		name: "vale.zip",
+		sha256: createHash("sha256").update(bytes).digest("hex"),
+	});
+	assert.throws(
+		() => verifyArchive(bytes, { name: "vale.zip", sha256: "0".repeat(64) }),
+		/checksum/u,
+	);
 	assert.deepEqual(
-		executableFromArchive(zipSync({ "vale.exe": bytes, "../escape": bytes }), true),
+		executableFromArchive(
+			zipSync({ "vale.exe": bytes, "../escape": bytes }),
+			"vale.zip",
+			"vale.exe",
+		),
 		bytes,
 	);
-	assert.throws(() => executableFromArchive(zipSync({ other: bytes }), true), /no vale.exe/u);
+	assert.throws(
+		() => executableFromArchive(zipSync({ other: bytes }), "vale.zip", "vale.exe"),
+		/no vale.exe/u,
+	);
 });
 
 await test("concurrent Vale installers publish one verified binary and reuse it offline", async () => {

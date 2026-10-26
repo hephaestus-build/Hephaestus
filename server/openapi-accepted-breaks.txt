@@ -1,0 +1,32 @@
+# Breaking changes to server/openapi.yaml that are accepted against the previous stable release.
+# Rules: docs/contributor/ci-cd.mdx § API compatibility.
+# oasdiff reads every line, so the gate fails on a comment that contains a break's line.
+
+# Merged before this gate existed, against v0.94.7.
+# #2749: one Heph conversation per developer replaces the mentor threads.
+in API PUT /user/notification-preferences added the new required request property `weeklyDigest`
+in API POST /user/settings added the new required request property `timeZone`
+in API POST /workspaces/{workspaceSlug}/mentor/sandbox api path removed without deprecation
+in API GET /workspaces/{workspaceSlug}/mentor/threads api path removed without deprecation
+in API DELETE /workspaces/{workspaceSlug}/mentor/threads/{threadId} api path removed without deprecation
+in API GET /workspaces/{workspaceSlug}/mentor/threads/{threadId} api path removed without deprecation
+in API DELETE /workspaces/{workspaceSlug}/mentor/threads/{threadId}/messages/{messageId}/vote api path removed without deprecation
+in API POST /workspaces/{workspaceSlug}/mentor/threads/{threadId}/messages/{messageId}/vote api path removed without deprecation
+in API GET /workspaces/{workspaceSlug}/practices/reviews/feedback/{feedbackId} removed the required property `copies/items/chatMessageId` from the response with the `200` status
+in API POST /workspaces/{workspaceSlug}/practices/reviews/feedback/{feedbackId}/recheck removed the required property `copies/items/chatMessageId` from the response with the `202` status
+in API POST /workspaces/{workspaceSlug}/practices/reviews/feedback/{feedbackId}/retry removed the required property `copies/items/chatMessageId` from the response with the `202` status
+
+# #3084: a delayed review records that the original evidence is unavailable.
+in API GET /workspaces/{workspaceSlug}/practices/items/{itemId}/events added the new `OCCASION_EVIDENCE_UNAVAILABLE` enum value to the `content/items/reason` response property for the response status `200`
+in API GET /workspaces/{workspaceSlug}/practices/items/{itemId}/trace added the new `OCCASION_EVIDENCE_UNAVAILABLE` enum value to the `events/items/reason` response property for the response status `200`
+in API POST /workspaces/{workspaceSlug}/practices/review-requests added the new `OCCASION_EVIDENCE_UNAVAILABLE` enum value to the `reason` response property for the response status `200`
+in API GET /workspaces/{workspaceSlug}/practices/reviews added the new `OCCASION_EVIDENCE_UNAVAILABLE` enum value to the `content/items/startedBy/anyOf[#/components/schemas/ItemEvent]/reason` response property for the response status `200`
+in API GET /workspaces/{workspaceSlug}/practices/reviews/{reviewId} added the new `OCCASION_EVIDENCE_UNAVAILABLE` enum value to the `startedBy/anyOf[#/components/schemas/ItemEvent]/reason` response property for the response status `200`
+in API POST /workspaces/{workspaceSlug}/practices/reviews/{reviewId}/cancel added the new `OCCASION_EVIDENCE_UNAVAILABLE` enum value to the `startedBy/anyOf[#/components/schemas/ItemEvent]/reason` response property for the response status `200`
+in API POST /workspaces/{workspaceSlug}/practices/reviews/{reviewId}/cancel added the new `OCCASION_EVIDENCE_UNAVAILABLE` enum value to the `startedBy/anyOf[#/components/schemas/ItemEvent]/reason` response property for the response status `202`
+
+# #3046: the workspace standing comparison returns its tiles for a time window.
+in API GET /workspaces/{workspaceSlug}/practices/tiles added the new required `query` request parameter `window`
+in API GET /workspaces/{workspaceSlug}/practices/tiles the response's body `type` changed from `array<object>` to `object` for status `200`
+in API GET /workspaces/{workspaceSlug}/practices/workspace-overview removed the required property `developers` from the response with the `200` status
+in API GET /workspaces/{workspaceSlug}/practices/workspace-overview removed the required property `practices` from the response with the `200` status

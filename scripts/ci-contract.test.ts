@@ -104,9 +104,11 @@ const TASK_INVOCATION =
 // The gates outside `check`: the k6 syntax check and the alert rule tests need pinned containers, and
 // the PMD canary runs only when CI decides PMD inputs changed. The server test analysis compiles every
 // test, and `check` does not, so the pre-push hook stays fast; every local server test task runs it.
-// Every other CI gate is part of `check`.
+// The API compatibility check judges the spec that CI generates from the packaged server against a base
+// that moves with each release. Every other CI gate is part of `check`.
 const CI_ONLY_GATES = new Set([
 	"gate:alerts",
+	"gate:api-compatibility",
 	"gate:load-syntax",
 	"gate:pmd-canary",
 	"gate:server-test-analysis",

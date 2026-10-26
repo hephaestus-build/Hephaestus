@@ -57,7 +57,7 @@ interface Version {
 	readonly patch: number;
 }
 
-const parseVersion = (value: string): Version | undefined => {
+export const parseVersion = (value: string): Version | undefined => {
 	const groups = RELEASE_VERSION.exec(value)?.groups;
 	if (groups === undefined) {
 		return undefined;
@@ -65,7 +65,7 @@ const parseVersion = (value: string): Version | undefined => {
 	return { major: Number(groups.major), minor: Number(groups.minor), patch: Number(groups.patch) };
 };
 
-const compareVersions = (left: Version, right: Version): number =>
+export const compareVersions = (left: Version, right: Version): number =>
 	left.major - right.major || left.minor - right.minor || left.patch - right.patch;
 
 const formatVersion = (version: Version): string =>
