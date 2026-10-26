@@ -41,7 +41,7 @@ on:
         type: string
         default: "true"
       application_server_changed:
-        description: "Whether the Build workflow published an application-server image this run"
+        description: "Whether the CI / Build workflow published an application-server image this run"
         required: false
         type: string
         default: "true"

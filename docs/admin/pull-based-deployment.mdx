@@ -220,7 +220,7 @@ Do not change the checkout underneath a tick.
    sudo readlink /var/lib/hephaestus/tooling
    ```
 
-2. Run the **Promote** workflow for the release that the host already runs.
+2. Run the **Release / Promote** workflow for the release that the host already runs.
 
    The host cannot complete an old record that lacks the release commit from files on disk.
    Those files cannot distinguish the accepted tree from one left by a failed promotion.
@@ -366,7 +366,7 @@ Data that the chart wrote after the switch is not in the Compose database.
 
 | You want to                                            | Do this                                                                                                                                                      |
 | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Move an environment                                    | Run the **Promote** workflow: pick the environment and release or commit                                                                                     |
+| Move an environment                                    | Run the **Release / Promote** workflow: pick the environment and release or commit                                                                                     |
 | Roll back                                              | Pause reconciliation, then follow [Rollback](./upgrade#rollback). After the database matches the older release, promote that release with **allow-rollback** |
 | Keep Staging on a release or commit                    | Promote it with **freeze**                                                                                                                                   |
 | Let Staging follow `main` again                        | Promote a commit of `main` with **freeze** cleared. The next successful build moves it on. Promoting the commit that runs applies it again                   |

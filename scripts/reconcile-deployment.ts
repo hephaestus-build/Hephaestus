@@ -918,7 +918,7 @@ async function fetchSignedChannel(
 	) {
 		throw new OperatorActionRequiredError(
 			`no ${channelPath} on deploy-state: the "${config.channel}" environment has not been ` +
-				"promoted yet. Run the Promote workflow for it and this host applies it on the next tick.",
+				"promoted yet. Run the Release / Promote workflow for it and this host applies it on the next tick.",
 		);
 	}
 	// Not trimmed: the channel must reach cosign byte for byte as it was signed.

@@ -192,7 +192,7 @@ The changeset that drops the object also removes its row and its exclusion.
 
 ## CI validation
 
-1. **Migration-chain replay, schema drift and ERD** — Build workflow, job *App Server: Generated
+1. **Migration-chain replay, schema drift and ERD** — **CI / Build** workflow, job *App Server: Generated
    artifacts*. `vp run db:check-drift` applies the full `master.xml` chain to an empty database from the repository's PostgreSQL image (`docker/postgres`).
    It compares the result with the JPA entities. A changelog that does not parse or apply fails here. `vp run db:generate-erd-docs`
    then has to leave `docs/contributor/erd/schema.mmd` unchanged.

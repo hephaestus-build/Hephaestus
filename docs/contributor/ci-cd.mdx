@@ -527,7 +527,7 @@ Do not alter dependency submission or disable checksum verification to change it
 | Staging           | qualified commits of `main`                 | automatic promotion policy        | none              |
 | Production        | a published release                         | manual promotion                  | required reviewer |
 
-After each successful `main` push, `continuous-staging.yml` dispatches one automatic **Promote** run for Staging and ends.
+After each successful `main` push, `continuous-staging.yml` dispatches one automatic **Release / Promote** run for Staging and ends.
 That run decides, signs, publishes and observes the promotion in one job, so a promotion waits for one runner.
 Its conclusion and the Staging deployment record report the outcome.
 GitHub notifies nobody of a run that `GITHUB_TOKEN` dispatched.
