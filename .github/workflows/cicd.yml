@@ -382,7 +382,6 @@ jobs:
               - 'renovate.json'
               - 'security/scorecard-baseline.json'
               - 'openapitools.json'
-              - 'jean.json'
               - 'project.code-workspace'
               - '.vscode/settings.json'
             application-server-image:

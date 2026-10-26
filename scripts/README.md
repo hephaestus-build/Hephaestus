@@ -3,7 +3,7 @@
 The Node.js version pinned in `package.json#devEngines.runtime` executes these TypeScript utilities
 using native type stripping.
 
-Most scripts require `vp install` at the repository root; Jean setup performs it.
+Most scripts require `vp install` at the repository root.
 
 ## Available Scripts
 
@@ -22,16 +22,8 @@ Substantive developer orchestration under `scripts/` uses typed Node.js entry po
 | `vp run db:generate-erd-docs` | Apply migrations and regenerate the Mermaid ERD. |
 | `vp run dev:e2e:setup <options>` | Configure a local E2E workspace against the selected SCM and model provider. Secrets are environment-only. |
 | `vp run dev:practices-across-the-workspace:seed` / `:remove` | Seed or remove the practices demo in the local database: synthetic developers for Practices across the workspace and a full Practice profile for the reader — flags and defaults in [local-development.mdx](../docs/contributor/local-development.mdx#seeding-the-practices-demo). |
-| `vp run dev:public-test <command>` | Manage the machine-local public test route. |
 
 The database commands require Docker with the Compose plugin.
-
-`dev:public-test` accepts `start`, `stop`, `status`, `smoke`, and `seed-status`. The route is
-internet-facing and requires Docker, the machine's Coolify network and Traefik configuration
-directory, and `server/.env`.
-
-Jean runs `node "$JEAN_ROOT_PATH/scripts/jean-setup.ts"` from a new worktree to copy machine-local
-configuration and install dependencies. It is not a general contributor command.
 
 **ERD generation environment variables:**
 

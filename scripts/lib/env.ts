@@ -59,19 +59,6 @@ export function requiredPositiveInteger(environment: NodeJS.ProcessEnv, name: st
 }
 
 /**
- * Whether a value is a DNS hostname. Env-supplied hosts reach shell and proxy configuration, so a
- * value that is not one is rejected before it is interpolated anywhere.
- */
-export function isHostname(value: string): boolean {
-	return (
-		value.length <= 253 &&
-		value
-			.split(".")
-			.every((label) => /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$/u.test(label))
-	);
-}
-
-/**
  * Whether a host is this machine. Scripts that write straight into a database or reach a
  * development server refuse every other host, so a stray production URL never gets through.
  */

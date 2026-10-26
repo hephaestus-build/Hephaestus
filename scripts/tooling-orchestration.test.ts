@@ -8,7 +8,6 @@ import { describe, test } from "node:test";
 import { duplicatePorts } from "./check-ports.ts";
 import { withDisposableDatabase } from "./db-utils.ts";
 import { loadConfig } from "./e2e-setup.ts";
-import { updateEnv } from "./jean-setup.ts";
 import {
 	type Api,
 	type E2eLlmRoute,
@@ -16,7 +15,7 @@ import {
 	provisionLlmModel,
 	readLlmRoute,
 } from "./lib/e2e-llm.ts";
-import { isHostname, isSet, positivePort, readEnvFile } from "./lib/env.ts";
+import { isSet, positivePort, readEnvFile } from "./lib/env.ts";
 
 await describe("environment parsing", async () => {
 	await test("parses data without evaluating shell syntax", async () => {
@@ -52,21 +51,6 @@ await test("duplicate configured ports fail the preflight", async () => {
 		},
 	);
 	assert.equal(result.status, 1);
-});
-
-await test("public host validation rejects Traefik rule syntax", () => {
-	assert.equal(isHostname("preview.example.com"), true);
-	assert.equal(isHostname("example.com`) || Host(`attacker.example"), false);
-});
-
-await test("Jean setup updates only GitLab bootstrap settings and remains idempotent", () => {
-	const initial =
-		"# machine-local config\nGITLAB_PAT=secret\nGITLAB_GROUP_PATH=group\nGITLAB_ENABLED=false\n";
-	const updated = updateEnv(initial);
-	assert.equal(updated.startsWith("# machine-local config\n"), true);
-	assert.ok(updated.includes("GITLAB_ENABLED=true"));
-	assert.ok(updated.includes("GITLAB_SERVER_URL=https://gitlab.lrz.de"));
-	assert.equal(updateEnv(updated), updated);
 });
 
 await test("database drafting restores planted state after external-command failure", async () => {
