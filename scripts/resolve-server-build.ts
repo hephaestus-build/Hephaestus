@@ -15,6 +15,7 @@ const requiredJobs = [
 	"Test / App Server: Unit and architecture",
 	"Test / App Server: Integration (application)",
 	"Test / App Server: Integration (providers)",
+	"Test / App Server: Integration (runtime-and-startup)",
 	"Test / App Server: Integration (practices-and-agent)",
 	"Security / Dependencies, secrets, and policy",
 	"CI Status Gate",

@@ -46,7 +46,6 @@ const INTEGRATION_LAYOUTS = [
 	["providers-and-startup", "application"],
 	["providers", "runtime-and-startup", "application"],
 	["providers", "runtime-and-startup", "practices-and-agent", "application"],
-	["providers", "practices-and-agent", "application"],
 ];
 
 export function isFullVerification(jobs: readonly { name: string }[]) {

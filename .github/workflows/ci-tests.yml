@@ -83,12 +83,13 @@ jobs:
     name: "App Server: Integration (${{ matrix.shard }})"
     if: inputs.should_skip != 'true' && inputs.application_server_changed == 'true' && inputs.queue_tier == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: ${{ matrix.shard == 'runtime-and-startup' && 20 || 30 }}
     strategy:
       fail-fast: false
       matrix:
         include:
           - shard: providers
+          - shard: runtime-and-startup
           - shard: practices-and-agent
           - shard: application
     permissions:

@@ -30,6 +30,7 @@ jobs:
       matrix:
         include:
           - shard: providers
+          - shard: runtime-and-startup
           - shard: practices-and-agent
           - shard: application
     permissions:
