@@ -126,7 +126,6 @@
 	"docs/admin/production-operations-runbook.mdx",
 	"docs/admin/production-setup.mdx",
 	"docs/admin/pull-based-deployment.mdx",
-	"docs/admin/reference-deployment.mdx",
 	"docs/admin/release-image-lock.md",
 	"docs/admin/runtime-roles.mdx",
 	"docs/admin/secret-custody.mdx",

@@ -189,6 +189,25 @@ For that release, do these steps:
 
 [Upgrade § Rollback](./upgrade#rollback) explains why images alone cannot undo a schema change.
 
+## Webapp container
+
+The webapp image runs nginx as an unprivileged user and needs no capabilities.
+
+| Property         | Value                                                                                       |
+| ---------------- | ------------------------------------------------------------------------------------------- |
+| User and group   | UID `101`, GID `101`                                                                        |
+| Port             | `8080`, plain HTTP. Your proxy handles TLS.                                              |
+| Health check     | `GET /` on port `8080` returns `200`                                                        |
+| Writable path    | `/tmp/hephaestus-webapp` only. It holds the page shell, the runtime configuration and the nginx files. |
+| Root file system | Can be read-only                                                                            |
+
+The Compose stacks run the container with a read-only root file system, all capabilities dropped and `no-new-privileges`.
+They mount a 16 MiB `tmpfs` at `/tmp/hephaestus-webapp`, owned by UID 101 with mode `0700`.
+The maintenance page uses the same image and the same settings.
+The Helm chart sets the same constraints.
+If you run the image on another platform, mount an empty directory at `/tmp/hephaestus-webapp` that UID 101 can write, for example an `emptyDir` with `fsGroup: 101`.
+To mount legal overrides, see [Legal Pages](./legal-pages).
+
 ## Configuration cheatsheet
 
 Each cell shows the value a pod uses when the operator sets **no** environment variable for it.

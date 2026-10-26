@@ -18,4 +18,4 @@ They run the container with a read-only root file system and a `tmpfs` at `/tmp/
 4. Make your legal override files readable by UID 101.
    The mount path `/usr/share/nginx/html/legal-overrides` does not change.
 
-See [Webapp container](https://docs.hephaestus.build/admin/reference-deployment#webapp-container).
+See [Webapp container](https://docs.hephaestus.build/admin/runtime-roles#webapp-container).
