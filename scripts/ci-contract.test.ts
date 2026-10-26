@@ -1354,10 +1354,8 @@ void describe("CI contract", () => {
 	});
 
 	void test("GHCR-only rescans share login while the image builder keeps its registry input", async () => {
-		const rescan = parseDocument(
-			await readFile(".github/workflows/rescan-main-images.yml", "utf8"),
-		);
-		const login = namedStep(rescan, ["jobs", "rescan"], "Log in to Container Registry");
+		const rescan = parseDocument(await readFile(".github/workflows/rescan-images.yml", "utf8"));
+		const login = namedStep(rescan, ["jobs", "main"], "Log in to Container Registry");
 		assert.equal(login.get("uses"), "./.github/actions/ghcr-login");
 		assert.equal(login.getIn(["with", "username"]), `\${{ github.actor }}`);
 		assert.equal(login.getIn(["with", "password"]), `\${{ secrets.GITHUB_TOKEN }}`);
@@ -2704,17 +2702,12 @@ void describe("CI contract", () => {
 		// (check-release-vulnerabilities.ts), so every job that reaches it installs the pinned Syft. Only
 		// the advisory snapshot job does not.
 		const cicd = await readFile(".github/workflows/cicd.yml", "utf8");
+		const rescan = await readFile(".github/workflows/rescan-images.yml", "utf8");
 		const evaluatorJobs: [string, string][] = [
 			[".github/workflows/reusable-docker-build.yml", job(reusable, "build")],
 			[".github/workflows/cicd.yml", job(cicd, "upstream-images")],
-			[
-				".github/workflows/rescan-main-images.yml",
-				await readFile(".github/workflows/rescan-main-images.yml", "utf8"),
-			],
-			[
-				".github/workflows/rescan-release-images.yml",
-				await readFile(".github/workflows/rescan-release-images.yml", "utf8"),
-			],
+			[".github/workflows/rescan-images.yml main", job(rescan, "main")],
+			[".github/workflows/rescan-images.yml release", job(rescan, "release")],
 		];
 		for (const [file, section] of evaluatorJobs) {
 			assert.match(
@@ -2730,7 +2723,7 @@ void describe("CI contract", () => {
 		);
 		// Syft 1.51.1 reads GHCR through its native registry authentication.
 		assert.match(
-			await readFile(".github/workflows/rescan-release-images.yml", "utf8"),
+			job(rescan, "release"),
 			/SYFT_REGISTRY_AUTH_AUTHORITY: ghcr\.io[\s\S]*SYFT_REGISTRY_AUTH_USERNAME:[\s\S]*SYFT_REGISTRY_AUTH_PASSWORD:/u,
 		);
 	});
@@ -2823,7 +2816,7 @@ void describe("CI contract", () => {
 			/run: node scripts\/scan-upstream-images\.ts reports\n/u,
 		);
 		assert.match(
-			await readFile(".github/workflows/rescan-main-images.yml", "utf8"),
+			job(await readFile(".github/workflows/rescan-images.yml", "utf8"), "main"),
 			/run: node scripts\/scan-upstream-images\.ts reports --report-only\n/u,
 		);
 		const detection = job(await readFile(".github/workflows/cicd.yml", "utf8"), "detect-changes");
@@ -3468,13 +3461,14 @@ void describe("CI contract", () => {
 	});
 
 	void test("rescans main's images weekly and reports drift to an issue, not a status", async () => {
-		const source = await readFile(".github/workflows/rescan-main-images.yml", "utf8");
-		// Weekly, matching the supported-release rescan: the remedy for drift is a rebuild of main,
+		const workflow = await readFile(".github/workflows/rescan-images.yml", "utf8");
+		const source = job(workflow, "main");
+		// Weekly, with the supported-release rescan: the remedy for drift is a rebuild of main,
 		// which the next merge performs anyway, so a nightly run would report the same finding six
 		// more times before anything could have changed.
-		assert.match(source, /^ {4}- cron: "\d+ \d+ \* \* 1"$/mu);
-		assert.match(source, /workflow_dispatch:/u);
-		assert.match(source, /group: rescan-main-images/u);
+		assert.match(workflow, /^ {4}- cron: "\d+ \d+ \* \* 1"$/mu);
+		assert.match(workflow, /workflow_dispatch:/u);
+		assert.match(workflow, /group: rescan-images/u);
 		// Writing an issue is the whole point; nothing else here needs a write.
 		assert.match(source, /issues: write/u);
 		assert.doesNotMatch(source, /contents: write|packages: write|id-token: write/u);
@@ -3541,12 +3535,13 @@ void describe("CI contract", () => {
 			}
 		}
 		// Everything that signs or publishes a scan result asserts the database is not stale.
-		for (const file of [
-			".github/workflows/release.yml",
-			".github/workflows/rescan-release-images.yml",
-			".github/workflows/rescan-main-images.yml",
-		]) {
-			const source = await readFile(file, "utf8");
+		const rescan = await readFile(".github/workflows/rescan-images.yml", "utf8");
+		const scanners: [string, string][] = [
+			[".github/workflows/release.yml", await readFile(".github/workflows/release.yml", "utf8")],
+			[".github/workflows/rescan-images.yml release", job(rescan, "release")],
+			[".github/workflows/rescan-images.yml main", job(rescan, "main")],
+		];
+		for (const [file, source] of scanners) {
 			assert.match(
 				source,
 				/uses: \.\/\.github\/actions\/download-trivy-db\n\s+with:\n\s+max-age-hours: "48"/u,
@@ -3998,7 +3993,7 @@ void describe("CI contract", () => {
 
 	void test("runs release evidence verification through tested TypeScript", async () => {
 		const release = await readFile(".github/workflows/release.yml", "utf8");
-		const rescan = await readFile(".github/workflows/rescan-release-images.yml", "utf8");
+		const rescan = job(await readFile(".github/workflows/rescan-images.yml", "utf8"), "release");
 		assert.match(release, /SOURCE_TAG: \$\{\{ github\.event\.workflow_run\.head_sha \}\}/u);
 		assert.match(release, /node scripts\/resolve-release-images\.ts "\$SOURCE_TAG"/u);
 		assert.doesNotMatch(job(release, "tag-images"), /imagetools/u);
@@ -4959,12 +4954,10 @@ void test("workflows do not comment on hard-coded issue numbers", async () => {
 });
 
 void test("supported-release failures use the shared tracking issue reporter", async () => {
-	const workflow = parseDocument(
-		await readFile(".github/workflows/rescan-release-images.yml", "utf8"),
-	);
+	const workflow = parseDocument(await readFile(".github/workflows/rescan-images.yml", "utf8"));
 	const notification = namedStep(
 		workflow,
-		["jobs", "rescan"],
+		["jobs", "release"],
 		"Notify vulnerability response tracking",
 	);
 	assert.equal(notification.get("if"), "failure()");
@@ -4973,8 +4966,8 @@ void test("supported-release failures use the shared tracking issue reporter", a
 		"node scripts/report-vulnerability-drift.ts reports --release-failure",
 	);
 	assert.equal(notification.getIn(["env", "GH_TOKEN"]), `\${{ secrets.GITHUB_TOKEN }}`);
-	assert.equal(workflow.getIn(["permissions", "issues"]), "write");
-	assert.equal(workflow.getIn(["concurrency", "group"]), "rescan-supported-release");
+	assert.equal(workflow.getIn(["jobs", "release", "permissions", "issues"]), "write");
+	assert.equal(workflow.getIn(["concurrency", "group"]), "rescan-images");
 	assert.equal(workflow.getIn(["concurrency", "cancel-in-progress"]), false);
 });
 

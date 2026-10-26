@@ -1,0 +1,128 @@
+name: Security / Rescan images
+
+on:
+  schedule:
+    - cron: "37 4 * * 1"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: rescan-images
+  cancel-in-progress: false
+
+jobs:
+  main:
+    name: Rescan main's images
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      issues: write
+      packages: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup-toolchain
+        with:
+          install: "none"
+
+      - uses: ./.github/actions/setup-release-security-tools
+        with:
+          install-syft: "true"
+
+      - name: Log in to Container Registry
+        uses: ./.github/actions/ghcr-login
+        with:
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: ./.github/actions/download-trivy-db
+        with:
+          max-age-hours: "48"
+          metadata-path: reports/trivy-db.json
+
+      - name: Scan the images built from main
+        env:
+          TRIVY_USERNAME: ${{ github.actor }}
+          TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/scan-main-images.ts reports
+
+      # The pinned upstream digests too, so the weekly picture is the release gate's subject set
+      # rather than half of it. Report-only for the same reason as the images above: a CVE
+      # published after the digest was pinned belongs to no commit here.
+      - name: Scan the pinned upstream images
+        run: node scripts/scan-upstream-images.ts reports --report-only
+
+      - name: Upload the vulnerability policy results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: main-image-rescan-${{ github.run_id }}
+          path: reports
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Route findings to the tracking issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/report-vulnerability-drift.ts reports
+
+  release:
+    name: Rescan the supported release
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      issues: write
+      packages: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-toolchain
+        with:
+          install: "none"
+      - uses: ./.github/actions/setup-release-security-tools
+        with:
+          install-syft: "true"
+      - name: Download latest supported release evidence
+        id: release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          tag=$(gh release view --repo "${{ github.repository }}" --json tagName --jq .tagName)
+          mkdir release-evidence
+          gh release download "$tag" --repo "${{ github.repository }}" --dir release-evidence
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+      - uses: ./.github/actions/download-trivy-db
+        with:
+          max-age-hours: "48"
+          metadata-path: reports/trivy-db.json
+      - name: Rescan immutable subjects
+        env:
+          TRIVY_USERNAME: ${{ github.actor }}
+          TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+          SYFT_REGISTRY_AUTH_AUTHORITY: ghcr.io
+          SYFT_REGISTRY_AUTH_USERNAME: ${{ github.actor }}
+          SYFT_REGISTRY_AUTH_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+        run: node scripts/rescan-release-images.ts release-evidence reports "$RELEASE_TAG"
+      - name: Upload diagnostic reports
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: supported-release-rescan-${{ github.run_id }}
+          path: reports
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Notify vulnerability response tracking
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/report-vulnerability-drift.ts reports --release-failure
