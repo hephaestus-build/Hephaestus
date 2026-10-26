@@ -1123,7 +1123,7 @@ await test(
 			assert.notEqual(result.status, 0, "an unpromoted host must not report success");
 			assert.match(result.stderr, /channels\/production\.json/u);
 			assert.match(result.stderr, /has not been promoted yet/u);
-			assert.match(result.stderr, /Run the Promote workflow/u);
+			assert.match(result.stderr, /Run the Release \/ Promote workflow/u);
 			// The whole point: the journal gets the sentence, not a Node stack.
 			assert.doesNotMatch(result.stderr, /^\s+at /mu);
 			assert.doesNotMatch(result.stderr, /OperatorActionRequiredError:/u);
@@ -1450,7 +1450,7 @@ await test(
 			const result = fixture.run({ cli: true, channel: "unpromoted" });
 			assert.notEqual(result.status, 0);
 			assert.match(result.stderr, /no channels\/unpromoted\.json on deploy-state/u);
-			assert.match(result.stderr, /Run the Promote workflow/u);
+			assert.match(result.stderr, /Run the Release \/ Promote workflow/u);
 			assert.equal(await readApplied(path.join(directory, "applied.json")), undefined);
 			assert.equal(await readlink(path.join(directory, "tooling")), fixture.bootstrap);
 			assert.match(

@@ -1,4 +1,4 @@
-name: Release Host Smoke
+name: Release / Host smoke
 
 # The one-host install of docs/admin/kubernetes.mdx § Install on one host (k3s) on a clean runner of
 # each supported architecture: the release's signed k3s-install.sh with its other k3s assets, as the

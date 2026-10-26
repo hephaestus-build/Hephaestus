@@ -1,4 +1,4 @@
-name: Seeded Release Upgrade
+name: Release / Seeded upgrade
 
 on:
   workflow_call:

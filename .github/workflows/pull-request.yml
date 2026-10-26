@@ -1,4 +1,4 @@
-name: "PR"
+name: Repo / Pull request policy
 
 on:
   pull_request_target: # zizmor: ignore[dangerous-triggers] No pull-request code is checked out or executed.

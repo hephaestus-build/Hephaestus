@@ -1,4 +1,4 @@
-name: Verify Changesets
+name: CI / Changesets
 
 on:
   workflow_call:

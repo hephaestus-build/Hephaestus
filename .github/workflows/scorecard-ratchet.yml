@@ -1,4 +1,4 @@
-name: Scorecard ratchet
+name: Security / Scorecard ratchet
 
 # Separate from scorecard.yml: OpenSSF allows the publishing job only allowlisted actions, and its
 # publishing is supported on the events that workflow already declares.

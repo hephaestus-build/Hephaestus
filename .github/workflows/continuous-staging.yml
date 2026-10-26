@@ -1,5 +1,5 @@
 # Promotes successful main builds through the environment-protected promotion workflow.
-name: Continuous staging
+name: Release / Continuous staging
 
 on:
   workflow_run: # zizmor: ignore[dangerous-triggers] Nothing from the run is checked out or executed.

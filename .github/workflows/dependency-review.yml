@@ -1,4 +1,4 @@
-name: Dependency review
+name: Security / Dependency review
 
 on:
   # The files the dependency graph reads. Without a change to one, the comparison is empty.

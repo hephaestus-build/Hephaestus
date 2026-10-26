@@ -12,7 +12,7 @@ It is not a security guarantee or a mutation-score gate.
 
 ## Run the suite
 
-The **Security mutation testing** workflow runs when a pull request changes an affected security
+The **Security / Mutation testing** workflow runs when a pull request changes an affected security
 area or the suite's build inputs. It also supports manual dispatch. Run the same analysis locally
 with JDK 21:
 

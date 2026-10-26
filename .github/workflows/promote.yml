@@ -1,6 +1,6 @@
 # Hosts trust this workflow's signing identity. Keep signing behind the environment gate;
 # making this workflow reusable would let callers share that identity.
-name: Promote
+name: Release / Promote
 run-name: Promote ${{ inputs.release || inputs.commit }} to ${{ inputs.environment }}
 
 on:

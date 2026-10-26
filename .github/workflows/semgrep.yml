@@ -1,4 +1,4 @@
-name: Semgrep
+name: Security / Semgrep
 
 on:
   pull_request:

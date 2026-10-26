@@ -1,4 +1,4 @@
-name: Warm Gradle caches
+name: Cache / Gradle
 
 # Main pushes reuse the merge group's packaged server and run no Gradle build, so this job is the
 # only producer of the Gradle state that server jobs restore. docs/contributor/ci-cd.mdx § Caches.

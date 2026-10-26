@@ -1,4 +1,4 @@
-name: CD / Docs
+name: Docs / Build and deploy
 
 on:
   push:

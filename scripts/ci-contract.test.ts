@@ -742,6 +742,37 @@ void describe("CI contract", () => {
 		assert.ok(taskClosure(tasks, ["ci:tooling"]).has("docs:build"));
 	});
 
+	void test("every workflow's display name is unique and starts with its area, so the Actions sidebar groups them", async () => {
+		const names = new Map<string, string>();
+		const upstreams = new Set<string>();
+		for (const [file, source] of await workflowSources()) {
+			const workflow = parseDocument(source);
+			const name = String(workflow.get("name"));
+			const previous = names.get(name);
+			assert.equal(previous, undefined, `${file} repeats the name of ${String(previous)}`);
+			names.set(name, file);
+			const triggers = workflow.getIn(["on", "workflow_run", "workflows"]);
+			if (isSeq(triggers)) {
+				for (const item of triggers.items) {
+					upstreams.add(String(isScalar(item) ? item.value : item));
+				}
+			}
+		}
+		// `workflow_run` matches a workflow by its display name, so a renamed upstream would stop
+		// its consumers without an error. A name that a consumer matches keeps its form.
+		for (const upstream of upstreams) {
+			assert.ok(
+				names.has(upstream),
+				`a workflow_run trigger names ${upstream}, which no workflow has`,
+			);
+		}
+		for (const [name, file] of names) {
+			if (!upstreams.has(name)) {
+				assert.match(name, /^(?:CI|Release|Security|Docs|Cache|Repo) \/ \S/u, file);
+			}
+		}
+	});
+
 	void test("every local gate runs in a workflow, and every CI gate is a local gate", async () => {
 		const tasks = await loadTasks();
 		const local = taskClosure(tasks, ["quality"]);
@@ -3527,7 +3558,7 @@ void describe("CI contract", () => {
 	void test("generates verified Gradle snapshots without giving pull request code write access", async () => {
 		const source = await readFile(".github/workflows/dependency-graph.yml", "utf8");
 		const workflow = parseDocument(source);
-		assert.equal(workflow.get("name"), "Gradle dependency graph");
+		assert.equal(workflow.get("name"), "Security / Gradle dependency graph");
 		assert.equal(workflow.getIn(["jobs", "generate", "permissions", "contents"]), "read");
 		assert.doesNotMatch(
 			source,
@@ -3556,7 +3587,10 @@ void describe("CI contract", () => {
 	void test("submits dependency snapshot data without executing the originating checkout", async () => {
 		const source = await readFile(".github/workflows/submit-dependency-graph.yml", "utf8");
 		const workflow = parseDocument(source);
-		assert.equal(workflow.getIn(["on", "workflow_run", "workflows", 0]), "Gradle dependency graph");
+		const upstream = parseDocument(
+			await readFile(".github/workflows/dependency-graph.yml", "utf8"),
+		);
+		assert.equal(workflow.getIn(["on", "workflow_run", "workflows", 0]), upstream.get("name"));
 		assert.equal(workflow.getIn(["on", "workflow_run", "types", 0]), "completed");
 		assert.equal(
 			workflow.getIn(["jobs", "submit", "if"]),
