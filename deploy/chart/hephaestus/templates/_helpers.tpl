@@ -236,6 +236,12 @@ fails every pod, so each role is owed the lock's digest. */}}
 
 {{/* The server and worker roles both reach the SCM. */}}
 {{- define "hephaestus.env.scm" -}}
+# JGit writes its own configuration (jgit/config and its lock) under XDG_CONFIG_HOME, which defaults to
+# $HOME/.config on the read-only root: a repository preparation then fails. /tmp is an emptyDir.
+- name: XDG_CONFIG_HOME
+  value: /tmp/.config
+- name: XDG_CACHE_HOME
+  value: /tmp/.cache
 - name: GH_APP_ID
   value: {{ .Values.config.github.appId | int | quote }}
 {{ include "hephaestus.secretEnv" (dict "root" . "env" "GH_APP_PRIVATE_KEY" "optional" true) }}
