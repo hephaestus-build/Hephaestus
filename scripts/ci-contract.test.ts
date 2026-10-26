@@ -3484,6 +3484,30 @@ void describe("CI contract", () => {
 				/--download-db-only/u,
 				`${file} must download the Trivy database through .github/actions/download-trivy-db`,
 			);
+			// trivy-action downloads from one mirror with no retry unless told not to; a 404 there
+			// failed a merge group's required Security job.
+			const jobs = parseDocument(source).get("jobs");
+			assert.ok(isMap(jobs));
+			for (const entry of jobs.items) {
+				const steps = isMap(entry.value) ? entry.value.get("steps") : undefined;
+				if (!isSeq(steps)) {
+					continue;
+				}
+				const uses = steps.items.map((item) => (isMap(item) ? String(item.get("uses")) : ""));
+				const download = uses.indexOf("./.github/actions/download-trivy-db");
+				for (const [index, used] of uses.entries()) {
+					if (!used.startsWith("aquasecurity/trivy-action@")) {
+						continue;
+					}
+					const trivy: unknown = steps.items[index];
+					assert.ok(isMap(trivy));
+					const where = `${file} ${String(entry.key)} step ${index}`;
+					assert.ok(download !== -1 && download < index, `${where} must follow download-trivy-db`);
+					assert.equal(trivy.getIn(["env", "TRIVY_SKIP_DB_UPDATE"]), "true", where);
+					assert.equal(trivy.getIn(["with", "cache"]), "false", where);
+					assert.equal(trivy.getIn(["with", "skip-setup-trivy"]), true, where);
+				}
+			}
 		}
 		// Everything that signs or publishes a scan result asserts the database is not stale.
 		for (const file of [
