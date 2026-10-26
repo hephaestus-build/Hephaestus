@@ -361,6 +361,9 @@ const layersFor = (name: (typeof profiles)[number]) => {
 const bundled = (name: (typeof profiles)[number]) => name !== "external";
 const runsReviews = (name: (typeof profiles)[number]) =>
 	name === "small" || name === "small-16gib" || name === "external";
+/** A profile as an operator installs it with reviews: CI turns on the worker of the dev profile this way. */
+const withWorker = (name: (typeof profiles)[number]) =>
+	runsReviews(name) ? layersFor(name) : [...layersFor(name), workerLayer];
 /** The worker and what it writes into the sandbox namespace. */
 const workerOwned = (resource: Resource) =>
 	["worker", "sandbox"].includes(String(componentOf(resource)));
@@ -1448,9 +1451,10 @@ await test("the server requires the worker registration token exactly when a wor
 await test("practice reviews run exactly when a worker runs, with its Heph turn capacity", () => {
 	// Without a worker, a submitted review job would wait for a worker that never comes.
 	assert.equal(envValue(workload(rendered(layersFor("dev")), "server"), "AGENT_ENABLED"), "false");
-	// The switch the CI clusters did not exercise: a worker without it claims no review.
-	for (const name of profiles.filter((candidate) => runsReviews(candidate))) {
-		const resources = rendered(layersFor(name));
+	// The switch the CI clusters did not exercise: a worker without it claims no review. Every shipped
+	// profile, also the ones whose worker the operator turns on.
+	for (const name of profiles) {
+		const resources = rendered(withWorker(name));
 		for (const role of ["server", "worker"]) {
 			assert.equal(envValue(workload(resources, role), "AGENT_ENABLED"), "true", `${name} ${role}`);
 		}
@@ -1799,11 +1803,12 @@ await test("the 16 GiB profile runs a review and a Heph turn, and an upgrade, wi
 	);
 });
 
-await test("every role that runs git writes the JGit configuration to an emptyDir", () => {
+await test("every role that runs git writes the JGit configuration to an emptyDir, in every profile", () => {
 	// The root filesystem is read-only, so JGit's default $HOME/.config cannot hold its config lock.
-	const resources = rendered(layersFor("small"));
-	for (const role of ["server", "worker"]) {
-		const pod = workload(resources, role);
+	for (const [name, role] of profiles.flatMap((shipped) =>
+		(["server", "worker"] as const).map((candidate) => [shipped, candidate] as const),
+	)) {
+		const pod = workload(rendered(withWorker(name)), role);
 		const home = String(envValue(pod, "XDG_CONFIG_HOME"));
 		const emptyDirs = new Set(
 			list(get(podSpec(pod), "volumes"))
@@ -1815,7 +1820,7 @@ await test("every role that runs git writes the JGit configuration to an emptyDi
 		);
 		assert.ok(
 			writable.some((mount) => home.startsWith(`${String(get(mount, "mountPath"))}/`)),
-			`${role}: XDG_CONFIG_HOME ${home} is not on a writable emptyDir`,
+			`${name} ${role}: XDG_CONFIG_HOME ${home} is not on a writable emptyDir`,
 		);
 	}
 });
@@ -1823,16 +1828,18 @@ await test("every role that runs git writes the JGit configuration to an emptyDi
 const podTemplate = (layers: readonly Layer[], component: string) =>
 	get(workload(rendered(layers), component), "spec", "template");
 
-await test("a release that changes neither image restarts neither PostgreSQL nor NATS", () => {
+await test("a release that changes neither image restarts neither PostgreSQL nor NATS, in every profile", () => {
 	// A Pod template that names the release would roll both on every upgrade. The application roles
 	// report the release they run, so their Pods carry it on purpose.
 	const next = { release: { version: "v1.2.4", commit: "b".repeat(40) } };
-	for (const component of ["postgresql", "nats"]) {
-		assert.deepEqual(
-			podTemplate([...layersFor("small"), next], component),
-			podTemplate(layersFor("small"), component),
-			component,
-		);
+	for (const name of profiles.filter((candidate) => bundled(candidate))) {
+		for (const component of ["postgresql", "nats"]) {
+			assert.deepEqual(
+				podTemplate([...withWorker(name), next], component),
+				podTemplate(withWorker(name), component),
+				`${name} ${component}`,
+			);
+		}
 	}
 });
 
