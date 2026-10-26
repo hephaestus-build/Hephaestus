@@ -263,7 +263,7 @@ class PracticeStandingReplacementIntegrationTest extends AbstractResultAdmission
     @ParameterizedTest
     @EnumSource(
             value = ResultEndReason.class,
-            names = {"WORK_CHANGED", "REMOVED", "REPAIRED"})
+            names = {"REMOVED", "REPAIRED"})
     void shouldNotRestoreHistoricalAssessmentAcrossARealRetirement(ResultEndReason reason) {
         var earlier = historicalLiveAssessment();
         assertThat(store.endCurrent(
@@ -281,6 +281,48 @@ class PracticeStandingReplacementIntegrationTest extends AbstractResultAdmission
         assertThat(practice.evidence())
                 .extracting(view -> view.result().getId())
                 .doesNotContain(earlier.getId());
+    }
+
+    @Test
+    void shouldKeepTheHistoricalAssessmentAcrossAWorkChange() {
+        var earlier = historicalLiveAssessment();
+        assertThat(store.endCurrent(
+                        scenario.workspace().getId(),
+                        scenario.item().getId(),
+                        ResultEndReason.WORK_CHANGED,
+                        Instant.now().minusSeconds(5)))
+                .isEqualTo(1);
+        admit(ResultOutcome.DOES_NOT_APPLY, Objects.requireNonNull(earlier.getItemVersion()));
+
+        var practice = snapshot();
+        assertThat(practice.dto().standing()).isEqualTo(PracticeStanding.STRENGTH);
+        assertThat(practice.dto().basis()).isEqualTo(StandingBasis.EARLIER_REVIEWS);
+        assertThat(practice.evidence())
+                .extracting(view -> view.result().getId())
+                .containsExactly(earlier.getId());
+    }
+
+    @Test
+    void shouldKeepTheLiveStandingAfterAWorkChangeThatNoReviewFollowed() {
+        var live = asLive(admit(ResultOutcome.NOT_MET, itemVersion));
+        var before = snapshot();
+        assertThat(before.liveRuns()).extracting(view -> view.result().getId()).containsExactly(live.getId());
+
+        assertThat(store.endCurrent(
+                        scenario.workspace().getId(),
+                        scenario.item().getId(),
+                        ResultEndReason.WORK_CHANGED,
+                        Instant.now()))
+                .isEqualTo(1);
+        assertThat(results.findById(live.getId()).orElseThrow().getEndReason()).isEqualTo(ResultEndReason.WORK_CHANGED);
+
+        var after = snapshot();
+        assertThat(after.dto().standing()).isEqualTo(before.dto().standing());
+        assertThat(after.dto().basis()).isEqualTo(StandingBasis.CURRENT_REVIEWS);
+        assertThat(after.liveRuns()).extracting(view -> view.result().getId()).containsExactly(live.getId());
+        // An ended result proves nothing current: it is not quoted, and Heph does not read it.
+        assertThat(after.dto().toWorkOn()).isEmpty();
+        assertThat(processingSnapshot().liveRuns()).isEmpty();
     }
 
     private ReviewIntegrationData.Scenario monitoredPullRequest(ReviewIntegrationData.Scenario seed) {
@@ -364,6 +406,18 @@ class PracticeStandingReplacementIntegrationTest extends AbstractResultAdmission
         });
         assertThat(snapshot().dto().basis()).isEqualTo(StandingBasis.EARLIER_REVIEWS);
         return results.findById(earlier.getId()).orElseThrow();
+    }
+
+    // Admission in this test records a requested review; a live review comes from an event.
+    private Result asLive(Result result) {
+        new TransactionTemplate(transactions).executeWithoutResult(status -> {
+            jdbc.execute("SET LOCAL session_replication_role=replica");
+            jdbc.update(
+                    "UPDATE review SET origin='EVENT',requested_by_id=NULL WHERE workspace_id=? AND id=?",
+                    scenario.workspace().getId(),
+                    result.getReviewId());
+        });
+        return results.findById(result.getId()).orElseThrow();
     }
 
     private Result admit(ResultOutcome outcome, String itemVersion) {

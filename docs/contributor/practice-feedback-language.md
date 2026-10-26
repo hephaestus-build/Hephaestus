@@ -222,7 +222,7 @@ Removing a usefulness answer does not remove the developer's disagreement.
 | **Hephaestus** | The application. | agent |
 | **Practice profile** | The developer's private page for practice standing, changes and feedback. | practice dashboard, standings page |
 | **Practice page** | The page for one practice within the developer's Practice profile. |  |
-| **Standing** | Needs attention, Mixed feedback or Going well, read from the newest eligible decided work. | score, grade, rating |
+| **Standing** | Needs attention, Mixed feedback or Going well, read from the newest eligible decided work. A change to the work keeps its last decision until a newer review decides again. | score, grade, rating |
 | **No standing yet** | What a developer surface shows for a practice or group that no review has given a standing in the window. The practice did not apply to the work, or no review decided it. It is not a fourth standing. **Not reviewed** (above, under Observations) is an item/practice pair, not this label. | Not reviewed, Nothing to report yet, not applicable |
 | **Early read** | A standing based on fewer than three decided pieces of work. | preliminary score, provisional grade |
 | **Practices across the workspace** | The page that counts, for each practice, the developers with current observations and the outcomes of those observations, without naming a developer. | course comparison, course figures, cohort view, benchmark, leaderboard |
