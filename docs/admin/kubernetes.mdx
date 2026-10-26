@@ -736,7 +736,7 @@ These values set the server's settings of the same meaning ([Production setup](.
 | `config.monitoring.syncCron` | `MONITORING_SYNC_CRON`, a Spring cron expression with six fields | `0 0 * * * *` |
 | `config.monitoring.cooldownMinutes` | `MONITORING_SYNC_COOLDOWN_IN_MINUTES` | `60` |
 
-`webapp.securityContact` sets the webapp's `SECURITY_CONTACT`, the first contact in `/.well-known/security.txt` ([Production setup](./production-setup)). Empty lists only the project's contacts.
+`webapp.securityContact` sets the webapp's `SECURITY_CONTACT`: with a value, `/.well-known/security.txt` names it as the contact of this deployment ([Production setup](./production-setup)). Empty serves no file.
 
 ## Integration values
 

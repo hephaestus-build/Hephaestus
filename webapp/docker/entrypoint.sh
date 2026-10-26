@@ -12,8 +12,6 @@ readonly ENV_TS="/app/src/environment/index.ts"
 # test pins them together — keep both in sync if you widen the policy.
 readonly LEGAL_PROFILE_PATTERN='^[a-z0-9][a-z0-9_-]{0,31}$'
 
-readonly SECURITY_POLICY="https://github.com/hephaestus-build/Hephaestus/blob/main/SECURITY.md"
-
 log() { echo "[$(date +'%Y-%m-%dT%H:%M:%S%z')] $*" >&2; }
 
 escape_for_js() {
@@ -38,26 +36,27 @@ extract_env_vars() {
   grep -oE '[A-Z_]+\?:' "$ENV_TS" | sed 's/\?:$//' | grep -v '^__'
 }
 
-# RFC 9116 § 2.5.2: a reader distrusts the file on a host that Canonical does not list, and a web
-# Canonical is https. Workspace addresses serve it on many hosts, so only a single https origin gets
-# one; Canonical is optional. The deployment's contact comes first, then the project's.
+# The file names the operator of this deployment, so without SECURITY_CONTACT there is none: a report
+# about an installation goes to whoever runs it. RFC 9116 § 2.5.2: a reader distrusts the file on a
+# host that Canonical does not list, and a web Canonical is https. Workspace addresses serve it on
+# many hosts, so only a single https origin gets one; Canonical is optional.
 write_security_txt() {
-  local contact="${SECURITY_CONTACT:-}" expires
-  # RFC 9116 § 2.5.5 recommends an expiry less than a year away; each start renews it.
+  local file="${RUNTIME_DIR}/.well-known/security.txt" expires
+  if [[ -z "${SECURITY_CONTACT:-}" ]]; then
+    rm -f "$file"
+    return
+  fi
+  # RFC 9116 § 2.5.5 recommends an expiry less than a year away. Each start renews it, and every
+  # release restarts the webapp.
   TZ=UTC printf -v expires '%(%Y-%m-%dT%H:%M:%SZ)T' "$(( $(printf '%(%s)T' -1) + 364 * 86400 ))"
   {
-    echo "# Security policy of the Hephaestus software: ${SECURITY_POLICY}"
-    if [[ -n "$contact" ]]; then echo "Contact: ${contact}"; fi
-    echo "Contact: https://github.com/hephaestus-build/Hephaestus/security/advisories/new"
-    echo "Contact: mailto:security@hephaestus.build"
-    echo "Policy: ${SECURITY_POLICY}"
+    echo "Contact: ${SECURITY_CONTACT}"
     if [[ "${HEPHAESTUS_WORKSPACE_SUBDOMAINS_ENABLED:-false}" == false \
       && "${APPLICATION_CLIENT_URL:-}" =~ ^https://[^[:space:]/]+/?$ ]]; then
       echo "Canonical: ${APPLICATION_CLIENT_URL%/}/.well-known/security.txt"
     fi
-    echo "Preferred-Languages: en"
     echo "Expires: ${expires}"
-  } > "${RUNTIME_DIR}/.well-known/security.txt"
+  } > "$file"
 }
 
 main() {
