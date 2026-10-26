@@ -5207,3 +5207,124 @@ void test("every job that runs Helm installs the pinned one first, and the rende
 	assert.match(pathFilter(detection, "tooling"), /- 'deploy\/chart\/\*\*'/u);
 	assert.match(pathFilter(detection, "quality-config"), /- '\.github\/actions\/setup-helm\/\*\*'/u);
 });
+
+void test("a cluster leg is named for its distribution, minor and architecture, and its pinned image has that minor", async () => {
+	const workflow = parseDocument(await readFile(".github/workflows/ci-kubernetes.yml", "utf8"));
+	const name = (leg: string) => String(workflow.getIn(["jobs", leg, "name"]));
+	// A digest or patch version in a name starts a new check history at each image update.
+	const jobs = workflow.get("jobs");
+	assert.ok(isMap(jobs));
+	for (const entry of jobs.items) {
+		assert.doesNotMatch(name(String(entry.key)), /sha256|@|\d+\.\d+\.\d+/u);
+	}
+	assert.equal(name("schema"), "Chart");
+	assert.match(name("k3d"), /^k3s \$\{\{ matrix\.minor \}\} \$\{\{ matrix\.arch \}\}$/u);
+	const matrix = workflow.getIn(["jobs", "k3d", "strategy", "matrix"]);
+	assert.ok(isMap(matrix));
+	// GitHub applies `include` after `exclude`, so an include could add an excluded minor back.
+	assert.equal(matrix.get("include"), undefined);
+	const minors = matrix.get("minor");
+	assert.ok(isSeq(minors));
+	const images: unknown = JSON.parse(String(workflow.getIn(["jobs", "k3d", "env", "K3S_IMAGES"])));
+	assert.ok(typeof images === "object" && images !== null);
+	assert.deepEqual(Object.keys(images), minors.items.map(String));
+	for (const [minor, image] of Object.entries(images)) {
+		assert.match(minor, /^1\.\d+$/u);
+		assert.match(
+			String(image),
+			new RegExp(
+				`^docker\\.io/rancher/k3s:v${minor.replace(".", String.raw`\.`)}\\.\\d+-k3s\\d+@sha256:[a-f0-9]{64}$`,
+				"u",
+			),
+		);
+	}
+	const kind = /^kind (?<minor>1\.\d+) Calico$/u.exec(name("calico"));
+	assert.ok(kind?.groups?.minor !== undefined);
+	assert.match(
+		String(workflow.getIn(["jobs", "calico", "env", "NODE_IMAGE"])),
+		new RegExp(
+			`^docker\\.io/kindest/node:v${kind.groups.minor.replace(".", String.raw`\.`)}\\.\\d+@sha256:[a-f0-9]{64}$`,
+			"u",
+		),
+	);
+});
+
+/** Evaluates a `ci-kubernetes.yml` expression for one leg and one value of the `queue` input. */
+function evaluateLeg(source: unknown, queue: boolean, leg: Record<string, string> = {}): string {
+	const parsed = new Parser(
+		new Lexer(String(source).replaceAll(/^\$\{\{\s*|\s*\}\}$/gu, "")).lex().tokens,
+		["inputs", "matrix"],
+		[],
+	).parse();
+	const context: unknown = JSON.parse(
+		JSON.stringify({ inputs: { queue }, matrix: leg }),
+		data.reviver,
+	);
+	assert.ok(context instanceof data.Dictionary);
+	return new Evaluator(parsed, context).evaluate().coerceString();
+}
+
+void test("a pull request runs the chart and the latest k3s on amd64; the queue adds the floor on both architectures, kind and the drill", async () => {
+	const kubernetes = parseDocument(await readFile(".github/workflows/ci-kubernetes.yml", "utf8"));
+	const cicd = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
+	const queue = String(cicd.getIn(["jobs", "Kubernetes", "with", "queue"]));
+	assert.doesNotMatch(queue, /pull_request/u, "a pull request must not run the queue's legs");
+	for (const event of ["merge_group", "push", "workflow_dispatch"]) {
+		assert.match(queue, new RegExp(`github\\.event_name == '${event}'`, "u"));
+	}
+
+	// The matrix GitHub expands: every minor and architecture, less each exclude that matches.
+	const matrix = kubernetes.getIn(["jobs", "k3d", "strategy", "matrix"]);
+	assert.ok(isMap(matrix));
+	const minors = matrix.get("minor");
+	const arches = matrix.get("arch");
+	const exclude = matrix.get("exclude");
+	assert.ok(isSeq(minors) && isSeq(arches) && isSeq(exclude));
+	const steps = kubernetes.getIn(["jobs", "k3d", "steps"]);
+	assert.ok(isSeq(steps));
+	const drill = steps.items.find(
+		(item) => isMap(item) && item.get("name") === "Back up, then restore to a point in time",
+	);
+	assert.ok(isMap(drill));
+	const legs = (tier: boolean) =>
+		minors.items.flatMap((minor) =>
+			arches.items
+				.map((arch) => ({ minor: String(minor), arch: String(arch) }))
+				.filter(
+					(leg) =>
+						!exclude.items.some(
+							(entry) =>
+								isMap(entry) &&
+								entry.items.every(
+									(pair) =>
+										// An exclude value is a literal unless it is a `${{ }}` expression.
+										(String(pair.value).startsWith("${{")
+											? evaluateLeg(pair.value, tier)
+											: String(pair.value)) ===
+										(String(pair.key) === "minor" ? leg.minor : leg.arch),
+								),
+						),
+				)
+				.map(
+					(leg) =>
+						`${leg.minor} ${leg.arch}${evaluateLeg(drill.get("if"), tier, leg) === "true" ? " drill" : ""}`,
+				),
+		);
+	assert.deepEqual(legs(false), ["1.37 amd64"]);
+	assert.deepEqual(legs(true), ["1.35 amd64", "1.35 arm64", "1.37 amd64 drill"]);
+	assert.equal(evaluateLeg(kubernetes.getIn(["jobs", "calico", "if"]), false), "false");
+	assert.equal(evaluateLeg(kubernetes.getIn(["jobs", "calico", "if"]), true), "true");
+
+	// kubeconform validates the render on the lowest and the latest minor of the legs.
+	const schemaSteps = kubernetes.getIn(["jobs", "schema", "steps"]);
+	assert.ok(isSeq(schemaSteps));
+	const lintStep = schemaSteps.items.find(
+		(item) => isMap(item) && String(item.get("name")).startsWith("Lint the chart"),
+	);
+	assert.ok(isMap(lintStep));
+	const versions = minors.items.map((minor) => `${String(minor)}.0`);
+	assert.match(
+		String(lintStep.get("run")),
+		new RegExp(`for version in ${versions.join(" ").replaceAll(".", String.raw`\.`)}; do`, "u"),
+	);
+});

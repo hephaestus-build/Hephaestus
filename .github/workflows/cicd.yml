@@ -1068,8 +1068,9 @@ jobs:
       contents: read
     with:
       commit: ${{ github.event.pull_request.head.sha || github.sha }}
-      # The arm64 clusters run on main only, which has the arm64 images of its merge group.
-      arm64: ${{ github.event_name == 'push' && contains(needs.detect-changes.outputs.platforms, 'linux/arm64') }}
+      # A pull request runs the chart and the latest k3s on amd64; the floor on both architectures,
+      # kind and the drill wait for the merge queue, which tests the commit that main receives.
+      queue: ${{ github.event_name == 'merge_group' || github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
 
   # Validate the built images before release; signatures and attestations are added at publication.
   # Every release candidate needs evidence for its own tree, including a merge group's aggregate.
