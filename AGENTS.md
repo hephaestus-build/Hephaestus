@@ -96,10 +96,8 @@ State which entries applied:
   See `webapp/AGENTS.md` § Which admin console a component belongs to.
 - **UI states.** Every component ships stories for its empty, loading, and error states.
   The loading rules in `webapp/DESIGN.md` decide skeleton versus spinner.
-- **Docs by audience.** `docs/user/` describes the shipped product in its own voice.
-  It has no repository tooling or source paths.
-  `docs/admin/` is for operators.
-  `docs/contributor/` is for engineers.
+- **Docs by audience.** Put each fact in the guide of the reader who acts on it.
+  `docs/contributor/documentation-guide.md` defines the three guides, their page types, and their templates.
   New vocabulary goes in the two glossaries.
 - **Release note.** A change to shipped code ships a changeset in the operator's or user's voice —
   `.changeset/README.md`.

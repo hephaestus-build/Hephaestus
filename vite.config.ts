@@ -121,7 +121,7 @@ const extensionGates = [
 	"gate:stories",
 ];
 const agentGates = ["gate:agents", "gate:agent-tests"];
-const docsGates = ["gate:docs", "gate:diagrams", "gate:docs-tokens"];
+const docsGates = ["gate:docs", "gate:diagrams", "gate:docs-tokens", "gate:docs-pages"];
 const loadGates = ["gate:load-format"];
 const checkTasks = [
 	...policyGates,
@@ -377,6 +377,9 @@ export default defineConfig({
 				docsLintInputs,
 			),
 			"gate:diagrams": cached("node scripts/check-mermaid-diagrams.ts"),
+			"gate:docs-pages": cached(
+				"node scripts/check-docs-pages.ts && node --test scripts/check-docs-pages.test.ts",
+			),
 			"gate:docs": group(["gate:docs-format", "gate:docs-lint"]),
 			"docs:lint": group(["gate:docs-lint"]),
 			"docs:dev": run("vp run --filter docs start"),
