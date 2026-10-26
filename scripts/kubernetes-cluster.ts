@@ -5,7 +5,9 @@
  *   prepare  namespaces, Secrets, certificates and the operator's values for the images in a file;
  *            a second run keeps every value. --gateway routes the release through k3s's Traefik
  *   gateway  Traefik's Gateway provider and the Gateway `cluster`, on a k3d cluster that publishes 443
- *   install  `helm upgrade --install` with the dev profile and the prepared values, until ready
+ *   install  `helm upgrade --install` with the dev profile, or each --profile in order, and the
+ *            prepared values, until ready
+ *   upgrade  install, and check that PostgreSQL and NATS kept their Pods
  *   verify   every workload ready, and each worker's isolation probe passed
  *   request  one HTTPS request to the webapp and the API through that Gateway
  *   backup-drill  pgBackRest to a throwaway S3 server, then a point-in-time restore
@@ -662,7 +664,11 @@ export async function prepare(options: PrepareOptions): Promise<{ rotated: boole
 	};
 }
 
-export async function install(work: string, extra: readonly string[] = []): Promise<void> {
+export async function install(
+	work: string,
+	extra: readonly string[] = [],
+	profiles: readonly string[] = ["dev"],
+): Promise<void> {
 	await run("helm", [
 		"upgrade",
 		"--install",
@@ -670,8 +676,7 @@ export async function install(work: string, extra: readonly string[] = []): Prom
 		CHART,
 		"--namespace",
 		NAMESPACE,
-		"--values",
-		path.join(CHART, "profiles", "dev.yaml"),
+		...profiles.flatMap((profile) => ["--values", path.join(CHART, "profiles", `${profile}.yaml`)]),
 		"--values",
 		path.join(work, "values.yaml"),
 		...extra,
@@ -682,6 +687,55 @@ export async function install(work: string, extra: readonly string[] = []): Prom
 		"--timeout",
 		"20m",
 	]);
+}
+
+const STATEFUL = new Set(["postgresql", "nats"]);
+
+/** The UID of each running PostgreSQL and NATS Pod, by Pod name, from `kubectl get pods -o json`. */
+export function statefulPods(listed: unknown): Map<string, string> {
+	const pods = asArray(asRecord(listed, "Pod list").items, "Pods")
+		.map((pod) => asRecord(asRecord(pod, "Pod").metadata, "Pod metadata"))
+		.filter(
+			(metadata) =>
+				metadata.deletionTimestamp === undefined &&
+				isRecord(metadata.labels) &&
+				STATEFUL.has(String(metadata.labels["app.kubernetes.io/component"])),
+		);
+	return new Map(
+		pods.map((metadata) => [
+			asString(metadata.name, "Pod name"),
+			asString(metadata.uid, "Pod UID"),
+		]),
+	);
+}
+
+/** The Pods of `before` that `after` replaced or lost. */
+export function restartedPods(
+	before: ReadonlyMap<string, string>,
+	after: ReadonlyMap<string, string>,
+): string[] {
+	return [...before].filter(([name, uid]) => after.get(name) !== uid).map(([name]) => name);
+}
+
+async function listStatefulPods(): Promise<Map<string, string>> {
+	return statefulPods(parseJson(await kubectl(["-n", NAMESPACE, "get", "pods", "-o", "json"])));
+}
+
+/**
+ * Runs an upgrade and fails if it restarted PostgreSQL or NATS. A Pod template that changes on every
+ * release, such as a version label, would cut the database and the broker on each upgrade.
+ */
+export async function keepsStatefulPods(upgrade: () => Promise<void>): Promise<void> {
+	const before = await listStatefulPods();
+	if (before.size === 0) {
+		throw new Error("no PostgreSQL or NATS Pod runs before the upgrade");
+	}
+	await upgrade();
+	const restarted = restartedPods(before, await listStatefulPods());
+	if (restarted.length > 0) {
+		throw new Error(`the upgrade restarted ${restarted.join(", ")}`);
+	}
+	process.stdout.write(`the upgrade kept ${[...before.keys()].join(", ")}\n`);
 }
 
 /** Every workload ready and each worker's isolation probe passed; the number of those workers. */
@@ -1340,7 +1394,7 @@ async function reviewsOn(): Promise<void> {
  * The one-host install as docs/admin/kubernetes.mdx § Install on one host (k3s) runs it: the
  * release's k3s-install.sh, with a local CA in place of Let's Encrypt, and without the DNS and
  * clock checks that a runner cannot pass. A runner of 16 GiB installs with the small-16gib profile. Then the checks around it, a second run that must change
- * nothing, and an upgrade that rolls every role.
+ * nothing, and an upgrade that rolls every role except PostgreSQL and NATS.
  */
 export async function releaseSmoke(options: SmokeOptions): Promise<void> {
 	await mkdir(options.work, { recursive: true, mode: 0o700 });
@@ -1407,22 +1461,24 @@ export async function releaseSmoke(options: SmokeOptions): Promise<void> {
 	await verify();
 	process.stdout.write("a second run of k3s-install.sh kept the Secret and every workload\n");
 
-	// An upgrade that rolls every role, with a new migration Job: new workers prove the cluster with
-	// the isolation probe before an old worker drains.
-	await run("helm", [
-		"upgrade",
-		ONE_HOST_RELEASE,
-		path.join(options.assets, `chart-${version}`, "hephaestus"),
-		"--namespace",
-		NAMESPACE,
-		"--reuse-values",
-		"--set",
-		`release.version=${options.release}-smoke`,
-		"--wait=watcher",
-		"--wait-for-jobs",
-		"--timeout",
-		"20m",
-	]);
+	// An upgrade that rolls every role but PostgreSQL and NATS, with a new migration Job: new workers
+	// prove the cluster with the isolation probe before an old worker drains.
+	await keepsStatefulPods(async () =>
+		run("helm", [
+			"upgrade",
+			ONE_HOST_RELEASE,
+			path.join(options.assets, `chart-${version}`, "hephaestus"),
+			"--namespace",
+			NAMESPACE,
+			"--reuse-values",
+			"--set",
+			`release.version=${options.release}-smoke`,
+			"--wait=watcher",
+			"--wait-for-jobs",
+			"--timeout",
+			"20m",
+		]),
+	);
 	await verify();
 	await reviewsOn();
 	await gatewayRequests(options.work, nodeAddress, gatewayTls);
@@ -2069,6 +2125,7 @@ if (import.meta.main) {
 			"pod-cidr": { type: "string" },
 			gateway: { type: "boolean", default: false },
 			set: { type: "string", multiple: true, default: [] },
+			profile: { type: "string", multiple: true, default: ["dev"] },
 			assets: { type: "string" },
 			lock: { type: "string" },
 			release: { type: "string" },
@@ -2098,11 +2155,11 @@ if (import.meta.main) {
 			});
 			break;
 		}
-		case "install": {
-			await install(
-				work,
-				values.set.flatMap((setting) => ["--set", setting]),
-			);
+		case "install":
+		case "upgrade": {
+			const settings = values.set.flatMap((setting) => ["--set", setting]);
+			const upgrade = async () => install(work, settings, values.profile);
+			await (command === "upgrade" ? keepsStatefulPods(upgrade) : upgrade());
 			break;
 		}
 		case "verify": {
@@ -2163,7 +2220,7 @@ if (import.meta.main) {
 		}
 		default: {
 			throw new Error(
-				"usage: kubernetes-cluster <prepare|gateway|install|verify|request|backup-drill|render|dev|down|reset|release-smoke> [--work dir]",
+				"usage: kubernetes-cluster <prepare|gateway|install|upgrade|verify|request|backup-drill|render|dev|down|reset|release-smoke> [--work dir]",
 			);
 		}
 	}

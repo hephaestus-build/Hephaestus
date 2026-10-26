@@ -1,7 +1,7 @@
 name: Kubernetes
 
-# The chart on real clusters, with this run's images: an install, an upgrade that rolls every role,
-# and each worker's isolation probe. docs/admin/kubernetes.mdx § Supported clusters states what these
+# The chart on real clusters, with this run's images: an install, an upgrade that rolls every role
+# but PostgreSQL and NATS, and each worker's isolation probe. docs/admin/kubernetes.mdx § Supported clusters states what these
 # jobs show. They share scripts/kubernetes-cluster.ts with `vp run dev:kubernetes`.
 
 on:
@@ -73,6 +73,9 @@ jobs:
       K3S_IMAGES: >-
         {"1.35": "docker.io/rancher/k3s:v1.35.9-k3s1@sha256:ec9868c6a38d4e8c1869832fb5fd1eb8473c39794a0b44d2b952e7ba911951bc",
         "1.37": "docker.io/rancher/k3s:v1.37.1-k3s1@sha256:ca7f37d993d82ef0dcdcfecb2e0e2618ea541dbaffc620c8cedebe01a82acd0d"}
+      # The lowest minor on amd64 installs the profile of a 16 GiB host, which a runner is, so a
+      # shipped profile that cannot start fails here. The other legs install the dev profile.
+      PROFILES: ${{ matrix.minor == '1.35' && matrix.arch == 'amd64' && '--profile small --profile small-16gib' || '--profile dev' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -104,12 +107,14 @@ jobs:
           # The release serves through the Gateway of k3s's Traefik, as in `vp run dev:kubernetes`.
           node scripts/kubernetes-cluster.ts prepare --work "$work" --images release-images.tsv --commit "$COMMIT" --gateway
           node scripts/kubernetes-cluster.ts gateway --work "$work"
-          node scripts/kubernetes-cluster.ts install --work "$work"
+          # shellcheck disable=SC2086 # PROFILES is a list of flags.
+          node scripts/kubernetes-cluster.ts install --work "$work" $PROFILES
           node scripts/kubernetes-cluster.ts verify
           # A second prepare keeps the Secrets that the database started with, as a second dev run does.
           node scripts/kubernetes-cluster.ts prepare --work "$work" --images release-images.tsv --commit "$COMMIT" --gateway
-          # A changed release identity rolls every role: new workers prove the cluster before an old one drains.
-          node scripts/kubernetes-cluster.ts install --work "$work" --set "release.version=v0.0.1-cluster"
+          # A changed release identity rolls every role but PostgreSQL and NATS, whose Pods must stay.
+          # shellcheck disable=SC2086
+          node scripts/kubernetes-cluster.ts upgrade --work "$work" $PROFILES --set "release.version=v0.0.1-cluster"
           node scripts/kubernetes-cluster.ts verify
           node scripts/kubernetes-cluster.ts request --work "$work"
       # k3s gives Pods 10.42.0.0/16, where the drill's S3 server runs.
@@ -194,7 +199,7 @@ jobs:
           node scripts/kubernetes-cluster.ts verify
           node scripts/kubernetes-cluster.ts prepare --work "$work" --images release-images.tsv --commit "$COMMIT" \
             --external-postgresql-cidr "$POD_CIDR"
-          node scripts/kubernetes-cluster.ts install --work "$work" --set "release.version=v0.0.1-cluster"
+          node scripts/kubernetes-cluster.ts upgrade --work "$work" --set "release.version=v0.0.1-cluster"
           node scripts/kubernetes-cluster.ts verify
       - name: Record the cluster state
         if: ${{ failure() }}
