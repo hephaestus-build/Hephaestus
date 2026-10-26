@@ -1,4 +1,4 @@
 ---
 ---
 
-Removes a webapp scaffold file that the build never read. No user or operator effect.
+No release note: the removed webapp scaffold file was never read by the build.
