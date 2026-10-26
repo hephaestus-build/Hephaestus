@@ -4,6 +4,8 @@ description: Understand how workspaces separate repositories, members, practices
 page_type: feature
 ---
 
+import Screenshot from "@site/src/components/Screenshot";
+
 Use this guide to switch workspaces or fix missing workspace content.
 A workspace holds one team’s repositories, members, practices, integrations, and settings.
 You can belong to several workspaces on one instance.
@@ -107,12 +109,19 @@ If source-managed membership is incorrect:
 Workspace admins choose:
 
 - The active engineering practices.
-- Each practice’s feedback setting: **Off**, **Review before sending** (the default), or **Send automatically**.
+- The feedback mode for the workspace, a practice group, or one practice: **Off**, **Approve first** (the default), or **Automatic**.
 - Whether practice reviews run automatically or permit manual requests.
 - The connected AI model for practice reviews and Heph.
 - The monthly AI spending cap.
 
-**Review before sending** records observations but waits for workspace admin approval of feedback on the work.
+**Approve first** keeps feedback on the work until a workspace admin approves it.
+Practice pages and Heph show feedback without waiting.
+Workspace admins choose the mode under **Administration → Practices → Review settings**.
+
+<Screenshot
+  src="workspace/feedback-mode"
+  alt="Review settings with the workspace feedback mode set to Approve first, and the practice groups that follow it."
+/>
 Heph is available when the workspace has a model that meets your AI choice.
 If you choose **No AI**, Heph does not answer.
 These settings apply only to that workspace.

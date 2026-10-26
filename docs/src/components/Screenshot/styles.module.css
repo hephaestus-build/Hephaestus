@@ -1,0 +1,7 @@
+.screenshot {
+	display: block;
+	height: auto;
+	margin-block: 1rem 1.5rem;
+	border: 1px solid var(--ifm-color-emphasis-200);
+	border-radius: var(--ifm-global-radius);
+}

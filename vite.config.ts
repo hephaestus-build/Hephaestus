@@ -385,6 +385,10 @@ export default defineConfig({
 			"docs:dev": run("vp run --filter docs start"),
 			"docs:build": run("vp run --filter docs build"),
 			"docs:serve": run("vp run --filter docs serve"),
+			// The user-guide screenshots, from the built app and the synthetic workspace in `webapp/e2e/screenshots/`.
+			"generate:docs-screenshots": run(
+				"vp -C webapp exec playwright test --config playwright.screenshots.config.ts",
+			),
 
 			// What each CI job runs.
 			// The package job compiles the tests without the analysis; this leg runs it.

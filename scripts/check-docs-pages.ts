@@ -1,4 +1,5 @@
 /** The page rules of `docs/contributor/documentation-guide.md` that a machine can hold. */
+import { existsSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { parse } from "yaml";
@@ -41,6 +42,9 @@ const REPOSITORY_TOOLING =
 	/^(?:vp|pnpm|npm|npx|\.\/gradlew|gradlew)\s|^(?:server|webapp|extension|docs|scripts|deploy|docker|\.github)\//u;
 // An inline link, a reference definition or an HTML anchor whose target is in the contributor guide.
 const CONTRIBUTOR_LINK = /(?:\]\(|\]:\s+|href=["'])(?:[^)\s"']*\/)?contributor\//u;
+
+const SCREENSHOTS = "docs/static/img/user";
+const COLOR_SCHEMES = ["light", "dark"];
 
 interface Line {
 	number: number;
@@ -143,6 +147,9 @@ function lineProblems({ number, text }: Line, guide: Guide, pageType?: string): 
 			"Link the user or admin guide. Only a reference page cites the contributor guide.",
 		);
 	}
+	if (guide === "user" && /!\[[^\]]*\]\(/u.test(text)) {
+		problems.push("Show the product with <Screenshot>, which has a light and a dark image.");
+	}
 	for (const [, code] of guide === "user" ? text.matchAll(/`(?<code>[^`]+)`/gu) : []) {
 		if (code !== undefined && REPOSITORY_TOOLING.test(code)) {
 			problems.push(`Remove the repository command or path \`${code}\` from the user guide.`);
@@ -212,6 +219,34 @@ export function checkPage(file: string, guide: Guide, source: string): string[] 
 	return problems.map(({ line, message }) => `${file}:${line}: ${message}`);
 }
 
+/** Each `<Screenshot>` names its image with a literal `src`, and the image exists in both color schemes. */
+export function screenshotProblems(
+	file: string,
+	source: string,
+	exists: (path: string) => boolean,
+): string[] {
+	const problems: string[] = [];
+	for (const match of source.matchAll(/<Screenshot\b[^>]*>/gu)) {
+		const line = source.slice(0, match.index).split("\n").length;
+		const src = /\bsrc="(?<src>[^"]+)"/u.exec(match[0])?.groups?.src;
+		if (src === undefined) {
+			problems.push(
+				`${file}:${line}: Give the <Screenshot> a literal src, such as src="practice-profile/overview".`,
+			);
+			continue;
+		}
+		for (const scheme of COLOR_SCHEMES) {
+			const image = `${SCREENSHOTS}/${src}.${scheme}.webp`;
+			if (!exists(image)) {
+				problems.push(
+					`${file}:${line}: ${image} does not exist. Run vp run generate:docs-screenshots.`,
+				);
+			}
+		}
+	}
+	return problems;
+}
+
 async function pagesOf(directory: string): Promise<string[]> {
 	const entries = await readdir(path.resolve(repositoryRoot, directory), {
 		recursive: true,
@@ -239,8 +274,12 @@ if (import.meta.main) {
 	for (const guide of GUIDES) {
 		for (const file of await pagesOf(`docs/${guide}`)) {
 			pages += 1;
+			const source = await readFile(path.resolve(repositoryRoot, file), "utf8");
 			problems.push(
-				...checkPage(file, guide, await readFile(path.resolve(repositoryRoot, file), "utf8")),
+				...checkPage(file, guide, source),
+				...screenshotProblems(file, source, (image) =>
+					existsSync(path.resolve(repositoryRoot, image)),
+				),
 			);
 		}
 	}

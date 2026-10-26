@@ -225,9 +225,10 @@ Issues follow `CONTRIBUTING.md` § Issues.
 | Workflow | `.github/workflows/*.yml` | `node scripts/check-workflows.ts` | `docs/contributor/ci-cd.mdx` |
 | Agent guide or skill | `AGENTS.md` or `.claude/skills/` | `vp run gate:instructions` | `docs/contributor/ai-agent-workflow.mdx` |
 | Docs page | `docs/**` | `vp run docs:build` and `gate:prose` | `docs/contributor/simplified-technical-english.md` |
+| Screen that a user page shows | The route or component | `vp run generate:docs-screenshots`. Commit the images. | `docs/contributor/add-a-user-guide-screenshot.md` |
 | Shipped behavior | A changeset too | `vp run gate:changesets` | `.changeset/README.md` |
 
-Never hand-edit a generated file: the spec, `webapp/src/api/**`, `extension/src/api/**`, `routeTree.gen.ts`, the ERD, or the configuration reference.
+Never hand-edit a generated file: the spec, `webapp/src/api/**`, `extension/src/api/**`, `routeTree.gen.ts`, the ERD, the configuration reference, or the user-guide screenshots.
 `generate:api:client` empties both `src/api/` directories first.
 A branch has one changelog, written by `db:draft-changelog`.
 Never edit, rename, or delete a file under `db/changelog/` that reached `main`.

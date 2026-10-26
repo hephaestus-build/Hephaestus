@@ -159,6 +159,36 @@ Use the same name for the same section on every page.
 - Draw a diagram in Mermaid, not as an image, with `accTitle` and `accDescr`. `gate:diagrams` checks them.
 - Do not add an animated GIF.
 
+### Screenshots of the web app
+
+A user page shows the web app with the `Screenshot` component.
+The component shows the image of the reader's color scheme:
+
+```mdx
+import Screenshot from "@site/src/components/Screenshot";
+
+<Screenshot src="practice-profile/overview" alt="Practice profile with an open feedback card." />
+```
+
+`vp run generate:docs-screenshots` makes every image from the built web app:
+
+- The app reads a synthetic workspace from `webapp/e2e/screenshots/workspace.ts`. No server or database runs.
+- The capture uses a 1280 by 800 viewport, a fixed clock, and the UTC time zone. It blocks every request to another site, so no avatar of a real person appears.
+- Each screen is captured in the light and the dark color scheme. The images go to `docs/static/img/user/<page>/<name>.<scheme>.webp`.
+- An image of more than 150 KB fails the capture.
+- A request that `workspace.ts` does not answer fails the capture, so no image shows an error by accident.
+
+To add a screenshot, do these steps:
+
+1. Add the screen to the list in `webapp/e2e/screenshots/user-guide.shot.ts`.
+2. Add the data for the screen to `workspace.ts`. Use invented names, and use practice names from the shipped catalog.
+3. Run `vp run generate:docs-screenshots`.
+4. Look at both images.
+5. Add the `Screenshot` component to the page.
+
+Run the command again when a pull request changes a screen that a user page shows.
+Commit the new images with that change.
+
 ## Callouts
 
 Docusaurus calls a callout an admonition.
@@ -201,6 +231,8 @@ Do not put two callouts in a row.
 - No section uses a name from the "Do not use" column.
 - Only a reference page links to the contributor guide.
 - No inline code names a repository command or a source path.
+- A page shows the product with `Screenshot`, not with a Markdown image.
+- Each `Screenshot` has a light and a dark image.
 
 In the admin and contributor guides, the gate checks on every page that a callout is a note, a tip, or a caution.
 It checks the other rules below on a page that declares its type:

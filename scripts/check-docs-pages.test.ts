@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { checkPage, type Guide } from "./check-docs-pages.ts";
+import { checkPage, type Guide, screenshotProblems } from "./check-docs-pages.ts";
 
 const page = (frontMatter: string, body: string) => `---\n${frontMatter}\n---\n\n${body}\n`;
 const feature = (body: string) =>
@@ -111,5 +111,36 @@ await describe("checkPage", async () => {
 			'page.md:3: Use a note, tip or caution callout, not "warning".',
 		]);
 		assert.equal(check("::::info\nText.\n::::", "admin").length, 1);
+	});
+
+	await test("asks a user page to show the product with a screenshot component", () => {
+		assert.deepEqual(check(feature("![Practice profile](/img/profile.png)")), [
+			"page.md:7: Show the product with <Screenshot>, which has a light and a dark image.",
+		]);
+	});
+});
+
+await describe("screenshotProblems", async () => {
+	const existing = new Set(["docs/static/img/user/activity/table.light.webp"]);
+	const exists = (image: string) => existing.has(image);
+
+	await test("asks for the image in both color schemes", () => {
+		assert.deepEqual(
+			screenshotProblems(
+				"page.md",
+				'Text.\n\n<Screenshot\n  src="activity/table"\n  alt="A"\n/>',
+				exists,
+			),
+			[
+				"page.md:3: docs/static/img/user/activity/table.dark.webp does not exist. Run vp run generate:docs-screenshots.",
+			],
+		);
+	});
+
+	await test("asks for a literal src", () => {
+		assert.equal(
+			screenshotProblems("page.md", '<Screenshot src={name} alt="A" />', exists).length,
+			1,
+		);
 	});
 });
