@@ -238,7 +238,8 @@ class ScmSummaryPosterTest extends BaseUnitTest {
             String multiline = "Keep `@State\nvar isOn: Binding<Bool>` as it is.";
             assertThat(ScmFeedbackFormatter.sanitize(multiline)).isEqualTo(multiline);
 
-            assertThat(ScmFeedbackFormatter.sanitize("Not code: \\`@State\\`")).isEqualTo("Not code: \\``@State`\\`");
+            // Escaped backticks move the name in the source, so the whole text run becomes code.
+            assertThat(ScmFeedbackFormatter.sanitize("Not code: \\`@State\\`")).isEqualTo("`` Not code: `@State` ``");
         }
 
         @Test
