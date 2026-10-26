@@ -79,6 +79,7 @@ const sidebars: SidebarsConfig = {
 				"threat-model",
 				"network-egress",
 				"data-retention",
+				"secret-custody",
 				"credential-key-rotation",
 				"release-image-lock",
 				"legal-pages",

@@ -112,29 +112,10 @@ Step 3 stops if that directory already exists.
 The chart reads secret values only from one Secret in the release namespace.
 It never writes a secret value.
 Set `secret.name` to the name of that Secret.
+The chart reads fixed key names from it.
 
-| Key | Required | Read by |
-| --- | --- | --- |
-| `DATABASE_USERNAME`, `DATABASE_PASSWORD` | Yes | Server, webhook, bundled PostgreSQL |
-| `NATS_USERNAME`, `NATS_PASSWORD` | Yes | Server, webhook, bundled NATS |
-| `HEPHAESTUS_SECURITY_ENCRYPTION_KEY` | Yes | Server, webhook |
-| `HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY` | Yes | Server, webhook |
-| `HEPHAESTUS_AUTH_STATE_COOKIE_KEY` | Yes | Server |
-| `WEBHOOK_SECRET`, `WEBHOOK_ROUTING_SECRET` | Yes | Server, webhook |
-| `WEBHOOK_ROUTING_PREVIOUS_SECRET` | No | Server, webhook |
-| `HEPHAESTUS_SECURITY_PRIOR_CREDENTIAL_ENCRYPTION_KEY` | No | Server, webhook |
-| `HEPHAESTUS_INTEGRATION_SLACK_SIGNING_SECRET` | No | Server, webhook |
-| `HEPHAESTUS_AUTH_BOOTSTRAP_TOKEN` | No | Server |
-| `GITHUB_OAUTH_CLIENT_SECRET`, `GITLAB_OAUTH_CLIENT_SECRET` | No | Server |
-| `GH_APP_CLIENT_SECRET`, `GH_APP_PRIVATE_KEY`, `GH_AUTH_TOKEN` | No | Server |
-| `HEPHAESTUS_INTEGRATION_SLACK_CLIENT_SECRET`, `OUTLINE_OAUTH_CLIENT_SECRET` | No | Server |
-| `SPRING_MAIL_PASSWORD` | No | Server |
-| `HEPHAESTUS_WORKER_REGISTRATION_TOKEN` | With a worker | Server, worker |
-| `BACKUP_S3_KEY`, `BACKUP_S3_KEY_SECRET`, `BACKUP_CIPHER_PASS` | With backups | Bundled PostgreSQL, backup Jobs |
-
-[Production setup](./production-setup) describes each value.
-The same rules as in Compose apply to the two encryption keys.
-Back up the Secret with the database.
+[Secret custody and rotation](./secret-custody#inventory) lists each key, the roles that read it, and the command that generates it.
+That page also tells you which keys to keep outside the cluster for a restore, and how to replace each key.
 
 ### PostgreSQL TLS Secret
 
@@ -160,11 +141,7 @@ The roles connect to exactly this name, without a cluster domain.
 The chart mounts `tls.crt` and `tls.key` into the PostgreSQL pod with the mode `0440`.
 The files belong to root and to the group 999, and PostgreSQL accepts a key with these permissions.
 
-When you renew the certificate, update the Secret.
-The kubelet updates the mounted files after a delay.
-PostgreSQL reads its certificate and key again only on a configuration reload or a restart.
-Restart the PostgreSQL pod after a renewal.
-A new CA needs a restart of each application role too.
+[TLS certificates](./secret-custody#tls-certificates) gives the renewal of each certificate. A new CA needs the [database maintenance](#database-maintenance) procedure.
 
 ## Gateway routes
 
@@ -623,15 +600,13 @@ That server admits only a client certificate for the common name `hephaestus-bac
 To prepare backups:
 
 1. Create the bucket for this instance alone, and an identity with read, write and delete rights in it.
-2. Add `BACKUP_S3_KEY`, `BACKUP_S3_KEY_SECRET` and `BACKUP_CIPHER_PASS` to the release Secret. Generate the passphrase with `openssl rand -base64 48`, and keep a copy outside the cluster.
+2. Add `BACKUP_S3_KEY`, `BACKUP_S3_KEY_SECRET` and `BACKUP_CIPHER_PASS` to the release Secret. Generate the passphrase and keep a copy as [Secret custody](./secret-custody#keep-the-required-keys-outside-the-cluster) describes.
 3. Add `backup.crt` and `backup.key` to the PostgreSQL TLS Secret: a client certificate for `hephaestus-backup`.
 4. Set `postgresql.backup.enabled=true` and `postgresql.backup.s3` with the bucket, the endpoint host name and the region. Set `cidr` and `port` when the endpoint is in a private address range.
    When a private CA signs the endpoint's certificate, add it to the PostgreSQL TLS Secret as `s3-ca.crt`, and set `postgresql.backup.s3.privateCa=true`.
 5. Upgrade the release, and check that the stanza Job completed.
 
-PostgreSQL reads the bucket's credentials only at its start.
-After you change `BACKUP_S3_KEY` or `BACKUP_S3_KEY_SECRET`, restart it with `kubectl --namespace <release namespace> rollout restart statefulset/<release>-postgresql`.
-Until then, the WAL archive fails.
+[Backup bucket credentials](./secret-custody#backup-bucket-credentials) and [Backup cipher passphrase](./secret-custody#backup-cipher-passphrase) give the rotation of these values.
 
 A failed WAL archive keeps the WAL on the PostgreSQL volume until the volume is full.
 The [alert rules](./observability.mdx#alert-rules) watch the WAL archive, the age of the latest backup and the free space of the volume.
@@ -640,6 +615,8 @@ The [alert rules](./observability.mdx#alert-rules) watch the WAL archive, the ag
 
 A restore replaces the bundled database with a backup.
 It loses every change after the backup or the time that you select.
+The restored database is readable only with the keys that sealed its values.
+Keep them as [Secret custody](./secret-custody#keep-the-required-keys-outside-the-cluster) describes.
 Restore the NATS JetStream data separately, as [Backup and restore](./backup-restore) describes.
 
 1. Upgrade the release with `postgresql.backup.restore.enabled=true`.
@@ -691,7 +668,7 @@ Roll forward to fix a failed upgrade.
 
 ### Database maintenance
 
-Use this procedure when the release notes require it, or before you change PostgreSQL itself or its TLS Secret.
+Use this procedure when the release notes require it, before you change PostgreSQL itself, or before you change the CA in its TLS Secret.
 The server, the webhook role and the workers are the database roles.
 Each phase is one `helm upgrade` with the replica counts of that phase:
 
@@ -703,7 +680,8 @@ Each phase is one `helm upgrade` with the replica counts of that phase:
 | 4. Restore | 1 | The prior count | The prior count | The pods of the three roles are ready. |
 
 Phase 1 uses the verified chart and the values of the current release, with only the three counts changed.
-Phase 2 applies the change: the new release values, a new PostgreSQL configuration, or a restart of PostgreSQL after you update its TLS Secret.
+Phase 2 applies the change.
+The change can be the new release values, a new PostgreSQL configuration, or a new CA in the TLS Secret and a restart of PostgreSQL.
 Phase 3 runs the new release's migration Job and starts its server alone.
 
 Before phase 1, record the current `webhook.replicas` and `worker.replicas`, and back up the database and the NATS JetStream data.

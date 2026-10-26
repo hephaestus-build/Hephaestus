@@ -497,8 +497,10 @@ Federated identity links to GitHub user ID / gitlab.lrz.de `sub` minimize collec
 
 PostgreSQL data at rest relies on the host's filesystem and access-control protections. The general store has no application-level at-rest encryption. Two platform-level keys seal secrets at rest with AES-256-GCM:
 
-- `HEPHAESTUS_SECURITY_ENCRYPTION_KEY` protects workspace LLM API keys, login-provider OAuth client secrets, Outline webhook signing secrets, sandbox job tokens and JWT signing keys.
+- `HEPHAESTUS_SECURITY_ENCRYPTION_KEY` protects LLM API keys, login-provider OAuth client secrets, Outline webhook signing secrets and JWT signing keys.
 - `HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY` protects integration connection credentials. These include GitHub and GitLab tokens, Slack bot tokens, Outline API keys, and their OAuth access and refresh tokens. This key is versioned and supports online rotation.
+
+[What the database seals](../secret-custody.mdx#what-the-database-seals) owns the full list.
 
 Compromise of the first key exposes workspace secrets and session-token signing. Compromise of the second exposes every connected provider's credential. Key injection is deployment-specific and requires verification against the active role.
 

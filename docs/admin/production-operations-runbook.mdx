@@ -155,6 +155,7 @@ For backup and recovery:
 1. Set explicit RPO/RTO, backup schedule, retention, owner, off-host destination, and restore-test frequency.
 2. Monitor the last successful backup/WAL archive and restore drill.
 3. Test loss of the primary host.
+   On the Helm chart, retrieve the required keys without that host, as [Secret custody](./secret-custody#keep-the-required-keys-outside-the-cluster) describes.
 4. Test backup failure alerts.
 5. For PITR, validate the base backup.
 6. For PITR, validate continuous WAL coverage to the selected timestamp/timeline.

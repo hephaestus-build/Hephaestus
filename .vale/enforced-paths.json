@@ -130,6 +130,7 @@
 	"docs/admin/reference-deployment.mdx",
 	"docs/admin/release-image-lock.md",
 	"docs/admin/runtime-roles.mdx",
+	"docs/admin/secret-custody.mdx",
 	"docs/admin/sizing.mdx",
 	"docs/admin/threat-model.mdx",
 	"docs/admin/troubleshooting.mdx",

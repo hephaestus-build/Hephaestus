@@ -120,9 +120,9 @@ See [Troubleshooting](./troubleshooting).
 ## 2. Configure `.env`
 
 :::caution CAUTION: Back up both encryption keys
-`HEPHAESTUS_SECURITY_ENCRYPTION_KEY` protects legacy encrypted values and the JWT signing key.
+`HEPHAESTUS_SECURITY_ENCRYPTION_KEY` protects the values that [What the database seals](./secret-custody#what-the-database-seals) lists.
 `HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY` protects integration credentials. Loss of either key
-makes the corresponding database values unreadable. Store both with the database backup. Rotate the
+makes the corresponding database values unreadable. Keep both with the backup set, in separate storage with separate credentials, as [Keep the required keys outside the cluster](./secret-custody#keep-the-required-keys-outside-the-cluster) describes. Rotate the
 credential key only with the [credential-key rotation procedure](./credential-key-rotation).
 :::
 
