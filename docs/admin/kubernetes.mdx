@@ -475,7 +475,7 @@ At the end of the budget, a worker stops the reviews that it runs. They run agai
 - Outbound HTTPS to the destinations in [Network egress](./network-egress#one-host-on-k3s).
 - `curl`, `jq`, `openssl`, `python3`, Cosign, and the Helm CLI, as [Verify the release chart](#verify-the-release-chart) describes. Ubuntu includes `python3`.
 - A clock that NTP keeps synchronized, as [Clocks](./install#clocks) describes.
-- A GitHub OAuth app for sign-in, as [Configure a login provider](./install#3-configure-a-login-provider) describes. Its callback URL is `https://<host>/api/login/oauth2/code/github`.
+- A GitHub OAuth app for sign-in, as [First steps § 1](./first-steps#1-configure-a-login-provider) describes. Its callback URL is `https://<host>/api/login/oauth2/code/github`.
 
 ### What the installer checks
 
@@ -538,12 +538,12 @@ If your network cannot reach its own public address, the DNS check fails. Then r
 
    For a first try, add `--staging`: the `Let's Encrypt` staging service has higher rate limits, and no browser trusts its certificate.
    Later, run the installer again without `--staging`, and delete the Secret `traefik/hephaestus-tls` to get a trusted certificate.
-   [First admin](./install#4-first-admin--before-first-boot) explains the admin list.
+   [First steps § 2](./first-steps#2-name-the-first-admin) explains the admin list.
 
 3. Keep the required keys of the release Secret outside the host, as [Keep the required keys outside the cluster](./secret-custody#keep-the-required-keys-outside-the-cluster) describes. For `kubectl` on this host, run `export KUBECONFIG=~/hephaestus/kubeconfig` first.
 
 4. Open `https://<host>` and sign in as the bootstrap admin.
-5. Continue with [Connect repository data](./install#6-connect-repository-data).
+5. Continue with [First steps § 4](./first-steps#4-connect-repository-data).
 
 The installer keeps every key of the release Secret `hephaestus-app` and generates only the keys that it lacks.
 It generates each key as [Secret custody and rotation](./secret-custody#generation-and-rotation) gives it.
