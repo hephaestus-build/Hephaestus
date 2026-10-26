@@ -1,4 +1,6 @@
 org.springframework.boot.EnvironmentPostProcessor=\
 de.tum.cit.aet.hephaestus.core.configuration.ProductionConfigurationEnvironmentPostProcessor
+org.springframework.boot.sql.init.dependency.DatabaseInitializerDetector=\
+de.tum.cit.aet.hephaestus.core.database.MigratedSchemaWait$Detector
 org.springframework.boot.diagnostics.FailureAnalyzer=\
 de.tum.cit.aet.hephaestus.core.database.LiquibaseRefusalFailureAnalyzer

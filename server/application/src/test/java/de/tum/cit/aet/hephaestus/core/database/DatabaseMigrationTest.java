@@ -65,6 +65,23 @@ class DatabaseMigrationTest {
     }
 
     @Test
+    void shouldLeaveAFreshDatabaseToTheMigrationWhileTheStartWaits() {
+        TestDatabase database = PostgreSQLTestContainer.createDatabase("hephaestus_migrate_untouched");
+
+        assertThatThrownBy(() -> awaitSchema(database, Duration.ofSeconds(1)))
+                .rootCause()
+                .hasMessageContaining("The database schema is behind this release");
+
+        // A table that the wait created would make the migration fail to create it.
+        assertThat(jdbc(database)
+                        .queryForObject(
+                                "SELECT count(*) FROM pg_tables WHERE schemaname = current_schema()", Integer.class))
+                .isZero();
+        assertThat(DatabaseMigration.run(arguments(database))).isZero();
+        awaitSchema(database, Duration.ofSeconds(1));
+    }
+
+    @Test
     void shouldKeepAnotherRunsLiquibaseLockWhileThatRunHoldsTheMigrationLock(CapturedOutput output) throws Exception {
         TestDatabase database = PostgreSQLTestContainer.createDatabase("hephaestus_migrate_live_lock");
         assertThat(DatabaseMigration.run(arguments(database))).isZero();
@@ -172,8 +189,7 @@ class DatabaseMigrationTest {
         var properties = new LiquibaseProperties();
         properties.setChangeLog("classpath:db/master.xml");
         properties.setContexts(List.of("prod"));
-        var wait = new MigratedSchemaWait(dataSource(database), properties, timeout);
-        wait.setResourceLoader(new DefaultResourceLoader());
+        var wait = new MigratedSchemaWait(dataSource(database), properties, new DefaultResourceLoader(), timeout);
         try {
             wait.afterPropertiesSet();
         } catch (Exception e) {
