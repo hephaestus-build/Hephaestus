@@ -1,0 +1,15 @@
+[Unit]
+Description=Forward Pod traffic for the Coolify proxy on port %i (deploy/staging/README.md)
+After=docker.service k3s.service
+Wants=docker.service
+
+[Service]
+# Listens on the k3s Pod bridge address and connects to the Coolify proxy on the Docker bridge address.
+ExecStartPre=/bin/sh -c "until ip -4 addr show cni0 | grep -q 10.42.0.1; do sleep 2; done"
+ExecStart=/usr/bin/socat TCP-LISTEN:1%i,bind=10.42.0.1,fork,reuseaddr TCP:172.17.0.1:%i
+Restart=always
+RestartSec=2
+DynamicUser=yes
+
+[Install]
+WantedBy=multi-user.target

@@ -489,6 +489,7 @@ The workers remove what no attempt and no worker uses in the sandbox namespace.
 Do not share it with another release or another application.
 A sandbox's credential, not the network, binds it to the worker that started it.
 
+If the model endpoint resolves to the cluster's own ingress, the worker's egress policy does not reach it: add a NetworkPolicy that lets the worker Pods reach the ingress Pods.
 The worker reaches the Kubernetes API only at `networkPolicy.kubernetesApi`.
 Set the address and port that the selected network plugin sees after address translation.
 The plugins that CI runs, k3s's kube-router and Calico, see the endpoint of the `kubernetes` Service ([Install](#install), step 4).

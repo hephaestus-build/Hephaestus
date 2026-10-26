@@ -1,0 +1,63 @@
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    privateKeySecretRef: { name: letsencrypt-account }
+    solvers:
+      - http01:
+          gatewayHTTPRoute:
+            parentRefs: [{ kind: Gateway, name: edge, namespace: traefik, sectionName: http }]
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: edge
+  namespace: traefik
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt
+spec:
+  gatewayClassName: traefik
+  listeners:
+    - name: http
+      protocol: HTTP
+      port: 8000
+      allowedRoutes: { namespaces: { from: All } }
+    - name: https
+      protocol: HTTPS
+      port: 8443
+      hostname: staging.hephaestus.build
+      tls: { mode: Terminate, certificateRefs: [{ name: staging-hephaestus-build-tls }] }
+      allowedRoutes: { namespaces: { from: All } }
+    - name: https-alias
+      protocol: HTTPS
+      port: 8443
+      hostname: staging.hephaestus.aet.cit.tum.de
+      tls: { mode: Terminate, certificateRefs: [{ name: staging-hephaestus-aet-tls }] }
+      allowedRoutes: { namespaces: { from: Same } }
+---
+# Plain HTTP only redirects; the ACME solver route matches its exact path first.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: http-to-https
+  namespace: traefik
+spec:
+  parentRefs: [{ name: edge, sectionName: http }]
+  hostnames: [staging.hephaestus.build, staging.hephaestus.aet.cit.tum.de]
+  rules:
+    - filters: [{ type: RequestRedirect, requestRedirect: { scheme: https, statusCode: 301 } }]
+---
+# The TUM alias redirects to the canonical host, as the Compose proxy did.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: alias-to-canonical
+  namespace: traefik
+spec:
+  parentRefs: [{ name: edge, sectionName: https-alias }]
+  hostnames: [staging.hephaestus.aet.cit.tum.de]
+  rules:
+    - filters: [{ type: RequestRedirect, requestRedirect: { hostname: staging.hephaestus.build, statusCode: 301 } }]

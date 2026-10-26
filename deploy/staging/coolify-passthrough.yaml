@@ -1,0 +1,55 @@
+# logos. and stats.hephaestus.felixdietrich.com stay on the Coolify proxy, which listens on the
+# Docker bridge address only (172.17.0.1:8080/8443). A Pod reaches it through two host forwarders on the
+# Pod bridge address (10.42.0.1:18080/18443, coolify-forward@.service): Docker answers a DNAT-ed
+# connection from the Pod network, but its reply never returns to the Pod.
+apiVersion: v1
+kind: Service
+metadata:
+  name: coolify-proxy
+  namespace: traefik
+spec:
+  ports:
+    - { name: http, port: 8080, targetPort: 18080 }
+    - { name: https, port: 8443, targetPort: 18443 }
+---
+apiVersion: discovery.k8s.io/v1
+kind: EndpointSlice
+metadata:
+  name: coolify-proxy-host
+  namespace: traefik
+  labels:
+    kubernetes.io/service-name: coolify-proxy
+addressType: IPv4
+ports:
+  - { name: http, port: 18080, protocol: TCP }
+  - { name: https, port: 18443, protocol: TCP }
+endpoints:
+  - addresses: ["10.42.0.1"]
+    conditions: { ready: true }
+---
+# TLS passes through on SNI, so the Coolify proxy keeps its own certificates.
+apiVersion: traefik.io/v1alpha1
+kind: IngressRouteTCP
+metadata:
+  name: coolify-passthrough
+  namespace: traefik
+spec:
+  entryPoints: [websecure]
+  routes:
+    - match: HostSNI(`logos.hephaestus.felixdietrich.com`) || HostSNI(`stats.hephaestus.felixdietrich.com`)
+      services:
+        - { name: coolify-proxy, port: 8443 }
+  tls:
+    passthrough: true
+---
+# Plain HTTP too, so the Coolify proxy answers its ACME HTTP-01 challenges.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: coolify-http
+  namespace: traefik
+spec:
+  parentRefs: [{ name: edge, sectionName: http }]
+  hostnames: [logos.hephaestus.felixdietrich.com, stats.hephaestus.felixdietrich.com]
+  rules:
+    - backendRefs: [{ name: coolify-proxy, port: 8080 }]

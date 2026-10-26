@@ -1,0 +1,25 @@
+# Staging only: the instance model endpoint (logos.hephaestus.felixdietrich.com) is served by this
+# same host. A worker connection to the public address is translated to the k3s Traefik Pod, a
+# private address that the chart's external egress rule leaves out. Remove when logos moves.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: worker-to-traefik
+  namespace: hephaestus
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: hephaestus
+      app.kubernetes.io/component: worker
+  policyTypes: ["Egress"]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: traefik
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: traefik
+      ports:
+        - { port: 8443, protocol: TCP }
+        - { port: 8000, protocol: TCP }
