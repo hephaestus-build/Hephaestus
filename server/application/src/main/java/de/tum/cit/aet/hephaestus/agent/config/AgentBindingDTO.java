@@ -41,7 +41,10 @@ public record AgentBindingDTO(
                 binding.getWorkspaceModel() == null
                         ? null
                         : binding.getWorkspaceModel().getId(),
-                binding.getTimeoutSeconds(),
+                // The timeout that applies: a Heph turn stops at its ceiling whatever an older binding stored.
+                binding.getPurpose() == AgentPurpose.MENTOR
+                        ? Math.min(binding.getTimeoutSeconds(), AgentBindingLimits.MAX_HEPH_TURN_SECONDS)
+                        : binding.getTimeoutSeconds(),
                 binding.getMaxConcurrentJobs(),
                 binding.isEnabled(),
                 ready,

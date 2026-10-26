@@ -90,10 +90,17 @@ public class HephTurnController {
     @PostMapping("/link-result")
     public ResultLink linkResult(
             @PathVariable UUID turnId, @Valid @RequestBody ResultLink request, Authentication authentication) {
-        if (!contexts.admitsResult(turn(turnId, authentication), request.resultId())) {
-            throw refused("it is not a result of the developer that Heph may show");
-        }
-        return request;
+        TurnJwt turn = turn(turnId, authentication);
+        return HephToolCalls.logged(
+                turn,
+                "link_result",
+                () -> {
+                    if (!contexts.admitsResult(turn, request.resultId())) {
+                        throw refused("it is not a result of the developer that Heph may show");
+                    }
+                    return request;
+                },
+                linked -> "ok");
     }
 
     /** {@code link_problem}: admitted through the result that carries the problem. */
@@ -102,10 +109,17 @@ public class HephTurnController {
     @PostMapping("/link-problem")
     public ProblemLink linkProblem(
             @PathVariable UUID turnId, @Valid @RequestBody ProblemLink request, Authentication authentication) {
-        if (!contexts.admitsProblem(turn(turnId, authentication), request.problemId())) {
-            throw refused("it is not a problem on a result of the developer that Heph may show");
-        }
-        return request;
+        TurnJwt turn = turn(turnId, authentication);
+        return HephToolCalls.logged(
+                turn,
+                "link_problem",
+                () -> {
+                    if (!contexts.admitsProblem(turn, request.problemId())) {
+                        throw refused("it is not a problem on a result of the developer that Heph may show");
+                    }
+                    return request;
+                },
+                linked -> "ok");
     }
 
     /**
@@ -117,10 +131,17 @@ public class HephTurnController {
     @PostMapping("/show-feedback")
     public FeedbackShow showFeedback(
             @PathVariable UUID turnId, @Valid @RequestBody FeedbackShow request, Authentication authentication) {
-        if (!contexts.showFeedback(turn(turnId, authentication), request.feedbackId())) {
-            throw refused("it is not conversation feedback that is ready for the developer now");
-        }
-        return request;
+        TurnJwt turn = turn(turnId, authentication);
+        return HephToolCalls.logged(
+                turn,
+                "show_feedback",
+                () -> {
+                    if (!contexts.showFeedback(turn, request.feedbackId())) {
+                        throw refused("it is not conversation feedback that is ready for the developer now");
+                    }
+                    return request;
+                },
+                shown -> "ok");
     }
 
     private static ResponseStatusException refused(String reason) {
@@ -154,14 +175,14 @@ public class HephTurnController {
                     HttpStatus.UNPROCESSABLE_CONTENT, "branch is one of main, this or all", unknown);
         }
         Integer limit = request.limit();
-        return new SearchResponse(contexts.search(
-                turn,
-                new MentorEntryService.SearchQuery(
-                        request.query(),
-                        scope,
-                        request.before(),
-                        request.after(),
-                        limit == null ? MentorEntryService.MAX_SEARCH_HITS : limit)));
+        var query = new MentorEntryService.SearchQuery(
+                request.query(),
+                scope,
+                request.before(),
+                request.after(),
+                limit == null ? MentorEntryService.MAX_SEARCH_HITS : limit);
+        return HephToolCalls.logged(
+                turn, "search_conversation", () -> new SearchResponse(contexts.search(turn, query)), found -> "ok");
     }
 
     @PutMapping("/partial")
@@ -196,6 +217,7 @@ public class HephTurnController {
      */
     static final Set<String> FAILURE_DETAILS = Set.of(
             "deadline",
+            "call_limit",
             "upstream_stalled",
             "upstream_paused",
             "provider_unavailable",

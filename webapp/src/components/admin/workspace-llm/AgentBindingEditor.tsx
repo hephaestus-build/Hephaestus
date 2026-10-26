@@ -39,10 +39,20 @@ const MIN_TIMEOUT_SECONDS = 30;
 const MAX_TIMEOUT_SECONDS = 10_800;
 const MIN_CONCURRENT_JOBS = 1;
 
-const TIMEOUT_CEILING = {
-	max: MAX_TIMEOUT_SECONDS,
-	error: `Runs stop after three hours, so enter ${MAX_TIMEOUT_SECONDS} seconds or less.`,
-};
+const HEPH_TURN_SECONDS = 300;
+
+/** The longest one run may last: a review up to three hours, one Heph answer five minutes. */
+function timeoutCeiling(purpose: BindingTarget["purpose"]) {
+	return purpose === "MENTOR"
+		? {
+				max: HEPH_TURN_SECONDS,
+				error: `Heph stops an answer after five minutes, so enter ${HEPH_TURN_SECONDS} seconds or less.`,
+			}
+		: {
+				max: MAX_TIMEOUT_SECONDS,
+				error: `Runs stop after three hours, so enter ${MAX_TIMEOUT_SECONDS} seconds or less.`,
+			};
+}
 
 function bindingToSelection(binding?: AgentBinding): ModelSelection | null {
 	if (binding?.instanceModelId != null) {
@@ -64,25 +74,26 @@ export function modelOf(
 
 const numberInput = (input: unknown) => (input === "" ? undefined : input);
 
-const runLimitsSchema = z.object({
-	timeoutSeconds: z.preprocess(
-		numberInput,
-		z.coerce
-			.number({ error: "Enter a number of seconds." })
-			.int({ error: "Enter a whole number of seconds, 30 or more." })
-			.min(MIN_TIMEOUT_SECONDS, { error: "Enter a whole number of seconds, 30 or more." })
-			.max(TIMEOUT_CEILING.max, { error: TIMEOUT_CEILING.error }),
-	),
-	maxConcurrentJobs: z.preprocess(
-		numberInput,
-		z.coerce
-			.number({ error: "Enter a number of runs." })
-			.int({ error: "Enter a whole number of runs, 1 or more." })
-			.min(MIN_CONCURRENT_JOBS, { error: "Enter a whole number of runs, 1 or more." }),
-	),
-});
+const runLimitsSchema = (ceiling: ReturnType<typeof timeoutCeiling>) =>
+	z.object({
+		timeoutSeconds: z.preprocess(
+			numberInput,
+			z.coerce
+				.number({ error: "Enter a number of seconds." })
+				.int({ error: "Enter a whole number of seconds, 30 or more." })
+				.min(MIN_TIMEOUT_SECONDS, { error: "Enter a whole number of seconds, 30 or more." })
+				.max(ceiling.max, { error: ceiling.error }),
+		),
+		maxConcurrentJobs: z.preprocess(
+			numberInput,
+			z.coerce
+				.number({ error: "Enter a number of runs." })
+				.int({ error: "Enter a whole number of runs, 1 or more." })
+				.min(MIN_CONCURRENT_JOBS, { error: "Enter a whole number of runs, 1 or more." }),
+		),
+	});
 
-function limitErrors(limits: ReturnType<typeof runLimitsSchema.safeParse>) {
+function limitErrors(limits: ReturnType<ReturnType<typeof runLimitsSchema>["safeParse"]>) {
 	return limits.success ? undefined : z.flattenError(limits.error).fieldErrors;
 }
 
@@ -157,8 +168,9 @@ export function AgentBindingEditor({
 	const [submitted, setSubmitted] = useState<ModelSelection | null>(null);
 	const refusal = refusalOf(saveError, submitted, selection);
 	const [enabled, setEnabled] = useState(binding?.enabled ?? true);
+	const ceiling = timeoutCeiling(purpose);
 	const [timeoutSeconds, setTimeoutSeconds] = useState(() =>
-		String(binding?.timeoutSeconds ?? MAX_TIMEOUT_SECONDS),
+		String(binding?.timeoutSeconds ?? ceiling.max),
 	);
 	const [maxConcurrentJobs, setMaxConcurrentJobs] = useState(() =>
 		String(binding?.maxConcurrentJobs ?? 3),
@@ -166,7 +178,7 @@ export function AgentBindingEditor({
 	const [showAdvanced, setShowAdvanced] = useState(false);
 	const hasRunLimits = purpose === "PRACTICE_REVIEW" || purpose === "MENTOR";
 	const [showErrors, setShowErrors] = useState(false);
-	const limits = runLimitsSchema.safeParse({ timeoutSeconds, maxConcurrentJobs });
+	const limits = runLimitsSchema(ceiling).safeParse({ timeoutSeconds, maxConcurrentJobs });
 	const fieldErrors = limitErrors(limits);
 	const modelError = showErrors && !selection ? "Choose the model this runs on." : null;
 	const timeoutError = showErrors ? fieldErrors?.timeoutSeconds?.[0] : undefined;
@@ -307,7 +319,7 @@ export function AgentBindingEditor({
 											type="number"
 											inputMode="numeric"
 											min={MIN_TIMEOUT_SECONDS}
-											max={MAX_TIMEOUT_SECONDS}
+											max={ceiling.max}
 											value={timeoutSeconds}
 											aria-invalid={Boolean(timeoutError)}
 											aria-describedby={hasText(timeoutError) ? timeoutErrorId : undefined}

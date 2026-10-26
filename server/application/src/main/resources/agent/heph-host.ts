@@ -96,6 +96,13 @@ const EXEC_TIMEOUT_SECONDS = 60;
  */
 const PROVIDER_UNAVAILABLE = ["upstream_stalled", "upstream_paused"] as const;
 
+/**
+ * The most model calls one turn makes, retries included. An answer takes a handful. A turn that keeps calling loops on
+ * a tool or a failing call, and it would keep one of the worker's few turn slots, and every question queued behind it,
+ * until its deadline.
+ */
+const MAX_TURN_MODEL_CALLS = 40;
+
 /** Waits before each repeat of a context read or an end that the worker did not answer or answered with a 5xx. */
 const RETRY_DELAYS_MS = [1000, 2000, 4000];
 
@@ -1271,8 +1278,11 @@ export function partialStream(api: TurnApi, intervalMs: number): PartialStream {
 	};
 }
 
-/** Why a turn stops: the worker's stop command, or a provider the worker's proxy found unavailable. */
-type HaltReason = StopReason | "stalled";
+/**
+ * Why a turn stops: the worker's stop command, a provider the worker's proxy found unavailable, or a turn past its
+ * model calls.
+ */
+type HaltReason = StopReason | "stalled" | "calls";
 
 interface TurnState {
 	readonly attempt: number;
@@ -1465,9 +1475,18 @@ export function createHephHost(options: HostOptions): HephHost {
 			appended = { manager: sessionManager, stored };
 			const partials = partialStream(api, options.partialIntervalMs ?? PARTIAL_INTERVAL_MS);
 			const summaries = summaryThinkingOff(agent);
+			let calls = 0;
 			const unsubscribe = agent.subscribe((event) => {
 				summaries.observe(event);
 				partials.observe(event);
+				if (event.type === "message_end" && event.message.role === "assistant") {
+					calls += 1;
+					// Only a turn that goes on to a tool stops here. An answer, a cut answer or a failed call at the limit
+					// ends the turn as it would anyway, with its own reason.
+					if (calls >= MAX_TURN_MODEL_CALLS && event.message.stopReason === "toolUse") {
+						halt(turnId, state, "calls");
+					}
+				}
 				const unavailable = providerUnavailable(event);
 				if (unavailable !== null) {
 					state.stallDetail ??= unavailable;
@@ -1562,8 +1581,8 @@ type Ending = (
 ) => Promise<void>;
 
 /**
- * A stop by the developer keeps what Heph wrote; a deadline or a silent model fails the turn; a lost lease says
- * nothing.
+ * A stop by the developer keeps what Heph wrote; a deadline, a silent model or too many model calls fail the turn; a
+ * lost lease says nothing.
  */
 async function endStopped(state: TurnState, end: Ending): Promise<void> {
 	if (state.stopReason === "developer") {
@@ -1572,6 +1591,8 @@ async function endStopped(state: TurnState, end: Ending): Promise<void> {
 		await end("FAILED", "DEADLINE", "deadline");
 	} else if (state.stopReason === "stalled") {
 		await end("FAILED", "STALLED", state.stallDetail ?? "provider_unavailable");
+	} else if (state.stopReason === "calls") {
+		await end("FAILED", "DEADLINE", "call_limit");
 	}
 }
 

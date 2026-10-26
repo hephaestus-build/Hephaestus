@@ -75,6 +75,11 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
      */
     static final Duration WORKSPACE_APPEND_SPACING = Duration.ofMillis(600);
 
+    /** How long a question waits for its turn to start before the developer is told why nothing happens. */
+    static final Duration WAITING_NOTICE_AFTER = Duration.ofSeconds(10);
+
+    static final String WAITING_NOTICE = "Heph has not started on this question yet. It answers as soon as it can.";
+
     /**
      * How far Slack's clock may differ from this server's when the stream that a refused start may have opened is
      * looked for; both keep time by NTP.
@@ -283,6 +288,8 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
         if (status == MentorTurn.Status.QUEUED) {
             if (stream != null) {
                 restart(projection, stream);
+            } else {
+                noticeWaiting(projection, turn, now);
             }
             return;
         }
@@ -309,6 +316,64 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
     }
 
     /**
+     * Tells the developer once that their question waits, when its turn has not run {@link #WAITING_NOTICE_AFTER} after
+     * it was asked. Without it, Slack shows nothing while earlier turns hold the worker's turn slots. It goes once the
+     * turn runs or ends. A turn that already ran and waits again gets none: it did start. The notice does not claim the
+     * reply: a claim before the turn runs would leave the reply with this server, and a restart during the wait would
+     * lose the answer. So it relies on the one server that the chart runs, which also keeps the "once" in memory: after
+     * a restart, a question that still waits can get it again.
+     */
+    private void noticeWaiting(Projection projection, MentorTurn turn, Instant now) {
+        if (projection.waitingNoticed || turn.getStartedAt() != null || turn.getAttempt() > 0) {
+            return;
+        }
+        Instant due = turn.getCreatedAt().plus(WAITING_NOTICE_AFTER);
+        if (now.isBefore(due)) {
+            later(projection, Duration.between(now, due));
+            return;
+        }
+        if (projection.owner == Owner.ELSEWHERE || !slack.isConnected(projection.workspaceId)) {
+            return;
+        }
+        projection.waitingNoticed = true;
+        delivery.slackTurn(projection.workspaceId, projection.turnId).ifPresent(asked -> {
+            try {
+                projection.notice = slack.postMessage(
+                        projection.workspaceId,
+                        asked.channelId(),
+                        asked.threadTs(),
+                        List.of(),
+                        WAITING_NOTICE,
+                        SlackMentorPosts.noticeMetadata());
+            } catch (SlackSendException e) {
+                log.warn(
+                        "Slack could not show that a Heph question waits: workspaceId={}, turnId={}, error={}",
+                        projection.workspaceId,
+                        projection.turnId,
+                        e.slackError());
+            }
+        });
+    }
+
+    /** Deletes the notice that the question waited, once the turn runs or ends. */
+    private void clearNotice(Projection projection) {
+        SlackMessageService.Posted notice = projection.notice;
+        if (notice == null) {
+            return;
+        }
+        projection.notice = null;
+        try {
+            slack.deleteMessage(projection.workspaceId, notice.channelId(), notice.ts());
+        } catch (SlackSendException e) {
+            log.warn(
+                    "Slack could not remove the notice that a Heph question waited: workspaceId={}, turnId={}, error={}",
+                    projection.workspaceId,
+                    projection.turnId,
+                    e.slackError());
+        }
+    }
+
+    /**
      * Fails a reply that can no longer reach Slack. Its claimed feedback stays unconfirmed, never failed: a server may
      * have shown the words before Slack went away, and unconfirmed feedback is never sent again.
      */
@@ -330,6 +395,7 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
 
     /** The turn's reply is settled: no wake-up still pending looks at it again. Runs under the lock. */
     private void finished(Projection projection) {
+        clearNotice(projection);
         projection.finished = true;
         ScheduledFuture<?> pending = projection.wakeUp;
         if (pending != null) {
@@ -352,11 +418,19 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
             return false;
         }
         projection.owner = Owner.HERE;
-        SlackTurn turn = found.get();
-        String threadTs = turn.threadTs();
-        if (status != MentorTurn.Status.RUNNING) {
-            return true;
+        if (status == MentorTurn.Status.RUNNING) {
+            show(projection, found.get());
         }
+        return true;
+    }
+
+    /**
+     * Shows that Heph works on a running turn that this server owns: the reaction, and in a thread the stream and
+     * Slack's Stop. The notice that the question waited goes.
+     */
+    private void show(Projection projection, SlackTurn turn) {
+        long workspaceId = projection.workspaceId;
+        String threadTs = turn.threadTs();
         ReplyStream stream = null;
         if (threadTs != null) {
             stream = new ReplyStream(
@@ -387,7 +461,7 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
         if (stream != null) {
             showWorking(workspaceId, stream);
         }
-        return true;
+        clearNotice(projection);
     }
 
     /**
@@ -1011,6 +1085,12 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
 
         /** The reply is settled; nothing looks at the turn again. */
         boolean finished;
+
+        /** The developer was told that the question waits. */
+        boolean waitingNoticed;
+
+        /** The notice that the question waits, until the turn runs or ends. */
+        volatile SlackMessageService.@Nullable Posted notice;
 
         volatile Owner owner = Owner.UNKNOWN;
         volatile MentorTurn.@Nullable Status status;

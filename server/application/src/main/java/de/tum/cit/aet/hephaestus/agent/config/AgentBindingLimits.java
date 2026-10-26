@@ -16,6 +16,12 @@ public final class AgentBindingLimits {
     public static final int MAX_TIMEOUT_SECONDS = 10800;
 
     /**
+     * The longest one Heph turn runs, whatever its binding says. A developer waits for the answer, and a worker runs
+     * few turns at once: a turn as long as a review would keep every other conversation waiting.
+     */
+    public static final int MAX_HEPH_TURN_SECONDS = 300;
+
+    /**
      * The smallest context window Heph works in. Its fixed prompt (instructions, tools and the situation) takes about
      * 9,000 tokens. At 10,000 to 12,000 tokens, every turn overflowed and nothing could be compacted.
      */

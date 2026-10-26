@@ -185,6 +185,14 @@ public class SlackMessageService {
                         req.channel(channelId).ts(ts).blocks(blocks).text(text).metadata(metadata)));
     }
 
+    /** Deletes a message the app wrote. */
+    public void deleteMessage(long workspaceId, String channelId, String ts) {
+        callWrite(
+                workspaceId,
+                channelId,
+                methods -> methods.chatDelete(req -> req.channel(channelId).ts(ts)));
+    }
+
     /**
      * Post an <strong>ephemeral</strong> message via {@code chat.postEphemeral} — visible only to {@code slackUserId}
      * in {@code channelId} and gone on reload. Throws {@link SlackSendException} carrying the Slack error so the

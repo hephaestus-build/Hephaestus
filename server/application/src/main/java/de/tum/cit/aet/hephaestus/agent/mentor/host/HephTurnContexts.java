@@ -50,6 +50,14 @@ import tools.jackson.databind.node.ObjectNode;
 @Profile(HephHostConfiguration.PROFILES)
 public class HephTurnContexts {
 
+    /**
+     * The situation of a turn that this worker cannot give a context folder, for example when no turn sandbox can start.
+     * The turn has no read, bash or load tool, and without this line its instructions still send it to read files.
+     */
+    static final String NO_CONTEXT_FOLDER =
+            "This turn has no context folder: you cannot read files, run commands or load repositories. Answer from"
+                    + " this conversation and your other tools, and say plainly what you could not check.";
+
     static final Duration UNREAD = Duration.ofMinutes(15);
 
     /** Builds a change may overtake in a row before the call fails. */
@@ -150,7 +158,8 @@ public class HephTurnContexts {
                 .orElseThrow(
                         () -> new IllegalStateException("Mentor turn " + turn.turnId() + " has no admitted model"));
         Map<String, byte[]> built = current(turn, path.questionEntryId(), zone);
-        String loadable = folder.situation(turn);
+        boolean contextFolder = folder.available();
+        String loadable = contextFolder ? folder.situation(turn) : NO_CONTEXT_FOLDER;
         String situation = situations.render(turn, zone) + "\n" + (loadable.isEmpty() ? "" : loadable + "\n")
                 + MentorTurnEvidence.receipt(mapper, built);
         var effort = admitted.reasoningEffort();
@@ -165,7 +174,7 @@ public class HephTurnContexts {
                         admitted.maxOutputTokens(),
                         effort == null ? null : effort.name()),
                 situation,
-                folder.available());
+                contextFolder);
     }
 
     /** The turn attempt's context documents, built once per attempt; the turn sandbox stages them. */

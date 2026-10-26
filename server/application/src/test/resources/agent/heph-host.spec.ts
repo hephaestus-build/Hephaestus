@@ -340,6 +340,61 @@ void test("a turn sends every entry Pi appended after the stored path once, with
 	);
 });
 
+void test("a turn that keeps calling its model stops at the call limit and fails as too long", async () => {
+	const worker = fakeWorker(contextOf([], "Why is this item not met?"));
+	let requests = 0;
+	const looping = Array.from({ length: 60 }, () => () => {
+		requests += 1;
+		return faux.fauxAssistantMessage([faux.fauxToolCall("read", { path: "INDEX.md" })], {
+			stopReason: "toolUse",
+		});
+	});
+
+	const end = await runTurn(worker, fauxModels(looping));
+
+	assert.equal(end.outcome, "FAILED");
+	assert.equal(end.reason, "DEADLINE");
+	assert.equal(end.detail, "call_limit");
+	assert.equal(requests, 40);
+});
+
+void test("a turn whose answer comes with its last allowed model call ends as written", async () => {
+	const worker = fakeWorker(contextOf([], "Why is this item not met?"));
+	const steps = [
+		...Array.from(
+			{ length: 39 },
+			() => () =>
+				faux.fauxAssistantMessage([faux.fauxToolCall("read", { path: "INDEX.md" })], {
+					stopReason: "toolUse",
+				}),
+		),
+		() => faux.fauxAssistantMessage("Here is why."),
+	];
+
+	const end = await runTurn(worker, fauxModels(steps));
+
+	assert.equal(end.outcome, "DONE");
+});
+
+void test("a model call that fails at the call limit keeps its own reason", async () => {
+	const worker = fakeWorker(contextOf([], "Why is this item not met?"));
+	const steps = [
+		...Array.from(
+			{ length: 39 },
+			() => () =>
+				faux.fauxAssistantMessage([faux.fauxToolCall("read", { path: "INDEX.md" })], {
+					stopReason: "toolUse",
+				}),
+		),
+		() => faux.fauxAssistantMessage("", { stopReason: "error" }),
+	];
+
+	const end = await runTurn(worker, fauxModels(steps));
+
+	assert.equal(end.reason, "ERROR");
+	assert.equal(end.detail, "model_error");
+});
+
 void test("a turn whose model fails ends failed, sends none of its entries, and tells the worker why", async () => {
 	const worker = fakeWorker(contextOf([], "question"));
 

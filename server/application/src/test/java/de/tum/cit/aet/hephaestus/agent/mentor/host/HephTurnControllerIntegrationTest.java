@@ -18,6 +18,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import de.tum.cit.aet.hephaestus.agent.AgentControllerAdvice;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
+import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnContextFolder;
 import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnContextGenerations;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnCompletion;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnEvidence;
@@ -322,6 +323,19 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
         assertThat(fieldNames(mapper.readTree(served), ""))
                 .isSubsetOf(fieldNames(mapper.readTree(contract("context.response.json")), ""))
                 .contains("sessionId", "entries", "prompt", "situation", "model.apiProtocol", "model.modelId");
+    }
+
+    /** A turn that this worker cannot give a folder is told so, or its instructions would send it to read files. */
+    @Test
+    void shouldTellATurnWithoutAContextFolderThatItCannotReadFiles() throws Exception {
+        var folder = mock(TurnContextFolder.class);
+        when(folder.available()).thenReturn(false);
+        gateway(controller(HephTurnFixtures.contexts(beans, folder)))
+                .perform(get(TURN_PATH + "context", turn.getId())
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + credential(turn.getAttempt())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.contextFolder").value(false))
+                .andExpect(jsonPath("$.situation").value(containsString(HephTurnContexts.NO_CONTEXT_FOLDER)));
     }
 
     /** One result in the developer's history, about {@code developerAccountId}, carrying {@code problems}. */

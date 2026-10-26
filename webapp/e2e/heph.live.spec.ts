@@ -57,7 +57,7 @@ function apiOf(context: APIRequestContext): Api {
 async function bindMentor(context: APIRequestContext, instanceModelId: number): Promise<void> {
 	await body(
 		await context.put("/workspaces/e2e/agents/MENTOR?dataHandlingTier=UNDECLARED", {
-			data: { instanceModelId, enabled: true, timeoutSeconds: 600, maxConcurrentJobs: 4 },
+			data: { instanceModelId, enabled: true, timeoutSeconds: 300, maxConcurrentJobs: 4 },
 		}),
 	);
 }

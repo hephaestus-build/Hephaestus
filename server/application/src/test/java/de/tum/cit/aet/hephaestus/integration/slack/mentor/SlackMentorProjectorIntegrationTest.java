@@ -444,6 +444,75 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
     }
 
     @Test
+    void shouldTellTheDeveloperOnceThatTheQuestionWaitsAndRemoveTheNoticeWhenTheTurnRuns() {
+        when(slack.postMessage(
+                        eq(workspace.getId()),
+                        eq(CHANNEL),
+                        isNull(),
+                        eq(List.of()),
+                        eq(SlackMentorProjector.WAITING_NOTICE),
+                        any()))
+                .thenReturn(new SlackMessageService.Posted(CHANNEL, "500.1"));
+        MentorTurn queued = ask(main, "Why is this not met?", "100.1").turn();
+        changed(queued);
+        verify(slack, never()).postMessage(anyLong(), anyString(), any(), anyList(), anyString(), any());
+        assertThat(wakeUps).hasSize(1);
+
+        clock.advance(SlackMentorProjector.WAITING_NOTICE_AFTER.plusMinutes(1));
+        wakeUps.forEach(Runnable::run);
+        changed(queued);
+        verify(slack, times(1))
+                .postMessage(
+                        eq(workspace.getId()),
+                        eq(CHANNEL),
+                        isNull(),
+                        eq(List.of()),
+                        eq(SlackMentorProjector.WAITING_NOTICE),
+                        any());
+
+        changed(turns.claimNext(WORKER, LEASE).orElseThrow());
+
+        verify(slack).deleteMessage(workspace.getId(), CHANNEL, "500.1");
+    }
+
+    @Test
+    void shouldRemoveTheNoticeWhenTheDeveloperStopsAQuestionThatStillWaits() {
+        when(slack.postMessage(
+                        eq(workspace.getId()),
+                        eq(CHANNEL),
+                        isNull(),
+                        eq(List.of()),
+                        eq(SlackMentorProjector.WAITING_NOTICE),
+                        any()))
+                .thenReturn(new SlackMessageService.Posted(CHANNEL, "500.1"));
+        MentorTurn queued = ask(main, "Why is this not met?", "100.1").turn();
+        changed(queued);
+        clock.advance(SlackMentorProjector.WAITING_NOTICE_AFTER.plusMinutes(1));
+        wakeUps.forEach(Runnable::run);
+
+        changed(turns.stop(workspace.getId(), queued.getId()));
+
+        verify(slack).deleteMessage(workspace.getId(), CHANNEL, "500.1");
+    }
+
+    @Test
+    void shouldNotSayThatATurnHasNotStartedWhenItRanAndWaitsAgain() {
+        MentorTurn asked = ask(main, "Why is this not met?", "100.1").turn();
+        MentorTurn running = turns.claimNext(WORKER, LEASE).orElseThrow();
+        changed(running);
+        turns.renewLease(running.getId(), running.getAttempt(), WORKER, Duration.ofSeconds(-1));
+        assertThat(turns.expireLease(running.getId())).isPresent();
+        assertThat(turns.require(workspace.getId(), asked.getId()).getStatus()).isEqualTo(MentorTurn.Status.QUEUED);
+
+        clock.advance(SlackMentorProjector.WAITING_NOTICE_AFTER.plusMinutes(1));
+        changed(asked);
+        wakeUps.forEach(Runnable::run);
+
+        verify(slack, never())
+                .postMessage(anyLong(), anyString(), any(), anyList(), eq(SlackMentorProjector.WAITING_NOTICE), any());
+    }
+
+    @Test
     void shouldPostEveryMessageAndTheFeedbackHephShowedOnceWhenATopLevelTurnEnds() {
         MentorTurnService.Submission asked = ask(main, "How are my reviews?", "100.1");
         MentorTurn running = turns.claimNext(WORKER, LEASE).orElseThrow();
