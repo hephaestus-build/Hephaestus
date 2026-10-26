@@ -716,14 +716,14 @@ class ReviewJobExecutorTest extends BaseUnitTest {
         verify(workerCapacity).releaseReview();
         assertThat(MDC.get("job.id")).isNull();
         verifyNoInteractions(sandbox);
-        // A preparation failure names its stage, kind, exception type and message in the log line itself.
+        // A preparation failure names its stage, kind and exception types in the log line, never its message.
         assertThat(appender.list)
                 .map(ILoggingEvent::getFormattedMessage)
                 .anySatisfy(line -> assertThat(line)
                         .startsWith("Review preparation failed: jobId=" + job.getId())
                         .contains("stage=INPUTS", "kind=INPUT_PREPARATION")
-                        .contains("errorType=" + JobPreparationException.class.getName())
-                        .contains("cause=Input preparation failed"));
+                        .contains("exceptionTypes=[" + JobPreparationException.class.getName())
+                        .doesNotContain("Input preparation failed"));
     }
 
     @Test

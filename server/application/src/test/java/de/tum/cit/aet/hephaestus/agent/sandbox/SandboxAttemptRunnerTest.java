@@ -364,7 +364,7 @@ class SandboxAttemptRunnerTest extends BaseUnitTest {
                     .extracting(ILoggingEvent::getFormattedMessage)
                     .containsExactly("Sandbox execution failed: errorType="
                             + SandboxInitializationException.class.getName()
-                            + ", error=Sandbox workspace initialization failed: exit 2");
+                            + ", initializerExit=2, timedOut=false");
         }
 
         @Test

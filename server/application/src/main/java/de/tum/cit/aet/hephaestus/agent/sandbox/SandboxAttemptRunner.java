@@ -267,12 +267,20 @@ public class SandboxAttemptRunner implements SandboxManager {
         executionsFailed.increment();
         captureLogsOnError(handle);
         if (e instanceof SandboxException failure) {
-            // The message is the adapter's own text, never a transcript: it names the failure in the line itself.
-            log.error(
-                    "Sandbox execution failed: errorType={}, error={}",
-                    failure.getClass().getName(),
-                    failure.getMessage(),
-                    failure);
+            // Bounded facts only, never a message: the initializer's exit names the failure in the line itself.
+            if (failure instanceof SandboxInitializationException initialization) {
+                log.error(
+                        "Sandbox execution failed: errorType={}, initializerExit={}, timedOut={}",
+                        failure.getClass().getName(),
+                        initialization.exitCode(),
+                        initialization.timedOut(),
+                        failure);
+            } else {
+                log.error(
+                        "Sandbox execution failed: errorType={}",
+                        failure.getClass().getName(),
+                        failure);
+            }
             return failure;
         }
         log.error("Unexpected error during sandbox execution", e);

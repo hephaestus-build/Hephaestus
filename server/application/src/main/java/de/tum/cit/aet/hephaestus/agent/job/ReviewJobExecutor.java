@@ -1050,22 +1050,20 @@ public class ReviewJobExecutor {
                                                 : "The job failed during execution.";
         if (preparation == null) {
             log.error(
-                    "Agent job failed: jobId={}, error={}, errorType={}, cause={}",
+                    "Agent job failed: jobId={}, error={}, errorType={}",
                     jobId,
                     errorMessage,
                     e.getClass().getName(),
-                    e.getMessage(),
                     e);
         } else {
-            // The job row keeps types only; the log keeps the message too, masked like every log line, so that an
-            // unclassified cause can still be diagnosed.
+            // Bounded facts only, as on the job row: the exception types of the chain show an unclassified cause.
             log.error(
-                    "Review preparation failed: jobId={}, stage={}, kind={}, errorType={}, cause={}",
+                    "Review preparation failed: jobId={}, stage={}, kind={}, reason={}, exceptionTypes={}",
                     jobId,
                     preparation.stage().name(),
                     preparation.kind().name(),
-                    e.getClass().getName(),
-                    e.getMessage(),
+                    preparation.reason().name(),
+                    preparation.exceptionTypes(),
                     e);
         }
 
