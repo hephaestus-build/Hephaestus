@@ -4,6 +4,8 @@ import { test } from "node:test";
 
 import {
 	analyse,
+	CODEX_GUIDE_SEPARATOR,
+	CODEX_INSTRUCTION_BYTES,
 	CODEX_SKILLS,
 	codeSpans,
 	parse,
@@ -68,12 +70,17 @@ await test("the repository this gate ships in passes it", async () => {
 	assert.deepEqual(analyse(await scan(REPO_ROOT), CODEX_SKILLS), []);
 });
 
-await test("a guide chain one byte longer than Codex reads fails, counted in bytes", () => {
+await test("a guide chain one byte longer than Codex reads fails, counted in bytes with the separator", () => {
 	// "§" is one character and two bytes, so a count of characters would pass this chain.
-	const chain = { "AGENTS.md": "§".repeat(10_000), "webapp/AGENTS.md": "b".repeat(12_768) };
+	const root = "§".repeat(10_000);
+	const fits = CODEX_INSTRUCTION_BYTES - Buffer.byteLength(root) - CODEX_GUIDE_SEPARATOR.length;
+	const chain = { "AGENTS.md": root, "webapp/AGENTS.md": "b".repeat(fits) };
 	assert.deepEqual(analyse(snapshot(chain)), []);
-	const failure = only(analyse(snapshot({ ...chain, "webapp/AGENTS.md": "b".repeat(12_769) })));
-	assert.match(failure, /^AGENTS\.md \+ webapp\/AGENTS\.md is 32769 bytes/u);
+	const failure = only(analyse(snapshot({ ...chain, "webapp/AGENTS.md": "b".repeat(fits + 1) })));
+	assert.match(
+		failure,
+		new RegExp(`^AGENTS\\.md \\+ webapp/AGENTS\\.md is ${CODEX_INSTRUCTION_BYTES + 1} bytes`, "u"),
+	);
 });
 
 await test("sibling guides count against the budget separately", () => {

@@ -865,7 +865,10 @@ function duplicated(repo: Repo): readonly string[] {
  * `project_doc_max_bytes`, 32 KiB by default (https://developers.openai.com/codex/guides/agents-md).
  * What falls past the limit is dropped without a warning, and it is always the deepest guide's tail.
  */
-const CODEX_INSTRUCTION_BYTES = 32 * 1024;
+export const CODEX_INSTRUCTION_BYTES = 32 * 1024;
+
+/** Codex puts a blank line between two joined guides, and the separator counts against the limit. */
+export const CODEX_GUIDE_SEPARATOR = "\n\n";
 
 const inChain = (guide: string, ancestor: string): boolean =>
 	dirname(ancestor) === "." || guide.startsWith(`${dirname(ancestor)}/`);
@@ -881,7 +884,12 @@ function oversized(repo: Repo): readonly string[] {
 				.filter((ancestor) => inChain(guide, ancestor))
 				.toSorted((a, b) => a.split("/").length - b.split("/").length),
 		)
-		.map((chain) => ({ chain, total: chain.reduce((sum, path) => sum + bytes(path), 0) }))
+		.map((chain) => ({
+			chain,
+			total:
+				chain.reduce((sum, path) => sum + bytes(path), 0) +
+				(chain.length - 1) * CODEX_GUIDE_SEPARATOR.length,
+		}))
 		.filter(({ total }) => total > CODEX_INSTRUCTION_BYTES)
 		.map(
 			({ chain, total }) =>
