@@ -7,9 +7,9 @@ description: The multi-file Compose deployment that the maintainers run, and the
 The reference deployment is the multi-file Compose stack in `docker/compose.{proxy,core,app}.yaml`.
 The maintainers run it for the TUM deployment.
 Self-hosters do not use that stack.
-The [Install guide](./install) and the [Kubernetes chart](./kubernetes) are the install paths for self-hosters.
+The [Kubernetes chart](./kubernetes) is the install path for self-hosters.
+The [Install guide](./install) is deprecated and stays supported until 1.0.0, as [Supported deployment](./compatibility-policy#supported-deployment) states.
 This page links to the Install guide's facts rather than repeating them.
-The Compose deployment is deprecated, as [Supported deployment](./compatibility-policy#supported-deployment) states.
 
 This page assumes knowledge of Docker Compose.
 The TUM sections also assume access to TUM's protected secrets.
@@ -53,7 +53,8 @@ To mount legal overrides, see [Legal Pages](./legal-pages).
 
 ## Deployment steps (reference stack)
 
-The [Install guide](./install) owns the same base installation, secrets, GitHub OAuth app and callback, before-first-boot admin allowlist, and legal-pages obligation.
+The [Install guide](./install) owns the same base installation and secrets. [First steps](./first-steps) owns the GitHub OAuth app and callback, the before-first-boot admin allowlist, and the legal-pages obligation.
+
 Only multi-file stack differences appear here.
 Each file is a separate Compose project and needs its own `-p` and `up`.
 Each resolves images from the verified release lock.

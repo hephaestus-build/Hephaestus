@@ -11,7 +11,7 @@
   <p>
     <a href="https://hephaestus.build"><strong>App</strong></a> ·
     <a href="https://docs.hephaestus.build/"><strong>Docs</strong></a> ·
-    <a href="https://docs.hephaestus.build/admin/install"><strong>Self-host</strong></a> ·
+    <a href="https://docs.hephaestus.build/admin/kubernetes"><strong>Self-host</strong></a> ·
     <a href="https://github.com/hephaestus-build/Hephaestus/discussions"><strong>Discussions</strong></a>
   </p>
   <p>
@@ -96,12 +96,14 @@ The feedback is advisory: it does not approve a change for merge or grade anyone
 
 ## Get started
 
-- **Use it at TUM:** if your course or team has a workspace, sign in at [hephaestus.build](https://hephaestus.build).
+- **Run your own deployment:** on one Linux host, `k3s-install.sh` installs k3s and the Helm chart.
+  See [Install on one host (k3s)](https://docs.hephaestus.build/admin/kubernetes#install-on-one-host-k3s).
+  On a Kubernetes cluster, install the [Helm chart](https://docs.hephaestus.build/admin/kubernetes#install).
+  Then follow the [first steps](https://docs.hephaestus.build/admin/first-steps).
 - **Learn how it works:** read the [user guide](https://docs.hephaestus.build/user/overview).
-- **Run your own deployment:** follow the [installation guide](https://docs.hephaestus.build/admin/install).
-  It starts with the [supported hosts and capacity guidance](https://docs.hephaestus.build/admin/install#requirements).
 - **Upgrade:** read the release notes and the [upgrade guide](https://docs.hephaestus.build/admin/upgrade).
   Then test the upgrade in staging.
+- **Use it at TUM:** if your course or team has a workspace, sign in at [hephaestus.build](https://hephaestus.build).
 - **Contribute:** start with the
   [local development guide](https://docs.hephaestus.build/contributor/local-development).
   It also shows how to explore the UI components in Storybook.

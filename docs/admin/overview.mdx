@@ -18,9 +18,10 @@ People who change the code need the [Contributor guide](/contributor/overview).
 
 ## What a deployment consists of
 
-A deployment uses one Docker Compose stack on a single 64-bit Linux host.
 One application image starts in three runtime roles: `server`, `worker`, and `webhook`.
-The stack also has PostgreSQL, a NATS event buffer, and Traefik for TLS.
+A deployment also has PostgreSQL and a NATS event buffer.
+On [Kubernetes](./kubernetes#what-the-chart-runs), the Helm chart runs them on a cluster or on one host with k3s, and a Gateway API controller handles TLS.
+The deprecated [Docker Compose stack](./install) runs them on one host with Traefik for TLS.
 
 Sign-in uses a GitHub or GitLab OAuth app that you register during installation.
 The worker starts a sandboxed container for each practice review.
@@ -29,7 +30,7 @@ It does not keep that container active between reviews.
 
 ## Architecture and network
 
-The diagram shows the self-hosted Compose stack on one host.
+The diagram shows the deprecated Compose stack on one host. On Kubernetes, the roles run as Pods, a Gateway replaces Traefik, and the worker starts sandboxes through the Kubernetes API.
 Each box is a container, and each arrow is one of its main connections.
 [Network egress](./network-egress) lists every outbound destination and when it is used, also the ones that the diagram leaves out.
 The [threat model](./threat-model#system-and-data-flow) shows the trust boundaries of the same system.
@@ -100,8 +101,9 @@ A person can be both.
 
 ## Set it up in this order
 
-1. [Install](./install) the supported Compose stack. The guide covers required `.env` values and TLS.
-   Compose is deprecated, as [Supported deployment](./compatibility-policy#supported-deployment) states.
+1. [Install the Helm chart](./kubernetes), on a cluster or on one host with k3s.
+   Then follow [First steps](./first-steps) for the login provider, the first admin, and the first review.
+   The [Docker Compose install](./install) is deprecated and stays supported until 1.0.0, as [Supported deployment](./compatibility-policy#supported-deployment) states.
 2. [Connect a source](./integrations): a GitHub App or GitLab connection that supplies repository activity.
    [Integration settings](./production-setup) covers Slack and Outline.
 3. [Connect an AI provider](./ai-providers) with an OpenAI-compatible endpoint.

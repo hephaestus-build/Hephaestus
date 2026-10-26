@@ -1,14 +1,16 @@
 ---
 id: install
-title: Install (Self-Hosted)
-description: The supported 0.x install of Hephaestus — Docker Compose on a single host.
+title: Docker Compose (deprecated)
+description: The deprecated 0.x install of Hephaestus — Docker Compose on a single host.
 ---
+
+For a new install, use the Helm chart on [Kubernetes](./kubernetes).
+On one Linux host, follow [Install on one host (k3s)](./kubernetes#install-on-one-host-k3s).
 
 This page installs the Docker Compose stack in
 [`docker/self-host/`](https://github.com/hephaestus-build/Hephaestus/tree/main/docker/self-host)
-on one Linux host. It is the supported install for the 0.x releases.
-From 1.0.0, the supported deployment is the Helm chart on [Kubernetes](./kubernetes).
-For one Linux host with the Helm chart, follow [Install on one host (k3s)](./kubernetes#install-on-one-host-k3s).
+on one Linux host. It stays supported for the rest of the 0.x releases.
+From 1.0.0, the Helm chart is the only supported deployment.
 Other setups (own reverse proxy, external database, Podman) can work but are unsupported.
 
 The stack you get:
@@ -133,13 +135,13 @@ credential key only with the [credential-key rotation procedure](./credential-ke
 2. Fill in the remaining **REQUIRED** values.
 3. Do not replace the generated internal secrets manually.
 
-   | Variable                           | What / how                                                                                                                                           |
-   | ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-   | `APP_HOSTNAME`                     | Your public hostname, for example, `hephaestus.example.com`                                                                                          |
-   | `ACME_EMAIL`                       | `Let's Encrypt` expiry notices                                                                                                                       |
-   | One login provider                 | GitHub OAuth (`GH_OAUTH_CLIENT_ID` / `_SECRET`) or GitLab OAuth (`GITLAB_OAUTH_CLIENT_ID` / `_SECRET` and its base URL), from step 3. One is enough. |
-   | `DOCKER_GROUP_ID`                  | Host group ID that can access `/var/run/docker.sock`. Use the command below. A wrong value prevents every sandbox start.                             |
-   | `HEPHAESTUS_AUTH_BOOTSTRAP_ADMINS` | From step 4 — set it **before** first boot                                                                                                           |
+   | Variable                           | What / how                                                                                                                                                                                                  |
+   | ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+   | `APP_HOSTNAME`                     | Your public hostname, for example, `hephaestus.example.com`                                                                                                                                                 |
+   | `ACME_EMAIL`                       | `Let's Encrypt` expiry notices                                                                                                                                                                              |
+   | One login provider                 | GitHub OAuth (`GH_OAUTH_CLIENT_ID` / `_SECRET`) or GitLab OAuth (`GITLAB_OAUTH_CLIENT_ID` / `_SECRET` and its base URL), from [First steps § 1](./first-steps#1-configure-a-login-provider). One is enough. |
+   | `DOCKER_GROUP_ID`                  | Host group ID that can access `/var/run/docker.sock`. Use the command below. A wrong value prevents every sandbox start.                                                                                    |
+   | `HEPHAESTUS_AUTH_BOOTSTRAP_ADMINS` | From [First steps § 2](./first-steps#2-name-the-first-admin) — set it **before** first boot                                                                                                                 |
 
 4. To find `DOCKER_GROUP_ID`, run:
 
@@ -210,51 +212,7 @@ In that setup, `APP_HOST_MATCH` has no effect.
 2. Configure their certificate there.
 3. Configure its redirect to `APP_HOSTNAME`.
 
-## 3. Configure a login provider
-
-One enabled GitHub or GitLab login provider is enough. Slack and Outline are for account linking,
-not sign-in. The steps below configure GitHub. For GitLab, use the
-[GitLab rollout bundle](./production-setup#gitlab-rollout-bundle).
-
-GitHub login needs a plain **OAuth App**.
-This is *not* the GitHub App for data access: see [GitHub integration](./github-integration).
-Without a login provider, the instance boots but shows **no sign-in button**.
-
-1. Open [github.com/settings/developers](https://github.com/settings/developers), or your organization's equivalent settings.
-2. Select **New OAuth App**.
-3. Set **Homepage URL** to `https://<APP_HOSTNAME>`.
-4. Set **Authorization callback URL** to `https://<APP_HOSTNAME>/api/login/oauth2/code/github`.
-   The string must include `/api` and have no trailing slash.
-5. If the GitHub settings page offers an image upload, use [`external-app-icon-1024.png`](/img/brand/external-app-icon-1024.png) as the application logo.
-6. Create a client secret.
-7. Put both values into `.env` as `GH_OAUTH_CLIENT_ID` / `GH_OAUTH_CLIENT_SECRET`.
-
-GitLab login works the same way and can be used instead of (or next to) GitHub — see the
-[GitLab rollout bundle](./production-setup#gitlab-rollout-bundle).
-
-## 4. First admin — before first boot
-
-The admin UI requires admin access.
-The **first instance admin must therefore come from operator config**, not the UI.
-
-1. Set this value in `.env`:
-
-   ```bash
-   HEPHAESTUS_AUTH_BOOTSTRAP_ADMINS=github:@your-github-username
-   ```
-
-   The format is comma-separated `<provider>:@<username>` or `<provider>:<numeric-id>`.
-   Promotion occurs **on sign-in**.
-   It is idempotent and never demotes.
-
-2. On public github.com, prefer the numeric ID (`github:1234567`, from `https://api.github.com/users/<login>`).
-   Others can reclaim abandoned handles.
-3. If you omitted the value, add it.
-4. If you omitted the value, restart after adding it.
-
-For the break-glass bootstrap token, see [Instance admin](./instance-admin#bootstrap-and-recovery).
-
-## 5. First boot
+## 3. First boot
 
 ```bash
 docker compose --env-file .env --env-file release-lock.env up -d
@@ -265,115 +223,7 @@ First startup pulls about 2 GB of images, and the one-shot `database-migration` 
 The application server starts after it completes. A failed migration shows in its log.
 It can take a few minutes.
 
-1. Open `https://<APP_HOSTNAME>`.
-   The login page should offer **Continue with GitHub**.
-2. Sign in as the bootstrap admin.
-   You should see instance-admin navigation.
-3. Open **Instance administration → Overview**.
-4. Read **Configuration readiness**.
-
-   Each item under **Action required** needs a change and links to its section in [Configuration readiness](./configuration-readiness).
-   **Not configured** lists optional settings you have not set, such as email.
-   The page never shows a setting's value.
-
-5. Leave optional settings until you want them.
-6. Create your first workspace.
-7. Connect it to GitHub.
-
-## 6. Connect repository data
-
-A new instance starts in **Silent mode**. Sync and reviews can run, but outbound feedback is blocked.
-Turning silent mode off does not replay feedback withheld while it was on.
-See [Instance admin](./instance-admin#silent-mode).
-
-1. Check the deployment and integrations.
-2. Open **Instance admin → Instance settings**.
-3. Turn silent mode off.
-
-For GitLab workspaces, use [Integrations](./integrations#gitlab). For GitHub:
-
-Login alone syncs nothing.
-Data flow requires two things.
-Both have procedures in
-[GitHub integration](./github-integration):
-
-1. **Repository access** — use a **PAT** in the workspace UI for the simplest setup.
-   A **GitHub App** is necessary to post AI-review feedback to GitHub and offers better rate limits.
-2. **Webhooks** — Hephaestus does **not** auto-register GitHub webhooks (unlike GitLab).
-   Configure the webhook on your GitHub App **or** create an org/repo webhook manually,
-   pointing at `https://<APP_HOSTNAME>/webhooks/github` with your `WEBHOOK_SECRET`. Without
-   it the instance only sees changes on the hourly sync poll, and nothing warns you.
-
-## 7. Optional integrations
-
-All optional integrations are off by default.
-The Compose file already passes their variables through.
-Each has a variable reference in [Integration settings](./production-setup).
-
-1. Enable the desired integrations in `.env`.
-2. Run:
-
-   ```bash
-   docker compose --env-file .env --env-file release-lock.env up -d
-   ```
-
-| Add-on             | What it gives you                                                                                             | Where                                                         |
-| ------------------ | ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
-| GitLab             | GitLab login, workspaces, and sync (webhooks auto-register here)                                              | [GitLab bundle](./production-setup#gitlab-rollout-bundle)     |
-| Slack              | Heph in Slack DMs, channel ingestion                                                                          | [Slack app setup](./production-setup#slack-app-configuration) |
-| Outline            | Wiki as a content source for reviews                                                                          | [Outline integration](./production-setup#outline-integration) |
-| AI practice review | Automated PR feedback from the coding agent                                                                   | [Practice review](./practice-review#first-successful-review)               |
-| Email              | Optional invitations, summaries, weekly digest notes, and connection alerts. Configure `SPRING_MAIL_*` and `HEPHAESTUS_EMAIL_FROM` | [Email setup](./production-setup#email)                       |
-| An AI provider     | The model everything AI runs on — required by the row above                                                   | [Connect an AI Provider](./ai-providers)                      |
-
-AI practice review requires both the environment bundle above and a model that the workspace can run on.
-The bundle contains `AGENT_ENABLED` and `GIT_CHECKOUT_ENABLED`.
-
-1. Set them together on each role that submits or claims work.
-
-The job queue runs on PostgreSQL, so this bundle needs no NATS setup.
-
-[Connect an AI Provider](./ai-providers) explains model setup.
-It covers provider connection registration, tests, model prices, model shares, and an assignment to the **practice reviews** purpose.
-No reviews run until setup is complete.
-
-If the flags are on but no model is assigned, reviews do not run.
-Hephaestus records each review opportunity with the reason **No AI model is assigned to practice review.**
-The reason is visible under **Practices → Practice reviews → Work**.
-A workspace without an assigned model is a normal state.
-
-### Chrome extension
-
-The optional [Chrome extension](./browser-extension) shows practice reviews on GitHub or GitLab work pages.
-The guide explains how to allow sign-in and distribute the extension to users.
-
-## 8. Legal pages (public instances)
-
-:::caution CAUTION: Public instances need legal pages
-`/imprint` and `/privacy` serve a red "not configured" fallback until you provide your own.
-For operators in Germany that is a § 5 DDG / Art. 13 GDPR obligation **before** opening the
-instance to users. See [Legal Pages](./legal-pages).
-:::
-
-## 9. First practice review
-
-Before this procedure, GitHub must be connected (step 6).
-A model must also be assigned to practice reviews ([Connect an AI
-Provider](./ai-providers)).
-The procedure runs one review and lets you read its feedback before anyone else can:
-
-1. Open **Practices → Review settings → How much**.
-2. Set the **Workspace default** to **Review before sending**.
-   Each piece of feedback waits for your approval.
-3. Follow [First successful review](./practice-review#first-successful-review).
-4. When the review finishes, open **Practices → Practice reviews**. Its feedback is listed under
-   **Needs you**, awaiting approval. Nothing reaches the pull or merge request before you approve it.
-5. Open the feedback.
-6. Read it.
-7. Read the problems behind it.
-8. Approve or reject the feedback.
-
-9. Once the feedback reads as you want, widen coverage or increase feedback mode as [Practice review](./practice-review) describes.
+Continue with [First steps § 3. Sign in](./first-steps#3-sign-in).
 
 ## Upgrades
 

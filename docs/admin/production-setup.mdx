@@ -5,7 +5,9 @@ description: The deployment settings of every optional integration bundle, email
 ---
 
 This page owns the deployment settings of the optional integrations: GitLab, Slack, Outline, practice review, email, and sync.
-The [Install guide](./install) owns the base `.env`, the GitHub OAuth app, the first admin, and first boot.
+[Kubernetes](./kubernetes) and the deprecated [Docker Compose install](./install) own the base installation.
+[First steps](./first-steps) owns the GitHub OAuth app and the first admin.
+
 [Integrations](./integrations) owns the workspace connections that a workspace admin makes in the UI.
 The [reference deployment](./reference-deployment) owns the multi-file Compose stack that the maintainers run, the webapp container, and the rollout tiers.
 The [Install guide](./install#clocks) owns the clock requirement.
@@ -17,7 +19,10 @@ The [Configuration reference](./configuration-reference) lists every variable wi
 
 ## Base environment variables
 
-The [Install guide](./install#2-configure-env) owns these required base values and their lifecycle constraints:
+These base values are required.
+On Kubernetes, [Secret custody](./secret-custody#inventory) gives their lifecycle constraints.
+On Docker Compose, the [Install guide](./install#2-configure-env) gives them.
+[First steps](./first-steps) covers the login provider and the first admin.
 
 - `HEPHAESTUS_SECURITY_ENCRYPTION_KEY`.
 - `HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY`.

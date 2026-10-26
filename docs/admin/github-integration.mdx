@@ -12,7 +12,7 @@ Hephaestus uses three GitHub mechanisms:
 | **PAT** *or* **GitHub App** | Repository data access and feedback delivery per workspace | One of the two                                                                                      |
 | **Webhook**                 | Live events: PRs, reviews, pushes, and others              | Strongly recommended. Without it, updates wait for scheduled sync, hourly by default in production. |
 
-Configure login with the [OAuth App setup](./install#3-configure-a-login-provider).
+Configure login with the [OAuth App setup](./first-steps#1-configure-a-login-provider).
 
 ## Choosing PAT vs GitHub App
 
@@ -339,7 +339,7 @@ Hephaestus does not implement GitHub's manifest registration flow.
 
 The GitHub App reads repositories with installation tokens.
 Its callback URL and client credentials only [confirm who installed it](#connecting-an-installation-to-a-workspace).
-Login uses a [separate OAuth App](./install#3-configure-a-login-provider).
+Login uses a [separate OAuth App](./first-steps#1-configure-a-login-provider).
 Only the OAuth App's credentials belong in `GH_OAUTH_CLIENT_ID` / `GH_OAUTH_CLIENT_SECRET`.
 Only the GitHub App's credentials belong in `GH_APP_CLIENT_ID` / `GH_APP_CLIENT_SECRET`.
 

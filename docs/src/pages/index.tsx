@@ -31,7 +31,7 @@ const guides = [
 		description: "Install it, connect a source and an AI provider, and keep it healthy.",
 		to: "/admin/overview",
 		links: [
-			{ label: "Install (self-hosted)", to: "/admin/install" },
+			{ label: "Install with Helm", to: "/admin/kubernetes" },
 			{ label: "Connect an AI provider", to: "/admin/ai-providers" },
 			{ label: "Practice catalog", to: "/admin/practice-catalog" },
 		],
@@ -69,7 +69,7 @@ function HomepageHeader() {
 							<Link className="button button--primary button--lg" to="/user/overview">
 								Read the user guide
 							</Link>
-							<Link className="button button--secondary button--lg" to="/admin/install">
+							<Link className="button button--secondary button--lg" to="/admin/kubernetes">
 								Install it yourself
 							</Link>
 						</div>
