@@ -393,7 +393,7 @@ The other sections stand.
 The Helm chart and the Kubernetes runtime ship from 1.0.
 Before 1.0, the maintainers' staging instance runs the signed chart on k3s on its host, upgraded by the host's pull timer ([ADR 0042](0042-hosts-pull-their-own-releases.md)).
 Their production instance follows after one release qualified there.
-The chart supports a conformant Kubernetes cluster at a minor version that the Kubernetes project supports, from 1.34.
+The chart supports a conformant Kubernetes cluster at a minor version that the Kubernetes project supports ([ADR 0060](0060-the-kubernetes-floor-follows-upstream-support.md) sets the floor).
 The cluster needs a network plugin that enforces NetworkPolicy for egress and ingress, and a Gateway API controller for `HTTPRoute` `v1`.
 `kubeVersion` in the chart is a technical floor, not the support statement.
 CI installs and upgrades the chart on the lowest and the latest supported minor ([`docs/admin/kubernetes.mdx`](../admin/kubernetes.mdx#supported-clusters)).

@@ -20,13 +20,14 @@ It uses only stable Kubernetes APIs and the Gateway API `HTTPRoute` resource of 
 Hephaestus supports the chart on a cluster with these items:
 
 - A [conformant](https://www.cncf.io/training/certification/software-conformance/) Kubernetes cluster at a minor version that the [Kubernetes project supports](https://kubernetes.io/releases/) when the Hephaestus release ships.
-  The chart refuses a cluster below 1.34.
+  The chart refuses a cluster below 1.35.
+  A cluster at an older minor, for example 1.30 or 1.33, must be upgraded before Hephaestus runs on it ([ADR 0060](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0060-the-kubernetes-floor-follows-upstream-support.md)).
 - A network plugin that enforces NetworkPolicy for egress and for ingress.
   The worker's isolation probe stops the worker on a plugin that does not ([Sandbox prerequisites](#sandbox-prerequisites)).
 - A Gateway API controller for `HTTPRoute` `v1` with the four features in [Gateway routes](#gateway-routes).
 - A storage class for `ReadWriteOnce` volumes, for the bundled PostgreSQL and NATS.
 
-CI installs and upgrades the chart on Kubernetes 1.35 and on the latest minor version, 1.37, on `amd64`.
+CI installs and upgrades the chart on Kubernetes 1.35, the lowest version that the chart takes, and on the latest minor version, 1.37, on `amd64`.
 It also runs 1.35 on `arm64`, the minor version of the `arm64` host that the maintainers deploy to.
 A pull request runs only the latest minor version on `amd64`. The merge queue and each commit to `main` run all of them.
 One more run uses three nodes, Calico for network policy, and an external PostgreSQL.
