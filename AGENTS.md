@@ -123,7 +123,7 @@ The SPA talks to the server only through the generated client.
   Task naming, lint configuration, and cross-platform commands: `docs/contributor/local-verification.mdx` § Repository tooling.
 
 Skills live in `.claude/skills/<name>/`.
-Codex reads only `.agents/skills/`, so the five contribution skills have byte-identical mirrors there.
+Codex reads only `.agents/skills/`, so the six contribution skills have byte-identical mirrors there.
 `docs/contributor/ai-agent-workflow.mdx` § Slash commands has the rules.
 
 | Skill | When |
@@ -134,6 +134,7 @@ Codex reads only `.agents/skills/`, so the five contribution skills have byte-id
 | `/react-best-practices` | Frontend performance. Read its applicability table first. |
 | `/fix-ci`, `/land-pr`, `/resolve-review`, `/gh-stack` | CI triage, opening a PR, review comments, stacked PRs |
 | `/watch-pr` | Watching a PR until it is ready to merge |
+| `/modernize-pr` | Rebasing an old PR or continuing someone else's |
 
 ## Dev servers
 
