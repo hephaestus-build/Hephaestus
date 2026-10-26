@@ -1,4 +1,4 @@
-// The palette this page shares with the practice profile is `webapp/AGENTS.md` § Practice surfaces palette.
+// The palette this page shares with the practice profile is `webapp/DESIGN.md` § Practice surfaces palette.
 
 import type { ReactNode } from "react";
 

@@ -25,7 +25,7 @@ export interface AdminSurveyCreateLevelProps {
 	onPublished: (surveyId: string) => void;
 }
 
-/** The composer as a guarded drawer level — `webapp/AGENTS.md` § Guarded levels. */
+/** The composer as a guarded drawer level — `webapp/DESIGN.md` § Guarded levels. */
 export function AdminSurveyCreateLevel({ nested, onPublished }: AdminSurveyCreateLevelProps) {
 	const queryClient = useQueryClient();
 	const workspacesQuery = useQuery(adminListWorkspacesOptions());

@@ -1,10 +1,5 @@
 # Server
 
-All prose follows the [writing standard](../docs/contributor/simplified-technical-english.md).
-It has two profiles.
-UI text, user-facing responses, and user docs use the product voice.
-Admin docs, contributor docs, and repository instructions use STE.
-
 Spring Boot 4 / Java 21 / Spring Modulith 2. Liquibase owns the schema. The OpenAPI spec and the
 GraphQL clients are generated. Package layout under
 `application/src/main/java/de/tum/cit/aet/hephaestus/` follows the domain (`core/`, `workspace/`, `agent/`,
@@ -222,4 +217,4 @@ Configuration binds to
 Paketo Cloud Native Buildpacks with Application CDS. No `Dockerfile`. From `server/`:
 `./gradlew :application:bootJar`, then
 `pack build hephaestus/application-server --path application/build/libs/hephaestus-application-*.jar --descriptor application/project.toml --run-image <the run image pinned in .github/workflows/cicd.yml>`.
-Pinning and rationale: `docs/admin/buildpacks-cds-decision.md`.
+Pinning and rationale: `docs/contributor/buildpacks-cds-decision.md`.

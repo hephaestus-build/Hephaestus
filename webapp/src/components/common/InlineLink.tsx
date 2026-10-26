@@ -26,7 +26,7 @@ export interface InlineLinkProps extends Omit<
 
 /**
  * A link inside running text — a practice name, a work reference, a crumb in a level's path —
- * drawn to the practice surfaces' link rule (`webapp/AGENTS.md` § Practice surfaces palette), so a
+ * drawn to the practice surfaces' link rule (`webapp/DESIGN.md` § Practice surfaces palette), so a
  * name that opens a level and one that opens the provider's page look alike. A reference with
  * nowhere to go is a word, and a word that answers no press gets no hover. Rendered through
  * `useRender`, so it can stand in a `render=` slot such as a tooltip trigger's.

@@ -6,7 +6,7 @@ import { ReviewListLink } from "./ReviewListLink";
 /**
  * A card's title as the link to its tab, in the card's scope: the title is where one clicks to see
  * the rows a card sums up, and the tabs sit far above it. It follows the link convention
- * (`webapp/AGENTS.md` § Practice surfaces palette): plain title text at rest, the accent with an
+ * (`webapp/DESIGN.md` § Practice surfaces palette): plain title text at rest, the accent with an
  * underline on hover and focus, like every other link on the page. Without a workspace, as in a
  * preview, it stays a plain title.
  */

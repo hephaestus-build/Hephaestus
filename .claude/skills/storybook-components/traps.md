@@ -22,7 +22,7 @@ animation routinely. Any settle helper must `.catch()` the rejection and treat i
 
 ## 3. A hook suppression aimed at the `useEffect` line suppresses nothing
 
-`webapp/AGENTS.md` § Linting owns this.
+`docs/contributor/local-verification.mdx` § oxlint traps owns this.
 The two effect rules report on the `setState` line inside the effect.
 One `setState` usually triggers both.
 A directive naming `react-hooks/rules-of-hooks` silences every hook diagnostic in the component.

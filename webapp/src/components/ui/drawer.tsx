@@ -16,7 +16,7 @@ import { cn } from "cn";
  * 3. `DrawerBody`, the scrollable middle, keyboard-focusable so a submitting form's disabled
  *    controls do not strand the overflow. `DrawerHeader` and `DrawerFooter` are sized for it: the
  *    footer is bordered and reverses to a row at `sm`, and neither centres on the y axis.
- * 4. The motion tokens in `webapp/AGENTS.md` § Motion: 280ms in on a decelerate curve
+ * 4. The motion tokens in `webapp/DESIGN.md` § Motion: 280ms in on a decelerate curve
  *    (`--drawer-enter`, `--drawer-ease`), 200ms out on a standard curve (`--drawer-exit`), and a
  *    `motion-reduce:` block that zeroes the scale, the peek and the travel and keeps the fade.
  *    Upstream is 450ms both ways on one curve with no reduced-motion branch.

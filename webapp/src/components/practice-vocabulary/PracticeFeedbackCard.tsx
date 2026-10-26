@@ -655,7 +655,7 @@ export function PracticeFeedbackCard({
  * and below square instead of in a mitred corner, and the band stays unpositioned under the card's
  * link. Once the work resolved the feedback, the band wears the success wash and leads with the
  * green tick. Feedback the reader marked, or a practice change closed, keeps the neutral ground
- * (`webapp/AGENTS.md` § Practice surfaces palette).
+ * (`webapp/DESIGN.md` § Practice surfaces palette).
  */
 type NextStepTone = "open" | "resolved" | "closed";
 

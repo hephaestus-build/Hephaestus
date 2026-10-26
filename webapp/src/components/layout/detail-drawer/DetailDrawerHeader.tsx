@@ -29,7 +29,7 @@ export interface DetailDrawerHeaderProps {
  * The dismiss is a `DrawerClose`, so it closes through the same path as Escape, an outside press and
  * a swipe rather than a fourth one that can drift.
  *
- * The content row wraps as a backstop; two columns is the rule — `webapp/AGENTS.md` § Panel regions.
+ * The content row wraps as a backstop; two columns is the rule — `webapp/DESIGN.md` § Panel regions.
  */
 export function DetailDrawerHeader({
 	nested = false,

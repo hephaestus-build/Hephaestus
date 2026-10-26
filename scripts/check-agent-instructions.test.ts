@@ -68,6 +68,28 @@ await test("the repository this gate ships in passes it", async () => {
 	assert.deepEqual(analyse(await scan(REPO_ROOT), CODEX_SKILLS), []);
 });
 
+await test("a guide chain one byte longer than Codex reads fails, counted in bytes", () => {
+	// "§" is one character and two bytes, so a count of characters would pass this chain.
+	const chain = { "AGENTS.md": "§".repeat(10_000), "webapp/AGENTS.md": "b".repeat(12_768) };
+	assert.deepEqual(analyse(snapshot(chain)), []);
+	const failure = only(analyse(snapshot({ ...chain, "webapp/AGENTS.md": "b".repeat(12_769) })));
+	assert.match(failure, /^AGENTS\.md \+ webapp\/AGENTS\.md is 32769 bytes/u);
+});
+
+await test("sibling guides count against the budget separately", () => {
+	assert.deepEqual(
+		analyse(
+			snapshot({
+				"AGENTS.md": "a".repeat(12_000),
+				"webapp/AGENTS.md": "b".repeat(20_000),
+				"server/AGENTS.md": "c".repeat(20_000),
+				"server/CLAUDE.md": "@AGENTS.md\n",
+			}),
+		),
+		[],
+	);
+});
+
 await test("a nested AGENTS.md with no CLAUDE.md beside it is unreachable in Claude Code", () => {
 	const failure = only(analyse(snapshot({ "webapp/CLAUDE.md": null })));
 	assert.match(failure, /webapp\/AGENTS\.md is loaded by every agent except Claude Code/u);

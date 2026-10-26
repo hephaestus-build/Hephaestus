@@ -119,7 +119,7 @@ function describedBy(...ids: (string | false | undefined)[]): string | undefined
 }
 
 /**
- * A guarded drawer level — `webapp/AGENTS.md` § Guarded levels — that writes one survey. Preview
+ * A guarded drawer level — `webapp/DESIGN.md` § Guarded levels — that writes one survey. Preview
  * opens the very dialog members get, on the draft; the questionnaire is a native form, so it cannot
  * sit inside this one.
  */

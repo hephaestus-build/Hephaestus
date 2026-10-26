@@ -146,8 +146,8 @@ ignore the field, so there they are ordinary skills the model can reach on its o
 
 | File               | Covers                                                                                  |
 | ------------------ | --------------------------------------------------------------------------------------- |
-| `AGENTS.md`        | The repository — layout, quality gates, generated artefacts, migrations, changesets     |
-| `webapp/AGENTS.md` | The SPA — component conventions, linting traps, drawers, motion, vocabulary             |
+| `AGENTS.md`        | The repository — layout, quality gates, generated artifacts, migrations, changesets     |
+| `webapp/AGENTS.md` | The SPA — component conventions, data fetching, role gating, vocabulary                 |
 | `server/AGENTS.md` | The Spring Boot server — build traps, the four test tiers, API and security conventions |
 
 The tools read them differently.
@@ -160,6 +160,9 @@ The file itself does not show these differences:
   It stops there.
   Start it in `webapp/` to get the SPA guide.
   If you start it at the root, it has only the root file.
+  It stops reading at 32 KiB and drops the rest without a warning.
+  Thus, the root file and each nested file together stay under 32 KiB.
+  Detail goes in the owning doc, such as `webapp/DESIGN.md`, with a pointer from the guide.
 - **Claude Code** reads `CLAUDE.md` and
   [never `AGENTS.md`](https://code.claude.com/docs/en/memory#agents-md).
   Thus, each `AGENTS.md` has a `CLAUDE.md` beside it with one import line: `@AGENTS.md`.
@@ -178,6 +181,7 @@ The file itself does not show these differences:
 - A Codex mirror differs from its source.
 - Two agent files have the same body.
 - Any of these files is a committed symlink.
+- The root `AGENTS.md` and a nested one together are larger than 32 KiB.
 
 Each failure explains itself.
 The gate compares bodies exactly.

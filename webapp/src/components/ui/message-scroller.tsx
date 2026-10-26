@@ -1,7 +1,7 @@
 // ⚠️ Diverges from the shadcn registry — `shadcn add message-scroller` drops the following; re-apply it.
 //
 // The hooks are re-exported straight from the primitive (`unicorn/prefer-export-from`), and the jump
-// button only fades under reduced motion (`webapp/AGENTS.md` § Motion).
+// button only fades under reduced motion (`webapp/DESIGN.md` § Motion).
 import { MessageScroller as MessageScrollerPrimitive } from "@shadcn/react/message-scroller";
 import { cn } from "cn";
 import { ArrowDownIcon } from "lucide-react";

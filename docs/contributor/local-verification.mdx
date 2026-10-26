@@ -268,7 +268,7 @@ Write a rule once.
   All tree configs load it.
   Each config chooses which rules to turn on.
   Thus, adding a rule to the plugin enables it nowhere.
-  `webapp/AGENTS.md` § Linting has the rest.
+  § oxlint traps has the rest.
 - **`vp run` does not give a command a POSIX shell on every platform.**
   Thus, a command never contains `$`.
   `scripts/ci-contract.test.ts` enforces this.
@@ -278,3 +278,66 @@ Write a rule once.
   An oxfmt pattern with no `/` matches a basename at any depth.
   A pattern with a `/` is anchored at the working directory.
   Thus, a root-only pass pairs its patterns with `!*/**`.
+
+### oxlint traps
+
+Each restriction explains itself in its diagnostic at the call site.
+The following constraints do not appear in diagnostics.
+The commands assume the webapp.
+The extension uses the same layers.
+
+- **Suppress with `// oxlint-disable-next-line <rule> -- <why>`**, above the line named by the diagnostic.
+  Spell the rule as the **diagnostic** prints it: `plugin(rule)` becomes `plugin/rule`.
+  A directive that suppresses nothing fails the build.
+  `options.reportUnusedDisableDirectives` is `error`.
+  Thus, the build detects misspelled rules, nonexistent rules, and suppressions whose reason no longer applies.
+  The next case can still hide the original diagnostic.
+- **A hooks suppression silences the whole component.** oxlint routes every React-hooks diagnostic through one directive name.
+  `// oxlint-disable-next-line react-hooks/rules-of-hooks` can appear **anywhere in a component body**.
+  It also suppresses `react(set-state-in-effect)` and `react(no-deriving-state-in-effects)` for that whole component.
+  This happens regardless of the line below the directive.
+  Neighboring components still report diagnostics, so the file does not appear disabled.
+
+  The build still fails because it reports the directive as unused.
+  It reports the directive, not the effect, so the diagnostic you intended to silence disappears.
+  The two effect rules report on the `setState` line *inside* the effect, not on `useEffect`.
+  Thus, a directive above the effect never covers them.
+  Fix the effect.
+- **The config validator catches three shapes and misses a fourth.** oxlint refuses to start in these cases:
+  - `jsPlugins` names a module that it cannot load.
+  - `plugins` names an unknown plugin.
+  - A rule names a rule that its plugin does not define, including a namespace with no provider.
+
+  It does **not** detect a rule whose plugin is a built-in omitted from `plugins`.
+  It drops that rule with no diagnostic and a zero exit.
+  Check this with one command.
+  A config of `{"plugins":["typescript"],"rules":{"unicorn/prefer-node-protocol":"error"}}` passes a file that imports `"path"`.
+- **`react/forbid-dom-props` sees a DOM element and not a component.** `data-testid` on a `<div>` fails
+  the build. The same attribute handed to `<Button>` or `<Textarea>` and spread onto the DOM from
+  inside does not fail.
+  Thus, the ban does not cover the component layer.
+  Do not treat that gap as permission.
+- **A nullable string, number or boolean in a condition names its falsy case.**
+  `typescript/strict-boolean-expressions` reports the truthiness check, but not its replacement.
+  Use the applicable check:
+  - For a string, `hasText(s)` (`@/lib/text`).
+  - For a count, `n !== undefined && n > 0`.
+  - For a boolean, `flag === true`.
+  - For a `ReactNode` slot, `rendersContent(node)` (`@/lib/react-node`).
+    Here, `0` renders and `false` does not.
+
+  A `ReactNode` slot typed `ReactElement | undefined` needs none of these checks.
+- **The one exception `jsx-a11y/no-autofocus` earns** is the first field of an overlay the user just
+  opened. Suppress that case inline with the reason. Everything else is the bug the rule describes.
+- **Before you trust or change an off rule's reason, re-derive its reports.**
+  From the repository root, run `vp -C webapp lint -A all -D <rule> --report-unused-disable-directives-severity=off .`.
+  `-A all` excludes the rest of the rule set from the result.
+  The severity flag excludes suppressions that those excluded rules left unused.
+  A nested `overrides` entry still applies.
+  Thus, a rule that an override disables for some files stays off there.
+- **An `off` entry pins a decision and carries its reason.** The root `.oxlintrc.json` header owns the base policy.
+  If a category enables the rule, explain why it does not apply here.
+  Otherwise, explain why a rule that someone could select is wrong here.
+  Thus, the decision survives a category change in an oxlint release.
+  If this tree disables a rule enabled by the base, name the different constraint, not a preference.
+  Examples are the browser target and the React Compiler.

@@ -92,7 +92,7 @@ export const WithMark: Story = {
 	},
 };
 
-/** Text-like status goes below the title, inside its column (`webapp/AGENTS.md` § Panel regions). */
+/** Text-like status goes below the title, inside its column (`webapp/DESIGN.md` § Panel regions). */
 export const WithChipsAndDescription: Story = {
 	args: {
 		mark: groupPill,

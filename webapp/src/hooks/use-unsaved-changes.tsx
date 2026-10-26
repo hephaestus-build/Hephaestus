@@ -36,7 +36,7 @@ export interface UseUnsavedChangesOptions {
  * alone races the post-save navigation and asks the reader to discard work they just saved.
  *
  * Blocks *every* navigation, which is what makes Cancel work on a guarded drawer level — leaving
- * one is a navigation. See `webapp/AGENTS.md` § Guarded levels for the trap on the other side.
+ * one is a navigation. See `webapp/DESIGN.md` § Guarded levels for the trap on the other side.
  */
 export function useUnsavedChanges({
 	isDirty,

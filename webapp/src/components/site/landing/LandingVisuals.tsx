@@ -26,7 +26,7 @@ export interface LandingGroupVisual {
 	icon: string;
 }
 
-/** The house decelerate curve, `webapp/AGENTS.md` § Motion. */
+/** The house decelerate curve, `webapp/DESIGN.md` § Motion. */
 export const landingEase = [0.05, 0.7, 0.1, 1] as const;
 
 export function LandingSceneList({ children }: { children: ReactNode }) {
