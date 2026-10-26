@@ -13,8 +13,8 @@ export interface TraceDisplay {
 	 */
 	system: boolean;
 	/**
-	 * The other results and feedback of the record the reader started from, which otherwise
-	 * fold into one line. The review's results table opens and folds on its own.
+	 * The other observations and feedback of the record the reader started from, which otherwise
+	 * fold into one line. The review's observations table opens and folds on its own.
 	 */
 	siblings: boolean;
 	connections: boolean;

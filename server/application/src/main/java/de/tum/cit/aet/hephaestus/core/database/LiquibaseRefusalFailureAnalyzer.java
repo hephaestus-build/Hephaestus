@@ -19,7 +19,8 @@ import org.springframework.boot.diagnostics.FailureAnalysis;
  *       preconditions, which quote the driver message. The top-level preconditions in {@code db/master.xml} must
  *       therefore read only server settings, the catalog and {@code databasechangelog}.
  *   <li>A changeset precondition that halts the update when it fails. Its message is the changeset's
- *       {@code onFailMessage} or Liquibase's expected and actual result.
+ *       {@code onFailMessage} or Liquibase's expected and actual result. A {@code sqlCheck} that halts must
+ *       therefore return a count or flag, never row data.
  * </ul>
  *
  * <p>A changeset precondition that errors, or a failed statement, carries the driver message and is not reported.

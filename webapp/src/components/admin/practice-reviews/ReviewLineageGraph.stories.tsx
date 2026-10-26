@@ -204,7 +204,7 @@ export const DeliveredFeedback: Story = {
 };
 
 /**
- * A review's own trace opens on its results table, every row listed: the results are what the
+ * A review's own trace opens on its observations table, every row listed: the observations are what the
  * review is, not siblings. The table folds to the numbered dots and opens again on its own button.
  */
 export const ResultTable: Story = {
