@@ -116,13 +116,11 @@ The SPA talks to the server only through the generated client.
 
 ## Where code lives
 
-- `server/` — Spring Boot 4, Java 21, Spring Modulith 2, PostgreSQL with Liquibase.
-  `server/AGENTS.md` has the build traps and entity conventions.
-- `webapp/` — React 19 SPA, TanStack Router/Query, Tailwind 4.
-  `webapp/AGENTS.md` has the component conventions and `webapp/DESIGN.md` the surface rules.
-- `docs/` — user, admin and contributor docs published to GitHub Pages.
-- `scripts/` — repository tooling in typed TypeScript, run through the pinned Vite+ and Node.
-  `tsconfig.agents.json` also type-checks the agent runner and the practice script toolkit and scripts.
+- `server/` — Spring Boot 4, Java 21, Spring Modulith 2, PostgreSQL with Liquibase. Guide: `server/AGENTS.md`.
+- `webapp/` — React 19, TanStack Router/Query, Tailwind 4. Guides: `webapp/AGENTS.md` and `webapp/DESIGN.md`.
+- `extension/` — the Chrome extension. Guide: `extension/AGENTS.md`.
+- `docs/` — user, admin and contributor docs on GitHub Pages.
+- `scripts/` — repository tooling in TypeScript. `tsconfig.agents.json` also covers the agent runner and practice scripts.
 
 Skills live in `.claude/skills/<name>/`.
 Codex reads only `.agents/skills/`, so the four contribution skills have byte-identical mirrors there.
@@ -160,12 +158,8 @@ Codex reads only `.agents/skills/`, so the four contribution skills have byte-id
 - Ask before computer use or before you start a browser.
   Test against a run environment that the maintainer already started.
 
-| Command | Does |
-|---|---|
-| `vp run format` / `format:check` | Apply / verify formatting (Java + TypeScript) |
-| `vp run check` | Every gate in the `quality` group in `vite.config.ts` |
-| `vp run verify` | `check` plus the credential-free builds and test suites |
-| `vp run test:webapp` / `test:agents` / `test:server:unit` | Vitest / agent runtime and practice scripts / server unit tests |
+Suites: `vp run test:webapp`, `test:agents`, and `test:server:unit`.
+`server/AGENTS.md` § Test tiers has the other server tiers.
 
 ## Pull requests
 
@@ -173,7 +167,7 @@ Codex reads only `.agents/skills/`, so the four contribution skills have byte-id
   Use authorization already given for the current task.
   Do not request it again for each covered step.
   A request to plan or review does not authorize publication.
-- Use Conventional Commit titles in plain language, with the types and scopes in `CONTRIBUTING.md`.
+- Use Conventional Commit titles in plain language, with the types and scopes in `commitlint.config.ts`.
   Example: `fix(webapp): feedback list no longer jumps while it loads`.
   Do not put `!` in the title: the changeset carries a breaking change.
 - The body states the problem in one or two sentences, then the fix and verification,
@@ -222,30 +216,25 @@ Issues follow `CONTRIBUTING.md` § Issues.
 - Our users read feedback about their own work. A wrong claim, a stale label or a lying spinner
   costs trust that a fast fix does not buy back.
 
-## Generated artifacts
+## Where to change what
 
-| Artifact | Command |
-|---|---|
-| `server/openapi.yaml` | `vp run generate:api:specs` |
-| `docs/admin/configuration-reference.mdx` | `vp run generate:configuration-reference` |
-| `webapp/src/api/**`, `extension/src/api/**` | `vp run generate:api:client` |
-| `docs/contributor/erd/schema.mmd` | `vp run db:generate-erd-docs` |
-| `webapp/src/routeTree.gen.ts` | TanStack Router Vite plugin |
-| `server/generated-clients/build/**` | Gradle codegen for GraphQL and Outline, never committed |
+| Change | Edit | Then run | Owning doc |
+|---|---|---|---|
+| HTTP endpoint or DTO | The controller | `vp run generate:api`. Commit the spec and both clients. | `server/AGENTS.md` § API and security conventions |
+| Entity or column | The entity | `vp run db:draft-changelog`, which also refreshes the ERD | `docs/contributor/database-migration.mdx` |
+| Configuration property | The properties class | `vp run generate:configuration-reference` | `docs/admin/configuration-reference.mdx` |
+| Route | `webapp/src/routes/**` | `vp run dev:webapp` regenerates the route tree | `webapp/AGENTS.md` § Routing |
+| Component | The component and its stories | `vp run test:webapp` and `test:webapp:stories` | `/storybook-components` |
+| Workflow | `.github/workflows/*.yml` | `node scripts/check-workflows.ts` | `docs/contributor/ci-cd.mdx` |
+| Agent guide or skill | `AGENTS.md` or `.claude/skills/` | `vp run gate:instructions` | `docs/contributor/ai-agent-workflow.mdx` |
+| Docs page | `docs/**` | `vp run docs:build` and `gate:prose` | `docs/contributor/simplified-technical-english.md` |
+| Shipped behavior | A changeset too | `vp run gate:changesets` | `.changeset/README.md` |
 
-Never hand-edit these.
+Never hand-edit a generated file: the spec, `webapp/src/api/**`, `extension/src/api/**`, `routeTree.gen.ts`, the ERD, or the configuration reference.
 `generate:api:client` empties both `src/api/` directories first.
-Commit `server/openapi.yaml` and both generated clients with the API change that produced them.
-
-## Database changes
-
-Procedure: `docs/contributor/database-migration.mdx`.
-Entity conventions that the drift gate reads: `server/AGENTS.md` § Schema changes.
-`vp run db:draft-changelog` writes the drift into this branch's single changelog and wires it into `master.xml`.
-A branch never hand-writes a changelog or adds a second one.
+A branch has one changelog, written by `db:draft-changelog`.
 Never edit, rename, or delete a file under `db/changelog/` that reached `main`.
 `master.xml` is append-only.
-
 Bring an older local database to the baseline (`docs/admin/liquibase-baseline-runbook.md`) or wipe it with `vp run dev:reset`.
 
 ## Command caveats
