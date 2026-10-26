@@ -35,7 +35,7 @@ class JetStreamPublisherTopologyTest {
             null,
             null,
             new WebhookProperties.TokenRotation(7, 90),
-            new WebhookProperties.Publish(Duration.ofSeconds(2), 3, Duration.ofMillis(10)),
+            new WebhookProperties.Publish(Duration.ofSeconds(2), Duration.ofMillis(10)),
             WebhookPropertiesFixture.stream(),
             new WebhookProperties.Shutdown(Duration.ofSeconds(15)),
             new WebhookProperties.Http(26_214_400L),

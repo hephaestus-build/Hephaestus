@@ -207,11 +207,17 @@ public class WebhookIngestPipeline {
                 jetStreamPublisher.publish(request);
             }
         } catch (JetStreamPublisher.PublishFailedException e) {
-            log.error(
-                    "WebhookIngestPipeline: publish failed for kind={} subject={}: {}",
-                    kind,
-                    sanitizeForLog(subject),
-                    e.getClass().getSimpleName());
+            log.atError()
+                    .addKeyValue("event.name", "webhook.publish.failed")
+                    .addKeyValue("webhook.publish.reason", e.failureCause().label())
+                    .addKeyValue("webhook.publish.attempts", e.attempts())
+                    .log(
+                            "Webhook not stored for kind={} subject={}: cause={} attempts={} detail={}",
+                            kind,
+                            sanitizeForLog(subject),
+                            e.failureCause().label(),
+                            e.attempts(),
+                            sanitizeForLog(e.detail()));
             return problem(HttpStatus.SERVICE_UNAVAILABLE, "publish-failed");
         }
         log.info(

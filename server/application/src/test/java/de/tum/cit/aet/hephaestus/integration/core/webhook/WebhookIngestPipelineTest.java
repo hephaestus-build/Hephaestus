@@ -30,9 +30,12 @@ import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
@@ -49,6 +52,7 @@ import tools.jackson.databind.ObjectMapper;
  * The crypto adapters are covered in their own test classes.
  */
 @Tag("unit")
+@ExtendWith(OutputCaptureExtension.class)
 class WebhookIngestPipelineTest extends BaseUnitTest {
 
     @Mock
@@ -164,13 +168,16 @@ class WebhookIngestPipelineTest extends BaseUnitTest {
     }
 
     @Test
-    void publisherExceptionMapsTo503() {
+    void publisherExceptionMapsTo503AndTheLogNamesItsCause(CapturedOutput output) {
         WebhookIngestPipeline pipeline = new WebhookIngestPipeline(
                 List.of(stubVerifier(IntegrationKind.GITLAB, new VerificationResult.Verified())),
                 List.of(stubDeriver(IntegrationKind.GITLAB, "gitlab.foo.bar.push", "gitlab-uuid")),
                 publisher,
                 objectMapper);
-        doThrow(new JetStreamPublisher.PublishFailedException("nats down", new RuntimeException()))
+        doThrow(new JetStreamPublisher.PublishFailedException(
+                        new JetStreamPublisher.Failure(JetStreamPublisher.Cause.NO_RESPONDERS, "503"),
+                        3,
+                        "gitlab.foo.bar.push"))
                 .when(publisher)
                 .publish(any());
 
@@ -178,6 +185,7 @@ class WebhookIngestPipelineTest extends BaseUnitTest {
                 pipeline.handle(IntegrationKind.GITLAB, "{}".getBytes(StandardCharsets.UTF_8), headers());
 
         assertProblem(resp, HttpStatus.SERVICE_UNAVAILABLE, "publish-failed");
+        assertThat(output.getAll()).contains("cause=no_responders attempts=3");
     }
 
     @Test
@@ -342,7 +350,10 @@ class WebhookIngestPipelineTest extends BaseUnitTest {
                 List.of(stubDeriver(IntegrationKind.SLACK, "slack.T.C.message", "slack-Ev1")),
                 publisher,
                 objectMapper);
-        doThrow(new JetStreamPublisher.PublishFailedException("private failure data", new RuntimeException()))
+        doThrow(new JetStreamPublisher.PublishFailedException(
+                        new JetStreamPublisher.Failure(JetStreamPublisher.Cause.TIMEOUT, "private failure data"),
+                        1,
+                        "slack.T.C.message"))
                 .when(publisher)
                 .publishFast(any(), any());
 

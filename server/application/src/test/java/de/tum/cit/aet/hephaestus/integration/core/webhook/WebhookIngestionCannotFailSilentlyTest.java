@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import de.tum.cit.aet.hephaestus.core.webhook.WebhookProperties;
+import de.tum.cit.aet.hephaestus.integration.scm.github.app.GitHubWebhookRedelivery;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -151,6 +152,14 @@ class WebhookIngestionCannotFailSilentlyTest extends BaseUnitTest {
         assertThat(configured)
                 .as("a name no contributor answers to is a member the probe silently never evaluates")
                 .isSubsetOf(union(Set.of("readinessState"), CONTRIBUTOR_BEANS.values()));
+    }
+
+    @Test
+    void theDedupWindowOutlastsTheGitHubRedeliveryLookBack() throws IOException {
+        // A delivery stored after GitHub stopped waiting failed there; the job redelivers it within its window.
+        assertThat(shippedStream().duplicateWindow())
+                .as("a redelivery inside the window must be answered as a duplicate, not stored again")
+                .isGreaterThan(GitHubWebhookRedelivery.WINDOW);
     }
 
     @Test

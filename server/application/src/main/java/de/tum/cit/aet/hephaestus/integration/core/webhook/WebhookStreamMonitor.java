@@ -43,10 +43,19 @@ import org.slf4j.LoggerFactory;
  * <p>Runs its own single-threaded scheduler rather than {@code @Scheduled}: {@code @EnableScheduling}
  * lives on the SERVER-gated scheduling config, and this bean is contributed on the WEBHOOK role,
  * where an annotated method would silently never tick.
+ *
+ * <p>Each poll asks the broker's JetStream API for stream and consumer state. A broker on a saturated disk
+ * answers those requests slowly, and the receiver's publishes share that broker, so a slow poll doubles the delay
+ * to the next one, up to ten intervals, and a fast poll restores the interval.
  */
 class WebhookStreamMonitor {
 
     private static final Logger log = LoggerFactory.getLogger(WebhookStreamMonitor.class);
+
+    /** A poll slower than this read a broker under pressure. A healthy broker answers in milliseconds. */
+    static final Duration SLOW_POLL = Duration.ofSeconds(2);
+
+    private static final int MAX_BACKOFF_INTERVALS = 10;
     private static final Usage UNKNOWN = new Usage(0, 0, 0, 0, 0, 0, 0, 0);
 
     private final JetStreamManagement jsm;
@@ -130,11 +139,38 @@ class WebhookStreamMonitor {
 
     @PostConstruct
     void start() {
-        long intervalMs = properties.stream().monitorInterval().toMillis();
         // Zero initial delay: the first read happens on the scheduler thread, so it populates the
         // gauges immediately without adding NATS round-trips to application startup.
-        // Periodic; stop() ends it with shutdownNow().
-        var unused = scheduler.scheduleWithFixedDelay(this::poll, 0, intervalMs, TimeUnit.MILLISECONDS);
+        // stop() ends the chain with shutdownNow().
+        schedule(Duration.ZERO, properties.stream().monitorInterval());
+    }
+
+    private void schedule(Duration delay, Duration previous) {
+        var unused = scheduler.schedule(
+                () -> {
+                    long started = System.nanoTime();
+                    try {
+                        poll();
+                    } finally {
+                        if (!scheduler.isShutdown()) {
+                            Duration next = nextDelay(Duration.ofNanos(System.nanoTime() - started), previous);
+                            schedule(next, next);
+                        }
+                    }
+                },
+                delay.toMillis(),
+                TimeUnit.MILLISECONDS);
+    }
+
+    /** The delay after a poll that took {@code took}: doubled after a slow poll, the interval after a fast one. */
+    Duration nextDelay(Duration took, Duration previous) {
+        Duration interval = properties.stream().monitorInterval();
+        if (took.compareTo(SLOW_POLL) < 0) {
+            return interval;
+        }
+        Duration doubled = previous.multipliedBy(2);
+        Duration ceiling = interval.multipliedBy(MAX_BACKOFF_INTERVALS);
+        return doubled.compareTo(ceiling) > 0 ? ceiling : doubled;
     }
 
     @PreDestroy

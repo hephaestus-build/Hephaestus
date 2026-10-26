@@ -41,12 +41,19 @@ The receiver answers `202` only after JetStream acknowledges the delivery.
 If the broker does not acknowledge in time, the receiver answers `503`.
 It never accepts a delivery that it has not stored.
 
-- Each publish attempt waits `hephaestus.webhook.publish.timeout` (4 seconds by default).
-  The receiver makes `hephaestus.webhook.publish.max-retries` attempts (2 by default), including the first.
-  All attempts end before the 10-second response window of GitHub and GitLab.
+- The receiver waits up to `hephaestus.webhook.publish.deadline` (8 seconds by default) for the acknowledgment.
+  The deadline ends before the 10-second response window of GitHub and GitLab.
   After that window, the provider has already failed the delivery, and another attempt only holds a request thread.
-- A second attempt carries the same `Nats-Msg-Id`.
-  If the first attempt was stored late, the broker answers the second one as a duplicate, and the receiver answers `202`.
+  Slack deliveries wait 2 seconds, inside Slack's 3-second window.
+- Within the deadline, the receiver publishes again in two cases.
+  The client stopped waiting for an acknowledgment, which it does after 5 to 10 seconds.
+  Or the broker refused at once, for example with no responders or a dropped connection.
+  In that case, the receiver first waits a short backoff.
+  Each attempt carries the same `Nats-Msg-Id`.
+  If an earlier attempt was stored late, the broker answers the next one as a duplicate, and the receiver answers `202`.
+- A stream that refuses the message (for example, a full stream) is not retried.
+- The log line of a `503` names the cause and the number of attempts.
+  The causes are `timeout`, `no_responders`, `connection`, `connection_closed`, `stream_full` and `rejected`.
 - The receiver's health check reads only the state of the NATS connection.
   It makes no request to the broker, so it stays fast while the broker is slow.
   The stream gauges below report a broker that does not answer.
@@ -77,7 +84,9 @@ This is the procedure that GitHub [recommends](https://docs.github.com/en/webhoo
   The redeliveries are due 0, 10, 20, 40 and 80 minutes after the original delivery.
   The gaps double, so the attempts outlast a broker stall of up to 80 minutes.
   A stall that still lasts gets few requests.
-- A redelivery keeps its `X-GitHub-Delivery` identifier. The stream discards a copy of a delivery that it already stored within `hephaestus.webhook.stream.duplicate-window` (10 minutes by default).
+- A redelivery keeps its `X-GitHub-Delivery` identifier.
+  The stream discards a copy of a delivery that it stored within `hephaestus.webhook.stream.duplicate-window`.
+  The default is 3 hours, longer than the 2-hour look-back of the redelivery job.
 - A slow broker can still store a delivery after GitHub stopped waiting for it. If its redelivery comes after the duplicate window, the event is processed twice. A late copy can restate an older reviewer list until the next sync reads the list again. [Reviewer lists are dated snapshots](/contributor/sync-lifecycle#reviewer-lists-are-dated-snapshots) explains this.
 - Silent mode does not stop redelivery. A redelivery sends nothing to people. It only asks GitHub to send the event to the receiver again.
 

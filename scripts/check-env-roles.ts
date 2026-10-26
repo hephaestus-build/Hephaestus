@@ -104,7 +104,7 @@ const ROLE_SCOPES: readonly RoleScope[] = [
 	{
 		path: "hephaestus.webhook.publish",
 		role: "webhook",
-		why: "the publish retry policy and JetStreamPublisher are webhook-role beans",
+		why: "the publish deadline and JetStreamPublisher are webhook-role beans",
 	},
 	{
 		path: "hephaestus.webhook.shutdown",

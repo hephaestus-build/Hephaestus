@@ -75,13 +75,7 @@ class WebhookPublishStallIntegrationTest extends BaseIntegrationTest {
 
     @Test
     void shouldAnswer503BeforeGitHubStopsWaitingWhileTheBrokerStalls() throws IOException {
-        JetStreamPublisher publisher = new JetStreamPublisher(
-                connection.jetStream(),
-                new WebhookProducerBeans().webhookPublishRetry(properties),
-                properties,
-                new SimpleMeterRegistry());
-        WebhookIngestPipeline pipeline = new WebhookIngestPipeline(
-                List.of(new AcceptingVerifier()), List.of(new FixedSubject()), publisher, new ObjectMapper());
+        WebhookIngestPipeline pipeline = pipeline();
         WebhookHealthIndicator health = new WebhookHealthIndicator(connection);
         assertThat(deliver(pipeline, "first").getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);
 
@@ -98,6 +92,35 @@ class WebhookPublishStallIntegrationTest extends BaseIntegrationTest {
                     .unpauseContainerCmd(broker.getContainerId())
                     .exec();
         }
+    }
+
+    @Test
+    void shouldStoreADeliveryWhenTheStreamReturnsWithinTheDeadline() throws Exception {
+        WebhookIngestPipeline pipeline = pipeline();
+        StreamConfiguration github =
+                connection.jetStreamManagement().getStreamInfo("github").getConfiguration();
+        connection.jetStreamManagement().deleteStream("github");
+
+        // No stream listens: the broker answers every attempt at once with "no responders".
+        CompletableFuture<ResponseEntity<?>> answer = CompletableFuture.supplyAsync(() -> deliver(pipeline, "returns"));
+        Thread.sleep(Duration.ofSeconds(2));
+        connection.jetStreamManagement().addStream(github);
+
+        await().atMost(GITHUB_RESPONSE_WINDOW).until(answer::isDone);
+        assertThat(answer.join().getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);
+        assertThat(connection
+                        .jetStreamManagement()
+                        .getStreamInfo("github")
+                        .getStreamState()
+                        .getMsgCount())
+                .isEqualTo(1);
+    }
+
+    private WebhookIngestPipeline pipeline() throws IOException {
+        JetStreamPublisher publisher =
+                new JetStreamPublisher(connection.jetStream(), properties, new SimpleMeterRegistry());
+        return new WebhookIngestPipeline(
+                List.of(new AcceptingVerifier()), List.of(new FixedSubject()), publisher, new ObjectMapper());
     }
 
     private static ResponseEntity<?> deliver(WebhookIngestPipeline pipeline, String delivery) {

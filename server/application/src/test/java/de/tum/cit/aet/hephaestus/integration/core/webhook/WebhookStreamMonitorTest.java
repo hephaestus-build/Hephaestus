@@ -50,6 +50,21 @@ class WebhookStreamMonitorTest extends BaseUnitTest {
     private final JetStreamManagement jsm = mock(JetStreamManagement.class);
 
     @Test
+    void shouldBackOffWhileTheBrokerAnswersSlowlyAndReturnToTheIntervalWhenItRecovers() {
+        WebhookStreamMonitor monitor = monitor();
+        Duration interval = properties.stream().monitorInterval();
+        Duration slow = WebhookStreamMonitor.SLOW_POLL.plusSeconds(1);
+
+        Duration first = monitor.nextDelay(slow, interval);
+        Duration second = monitor.nextDelay(slow, first);
+
+        assertThat(first).isEqualTo(interval.multipliedBy(2));
+        assertThat(second).isEqualTo(interval.multipliedBy(4));
+        assertThat(monitor.nextDelay(slow, interval.multipliedBy(8))).isEqualTo(interval.multipliedBy(10));
+        assertThat(monitor.nextDelay(Duration.ofMillis(20), second)).isEqualTo(interval);
+    }
+
+    @Test
     void claimsNoLossWhenOtherSubjectsPushTheStreamPastCaughtUpFilteredConsumers(CapturedOutput output)
             throws Exception {
         // Both durables are caught up on their own subjects; a busier organisation's messages, shed at the

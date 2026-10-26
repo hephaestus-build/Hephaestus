@@ -52,7 +52,7 @@ public final class WebhookPropertiesFixture {
                 externalUrl,
                 secret,
                 new WebhookProperties.TokenRotation(7, 90),
-                new WebhookProperties.Publish(Duration.ofSeconds(4), 2, Duration.ofMillis(200)),
+                new WebhookProperties.Publish(Duration.ofSeconds(8), Duration.ofMillis(200)),
                 stream,
                 new WebhookProperties.Shutdown(Duration.ofSeconds(15)),
                 new WebhookProperties.Http(26_214_400L),

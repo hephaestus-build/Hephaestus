@@ -55,8 +55,8 @@ Option 1. Concretely:
   this package keeps subject grammar, dedup ID derivation, HMAC verification, and hex encoding
   honest under refactor.
 - `WebhookConfiguration` reuses the existing `Connection natsConnection` bean from
-  `config.NatsConfig` — no new NATS connection per pod. Publisher uses Resilience4j Retry with
-  exponential backoff + ±25% jitter; stream creation is `addStream`-or-`getStreamInfo` with
+  `config.NatsConfig` — no new NATS connection per pod. Publisher retries within one deadline
+  (`hephaestus.webhook.publish.deadline`) with exponential backoff + ±25% jitter; stream creation is `addStream`-or-`getStreamInfo` with
   WARN-on-drift (never `updateStream`).
 
   > Superseded in part by the 2026-08-22 update, §"Limits may be corrected in place; shape still
@@ -130,7 +130,7 @@ the receiver still has known failure windows that we are NOT solving here:
   `stop_grace_period ≥ server.shutdown drain + shutdown.drain-timeout + 5s`). POSTs that arrive
   AFTER Traefik routes away from the dying pod but BEFORE the new pod is in rotation hit a brief
   outage window. Multi-replica + rolling restart closes this; deferred (see Revisit trigger).
-- **NATS unavailability.** Resilience4j retry (5 attempts, ±25% jitter, 9s total) absorbs short
+- **NATS unavailability.** Retries within the 8s publish deadline (±25% jitter) absorb short
   blips. Beyond that the controllers return 503 → provider retries per its own schedule. Push
   events on GitHub/GitLab are NOT in the provider retry set, so a sustained NATS outage drops
   pushes. Mitigation: NATS uptime SLO (operationally tracked, not gated here).
@@ -158,8 +158,8 @@ The receiver exposes Micrometer instruments under the `webhook.*` namespace:
 
 - `webhook.publish{outcome=success|failure}` — counter per NATS publish attempt outcome. The
   receiver's primary SLI.
-- `webhook.publish.retry` — counter per Resilience4j retry event. Spike indicates NATS pressure
-  or transient broker errors.
+- `webhook.publish.retry` — counter per repeated publish attempt within the deadline. Spike
+  indicates NATS pressure or transient broker errors.
 - `webhook.rejected{provider, reason}` — counter for every request rejected before publish
   (bad signature, bad token, oversize, invalid JSON, etc.). Lets ops separate scan traffic from
   misconfigured providers.

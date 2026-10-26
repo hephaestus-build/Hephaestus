@@ -128,7 +128,7 @@ class GitHubWebhookSignatureVerifierTest extends BaseUnitTest {
                 /* externalUrl */ null,
                 secret,
                 new WebhookProperties.TokenRotation(7, 90),
-                new WebhookProperties.Publish(Duration.ofSeconds(9), 5, Duration.ofMillis(200)),
+                new WebhookProperties.Publish(Duration.ofSeconds(8), Duration.ofMillis(200)),
                 WebhookPropertiesFixture.stream(),
                 new WebhookProperties.Shutdown(Duration.ofSeconds(15)),
                 new WebhookProperties.Http(26_214_400L),
