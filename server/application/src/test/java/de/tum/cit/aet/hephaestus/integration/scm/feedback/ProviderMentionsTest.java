@@ -18,8 +18,13 @@ class ProviderMentionsTest extends BaseUnitTest {
             @all of you                                     | `@all` of you
             Tell @org/reviewers and @group/sub/team now     | Tell `@org/reviewers` and `@group/sub/team` now
             *@alice* and (@bob)                             | *`@alice`* and (`@bob`)
+            _x_@alice                                       | _x_`@alice`
+            `x`@alice                                       | `x`<code>@alice</code>
             [@alice](https://example.test/alice)            | [`@alice`](https://example.test/alice)
             \\@alice                                        | `@alice`
+            \\\\@alice                                      | `\\@alice`
+            Ask &#64;alice                                  | `Ask @alice`
+            See https://example.test/a)@alice               | See https://example.test/a)`@alice`
             "<details><summary>Ask @alice</summary>"        | "<details><summary>Ask <code>@alice</code></summary>"
             """)
     void shouldTurnEveryMentionIntoCode(String body, String expected) {

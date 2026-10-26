@@ -122,10 +122,6 @@ public class ScmFeedbackFormatter {
     /** Maximum comment body length before header/footer (GitHub limit is 65,536). */
     static final int MAX_BODY_LENGTH = 60_000;
 
-    // Escape live mentions, including those adjacent to Markdown punctuation, to prevent notifications.
-    private static final Pattern AT_MENTION =
-            Pattern.compile("(?<=^|[\\s(\\[\"'*_~>|#!+={}\\-,.:;/)`])@([a-zA-Z0-9][-a-zA-Z0-9._]*)", Pattern.MULTILINE);
-
     // Hidden HTML comments can carry instructions for downstream AI tools.
     private static final Pattern HTML_COMMENT = Pattern.compile("<!--[\\s\\S]*?-->");
 
@@ -243,7 +239,7 @@ public class ScmFeedbackFormatter {
             result = outsideCode(result, HTML_TAG, ScmFeedbackFormatter::safeTag);
         } while (!result.equals(prev));
         result = withoutLiveImagesOrUnsafeLinks(result);
-        return result == null ? null : outsideCode(result, AT_MENTION, match -> "`@" + match.group(1) + "`");
+        return result == null ? null : ProviderMentions.escape(result);
     }
 
     private static String safeTag(MatchResult match) {
