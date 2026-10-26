@@ -69,7 +69,7 @@ await test("release upgrade runs the server topology without optional infrastruc
 });
 
 await test("verification identity is the release's own: run context now, the map for history", () => {
-	const rescan = readFileSync(".github/workflows/rescan-release-images.yml", "utf8");
+	const rescan = readFileSync(".github/workflows/rescan-images.yml", "utf8");
 	const rescanSource = readFileSync("scripts/rescan-release-images.ts", "utf8");
 	const prepareLock = readFileSync("scripts/prepare-release-lock.ts", "utf8");
 	const releaseChart = readFileSync("scripts/release-chart.ts", "utf8");
