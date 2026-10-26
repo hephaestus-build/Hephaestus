@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { after, test } from "node:test";
@@ -7,6 +7,7 @@ import { after, test } from "node:test";
 import {
 	breakLines,
 	compareSpecs,
+	headsForMajorRelease,
 	installOasdiff,
 	latestStableTag,
 } from "./check-api-compatibility.ts";
@@ -63,7 +64,12 @@ function spec(options: { optional?: Record<string, object>; withDelete?: boolean
 }
 
 let fixtures = 0;
-async function compare(revision: object, acceptedBreaks = "", baseTag = "v0.9.0") {
+async function compare(
+	revision: object,
+	acceptedBreaks = "",
+	baseTag = "v0.9.0",
+	majorRelease = false,
+) {
 	fixtures += 1;
 	const name = (role: string) => path.join(directory, `${role}-${fixtures}`);
 	await writeFile(name("base"), JSON.stringify(spec()));
@@ -73,6 +79,7 @@ async function compare(revision: object, acceptedBreaks = "", baseTag = "v0.9.0"
 		oasdiff,
 		base: name("base"),
 		baseTag,
+		majorRelease,
 		revision: name("revision"),
 		acceptedBreaks: name("accepted"),
 		format: "text",
@@ -104,9 +111,54 @@ void test("an accepted break passes, and an entry that accepts nothing is obsole
 	assert.deepEqual(problems, []);
 });
 
-void test("from a 1.0 base, an accepted break fails the gate", async () => {
-	const { problems } = await compare(spec({ withDelete: false }), `${removedDelete}\n`, "v1.0.0");
-	assert.match(problems.join("\n"), /must be empty against v1\.0\.0/u);
+/** A checkout at `version` whose pending changeset, if any, bumps `hephaestus` by `bump`. */
+async function checkout(version: string, bump?: "major" | "minor") {
+	fixtures += 1;
+	const root = path.join(directory, `checkout-${fixtures}`);
+	await mkdir(path.join(root, ".changeset"), { recursive: true });
+	await writeFile(path.join(root, "package.json"), JSON.stringify({ version }));
+	if (bump !== undefined) {
+		await writeFile(
+			path.join(root, ".changeset", "api-break.md"),
+			`---\n"hephaestus": ${bump}\n---\n\nThe delete endpoint is gone.\n`,
+		);
+	}
+	return root;
+}
+
+async function compareWith1x(root: string, acceptedBreaks = `${removedDelete}\n`) {
+	return compare(
+		spec({ withDelete: false }),
+		acceptedBreaks,
+		"v1.2.0",
+		await headsForMajorRelease(root, "v1.2.0"),
+	);
+}
+
+void test("from a 1.0 base, an accepted break fails the gate outside a major release", async () => {
+	const { compatible, problems } = await compareWith1x(await checkout("1.2.0", "minor"));
+	assert.equal(compatible, true, "oasdiff accepts the listed break");
+	assert.match(problems.join("\n"), /From 1\.0 a break needs a major release/u);
+});
+
+void test("from a 1.0 base, a pending major changeset lets an accepted break pass", async () => {
+	const { compatible, problems } = await compareWith1x(await checkout("1.2.0", "major"));
+	assert.equal(compatible, true);
+	assert.deepEqual(problems, []);
+});
+
+void test("from a 1.0 base, a higher package.json major lets an accepted break pass", async () => {
+	const { compatible, problems } = await compareWith1x(await checkout("2.0.0"));
+	assert.equal(compatible, true);
+	assert.deepEqual(problems, []);
+});
+
+void test("from a 1.0 base, an obsolete entry does not fail the gate", async () => {
+	const stale = "in API GET /items/{id} api path removed without deprecation";
+	const { compatible, obsolete, problems } = await compare(spec(), `${stale}\n`, "v1.2.0");
+	assert.equal(compatible, true);
+	assert.deepEqual(obsolete, [stale]);
+	assert.deepEqual(problems, []);
 });
 
 void test("a comment that holds a break's line fails the gate", async () => {

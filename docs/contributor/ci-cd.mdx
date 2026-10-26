@@ -148,15 +148,25 @@ This agrees with the [deprecation policy](/admin/compatibility-policy#deprecatio
 #### Accept a deliberate break
 
 Before 1.0, a release can break the API deliberately.
-From 1.0, a break needs a major release, so the gate fails on any entry when the base is `v1.0.0` or later.
-To accept a break before 1.0:
+From 1.0, a break needs a major release.
+When the base is `v1.0.0` or later, the gate fails on an entry that accepts a break, unless the change heads for a major release.
+
+Before the Version PR, a pending changeset with `"hephaestus": major` marks the major release.
+From the Version PR on, the major of the `package.json` version is higher than the major of the base.
+The changeset stays on `main` until the Version PR consumes it.
+Thus, other changes can accept breaks for the same major release.
+
+To accept a break:
 
 1. Add the break's line to `server/openapi-accepted-breaks.txt`.
    The line is the message of the gate's annotation in CI: `in API <method> <path> <change text>`.
    The local report shows the same parts on two lines.
    Above it, write a `#` comment with the reason and the pull request.
-2. Write a `minor` changeset that tells API clients what changed.
+2. Write a changeset that tells API clients what changed.
    See [Writing changesets](./release-management.mdx#writing-changesets).
+   - Before 1.0, use `minor`.
+   - From 1.0, use `major`.
+     The break must obey the [version numbers](/admin/compatibility-policy#version-numbers) and the [deprecation policy](/admin/compatibility-policy#deprecation-policy) of the compatibility policy.
 
 The diff of the file shows each accepted break in review.
 

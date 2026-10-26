@@ -4,8 +4,6 @@
 
 # Merged before this gate existed, against v0.94.7.
 # #2749: one Heph conversation per developer replaces the mentor threads.
-in API PUT /user/notification-preferences added the new required request property `weeklyDigest`
-in API POST /user/settings added the new required request property `timeZone`
 in API POST /workspaces/{workspaceSlug}/mentor/sandbox api path removed without deprecation
 in API GET /workspaces/{workspaceSlug}/mentor/threads api path removed without deprecation
 in API DELETE /workspaces/{workspaceSlug}/mentor/threads/{threadId} api path removed without deprecation
