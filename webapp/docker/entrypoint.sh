@@ -12,6 +12,8 @@ readonly ENV_TS="/app/src/environment/index.ts"
 # test pins them together — keep both in sync if you widen the policy.
 readonly LEGAL_PROFILE_PATTERN='^[a-z0-9][a-z0-9_-]{0,31}$'
 
+readonly SECURITY_POLICY="https://github.com/hephaestus-build/Hephaestus/blob/main/SECURITY.md"
+
 log() { echo "[$(date +'%Y-%m-%dT%H:%M:%S%z')] $*" >&2; }
 
 escape_for_js() {
@@ -34,6 +36,26 @@ extract_env_vars() {
     exit 1
   fi
   grep -oE '[A-Z_]+\?:' "$ENV_TS" | sed 's/\?:$//' | grep -v '^__'
+}
+
+# RFC 9116 makes Canonical name the host that serves the file, so each deployment writes its own.
+# The deployment's contact comes first; the project's contacts follow for the software itself.
+write_security_txt() {
+  local contact="${SECURITY_CONTACT:-}" expires
+  # RFC 9116 § 2.5.5 recommends an expiry less than a year away; each start renews it.
+  TZ=UTC printf -v expires '%(%Y-%m-%dT%H:%M:%SZ)T' "$(( $(printf '%(%s)T' -1) + 364 * 86400 ))"
+  {
+    echo "# Security policy of the Hephaestus software: ${SECURITY_POLICY}"
+    if [[ -n "$contact" ]]; then echo "Contact: ${contact}"; fi
+    echo "Contact: https://github.com/hephaestus-build/Hephaestus/security/advisories/new"
+    echo "Contact: mailto:security@hephaestus.build"
+    echo "Policy: ${SECURITY_POLICY}"
+    if [[ -n "${APPLICATION_CLIENT_URL:-}" ]]; then
+      echo "Canonical: ${APPLICATION_CLIENT_URL%/}/.well-known/security.txt"
+    fi
+    echo "Preferred-Languages: en"
+    echo "Expires: ${expires}"
+  } > "${RUNTIME_DIR}/.well-known/security.txt"
 }
 
 main() {
@@ -61,6 +83,10 @@ main() {
     log "ERROR: APPLICATION_CLIENT_URL is required when workspace subdomains are enabled."
     exit 1
   fi
+  if [[ -n "${SECURITY_CONTACT:-}" && ! "$SECURITY_CONTACT" =~ ^(mailto:|https://|tel:)[^[:space:]]+$ ]]; then
+    log "ERROR: SECURITY_CONTACT must be one mailto:, https:// or tel: URI."
+    exit 1
+  fi
   if [[ ! -f "$INDEX_TEMPLATE" ]]; then
     log "ERROR: index.html not found: $INDEX_TEMPLATE"
     exit 1
@@ -70,7 +96,7 @@ main() {
     "$(escape_for_js "${APPLICATION_CLIENT_URL:-}")" \
     "$(escape_for_js "${HEPHAESTUS_WORKSPACE_SUBDOMAINS_BASE_DOMAIN:-}")" \
     "$subdomains" > "${RUNTIME_DIR}/.well-known/hephaestus.json"
-
+  write_security_txt
 
   # Extract all env var names from TypeScript (single source of truth)
   local -a all_vars=()

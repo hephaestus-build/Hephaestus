@@ -97,26 +97,6 @@ jobs:
           head: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha || github.sha }}
           extra_args: --debug --only-verified --fail-on-scan-errors
 
-      # RFC 9116 requires a valid Expires date. Fail before it lapses so an
-      # active branch is forced to renew it — a stale file signals abandonment.
-      - name: security.txt freshness
-        id: policy
-        continue-on-error: true
-        run: |
-          file="webapp/public/.well-known/security.txt"
-          expires="$(grep -i '^Expires:' "$file" | head -1 | cut -d' ' -f2)"
-          if [ -z "$expires" ]; then
-            echo "::error file=$file::Missing required RFC 9116 Expires field"
-            exit 1
-          fi
-
-          days=$(( ( $(date -u -d "$expires" +%s) - $(date -u +%s) ) / 86400 ))
-          echo "security.txt expires in $days day(s) ($expires)"
-          if [ "$days" -lt 30 ]; then
-            echo "::error file=$file::Expires is $days day(s) away (<30); renew it per RFC 9116"
-            exit 1
-          fi
-
       - name: Evaluate security checks
         id: security
         if: always()
@@ -125,10 +105,9 @@ jobs:
           DEPENDENCIES: ${{ steps.dependencies.outcome }}
           DEPENDENCY_POLICY: ${{ steps.dependency-policy.outcome }}
           SECRETS: ${{ steps.secrets.outcome }}
-          POLICY: ${{ steps.policy.outcome }}
         run: |
           failed=false
-          for result in "$DEPENDENCIES" "$DEPENDENCY_POLICY" "$SECRETS" "$POLICY"; do
+          for result in "$DEPENDENCIES" "$DEPENDENCY_POLICY" "$SECRETS"; do
             if [ "$result" != "success" ]; then failed=true; fi
           done
           if [ "$failed" = "true" ]; then
