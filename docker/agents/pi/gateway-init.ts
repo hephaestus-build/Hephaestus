@@ -74,21 +74,46 @@ export async function downloadWorkspace(
 	}
 }
 
-async function extract(archive: string): Promise<void> {
-	const child = spawn(
-		"tar",
-		[
-			"--extract",
-			"--file",
-			archive,
-			"--directory",
-			"/workspace",
-			"--no-same-owner",
-			"--no-same-permissions",
-			"--delay-directory-restore",
-		],
-		{ stdio: "inherit" },
-	);
+/**
+ * The volumes mounted below /workspace (KubernetesPods.attemptVolumes; tmpfs mounts on Docker). On Kubernetes each is
+ * an emptyDir mount point that root owns: the sandbox user may write into it but not change its mode or times.
+ */
+export const MOUNT_POINTS = ["work", "out", ".pi", ".sessions"];
+
+/**
+ * GNU tar's arguments for extracting the workspace into a directory. The archive's entries for the mount points
+ * themselves are skipped, so tar never sets their mode or times; everything below them extracts as before.
+ * `--no-recursion` keeps an excluded directory entry from excluding its contents. `--no-overwrite-dir` does not
+ * help: tar still changes an existing directory's mode while it writes into it.
+ */
+export function extractArguments(
+	archive: string,
+	directory: string,
+	mountPoints: readonly string[] = MOUNT_POINTS,
+): string[] {
+	return [
+		"--extract",
+		"--file",
+		archive,
+		"--directory",
+		directory,
+		"--no-same-owner",
+		"--no-same-permissions",
+		"--no-recursion",
+		"--anchored",
+		...mountPoints.map((name) => `--exclude=${name}`),
+		"--delay-directory-restore",
+	];
+}
+
+export async function extract(
+	archive: string,
+	directory = "/workspace",
+	mountPoints: readonly string[] = MOUNT_POINTS,
+): Promise<void> {
+	const child = spawn("tar", extractArguments(archive, directory, mountPoints), {
+		stdio: "inherit",
+	});
 	const extracted = Promise.withResolvers<undefined>();
 	child.once("error", extracted.reject);
 	child.once("exit", (code, signal) => {

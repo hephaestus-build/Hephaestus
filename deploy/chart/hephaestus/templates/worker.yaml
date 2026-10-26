@@ -197,12 +197,17 @@ spec:
   selector:
     matchLabels:
       {{- include "hephaestus.selectorLabels" (dict "root" . "component" "worker") | nindent 6 }}
-  # The new workers start and prove isolation before an old one drains, so capacity never drops.
   strategy:
+    {{- if eq .Values.worker.rolloutStrategy "Recreate" }}
+    # The old workers drain and stop before the new ones start: a node too small for both.
+    type: Recreate
+    {{- else }}
+    # The new workers start and prove isolation before an old one drains, so capacity never drops.
     type: RollingUpdate
     rollingUpdate:
       maxSurge: 100%
       maxUnavailable: 0
+    {{- end }}
   template:
     metadata:
       labels:
@@ -250,6 +255,10 @@ spec:
             - name: HEPHAESTUS_HUB_URL
               value: {{ printf "ws://%s:8080/api/workers/connect" (include "hephaestus.name" (dict "root" . "component" "server")) | quote }}
             {{- include "hephaestus.secretEnv" (dict "root" . "env" "HEPHAESTUS_WORKER_REGISTRATION_TOKEN") | nindent 12 }}
+            - name: AGENT_ENABLED
+              value: "true"
+            - name: HEPHAESTUS_WORKER_CAPACITY_MENTOR_MAX
+              value: {{ .Values.worker.hephTurns | quote }}
             # Also the review capacity: a worker claims no more reviews than it may run sandboxes.
             - name: SANDBOX_MAX_CONCURRENT
               value: {{ .Values.worker.reviews | int | quote }}

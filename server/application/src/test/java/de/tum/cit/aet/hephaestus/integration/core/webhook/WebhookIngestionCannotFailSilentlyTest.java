@@ -20,11 +20,13 @@ import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.context.properties.bind.Binder;
 import org.springframework.boot.env.YamlPropertySourceLoader;
+import org.springframework.boot.health.actuate.endpoint.HealthEndpoint;
 import org.springframework.boot.health.actuate.endpoint.HealthEndpointGroups;
 import org.springframework.boot.health.autoconfigure.actuate.endpoint.HealthEndpointAutoConfiguration;
 import org.springframework.boot.health.autoconfigure.registry.HealthContributorRegistryAutoConfiguration;
 import org.springframework.boot.health.contributor.Health;
 import org.springframework.boot.health.contributor.HealthIndicator;
+import org.springframework.boot.health.contributor.Status;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.core.env.EnumerablePropertySource;
 import org.springframework.core.env.PropertySource;
@@ -35,9 +37,9 @@ import org.springframework.util.unit.DataSize;
 /**
  * The shipped configuration, checked as the deployment sees it.
  *
- * <p>Every assertion here corresponds to a way an ingestion outage went unnoticed: a health signal in
- * no probe, a storage bound below what loss costs, bounds that overcommit the volume, and a receiver
- * admitting payloads the broker will not carry.
+ * <p>Every assertion here corresponds to a way an ingestion outage went unnoticed or spread: a health signal
+ * that took every Pod out of rotation at once, a storage bound below what loss costs, bounds that overcommit
+ * the volume, and a receiver admitting payloads the broker will not carry.
  *
  * <p>The readiness assertions drive the shipped {@code management.*} keys through the same
  * autoconfiguration a deployment does. The defect they exist to catch was a property path that binds
@@ -52,8 +54,8 @@ class WebhookIngestionCannotFailSilentlyTest extends BaseUnitTest {
     private static final long BUSY_GITHUB_BYTES_PER_DAY = 750_000_000L;
 
     /**
-     * Health contributors the readiness group may name, as bean name to the contributor name Spring
-     * derives from it. Always present, on every role: {@code readinessState}.
+     * Health contributors of the shipped roles, as bean name to the contributor name Spring derives from it.
+     * Always present, on every role: {@code readinessState}.
      */
     private static final Map<String, String> CONTRIBUTOR_BEANS = Map.of(
             "webhookHealthIndicator",
@@ -62,8 +64,6 @@ class WebhookIngestionCannotFailSilentlyTest extends BaseUnitTest {
             "integrationConsumer",
             "practiceReviewHealthIndicator",
             "practiceReview",
-            "catalogProvenanceBackfillStartup",
-            "catalogProvenanceBackfillStartup",
             "kubernetesSandboxHealthIndicator",
             "kubernetesSandbox");
 
@@ -72,17 +72,47 @@ class WebhookIngestionCannotFailSilentlyTest extends BaseUnitTest {
             Set.of("webhookHealthIndicator", "practiceReviewHealthIndicator");
 
     @Test
-    void readinessReportsWhetherThisRuntimeCanIngest() {
+    void readinessAsksOnlyWhetherThisPodCanServe() {
         healthContext(CONTRIBUTOR_BEANS.keySet())
                 .run(context -> assertThat(
                                 context.getBean(HealthEndpointGroups.class).get("readiness"))
                         .as(
                                 "the shipped keys must produce a configured readiness group, not the auto-configured probe group")
                         .isNotNull()
-                        .satisfies(group -> assertThat(group.isMember("webhook"))
-                                .as("on the webhook-only container this is the only contributor that knows about "
-                                        + "NATS; without it ADR 0008's webhook-server-down alert can never fire")
-                                .isTrue()));
+                        .satisfies(group -> {
+                            // A broker outage unready every Pod at once and leaves no Pod to serve or receive.
+                            assertThat(group.isMember("webhook"))
+                                    .as("JetStream is a remote dependency")
+                                    .isFalse();
+                            assertThat(group.isMember("integrationConsumer"))
+                                    .as("the NATS connection is a remote dependency")
+                                    .isFalse();
+                            assertThat(group.isMember("kubernetesSandbox"))
+                                    .as("the worker's own isolation proof")
+                                    .isTrue();
+                            assertThat(group.isMember("practiceReview"))
+                                    .as("the worker's own configuration")
+                                    .isTrue();
+                        }));
+    }
+
+    @Test
+    void aJetStreamFailureLeavesReadinessUpAndHealthDown() {
+        healthContext(
+                        CONTRIBUTOR_BEANS.keySet(),
+                        Map.of(
+                                "webhookHealthIndicator",
+                                Health.down()
+                                        .withDetail("reason", "JetStream unreachable")
+                                        .build()))
+                .run(context -> {
+                    var endpoint = context.getBean(HealthEndpoint.class);
+                    var readiness = endpoint.healthForPath("readiness");
+                    assertNotNull(readiness);
+                    assertThat(readiness.getStatus()).isEqualTo(Status.UP);
+                    // ADR 0008's webhook-server-down alert reads the whole health endpoint, which still knows.
+                    assertThat(endpoint.health().getStatus()).isEqualTo(Status.DOWN);
+                });
     }
 
     @Test
@@ -91,7 +121,7 @@ class WebhookIngestionCannotFailSilentlyTest extends BaseUnitTest {
             assertThat(context).hasNotFailed();
             var readiness = context.getBean(HealthEndpointGroups.class).get("readiness");
             assertNotNull(readiness);
-            assertThat(readiness.isMember("webhook")).isTrue();
+            assertThat(readiness.isMember("webhook")).isFalse();
         });
     }
 
@@ -224,13 +254,19 @@ class WebhookIngestionCannotFailSilentlyTest extends BaseUnitTest {
      * contributor per bean name the given runtime role would have contributed.
      */
     private static ApplicationContextRunner healthContext(Set<String> contributorBeans) {
+        return healthContext(contributorBeans, Map.of());
+    }
+
+    /** The given contributors, each UP unless {@code reports} names its health. */
+    private static ApplicationContextRunner healthContext(Set<String> contributorBeans, Map<String, Health> reports) {
         ApplicationContextRunner runner = new ApplicationContextRunner()
                 .withConfiguration(AutoConfigurations.of(
                         HealthContributorRegistryAutoConfiguration.class, HealthEndpointAutoConfiguration.class))
                 .withPropertyValues(shippedPropertyValues("management."))
                 .withBean("readinessState", HealthIndicator.class, () -> Health.up()::build);
         for (String bean : contributorBeans) {
-            runner = runner.withBean(bean, HealthIndicator.class, () -> Health.up()::build);
+            Health health = reports.getOrDefault(bean, Health.up().build());
+            runner = runner.withBean(bean, HealthIndicator.class, () -> () -> health);
         }
         return runner;
     }

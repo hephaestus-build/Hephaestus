@@ -512,3 +512,18 @@ Considered and rejected:
 
 GitLab, Slack and Outline are not covered by this job. Their missed events recover through
 reconciliation, as before. Why the broker stalls is a sizing question, not part of this decision.
+
+## Update — 2026-10-26 (readiness leaves out remote dependencies)
+
+On Kubernetes, readiness takes a Pod out of its Service and holds a rollout. With `webhook` and
+`integrationConsumer` in the group, a broker outage made every receiver and server unready at once: the
+receivers left the Service and could no longer answer a provider with the `503` that a failed publish
+returns, and the server left it although it could still serve the API. Readiness now holds only what
+says that this Pod cannot serve: `readinessState`, `practiceReview` (the worker's own configuration) and
+`kubernetesSandbox` (its isolation proof). This follows the Kubernetes guidance that readiness does not
+check dependencies that other Pods share.
+
+`WebhookHealthIndicator` and `IntegrationConsumerHealthIndicator` stay in `/actuator/health` and its
+metrics. The `webhook-server-down` alert reads `/actuator/health` returning DOWN for 60 s or more, not
+readiness. `WebhookIngestionCannotFailSilentlyTest` asserts that a JetStream failure leaves readiness UP
+and health DOWN. This supersedes "`webhook` joins the readiness group".

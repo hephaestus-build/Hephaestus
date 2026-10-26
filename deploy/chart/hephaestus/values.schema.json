@@ -393,7 +393,9 @@
 				"enabled",
 				"replicas",
 				"reviews",
+				"hephTurns",
 				"drainTimeoutSeconds",
+				"rolloutStrategy",
 				"runtime",
 				"gitCache",
 				"resources",
@@ -403,7 +405,12 @@
 				"enabled": { "type": "boolean" },
 				"replicas": { "type": "integer", "minimum": 0, "maximum": 16 },
 				"reviews": { "type": "integer", "minimum": 1, "maximum": 32 },
+				"hephTurns": {
+					"description": "HEPHAESTUS_WORKER_CAPACITY_MENTOR_MAX: auto, or the Heph turns that one worker runs at once.",
+					"oneOf": [{ "const": "auto" }, { "type": "integer", "minimum": 0, "maximum": 64 }]
+				},
 				"drainTimeoutSeconds": { "type": "integer", "minimum": 0, "maximum": 86400 },
+				"rolloutStrategy": { "enum": ["RollingUpdate", "Recreate"] },
 				"runtime": {
 					"description": "The sandbox nodes, as KubernetesSandboxProperties accepts them. Every value is optional.",
 					"type": "object",
@@ -470,6 +477,10 @@
 				"durableConsumerName",
 				"consumerInactiveThreshold",
 				"llmUsageRetention",
+				"llmDisplayCurrency",
+				"researchOrganization",
+				"publicActivity",
+				"monitoring",
 				"credentialKey",
 				"auth",
 				"github",
@@ -485,6 +496,32 @@
 				"durableConsumerName": { "type": "string", "pattern": "^[A-Za-z0-9_-]{1,64}$" },
 				"consumerInactiveThreshold": { "$ref": "#/definitions/duration" },
 				"llmUsageRetention": { "type": "string", "pattern": "^P[0-9]+D$" },
+				"llmDisplayCurrency": { "enum": ["", "EUR"] },
+				"researchOrganization": { "type": "string", "maxLength": 300 },
+				"publicActivity": {
+					"type": "object",
+					"additionalProperties": false,
+					"required": ["enabled", "repositoryVisibilityMaxAge"],
+					"properties": {
+						"enabled": { "type": "boolean" },
+						"repositoryVisibilityMaxAge": { "$ref": "#/definitions/duration" }
+					}
+				},
+				"monitoring": {
+					"type": "object",
+					"additionalProperties": false,
+					"required": ["runOnStartup", "timeframeDays", "syncCron", "cooldownMinutes"],
+					"properties": {
+						"runOnStartup": { "type": "boolean" },
+						"timeframeDays": { "type": "integer", "minimum": 1, "maximum": 3650 },
+						"syncCron": {
+							"description": "A Spring cron expression with six fields, seconds first.",
+							"type": "string",
+							"pattern": "^\\S+( \\S+){5}$"
+						},
+						"cooldownMinutes": { "type": "integer", "minimum": 0, "maximum": 10080 }
+					}
+				},
 				"credentialKey": {
 					"type": "object",
 					"additionalProperties": false,
@@ -498,11 +535,27 @@
 				"auth": {
 					"type": "object",
 					"additionalProperties": false,
-					"required": ["assuranceEnforced", "bootstrapAdmins", "browserExtensionIds"],
+					"required": ["assuranceEnforced", "bootstrapAdmins", "browserExtensionIds", "passkeys"],
 					"properties": {
 						"assuranceEnforced": { "type": "boolean" },
 						"bootstrapAdmins": { "$ref": "#/definitions/text" },
-						"browserExtensionIds": { "$ref": "#/definitions/text" }
+						"browserExtensionIds": { "$ref": "#/definitions/text" },
+						"passkeys": {
+							"type": "object",
+							"additionalProperties": false,
+							"required": [
+								"instanceAdminRequired",
+								"workspaceAdminRequired",
+								"rpId",
+								"allowedOrigins"
+							],
+							"properties": {
+								"instanceAdminRequired": { "type": "boolean" },
+								"workspaceAdminRequired": { "type": "boolean" },
+								"rpId": { "$ref": "#/definitions/text" },
+								"allowedOrigins": { "$ref": "#/definitions/text" }
+							}
+						}
 					}
 				},
 				"github": {
@@ -565,10 +618,11 @@
 				"email": {
 					"type": "object",
 					"additionalProperties": false,
-					"required": ["host", "port", "username", "from", "fromName", "replyTo"],
+					"required": ["host", "port", "tls", "username", "from", "fromName", "replyTo"],
 					"properties": {
 						"host": { "$ref": "#/definitions/text" },
 						"port": { "$ref": "#/definitions/port" },
+						"tls": { "enum": ["starttls", "implicit"] },
 						"username": { "$ref": "#/definitions/text" },
 						"from": { "$ref": "#/definitions/text" },
 						"fromName": { "$ref": "#/definitions/text" },
