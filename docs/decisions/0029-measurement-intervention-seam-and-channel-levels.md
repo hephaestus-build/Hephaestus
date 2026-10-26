@@ -180,3 +180,9 @@ Everything else in this ADR stands. The contract lives in `agent/review-composer
 ## Update — 2026-10-14 (#2656): the practice model cutover
 
 Superseded by [ADR 0056](0056-one-practice-model-for-items-and-scans.md) for feedback basis and destinations.
+
+## Update — 2026-10-26: composition runs on the worker after the seal
+
+Superseded by [ADR 0061](0061-review-seals-then-feedback-composes.md) for where and when composition runs.
+The seam between measurement and intervention stands.
+Composition is a worker step of the review job after the sandbox ends, not a stage of the sandbox runner.

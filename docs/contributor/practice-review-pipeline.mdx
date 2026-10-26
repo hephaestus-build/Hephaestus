@@ -35,6 +35,8 @@ flowchart TD
 
 ## Select a review
 
+[ADR 0062](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0062-the-item-is-the-review-scope.md) decides a quiet window and supersede for item reviews. They are not shipped yet.
+
 Adapters record item events after source sync establishes the recorded change.
 Repeated provider delivery does not create another event for the same item, name and version.
 Queue updates retain the original event time, version and discovery source.
@@ -193,6 +195,8 @@ Captured text is evidence, not instructions that can override the review contrac
 
 ## Admit results
 
+[ADR 0063](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0063-each-practice-is-staged-when-it-ends.md) decides per-practice staging and one seal. It is not shipped yet. [ADR 0064](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0064-one-evidence-contract-for-every-producer.md) owns the evidence contract.
+
 Every practice uses the same script contract.
 A null custom script invokes the built-in script.
 An invalid custom script stops its practice without fallback.
@@ -242,6 +246,8 @@ The [script runner](./practice-script-runner.mdx) owns strict candidate fields a
 The [data model](./practice-feedback-schema.md) owns current-result identity and ordering.
 
 ## Compose feedback
+
+[ADR 0061](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0061-review-seals-then-feedback-composes.md) records why composition runs on the worker.
 
 The worker composes after the sandbox ends: the sandbox measures and admits, and never composes.
 Composition runs in the attempt that admitted the results, before the attempt ends.

@@ -211,3 +211,9 @@ It is the narrowest window, so its counts are likely smaller.
 The decision of 2026-10-07 to show every count, however small, covers it.
 That decision is about small counts, not about windows.
 Nothing else above changes.
+
+## Update — 2026-10-26 (a work change keeps the live review)
+
+[ADR 0065](0065-standing-counts-the-newest-observation-of-each-item.md) amends the 2026-10-20 update.
+A work change no longer ends the live review. A newer live review, a repair or a removal still ends it.
+This is decided and is not shipped yet.
