@@ -378,16 +378,6 @@ Two metrics count practice script events on the worker:
 
 [Queue health](#queue-health) lists `llm.proxy.budget.blocked`, which also counts the direct model calls that a budget, a cap or the direct model limit of the attempt refused.
 
-### Issue-update queue
-
-Live issue updates become eligible 30 seconds after the last newly queued snapshot, or when the oldest reaches five minutes.
-The server checks every five seconds and processes at most 100 issues per sweep.
-Opening and closing are separate events and do not wait in this queue.
-
-A return to an already-pending snapshot does not reset eligibility.
-Queue load, contention, and failures can delay submission beyond eligibility.
-Job-queue gauges exclude these pre-submission events.
-
 ### Log correlation
 
 The application emits one JSON object per log line.

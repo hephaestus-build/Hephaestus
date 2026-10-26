@@ -119,3 +119,9 @@ The host must combine dependencies from the script and all its review sessions b
 Unknown or incomplete dependencies must retain the current version equality requirement.
 Practice version, frozen model method, marks, trusted coverage and source authorization must still gate reuse.
 The composed item version remains the identity for reports and comparison.
+
+## Update — 2026-10-26: the item is the review scope
+
+[ADR 0062](0062-the-item-is-the-review-scope.md) adds the quiet window, supersede and problem lineage on top of this model.
+[ADR 0063](0063-each-practice-is-staged-when-it-ends.md) adds per-practice staging to review membership.
+The item, version and current-claim model of this ADR stands.
