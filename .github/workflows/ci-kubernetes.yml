@@ -86,21 +86,24 @@ jobs:
         run: |
           set -euo pipefail
           k3d cluster create hephaestus --agents 1 --image "$NODE_IMAGE" --wait \
-            --k3s-arg "--kubelet-arg=pod-max-pids=4096@all" --k3s-arg "--disable=traefik@server:*"
+            --k3s-arg "--kubelet-arg=pod-max-pids=4096@all" --port "127.0.0.1:443:443@loadbalancer"
       - name: Install, upgrade and verify
         env:
           COMMIT: ${{ inputs.commit }}
         run: |
           set -euo pipefail
           work="$RUNNER_TEMP/kubernetes-cluster"
-          node scripts/kubernetes-cluster.ts prepare --work "$work" --images release-images.tsv --commit "$COMMIT"
+          # The release serves through the Gateway of k3s's Traefik, as in `vp run dev:kubernetes`.
+          node scripts/kubernetes-cluster.ts prepare --work "$work" --images release-images.tsv --commit "$COMMIT" --gateway
+          node scripts/kubernetes-cluster.ts gateway --work "$work"
           node scripts/kubernetes-cluster.ts install --work "$work"
           node scripts/kubernetes-cluster.ts verify
           # A second prepare keeps the Secrets that the database started with, as a second dev run does.
-          node scripts/kubernetes-cluster.ts prepare --work "$work" --images release-images.tsv --commit "$COMMIT"
+          node scripts/kubernetes-cluster.ts prepare --work "$work" --images release-images.tsv --commit "$COMMIT" --gateway
           # A changed release identity rolls every role: new workers prove the cluster before an old one drains.
           node scripts/kubernetes-cluster.ts install --work "$work" --set "release.version=v0.0.1-cluster"
           node scripts/kubernetes-cluster.ts verify
+          node scripts/kubernetes-cluster.ts request --work "$work"
       # k3s gives Pods 10.42.0.0/16, where the drill's S3 server runs.
       - name: Back up, then restore to a point in time
         if: ${{ matrix.cluster.backupDrill && matrix.arch == 'amd64' }}
