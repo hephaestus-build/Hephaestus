@@ -6057,7 +6057,7 @@ export const zUpdateNotificationPreferences = z.object({
     productSurveys: z.boolean(),
     researchSurveys: z.boolean(),
     surveySummaries: z.boolean(),
-    weeklyDigest: z.boolean(),
+    weeklyDigest: z.boolean().optional(),
     workspaceAlerts: z.boolean()
 });
 
@@ -6129,6 +6129,14 @@ export const zUpdateSyncJobRequest = z.object({
  */
 export const zUpdateTeamSettingsRequest = z.object({
     hidden: z.boolean()
+});
+
+/**
+ * A change to the user's preferences and settings
+ */
+export const zUpdateUserSettings = z.object({
+    practiceFeedbackDeliveryEnabled: z.boolean(),
+    timeZone: z.string().min(0).max(64).optional()
 });
 
 /**

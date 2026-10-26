@@ -85,7 +85,7 @@ public class NotificationSubscriptionService {
         // The weekly digest is not an email kind (NotificationSubscriptionKind.MENTOR_DIGEST).
         boolean enablingEmail = Arrays.stream(NotificationSubscriptionKind.values())
                 .filter(kind -> kind != NotificationSubscriptionKind.MENTOR_DIGEST)
-                .anyMatch(kind -> requested(update, kind) && !enabled(rows, kind));
+                .anyMatch(kind -> requested(update, rows, kind) && !enabled(rows, kind));
         if (enablingEmail && contacts.activeVerifiedPrimaryEmail(accountId).isEmpty()) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT, "The account must be active and have a verified email address.");
@@ -110,7 +110,7 @@ public class NotificationSubscriptionService {
                 row = new NotificationSubscription(accountId, kind);
                 rows.add(row);
             }
-            row.setEnabled(requested(update, kind), clock.instant());
+            row.setEnabled(requested(update, rows, kind), clock.instant());
         }
         subscriptions.saveAllAndFlush(rows);
         return view(accountId, rows);
@@ -130,14 +130,20 @@ public class NotificationSubscriptionService {
                 EntityTagPrecondition.format(version(rows)));
     }
 
-    private static boolean requested(UpdateNotificationPreferencesDTO update, NotificationSubscriptionKind kind) {
+    private static boolean requested(
+            UpdateNotificationPreferencesDTO update,
+            List<NotificationSubscription> rows,
+            NotificationSubscriptionKind kind) {
         return switch (kind) {
             case PRODUCT_FEEDBACK -> update.productFeedback();
             case PRODUCT_SURVEYS -> update.productSurveys();
             case RESEARCH_SURVEYS -> update.researchSurveys();
             case WORKSPACE_ALERTS -> update.workspaceAlerts();
             case SURVEY_SUMMARIES -> update.surveySummaries();
-            case MENTOR_DIGEST -> update.weeklyDigest();
+            case MENTOR_DIGEST -> {
+                Boolean weeklyDigest = update.weeklyDigest();
+                yield weeklyDigest == null ? enabled(rows, kind) : weeklyDigest;
+            }
         };
     }
 

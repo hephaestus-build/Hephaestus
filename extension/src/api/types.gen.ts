@@ -6234,9 +6234,9 @@ export type UpdateNotificationPreferences = {
     researchSurveys: boolean;
     surveySummaries: boolean;
     /**
-     * The weekly digest in your Heph conversation, with one note in Slack or email that it is ready
+     * The weekly digest in your Heph conversation, with one note in Slack or email that it is ready. Absent keeps the saved choice.
      */
-    weeklyDigest: boolean;
+    weeklyDigest?: boolean;
     workspaceAlerts: boolean;
 };
 
@@ -6348,6 +6348,20 @@ export type UpdateTeamSettingsRequest = {
      * Whether the team should be hidden from workspace activity
      */
     hidden: boolean;
+};
+
+/**
+ * A change to the user's preferences and settings
+ */
+export type UpdateUserSettings = {
+    /**
+     * Whether new practice-feedback comments may be delivered on issues, pull requests, and merge requests authored by the user, together with related Slack reminders
+     */
+    practiceFeedbackDeliveryEnabled: boolean;
+    /**
+     * The account's IANA time zone, such as Europe/Berlin. Absent keeps the saved time zone.
+     */
+    timeZone?: string;
 };
 
 /**
@@ -9952,7 +9966,7 @@ export type GetUserSettingsResponses = {
 export type GetUserSettingsResponse = GetUserSettingsResponses[keyof GetUserSettingsResponses];
 
 export type UpdateUserSettingsData = {
-    body: UserSettings;
+    body: UpdateUserSettings;
     path?: never;
     query?: never;
     url: '/user/settings';

@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.media.Schema.RequiredMode;
 import jakarta.validation.constraints.NotNull;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 
 public record UpdateNotificationPreferencesDTO(
         @NotNull @NonNull @Schema(requiredMode = RequiredMode.REQUIRED)
@@ -21,10 +22,9 @@ public record UpdateNotificationPreferencesDTO(
         @NotNull @NonNull @Schema(requiredMode = RequiredMode.REQUIRED)
         Boolean surveySummaries,
 
-        @NotNull
-        @NonNull
+        // Absent keeps the saved choice.
+        @Nullable
         @Schema(
-                requiredMode = RequiredMode.REQUIRED,
                 description = "The weekly digest in your Heph conversation, with one note in Slack or email that it is"
-                        + " ready")
+                        + " ready. Absent keeps the saved choice.")
         Boolean weeklyDigest) {}

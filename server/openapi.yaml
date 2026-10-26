@@ -3253,7 +3253,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/UserSettings"
+              $ref: "#/components/schemas/UpdateUserSettings"
         required: true
       responses:
         "200":
@@ -27293,7 +27293,7 @@ components:
         weeklyDigest:
           type: boolean
           description: "The weekly digest in your Heph conversation, with one note\
-            \ in Slack or email that it is ready"
+            \ in Slack or email that it is ready. Absent keeps the saved choice."
         workspaceAlerts:
           type: boolean
       required:
@@ -27301,7 +27301,6 @@ components:
       - productSurveys
       - researchSurveys
       - surveySummaries
-      - weeklyDigest
       - workspaceAlerts
     UpdateOutlineCollectionStateRequest:
       type: object
@@ -27490,6 +27489,23 @@ components:
           description: Whether the team should be hidden from workspace activity
       required:
       - hidden
+    UpdateUserSettings:
+      type: object
+      description: A change to the user's preferences and settings
+      properties:
+        practiceFeedbackDeliveryEnabled:
+          type: boolean
+          description: "Whether new practice-feedback comments may be delivered on\
+            \ issues, pull requests, and merge requests authored by the user, together\
+            \ with related Slack reminders"
+        timeZone:
+          type: string
+          description: "The account's IANA time zone, such as Europe/Berlin. Absent\
+            \ keeps the saved time zone."
+          maxLength: 64
+          minLength: 0
+      required:
+      - practiceFeedbackDeliveryEnabled
     UpdateWorkspaceFeaturesRequest:
       type: object
       description: Request to turn practice reviews and their triggers on or off.

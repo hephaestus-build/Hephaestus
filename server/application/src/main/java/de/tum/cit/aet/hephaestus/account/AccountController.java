@@ -37,7 +37,7 @@ public class AccountController {
 
     @PostMapping("/settings")
     @Operation(summary = "Update user settings", operationId = "updateUserSettings")
-    public ResponseEntity<UserSettingsDTO> updateUserSettings(@Valid @RequestBody UserSettingsDTO settings) {
+    public ResponseEntity<UserSettingsDTO> updateUserSettings(@Valid @RequestBody UpdateUserSettingsDTO settings) {
         return ResponseEntity.ok(preferencesService.updateUserSettings(CurrentAccount.requireId(), settings));
     }
 }
