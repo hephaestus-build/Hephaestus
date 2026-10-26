@@ -397,13 +397,9 @@ A result does not prove that feedback was prepared, sent or received.
 Each `feedbackStates` entry gives a `destination`: `ON_WORK` on the reviewed work, `PRACTICE_PAGE` privately on
 the developer's practice page, or `CONVERSATION` in a mentor conversation. Its `state` records delivery:
 
-- `AWAITING_APPROVAL` — waiting for an approval decision.
 - `READY` — prepared and eligible for delivery; this does not prove it was shown.
 - `DELIVERED` — delivery was confirmed.
 - `UNCONFIRMED` — provider visibility is uncertain. Do not claim it was delivered or that nothing reached them.
-- `WITHHELD` — delivery was withheld.
-- `REJECTED` — the prepared feedback was rejected.
-- `REPLACED` — a later piece replaced it.
 - `FAILED` — delivery failed. This alone does not prove that no part reached them.
 
 Use `deliveredFeedback` for confirmed words. Its `feedbackId` joins it to the state record and `deliveredAt`

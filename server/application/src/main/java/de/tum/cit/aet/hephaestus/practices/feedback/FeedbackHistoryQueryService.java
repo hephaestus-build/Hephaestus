@@ -61,7 +61,8 @@ public class FeedbackHistoryQueryService implements FeedbackHistoryQuery {
         Specification<Feedback> selected = (row, query, cb) -> cb.and(
                 cb.equal(row.get("workspaceId"), workspaceId),
                 cb.equal(row.get("id"), feedbackId),
-                cb.equal(row.get("developerId"), developerAccountId));
+                cb.equal(row.get("developerId"), developerAccountId),
+                row.get("state").in(FeedbackState.VISIBLE_TO_DEVELOPER));
         return read(selected, developerAccountId, 1, SourceUsePurpose.CONVERSATIONAL_MENTORING).stream()
                 .findFirst();
     }
@@ -73,6 +74,7 @@ public class FeedbackHistoryQueryService implements FeedbackHistoryQuery {
         Specification<Feedback> selected = (row, query, cb) -> cb.and(
                 cb.equal(row.get("workspaceId"), workspaceId),
                 cb.equal(row.get("developerId"), developerAccountId),
+                row.get("state").in(FeedbackState.VISIBLE_TO_DEVELOPER),
                 cb.greaterThanOrEqualTo(row.get("createdAt"), since));
         return read(selected, developerAccountId, limit, SourceUsePurpose.CONVERSATIONAL_MENTORING);
     }
