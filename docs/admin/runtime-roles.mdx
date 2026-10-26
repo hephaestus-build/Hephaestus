@@ -128,7 +128,7 @@ Run the migration once for each release, before the new roles start:
   Run `docker compose run --rm -T --no-deps database-migration` first.
   `--no-deps` keeps Compose from restarting PostgreSQL under the running roles.
   The command ends with the exit status of the migration, and the previous roles keep serving until then.
-  If it fails, Compose replaces no role. Follow [Upgrade § If migration fails](./upgrade#if-migration-fails).
+  If it fails, Compose replaces no role. Follow [Rollouts and rollback](#rollouts-and-rollback).
   Then run `docker compose up -d` to replace the roles.
   It stops the previous roles and runs the migration service again, which finds nothing to apply.
   Then it starts the new roles.
@@ -160,13 +160,34 @@ Release a Liquibase lock by hand only when such a process left it, and only afte
 ### Rollouts and rollback
 
 Between the migration and the end of the rollout, both releases use the new schema.
-The [expand/contract rule](/contributor/database-migration#changelog-immutability-policy) keeps this safe.
-A release that cannot follow the rule says so in its migration guide entry.
-For that release, stop every role, run the migration, then start the new release.
-
+The [expand/contract rule](/contributor/database-migration#expand-and-contract) keeps this safe.
 The schema is never rolled back.
-Roll forward to a release that fixes the problem.
-[Upgrade § If migration fails](./upgrade#if-migration-fails) restores the backup from before the upgrade, and [§ Rollback](./upgrade#rollback) explains why images alone cannot undo a schema change.
+If the new release fails after the migration, you can return the roles to the previous release.
+The previous release runs on the new schema.
+Then roll forward to a release that fixes the problem.
+
+A failed migration stops at a change set boundary.
+The previous release can run on that partly migrated schema, but only if the release has no **Stop every role** entry in its migration guide.
+With the bundled Compose stacks, this is the default case:
+
+1. If `docker compose run --rm -T --no-deps database-migration` fails, do not run `docker compose up -d`.
+   The previous roles continue to serve.
+2. Correct the cause that the migration error names.
+3. Run the migration command again. It continues from that boundary.
+4. Run `docker compose up -d` to replace the roles.
+
+A release whose migration guide entry starts with **Stop every role** is the exception.
+The previous release cannot run on its schema, and also not on a partly migrated one.
+For that release, do these steps:
+
+1. Stop every role, including remote workers.
+2. Make a database backup with the matching signed release lock, as the [silent deployment checklist](./production-operations-runbook#silent-deployment-checklist) describes.
+3. Run the migration.
+   Do not let a deployment tool return the roles to the previous release when the migration fails.
+4. Start the new release.
+5. If the migration or the new release fails, follow [Upgrade § If migration fails](./upgrade#if-migration-fails). It restores the backup and the previous signed release lock together.
+
+[Upgrade § Rollback](./upgrade#rollback) explains why images alone cannot undo a schema change.
 
 ## Configuration cheatsheet
 

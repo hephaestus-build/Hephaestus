@@ -76,6 +76,8 @@ sequenceDiagram
 4. **Merging the Version PR cuts the release.** The workflow resolves release image digests, then runs the evidence gate.
    Only then does it create the draft at the merge commit and attach evidence.
    After seeded-upgrade and supported-host gates also pass, it publishes the release and verifies its immutable state.
+   The seeded-upgrade gate also runs the previous release on the new and a partly migrated schema.
+   [Previous release on the new schema](./database-migration#previous-release-on-the-new-schema) has the checks.
    Then it promotes CI-built images to `X.Y.Z`, `X.Y`, and `latest`.
    Publication deploys nothing. See [Deploys](#deploys).
 
@@ -356,6 +358,11 @@ No TTY (agents, CI)? `vp exec changeset` is interactive — write the file by ha
 `.changeset/README.md`). When action is required, add `.migration/<slug>.md` with the complete
 `#### 🔴 …` guide entry. CI requires the matching slug and `**Operators:**` marker. Never hand-edit
 `CHANGELOG.md` or `MIGRATION.md`. Versioning generates both.
+
+A fragment whose heading starts with `#### 🔴 Stop every role` waives the rule that the previous release runs on the new schema.
+The waiver covers the whole release: the changelog guard and the seeded-upgrade gate then skip that proof and write a warning to the job summary.
+Add it only for a release that an ADR or the maintainer allows to stop every role.
+[Expand and contract](./database-migration#expand-and-contract) owns the rule.
 
 :::caution Pre-1.0
 Never pick a `major` bump while the version is `0.x`.
