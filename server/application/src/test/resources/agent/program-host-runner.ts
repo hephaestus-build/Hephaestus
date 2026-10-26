@@ -152,6 +152,7 @@ export default definePracticeScript({
 	async run(ctx) {
 		let note = "none";
 		${before}
+		await ctx.evidence.record("metadata.json");
 		return {
 			outcome: "DOES_NOT_APPLY",
 			summary: \`No user interface changes; note \${note}\`,
@@ -164,7 +165,6 @@ export default definePracticeScript({
 					ruledOutBy: "The record names one changed Java file.",
 				},
 			},
-			coverage: { source: "claimed", selected: 1, checked: 1, total: 1, complete: true },
 		};
 	},
 });

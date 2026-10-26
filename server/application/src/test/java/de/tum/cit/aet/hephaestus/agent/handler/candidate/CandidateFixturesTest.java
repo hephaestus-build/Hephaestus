@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.tum.cit.aet.hephaestus.integration.core.spi.CandidateRefusal;
-import de.tum.cit.aet.hephaestus.practices.spi.ClaimedCoverage;
 import de.tum.cit.aet.hephaestus.practices.spi.HostCoverage;
 import de.tum.cit.aet.hephaestus.practices.spi.Severity;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -304,21 +303,21 @@ class CandidateFixturesTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldKeepUnknownTotalWhenClaimedCoverageIsCompleteForTheSelectedItems() throws IOException {
-        ObjectNode candidate = fixture("candidate-met-with-example.json");
-        candidate
-                .putObject("coverage")
-                .put("source", "claimed")
-                .put("selected", 1)
-                .put("checked", 1)
-                .putNull("total")
-                .put("complete", true);
+    void shouldRefuseClaimedCoverageWhenAnyOutcomeCarriesIt() throws IOException {
+        for (String name : CANDIDATES.keySet()) {
+            ObjectNode candidate = fixture(name);
+            candidate
+                    .putObject("coverage")
+                    .put("source", "claimed")
+                    .put("selected", 1)
+                    .put("checked", 1)
+                    .putNull("total")
+                    .put("complete", true);
+            assertRefused(candidate, CandidateRefusal.COVERAGE_INCONSISTENT);
 
-        assertThat(((ClaimedCoverage) CandidateParser.parse(candidate).coverage()).total())
-                .isNull();
-
-        ((ObjectNode) candidate.get("coverage")).remove("total");
-        assertRefused(candidate, CandidateRefusal.MALFORMED_CANDIDATE);
+            ((ObjectNode) candidate.get("coverage")).remove("total");
+            assertRefused(candidate, CandidateRefusal.MALFORMED_CANDIDATE);
+        }
     }
 
     @Test

@@ -55,7 +55,7 @@ export default definePracticeScript({
 		expectKind(ctx, "scm.pull_request");
 		const { files } = scm(ctx);
 		const comments = addedComments(requireChange(files));
-		const { ratings, unrated } = await classify({
+		const { ratings } = await classify({
 			model: ctx.models.decision,
 			set: commentKinds,
 			items: comments,
@@ -76,10 +76,6 @@ export default definePracticeScript({
 					{ openQuestion: "Does each rated comment meet the practice?", wouldSettleIt: "A review of the rated comments." },
 				],
 			},
-			coverage:
-				unrated.length === 0
-					? { source: "claimed", selected: comments.length, checked: ratings.size, total: comments.length, complete: true }
-					: { source: "claimed", selected: comments.length, checked: ratings.size, total: comments.length, complete: false, omitted: unrated },
 		};
 	},
 });
@@ -215,6 +211,7 @@ async function runLive(slug: string, source: string, bound: BoundModels): Promis
 					log.push(line);
 				},
 				receipts,
+				requiredSources: [],
 			},
 		);
 		return { outcome, reviews, requests: standIn.requests, log: log.join("\n") };
@@ -297,7 +294,7 @@ void test(
 		assert.partialDeepStrictEqual(outcome.candidate, {
 			outcome: "COULD_NOT_DETERMINE",
 			citations: [{ sourceKind: "scm.pull-request.diff", path: "src/cart.ts", startLine: 2 }],
-			coverage: { source: "claimed", selected: 5, checked: 5, total: 5, complete: true },
+			coverage: { source: "host" },
 		});
 		assert.deepEqual(outcome.calls, {
 			review: 0,

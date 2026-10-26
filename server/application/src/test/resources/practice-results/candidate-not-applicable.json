@@ -23,10 +23,11 @@
 		}
 	},
 	"coverage": {
-		"source": "claimed",
-		"selected": 3,
-		"checked": 3,
-		"total": 3,
+		"source": "host",
+		"reads": 3,
+		"truncatedReads": 0,
+		"failedReads": 0,
+		"receipts": [],
 		"complete": true
 	}
 }

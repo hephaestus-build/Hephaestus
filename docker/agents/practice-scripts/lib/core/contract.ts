@@ -411,8 +411,8 @@ export type Completeness =
 	| { complete: true; omitted?: never }
 	| { complete: false; omitted: NonEmpty<Omission> };
 /**
- * What the result covers. "host": the host derived it from its own read receipts. "claimed": program
- * code typed it, and it stays a claim.
+ * What the result covers. "host": the host derived it from its own read receipts. "claimed": counts
+ * that code typed, which only stored results from earlier releases carry. Admission refuses it.
  */
 export const readReceiptSchema = z
 	.strictObject({
@@ -651,19 +651,7 @@ function readCoverage(coverage: Superset["coverage"]): Coverage | string {
 					omitted: omissions,
 				};
 	}
-	const { selected, checked, total } = coverage;
-	if (checked > selected) {
-		return "claimed coverage checked more items than it selected";
-	}
-	if (total !== null && selected > total) {
-		return "claimed coverage selected more items than the total";
-	}
-	if (coverage.complete && (checked !== selected || (total !== null && selected !== total))) {
-		return "complete claimed coverage checks every selected item of the total";
-	}
-	return omissions === undefined
-		? { source: "claimed", selected, checked, total, complete: true }
-		: { source: "claimed", selected, checked, total, complete: false, omitted: omissions };
+	return "coverage is what the host measured; a result cannot claim it";
 }
 
 function basisIndices(basis: ClaimBasis): number[] {

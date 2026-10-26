@@ -794,7 +794,7 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                "basis":{"type":"introduced","head":0,"explanation":"This pull request adds the handler."},
                "nextStep":"Rethrow the failure with its cause, or record the export as failed."}],
              "evidence":{},
-             "coverage":{"source":"claimed","selected":1,"checked":1,"total":1,"complete":true}}
+             "coverage":{"source":"host","reads":1,"truncatedReads":0,"failedReads":0,"receipts":[],"complete":true}}
             """.formatted(summary, RECORD, RECORD, QUOTE));
         return new AdmissionRequestDTO(
                 3,

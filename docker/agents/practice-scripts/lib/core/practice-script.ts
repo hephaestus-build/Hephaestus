@@ -25,6 +25,7 @@ import type {
 	Omission,
 	Reason,
 	ReviewOptions,
+	SessionCandidate,
 	SlotModels,
 	PracticeInputs,
 } from "./contract.ts";
@@ -94,7 +95,8 @@ export type PracticeScriptContext<M extends ModelNeeds = ModelNeeds> = PracticeI
 
 export interface PracticeScriptDefinition<M extends ModelNeeds> {
 	meta: PracticeScriptMeta<M>;
-	run: (ctx: PracticeScriptContext<M>) => Promise<Candidate>;
+	/** Return what `ctx.review` returned, or a result that code decided: without coverage, which the host measures. */
+	run: (ctx: PracticeScriptContext<M>) => Promise<Candidate | SessionCandidate>;
 }
 
 export function isPracticeScriptDefinition(

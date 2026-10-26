@@ -30,6 +30,7 @@ import {
 	runPracticeProgram,
 	type PracticeProgram,
 	type ProgramOutcome,
+	type RequiredSource,
 } from "./program-host.ts";
 import { InputReader } from "./script-inputs.ts";
 import { ProgramSettlementError, RETURN_MS } from "./script-run.ts";
@@ -139,6 +140,7 @@ interface RunOptions {
 	budget?: ModelBudget;
 	signal?: AbortSignal;
 	deadlineMs?: number;
+	requiredSources?: RequiredSource[];
 }
 
 async function run(ws: Workspace, slug: string, options: RunOptions = {}) {
@@ -176,6 +178,7 @@ async function run(ws: Workspace, slug: string, options: RunOptions = {}) {
 				logs.push(line.replace(/^\s*\[[^\]]*\] /u, ""));
 			},
 			receipts,
+			requiredSources: options.requiredSources ?? [],
 		},
 	);
 	return { outcome, reviews, logs, staged };
@@ -212,6 +215,34 @@ const slowReview = (ms: number) => async () => {
 	return REVIEWED;
 };
 
+/** A program that asks two reviews and returns `returns`, an expression over the second. */
+const reviewsTwice = (returns: string) =>
+	program(
+		"definePracticeScript",
+		`{ meta: {}, run: async (ctx) => {
+				await ctx.review({});
+				const second = await ctx.review({});
+				return ${returns};
+			} }`,
+	);
+
+/** A program that cites the change, and reads the core record first when `read` is set. */
+const decidesFromTheChange = (read: boolean) =>
+	program(
+		"definePracticeScript",
+		`{ meta: {}, run: async (ctx) => {
+				${read ? 'await ctx.evidence.record("metadata.json");' : ""}
+				const found = await scm(ctx).files?.change?.cite("src/cart.ts", "NEW", 2);
+				return {
+					outcome: "MET",
+					summary: "Met",
+					explanation: "The change shows the practice.",
+					citations: [found],
+					evidence: {},
+				};
+			} }`,
+	);
+
 void describe("a practice's result", () => {
 	void test("a custom program that decides in code returns its own result and asks for no review", async () => {
 		const ws = await workspace({ direct: await fixture("direct") });
@@ -236,9 +267,222 @@ void describe("a practice's result", () => {
 					endLine: 36,
 				},
 			],
-			coverage: { source: "claimed", selected: 1, checked: 1, total: 1, complete: true },
+			coverage: { source: "host", truncatedReads: 0, failedReads: 0, complete: true },
 		});
 		reportEntry("direct", outcome);
+	});
+
+	void test("a program result that types its own coverage is refused", async () => {
+		const ws = await workspace({
+			typed: program(
+				"definePracticeScript",
+				`{ meta: {}, run: async (ctx) => ({
+					outcome: "MET",
+					summary: "Met",
+					explanation: "The program typed its coverage.",
+					citations: [await ctx.evidence.citeRecord("metadata.json", 36)],
+					evidence: {},
+					coverage: { source: "claimed", selected: 1, checked: 1, total: 1, complete: true },
+				}) }`,
+			),
+		});
+		const { outcome } = await run(ws, "typed");
+		assert.equal(outcome.status, "failed");
+		assert.equal(outcome.stopReason, "invalid-candidate");
+		assert.match(outcome.error ?? "", /coverage_inconsistent/u);
+	});
+
+	void test("code that cites a source it did not read gets no MET", async () => {
+		const ws = await workspace({
+			unread: program(
+				"definePracticeScript",
+				`{ meta: {}, run: async (ctx) => ({
+					outcome: "MET",
+					summary: "Met",
+					explanation: "The program quoted one line and read nothing.",
+					citations: [await ctx.evidence.citeRecord("metadata.json", 36)],
+					evidence: {},
+				}) }`,
+			),
+		});
+		const { outcome } = await run(ws, "unread");
+		assert.equal(outcome.status, "failed");
+		assert.equal(outcome.stopReason, "invalid-candidate");
+		assert.match(outcome.error ?? "", /^met_coverage_incomplete:/u);
+	});
+
+	void test("code that ignored a failed read gets no Does not apply", async () => {
+		const ws = await workspace({
+			hidden: program(
+				"definePracticeScript",
+				`{ meta: {}, run: async (ctx) => {
+					await ctx.evidence.record("..").catch(() => undefined);
+					await ctx.evidence.record("metadata.json");
+					return {
+						outcome: "DOES_NOT_APPLY",
+						summary: "No user interface changes",
+						explanation: "The program ignored its failed read.",
+						citations: [await ctx.evidence.citeRecord("metadata.json", 36)],
+						evidence: {
+							inapplicability: {
+								consulted: ["scm.pull-request.core"],
+								prerequisite: "user interface files",
+								ruledOutBy: "No changed file is a view.",
+							},
+						},
+					};
+				} }`,
+			),
+		});
+		const { outcome } = await run(ws, "hidden");
+		assert.equal(outcome.status, "failed");
+		assert.equal(outcome.stopReason, "invalid-candidate");
+		assert.match(outcome.error ?? "", /complete coverage/u);
+	});
+
+	void test("code cannot turn a review's Could not determine into Does not apply after a failed read", async () => {
+		const ws = await workspace({
+			rides: program(
+				"definePracticeScript",
+				`{ meta: {}, run: async (ctx) => {
+					const reviewed = await ctx.review({});
+					await ctx.evidence.record("..").catch(() => undefined);
+					return {
+						outcome: "DOES_NOT_APPLY",
+						summary: "No user interface changes",
+						explanation: "The program replaced the review's outcome.",
+						citations: reviewed.citations,
+						evidence: {
+							inapplicability: {
+								consulted: ["scm.pull-request.core"],
+								prerequisite: "user interface files",
+								ruledOutBy: "No changed file is a view.",
+							},
+						},
+						coverage: reviewed.coverage,
+					};
+				} }`,
+			),
+		});
+		const { outcome } = await run(ws, "rides");
+		assert.equal(outcome.status, "failed");
+		assert.equal(outcome.stopReason, "invalid-candidate");
+		assert.match(outcome.error ?? "", /complete coverage/u);
+	});
+
+	void test("code cannot turn a review's Could not determine into Met on the review's coverage", async () => {
+		const ws = await workspace({
+			rides: program(
+				"definePracticeScript",
+				`{ meta: {}, run: async (ctx) => {
+					const reviewed = await ctx.review({});
+					return {
+						outcome: "MET",
+						summary: "Met",
+						explanation: "The program replaced the review's outcome and read nothing.",
+						citations: reviewed.citations,
+						evidence: {},
+						coverage: reviewed.coverage,
+					};
+				} }`,
+			),
+		});
+		const { outcome } = await run(ws, "rides");
+		assert.equal(outcome.status, "failed");
+		assert.equal(outcome.stopReason, "invalid-candidate");
+		assert.match(outcome.error ?? "", /^met_coverage_incomplete:/u);
+	});
+
+	void test("when two reviews return the same coverage, only their own decisions keep it", async () => {
+		const inapplicable: Candidate = {
+			outcome: "DOES_NOT_APPLY",
+			summary: "No user interface changes",
+			explanation: "The second review found no view.",
+			citations: REVIEWED.citations,
+			evidence: {
+				inapplicability: {
+					consulted: ["scm.pull-request.core"],
+					prerequisite: "user interface files",
+					ruledOutBy: "No changed file is a view.",
+				},
+			},
+			coverage: REVIEWED.coverage,
+		};
+		const ws = await workspace({
+			second: reviewsTwice("second"),
+			changed: reviewsTwice(`{ ...second, outcome: "MET", evidence: {} }`),
+		});
+		let asked = 0;
+		const review = async () => {
+			asked += 1;
+			return asked % 2 === 1 ? REVIEWED : inapplicable;
+		};
+		const kept = await run(ws, "second", { review });
+		assert.equal(kept.outcome.status, "ok", kept.outcome.error);
+		assert.partialDeepStrictEqual(kept.outcome.candidate, {
+			outcome: "DOES_NOT_APPLY",
+			coverage: { source: "host", reads: 3, complete: true },
+		});
+		const changed = await run(ws, "changed", { review });
+		assert.equal(changed.outcome.status, "failed");
+		assert.match(changed.outcome.error ?? "", /^met_coverage_incomplete:/u);
+	});
+
+	void test("code gets no MET until it reads each source that its practice requires", async () => {
+		const ws = await workspace({
+			unread: decidesFromTheChange(false),
+			read: decidesFromTheChange(true),
+		});
+		const requiredSources = [
+			{ sourceKind: "scm.pull-request.core", sourcePath: "context/metadata.json" },
+		];
+		const unread = await run(ws, "unread", { requiredSources });
+		assert.equal(unread.outcome.status, "failed");
+		assert.match(unread.outcome.error ?? "", /^met_coverage_incomplete:/u);
+		const read = await run(ws, "read", { requiredSources });
+		assert.equal(read.outcome.status, "ok", read.outcome.error);
+		assert.partialDeepStrictEqual(read.outcome.candidate, {
+			outcome: "MET",
+			coverage: { source: "host", complete: true },
+		});
+	});
+
+	void test("code that ignored a failed read keeps its Not met, with incomplete coverage", async () => {
+		const ws = await workspace({
+			partial: program(
+				"definePracticeScript",
+				`{ meta: {}, run: async (ctx) => {
+					await ctx.evidence.record("..").catch(() => undefined);
+					await ctx.evidence.record("metadata.json");
+					const cited = await ctx.evidence.citeRecord("metadata.json", 36);
+					return {
+						outcome: "NOT_MET",
+						summary: "The change is too large",
+						explanation: "The record counts the changed files.",
+						citations: [],
+						problems: [{
+							severity: "MINOR",
+							summary: "Too many changed files",
+							explanation: "The record states the count.",
+							citations: [cited],
+							basis: { type: "state", explanation: "The pull request has this state." },
+						}],
+						evidence: {},
+					};
+				} }`,
+			),
+		});
+		const { outcome } = await run(ws, "partial");
+		assert.equal(outcome.status, "ok", outcome.error);
+		assert.partialDeepStrictEqual(outcome.candidate, {
+			outcome: "NOT_MET",
+			coverage: {
+				source: "host",
+				failedReads: 1,
+				complete: false,
+				omitted: [{ what: "script reads that failed", count: 1, reason: "unavailable" }],
+			},
+		});
 	});
 
 	void test("the built-in asks one review with no prepared input and returns its result", async () => {
@@ -433,7 +677,7 @@ void describe("the host's bounds on a program's messages", () => {
 	void test("a pending review settles before the next practice starts", async () => {
 		const candidate = {
 			...REVIEWED,
-			coverage: { source: "claimed", selected: 1, checked: 1, total: 1, complete: true },
+			coverage: undefined,
 		};
 		const ws = await workspace({
 			first: program(
@@ -567,7 +811,7 @@ void describe("a program that does not stop when the host stops it", { concurren
 		const cancel = new AbortController();
 		const candidate = {
 			...REVIEWED,
-			coverage: { source: "claimed", selected: 1, checked: 1, total: 1, complete: true },
+			coverage: undefined,
 		};
 		const ws = await workspace({
 			late: program(

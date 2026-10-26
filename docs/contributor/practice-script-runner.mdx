@@ -63,8 +63,8 @@ The server derives the result's worst severity.
 Every new problem has verified citations and a permitted claim basis.
 An example can appear only on Met or Not met and cannot overlap a problem.
 
-Coverage distinguishes host read receipts from a script's claimed counts.
-Claimed completeness is not a trusted complete file read.
+A script returns what `ctx.review` returned, or a candidate that its code decided, without coverage.
+The [pipeline](./practice-review-pipeline.mdx#admit-results) owns how the host measures coverage.
 
 Host coverage checks the practice's required sources and the sources that its result cites.
 A source supplied in full by the opening brief needs no duplicate read.

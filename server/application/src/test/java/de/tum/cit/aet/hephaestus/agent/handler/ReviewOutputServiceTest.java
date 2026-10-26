@@ -92,7 +92,7 @@ class ReviewOutputServiceTest extends BaseUnitTest {
         var candidate = mapper.readTree("""
             {"outcome":"MET","summary":"Clear names","explanation":"The names explain the document.",
              "citations":[{"sourceKind":"docs.document.core","sourcePath":"context/body.txt","path":"document/body","startLine":1,"endLine":1,"quote":"Clear names"}],
-             "evidence":{},"coverage":{"source":"claimed","selected":1,"checked":1,"total":1,"complete":true}}
+             "evidence":{},"coverage":{"source":"host","reads":1,"truncatedReads":0,"failedReads":0,"receipts":[],"complete":true}}
             """);
         return new AdmissionRequestDTO(
                 3,
@@ -127,6 +127,31 @@ class ReviewOutputServiceTest extends BaseUnitTest {
                         .path("reason")
                         .asString())
                 .isEqualTo("quote_unverified");
+    }
+
+    @Test
+    void shouldWithholdAClaimedMetWithoutWritingAResultWhenTheCoverageIsNotMeasured() {
+        var submission = submission("clear-names", "docs:one");
+        var claimed = ((ObjectNode) submission.results().getFirst().candidate());
+        claimed.putObject("coverage")
+                .put("source", "claimed")
+                .put("selected", 1)
+                .put("checked", 1)
+                .put("total", 1)
+                .put("complete", true);
+        when(results.admit(1, job.getReviewId(), job.getId(), 0, List.of()))
+                .thenReturn(new AdmissionReceipt(List.of(), List.of()));
+
+        service.prepare(job, submission).record(job);
+
+        verifyNoInteractions(verifier);
+        verify(results).admit(1, job.getReviewId(), job.getId(), 0, List.of());
+        verify(membership)
+                .withhold(
+                        eq(1L),
+                        eq(RuntimeReviewTestData.assignment(5L, null).id()),
+                        eq(CandidateRefusal.COVERAGE_INCONSISTENT),
+                        any());
     }
 
     @Test

@@ -229,6 +229,9 @@ try {
 					console.error(line);
 				},
 				receipts,
+				// The tool captures no records, so it cannot check required record reads. A result that misses one
+				// passes here; a review withholds it.
+				requiredSources: [],
 			},
 		);
 	}

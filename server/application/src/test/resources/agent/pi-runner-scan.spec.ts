@@ -340,7 +340,6 @@ export default definePracticeScript({
 			explanation: "The assigned source is readable at its pinned commit.",
 			citations: [await ctx.files.head.cite(ctx.scope.item.path, 1)],
 			evidence: {},
-			coverage: { source: "claimed", selected: 1, checked: 1, total: 1, complete: true },
 		};
 	},
 });

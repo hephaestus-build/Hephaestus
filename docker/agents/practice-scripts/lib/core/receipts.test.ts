@@ -111,7 +111,7 @@ void test("source-catalog flags decide side and commit without a provider allowl
 	);
 });
 
-void test("a claimed MET cannot manufacture the assigned scan file's complete read receipt", async (t) => {
+void test("code that only quotes the assigned scan file gets no MET", async (t) => {
 	const { reader, counters } = await fixture(t);
 	const met = {
 		outcome: "MET",
@@ -128,9 +128,18 @@ void test("a claimed MET cannot manufacture the assigned scan file's complete re
 			},
 		],
 		evidence: {},
-		coverage: { source: "claimed", selected: 1, checked: 1, total: 1, complete: true },
 	};
-	const parsed = parseCandidate(met);
+	const parsed = parseCandidate({
+		...met,
+		coverage: {
+			source: "host",
+			reads: 0,
+			truncatedReads: 0,
+			failedReads: 0,
+			receipts: [],
+			complete: true,
+		},
+	});
 	assert.ok(parsed.ok);
 	const inputs = practiceInputsSchema.parse({
 		...scan("a.ts"),
@@ -154,6 +163,7 @@ void test("a claimed MET cannot manufacture the assigned scan file's complete re
 		{
 			reader,
 			receipts: counters,
+			requiredSources: [],
 			models: {},
 			budget: new ModelBudget(0, 1),
 			review: async () => parsed.candidate,
@@ -162,5 +172,5 @@ void test("a claimed MET cannot manufacture the assigned scan file's complete re
 		},
 	);
 	assert.equal(outcome.candidate, undefined);
-	assert.match(outcome.error ?? "", /SCAN MET requires a complete receipt/u);
+	assert.match(outcome.error ?? "", /^met_coverage_incomplete:/u);
 });
