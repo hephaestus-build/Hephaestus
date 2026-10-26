@@ -1,0 +1,19 @@
+cff-version: 1.2.0
+message: If you use Hephaestus in your research, please cite it as below.
+type: software
+title: Hephaestus
+abstract: >-
+  Hephaestus is an open-source AI mentor for software teams. It checks developers' existing work
+  in GitHub, GitLab, Slack and Outline against the engineering practices that their project values.
+authors:
+  - name: TUM Applied Education Technologies
+    website: https://aet.cit.tum.de/
+repository-code: https://github.com/hephaestus-build/Hephaestus
+url: https://hephaestus.build
+license: MIT
+keywords:
+  - ai-mentor
+  - code-review
+  - education
+  - engineering-practices
+  - developer-feedback
