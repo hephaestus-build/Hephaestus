@@ -14,7 +14,9 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { parseArgs } from "node:util";
 
-import { asArray, asRecord, asString, parseJson } from "./lib/json.ts";
+import { readChangesets } from "@changesets/read";
+
+import { asArray, asRecord, asString, parseJson, readJsonFile } from "./lib/json.ts";
 import { installPinnedBinary, type PinnedAsset } from "./lib/pinned-binary.ts";
 import { CAPTURE_LIMIT_BYTES, exitStatus, output, run, succeeds } from "./lib/process.ts";
 import { compareVersions, parseVersion } from "./plan-release.ts";
@@ -126,16 +128,48 @@ export interface Compatibility {
 	readonly problems: string[];
 }
 
+/** The major version of a `vX.Y.Z` release tag. */
+const majorOf = (tag: string): number => parseVersion(tag.slice(1))?.major ?? 0;
+
 /**
- * From 1.0 a break needs a major release, so no entry may accept one. A comment that contains a
- * break's line accepts it too, because oasdiff reads every line, so the file must not hide one there.
+ * Whether the checkout at `rootDir` heads for a major release after `baseTag`. Before the Version
+ * PR, a pending changeset bumps `hephaestus` by `major`. From the Version PR on, it has consumed
+ * that changeset and `package.json` carries the higher major.
  */
-function acceptedBreaksProblems(file: string, baseTag: string, breaks: ReadonlySet<string>) {
+export async function headsForMajorRelease(rootDir: string, baseTag: string): Promise<boolean> {
+	const changesets = await readChangesets(rootDir);
+	if (
+		changesets.some(({ releases }) =>
+			releases.some(({ name, type }) => name === "hephaestus" && type === "major"),
+		)
+	) {
+		return true;
+	}
+	const root = asRecord(await readJsonFile(path.join(rootDir, "package.json")), "package.json");
+	const version = asString(root.version, "package.json version");
+	const parsed = parseVersion(version);
+	if (parsed === undefined) {
+		throw new Error(`package.json version ${version} is not a stable X.Y.Z version`);
+	}
+	return parsed.major > majorOf(baseTag);
+}
+
+/**
+ * From 1.0 a break needs a major release, so outside one no entry may accept a break. An obsolete
+ * entry accepts nothing, so it does not count. A comment that contains a break's line accepts it
+ * too, because oasdiff reads every line, so the file must not hide one there.
+ */
+function acceptedBreaksProblems(
+	file: string,
+	baseTag: string,
+	breaks: ReadonlySet<string>,
+	majorRelease: boolean,
+) {
 	const problems: string[] = [];
-	const major = parseVersion(baseTag.slice(1))?.major ?? 0;
-	if (major >= 1 && acceptedEntries(file).length > 0) {
+	const accepting = acceptedEntries(file).filter((entry) => breaks.has(entry));
+	if (majorOf(baseTag) >= 1 && !majorRelease && accepting.length > 0) {
 		problems.push(
-			`From 1.0 a break needs a major release: ${ACCEPTED_BREAKS} must be empty against ${baseTag}.`,
+			`From 1.0 a break needs a major release. ${accepting.length} entries in ${ACCEPTED_BREAKS} accept a break of ${baseTag}. Add a major changeset, or make the change compatible.`,
 		);
 	}
 	const lines = [...breaks].map((line) => line.toLowerCase());
@@ -167,12 +201,14 @@ export async function compareSpecs(options: {
 	base: string;
 	/** The release tag that `base` was read from. */
 	baseTag: string;
+	/** Whether the change heads for a major release after `baseTag`, which may break it. */
+	majorRelease: boolean;
 	revision: string;
 	acceptedBreaks: string;
 	format: "githubactions" | "text";
 	cwd: string;
 }): Promise<Compatibility> {
-	const { oasdiff, base, baseTag, revision, acceptedBreaks, format, cwd } = options;
+	const { oasdiff, base, baseTag, majorRelease, revision, acceptedBreaks, format, cwd } = options;
 	const all = oasdiffBreaking(oasdiff, [base, revision, "--format", "json"], cwd);
 	if (all.status !== 0) {
 		throw new Error(`oasdiff exited with ${exitStatus(all.status, all.signal)}:\n${all.stderr}`);
@@ -191,7 +227,7 @@ export async function compareSpecs(options: {
 		compatible: gate.status === 0,
 		report: `${gate.stdout}${gate.stderr}`,
 		obsolete: acceptedEntries(file).filter((entry) => !breaks.has(entry)),
-		problems: acceptedBreaksProblems(file, baseTag, breaks),
+		problems: acceptedBreaksProblems(file, baseTag, breaks, majorRelease),
 	};
 }
 
@@ -231,10 +267,15 @@ async function main(): Promise<void> {
 		const baseSpec = path.join(directory, `openapi-${base}.yaml`);
 		await writeFile(baseSpec, await specAt(base));
 		console.log(`Comparing ${SPEC} with ${base} (oasdiff ${OASDIFF_VERSION}).`);
+		const majorRelease = majorOf(base) >= 1 && (await headsForMajorRelease(ROOT, base));
+		if (majorRelease) {
+			console.log(`The change heads for a major release after ${base}, so it can break it.`);
+		}
 		const { compatible, report, obsolete, problems } = await compareSpecs({
 			oasdiff: await installOasdiff(),
 			base: baseSpec,
 			baseTag: base,
+			majorRelease,
 			// Relative, so that each annotation names the file in the checkout.
 			revision: SPEC,
 			acceptedBreaks: ACCEPTED_BREAKS,
