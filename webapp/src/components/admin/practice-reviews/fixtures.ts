@@ -2215,6 +2215,8 @@ export const longFeedbackDetail: ReviewFeedbackDetail = feedbackDetail(
 export const partialPackageFeedbackDetail: ReviewFeedbackDetail = {
 	...longFeedbackDetail,
 	state: "FAILED",
+	disagreedAt: null,
+	deliveredAt: longFeedbackDetail.copies.find((copy) => copy.postedAt !== null)?.postedAt ?? null,
 };
 
 export const awaitingApprovalFeedbackDetail: ReviewFeedbackDetail = feedbackDetail(
