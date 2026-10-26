@@ -203,17 +203,15 @@ jobs:
           retention-days: 14
           if-no-files-found: warn
 
-  # Each drill migrates its own named containers from the packaged JAR, so it takes its own job
-  # rather than queueing behind databaseTest's Gradle invocation.
+  # The drills migrate their own named containers from the packaged JAR, so they take a job of
+  # their own rather than queueing behind databaseTest's Gradle invocation. They share one job:
+  # together they are shorter than the integration shards, and a job of its own costs each a
+  # runner's setup.
   postgres-drill:
-    name: "App Server: PostgreSQL drill (${{ matrix.drill }})"
+    name: "App Server: PostgreSQL drills"
     if: inputs.should_skip != 'true' && inputs.contracts_changed == 'true' && inputs.queue_tier == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    strategy:
-      fail-fast: false
-      matrix:
-        drill: [backup-restore, pitr]
     permissions:
       contents: read
     steps:
@@ -233,11 +231,18 @@ jobs:
           base-sha: ${{ inputs.postgres_base_sha }}
           image-changed: ${{ inputs.postgres_image_changed }}
           tag: hephaestus-postgres:ci
-      - name: Run the PostgreSQL ${{ matrix.drill }} drill
+      - name: Run the PostgreSQL backup-restore drill
+        id: backup_restore
         env:
-          DRILL: ${{ matrix.drill }}
           HEPHAESTUS_APPLICATION_JAR: ${{ steps.server.outputs.executable-jar }}
-        run: node "scripts/postgres-$DRILL-test.ts" --target-image hephaestus-postgres:ci
+        run: node scripts/postgres-backup-restore-test.ts --target-image hephaestus-postgres:ci
+      # The PITR drill reports on its own even when the backup-restore drill failed, but not after a
+      # failed setup step.
+      - name: Run the PostgreSQL pitr drill
+        if: ${{ !cancelled() && (success() || steps.backup_restore.outcome == 'failure') }}
+        env:
+          HEPHAESTUS_APPLICATION_JAR: ${{ steps.server.outputs.executable-jar }}
+        run: node scripts/postgres-pitr-test.ts --target-image hephaestus-postgres:ci
 
   webapp-e2e:
     name: "Webapp: E2E"

@@ -1517,6 +1517,22 @@ void describe("CI contract", () => {
 		);
 	});
 
+	void test("every CI/CD run validates the Gradle wrapper in a job without a condition", async () => {
+		// Scorecard exempts the committed wrapper JAR only for a successful run of this file at the
+		// latest commit that contains the validation action.
+		const workflow = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
+		assert.equal(workflow.getIn(["jobs", "detect-changes", "if"]), undefined);
+		assert.equal(workflow.getIn(["jobs", "detect-changes", "needs"]), undefined);
+		const steps = workflow.getIn(["jobs", "detect-changes", "steps"]);
+		assert.ok(isSeq(steps));
+		const validation = steps.items.find(
+			(item) =>
+				isMap(item) && String(item.get("uses")).startsWith("gradle/actions/wrapper-validation@"),
+		);
+		assert.ok(isMap(validation), "Detect changes validates the Gradle wrapper");
+		assert.equal(validation.get("if"), undefined);
+	});
+
 	void test("changes to the PMD canary exercise it even without server source changes", async () => {
 		const workflow = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
 		const filter = step(workflow, ["jobs", "detect-changes"], "dorny/paths-filter");
@@ -1628,14 +1644,14 @@ void describe("CI contract", () => {
 		);
 		assert.ok(isMap(restored));
 		assert.equal(restored.get("id"), "server");
-		assert.equal(
-			namedStep(
-				drill,
-				["jobs", "postgres-drill"],
-				`Run the PostgreSQL \${{ matrix.drill }} drill`,
-			).getIn(["env", "HEPHAESTUS_APPLICATION_JAR"]),
-			`\${{ steps.server.outputs.executable-jar }}`,
-		);
+		for (const drillName of ["backup-restore", "pitr"]) {
+			assert.equal(
+				namedStep(drill, ["jobs", "postgres-drill"], `Run the PostgreSQL ${drillName} drill`).getIn(
+					["env", "HEPHAESTUS_APPLICATION_JAR"],
+				),
+				`\${{ steps.server.outputs.executable-jar }}`,
+			);
+		}
 		const changedPaths = step(
 			parseDocument(orchestrator),
 			["jobs", "detect-changes"],
