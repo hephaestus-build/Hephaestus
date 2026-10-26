@@ -108,6 +108,9 @@ jobs:
         run: |
           kubectl get pods -A -o wide || true
           kubectl -n hephaestus describe pods || true
+          # A failed migration Job blocks every role; its own log names the cause.
+          kubectl -n hephaestus logs -l app.kubernetes.io/component=migration --all-containers --tail=400 --prefix || true
+          kubectl -n hephaestus logs -l app.kubernetes.io/component=postgresql --all-containers --tail=200 --prefix || true
           kubectl -n hephaestus logs -l app.kubernetes.io/component=worker --tail=300 --prefix || true
           kubectl -n hephaestus logs -l app.kubernetes.io/component=server --tail=300 --prefix || true
           kubectl -n hephaestus get jobs,cronjobs -o wide || true
@@ -177,6 +180,9 @@ jobs:
         run: |
           kubectl get pods -A -o wide || true
           kubectl -n hephaestus describe pods || true
+          # A failed migration Job blocks every role; its own log names the cause.
+          kubectl -n hephaestus logs -l app.kubernetes.io/component=migration --all-containers --tail=400 --prefix || true
+          kubectl -n hephaestus logs -l app.kubernetes.io/component=postgresql --all-containers --tail=200 --prefix || true
           kubectl -n hephaestus logs -l app.kubernetes.io/component=worker --tail=300 --prefix || true
           kubectl -n hephaestus logs -l app.kubernetes.io/component=server --tail=300 --prefix || true
           kubectl -n hephaestus-sandboxes get pods,jobs -o wide || true
