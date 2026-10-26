@@ -216,12 +216,8 @@ await test("a commit lock names the chart images by digest, its upstream images 
 	const values = commitChartValues(images, inventory, commit);
 	assert.deepEqual(Object.keys(values.images), [...chartImages]);
 	assert.equal(values.images.postgres, images.HEPHAESTUS_IMAGE_POSTGRES);
-	// The chart's schema takes the version: a tag, with the commit as its prerelease.
-	assert.equal(values.release.version, `v0.0.0-${commit}`);
-	assert.match(
-		values.release.version,
-		/^v(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?$/u,
-	);
+	// A followed commit reports the commit as its version, which the promotion verifies.
+	assert.equal(values.release.version, commit);
 
 	const { HEPHAESTUS_IMAGE_WEBAPP: _webapp, ...withoutWebapp } = images;
 	assert.throws(() => commitChartValues(withoutWebapp, inventory, commit), /no webapp digest/u);

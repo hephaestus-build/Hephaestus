@@ -1836,6 +1836,13 @@ await test("a release that changes neither image restarts neither PostgreSQL nor
 	}
 });
 
+await test("a followed commit reports the commit as its version, as the promotion verifies", () => {
+	const commit = "c".repeat(40);
+	const resources = rendered([...layersFor("small"), { release: { version: commit, commit } }]);
+	assert.equal(envValue(workload(resources, "webapp"), "APPLICATION_VERSION"), commit);
+	assert.equal(envValue(workload(resources, "server"), "APP_VERSION"), commit);
+});
+
 await test("every revision migrates the database once, in a Job that only reaches PostgreSQL", () => {
 	const first = rendered([...layersFor("small"), workerLayer]);
 	const migration = first.find(

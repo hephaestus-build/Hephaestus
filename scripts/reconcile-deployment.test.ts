@@ -1286,7 +1286,7 @@ await test(
 			const written = await readFile(imagesFile, "utf8");
 			const values = asRecord(parseJson(written.replace(/^#.*\n/u, "")), "images values");
 			assert.deepEqual(at(values, ["release"], "images values"), {
-				version: `v0.0.0-${release}`,
+				version: release,
 				commit: release,
 			});
 			assert.equal(
