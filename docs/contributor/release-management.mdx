@@ -340,6 +340,13 @@ Operators verify the chart without the repository tooling, as [Verify the releas
 The release jobs use the Helm CLI that the [shared installer](https://github.com/hephaestus-build/Hephaestus/blob/main/.github/actions/setup-helm/action.yml) pins.
 Commit channels and the native apply path do not carry a chart yet.
 
+The manual `chart-signing-rehearsal.yml` workflow rehearses this signing and steps 2 to 4 of [Verify the release chart](/admin/kubernetes#verify-the-release-chart) on the scratch repository `charts-rehearsal/hephaestus`.
+Dispatch it twice before the first release with the chart.
+The first run creates the package, and the second run proves that `GITHUB_TOKEN` can push to it again.
+Helm sets the `org.opencontainers.image.source` annotation from the first `sources` entry of `Chart.yaml`, so GitHub can link the package to this repository.
+Each run adds one version to the scratch package.
+Delete old versions by hand.
+
 ## Current migration-guide instructions
 
 Edit `scripts/templates/migration-guide.md` for current operator instructions, not `MIGRATION.md`.

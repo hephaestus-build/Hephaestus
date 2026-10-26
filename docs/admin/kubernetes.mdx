@@ -101,9 +101,10 @@ helm pull "oci://$CHART@$DIGEST" --untar --untardir "chart-$VERSION"
 helm show chart "chart-$VERSION/hephaestus" | grep -qx "version: $VERSION"
 ```
 
-Step 2 proves that the release workflow made the chart.
+The joint lock in step 1 is only a lookup for the chart digest.
+You do not verify it.
+Step 2 refuses every digest that the release workflow did not sign.
 That identity is the same for every release, so step 4 binds the chart to the release that you asked for.
-The digest from step 1 needs no other check: steps 2 and 4 refuse every other chart.
 A version tag can move, and it is not a release signal.
 
 The `chart-$VERSION/hephaestus` directory is the verified chart, with its `profiles/`.
