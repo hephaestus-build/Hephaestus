@@ -1208,7 +1208,10 @@ await test(
 	},
 );
 
-/** A fake Helm that logs each call; `status` answers HELM_STATUS, or fails as for no release. */
+/**
+ * A fake Helm that logs each call; `status` answers HELM_STATUS, or fails as for no release, and
+ * `history` answers HELM_HISTORY.
+ */
 async function fakeHelm(
 	directory: string,
 ): Promise<{ helm: string; log: () => Promise<string[]> }> {
@@ -1225,6 +1228,7 @@ if (args[0] === "status") {
 if (process.env.HELM_STATUS === undefined) process.exit(1);
 console.log(JSON.stringify({ info: { status: process.env.HELM_STATUS } }));
 }
+if (args[0] === "history") console.log(process.env.HELM_HISTORY ?? "[]");
 process.exit(args[0] === "upgrade" && process.env.FAIL_HELM === "1" ? 1 : 0);
 `,
 		{ mode: 0o755 },
@@ -1328,15 +1332,54 @@ await test(
 					HEPHAESTUS_HELM: helm,
 					HEPHAESTUS_SECRETS: directory,
 					HELM_STATUS: "pending-upgrade",
+					// Helm's own rollback default, the revision before the stuck one, failed.
+					HELM_HISTORY: JSON.stringify([
+						{ revision: 2, status: "superseded" },
+						{ revision: 3, status: "deployed" },
+						{ revision: 4, status: "failed" },
+						{ revision: 5, status: "pending-upgrade" },
+					]),
 				},
 			});
 			assert.equal(result.status, 0, result.stderr);
 			const repaired = await log();
 			assert.deepEqual(
 				repaired.map((call) => call.split(" ")[0]),
-				["status", "rollback", "upgrade"],
+				["status", "history", "rollback", "upgrade"],
 			);
-			assert.match(repaired[1] ?? "", /^rollback hephaestus --namespace hephaestus --wait/u);
+			assert.match(repaired[2] ?? "", /^rollback hephaestus 3 --namespace hephaestus --wait/u);
+		} finally {
+			await rm(directory, { recursive: true, force: true });
+		}
+	},
+);
+
+await test(
+	"a chart host leaves a cut-off first install to the operator and names the command that removes it",
+	reconcilerSubprocess,
+	async () => {
+		const directory = await mkdtemp(path.join(tmpdir(), "reconcile-chart-pending-install-"));
+		try {
+			const fixture = await reconcilerFixture(directory);
+			const { helm, log } = await fakeHelm(directory);
+			const result = fixture.run({
+				channel: "chart",
+				environment: {
+					HEPHAESTUS_STACKS: "chart",
+					HEPHAESTUS_HELM: helm,
+					HEPHAESTUS_SECRETS: directory,
+					HELM_STATUS: "pending-install",
+					HELM_HISTORY: JSON.stringify([{ revision: 1, status: "pending-install" }]),
+				},
+			});
+			assert.notEqual(result.status, 0, "a release with nothing to return to fails the tick");
+			assert.match(result.stderr, /`helm uninstall hephaestus --namespace hephaestus`/u);
+			const calls = await log();
+			assert.deepEqual(
+				calls.map((call) => call.split(" ")[0]),
+				["status", "history"],
+			);
+			assert.equal(await readApplied(path.join(directory, "applied.json")), undefined);
 		} finally {
 			await rm(directory, { recursive: true, force: true });
 		}
