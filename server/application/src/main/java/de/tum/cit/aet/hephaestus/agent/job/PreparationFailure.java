@@ -12,6 +12,8 @@ import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import org.eclipse.jgit.api.errors.GitAPIException;
+import org.eclipse.jgit.api.errors.JGitInternalException;
 import org.jspecify.annotations.Nullable;
 import org.springframework.dao.DataAccessException;
 import org.springframework.transaction.TransactionException;
@@ -44,6 +46,7 @@ record PreparationFailure(Stage stage, Kind kind, JobPreparationException.Reason
         INPUT_PREPARATION("the review inputs could not be prepared"),
         SOURCE_CAPTURE("the reviewed source could not be captured"),
         IO("a file or network operation failed"),
+        REPOSITORY("a repository operation failed"),
         DATABASE("a database operation failed"),
         UNKNOWN("the cause is not classified");
 
@@ -80,6 +83,11 @@ record PreparationFailure(Stage stage, Kind kind, JobPreparationException.Reason
             }
             if (current instanceof ReviewSourceNotReadyException) {
                 kind = Kind.SOURCE_NOT_READY;
+                break;
+            }
+            // JGit wraps the file or network error of a checkout or fetch in its own types.
+            if (current instanceof GitAPIException || current instanceof JGitInternalException) {
+                kind = Kind.REPOSITORY;
                 break;
             }
             if (current instanceof IOException || current instanceof UncheckedIOException) {

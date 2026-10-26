@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxBackend;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxCancelledException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxException;
+import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxInitializationException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxManager;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxResult;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxSpec;
@@ -161,19 +162,16 @@ public class SandboxAttemptRunner implements SandboxManager {
             SandboxBackend.Observation initialized =
                     backend.observe(handle, SandboxBackend.Stage.INITIALIZED, workDeadline);
             checkCancelled(cancelled, jobId);
-            if (initialized.timedOut()) {
-                executionsTimedOut.increment();
-                return new SandboxResult(
-                        exitOrKilled(initialized),
-                        Map.of(),
-                        backend.transcript(handle, SandboxBackend.Container.INITIALIZER),
-                        true,
-                        Duration.between(startTime, Instant.now()));
-            }
+            // Before any model call, an initializer that fails or hangs is the infrastructure's failure: the job may
+            // run again within its retry budget.
             Integer initExit = initialized.exitCode();
-            if (initExit == null || initExit != 0) {
-                logTranscriptTail(backend.transcript(handle, SandboxBackend.Container.INITIALIZER));
-                throw new SandboxException("Sandbox workspace initialization failed");
+            if (initialized.timedOut() || initExit == null || initExit != 0) {
+                if (initialized.timedOut()) {
+                    executionsTimedOut.increment();
+                }
+                String transcript = backend.transcript(handle, SandboxBackend.Container.INITIALIZER);
+                logTranscriptTail(transcript);
+                throw new SandboxInitializationException(initExit, initialized.timedOut(), transcript);
             }
             if (!Instant.now().isBefore(workDeadline)) {
                 backend.kill(handle);
@@ -272,8 +270,20 @@ public class SandboxAttemptRunner implements SandboxManager {
         executionsFailed.increment();
         captureLogsOnError(handle);
         if (e instanceof SandboxException failure) {
-            log.error(
-                    "Sandbox execution failed: errorType={}", failure.getClass().getName(), failure);
+            // Bounded facts only, never a message: the initializer's exit names the failure in the line itself.
+            if (failure instanceof SandboxInitializationException initialization) {
+                log.error(
+                        "Sandbox execution failed: errorType={}, initializerExit={}, timedOut={}",
+                        failure.getClass().getName(),
+                        initialization.exitCode(),
+                        initialization.timedOut(),
+                        failure);
+            } else {
+                log.error(
+                        "Sandbox execution failed: errorType={}",
+                        failure.getClass().getName(),
+                        failure);
+            }
             return failure;
         }
         log.error("Unexpected error during sandbox execution", e);
