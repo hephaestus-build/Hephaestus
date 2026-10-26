@@ -34,6 +34,7 @@ import io.fabric8.kubernetes.api.model.ContainerStatusBuilder;
 import io.fabric8.kubernetes.api.model.Pod;
 import io.fabric8.kubernetes.api.model.PodBuilder;
 import io.fabric8.kubernetes.api.model.PodConditionBuilder;
+import io.fabric8.kubernetes.api.model.PodStatus;
 import io.fabric8.kubernetes.api.model.PodStatusBuilder;
 import io.fabric8.kubernetes.api.model.Quantity;
 import io.fabric8.kubernetes.api.model.VolumeMount;
@@ -448,8 +449,7 @@ class KubernetesSandboxRuntimeTest {
         CompletableFuture<SandboxResult> execution =
                 CompletableFuture.supplyAsync(() -> adapter.execute(spec(jobId)), background);
         String name = KubernetesSandboxBackend.jobName(jobId, 2);
-        String child = startChild(name);
-        setStatus(SANDBOXES, child, "Failed", List.of(exited(KubernetesPods.INITIALIZER, 1)), List.of());
+        String child = startChild(name, status("Failed", List.of(exited(KubernetesPods.INITIALIZER, 1)), List.of()));
 
         assertThatThrownBy(() -> execution.get(10, TimeUnit.SECONDS))
                 .hasCauseInstanceOf(SandboxException.class)
@@ -465,8 +465,7 @@ class KubernetesSandboxRuntimeTest {
         CompletableFuture<SandboxResult> execution =
                 CompletableFuture.supplyAsync(() -> adapter.execute(spec(jobId)), background);
         String name = KubernetesSandboxBackend.jobName(jobId, 2);
-        String child = startChild(name);
-        setStatus(SANDBOXES, child, "Failed", List.of(exited(KubernetesPods.ISOLATION, 1)), List.of());
+        String child = startChild(name, status("Failed", List.of(exited(KubernetesPods.ISOLATION, 1)), List.of()));
 
         assertThatThrownBy(() -> execution.get(10, TimeUnit.SECONDS))
                 .as("the cluster's failure, not one of the review: the attempt is tried again")
@@ -483,13 +482,12 @@ class KubernetesSandboxRuntimeTest {
         CompletableFuture<SandboxResult> execution =
                 CompletableFuture.supplyAsync(() -> adapter.execute(spec(jobId)), background);
         String name = KubernetesSandboxBackend.jobName(jobId, 2);
-        String child = startChild(name);
-        setStatus(
-                SANDBOXES,
-                child,
-                "Failed",
-                List.of(exited(KubernetesPods.INITIALIZER, 0)),
-                List.of(exited(KubernetesPods.RUNTIME, SandboxLayout.EXIT_UPLOAD_FAILED)));
+        String child = startChild(
+                name,
+                status(
+                        "Failed",
+                        List.of(exited(KubernetesPods.INITIALIZER, 0)),
+                        List.of(exited(KubernetesPods.RUNTIME, SandboxLayout.EXIT_UPLOAD_FAILED))));
 
         SandboxResult result = execution.get(10, TimeUnit.SECONDS);
 
@@ -507,20 +505,19 @@ class KubernetesSandboxRuntimeTest {
         CompletableFuture<SandboxResult> execution =
                 CompletableFuture.supplyAsync(() -> adapter.execute(spec(jobId)), background);
         String name = KubernetesSandboxBackend.jobName(jobId, 2);
-        String child = startChild(name);
-        Pod pod = awaitPod(SANDBOXES, child);
-        pod.setStatus(new PodStatusBuilder()
-                .withPhase("Failed")
-                .withReason("Evicted")
-                .withConditions(new PodConditionBuilder()
-                        .withType("DisruptionTarget")
-                        .withStatus("True")
-                        .withReason("TerminationByKubelet")
-                        .build())
-                .withInitContainerStatuses(List.of(exited(KubernetesPods.INITIALIZER, 0)))
-                .withContainerStatuses(List.of(exited(KubernetesPods.RUNTIME, 137)))
-                .build());
-        api().pods().inNamespace(SANDBOXES).resource(pod).update();
+        String child = startChild(
+                name,
+                new PodStatusBuilder()
+                        .withPhase("Failed")
+                        .withReason("Evicted")
+                        .withConditions(new PodConditionBuilder()
+                                .withType("DisruptionTarget")
+                                .withStatus("True")
+                                .withReason("TerminationByKubelet")
+                                .build())
+                        .withInitContainerStatuses(List.of(exited(KubernetesPods.INITIALIZER, 0)))
+                        .withContainerStatuses(List.of(exited(KubernetesPods.RUNTIME, 137)))
+                        .build());
 
         assertThatThrownBy(() -> execution.get(10, TimeUnit.SECONDS))
                 .as("an eviction is no exit of the review: the ledger tries the attempt again")
@@ -537,13 +534,12 @@ class KubernetesSandboxRuntimeTest {
         CompletableFuture<SandboxResult> execution =
                 CompletableFuture.supplyAsync(() -> adapter.execute(spec(jobId)), background);
         String name = KubernetesSandboxBackend.jobName(jobId, 2);
-        String child = startChild(name);
-        setStatus(
-                SANDBOXES,
-                child,
-                "Failed",
-                List.of(exited(KubernetesPods.INITIALIZER, 0)),
-                List.of(exited(KubernetesPods.RUNTIME, SandboxLayout.EXIT_WORK_TIMEOUT)));
+        String child = startChild(
+                name,
+                status(
+                        "Failed",
+                        List.of(exited(KubernetesPods.INITIALIZER, 0)),
+                        List.of(exited(KubernetesPods.RUNTIME, SandboxLayout.EXIT_WORK_TIMEOUT))));
 
         SandboxResult result = execution.get(10, TimeUnit.SECONDS);
 
@@ -830,6 +826,16 @@ class KubernetesSandboxRuntimeTest {
 
     /** Creates the Pod that the Job controller would create for the attempt's Job. The mock runs no Job controller. */
     private String startChild(String name) {
+        return startChild(name, null);
+    }
+
+    /**
+     * Creates the attempt's Pod with the status that the kubelet reports at its end. One event then ends the review's
+     * wait for its Pod. In the mock (fabric8 8.0.0), a client that closes a watch while the mock still sends it an
+     * event blocks the mock's event loop for up to 30 seconds, and an update right after the Pod appears races that
+     * close.
+     */
+    private String startChild(String name, @Nullable PodStatus status) {
         Job job = awaitJob(name);
         Pod child = new PodBuilder()
                 .withNewMetadata()
@@ -839,6 +845,7 @@ class KubernetesSandboxRuntimeTest {
                 .addToLabels(KubernetesReviewJobs.JOB_NAME, name)
                 .endMetadata()
                 .withSpec(job.getSpec().getTemplate().getSpec())
+                .withStatus(status)
                 .build();
         return api().pods()
                 .inNamespace(SANDBOXES)
@@ -909,12 +916,16 @@ class KubernetesSandboxRuntimeTest {
             List<ContainerStatus> initStatuses,
             List<ContainerStatus> statuses) {
         Pod pod = awaitPod(namespace, name);
-        pod.setStatus(new PodStatusBuilder()
+        pod.setStatus(status(phase, initStatuses, statuses));
+        api().pods().inNamespace(namespace).resource(pod).update();
+    }
+
+    private static PodStatus status(String phase, List<ContainerStatus> initStatuses, List<ContainerStatus> statuses) {
+        return new PodStatusBuilder()
                 .withPhase(phase)
                 .withInitContainerStatuses(initStatuses)
                 .withContainerStatuses(statuses)
-                .build());
-        api().pods().inNamespace(namespace).resource(pod).update();
+                .build();
     }
 
     private static ContainerStatus running(String name) {
