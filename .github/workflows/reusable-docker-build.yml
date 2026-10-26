@@ -1,4 +1,4 @@
-name: Docker Build (Cached)
+name: CI / Docker build (cached)
 
 # Builds every image a run publishes in one job per platform, then merges, attests, signs and tags
 # them in one job. Signature and attestation verification name this file as the signer, so the

@@ -1,4 +1,4 @@
-name: Server Phase Reference
+name: CI / Server clean-build reference
 
 on:
   workflow_dispatch:

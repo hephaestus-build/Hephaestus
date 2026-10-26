@@ -1,4 +1,4 @@
-name: Practice guidance links
+name: Docs / Practice guidance links
 
 # The links in a bundled guide's Sources rot without any change here, so a weekly run catches what
 # a pull request cannot. scripts/practice-guidance.test.ts owns the offline rules for these files.

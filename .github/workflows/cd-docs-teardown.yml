@@ -1,4 +1,4 @@
-name: CD / Docs Teardown
+name: Docs / Preview teardown
 
 on:
   pull_request:

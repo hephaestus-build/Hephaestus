@@ -1,4 +1,4 @@
-name: Rescan main images
+name: Security / Rescan main images
 
 on:
   schedule:

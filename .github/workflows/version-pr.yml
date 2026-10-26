@@ -1,4 +1,4 @@
-name: Version PR
+name: Release / Version PR
 
 # Versioning contract: docs/contributor/release-management.mdx.
 on:

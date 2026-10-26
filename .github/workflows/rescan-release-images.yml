@@ -1,4 +1,4 @@
-name: Rescan supported release images
+name: Security / Rescan release images
 on:
   schedule:
     - cron: "17 4 * * 1"

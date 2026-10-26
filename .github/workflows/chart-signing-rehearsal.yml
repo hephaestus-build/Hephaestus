@@ -1,4 +1,4 @@
-name: Chart signing rehearsal
+name: Release / Chart signing rehearsal
 
 # Rehearses the chart half of a release on a scratch repository that no release uses: the release's
 # own packaging, push and keyless `cosign sign`, then the operator's verification from

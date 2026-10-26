@@ -1,4 +1,4 @@
-name: CI diagnostics
+name: CI / Diagnostics
 
 on:
   workflow_run: # zizmor: ignore[dangerous-triggers] Read-only run metadata; no upstream source, artifacts, secrets, or status writes.

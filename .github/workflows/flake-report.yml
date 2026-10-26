@@ -1,4 +1,4 @@
-name: Flaky test report
+name: CI / Flaky test report
 
 # Reads run attempts and retained JUnit reports; it never reruns or retries anything.
 on:

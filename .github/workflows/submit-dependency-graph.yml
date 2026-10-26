@@ -1,8 +1,8 @@
-name: Submit Gradle dependency graph
+name: Security / Submit Gradle dependency graph
 
 on:
   workflow_run: # zizmor: ignore[dangerous-triggers] Only snapshot data is submitted; no originating code is checked out or executed.
-    workflows: [Gradle dependency graph]
+    workflows: ["Security / Gradle dependency graph"]
     types: [completed]
 
 permissions: {}

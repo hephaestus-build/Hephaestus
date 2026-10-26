@@ -1,4 +1,4 @@
-name: Validate Compose
+name: CI / Compose validation
 
 # Shared Compose files can break either the reference or self-hosted stack, so
 # render both configurations.

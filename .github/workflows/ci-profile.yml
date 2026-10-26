@@ -1,4 +1,4 @@
-name: CI profile
+name: CI / Profile
 
 on:
   schedule:

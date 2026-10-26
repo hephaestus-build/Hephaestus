@@ -579,6 +579,11 @@ A draft with the label also builds its images.
 
 ## Workflows
 
+Each display name starts with its area: `CI`, `Release`, `Security`, `Docs`, `Cache` or `Repo`, as in `Release / Promote`.
+The Actions sidebar sorts by name, so it groups each area.
+`cicd.yml` keeps the name `CI/CD`, because `workflow_run` consumers match that name.
+The required checks are job names, so a display name does not change them.
+
 | Workflow                              | Trigger                                                                       | Purpose                                                                                                                                                                                                                          |
 | ------------------------------------- | ----------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `cicd.yml`                            | PR, merge group, push to main, manual                                         | Validates changes before merge and publishes final-SHA images after merge. The release evidence gate runs over the images the run built on the Version PR's branch, and wherever the `release-preflight` dispatch input asks for it |
@@ -1305,7 +1310,7 @@ and the Java version pinned in `.java-version`. Compare the same suite, runtime 
 Compare a local shard only with the weekly history of the same shard.
 
 `SpringTestContextArchitectureTest` enforces the reviewed Spring context keys. The weekly
-**Server Phase Reference** workflow profiles generation, compilation, and unit and architecture execution
+**CI / Server clean-build reference** workflow profiles generation, compilation, and unit and architecture execution
 in one job, with the build cache disabled. It compares two clean generated-client JARs.
 When that job ends, each integration shard runs in a separate job, one at a time.
 Each shard job compiles from source with the build cache disabled.

@@ -1,4 +1,4 @@
-name: Kubernetes
+name: CI / Kubernetes
 
 # The chart on real clusters, with this run's images: an install, an upgrade that rolls every role
 # but PostgreSQL and NATS, and each worker's isolation probe. docs/admin/kubernetes.mdx § Supported clusters states what these

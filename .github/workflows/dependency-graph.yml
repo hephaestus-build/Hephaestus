@@ -1,4 +1,4 @@
-name: Gradle dependency graph
+name: Security / Gradle dependency graph
 
 on:
   push:

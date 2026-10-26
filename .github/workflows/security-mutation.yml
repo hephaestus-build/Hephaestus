@@ -1,4 +1,4 @@
-name: Security mutation testing
+name: Security / Mutation testing
 
 on:
   workflow_dispatch:

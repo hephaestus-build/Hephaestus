@@ -1,5 +1,5 @@
 # Weekly delivery metrics from GitHub's own records. Advisory: it gates nothing.
-name: Delivery metrics
+name: Repo / Delivery metrics
 
 on:
   schedule:

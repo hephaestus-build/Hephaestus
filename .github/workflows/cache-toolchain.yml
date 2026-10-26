@@ -1,4 +1,4 @@
-name: Warm toolchain caches
+name: Cache / Toolchain
 
 on:
   push:

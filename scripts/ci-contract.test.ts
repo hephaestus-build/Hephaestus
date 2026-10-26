@@ -742,6 +742,18 @@ void describe("CI contract", () => {
 		assert.ok(taskClosure(tasks, ["ci:tooling"]).has("docs:build"));
 	});
 
+	void test("every workflow's display name starts with its area, so the Actions sidebar groups them", async () => {
+		for (const [file, source] of await workflowSources()) {
+			const name = String(parseDocument(source).get("name"));
+			// `workflow_run` consumers, the CI diagnostics and the delivery metrics match `CI/CD` by name.
+			if (file.endsWith("/cicd.yml")) {
+				assert.equal(name, "CI/CD");
+				continue;
+			}
+			assert.match(name, /^(?:CI|Release|Security|Docs|Cache|Repo) \/ \S/u, file);
+		}
+	});
+
 	void test("every local gate runs in a workflow, and every CI gate is a local gate", async () => {
 		const tasks = await loadTasks();
 		const local = taskClosure(tasks, ["quality"]);
@@ -3527,7 +3539,7 @@ void describe("CI contract", () => {
 	void test("generates verified Gradle snapshots without giving pull request code write access", async () => {
 		const source = await readFile(".github/workflows/dependency-graph.yml", "utf8");
 		const workflow = parseDocument(source);
-		assert.equal(workflow.get("name"), "Gradle dependency graph");
+		assert.equal(workflow.get("name"), "Security / Gradle dependency graph");
 		assert.equal(workflow.getIn(["jobs", "generate", "permissions", "contents"]), "read");
 		assert.doesNotMatch(
 			source,
@@ -3556,7 +3568,10 @@ void describe("CI contract", () => {
 	void test("submits dependency snapshot data without executing the originating checkout", async () => {
 		const source = await readFile(".github/workflows/submit-dependency-graph.yml", "utf8");
 		const workflow = parseDocument(source);
-		assert.equal(workflow.getIn(["on", "workflow_run", "workflows", 0]), "Gradle dependency graph");
+		const upstream = parseDocument(
+			await readFile(".github/workflows/dependency-graph.yml", "utf8"),
+		);
+		assert.equal(workflow.getIn(["on", "workflow_run", "workflows", 0]), upstream.get("name"));
 		assert.equal(workflow.getIn(["on", "workflow_run", "types", 0]), "completed");
 		assert.equal(
 			workflow.getIn(["jobs", "submit", "if"]),
