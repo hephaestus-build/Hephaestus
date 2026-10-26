@@ -1,4 +1,4 @@
 ---
 ---
 
-No release note: the only shipped change is example identifiers in a code comment.
+No release note: test fixtures, a story and one code comment use synthetic identities instead of real people. No behavior changes.
