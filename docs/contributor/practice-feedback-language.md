@@ -172,7 +172,7 @@ Hephaestus never sends an open question as feedback.
 | Term | Meaning | Avoid for this concept |
 | --- | --- | --- |
 | **Feedback** | Guidance that Hephaestus writes from observations for a developer. | message, feedbacks |
-| **Practice feedback** | The full name for feedback when the surrounding text does not establish its context. | message, AI feedback, feedback item, ledger unit |
+| **Practice feedback** | The full name for feedback when the surrounding text does not establish its context. It also names the product category: feedback on how developers apply engineering practices. | message, AI feedback, feedback item, ledger unit, AI mentoring, AI code review |
 | **Destination** | Where feedback is intended to appear: on the work, on the practice page, or in conversation. | channel, location, surface |
 | **Delivery** | Whether feedback is awaiting approval, ready, delivered, withheld, rejected, replaced, failed or unconfirmed. | surface |
 | **Copy** | One appearance of feedback: a summary, line note, file note or Heph answer. | placement |
@@ -220,7 +220,6 @@ Removing a usefulness answer does not remove the developer's disagreement.
 | **Heph** | The conversational assistant. | agent, bot, mentor |
 | **Conversations** | The product area for conversations with Heph. | Mentor |
 | **Mentor** | A person who guides a less experienced developer, such as a reviewer or an experienced colleague. Use it only for people. |  |
-| **Practice feedback** | The product category: feedback on how developers apply engineering practices. | AI mentoring, AI code review |
 | **Hephaestus** | The application. | agent, AI mentor |
 | **Practice profile** | The developer's private page for practice standing, changes and feedback. | practice dashboard, standings page |
 | **Practice page** | The page for one practice within the developer's Practice profile. |  |
@@ -262,13 +261,15 @@ Use the research word only when you quote or cite the research.
 | Research word | Product word |
 | --- | --- |
 | AI-generated feedback on practice application | Practice feedback |
-| Contribution | Work, or item in contributor docs |
-| Assessment | Observation |
-| Met, not met, does not apply, could not determine | Met, Not met, Does not apply, Could not determine |
-| Problem, severity, next step | Problem, severity, next step |
+| Contribution | Work, or item in contributor docs. **Contributions** on Workspace activity is a separate count. |
+| Assessment | Observation and its outcome |
 | Delivery strategy: in-context, in-app, in-chat | Destination: On the work, On the practice page, In conversation |
-| Mentor approves feedback | Approve first, a feedback mode |
+| Mentor approves feedback | A workspace admin approves feedback in the Approve first feedback mode |
 | Reply: agree, disagree, question, usefulness | Response (resolution and usefulness), Disagreement, or a question in the Heph conversation |
+
+The outcomes, problem, severity and next step have the same names in both.
+A destination matches a delivery strategy only by the place where feedback appears.
+[Destinations](#destinations) states that a destination does not establish a level of feedback.
 
 ### Heph
 

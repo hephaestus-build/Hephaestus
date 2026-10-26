@@ -139,7 +139,7 @@ export function SlackPreferencesSection({
 				</div>
 				<p className="text-sm text-muted-foreground">
 					Connect your Slack account, and choose whether Hephaestus can use your new messages in
-					monitored channels as context for mentoring.
+					monitored channels as context for your feedback and Heph’s answers.
 				</p>
 			</div>
 

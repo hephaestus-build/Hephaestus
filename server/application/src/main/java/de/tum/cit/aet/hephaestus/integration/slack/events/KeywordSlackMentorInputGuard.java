@@ -30,7 +30,7 @@ public class KeywordSlackMentorInputGuard implements SlackMentorInputGuard {
                     + "local emergency services. You deserve real support, and it’s okay to ask for it.";
 
     static final String THREADING_RESPONSE =
-            "I reply in this DM thread. Hephaestus mentors in DM and uses channel messages only as allowed context.";
+            "I reply in this DM thread. I answer in direct messages and use channel messages only as allowed context.";
 
     @Override
     public Verdict decide(String text) {

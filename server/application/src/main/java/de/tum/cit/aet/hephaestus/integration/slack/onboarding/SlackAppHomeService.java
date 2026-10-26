@@ -157,7 +157,7 @@ public class SlackAppHomeService {
                 section(
                         s -> s.text(
                                 markdownText(
-                                        "*Context and privacy.* Hephaestus can use your linked project work and new messages you send in monitored channels. It does not read channel history from before the channel was activated. It does not mentor in channels."))));
+                                        "*Context and privacy.* Hephaestus can use your linked project work and new messages you send in monitored channels. It does not read channel history from before the channel was activated. It replies only in your direct messages."))));
     }
 
     record HomeOverviewState(
@@ -201,7 +201,7 @@ public class SlackAppHomeService {
 
     List<LayoutBlock> channelMessageBlocks(boolean allowed) {
         String status = allowed
-                ? "*Channel-message context is allowed.* Hephaestus may use the new messages that you send in monitored channels to personalize how it mentors you in private. If you turn this off, Hephaestus stops future use and deletes the channel-message data that it collected from you."
+                ? "*Channel-message context is allowed.* Hephaestus may use the new messages that you send in monitored channels as context for your private feedback and for Heph’s answers. If you turn this off, Hephaestus stops future use and deletes the channel-message data that it collected from you."
                 : "*Channel-message context is not allowed.* Hephaestus does not use your messages in monitored channels.";
         return List.of(
                 section(s -> s.text(markdownText(status))),
