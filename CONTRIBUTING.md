@@ -13,13 +13,7 @@ Maintainers triage issues and pull requests as time permits.
 Security reports are the exception and get priority.
 See [SECURITY.md](SECURITY.md) for how to report vulnerabilities privately.
 
-## Branches and Forks
-
-- Members of our organization create branches and pull requests directly within the repository.
-- External contributors fork the repository and work on a branch of the fork.
-  Submit the pull request from the fork. Make sure your branch is up to date with `main`.
-
-### Signed Commits
+## Signed Commits
 
 A commit pushed to a branch in this repository must be signed.
 Its commit email must resolve to the GitHub account that opened the pull request.
@@ -49,7 +43,7 @@ If a push is refused, sign the commits your branch already carries and force-pus
 git rebase --exec 'git commit --amend --no-edit -S' origin/main
 ```
 
-### Compliance
+## Compliance
 
 A pull request title or body carries no model, agent, harness, or tool attribution.
 `AGENTS.md` § Pull requests has the rule.
