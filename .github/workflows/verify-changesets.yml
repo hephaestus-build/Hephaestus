@@ -1,4 +1,4 @@
-name: Release / Verify changesets
+name: CI / Changesets
 
 on:
   workflow_call:

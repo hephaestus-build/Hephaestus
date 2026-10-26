@@ -742,15 +742,34 @@ void describe("CI contract", () => {
 		assert.ok(taskClosure(tasks, ["ci:tooling"]).has("docs:build"));
 	});
 
-	void test("every workflow's display name starts with its area, so the Actions sidebar groups them", async () => {
+	void test("every workflow's display name is unique and starts with its area, so the Actions sidebar groups them", async () => {
+		const names = new Map<string, string>();
+		const upstreams = new Set<string>();
 		for (const [file, source] of await workflowSources()) {
-			const name = String(parseDocument(source).get("name"));
-			// `workflow_run` consumers, the CI diagnostics and the delivery metrics match `CI/CD` by name.
-			if (file.endsWith("/cicd.yml")) {
-				assert.equal(name, "CI/CD");
-				continue;
+			const workflow = parseDocument(source);
+			const name = String(workflow.get("name"));
+			const previous = names.get(name);
+			assert.equal(previous, undefined, `${file} repeats the name of ${String(previous)}`);
+			names.set(name, file);
+			const triggers = workflow.getIn(["on", "workflow_run", "workflows"]);
+			if (isSeq(triggers)) {
+				for (const item of triggers.items) {
+					upstreams.add(String(isScalar(item) ? item.value : item));
+				}
 			}
-			assert.match(name, /^(?:CI|Release|Security|Docs|Cache|Repo) \/ \S/u, file);
+		}
+		// `workflow_run` matches a workflow by its display name, so a renamed upstream would stop
+		// its consumers without an error. A name that a consumer matches keeps its form.
+		for (const upstream of upstreams) {
+			assert.ok(
+				names.has(upstream),
+				`a workflow_run trigger names ${upstream}, which no workflow has`,
+			);
+		}
+		for (const [name, file] of names) {
+			if (!upstreams.has(name)) {
+				assert.match(name, /^(?:CI|Release|Security|Docs|Cache|Repo) \/ \S/u, file);
+			}
 		}
 	});
 

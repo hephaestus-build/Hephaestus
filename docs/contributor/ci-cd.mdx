@@ -581,7 +581,7 @@ A draft with the label also builds its images.
 
 Each display name starts with its area: `CI`, `Release`, `Security`, `Docs`, `Cache` or `Repo`, as in `Release / Promote`.
 The Actions sidebar sorts by name, so it groups each area.
-`cicd.yml` keeps the name `CI/CD`, because `workflow_run` consumers match that name.
+A workflow that a `workflow_run` trigger names keeps its name, because the trigger matches the display name. So `cicd.yml` stays `CI/CD`.
 The required checks are job names, so a display name does not change them.
 
 | Workflow                              | Trigger                                                                       | Purpose                                                                                                                                                                                                                          |
@@ -1168,7 +1168,7 @@ It publishes the required commit status without checking out source.
 Its logs and local summary retain each prerequisite result.
 A local summary write failure does not change the verdict.
 
-After CI finishes, `CI diagnostics` reads that run's exact attempt with read-only Actions permissions.
+After CI finishes, `CI / Diagnostics` reads that run's exact attempt with read-only Actions permissions.
 It reports the completed verdict, job times, and step times in a separate workflow summary.
 
 Attempt-to-gate time starts when that attempt starts, so it excludes earlier attempts.
@@ -1182,7 +1182,7 @@ JUnit results appear as `Test Results - …` check runs.
 The full-verification target is a six-minute median and a seven-minute p90, measured from workflow
 creation to completion of **CI Status Gate**. A merge group always runs both
 [verification tiers](#two-verification-tiers), so the sample is merge groups.
-On the default branch, `CI profile` lists every completed merge-group run created in the last 28 days.
+On the default branch, `CI / Profile` lists every completed merge-group run created in the last 28 days.
 It selects the ten most recent successful first-attempt runs with full server and browser verification.
 Lightweight changes and release-candidate groups, which also generate release evidence, cannot
 satisfy this cohort.
@@ -1234,7 +1234,7 @@ or mixed attempts. Keep raw API evidence under `tmp/`, not in committed performa
 
 ### Flaky tests
 
-`Flaky test report` runs every Monday and on dispatch.
+`CI / Flaky test report` runs every Monday and on dispatch.
 It covers the CI/CD runs of the last 14 days.
 It lists the jobs and tests that failed in one attempt of a run and then passed in a later attempt.
 
@@ -1256,7 +1256,7 @@ PR and merge-queue test jobs retain JUnit XML reports for 14 days, separately fo
 shard and attempt. Use those reports and GitHub's step timings before rerunning tests with instrumentation.
 Deep profiling stays in the manual/weekly workflow, not on the PR critical path. Select
 `integration`, `verification` (unit and architecture, including coverage), or `all` when dispatching
-`CI profile`. Weekly runs profile both tiers sequentially so diagnostics do not occupy two heavy
+`CI / Profile`. Weekly runs profile both tiers sequentially so diagnostics do not occupy two heavy
 runners at once.
 
 The integration tier is profiled one shard at a time, with the shards that

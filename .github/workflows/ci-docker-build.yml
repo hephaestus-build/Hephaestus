@@ -1,4 +1,4 @@
-name: CI / Docker images
+name: CI / Images (build or reuse)
 
 on:
   workflow_call:
