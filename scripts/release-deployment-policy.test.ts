@@ -186,7 +186,12 @@ function postgresRebuildTriggers(): { paths: string[]; unconditional: string[] }
 	const paths = new Set<string>();
 	const unconditional = new Set<string>();
 	for (const name of referenced(condition, /needs\.detect-changes\.outputs\.(?<name>[\w-]+)/gu)) {
-		const expression = asString(outputs[name], `detect-changes.outputs.${name}`);
+		// A host follows main's commits, which push runs build, so a clause for merge groups alone
+		// never rebuilds an image the host applies.
+		const expression = asString(outputs[name], `detect-changes.outputs.${name}`).replaceAll(
+			/\(github\.event_name == 'merge_group' && [^)]*\)/gu,
+			"",
+		);
 		const behind = referenced(expression, /steps\.filter\.outputs\.(?<name>[\w-]+)/gu);
 		if (behind.length === 0) {
 			unconditional.add(name);

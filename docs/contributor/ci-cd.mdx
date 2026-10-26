@@ -954,9 +954,11 @@ Right after a merge, that run is still building, so the pull request builds ever
   the tier runs whole. The weekly [server profiles](#server-profiles) run the same shards.
 - Pull requests build `linux/amd64`. Merge groups, pushes to `main`, dispatches, and every run on
   the Version PR's branch build `linux/amd64` and `linux/arm64`. Both lists take the same build,
-  merge, signing, attestation and per-platform scan path. Pull requests and merge groups build only
-  changed images and alias the rest. The Version PR's branch builds them all. `detect-changes`
-  decides both once, as `platforms` and `all-images`, and hands them to every image build in the run.
+  merge, signing, attestation and per-platform scan path. Pull requests build only changed images
+  and alias the rest. Merge groups build only changed images and alias nothing. A merge group that
+  runs the Kubernetes legs builds every image. Those legs install every image under the group's
+  commit. The Version PR's branch builds them all. `detect-changes` decides both once, as
+  `platforms` and `all-images`, and hands them to every image build in the run.
 - A job's `timeout-minutes` is a hang detector of at least 15 minutes.
   This holds whatever the job's usual duration is.
   GitHub documents only that it cancels a job that runs longer than its limit
