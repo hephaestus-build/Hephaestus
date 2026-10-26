@@ -743,6 +743,13 @@ try {
 			baseDomain: base,
 			workspaceSubdomainsEnabled: enabled === "true",
 		});
+		const securityTxt = await get(port, base, "/.well-known/security.txt");
+		assert.equal(securityTxt.status, 200);
+		assert.ok(securityTxt.body.includes("Contact: mailto:security@hephaestus.build"));
+		assert.equal(
+			securityTxt.body.includes(`Canonical: https://${base}/.well-known/security.txt`),
+			enabled !== "true",
+		);
 		if (enabled === "true") {
 			const page = await get(port, `acme.${base}`, "/");
 			const configPath = /src="(?<path>\/env-config[^"]+)"/u.exec(page.body)?.groups?.path;

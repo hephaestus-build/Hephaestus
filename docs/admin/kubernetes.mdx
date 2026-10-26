@@ -725,7 +725,6 @@ These values set the server's settings of the same meaning ([Production setup](.
 | `config.researchOrganization` | `HEPHAESTUS_RESEARCH_ORGANIZATION` | Empty |
 | `config.publicActivity.enabled` | `HEPHAESTUS_PUBLIC_ACTIVITY_ENABLED` | `false` |
 | `config.publicActivity.repositoryVisibilityMaxAge` | `HEPHAESTUS_PUBLIC_ACTIVITY_REPOSITORY_VISIBILITY_MAX_AGE` | `48h` |
-| `webapp.securityContact` | `SECURITY_CONTACT` of the webapp: the first contact in `/.well-known/security.txt` | Empty: the project's contacts only |
 | `config.llmDisplayCurrency` | `HEPHAESTUS_LLM_DISPLAY_CURRENCY`: empty or `EUR` | Empty |
 | `config.auth.passkeys.instanceAdminRequired` | `HEPHAESTUS_AUTH_PASSKEYS_INSTANCE_ADMIN_REQUIRED` | `true` |
 | `config.auth.passkeys.workspaceAdminRequired` | `HEPHAESTUS_AUTH_PASSKEYS_WORKSPACE_ADMIN_REQUIRED` | `false` |
@@ -736,6 +735,8 @@ These values set the server's settings of the same meaning ([Production setup](.
 | `config.monitoring.timeframeDays` | `MONITORING_TIMEFRAME` | `7` |
 | `config.monitoring.syncCron` | `MONITORING_SYNC_CRON`, a Spring cron expression with six fields | `0 0 * * * *` |
 | `config.monitoring.cooldownMinutes` | `MONITORING_SYNC_COOLDOWN_IN_MINUTES` | `60` |
+
+`webapp.securityContact` sets the webapp's `SECURITY_CONTACT`, the first contact in `/.well-known/security.txt` ([Production setup](./production-setup)). Empty lists only the project's contacts.
 
 ## Integration values
 

@@ -38,8 +38,9 @@ extract_env_vars() {
   grep -oE '[A-Z_]+\?:' "$ENV_TS" | sed 's/\?:$//' | grep -v '^__'
 }
 
-# RFC 9116 makes Canonical name the host that serves the file, so each deployment writes its own.
-# The deployment's contact comes first; the project's contacts follow for the software itself.
+# RFC 9116 § 2.5.2: a reader distrusts the file on a host that Canonical does not list, and a web
+# Canonical is https. Workspace addresses serve it on many hosts, so only a single https origin gets
+# one; Canonical is optional. The deployment's contact comes first, then the project's.
 write_security_txt() {
   local contact="${SECURITY_CONTACT:-}" expires
   # RFC 9116 § 2.5.5 recommends an expiry less than a year away; each start renews it.
@@ -50,7 +51,8 @@ write_security_txt() {
     echo "Contact: https://github.com/hephaestus-build/Hephaestus/security/advisories/new"
     echo "Contact: mailto:security@hephaestus.build"
     echo "Policy: ${SECURITY_POLICY}"
-    if [[ -n "${APPLICATION_CLIENT_URL:-}" ]]; then
+    if [[ "${HEPHAESTUS_WORKSPACE_SUBDOMAINS_ENABLED:-false}" == false \
+      && "${APPLICATION_CLIENT_URL:-}" =~ ^https://[^[:space:]/]+/?$ ]]; then
       echo "Canonical: ${APPLICATION_CLIENT_URL%/}/.well-known/security.txt"
     fi
     echo "Preferred-Languages: en"

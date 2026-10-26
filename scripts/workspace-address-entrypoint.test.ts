@@ -336,6 +336,32 @@ void describe("webapp container entrypoint", () => {
 		}
 	});
 
+	void test("security.txt names no canonical host where the file is served on many or without TLS", () => {
+		for (const env of [
+			{ APPLICATION_CLIENT_URL: "http://localhost:8080" },
+			{
+				APPLICATION_CLIENT_URL:
+					"https://hephaestus.example.invalid/\nContact: mailto:x@attacker.invalid",
+			},
+			{
+				APPLICATION_CLIENT_URL: "https://hephaestus.example.invalid",
+				HEPHAESTUS_WORKSPACE_SUBDOMAINS_ENABLED: "true",
+				HEPHAESTUS_WORKSPACE_SUBDOMAINS_BASE_DOMAIN: "hephaestus.example.invalid",
+			},
+		]) {
+			const fixture = createFixture();
+			try {
+				const result = runEntrypoint(fixture, env);
+				assert.equal(result.status, 0, result.stderr);
+				const body = readFileSync(path.join(fixture.runtime, ".well-known/security.txt"), "utf8");
+				assert.ok(!body.includes("Canonical:"), body);
+				assert.ok(!body.includes("attacker"), body);
+			} finally {
+				removeFixture(fixture);
+			}
+		}
+	});
+
 	void test("a security contact that is not one URI stops the container before it writes files", () => {
 		const fixture = createFixture();
 		try {
