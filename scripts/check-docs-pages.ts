@@ -1,5 +1,5 @@
 /** The page rules of `docs/contributor/documentation-guide.md` that a machine can hold. */
-import { existsSync } from "node:fs";
+import { statSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { parse } from "yaml";
@@ -45,6 +45,10 @@ const CONTRIBUTOR_LINK = /(?:\]\(|\]:\s+|href=["'])(?:[^)\s"']*\/)?contributor\/
 
 const SCREENSHOTS = "docs/static/img/user";
 const COLOR_SCHEMES = ["light", "dark"];
+// GitLab's alt text limit; a longer description belongs in the text around the image.
+const MAX_ALT = 155;
+// The capture enforces the same budget; a hand-edited or stale image meets it here.
+const MAX_IMAGE_BYTES = 150_000;
 
 interface Line {
 	number: number;
@@ -219,28 +223,38 @@ export function checkPage(file: string, guide: Guide, source: string): string[] 
 	return problems.map(({ line, message }) => `${file}:${line}: ${message}`);
 }
 
-/** Each `<Screenshot>` names its image with a literal `src`, and the image exists in both color schemes. */
+/**
+ * Each `<Screenshot>` names its image with a literal `src` and describes it in a literal `alt`, and
+ * the image exists in both color schemes within the size budget. MDX is not type-checked, so the
+ * component's required props hold only here.
+ */
 export function screenshotProblems(
 	file: string,
 	source: string,
-	exists: (path: string) => boolean,
+	sizeOf: (path: string) => number | undefined,
 ): string[] {
 	const problems: string[] = [];
 	for (const match of source.matchAll(/<Screenshot\b[^>]*>/gu)) {
-		const line = source.slice(0, match.index).split("\n").length;
+		const report = (message: string) =>
+			problems.push(`${file}:${source.slice(0, match.index).split("\n").length}: ${message}`);
+		const alt = /\balt="(?<alt>[^"]*)"/u.exec(match[0])?.groups?.alt?.trim() ?? "";
+		if (alt === "") {
+			report("Give the <Screenshot> a literal alt text that says what the image shows.");
+		} else if (alt.length > MAX_ALT) {
+			report(`Shorten the alt text to ${MAX_ALT} characters (${alt.length}).`);
+		}
 		const src = /\bsrc="(?<src>[^"]+)"/u.exec(match[0])?.groups?.src;
 		if (src === undefined) {
-			problems.push(
-				`${file}:${line}: Give the <Screenshot> a literal src, such as src="practice-profile/overview".`,
-			);
+			report('Give the <Screenshot> a literal src, such as src="practice-profile/overview".');
 			continue;
 		}
 		for (const scheme of COLOR_SCHEMES) {
 			const image = `${SCREENSHOTS}/${src}.${scheme}.webp`;
-			if (!exists(image)) {
-				problems.push(
-					`${file}:${line}: ${image} does not exist. Run vp run generate:docs-screenshots.`,
-				);
+			const size = sizeOf(image);
+			if (size === undefined) {
+				report(`${image} does not exist. Run vp run generate:docs-screenshots.`);
+			} else if (size > MAX_IMAGE_BYTES) {
+				report(`${image} is ${size} bytes, over the ${MAX_IMAGE_BYTES}-byte budget.`);
 			}
 		}
 	}
@@ -277,8 +291,10 @@ if (import.meta.main) {
 			const source = await readFile(path.resolve(repositoryRoot, file), "utf8");
 			problems.push(
 				...checkPage(file, guide, source),
-				...screenshotProblems(file, source, (image) =>
-					existsSync(path.resolve(repositoryRoot, image)),
+				...screenshotProblems(
+					file,
+					source,
+					(image) => statSync(path.resolve(repositoryRoot, image), { throwIfNoEntry: false })?.size,
 				),
 			);
 		}

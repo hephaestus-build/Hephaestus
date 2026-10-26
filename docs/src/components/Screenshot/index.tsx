@@ -19,8 +19,8 @@ export default function Screenshot({ src, alt }: ScreenshotProps): ReactNode {
 		<div className={styles.frame}>
 			<ThemedImage
 				alt={alt}
-				width={1280}
-				height={800}
+				width={1024}
+				height={640}
 				loading="lazy"
 				sources={{
 					light: useBaseUrl(`/img/user/${src}.light.webp`),

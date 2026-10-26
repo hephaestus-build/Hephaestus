@@ -155,7 +155,7 @@ Use the same name for the same section on every page.
 - Use a screenshot when the reader must find something on a screen and a sentence cannot point to it. [Google](https://developers.google.com/style/images) and [GitLab](https://docs.gitlab.com/development/documentation/styleguide/) give the same rule.
 - Never put a fact only in an image. The text must give it too.
 - A screenshot shows the current UI with synthetic data only. Do not show a real person, repository, organization, or secret. [PostHog](https://posthog.com/handbook/docs-and-wizard/docs-style-guide) gives the same rule.
-- Write alt text that says what the image shows, in at most 155 characters, as [GitLab](https://docs.gitlab.com/development/documentation/styleguide/) sets. Markdownlint rejects an image without alt text.
+- Write alt text that says what the image shows, in at most 155 characters, as [GitLab](https://docs.gitlab.com/development/documentation/styleguide/) sets. Markdownlint rejects a Markdown image without alt text. `gate:docs-pages` rejects a `Screenshot` without alt text or with a longer one.
 - Draw a diagram in Mermaid, not as an image, with `accTitle` and `accDescr`. `gate:diagrams` checks them.
 - Do not add an animated GIF.
 
@@ -172,11 +172,11 @@ import Screenshot from "@site/src/components/Screenshot";
 
 `vp run generate:docs-screenshots` makes every image from the built web app:
 
-- The app reads a synthetic workspace from `webapp/e2e/screenshots/workspace.ts`. No server or database runs. Some data comes from fixture builders that the stories share. A change to them can change an image.
+- The app reads a synthetic workspace from `webapp/e2e/screenshots/workspace.ts`. No server or database runs. The user, workspace, membership, conversation, and feedback mode data come from the fixtures that the stories and tests share. A change to them can change an image.
 - The live event stream of the app stays open with no events. A new screen with another stream needs the same answer in `workspace.ts`.
-- The capture uses a 1280 by 800 viewport, a fixed clock, and the UTC time zone. It blocks every request to another site, so no avatar of a real person appears.
+- The capture uses a 1024 by 640 viewport at twice the pixels, a fixed clock, and the UTC time zone. It blocks every request to another site, so no avatar of a real person appears. It hides the floating Heph button, which covers the content.
 - Chromium encodes each image as WebP. Each screen is captured in the light and the dark color scheme. The images go to `docs/static/img/user/<page>/<name>.<scheme>.webp`.
-- An image of more than 150 KB fails the capture.
+- An image of more than 150 KB fails the capture and `gate:docs-pages`.
 - A request that `workspace.ts` does not answer fails the capture, so no image shows an error by accident.
 
 [Add a user-guide screenshot](./add-a-user-guide-screenshot.md) gives the steps.
@@ -225,7 +225,8 @@ Do not put two callouts in a row.
 - Only a reference page links to the contributor guide.
 - No inline code names a repository command or a source path.
 - A page shows the product with `Screenshot`, not with a Markdown image.
-- Each `Screenshot` has a light and a dark image.
+- Each `Screenshot` has alt text of at most 155 characters.
+- Each `Screenshot` has a light and a dark image of at most 150 KB.
 
 In the admin and contributor guides, the gate checks on every page that a callout is a note, a tip, or a caution.
 It checks the other rules below on a page that declares its type:

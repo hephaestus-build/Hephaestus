@@ -17,7 +17,7 @@ Install the repository dependencies, as [Local verification](./local-verificatio
 2. Add the data for the screen to `webapp/e2e/screenshots/workspace.ts`. Use invented names. Use practice names from the shipped catalog.
 3. Run `vp run generate:docs-screenshots`.
 4. Look at the light and the dark image.
-5. Add the `Screenshot` component to the page, with the `src` and the `alt` text.
+5. Add the `Screenshot` component to the page with its `src`. Give it an `alt` text that says what the image shows, in at most 155 characters.
 
 ## Check that it worked
 

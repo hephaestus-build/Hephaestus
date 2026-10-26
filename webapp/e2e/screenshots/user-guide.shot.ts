@@ -16,8 +16,9 @@ import { handlers, NOW, WORKSPACE } from "./workspace.ts";
 
 const OUTPUT = path.resolve(import.meta.dirname, "../../../docs/static/img/user");
 const API = "http://api.test";
-const VIEWPORT = { width: 1280, height: 800 };
-// WebP of a 1280×800 screen stays well under this; a larger file is a screen full of noise.
+// Narrow enough that the text stays readable when the docs column scales the image down.
+const VIEWPORT = { width: 1024, height: 640 };
+// WebP of a screen at twice the viewport stays well under this; a larger file is a screen full of noise.
 const MAX_BYTES = 150_000;
 
 interface Shot {
@@ -43,7 +44,7 @@ const shots: Shot[] = [
 		name: "conversation",
 		route: `/w/${WORKSPACE}/mentor`,
 		role: "MEMBER",
-		ready: (page) => page.getByText("Does a screenshot of the dashboard count?"),
+		ready: (page) => page.getByText("Why did I get feedback about how to verify #223?"),
 	},
 	{
 		page: "workspace",
@@ -106,9 +107,18 @@ async function open(
 /** Playwright writes PNG or JPEG only; Chromium's own capture encodes WebP. */
 async function captureWebp(page: Page): Promise<Buffer> {
 	// A focused field blinks its caret, so two captures of the same screen would differ.
-	await page.addStyleTag({ content: "* { caret-color: transparent !important; }" });
+	// The floating Heph button sits over the content that the image is about.
+	await page.addStyleTag({
+		content: `* { caret-color: transparent !important; }
+			div:has(> button[aria-label^="Open Heph"]) { display: none !important; }`,
+	});
 	const session = await page.context().newCDPSession(page);
-	const { data } = await session.send("Page.captureScreenshot", { format: "webp", quality: 90 });
+	const { data } = await session.send("Page.captureScreenshot", {
+		format: "webp",
+		quality: 80,
+		// Twice the pixels, so the text stays sharp when the docs column scales the image down.
+		clip: { x: 0, y: 0, ...VIEWPORT, scale: 2 },
+	});
 	return Buffer.from(data, "base64");
 }
 

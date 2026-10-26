@@ -13,7 +13,6 @@ import type {
 	IntegrationCatalogEntry,
 	ItemRef,
 	MentorConversation,
-	MentorEntry,
 	MentorEntryPage,
 	PracticeGroupStanding,
 	PracticePageFeedback,
@@ -23,12 +22,15 @@ import type {
 	PracticeStandingResult,
 	ReviewedPractice,
 	Workspace,
-	WorkspaceListItem,
 	WorkspaceMembership,
 	WorkspaceOnboarding,
 } from "@/api/types.gen";
 import { buildFeedbackModeFixture } from "@/components/admin/practices/practice-feedback-mode/fixtures";
+import { entry } from "@/components/mentor/fixtures";
 import type { Wire } from "@/lib/dates";
+import { currentUser } from "@/mocks/fixtures/auth";
+import { workspaceOnboarding } from "@/mocks/fixtures/onboarding";
+import { ownMembership, workspaceListItem } from "@/mocks/fixtures/workspaces";
 
 /** Every screen is captured at this moment, so relative times read the same in every run. */
 export const NOW = new Date("2026-10-20T09:30:00Z");
@@ -37,7 +39,10 @@ const daysAgo = (days: number) => new Date(NOW.getTime() - days * 86_400_000).to
 export const WORKSPACE = "orbit";
 const REPOSITORY = "orbit-labs/telemetry-service";
 
+// The shared fixture's avatar is a real person's picture.
+const { avatarUrl: _realAvatar, ...sharedUser } = currentUser;
 const reader: CurrentUserView = {
+	...sharedUser,
 	id: 7,
 	username: "alex-rivera",
 	displayName: "Alex Rivera",
@@ -45,8 +50,6 @@ const reader: CurrentUserView = {
 	profileUrl: "https://github.com/alex-rivera",
 	appRole: "USER",
 	roles: ["ROLE_USER"],
-	status: "ACTIVE",
-	identityProvider: "GITHUB",
 	gitProviderId: "1001",
 	linkedProviders: [{ type: "GITHUB", serverUrl: "https://github.com" }],
 };
@@ -342,103 +345,71 @@ const practiceFeedback: Wire<PracticePageFeedback>[] =
 				),
 			];
 
-function entry(
-	seq: number,
-	kind: MentorEntry["kind"],
-	text: string,
-	minutesAgo: number,
-): Wire<MentorEntry> {
-	return {
-		conversationId: "conversation-alex",
-		createdAt: new Date(NOW.getTime() - minutesAgo * 60_000).toISOString(),
-		deleted: false,
-		id: `entry-${seq}`,
-		kind,
-		links: [],
-		seq,
-		surface: "APP",
-		text,
-		...(kind === "HEPH" ? { turnStatus: "DONE" as const } : {}),
-	};
-}
+const minutesAgo = (minutes: number) => new Date(NOW.getTime() - minutes * 60_000);
 
-const entries: Wire<MentorEntryPage> = {
+const entries: MentorEntryPage = {
 	entries: [
-		entry(1, "USER", "Why did I get feedback about how to verify #223?", 6),
-		entry(
-			2,
-			"HEPH",
-			[
+		entry({
+			id: "entry-1",
+			seq: 1,
+			kind: "USER",
+			text: "Why did I get feedback about how to verify #223?",
+			createdAt: minutesAgo(4),
+		}),
+		entry({
+			id: "entry-2",
+			seq: 2,
+			kind: "HEPH",
+			turnStatus: "DONE",
+			text: [
 				"The description of #223 says what the new queue-depth metric is, but not how to see it.",
-				"A reviewer would have to find the dashboard or the query on their own.",
-				"",
-				"Your earlier pull requests had the same gap, so I raised it as a pattern, not as a one-off.",
+				"Your earlier pull request #219 had the same gap, so I raised it as a pattern.",
 				"",
 				"Next time, add a short **How to verify** section, for example:",
 				"",
 				"- Run the ingest load test.",
 				"- Open the *Queue* dashboard and check that `queue_depth` rises and falls.",
 			].join("\n"),
-			5,
-		),
-		entry(3, "USER", "Does a screenshot of the dashboard count?", 2),
-		entry(
-			4,
-			"HEPH",
-			"Yes. A screenshot shows the result, and a sentence that says where to find it lets the reviewer check it themselves.",
-			1,
-		),
+			createdAt: minutesAgo(3),
+		}),
 	],
 };
 
-const conversation: Wire<MentorConversation> = {
+const conversation: MentorConversation = {
 	activeTurns: [],
-	id: "conversation-alex",
-	lastAnswerAt: new Date(NOW.getTime() - 60_000).toISOString(),
-	lastReadAt: new Date(NOW.getTime() - 60_000).toISOString(),
-	latestSeq: 4,
+	id: entries.entries[0]?.conversationId,
+	lastAnswerAt: minutesAgo(3),
+	lastReadAt: minutesAgo(3),
+	latestSeq: 2,
 	threads: [],
 };
 
-const workspace: Wire<WorkspaceListItem> = {
+const workspace = workspaceListItem(WORKSPACE, {
 	accountLogin: "orbit-labs",
-	createdAt: daysAgo(120),
+	createdAt: new Date(daysAgo(120)),
 	displayName: "Orbit Labs",
-	id: 1,
 	practicesEnabled: true,
-	providerType: "GITHUB",
-	publishesPublicActivity: false,
-	status: "ACTIVE",
 	workspaceAddress: `https://hephaestus.example/w/${WORKSPACE}`,
-	workspaceSlug: WORKSPACE,
-};
-
-const membership = (role: WorkspaceMembership["role"]): Wire<WorkspaceMembership> => ({
-	account: {
-		id: "7",
-		status: "ACTIVE",
-		displayName: "Alex Rivera",
-		avatarUrl: null,
-		identities: [
-			{ provider: "GITHUB", login: "alex-rivera", displayName: "Alex Rivera", avatarUrl: null },
-		],
-	},
-	role,
-	joinedAt: daysAgo(120),
-	leftAt: null,
-	hidden: false,
-	reviewSelected: true,
-	eligibleForPracticeReview: true,
 });
 
+const membership = (role: WorkspaceMembership["role"]) =>
+	ownMembership(role, {
+		account: {
+			id: "7",
+			status: "ACTIVE",
+			displayName: "Alex Rivera",
+			avatarUrl: null,
+			identities: [
+				{ provider: "GITHUB", login: "alex-rivera", displayName: "Alex Rivera", avatarUrl: null },
+			],
+		},
+		joinedAt: daysAgo(120),
+	});
+
 const onboarding: WorkspaceOnboarding = {
+	...workspaceOnboarding("Orbit Labs"),
 	aiChoice: "IN_HOUSE_ONLY",
-	aiChoiceRequired: false,
-	aiOptions: [],
 	enabled: true,
-	links: [],
-	needsSetup: false,
-	workspaceName: "Orbit Labs",
 };
 
 const consent: ConsentStatus = {
