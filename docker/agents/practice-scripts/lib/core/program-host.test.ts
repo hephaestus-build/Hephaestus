@@ -215,6 +215,17 @@ const slowReview = (ms: number) => async () => {
 	return REVIEWED;
 };
 
+/** A program that asks two reviews and returns `returns`, an expression over the second. */
+const reviewsTwice = (returns: string) =>
+	program(
+		"definePracticeScript",
+		`{ meta: {}, run: async (ctx) => {
+				await ctx.review({});
+				const second = await ctx.review({});
+				return ${returns};
+			} }`,
+	);
+
 /** A program that cites the change, and reads the core record first when `read` is set. */
 const decidesFromTheChange = (read: boolean) =>
 	program(
@@ -357,6 +368,64 @@ void describe("a practice's result", () => {
 		assert.equal(outcome.status, "failed");
 		assert.equal(outcome.stopReason, "invalid-candidate");
 		assert.match(outcome.error ?? "", /complete coverage/u);
+	});
+
+	void test("code cannot turn a review's Could not determine into Met on the review's coverage", async () => {
+		const ws = await workspace({
+			rides: program(
+				"definePracticeScript",
+				`{ meta: {}, run: async (ctx) => {
+					const reviewed = await ctx.review({});
+					return {
+						outcome: "MET",
+						summary: "Met",
+						explanation: "The program replaced the review's outcome and read nothing.",
+						citations: reviewed.citations,
+						evidence: {},
+						coverage: reviewed.coverage,
+					};
+				} }`,
+			),
+		});
+		const { outcome } = await run(ws, "rides");
+		assert.equal(outcome.status, "failed");
+		assert.equal(outcome.stopReason, "invalid-candidate");
+		assert.match(outcome.error ?? "", /^met_coverage_incomplete:/u);
+	});
+
+	void test("when two reviews return the same coverage, only their own decisions keep it", async () => {
+		const inapplicable: Candidate = {
+			outcome: "DOES_NOT_APPLY",
+			summary: "No user interface changes",
+			explanation: "The second review found no view.",
+			citations: REVIEWED.citations,
+			evidence: {
+				inapplicability: {
+					consulted: ["scm.pull-request.core"],
+					prerequisite: "user interface files",
+					ruledOutBy: "No changed file is a view.",
+				},
+			},
+			coverage: REVIEWED.coverage,
+		};
+		const ws = await workspace({
+			second: reviewsTwice("second"),
+			changed: reviewsTwice(`{ ...second, outcome: "MET", evidence: {} }`),
+		});
+		let asked = 0;
+		const review = async () => {
+			asked += 1;
+			return asked % 2 === 1 ? REVIEWED : inapplicable;
+		};
+		const kept = await run(ws, "second", { review });
+		assert.equal(kept.outcome.status, "ok", kept.outcome.error);
+		assert.partialDeepStrictEqual(kept.outcome.candidate, {
+			outcome: "DOES_NOT_APPLY",
+			coverage: { source: "host", reads: 3, complete: true },
+		});
+		const changed = await run(ws, "changed", { review });
+		assert.equal(changed.outcome.status, "failed");
+		assert.match(changed.outcome.error ?? "", /^met_coverage_incomplete:/u);
 	});
 
 	void test("code gets no MET until it reads each source that its practice requires", async () => {

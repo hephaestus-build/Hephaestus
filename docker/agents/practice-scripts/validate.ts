@@ -4,7 +4,6 @@ import path from "node:path";
 import { parseArgs } from "node:util";
 
 import { parseDiff } from "./kits/scm/diff-parser.ts";
-import { DIFF_SOURCE } from "./kits/scm/sources.ts";
 import type { DiffFile } from "./kits/scm/types.ts";
 import {
 	parseCandidate,
@@ -20,7 +19,6 @@ import { ModelBudget } from "./lib/core/models-host.ts";
 import { reasonOf, UnratedError, type UnratedReason } from "./lib/core/practice-script.ts";
 import {
 	notReached,
-	requiredSources,
 	runPracticeProgram,
 	type PracticeProgram,
 	type ProgramOutcome,
@@ -231,11 +229,9 @@ try {
 					console.error(line);
 				},
 				receipts,
-				// The tool captures no records, so the change is the only source a practice can require here.
-				requiredSources: requiredSources(
-					[DIFF_SOURCE],
-					captured === null ? [] : [[`${CONTEXT_REFERENCE}/change.json`, DIFF_SOURCE]],
-				),
+				// The tool captures no records, so it cannot check required record reads. A result that misses one
+				// passes here; a review withholds it.
+				requiredSources: [],
 			},
 		);
 	}

@@ -170,18 +170,17 @@ export async function runPracticeProgram(
 	services: ProgramServices & { receipts: Receipts; requiredSources: readonly RequiredSource[] },
 ): Promise<ProgramOutcome> {
 	const started = Date.now();
-	/**
-	 * The coverage each review of this practice returned, with the outcomes it returned it for: the only
-	 * host coverage its candidate may carry.
-	 */
-	const returned = new Map<string, Set<Outcome>>();
+	/** The coverage each review of this practice returned: the only host coverage its candidate may carry. */
+	const returned = new Set<string>();
+	/** What each review decided: its outcome and citations, on its coverage. */
+	const decisions = new Set<string>();
 	const sessionReadReceipts: ReadReceipt[] = [];
 	const hosted: ProgramServices = {
 		...services,
 		review: async (options, signal) => {
 			const candidate = await services.review(options, signal);
-			const key = JSON.stringify(candidate.coverage);
-			returned.set(key, (returned.get(key) ?? new Set()).add(candidate.outcome));
+			returned.add(JSON.stringify(candidate.coverage));
+			decisions.add(decisionKey(candidate, candidate.coverage));
 			if (candidate.coverage.source === "host") {
 				sessionReadReceipts.push(...candidate.coverage.receipts);
 			}
@@ -274,18 +273,19 @@ export async function runPracticeProgram(
 			error: "a scan citation is outside its frozen context",
 		});
 	}
+	// Only a result that returns a review's decision unchanged keeps that review's coverage. Any other
+	// result is code's decision, measured against the reads, whatever coverage it carries.
+	const decided =
+		reviewed !== null && decisions.has(decisionKey(shaped, reviewed)) ? reviewed : null;
 	const coverage = hostCoverage(
-		reviewed,
-		reviewed === null
+		decided,
+		decided === null
 			? unreadSources(citations, services.requiredSources, readReceipts, job.files?.change != null)
 			: [],
 		services.receipts,
 		readReceipts,
 	);
-	// A review may decide Does not apply on incomplete coverage; code may not, even on a review's coverage.
-	const reviewDecided =
-		reviewed !== null && returned.get(JSON.stringify(reviewed))?.has(shaped.outcome) === true;
-	if (!reviewDecided && shaped.outcome === "DOES_NOT_APPLY" && !coverage.complete) {
+	if (decided === null && shaped.outcome === "DOES_NOT_APPLY" && !coverage.complete) {
 		return finished("failed", "invalid-candidate", {
 			error: "a Does not apply that code decided needs complete coverage",
 		});
@@ -328,6 +328,11 @@ interface Cited {
 		inapplicability?: unknown;
 		openQuestions?: readonly { citation?: Citation }[];
 	};
+}
+
+/** A decision's identity: its outcome and every citation, on the coverage it rests on. */
+function decisionKey(candidate: Cited & { outcome: Outcome }, coverage: Coverage): string {
+	return JSON.stringify([candidate.outcome, citationsOf(candidate), coverage]);
 }
 
 /** Every citation of a candidate: its own, its problems', its example's and its open questions'. */
