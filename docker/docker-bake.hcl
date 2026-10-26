@@ -64,7 +64,7 @@ target "agent-pi" {
   inherits   = ["image", "agent-pi-metadata"]
   labels = {
     "org.opencontainers.image.title" = "Hephaestus Agent - Pi"
-    "org.opencontainers.image.description" = "Sandboxed Pi coding agent for AI-powered code review"
+    "org.opencontainers.image.description" = "Sandboxed runtime that reviews work against engineering practices"
     "org.opencontainers.image.vendor" = "AET TUM"
     "org.opencontainers.image.licenses" = "MIT"
     "hephaestus.component" = "agent-pi"

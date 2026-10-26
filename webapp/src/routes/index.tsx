@@ -11,7 +11,7 @@ import { useAuth } from "@/runtime/auth/AuthContext";
 import { consentIsPending, resolveCurrentUser } from "@/runtime/auth/guard";
 
 export const Route = createFileRoute("/")({
-	head: pageHead("AI mentor for software teams"),
+	head: pageHead("Open-source practice feedback for software teams"),
 	staticData: { surface: "bleed" },
 	beforeLoad: async ({ context }) => {
 		const user = await resolveCurrentUser(context.queryClient);

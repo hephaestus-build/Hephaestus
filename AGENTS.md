@@ -5,7 +5,7 @@ It has two profiles.
 UI text, user-facing responses, and user docs use the product voice.
 Admin docs, contributor docs, and repository instructions use STE.
 
-Hephaestus is an open-source AI mentor for software teams.
+Hephaestus is open-source software that gives software teams practice feedback: feedback on how developers apply engineering practices.
 It checks developers' existing work in GitHub, GitLab, Slack, and Outline against the engineering practices that their project values.
 A curated set of practices ships with it.
 It delivers practice feedback on the work itself, on the developer's own practice pages, or in conversation with Heph.

@@ -90,7 +90,7 @@ public class SlackAppHomeService {
 
     View buildHomeView(long workspaceId, String teamId, String slackUserId) {
         List<LayoutBlock> blocks = new ArrayList<>();
-        blocks.add(header(h -> h.text(plainText("Hephaestus practice mentor"))));
+        blocks.add(header(h -> h.text(plainText("Hephaestus"))));
         boolean mentorReady = mentorReadinessQuery.isReady(workspaceId);
         Optional<AccountSummaryQuery.AccountSummary> developer =
                 identityResolver.resolveDeveloper(workspaceId, teamId, slackUserId);
@@ -192,7 +192,7 @@ public class SlackAppHomeService {
         if (state.refusal().isPresent()) {
             return state.refusal().get().userMessage();
         }
-        return "*AI mentor for software project practices.* In the Messages tab, ask about PRs, reviews, issues, tests, or team ways of working. The replies stay in DMs.";
+        return "*Open-source practice feedback for software teams.* In the Messages tab, ask about PRs, reviews, issues, tests, or team ways of working. The replies stay in DMs.";
     }
 
     private static String stateIcon(boolean ok) {
