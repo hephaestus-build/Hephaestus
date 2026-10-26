@@ -304,7 +304,7 @@ await test("fails closed for shared, generated, contract, tooling, and unknown i
 		"extension/src/api/sdk.gen.ts",
 		"webapp/src/routeTree.gen.ts",
 		"webapp/tools/oxlint/index.ts",
-		"docs/contributor/erd/schema.mmd",
+		"docs/contributor/erd/integration.mmd",
 		".vite-hooks/pre-push",
 		"docker/compose.app.yaml",
 		"webapp/CLAUDE.md",

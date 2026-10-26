@@ -1,0 +1,72 @@
+---
+config:
+    layout: elk
+---
+erDiagram
+    %% Generated automatically from PostgreSQL database schema
+    %% using scripts/generate-mermaid-erd.ts
+    %% To regenerate: vp run db:generate-erd-docs
+
+    direction LR
+
+    AuthRateLimitBucket {
+        VARCHAR(255) id PK
+        BYTEA state
+        BIGINT expires_at
+    }
+
+    ConsentNotice {
+        VARCHAR(32) version PK,UK
+        TEXT notice_text "NOT NULL"
+        VARCHAR(64) sha256 UK "NOT NULL"
+        TIMESTAMPTZ published_at "NOT NULL"
+    }
+
+    EventPublication {
+        UUID id PK
+        TEXT listener_id "NOT NULL"
+        TEXT event_type "NOT NULL"
+        TEXT serialized_event "NOT NULL"
+        TIMESTAMPTZ publication_date "NOT NULL"
+        TIMESTAMPTZ completion_date
+        TEXT status
+        INTEGER completion_attempts
+        TIMESTAMPTZ last_resubmission_date
+    }
+
+    ProductSurveySubmission {
+        UUID id PK
+        UUID survey_id FK,UK "NOT NULL"
+        BIGINT account_id FK,UK "NOT NULL"
+        BIGINT workspace_id FK
+        VARCHAR(16) disposition "NOT NULL"
+        JSONB answers_json
+        TIMESTAMPTZ created_at "NOT NULL"
+    }
+
+    Shedlock {
+        VARCHAR(64) name PK
+        TIMESTAMP lock_until "NOT NULL"
+        TIMESTAMP locked_at "NOT NULL"
+        VARCHAR(255) locked_by "NOT NULL"
+    }
+
+    Account["Account · Core"]
+    ProductSurvey["ProductSurvey · Productfeedback"]
+    Workspace["Workspace · Workspace (Tenancy)"]
+
+    %% Relationships
+    %% One-to-Many relationships
+    Account ||--o{ ProductSurveySubmission : has
+    ProductSurvey ||--o{ ProductSurveySubmission : has
+    Workspace ||--o{ ProductSurveySubmission : has
+
+    %% Styling
+    classDef primaryEntity stroke:#0288d1,stroke-width:2px
+    classDef associationEntity stroke:#8e24aa,stroke-width:2px
+    classDef metadataEntity stroke:#43a047,stroke-width:2px
+    classDef referenceEntity stroke-dasharray:5 5
+
+    class Account referenceEntity
+    class ProductSurvey referenceEntity
+    class Workspace referenceEntity

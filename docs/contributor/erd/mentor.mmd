@@ -1,0 +1,98 @@
+---
+config:
+    layout: elk
+---
+erDiagram
+    %% Generated automatically from PostgreSQL database schema
+    %% using scripts/generate-mermaid-erd.ts
+    %% To regenerate: vp run db:generate-erd-docs
+
+    direction LR
+
+    MentorConversation {
+        UUID id PK,UK
+        TIMESTAMPTZ created_at "NOT NULL"
+        TIMESTAMPTZ last_activity_at "NOT NULL"
+        UUID parent_conversation_id FK
+        UUID parent_entry_id FK,UK
+        VARCHAR(32) slack_channel_id
+        VARCHAR(32) slack_team_id
+        VARCHAR(32) slack_user_id
+        BIGINT account_id FK "NOT NULL"
+        BIGINT workspace_id FK,UK "NOT NULL"
+        TIMESTAMPTZ last_read_at
+    }
+
+    MentorEntry {
+        UUID id PK,UK
+        UUID conversation_id FK,UK "NOT NULL"
+        TIMESTAMPTZ created_at "NOT NULL"
+        TIMESTAMPTZ edited_at
+        VARCHAR(16) kind "NOT NULL"
+        JSONB payload
+        TIMESTAMPTZ redacted_at
+        VARCHAR(200) request_id
+        TEXT search_text "NOT NULL"
+        BIGINT seq UK "NOT NULL"
+        INTEGER slack_attempts "NOT NULL"
+        VARCHAR(16) slack_delivery
+        VARCHAR(32) slack_stream_ts
+        VARCHAR(32) slack_ts UK
+        VARCHAR(8) surface "NOT NULL"
+        TEXT text "NOT NULL"
+        UUID turn_id FK
+        VARCHAR(16) vote
+        BIGINT workspace_id FK,UK "NOT NULL"
+    }
+
+    MentorTurn {
+        UUID id PK,UK
+        JSONB admission
+        INTEGER attempt "NOT NULL"
+        BIGINT cache_write_tokens "NOT NULL"
+        BIGINT cached_tokens "NOT NULL"
+        UUID conversation_id FK "NOT NULL"
+        NUMERIC(19,9) cost_usd
+        TIMESTAMPTZ created_at "NOT NULL"
+        TEXT error
+        TIMESTAMPTZ finished_at
+        BIGINT input_tokens "NOT NULL"
+        TIMESTAMPTZ leased_until
+        INTEGER llm_calls "NOT NULL"
+        BIGINT output_tokens "NOT NULL"
+        JSONB partial
+        BIGINT reasoning_tokens "NOT NULL"
+        VARCHAR(200) request_id UK "NOT NULL"
+        TIMESTAMPTZ started_at
+        VARCHAR(16) status "NOT NULL"
+        VARCHAR(8) surface "NOT NULL"
+        VARCHAR(128) worker_id
+        BIGINT workspace_id FK,UK "NOT NULL"
+        VARCHAR(500) page_context
+    }
+
+    Account["Account · Core"]
+    Workspace["Workspace · Workspace (Tenancy)"]
+
+    %% Relationships
+    %% One-to-One relationships
+    MentorEntry ||--|| MentorConversation : references
+
+    %% One-to-Many relationships
+    Account ||--o{ MentorConversation : has
+    MentorConversation ||--o{ MentorConversation : references
+    Workspace ||--o{ MentorConversation : has
+    MentorConversation ||--o{ MentorEntry : has
+    MentorTurn ||--o{ MentorEntry : has
+    Workspace ||--o{ MentorEntry : has
+    MentorConversation ||--o{ MentorTurn : has
+    Workspace ||--o{ MentorTurn : has
+
+    %% Styling
+    classDef primaryEntity stroke:#0288d1,stroke-width:2px
+    classDef associationEntity stroke:#8e24aa,stroke-width:2px
+    classDef metadataEntity stroke:#43a047,stroke-width:2px
+    classDef referenceEntity stroke-dasharray:5 5
+
+    class Account referenceEntity
+    class Workspace referenceEntity

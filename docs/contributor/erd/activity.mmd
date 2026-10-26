@@ -1,0 +1,52 @@
+---
+config:
+    layout: elk
+---
+erDiagram
+    %% Generated automatically from PostgreSQL database schema
+    %% using scripts/generate-mermaid-erd.ts
+    %% To regenerate: vp run db:generate-erd-docs
+
+    direction LR
+
+    ActivityAutomation {
+        BIGINT user_id PK,FK
+        BIGINT workspace_id PK,FK
+    }
+
+    ActivityEvent {
+        UUID id PK
+        VARCHAR(255) event_key UK "NOT NULL"
+        VARCHAR(64) event_type "NOT NULL"
+        TIMESTAMPTZ occurred_at "NOT NULL"
+        BIGINT actor_id FK
+        BIGINT workspace_id FK,UK "NOT NULL"
+        BIGINT repository_id FK
+        VARCHAR(32) target_type
+        BIGINT target_id
+        TIMESTAMPTZ ingested_at "NOT NULL"
+    }
+
+    Repository["Repository · Integration"]
+    User["User · Integration"]
+    Workspace["Workspace · Workspace (Tenancy)"]
+
+    %% Relationships
+    %% One-to-Many relationships
+    User ||--o{ ActivityEvent : references
+    Repository ||--o{ ActivityEvent : has
+    Workspace ||--o{ ActivityEvent : has
+
+    %% Many-to-Many relationships
+    User }o--o{ ActivityAutomation : has
+    Workspace }o--o{ ActivityAutomation : has
+
+    %% Styling
+    classDef primaryEntity stroke:#0288d1,stroke-width:2px
+    classDef associationEntity stroke:#8e24aa,stroke-width:2px
+    classDef metadataEntity stroke:#43a047,stroke-width:2px
+    classDef referenceEntity stroke-dasharray:5 5
+
+    class Repository referenceEntity
+    class User referenceEntity
+    class Workspace referenceEntity

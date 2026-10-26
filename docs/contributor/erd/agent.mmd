@@ -1,0 +1,377 @@
+---
+config:
+    layout: elk
+---
+erDiagram
+    %% Generated automatically from PostgreSQL database schema
+    %% using scripts/generate-mermaid-erd.ts
+    %% To regenerate: vp run db:generate-erd-docs
+
+    direction LR
+
+    FxRate {
+        BIGINT id PK
+        DATE rate_date UK "NOT NULL"
+        NUMERIC(12,6) usd_per_eur "NOT NULL"
+        TIMESTAMPTZ fetched_at "NOT NULL"
+    }
+
+    InstanceLlmSetting {
+        SMALLINT id PK
+        TEXT allowed_egress_hosts
+        BOOLEAN allow_workspace_connections "NOT NULL"
+        TIMESTAMPTZ updated_at
+        BIGINT updated_by_account_id FK
+    }
+
+    LlmConnection {
+        BIGINT id PK
+        VARCHAR(64) slug UK "NOT NULL"
+        VARCHAR(128) display_name "NOT NULL"
+        VARCHAR(2048) base_url "NOT NULL"
+        VARCHAR(40) api_protocol "NOT NULL"
+        VARCHAR(16) auth_mode "NOT NULL"
+        TEXT api_key
+        BOOLEAN enabled "NOT NULL"
+        TIMESTAMPTZ created_at "NOT NULL"
+        TIMESTAMPTZ updated_at
+        VARCHAR(32) connection_platform
+    }
+
+    LlmModel {
+        BIGINT id PK
+        BIGINT connection_id FK,UK "NOT NULL"
+        VARCHAR(64) slug UK "NOT NULL"
+        VARCHAR(128) display_name "NOT NULL"
+        VARCHAR(256) upstream_model_id UK "NOT NULL"
+        INTEGER context_window
+        INTEGER max_output_tokens
+        BOOLEAN supports_reasoning "NOT NULL"
+        VARCHAR(16) visibility "NOT NULL"
+        BOOLEAN enabled "NOT NULL"
+        TIMESTAMPTZ created_at "NOT NULL"
+        TIMESTAMPTZ updated_at
+        VARCHAR(16) reasoning_effort
+        VARCHAR(200) data_handling_note
+        VARCHAR(24) operated_by
+        VARCHAR(16) brand
+    }
+
+    LlmModelPrice {
+        BIGINT id PK
+        BIGINT model_id FK "NOT NULL"
+        VARCHAR(16) pricing_mode "NOT NULL"
+        NUMERIC(18,8) per_1m_input_usd
+        NUMERIC(18,8) per_1m_output_usd
+        NUMERIC(18,8) per_1m_cache_read_usd
+        NUMERIC(18,8) per_1m_cache_write_usd
+        VARCHAR(3) currency "NOT NULL"
+        VARCHAR(500) note
+        TIMESTAMPTZ effective_from "NOT NULL"
+        TIMESTAMPTZ effective_to
+        VARCHAR(255) created_by
+        TIMESTAMPTZ created_at "NOT NULL"
+    }
+
+    LlmModelWorkspaceGrant {
+        BIGINT model_id PK,FK
+        BIGINT workspace_id PK,FK
+        TIMESTAMPTZ granted_at "NOT NULL"
+        VARCHAR(255) granted_by
+    }
+
+    LlmUsageEvent {
+        UUID id PK,UK
+        BIGINT workspace_id FK,UK "NOT NULL"
+        VARCHAR(40) job_type "NOT NULL"
+        VARCHAR(32) source_type UK "NOT NULL"
+        UUID source_id UK "NOT NULL"
+        INTEGER source_attempt UK "NOT NULL"
+        VARCHAR(128) model
+        BIGINT input_tokens "NOT NULL"
+        BIGINT output_tokens "NOT NULL"
+        BIGINT cache_read_tokens "NOT NULL"
+        BIGINT cache_write_tokens "NOT NULL"
+        BIGINT reasoning_tokens "NOT NULL"
+        INTEGER total_calls "NOT NULL"
+        NUMERIC(18,6) cost_usd
+        VARCHAR(16) pricing_state "NOT NULL"
+        VARCHAR(16) funding_source "NOT NULL"
+        BIGINT applied_price_id
+        BIGINT applied_workspace_model_id
+        NUMERIC(18,8) applied_per_1m_input_usd
+        NUMERIC(18,8) applied_per_1m_output_usd
+        NUMERIC(18,8) applied_per_1m_cache_read_usd
+        NUMERIC(18,8) applied_per_1m_cache_write_usd
+        TIMESTAMPTZ occurred_at "NOT NULL"
+        VARCHAR(16) usage_provenance
+        VARCHAR(16) measurement_verification "NOT NULL"
+        UUID review_id FK
+        BIGINT search_units "NOT NULL"
+        INTEGER unreported_calls "NOT NULL"
+    }
+
+    MentorTurnAttemptUsage {
+        INTEGER attempt PK,UK
+        UUID turn_id PK,FK,UK
+        NUMERIC(18,8) applied_per_1m_cache_read_usd
+        NUMERIC(18,8) applied_per_1m_cache_write_usd
+        NUMERIC(18,8) applied_per_1m_input_usd
+        NUMERIC(18,8) applied_per_1m_output_usd
+        BIGINT applied_price_id
+        BIGINT applied_workspace_model_id
+        BIGINT cache_read_tokens "NOT NULL"
+        BIGINT cache_write_tokens "NOT NULL"
+        INTEGER calls "NOT NULL"
+        VARCHAR(16) funding_source "NOT NULL"
+        BIGINT input_tokens "NOT NULL"
+        VARCHAR(128) model "NOT NULL"
+        TIMESTAMPTZ occurred_at
+        BIGINT output_tokens "NOT NULL"
+        VARCHAR(16) pricing_state "NOT NULL"
+        BIGINT reasoning_tokens "NOT NULL"
+        BIGINT workspace_id FK,UK "NOT NULL"
+    }
+
+    PersonEvidenceCopy {
+        UUID id PK,UK
+        UUID job_id "NOT NULL"
+        VARCHAR(24) state "NOT NULL"
+        JSONB payload "NOT NULL"
+        UUID store_id "NOT NULL"
+        BIGINT workspace_id UK "NOT NULL"
+        TIMESTAMPTZ created_at "NOT NULL"
+    }
+
+    ReviewCompositionBasi {
+        UUID job_id PK,FK,UK
+        BIGINT workspace_id FK,UK "NOT NULL"
+        INTEGER admission_attempt "NOT NULL"
+        VARCHAR(64) admission_digest "NOT NULL"
+        VARCHAR(64) basis_digest "NOT NULL"
+        INTEGER basis_version "NOT NULL"
+        UUID copy_id "NOT NULL"
+        TIMESTAMPTZ expires_at "NOT NULL"
+        JSONB payload "NOT NULL"
+    }
+
+    ReviewJob {
+        UUID id PK,UK
+        UUID review_id FK "NOT NULL"
+        BIGINT workspace_id FK,UK "NOT NULL"
+        TIMESTAMPTZ submitted_at "NOT NULL"
+        VARCHAR(20) status "NOT NULL"
+        INTEGER attempt "NOT NULL"
+        VARCHAR(16) processing_status "NOT NULL"
+        TIMESTAMPTZ available_at "NOT NULL"
+        VARCHAR(32) hold_reason
+        VARCHAR(255) worker_id
+        VARCHAR(255) idempotency_key
+        VARCHAR(32) trace_id "NOT NULL"
+        JSONB input "NOT NULL"
+        JSONB config_snapshot "NOT NULL"
+        JSONB capture
+        JSONB output
+        INTEGER exit_code
+        TEXT error_message
+        VARCHAR(32) cancellation_reason
+        TIMESTAMPTZ conversation_prepared_at
+        TIMESTAMPTZ practice_page_prepared_at
+        VARCHAR(64) public_review_digest
+        INTEGER admission_attempt
+        VARCHAR(64) admission_digest
+        INTEGER llm_calls "NOT NULL"
+        BIGINT llm_input_tokens "NOT NULL"
+        BIGINT llm_output_tokens "NOT NULL"
+        BIGINT llm_reasoning_tokens "NOT NULL"
+        BIGINT llm_cache_read_tokens "NOT NULL"
+        BIGINT llm_cache_write_tokens "NOT NULL"
+        TIMESTAMPTZ started_at
+        TIMESTAMPTZ execution_started_at
+        TIMESTAMPTZ completed_at
+    }
+
+    ReviewJobAttemptCharge {
+        INTEGER attempt PK,FK
+        UUID job_id PK,FK
+        VARCHAR(16) model_kind PK
+        NUMERIC(18,8) applied_per_1m_cache_read_usd
+        NUMERIC(18,8) applied_per_1m_cache_write_usd
+        NUMERIC(18,8) applied_per_1m_input_usd
+        NUMERIC(18,8) applied_per_1m_output_usd
+        BIGINT applied_price_id
+        BIGINT applied_workspace_model_id
+        VARCHAR(16) funding_source "NOT NULL"
+        VARCHAR(128) model
+        VARCHAR(16) pricing_state "NOT NULL"
+        BIGINT workspace_id FK "NOT NULL"
+    }
+
+    ReviewJobAttemptUsage {
+        INTEGER attempt PK,UK
+        UUID job_id PK,FK,UK
+        TIMESTAMPTZ occurred_at
+        BIGINT proxy_cache_read_tokens "NOT NULL"
+        BIGINT proxy_cache_write_tokens "NOT NULL"
+        INTEGER proxy_calls "NOT NULL"
+        BIGINT proxy_input_tokens "NOT NULL"
+        BIGINT proxy_output_tokens "NOT NULL"
+        BIGINT proxy_reasoning_tokens "NOT NULL"
+        INTEGER runner_cache_read_tokens
+        INTEGER runner_cache_write_tokens
+        INTEGER runner_calls
+        INTEGER runner_input_tokens
+        INTEGER runner_output_tokens
+        INTEGER runner_reasoning_tokens
+        BIGINT workspace_id FK,UK "NOT NULL"
+    }
+
+    ReviewJobScriptRun {
+        UUID job_id PK,FK
+        INTEGER attempt PK
+        BIGINT practice_id PK,FK
+        BIGINT workspace_id FK "NOT NULL"
+        BIGINT practice_version_id FK "NOT NULL"
+        VARCHAR(16) status "NOT NULL"
+        VARCHAR(16) script_kind "NOT NULL"
+        VARCHAR(32) stop_reason
+        JSONB calls
+        JSONB models
+        TIMESTAMPTZ finished_at "NOT NULL"
+        VARCHAR(500) error
+        INTEGER duration_ms
+    }
+
+    ReviewJobScriptUsage {
+        UUID job_id PK,FK
+        INTEGER attempt PK
+        VARCHAR(16) model_kind PK
+        BIGINT practice_id PK,FK
+        BIGINT workspace_id FK "NOT NULL"
+        VARCHAR(24) data_handling_tier
+        INTEGER calls "NOT NULL"
+        INTEGER reported_calls "NOT NULL"
+        BIGINT input_tokens "NOT NULL"
+        BIGINT output_tokens "NOT NULL"
+        BIGINT cache_read_tokens "NOT NULL"
+        BIGINT cache_write_tokens "NOT NULL"
+        BIGINT search_units "NOT NULL"
+    }
+
+    WorkerRegistry {
+        VARCHAR(255) worker_id PK
+        TIMESTAMPTZ last_heartbeat "NOT NULL"
+        TIMESTAMPTZ registered_at "NOT NULL"
+    }
+
+    WorkspaceAgentBinding {
+        BIGINT id PK
+        BIGINT workspace_id FK,UK "NOT NULL"
+        VARCHAR(32) purpose UK "NOT NULL"
+        BOOLEAN enabled "NOT NULL"
+        INTEGER timeout_seconds "NOT NULL"
+        INTEGER max_concurrent_jobs "NOT NULL"
+        BIGINT instance_model_id FK
+        BIGINT workspace_model_id FK
+        TIMESTAMPTZ created_at "NOT NULL"
+        TIMESTAMPTZ updated_at
+        VARCHAR(24) data_handling_tier UK "NOT NULL"
+    }
+
+    WorkspaceLlmConnection {
+        BIGINT id PK,UK
+        BIGINT workspace_id FK,UK "NOT NULL"
+        VARCHAR(64) slug UK "NOT NULL"
+        VARCHAR(128) display_name "NOT NULL"
+        VARCHAR(2048) base_url "NOT NULL"
+        VARCHAR(40) api_protocol "NOT NULL"
+        VARCHAR(16) auth_mode "NOT NULL"
+        TEXT api_key
+        BOOLEAN enabled "NOT NULL"
+        TIMESTAMPTZ created_at "NOT NULL"
+        TIMESTAMPTZ updated_at
+        VARCHAR(32) connection_platform
+    }
+
+    WorkspaceLlmModel {
+        BIGINT id PK,UK
+        BIGINT workspace_id FK,UK "NOT NULL"
+        BIGINT connection_id FK,UK "NOT NULL"
+        VARCHAR(64) slug UK "NOT NULL"
+        VARCHAR(128) display_name "NOT NULL"
+        VARCHAR(256) upstream_model_id UK "NOT NULL"
+        INTEGER context_window
+        INTEGER max_output_tokens
+        BOOLEAN supports_reasoning "NOT NULL"
+        VARCHAR(16) pricing_mode "NOT NULL"
+        NUMERIC(18,8) per_1m_input_usd
+        NUMERIC(18,8) per_1m_output_usd
+        NUMERIC(18,8) per_1m_cache_read_usd
+        NUMERIC(18,8) per_1m_cache_write_usd
+        VARCHAR(3) currency "NOT NULL"
+        VARCHAR(500) price_note
+        BOOLEAN enabled "NOT NULL"
+        TIMESTAMPTZ created_at "NOT NULL"
+        TIMESTAMPTZ updated_at
+        VARCHAR(16) reasoning_effort
+        VARCHAR(200) data_handling_note
+        VARCHAR(24) operated_by
+        VARCHAR(16) brand
+    }
+
+    Account["Account · Core"]
+    MentorTurn["MentorTurn · Mentor"]
+    Practice["Practice · Practices"]
+    PracticeVersion["PracticeVersion · Practices"]
+    Review["Review · Practices"]
+    Workspace["Workspace · Workspace (Tenancy)"]
+
+    %% Relationships
+    %% One-to-One relationships
+    ReviewJob ||--|| ReviewCompositionBasi : reviewed
+
+    %% One-to-Many relationships
+    Account ||--o{ InstanceLlmSetting : has
+    LlmConnection ||--o{ LlmModel : has
+    LlmModel ||--o{ LlmModelPrice : has
+    Review ||--o{ LlmUsageEvent : has
+    Workspace ||--o{ LlmUsageEvent : has
+    MentorTurn ||--o{ MentorTurnAttemptUsage : has
+    Workspace ||--o{ MentorTurnAttemptUsage : has
+    Workspace ||--o{ ReviewCompositionBasi : reviewed
+    Review ||--o{ ReviewJob : reviewed
+    Workspace ||--o{ ReviewJob : reviewed
+    ReviewJobAttemptUsage ||--o{ ReviewJobAttemptCharge : reviewed
+    ReviewJob ||--o{ ReviewJobAttemptUsage : reviewed
+    Workspace ||--o{ ReviewJobAttemptUsage : reviewed
+    ReviewJob ||--o{ ReviewJobScriptRun : reviewed
+    PracticeVersion ||--o{ ReviewJobScriptRun : reviewed
+    Workspace ||--o{ ReviewJobScriptRun : reviewed
+    ReviewJob ||--o{ ReviewJobScriptUsage : reviewed
+    Practice ||--o{ ReviewJobScriptUsage : reviewed
+    Workspace ||--o{ ReviewJobScriptUsage : reviewed
+    LlmModel ||--o{ WorkspaceAgentBinding : references
+    Workspace ||--o{ WorkspaceAgentBinding : has
+    WorkspaceLlmModel ||--o{ WorkspaceAgentBinding : workspace_model_id
+    WorkspaceLlmModel ||--o{ WorkspaceAgentBinding : workspace_model_id
+    Workspace ||--o{ WorkspaceLlmConnection : has
+    WorkspaceLlmConnection ||--o{ WorkspaceLlmModel : connection_id
+    Workspace ||--o{ WorkspaceLlmModel : has
+    WorkspaceLlmConnection ||--o{ WorkspaceLlmModel : connection_id
+
+    %% Many-to-Many relationships
+    LlmModel }o--o{ LlmModelWorkspaceGrant : has
+    Workspace }o--o{ LlmModelWorkspaceGrant : has
+
+    %% Styling
+    classDef primaryEntity stroke:#0288d1,stroke-width:2px
+    classDef associationEntity stroke:#8e24aa,stroke-width:2px
+    classDef metadataEntity stroke:#43a047,stroke-width:2px
+    classDef referenceEntity stroke-dasharray:5 5
+
+    class Account referenceEntity
+    class MentorTurn referenceEntity
+    class Practice referenceEntity
+    class PracticeVersion referenceEntity
+    class Review referenceEntity
+    class Workspace referenceEntity

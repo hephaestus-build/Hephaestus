@@ -11,7 +11,8 @@ import { environmentForGitFixture } from "./lib/git-environment.ts";
 
 const checker = path.join(import.meta.dirname, "assert-generated-clean.ts");
 const apiPaths = ["server/openapi.yaml", "webapp/src/api", "extension/src/api"];
-const erdPath = "docs/contributor/erd/schema.mmd";
+const erdPath = "docs/contributor/erd";
+const erdFile = `${erdPath}/integration.mmd`;
 
 function fixture() {
 	const repo = mkdtempSync(path.join(tmpdir(), "generated-clean-"));
@@ -30,7 +31,7 @@ function fixture() {
 		"server/openapi.yaml",
 		"webapp/src/api/client.ts",
 		"extension/src/api/client.ts",
-		erdPath,
+		erdFile,
 		"unrelated.txt",
 	]) {
 		mkdirSync(path.dirname(path.join(repo, file)), { recursive: true });
@@ -55,7 +56,7 @@ for (const file of [
 	"server/openapi.yaml",
 	"webapp/src/api/client.ts",
 	"extension/src/api/client.ts",
-	erdPath,
+	erdFile,
 ]) {
 	for (const change of ["modified", "deleted", "staged"]) {
 		void test(`rejects ${change} ${file} without changing the index`, (t) => {
@@ -70,7 +71,7 @@ for (const file of [
 				git("add", file);
 			}
 			const before = index();
-			const result = check(file === erdPath ? [erdPath] : apiPaths, "server");
+			const result = check(file === erdFile ? [erdPath] : apiPaths, "server");
 			assert.equal(result.status, 1, result.stderr);
 			assert.ok(result.stderr.includes(file.split("/").at(-1) ?? file));
 			assert.deepEqual(index(), before);
@@ -106,7 +107,7 @@ void test("API and ERD verdicts ignore unrelated drift and remain independent", 
 	writeFileSync(path.join(repo, "server/openapi.yaml"), "API drift\n");
 	assert.equal(check(apiPaths).status, 1);
 	assert.equal(check([erdPath]).status, 0);
-	writeFileSync(path.join(repo, erdPath), "ERD drift\n");
+	writeFileSync(path.join(repo, erdFile), "ERD drift\n");
 	assert.equal(check(apiPaths).status, 1);
 	assert.equal(check([erdPath]).status, 1);
 	assert.deepEqual(index(), before);

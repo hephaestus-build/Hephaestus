@@ -41,7 +41,7 @@ conventions the drift gate reads are in `server/AGENTS.md` § Schema changes.
    (`.changeset/README.md`). A Liquibase `<changeSet>` and a release changeset are different things
    and a schema change needs both. `verify-changesets` fails a PR that touches `db/changelog/`
    without one. Keep the summary user-facing. The release notes flag the migration automatically.
-5. Commit the changelog, the `master.xml` edit, the changeset, and `docs/contributor/erd/schema.mmd`.
+5. Commit the changelog, the `master.xml` edit, the changeset, and `docs/contributor/erd/`.
 
 ## Workspace column
 
@@ -195,7 +195,7 @@ The changeset that drops the object also removes its row and its exclusion.
 1. **Migration-chain replay, schema drift and ERD** — **CI / Build** workflow, job *App Server: Generated
    artifacts*. `vp run db:check-drift` applies the full `master.xml` chain to an empty database from the repository's PostgreSQL image (`docker/postgres`).
    It compares the result with the JPA entities. A changelog that does not parse or apply fails here. `vp run db:generate-erd-docs`
-   then has to leave `docs/contributor/erd/schema.mmd` unchanged.
+   then has to leave `docs/contributor/erd/` unchanged.
 2. **Changelog immutability** — Security workflow, job *Dependencies, secrets, and policy*, step
    *Changelog immutability guard*. A git diff from the event's base commit checks two conditions.
    Pull requests and merge groups both run it.

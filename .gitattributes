@@ -25,5 +25,5 @@ patches/*.patch whitespace=-space-before-tab
 webapp/src/api/** linguist-generated=true
 extension/src/api/** linguist-generated=true
 webapp/src/routeTree.gen.ts linguist-generated=true
-docs/contributor/erd/schema.mmd linguist-generated=true
+docs/contributor/erd/** linguist-generated=true
 docs/admin/configuration-reference.mdx linguist-generated=true

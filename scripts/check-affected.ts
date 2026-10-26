@@ -41,7 +41,7 @@ const fullGateInputs = [
 	/^extension\/src\/api\//u,
 	/^webapp\/src\/routeTree\.gen\.ts$/u,
 	/^webapp\/tools\/oxlint\//u,
-	/^docs\/contributor\/erd\/schema\.mmd$/u,
+	/^docs\/contributor\/erd\//u,
 	/(?:^|\/)AGENTS\.md$/u,
 	/(?:^|\/)CLAUDE\.md$/u,
 ];

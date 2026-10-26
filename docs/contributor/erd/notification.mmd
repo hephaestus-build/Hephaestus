@@ -1,0 +1,34 @@
+---
+config:
+    layout: elk
+---
+erDiagram
+    %% Generated automatically from PostgreSQL database schema
+    %% using scripts/generate-mermaid-erd.ts
+    %% To regenerate: vp run db:generate-erd-docs
+
+    direction LR
+
+    NotificationSubscription {
+        UUID id PK
+        BIGINT account_id FK,UK "NOT NULL"
+        BOOLEAN enabled "NOT NULL"
+        TIMESTAMPTZ enabled_since
+        VARCHAR(32) kind UK "NOT NULL"
+        UUID unsubscribe_token UK "NOT NULL"
+        BIGINT version "NOT NULL"
+    }
+
+    Account["Account · Core"]
+
+    %% Relationships
+    %% One-to-Many relationships
+    Account ||--o{ NotificationSubscription : has
+
+    %% Styling
+    classDef primaryEntity stroke:#0288d1,stroke-width:2px
+    classDef associationEntity stroke:#8e24aa,stroke-width:2px
+    classDef metadataEntity stroke:#43a047,stroke-width:2px
+    classDef referenceEntity stroke-dasharray:5 5
+
+    class Account referenceEntity

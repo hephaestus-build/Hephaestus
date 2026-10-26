@@ -101,8 +101,10 @@ async function generateErd(value: Config): Promise<void> {
 			`jdbc:postgresql://${value.host}:${value.port}/${value.env.POSTGRES_DB ?? "hephaestus"}`,
 			"--username",
 			value.env.POSTGRES_USER ?? "root",
-			"--output",
-			"../docs/contributor/erd/schema.mmd",
+			"--output-dir",
+			"../docs/contributor/erd",
+			"--sources",
+			"../server/application/src/main/java/de/tum/cit/aet/hephaestus",
 		],
 		{
 			cwd: import.meta.dirname,
@@ -374,7 +376,7 @@ const commands = {
 	"draft-changelog":
 		"apply the chain, diff it against the JPA model, write the drift into this branch's changelog and refresh the ERD",
 	"check-drift": "apply the chain and fail when the JPA model and the schema differ",
-	"generate-erd": "apply the chain and regenerate docs/contributor/erd/schema.mmd",
+	"generate-erd": "apply the chain and regenerate the per-module diagrams in docs/contributor/erd",
 } as const;
 
 function usage(): string {
