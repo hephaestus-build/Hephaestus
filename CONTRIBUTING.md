@@ -200,7 +200,7 @@ The [compatibility policy](https://docs.hephaestus.build/admin/compatibility-pol
 - `scripts`: Helper scripts
 - `release`: Release engineering (also used by the automated Version PR)
 
-> ⚠️ **`config` scope warning:** Only use for tooling config files like `renovate.json`, `.oxfmtrc.json`, `webapp/.oxlintrc.json`. Do NOT use for:
+> ⚠️ **`config` scope warning:** Only use for tooling config files like `.github/renovate.json`, `.oxfmtrc.json`, `webapp/.oxlintrc.json`. Do NOT use for:
 > - Runtime config (`application.yml`) → use `server`
 > - Dockerfiles → use service scope (`webapp`, `server`, etc.)
 > - Production compose files → use `docker`

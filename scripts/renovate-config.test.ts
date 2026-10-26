@@ -8,7 +8,7 @@ import { isSet } from "./lib/env.ts";
 import { isRecord, parseJson } from "./lib/json.ts";
 import { BUNDLED_PINS } from "./lib/toolchain-pins.ts";
 
-const parsedConfig: unknown = parseJson(await readFile("renovate.json", "utf8"));
+const parsedConfig: unknown = parseJson(await readFile(".github/renovate.json", "utf8"));
 assert.ok(isRecord(parsedConfig));
 const config = parsedConfig;
 assert.ok(Array.isArray(config.extends));
