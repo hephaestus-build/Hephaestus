@@ -347,6 +347,8 @@ jobs:
               - 'deploy/chart/**'
               # format:load:check and test:load:syntax run on this leg.
               - 'load-tests/**'
+              # test:alerts runs promtool on these rules on this leg.
+              - 'deploy/observability/**'
               # The catalog and guidance tests in scripts/ judge these bundled server resources.
               - 'server/application/src/main/resources/practices/default-catalog.json'
               - 'server/application/src/main/resources/practices/default-catalog.schema.json'

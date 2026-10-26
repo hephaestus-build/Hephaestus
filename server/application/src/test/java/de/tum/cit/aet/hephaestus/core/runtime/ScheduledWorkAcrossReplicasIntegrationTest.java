@@ -56,6 +56,7 @@ class ScheduledWorkAcrossReplicasIntegrationTest extends BaseIntegrationTest {
      */
     private static final Map<String, String> UNLOCKED = Map.ofEntries(
             Map.entry("AgentQueueHealthSampler#sample", "LOCAL"),
+            Map.entry("WalArchiveMonitor#sample", "LOCAL"),
             Map.entry("ReviewJobZombieSweeper#reapStaleRunningJobs", "ROW"),
             Map.entry("ReviewJobZombieSweeper#recoverOrphanedJobs", "ROW"),
             Map.entry("ReviewJobZombieSweeper#purgeStaleWorkerRegistrations", "ROW"),

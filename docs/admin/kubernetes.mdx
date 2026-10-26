@@ -583,7 +583,7 @@ After you change `BACKUP_S3_KEY` or `BACKUP_S3_KEY_SECRET`, restart it with `kub
 Until then, the WAL archive fails.
 
 A failed WAL archive keeps the WAL on the PostgreSQL volume until the volume is full.
-Alert on failed backup Jobs and on the free space of the volume, not only on the next scheduled backup.
+The [alert rules](./observability.mdx#alert-rules) watch the WAL archive, the age of the latest backup and the free space of the volume.
 
 ### Restore
 

@@ -1,0 +1,189 @@
+# Prometheus alert rules for Hephaestus. docs/admin/observability.mdx § Alert rules gives the scrape
+# labels that these rules read, the exporters of the second group, and each threshold.
+# docs/admin/production-operations-runbook.mdx § Alert response gives the response to each alert.
+# hephaestus-alerts.test.yml beside this file holds the unit tests: vp run test:alerts.
+groups:
+  # The application's own metrics, from the management listener of each runtime role.
+  - name: hephaestus
+    rules:
+      - alert: HephaestusMetricsUnavailable
+        expr: up{job="hephaestus"} == 0
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: A Hephaestus metrics target cannot be scraped
+      - alert: HephaestusConsumerPoison
+        expr: sum by (kind) (increase(integration_consumer_poison_total{job="hephaestus"}[10m])) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: An integration event reached the poison retry limit
+      - alert: HephaestusStreamPollStale
+        expr: >-
+          webhook_stream_poll_age_seconds{job="hephaestus",runtime_role="webhook"} > 180
+          or webhook_stream_poll_age_seconds{job="hephaestus",runtime_role="webhook"}
+          != webhook_stream_poll_age_seconds{job="hephaestus",runtime_role="webhook"}
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: Webhook stream gauges are stale or have never been refreshed
+      - alert: HephaestusStreamPollMissing
+        expr: >-
+          up{job="hephaestus",runtime_role="webhook"} == 1
+          unless on (job, instance)
+          webhook_stream_poll_age_seconds{job="hephaestus",runtime_role="webhook"}
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: A scraped webhook receiver exports no stream poll age
+      - alert: HephaestusStreamBacklog
+        expr: max by (stream) (webhook_stream_consumer_pending{job="hephaestus",runtime_role="webhook"}) > 50
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: More than 50 events of a stream stayed undelivered to the consumers for 15 minutes
+      - alert: HephaestusWebhookPublishFailing
+        expr: sum(increase(webhook_publish_total{job="hephaestus",outcome="failure"}[10m])) > 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: The webhook receiver cannot store deliveries on the broker
+      - alert: HephaestusWebhookRedeliveryNotRunning
+        expr: >-
+          sum(increase(github_webhook_redelivery_total{job="hephaestus",outcome=~"unavailable|refused"}[30m])) > 2
+        labels:
+          severity: warning
+        annotations:
+          summary: GitHub refuses redeliveries, or the deliveries of the GitHub App cannot be read
+      - alert: HephaestusWebhookEventsUnrecovered
+        expr: max(github_webhook_unrecovered{job="hephaestus"}) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: GitHub events failed every delivery attempt and were not received
+      - alert: HephaestusBudgetExhausted
+        expr: sum(increase(llm_budget_exhausted_total{job="hephaestus"}[10m])) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: A workspace crossed the instance-funded monthly budget cap
+      - alert: HephaestusBudgetBlocked
+        expr: sum by (surface, cap) (increase(llm_budget_blocked_total{job="hephaestus"}[10m])) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: LLM budget admission refused work
+      - alert: HephaestusAgentJobsFailing
+        expr: sum(increase(agent_job_total{job="hephaestus",outcome=~"failed|timed_out"}[15m])) >= 3
+        labels:
+          severity: warning
+        annotations:
+          summary: At least three agent jobs failed or timed out in fifteen minutes
+      - alert: HephaestusAgentQueueStalled
+        expr: max(agent_queue_oldest_age_seconds{job="hephaestus"}) > 3600
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: An agent job that can run has waited for a worker for more than one hour
+      - alert: HephaestusSandboxIsolationFailed
+        expr: sandbox_isolation_passed{job="hephaestus",runtime_role="worker"} == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: A worker's sandbox isolation probe failed, so the worker starts no sandbox
+      - alert: HephaestusWalArchiveFailing
+        expr: max(database_wal_archive_failing{job="hephaestus"}) == 1
+        for: 10m
+        # A failed read makes the gauge NaN until the next read. The alert stays firing through it.
+        keep_firing_for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: PostgreSQL cannot archive its WAL, so backups and point-in-time recovery stop
+
+  # Kubernetes and cluster metrics: kube-state-metrics, the kubelet, node-exporter and cert-manager.
+  # The PVC and CronJob names are those that the chart gives a release. Add a namespace matcher to
+  # limit a rule to the release namespace.
+  - name: hephaestus-kubernetes
+    rules:
+      - alert: HephaestusBackupStale
+        expr: >-
+          time() - max by (namespace, release) (
+            label_replace(
+              kube_cronjob_status_last_successful_time{cronjob=~".+-postgresql-backup-(full|diff)"},
+              "release", "$1", "cronjob", "(.+)-postgresql-backup-(?:full|diff)"
+            )
+          ) > 30 * 3600
+          or
+          (
+            time() - min by (namespace, release) (
+              label_replace(
+                kube_cronjob_created{cronjob=~".+-postgresql-backup-(full|diff)"},
+                "release", "$1", "cronjob", "(.+)-postgresql-backup-(?:full|diff)"
+              )
+            ) > 30 * 3600
+            unless on (namespace, release)
+            label_replace(
+              kube_cronjob_status_last_successful_time{cronjob=~".+-postgresql-backup-(full|diff)"},
+              "release", "$1", "cronjob", "(.+)-postgresql-backup-(?:full|diff)"
+            )
+          )
+        labels:
+          severity: critical
+        annotations:
+          summary: No PostgreSQL backup completed in the last 30 hours
+      - alert: HephaestusPostgresVolumeFilling
+        expr: >-
+          kubelet_volume_stats_available_bytes{persistentvolumeclaim=~"data-.+-postgresql-0"}
+          / kubelet_volume_stats_capacity_bytes{persistentvolumeclaim=~"data-.+-postgresql-0"}
+          < 0.15
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: The PostgreSQL volume has less than 15 % free space
+      - alert: HephaestusPostgresVolumeFilling
+        expr: >-
+          kubelet_volume_stats_available_bytes{persistentvolumeclaim=~"data-.+-postgresql-0"}
+          / kubelet_volume_stats_capacity_bytes{persistentvolumeclaim=~"data-.+-postgresql-0"}
+          < 0.05
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: The PostgreSQL volume has less than 5 % free space
+      - alert: HephaestusJetStreamVolumeFilling
+        expr: >-
+          kubelet_volume_stats_available_bytes{persistentvolumeclaim=~"data-.+-nats-0"}
+          / kubelet_volume_stats_capacity_bytes{persistentvolumeclaim=~"data-.+-nats-0"}
+          < 0.10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: The NATS JetStream volume has less than 10 % free space
+      - alert: HephaestusNodeDiskFilling
+        expr: >-
+          node_filesystem_avail_bytes{fstype!~"tmpfs|ramfs|squashfs|overlay",mountpoint!~"/var/lib/kubelet/pods/.+"}
+          / node_filesystem_size_bytes
+          < 0.15
+          and node_filesystem_readonly == 0
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: A node file system has less than 15 % free space
+      - alert: HephaestusCertificateExpiring
+        expr: certmanager_certificate_expiration_timestamp_seconds - time() < 7 * 24 * 3600
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: A certificate that cert-manager manages expires in less than seven days, or has no issued certificate

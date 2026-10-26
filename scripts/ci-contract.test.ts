@@ -101,11 +101,16 @@ async function readSources(files: string[]): Promise<Map<string, string>> {
 const TASK_INVOCATION =
 	/\bvp run (?:(?:--(?!filter\b)[\w-]+|\$\{\{ *matrix\.\w+ *\}\}) +)*(?<name>(?:[\w:-]|\$\{\{ *matrix\.\w+ *\}\})+)/gu;
 
-// The gates outside `check`: the k6 syntax check needs the pinned container, and the PMD canary runs
-// only when CI decides PMD inputs changed. The server test analysis compiles every test, and
-// `check` does not, so the pre-push hook stays fast; every local server test task runs it.
+// The gates outside `check`: the k6 syntax check and the alert rule tests need pinned containers, and
+// the PMD canary runs only when CI decides PMD inputs changed. The server test analysis compiles every
+// test, and `check` does not, so the pre-push hook stays fast; every local server test task runs it.
 // Every other CI gate is part of `check`.
-const CI_ONLY_GATES = new Set(["gate:load-syntax", "gate:pmd-canary", "gate:server-test-analysis"]);
+const CI_ONLY_GATES = new Set([
+	"gate:alerts",
+	"gate:load-syntax",
+	"gate:pmd-canary",
+	"gate:server-test-analysis",
+]);
 
 // Assignment names exclude '=' so each token has only one possible split.
 const VP_INVOCATION =
