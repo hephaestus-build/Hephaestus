@@ -1,5 +1,4 @@
 import { InstitutionalAttribution } from "@/components/layout/InstitutionalAttribution";
-
 import { ProductFeatureList } from "@/components/site/ProductFeatureList";
 
 export function AboutMissionSection() {
@@ -29,7 +28,10 @@ export function AboutMissionSection() {
 				</p>
 			</div>
 
-			<ProductFeatureList />
+			<div>
+				<h2 className="mb-6 text-2xl font-bold">Features</h2>
+				<ProductFeatureList />
+			</div>
 
 			<div>
 				<h2 className="mb-4 text-2xl font-bold">Where Hephaestus is going</h2>
@@ -41,7 +43,7 @@ export function AboutMissionSection() {
 			</div>
 
 			<div className="rounded-2xl border border-border bg-muted/20 p-6 text-center">
-				<h3 className="text-xl font-semibold">Project origins</h3>
+				<h2 className="text-xl font-semibold">Project origins</h2>
 				<p className="mx-auto mt-2 mb-6 max-w-2xl text-sm leading-relaxed text-muted-foreground">
 					Developed at the Technical University of Munich. There, Hephaestus is the research
 					platform for a study of how AI-generated feedback can improve developers’ application of

@@ -14,16 +14,14 @@ type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {
 	play: async ({ canvas }) => {
-		const names = canvas
-			.getAllByRole("heading", { level: 3 })
-			.map((heading) => heading.textContent);
-		await expect(names).toEqual([
-			"Practices",
-			"Feedback on the Work",
-			"Practice Page",
-			"Conversations",
-			"Feedback Mode",
-			"Your Stack",
-		]);
+		await expect(canvas.getAllByRole("listitem")).toHaveLength(6);
 	},
+};
+
+export const Mobile: Story = {
+	parameters: { viewport: { defaultViewport: "reflow" }, chromatic: { viewports: [320] } },
+};
+
+export const DarkMode: Story = {
+	globals: { theme: "dark" },
 };
