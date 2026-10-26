@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
+import { spawnSync, type SpawnSyncReturns } from "node:child_process";
 import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -168,6 +168,8 @@ if (tool === 'docker' && args.includes('inspect')) process.stdout.write(process.
 						FAILURE: failure,
 						DIGEST: digest,
 						RUNNER_TEMP: directory,
+						// Not a push, so the publication reads no branch head from the network.
+						GITHUB_EVENT_NAME: "merge_group",
 						DOCKER_METADATA_OUTPUT_JSON:
 							failure === "invalidMetadata"
 								? "{"
@@ -897,5 +899,98 @@ if (tool === 'docker' && args.includes('--format')) {
 		assert.doesNotMatch(result.stdout, /webapp: the merge-queue image did not verify/u);
 		// Nothing reaches the outputs, so no digest of the verified first image is published either.
 		assert.equal(await readFile(output, "utf8"), "");
+	},
+);
+
+// The publish step runs on Linux; the other tests that run workflow shell skip Windows too.
+void test(
+	"the branch tag only moves forward",
+	{ skip: process.platform === "win32" },
+	async (t) => {
+		const reusable = parseDocument(
+			await readFile(".github/workflows/reusable-docker-build.yml", "utf8"),
+		);
+		const steps = reusable.getIn(["jobs", "merge", "steps"]);
+		assert.ok(isSeq(steps));
+		const publication: unknown = steps.items.find(
+			(item) => isMap(item) && item.get("name") === "Publish verified image tags",
+		);
+		assert.ok(isMap(publication));
+		const directory = await mkdtemp(path.join(tmpdir(), "branch-tag-"));
+		t.after(async () => rm(directory, { recursive: true, force: true }));
+		const log = path.join(directory, "calls");
+		const webapp = "ghcr.io/hephaestus-build/webapp";
+		const published = `sha256:${"a".repeat(64)}`;
+		const commit = "c".repeat(40);
+		const tagged = "d".repeat(40);
+		// `docker` reads the branch tag's revision label and records the tags it publishes; `gh` answers
+		// the comparison of this commit with the tagged one.
+		for (const tool of ["docker", "gh"]) {
+			await writeFile(
+				path.join(directory, tool),
+				`#!/usr/bin/env node
+const fs = require('node:fs');
+const args = process.argv.slice(2);
+if (require('node:path').basename(process.argv[1]) === 'gh') {
+  if (process.env.COMPARE === 'fail') process.exit(1);
+  process.stdout.write(process.env.COMPARE + '\\n');
+  process.exit(0);
+}
+if (args.includes('inspect')) {
+  if (process.env.LABEL === 'none') process.exit(1);
+  const labels = { 'org.opencontainers.image.revision': process.env.LABEL };
+  process.stdout.write(JSON.stringify({ 'linux/amd64': { config: { Labels: labels } } }));
+  process.exit(0);
+}
+fs.appendFileSync(process.env.CALL_LOG, JSON.stringify(args.filter((arg, i) => args[i - 1] === '--tag')) + '\\n');
+const index = args.indexOf('--metadata-file');
+fs.writeFileSync(args[index + 1], JSON.stringify({ 'containerimage.descriptor': { digest: process.env.DIGEST } }));
+`,
+			);
+			await chmod(path.join(directory, tool), 0o755);
+		}
+		const all = [`${webapp}:main`, `${webapp}:ci-7`, `${webapp}:${commit}`];
+		const withoutBranch = [`${webapp}:ci-7`, `${webapp}:${commit}`];
+		for (const [event, label, comparison, tags] of [
+			// The tag names an older commit: it moves forward.
+			["push", tagged, "behind", all],
+			// The tag names a newer commit: it stays.
+			["push", tagged, "ahead", withoutBranch],
+			["push", commit, "identical", withoutBranch],
+			// Nothing tells the order: it moves, so it never stays behind.
+			["push", "none", "behind", all],
+			["push", tagged, "fail", all],
+			["merge_group", tagged, "ahead", [`${webapp}:${commit}`]],
+		] as const) {
+			await writeFile(log, "");
+			const metadata = event === "push" ? all : [`${webapp}:${commit}`];
+			const result: SpawnSyncReturns<string> = spawnSync(
+				"bash",
+				["-e", "-c", String(publication.get("run"))],
+				{
+					encoding: "utf8",
+					env: {
+						...process.env,
+						PATH: `${directory}${path.delimiter}${process.env.PATH ?? ""}`,
+						CALL_LOG: log,
+						DIGEST: published,
+						LABEL: label,
+						COMPARE: comparison,
+						RUNNER_TEMP: directory,
+						GITHUB_EVENT_NAME: event,
+						GITHUB_REPOSITORY: "hephaestus-build/Hephaestus",
+						GITHUB_REF_NAME: "main",
+						GITHUB_SHA: commit,
+						DOCKER_METADATA_OUTPUT_JSON: JSON.stringify({ tags: metadata }),
+						IMAGES: JSON.stringify(["webapp"]),
+						DIGESTS: JSON.stringify({ webapp: published }),
+						INPUTS_REGISTRY: "ghcr.io",
+					},
+				},
+			);
+			assert.equal(result.status, 0, result.stderr);
+			const calls = await readFile(log, "utf8");
+			assert.deepEqual(JSON.parse(calls.trim()), tags, `${event}, tag at ${label}, ${comparison}`);
+		}
 	},
 );
