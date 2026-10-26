@@ -4,29 +4,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync
 import nodePath from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { isDeepStrictEqual } from "node:util";
-import {
-	admit,
-	parseAdmission,
-	ADMISSION_ATTEMPT_TIMEOUT_MS,
-	ADMISSION_ATTEMPTS,
-	AdmissionUnreachableError,
-	leanResults,
-	type Admission,
-} from "./pi-admitted-results.ts";
-import {
-	loadCompositionRequest,
-	createCompositionStage,
-	composeAdmittedFeedback,
-	closeUnroutedPrivateDestinations,
-	undecidedPrivatePractices,
-	recordCompositionFailure,
-	compositionOwed,
-	persistComposedFeedback as persistComposition,
-	prepareComposedFeedback as prepareComposition,
-	preparePublicReview,
-	type PreparationOptions,
-	type ComposedFeedback,
-} from "./pi-composition-stage.ts";
+import { admit, AdmissionUnreachableError } from "./pi-admitted-results.ts";
 import { DIFF_SOURCE, TREE_SOURCE } from "./work/practice-scripts/kits/scm/sources.ts";
 
 import {
@@ -98,7 +76,6 @@ import { buildResultTools, RESULT_TOOL_NAMES } from "./pi-result-tools.ts";
 import { type BriefSource, buildBrief } from "./pi-review-brief.ts";
 import {
 	type Work,
-	deriveWindows,
 	missingSlugs,
 	planTurns,
 	partitionBudget,
@@ -106,13 +83,7 @@ import {
 	spent,
 	turnBudget,
 } from "./pi-review-turns.ts";
-import {
-	PRIVATE_DESTINATIONS,
-	REVIEW_CONTRACT_VERSION,
-	workIdentity,
-} from "./pi-runner-composition.ts";
 import { outputPath } from "./pi-runner-output.ts";
-import { answerText, causeText, isRetryableStatus, retrying } from "./pi-runner-retry.ts";
 import {
 	addAssistantUsage,
 	extractUsageFromSession,
@@ -190,24 +161,6 @@ function logValue(value: unknown): string {
 /** SDK event arrays may be absent before completion or after abort. */
 function listOrEmpty<T>(items: T[] | undefined): T[] {
 	return items ?? [];
-}
-
-/** The list, or the one item that was sent where a list of them was asked for. */
-function listOrItem(value: unknown): unknown[] {
-	if (Array.isArray(value)) {
-		return value;
-	}
-	return isRecord(value) ? [value] : [];
-}
-
-/** The schema for such a list: the array, or the same array as a JSON string. */
-function listSchema(items: unknown, what: string) {
-	return {
-		anyOf: [
-			{ type: "array", minItems: 1, maxItems: 10, items },
-			{ type: "string", minLength: 2, description: `The ${what} as a JSON-encoded array` },
-		],
-	};
 }
 
 /** The task this runner was started for. */
@@ -316,18 +269,6 @@ interface RequiredSourceTrace {
 	read: "complete" | "partial" | "none";
 }
 
-interface PublicHistoryReceipt {
-	readAt: string;
-	workCapturedAt: string | null;
-	entries: {
-		id: unknown;
-		deliveredAt: unknown;
-		eligibleForAlreadySaid: boolean;
-		eligibleForPriorAdvice: boolean;
-	}[];
-	omissions: { oversizedEntries: number; budgetEntries: number };
-}
-
 function compareSlugs(a: string, b: string): number {
 	if (a === b) {
 		return 0;
@@ -433,7 +374,6 @@ type Recorded =
 interface TurnDemand {
 	owed: () => number;
 	nudge: string;
-	endsWhenPaid?: true;
 }
 
 function problemsIn(result: unknown): number {
@@ -514,8 +454,6 @@ function recordOnceMoreText(slug: string): string {
 		`is a collection gap: submit nothing.`
 	);
 }
-
-type PrivateDestination = (typeof PRIVATE_DESTINATIONS)[number];
 
 function recordModelResponse(trace: TurnTrace, stopReason: string, message: unknown): void {
 	const failed = stopReason === "error" || stopReason === "aborted";
@@ -675,24 +613,6 @@ ${subject} Each captured record keeps the attribution it was captured with: its 
 `;
 }
 
-function submittedList(value: unknown): { items: unknown[] } | { error: string } {
-	if (typeof value !== "string") {
-		return { items: listOrItem(value) };
-	}
-	try {
-		return { items: listOrItem(JSON.parse(value)) };
-	} catch (error) {
-		const at = /position (?<position>\d+)/u.exec(errorText(error))?.groups?.position;
-		const near =
-			at === undefined
-				? ""
-				: `; it breaks here: ${JSON.stringify(value.slice(Math.max(0, Number(at) - 60), Number(at)))} ⟵ ${JSON.stringify(value.slice(Number(at), Number(at) + 20))}`;
-		return {
-			error: `the list arrived as a string that is not valid JSON (${errorText(error)})${near}. Fix that spot — usually a quote inside a text left unescaped — or send the array itself`,
-		};
-	}
-}
-
 export async function runReviewJob(): Promise<void> {
 	const WORKSPACE_ROOT = "/workspace";
 	const EVIDENCE_TOOLS = ["read", "grep", "find", "ls"] as const;
@@ -705,11 +625,6 @@ export async function runReviewJob(): Promise<void> {
 
 	const taskEnvelope = readTaskEnvelope();
 	const INPUT_PATHS = resolveTaskPaths(CWD, taskEnvelope.paths);
-	// Recovery composes from the admitted attempt's staged inputs without reassessing practices.
-	const CONTINUATION_PATH = nodePath.join(
-		nodePath.dirname(INPUT_PATHS.compositionRequest),
-		"composition-continuation.json",
-	);
 	const OUTPUT = `${CWD}/out`;
 	const RESULT_PATH = outputPath(OUTPUT, "result.json");
 	const REVIEW_STATE_PATH = outputPath(OUTPUT, "review-state.json");
@@ -757,7 +672,6 @@ export async function runReviewJob(): Promise<void> {
 	const CUT_OFF_ABORT = 2;
 
 	const STALL_CHECK_MS = 1000;
-	const WINDOWS = deriveWindows(AGENT_BUDGET_MS, existsSync(INPUT_PATHS.compositionRequest));
 
 	// The instant the watchdog below counts from. Every stage deadline starts later than this, so it is
 	// the only reading against which the process budget means anything.
@@ -823,7 +737,6 @@ export async function runReviewJob(): Promise<void> {
 		attempts: AttemptDebug[];
 		turns: TurnTrace[];
 		usageTotals: UsageTotals;
-		publicHistory?: PublicHistoryReceipt;
 		practiceConcurrency?: { configured: number; effective: number };
 		/** Each practice's required brief sources: sizes and read state only, never their text. */
 		practiceSources: Record<string, RequiredSourceTrace[]>;
@@ -889,10 +802,8 @@ export async function runReviewJob(): Promise<void> {
 		writeFileSync(REVIEW_STATE_PATH, JSON.stringify(admissionRequest(), null, 2));
 	}
 
-	const continuing = existsSync(CONTINUATION_PATH);
-
 	function maybeWriteResultFile(): boolean {
-		if (!continuing && reviewState.size === 0) {
+		if (reviewState.size === 0) {
 			return false;
 		}
 		writeFileSync(RESULT_PATH, JSON.stringify(admissionRequest(), null, 2));
@@ -936,12 +847,7 @@ export async function runReviewJob(): Promise<void> {
 		if (practiceCoverageLedger !== null) {
 			persist(PRACTICE_COVERAGE_PATH, persistPracticeCoverage);
 		}
-		if (admission !== null) {
-			persist(FEEDBACK_PATH, persistComposedFeedback);
-		}
-		if (!continuing) {
-			persist(PRACTICE_SCRIPT_REPORT_PATH, persistExecutionReport);
-		}
+		persist(PRACTICE_SCRIPT_REPORT_PATH, persistExecutionReport);
 		for (const entry of readdirSync(OUTPUT)) {
 			const path = `${OUTPUT}/${entry}`;
 			if (!written.has(path)) {
@@ -1356,14 +1262,6 @@ export async function runReviewJob(): Promise<void> {
 		throw new Error(text);
 	}
 
-	const RECORDING_TOOLS: ReadonlySet<string> = new Set([
-		"submit_result",
-		"report_feedback",
-		"report_review",
-	]);
-
-	let composerTool: "report_review" | "report_feedback" = "report_feedback";
-
 	const TOOL_ERROR_CHARS = 240;
 
 	// SDK error headings can be followed by the refused content; retain only a bounded reason.
@@ -1713,61 +1611,6 @@ export async function runReviewJob(): Promise<void> {
 			: slugs.filter((slug) => slug === review.slug);
 	}
 
-	const RULE_KEYWORDS = new Set([
-		"required",
-		"additionalProperties",
-		"minLength",
-		"maxLength",
-		"minItems",
-		"maxItems",
-		"pattern",
-		"minimum",
-		"maximum",
-	]);
-
-	// Batch tools validate each piece independently; whole-call validation would discard valid siblings.
-	function documentedShape(schema: unknown): unknown {
-		if (Array.isArray(schema)) {
-			return schema.map(documentedShape);
-		}
-		if (!isRecord(schema)) {
-			return schema;
-		}
-		const out: Record<string, unknown> = {};
-		const structural = schema.type === "object" || schema.type === "array";
-		const noted = (note: string) => {
-			const description = typeof out.description === "string" ? out.description : "";
-			out.description = description ? `${description} ${note}` : note;
-		};
-		if (typeof schema.description === "string") {
-			out.description = schema.description;
-		}
-		for (const [key, value] of Object.entries(schema)) {
-			if (key === "description") {
-				continue;
-			}
-			// What the schema required is still said, in words: the rule is applied by the tool, but the
-			// session is told which fields a call cannot do without.
-			if (key === "required" && Array.isArray(value) && value.length > 0) {
-				noted(`Required: ${value.map(String).join(", ")}.`);
-				continue;
-			}
-			if (RULE_KEYWORDS.has(key) || (key === "type" && structural)) {
-				continue;
-			}
-			if (key === "enum" && Array.isArray(value)) {
-				const listed = value.map((item) => (item === null ? "null" : String(item))).join(", ");
-				const description = typeof out.description === "string" ? out.description : "";
-				if (!description.includes(listed.split(", ")[0] ?? "")) {
-					noted(`One of: ${listed}.`);
-				}
-				continue;
-			}
-			out[key] = documentedShape(value);
-		}
-		return out;
-	}
-
 	function requireOpenReview(expected: ActiveReview): ActiveReview {
 		const review = sessionState().activeReview;
 		if (measurementClosed || review === null || review !== expected) {
@@ -1828,18 +1671,15 @@ export async function runReviewJob(): Promise<void> {
 		});
 	}
 
-	function accumulateUsage(prev: UsageReport | null, curr: UsageReport): void {
-		usageTotals.model = curr.model ?? usageTotals.model;
-		usageTotals.inputTokens += Math.max(0, curr.inputTokens - (prev?.inputTokens ?? 0));
-		usageTotals.outputTokens += Math.max(0, curr.outputTokens - (prev?.outputTokens ?? 0));
-		usageTotals.reasoningTokens += Math.max(0, curr.reasoningTokens - (prev?.reasoningTokens ?? 0));
-		usageTotals.cacheReadTokens += Math.max(0, curr.cacheReadTokens - (prev?.cacheReadTokens ?? 0));
-		usageTotals.cacheWriteTokens += Math.max(
-			0,
-			curr.cacheWriteTokens - (prev?.cacheWriteTokens ?? 0),
-		);
-		usageTotals.costUsd += Math.max(0, curr.costUsd - (prev?.costUsd ?? 0));
-		usageTotals.totalCalls += Math.max(0, curr.totalCalls - (prev?.totalCalls ?? 0));
+	function accumulateUsage(report: UsageReport): void {
+		usageTotals.model = report.model ?? usageTotals.model;
+		usageTotals.inputTokens += report.inputTokens;
+		usageTotals.outputTokens += report.outputTokens;
+		usageTotals.reasoningTokens += report.reasoningTokens;
+		usageTotals.cacheReadTokens += report.cacheReadTokens;
+		usageTotals.cacheWriteTokens += report.cacheWriteTokens;
+		usageTotals.costUsd += report.costUsd;
+		usageTotals.totalCalls += report.totalCalls;
 	}
 
 	function deriveChangeView(): void {
@@ -1969,20 +1809,6 @@ export async function runReviewJob(): Promise<void> {
 		);
 	}
 
-	const COMPOSITION_NUDGE =
-		`Stop reading: the admitted results with their problems and the history are in this turn's prompt and in ` +
-		`work/composition/results.json, and nothing else decides a piece. Persist the feedback you have ` +
-		`with report_feedback now — and a WITHHOLD with its reason for each NOT_MET practice you decided ` +
-		`to stay quiet about. Use tools only from this point onward; no planning prose.`;
-
-	const REVIEW_NUDGE =
-		`Everything this review may rest on is in this session. Store the final review now with one report_review call: ` +
-		`first one decision for each NOT_MET result, RAISE or a withholding reason, then the complete summary and ` +
-		`any line notes, which speak about each raised result, itself or through its problems, and no withheld one. ` +
-		`No prose outside the calls.`;
-
-	const COMPOSITION_EXPLORATION_NUDGE = 12;
-
 	const PERSIST_DISCIPLINE =
 		`Submit the outcome the evidence supports, MET, NOT_MET, DOES_NOT_APPLY, or COULD_NOT_DETERMINE; there is no quota. ` +
 		`Use tools only from this point onward; no planning prose.`;
@@ -1993,8 +1819,6 @@ export async function runReviewJob(): Promise<void> {
 	const SERVER_UNREACHABLE_EXIT = 75;
 	// The server interprets exit 76 as provider failure without a recorded result and retries the review.
 	const PROVIDER_UNREACHABLE_EXIT = 76;
-	// The server interprets exit 77 as owed private composition and may continue it as a new attempt.
-	const COMPOSITION_OWED_EXIT = 77;
 
 	function readTaskEnvelope(): TaskEnvelope {
 		let raw: string;
@@ -2067,294 +1891,38 @@ export async function runReviewJob(): Promise<void> {
 			`prNumber=${logValue(taskEnvelope.pullRequestNumber ?? "?")}`,
 	);
 
-	const COMPOSITION_REQUEST_PATH = INPUT_PATHS.compositionRequest;
-	const FEEDBACK_PATH = outputPath(OUTPUT, "feedback.json");
-	const COMPOSER_PROMPT_PATH = `${CWD}/feedback-composer.md`;
-	const REVIEW_COMPOSER_PROMPT_PATH = `${CWD}/review-composer.md`;
-	const FEEDBACK_STYLE_PATH = `${CWD}/feedback-style.md`;
-	const COMPOSITION_RESULTS_PATH = `${CWD}/work/composition/results.json`;
-	const PRACTICE_PAGE_SUPPORT_PATH = `${CWD}/work/composition/in-app-support.json`;
-
-	let admission: Admission | null = null;
-	function requiredAdmission(): Admission {
-		if (admission === null) {
-			throw new Error("Composition requires admitted results");
-		}
-		return admission;
-	}
-	// Private history arrives with the admission and is written where the inputs mount cannot be: under work/.
-	const compositionFiles = {
-		requestPath: COMPOSITION_REQUEST_PATH,
-		feedbackPath: FEEDBACK_PATH,
-		deliveredPath: `${CWD}/work/composition/history/feedback.json`,
-		preparedPath: `${CWD}/work/composition/history/prepared.json`,
-		problemsPath: `${nodePath.dirname(INPUT_PATHS.preparedFeedback)}/problems.json`,
-		supportPath: PRACTICE_PAGE_SUPPORT_PATH,
-		criteriaPathOf,
-	};
-
-	let routedDestinations: ReadonlyMap<string, readonly PrivateDestination[]> | null = null;
-
-	const PUBLIC_FEEDBACK_HISTORY_PATH = `${CWD}/work/composition/public-feedback-history.json`;
-	const PUBLICATION_CONTEXT = /^v1:[1-9][0-9]*(?:,[1-9][0-9]*)*:[0-9a-f]{64}$/u;
-
-	// Echo the exact composition inputs so Java validates references against the same snapshot.
-	const composedFeedback: ComposedFeedback = {
-		compositionFailures: [],
-		contractVersion: REVIEW_CONTRACT_VERSION,
-		admissionDigest: null,
-		results: [],
-		preparedTargets: [],
-		feedback: [],
-		review: null,
-		preparation: null,
-	};
-
-	// A time stop can request recovery: the review on the work only from the admitting attempt, private feedback
-	// after a review was composed or accepted earlier. The server's recorded preparation decides whether it is owed.
-	function compositionExit(): number {
-		if (
-			!compositionOwed(composedFeedback, {
-				admitting: !continuing,
-				reviewOnWork: admission?.publicReviewed === true || composedFeedback.review !== null,
-			})
-		) {
-			return 0;
-		}
-		console.error("[pi-runner] OWED: the run stopped feedback composition before it finished");
-		return COMPOSITION_OWED_EXIT;
-	}
-
-	function persistAdmission(): void {
-		if (admission === null) {
-			throw new Error("No admitted results to persist");
-		}
-		composedFeedback.admissionDigest = admission.digest;
-		composedFeedback.results = leanResults(admission.results);
-		mkdirSync(`${CWD}/work/composition`, { recursive: true });
-		writeFileSync(
-			COMPOSITION_RESULTS_PATH,
-			JSON.stringify({ results: admission.results }, null, 2),
-		);
-		if (admission.practicePageSupport?.state === "COMPLETE") {
-			writeFileSync(
-				PRACTICE_PAGE_SUPPORT_PATH,
-				JSON.stringify(admission.practicePageSupport, null, 2),
-			);
-		}
-	}
-
-	const persistComposedFeedback = () => persistComposition(composedFeedback, FEEDBACK_PATH);
-	const preparationOptions = (
-		expired: boolean,
-		phase?: "PUBLIC_REVIEW" | "PRIVATE_FEEDBACK",
-	): PreparationOptions => ({
-		feedback: composedFeedback,
-		phase,
-		admitted: admission !== null,
-		expired,
-		url: `${LLM_PROXY_URL}/prepare-feedback`,
-		token: LLM_PROXY_TOKEN,
-		task: taskEnvelope,
-		timeoutMs: Math.min(
-			ADMISSION_ATTEMPT_TIMEOUT_MS,
-			AGENT_BUDGET_MS - (Date.now() - PROCESS_START_MS),
-		),
-		persist: persistComposedFeedback,
-		recordFailure: (failedPhase, reason) =>
-			recordCompositionFailure(composedFeedback, failedPhase, reason),
-	});
-	const prepareComposedFeedback = async (
-		safety: ReturnType<typeof scheduleDeadline>,
-		phase?: "PUBLIC_REVIEW" | "PRIVATE_FEEDBACK",
-	) => prepareComposition(preparationOptions(safety.expired(), phase));
-
-	const THIS_WORK = ((): string | undefined => {
-		const metadataPath = nodePath.join(INPUT_PATHS.contextRoot, "metadata.json");
-		if (!existsSync(metadataPath) || !isRecord(folderIndex)) {
-			return undefined;
-		}
-		const metadata: unknown = JSON.parse(readFileSync(metadataPath, "utf8"));
-		if (!isRecord(metadata)) {
-			return undefined;
-		}
-		const kind = folderIndex.itemKind;
-		if (kind !== "scm.pull_request" && kind !== "scm.issue") {
-			return undefined;
-		}
-		return workIdentity(kind, metadata[kind === "scm.pull_request" ? "pr_url" : "html_url"]);
-	})();
-
-	// Refused or malformed history must not become empty history or a fallback to older data.
-	async function postPublicHistoryRead(): Promise<unknown> {
-		let response: Response;
-		try {
-			response = await fetch(`${LLM_PROXY_URL}/public-feedback-history`, {
-				method: "POST",
-				signal: AbortSignal.timeout(
-					Math.max(1, Math.min(60_000, AGENT_BUDGET_MS - (Date.now() - PROCESS_START_MS))),
-				),
-				headers: {
-					authorization: `Bearer ${LLM_PROXY_TOKEN}`,
-					...(hasText(process.env.TRACEPARENT) ? { traceparent: process.env.TRACEPARENT } : {}),
-				},
-			});
-		} catch (error) {
-			throw new AdmissionUnreachableError(
-				`public feedback history could not be read: ${errorText(error)}${causeText(error)}`,
-			);
-		}
-		if (isRetryableStatus(response.status)) {
-			throw new AdmissionUnreachableError(
-				`public feedback history read failed: HTTP ${response.status}`,
-			);
-		}
-		if (!response.ok) {
-			throw new Error(
-				`public feedback history read was refused: HTTP ${response.status} — ${await answerText(response)}`,
-			);
-		}
-		let body: string;
-		try {
-			body = await response.text();
-		} catch (error) {
-			throw new AdmissionUnreachableError(
-				`public feedback history body could not be read: ${errorText(error)}${causeText(error)}`,
-			);
-		}
-		return JSON.parse(body);
-	}
-
-	// Keep live delivery history beside the staged history that the review was prepared from.
-	async function readPublicFeedbackHistory(): Promise<{
-		readAt: string;
-		publicationContext: string | null;
-		history: { feedback: unknown[] };
-	}> {
-		const answer: unknown = await retrying(
-			postPublicHistoryRead,
-			(error) => error instanceof AdmissionUnreachableError,
-			{ attempts: ADMISSION_ATTEMPTS },
-			(attempt, error, delayMs) =>
-				console.error(
-					`[pi-runner] public history read ${attempt}/${ADMISSION_ATTEMPTS} did not arrive (${errorText(error)}); retrying in ${delayMs}ms`,
-				),
-		);
-		const history = isRecord(answer) && isRecord(answer.history) ? answer.history : null;
-		if (
-			!isRecord(answer) ||
-			answer.contractVersion !== 4 ||
-			(answer.publicationContext !== null &&
-				(typeof answer.publicationContext !== "string" ||
-					!PUBLICATION_CONTEXT.test(answer.publicationContext))) ||
-			typeof answer.readAt !== "string" ||
-			!Number.isFinite(Date.parse(answer.readAt)) ||
-			history === null ||
-			!isRecord(history.item) ||
-			!isDecimalId(history.item.id) ||
-			typeof history.item.kind !== "string" ||
-			(history.item.url !== null &&
-				history.item.url !== undefined &&
-				typeof history.item.url !== "string") ||
-			!Array.isArray(history.feedback)
-		) {
-			throw new Error("public feedback history read returned an invalid contract");
-		}
-		const { item } = history;
-		const feedback = history.feedback.map((entry: unknown) => {
-			if (
-				!isRecord(entry) ||
-				typeof entry.id !== "string" ||
-				entry.destination !== "ON_WORK" ||
-				typeof entry.deliveredAt !== "string" ||
-				!Number.isFinite(Date.parse(entry.deliveredAt)) ||
-				!["CURRENT", "STALE", "UNVERIFIABLE"].includes(String(entry.currentness)) ||
-				(entry.body !== null && typeof entry.body !== "string") ||
-				typeof entry.bodyUnavailable !== "boolean" ||
-				typeof entry.withdrawn !== "boolean" ||
-				!Array.isArray(entry.basedOn) ||
-				!Array.isArray(entry.copies)
-			) {
-				throw new Error("public feedback history read returned an invalid contract");
-			}
-			return {
-				...entry,
-				item,
-				publicEligible: true,
-				recordedClaimCurrentness: entry.currentness,
-				...(entry.bodyUnavailable ? { wordsUnavailable: "COPY_AUTHORITY_UNAVAILABLE" } : {}),
-			};
-		});
-		// The context names this exact response; it travels with the statements built from it, never alone.
-		const read = {
-			readAt: answer.readAt,
-			publicationContext:
-				typeof answer.publicationContext === "string" ? answer.publicationContext : null,
-			history: { ...history, feedback },
-		};
-		writeFileSync(PUBLIC_FEEDBACK_HISTORY_PATH, JSON.stringify(read, null, 2));
-		return read;
-	}
-
-	function noteToolCall(
-		turn: TurnTrace,
-		toolName: string,
-		args: unknown,
-		measuring: boolean,
-	): void {
+	function noteToolCall(turn: TurnTrace, toolName: string, args: unknown): void {
 		const state = sessionState();
 		turn.toolCalls[toolName] = (turn.toolCalls[toolName] ?? 0) + 1;
 		if (!state.activeSession) {
 			return;
 		}
-		const calls = Object.values(turn.toolCalls).reduce((sum, count) => sum + count, 0);
-		if (
-			!measuring &&
-			!RECORDING_TOOLS.has(toolName) &&
-			state.sessionGuards.recordingCalls === 0 &&
-			calls === COMPOSITION_EXPLORATION_NUDGE
-		) {
-			console.error(
-				`[pi-runner] composition: ${COMPOSITION_EXPLORATION_NUDGE} calls without a recording call — nudging to persist`,
-			);
-			void steer(
-				state.activeSession,
-				composerTool === "report_review" ? REVIEW_NUDGE : COMPOSITION_NUDGE,
-			);
-		}
 		const signature = `${toolName}:${JSON.stringify(args)}`;
 		const repeats = (state.repeatedCalls.get(signature) ?? 0) + 1;
 		state.repeatedCalls.set(signature, repeats);
 		turn.repeatedCalls = Math.max(turn.repeatedCalls, repeats);
-		const recording = RECORDING_TOOLS.has(toolName);
+		const recording = toolName === "submit_result";
 		if (repeats === (recording ? REPEATED_RECORDING_NUDGE : REPEATED_CALL_NUDGE)) {
 			console.error(
 				`[pi-runner] ${turn.label}: the same ${toolName} call ${repeats} times — nudging to record`,
 			);
 			// Naming what is still owed matters most when the repeated call is the recording itself: "record"
 			// alone reads as "send that again".
-			const owed = measuring ? owedPractices() : [];
+			const owed = owedPractices();
 			const next =
 				owed.length > 0
 					? `Still owed: ${owed.join(", ")}. Submit what the evidence you have read supports for these`
 					: "Submit what the evidence you have read supports";
-			// The review's next tool depends on what it still lacks, which REVIEW_NUDGE already says.
-			let correction = `Correct what its answer names and send one ${recording ? toolName : composerTool} call.`;
-			if (composerTool === "report_review") {
-				correction = `Correct what its answer names. ${REVIEW_NUDGE}`;
-			}
 			void steer(
 				state.activeSession,
-				measuring
-					? `You have run the same ${toolName} call ${repeats} times; its result will not change. ${next}, in one submit_result call. ${PERSIST_DISCIPLINE}`
-					: `You have run the same ${toolName} call ${repeats} times; its result will not change. ${correction}`,
+				`You have run the same ${toolName} call ${repeats} times; its result will not change. ${next}, in one submit_result call. ${PERSIST_DISCIPLINE}`,
 			);
 		}
 		if (repeats >= (recording ? REPEATED_RECORDING_ABORT : REPEATED_CALL_ABORT)) {
 			stopTurn("loop", `the same ${toolName} call ${repeats} times — aborting this turn`);
 		}
 		// SDK schema refusals bypass tool execution and its per-practice cap; count attempts here too.
-		if (RECORDING_TOOLS.has(toolName)) {
+		if (recording) {
 			turn.recordingCalls += 1;
 			state.sessionGuards.recordingCalls += 1;
 			if (
@@ -2377,17 +1945,12 @@ export async function runReviewJob(): Promise<void> {
 		sessionState().sessionGuards = { cutOff: 0, recordingCalls: 0, stored: 0 };
 	}
 
-	function openTurnTrace(
-		phase: SessionPhase,
-		label: string,
-		budget: Work,
-		demand: TurnDemand,
-	): TurnTrace {
+	function openTurnTrace(label: string, budget: Work, demand: TurnDemand): TurnTrace {
 		const state = sessionState();
 		resetSessionGuards();
 		state.lastEventAt = Date.now();
 		state.currentTurn = {
-			phase,
+			phase: "practice",
 			modelError: false,
 			modelFailures: {},
 			lastModelFailureAt: null,
@@ -2464,20 +2027,16 @@ export async function runReviewJob(): Promise<void> {
 	}
 
 	// Restore only the current practice's draft after compaction; other drafts are outside its context.
-	function openingIfNeeded(brief: string, composing = false): string {
+	function openingIfNeeded(brief: string): string {
 		if (sessionState().openingInContext) {
 			return "";
 		}
 		const review = sessionState().activeReview;
 		const problemDrafts = review?.problems.inventory() ?? [];
 		const ownDrafts = review?.draft != null;
-		return composing
-			? assessmentOpening(brief)
-			: `${assessmentOpening(brief)}${
-					ownDrafts
-						? `## Recorded so far\n${recordedSoFar(sessionState().currentTurnSlugs)}\n\n`
-						: ""
-				}${problemDrafts.length === 0 ? "" : `## Local problem drafts (not admitted)\n${JSON.stringify(problemDrafts)}\nUse read_problem with one key to recover its complete local body before correcting it. Select keys explicitly with submit_result; unselected drafts are not submitted.\n\n`}`;
+		return `${assessmentOpening(brief)}${
+			ownDrafts ? `## Recorded so far\n${recordedSoFar(sessionState().currentTurnSlugs)}\n\n` : ""
+		}${problemDrafts.length === 0 ? "" : `## Local problem drafts (not admitted)\n${JSON.stringify(problemDrafts)}\nUse read_problem with one key to recover its complete local body before correcting it. Select keys explicitly with submit_result; unselected drafts are not submitted.\n\n`}`;
 	}
 
 	const RESULT_EXAMPLE = (() => {
@@ -2581,15 +2140,11 @@ ${assignmentText(assignedInputs.get(slug))}${criteriaOf([slug])}${illustrations}
 Submit one result for ${slug} with submit_result: the outcome its criterion above decides through its applicability, Judge and Defer, as the evidence supports it, DOES_NOT_APPLY and COULD_NOT_DETERMINE included. What the brief shows is yours to quote; read more when the criterion needs evidence beyond it. This session submits only this practice's result. For several NOT_MET problems, optionally use upsert_problem with a stable key for each full problem body; remove_problem retracts a draft. Then submit_result selects the ordered problemKeys instead of inline problems. Nothing is admitted until the complete result passes server admission.`;
 	}
 
-	function compositionBudget(notMet: number): Work {
-		return turnBudget(Math.min(Math.max(1, notMet), PRACTICES_PER_TURN), PER_PRACTICE_WORK);
-	}
-
 	async function main() {
-		console.error(`[pi-runner] Review: one fresh session per practice, then composition`);
+		console.error(`[pi-runner] Review: one fresh session per practice`);
 		console.error(
 			`[pi-runner] Work per practice: ${PER_PRACTICE_WORK.modelCalls} model calls, ${PER_PRACTICE_WORK.outputTokens} output tokens; ` +
-				`safety ceiling ${AGENT_BUDGET_MS}ms, measuring hands in by ${WINDOWS.measureMs}ms`,
+				`safety ceiling ${AGENT_BUDGET_MS}ms`,
 		);
 
 		// pi-agent-sandbox.ts has the rationale for running untrusted; both Pi runners in this image
@@ -2630,10 +2185,10 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 		);
 
 		// SDK custom entries bind debug transcripts without entering the model context.
-		function nativeSessionManager(phase: SessionPhase, practiceSlug: string | null) {
+		function nativeSessionManager(practiceSlug: string | null) {
 			const manager = SessionManager.create(CWD, `${CWD}/.sessions`);
 			const binding: ReviewSessionBinding = {
-				phase,
+				phase: "practice",
 				practiceSlug,
 				practiceVersionId:
 					practiceIndex.find((practice) => practice.slug === practiceSlug)?.versionId ?? null,
@@ -2646,27 +2201,23 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 			return manager;
 		}
 
-		const compositionRequest = loadCompositionRequest(COMPOSITION_REQUEST_PATH);
 		const streamUsage = newUsageLedger();
 		let providerFailures = 0;
 		const measurementReply = { received: false };
-		let measuring = true;
 		const subscribeSession = (trackedSession: AgentSession) => {
 			const scope = sessionState();
 			return trackedSession.subscribe((event: AgentSessionEvent) =>
 				sessionScopes.run(scope, () => {
 					chargeWork(event);
-					const label = measuring ? practiceLogLabel() : "composer";
+					const label = practiceLogLabel();
 					if (event.type === "tool_execution_start") {
 						// A call a codemode script makes is the script's work, not a call the model sent: the loop
 						// guards count only the latter, and the trace keeps the former apart.
 						if (event.parentToolCallId === undefined) {
-							if (measuring) {
-								measurementReply.received = true;
-							}
+							measurementReply.received = true;
 							console.error(`[pi-runner] ${label} tool: ${event.toolName}`);
 							if (scope.currentTurn) {
-								noteToolCall(scope.currentTurn, event.toolName, event.args, measuring);
+								noteToolCall(scope.currentTurn, event.toolName, event.args);
 							}
 						} else {
 							console.error(`[pi-runner] ${label} tool: codemode → ${event.toolName}`);
@@ -2723,10 +2274,7 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 							recordUnsuccessfulRetryEnd(scope.currentTurn);
 						}
 						const finalError = event.finalError ?? "no error given";
-						// Only measurement failures can make a review eligible for provider retry.
-						if (measuring) {
-							providerFailures += 1;
-						}
+						providerFailures += 1;
 						console.error(
 							`[pi-runner] ${label} provider call failed for good after ${event.attempt} retries: ${finalError}`,
 						);
@@ -2737,13 +2285,12 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 						// An error or abort alone is not a reply; meaningful partial output is. Once answered,
 						// later provider failures cannot turn a recording failure into a wholly unreachable review.
 						if (
-							measuring &&
-							((stopReason !== "error" && stopReason !== "aborted") ||
-								event.message.content.some(
-									(content) =>
-										content.type === "toolCall" ||
-										(content.type === "text" && !isBlank(content.text)),
-								))
+							(stopReason !== "error" && stopReason !== "aborted") ||
+							event.message.content.some(
+								(content) =>
+									content.type === "toolCall" ||
+									(content.type === "text" && !isBlank(content.text)),
+							)
 						) {
 							measurementReply.received = true;
 						}
@@ -2756,7 +2303,7 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 						const toolCalls = types.filter((t) => t === "toolCall").length;
 						const { rawStopReason } = event.message;
 						// An error can leave a review unanswered even when the SDK does not retry it.
-						if (stopReason === "error" && measuring) {
+						if (stopReason === "error") {
 							providerFailures += 1;
 						}
 						const failure =
@@ -2773,10 +2320,8 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 		};
 
 		const allSlugs = loadPracticeSlugs();
-		if (!continuing) {
-			practiceCoverageLedger = new PracticeCoverageLedger(PRACTICE_COVERAGE_PATH, allSlugs);
-			deriveChangeView();
-		}
+		practiceCoverageLedger = new PracticeCoverageLedger(PRACTICE_COVERAGE_PATH, allSlugs);
+		deriveChangeView();
 		persistRecordedNotes();
 		const turns = planTurns(practiceIndex, PRACTICES_PER_TURN);
 		const { text: brief, sources: briefSources } = buildBrief(CWD, {
@@ -2787,9 +2332,9 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 			`[pi-runner] Review: ${allSlugs.length} practice(s) in ${turns.length} turn(s); brief=${brief.length} chars`,
 		);
 
-		const measureEnd = PROCESS_START_MS + WINDOWS.measureMs;
+		const measureEnd = PROCESS_START_MS + AGENT_BUDGET_MS;
 		const startMs = Date.now();
-		const tooLate = !continuing && Date.now() >= measureEnd;
+		const tooLate = Date.now() >= measureEnd;
 		if (tooLate) {
 			console.error(
 				`[pi-runner] FAILED: the run reached its safety ceiling before the session could start`,
@@ -2809,68 +2354,6 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 			taskEnvelope.workspaceId,
 			taskEnvelope.jobId,
 		);
-
-		function compositionStage() {
-			return createCompositionStage({
-				admission: requiredAdmission(),
-				feedback: composedFeedback,
-				routes: routedDestinations,
-				files: compositionFiles,
-				cwd: CWD,
-				agentDir: AGENT_DIR,
-				paths: taskEnvelope.paths,
-				folderIndex,
-				task: {
-					repositoryFullName: taskEnvelope.repositoryFullName,
-					pullRequestNumber: taskEnvelope.pullRequestNumber,
-				},
-				practiceIndex,
-				settingsManager,
-				stylePath: FEEDBACK_STYLE_PATH,
-				reviewPromptPath: REVIEW_COMPOSER_PROMPT_PATH,
-				privatePromptPath: COMPOSER_PROMPT_PATH,
-				practiceTools: [...PRACTICE_TOOLS],
-				thisWork: THIS_WORK,
-				budget: compositionBudget,
-				runtime: {
-					openSession,
-					closeSession,
-					openTurnTrace,
-					closeTurnTrace,
-					settleSession: async (session, label) => settleSession(session, label, ABORT_SETTLE_MS),
-					opening: () => openingIfNeeded(brief, true),
-					hasOpening: () => sessionState().openingInContext,
-					openedContext: () => {
-						sessionState().openingInContext = true;
-					},
-					readPublicFeedbackHistory,
-					preparePublic: async (expired) =>
-						preparePublicReview(preparationOptions(expired, "PUBLIC_REVIEW")),
-					recordHistory: (history) => {
-						runnerDebug.publicHistory = history;
-						persistRunnerDebug();
-					},
-					onStored: (stored) => {
-						const state = sessionState();
-						if (state.currentTurn) {
-							state.currentTurn.stored += stored;
-							state.sessionGuards.stored += stored;
-						}
-					},
-					paid: () => {
-						const demand = sessionState().turnDemand;
-						return demand?.endsWhenPaid === true && demand.owed() === 0;
-					},
-					documentedShape,
-					listSchema,
-					submittedList,
-					refusal,
-					persist: persistComposedFeedback,
-					compositionNudge: COMPOSITION_NUDGE,
-					reviewNudge: REVIEW_NUDGE,
-				},
-			});
-		}
 
 		async function assessmentLoader() {
 			const scope = sessionState();
@@ -2897,12 +2380,7 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 		}
 
 		type SessionOptions = NonNullable<Parameters<typeof createAgentSession>[0]>;
-		async function openSession(
-			phase: SessionPhase,
-			tools: string[],
-			customTools: SessionOptions["customTools"],
-			resourceLoader?: SessionOptions["resourceLoader"],
-		) {
+		async function openSession(tools: string[], customTools: SessionOptions["customTools"]) {
 			const bash = createBashToolDefinition(CWD);
 			const sessionTools: SessionOptions["customTools"] = tools.includes("bash")
 				? [
@@ -2926,16 +2404,15 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 						tool.execute(...args),
 					),
 				})),
-				sessionManager: nativeSessionManager(phase, sessionState().activePractice),
+				sessionManager: nativeSessionManager(sessionState().activePractice),
 				settingsManager,
-				resourceLoader: resourceLoader ?? (await assessmentLoader()),
+				resourceLoader: await assessmentLoader(),
 				modelRuntime,
 				model,
 				thinkingLevel,
 			});
 			const scope = sessionState();
-			const composing = phase === "public-review" || phase === "private-feedback";
-			if (composing || scope.currentTurn?.practiceSlug !== undefined) {
+			if (scope.currentTurn?.practiceSlug !== undefined) {
 				const stream = fresh.agent.streamFunction;
 				fresh.agent.streamFunction = (
 					requestModel,
@@ -2948,16 +2425,7 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 						trace.stoppedBy !== null ||
 						spent({ modelCalls: trace.calls, outputTokens: trace.outputTokens }, trace.budget)
 					) {
-						// A composer turn that spent its work ends for that reason: the work's outcome, not the run's.
-						if (composing && trace !== null && trace.stoppedBy === null) {
-							trace.stoppedBy = "budget";
-						}
-						throw new UnratedError(
-							"budget",
-							composing
-								? "the composition work budget is spent"
-								: "the practice reservation is spent",
-						);
+						throw new UnratedError("budget", "the practice reservation is spent");
 					}
 					// A final call can finish, but cannot write tokens beyond its turn or reserved for a sibling practice.
 					scope.callOutputLimit = Math.min(
@@ -2970,15 +2438,11 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 			for (const error of extensionsResult.errors) {
 				console.error(`[pi-runner] extension error: ${error.path}: ${error.error}`);
 			}
-			if (phase === "public-review" || phase === "private-feedback") {
-				sessionState().currentTurnSlugs = [];
-				composerTool = phase === "public-review" ? "report_review" : "report_feedback";
-			}
 			resetSessionGuards();
 			sessionState().openingInContext = false;
 			sessionState().lastEventAt = Date.now();
 			sessionState().activeSession = fresh;
-			return { session: fresh, phase, unsubscribe: subscribeSession(fresh) };
+			return { session: fresh, unsubscribe: subscribeSession(fresh) };
 		}
 
 		// Keep settlement handlers subscribed until the native session stops.
@@ -3006,9 +2470,6 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 				await stopBeforeSwitching(opened.session);
 			} finally {
 				opened.unsubscribe();
-				if (opened.phase === "public-review") {
-					composerTool = "report_feedback";
-				}
 				if (sessionState().activeSession === opened.session) {
 					sessionState().activeSession = null;
 				}
@@ -3019,9 +2480,7 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 		const checkStall = (scope: ReviewSessionState) => {
 			sessionScopes.run(scope, () => {
 				if (scope.currentTurn?.stoppedBy === null && Date.now() - scope.lastEventAt >= STALL_MS) {
-					if (measuring) {
-						providerFailures += 1;
-					}
+					providerFailures += 1;
 					stopTurn("stall", `no model or tool event for ${STALL_MS / 1000}s — aborting this turn`);
 				}
 			});
@@ -3038,7 +2497,6 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 		const boundModels = readBoundModels();
 		const directBudget = new ModelBudget(DIRECT_MODEL_TOKENS, MODEL_CONCURRENCY);
 		let sessionStopFailure: Error | null = null;
-		const sessionStopFailed = () => sessionStopFailure !== null;
 		const measuringEnded = new AbortController();
 
 		async function runScope(
@@ -3057,8 +2515,7 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 			console.error(
 				`[pi-runner] ${label}: ${slugs.length} practice(s), up to ${budget.modelCalls} calls and ${budget.outputTokens} output tokens (${sessionState().tokensPerProblem} tokens per result so far)`,
 			);
-			const phase: SessionPhase = "practice";
-			const trace = openTurnTrace(phase, label, budget, {
+			const trace = openTurnTrace(label, budget, {
 				owed: () => owedPractices(slugs).length,
 				nudge: RECORD_NUDGE,
 			});
@@ -3243,7 +2700,6 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 				let opened: Awaited<ReturnType<typeof openSession>>;
 				try {
 					opened = await openSession(
-						"practice",
 						isScan ? ["read", ...RESULT_TOOL_NAMES] : [...PRACTICE_TOOLS, ...RESULT_TOOL_NAMES],
 						reader === undefined ? resultTools : [...resultTools, governedScanRead(reader)],
 					);
@@ -3475,10 +2931,6 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 			return stoppedBy();
 		}
 
-		if (continuing) {
-			await continueAdmittedReview();
-		}
-
 		async function measurePractices(): Promise<void> {
 			let stalls = 0;
 			const serial =
@@ -3572,16 +3024,14 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 			}
 		}
 
-		let measureUsage: UsageReport;
 		try {
 			await measurePractices();
 		} finally {
-			measuring = false;
 			measuringEnded.abort(new UnratedError("deadline", "measuring ended"));
 			persistRecordedNotes();
 			const measureDurationMs = Date.now() - startMs;
-			measureUsage = extractUsageFromSession({}, streamUsage);
-			accumulateUsage(null, measureUsage);
+			const measureUsage = extractUsageFromSession({}, streamUsage);
+			accumulateUsage(measureUsage);
 			runnerDebug.attempts.push({
 				label: "measure",
 				durationMs: measureDurationMs,
@@ -3636,9 +3086,7 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 		}
 
 		measurementClosed = true;
-		// Prepared review input serves measurement only; composition must not receive it.
-		rmSync(`${CWD}/${REVIEW_INPUT_ROOT}`, { recursive: true, force: true });
-		admission = await admit(admissionRequest(), async (body, signal) =>
+		await admit(admissionRequest(), async (body, signal) =>
 			fetch(`${LLM_PROXY_URL}/admit-results`, {
 				method: "POST",
 				signal,
@@ -3650,128 +3098,9 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 				body,
 			}),
 		);
-		persistAdmission();
-		if (compositionRequest) {
-			routedDestinations = closeUnroutedPrivateDestinations(
-				compositionRequest,
-				admission,
-				composedFeedback,
-			);
-		}
-		if (sessionStopFailed() && compositionRequest !== null) {
-			if (compositionRequest.destinations.ON_WORK !== undefined) {
-				recordCompositionFailure(composedFeedback, "PUBLIC_REVIEW", "RUNTIME_ERROR");
-			}
-			if (
-				PRIVATE_DESTINATIONS.some(
-					(destination) => compositionRequest.destinations[destination] !== undefined,
-				)
-			) {
-				recordCompositionFailure(composedFeedback, "PRIVATE_FEEDBACK", "RUNTIME_ERROR");
-			}
-		}
-		persistComposedFeedback();
-		maybeWriteResultFile();
-		if (
-			!sessionStopFailed() &&
-			compositionRequest &&
-			![...assignedInputs.values()].some((inputs) => inputs.scope.kind === "SCAN")
-		) {
-			await composeAdmittedFeedback({
-				request: compositionRequest,
-				admission,
-				feedback: composedFeedback,
-				routes: routedDestinations,
-				stage: compositionStage(),
-				notReached,
-				remainingMs: AGENT_BUDGET_MS - (Date.now() - PROCESS_START_MS),
-				onDeadline: () =>
-					stopTurn(
-						"safety",
-						"the run is near its safety ceiling — preserving results and composed feedback so far",
-					),
-				prepare: prepareComposedFeedback,
-				persist: persistComposedFeedback,
-				after: () => {
-					accumulateUsage(measureUsage, extractUsageFromSession({}, streamUsage));
-					persistUsage();
-				},
-			});
-		}
 		console.error(`[pi-runner] SUCCESS: result.json holds ${reviewState.size} result(s)`);
 		finalizeOutput();
-		process.exit(compositionExit());
-
-		// Recovery performs no new admission. Like the measured attempt, it composes the review on the work unless that
-		// review is accepted, then private feedback for the practices no prepared piece decides, from the server's
-		// current reread.
-		async function continueAdmittedReview(): Promise<void> {
-			measuring = false;
-			measurementClosed = true;
-			admission = parseAdmission(JSON.parse(readFileSync(CONTINUATION_PATH, "utf8")));
-			persistAdmission();
-			// The original selection, less what was admitted: what that attempt did not reach stays not reached.
-			const unreachedSlugs = missingSlugs(
-				allSlugs,
-				admission.results.map((item) => item.practiceSlug),
-			);
-			const privateRequested =
-				compositionRequest !== null &&
-				PRIVATE_DESTINATIONS.some(
-					(destination) => compositionRequest.destinations[destination] !== undefined,
-				);
-			if (privateRequested) {
-				// Routing comes from the server's reread for this attempt, not from the earlier attempt.
-				routedDestinations = closeUnroutedPrivateDestinations(
-					compositionRequest,
-					admission,
-					composedFeedback,
-				);
-			}
-			const publicWork = admission.publicReviewed
-				? "no review on the work"
-				: "the review on the work";
-			const pendingPrivatePractices = privateRequested
-				? undecidedPrivatePractices(admission, composedFeedback, routedDestinations)
-				: [];
-			const privateWork =
-				pendingPrivatePractices.length > 0
-					? `private feedback for ${pendingPrivatePractices.join(", ")}`
-					: "no private feedback";
-			console.error(
-				`[pi-runner] Continuing an admitted review: ${admission.results.length} result(s), ` +
-					`${unreachedSlugs.length} practice(s) not reached, ` +
-					`${admission.privateProgress.decidedPractices.length} decided privately earlier; composing ${publicWork} and ${privateWork}`,
-			);
-			persistComposedFeedback();
-			if (compositionRequest !== null) {
-				await composeAdmittedFeedback({
-					request: compositionRequest,
-					admission,
-					feedback: composedFeedback,
-					routes: routedDestinations,
-					stage: compositionStage(),
-					notReached: unreachedSlugs,
-					remainingMs: AGENT_BUDGET_MS - (Date.now() - PROCESS_START_MS),
-					onDeadline: () =>
-						stopTurn(
-							"safety",
-							"the run is near its safety ceiling — preserving the composed feedback so far",
-						),
-					prepare: prepareComposedFeedback,
-					persist: persistComposedFeedback,
-					after: () => {
-						accumulateUsage(null, extractUsageFromSession({}, streamUsage));
-						persistUsage();
-					},
-				});
-			}
-			console.error(
-				`[pi-runner] SUCCESS: composed from the ${admission.results.length} admitted result(s)`,
-			);
-			finalizeOutput();
-			process.exit(compositionExit());
-		}
+		process.exit(0);
 	}
 
 	function finalizeOutputQuietly() {

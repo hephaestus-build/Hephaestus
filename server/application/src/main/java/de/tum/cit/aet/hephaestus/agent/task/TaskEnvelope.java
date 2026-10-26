@@ -15,10 +15,9 @@ public record TaskEnvelope(
         String repositoryRoot,
         String manifest,
         String practiceIndex,
-        String compositionRequest,
         String preparedFeedback,
         String practiceScripts) {
-    public static final int SCHEMA_VERSION = 6;
+    public static final int SCHEMA_VERSION = 7;
 
     private static final Task PRACTICE_REVIEW = new Task("Review each assigned practice against the captured item."
             + " Use the governed tools and return one result for each assigned practice.");
@@ -29,14 +28,7 @@ public record TaskEnvelope(
         if (attempt < 0) throw new IllegalArgumentException("Attempt must not be negative");
         Objects.requireNonNull(workspaceId, "workspaceId");
         new Task(prompt);
-        new TaskPaths(
-                contextRoot,
-                repositoryRoot,
-                manifest,
-                practiceIndex,
-                compositionRequest,
-                preparedFeedback,
-                practiceScripts);
+        new TaskPaths(contextRoot, repositoryRoot, manifest, practiceIndex, preparedFeedback, practiceScripts);
         if (schemaVersion != SCHEMA_VERSION) throw new IllegalArgumentException("Unsupported task schema version");
         if (!workspaceId.matches("[1-9][0-9]*") || workspaceId.length() > 19) {
             throw new IllegalArgumentException("Workspace id must be a positive decimal id");
@@ -57,7 +49,6 @@ public record TaskEnvelope(
                 paths.repositoryRoot(),
                 paths.manifest(),
                 paths.practiceIndex(),
-                paths.compositionRequest(),
                 paths.preparedFeedback(),
                 paths.practiceScripts());
     }
@@ -71,13 +62,6 @@ public record TaskEnvelope(
     }
 
     public TaskPaths paths() {
-        return new TaskPaths(
-                contextRoot,
-                repositoryRoot,
-                manifest,
-                practiceIndex,
-                compositionRequest,
-                preparedFeedback,
-                practiceScripts);
+        return new TaskPaths(contextRoot, repositoryRoot, manifest, practiceIndex, preparedFeedback, practiceScripts);
     }
 }

@@ -520,13 +520,6 @@ export type BackfillSummary = {
     state: string;
 };
 
-export type Basis = {
-    outcome: 'MET' | 'NOT_MET' | 'DOES_NOT_APPLY' | 'COULD_NOT_DETERMINE';
-    practiceSlug: string;
-    practiceVersionId: string | null;
-    resultId: string;
-};
-
 export type BindPracticeGroupRequest = {
     groupSlug: string | null;
 };
@@ -727,16 +720,6 @@ export type CompletePracticePageSupport = {
     practices: Array<PracticeSupport>;
     readAt: Date;
     state: 'COMPLETE';
-};
-
-export type ComposedFeedback = {
-    destination?: 'ON_WORK' | 'PRACTICE_PAGE' | 'CONVERSATION';
-    notes?: Array<Note>;
-    page?: Page;
-    resultIds?: Array<string>;
-    summary?: string;
-    trace?: FeedbackCompositionTrace;
-    withheldReason?: 'VOLUME_CAPPED' | 'COMPOSER_WITHHELD' | 'NOTHING_NEW' | 'REPEATS_DELIVERED_NOTE' | 'REACTED_DISAGREE' | 'REACTED_NOT_APPLICABLE' | 'CONVERSATION_EXPIRED' | 'DELIVERY_UNCONFIRMED' | 'ITEM_GONE' | 'ITEM_CLOSED' | 'ITEM_MERGED' | 'ITEM_STATE_INELIGIBLE' | 'ISSUE_SNAPSHOT_CHANGED' | 'PUBLIC_SUBJECT_INELIGIBLE' | 'NO_AI' | 'DELIVERY_OFF' | 'PERSON_SUPPRESSED' | 'RECIPIENT_UNAVAILABLE' | 'EMPTY_AFTER_SANITIZE' | 'INSTANCE_SILENCED' | 'FEEDBACK_OFF' | 'WORKSPACE_DISABLED' | 'WORKSPACE_DELIVERY_PAUSED' | 'STALE_ROLLOUT_REVISION' | 'OUTSIDE_CURRENT_SCOPE' | 'APPROVAL_STALE' | 'APPROVAL_NO_LONGER_ELIGIBLE' | 'PRACTICE_REQUIRES_APPROVAL' | 'BACKFILL_QUIET' | 'RESULT_MARKED_INCORRECT' | 'REVIEWED_VERSION_CHANGED' | 'REVIEW_CANCELLED' | 'EVIDENCE_NOT_PERMITTED' | 'NO_EVIDENCE' | 'UNCORROBORATED' | 'PUBLIC_HISTORY_CHANGED' | 'PUBLIC_DELIVERY_UNRESOLVED' | 'NOT_COMPOSED';
 };
 
 /**
@@ -988,26 +971,6 @@ export type ConversationEligibility = {
     readAt: Date;
     results: Array<ResultDecision>;
     state: 'COMPLETE' | 'UNAVAILABLE' | 'REFUSED';
-};
-
-export type Copy = {
-    body: string | null;
-    endLine: null | number;
-    externalRef: string | null;
-    externalUrl: string | null;
-    id: string;
-    kind: 'SUMMARY' | 'LINE_NOTE' | 'FILE_NOTE' | 'CHAT_TURN';
-    path: string | null;
-    postedAt: Date;
-    side: 'OLD' | 'NEW' | null;
-    startLine: null | number;
-    state: 'PLANNED' | 'WRITE_STARTED' | 'POSTED' | 'FAILED' | 'WITHHELD' | 'RETRACTED';
-};
-
-export type CopySupport = {
-    basedOn?: Array<Support>;
-    kind?: 'SUMMARY' | 'LINE_NOTE' | 'FILE_NOTE' | 'CHAT_TURN';
-    position?: number;
 };
 
 export type Coverage = {
@@ -1435,20 +1398,6 @@ export type EmailTestResponse = {
     to?: string;
 };
 
-export type Entry = {
-    basedOn: Array<Basis>;
-    body: string | null;
-    bodyUnavailable: boolean;
-    copies: Array<Copy>;
-    currentness: 'CURRENT' | 'STALE' | 'UNVERIFIABLE';
-    deliveredAt: Date;
-    destination: 'ON_WORK' | 'PRACTICE_PAGE' | 'CONVERSATION';
-    id: string;
-    itemVersion: string | null;
-    state: 'AWAITING_APPROVAL' | 'READY' | 'DELIVERED' | 'UNCONFIRMED' | 'WITHHELD' | 'REJECTED' | 'REPLACED' | 'FAILED';
-    withdrawn: boolean;
-};
-
 export type ErasureRequest = {
     externalCopiesRemoved: boolean;
 };
@@ -1542,18 +1491,6 @@ export type FeedbackCheckFacts = {
     incorrectBasis: boolean;
     modelAllowed: boolean;
     writeStarted: boolean;
-};
-
-/**
- * Exact support and quiet decisions retained with the immutable preparation receipt. A public piece also retains the
- * publication context of the history read it was composed from; the server sets it, never the composer.
- */
-export type FeedbackCompositionTrace = {
-    copies?: Array<CopySupport>;
-    primaryResultId?: string;
-    publicationContext?: string;
-    replacesId?: string;
-    withheld?: Array<QuietDecision>;
 };
 
 export type FeedbackCopy = {
@@ -1915,11 +1852,6 @@ export type GroupRef = {
     icon: string | null;
     name: string;
     slug: string;
-};
-
-export type History = {
-    feedback?: Array<Entry>;
-    item?: ItemRef;
 };
 
 export type HostCoverage = Omit<ResultCoverage, 'source'> & {
@@ -2870,12 +2802,6 @@ export type NotReviewedScanReportItem = {
     status: 'NOT_REVIEWED';
 };
 
-export type Note = {
-    body?: string;
-    citationIndex: number;
-    problemId?: string;
-};
-
 export type NotificationPreferences = {
     /**
      * This instance has an email transport and sender configured
@@ -3099,12 +3025,6 @@ export type OwnItemTrace = {
     item: ItemRef;
     results: Array<ResultList>;
     review: ReviewRef;
-};
-
-export type Page = {
-    body?: string;
-    nextStep?: string;
-    title?: string;
 };
 
 export type PageMetadata = {
@@ -3964,22 +3884,6 @@ export type PracticesAcrossWorkspaceTiles = {
     yourPractices: number;
 };
 
-export type PrepareFeedbackRequest = {
-    attempt: number;
-    basisResultIds: Array<string>;
-    composition: Array<ComposedFeedback>;
-    jobId: string;
-    publicComposition: boolean;
-    publicationContext: string | null;
-    reviewId: string;
-};
-
-export type PrepareFeedbackResponse = {
-    contentDigest: string;
-    feedbackIds: Array<string>;
-    preparedAt: Date;
-};
-
 export type PreviewRequest = {
     accountId?: number;
     identities: Array<Identity>;
@@ -4279,17 +4183,6 @@ export type PublicActivityWorkspaceSettings = {
     enabled: boolean;
 };
 
-/**
- * One authorized history read. <code>publicationContext</code> names this exact response: preparation of a public piece
- * composed from it must send it back unchanged.
- */
-export type PublicFeedbackHistory = {
-    contractVersion: number;
-    history: History;
-    publicationContext: string | null;
-    readAt: Date;
-};
-
 export type Question = {
     /**
      * a choice question also takes one free-text answer; false when a stored question omits it
@@ -4332,15 +4225,6 @@ export type Queued = {
     preparedAt: Date;
     recordedClaimCurrentness: 'CURRENT' | 'STALE' | 'UNVERIFIABLE';
     threadKey: string;
-};
-
-/**
- * Why results stay unsaid: the composer's reason with the prior advice it rests on, or NOT_COMPOSED.
- */
-export type QuietDecision = {
-    basedOn?: Array<Support>;
-    reason?: string;
-    witnessIds?: Array<string>;
 };
 
 /**
@@ -5685,11 +5569,6 @@ export type SubmittedResult = {
     itemVersion?: string;
     practiceSlug?: string;
     readReceipts?: Array<ReadReceipt>;
-};
-
-export type Support = {
-    problemId?: string;
-    resultId?: string;
 };
 
 export type SupportOccurrence = {
@@ -9200,38 +9079,6 @@ export type AdmitResultsResponses = {
 };
 
 export type AdmitResultsResponse = AdmitResultsResponses[keyof AdmitResultsResponses];
-
-export type PrepareFeedbackData = {
-    body: PrepareFeedbackRequest;
-    path?: never;
-    query?: never;
-    url: '/internal/llm/prepare-feedback';
-};
-
-export type PrepareFeedbackResponses = {
-    /**
-     * OK
-     */
-    200: PrepareFeedbackResponse;
-};
-
-export type PrepareFeedbackResponse2 = PrepareFeedbackResponses[keyof PrepareFeedbackResponses];
-
-export type ReadPublicFeedbackHistoryData = {
-    body?: never;
-    path?: never;
-    query?: never;
-    url: '/internal/llm/public-feedback-history';
-};
-
-export type ReadPublicFeedbackHistoryResponses = {
-    /**
-     * OK
-     */
-    200: PublicFeedbackHistory;
-};
-
-export type ReadPublicFeedbackHistoryResponse = ReadPublicFeedbackHistoryResponses[keyof ReadPublicFeedbackHistoryResponses];
 
 export type UnsubscribeEmailData = {
     body?: {

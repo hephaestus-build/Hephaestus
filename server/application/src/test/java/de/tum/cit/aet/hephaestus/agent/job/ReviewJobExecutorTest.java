@@ -124,7 +124,7 @@ class ReviewJobExecutorTest extends BaseUnitTest {
             TerminalUsageTestFixtures.attemptUsageOverMocks(jobs, mock(LlmUsageRecorder.class)),
             Optional.empty());
 
-    private static final String OWED_RESULT =
+    private static final String ADMITTED_RESULT =
             "{\"contractVersion\":3,\"results\":[{\"practiceSlug\":\"silent-failure\","
                     + "\"candidate\":{\"outcome\":\"NOT_MET\",\"summary\":\"s\",\"explanation\":\"e\","
                     + "\"citations\":[],\"problems\":[{\"severity\":\"MAJOR\",\"summary\":\"s\","
@@ -247,7 +247,7 @@ class ReviewJobExecutorTest extends BaseUnitTest {
     }
 
     private double requeuedAfterExit(int exitCode, String cause) {
-        var job = owedJob();
+        var job = admittedJob();
         recovery = mock(ReviewJobRecovery.class);
         when(recovery.retryUnadmitted(any(), eq("worker-1"), anyBoolean())).thenReturn(true);
         var executor = runExecutor(
@@ -389,8 +389,8 @@ class ReviewJobExecutorTest extends BaseUnitTest {
 
     @Test
     void shouldCompleteARunThatFailedAfterItsResultsWereAdmitted() {
-        var owed = owedResult();
-        var parsed = new PiResultParser(new JsonMapper(), meters).parse(owed);
+        var measured = admittedResult();
+        var parsed = new PiResultParser(new JsonMapper(), meters).parse(measured);
         var admitted = RuntimeReviewTestData.job();
         admitted.setAdmissionAttempt(0);
         admitted.setAdmissionDigest("admitted");
@@ -398,24 +398,24 @@ class ReviewJobExecutorTest extends BaseUnitTest {
 
         // The parser calls only exit 0 a success, so the admitted result keeps the run complete, not a failed exit.
         assertThat(parsed.success()).isFalse();
-        assertThat(executor.determineTerminalStatus(owed, parsed, admitted)).isEqualTo(ReviewJobStatus.COMPLETED);
-        assertThat(executor.determineTerminalStatus(owed, parsed, RuntimeReviewTestData.job()))
+        assertThat(executor.determineTerminalStatus(measured, parsed, admitted)).isEqualTo(ReviewJobStatus.COMPLETED);
+        assertThat(executor.determineTerminalStatus(measured, parsed, RuntimeReviewTestData.job()))
                 .isEqualTo(ReviewJobStatus.FAILED);
     }
 
     @Test
     void shouldComposeAnAdmittedRunOnTheWorkerBeforeItsTerminalWriteAndForgetItsInputs() {
-        var job = owedJob();
+        var job = admittedJob();
         var kept = mock(ReviewCompositionContinuation.class);
         var composer = mock(WorkerFeedbackComposer.class);
         terminalWriteOf(job, ReviewJobStatus.COMPLETED);
-        var executor = owedExecutor(kept);
+        var executor = admittedExecutor(kept);
         executor.setFeedbackComposer(composer);
 
         assertThat(executor.executePrepared(job.getId(), job, mock(SandboxSpec.class)))
                 .isEqualTo(ReviewJobStatus.COMPLETED);
 
-        // The runner's old "composition owed" exit no longer requeues: the worker composes, then the attempt ends once.
+        // The worker composes, then the attempt ends once.
         var order = inOrder(composer, jobs, kept);
         order.verify(composer).composeAfterMeasurement(eq(job), eq("worker-1"), any());
         order.verify(jobs)
@@ -428,7 +428,7 @@ class ReviewJobExecutorTest extends BaseUnitTest {
 
     @Test
     void shouldComposeATimedOutAdmittedRunAndEndItAsTimedOut() {
-        var job = owedJob();
+        var job = admittedJob();
         var kept = mock(ReviewCompositionContinuation.class);
         var composer = mock(WorkerFeedbackComposer.class);
         terminalWriteOf(job, ReviewJobStatus.TIMED_OUT);
@@ -445,7 +445,7 @@ class ReviewJobExecutorTest extends BaseUnitTest {
 
     @Test
     void shouldHandOnAnAdmittedRunWithItsInputsKeptWhenItsCompositionFails() {
-        var job = owedJob();
+        var job = admittedJob();
         var kept = mock(ReviewCompositionContinuation.class);
         var composer = mock(WorkerFeedbackComposer.class);
         doThrow(new IllegalStateException("database unavailable"))
@@ -473,7 +473,7 @@ class ReviewJobExecutorTest extends BaseUnitTest {
 
     @Test
     void shouldComposeNothingForARunThatAdmittedNothing() {
-        var job = owedJob();
+        var job = admittedJob();
         job.setAdmissionAttempt(null);
         job.setAdmissionDigest(null);
         var composer = mock(WorkerFeedbackComposer.class);
@@ -504,7 +504,7 @@ class ReviewJobExecutorTest extends BaseUnitTest {
         var properties = mock(WorkerProperties.class);
         when(properties.resolvedWorkerId()).thenReturn("worker-1");
         worker = properties;
-        var parsed = new AgentResult(success, Map.of("rawOutput", OWED_RESULT), RETURNED_USAGE);
+        var parsed = new AgentResult(success, Map.of("rawOutput", ADMITTED_RESULT), RETURNED_USAGE);
         when(sandbox.execute(any())).thenReturn(result);
         when(practiceAgent.parseResult(result)).thenReturn(parsed);
         var executor = executor(mock(AsyncTaskExecutor.class));
@@ -522,20 +522,20 @@ class ReviewJobExecutorTest extends BaseUnitTest {
                 Duration.ofSeconds(1));
     }
 
-    private ReviewJobExecutor owedExecutor(ReviewCompositionContinuation kept) {
+    private ReviewJobExecutor admittedExecutor(ReviewCompositionContinuation kept) {
         var properties = mock(WorkerProperties.class);
         when(properties.resolvedWorkerId()).thenReturn("worker-1");
         worker = properties;
-        var owed = owedResult();
-        when(sandbox.execute(any())).thenReturn(owed);
-        when(practiceAgent.parseResult(owed))
-                .thenReturn(new AgentResult(false, Map.of("rawOutput", OWED_RESULT), RETURNED_USAGE));
+        var measured = admittedResult();
+        when(sandbox.execute(any())).thenReturn(measured);
+        when(practiceAgent.parseResult(measured))
+                .thenReturn(new AgentResult(false, Map.of("rawOutput", ADMITTED_RESULT), RETURNED_USAGE));
         var executor = executor(mock(AsyncTaskExecutor.class));
         executor.setCompositionContinuation(kept);
         return executor;
     }
 
-    private ReviewJob owedJob() {
+    private ReviewJob admittedJob() {
         var job = configuredJob();
         job.setStatus(ReviewJobStatus.RUNNING);
         job.setWorkerId("worker-1");
@@ -636,15 +636,15 @@ class ReviewJobExecutorTest extends BaseUnitTest {
         return SCRIPT_REPORT.getBytes(StandardCharsets.UTF_8);
     }
 
-    private static SandboxResult owedResult() {
+    private static SandboxResult admittedResult() {
         return new SandboxResult(
                 1,
                 Map.of(
                         "result.json",
-                        OWED_RESULT.getBytes(StandardCharsets.UTF_8),
+                        ADMITTED_RESULT.getBytes(StandardCharsets.UTF_8),
                         SandboxLayout.PRACTICE_SCRIPT_REPORT_FILE,
                         scriptReport()),
-                "owed",
+                "measured",
                 false,
                 Duration.ofSeconds(1));
     }

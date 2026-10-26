@@ -2,13 +2,11 @@ package de.tum.cit.aet.hephaestus.agent.proxy;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.handler.AdmissionConflictException;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.AdmissionRequestDTO;
-import de.tum.cit.aet.hephaestus.agent.proxy.dto.PrepareFeedbackRequestDTO;
 import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.JobJwt;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Instant;
@@ -28,8 +26,9 @@ class ResultAdmissionControllerTest extends BaseUnitTest {
     @Test
     void shouldRejectCredentialsThatDoNotIdentifyAReviewWorker() {
         var controller = new ResultAdmissionController(mock(ResultAdmissionService.class));
-        assertThatThrownBy(() ->
-                        controller.readPublicFeedbackHistory(new TestingAuthenticationToken("mentor", "credential")))
+        var request = new AdmissionRequestDTO(3, UUID.randomUUID(), UUID.randomUUID(), 0, List.of(), List.of());
+        assertThatThrownBy(
+                        () -> controller.admitResults(request, new TestingAuthenticationToken("mentor", "credential")))
                 .isInstanceOfSatisfying(
                         ResponseStatusException.class,
                         error -> Assertions.assertThat(error.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN));
@@ -51,27 +50,6 @@ class ResultAdmissionControllerTest extends BaseUnitTest {
                 .isInstanceOfSatisfying(
                         ResponseStatusException.class,
                         error -> Assertions.assertThat(error.getStatusCode()).isEqualTo(HttpStatus.CONFLICT));
-    }
-
-    @Test
-    void shouldRefuseASandboxThatAsksToComposeBecauseTheWorkerComposes() {
-        var admission = mock(ResultAdmissionService.class);
-        var id = UUID.randomUUID();
-        var request = new PrepareFeedbackRequestDTO(UUID.randomUUID(), id, 0, List.of(), List.of(), true, null);
-        var now = Instant.now();
-        var jwt = new JobJwt(id, 1L, 0, Set.of("llm_proxy"), "test", now, now.plusSeconds(60), now.plusSeconds(30));
-        var authentication = new JobTokenAuthentication(ProxyIdentity.of(jwt, "worker"), jwt.scopes(), null);
-        var controller = new ResultAdmissionController(admission);
-
-        assertThatThrownBy(() -> controller.prepareFeedback(request, authentication))
-                .isInstanceOfSatisfying(
-                        ResponseStatusException.class,
-                        error -> Assertions.assertThat(error.getStatusCode()).isEqualTo(HttpStatus.GONE));
-        assertThatThrownBy(() -> controller.readPublicFeedbackHistory(authentication))
-                .isInstanceOfSatisfying(
-                        ResponseStatusException.class,
-                        error -> Assertions.assertThat(error.getStatusCode()).isEqualTo(HttpStatus.GONE));
-        verifyNoInteractions(admission);
     }
 
     private static Stream<RuntimeException> attemptConflicts() {

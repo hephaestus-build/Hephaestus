@@ -193,7 +193,8 @@ storage.
 
 The guarantee is **byte-exact citation verification against captured evidence**. **No replay is
 offered.** The worker deletes its evidence folder after observation admission commits; feedback
-composition uses the sandbox's already downloaded read-only workspace and the persisted verdicts.
+composition runs on the worker after the sandbox ends, from the inputs that the admission retained and the
+persisted verdicts.
 A sweep retries missed cleanup. Other ended attempts become eligible for deletion one hour after
 the worker first records that they have ended. On restart, the worker deletes folders for unknown
 or finished attempts immediately and preserves matching running attempts. There are no keep-refs,

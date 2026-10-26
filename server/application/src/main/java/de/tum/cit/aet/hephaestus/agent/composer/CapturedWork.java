@@ -27,8 +27,7 @@ import tools.jackson.databind.node.ObjectNode;
 
 /**
  * The captured record of the reviewed work as the composers see it: the brief of captured files, the same-work record,
- * and the public discussion captured on the work. A port of the runner's {@code pi-review-brief.ts}; every text it
- * returns is the text the runner rendered from the same files.
+ * and the public discussion captured on the work. The golden fixtures hold the texts it renders.
  */
 final class CapturedWork {
     private static final JsonNodeFactory JSON = JsonNodeFactory.instance;
@@ -115,7 +114,7 @@ final class CapturedWork {
         this.mapper = mapper;
     }
 
-    @SuppressWarnings("unchecked") // Pairs of a field name and its type, in the order the runner declares them.
+    @SuppressWarnings("unchecked") // Pairs of a field name and its type, in the order the prompts list them.
     private static <T> Map<String, T> ordered(Object... pairs) {
         var map = new LinkedHashMap<String, T>();
         for (int index = 0; index < pairs.length; index += 2) map.put((String) pairs[index], (T) pairs[index + 1]);

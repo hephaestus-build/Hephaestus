@@ -23,7 +23,7 @@ import tools.jackson.databind.node.ObjectNode;
 
 /**
  * The review on the reviewed work: what it is composed from, the {@code report_review} tool it is stored with, and the
- * checks that store or refuse it whole. A port of the runner's {@code pi-runner-composition.ts}.
+ * checks that store or refuse it whole.
  */
 final class ReviewOnWork {
     private static final JsonNodeFactory JSON = JsonNodeFactory.instance;

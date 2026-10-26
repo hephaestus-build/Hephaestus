@@ -23,8 +23,8 @@ import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.MissingNode;
 
 /**
- * The code that the public NOT_MET results cite, shown whole with its line numbers, for the review on the work: a port
- * of the runner's {@code buildPrimarySourceReference}. A file is shown only when its bytes match the digest admission
+ * The code that the public NOT_MET results cite, shown whole with its line numbers, for the review on the work. A
+ * file is shown only when its bytes match the digest admission
  * verified; the {@link Reader} decides where those bytes come from.
  */
 final class PrimarySource {
@@ -41,7 +41,7 @@ final class PrimarySource {
 
     private PrimarySource() {}
 
-    /** One captured text the manifest owns, as the runner's {@code citableTextIndex} reads it. */
+    /** One captured text the manifest owns. */
     record CitableText(
             String source,
             String path,
@@ -369,7 +369,7 @@ final class PrimarySource {
         return new Vouched(note, range);
     }
 
-    /** The source state of one captured file, as the runner's {@code captureOf} reads it for the reference. */
+    /** The source state of one captured file, as the reference reads it. */
     private record SourceCapture(
             @Nullable String omitted, JsonNode completeness, JsonNode limitations, JsonNode identity) {
         static SourceCapture of(JsonNode index, String kind, String sourcePath) {

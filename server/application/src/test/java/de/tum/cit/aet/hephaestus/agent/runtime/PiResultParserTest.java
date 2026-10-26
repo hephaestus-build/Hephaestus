@@ -148,9 +148,7 @@ class PiResultParserTest extends BaseUnitTest {
                         "review-state.json",
                         reviewState.getBytes(UTF_8),
                         "usage.json",
-                        "{\"model\":\"m\",\"totalCalls\":1}".getBytes(UTF_8),
-                        SandboxLayout.FEEDBACK_FILENAME,
-                        "{\"units\":[]}".getBytes(UTF_8)),
+                        "{\"model\":\"m\",\"totalCalls\":1}".getBytes(UTF_8)),
                 "done",
                 false,
                 Duration.ofSeconds(10)));

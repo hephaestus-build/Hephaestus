@@ -19,6 +19,7 @@ import {
 	type ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
 
+import { SUPPORTED_SCHEMA_VERSION } from "../../../main/resources/agent/pi-task-paths.ts";
 import {
 	AUTHENTICATION_PRACTICE,
 	GOLDEN_INPUTS,
@@ -173,7 +174,7 @@ export default definePracticeScript({
 export function stagePractices(cwd: string, practices: readonly StagedPractice[]): void {
 	stageGoldenWorkspace(
 		cwd,
-		6,
+		SUPPORTED_SCHEMA_VERSION,
 		readFileSync(
 			new URL("../../../main/resources/agent/pi-orchestrator.md", import.meta.url),
 			"utf8",
@@ -361,23 +362,12 @@ if (scenario !== undefined && scenario !== "") {
 			return realFetch(input, init);
 		}
 		assert.ok(typeof init?.body === "string");
-		capture("admission", {
-			body: parseJson(init.body),
-			reviewInputPresent: existsSync(nodePath.join(cwd, "work/review-input")),
-		});
+		capture("admission", { body: parseJson(init.body) });
 		return Response.json({
 			contractVersion: 4,
 			admissionDigest: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-			publicReviewed: false,
-			privateProgress: {
-				decidedResultIds: [],
-				practicePageDeliveries: 0,
-				conversationDeliveries: 0,
-			},
 			admitted: [],
 			withheld: [],
-			practicePageSupport: null,
-			conversationEligibility: null,
 		});
 	});
 

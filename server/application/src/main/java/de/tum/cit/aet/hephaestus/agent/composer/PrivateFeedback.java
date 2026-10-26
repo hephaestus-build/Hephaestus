@@ -33,8 +33,7 @@ import tools.jackson.databind.node.ObjectNode;
 
 /**
  * Feedback for the developer's practice pages and the mentor conversation: what it is composed from, the
- * {@code report_feedback} tool it is stored with, and the checks that store or skip each piece. A port of the private
- * half of the runner's {@code pi-composition-stage.ts}.
+ * {@code report_feedback} tool it is stored with, and the checks that store or skip each piece.
  */
 final class PrivateFeedback {
     private static final JsonNodeFactory JSON = JsonNodeFactory.instance;

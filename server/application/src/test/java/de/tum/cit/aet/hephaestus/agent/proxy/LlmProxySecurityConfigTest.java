@@ -148,8 +148,6 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
                 .isEqualTo(404);
         assertThat(answerTo("POST", "/internal/llm/admit-results", APPLICATION_PORT))
                 .isEqualTo(404);
-        assertThat(answerTo("POST", "/internal/llm/prepare-feedback", APPLICATION_PORT))
-                .isEqualTo(404);
     }
 
     /**
@@ -163,17 +161,6 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
 
         assertThat(answerTo("POST", "/internal/llm/responses", GATEWAY_PORT, oversized))
                 .isEqualTo(413);
-    }
-
-    @Test
-    void refusesOversizedFeedbackPreparationBeforeAuthentication() throws Exception {
-        assertThat(answerTo(
-                        "POST",
-                        "/internal/llm/prepare-feedback",
-                        GATEWAY_PORT,
-                        new byte[GATEWAY.maxRequestBytes() + 1]))
-                .isEqualTo(413);
-        Mockito.verifyNoInteractions(jobRepository, jwtVerifier);
     }
 
     /** The result upload is bounded by the archive budget, not by the model-call bound. */
@@ -209,12 +196,8 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
         when(jwtVerifier.verify("current-attempt")).thenReturn(jobJwt(job, 1));
         assertThat(answerToTokenCall("current-attempt")).isEqualTo(200);
 
-        for (String path : List.of(
-                "/internal/llm/responses",
-                "/internal/llm/chat/completions",
-                "/internal/llm/admit-results",
-                "/internal/llm/public-feedback-history",
-                "/internal/llm/prepare-feedback")) {
+        for (String path :
+                List.of("/internal/llm/responses", "/internal/llm/chat/completions", "/internal/llm/admit-results")) {
             MockHttpServletRequest request = request("POST", path, GATEWAY_PORT);
             request.setCookies(
                     new Cookie("__Host-HEPHAESTUS_AT", "current-attempt"), new Cookie("JSESSIONID", "current-attempt"));
@@ -249,33 +232,6 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
         assertThat(servedAs.get()).isNull();
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"/internal/llm/public-feedback-history", "/internal/llm/prepare-feedback"})
-    void servesCompositionOnlyOnTheGatewayForTheAuthenticatedCurrentAttempt(String path) throws Exception {
-        ReviewJob job = runningJobOnAttempt(1);
-        when(jobRepository.findById(job.getId())).thenReturn(Optional.of(job));
-        when(jwtVerifier.verify("current-attempt")).thenReturn(jobJwt(job, 1));
-        when(jwtVerifier.verify("dead-attempt")).thenReturn(jobJwt(job, 0));
-        MockHttpServletRequest current = request("POST", path, GATEWAY_PORT);
-        current.addHeader("Authorization", "Bearer current-attempt");
-        assertThat(answerTo(current)).isEqualTo(200);
-        assertThat(servedAs.get())
-                .isNotNull()
-                .extracting(Authentication::getPrincipal)
-                .asInstanceOf(type(ProxyIdentity.class))
-                .extracting(ProxyIdentity::description)
-                .isEqualTo("job:" + job.getId());
-        MockHttpServletRequest stale = request("POST", path, GATEWAY_PORT);
-        stale.addHeader("Authorization", "Bearer dead-attempt");
-        assertThat(answerTo(stale)).isEqualTo(409);
-        assertThat(servedAs.get()).isNull();
-        assertThat(answerTo("POST", path, GATEWAY_PORT)).isEqualTo(401);
-        assertThat(answerTo("GET", path, GATEWAY_PORT)).isEqualTo(404);
-        assertThat(answerTo("POST", path, APPLICATION_PORT)).isEqualTo(404);
-        assertThat(answerTo("POST", path, GATEWAY_PORT, new byte[GATEWAY.maxRequestBytes() + 1]))
-                .isEqualTo(413);
-    }
-
     @Test
     void shouldServeThePracticeScriptRouteOnTheGatewayWhenTheJobTokenCallsIt() throws Exception {
         String path = "/internal/llm/practice-script/chat/chat/completions";
@@ -303,7 +259,6 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
         "POST,/internal/llm/responses",
         "POST,/internal/llm/practice-script/chat/chat/completions",
         "POST,/internal/llm/admit-results",
-        "POST,/internal/llm/public-feedback-history",
         "GET,/internal/llm/runtime/{job}",
         "GET,/internal/llm/runtime/{job}/workspace",
         "POST,/internal/llm/runtime/{job}/result"
@@ -393,11 +348,8 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
                     .isEqualTo(401);
             assertThat(servedAs.get()).isNull();
         }
-        for (String path : List.of(
-                "/internal/llm/practice-script/chat/chat/completions",
-                "/internal/llm/admit-results",
-                "/internal/llm/public-feedback-history",
-                "/internal/llm/prepare-feedback")) {
+        for (String path :
+                List.of("/internal/llm/practice-script/chat/chat/completions", "/internal/llm/admit-results")) {
             assertThat(answerTo(withToken(request("POST", path, GATEWAY_PORT), "turn-token")))
                     .as(path)
                     .isEqualTo(403);

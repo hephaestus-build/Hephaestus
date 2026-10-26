@@ -145,11 +145,6 @@ const INTENTIONALLY_MISSING_PATHS = [
 		reason: "the review's notes file, created inside the agent workspace",
 	},
 	{
-		document: "docs/contributor/practice-review-runtime.mdx",
-		value: "work/composition/results.json",
-		reason: "the admitted results, written inside the agent workspace for the composer",
-	},
-	{
 		document: "docs/contributor/agent/workspace-abi.mdx",
 		value: "context/commits.json",
 		reason: "the staged commit record, written into the agent workspace",

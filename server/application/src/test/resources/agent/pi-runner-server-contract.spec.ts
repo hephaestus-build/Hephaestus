@@ -12,11 +12,7 @@ import { tmpdir } from "node:os";
 import nodePath from "node:path";
 import { after, test } from "node:test";
 
-import {
-	compositionRequestSchema,
-	executionReportSchema,
-} from "../../../../../../docker/agents/practice-scripts/lib/core/contract.ts";
-import { isJsonObject as isRecord } from "../../../../../../docker/agents/practice-scripts/lib/core/json.ts";
+import { executionReportSchema } from "../../../../../../docker/agents/practice-scripts/lib/core/contract.ts";
 import { practiceIndexSchema } from "../../../../../../docker/agents/practice-scripts/lib/core/runtime-inputs.ts";
 import { AUTHENTICATION_CRITERION, PRACTICES_DIR } from "./golden-review-workspace.ts";
 import {
@@ -61,7 +57,6 @@ function toServerContextRoot(): void {
 			...(typeof task === "object" ? task : {}),
 			contextRoot: "context",
 			manifest: relocated("manifest"),
-			compositionRequest: relocated("compositionRequest"),
 		}),
 	);
 	const manifest = nodePath.join(cwd, "context/manifest.json");
@@ -171,14 +166,6 @@ void test("the server's runner output fixtures are what this run wrote", () => {
 	}
 });
 
-void test("the runner reads the composition request the server stages", () => {
-	const request: unknown = JSON.parse(
-		readFileSync(nodePath.join(import.meta.dirname, "feedback-composition-request.json"), "utf8"),
-	);
-
-	assert.deepEqual(compositionRequestSchema.parse(request), request);
-});
-
 void test("the runner reads the assigned practice index", () => {
 	const index: unknown = JSON.parse(
 		readFileSync(new URL("practice-index.json", import.meta.url), "utf8"),
@@ -186,53 +173,11 @@ void test("the runner reads the assigned practice index", () => {
 	assert.deepEqual(practiceIndexSchema.parse(index), index);
 });
 
-void test("the runner reads the server's admission envelope and recorded routing refusals", () => {
+void test("the runner reads the server's admission envelope", () => {
 	const response: unknown = JSON.parse(
 		readFileSync(new URL("admission-response.json", import.meta.url), "utf8"),
 	);
 	const admission = parseAdmission(response);
 	assert.equal(admission.results[0]?.practiceSlug, "handles-errors");
 	assert.ok(admissionResponseSchema.safeParse(response).success);
-	assert.ok(admission.practicePageSupport?.state === "COMPLETE");
-	assert.ok(admission.conversationEligibility?.state === "COMPLETE");
-	assert.equal(admission.practicePageSupport.practices[0]?.stopReason, "NO_AI");
-	assert.equal(admission.conversationEligibility.results[0]?.stopReason, "NO_AI");
-	// The private history the server serializes: authorized words whatever the claim's state, targets by feedback ID.
-	const history = admission.privateHistory;
-	assert.ok(history !== null);
-	assert.deepEqual(
-		history.delivered.map((row) => [row.recordedClaimCurrentness, row.bodyRole, row.body !== null]),
-		[
-			["CURRENT", "CONVERSATION_WORDS", true],
-			["STALE", "PRACTICE_PAGE_CARD", true],
-		],
-	);
-	assert.deepEqual(
-		history.queued.map((row) => row.threadKey === row.feedbackId),
-		[true],
-	);
-});
-
-void test("the runner refuses private history the server never sends", () => {
-	const response: unknown = JSON.parse(
-		readFileSync(new URL("admission-response.json", import.meta.url), "utf8"),
-	);
-	assert.ok(isRecord(response) && isRecord(response.privateHistory));
-	const history = response.privateHistory;
-	assert.ok(Array.isArray(history.delivered) && isRecord(history.delivered[0]));
-	const delivered = history.delivered[0];
-	for (const changed of [
-		{ ...history, delivered: [{ ...delivered, destination: "ON_WORK" }] },
-		{ ...history, delivered: [{ ...delivered, deliveredAt: null }] },
-		{ ...history, delivered: [{ ...delivered, withdrawn: "false" }] },
-		{ ...history, queued: [{ ...delivered }] },
-	]) {
-		assert.equal(
-			admissionResponseSchema.safeParse({ ...response, privateHistory: changed }).success,
-			false,
-		);
-	}
-	// Absent is a read not made, not an empty history.
-	const { privateHistory: _omitted, ...withoutHistory } = response;
-	assert.equal(parseAdmission(withoutHistory).privateHistory, null);
 });

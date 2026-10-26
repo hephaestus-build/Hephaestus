@@ -10,7 +10,6 @@ import {
 	authoredDescription,
 	checkedOutCommit,
 	parseNameStatus,
-	pinnedDiff,
 	readChange,
 	readPinnedBlob,
 	renderAuthoredDescription,
@@ -223,34 +222,6 @@ void test("a pinned file is read from the commit named, never from the checkout 
 	assert.deepEqual(read("HEAD", "lib.ts"), { kind: "unsafe" });
 	assert.deepEqual(read("f".repeat(40), "lib.ts"), { kind: "unreadable" });
 	assert.equal(checkedOutCommit(repo), linked);
-});
-
-void test("the pinned change comes from Git whole, as the change view derives it, or is refused whole", (t) => {
-	const { root, repo, base, head } = repositoryWithChange();
-	t.after(() => rmSync(root, { recursive: true, force: true }));
-	writeChangeView(root, repo, { base, head });
-	const derived = readFileSync(path.join(root, "work/change/diff.patch"), "utf8");
-	// A later edit of the derived view changes nothing the pinned diff says.
-	writeFileSync(path.join(root, "work/change/diff.patch"), "STALE-SENTINEL\n");
-
-	const pinned = pinnedDiff(repo, base, head, 64_000);
-	assert.ok(pinned.kind === "available", pinned.kind);
-	assert.equal(pinned.text, derived);
-	assert.deepEqual(
-		pinned.files.find((file) => file.path === "lib.ts"),
-		{ status: "R", path: "lib.ts", oldPath: "app.ts" },
-	);
-	assert.ok(pinned.sections.has("a/app.ts b/lib.ts"));
-	assert.ok(!pinned.text.includes("STALE-SENTINEL"));
-
-	assert.deepEqual(pinnedDiff(repo, base, head, 10), { kind: "tooLarge" });
-	assert.deepEqual(pinnedDiff(repo, "HEAD", head, 64_000), { kind: "unreadable" });
-	writeFileSync(path.join(repo, "latin1.txt"), Buffer.from([0x63, 0x61, 0x66, 0xe9, 0x0a]));
-	git(repo, "add", "latin1.txt");
-	git(repo, "commit", "-q", "-m", "Latin-1 text");
-	assert.deepEqual(pinnedDiff(repo, head, git(repo, "rev-parse", "HEAD"), 64_000), {
-		kind: "invalidText",
-	});
 });
 
 void test("annotates every hunk line with its source coordinate and leaves headers alone", () => {

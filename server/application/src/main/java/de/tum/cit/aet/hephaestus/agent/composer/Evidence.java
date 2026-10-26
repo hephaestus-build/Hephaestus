@@ -17,7 +17,7 @@ import tools.jackson.databind.node.ObjectNode;
 
 /**
  * What a composed text rests on, as the server records it, and the admitted results it may name. Shared by the review
- * on the work and the private feedback; ports of the runner's evidence helpers.
+ * on the work and the private feedback.
  */
 final class Evidence {
     private Evidence() {}

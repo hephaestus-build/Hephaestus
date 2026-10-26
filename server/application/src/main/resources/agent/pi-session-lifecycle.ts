@@ -3,7 +3,7 @@ import type { AgentSession } from "@earendil-works/pi-coding-agent";
 /** The custom entry type that binds a native session file to the review it belongs to. */
 export const REVIEW_SESSION_ENTRY = "hephaestus.review-session";
 
-export type SessionPhase = "practice" | "public-review" | "private-feedback";
+export type SessionPhase = "practice";
 
 /** What a session reviewed, as the runner knows it; null where the task did not say. */
 export interface ReviewSessionBinding {

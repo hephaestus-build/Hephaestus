@@ -47,28 +47,6 @@ export function planTurns(practices: readonly TurnPractice[], maxPerTurn = 6): R
 	return turns;
 }
 
-export interface ReviewWindows {
-	/** When measuring must hand in, so admission and composition still land before the run is stopped. */
-	measureMs: number;
-	/** Kept for composition when it was requested; zero otherwise. */
-	compositionMs: number;
-}
-
-/** The part of the safety ceiling kept for composition. */
-const COMPOSITION_SHARE = 0.15;
-
-/**
- * How the run's safety ceiling is split, so measuring
- * hands in early enough for admission and composition. Not a budget: work is bounded by {@link turnBudget}.
- */
-export function deriveWindows(budgetMs: number, compositionRequested: boolean): ReviewWindows {
-	if (!Number.isFinite(budgetMs) || budgetMs <= 0) {
-		throw new Error(`budgetMs must be a positive number, got: ${budgetMs}`);
-	}
-	const compositionMs = compositionRequested ? Math.floor(budgetMs * COMPOSITION_SHARE) : 0;
-	return { measureMs: budgetMs - compositionMs, compositionMs };
-}
-
 /** Model calls and output tokens: what a turn may spend, or what it has spent. */
 export interface Work {
 	modelCalls: number;

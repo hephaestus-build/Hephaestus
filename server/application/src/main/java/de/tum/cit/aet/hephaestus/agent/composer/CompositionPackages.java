@@ -17,8 +17,7 @@ import org.jspecify.annotations.Nullable;
 
 /**
  * The preparation requests one composition sends: the review on the work as one public package, each private piece as
- * its own package, and a withholding for each destination no decision was composed for. A port of the runner's
- * {@code preparationPackages}.
+ * its own package, and a withholding for each destination no decision was composed for.
  */
 final class CompositionPackages {
     private CompositionPackages() {}

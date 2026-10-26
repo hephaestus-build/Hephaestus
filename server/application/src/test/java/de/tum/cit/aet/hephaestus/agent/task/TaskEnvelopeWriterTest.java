@@ -19,7 +19,7 @@ class TaskEnvelopeWriterTest extends BaseUnitTest {
     void roundTripsReviewJobAttemptAndDecimalWorkspaceIdentity() {
         var envelope = TaskEnvelope.of(reviewId, jobId, 0, Long.MAX_VALUE, new Task("Review the pinned item"));
         var wire = mapper.readTree(writer.write(envelope));
-        assertThat(wire.path("schemaVersion").asInt()).isEqualTo(6);
+        assertThat(wire.path("schemaVersion").asInt()).isEqualTo(7);
         assertThat(wire.path("reviewId").asString()).isEqualTo(reviewId.toString());
         assertThat(wire.path("jobId").asString()).isEqualTo(jobId.toString());
         assertThat(wire.path("workspaceId").asString()).isEqualTo(Long.toString(Long.MAX_VALUE));
@@ -46,7 +46,7 @@ class TaskEnvelopeWriterTest extends BaseUnitTest {
     void rejectsTheRetiredTaskSchema() {
         var envelope = TaskEnvelope.of(reviewId, jobId, 0, 1, new Task("Review"));
         var wire = mapper.valueToTree(envelope);
-        ((ObjectNode) wire).put("schemaVersion", 5);
+        ((ObjectNode) wire).put("schemaVersion", 6);
         assertThatThrownBy(() -> mapper.treeToValue(wire, TaskEnvelope.class)).isInstanceOf(RuntimeException.class);
     }
 }

@@ -34,19 +34,11 @@ public final class PracticeRunnerProfile implements PiRunnerProfile {
             "pi-runner-output.ts",
             "pi-runner-usage.ts",
             "pi-runner-retry.ts",
-            "pi-runner-composition.ts",
-            "pi-composition-stage.ts",
             "pi-admitted-results.ts",
-            "pi-feedback-preparation.ts",
             "pi-session-lifecycle.ts",
             "pi-session-reads.ts",
             "pi-bash-reads.ts",
             SandboxLayout.PROVIDER_HELPER_FILENAME);
-
-    private static final List<String> PROMPTS = List.of(
-            SandboxLayout.FEEDBACK_STYLE_PROMPT_FILENAME,
-            SandboxLayout.FEEDBACK_COMPOSER_PROMPT_FILENAME,
-            SandboxLayout.REVIEW_COMPOSER_PROMPT_FILENAME);
 
     @Override
     public String runnerScript() {
@@ -56,11 +48,6 @@ public final class PracticeRunnerProfile implements PiRunnerProfile {
     @Override
     public List<String> sidecarScripts() {
         return SIDECARS;
-    }
-
-    @Override
-    public List<String> promptResources() {
-        return PROMPTS;
     }
 
     @Override

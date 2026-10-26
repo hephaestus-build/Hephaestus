@@ -131,7 +131,7 @@ results and recovery distinguishable.
 - [Practice review pipeline](../contributor/practice-review-pipeline.mdx)
 - [Practice review glossary](../contributor/practice-review-glossary.mdx)
 - [Practice review data model](../contributor/practice-feedback-schema.md)
-- `agent/feedback-composer.md`, `pi-runner.ts`, and `agent.handler.composition`
+- `agent/feedback-composer.md`, `agent.composer`, and `agent.handler.composition`
 
 ## Sources
 
@@ -142,11 +142,11 @@ results and recovery distinguishable.
 
 Supersedes the `basedOn` rule in § Composition contract. `basedOn` names only admitted observations
 from the current run, and at least one must belong to the unit's `practiceSlug`
-(`validateFeedbackEvidence` in `server/application/src/main/resources/agent/pi-runner-composition.ts`;
+(the composer's checks in `agent.composer`, which replaced the runner's `validateFeedbackEvidence`;
 `ComposedFeedbackUnit` in `agent.handler.composition`); there is no `prior:<practiceSlug>`
 reference. Feedback that rests on the record rather than on this run is expressed through the
 history staged for the composer, and the `IN_CHAT` `notes` object carries an optional `alreadySaid`
-for it (`pi-runner.ts`). Everything else in that section stands.
+for it (`agent.composer.PrivateFeedback`). Everything else in that section stands.
 
 ## Update — 2026-10-05: the review on the work is written whole in its own session
 
@@ -174,7 +174,7 @@ The result read as a template, and the server wrote sentences that no model wrot
   When a review is owed, an output without that version or without a review is a delivery failure.
   This failure makes no claim about the work.
 
-Everything else in this ADR stands. The contract lives in `agent/review-composer.md`, `pi-runner-composition.ts`,
+Everything else in this ADR stands. The contract lives in `agent/review-composer.md`, `agent.composer.ReviewOnWork`,
 `ComposedReview` and `ComposedReviewAdmission`.
 
 ## Update — 2026-10-14 (#2656): the practice model cutover

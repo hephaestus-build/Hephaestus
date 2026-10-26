@@ -55,7 +55,7 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
         var jwt = jwt(job.getId(), job.getWorkspaceId(), job.getAttempt());
         when(verifier.verify("valid-token")).thenReturn(jwt);
         when(jobs.findById(job.getId())).thenReturn(Optional.of(job));
-        var request = request("/internal/llm/prepare-feedback", "Bearer valid-token");
+        var request = request("/internal/llm/admit-results", "Bearer valid-token");
         var response = new MockHttpServletResponse();
         var principal = new AtomicReference<Authentication>();
         filter.doFilter(
@@ -256,9 +256,7 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
         when(verifier.verify("valid-token")).thenReturn(jwt);
         when(jobs.findById(job.getId())).thenReturn(Optional.of(job));
         var request = request(
-                mismatch.equals("path")
-                        ? "/internal/llm/runtime/" + UUID.randomUUID()
-                        : "/internal/llm/prepare-feedback",
+                mismatch.equals("path") ? "/internal/llm/runtime/" + UUID.randomUUID() : "/internal/llm/admit-results",
                 "Bearer valid-token");
         var response = new MockHttpServletResponse();
         filter.doFilter(request, response, (incoming, outgoing) -> {
@@ -309,7 +307,7 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
     @ValueSource(strings = {"Bearer", "Bearer one two", "Basic one", "bearer "})
     void rejectsMalformedAuthorizationWithoutLookingUpAJob(String header) throws Exception {
         var response = new MockHttpServletResponse();
-        filter.doFilter(request("/internal/llm/prepare-feedback", header), response, (incoming, outgoing) -> {
+        filter.doFilter(request("/internal/llm/admit-results", header), response, (incoming, outgoing) -> {
             throw new AssertionError("Malformed credential served");
         });
         assertThat(response.getStatus()).isEqualTo(401);
@@ -319,7 +317,7 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
     @ParameterizedTest
     @ValueSource(strings = {"8.8.8.8", "deadbeef", "localhost", "2001:db8::1", "fec0::1"})
     void rejectsNonprivateLiteralsAndHostnamesBeforeCredentialVerification(String address) throws Exception {
-        var request = request("/internal/llm/prepare-feedback", "Bearer valid-token");
+        var request = request("/internal/llm/admit-results", "Bearer valid-token");
         request.setRemoteAddr(address);
         var response = new MockHttpServletResponse();
         filter.doFilter(request, response, (incoming, outgoing) -> {
@@ -335,7 +333,7 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
         var job = running();
         when(verifier.verify("valid-token")).thenReturn(jwt(job.getId(), job.getWorkspaceId(), job.getAttempt()));
         when(jobs.findById(job.getId())).thenReturn(Optional.of(job));
-        var request = request("/internal/llm/prepare-feedback", "Bearer valid-token");
+        var request = request("/internal/llm/admit-results", "Bearer valid-token");
         request.setRemoteAddr(address);
         var response = new MockHttpServletResponse();
         var served = new AtomicBoolean();

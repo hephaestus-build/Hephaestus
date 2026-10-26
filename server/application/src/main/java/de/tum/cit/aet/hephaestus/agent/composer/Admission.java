@@ -19,10 +19,10 @@ import tools.jackson.databind.node.ObjectNode;
 
 /**
  * The admitted results of one review and the server's reads that route its private feedback, in the shape the
- * composers read them: a port of the runner's {@code parseAdmission}, with progress kept per private destination.
+ * composers read them, with progress kept per private destination.
  *
  * @param results each admitted result with its citations lifted beside its evidence and each problem's id as
- *     {@code problemId}, in the runner's key order
+ *     {@code problemId}, in the key order the prompts show
  * @param decided the practices the review's prepared private pieces already decide, per private destination
  * @param deliveries the room those pieces used, per private destination
  * @param practicePageSupport the page support read, or null when it is missing or does not match the results
@@ -97,7 +97,7 @@ record Admission(
     }
 
     /**
-     * One admitted result as the runner's schema returns it: its declared fields first, then the others as sent, then
+     * One admitted result in the key order the prompts show: its declared fields first, then the others as sent, then
      * its evidence, the evidence's citations each with their index, and its problems with their id last.
      */
     static ObjectNode normalize(JsonNode admitted) {

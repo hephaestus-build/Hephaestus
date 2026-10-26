@@ -964,7 +964,7 @@ public class WorkerFeedbackComposer {
                 .toList();
     }
 
-    /** The reviewed work's identity, as the runner derives it from the captured record. */
+    /** The reviewed work's identity, derived from the captured record. */
     static @Nullable String thisWork(ComposerFiles files, JsonNode folderIndex) {
         var metadata = files.json(ComposerFiles.CONTEXT_ROOT + "/metadata.json", MAPPER)
                 .orElse(null);

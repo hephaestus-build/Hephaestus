@@ -88,7 +88,7 @@ export function annotateDiff(patch: Buffer): Buffer {
  * `diff --git` header without the prefix (`a/<old> b/<new>`): what lets a large diff be read one file
  * at a time.
  */
-export function diffSections(annotated: string): Map<string, [number, number]> {
+function diffSections(annotated: string): Map<string, [number, number]> {
 	const lines = annotated.split("\n");
 	const sections = new Map<string, [number, number]>();
 	let header: string | null = null;
@@ -248,63 +248,6 @@ export function readPinnedBlob(
 	} catch {
 		return { kind: "unreadable" };
 	}
-}
-
-/** The pinned change as Git prints it, annotated and divided by file, or why it cannot be shown. */
-export type PinnedDiff =
-	| {
-			kind: "available";
-			files: ReturnType<typeof parseNameStatus>;
-			text: string;
-			sections: Map<string, [number, number]>;
-	  }
-	| { kind: "tooLarge" | "unreadable" | "invalidText" };
-
-/**
- * The complete diff of the pinned range from Git itself, by the same command and coordinates as the derived change
- * view and never from that view's files. Output over `limit` bytes is refused whole, never cut; text that is not
- * valid UTF-8 is refused rather than replaced.
- */
-export function pinnedDiff(
-	repository: string,
-	base: string,
-	head: string,
-	limit: number,
-): PinnedDiff {
-	if (!isCommitId(base) || !isCommitId(head)) {
-		return { kind: "unreadable" };
-	}
-	const range = [base, head];
-	let patch: Buffer;
-	let listing: Buffer;
-	try {
-		patch = git(repository, ["diff", "--no-color", "--no-ext-diff", RENAMES, ...range], limit);
-		listing = git(
-			repository,
-			["diff", "--no-color", "--name-status", "-z", RENAMES, ...range],
-			limit,
-		);
-	} catch (error) {
-		return {
-			kind:
-				error instanceof Error && "code" in error && error.code === "ENOBUFS"
-					? "tooLarge"
-					: "unreadable",
-		};
-	}
-	let annotated: Buffer;
-	try {
-		annotated = annotateDiff(patch);
-	} catch {
-		return { kind: "unreadable" };
-	}
-	let text: string;
-	try {
-		text = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(annotated);
-	} catch {
-		return { kind: "invalidText" };
-	}
-	return { kind: "available", files: parseNameStatus(listing), text, sections: diffSections(text) };
 }
 
 /** The commit the checkout has checked out, or null when it cannot be read. */

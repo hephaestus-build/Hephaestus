@@ -17,7 +17,6 @@ const paths = {
 	repositoryRoot: "repos/project",
 	manifest: "manifest.json",
 	practiceIndex: "practices/index.json",
-	compositionRequest: "composition/request.json",
 	preparedFeedback: "history/prepared.json",
 	practiceScripts: "scripts/practices",
 };
@@ -68,7 +67,7 @@ void test("ignores additive metadata without relaxing required path validation",
 });
 
 void test("accepts the envelope produced by the Java task writer, at the version the runner supports", () => {
-	assert.equal(SUPPORTED_SCHEMA_VERSION, 6);
+	assert.equal(SUPPORTED_SCHEMA_VERSION, 7);
 	const envelope: unknown = JSON.parse(
 		readFileSync(new URL("../task-fixtures/practice-review.json", import.meta.url), "utf8"),
 	);
@@ -82,10 +81,10 @@ void test("accepts the envelope produced by the Java task writer, at the version
 });
 
 for (const [name, envelope] of Object.entries({
-	"the previous schema": { schemaVersion: 4, ...paths, prompt: "Review" },
+	"the previous schema": { schemaVersion: 6, ...paths, prompt: "Review" },
 	"an older schema": { schemaVersion: 3, ...paths, prompt: "Review" },
 	"missing paths": {
-		schemaVersion: 6,
+		schemaVersion: 7,
 		reviewId: "11111111-1111-4111-8111-111111111111",
 		jobId: "22222222-2222-4222-8222-222222222222",
 		attempt: 1,
@@ -93,7 +92,7 @@ for (const [name, envelope] of Object.entries({
 		prompt: "Review",
 	},
 	traversal: {
-		schemaVersion: 6,
+		schemaVersion: 7,
 		reviewId: "11111111-1111-4111-8111-111111111111",
 		jobId: "22222222-2222-4222-8222-222222222222",
 		attempt: 1,

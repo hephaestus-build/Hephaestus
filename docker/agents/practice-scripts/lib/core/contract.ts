@@ -315,25 +315,6 @@ const previousCitationSchema = z.strictObject({
 	side: z.enum(["OLD", "NEW"]).optional(),
 	commit: version.optional(),
 });
-const destinationBoundsSchema = z.strictObject({
-	maxPieces: z.int().min(0).max(10),
-});
-/**
- * The feedback composition request the server stages for an ITEM review that delivers somewhere
- * (`FeedbackCompositionInputs`). An absent destination is closed.
- */
-export const compositionRequestSchema = z.strictObject({
-	contractVersion: z.literal(3),
-	destinations: z.strictObject({
-		ON_WORK: destinationBoundsSchema.optional(),
-		PRACTICE_PAGE: destinationBoundsSchema.optional(),
-		CONVERSATION: destinationBoundsSchema.optional(),
-	}),
-	/** How many distinct items a pattern claim needs. */
-	minDistinctItems: z.int().min(2),
-	/** The copy forms an ON_WORK note may take on this item's integration. */
-	onWorkCopyForms: z.array(z.enum(["LINE_NOTE", "FILE_NOTE"])),
-});
 export const previousSchema = z.strictObject({
 	resultId: z.uuid(),
 	reviewedAt: z.iso.datetime(),

@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { createHash } from "node:crypto";
 import {
 	appendFileSync,
 	existsSync,
@@ -16,10 +15,7 @@ import { tmpdir } from "node:os";
 import nodePath from "node:path";
 import { mock, test } from "node:test";
 
-import {
-	CANDIDATE_LIMITS,
-	compositionRequestSchema,
-} from "../../../main/resources/agent/work/practice-scripts/lib/core/contract.ts";
+import { CANDIDATE_LIMITS } from "../../../main/resources/agent/work/practice-scripts/lib/core/contract.ts";
 
 import type {
 	AgentSession,
@@ -45,140 +41,6 @@ const LIB = nodePath.resolve(
 	"../../../../../../docker/agents/practice-scripts/lib",
 );
 
-const SERVER_COMPOSITION_REQUEST = compositionRequestSchema.parse(
-	JSON.parse(readFileSync(new URL("feedback-composition-request.json", import.meta.url), "utf8")),
-);
-
-const supportOccurrence = (itemKind: string, itemId: number) => ({
-	resultId: `support-${itemKind}-${itemId}`,
-	itemKind,
-	itemId: String(itemId),
-	outcome: "NOT_MET",
-	origin: "EVENT",
-	summary: "A selected negative occurrence",
-	recordedAt: "2026-10-07T08:00:00Z",
-});
-
-const admittedCitation = {
-	index: 0,
-	sourceKind: "scm.pull-request.diff",
-	sourcePath: "evidence/change.json",
-	path: "src/Auth.java",
-	side: "NEW",
-	startLine: 10,
-	endLine: 10,
-	quote: "+ insecure();",
-	verification: { status: "VERIFIED", scope: "EXACT_LOCATION" },
-	anchorable: true,
-};
-
-const admittedChild = (problemId: string, citation: unknown = admittedCitation) => ({
-	problemId,
-	position: 0,
-	severity: "MAJOR",
-	summary: "Login calls insecure() on every sign-in",
-	explanation: "The added line calls insecure() where the criteria ask for checked().",
-	nextStep: null,
-	basis: { type: "introduced", head: 0, explanation: "The change adds the call." },
-	citations: [citation],
-	anchorable: true,
-});
-
-const admittedResult = {
-	resultId: "00000000-0000-4000-8000-000000000001",
-	practiceSlug: "test-practice",
-	outcome: "NOT_MET",
-	summary: "Added authentication call is insecure",
-	explanation: "The changed authentication code calls insecure().",
-	summaryOnly: false,
-	publicEligible: true,
-	citations: [],
-	evidence: {
-		citations: [],
-		search: { consulted: ["scm.pull-request.diff"], lookedFor: "x", boundary: "y" },
-	},
-	example: null,
-	coverage: {
-		source: "host",
-		reads: 1,
-		truncatedReads: 0,
-		failedReads: 0,
-		receipts: [],
-		complete: true,
-	},
-	problems: [admittedChild("problem-1")],
-};
-
-const metResult = (resultId: string, practiceSlug: string) => ({
-	...admittedResult,
-	resultId,
-	practiceSlug,
-	outcome: "MET",
-	citations: [{ ...admittedCitation, anchorable: false }],
-	problems: [],
-});
-
-function admissionDto(value: unknown) {
-	const row = recordOf(value);
-	const { citations, problems, severity: _severity, ...fields } = row;
-	return {
-		...fields,
-		evidence: { ...recordOf(row.evidence), citations },
-		problems: listOf(problems).map((child) => {
-			const { problemId, ...problem } = recordOf(child);
-			return { ...problem, id: problemId };
-		}),
-	};
-}
-
-const PUBLICATION_CONTEXT = `v1:7:${"c".repeat(64)}`;
-
-function historyDto(value: unknown) {
-	const response = recordOf(value);
-	const history = recordOf(response.history);
-	const entries = listOf(history.feedback)
-		.map(recordOf)
-		.filter(
-			(entry) =>
-				!["fresh", "body-transport"].includes(process.env.PI_PUBLIC_HISTORY_MODE ?? "") ||
-				entry.id === "00000000-0000-4000-8000-000000000001",
-		);
-	const first = entries[0];
-	const item = {
-		id: "1",
-		kind: "scm.pull_request",
-		url: "https://gitlab.example/group/repo/-/merge_requests/3",
-		...(first !== undefined && isRecord(first.item) ? first.item : {}),
-	};
-	return {
-		contractVersion: 4,
-		readAt: response.readAt,
-		publicationContext:
-			typeof response.publicationContext === "string"
-				? response.publicationContext
-				: PUBLICATION_CONTEXT,
-		history: {
-			item,
-			feedback: entries.map((entry) => ({
-				id: entry.id,
-				destination: entry.destination,
-				state: "DELIVERED",
-				deliveredAt: entry.deliveredAt ?? "2026-10-07T10:00:00Z",
-				itemVersion: null,
-				body: entry.body ?? null,
-				bodyUnavailable: entry.wordsUnavailable === "COPY_AUTHORITY_UNAVAILABLE",
-				currentness:
-					process.env.PI_PUBLIC_HISTORY_MODE === "missing-currentness"
-						? undefined
-						: (entry.recordedClaimCurrentness ?? "UNVERIFIABLE"),
-				withdrawn: entry.withdrawn ?? false,
-				basedOn: entry.basedOn ?? [],
-				copies: [],
-			})),
-		},
-	};
-}
-
 const timing = (calls: number[][], failedElapsedMs: number) => ({
 	timedCalls: calls.length,
 	respondedCalls: calls.filter((call) => call.length > 1).length,
@@ -187,27 +49,6 @@ const timing = (calls: number[][], failedElapsedMs: number) => ({
 	maxElapsedMs: Math.max(0, ...calls.map(([elapsed = 0]) => elapsed)),
 	responseMs: calls.reduce((sum, [, response = 0]) => sum + response, 0),
 });
-
-function reviewPracticesOf(text: string): unknown {
-	const practices = [...text.matchAll(/```json\n(?<context>[\s\S]*?)\n```/gu)].flatMap((block) => {
-		const entry: unknown = JSON.parse(block.groups?.context ?? "null");
-		return isRecord(entry) && isRecord(entry.practice) ? [entry.practice] : [];
-	});
-	assert.ok(practices.length > 0, text);
-	return { practices };
-}
-
-function readToolText(path: string): string {
-	const result: unknown = JSON.parse(readFileSync(path, "utf8"));
-	if (typeof result === "string") {
-		return result;
-	}
-	assert.ok(isRecord(result) && Array.isArray(result.content));
-	const parts: unknown[] = result.content;
-	const [content] = parts;
-	assert.ok(isRecord(content) && content.type === "text" && typeof content.text === "string");
-	return content.text;
-}
 
 const changeCitation = {
 	sourceKind: "scm.pull-request.diff",
@@ -220,212 +61,6 @@ const changeCitation = {
 };
 
 const OVERLONG_SUMMARY = "A summary that runs on ".repeat(8).trim();
-
-/** Words only the person's history holds: they may reach the private destinations and never the review on the work. */
-const PRIVATE_HISTORY_SENTENCE = "Earlier reviews told this person about the insecure call twice.";
-
-/** What the staged history establishes, as the server writes it on both history files. */
-const HISTORY_COVERAGE = {
-	scope: "AUTHORIZED_REVIEW_RECORDS_FOR_SUBJECT",
-	workChronology: "NOT_ESTABLISHED",
-	communicationHistory: "NOT_ESTABLISHED",
-};
-
-const historyBasis = (practiceSlug: string, outcome = "NOT_MET") => [
-	{
-		resultId: "00000000-0000-4000-8000-000000000301",
-		practiceSlug,
-		practiceVersionId: null,
-		outcome,
-	},
-];
-
-/** The server's read of this developer's earlier private feedback, answered with the admission. */
-const PRIVATE_HISTORY = {
-	readAt: "2026-10-07T10:00:00Z",
-	coverage: { maxEntries: 30, hasMore: false, omittedWithoutCopyAuthority: 1 },
-	delivered: [
-		{
-			id: "00000000-0000-4000-8000-000000000201",
-			destination: "PRACTICE_PAGE",
-			deliveredAt: "2026-08-01T10:00:00Z",
-			recordedClaimCurrentness: "CURRENT",
-			withdrawn: false,
-			basedOn: historyBasis("test-practice"),
-			bodyRole: "PRACTICE_PAGE_CARD",
-			body: "An earlier card about the insecure call.",
-		},
-		{
-			id: "00000000-0000-4000-8000-000000000202",
-			destination: "PRACTICE_PAGE",
-			deliveredAt: "2026-08-15T10:00:00Z",
-			recordedClaimCurrentness: "STALE",
-			withdrawn: true,
-			basedOn: historyBasis("test-practice"),
-			bodyRole: null,
-			body: null,
-		},
-	],
-	queued: [
-		{
-			threadKey: "00000000-0000-4000-8000-000000000101",
-			feedbackId: "00000000-0000-4000-8000-000000000101",
-			destination: "CONVERSATION",
-			practiceSlug: "test-practice",
-			preparedAt: "2026-09-01T10:00:00Z",
-			recordedClaimCurrentness: "CURRENT",
-			basedOn: historyBasis("test-practice"),
-			bodyRole: "MENTOR_NOTES",
-			body: "Earlier prepared mentor wording.",
-		},
-	],
-};
-
-const STAGED_FEEDBACK_HISTORY = JSON.stringify({
-	coverage: HISTORY_COVERAGE,
-	recordRole: "RECORDED_DELIVERY",
-	feedback: [
-		{
-			id: "feedback-same-work",
-			destination: "ON_WORK",
-			publicEligible: true,
-			item: {
-				kind: "scm.pull_request",
-				url: "https://gitlab.example/group/repo/-/merge_requests/3",
-			},
-			deliveredAt: "2026-09-01T10:00:00Z",
-			itemVersion: "c".repeat(40),
-			basedOn: [
-				{
-					id: "earlier-1",
-					practiceSlug: "test-practice",
-					practiceVersion: null,
-					outcome: "NOT_MET",
-				},
-			],
-			recordedClaimCurrentness: "CURRENT",
-			bodyRole: "COMPOSED_GUIDANCE",
-			body: "An earlier comment on this same change.",
-		},
-		{
-			id: "feedback-earlier-work",
-			destination: "PRACTICE_PAGE",
-			item: {
-				kind: "scm.pull_request",
-				url: "https://gitlab.example/group/repo/-/merge_requests/1",
-			},
-			deliveredAt: "2026-08-01T10:00:00Z",
-			itemVersion: null,
-			basedOn: [],
-			recordedClaimCurrentness: "CURRENT",
-			bodyRole: "COMPOSED_GUIDANCE",
-			body: PRIVATE_HISTORY_SENTENCE,
-		},
-		{
-			id: "feedback-withdrawn",
-			destination: "PRACTICE_PAGE",
-			item: {
-				kind: "scm.pull_request",
-				url: "https://gitlab.example/group/repo/-/merge_requests/2",
-			},
-			deliveredAt: "2026-08-15T10:00:00Z",
-			itemVersion: "d".repeat(40),
-			basedOn: [
-				{
-					id: "earlier-2",
-					practiceSlug: "test-practice",
-					practiceVersion: null,
-					outcome: "NOT_MET",
-				},
-			],
-			recordedClaimCurrentness: "STALE",
-			withdrawn: true,
-		},
-		{
-			id: "feedback-legacy",
-			destination: null,
-			item: {
-				kind: "scm.pull_request",
-				url: "https://gitlab.example/group/repo/-/merge_requests/4",
-			},
-			deliveredAt: "2026-07-01T10:00:00Z",
-			itemVersion: null,
-			basedOn: [],
-			recordedClaimCurrentness: "CURRENT",
-			bodyRole: "UNKNOWN",
-			body: "A legacy delivered note without a recorded destination.",
-		},
-	],
-});
-
-/** Delivered-feedback IDs the already-said composer names as witnesses; `chat-test` names none on record. */
-const WITNESS: Record<string, string> = {
-	"app-test": "00000000-0000-4000-8000-000000000211",
-	"app-second": "00000000-0000-4000-8000-000000000212",
-	"chat-test": "00000000-0000-4000-8000-000000000221",
-	"chat-second": "00000000-0000-4000-8000-000000000222",
-	"chat-other": "00000000-0000-4000-8000-000000000223",
-};
-
-const deliveredRecord = (
-	id: string,
-	destination: string,
-	practiceSlug: string,
-	overrides = {},
-) => ({
-	id,
-	destination,
-	deliveredAt: "2026-08-01T10:00:00Z",
-	recordedClaimCurrentness: "CURRENT",
-	withdrawn: false,
-	basedOn: historyBasis(practiceSlug),
-	bodyRole: destination === "CONVERSATION" ? "CONVERSATION_WORDS" : "PRACTICE_PAGE_CARD",
-	body: `Earlier ${destination} feedback about ${practiceSlug}.`,
-	...overrides,
-});
-
-/** Delivered feedback for every practice but test-practice on CONVERSATION, where only unusable records exist. */
-const ALREADY_SAID_HISTORY = {
-	readAt: "2026-10-07T10:00:00Z",
-	coverage: { maxEntries: 30, hasMore: false, omittedWithoutCopyAuthority: 0 },
-	delivered: [
-		deliveredRecord(WITNESS["app-test"] ?? "", "PRACTICE_PAGE", "test-practice"),
-		deliveredRecord(WITNESS["app-second"] ?? "", "PRACTICE_PAGE", "second-practice"),
-		deliveredRecord(WITNESS["chat-second"] ?? "", "CONVERSATION", "second-practice"),
-		deliveredRecord(WITNESS["chat-other"] ?? "", "CONVERSATION", "other-practice"),
-		deliveredRecord("00000000-0000-4000-8000-000000000231", "CONVERSATION", "test-practice", {
-			basedOn: historyBasis("test-practice", "MET"),
-		}),
-		deliveredRecord("00000000-0000-4000-8000-000000000232", "CONVERSATION", "test-practice", {
-			recordedClaimCurrentness: "STALE",
-			bodyRole: null,
-			body: null,
-		}),
-		deliveredRecord("00000000-0000-4000-8000-000000000233", "CONVERSATION", "test-practice", {
-			withdrawn: true,
-			bodyRole: null,
-			body: null,
-		}),
-	],
-	queued: [
-		{
-			threadKey: "00000000-0000-4000-8000-000000000103",
-			feedbackId: "00000000-0000-4000-8000-000000000103",
-			destination: "CONVERSATION",
-			practiceSlug: "test-practice",
-			preparedAt: "2026-09-01T10:00:00Z",
-			recordedClaimCurrentness: "CURRENT",
-			basedOn: historyBasis("test-practice"),
-			bodyRole: "MENTOR_NOTES",
-			body: "Prepared mentor notes about test-practice.",
-		},
-	],
-};
-
-/** The review composition's whole summary, as the composer wrote it, paragraphs and all. */
-const REVIEW_SUMMARY =
-	"The login change calls `insecure()` on the path every sign-in takes.\n\n" +
-	"Route it through the checked helper so a bad token cannot reach it.";
 
 type SubmittedCitation = Record<string, string | number>;
 
@@ -536,13 +171,6 @@ function listOf(value: unknown): unknown[] {
 	return items;
 }
 
-function readFeedbackResults(path: string) {
-	const payload: unknown = JSON.parse(readFileSync(path, "utf8"));
-	assert.ok(isRecord(payload) && Array.isArray(payload.results));
-	const results: unknown[] = payload.results;
-	return results.map(recordOf);
-}
-
 function readResults(path: string) {
 	const payload = recordOf(JSON.parse(readFileSync(path, "utf8")));
 	assert.equal(payload.contractVersion, 3);
@@ -571,35 +199,6 @@ interface CustomTool {
 	prepareArguments?: (args: unknown) => unknown;
 	execute: (id: string, input: unknown) => Promise<AgentToolResult<unknown>>;
 }
-
-const withhold = (
-	destination: string,
-	practiceSlug: string,
-	withholdReason: string,
-	basedOn = [
-		practiceSlug === "test-practice"
-			? "00000000-0000-4000-8000-000000000001"
-			: "00000000-0000-4000-8000-000000000002",
-	],
-) => ({
-	destination,
-	practiceSlug,
-	basedOn,
-	action: "WITHHOLD",
-	withholdReason,
-	witnessIds:
-		withholdReason === "BELOW_BAR"
-			? []
-			: basedOn.map((id) => {
-					let suffix = "other";
-					if (id.endsWith("1")) {
-						suffix = "test";
-					} else if (id.endsWith("2")) {
-						suffix = "second";
-					}
-					return WITNESS[`${destination === "PRACTICE_PAGE" ? "app" : "chat"}-${suffix}`] ?? "";
-				}),
-});
 
 type NativeStream = Awaited<ReturnType<AgentSession["agent"]["streamFunction"]>>;
 function isStreamFactory(value: unknown): value is () => NativeStream {
@@ -699,15 +298,6 @@ const nativeSdk =
 		? await import("@earendil-works/pi-coding-agent")
 		: undefined;
 let reviewExtensions: ExtensionFactory[] = [];
-const unavailableContext = process.env.PI_UNAVAILABLE_CONTEXT === "true";
-/** The private composer's response ends, but its compaction stays busy until the run's own deadline. */
-const privateHold = process.env.PI_PRIVATE_HOLD === "true";
-/** The review composer's response ends, but its compaction stays busy until the run's own deadline. */
-const publicHold = process.env.PI_PUBLIC_HOLD === "true";
-const counterevidence = process.env.PI_COUNTEREVIDENCE === "true";
-const reviewCompacted = process.env.PI_REVIEW_COMPACTED === "true";
-const reviewerOnly = process.env.PI_REVIEWER_ONLY === "true";
-const loopReject = process.env.PI_LOOP_REJECT === "true";
 if (scenario !== undefined && scenario !== "") {
 	const cwd = process.env.PI_RUNNER_CWD;
 	assert.ok(cwd !== undefined && cwd !== "");
@@ -724,494 +314,49 @@ if (scenario !== undefined && scenario !== "") {
 	mock.method(Date, "now", () => now);
 	const record = (event: string) => appendFileSync(nodePath.join(cwd, "events"), `${event}\n`);
 	await mockChange({ writeChangeView: () => record("derive-change") });
-	const secondNotMet = {
-		...admittedResult,
-		resultId: "00000000-0000-4000-8000-000000000002",
-		practiceSlug: "second-practice",
-		problems: [admittedChild("problem-2")],
-	};
-	const abstention = (
-		resultId: string,
-		practiceSlug: string,
-		path: string,
-		startLine: number,
-		endLine: number,
-		quote: string,
-	) => ({
-		...admittedResult,
-		resultId,
-		practiceSlug,
-		severity: null,
-		citations: [{ ...admittedCitation, path, startLine, endLine, quote }],
-		problems: [],
-	});
+	/** What the mocked server admits: nothing, or one result whose outcome is outside the vocabulary. */
 	const admitted = (): unknown[] => {
-		switch (scenario) {
-			case "compose-abstention": {
-				const ids = ["test-practice", "second-practice", "third-practice"];
-				return readResults(nodePath.join(cwd, "admission.json")).map((posted) => {
-					const candidate = recordOf(posted.candidate);
-					return {
-						...admittedResult,
-						...candidate,
-						resultId: `00000000-0000-4000-8000-${String(ids.indexOf(String(posted.practiceSlug)) + 1).padStart(12, "0")}`,
-						practiceSlug: posted.practiceSlug,
-						severity: null,
-						citations: listOf(candidate.citations).map((citation, index) => ({
-							...recordOf(citation),
-							index,
-							anchorable: false,
-						})),
+		const outcome = new Map<string, unknown>([
+			["admission-unknown-outcome", "PASSED"],
+			["admission-null-outcome", null],
+		]);
+		return outcome.has(scenario)
+			? [
+					{
+						resultId: "00000000-0000-4000-8000-000000000001",
+						practiceSlug: "test-practice",
+						outcome: outcome.get(scenario),
+						evidence: { citations: [] },
 						problems: [],
-					};
-				});
-			}
-			case "compose-already-said": {
-				// Two NOT_MET practices, and MET counterevidence of another practice without delivered history.
-				return [
-					admittedResult,
-					secondNotMet,
-					metResult("00000000-0000-4000-8000-000000000003", "counter-practice"),
-				];
-			}
-			case "compose-reselect": {
-				return [
-					admittedResult,
-					metResult("00000000-0000-4000-8000-000000000002", "second-practice"),
-				];
-			}
-			case "compose-partial-error":
-			case "compose-qualify":
-			case "compose-fold": {
-				return [
-					{ ...admittedResult, publicEligible: !reviewerOnly },
-					counterevidence
-						? {
-								...metResult(
-									"00000000-0000-4000-8000-000000000002",
-									scenario === "compose-qualify" ? "test-practice" : "second-practice",
-								),
-								publicEligible: !reviewerOnly,
-								explanation:
-									"The helper path is present in the source; its runtime behavior was not executed.",
-								evidence: {
-									search: {
-										consulted: ["scm.pull-request.diff"],
-										lookedFor: "A recorded relaunch result",
-										boundary: "Source only; no relaunch result recorded.",
-									},
-								},
-							}
-						: { ...secondNotMet, publicEligible: !reviewerOnly },
-					...(scenario === "compose-fold"
-						? [
-								{
-									...abstention(
-										"00000000-0000-4000-8000-000000000011",
-										"request-scope-practice",
-										"src/RequestScope.java",
-										41,
-										42,
-										"+ unresolvedCurrentRequest();",
-									),
-									outcome: "COULD_NOT_DETERMINE",
-									summary: "Unwarranted conformance summary",
-									explanation: "Unwarranted conformance rationale",
-									evidence: {
-										openQuestions: [
-											{
-												openQuestion: "Which current request governs?",
-												wouldSettleIt:
-													"An authored resolution of the conflicting current statements.",
-											},
-										],
-									},
-								},
-								{
-									...abstention(
-										"00000000-0000-4000-8000-000000000012",
-										"external-interface-practice",
-										"src/ExternalInterface.java",
-										73,
-										73,
-										"+ unchangedInterface();",
-									),
-									outcome: "DOES_NOT_APPLY",
-									evidence: {
-										inapplicability: {
-											consulted: ["scm.pull-request.diff"],
-											prerequisite: "A changed external interface",
-											ruledOutBy: "The captured interface is unchanged.",
-										},
-									},
-								},
-							]
-						: []),
-				];
-			}
-			case "compose":
-			case "compose-foreign-provider": {
-				return [
-					{
-						...admittedResult,
-						problems: [admittedChild("problem-1"), admittedChild("problem-1b")],
 					},
-					{
-						...admittedResult,
-						resultId: "00000000-0000-4000-8000-000000000010",
-						summary: PRIVATE_HISTORY_SENTENCE,
-						explanation: PRIVATE_HISTORY_SENTENCE,
-						publicEligible: false,
-						problems: [
-							{
-								...admittedChild("problem-history", {
-									index: 0,
-									sourceKind: "hephaestus.feedback-history",
-									path: "history/feedback.json",
-									anchorable: false,
-								}),
-								anchorable: false,
-							},
-						],
-					},
-				];
-			}
-			case "compose-empty": {
-				return [metResult("00000000-0000-4000-8000-000000000001", "test-practice")];
-			}
-			case "compose-unknown-outcome": {
-				return [{ ...admittedResult, outcome: "PASSED" }];
-			}
-			case "compose-null-outcome": {
-				return [{ ...admittedResult, outcome: null }];
-			}
-			default: {
-				return [admittedResult];
-			}
-		}
+				]
+			: [];
 	};
-	let publicHistoryReads = 0;
-	let publicCompletionAttempts = 0;
 	mock.method(globalThis, "fetch", async (input: unknown, init?: RequestInit) => {
 		if (nativeSdk) {
 			assert.equal(String(input), "https://unused.invalid/admit-results");
-		}
-		if (String(input).endsWith("/prepare-feedback")) {
-			publicCompletionAttempts += 1;
-			const preparationBody = init?.body;
-			assert.ok(typeof preparationBody === "string");
-			const preparation: unknown = JSON.parse(preparationBody);
-			assert.ok(isRecord(preparation));
-			assert.equal(typeof preparation.publicComposition, "boolean");
-			record(`prepare-public:${String(preparation.publicComposition)}`);
-			const mode = process.env.PI_PUBLIC_COMPLETION_MODE;
-			if (mode !== undefined) {
-				const body = init?.body;
-				assert.ok(typeof body === "string");
-				record(
-					`public-completion:${publicCompletionAttempts}:${createHash("sha256").update(body).digest("hex")}`,
-				);
-				const submitted: unknown = JSON.parse(body);
-				assert.ok(isRecord(submitted));
-				assert.equal(submitted.reviewId, "11111111-1111-4111-8111-111111111111");
-				assert.ok(Array.isArray(submitted.composition));
-				if (submitted.publicComposition === true) {
-					record(`public-context:${String(submitted.publicationContext)}`);
-				}
-			}
-			if (mode === "stale" && publicCompletionAttempts === 1) {
-				return Response.json({ status: 409, code: "PUBLIC_HISTORY_CHANGED" }, { status: 409 });
-			}
-			if (mode === "unresolved" && publicCompletionAttempts === 1) {
-				return Response.json({ status: 409, code: "PUBLIC_DELIVERY_UNRESOLVED" }, { status: 409 });
-			}
-			if (mode === "refused") {
-				return Response.json(
-					{ schemaVersion: 1, accepted: false, reasons: ["Refused"] },
-					{ status: 422 },
-				);
-			}
-			if (mode === "public-unavailable" && preparation.publicComposition === true) {
-				throw new DOMException("The preparation response was not received", "TimeoutError");
-			}
-			if (mode === "lost-ack" && publicCompletionAttempts === 1) {
-				throw new TypeError("fetch failed");
-			}
-			return Response.json({
-				feedbackIds: [],
-				preparedAt: "2026-10-14T12:00:00Z",
-				contentDigest: "a".repeat(64),
-			});
-		}
-		if (String(input).endsWith("/public-feedback-history")) {
-			const mode = process.env.PI_PUBLIC_HISTORY_MODE;
-			publicHistoryReads += 1;
-			if (mode === "body-transport" || mode === "malformed-json") {
-				record("public-history-read");
-			}
-			if (mode === "body-transport" && publicHistoryReads === 1) {
-				return new Response(
-					new ReadableStream({
-						start(controller) {
-							controller.error(new TypeError("Response body stream interrupted"));
-						},
-					}),
-				);
-			}
-			if (mode === "malformed-json") {
-				return new Response('{"schemaVersion":');
-			}
-			if (mode === "invalid" || mode === "invalid-link") {
-				return Response.json(
-					historyDto({
-						schemaVersion: 1,
-						readAt: "2026-10-07T11:00:00Z",
-						history: {
-							feedback: [
-								{
-									id: "00000000-0000-4000-8000-000000000001",
-									destination: "ON_WORK",
-									publicEligible: true,
-									item: {
-										kind: "scm.pull_request",
-										url:
-											mode === "invalid-link"
-												? 42
-												: "https://gitlab.example/group/repo/-/merge_requests/3",
-									},
-									deliveredAt: mode === "invalid" ? "invalid" : "2026-10-07T10:00:00Z",
-									recordedClaimCurrentness: "CURRENT",
-									body: "Malformed non-null delivery time",
-								},
-							],
-						},
-					}),
-				);
-			}
-			if (mode === "unavailable-words" || mode === "missing-currentness") {
-				return Response.json(
-					historyDto({
-						schemaVersion: 1,
-						readAt: "2026-10-07T11:00:00Z",
-						history: {
-							wordsCoverage: "PARTIAL",
-							feedback: ["CURRENT", "STALE"].map((currentness, index) => ({
-								id: `00000000-0000-4000-8000-00000000000${index + 1}`,
-								destination: "ON_WORK",
-								publicEligible: true,
-								item: {
-									kind: "scm.pull_request",
-									url: "https://gitlab.example/group/repo/-/merge_requests/3",
-								},
-								deliveredAt: "2026-10-07T10:00:00Z",
-								...(mode === "missing-currentness"
-									? {}
-									: { recordedClaimCurrentness: currentness }),
-								...(index === 1 ? { withdrawn: true } : {}),
-								wordsUnavailable: "COPY_AUTHORITY_UNAVAILABLE",
-							})),
-						},
-					}),
-				);
-			}
-			if (mode === "refused") {
-				return new Response("Attempt no longer owns the job", { status: 409 });
-			}
-			if (mode === "fresh" || mode === "body-transport") {
-				return Response.json(
-					historyDto({
-						schemaVersion: 1,
-						readAt: "2026-10-07T11:00:00Z",
-						history: {
-							feedback: [
-								{
-									id: "00000000-0000-4000-8000-000000000001",
-									destination: "ON_WORK",
-									publicEligible: true,
-									item: {
-										kind: "scm.pull_request",
-										url: "https://gitlab.example/group/repo/-/merge_requests/3",
-									},
-									deliveredAt: "2026-10-07T10:00:00Z",
-									recordedClaimCurrentness: "CURRENT",
-									body: "Fresh delivered communication",
-								},
-								{
-									id: "00000000-0000-4000-8000-000000000002",
-									destination: "ON_WORK",
-									publicEligible: true,
-									item: {
-										kind: "scm.pull_request",
-										url: "https://gitlab.example/group/repo/-/merge_requests/3",
-									},
-									deliveredAt: null,
-									recordedClaimCurrentness: "CURRENT",
-									body: "Delivered with unknown time",
-								},
-								...[{ kind: "scm.pull_request" }, { kind: "scm.pull_request", url: null }].map(
-									(item, index) => ({
-										id: `00000000-0000-4000-8000-00000000000${index + 3}`,
-										destination: "ON_WORK",
-										publicEligible: true,
-										item,
-										deliveredAt: "2026-10-07T08:00:00Z",
-										recordedClaimCurrentness: "CURRENT",
-										body: "Delivery with unknown work link",
-									}),
-								),
-							],
-						},
-					}),
-				);
-			}
-			const path = nodePath.join(cwd, "history/feedback.json");
-			const history: unknown = existsSync(path)
-				? JSON.parse(readFileSync(path, "utf8"))
-				: { feedback: [] };
-			assert.ok(isRecord(history) && Array.isArray(history.feedback));
-			return Response.json(
-				historyDto({
-					schemaVersion: 1,
-					readAt: "2026-10-07T11:00:00Z",
-					// Each read names its own response, so a stale package must come back with the newer one.
-					...(process.env.PI_PUBLIC_COMPLETION_MODE === "stale"
-						? { publicationContext: `v1:7:${(publicHistoryReads === 1 ? "c" : "d").repeat(64)}` }
-						: {}),
-					history: {
-						...history,
-						feedback: history.feedback.filter(
-							(entry: unknown) =>
-								isRecord(entry) && entry.destination === "ON_WORK" && entry.publicEligible === true,
-						),
-					},
-				}),
-			);
 		}
 		assert.ok(String(input).endsWith("/admit-results"), String(input));
 		record("admit");
 		assert.ok(typeof init?.body === "string");
 		writeFileSync(nodePath.join(cwd, "admission.json"), init.body);
-		if (scenario === "compose-settle-deadline") {
-			now = 1_000_000 + Number(process.env.AGENT_BUDGET_MS) - 200;
+		if (scenario === "draft-commit") {
+			// Measurement closes before admission: the measured tool can no longer change a result.
+			assert.ok(measuredTool);
+			const closedTool = measuredTool;
+			const before = [stateText(), notesText()];
+			await assert.rejects(
+				async () => closedTool.execute("after-measurement", notMet("Forbidden late replacement")),
+				/Measurement is closed/u,
+			);
+			assert.deepEqual([stateText(), notesText()], before);
+			record("draft-closed:Measurement is closed; result and notes unchanged");
 		}
-		if (scenario === "compose-private-safety") {
-			// Room for the review on the work, which this mock answers at once, before the private composition.
-			now = 1_000_000 + Number(process.env.AGENT_BUDGET_MS) - 2000;
-		}
-		const rows = admitted();
-		const supportMode = process.env.PI_PRACTICE_PAGE_SUPPORT_MODE;
-
-		let selected: ReturnType<typeof supportOccurrence>[] = [];
-		if (
-			scenario === "compose" ||
-			scenario === "compose-foreign-provider" ||
-			supportMode === "selected" ||
-			supportMode === "mentor-unavailable" ||
-			supportMode === "routing-missing"
-		) {
-			selected = [supportOccurrence("scm.pull_request", 3), supportOccurrence("scm.issue", 3)];
-		} else if (supportMode === "duplicate") {
-			selected = [
-				supportOccurrence("scm.pull_request", 3),
-				supportOccurrence("scm.pull_request", 3),
-			];
-		}
-
-		const pageAdmission = new Map([
-			["cooldown", { decision: "RECENTLY_SURFACED", stopReason: "NOTHING_NEW" }],
-			["inline", { decision: "UNCORROBORATED", stopReason: "UNCORROBORATED" }],
-		]).get(supportMode ?? "");
-		const complete = {
-			state: "COMPLETE",
-			readAt: "2026-10-07T10:00:00Z",
-			practices: [
-				...new Set(
-					rows
-						.filter((row) => isRecord(row) && row.outcome === "NOT_MET")
-						.map((row) => {
-							assert.ok(isRecord(row));
-							return row.practiceSlug;
-						}),
-				),
-			].map((practiceSlug) =>
-				pageAdmission === undefined
-					? { practiceSlug, decision: "ADMIT", stopReason: null, occurrences: selected }
-					: { practiceSlug, ...pageAdmission, occurrences: [] },
-			),
-		};
-		const chatRouting =
-			supportMode === "routing-missing"
-				? undefined
-				: {
-						state: "COMPLETE",
-						readAt: complete.readAt,
-						results: rows.flatMap((row) => {
-							if (!isRecord(row) || row.outcome !== "NOT_MET") {
-								return [];
-							}
-							const inline =
-								supportMode === "inline" ||
-								(supportMode === "first-inline" && row.practiceSlug === "test-practice");
-							let decision = "ADMIT";
-							let stopReason: string | null = null;
-							if (supportMode === "mentor-unavailable") {
-								decision = "MENTOR_UNAVAILABLE";
-								stopReason = "RECIPIENT_UNAVAILABLE";
-							} else if (inline) {
-								decision = "HAS_INLINE_ANCHOR";
-								stopReason = "NOTHING_NEW";
-							}
-							return [
-								{
-									resultId: row.resultId,
-									decision,
-									stopReason,
-								},
-							];
-						}),
-					};
-		let support: unknown = complete;
-		if (supportMode === "missing") {
-			support = undefined;
-		} else if (supportMode === "unavailable") {
-			support = { state: "UNAVAILABLE", readAt: complete.readAt };
-		} else if (supportMode === "refused" || supportMode === "refused-only") {
-			support = { state: "REFUSED", readAt: complete.readAt };
-		} else if (supportMode === "malformed") {
-			support = { ...complete, practices: [] };
-		} else if (supportMode === "invalid-optional") {
-			support = {
-				...complete,
-				practices: [
-					{
-						practiceSlug: "test-practice",
-						decision: "ADMIT",
-						stopReason: null,
-						occurrences: [{ ...supportOccurrence("scm.issue", 1), practiceVersionId: "unknown" }],
-					},
-				],
-			};
-		}
-
-		// The server's private history read for this fixture, if it made one.
-		const privateHistoryPath = nodePath.join(cwd, "private-history.json");
-		const privateHistory: unknown = existsSync(privateHistoryPath)
-			? JSON.parse(readFileSync(privateHistoryPath, "utf8"))
-			: null;
 		return Response.json({
 			contractVersion: 4,
 			admissionDigest: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-			publicReviewed: false,
-			privateProgress: {
-				decidedResultIds: [],
-				practicePageDeliveries: 0,
-				conversationDeliveries: 0,
-			},
-			admitted: rows.map(admissionDto),
+			admitted: admitted(),
 			withheld: [],
-			practicePageSupport: support ?? null,
-			conversationEligibility: chatRouting ?? null,
-			privateHistory,
 		});
 	});
 	const manager = {
@@ -1792,12 +937,7 @@ if (scenario !== undefined && scenario !== "") {
 							return queued;
 						},
 						getContextUsage: () => ({
-							tokens:
-								((scenario === "compose-overflow" && prompts >= 2) ||
-									scenario === "measure-context-compact") &&
-								!wasCompacted
-									? 120_000
-									: 1000,
+							tokens: scenario === "measure-context-compact" && !wasCompacted ? 120_000 : 1000,
 							contextWindow: 128_000,
 							percent: 0,
 						}),
@@ -1830,11 +970,7 @@ if (scenario !== undefined && scenario !== "") {
 							if (scenario === "scope-stop-failure") {
 								throw new Error("Native session did not settle");
 							}
-							if (
-								scenario === "compose-late-usage" &&
-								options.tools.includes("report_review") &&
-								!settlementUsageEmitted
-							) {
+							if (scenario === "late-usage" && !settlementUsageEmitted) {
 								settlementUsageEmitted = true;
 								emit({
 									type: "message_end",
@@ -1868,18 +1004,13 @@ if (scenario !== undefined && scenario !== "") {
 							prompts += 1;
 							record(`prompt:${prompts}`);
 							writeFileSync(nodePath.join(cwd, `prompt-${prompts}.md`), text);
-							if (
-								scenario === "compose-request-caps" &&
-								(options.tools.includes("report_review") ||
-									options.tools.includes("report_feedback"))
-							) {
+							if (scenario === "request-caps") {
 								// Each request asks for the model's ceiling; the turn grants only what it has left.
-								const phase = options.tools.includes("report_review") ? "public" : "private";
 								const request = () => {
 									try {
 										agent.streamFunction({ maxTokens: 16_384 }, {}, { maxTokens: 16_384 });
 									} catch {
-										record(`stream-request-refused:${phase}`);
+										record("stream-request-refused");
 									}
 								};
 								// Each response stays within what it was granted, so the turn ends on its work budget.
@@ -1896,6 +1027,10 @@ if (scenario !== undefined && scenario !== "") {
 									});
 								}
 								request();
+								await tool("submit_result").execute(
+									"capped",
+									notMet("Submitted after the turn spent its work"),
+								);
 								return;
 							}
 							if (scenario.startsWith("provider-reply-")) {
@@ -2056,763 +1191,6 @@ if (scenario !== undefined && scenario !== "") {
 								settleIdle();
 								return;
 							}
-							if (
-								text.includes("## The review to write") ||
-								text.includes("The review leaves these NOT_MET results undecided") ||
-								text.includes("The review on this work is not final yet")
-							) {
-								assert.ok(
-									admitted().some(
-										(row) =>
-											isRecord(row) && row.publicEligible === true && row.outcome === "NOT_MET",
-									),
-								);
-								assert.deepEqual(options.tools, ["report_review"]);
-								assert.deepEqual(
-									options.customTools.map((custom) => custom.name),
-									["report_review"],
-								);
-								if (scenario === "compose-public-error" || scenario === "compose-recovered-error") {
-									emit({
-										type: "message_end",
-										message: {
-											role: "assistant",
-											stopReason: "error",
-											usage: callUsage(17),
-											content: [],
-											errorMessage: "503 upstream body sk-orchestration-secret",
-											// The public error keeps chat-completions names; the recovered call fails as a
-											// Responses call whose failed terminal event arrived after its response.
-											diagnostics:
-												scenario === "compose-public-error"
-													? [
-															{
-																type: "openai_completions_failure",
-																timestamp: 1_760_000_000_000,
-																details: { kind: "HTTP_ERROR", phase: "request", status: 503 },
-															},
-															// The call never got its response, so it states no response time.
-															{
-																type: "openai_completions_call",
-																timestamp: 1_760_000_000_000,
-																details: { elapsedMs: 1200 },
-															},
-														]
-													: [
-															{
-																type: "openai_responses_failure",
-																timestamp: 1_760_000_000_000,
-																details: { kind: "RESPONSE_FAILED", phase: "response_body" },
-															},
-															{
-																type: "openai_responses_call",
-																timestamp: 1_760_000_000_000,
-																details: { elapsedMs: 1200, responseMs: 200 },
-															},
-														],
-										},
-									});
-									if (scenario === "compose-public-error") {
-										return;
-									}
-									emit({ type: "auto_retry_end", success: true });
-									emit({
-										type: "message_end",
-										message: {
-											role: "assistant",
-											stopReason: "toolUse",
-											usage: callUsage(19),
-											content: [],
-											diagnostics: [
-												{
-													type: "openai_responses_call",
-													timestamp: 1_760_000_001_000,
-													details: { elapsedMs: 900, responseMs: 300 },
-												},
-											],
-										},
-									});
-								}
-								const review = tool("report_review");
-								if (
-									text.includes("The review leaves") ||
-									text.includes("The review on this work is not final yet")
-								) {
-									record("review-retry");
-									return;
-								}
-								if (scenario === "compose-settle-deadline" || publicHold) {
-									// A whole review is refused, and then the response ends while its auto-compaction
-									// remains busy until the deadline: no final review is ever stored.
-									const refused = await review
-										.execute("r-d", { decisions: [] })
-										.catch((error: unknown) =>
-											error instanceof Error ? error.message : String(error),
-										);
-									record(`refused-only:${JSON.stringify(refused)}`);
-									compacting = true;
-									return;
-								}
-								if (scenario === "compose-loop") {
-									// SDK validation failures emit tool events without executing the tool.
-									for (let call = 1; call <= 24; call += 1) {
-										emit({
-											type: "tool_execution_start",
-											toolCallId: `s-${call}`,
-											toolName: "report_review",
-											args: {},
-										});
-										emit({
-											type: "tool_execution_end",
-											toolCallId: `s-${call}`,
-											toolName: "report_review",
-											isError: true,
-											result: {
-												content: [
-													{
-														type: "text",
-														text: 'Validation failed for tool "report_review":\n  - /summary: Expected object',
-													},
-												],
-											},
-										});
-									}
-									if (loopReject) {
-										throw new Error("Expected native loop abort");
-									}
-									return;
-								}
-								const attempt = async (id: string, args: unknown) => {
-									try {
-										return JSON.stringify(await review.execute(id, args));
-									} catch (error) {
-										return JSON.stringify(error instanceof Error ? error.message : String(error));
-									}
-								};
-								if (scenario === "compose-invalid-select") {
-									// Each call as the SDK runs it: started and ended as events, so the runner's repeat
-									// guard sees it, and executed by the native tool.
-									const native = async (name: string, id: string, args: unknown) => {
-										emit({ type: "tool_execution_start", toolCallId: id, toolName: name, args });
-										try {
-											const result = await tool(name).execute(id, args);
-											emit({
-												type: "tool_execution_end",
-												toolCallId: id,
-												toolName: name,
-												isError: false,
-												result,
-											});
-											return JSON.stringify(result);
-										} catch (error) {
-											const errorMessage = error instanceof Error ? error.message : String(error);
-											emit({
-												type: "tool_execution_end",
-												toolCallId: id,
-												toolName: name,
-												isError: true,
-												result: { content: [{ type: "text", text: errorMessage }] },
-											});
-											return JSON.stringify(errorMessage);
-										}
-									};
-									/** The tools a steering message tells the session to call. */
-									const toolsNamed = (from: number) =>
-										steered
-											.slice(from)
-											.map((message) => ["report_review"].filter((name) => message.includes(name)));
-									const said = {
-										decisions: [
-											{ resultId: "00000000-0000-4000-8000-000000000001", disposition: "RAISE" },
-										],
-										summary: {
-											body: REVIEW_SUMMARY,
-											basedOn: ["00000000-0000-4000-8000-000000000001"],
-										},
-									};
-									const decidesNothing = { decisions: [] };
-									record(`invalid-report:${await native("report_review", "r-1", decidesNothing)}`);
-									const before = steered.length;
-									record(`invalid-again:${await native("report_review", "r-1b", decidesNothing)}`);
-									record(`invalid-nudge:${JSON.stringify(toolsNamed(before))}`);
-									record(`invalid-final:${await native("report_review", "r-2", said)}`);
-									record(`invalid-after-final:${await native("report_review", "r-3", said)}`);
-									return;
-								}
-								if (scenario === "compose-recover") {
-									// A whole review is refused and the response ends without a final one.
-									record(`recover-refused:${await attempt("r-r", { decisions: [] })}`);
-									return;
-								}
-								if (scenario === "compose-qualify" && reviewCompacted) {
-									const raised = {
-										decisions: [
-											{ resultId: "00000000-0000-4000-8000-000000000001", disposition: "RAISE" },
-										],
-										summary: {
-											body: REVIEW_SUMMARY,
-											basedOn: ["00000000-0000-4000-8000-000000000001"],
-										},
-									};
-									record(
-										`mixed-met:${await attempt("r-met", {
-											...raised,
-											summary: {
-												body: REVIEW_SUMMARY,
-												basedOn: [
-													"00000000-0000-4000-8000-000000000001",
-													"00000000-0000-4000-8000-000000000002",
-												],
-											},
-										})}`,
-									);
-									emit({
-										type: "compaction_end",
-										reason: "threshold",
-										result: undefined,
-										aborted: false,
-									});
-									writeFileSync(
-										nodePath.join(cwd, "compacted-refused.txt"),
-										await attempt("r-c1", raised),
-									);
-									writeFileSync(
-										nodePath.join(cwd, "restore-batch-refused.txt"),
-										await attempt("r-c2", raised),
-									);
-									emit({ type: "turn_start" });
-									record(`compacted-stored:${await attempt("r-c3", raised)}`);
-									return;
-								}
-								if (scenario === "compose-qualify") {
-									const before = readFileSync(nodePath.join(cwd, "out/review-state.json"), "utf8");
-									// A review that leaves the second problem undecided is refused whole; the corrected
-									// whole review is stored.
-									writeFileSync(
-										nodePath.join(cwd, "qualification-refused.txt"),
-										await attempt("r-q1", {
-											decisions: [
-												{ resultId: "00000000-0000-4000-8000-000000000001", disposition: "RAISE" },
-											],
-											summary: {
-												body: REVIEW_SUMMARY,
-												basedOn: ["00000000-0000-4000-8000-000000000001"],
-											},
-										}),
-									);
-									record(
-										`qualification-stored:${await attempt("r-q", {
-											summary: {
-												body: REVIEW_SUMMARY,
-												basedOn: ["00000000-0000-4000-8000-000000000001"],
-											},
-											decisions: [
-												{ resultId: "00000000-0000-4000-8000-000000000001", disposition: "RAISE" },
-												{
-													resultId: "00000000-0000-4000-8000-000000000002",
-													disposition: "BELOW_BAR",
-												},
-											],
-										})}`,
-									);
-									assert.equal(
-										readFileSync(nodePath.join(cwd, "out/review-state.json"), "utf8"),
-										before,
-									);
-									record("qualification:canonical-unchanged");
-									return;
-								}
-								if (scenario === "compose-reselect") {
-									// The composer leaves a problem undecided, then withholds it naming no witness, and then
-									// sends the corrected whole review.
-									const said = {
-										decisions: [
-											{ resultId: "00000000-0000-4000-8000-000000000001", disposition: "RAISE" },
-										],
-										summary: {
-											body: REVIEW_SUMMARY,
-											basedOn: ["00000000-0000-4000-8000-000000000001"],
-										},
-									};
-									await this.steer();
-									record(`reselect-incomplete:${await attempt("r-0", { decisions: [] })}`);
-									record(`reselect-before-final:${JSON.stringify(await this.agent.finishTurn())}`);
-									record(`reselect-retained:${this.pendingMessageCount}`);
-									record(
-										`reselect-unwitnessed:${await attempt("r-1", {
-											decisions: [
-												{
-													resultId: "00000000-0000-4000-8000-000000000001",
-													disposition: "ALREADY_SAID",
-												},
-											],
-										})}`,
-									);
-									record(
-										`reselect-met:${await attempt("r-met", {
-											...said,
-											summary: {
-												body: REVIEW_SUMMARY,
-												basedOn: [
-													"00000000-0000-4000-8000-000000000001",
-													"00000000-0000-4000-8000-000000000002",
-												],
-											},
-										})}`,
-									);
-									record(`reselect-final:${await attempt("r-2", said)}`);
-									record(`reselect-terminal:${JSON.stringify(await this.agent.finishTurn())}`);
-									record(`reselect-drained:${this.pendingMessageCount}`);
-									// One response can carry more calls after the final one; none of them is accepted.
-									record(`reselect-after-review:${await attempt("r-3", said)}`);
-									return;
-								}
-								if (scenario === "compose-complete-error") {
-									record(
-										`complete-final:${await attempt("r-e", {
-											decisions: [
-												{
-													resultId: "00000000-0000-4000-8000-000000000001",
-													disposition: "BELOW_BAR",
-												},
-											],
-										})}`,
-									);
-									emit({
-										type: "message_end",
-										message: { role: "assistant", stopReason: "error", content: [] },
-									});
-									return;
-								}
-								if (scenario === "compose" || scenario === "compose-foreign-provider") {
-									record(
-										`review-refused:${await attempt("r-1", {
-											decisions: [
-												{ resultId: "00000000-0000-4000-8000-000000000001", disposition: "RAISE" },
-											],
-											summary: {
-												body: "Fine. <!-- marker -->",
-												basedOn: ["00000000-0000-4000-8000-000000000001"],
-											},
-											inline: [
-												{
-													body: "On this line.",
-													basedOn: ["problem-1"],
-													anchor: { problemId: "problem-1b", citationIndex: 0 },
-												},
-											],
-										})}`,
-									);
-									record(
-										`review-history:${await attempt("r-h", {
-											decisions: [
-												{ resultId: "00000000-0000-4000-8000-000000000001", disposition: "RAISE" },
-											],
-											summary: {
-												body: "A sentence.",
-												basedOn: ["00000000-0000-4000-8000-000000000010"],
-											},
-										})}`,
-									);
-									record(
-										`review-stored:${await attempt("r-2", {
-											decisions: [
-												{ resultId: "00000000-0000-4000-8000-000000000001", disposition: "RAISE" },
-											],
-											summary: {
-												body: REVIEW_SUMMARY,
-												basedOn: ["00000000-0000-4000-8000-000000000001"],
-											},
-											inline: [
-												{
-													body: "`insecure()` runs here before the token is checked; call the checked helper instead.",
-													basedOn: ["problem-1"],
-													anchor: { problemId: "problem-1", citationIndex: 0 },
-												},
-											],
-										})}`,
-									);
-									return;
-								}
-								// Every other composing scenario decides the review's problems by withholding them.
-								const ids =
-									(scenario === "compose-fold" ||
-										scenario === "compose-partial-error" ||
-										scenario === "compose-already-said") &&
-									!counterevidence
-										? [
-												"00000000-0000-4000-8000-000000000001",
-												"00000000-0000-4000-8000-000000000002",
-											]
-										: ["00000000-0000-4000-8000-000000000001"];
-								const decisions = ids.map((resultId) => ({
-									resultId,
-									disposition: "BELOW_BAR",
-								}));
-								if (scenario === "compose-fold" && !reviewerOnly) {
-									record(
-										`qualification-support:${await attempt("r-limits", {
-											decisions,
-											summary: {
-												body: "A limit is not a concern.",
-												basedOn: ["00000000-0000-4000-8000-000000000011"],
-											},
-										})}`,
-									);
-									emit({
-										type: "compaction_end",
-										reason: "threshold",
-										result: undefined,
-										aborted: false,
-									});
-									record(`qualification-restored:${await attempt("r-restored", { decisions })}`);
-									emit({ type: "turn_start" });
-								}
-								record(`review-withheld:${await attempt("r-w", { decisions })}`);
-								if (unavailableContext) {
-									rmSync(nodePath.join(cwd, "catalog/practices/test-practice.md"));
-									writeFileSync(nodePath.join(cwd, "catalog/practices/second-practice.md"), "");
-									// A file a session leaves where the runner stages history is not history.
-									mkdirSync(nodePath.join(cwd, "work/composition/history"), { recursive: true });
-									writeFileSync(
-										nodePath.join(cwd, "work/composition/history/feedback.json"),
-										JSON.stringify({ unexpected: "Unknown historical prose" }),
-									);
-								}
-								return;
-							}
-							if (text.includes("## Undecided")) {
-								if (scenario === "compose-no-decision") {
-									return;
-								}
-								const withheld = await tool("report_feedback").execute("f-9", {
-									feedback: [
-										{
-											destination: "PRACTICE_PAGE",
-											practiceSlug: "test-practice",
-											action: "WITHHOLD",
-											withholdReason: "BELOW_BAR",
-										},
-										{
-											destination: "PRACTICE_PAGE",
-											practiceSlug: "test-practice",
-											basedOn: ["00000000-0000-4000-8000-000000000001"],
-											action: "WITHHOLD",
-											withholdReason: "BELOW_BAR",
-										},
-									],
-								});
-								record(`feedback-finish:${JSON.stringify(withheld)}`);
-								return;
-							}
-							if (text.includes("## This turn")) {
-								if (scenario === "compose-support") {
-									const feedback = tool("report_feedback");
-									const reply = await feedback.execute("support", {
-										feedback: [
-											{
-												destination: "PRACTICE_PAGE",
-												practiceSlug: "test-practice",
-												basedOn: ["problem-1"],
-												action: "NEW",
-												title: "A repeated problem",
-												body: "The recurring problem",
-												nextStep: "Check the boundary",
-											},
-											{
-												destination: "CONVERSATION",
-												practiceSlug: "test-practice",
-												basedOn: ["problem-1"],
-												action: "NEW",
-												title: "Discuss the boundary",
-												notes: {
-													situation: "Current problem",
-													capability: "Check the boundary",
-													evidenceSummary: "The admitted occurrence",
-													inConversationLearning: "A boundary discussion",
-												},
-											},
-										],
-									});
-									record(`support-items:${JSON.stringify(reply)}`);
-									if (
-										process.env.PI_PRACTICE_PAGE_SUPPORT_MODE === "empty" ||
-										process.env.PI_PRACTICE_PAGE_SUPPORT_MODE === "duplicate"
-									) {
-										await feedback.execute("below", {
-											feedback: [
-												{
-													destination: "PRACTICE_PAGE",
-													practiceSlug: "test-practice",
-													basedOn: ["problem-1"],
-													action: "WITHHOLD",
-													withholdReason: "BELOW_BAR",
-												},
-											],
-										});
-									}
-									return;
-								}
-								if (scenario === "draft-commit") {
-									assert.ok(!options.customTools.some((item) => item.name === "submit_result"));
-									assert.ok(measuredTool);
-									const closedTool = measuredTool;
-									const before = [stateText(), notesText()];
-									await assert.rejects(
-										async () =>
-											closedTool.execute("after-admission", notMet("Forbidden late replacement")),
-										/Measurement is closed/u,
-									);
-									assert.deepEqual([stateText(), notesText()], before);
-									record("draft-closed:Measurement is closed; result and notes unchanged");
-									return;
-								}
-								// Private composition has its own session.
-								if (scenario === "compose-private-budget") {
-									for (let call = 0; call < 6; call += 1) {
-										emit({
-											type: "message_end",
-											message: {
-												role: "assistant",
-												stopReason: "toolUse",
-												usage: callUsage(100),
-												content: [],
-											},
-										});
-										emit({ type: "turn_end" });
-									}
-									return;
-								}
-								if (scenario === "compose-private-complete-error") {
-									await tool("report_feedback").execute("complete", {
-										feedback: [
-											{
-												destination: "PRACTICE_PAGE",
-												practiceSlug: "test-practice",
-												basedOn: ["problem-1"],
-												action: "WITHHOLD",
-												withholdReason: "BELOW_BAR",
-											},
-										],
-									});
-									emit({
-										type: "message_end",
-										message: {
-											role: "assistant",
-											stopReason: "error",
-											usage: callUsage(23),
-											content: [],
-										},
-									});
-									return;
-								}
-								if (scenario === "compose-no-decision") {
-									return;
-								}
-								if (scenario === "compose-partial-error") {
-									await tool("report_feedback").execute("partial", {
-										feedback: [
-											{
-												destination: "PRACTICE_PAGE",
-												practiceSlug: "test-practice",
-												basedOn: ["problem-1"],
-												action: "WITHHOLD",
-												withholdReason: "BELOW_BAR",
-											},
-										],
-									});
-								}
-								if (scenario === "compose-private-error" || scenario === "compose-partial-error") {
-									emit({
-										type: "message_end",
-										message: {
-											role: "assistant",
-											stopReason: "error",
-											usage: callUsage(23),
-											content: [],
-											// A malformed diagnostic claims nothing: the failure stays UNKNOWN.
-											diagnostics: [
-												{
-													type: "openai_completions_failure",
-													timestamp: "soon",
-													details: { kind: "sk-orchestration-secret", status: 503 },
-												},
-											],
-										},
-									});
-									if (scenario === "compose-private-error") {
-										emit({
-											type: "auto_retry_end",
-											success: false,
-											attempt: 3,
-											finalError: "sk-orchestration-secret",
-										});
-									}
-									return;
-								}
-								if (scenario === "compose-runtime-error") {
-									throw new Error("Synthetic settled prompt failure");
-								}
-								if (
-									scenario === "compose-public-error" ||
-									scenario === "compose-recovered-error" ||
-									scenario === "compose-complete-error"
-								) {
-									await tool("report_feedback").execute("paid", {
-										feedback: [
-											{
-												destination: "PRACTICE_PAGE",
-												practiceSlug: "test-practice",
-												basedOn: ["problem-1"],
-												action: "WITHHOLD",
-												withholdReason: "BELOW_BAR",
-											},
-										],
-									});
-									return;
-								}
-								if (
-									scenario === "compose-settle-deadline" ||
-									scenario === "compose-private-safety" ||
-									privateHold
-								) {
-									// The response ended, but its auto-compaction remains busy until the deadline.
-									compacting = true;
-									return;
-								}
-								if (scenario === "compose-already-said") {
-									const feedback = tool("report_feedback");
-									const first = await feedback.execute("said", {
-										feedback: [
-											withhold("CONVERSATION", "second-practice", "NO_MATERIAL_CHANGE", [
-												"00000000-0000-4000-8000-000000000002",
-												"00000000-0000-4000-8000-000000000001",
-											]),
-											withhold("CONVERSATION", "test-practice", "ALREADY_SAID"),
-											withhold("PRACTICE_PAGE", "test-practice", "ALREADY_SAID"),
-										],
-									});
-									record(`said-first:${JSON.stringify(first)}`);
-									const second = await feedback.execute("said-again", {
-										feedback: [
-											withhold("CONVERSATION", "test-practice", "NO_MATERIAL_CHANGE"),
-											withhold("CONVERSATION", "second-practice", "NO_MATERIAL_CHANGE", [
-												"00000000-0000-4000-8000-000000000002",
-											]),
-											withhold("CONVERSATION", "test-practice", "BELOW_BAR"),
-										],
-									});
-									record(`said-second:${JSON.stringify(second)}`);
-									return;
-								}
-								if (scenario === "compose-fold") {
-									const pieces = admitted()
-										.map(recordOf)
-										.filter((row) => row.outcome === "NOT_MET")
-										.map((row) => ({
-											destination: "PRACTICE_PAGE",
-											practiceSlug: row.practiceSlug,
-											basedOn: [row.resultId],
-											action: "WITHHOLD",
-											withholdReason: "BELOW_BAR",
-										}));
-									const folded = await tool("report_feedback").execute("f-fold", {
-										feedback: pieces,
-									});
-									record(`feedback-fold:${JSON.stringify(folded)}`);
-									return;
-								}
-								if (scenario === "compose-loop") {
-									return;
-								}
-								if (scenario === "compose-silent") {
-									// A composer that reads its way through the practice files: at the twelfth call
-									// without a recording call it is told to persist, once.
-									for (let call = 1; call <= 13; call += 1) {
-										emit({
-											type: "tool_execution_start",
-											toolCallId: `r-${call}`,
-											toolName: "read",
-											args: { path: `catalog/practices/${call}.md` },
-										});
-									}
-									return;
-								}
-								// The private composition sees the person's history and the accepted public review.
-								record(
-									`private-turn history=${String(text.includes(PRIVATE_HISTORY_SENTENCE))} review=${String(text.includes("The review composed for this work"))}`,
-								);
-								const card = {
-									destination: "PRACTICE_PAGE",
-									practiceSlug: "test-practice",
-									basedOn: ["problem-1"],
-									action: "NEW",
-									title: "Insecure call",
-									body: "The pattern across your work.",
-									nextStep: "Check the call before pushing.",
-								};
-								const feedback = tool("report_feedback");
-								const schema = JSON.stringify(feedback.parameters);
-								for (const keyword of ["maxLength", "additionalProperties", "minItems", "anyOf"]) {
-									assert.ok(
-										schema.includes(`"${keyword}"`),
-										`${keyword} in ${schema.slice(0, 200)}`,
-									);
-								}
-								assert.match(schema, /"enum":\["PRACTICE_PAGE"\]/u);
-								assert.match(
-									schema,
-									/"required":\["destination","practiceSlug","basedOn","action"/u,
-								);
-								const historical = await feedback
-									.execute("historical", {
-										feedback: [{ ...card, basedOn: ["support-scm.issue-3"] }],
-									})
-									.then(() => "accepted")
-									.catch((error: unknown) =>
-										error instanceof Error ? error.message : String(error),
-									);
-								record(`feedback-historical:${historical}`);
-								const reply = await feedback.execute("f-1", {
-									feedback: [
-										{ ...card, destination: "PRACTICE_PAGE", basedOn: ["problem-1"] },
-										{
-											destination: "PRACTICE_PAGE",
-											practiceSlug: "test-practice",
-											action: "NEW",
-											basedOn: [],
-										},
-										{ ...card, verdict: "BAD" },
-										{ ...card, body: "x".repeat(8001) },
-										{ ...card, destination: "CONVERSATION", withholdReason: "NOT_A_REASON" },
-										{ ...card, practiceSlug: "other-practice" },
-										{ ...card, destination: "ON_WORK", body: undefined },
-										"a piece as a string",
-									],
-								});
-								record(`feedback:${JSON.stringify(reply)}`);
-								const bare = await feedback
-									.execute("f-2", {
-										feedback: {
-											...card,
-											destination: "CONVERSATION",
-											body: undefined,
-											nextStep: undefined,
-											notes: {
-												situation: "s",
-												capability: "c",
-												evidenceSummary: "e",
-												inConversationLearning: "i",
-											},
-										},
-									})
-									.then((result) => JSON.stringify(result))
-									.catch((error: unknown) =>
-										error instanceof Error ? error.message : String(error),
-									);
-								record(`feedback-bare:${bare}`);
-								return;
-							}
 							if (scenario === "natural-stop" || scenario === "natural-stop-twice") {
 								// The model answers in prose and the session ends on its own: prose records nothing.
 								record(`natural-prompt:${prompts}:session-${sessionNumber}`);
@@ -2868,6 +1246,96 @@ if (scenario !== undefined && scenario !== "") {
 							}
 							const report = tool("submit_result");
 							measuredTool = report;
+							if (
+								scenario === "model-error" ||
+								scenario === "model-recovered-error" ||
+								scenario === "model-retry-failed"
+							) {
+								emit({
+									type: "message_end",
+									message: {
+										role: "assistant",
+										stopReason: "error",
+										usage: callUsage(17),
+										content: [],
+										errorMessage: "503 upstream body sk-orchestration-secret",
+										diagnostics: new Map<string, unknown[]>([
+											// The call never got its response, so it states no response time.
+											[
+												"model-error",
+												[
+													{
+														type: "openai_completions_failure",
+														timestamp: 1_760_000_000_000,
+														details: { kind: "HTTP_ERROR", phase: "request", status: 503 },
+													},
+													{
+														type: "openai_completions_call",
+														timestamp: 1_760_000_000_000,
+														details: { elapsedMs: 1200 },
+													},
+												],
+											],
+											// A Responses call whose failed terminal event arrived after its response.
+											[
+												"model-recovered-error",
+												[
+													{
+														type: "openai_responses_failure",
+														timestamp: 1_760_000_000_000,
+														details: { kind: "RESPONSE_FAILED", phase: "response_body" },
+													},
+													{
+														type: "openai_responses_call",
+														timestamp: 1_760_000_000_000,
+														details: { elapsedMs: 1200, responseMs: 200 },
+													},
+												],
+											],
+											// A malformed diagnostic claims nothing: the failure stays UNKNOWN.
+											[
+												"model-retry-failed",
+												[
+													{
+														type: "openai_completions_failure",
+														timestamp: "soon",
+														details: { kind: "sk-orchestration-secret", status: 503 },
+													},
+												],
+											],
+										]).get(scenario),
+									},
+								});
+								if (scenario === "model-recovered-error") {
+									emit({ type: "auto_retry_end", success: true });
+									emit({
+										type: "message_end",
+										message: {
+											role: "assistant",
+											stopReason: "toolUse",
+											usage: callUsage(19),
+											content: [],
+											diagnostics: [
+												{
+													type: "openai_responses_call",
+													timestamp: 1_760_000_001_000,
+													details: { elapsedMs: 900, responseMs: 300 },
+												},
+											],
+										},
+									});
+								}
+								if (scenario === "model-retry-failed") {
+									emit({
+										type: "auto_retry_end",
+										success: false,
+										attempt: 3,
+										finalError: "sk-orchestration-secret",
+									});
+								}
+								await report.execute("o-1", notMet("Unsafe authentication call"));
+								return;
+							}
 							if (scenario === "scope-cut-off") {
 								emit({
 									type: "message_end",
@@ -3347,35 +1815,6 @@ if (scenario !== undefined && scenario !== "") {
 								assert.doesNotMatch(notesText(), /test-practice: MET/u);
 								return;
 							}
-							if (scenario === "compose-abstention") {
-								const own = new Map<string, unknown>([
-									["test-practice", met("Authentication call goes through the helper")],
-									[
-										"second-practice",
-										undecided(["scm.pull-request.core", "scm.pull-request.diff"]),
-									],
-									[
-										"third-practice",
-										{
-											outcome: "COULD_NOT_DETERMINE",
-											summary: "Whether the call is reachable",
-											explanation: "The change adds the call; its callers are outside the change.",
-											citations: [changeCitation],
-											evidence: {
-												openQuestions: [
-													{
-														openQuestion: "Is insecure() reachable from the login flow?",
-														wouldSettleIt: "The callers of Auth outside this change.",
-													},
-												],
-											},
-										},
-									],
-								]).get(currentSlug);
-								assert.ok(own !== undefined);
-								await report.execute("o-mixed", own);
-								return;
-							}
 							if (scenario === "comment-undecided") {
 								// A practice that reads only what people wrote owes the change nothing; one that
 								// reads the change still grounds a decision of nothing in it.
@@ -3540,19 +1979,8 @@ if (scenario !== undefined && scenario !== "") {
 		(options) => {
 			reviewExtensions = options.extensionFactories ?? [];
 			assert.ok(cwd !== "");
-			const first = !existsSync(nodePath.join(cwd, "system-prompt.md"));
-			const privateComposition = options.systemPrompt.includes("Compose from admitted problems.");
-			if (first) {
+			if (!existsSync(nodePath.join(cwd, "system-prompt.md"))) {
 				writeFileSync(nodePath.join(cwd, "system-prompt.md"), options.systemPrompt);
-			} else {
-				writeFileSync(
-					nodePath.join(
-						cwd,
-						privateComposition ? "private-system-prompt.md" : "review-system-prompt.md",
-					),
-					options.systemPrompt,
-				);
-				record(`review-loader extensions=${String(options.extensionFactories?.length)}`);
 			}
 			assert.ok(options.agentsFilesOverride);
 			assert.deepEqual(options.agentsFilesOverride(), { agentsFiles: [] });
@@ -3566,7 +1994,7 @@ if (scenario !== undefined && scenario !== "") {
 	const { runReviewJob } = await import("../../../main/resources/agent/pi-runner.ts");
 	await runReviewJob();
 } else {
-	for (const fixture of [
+	for (const stage of [
 		"scope-native-problem-drafts",
 		"scope-native-problem-repair",
 		"scope-native-problem-isolation",
@@ -3588,7 +2016,7 @@ if (scenario !== undefined && scenario !== "") {
 		"scope-budget",
 		"scope-stop-failure",
 		"scope-stop-hangs",
-		"compose-late-usage",
+		"late-usage",
 		"setup",
 		"context-unfit",
 		"measure-context-compact",
@@ -3598,11 +2026,7 @@ if (scenario !== undefined && scenario !== "") {
 		"cut-off",
 		"stall",
 		"settle-safety",
-		"compose-settle-deadline",
-		"compose-private-safety",
-		"compose-private-only-safety",
-		"compose-private-unacknowledged-public",
-		"compose-request-caps",
+		"request-caps",
 		"provider-error",
 		"provider-reply-unanswered-stall",
 		"provider-reply-refused-error",
@@ -3626,115 +2050,12 @@ if (scenario !== undefined && scenario !== "") {
 		"met-coverage",
 		"met-coverage-repair",
 		"tree-citation",
-		"compose-private-complete-error",
-		"compose-private-budget",
-		"compose-partial-error",
-		"compose-no-decision",
-		"compose-public-error",
-		"compose-private-error",
-		"compose-runtime-error",
-		"compose-recovered-error",
-		"compose-complete-error",
-		"compose-support-selected",
-		"compose-support-mentor-unavailable",
-		"compose-support-empty",
-		"compose-support-duplicate",
-		"compose-support-missing",
-		"compose-support-malformed",
-		"compose-support-invalid-optional",
-		"compose-support-unavailable",
-		"compose-support-refused",
-		"compose-support-refused-only",
-		"compose-support-cooldown",
-		"compose-support-inline",
-		"compose-support-routing-missing",
-		"compose",
-		"compose-completion-accepted",
-		"compose-completion-refused",
-		"compose-completion-lost-ack",
-		"compose-completion-stale",
-		"compose-completion-unresolved",
-		"compose-continuation",
-		"compose-continuation-reviewed",
-		"compose-continuation-private",
-		"compose-continuation-private-prepared",
-		"compose-continuation-private-safety",
-		"compose-continuation-public-safety",
-		"compose-continuation-stale",
-		"compose-continuation-unresolved",
-		"compose-fresh-history",
-		"compose-history-unavailable-words",
-		"compose-history-missing-currentness",
-		"compose-history-invalid",
-		"compose-history-invalid-link",
-		"compose-history-refused",
-		"compose-history-body-transport",
-		"compose-history-malformed-json",
-		"compose-foreign-provider",
-		"compose-overflow",
-		"compose-silent",
-		"compose-loop-rejection",
-		"compose-loop",
-		"compose-empty",
-		"compose-reselect",
-		"compose-qualify",
-		"compose-compacted",
-		"compose-recover",
-		"compose-invalid-select",
-		"compose-fold",
-		"compose-already-said",
-		"compose-already-said-inline",
-		"compose-context-unavailable",
-		"compose-counterevidence",
-		"compose-reviewer-only",
-		"compose-abstention",
-		"compose-unknown-outcome",
-		"compose-null-outcome",
+		"model-error",
+		"model-recovered-error",
+		"model-retry-failed",
+		"admission-unknown-outcome",
+		"admission-null-outcome",
 	]) {
-		const stage =
-			new Map([
-				["compose-continuation-reviewed", "compose-continuation"],
-				["compose-continuation-private", "compose-continuation"],
-				["compose-continuation-private-prepared", "compose-continuation"],
-				["compose-continuation-private-safety", "compose-continuation"],
-				["compose-continuation-public-safety", "compose-continuation"],
-				["compose-private-only-safety", "compose-private-safety"],
-				["compose-private-unacknowledged-public", "compose-private-safety"],
-				["compose-continuation-stale", "compose-continuation"],
-				["compose-continuation-unresolved", "compose-continuation"],
-				["compose-completion-accepted", "compose"],
-				["compose-completion-refused", "compose"],
-				["compose-completion-lost-ack", "compose"],
-				["compose-completion-stale", "compose"],
-				["compose-completion-unresolved", "compose"],
-				["compose-support-selected", "compose-support"],
-				["compose-support-mentor-unavailable", "compose-support"],
-				["compose-support-empty", "compose-support"],
-				["compose-support-duplicate", "compose-support"],
-				["compose-support-missing", "compose-support"],
-				["compose-support-malformed", "compose-support"],
-				["compose-support-invalid-optional", "compose-support"],
-				["compose-support-unavailable", "compose-support"],
-				["compose-support-refused", "compose-support"],
-				["compose-support-refused-only", "compose-support"],
-				["compose-support-cooldown", "compose-support"],
-				["compose-support-inline", "compose-support"],
-				["compose-support-routing-missing", "compose-support"],
-				["compose-already-said-inline", "compose-already-said"],
-				["compose-loop-rejection", "compose-loop"],
-				["compose-compacted", "compose-qualify"],
-				["compose-fresh-history", "compose"],
-				["compose-history-unavailable-words", "compose"],
-				["compose-history-missing-currentness", "compose"],
-				["compose-history-invalid", "compose"],
-				["compose-history-invalid-link", "compose"],
-				["compose-history-refused", "compose"],
-				["compose-history-body-transport", "compose"],
-				["compose-history-malformed-json", "compose"],
-				["compose-context-unavailable", "compose-fold"],
-				["compose-counterevidence", "compose-fold"],
-				["compose-reviewer-only", "compose-fold"],
-			]).get(fixture) ?? fixture;
 		void test(
 			{
 				"scope-native-problem-drafts":
@@ -3779,8 +2100,18 @@ if (scenario !== undefined && scenario !== "") {
 					"a session that never settles fails within the existing deadline, refuses a late submission and keeps its usage without admission",
 				"scope-stop-failure":
 					"a native stop failure ends the run with its usage and starts no later practice session",
-				"compose-late-usage":
-					"public session settlement remains subscribed for its final native usage event",
+				"late-usage":
+					"a practice session's settlement remains subscribed for its final native usage event",
+				"request-caps":
+					"grants each practice request no more output than its reservation has left, and no request once it is spent",
+				"model-error":
+					"traces a failed model call with its stated status and timing, without the provider's text",
+				"model-recovered-error":
+					"clears a failure a later successful call recovers, keeping its count and timing",
+				"model-retry-failed":
+					"traces a malformed failure diagnostic as unknown and marks the retry that ended unsuccessfully",
+				"admission-unknown-outcome": "refuses an admitted outcome outside the vocabulary",
+				"admission-null-outcome": "refuses an admitted result without an outcome",
 				setup: "does not start a session when setup reaches the safety ceiling",
 				"context-unfit":
 					"leaves essential oversized criteria not reached without creating results or repeating compaction",
@@ -3792,12 +2123,6 @@ if (scenario !== undefined && scenario !== "") {
 				stall:
 					"aborts a turn that shows no sign of life, ends its compaction and waits before the next turn",
 				"settle-safety": "does not start a measuring turn once settling reaches the safety line",
-				"compose-settle-deadline":
-					"does not ask the composer once more after the run reaches its safety ceiling",
-				"compose-private-safety":
-					"owes private feedback the run stopped at its safety ceiling after the public review was prepared",
-				"compose-private-unacknowledged-public":
-					"leaves a lost public preparation response for the server to decide after a private safety stop",
 				"provider-reply-unanswered-stall":
 					"retries only when no model or tool answer preceded a stall",
 				"provider-reply-refused-error":
@@ -3840,72 +2165,11 @@ if (scenario !== undefined && scenario !== "") {
 					"accepts the same MET after its missing source content is read completely",
 				"tree-citation":
 					"verifies a HEAD repository citation against the checkout and finalizes out/",
-				compose:
-					"uses selected native issue and merge request identities while retaining current-only piece grounding",
-				"compose-foreign-provider":
-					"keeps distinct native work identities separate from provider URL text",
-				"compose-continuation-reviewed":
-					"an accepted public review is never recomposed by its continuation",
-				"compose-continuation-private":
-					"continues private feedback after an accepted public review when no private piece is prepared",
-				"compose-continuation":
-					"continues an admitted review by composing the review on the work and then its private feedback, measuring and admitting nothing",
-				"compose-continuation-private-prepared":
-					"continues an admitted review whose private practices are all decided by composing only the review on the work, with no private failure",
-				"compose-continuation-unresolved":
-					"continues an admitted review whose public delivery stays unresolved without composing it again",
-				"compose-continuation-private-safety":
-					"owes the private feedback a continuation's own ceiling stopped after the review it composed was prepared",
-				"compose-continuation-public-safety":
-					"ends a continuation whose own ceiling stopped the review on the work, without another attempt",
-				"compose-private-only-safety":
-					"ends a run without a requested review on the work whose own ceiling stopped private feedback",
-				"compose-request-caps":
-					"grants each composer request no more output than its turn has left, and no request once it is spent",
-				"compose-overflow":
-					"compacts the session before a composition prompt that would not fit beside what it holds",
-				"compose-silent":
-					"asks once more when the composition ended without a recording call and negatives await a decision",
-				"compose-loop":
-					"ends a composition that keeps calling a recording tool without recording anything",
-				"compose-empty":
-					"composes no review on the work when its only public result is MET, and records no failure",
 				"measure-context-compact":
 					"restores the exact criterion before illustrations and leads when native turn preparation compacts",
 				"measure-context-missing":
 					"keeps a missing criterion explicit without changing the recording contract",
-				"compose-qualify":
-					"refuses a whole review that leaves a problem undecided and stores the corrected one, final results unchanged",
-				"compose-compacted":
-					"refuses a text on a MET result, restores the review turn after a compaction, and stores a review only from the next turn",
-				"compose-reselect":
-					"stores only the corrected whole review after refusals, a text on a MET result among them, and nothing after it",
-				"compose-recover": "asks once more for a review left unfinished after a refused one",
-				"compose-invalid-select":
-					"refuses a repeated whole review that decides nothing until a corrected one is stored",
-				"compose-reviewer-only":
-					"reviewer-only concerns start no public writer alongside public abstentions and remain available to private feedback",
-				"compose-counterevidence":
-					"private counterevidence retains MET source qualifications and coordinates without quoted or verified-runtime claims",
-				"compose-context-unavailable":
-					"keeps missing and empty standards and unknown history explicit without inventing their contents",
-				"compose-fold": "keeps one practice per card and leaves non-NOT_MET records as context",
-				"compose-already-said":
-					"withholds as already said only on the destination and practice that captured delivered feedback records",
-				"compose-already-said-inline":
-					"refuses even a withholding on an open destination for a practice the server routed elsewhere",
-				"compose-support-cooldown":
-					"composes conversation notes for an unanchored problem while the page's cooldown closes its destination",
-				"compose-support-inline":
-					"opens no private session when every destination refuses the practice, keeping the review and every result",
-				"compose-support-routing-missing":
-					"closes only the conversation destination, as a failure, when its routing read is missing",
-				"compose-abstention":
-					"composes no review on the work from a MET result and abstentions, and keeps every admitted result",
-				"compose-unknown-outcome":
-					"refuses an admitted outcome outside the vocabulary before composing",
-				"compose-null-outcome": "refuses an admitted result without an outcome before composing",
-			}[fixture] ?? fixture,
+			}[stage] ?? stage,
 			async () => {
 				const cwd = realpathSync(mkdtempSync(nodePath.join(tmpdir(), "pi-orchestration-")));
 				try {
@@ -3919,61 +2183,6 @@ if (scenario !== undefined && scenario !== "") {
 							"utf8",
 						),
 					);
-					writeFileSync(
-						nodePath.join(cwd, "feedback-composer.md"),
-						"Compose from admitted problems.",
-					);
-					writeFileSync(nodePath.join(cwd, "review-composer.md"), "Write the review on the work.");
-					writeFileSync(nodePath.join(cwd, "feedback-style.md"), "Write clear, useful feedback.");
-					// What the mocked server answers: the private history with the admission (private-history.json), and
-					// the public history it reads from history/feedback.json.
-					if (stage === "compose" || stage === "compose-foreign-provider") {
-						mkdirSync(nodePath.join(cwd, "history"), { recursive: true });
-						writeFileSync(nodePath.join(cwd, "history/feedback.json"), STAGED_FEEDBACK_HISTORY);
-						writeFileSync(
-							nodePath.join(cwd, "private-history.json"),
-							JSON.stringify(PRIVATE_HISTORY),
-						);
-					}
-					if (fixture === "compose-context-unavailable") {
-						// A read that found nothing: present and empty, unlike a read never made.
-						writeFileSync(
-							nodePath.join(cwd, "private-history.json"),
-							JSON.stringify({ ...PRIVATE_HISTORY, delivered: [], queued: [] }),
-						);
-					}
-					if (stage === "compose-already-said") {
-						writeFileSync(
-							nodePath.join(cwd, "private-history.json"),
-							JSON.stringify(ALREADY_SAID_HISTORY),
-						);
-					}
-					if (stage === "compose-support") {
-						mkdirSync(nodePath.join(cwd, "history"), { recursive: true });
-						writeFileSync(
-							nodePath.join(cwd, "history/problems.json"),
-							JSON.stringify({
-								problems: [
-									{
-										practiceSlug: "test-practice",
-										outcome: "NOT_MET",
-										item: {
-											kind: "scm.issue",
-											url: "https://gitlab.example/group/repo/-/issues/1",
-										},
-									},
-									{
-										practiceSlug: "test-practice",
-										outcome: "NOT_MET",
-										item: {
-											kind: "scm.issue",
-											url: "https://gitlab.example/group/repo/-/issues/2",
-										},
-									},
-								],
-							}),
-						);
-					}
 					writeFileSync(nodePath.join(cwd, "events"), "");
 					writeFileSync(nodePath.join(cwd, "evidence/metadata.json"), JSON.stringify(WORK_RECORD));
 					writeFileSync(
@@ -4009,11 +2218,6 @@ if (scenario !== undefined && scenario !== "") {
 							"    let answer = qualified(work)\n\n# Standard\nBounded criterion.  \n\n## applicability\nOnly captured work.\n\n## Judge\nQualify the outcome.\n\n## Defer\nUnknown remains unknown.  \n\n";
 					} else if (stage === "context-unfit") {
 						practiceCriteria = "Essential criteria. ".repeat(30_000);
-					} else if (stage === "compose-reselect" || stage === "compose-recover") {
-						// Leading indentation is a Markdown code block; trimming it would change the standard.
-						practiceCriteria =
-							"    let reply = answer(request)\n\n# Engages with review\n" +
-							"A review request is answered by a fix, a reasoned decline, or a clarification.  \n\n";
 					}
 					if (stage !== "measure-context-missing") {
 						writeFileSync(
@@ -4026,98 +2230,6 @@ if (scenario !== undefined && scenario !== "") {
 						writeFileSync(nodePath.join(cwd, "package.json"), '{"type":"module"}\n');
 						symlinkSync(LIB, nodePath.join(cwd, nodePath.dirname(PRACTICES_DIR), "lib"));
 						writeFileSync(nodePath.join(cwd, PRACTICES_DIR, "test-practice.ts"), LEADS_PROGRAM);
-					}
-					if (stage.startsWith("compose") || stage === "draft-commit") {
-						const onWorkCopyForms = stage === "compose-continuation" ? [] : ["FILE_NOTE"];
-						if (stage === "compose" || stage === "compose-foreign-provider") {
-							onWorkCopyForms.push("LINE_NOTE");
-						}
-						writeFileSync(
-							nodePath.join(cwd, "evidence/composition.json"),
-							JSON.stringify(
-								fixture === "compose"
-									? SERVER_COMPOSITION_REQUEST
-									: {
-											...SERVER_COMPOSITION_REQUEST,
-											destinations: {
-												PRACTICE_PAGE: { maxPieces: 1 },
-												...(fixture === "compose-private-only-safety"
-													? {}
-													: { ON_WORK: { maxPieces: 1 } }),
-												...((stage === "compose-support" || stage === "compose-already-said") &&
-												fixture !== "compose-support-refused-only"
-													? {
-															CONVERSATION: {
-																maxPieces: 1,
-															},
-														}
-													: {}),
-											},
-											onWorkCopyForms,
-										},
-							),
-						);
-					}
-					if (stage === "compose-continuation") {
-						// What an earlier attempt's admission answered, staged by the server beside the request.
-						const continued = admissionDto(admittedResult);
-						writeFileSync(
-							nodePath.join(cwd, "evidence/composition-continuation.json"),
-							JSON.stringify({
-								contractVersion: 4,
-								admissionDigest: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-								publicReviewed: [
-									"compose-continuation-reviewed",
-									"compose-continuation-private",
-								].includes(fixture),
-								// An earlier attempt's accepted card decides the one NOT_MET practice and uses the page's room.
-								privateProgress: [
-									"compose-continuation-reviewed",
-									"compose-continuation-private-prepared",
-								].includes(fixture)
-									? {
-											decidedResultIds: [admittedResult.resultId],
-											practicePageDeliveries: 1,
-											conversationDeliveries: 0,
-										}
-									: { decidedResultIds: [], practicePageDeliveries: 0, conversationDeliveries: 0 },
-								admitted: [continued],
-								withheld: [],
-								// The server's reread for this attempt: the page is routed, the conversation is not.
-								practicePageSupport:
-									fixture === "compose-continuation-reviewed"
-										? null
-										: {
-												state: "COMPLETE",
-												readAt: "2026-10-07T10:00:00Z",
-												practices: [
-													{
-														practiceSlug: admittedResult.practiceSlug,
-														decision: "ADMIT",
-														stopReason: null,
-														occurrences: [
-															supportOccurrence("scm.pull_request", 3),
-															supportOccurrence("scm.issue", 3),
-														],
-													},
-												],
-											},
-								conversationEligibility:
-									fixture === "compose-continuation-reviewed"
-										? null
-										: {
-												state: "COMPLETE",
-												readAt: "2026-10-07T10:00:00Z",
-												results: [
-													{
-														resultId: admittedResult.resultId,
-														decision: "GATE_REFUSED",
-														stopReason: "NO_AI",
-													},
-												],
-											},
-							}),
-						);
 					}
 					if (stage === "tree-citation") {
 						// A real checkout with one commit in its history, so a citation at a commit is read
@@ -4159,12 +2271,6 @@ if (scenario !== undefined && scenario !== "") {
 						nodePath.join(cwd, "evidence/manifest.json"),
 						JSON.stringify({
 							itemKind: "scm.pull_request",
-							// NO_MATERIAL_CHANGE needs advice delivered before this capture time; without one it has no witness.
-							...(fixture === "compose-fresh-history" ||
-							fixture === "compose-history-body-transport" ||
-							stage === "compose-already-said"
-								? { capturedAt: "2026-10-07T09:00:00Z" }
-								: {}),
 							files: [
 								{ kind: "scm.pull-request.core", file: { path: "evidence/metadata.json" } },
 								{ kind: "scm.pull-request.diff", file: { path: "evidence/change.json" } },
@@ -4207,30 +2313,18 @@ if (scenario !== undefined && scenario !== "") {
 						}),
 					);
 					let index = [practice("test-practice")];
-					if (stage === "compose") {
-						index = [practice("test-practice", undefined, "42")];
-					} else if (stage === "compose-foreign-provider") {
-						index = [practice("test-practice", undefined, "42")];
-					}
 					if (
 						stage.startsWith("scope-") ||
 						stage === "finish" ||
 						stage === "settle-safety" ||
 						stage === "session-init" ||
 						stage === "batch" ||
-						stage === "draft-commit" ||
-						stage === "compose-fold" ||
-						stage === "compose-already-said" ||
-						stage === "compose-qualify" ||
-						stage === "compose-reselect" ||
-						stage === "compose-abstention"
+						stage === "draft-commit"
 					) {
 						index = [
 							practice("test-practice"),
 							practice("second-practice"),
-							...(stage === "compose-abstention" || stage === "finish"
-								? [practice("third-practice")]
-								: []),
+							...(stage === "finish" ? [practice("third-practice")] : []),
 						];
 					} else if (stage === "stall") {
 						index = [
@@ -4260,9 +2354,7 @@ if (scenario !== undefined && scenario !== "") {
 					}
 					writeFileSync(
 						nodePath.join(cwd, "catalog/practices/second-practice.md"),
-						stage === "compose-fold"
-							? "Long criterion. ".repeat(2500)
-							: "Complete second criterion. Its own independent question.",
+						"Complete second criterion. Its own independent question.",
 					);
 					writeFileSync(
 						nodePath.join(cwd, "pi-provider.json"),
@@ -4271,7 +2363,7 @@ if (scenario !== undefined && scenario !== "") {
 					writeFileSync(
 						nodePath.join(cwd, "task.json"),
 						JSON.stringify({
-							schemaVersion: 6,
+							schemaVersion: 7,
 							reviewId: "11111111-1111-4111-8111-111111111111",
 							jobId: "22222222-2222-4222-8222-222222222222",
 							attempt: 1,
@@ -4280,7 +2372,6 @@ if (scenario !== undefined && scenario !== "") {
 							repositoryRoot: "repos/primary",
 							manifest: "evidence/manifest.json",
 							practiceIndex: "catalog/practices/index.json",
-							compositionRequest: "evidence/composition.json",
 							preparedFeedback: "history/prepared.json",
 							practiceScripts: PRACTICES_DIR,
 							prompt: "Review the practice.",
@@ -4288,13 +2379,7 @@ if (scenario !== undefined && scenario !== "") {
 							pullRequestNumber: 3,
 						}),
 					);
-					// A continuation measures nothing: its whole budget is composition, and this one ends inside it.
-					const budgetMs =
-						new Map([
-							["compose-continuation-private-safety", "3000"],
-							["compose-continuation-public-safety", "3000"],
-						]).get(fixture) ??
-						(stage === "stall" || stage.endsWith("-stall") ? "3600000" : "60000");
+					const budgetMs = stage === "stall" || stage.endsWith("-stall") ? "3600000" : "60000";
 					const child = spawnSync(
 						process.execPath,
 						[
@@ -4306,35 +2391,6 @@ if (scenario !== undefined && scenario !== "") {
 							env: {
 								...(stage.startsWith("scope-native-") ? { PATH: process.env.PATH } : process.env),
 								PI_ORCHESTRATION_SCENARIO: stage,
-								PI_PUBLIC_COMPLETION_MODE: fixture.startsWith("compose-completion-")
-									? fixture.slice("compose-completion-".length)
-									: new Map([
-											["compose-continuation-stale", "stale"],
-											["compose-continuation-unresolved", "unresolved"],
-											["compose-private-unacknowledged-public", "public-unavailable"],
-										]).get(fixture),
-								PI_PRACTICE_PAGE_SUPPORT_MODE: fixture.startsWith("compose-support-")
-									? fixture.slice("compose-support-".length)
-									: new Map([["compose-already-said-inline", "first-inline"]]).get(fixture),
-								PI_UNAVAILABLE_CONTEXT: String(fixture === "compose-context-unavailable"),
-								PI_PRIVATE_HOLD: String(fixture === "compose-continuation-private-safety"),
-								PI_PUBLIC_HOLD: String(fixture === "compose-continuation-public-safety"),
-								PI_PUBLIC_HISTORY_MODE: new Map([
-									["compose-fresh-history", "fresh"],
-									["compose-history-unavailable-words", "unavailable-words"],
-									["compose-history-missing-currentness", "missing-currentness"],
-									["compose-history-invalid", "invalid"],
-									["compose-history-invalid-link", "invalid-link"],
-									["compose-history-refused", "refused"],
-									["compose-history-body-transport", "body-transport"],
-									["compose-history-malformed-json", "malformed-json"],
-								]).get(fixture),
-								PI_COUNTEREVIDENCE: String(
-									fixture === "compose-counterevidence" || fixture === "compose-compacted",
-								),
-								PI_REVIEW_COMPACTED: String(fixture === "compose-compacted"),
-								PI_REVIEWER_ONLY: String(fixture === "compose-reviewer-only"),
-								PI_LOOP_REJECT: String(fixture === "compose-loop-rejection"),
 								PI_RUNNER_CWD: cwd,
 								PI_CODING_AGENT_DIR: cwd,
 								AGENT_BUDGET_MS: budgetMs,
@@ -4349,7 +2405,10 @@ if (scenario !== undefined && scenario !== "") {
 										["scope-native-submission-repair", "4"],
 										["scope-native-read-correction", "4"],
 									]).get(stage) ?? "2",
-								PI_PRACTICE_CONCURRENCY: stage === "scope-native-problem-isolation" ? "2" : "1",
+								PI_PRACTICE_CONCURRENCY:
+									stage === "scope-native-problem-isolation" || stage === "request-caps"
+										? "2"
+										: "1",
 								PI_PRACTICE_OUTPUT_TOKENS: "8000",
 								PI_DIRECT_MODEL_TOKENS: "1000",
 								LLM_PROXY_URL: "https://unused.invalid",
@@ -4360,19 +2419,8 @@ if (scenario !== undefined && scenario !== "") {
 						},
 					);
 					assert.equal(child.error, undefined);
-					// Read production output from the native orchestration fixtures, including both retry helpers.
-					const expectedPhases = new Map([
-						["scope-native-completion", ["practice"]],
-						["compose", ["practice", "public-review", "private-feedback"]],
-						["compose-recover", ["practice", "public-review", "public-review", "private-feedback"]],
-						[
-							"compose-no-decision",
-							["practice", "public-review", "private-feedback", "private-feedback"],
-						],
-						["compose-recovered-error", ["practice", "public-review", "private-feedback"]],
-						["compose-private-error", ["practice", "public-review", "private-feedback"]],
-					]).get(fixture);
-					if (expectedPhases !== undefined) {
+					// Read production output from the native orchestration fixture.
+					if (stage === "scope-native-completion") {
 						const debug: unknown = JSON.parse(
 							readFileSync(nodePath.join(cwd, "out/runner-debug.json"), "utf8"),
 						);
@@ -4387,7 +2435,7 @@ if (scenario !== undefined && scenario !== "") {
 								);
 								return turn.phase;
 							}),
-							expectedPhases,
+							["practice"],
 						);
 					}
 
@@ -4395,16 +2443,10 @@ if (scenario !== undefined && scenario !== "") {
 						.trim()
 						.split("\n")
 						.filter(Boolean);
-					// A continuing writer evaluates no practice and reports no coverage of its own.
-					assert.equal(
-						existsSync(nodePath.join(cwd, "out/practice-coverage.json")),
-						stage !== "compose-continuation",
-						child.stderr,
+					assert.ok(existsSync(nodePath.join(cwd, "out/practice-coverage.json")), child.stderr);
+					const coverage: unknown = JSON.parse(
+						readFileSync(nodePath.join(cwd, "out/practice-coverage.json"), "utf8"),
 					);
-					const coverage: unknown =
-						stage === "compose-continuation"
-							? null
-							: JSON.parse(readFileSync(nodePath.join(cwd, "out/practice-coverage.json"), "utf8"));
 					const reached = (slugs: Record<string, "EVALUATED" | "NOT_REACHED">) =>
 						assert.deepEqual(coverage, {
 							eligible: Object.keys(slugs).length,
@@ -4415,26 +2457,18 @@ if (scenario !== undefined && scenario !== "") {
 							})),
 						});
 					const slugs = index.map(({ slug }) => slug).toSorted();
-					assert.equal(
-						events.includes("derive-change"),
-						stage !== "compose-continuation",
-						child.stderr,
-					);
+					assert.ok(events.includes("derive-change"), child.stderr);
 					const reportPath = nodePath.join(cwd, "out/practice-scripts.json");
-					assert.equal(existsSync(reportPath), stage !== "compose-continuation", child.stderr);
-					const executions =
-						stage === "compose-continuation"
-							? new Map<string, Record<string, unknown>>()
-							: new Map(
-									listOf(recordOf(JSON.parse(readFileSync(reportPath, "utf8"))).practices).map(
-										(entry) => [String(recordOf(entry).practiceSlug), recordOf(entry)],
-									),
-								);
-					if (stage !== "compose-continuation") {
-						const report = recordOf(JSON.parse(readFileSync(reportPath, "utf8")));
-						assert.equal(report.schemaVersion, 2);
-						assert.deepEqual([...executions.keys()], slugs, child.stderr);
-					}
+					assert.ok(existsSync(reportPath), child.stderr);
+					const report = recordOf(JSON.parse(readFileSync(reportPath, "utf8")));
+					assert.equal(report.schemaVersion, 2);
+					const executions = new Map(
+						listOf(report.practices).map((entry) => [
+							String(recordOf(entry).practiceSlug),
+							recordOf(entry),
+						]),
+					);
+					assert.deepEqual([...executions.keys()], slugs, child.stderr);
 					const ran = (expected: Record<string, string>) =>
 						assert.deepEqual(
 							Object.fromEntries(
@@ -4466,183 +2500,6 @@ if (scenario !== undefined && scenario !== "") {
 					const measuringSessions = events.filter(
 						(event) => event.startsWith("create:session") && event.endsWith(",submit_result"),
 					);
-					if (stage.startsWith("compose")) {
-						assert.equal(
-							measuringSessions.length,
-							stage === "compose-continuation" ? 0 : index.length,
-							events.join("\n"),
-						);
-					}
-					if (stage.startsWith("compose") && existsSync(nodePath.join(cwd, "out/feedback.json"))) {
-						const payload: unknown = JSON.parse(
-							readFileSync(nodePath.join(cwd, "out/feedback.json"), "utf8"),
-						);
-						assert.ok(isRecord(payload));
-						if (fixture.startsWith("compose-completion-")) {
-							assert.equal(child.status, 0, child.stderr);
-							const attempts = events.filter((event) => event.startsWith("public-completion:"));
-							assert.equal(
-								attempts.length,
-								["compose-completion-lost-ack", "compose-completion-stale"].includes(fixture)
-									? 3
-									: 2,
-							);
-							const privateIndex = events.findIndex((event) => event.startsWith("private-turn"));
-							const lastAttempt = attempts.at(-1);
-							assert.ok(lastAttempt !== undefined);
-							assert.ok(privateIndex < events.indexOf(lastAttempt));
-							assert.ok(Array.isArray(payload.feedback));
-							assert.equal(payload.feedback.length > 0, fixture !== "compose-completion-refused");
-							if (fixture === "compose-completion-refused") {
-								assert.equal(payload.review, null);
-								assert.deepEqual(payload.compositionFailures, [
-									{ phase: "PUBLIC_REVIEW", reason: "SERVER_REFUSED" },
-									{ phase: "PRIVATE_FEEDBACK", reason: "SERVER_REFUSED" },
-								]);
-							} else if (fixture === "compose-completion-unresolved") {
-								// Only a readback can resolve an unknown delivery: no fresh session, the exact reason,
-								// and private composition still runs.
-								assert.equal(payload.review, null);
-								assert.deepEqual(payload.compositionFailures, [
-									{ phase: "PUBLIC_REVIEW", reason: "PUBLIC_DELIVERY_UNRESOLVED" },
-								]);
-								assert.equal(
-									events.filter(
-										(event) => event.startsWith("create:") && event.endsWith("tools=report_review"),
-									).length,
-									1,
-									events.join("\n"),
-								);
-								assert.equal(events.filter((event) => event === "admit").length, 1);
-							} else {
-								assert.ok(isRecord(payload.review));
-								assert.deepEqual(payload.compositionFailures, []);
-							}
-							assert.ok(
-								events.includes(
-									`private-turn history=true review=${String(
-										!["compose-completion-refused", "compose-completion-unresolved"].includes(
-											fixture,
-										),
-									)}`,
-								),
-							);
-							const publicPreparation = events.indexOf("prepare-public:true");
-							assert.ok(publicPreparation !== -1 && publicPreparation < privateIndex);
-							if (fixture === "compose-completion-lost-ack") {
-								const [first, second] = attempts;
-								assert.ok(first !== undefined && second !== undefined);
-								assert.equal(first.split(":")[2], second.split(":")[2]);
-							}
-							if (fixture === "compose-completion-stale") {
-								// The refused words were composed from the first read; the accepted ones from a fresh
-								// session over the second read, in the same attempt and with no new assessment.
-								assert.deepEqual(
-									events.filter((event) => event.startsWith("public-context:")),
-									[
-										`public-context:v1:7:${"c".repeat(64)}`,
-										`public-context:v1:7:${"d".repeat(64)}`,
-									],
-								);
-								assert.equal(
-									events.filter(
-										(event) => event.startsWith("create:") && event.endsWith("tools=report_review"),
-									).length,
-									2,
-									events.join("\n"),
-								);
-								assert.equal(events.filter((event) => event === "admit").length, 1);
-							}
-							return;
-						}
-
-						if (
-							[
-								"compose-private-budget",
-								"compose-private-complete-error",
-								"compose-partial-error",
-								"compose-no-decision",
-								"compose-public-error",
-								"compose-private-error",
-								"compose-runtime-error",
-								"compose-recovered-error",
-								"compose-complete-error",
-							].includes(stage)
-						) {
-							const failuresByStage: Record<string, { phase: string; reason: string }[]> = {
-								"compose-private-budget": [{ phase: "PRIVATE_FEEDBACK", reason: "BUDGET" }],
-								"compose-public-error": [{ phase: "PUBLIC_REVIEW", reason: "MODEL_ERROR" }],
-								"compose-private-error": [{ phase: "PRIVATE_FEEDBACK", reason: "MODEL_ERROR" }],
-								"compose-partial-error": [{ phase: "PRIVATE_FEEDBACK", reason: "MODEL_ERROR" }],
-								"compose-no-decision": [{ phase: "PRIVATE_FEEDBACK", reason: "NO_DECISION" }],
-								"compose-runtime-error": [{ phase: "PRIVATE_FEEDBACK", reason: "RUNTIME_ERROR" }],
-							};
-							const expected = failuresByStage[stage] ?? [];
-							assert.deepEqual(payload.compositionFailures, expected);
-							assert.equal(
-								payload.admissionDigest,
-								"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-							);
-							assert.equal(child.status, 0, child.stderr);
-							const promptCounts: Record<string, number> = {
-								"compose-no-decision": 4,
-							};
-							assert.equal(
-								events.filter((event) => event.startsWith("prompt:")).length,
-								promptCounts[stage] ?? 3,
-							);
-							if (stage !== "compose-public-error") {
-								assert.ok(payload.review !== null);
-							}
-						}
-						if (["compose-empty", "compose-fold"].includes(stage)) {
-							assert.deepEqual(payload.compositionFailures, []);
-						}
-						if (stage === "compose-settle-deadline") {
-							assert.deepEqual(payload.compositionFailures, [
-								{ phase: "PUBLIC_REVIEW", reason: "SAFETY" },
-								{ phase: "PRIVATE_FEEDBACK", reason: "SAFETY" },
-							]);
-						}
-						if (stage === "compose-silent") {
-							assert.deepEqual(payload.compositionFailures, []);
-						}
-						if (stage === "compose-loop") {
-							assert.deepEqual(payload.compositionFailures, [
-								{ phase: "PUBLIC_REVIEW", reason: "NO_DECISION" },
-							]);
-						}
-					}
-					if (fixture === "compose-reviewer-only") {
-						assert.equal(child.status, 0, child.stderr);
-						assert.ok(events.includes("prepare-public:false"), events.join("\n"));
-						assert.equal(
-							events.filter(
-								(event) => event.startsWith("create:") && event.endsWith("tools=report_review"),
-							).length,
-							0,
-						);
-						const feedback: unknown = JSON.parse(
-							readFileSync(nodePath.join(cwd, "out/feedback.json"), "utf8"),
-						);
-						assert.ok(isRecord(feedback));
-						assert.deepEqual(
-							listOf(feedback.results).map((row) => recordOf(row).resultId),
-							[
-								"00000000-0000-4000-8000-000000000001",
-								"00000000-0000-4000-8000-000000000002",
-								"00000000-0000-4000-8000-000000000011",
-								"00000000-0000-4000-8000-000000000012",
-							],
-						);
-						assert.ok(Array.isArray(feedback.feedback) && feedback.feedback.length > 0);
-						assert.ok(
-							feedback.feedback.every(
-								(piece: unknown) => isRecord(piece) && piece.destination !== "ON_WORK",
-							),
-						);
-						return;
-					}
 					switch (stage) {
 						case "scope-native-problem-compaction": {
 							assert.equal(child.status, 0, child.stderr);
@@ -4805,95 +2662,75 @@ if (scenario !== undefined && scenario !== "") {
 							reached({ "test-practice": "EVALUATED", "second-practice": "EVALUATED" });
 							break;
 						}
-						case "compose-private-budget":
-						case "compose-private-complete-error":
-						case "compose-public-error":
-						case "compose-private-error":
-						case "compose-partial-error":
-						case "compose-no-decision":
-						case "compose-runtime-error":
-						case "compose-recovered-error":
-						case "compose-complete-error": {
-							if (stage === "compose-partial-error") {
-								const payload: unknown = JSON.parse(
-									readFileSync(nodePath.join(cwd, "out/feedback.json"), "utf8"),
-								);
-								assert.ok(isRecord(payload) && Array.isArray(payload.feedback));
-								assert.equal(payload.feedback.length, 1);
-							}
-
-							const failures: Record<string, [string, unknown, number, unknown][]> = {
-								// The last call failed with a stated native status, before any response.
-								"compose-public-error": [
-									[
-										"public-review",
-										{
-											kind: "HTTP_ERROR",
-											source: "ADAPTER",
-											phase: "request",
-											status: 503,
-											at: 1_760_000_000_000,
-											retryEndedUnsuccessfully: false,
-										},
-										0,
-										timing([[1200]], 1200),
-									],
+						case "model-error":
+						case "model-recovered-error":
+						case "model-retry-failed": {
+							assert.equal(child.status, 0, child.stderr);
+							const failures: Record<string, [unknown, number, unknown]> = {
+								// The call failed with a stated native status, before any response.
+								"model-error": [
+									{
+										kind: "HTTP_ERROR",
+										source: "ADAPTER",
+										phase: "request",
+										status: 503,
+										at: 1_760_000_000_000,
+										retryEndedUnsuccessfully: false,
+									},
+									0,
+									timing([[1200]], 1200),
 								],
 								// A later successful call clears the earlier failure; its count and time stay.
 								// Responses diagnostics are read like chat-completions ones.
-								"compose-recovered-error": [
-									[
-										"public-review",
-										null,
-										0,
-										timing(
-											[
-												[1200, 200],
-												[900, 300],
-											],
-											1200,
-										),
-									],
+								"model-recovered-error": [
+									null,
+									0,
+									timing(
+										[
+											[1200, 200],
+											[900, 300],
+										],
+										1200,
+									),
 								],
 								// A malformed diagnostic is UNKNOWN and unattributed; the native unsuccessful retry-end
 								// event marks it. A call without a span is not timed, not timed as zero.
-								"compose-private-error": [
-									[
-										"private-feedback",
-										{
-											kind: "UNKNOWN",
-											source: "INVALID",
-											phase: null,
-											status: null,
-											at: null,
-											retryEndedUnsuccessfully: true,
-										},
-										1,
-										timing([], 0),
-									],
+								"model-retry-failed": [
+									{
+										kind: "UNKNOWN",
+										source: "INVALID",
+										phase: null,
+										status: null,
+										at: null,
+										retryEndedUnsuccessfully: true,
+									},
+									1,
+									timing([], 0),
 								],
 							};
+							const expected = failures[stage];
+							assert.ok(expected !== undefined);
+							const [final, unattributed, callTiming] = expected;
 							const debugText = readFileSync(nodePath.join(cwd, "out/runner-debug.json"), "utf8");
 							assert.ok(!debugText.includes("sk-orchestration-secret"));
 							const debug: unknown = JSON.parse(debugText);
 							assert.ok(isRecord(debug) && Array.isArray(debug.turns));
-							for (const [phase, final, unattributed, callTiming] of failures[stage] ?? []) {
-								const turn: unknown = debug.turns.find(
-									(entry: unknown) => isRecord(entry) && entry.phase === phase,
-								);
-								assert.ok(isRecord(turn), phase);
-								assert.deepEqual(turn.finalModelFailure, final, `${stage} ${phase}`);
-								assert.equal(turn.unattributedModelFailures, unattributed, `${stage} ${phase}`);
-								assert.deepEqual(turn.modelCallTiming, callTiming, `${stage} ${phase}`);
-								assert.ok(isRecord(turn.modelFailures));
-								assert.equal(
-									Object.values(turn.modelFailures).reduce(
-										(sum: number, count: unknown) => sum + (typeof count === "number" ? count : 0),
-										0,
-									),
-									1,
-								);
-							}
+							const turn: unknown = debug.turns.find(
+								(entry: unknown) => isRecord(entry) && entry.phase === "practice",
+							);
+							assert.ok(isRecord(turn));
+							assert.deepEqual(turn.finalModelFailure, final, stage);
+							assert.equal(turn.unattributedModelFailures, unattributed, stage);
+							assert.deepEqual(turn.modelCallTiming, callTiming, stage);
+							assert.ok(isRecord(turn.modelFailures));
+							assert.equal(
+								Object.values(turn.modelFailures).reduce(
+									(sum: number, count: unknown) => sum + (typeof count === "number" ? count : 0),
+									0,
+								),
+								1,
+							);
+							reached({ "test-practice": "EVALUATED" });
 							break;
 						}
 						case "scope-cut-off": {
@@ -4986,7 +2823,7 @@ if (scenario !== undefined && scenario !== "") {
 							ran({ "second-practice": "not-reached (error)", "test-practice": "failed (error)" });
 							break;
 						}
-						case "compose-late-usage": {
+						case "late-usage": {
 							assert.equal(child.status, 0, child.stderr);
 							const usage: unknown = JSON.parse(
 								readFileSync(nodePath.join(cwd, "out/usage.json"), "utf8"),
@@ -5026,67 +2863,9 @@ if (scenario !== undefined && scenario !== "") {
 							});
 							break;
 						}
-						case "compose-private-safety": {
-							if (fixture === "compose-private-only-safety") {
-								// No review on the work was requested, so no review exists for private feedback to follow:
-								// the run's own ceiling ends it, with no further attempt.
-								assert.equal(child.status, 0, child.stderr);
-								assert.ok(
-									!events.some(
-										(event) =>
-											event.startsWith("create:session") && event.includes("report_review"),
-									),
-									events.join("\n"),
-								);
-								assert.ok(!events.includes("prepare-public:true"), events.join("\n"));
-								const stopped: unknown = JSON.parse(
-									readFileSync(nodePath.join(cwd, "out/feedback.json"), "utf8"),
-								);
-								assert.ok(isRecord(stopped));
-								assert.deepEqual(stopped.compositionFailures, [
-									{ phase: "PRIVATE_FEEDBACK", reason: "SAFETY" },
-								]);
-								break;
-							}
-							if (fixture === "compose-private-unacknowledged-public") {
-								const stopped: unknown = JSON.parse(
-									readFileSync(nodePath.join(cwd, "out/feedback.json"), "utf8"),
-								);
-								assert.ok(isRecord(stopped));
-								assert.notEqual(stopped.review, null);
-								assert.equal(stopped.preparation, null);
-								assert.deepEqual(stopped.compositionFailures, [
-									{ phase: "PRIVATE_FEEDBACK", reason: "SAFETY" },
-								]);
-								assert.ok(events.includes("prepare-public:true"), events.join("\n"));
-								const privateSession = events.findIndex(
-									(event) =>
-										event.startsWith("create:session") && event.includes("report_feedback"),
-								);
-								assert.ok(privateSession !== -1, events.join("\n"));
-								assert.ok(
-									events.slice(privateSession + 1).some((event) => event.startsWith("prompt:")),
-									events.join("\n"),
-								);
-								assert.match(child.stderr, /public review preparation: UNAVAILABLE/u);
-								assert.equal(child.status, 77, child.stderr);
-								break;
-							}
-							// The public review is prepared; the run's own ceiling stopped private composition.
-							assert.equal(child.status, 77, child.stderr);
-							assert.ok(events.includes("prepare-public:true"), events.join("\n"));
-							const owed: unknown = JSON.parse(
-								readFileSync(nodePath.join(cwd, "out/feedback.json"), "utf8"),
-							);
-							assert.ok(isRecord(owed));
-							assert.deepEqual(owed.compositionFailures, [
-								{ phase: "PRIVATE_FEEDBACK", reason: "SAFETY" },
-							]);
-							break;
-						}
-						case "compose-request-caps": {
-							// A composer request is bounded like a practice's: never more output than its turn has left,
-							// and none once the turn is spent. Each phase keeps its own allowance.
+						case "request-caps": {
+							// A practice request is bounded by its reservation: never more output than the turn has left,
+							// and none once the turn is spent.
 							assert.equal(child.status, 0, child.stderr);
 							assert.deepEqual(
 								events.filter((event) => event.startsWith("stream-request")),
@@ -5094,52 +2873,10 @@ if (scenario !== undefined && scenario !== "") {
 									"stream-request:16384",
 									"stream-request:7617",
 									"stream-request:1",
-									"stream-request-refused:public",
-									"stream-request:16384",
-									"stream-request:7617",
-									"stream-request:1",
-									"stream-request-refused:private",
+									"stream-request-refused",
 								],
 								child.stderr,
 							);
-							const capped: unknown = JSON.parse(
-								readFileSync(nodePath.join(cwd, "out/feedback.json"), "utf8"),
-							);
-							assert.ok(isRecord(capped));
-							// A spent work budget is the work's outcome, not one more attempt.
-							assert.deepEqual(capped.compositionFailures, [
-								{ phase: "PUBLIC_REVIEW", reason: "BUDGET" },
-								{ phase: "PRIVATE_FEEDBACK", reason: "BUDGET" },
-							]);
-							break;
-						}
-						case "compose-settle-deadline": {
-							// The admitting attempt's own ceiling stopped the review on the work: it is owed to one more
-							// attempt, which composes it from the same admitted results.
-							assert.equal(child.status, 77, child.stderr);
-							assert.deepEqual(
-								events.filter((event) => event.startsWith("prompt:")),
-								["prompt:1", "prompt:2"],
-							);
-							assert.match(
-								child.stderr,
-								/the run is near its safety ceiling — preserving results and composed feedback/u,
-							);
-							// The review composition was cut off by the safety line, so the private one never started.
-							assert.ok(
-								!events.some((event) => event.startsWith("private-turn")),
-								events.join("\n"),
-							);
-							// A refused review is not a review: nothing is left to deliver on the work.
-							assert.match(
-								events.find((event) => event.startsWith("refused-only:")) ?? "",
-								/review refused, nothing was stored:[\s\S]*00000000-0000-4000-8000-000000000001 has no decision/u,
-							);
-							const feedback: unknown = JSON.parse(
-								readFileSync(nodePath.join(cwd, "out/feedback.json"), "utf8"),
-							);
-							assert.ok(isRecord(feedback));
-							assert.equal(feedback.review ?? null, null);
 							reached({ "test-practice": "EVALUATED" });
 							break;
 						}
@@ -5906,1411 +3643,14 @@ for (const item of nullableCases) {
 							reached({ "test-practice": "EVALUATED" });
 							break;
 						}
-						case "compose-support": {
-							assert.equal(child.status, 0, child.stderr);
-							const payload: unknown = JSON.parse(
-								readFileSync(nodePath.join(cwd, "out/feedback.json"), "utf8"),
-							);
-							assert.ok(isRecord(payload) && Array.isArray(payload.feedback));
-							assert.ok(payload.review !== null);
-							assert.equal(
-								payload.admissionDigest,
-								"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-							);
-							assert.deepEqual(
-								JSON.parse(
-									readFileSync(nodePath.join(cwd, "work/composition/results.json"), "utf8"),
-								),
-								{ results: [admittedResult] },
-							);
-
-							const mode = fixture.slice("compose-support-".length);
-							assert.equal(
-								payload.feedback.some(
-									(piece: unknown) =>
-										isRecord(piece) &&
-										piece.destination === "CONVERSATION" &&
-										piece.action === "NEW",
-								),
-								!["refused-only", "inline", "routing-missing", "mentor-unavailable"].includes(mode),
-							);
-							assert.deepEqual(
-								payload.feedback
-									.filter(
-										(piece: unknown) => isRecord(piece) && piece.destination === "PRACTICE_PAGE",
-									)
-									.map((piece: unknown) => {
-										assert.ok(isRecord(piece));
-										return piece.action;
-									}),
-								new Map<string, string[]>([
-									["selected", ["NEW"]],
-									["mentor-unavailable", ["NEW"]],
-									["routing-missing", ["NEW"]],
-									["empty", ["WITHHOLD"]],
-									["duplicate", ["WITHHOLD"]],
-								]).get(mode) ?? [],
-							);
-							// A destination the server refuses is decided; only an unknown read is a failure.
-							assert.deepEqual(
-								payload.compositionFailures,
-								[
-									"missing",
-									"malformed",
-									"unavailable",
-									"invalid-optional",
-									"routing-missing",
-								].includes(mode)
-									? [{ phase: "PRIVATE_FEEDBACK", reason: "RUNTIME_ERROR" }]
-									: [],
-							);
-							assert.equal(
-								events.filter(
-									(event) => event.includes("tools=") && event.includes("report_feedback"),
-								).length,
-								mode === "refused-only" || mode === "inline" ? 0 : 1,
-							);
-							const pieceReply = events.find((event) => event.startsWith("support-items:")) ?? "";
-							if (mode === "cooldown") {
-								assert.match(
-									pieceReply,
-									/#1: PRACTICE_PAGE is not a destination this run may write for/u,
-								);
-								assert.match(
-									pieceReply,
-									/#2: stored a CONVERSATION piece for test-practice \(NEW\)/u,
-								);
-								assert.match(
-									child.stderr,
-									/PRACTICE_PAGE closed for this run: no undecided practice is routed to it/u,
-								);
-							}
-							if (mode === "routing-missing") {
-								assert.match(
-									pieceReply,
-									/#2: CONVERSATION is not a destination this run may write for/u,
-								);
-								assert.match(
-									child.stderr,
-									/CONVERSATION closed for this run: routing missing or malformed/u,
-								);
-							}
-							if (mode === "mentor-unavailable") {
-								assert.match(
-									pieceReply,
-									/#2: CONVERSATION is not a destination this run may write for/u,
-								);
-								assert.match(
-									child.stderr,
-									/CONVERSATION closed for this run: no undecided practice is routed to it/u,
-								);
-							}
-							if (mode === "inline") {
-								assert.equal(pieceReply, "");
-								assert.equal(payload.feedback.length, 0);
-								assert.match(
-									child.stderr,
-									/PRACTICE_PAGE closed for this run: no undecided practice is routed to it/u,
-								);
-								assert.match(
-									child.stderr,
-									/CONVERSATION closed for this run: no undecided practice is routed to it/u,
-								);
-							}
-							break;
-						}
-						case "compose":
-						case "compose-foreign-provider": {
-							assert.equal(child.status, 0, child.stderr);
-							assert.equal(existsSync(nodePath.join(cwd, "work/review-input")), false);
-							ran({ "test-practice": "ok" });
-							assert.deepEqual(executions.get("test-practice")?.program, {
-								kind: "builtin",
-								digest: null,
-							});
-							assert.deepEqual(executions.get("test-practice")?.calls, {
-								review: 1,
-								chat: 0,
-								decision: 0,
-								embedding: 0,
-								reranking: 0,
-							});
-							if (
-								fixture === "compose-history-missing-currentness" ||
-								fixture === "compose-history-invalid" ||
-								fixture === "compose-history-invalid-link" ||
-								fixture === "compose-history-refused" ||
-								fixture === "compose-history-malformed-json"
-							) {
-								const payload: unknown = JSON.parse(
-									readFileSync(nodePath.join(cwd, "out/feedback.json"), "utf8"),
-								);
-								assert.ok(isRecord(payload));
-								assert.equal(payload.review, null);
-								assert.deepEqual(payload.compositionFailures, [
-									{ phase: "PUBLIC_REVIEW", reason: "RUNTIME_ERROR" },
-								]);
-								assert.ok(
-									events.some((event) => event.startsWith("private-turn history=true")),
-									events.join("\n"),
-								);
-								assert.equal(
-									events.filter((event) => event.includes("tools=report_review")).length,
-									0,
-								);
-								assert.equal(
-									readFileSync(nodePath.join(cwd, "history/feedback.json"), "utf8"),
-									STAGED_FEEDBACK_HISTORY,
-								);
-								assert.equal(
-									payload.admissionDigest,
-									"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-								);
-								if (fixture === "compose-history-malformed-json") {
-									assert.equal(events.filter((event) => event === "public-history-read").length, 1);
-								}
-								break;
-							}
-							if (
-								fixture === "compose-fresh-history" ||
-								fixture === "compose-history-body-transport"
-							) {
-								if (fixture === "compose-history-body-transport") {
-									assert.equal(events.filter((event) => event === "public-history-read").length, 2);
-								}
-								const prompt = readFileSync(nodePath.join(cwd, "prompt-2.md"), "utf8");
-								assert.ok(prompt.includes("Fresh delivered communication"));
-								assert.ok(!prompt.includes("Delivery with unknown work link"));
-								assert.ok(!prompt.includes("An earlier comment on this same change."));
-								const debug: unknown = JSON.parse(
-									readFileSync(nodePath.join(cwd, "out/runner-debug.json"), "utf8"),
-								);
-								assert.ok(isRecord(debug) && isRecord(debug.publicHistory));
-								assert.equal(debug.publicHistory.readAt, "2026-10-07T11:00:00Z");
-								assert.equal(debug.publicHistory.workCapturedAt, "2026-10-07T09:00:00Z");
-								assert.deepEqual(debug.publicHistory.entries, [
-									{
-										id: "00000000-0000-4000-8000-000000000001",
-										deliveredAt: "2026-10-07T10:00:00Z",
-										eligibleForAlreadySaid: true,
-										eligibleForPriorAdvice: false,
-									},
-								]);
-								assert.ok(
-									!JSON.stringify(debug.publicHistory).includes("Fresh delivered communication"),
-								);
-								assert.equal(
-									readFileSync(nodePath.join(cwd, "history/feedback.json"), "utf8"),
-									STAGED_FEEDBACK_HISTORY,
-								);
-							}
-
-							if (fixture === "compose-history-unavailable-words") {
-								const prompt = readFileSync(nodePath.join(cwd, "prompt-2.md"), "utf8");
-								assert.match(prompt, /"wordsUnavailable": "COPY_AUTHORITY_UNAVAILABLE"/u);
-								assert.ok(!prompt.includes("An earlier comment on this same change."));
-								const debug: unknown = JSON.parse(
-									readFileSync(nodePath.join(cwd, "out/runner-debug.json"), "utf8"),
-								);
-								assert.ok(isRecord(debug) && isRecord(debug.publicHistory));
-								assert.deepEqual(
-									debug.publicHistory.entries,
-									[1, 2].map((entryNumber) => ({
-										id: `00000000-0000-4000-8000-00000000000${entryNumber}`,
-										deliveredAt: "2026-10-07T10:00:00Z",
-										eligibleForAlreadySaid: false,
-										eligibleForPriorAdvice: false,
-									})),
-								);
-								const answer: unknown = JSON.parse(
-									readFileSync(
-										nodePath.join(cwd, "work/composition/public-feedback-history.json"),
-										"utf8",
-									),
-								);
-								assert.ok(isRecord(answer) && isRecord(answer.history));
-								assert.ok(
-									listOf(answer.history.feedback).every(
-										(entry) => recordOf(entry).bodyUnavailable === true,
-									),
-								);
-							}
-
-							// Measurement, then the review on the work in a fresh session, then the private destinations in
-							// a third fresh session.
-							assert.deepEqual(
-								events.filter((event) => event.startsWith("prompt:")),
-								["prompt:1", "prompt:2", "prompt:3"],
-							);
-							assert.deepEqual(
-								events
-									.filter((event) => event.startsWith("create:"))
-									.map((event) => event.endsWith("tools=report_review")),
-								[false, true, false],
-							);
-							assert.ok(events.includes("review-loader extensions=0"), events.join("\n"));
-							assert.equal(
-								readFileSync(nodePath.join(cwd, "review-system-prompt.md"), "utf8"),
-								"Write clear, useful feedback.\n\nWrite the review on the work.",
-							);
-							assert.ok(!events.includes("compact"), child.stderr);
-							// What the review composition was given: this work, and nothing about the person.
-							const reviewTurn = readFileSync(nodePath.join(cwd, "prompt-2.md"), "utf8");
-							assert.match(reviewTurn, /^## The review to write/u);
-							// The captured record of this same work comes first, and the measurement task never.
-							const record = reviewTurn.indexOf('"title": "Add login"');
-							assert.ok(
-								record !== -1 &&
-									record < reviewTurn.indexOf('"resultId": "00000000-0000-4000-8000-000000000001"'),
-								reviewTurn,
-							);
-							assert.match(reviewTurn, /linked_work_items\.json[^\n]*not part of this capture/u);
-							assert.match(reviewTurn, /"resultId": "00000000-0000-4000-8000-000000000001"/u);
-							assert.match(reviewTurn, /"problemId": "problem-1"/u);
-							assert.match(reviewTurn, /"quote": "\+ insecure\(\);"/u);
-							if (
-								fixture !== "compose-fresh-history" &&
-								fixture !== "compose-history-unavailable-words" &&
-								fixture !== "compose-history-body-transport"
-							) {
-								assert.match(reviewTurn, /An earlier comment on this same change\./u);
-							}
-							assert.match(reviewTurn, /"slug": "test-practice"/u);
-							assert.deepEqual(reviewPracticesOf(reviewTurn), {
-								practices: [
-									{
-										slug: "test-practice",
-										name: "Test practice",
-										knownLimitations: [],
-										...(["compose", "compose-foreign-provider"].includes(stage)
-											? { versionId: "42" }
-											: {}),
-									},
-								],
-							});
-							const standard = reviewTurn.indexOf("```markdown\n# Test practice\nCriteria.\n```");
-							assert.ok(
-								record < standard &&
-									standard <
-										reviewTurn.indexOf('"resultId": "00000000-0000-4000-8000-000000000001"'),
-								reviewTurn,
-							);
-							assert.equal(reviewTurn.split("# Test practice\nCriteria.").length, 2, reviewTurn);
-							assert.ok(!reviewTurn.includes(PRIVATE_HISTORY_SENTENCE), reviewTurn);
-							// The private history the admission brought stays out of the review on the work.
-							assert.doesNotMatch(
-								reviewTurn,
-								/work\/composition\/history|00000000-0000-4000-8000-000000000201|00000000-0000-4000-8000-000000000101/u,
-							);
-							assert.ok(!reviewTurn.includes("problem-history"), reviewTurn);
-							assert.ok(!reviewTurn.includes("00000000-0000-4000-8000-000000000010"), reviewTurn);
-							assert.ok(!reviewTurn.includes("Review the practice."), reviewTurn);
-							assert.match(
-								events.find((event) => event.startsWith("review-refused:")) ?? "",
-								/review refused, nothing was stored:[\s\S]*summary: body may not contain an HTML comment[\s\S]*inline #1: anchor names problem-1b, which this note's basedOn does not, itself or through its result/u,
-							);
-							assert.match(
-								events.find((event) => event.startsWith("review-history:")) ?? "",
-								/00000000-0000-4000-8000-000000000010, which is not one of the NOT_MET results or problems this review may rest on/u,
-							);
-							assert.match(
-								events.find((event) => event.startsWith("review-stored:")) ?? "",
-								/Stored the review: a summary resting on 1 result\(s\) and problem\(s\), 1 line note\(s\), 0 withholding decision\(s\)[\s\S]*"terminate":true/u,
-							);
-							assert.ok(!events.includes("review-retry"), events.join("\n"));
-							// Private composition sees the person's history and the stored review.
-							assert.ok(
-								events.includes("private-turn history=true review=true"),
-								events.join("\n"),
-							);
-							assert.match(
-								events.find((event) => event.startsWith("feedback-historical:")) ?? "",
-								/does not name an admitted result or problem from this run/u,
-								`${events.join("\n")}\n${child.stderr}`,
-							);
-							const reply = events.find((event) => event.startsWith("feedback:")) ?? "";
-							// The composition turn goes on to its summary; only the retry ends on its last decision.
-							assert.match(reply, /"terminate":false/u, `${events.join("\n")}\n${child.stderr}`);
-							assert.match(
-								reply,
-								/#1: stored a PRACTICE_PAGE piece for test-practice \(NEW\); 1\/1 used/u,
-							);
-							assert.match(reply, /#2: basedOn is required/u);
-							assert.match(reply, /#3: piece: Unrecognized key: .*verdict/u);
-							assert.match(
-								reply,
-								/#4: body: Aim for at most 600 characters[\s\S]*Corrected text example/u,
-							);
-							assert.match(reply, /#5: withholdReason: Invalid option/u);
-							assert.match(
-								reply,
-								/#6: practiceSlug 'other-practice' is not a practice with an admitted result in this run \(those are: test-practice\)/u,
-							);
-							assert.match(reply, /#7: destination: Invalid option/u);
-							assert.match(reply, /#8: piece: Invalid input/u);
-							assert.match(
-								events.find((event) => event.startsWith("feedback-bare:")) ?? "",
-								/#1: CONVERSATION is not a destination this run may write for/u,
-							);
-							const second = readFileSync(nodePath.join(cwd, "prompt-3.md"), "utf8");
-							// Private composition receives stable context anew, without measurement criteria or tool examples.
-							assert.match(second, /### `evidence\/metadata\.json`/u);
-							assert.doesNotMatch(second, /### Practice `test-practice`|How submit_result takes/u);
-							assert.equal(
-								readFileSync(nodePath.join(cwd, "private-system-prompt.md"), "utf8"),
-								"Write clear, useful feedback.\n\nCompose from admitted problems.",
-							);
-							assert.doesNotMatch(
-								second,
-								/Compose from admitted problems|How submit_result takes/u,
-							);
-							assert.match(second, /"resultId": "00000000-0000-4000-8000-000000000001"/u);
-							assert.match(second, /"problemId": "problem-1"/u);
-							// The quoted lines and the verification records stay on disk, where the composer
-							// can read them if needed; the search it recorded is still shown.
-							assert.ok(second.includes("## This turn"));
-							const composerTurn = second.slice(second.indexOf("## This turn"));
-							// The NOT_MET practice's criteria come whole before the admitted rows, without its
-							// measuring leads or a sibling's criteria; the staged files stay readable.
-							const criteriaAt = composerTurn.indexOf("# Test practice\nCriteria.");
-							assert.ok(criteriaAt !== -1, composerTurn);
-							assert.ok(
-								criteriaAt <
-									composerTurn.indexOf('"resultId": "00000000-0000-4000-8000-000000000001"'),
-								composerTurn,
-							);
-							assert.doesNotMatch(
-								composerTurn,
-								/Leads from the practice script|insecure call: |Complete second criterion/u,
-							);
-							// The server's private history keeps every fact it was read with and names where its words are.
-							for (const fact of [
-								'"id": "00000000-0000-4000-8000-000000000202"',
-								'"deliveredAt": "2026-08-15T10:00:00Z"',
-								'"recordedClaimCurrentness": "STALE"',
-								'"withdrawn": true',
-								'"threadKey": "00000000-0000-4000-8000-000000000101"',
-							]) {
-								assert.ok(composerTurn.includes(fact), fact);
-							}
-							assert.ok(!composerTurn.includes("An earlier card about the insecure call."));
-							assert.ok(!composerTurn.includes("Earlier prepared mentor wording."));
-							assert.ok(!composerTurn.includes(REVIEW_SUMMARY));
-							assert.match(composerTurn, /feedback\[0\]\.body/u);
-							assert.doesNotMatch(composerTurn, /feedback\[1\]\.body/u);
-							assert.match(composerTurn, /prepared\[0\]\.body/u);
-							// Supplied history is shown as supplied; only the problem history, which no read supplies, is unknown.
-							assert.doesNotMatch(
-								composerTurn,
-								/(?:feedback|prepared)\.json` is not staged|staged with no entries/u,
-							);
-							assert.match(composerTurn, /history\/problems\.json` is not staged for this review/u);
-							assert.match(composerTurn, /review\.summary\.body/u);
-							assert.match(composerTurn, /review\.inline\[0\]\.body/u);
-							// The native evidence reader can retrieve the original source at a displayed locator.
-							const { createReadTool } = await import("@earendil-works/pi-coding-agent");
-							const reader = createReadTool(cwd);
-							for (const [path, expected] of [
-								[
-									"work/composition/history/feedback.json",
-									"An earlier card about the insecure call.",
-								],
-								["work/composition/history/prepared.json", "Earlier prepared mentor wording."],
-								["out/feedback.json", JSON.stringify(REVIEW_SUMMARY).slice(1, -1)],
-							]) {
-								assert.ok(path !== undefined && expected !== undefined);
-								const result = await reader.execute(`jit-${path}`, { path });
-								const text = result.content
-									.filter((block) => block.type === "text")
-									.map((block) => block.text)
-									.join("\n");
-								assert.ok(text.includes(expected), text);
-							}
-
-							// The runner stages each part of the read in its own file; the projection keeps every root
-							// and row fact, a body is replaced by its locator in the unchanged file, and a row without
-							// one (withdrawn, stale) names none.
-							const projections = [
-								...composerTurn.matchAll(/```json\n(?<json>[\s\S]*?)\n```/gu),
-							].map((match): unknown => JSON.parse(match.groups?.json ?? "null"));
-							const { readAt, coverage: historyCoverage } = PRIVATE_HISTORY;
-							for (const [role, key, file, rowsRead, bodyRoles] of [
-								[
-									"RECORDED_DELIVERY",
-									"feedback",
-									"work/composition/history/feedback.json",
-									PRIVATE_HISTORY.delivered,
-									["PRACTICE_PAGE_CARD", null],
-								],
-								[
-									"PREPARED_NOT_DELIVERED",
-									"prepared",
-									"work/composition/history/prepared.json",
-									PRIVATE_HISTORY.queued,
-									["MENTOR_NOTES"],
-								],
-							] as const) {
-								const staged = readFileSync(nodePath.join(cwd, file), "utf8");
-								assert.deepEqual(JSON.parse(staged), {
-									readAt,
-									coverage: historyCoverage,
-									recordRole: role,
-									[key]: rowsRead,
-								});
-								const view = projections.find(
-									(projection) => isRecord(projection) && projection.recordRole === role,
-								);
-								assert.ok(isRecord(view), role);
-								assert.deepEqual(view.coverage, historyCoverage);
-								const rows = view[key];
-								assert.ok(Array.isArray(rows));
-								assert.deepEqual(
-									rows.map((row: unknown) => (isRecord(row) ? row.bodyRole : undefined)),
-									bodyRoles,
-								);
-								const original: unknown = JSON.parse(staged);
-								const sourceRows = isRecord(original) ? original[key] : null;
-								assert.ok(Array.isArray(sourceRows) && sourceRows.length === rows.length);
-								for (const [bodyIndex, source] of sourceRows.entries()) {
-									assert.ok(isRecord(source));
-									const { body, ...facts } = source;
-									const row: unknown = rows[bodyIndex];
-									assert.ok(isRecord(row));
-									const { bodyAt, ...kept } = row;
-									assert.deepEqual(kept, facts);
-									assert.ok(!Object.hasOwn(row, "body"));
-									const sourcePath = nodePath.join(cwd, file);
-									assert.equal(
-										bodyAt,
-										typeof body === "string"
-											? `${sourcePath} → ${key}[${bodyIndex}].body (${body.length} characters)`
-											: undefined,
-									);
-									// The locator identifies the original bytes and the staged body index.
-									const located = readFileSync(sourcePath, "utf8");
-									assert.equal(located, staged);
-									const reread: unknown = JSON.parse(located);
-									const rereadRows = isRecord(reread) ? reread[key] : null;
-									assert.ok(Array.isArray(rereadRows));
-									const entry: unknown = rereadRows[bodyIndex];
-									assert.ok(isRecord(entry) && entry.body === body);
-								}
-							}
-							assert.doesNotMatch(composerTurn, /"quote"/u);
-							assert.doesNotMatch(composerTurn, /"verification"/u);
-							assert.match(second, /"lookedFor": "x"/u);
-							assert.match(
-								readFileSync(nodePath.join(cwd, "work/composition/results.json"), "utf8"),
-								/"quote": "\+ insecure\(\);"/u,
-							);
-							const feedback: unknown = JSON.parse(
-								readFileSync(nodePath.join(cwd, "out/feedback.json"), "utf8"),
-							);
-							assert.ok(typeof feedback === "object" && feedback !== null);
-							assert.equal(
-								Reflect.get(feedback, "admissionDigest"),
-								"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-							);
-							assert.equal(Reflect.get(feedback, "contractVersion"), 3);
-							assert.equal(Reflect.get(feedback, "lead"), undefined);
-							const pieces: unknown = Reflect.get(feedback, "feedback");
-							assert.ok(Array.isArray(pieces) && pieces.length === 1, JSON.stringify(feedback));
-							assert.ok(isRecord(pieces[0]) && pieces[0].destination === "PRACTICE_PAGE");
-							// The review as stored: the summary verbatim, the note on its cited line.
-							assert.deepEqual(Reflect.get(feedback, "review"), {
-								summary: {
-									body: REVIEW_SUMMARY,
-									basedOn: [{ resultId: "00000000-0000-4000-8000-000000000001" }],
-								},
-								inline: [
-									{
-										body: "`insecure()` runs here before the token is checked; call the checked helper instead.",
-										basedOn: [
-											{ resultId: "00000000-0000-4000-8000-000000000001", problemId: "problem-1" },
-										],
-										anchor: { problemId: "problem-1", citationIndex: 0 },
-									},
-								],
-								withheld: [],
-							});
-							assert.match(child.stderr, /\] composition: .*stored=1/u);
-							reached({ "test-practice": "EVALUATED" });
-							break;
-						}
-						case "compose-overflow": {
-							// 120k held, a prompt of a few thousand and 16k of output do not fit in 128k: the
-							// session is compacted before the prompt, and the prompt itself is sent whole.
-							assert.equal(child.status, 0, child.stderr);
-							// The review composition runs in its own fresh session, which holds nothing to compact; the
-							// private composition starts fresh and restores the complete authorized opening after compaction.
-							const order = events.filter((event) =>
-								["prompt:1", "prompt:2", "compact", "prompt:3"].includes(event),
-							);
-							assert.deepEqual(order, ["prompt:1", "prompt:2", "compact", "prompt:3"]);
-
-							// The compaction took the brief from the context, so the composition turn carries it again
-							// ahead of the composer's instructions — without the measuring examples and record, which
-							// the composer does not use.
-							const composition = readFileSync(nodePath.join(cwd, "prompt-3.md"), "utf8");
-							assert.match(composition, /### `evidence\/metadata\.json`[\s\S]*## This turn/u);
-							assert.doesNotMatch(composition, /## Recorded so far|How submit_result takes/u);
-							break;
-						}
-						case "compose-silent": {
-							assert.equal(child.status, 0, child.stderr);
-							assert.deepEqual(
-								events.filter((event) => event.startsWith("prompt:")),
-								["prompt:1", "prompt:2", "prompt:3", "prompt:4"],
-							);
-							assert.match(
-								readFileSync(nodePath.join(cwd, "prompt-4.md"), "utf8"),
-								/## Undecided[\s\S]*each with a NOT_MET result: test-practice/u,
-							);
-							assert.match(
-								readFileSync(nodePath.join(cwd, "prompt-4.md"), "utf8"),
-								/Room left for new items: PRACTICE_PAGE 1 of 1/u,
-							);
-							assert.match(
-								child.stderr,
-								/composition left 1 NOT_MET practice\(s\) undecided — asking once more/u,
-							);
-							assert.equal(
-								(
-									child.stderr.match(
-										/composition: 12 calls without a recording call — nudging to persist/gu,
-									) ?? []
-								).length,
-								1,
-								child.stderr,
-							);
-							assert.equal(events.filter((event) => event === "steer").length, 1);
-							assert.match(
-								events.find((event) => event.startsWith("feedback-finish:")) ?? "",
-								/#1: basedOn is required: [^;]*\(test-practice's results: 00000000-0000-4000-8000-000000000001\); skipped\./u,
-							);
-							assert.match(
-								events.find((event) => event.startsWith("feedback-finish:")) ?? "",
-								/#2: stored a PRACTICE_PAGE piece for test-practice \(WITHHOLD\)/u,
-							);
-							// The retry exists only to decide what was left undecided: once nothing is, it ends.
-							assert.match(
-								events.find((event) => event.startsWith("feedback-finish:")) ?? "",
-								/"terminate":true/u,
-							);
-							const feedback: unknown = JSON.parse(
-								readFileSync(nodePath.join(cwd, "out/feedback.json"), "utf8"),
-							);
-							assert.ok(typeof feedback === "object" && feedback !== null);
-							const pieces: unknown = Reflect.get(feedback, "feedback");
-							assert.ok(Array.isArray(pieces) && pieces.length === 1);
-							const piece: unknown = pieces[0];
-							assert.ok(typeof piece === "object" && piece !== null);
-							assert.equal(Reflect.get(piece, "withholdReason"), "BELOW_BAR");
-							break;
-						}
-						case "compose-empty": {
-							assert.equal(child.status, 0, child.stderr);
-							assert.deepEqual(
-								events.filter((event) => event.startsWith("prompt:")),
-								["prompt:1"],
-							);
-							assert.ok(
-								!events.some((event) => event.endsWith("tools=report_review")),
-								events.join("\n"),
-							);
-							const feedback: unknown = JSON.parse(
-								readFileSync(nodePath.join(cwd, "out/feedback.json"), "utf8"),
-							);
-							assert.ok(isRecord(feedback));
-							assert.equal(feedback.review, null);
-							assert.deepEqual(
-								readFeedbackResults(nodePath.join(cwd, "out/feedback.json")).map(
-									(item) => item.outcome,
-								),
-								["MET"],
-							);
-							break;
-						}
-						case "compose-invalid-select": {
-							assert.equal(child.status, 0, child.stderr);
-							const said = (label: string) =>
-								events.find((event) => event.startsWith(`${label}:`)) ?? "";
-							for (const label of ["invalid-report", "invalid-again"]) {
-								assert.match(
-									said(label),
-									/review refused, nothing was stored:[\s\S]*00000000-0000-4000-8000-000000000001 has no decision/u,
-								);
-							}
-							assert.equal(
-								said("invalid-nudge"),
-								`invalid-nudge:${JSON.stringify([["report_review"]])}`,
-							);
-							assert.match(said("invalid-after-final"), /The review on this work is final/u);
-							assert.match(
-								child.stderr,
-								/the same report_review call 2 times — nudging to record/u,
-							);
-							assert.doesNotMatch(child.stderr, /the same report_review call 3 times/u);
-							assert.match(said("invalid-final"), /Stored the review[\s\S]*"terminate":true/u);
-							assert.ok(!events.includes("review-retry"), events.join("\n"));
-							const feedback: unknown = JSON.parse(
-								readFileSync(nodePath.join(cwd, "out/feedback.json"), "utf8"),
-							);
-							assert.ok(isRecord(feedback));
-							assert.deepEqual(feedback.review, {
-								summary: {
-									body: REVIEW_SUMMARY,
-									basedOn: [{ resultId: "00000000-0000-4000-8000-000000000001" }],
-								},
-								inline: [],
-								withheld: [],
-							});
-							break;
-						}
-						case "compose-recover": {
-							assert.equal(child.status, 0, child.stderr);
-							const criteria = readFileSync(
-								nodePath.join(cwd, "catalog/practices/test-practice.md"),
-								"utf8",
-							);
-							assert.match(criteria, /^ {4}let reply[\s\S]*reasoned decline[\s\S]* {2}\n\n$/u);
-							const staged = `markdown\n${criteria}\n`;
-							const refused = events.find((event) => event.startsWith("recover-refused:")) ?? "";
-							assert.match(refused, /review refused, nothing was stored/u);
-							assert.ok(events.includes("review-retry"), events.join("\n"));
-							const prompts = events
-								.filter((event) => event.startsWith("prompt:"))
-								.map((event) =>
-									readFileSync(
-										nodePath.join(cwd, `prompt-${event.slice("prompt:".length)}.md`),
-										"utf8",
-									),
-								);
-							// The review turn carries the NOT_MET standard whole, before the rows it is decided on; the
-							// session still holds it, so neither the refusal nor the retry repeats it.
-							const turn = prompts.find((prompt) => prompt.startsWith("## The review to write"));
-							assert.ok(turn !== undefined, events.join("\n"));
-							assert.ok(turn.includes(staged), turn);
-							assert.ok(turn.indexOf(staged) < turn.indexOf('"problems": ['), turn);
-							assert.ok(!refused.includes(JSON.stringify(staged).slice(1, -1)), refused);
-							// The retry holds only what is owed and how to finish.
-							const retry = prompts.find((prompt) => prompt.startsWith("## Undecided"));
-							assert.ok(retry !== undefined, events.join("\n"));
-							assert.ok(retry.includes("00000000-0000-4000-8000-000000000001"), retry);
-							assert.ok(!retry.includes(staged), retry);
-							break;
-						}
-						case "compose-qualify": {
-							assert.equal(child.status, 0, child.stderr);
-							const standards = ["test-practice", "second-practice"].map(
-								(slug) =>
-									`markdown\n${readFileSync(nodePath.join(cwd, `catalog/practices/${slug}.md`), "utf8")}\n`,
-							);
-							const reviewTurn = events
-								.filter((event) => event.startsWith("prompt:"))
-								.map((event) =>
-									readFileSync(
-										nodePath.join(cwd, `prompt-${event.slice("prompt:".length)}.md`),
-										"utf8",
-									),
-								)
-								.find((prompt) => prompt.startsWith("## The review to write"));
-							assert.ok(reviewTurn !== undefined, events.join("\n"));
-							if (fixture === "compose-compacted") {
-								const [concern = ""] = standards;
-								assert.ok(reviewTurn.includes(concern), reviewTurn);
-								assert.ok(
-									!reviewTurn.includes(
-										"The helper path is present in the source; its runtime behavior was not executed.",
-									),
-									reviewTurn,
-								);
-								assert.ok(
-									!reviewTurn.includes('"resultId": "00000000-0000-4000-8000-000000000002"'),
-									reviewTurn,
-								);
-								assert.match(
-									events.find((event) => event.startsWith("mixed-met:")) ?? "",
-									/review refused, nothing was stored:[\s\S]*basedOn names 00000000-0000-4000-8000-000000000002, which is not one of the NOT_MET results or problems this review may rest on/u,
-								);
-								const refused = readToolText(nodePath.join(cwd, "compacted-refused.txt"));
-								assert.match(
-									refused,
-									/review refused, nothing was stored: the session's context was compacted/u,
-								);
-								assert.ok(refused.includes(reviewTurn), refused);
-								assert.ok(refused.includes(`"itemVersion": "${"a".repeat(40)}"`), refused);
-								assert.match(
-									readFileSync(nodePath.join(cwd, "restore-batch-refused.txt"), "utf8"),
-									/review refused, nothing was stored/u,
-								);
-								assert.match(
-									events.find((event) => event.startsWith("compacted-stored:")) ?? "",
-									/Stored the review: a summary resting on 1 result\(s\) and problem\(s\)/u,
-								);
-								const stored: unknown = JSON.parse(
-									readFileSync(nodePath.join(cwd, "out/feedback.json"), "utf8"),
-								);
-								assert.ok(isRecord(stored));
-								assert.deepEqual(stored.review, {
-									summary: {
-										body: REVIEW_SUMMARY,
-										basedOn: [{ resultId: "00000000-0000-4000-8000-000000000001" }],
-									},
-									inline: [],
-									withheld: [],
-								});
-								reached({ "test-practice": "EVALUATED", "second-practice": "EVALUATED" });
-								break;
-							}
-							for (const standard of standards) {
-								assert.ok(reviewTurn.includes(standard), reviewTurn);
-							}
-							const refused = readFileSync(nodePath.join(cwd, "qualification-refused.txt"), "utf8");
-							assert.match(
-								refused,
-								/review refused, nothing was stored:[\s\S]*00000000-0000-4000-8000-000000000002 has no decision/u,
-							);
-							for (const standard of standards) {
-								assert.ok(!refused.includes(standard), refused);
-							}
-							assert.match(
-								events.find((event) => event.startsWith("qualification-stored:")) ?? "",
-								/Stored the review/u,
-							);
-							const feedback: unknown = JSON.parse(
-								readFileSync(nodePath.join(cwd, "out/feedback.json"), "utf8"),
-							);
-							assert.ok(isRecord(feedback));
-							assert.equal(
-								feedback.admissionDigest,
-								"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-							);
-							assert.deepEqual(feedback.review, {
-								summary: {
-									body: REVIEW_SUMMARY,
-									basedOn: [{ resultId: "00000000-0000-4000-8000-000000000001" }],
-								},
-								inline: [],
-								withheld: [
-									{
-										basedOn: [{ resultId: "00000000-0000-4000-8000-000000000002" }],
-										reason: "BELOW_BAR",
-										witnessIds: [],
-									},
-								],
-							});
-							assert.ok(events.includes("qualification:canonical-unchanged"), events.join("\n"));
-							reached({ "test-practice": "EVALUATED", "second-practice": "EVALUATED" });
-							break;
-						}
-						case "compose-reselect": {
-							assert.equal(child.status, 0, child.stderr);
-							const said = (label: string) =>
-								events.find((event) => event.startsWith(`${label}:`)) ?? "";
-							assert.ok(
-								events.includes('reselect-before-final:{"action":"continue"}'),
-								events.join("\n"),
-							);
-							assert.ok(events.includes("reselect-retained:1"), events.join("\n"));
-							assert.match(
-								said("reselect-incomplete"),
-								/review refused, nothing was stored:[\s\S]*00000000-0000-4000-8000-000000000001 has no decision/u,
-							);
-							// A prior-advice reason with no statement to name is refused whole, not stored without it.
-							assert.match(
-								said("reselect-unwitnessed"),
-								/review refused, nothing was stored:[\s\S]*ALREADY_SAID names in witnessIds/u,
-							);
-							const criteria = readFileSync(
-								nodePath.join(cwd, "catalog/practices/test-practice.md"),
-								"utf8",
-							);
-							assert.match(criteria, /^ {4}let reply[\s\S]*reasoned decline[\s\S]* {2}\n\n$/u);
-							const staged = `markdown\n${criteria}\n`;
-							// The staged bytes reach the review turn whole; refusals the session answers while it still
-							// holds them do not repeat them.
-							const reviewTurn = events
-								.filter((event) => event.startsWith("prompt:"))
-								.map((event) =>
-									readFileSync(
-										nodePath.join(cwd, `prompt-${event.slice("prompt:".length)}.md`),
-										"utf8",
-									),
-								)
-								.find((prompt) => prompt.startsWith("## The review to write"));
-							assert.ok(reviewTurn?.includes(staged) === true, reviewTurn);
-							assert.ok(
-								!said("reselect-unwitnessed").includes(JSON.stringify(staged).slice(1, -1)),
-								said("reselect-unwitnessed"),
-							);
-							assert.match(
-								said("reselect-final"),
-								/Stored the review: a summary resting on 1 result\(s\) and problem\(s\)[\s\S]*"terminate":true/u,
-							);
-							assert.ok(events.includes('reselect-terminal:{"action":"end"}'), events.join("\n"));
-							assert.ok(events.includes("reselect-drained:0"), events.join("\n"));
-							assert.equal(events.filter((event) => event === "native-finish-turn").length, 2);
-							assert.match(
-								said("reselect-met"),
-								/review refused, nothing was stored:[\s\S]*basedOn names 00000000-0000-4000-8000-000000000002, which is not one of the NOT_MET results or problems this review may rest on/u,
-							);
-							assert.match(
-								said("reselect-after-review"),
-								/final; this composition accepts nothing more/u,
-							);
-							// The final review was the one the composition owed, so it is not asked for again.
-							assert.ok(!events.includes("review-retry"), events.join("\n"));
-							const reviewPrompts = events
-								.filter((event) => event.startsWith("prompt:"))
-								.map((event) =>
-									readFileSync(
-										nodePath.join(cwd, `prompt-${event.slice("prompt:".length)}.md`),
-										"utf8",
-									),
-								)
-								.filter((prompt) =>
-									/^## (?:The review to write|Undecided|Unfinished)/u.test(prompt),
-								);
-							assert.equal(reviewPrompts.length, 1);
-							const initialReview = reviewPrompts[0];
-							assert.ok(initialReview !== undefined);
-							assert.deepEqual(reviewPracticesOf(initialReview), {
-								practices: [{ slug: "test-practice", name: "Test practice", knownLimitations: [] }],
-							});
-							const feedback: unknown = JSON.parse(
-								readFileSync(nodePath.join(cwd, "out/feedback.json"), "utf8"),
-							);
-							assert.ok(isRecord(feedback));
-							assert.deepEqual(feedback.review, {
-								summary: {
-									body: REVIEW_SUMMARY,
-									basedOn: [{ resultId: "00000000-0000-4000-8000-000000000001" }],
-								},
-								inline: [],
-								withheld: [],
-							});
-							break;
-						}
-						case "compose-already-said": {
-							assert.equal(child.status, 0, child.stderr);
-							const first = events.find((event) => event.startsWith("said-first:")) ?? "";
-							assert.match(
-								first,
-								/#1: NO_MATERIAL_CHANGE rests on feedback recorded as delivered on CONVERSATION for test-practice in/u,
-							);
-							assert.match(
-								first,
-								/#2: ALREADY_SAID rests on feedback recorded as delivered on CONVERSATION for test-practice in/u,
-							);
-							assert.match(
-								first,
-								/#3: stored a PRACTICE_PAGE piece for test-practice \(WITHHOLD\); 0\/1 used on that destination\./u,
-							);
-							const second = events.find((event) => event.startsWith("said-second:")) ?? "";
-							assert.match(
-								second,
-								/#1: NO_MATERIAL_CHANGE rests on feedback recorded as delivered on CONVERSATION for test-practice in/u,
-							);
-							// The refused grouping left the pair open; MET counterevidence owes no history.
-							assert.match(
-								second,
-								/#2: stored a CONVERSATION piece for second-practice \(WITHHOLD\); 0\/1 used on that destination\./u,
-							);
-							// test-practice's problem is on the diff: the open destination refuses even a withholding for it.
-							const inline = fixture === "compose-already-said-inline";
-							assert.match(
-								second,
-								inline
-									? /#3: CONVERSATION cannot carry feedback about test-practice this run \(HAS_INLINE_ANCHOR\); write no piece for it there, not even a WITHHOLD\. Skipped\./u
-									: /#3: stored a CONVERSATION piece for test-practice \(WITHHOLD\); 0\/1 used on that destination\./u,
-							);
-							const payload: unknown = JSON.parse(
-								readFileSync(nodePath.join(cwd, "out/feedback.json"), "utf8"),
-							);
-							assert.ok(isRecord(payload) && Array.isArray(payload.feedback));
-							assert.deepEqual(
-								payload.feedback.map((piece: unknown) => {
-									assert.ok(isRecord(piece));
-									assert.ok(Array.isArray(piece.basedOn));
-									const refs = piece.basedOn.map((ref: unknown) => {
-										assert.ok(isRecord(ref) && ref.problemId === undefined);
-										return String(ref.resultId);
-									});
-									return `${String(piece.destination)}:${String(piece.practiceSlug)}:${String(piece.withholdReason)}:${refs.join("+")}`;
-								}),
-								[
-									"PRACTICE_PAGE:test-practice:ALREADY_SAID:00000000-0000-4000-8000-000000000001",
-									"CONVERSATION:second-practice:NO_MATERIAL_CHANGE:00000000-0000-4000-8000-000000000002",
-									...(inline
-										? []
-										: [
-												"CONVERSATION:test-practice:BELOW_BAR:00000000-0000-4000-8000-000000000001",
-											]),
-								],
-							);
-							assert.deepEqual(payload.compositionFailures, []);
-							break;
-						}
-						case "compose-fold": {
-							assert.equal(child.status, 0, child.stderr);
-							assert.match(
-								events.find((event) => event.startsWith("feedback-fold:")) ?? "",
-								/stored/u,
-							);
-							assert.deepEqual(
-								events.filter((event) => event.startsWith("prompt:")),
-								["prompt:1", "prompt:2", "prompt:3", "prompt:4"],
-							);
-							assert.match(
-								events.find((event) => event.startsWith("review-withheld:")) ?? "",
-								fixture === "compose-counterevidence"
-									? /0 line note\(s\), 1 withholding decision\(s\)/u
-									: /0 line note\(s\), 2 withholding decision\(s\)/u,
-							);
-							assert.doesNotMatch(child.stderr, /asking once more/u);
-							// An oversized criterion is named with where to read it, never cut; the other is shown whole.
-							const privateTurn = ["prompt-1.md", "prompt-2.md", "prompt-3.md", "prompt-4.md"]
-								.map((name) => readFileSync(nodePath.join(cwd, name), "utf8"))
-								.find((text) => text.includes("## This turn"));
-							assert.ok(privateTurn !== undefined);
-							if (fixture === "compose-counterevidence") {
-								assert.ok(
-									privateTurn.includes(
-										"The helper path is present in the source; its runtime behavior was not executed.",
-									),
-								);
-								assert.ok(privateTurn.includes("Source only; no relaunch result recorded."));
-								assert.match(privateTurn, /"startLine": 10/u);
-								assert.doesNotMatch(
-									privateTurn,
-									/"quote"|"verification"|Criteria of `second-practice`/u,
-								);
-								break;
-							}
-
-							if (fixture === "compose-context-unavailable") {
-								assert.match(privateTurn, /Criteria of `test-practice` — not staged/u);
-								assert.match(privateTurn, /Criteria of `second-practice`[^\n]*is empty/u);
-								// A server read that found nothing is staged empty, over the file the session planted, and
-								// history no read supplied is unknown: different facts.
-								assert.match(
-									privateTurn,
-									/### Recorded delivered feedback — staged with no entries\n```json\n[^`]*"feedback": \[\]/u,
-								);
-								assert.match(
-									privateTurn,
-									/### Prepared feedback \(not delivered; supersession targets\) — staged with no entries\n```json\n[^`]*"prepared": \[\]/u,
-								);
-								assert.match(
-									privateTurn,
-									/### What earlier reviews recorded about this person — `[^`]*history\/problems\.json` is not staged for this review; what it would record is unknown here, not empty/u,
-								);
-								assert.doesNotMatch(privateTurn, /(?:feedback|prepared)\.json` is not staged/u);
-								assert.doesNotMatch(
-									privateTurn,
-									/Unknown historical prose|# Test practice|Long criterion|review\.summary\.body/u,
-								);
-								break;
-							}
-							assert.match(
-								privateTurn,
-								/### Criteria of `second-practice` — too large to show here; read `[^`]*catalog\/practices\/second-practice\.md`/u,
-							);
-							assert.ok(!privateTurn.includes("Long criterion. Long criterion."));
-							assert.ok(privateTurn.includes("# Test practice\nCriteria."));
-							// Unstaged history locations are reported unknown instead of requiring a failed read.
-							for (const label of [
-								"What earlier reviews recorded about this person — `[^`]*history/problems\\.json`",
-								"Recorded delivered feedback — `[^`]*history/feedback\\.json`",
-								"Prepared feedback \\(not delivered; supersession targets\\) — `[^`]*history/prepared\\.json`",
-							]) {
-								assert.match(
-									privateTurn,
-									new RegExp(
-										`### ${label} is not staged for this review; what it would record is unknown here, not empty\n`,
-										"u",
-									),
-								);
-							}
-							if (fixture === "compose-fold") {
-								const publicTurn = readFileSync(nodePath.join(cwd, "prompt-3.md"), "utf8");
-								const limits =
-									/### Recorded limits of this review[\s\S]*?```json\n(?<limits>[\s\S]*?)\n```/u.exec(
-										publicTurn,
-									)?.groups?.limits;
-								assert.ok(limits !== undefined);
-								for (const text of [limits, privateTurn]) {
-									assert.ok(text.includes("Which current request governs?"));
-									assert.ok(
-										text.includes("An authored resolution of the conflicting current statements."),
-									);
-									assert.ok(text.includes("The captured interface is unchanged."));
-									assert.match(text, /"path": "src\/RequestScope\.java"/u);
-									assert.match(text, /"startLine": 41/u);
-									assert.match(text, /"endLine": 42/u);
-									assert.match(text, /"path": "src\/ExternalInterface\.java"/u);
-									assert.match(text, /"startLine": 73/u);
-									assert.match(text, /"endLine": 73/u);
-									assert.doesNotMatch(
-										text,
-										/Unwarranted conformance summary|Unwarranted conformance rationale/u,
-									);
-								}
-								assert.ok(limits.includes("+ unresolvedCurrentRequest();"));
-								assert.ok(limits.includes("+ unchangedInterface();"));
-								assert.ok(!publicTurn.includes("00000000-0000-4000-8000-000000000011"));
-								assert.ok(
-									privateTurn.includes('"resultId": "00000000-0000-4000-8000-000000000011"'),
-								);
-								assert.doesNotMatch(privateTurn, /"quote"|"verification"/u);
-								assert.match(
-									events.find((event) => event.startsWith("qualification-support:")) ?? "",
-									/00000000-0000-4000-8000-000000000011, which is not one of the NOT_MET results or problems this review may rest on/u,
-								);
-								const restored =
-									events.find((event) => event.startsWith("qualification-restored:")) ?? "";
-								assert.ok(restored.includes("Which current request governs?"));
-								assert.ok(restored.includes("The captured interface is unchanged."));
-								const feedback: unknown = JSON.parse(
-									readFileSync(nodePath.join(cwd, "out/feedback.json"), "utf8"),
-								);
-								assert.ok(isRecord(feedback) && Array.isArray(feedback.feedback));
-								const piece: unknown = feedback.feedback[0];
-								assert.ok(isRecord(piece));
-								assert.deepEqual(
-									feedback.feedback.map((entry) => recordOf(entry).basedOn),
-									[
-										[{ resultId: "00000000-0000-4000-8000-000000000001" }],
-										[{ resultId: "00000000-0000-4000-8000-000000000002" }],
-									],
-								);
-							}
-							break;
-						}
-						case "compose-abstention": {
-							assert.equal(child.status, 0, child.stderr);
-							assert.deepEqual(
-								events.filter((event) => event.startsWith("prompt:")),
-								["prompt:1", "prompt:2", "prompt:3"],
-							);
-							assert.ok(
-								!events.some((event) => event.endsWith("tools=report_review")),
-								events.join("\n"),
-							);
-							assert.deepEqual(
-								[...candidatesIn(nodePath.join(cwd, "out/result.json")).values()].map(
-									(item) => item.outcome,
-								),
-								["DOES_NOT_APPLY", "MET", "COULD_NOT_DETERMINE"],
-							);
-							const echoed: unknown = JSON.parse(
-								readFileSync(nodePath.join(cwd, "out/feedback.json"), "utf8"),
-							);
-							assert.ok(isRecord(echoed));
-							assert.equal(
-								echoed.admissionDigest,
-								"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-							);
-							assert.deepEqual(
-								readFeedbackResults(nodePath.join(cwd, "out/feedback.json")).map(
-									(item) => item.outcome,
-								),
-								["DOES_NOT_APPLY", "MET", "COULD_NOT_DETERMINE"],
-							);
-							assert.equal(echoed.review, null);
-							assert.deepEqual(echoed.compositionFailures, []);
-							reached({
-								"test-practice": "EVALUATED",
-								"second-practice": "EVALUATED",
-								"third-practice": "EVALUATED",
-							});
-							break;
-						}
-						case "compose-unknown-outcome":
-						case "compose-null-outcome": {
+						case "admission-unknown-outcome":
+						case "admission-null-outcome": {
 							assert.equal(child.status, 2, child.stderr);
 							assert.match(child.stderr, /outcome/u);
 							assert.deepEqual(
 								events.filter((event) => event.startsWith("prompt:")),
 								["prompt:1"],
 							);
-							assert.ok(!existsSync(nodePath.join(cwd, "out/feedback.json")));
-							break;
-						}
-						case "compose-loop": {
-							assert.deepEqual(
-								events.filter((event) => event.startsWith("prompt:")),
-								["prompt:1", "prompt:2", "prompt:3", "prompt:4", "prompt:5"],
-							);
-							assert.ok(events.includes("review-retry"));
-							assert.equal(child.status, 0, child.stderr);
-							assert.ok(events.includes("abort"), child.stderr);
-							assert.match(
-								child.stderr,
-								/composition: 24 recording calls without a record — aborting this turn/u,
-							);
-							// A recording call answers the same to the same arguments: the second identical call is
-							// nudged and the third ends the turn.
-							assert.match(
-								child.stderr,
-								/the same report_review call 2 times — nudging to record/u,
-							);
-							assert.match(
-								child.stderr,
-								/the same report_review call 3 times — aborting this turn/u,
-							);
-							// Every refused call is in the transcript with the SDK's reason, and in the trace.
-							assert.match(
-								child.stderr,
-								/composer tool error: report_review — Validation failed for tool "report_review": - \/summary: Expected object/u,
-							);
-							// A review composition stopped by the loop guard is asked once more for what it left.
-							assert.ok(events.includes("review-retry"), events.join("\n"));
-							const debug: unknown = JSON.parse(
-								readFileSync(nodePath.join(cwd, "out/runner-debug.json"), "utf8"),
-							);
-							assert.ok(typeof debug === "object" && debug !== null);
-							const turns: unknown = Reflect.get(debug, "turns");
-							assert.ok(Array.isArray(turns));
-							const composition: unknown = turns.find(
-								(turn: unknown) =>
-									typeof turn === "object" &&
-									turn !== null &&
-									Reflect.get(turn, "phase") === "public-review",
-							);
-							assert.ok(typeof composition === "object" && composition !== null);
-							assert.equal(Reflect.get(composition, "toolErrors"), 24);
-							assert.equal(Reflect.get(composition, "recordingCalls"), 24);
-							break;
-						}
-						case "compose-continuation": {
-							assert.equal(
-								child.status,
-								fixture === "compose-continuation-private-safety" ? 77 : 0,
-								child.stderr,
-							);
-							if (fixture === "compose-continuation-public-safety") {
-								// The continuation had the whole run for composition: its own ceiling ends the review on
-								// the work for good, with no further attempt and no private feedback started.
-								assert.equal(
-									events.filter((event) => event.startsWith("create:session")).length,
-									1,
-									events.join("\n"),
-								);
-								assert.ok(
-									!events.some((event) => event.startsWith("private-turn")),
-									events.join("\n"),
-								);
-								assert.ok(!events.includes("prepare-public:true"), events.join("\n"));
-								assert.ok(!existsSync(nodePath.join(cwd, "admission.json")));
-								const stopped: unknown = JSON.parse(
-									readFileSync(nodePath.join(cwd, "out/feedback.json"), "utf8"),
-								);
-								assert.ok(isRecord(stopped));
-								assert.equal(stopped.review ?? null, null);
-								assert.deepEqual(stopped.compositionFailures, [
-									{ phase: "PUBLIC_REVIEW", reason: "SAFETY" },
-									{ phase: "PRIVATE_FEEDBACK", reason: "SAFETY" },
-								]);
-								break;
-							}
-							if (fixture === "compose-continuation-private-safety") {
-								// The review composed and accepted in this attempt stays; the run's ceiling stopped the
-								// private composer, so the private feedback is owed to another attempt.
-								const created = events.filter((event) => event.startsWith("create:session"));
-								assert.equal(created.length, 2, events.join("\n"));
-								assert.equal(created[0], "create:session tools=report_review");
-								assert.ok((created[1] ?? "").includes("report_feedback"), events.join("\n"));
-								assert.deepEqual(
-									events.filter((event) => event.startsWith("prepare-public:")),
-									["prepare-public:true"],
-								);
-								assert.ok(
-									events.indexOf(created[1] ?? "") > events.indexOf("prepare-public:true"),
-									events.join("\n"),
-								);
-								assert.match(child.stderr, /preparation: PREPARED/u);
-								assert.ok(!existsSync(nodePath.join(cwd, "admission.json")));
-								assert.ok(!existsSync(nodePath.join(cwd, "out/practice-scripts.json")));
-								assert.ok(!events.includes("derive-change"));
-								const owed: unknown = JSON.parse(
-									readFileSync(nodePath.join(cwd, "out/feedback.json"), "utf8"),
-								);
-								assert.ok(isRecord(owed));
-								assert.ok(owed.review !== null);
-								assert.ok(isRecord(owed.preparation), JSON.stringify(owed.preparation));
-								assert.deepEqual(owed.compositionFailures, [
-									{ phase: "PRIVATE_FEEDBACK", reason: "SAFETY" },
-								]);
-								break;
-							}
-							if (fixture === "compose-continuation-reviewed") {
-								assert.deepEqual(
-									events.filter((event) => event.startsWith("create:session")),
-									[],
-								);
-								assert.ok(!events.some((event) => event.startsWith("public-completion:")));
-								assert.ok(!existsSync(nodePath.join(cwd, "admission.json")));
-								break;
-							}
-							if (fixture === "compose-continuation-private") {
-								// Private feedback only: no review composer, no public preparation, no new admission.
-								const created = events.filter((event) => event.startsWith("create:session"));
-								assert.ok(
-									!created.some((event) => event.includes("report_review")),
-									events.join("\n"),
-								);
-								assert.equal(
-									created.filter((event) => event.includes("report_feedback")).length,
-									1,
-									events.join("\n"),
-								);
-								assert.ok(
-									events.some((event) => event.startsWith("private-turn")),
-									events.join("\n"),
-								);
-								assert.ok(
-									events.includes("prepare-public:false"),
-									`${events.join("\n")}\n${child.stderr}`,
-								);
-								assert.ok(!events.includes("prepare-public:true"), events.join("\n"));
-								assert.ok(!existsSync(nodePath.join(cwd, "admission.json")));
-								const continued: unknown = JSON.parse(
-									readFileSync(nodePath.join(cwd, "out/feedback.json"), "utf8"),
-								);
-								assert.ok(isRecord(continued));
-								assert.equal(continued.review, null);
-								assert.ok(Array.isArray(continued.feedback));
-								assert.ok(
-									continued.feedback.some(
-										(piece: unknown) => isRecord(piece) && piece.destination === "PRACTICE_PAGE",
-									),
-								);
-								assert.ok(Array.isArray(continued.compositionFailures));
-								assert.ok(
-									!continued.compositionFailures.some(
-										(failure: unknown) => isRecord(failure) && failure.phase === "PUBLIC_REVIEW",
-									),
-									JSON.stringify(continued.compositionFailures),
-								);
-								break;
-							}
-							if (fixture === "compose-continuation-unresolved") {
-								// An unknown public delivery is recorded once and never composed again; it owes nothing.
-								// Private composition still runs, as in the measured attempt.
-								const sessions = events.filter((event) => event.startsWith("create:session"));
-								assert.equal(
-									sessions.filter((event) => event.includes("report_review")).length,
-									1,
-									events.join("\n"),
-								);
-								assert.equal(
-									sessions.filter((event) => event.includes("report_feedback")).length,
-									1,
-									events.join("\n"),
-								);
-								assert.equal(
-									events.filter((event) => event === "prepare-public:true").length,
-									1,
-									events.join("\n"),
-								);
-								assert.ok(events.includes("prepare-public:false"), events.join("\n"));
-								const unresolved: unknown = JSON.parse(
-									readFileSync(nodePath.join(cwd, "out/feedback.json"), "utf8"),
-								);
-								assert.ok(isRecord(unresolved));
-								assert.equal(unresolved.review, null);
-								assert.deepEqual(unresolved.compositionFailures, [
-									{ phase: "PUBLIC_REVIEW", reason: "PUBLIC_DELIVERY_UNRESOLVED" },
-								]);
-								assert.ok(!existsSync(nodePath.join(cwd, "admission.json")));
-								break;
-							}
-							const created = events.filter((event) => event.startsWith("create:session"));
-							if (fixture === "compose-continuation-private-prepared") {
-								// One session, the review composer's: the earlier card already decides the only private practice.
-								assert.deepEqual(created, ["create:session tools=report_review"]);
-								assert.equal(
-									readFileSync(nodePath.join(cwd, "system-prompt.md"), "utf8"),
-									"Write clear, useful feedback.\n\nWrite the review on the work.",
-								);
-							} else if (fixture === "compose-continuation-stale") {
-								// Changed history earns one fresh review session over the new read, then the private
-								// composer sees the accepted review. No submission reuses the refused context.
-								assert.deepEqual(created.slice(0, 2), [
-									"create:session tools=report_review",
-									"create:session tools=report_review",
-								]);
-								assert.equal(created.length, 3, events.join("\n"));
-								assert.ok((created[2] ?? "").includes("report_feedback"), events.join("\n"));
-								assert.deepEqual(
-									events.filter((event) => event.startsWith("public-context:")),
-									[
-										`public-context:v1:7:${"c".repeat(64)}`,
-										`public-context:v1:7:${"d".repeat(64)}`,
-									],
-								);
-								assert.equal(events.filter((event) => event === "prepare-public:true").length, 2);
-								assert.ok(
-									events.lastIndexOf("prepare-public:true") <
-										events.indexOf("prepare-public:false"),
-									events.join("\n"),
-								);
-								assert.ok(
-									events.some(
-										(event) => event.startsWith("private-turn") && event.endsWith("review=true"),
-									),
-								);
-							} else {
-								// The review composer, then the private composer that sees the review just composed.
-								assert.equal(created.length, 2, events.join("\n"));
-								assert.equal(created[0], "create:session tools=report_review");
-								assert.ok((created[1] ?? "").includes("report_feedback"), events.join("\n"));
-								assert.ok(
-									events.some(
-										(event) => event.startsWith("private-turn") && event.endsWith("review=true"),
-									),
-								);
-								const publicPrepared = events.indexOf("prepare-public:true");
-								assert.ok(publicPrepared !== -1, events.join("\n"));
-								assert.ok(
-									publicPrepared < events.indexOf("prepare-public:false"),
-									events.join("\n"),
-								);
-								assert.equal(events.filter((event) => event === "prepare-public:true").length, 1);
-							}
-							const result: unknown = JSON.parse(
-								readFileSync(nodePath.join(cwd, "out/result.json"), "utf8"),
-							);
-							assert.partialDeepStrictEqual(result, { contractVersion: 3, results: [] });
-							assert.ok(!existsSync(nodePath.join(cwd, "out/practice-scripts.json")));
-							assert.ok(!existsSync(nodePath.join(cwd, "admission.json")));
-							assert.ok(!events.includes("derive-change"));
-							const feedback: unknown = JSON.parse(
-								readFileSync(nodePath.join(cwd, "out/feedback.json"), "utf8"),
-							);
-							assert.ok(isRecord(feedback));
-							assert.equal(
-								feedback.admissionDigest,
-								"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-							);
-							assert.ok(feedback.review !== null);
-							if (fixture === "compose-continuation-private-prepared") {
-								// Nothing private is left to compose, so nothing private failed.
-								assert.deepEqual(feedback.feedback, []);
-								assert.deepEqual(feedback.compositionFailures, []);
-								break;
-							}
-							// The private feedback the earlier attempt never composed, from the server's current reread.
-							assert.ok(Array.isArray(feedback.feedback));
-							assert.ok(
-								feedback.feedback.some(
-									(piece: unknown) => isRecord(piece) && piece.destination === "PRACTICE_PAGE",
-								),
-								JSON.stringify(feedback.feedback),
-							);
-							assert.deepEqual(feedback.compositionFailures, []);
 							break;
 						}
 						default: {
