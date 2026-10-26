@@ -173,7 +173,7 @@ The tag waits for all of these:
 
 1. Chart CI passes on k3d at the minimum and the latest supported Kubernetes minor, on amd64 and arm64.
    Amended on 2026-10-26: arm64 runs on the minimum supported minor only, the minor of the arm64 host.
-   ADR 0060 sets the minimum. `.github/workflows/ci-kubernetes.yml` holds the matrix.
+   [ADR 0060](0060-the-kubernetes-floor-follows-upstream-support.md) sets the minimum. `.github/workflows/ci-kubernetes.yml` holds the matrix.
 2. Chart CI also passes on kind with Calico and an external PostgreSQL.
    The published support names only the Kubernetes versions, architectures, and network plugins that chart CI tests.
 3. A practice review completes on the chart, also across a `helm upgrade`.

@@ -8,7 +8,7 @@ type: application
 version: 0.0.0-source
 # The lowest Kubernetes that the templates and the worker need: a technical floor. The support
 # statement is docs/admin/kubernetes.mdx § Supported clusters.
-kubeVersion: ">=1.34.0-0"
+kubeVersion: ">=1.35.0-0"
 home: https://github.com/hephaestus-build/Hephaestus
 sources:
   - https://github.com/hephaestus-build/Hephaestus
