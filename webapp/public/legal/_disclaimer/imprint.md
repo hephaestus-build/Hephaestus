@@ -6,7 +6,7 @@ Where § 5 DDG (Digitale-Dienste-Gesetz) applies, the operator must provide impr
 
 ## What this means for you
 
-- This page does not identify the operator. The upstream Hephaestus project does not operate this instance.
+- This page does not identify the operator of this instance.
 - No imprint has been configured for the deployment you are looking at.
 - Please request imprint information directly from the party that deployed this instance.
 

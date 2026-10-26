@@ -6,7 +6,7 @@ Hephaestus does process personal data by design (sign-in identities, mirrored pr
 
 ## What this means for you
 
-- This page does not identify the operator. The upstream Hephaestus project does not operate this instance.
+- This page does not identify the operator of this instance.
 - No privacy statement has been configured for the deployment you are looking at.
 - Please request a privacy statement directly from the party that deployed this instance before continuing to use it.
 

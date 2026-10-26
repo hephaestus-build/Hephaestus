@@ -265,8 +265,6 @@ Links to the upstream notices do not describe a separately operated deployment.
    It must include data about contributors who never sign in.
 3. Publish the operator identification that your jurisdiction requires.
 
-<a id="three-layer-resolution"></a>
-
 ## Resolution
 
 At page load, the webapp fetches the relevant Markdown file in this priority order.
@@ -279,8 +277,6 @@ It uses the first file it finds:
 
 `<page>` is `imprint` or `privacy`.
 A banner alerts end users whenever the webapp serves the disclaimer.
-
-<a id="choosing-a-configuration-mode"></a>
 
 ## Publish your pages
 
@@ -325,6 +321,7 @@ They replace the safety-fallback.
 
 The webapp checks file paths on each request.
 Thus, you can update the files in the mount without a redeploy.
+A changed ConfigMap reaches the pod within about a minute.
 
 Resolution is per page: a single-file override leaves the other page on the built-in fallback. Verify both pages identify the correct operator.
 
@@ -457,8 +454,6 @@ An edit on the host takes effect on the next page load.
 Browsers revalidate every time.
 
 The bundled fallback under `/legal/` uses `max-age=300`.
-
-<a id="email-activation-and-the-tum-profile"></a>
 
 ### Email activation
 

@@ -65,22 +65,14 @@ describe("resolveLegalContent", () => {
 	}
 
 	/**
-	 * Mounts `files` by exact URL and `directories` by path prefix. Anything neither names answers
-	 * 404 — what an unmounted legal file looks like in production, and what the cascade walks past.
+	 * Mounts `files` by exact URL. Anything else answers 404 — what an unmounted legal file looks
+	 * like in production, and what the cascade walks past.
 	 */
-	function mockResponses(
-		files: Record<string, MockedFile>,
-		directories: Record<string, MockedFile> = {},
-	) {
+	function mockResponses(files: Record<string, MockedFile>) {
 		vi.mocked(globalThis.fetch).mockImplementation(async (input) => {
 			const url = requestUrl(input);
 			requestedUrls.push(url);
-			const mounted = Object.entries(directories).find(([prefix]) => url.startsWith(prefix));
-			const {
-				status,
-				body = "",
-				contentType = "text/markdown",
-			} = files[url] ?? mounted?.[1] ?? { status: 404 };
+			const { status, body = "", contentType = "text/markdown" } = files[url] ?? { status: 404 };
 			return new Response(body, { status, headers: { "Content-Type": contentType } });
 		});
 	}
