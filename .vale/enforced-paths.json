@@ -185,6 +185,7 @@
 	"docs/decisions/0055-practice-scripts-use-one-result-contract.md",
 	"docs/decisions/0057-one-heph-conversation-per-developer.md",
 	"docs/decisions/0058-the-helm-chart-is-the-only-supported-deployment-from-1-0.md",
+	"docs/decisions/0059-previews-run-on-the-staging-cluster.md",
 	"docs/user/accessibility.mdx",
 	"docs/user/activity.mdx",
 	"docs/user/ai-code-review.mdx",
