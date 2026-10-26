@@ -23,6 +23,8 @@ jobs:
     env:
       # Build and test dependencies execute in CI and can affect shipped artifacts too.
       TRIVY_INCLUDE_DEV_DEPS: "true"
+      # trivy-action's default cache directory, so the download and both scans share one database.
+      TRIVY_CACHE_DIR: ${{ github.workspace }}/.cache/trivy
       # The commit this event's change is measured from: the secret scan and the released-chain
       # guard judge the same range.
       EVENT_BASE: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before || '' }}
@@ -32,17 +34,28 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      # The image scans' Trivy and advisory download: retries and a registry fallback, which the
+      # action's own per-step download from a single mirror lacks. Both scans below read it.
+      - uses: ./.github/actions/setup-release-security-tools
+        with:
+          install-syft: "false"
+      - uses: ./.github/actions/download-trivy-db
+
       # SARIF output reports every severity whatever `severity` says, so this pass carries no
       # severity or exit code: it is the code-scanning feed, and the pass below is the verdict.
       - name: Trivy dependency scan
         id: dependencies
         continue-on-error: true
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        env:
+          TRIVY_SKIP_DB_UPDATE: "true"
         with:
           scan-type: "fs"
           scan-ref: "."
           format: "sarif"
           output: "trivy-results.sarif"
+          cache: "false"
+          skip-setup-trivy: true
 
       - name: Upload Trivy results
         if: always()
@@ -52,12 +65,13 @@ jobs:
           sarif_file: "trivy-results.sarif"
 
       # Every dependency in the checkout, not only the ones a pull request changes, so an advisory
-      # published against an untouched pin fails this job on the next push to main. `skip-setup-trivy`
-      # reuses the binary the scan above installed.
+      # published against an untouched pin fails this job on the next push to main.
       - name: Enforce dependency vulnerability policy
         id: dependency-policy
         continue-on-error: true
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        env:
+          TRIVY_SKIP_DB_UPDATE: "true"
         with:
           scan-type: "fs"
           scan-ref: "."
@@ -67,6 +81,7 @@ jobs:
           ignore-unfixed: true
           exit-code: "1"
           trivyignores: "security/trivy-dependency-ignore.yaml"
+          cache: "false"
           skip-setup-trivy: true
 
       - name: Secret detection
