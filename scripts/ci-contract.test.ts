@@ -5376,3 +5376,17 @@ void test("a pull request runs the chart and the latest k3s on amd64; the queue 
 		new RegExp(`for version in ${versions.join(" ").replaceAll(".", String.raw`\.`)}; do`, "u"),
 	);
 });
+
+void test("the staging channel is signed by the release's keyless signer, over no old bundle", async () => {
+	const workflow = parseDocument(await readFile(".github/workflows/promote.yml", "utf8"));
+	const steps = workflow.getIn(["jobs", "promote", "steps"]);
+	assert.ok(isSeq(steps));
+	const sign = steps.items.find((item) => isMap(item) && item.get("name") === "Sign the channel");
+	assert.ok(isMap(sign));
+	const run = String(sign.get("run"));
+	// deploy-state holds the previous bundle, and keyless-sign.ts refuses to write over one.
+	const removal = run.search(/rm -f "\$\{CHANNEL_FILE\}\.sigstore\.json"/u);
+	const signing = run.indexOf("node ../scripts/keyless-sign.ts sign-blob --yes --bundle");
+	assert.ok(removal !== -1 && signing > removal);
+	assert.doesNotMatch(run, /^\s*cosign /mu);
+});

@@ -85,6 +85,10 @@ function retryable(error: unknown): boolean {
 	}
 	const text = error.stderr;
 	return (
+		// GitHub's token service failed before anything was signed or logged.
+		/fetching ambient OIDC credentials: identity token request to provider github-actions failed with status 5\d\d\b/u.test(
+			text,
+		) ||
 		/Post "https:\/\/rekor\.sigstore\.dev\/api\/v1\/log\/entries":[^\n]*status 502:/u.test(text) ||
 		/\[POST \/api\/v1\/log\/entries\]\[409\] createLogEntryConflict[^\n]*an equivalent entry already exists in the transparency log/u.test(
 			text,
@@ -114,7 +118,7 @@ async function discardPartialBundle(bundle: string | undefined, cause: unknown):
 	await rm(bundle);
 }
 
-/** Retry uncertain Rekor uploads with fresh keyless processes, never as proof of a signature. */
+/** Retry a transient token or Rekor failure with fresh keyless processes, never as proof of a signature. */
 export async function keylessSign(args: string[], dependencies: Dependencies = {}): Promise<void> {
 	const { input, bundle } = signingFiles(args);
 	const expected = await digest(input);
@@ -159,7 +163,9 @@ export async function keylessSign(args: string[], dependencies: Dependencies = {
 			if (deadline - now() <= delay) {
 				throw new Error("Keyless signing time budget exhausted", { cause: error });
 			}
-			console.error(`Rekor upload uncertain; retry ${attempt + 1}/${MAX_ATTEMPTS} after backoff`);
+			console.error(
+				`Keyless signing failed transiently; retry ${attempt + 1}/${MAX_ATTEMPTS} after backoff`,
+			);
 			await sleep(delay);
 		}
 	}

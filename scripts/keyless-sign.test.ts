@@ -12,6 +12,9 @@ const unavailable =
 	'Post "https://rekor.sigstore.dev/api/v1/log/entries": giving up after 2 attempt(s): status 502: <html>';
 const conflict =
 	'[POST /api/v1/log/entries][409] createLogEntryConflict {"message":"an equivalent entry already exists in the transparency log with UUID abc"}';
+// Run 40355151916: GitHub's token service failed while `cosign` requested a keyless identity.
+const token =
+	'getting keypair and token: retrieving ID token: reading ID token: fetching ambient OIDC credentials: identity token request to provider github-actions failed with status 503 Service Unavailable: "upstream connect error"';
 const failure = (stderr: string) => Object.assign(new Error("cosign exited nonzero"), { stderr });
 
 async function fixture(t: test.TestContext) {
@@ -39,8 +42,9 @@ void test("first success has no backoff and leaves the bundle for native verific
 	assert.equal(await readFile(bundle, "utf8"), '{"verificationMaterial":{}}');
 });
 
-for (const transient of [unavailable, conflict]) {
-	void test(`fresh invocation after ${transient.includes("502") ? "502" : "equivalent 409"} preserves inputs and discards partial output`, async (t) => {
+const transients = { "Rekor 502": unavailable, "equivalent 409": conflict, "token 503": token };
+for (const [name, transient] of Object.entries(transients)) {
+	void test(`fresh invocation after ${name} preserves inputs and discards partial output`, async (t) => {
 		const { args, input, bundle } = await fixture(t);
 		let calls = 0;
 		const delays: number[] = [];

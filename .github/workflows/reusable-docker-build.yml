@@ -648,9 +648,18 @@ jobs:
           DIGESTS: ${{ toJSON(steps.digest.outputs) }}
         run: |
           set -euo pipefail
+          # A keyless signature fetches an OIDC token and a certificate, and either request can fail
+          # with a passing 5xx. Signing again is safe, because verification accepts any valid signature.
           for name in $(jq -r '.[]' <<< "$IMAGES"); do
             digest=$(jq -er --arg name "$name" '.[$name]' <<< "$DIGESTS")
-            cosign sign --yes --recursive "$INPUTS_REGISTRY/hephaestus-build/$name@$digest"
+            for attempt in 1 2 3; do
+              cosign sign --yes --recursive "$INPUTS_REGISTRY/hephaestus-build/$name@$digest" && break
+              if [ "$attempt" -eq 3 ]; then
+                echo "::error::Signing $name failed after $attempt attempts"
+                exit 1
+              fi
+              sleep $((attempt * 10))
+            done
           done
 
       # Intentionally inline in this checkout-free registry job; see ci-cd.mdx § Shared setup actions.

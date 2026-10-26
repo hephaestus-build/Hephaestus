@@ -295,6 +295,64 @@ void test("registry-only merge and alias jobs remain checkout-free and signing k
 	assert.match(String(sign.get("run")), /cosign sign --yes --recursive/u);
 });
 
+void test(
+	"a signature that fails twice is retried, and one that fails three times fails the job",
+	{ skip: process.platform === "win32" },
+	async (t) => {
+		const workflow = parseDocument(
+			await readFile(".github/workflows/reusable-docker-build.yml", "utf8"),
+		);
+		const steps = workflow.getIn(["jobs", "merge", "steps"]);
+		assert.ok(isSeq(steps));
+		const sign: unknown = steps.items.find(
+			(item) => isMap(item) && item.get("name") === "Sign images with cosign",
+		);
+		assert.ok(isMap(sign));
+		const directory = await mkdtemp(path.join(tmpdir(), "sign-retry-"));
+		t.after(async () => rm(directory, { recursive: true, force: true }));
+		const log = path.join(directory, "calls");
+		// `cosign` fails until it has been called FAILURES times; `sleep` returns at once.
+		await writeFile(
+			path.join(directory, "cosign"),
+			`#!/usr/bin/env node
+const fs = require('node:fs');
+fs.appendFileSync(process.env.CALL_LOG, process.argv.slice(2).join(' ') + '\\n');
+const calls = fs.readFileSync(process.env.CALL_LOG, 'utf8').trim().split('\\n').length;
+process.exit(calls <= Number(process.env.FAILURES) ? 1 : 0);
+`,
+		);
+		await writeFile(path.join(directory, "sleep"), "#!/bin/sh\n");
+		await chmod(path.join(directory, "cosign"), 0o755);
+		await chmod(path.join(directory, "sleep"), 0o755);
+		for (const [failures, status, calls] of [
+			[0, 0, 1],
+			[2, 0, 3],
+			[3, 1, 3],
+		] as const) {
+			await writeFile(log, "");
+			const result: SpawnSyncReturns<string> = spawnSync(
+				"bash",
+				["-e", "-c", String(sign.get("run"))],
+				{
+					encoding: "utf8",
+					env: {
+						...process.env,
+						PATH: `${directory}${path.delimiter}${process.env.PATH ?? ""}`,
+						CALL_LOG: log,
+						FAILURES: String(failures),
+						IMAGES: JSON.stringify(["webapp"]),
+						DIGESTS: JSON.stringify({ webapp: digest }),
+						INPUTS_REGISTRY: "ghcr.io",
+					},
+				},
+			);
+			assert.equal(result.status, status, `${failures} failures: ${result.stderr}`);
+			const recorded = await readFile(log, "utf8");
+			assert.equal(recorded.trim().split("\n").length, calls, `${failures} failures`);
+		}
+	},
+);
+
 for (const [captured, reused] of [
 	[digest, ""],
 	["invalid", ""],

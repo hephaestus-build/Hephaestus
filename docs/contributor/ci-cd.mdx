@@ -966,6 +966,11 @@ It does not rebuild, re-attest, or rescan the image.
 The release verifier accepts only the default-branch signing identity, so the push signs the image again.
 The provenance stays the queue run's, because that run built the image.
 
+A keyless signature fetches a GitHub OIDC token, and that request can fail with a passing 5xx.
+The manifest job signs each image up to three times, because verification accepts any valid signature.
+`scripts/keyless-sign.ts` signs the release evidence and the staging channel.
+It retries a token 5xx and the two transparency-log failures that its tests name.
+
 An image that the queue run did not publish is built and scanned as before.
 Examples are a direct push, an image that the merge group did not rebuild, and a lookup that failed.
 An image that the queue run published but that fails a check fails the push, which then publishes no image.
