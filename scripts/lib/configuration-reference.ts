@@ -49,7 +49,7 @@ export const COMPOSE_OVERLAYS = [
 	"docker/self-host/compose.restore.yaml",
 	"docker/observability/compose.journald.yaml",
 ];
-/** The template of the supported stack. The reference deployment's `docker/.env.example` is not documented. */
+/** The template of the supported stack. The multi-file stack's `docker/.env.example` is not documented. */
 export const ENV_EXAMPLES = ["docker/self-host/.env.example"];
 
 /** The prefix of a container variable in a Compose use's field. */

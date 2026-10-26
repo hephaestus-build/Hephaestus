@@ -9,13 +9,11 @@ This page owns the deployment settings of the optional integrations: GitLab, Sla
 [First steps](./first-steps) owns the GitHub OAuth app and the first admin.
 
 [Integrations](./integrations) owns the workspace connections that a workspace admin makes in the UI.
-The [reference deployment](./reference-deployment) owns the multi-file Compose stack that the maintainers run, the webapp container, and the rollout tiers.
+[Runtime roles](./runtime-roles#webapp-container) owns the container contract of the webapp image.
 The [Install guide](./install#clocks) owns the clock requirement.
 The [Configuration reference](./configuration-reference) lists every variable with its default.
 
-<a id="webapp-container"></a>
 <a id="clocks"></a>
-<a id="rollout-tiers"></a>
 
 ## Base environment variables
 
@@ -33,7 +31,7 @@ On Docker Compose, the [Install guide](./install#2-configure-env) gives them.
 - `HEPHAESTUS_AUTH_BOOTSTRAP_ADMINS`.
 
 The self-host installer generates its internal secrets.
-Reference deployment operators must supply equivalent values through its protected secret-management system.
+Operators of the multi-file Compose stack must supply equivalent values through their own secret management.
 Rotate integration credential keys with the [credential-key rotation procedure](./credential-key-rotation).
 
 These deployment settings complement the install table. `LEGAL_PROFILE`, `SECURITY_CONTACT` and

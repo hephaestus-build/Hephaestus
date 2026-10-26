@@ -2,9 +2,9 @@
 # Single-host overlay — merged on top of ../compose.{proxy,core,app}.yaml
 # by ./compose.yaml. Never used on its own.
 #
-# Everything here is a deliberate difference from the maintainers' multi-host
-# reference deployment. If a setting is NOT in this file, the self-hosted stack
-# intentionally uses the reference value.
+# Everything here is a deliberate difference from the multi-file Compose stack in
+# docker/. If a setting is NOT in this file, the self-hosted stack intentionally
+# uses the value of that stack.
 #
 # Merge rules that matter (docs.docker.com/reference/compose-file/merge/):
 #   mappings (environment, depends_on) merge per key — list them individually
@@ -12,12 +12,12 @@
 # =============================================================================
 
 services:
-  # ── Services the reference runs that a single host must not ────────────────
+  # ── Services the multi-file stack runs that a single host must not ─────────
   # A profile no one activates: `docker compose up -d` skips these, and the
-  # reference files stay untouched (adding profiles there would risk the
-  # maintainers' deploy, which runs `up -d --remove-orphans` without profiles).
+  # multi-file stack stays untouched (adding profiles there would change what
+  # `up -d --remove-orphans` without profiles starts).
 
-  # Traefik error page for the maintainers' multi-replica rollouts.
+  # Traefik error page for multi-replica rollouts.
   maintenance:
     profiles: ["reference-deployment-only"]
 

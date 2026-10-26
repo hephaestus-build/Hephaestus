@@ -1,6 +1,6 @@
 #### 🔴 Reach the broker only from its own host
 
-The reference deployment now publishes the broker's client port 4222 on `127.0.0.1` only.
+The multi-file Compose stack now publishes the broker's client port 4222 on `127.0.0.1` only.
 The `NATS_BIND_HOST` setting is no longer read.
 A stack on the same host connects over the Docker network `shared-network` to `nats-server:4222`, as preview environments do.
 

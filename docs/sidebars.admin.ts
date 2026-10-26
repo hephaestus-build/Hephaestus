@@ -13,7 +13,6 @@ const sidebars: SidebarsConfig = {
 				{ type: "doc", id: "install", label: "Docker Compose (0.x, deprecated)" },
 				"pull-based-deployment",
 				"runtime-roles",
-				"reference-deployment",
 			],
 		},
 		{

@@ -6,7 +6,7 @@ Date: 2026-09-03
 
 Accepted. Replaces the CI-driven SSH push deployment, which no ADR had recorded; the release
 evidence and image-lock decisions it builds on ([0034](0034-signed-release-image-lock.md)) are
-unchanged. Amended 2026-10-25 — the apply step becomes `helm upgrade`, [ADR 0058](0058-the-helm-chart-is-the-only-supported-deployment-from-1-0.md).
+unchanged. Amended 2026-10-25 — the apply step becomes `helm upgrade`, [ADR 0058](0058-the-helm-chart-is-the-only-supported-deployment-from-1-0.md). Amended 2026-10-26 — the project's own host operations live outside the product repository.
 
 ## Context
 
@@ -138,3 +138,20 @@ These parts change when the Helm apply ships:
 
 A GitOps controller such as Flux or Argo CD does not replace the reconciler.
 It cannot give the descent check without a replay gap on a mutable tag, which § Decision rejects.
+
+## Update — 2026-10-26: the project's own host operations live outside the product repository
+
+The product repository holds what any operator can reuse.
+It keeps the reconciler, its systemd units, `promote.yml`, the `deploy-state` branch, and the release tooling.
+`promote.yml` names no host: the host name comes from the environment's variables.
+The trust model of § Decision does not change, so no host changes its trusted identity.
+
+The configuration of the project's own hosts is not product documentation.
+The project's own operations notes hold it, outside this repository.
+These notes include each host's site values, cluster manifests, extra units, and runbooks.
+They also include the documentation of the multi-file Compose deployment that the maintainers run.
+Its Compose files stay in `docker/` until 1.0, because the self-hosted stack includes them.
+The notes hold no secret values.
+
+The pull-based deployment page stays in the admin docs and describes the mechanism for any operator.
+This replaces the move to the contributor docs in the update of 2026-10-25.

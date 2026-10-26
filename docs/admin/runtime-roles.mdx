@@ -46,7 +46,7 @@ Split the worker out when:
 - LLM reviews and HTTP traffic compete for the same JVM heap / sandbox quota.
 - You want to scale practice-review throughput independently of webhook ingestion.
 
-The shipped Compose stacks use separate containers in both the reference deployment and the single-host install.
+The shipped Compose stacks use separate containers in both the multi-file stack (`docker/compose.{proxy,core,app}.yaml`) and the single-host install.
 `application-server` turns off the worker role and has no Docker socket.
 `application-worker` runs all sandboxes and is the only container with the socket.
 The `gate:env` check fails a container that mounts the socket without the worker role.
@@ -188,6 +188,25 @@ For that release, do these steps:
 5. If the migration or the new release fails, follow [Upgrade § If migration fails](./upgrade#if-migration-fails). It restores the backup and the previous signed release lock together.
 
 [Upgrade § Rollback](./upgrade#rollback) explains why images alone cannot undo a schema change.
+
+## Webapp container
+
+The webapp image runs nginx as an unprivileged user and needs no capabilities.
+
+| Property         | Value                                                                                       |
+| ---------------- | ------------------------------------------------------------------------------------------- |
+| User and group   | UID `101`, GID `101`                                                                        |
+| Port             | `8080`, plain HTTP. Your proxy handles TLS.                                              |
+| Health check     | `GET /` on port `8080` returns `200`                                                        |
+| Writable path    | `/tmp/hephaestus-webapp` only. It holds the page shell, the runtime configuration and the nginx files. |
+| Root file system | Can be read-only                                                                            |
+
+The Compose stacks run the container with a read-only root file system, all capabilities dropped and `no-new-privileges`.
+They mount a 16 MiB `tmpfs` at `/tmp/hephaestus-webapp`, owned by UID 101 with mode `0700`.
+The maintenance page uses the same image and the same settings.
+The Helm chart sets the same constraints.
+If you run the image on another platform, mount an empty directory at `/tmp/hephaestus-webapp` that UID 101 can write, for example an `emptyDir` with `fsGroup: 101`.
+To mount legal overrides, see [Legal Pages](./legal-pages).
 
 ## Configuration cheatsheet
 

@@ -145,7 +145,7 @@ jobs:
           services=$(docker compose config --services)
           for unwanted in maintenance; do
             grep -qx "$unwanted" <<< "$services" && {
-              echo "::error::'$unwanted' is a reference-deployment service and must not run on a single host"; exit 1; } || true
+              echo "::error::'$unwanted' is a multi-file stack service and must not run on a single host"; exit 1; } || true
           done
           for required in application-server application-worker webhook-server postgres nats-server webapp reverse-proxy; do
             grep -qx "$required" <<< "$services" || {
@@ -199,19 +199,23 @@ jobs:
           [ "$edge_csp" = "$nginx_csp" ] || {
             echo "::error::Traefik and nginx Content-Security-Policy values differ"; exit 1; }
           [ "$edge_csp" = "$selfhost_csp" ] || {
-            echo "::error::reference and single-host Content-Security-Policy values differ"; exit 1; }
-          grep -q "admin@tum.de" <<< "$rendered" && {
-            echo "::error::the maintainers' ACME email survived the override — Compose is too old to honour !override"; exit 1; } || true
+            echo "::error::multi-file and single-host Content-Security-Policy values differ"; exit 1; }
           published=$(docker compose config --format json \
             | jq -r '.services["reverse-proxy"].ports[].published' | sort -n | tr '\n' ' ')
           [ "$published" = "80 443 " ] || {
             echo "::error::reverse-proxy publishes '$published', expected '80 443 ' — !override was ignored"; exit 1; }
+          # Both files publish the same ports, so the ports alone cannot show an ignored !override.
+          # The labels can: the base error page points at the maintenance service, which a single host
+          # does not run.
+          jq -e '.services["reverse-proxy"].labels | has("traefik.http.middlewares.errorpage.errors.service") | not' \
+            <<< "$rendered_json" > /dev/null || {
+            echo "::error::reverse-proxy keeps the multi-file error page — Compose is too old to honour !override"; exit 1; }
 
-      - name: Render the reference deployment
+      - name: Render the multi-file stack
         working-directory: docker
         run: |
           set -euo pipefail
-          # One stack at a time, because that is how the reference deployment runs them:
+          # One file at a time, because that is how the reconciler runs the multi-file stack:
           # the reconciler renders each file on its own and brings it up as its own Compose
           # project, one per stack. Rendering the three merged instead made
           # every cross-project reference look satisfiable, and hid a `depends_on` no stack could
