@@ -55,15 +55,21 @@ function HomepageHeader() {
 			<div className="container">
 				<div className={styles.heroGrid}>
 					<div className={styles.heroCopy}>
-						<span className={styles.heroKicker}>Hephaestus documentation</span>
+						<span className={styles.heroKicker}>
+							Open-source practice feedback for software teams
+						</span>
 						<Heading as="h1" className={styles.heroTitle}>
 							Learn from the work you’re already doing
 						</Heading>
 						<p className={styles.heroSubtitle}>
-							Hephaestus is an open-source AI mentor for software teams. It checks the issues, pull
-							and merge requests, and reviews that your team already writes against the engineering
-							practices that your workspace adopts. Each developer gets feedback with evidence and,
-							where something needs attention, a next step.
+							Hephaestus reviews the pull requests, issues, and code reviews your team already
+							writes against the engineering practices you choose. It gives each developer feedback
+							that cites their work and names a next step.
+						</p>
+						<p className={styles.heroSubtitle}>
+							Feedback appears on the work itself, on each developer’s private practice page, and in
+							a conversation. There, developers can ask why, ask for an example, or disagree.
+							Workspace admins can approve feedback before it appears on the work.
 						</p>
 						<div className={styles.heroActions}>
 							<Link className="button button--primary button--lg" to="/user/overview">
