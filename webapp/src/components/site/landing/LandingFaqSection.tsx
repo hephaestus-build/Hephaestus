@@ -9,12 +9,12 @@ const faqItems = [
 	{
 		key: "practice-feedback",
 		q: "What is practice feedback?",
-		a: "It is feedback on how the work was done. A practice is a defined way of working. Examples are scoping a change, writing an issue someone can act on, answering a reviewer, testing, handling failure, and changing dependencies deliberately. Feedback can cite code when a practice concerns it, such as testing or handling failure. A curated set of practices ships with Hephaestus. Each piece of feedback names the practice it came from and points back to what it saw.",
+		a: "It is feedback on how developers apply engineering practices. A practice is a defined way of working. Examples are scoping a change, writing an issue someone can act on, answering a reviewer, testing, handling failure, and changing dependencies deliberately. Feedback can cite code when a practice concerns it, such as testing or handling failure. A curated set of practices ships with Hephaestus. Each piece of feedback names the practice it came from and points back to what it saw.",
 	},
 	{
-		key: "replaces-review",
-		q: "Does this replace code review?",
-		a: "No, and it does not replace a mentor either. It does not approve a change for merge or grade anyone. It carries the routine feedback nobody has time to give everyone, and leaves the harder judgment and the relationships to people.",
+		key: "code-review",
+		q: "How does Hephaestus work with code review?",
+		a: "Hephaestus comments on the practices behind the work, next to your reviewers’ comments. Developers decide what to do with feedback: fix the work, ask why, or disagree. Merge decisions stay with your reviewers.",
 	},
 	{
 		key: "feedback-location",
@@ -24,7 +24,7 @@ const faqItems = [
 	{
 		key: "heph-conversation",
 		q: "What can I ask Heph?",
-		a: "Why a suggestion matters, or what Heph did not know when it wrote it. Heph draws on your recent project activity, the feedback you have received, and selected Outline documents. Slack channel messages are used only when you allow it.",
+		a: "Why a suggestion matters, or for an example. You can also add context Heph missed, or disagree. Heph draws on your recent project activity, the feedback you have received, and selected Outline documents. Slack channel messages are used only when you allow it.",
 	},
 	{
 		key: "project-data",
@@ -34,7 +34,7 @@ const faqItems = [
 	{
 		key: "ai-limitations",
 		q: "Can the feedback be wrong?",
-		a: "Yes. It is written by an AI model, so it can miss context or suggest something unhelpful. Check the work it links to, ask Heph a follow-up, then decide for yourself.",
+		a: "Yes. It is written by an AI model, so it can miss context or suggest something unhelpful. Check the work it links to, ask Heph a follow-up, or disagree and say why.",
 	},
 	{
 		key: "cost",
@@ -44,7 +44,7 @@ const faqItems = [
 	{
 		key: "access",
 		q: "How can I use Hephaestus?",
-		a: "Through a deployment your workspace already has access to, or by self-hosting it. The TUM-operated deployment has its own sign-in and workspace access rules.",
+		a: "Self-host it with the Helm chart on your Kubernetes cluster, or sign in to a deployment your team already uses.",
 	},
 ];
 

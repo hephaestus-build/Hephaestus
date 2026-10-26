@@ -219,7 +219,7 @@ export function LandingHeroSection({ onSignIn }: LandingHeroSectionProps) {
 						size="lg"
 						className="relative z-10"
 					>
-						Open-source AI mentor for software teams
+						Open-source practice feedback for software teams
 					</Badge>
 
 					<motion.h1
@@ -239,13 +239,14 @@ export function LandingHeroSection({ onSignIn }: LandingHeroSectionProps) {
 
 					<motion.p
 						variants={itemVariants}
-						className="relative z-10 mt-6 max-w-xl text-lg leading-relaxed text-pretty sm:text-xl"
+						className="relative z-10 mt-6 max-w-2xl text-lg leading-relaxed text-pretty sm:text-xl"
 					>
 						<span className="font-semibold text-foreground">
-							Feedback on the practices behind your work.
+							Hephaestus reviews the pull requests, issues, and code reviews your team already
+							writes against the engineering practices you choose.
 						</span>{" "}
 						<span className="text-muted-foreground">
-							Read the evidence, ask why, and decide what to try next.
+							It gives each developer feedback that cites their work and names a next step.
 						</span>
 					</motion.p>
 

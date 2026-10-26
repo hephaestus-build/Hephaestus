@@ -21,7 +21,7 @@ export function LandingCtaSection({ onSignIn }: LandingCtaSectionProps) {
 						<LandingGlow className={styles.ctaGlow} />
 						<LandingHephFigure
 							lead="Ask me about the feedback on your last change."
-							body="I can say why it matters, or hear the context I did not have when I wrote it."
+							body="I can say why it matters, or hear the context I missed when I wrote it."
 						/>
 						<LandingSpark className={styles.ctaSparkA} />
 						<LandingSpark className={styles.ctaSparkB} />

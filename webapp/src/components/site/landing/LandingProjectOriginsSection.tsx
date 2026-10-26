@@ -9,11 +9,13 @@ export function LandingProjectOriginsSection() {
 			<div className="mx-auto grid w-full max-w-5xl items-center gap-6 px-4 md:grid-cols-[minmax(0,1fr)_auto] md:px-6">
 				<div className="text-center md:text-left">
 					<h2 id="project-origins-heading" className="text-xl font-semibold">
-						Developed at TUM and open source
+						Project origins
 					</h2>
 					<p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-						Hephaestus is an MIT-licensed open-source project developed by Applied Education
-						Technologies at the Technical University of Munich.
+						Developed at the Technical University of Munich. There, Hephaestus is the research
+						platform for a study of how AI-generated feedback can improve developers’ application of
+						engineering practices. Applied Education Technologies maintains Hephaestus under the MIT
+						license.
 					</p>
 				</div>
 				<div className="justify-self-center md:justify-self-auto">
