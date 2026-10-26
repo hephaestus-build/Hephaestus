@@ -352,7 +352,11 @@ function needed(entry: Case): Record<string, boolean | undefined> {
 		entry.releaseCandidate === "true" ||
 		(entry.event === "workflow_dispatch" && entry.preflight === "true");
 	return {
-		Kubernetes: builtAtAll && (entry.event === "push" || entry.filters.kubernetes === "true"),
+		// A push that a merge group tested runs none: the group tested the same commit. A push with no
+		// merge-group run runs them all.
+		Kubernetes:
+			builtAtAll &&
+			(entry.event === "push" ? entry.queueImages === "[]" : entry.filters.kubernetes === "true"),
 		"Supported-host-smoke":
 			builtAtAll &&
 			entry.event === "pull_request" &&

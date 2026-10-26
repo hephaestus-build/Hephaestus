@@ -1060,9 +1060,12 @@ jobs:
             --wait-timeout 600 postgres nats-server application-server application-worker
           node ../../scripts/sandbox-isolation-probe.ts --env-file .env --env-file smoke-lock.env
 
-  # The chart on real clusters with this run's images, when the chart or the sandbox runtime changed,
-  # and on every main commit. `Docker` puts every image under the head commit's tag, by building it or,
-  # in a pull request, by aliasing the base image; a fork publishes none, so there is nothing to install.
+  # The chart on real clusters with this run's images, when the chart or the sandbox runtime changed.
+  # A push to main that a merge group tested runs none: its commit is the group's. A push with no
+  # merge-group run, such as a direct push, runs every leg. The nightly run on main
+  # (kubernetes-nightly.yml) covers changes that the filter does not select. `Docker` puts every image
+  # under the head commit's tag, by building it or, in a pull request, by aliasing the base image; a
+  # fork publishes none, so there is nothing to install.
   # `Docker` succeeds with the Dockerfile images alone when `App Server: Package` failed, so this job
   # waits for the package too: the run reports that failure once, not again as a cluster failure.
   Kubernetes:
@@ -1071,7 +1074,8 @@ jobs:
       !cancelled() && needs.Docker.result == 'success' && needs.server-package.result != 'failure' &&
       needs.detect-changes.outputs.should_skip != 'true' &&
       needs.detect-changes.outputs.publishable == 'true' &&
-      (github.event_name == 'push' || needs.detect-changes.outputs.kubernetes == 'true')
+      (github.event_name == 'push' && needs.detect-changes.outputs.queue-run == '' ||
+        github.event_name != 'push' && needs.detect-changes.outputs.kubernetes == 'true')
     uses: ./.github/workflows/ci-kubernetes.yml
     permissions:
       contents: read

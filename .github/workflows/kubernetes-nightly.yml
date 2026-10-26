@@ -1,0 +1,77 @@
+name: Kubernetes nightly
+
+# A push to main runs no cluster legs, because its merge group tested that commit. A change that the
+# `kubernetes` filter does not select reaches main untested on a cluster, so every leg runs each night
+# on the newest main build that passed CI, with that build's chart and images.
+
+on:
+  schedule:
+    - cron: "23 2 * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: kubernetes-nightly
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: "Newest main build"
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      actions: read
+    outputs:
+      commit: ${{ steps.newest.outputs.commit }}
+    steps:
+      - name: Find the newest main build that passed CI
+        id: newest
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          commit=$(gh api "repos/$REPOSITORY/actions/workflows/cicd.yml/runs?event=push&branch=main&status=success&per_page=1" \
+            --jq '.workflow_runs[0].head_sha // empty')
+          [[ "$commit" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::No main build has passed CI"; exit 1; }
+          echo "Commit: \`$commit\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "commit=$commit" >> "$GITHUB_OUTPUT"
+
+  Kubernetes:
+    needs: build
+    uses: ./.github/workflows/ci-kubernetes.yml
+    permissions:
+      contents: read
+    with:
+      commit: ${{ needs.build.outputs.commit }}
+      ref: ${{ needs.build.outputs.commit }}
+      queue: true
+
+  # A scheduled run has no pull request to fail, so a failure is reported on one tracking issue.
+  report:
+    name: "Report a failure"
+    needs: [build, Kubernetes]
+    if: failure()
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      issues: write
+    steps:
+      - name: Report the failure on the tracking issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          COMMIT: ${{ needs.build.outputs.commit }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          title="The nightly Kubernetes run failed"
+          body="The nightly cluster run on \`${COMMIT:-no commit}\` failed: $RUN_URL"
+          number=$(gh issue list -R "$REPOSITORY" --state open --search "\"$title\" in:title" --json number,title |
+            jq -r --arg title "$title" '[.[] | select(.title == $title)][0].number // empty')
+          if [ -n "$number" ]; then
+            gh issue comment "$number" -R "$REPOSITORY" --body "$body"
+          else
+            gh issue create -R "$REPOSITORY" --title "$title" --body "$body"
+          fi

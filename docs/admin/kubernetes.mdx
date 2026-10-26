@@ -31,7 +31,7 @@ Hephaestus supports the chart on a cluster with these items:
 
 CI installs and upgrades the chart on Kubernetes 1.35, the lowest version that the chart takes, and on the latest minor version, 1.37, on `amd64`.
 It also runs 1.35 on `arm64`, the minor version of the `arm64` host that the maintainers deploy to.
-A pull request runs only the latest minor version on `amd64`. The merge queue and each commit to `main` run all of them.
+A pull request runs only the latest minor version on `amd64`. When a change touches the chart or the sandbox runtime, the merge queue runs all of them before the commit reaches `main`. A nightly run repeats them on `main`.
 One more run uses three nodes, Calico for network policy, and an external PostgreSQL.
 Each run starts two workers, and each worker passes its isolation probe on that cluster.
 On the latest minor version, the `amd64` run also backs up to an S3 server and restores to a point in time, as [Backup and restore](#backup-and-restore) describes.
