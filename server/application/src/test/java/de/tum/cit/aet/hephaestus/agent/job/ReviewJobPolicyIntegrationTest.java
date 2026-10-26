@@ -102,6 +102,12 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
     @Autowired
     private AgentProperties properties;
 
+    @Autowired
+    private ReviewMemberAiPolicy memberAiPolicy;
+
+    @Autowired
+    private ReviewJobAssignments frozenAssignments;
+
     private final ReviewMemberAiPolicy policy = mock(ReviewMemberAiPolicy.class);
     private Workspace workspace;
     private ReviewJobExecutor executor;
@@ -266,6 +272,40 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                 .get()
                 .extracting(ReviewJob::getStatus, ReviewJob::getCancellationReason)
                 .containsExactly(ReviewJobStatus.QUEUED, null);
+    }
+
+    @Test
+    void shouldFailAJobWhoseFrozenAssignmentIsMissingOnItsFirstClaimAndNotClaimItAgain() {
+        // The fixture pins an assignment that no row holds; the real policy reads it inside the claim transaction.
+        var job = queued(binding(DataHandlingTier.IN_HOUSE));
+        var metrics = new SimpleMeterRegistry();
+        var claims = new ReviewJobClaimService(
+                jobs,
+                memberAiPolicy,
+                methods,
+                frozenAssignments,
+                transactions,
+                mapper,
+                metrics,
+                mock(LlmBudgetService.class),
+                admission,
+                new ReviewJobTelemetry(metrics, Tracer.NOOP),
+                Optional.empty());
+
+        assertThat(claims.claimJob(job.getId()))
+                .isInstanceOfSatisfying(
+                        ReviewJobClaimService.TerminalClaim.class,
+                        terminal -> assertThat(terminal.status()).isEqualTo(ReviewJobStatus.FAILED));
+
+        var failed = jobs.findById(job.getId()).orElseThrow();
+        assertThat(failed.getStatus()).isEqualTo(ReviewJobStatus.FAILED);
+        assertThat(failed.getErrorMessage()).isNotBlank();
+        assertThat(Objects.requireNonNull(failed.getCapture())
+                        .path("preparationFailure")
+                        .path("stage")
+                        .asString())
+                .isEqualTo("INPUTS");
+        assertThat(claims.claimJob(job.getId())).isEqualTo(ReviewJobClaimService.ClaimOutcome.ALREADY_CLAIMED);
     }
 
     @Test

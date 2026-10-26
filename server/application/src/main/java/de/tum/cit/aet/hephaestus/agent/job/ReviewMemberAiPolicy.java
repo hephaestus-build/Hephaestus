@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.config.MemberAiRoutingAdapter;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
+import de.tum.cit.aet.hephaestus.agent.handler.spi.JobPreparationException;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonProcessingSuppression;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentId;
@@ -24,7 +25,9 @@ import tools.jackson.databind.ObjectMapper;
 @Service
 @ConditionalOnCaptureRole
 @RequiredArgsConstructor
-@Transactional(readOnly = true)
+// The claim reads this policy inside its own transaction and fails a job whose frozen inputs are unavailable. Marking
+// that transaction rollback-only for the exception would undo the failure, so the job would be claimed again forever.
+@Transactional(readOnly = true, noRollbackFor = JobPreparationException.class)
 public class ReviewMemberAiPolicy {
     private final MemberAiRoutingAdapter routing;
     private final ObjectMapper objectMapper;
