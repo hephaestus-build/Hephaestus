@@ -202,11 +202,25 @@ export function clusterGlobs(workflow: string): string[] {
 }
 
 /**
- * Whether a changed path is one that the CI cluster jobs exercise. `path.matchesGlob` skips
+ * Whether a changed path is one that the CI cluster jobs exercise. Git paths use `/` on every
+ * system, so the POSIX matcher reads them. `matchesGlob` skips
  * dotfiles, which CI's filter matches, so a change to only a dotfile gets no reminder.
  */
 export function touchesCluster(paths: string[], globs: string[]): boolean {
-	return paths.some((file) => globs.some((glob) => path.matchesGlob(file, glob)));
+	return paths.some((file) => globs.some((glob) => path.posix.matchesGlob(file, glob)));
+}
+
+/** Whether to remind of the cluster. A hint: a workflow that it cannot read skips it and fails no check. */
+function hintsCluster(paths: string[]): boolean {
+	try {
+		const workflow = readFileSync(
+			path.join(import.meta.dirname, "..", ".github", "workflows", "cicd.yml"),
+			"utf8",
+		);
+		return touchesCluster(paths, clusterGlobs(workflow));
+	} catch {
+		return false;
+	}
 }
 
 function main(): void {
@@ -226,14 +240,11 @@ function main(): void {
 			`Running affected checks for: ${scopes.join(", ")}. This is not the complete local gate.`,
 		);
 	}
+	const clusterHint = hintsCluster(paths);
 	for (const command of commandsFor(scopes)) {
 		run(command);
 	}
-	const workflow = readFileSync(
-		path.join(import.meta.dirname, "..", ".github", "workflows", "cicd.yml"),
-		"utf8",
-	);
-	if (touchesCluster(paths, clusterGlobs(workflow))) {
+	if (clusterHint) {
 		console.log(
 			"This change runs the CI cluster jobs. Run `vp run dev:kubernetes` to check it on a local cluster.",
 		);
