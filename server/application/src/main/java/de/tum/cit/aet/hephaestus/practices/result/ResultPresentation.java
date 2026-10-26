@@ -243,8 +243,9 @@ public class ResultPresentation {
     }
 
     /**
-     * The developer's own feedback on each of {@code results}, read for all of them at once and keyed by result id. A
-     * withdrawn piece is left out, as the profile overview and the response guard read it: it accepts no response. A
+     * The developer's own feedback on each of {@code results}, read for all of them at once and keyed by result id. Only
+     * the {@linkplain FeedbackState#VISIBLE_TO_DEVELOPER states the developer may learn of} are read. A withdrawn piece
+     * is left out, as the profile overview and the response guard read it: it accepts no response. A
      * restore returns it with its earlier response.
      */
     public Map<UUID, List<OwnFeedbackRefDTO>> ownFeedback(long workspaceId, Collection<Result> results) {
@@ -255,7 +256,9 @@ public class ResultPresentation {
                         result -> Objects.requireNonNull(result.getDeveloperId()),
                         Collectors.mapping(Result::getId, Collectors.toSet())))
                 .forEach((developer, ids) -> {
-                    var rows = communication.ownFeedback(workspaceId, developer, ids);
+                    var rows = communication.ownFeedback(workspaceId, developer, ids).stream()
+                            .filter(row -> FeedbackState.VISIBLE_TO_DEVELOPER.contains(row.getState()))
+                            .toList();
                     if (rows.isEmpty()) return;
                     var feedbackIds = rows.stream()
                             .map(ResultCommunicationRepository.OwnFeedback::getId)

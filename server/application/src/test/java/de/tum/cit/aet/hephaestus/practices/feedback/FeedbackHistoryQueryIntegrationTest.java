@@ -10,6 +10,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.agent.context.providers.mentor.DeliveredFeedbackContentSource;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.mentor.MentorConversationService;
 import de.tum.cit.aet.hephaestus.mentor.MentorLedgerFixtures;
@@ -17,7 +18,9 @@ import de.tum.cit.aet.hephaestus.mentor.MentorLinkDTO;
 import de.tum.cit.aet.hephaestus.mentor.MentorTimeline;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnService;
+import de.tum.cit.aet.hephaestus.practices.feedback.dto.OwnFeedbackRefDTO;
 import de.tum.cit.aet.hephaestus.practices.model.Result;
+import de.tum.cit.aet.hephaestus.practices.result.ResultPresentation;
 import de.tum.cit.aet.hephaestus.practices.result.ResultSourceAuthorization;
 import de.tum.cit.aet.hephaestus.practices.spi.Currentness;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCopyKind;
@@ -25,6 +28,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCopyState;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDestination;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackIds;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackState;
+import de.tum.cit.aet.hephaestus.practices.spi.FeedbackStopReason;
 import de.tum.cit.aet.hephaestus.practices.spi.HistoryCustody;
 import de.tum.cit.aet.hephaestus.practices.spi.PrivateFeedbackHistory;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultEndReason;
@@ -32,6 +36,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ResultHistoryEntry;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultHistoryQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
@@ -64,6 +69,12 @@ class FeedbackHistoryQueryIntegrationTest extends AbstractFeedbackIntegrationTes
 
     @MockitoBean
     FeedbackVisibilityService visibility;
+
+    @Autowired
+    DeliveredFeedbackContentSource contextFile;
+
+    @Autowired
+    ResultPresentation presentation;
 
     @Test
     void shouldReadOneDevelopersDeliveredWitnessAndQueuedTargetOnTheReadPracticesOnly() {
@@ -326,6 +337,52 @@ class FeedbackHistoryQueryIntegrationTest extends AbstractFeedbackIntegrationTes
                 .isEqualTo(row.getBody());
     }
 
+    /**
+     * Heph's context and the developer's own pages read the same states: never a proposal awaiting approval, a
+     * rejection, a withholding or a replacement, whose state alone would tell the developer about it.
+     */
+    @Test
+    void shouldShowHephAndTheProfileOnlyTheFeedbackStatesTheDeveloperMayLearnOf() {
+        var proof = result();
+        authorize(proof);
+        var visible = new ArrayList<UUID>();
+        var hidden = new ArrayList<UUID>();
+        for (var state : FeedbackState.values()) {
+            var row = state == FeedbackState.WITHHELD
+                    ? withheld(FeedbackDestination.ON_WORK)
+                    : piece(
+                            FeedbackDestination.ON_WORK,
+                            state,
+                            state == FeedbackState.DELIVERED || state == FeedbackState.REPLACED ? AT : null);
+            bind(row, proof);
+            (List.of(FeedbackState.READY, FeedbackState.DELIVERED, FeedbackState.UNCONFIRMED, FeedbackState.FAILED)
+                                    .contains(state)
+                            ? visible
+                            : hidden)
+                    .add(row.getId());
+        }
+        for (var destination : List.of(FeedbackDestination.PRACTICE_PAGE, FeedbackDestination.CONVERSATION)) {
+            var ready = piece(destination, FeedbackState.READY, null);
+            bind(ready, proof);
+            visible.add(ready.getId());
+            var withheld = withheld(destination);
+            bind(withheld, proof);
+            hidden.add(withheld.getId());
+        }
+
+        var states = contextFile.buildPayload(workspace.getId(), developerId).get("feedbackStates");
+        assertThat(states.valueStream()
+                        .map(row -> UUID.fromString(row.get("feedbackId").asString())))
+                .containsExactlyInAnyOrderElementsOf(visible);
+        assertThat(presentation.ownFeedback(workspace.getId(), List.of(proof)).get(proof.getId()))
+                .extracting(OwnFeedbackRefDTO::id)
+                .containsExactlyInAnyOrderElementsOf(visible);
+        for (var id : visible)
+            assertThat(history.find(workspace.getId(), id, developerId)).isPresent();
+        for (var id : hidden)
+            assertThat(history.find(workspace.getId(), id, developerId)).isEmpty();
+    }
+
     /** The timeline names the work and practice that a problem and shown feedback are about, as the developer reads them. */
     @Test
     void shouldNameTheWorkAndPracticeOfAProblemAndOfShownFeedbackInTheTimeline() {
@@ -541,6 +598,21 @@ class FeedbackHistoryQueryIntegrationTest extends AbstractFeedbackIntegrationTes
                 .isEmpty();
         verify(permission, never())
                 .find(workspace.getId(), proof.getId(), developerId, SourceUsePurpose.OPERATOR_EVIDENCE_REVIEW);
+    }
+
+    private Feedback withheld(FeedbackDestination destination) {
+        return feedback.saveAndFlush(Feedback.builder()
+                .id(UUID.randomUUID())
+                .workspaceId(workspace.getId())
+                .reviewId(reviewId)
+                .itemId(itemId)
+                .developerId(developerId)
+                .destination(destination)
+                .state(FeedbackState.WITHHELD)
+                .stopReason(FeedbackStopReason.COMPOSER_WITHHELD)
+                .body("Add a focused regression test.")
+                .createdAt(AT)
+                .build());
     }
 
     private void authorize(Result proof) {

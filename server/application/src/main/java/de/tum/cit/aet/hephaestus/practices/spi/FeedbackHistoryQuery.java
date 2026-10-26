@@ -8,6 +8,7 @@ import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 
 public interface FeedbackHistoryQuery {
+    /** The developer's own feedback in the {@linkplain FeedbackState#VISIBLE_TO_DEVELOPER states they may learn of}. */
     List<FeedbackHistoryEntry> forDeveloper(long workspaceId, long developerAccountId, Instant since, int limit);
 
     List<FeedbackHistoryEntry> forItem(long workspaceId, long itemId, long viewerAccountId, int limit);
