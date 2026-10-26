@@ -1,4 +1,4 @@
-name: Kubernetes nightly
+name: CI / Kubernetes nightly
 
 # A push to main runs no cluster legs, because its merge group tested that commit. A change that the
 # `kubernetes` filter does not select reaches main untested on a cluster, so every leg runs each night
