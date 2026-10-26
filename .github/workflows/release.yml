@@ -211,8 +211,9 @@ jobs:
 
       - uses: ./.github/actions/setup-helm
 
-      # The chart is packaged from this checkout, the released commit, at the release version. Its
-      # values name no image, so the package never contains the lock that later names its digest.
+      # The chart is packaged from a copy of this checkout, the released commit, at the release
+      # version. Its values pin the images of the verified evidence; the lock that names the
+      # package's digest is written after the push.
       - name: Publish the chart by digest
         id: chart
         env:
@@ -230,8 +231,8 @@ jobs:
             echo "$state"; exit 1; }
           printf '%s' "$REGISTRY_TOKEN" | helm registry login ghcr.io --username "$ACTOR" --password-stdin
           mkdir "$RUNNER_TEMP/chart"
-          node scripts/release-chart.ts publish "v${VERSION}" deploy/chart/hephaestus "$RUNNER_TEMP/chart" \
-            > "$RUNNER_TEMP/chart.json"
+          node scripts/release-chart.ts publish "v${VERSION}" deploy/chart/hephaestus evidence/manifest.json \
+            security/release-images.json "$RUNNER_TEMP/chart" > "$RUNNER_TEMP/chart.json"
           echo "package=$RUNNER_TEMP/chart/hephaestus-${VERSION}.tgz" >> "$GITHUB_OUTPUT"
           jq . "$RUNNER_TEMP/chart.json"
 
@@ -284,22 +285,19 @@ jobs:
           predicate: |
             { "purl": "pkg:github/${{ steps.subjects.outputs.purl-repository }}@${{ needs.release.outputs.tag_name }}" }
 
-      # The chart package and both locks, each with its own bundle and the release workflow identity.
+      # Both locks, each with its own bundle, and the chart's digest in the registry, all with the
+      # release workflow identity. Operators verify the chart with `cosign verify` on that digest.
       - name: Sign release image lock
         env:
           ASSET: ${{ steps.pin.outputs.asset-path }}
           JOINT: ${{ steps.pin.outputs.joint-path }}
-          CHART_PACKAGE: ${{ steps.chart.outputs.package }}
-          VERSION: ${{ needs.release.outputs.version }}
         run: |
           set -euo pipefail
-          while read -r blob bundle; do
-            node scripts/keyless-sign.ts sign-blob --yes --bundle "$bundle" "$blob" </dev/null
-          done <<EOF
-          $CHART_PACKAGE evidence/hephaestus-${VERSION}.tgz.sigstore.json
-          $ASSET ${ASSET}.sigstore.json
-          $JOINT ${JOINT}.sigstore.json
-          EOF
+          for lock in "$ASSET" "$JOINT"; do
+            node scripts/keyless-sign.ts sign-blob --yes --bundle "${lock}.sigstore.json" "$lock"
+          done
+          chart=$(jq -er '"\(.chart.repository)@\(.chart.digest)"' "$JOINT")
+          node scripts/keyless-sign.ts sign --yes "$chart"
 
       - name: Verify signature with the deploy-side identity (fail fast)
         env:
@@ -315,10 +313,11 @@ jobs:
               --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
               "$lock"
           done
-          # The chart the joint lock names, pulled back by digest and checked against its package signature.
+          # The chart the joint lock names: its registry signature, and the package pulled back by digest,
+          # whose values must pin exactly the lock's images.
           mkdir "$RUNNER_TEMP/chart-verified"
-          node scripts/release-chart.ts verify "$JOINT" "v${VERSION}" \
-            "evidence/hephaestus-${VERSION}.tgz.sigstore.json" "$RUNNER_TEMP/chart-verified"
+          node scripts/release-chart.ts verify "$JOINT" "v${VERSION}" security/release-images.json \
+            "$RUNNER_TEMP/chart-verified"
 
       # First and only write to the release surface: every step above fails without creating one,
       # so a rejected release leaves no draft to delete and no tag — a draft materialises none —
@@ -599,11 +598,11 @@ jobs:
             --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
             "evidence/$joint"
           node scripts/release-image-lock.ts projection "evidence/$joint" "evidence/$lock" "$TAG_NAME"
-          # The chart by the locked digest: package signature, metadata, and the release attestation
-          # that release.yml made for it.
+          # The chart by the locked digest: its registry signature, metadata, values that pin exactly the
+          # lock's images, and the release attestation that release.yml made for it.
           mkdir "$RUNNER_TEMP/chart"
           package=$(node scripts/release-chart.ts verify "evidence/$joint" "$TAG_NAME" \
-            "evidence/hephaestus-${TAG_NAME#v}.tgz.sigstore.json" "$RUNNER_TEMP/chart")
+            security/release-images.json "$RUNNER_TEMP/chart")
           gh attestation verify "$package" --repo "${{ github.repository }}" \
             --signer-workflow "${{ github.repository }}/.github/workflows/release.yml" \
             --predicate-type https://in-toto.io/attestation/release/v0.1

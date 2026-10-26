@@ -2876,8 +2876,10 @@ void describe("CI contract", () => {
 			capture.indexOf("node scripts/verify-release-evidence.ts evidence --verify-signatures") >
 				checksumSigning,
 		);
-		assert.equal((capture.match(/node scripts\/keyless-sign\.ts /gu) ?? []).length, 3);
-		assert.doesNotMatch(capture, /(?:^|\n)\s*cosign (?:attest|sign-blob) /u);
+		// The SBOM attestations, the evidence checksums, the two locks and the chart digest.
+		assert.equal((capture.match(/node scripts\/keyless-sign\.ts /gu) ?? []).length, 4);
+		assert.match(capture, /node scripts\/keyless-sign\.ts sign --yes "\$chart"/u);
+		assert.doesNotMatch(capture, /(?:^|\n)\s*cosign (?:attest|sign|sign-blob) /u);
 		const verifier = await readFile("scripts/verify-release-evidence.ts", "utf8");
 		// Template literals are elided so this test can quote the source lines it expects without
 		// carrying interpolations of its own.

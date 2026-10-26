@@ -259,14 +259,11 @@ export function jointLockAsset(release: string): string {
 }
 
 /**
- * The joint lock of a release, built once from the evidence manifest that the release verified and
- * the chart that it pushed. The schema 1 lock is derived from this object, never assembled again.
+ * The images and source of a release, built once from the evidence manifest that the release
+ * verified. The chart's image values, the schema 1 lock and the joint lock all come from this
+ * object, so no two of them can name different images.
  */
-export function jointLockFromEvidence(
-	evidenceValue: unknown,
-	chartValue: unknown,
-	release: string,
-): ReleaseImageLockV2 {
+export function lockFromEvidence(evidenceValue: unknown, release: string): ReleaseImageLockV1 {
 	const evidence = record(evidenceValue);
 	if (evidence.release !== release || !Array.isArray(evidence.subjects)) {
 		throw new Error(`the evidence manifest does not describe ${release}`);
@@ -309,13 +306,29 @@ export function jointLockFromEvidence(
 			};
 		});
 	const lock = parseReleaseImageLock(
-		{ schemaVersion: 2, release, commit: evidence.commit, images, chart: chartValue },
+		{ schemaVersion: 1, release, commit: evidence.commit, images },
+		release,
+	);
+	if (lock.schemaVersion !== 1) {
+		throw new Error("expected a schema 1 lock");
+	}
+	verifyLockAgainstEvidence(lock, evidenceValue);
+	return lock;
+}
+
+/** The joint lock of a release: the lock from its evidence, plus the chart that it pushed. */
+export function jointLockFromEvidence(
+	evidenceValue: unknown,
+	chartValue: unknown,
+	release: string,
+): ReleaseImageLockV2 {
+	const lock = parseReleaseImageLock(
+		{ ...lockFromEvidence(evidenceValue, release), schemaVersion: 2, chart: chartValue },
 		release,
 	);
 	if (lock.schemaVersion !== 2) {
 		throw new Error("expected a joint lock");
 	}
-	verifyLockAgainstEvidence(lock, evidenceValue);
 	return lock;
 }
 

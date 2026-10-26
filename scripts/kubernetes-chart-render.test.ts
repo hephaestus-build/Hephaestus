@@ -3,7 +3,8 @@
  *
  * Each case runs `helm template` on the real chart, a real profile, values that kubernetes-chart.ts
  * prepares from a synthetic lock over the real release image inventory, and operator values that
- * name a Secret but hold no secret value. The assertions read the parsed resources. A render is not
+ * name a Secret but hold no secret value. The chart source names no image, so a source render
+ * passes the prepared values as a CI run passes its own; one case renders a release package instead. The assertions read the parsed resources. A render is not
  * a cluster: admission, network enforcement, volume start-up and upgrades stay with the cluster tests.
  *
  * The worker renders only with the names of what an operator qualified on the sandbox nodes. These
@@ -13,6 +14,7 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -21,8 +23,9 @@ import { fileURLToPath } from "node:url";
 import { parseAllDocuments, stringify } from "yaml";
 
 import { parseInventory } from "./commit-image-lock.ts";
-import { chartValues, renderChartValues } from "./kubernetes-chart.ts";
+import { chartValues } from "./kubernetes-chart.ts";
 import { isRecord, parseJson, readJsonFileSync } from "./lib/json.ts";
+import { packageReleaseChart } from "./release-chart.ts";
 import { parseReleaseImageLock } from "./release-image-lock.ts";
 
 const chart = fileURLToPath(new URL("../deploy/chart/hephaestus/", import.meta.url));
@@ -118,10 +121,13 @@ interface Rendered {
 	resources: Resource[];
 }
 
-/** One `helm template` run. A string layer is a values file path; an object is written to one. */
+/**
+ * One `helm template` run of the chart source, or of `source`. A string layer is a values file
+ * path; an object is written to one.
+ */
 function render(
 	layers: readonly Layer[],
-	{ release = "heph", namespace = "hephaestus" } = {},
+	{ release = "heph", namespace = "hephaestus", source = chart } = {},
 ): Rendered {
 	const directory = mkdtempSync(path.join(tmpdir(), "hephaestus-chart-"));
 	try {
@@ -130,8 +136,7 @@ function render(
 				return layer;
 			}
 			const file = path.join(directory, `values-${index}.yaml`);
-			// The prepared values reach Helm as the bytes prepare-release-lock writes, not a re-encoding.
-			writeFileSync(file, layer === prepared ? renderChartValues(prepared) : stringify(layer));
+			writeFileSync(file, stringify(layer));
 			return file;
 		});
 		const result = spawnSync(
@@ -139,7 +144,7 @@ function render(
 			[
 				"template",
 				release,
-				chart,
+				source,
 				"--namespace",
 				namespace,
 				...files.flatMap((file) => ["--values", file]),
@@ -525,6 +530,26 @@ for (const name of profiles) {
 		assert.equal(get(postgresql, "spec", "template", "spec", "securityContext", "fsGroup"), 999);
 	});
 }
+
+await test("a release package runs the release's images with the operator's values alone", async (t) => {
+	const directory = await mkdtemp(path.join(tmpdir(), "hephaestus-release-chart-"));
+	t.after(async () => rm(directory, { recursive: true, force: true }));
+	// The release's own packaging, with the real Helm: it also reads the package back through
+	// `helm show chart` and `helm show values` and refuses one that does not pin these images.
+	const packaged = await packageReleaseChart(prepared.release.version, chart, prepared, directory);
+	const resources = rendered([profile("small"), operator, reviews], { source: packaged });
+	for (const [component, image] of Object.entries(imageOf)) {
+		for (const entry of containers(workload(resources, component))) {
+			assert.equal(get(entry, "image"), prepared.images[image], `${component} image`);
+		}
+	}
+	const server = workload(resources, "server");
+	assert.equal(envValue(server, "HEPHAESTUS_AGENT_IMAGE_REFERENCE"), prepared.images["agent-pi"]);
+	assert.equal(envValue(server, "HEPHAESTUS_RELEASE_COMMIT"), prepared.release.commit);
+	assert.equal(envValue(server, "APP_VERSION"), "1.2.3");
+	// The chart source alone still refuses to render without a run's images.
+	assert.match(render([profile("small"), operator, reviews]).stderr, /images|release/u);
+});
 
 await test("the webapp runs the non-root image with one writable subtree on 8080", () => {
 	const resources = rendered(layersFor("small"));

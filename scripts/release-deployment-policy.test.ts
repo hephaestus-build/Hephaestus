@@ -87,13 +87,12 @@ await test("verification identity is the release's own: run context now, the map
 	);
 	assert.match(prepareLock, /releaseCertificateIdentity\(release, environment\)/u);
 	assert.match(prepareLock, /releaseRepository\(release, environment\)/u);
-	assert.match(
-		prepareLock,
-		/verifyReleaseChart\(\n\t+lock,\n\t+path\.join\(directory, signature\),\n\t+chartTempDirectory,\n\t+environment,/u,
-	);
-	// The chart package is verified with the same identity as the lock it is named in.
+	// The chart digest is verified with the same identity as the lock it is named in.
 	assert.match(releaseChart, /releaseCertificateIdentity\(lock\.release, environment\)/u);
-	assert.match(releaseChart, /signature,\n\t+destination,\n\t+process\.env,\n/u);
+	assert.match(
+		releaseChart,
+		/readChartLock\(lockPath, release\),\n\t+await readInventory\(inventory\),\n\t+destination,\n\t+process\.env,\n/u,
+	);
 	for (const contents of [release, reconciler, rescan, rescanSource, prepareLock, releaseChart]) {
 		assert.doesNotMatch(contents, /certificate-identity[^\n]*\n?[^\n]*ls1intum\/Hephaestus/u);
 		assert.doesNotMatch(

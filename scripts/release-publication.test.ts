@@ -17,7 +17,10 @@ import { test } from "node:test";
 
 import { isMap, isSeq, parseDocument } from "yaml";
 
+import { parseInventory } from "./commit-image-lock.ts";
+import { chartValues, releaseValuesLines } from "./kubernetes-chart.ts";
 import { asRecord, parseJson } from "./lib/json.ts";
+import { lockFromEvidence } from "./release-image-lock.ts";
 
 const release = "v0.93.0";
 const commit = "c".repeat(40);
@@ -29,6 +32,18 @@ const chart = {
 	digest: `sha256:${"b".repeat(64)}`,
 };
 const chartPackage = `hephaestus-${chart.version}.tgz`;
+/**
+ * The other images that the chart runs, as upstream pins: their evidence needs no attestation and
+ * no alias, so webapp stays the one first-party image that this suite promotes.
+ */
+const upstream = ["agent-pi", "application-server", "nats", "postgres"].map((name, index) => ({
+	name,
+	repository: `docker.io/library/${name}`,
+	tag: "1",
+	digest: `sha256:${"de34".charAt(index).repeat(64)}`,
+}));
+/** The release image inventory of the fixture checkout and its evidence. */
+const inventory = { schemaVersion: 1, images: ["webapp"], upstream };
 const jointLock = `release-${release}.chart.json`;
 /** A synthetic Cosign bundle: a JSON object naming the signed bytes. It proves nothing about Sigstore. */
 const bundle = (bytes: string | Uint8Array) => JSON.stringify({ sha256: hash(bytes) });
@@ -68,7 +83,7 @@ const writer = jobSteps("tag-images", [
 	"Upload release image lock to GitHub Release",
 ]);
 // The producer: chart push behind the release-state guard, the joint lock and its projection,
-// the three keyless signatures, and the fail-fast verification.
+// the two lock signatures and the chart's registry signature, and the fail-fast verification.
 const producer = jobSteps("tag-images", [
 	"Publish the chart by digest",
 	"Write release image lock",
@@ -87,6 +102,7 @@ const remoteState: ReadonlySet<string> = new Set([
 	"chart-registry",
 	"chart-metadata",
 	"chart-tags",
+	"chart-signatures",
 ]);
 
 // Only remote services are fixtures. The steps run the real lock, checksum, SBOM and policy
@@ -134,7 +150,7 @@ if (tool === 'gh') {
   if (['view', 'upload', 'edit'].includes(args[1]) && current === null) { console.error('release not found'); process.exit(1); }
   if (args[1] === 'download') {
     for (const file of fs.readdirSync(store)) {
-      if (!['state', 'aliases', 'releases', 'tags', 'tag-objects', 'chart-registry', 'chart-metadata', 'chart-tags'].includes(file)) fs.copyFileSync(path.join(store, file), path.join(option('--dir'), file));
+      if (!['state', 'aliases', 'releases', 'tags', 'tag-objects', 'chart-registry', 'chart-metadata', 'chart-tags', 'chart-signatures'].includes(file)) fs.copyFileSync(path.join(store, file), path.join(option('--dir'), file));
     }
   } else if (args[1] === 'view') {
     if (args.includes('--jq')) {
@@ -172,7 +188,13 @@ if (tool === 'gh') {
     const subject = read('manifest.json').subjects.find(subject => args.at(-1).endsWith(subject.digest));
     const predicate = read('webapp-' + subject.platform.replace('/', '-') + '.spdx.json');
     console.log(JSON.stringify({payload:Buffer.from(JSON.stringify({predicate})).toString('base64')}));
-  } else if (args[0] !== 'verify') throw new Error('Unexpected cosign command');
+  } else if (args[0] === 'sign') {
+    // The registry keeps a signature beside the chart digest that the release signed.
+    write('chart-signatures', [...read('chart-signatures'), args.at(-1)]);
+  } else if (args[0] === 'verify') {
+    // A chart digest verifies only with its registry signature; image signatures are not modelled.
+    if (args[1] in read('chart-registry') && !read('chart-signatures').includes(args[1])) { console.error('Error: no signatures found'); process.exit(1); }
+  } else throw new Error('Unexpected cosign command');
 } else if (tool === 'helm') {
   // The registry holds chart packages by manifest reference; a pull by any other digest misses.
   if (args[0] === 'pull') {
@@ -183,10 +205,13 @@ if (tool === 'gh') {
     fs.writeFileSync(path.join(option('--destination'), name), Buffer.from(packages[reference].bytes, 'base64'));
   } else if (args[0] === 'show' && args[1] === 'chart') {
     process.stdout.write(fs.readFileSync(path.join(store, 'chart-metadata'), 'utf8'));
+  } else if (args[0] === 'show' && args[1] === 'values') {
+    // A package holds the values.yaml it was made from, after one line that names the package.
+    process.stdout.write(fs.readFileSync(args[2], 'utf8').split('\n').slice(1).join('\n') + '\n');
   } else if (args[0] === 'version' || (args[0] === 'registry' && args[1] === 'login')) {
     fs.readFileSync(0);
   } else if (args[0] === 'package') {
-    fs.writeFileSync(path.join(option('--destination'), 'hephaestus-' + option('--version') + '.tgz'), 'packaged ' + args[1] + ' at ' + option('--app-version'));
+    fs.writeFileSync(path.join(option('--destination'), 'hephaestus-' + option('--version') + '.tgz'), 'packaged at ' + option('--app-version') + '\n' + fs.readFileSync(path.join(args[1], 'values.yaml'), 'utf8'));
   } else if (args[0] === 'push') {
     // A push writes the version tag; the registry answers with the manifest digest on stdout.
     const bytes = fs.readFileSync(args[1]);
@@ -226,6 +251,7 @@ async function fixture(directory: string, source = commit) {
 		await mkdir(folder);
 	}
 	await symlink(path.join(root, "scripts"), path.join(directory, "scripts"), "dir");
+	await symlink(path.join(root, "deploy"), path.join(directory, "deploy"), "dir");
 	const json = async (name: string, value: unknown) =>
 		writeFile(path.join(archive, name), JSON.stringify(value));
 	for (const tool of ["gh", "cosign", "docker", "helm"]) {
@@ -243,16 +269,35 @@ async function fixture(directory: string, source = commit) {
 		VERSION: release.slice(1),
 		SERIES: "0.93",
 	};
-	const subjects = platforms.map((architecture, index) => ({
-		image: "webapp",
-		repository,
-		provenance: "first-party",
-		indexDigest,
-		digest: `sha256:${String(index + 1).repeat(64)}`,
-		platform: `linux/${architecture}`,
-	}));
-	await json("manifest.json", { schemaVersion: 1, release, commit: source, subjects });
-	await json("release-images.json", { schemaVersion: 1, images: ["webapp"], upstream: [] });
+	const subjects = [
+		...platforms.map((architecture, index) => ({
+			image: "webapp",
+			repository,
+			provenance: "first-party",
+			indexDigest,
+			digest: `sha256:${String(index + 1).repeat(64)}`,
+			platform: `linux/${architecture}`,
+		})),
+		...upstream.flatMap((pin) =>
+			platforms.map((architecture, index) => ({
+				image: pin.name,
+				repository: pin.repository,
+				provenance: "upstream",
+				indexDigest: pin.digest,
+				digest: `sha256:${String(index + 5).repeat(64)}`,
+				platform: `linux/${architecture}`,
+			})),
+		),
+	];
+	const manifest = { schemaVersion: 1, release, commit: source, subjects };
+	await json("manifest.json", manifest);
+	await json("release-images.json", inventory);
+	// The checkout's inventory, which the release scripts read beside the evidence.
+	await mkdir(path.join(directory, "security"));
+	await writeFile(
+		path.join(directory, "security", "release-images.json"),
+		JSON.stringify(inventory),
+	);
 	await json("vulnerability-policy.json", {
 		schemaVersion: 3,
 		componentInventories: [],
@@ -276,8 +321,8 @@ async function fixture(directory: string, source = commit) {
 	);
 	assert.equal(produced.status, 0, produced.stderr);
 	for (const subject of subjects) {
-		const prefix = `webapp-${subject.platform.replace("/", "-")}`;
-		const reference = `${repository}@${subject.digest}`;
+		const prefix = `${subject.image}-${subject.platform.replace("/", "-")}`;
+		const reference = `${subject.repository}@${subject.digest}`;
 		const artifact = {
 			name: "example",
 			version: "1.0.0",
@@ -289,7 +334,7 @@ async function fixture(directory: string, source = commit) {
 		await json(`${prefix}.syft.json`, {
 			source: {
 				type: "image",
-				name: repository,
+				name: subject.repository,
 				version: subject.digest,
 				metadata: {
 					userInput: reference,
@@ -307,7 +352,11 @@ async function fixture(directory: string, source = commit) {
 			dataLicense: "CC0-1.0",
 			documentNamespace: "https://example.invalid/sbom",
 			packages: [
-				{ name: repository, versionInfo: subject.digest, primaryPackagePurpose: "CONTAINER" },
+				{
+					name: subject.repository,
+					versionInfo: subject.digest,
+					primaryPackagePurpose: "CONTAINER",
+				},
 				{
 					name: artifact.name,
 					versionInfo: artifact.version,
@@ -318,7 +367,9 @@ async function fixture(directory: string, source = commit) {
 		await json(`${prefix}.cdx.json`, {
 			bomFormat: "CycloneDX",
 			specVersion: "1.7",
-			metadata: { component: { type: "container", name: repository, version: subject.digest } },
+			metadata: {
+				component: { type: "container", name: subject.repository, version: subject.digest },
+			},
 			components: [artifact],
 		});
 		for (const kind of ["trivy", "license"]) {
@@ -339,10 +390,13 @@ async function fixture(directory: string, source = commit) {
 	for (const file of ["SHA256SUMS", `release-${release}.json`, jointLock]) {
 		await sign(path.join(archive, file));
 	}
-	// The chart is not evidence: release.yml signs its package after SHA256SUMS, and the registry,
-	// not the release, holds the package.
-	const packageBytes = `hephaestus chart ${chart.version} from ${source}`;
-	await writeFile(path.join(archive, `${chartPackage}.sigstore.json`), bundle(packageBytes));
+	// The chart is not evidence: the registry, not the release, holds the package and its signature.
+	// Its values pin the images of the lock that the evidence makes.
+	const pinned = releaseValuesLines(
+		chartValues(lockFromEvidence(manifest, release), parseInventory(inventory)),
+	);
+	const packageBytes = `hephaestus chart ${chart.version} from ${source}\n${pinned}`;
+	await json("chart-signatures", [`${chart.repository}@${chart.digest}`]);
 	await json("chart-tags", {});
 	await json("chart-registry", {
 		[`${chart.repository}@${chart.digest}`]: {
@@ -412,7 +466,7 @@ async function fixture(directory: string, source = commit) {
 			),
 		);
 	};
-	return { archive, smoke, json, run, assets };
+	return { archive, smoke, json, run, assets, manifest };
 }
 
 const authorityRefusal = /Only the current stable release/u;
@@ -428,7 +482,8 @@ const refusalReasons = new Map([
 	["authority-malformed", /boolean draft and prerelease flags/u],
 	["authority-malformed-draft", /boolean draft and prerelease flags/u],
 	["version-mismatch", /Release version does not match verified evidence/u],
-	["tampered-chart", /Signature mismatch/u],
+	["unsigned-chart", /no signatures found/u],
+	["unpinned-chart", /hephaestus-0\.93\.0\.tgz does not pin the v0\.93\.0 images/u],
 	["unlocked-chart-digest", /not found/u],
 	["missing-joint-lock", /ENOENT/u],
 	["projection-mismatch", /the schema 1 lock is not the projection of the joint lock/u],
@@ -445,13 +500,25 @@ async function tamperChartAssets(
 	archive: string,
 	json: (name: string, value: unknown) => Promise<void>,
 ): Promise<void> {
-	const reference = `${chart.repository}@${chart.digest}`;
-	if (scenario === "tampered-chart") {
+	if (scenario === "unsigned-chart") {
+		await json("chart-signatures", []);
+	}
+	if (scenario === "unpinned-chart") {
+		// A signed chart at the locked digest whose values pin another webapp than the joint lock.
+		const reference = `${chart.repository}@${chart.digest}`;
+		const registry = asRecord(
+			parseJson(await readFile(path.join(archive, "chart-registry"), "utf8")),
+			"chart registry",
+		);
+		const entry = asRecord(registry[reference], "locked chart");
+		const bytes = Buffer.from(String(entry.bytes), "base64")
+			.toString("utf8")
+			.replace(
+				`webapp: "${repository}@${indexDigest}"`,
+				`webapp: "${repository}@sha256:${"9".repeat(64)}"`,
+			);
 		await json("chart-registry", {
-			[reference]: {
-				version: chart.version,
-				bytes: Buffer.from("other bytes").toString("base64"),
-			},
+			[reference]: { ...entry, bytes: Buffer.from(bytes).toString("base64") },
 		});
 	}
 	if (scenario === "unlocked-chart-digest") {
@@ -499,7 +566,8 @@ for (const scenario of [
 	"authority-malformed",
 	"authority-malformed-draft",
 	"version-mismatch",
-	"tampered-chart",
+	"unsigned-chart",
+	"unpinned-chart",
 	"unlocked-chart-digest",
 	"missing-joint-lock",
 	"projection-mismatch",
@@ -524,6 +592,11 @@ for (const scenario of [
 					/\["helm","pull","oci:\/\/ghcr\.io\/hephaestus-build\/charts\/hephaestus@sha256:b{64}","--destination",/u,
 				);
 				assert.doesNotMatch(result.calls, /charts\/hephaestus:/u);
+				// Its signature is the registry signature of that digest, by the release workflow.
+				assert.match(
+					result.calls,
+					/\["cosign","verify","ghcr\.io\/hephaestus-build\/charts\/hephaestus@sha256:b{64}","--certificate-identity","https:\/\/github\.com\/hephaestus-build\/Hephaestus\/\.github\/workflows\/release\.yml@refs\/heads\/main",/u,
+				);
 				assert.match(
 					result.calls,
 					/\["gh","attestation","verify","[^"]*\/chart\/hephaestus-0\.93\.0\.tgz","--repo","hephaestus-build\/Hephaestus","--signer-workflow","hephaestus-build\/Hephaestus\/\.github\/workflows\/release\.yml"/u,
@@ -818,7 +891,7 @@ for (const scenario of ["absent", "same-source-draft", ...producerRefusals.keys(
 	void test(`release producer: ${scenario}`, { skip: process.platform === "win32" }, async (t) => {
 		const directory = await mkdtemp(path.join(tmpdir(), "release-producer-"));
 		t.after(async () => rm(directory, { recursive: true, force: true }));
-		const { archive, json, run } = await fixture(directory);
+		const { archive, json, run, manifest } = await fixture(directory);
 		// The job's own workspace: the verified evidence manifest, nothing signed yet.
 		await mkdir(path.join(directory, "evidence"));
 		await copyFile(
@@ -899,7 +972,35 @@ for (const scenario of ["absent", "same-source-draft", ...producerRefusals.keys(
 		const { chart: _chart, ...projection } = joint;
 		assert.equal(legacy.commit, commit);
 		assert.deepEqual(legacy, { ...projection, schemaVersion: 1 });
-		for (const file of [`release-${release}.json`, jointLock, `evidence/${chartPackage}`]) {
+		// The pushed package pins the evidence's index digests, the ones both locks name.
+		const pushed = `${chart.repository}@${String(tags[`${chart.repository}:${chart.version}`])}`;
+		const registry = asRecord(
+			parseJson(await readFile(path.join(archive, "chart-registry"), "utf8")),
+			"chart registry",
+		);
+		const packaged = Buffer.from(
+			String(asRecord(registry[pushed], "pushed chart").bytes),
+			"base64",
+		).toString("utf8");
+		assert.match(packaged, /^release:\n {2}version: "v0\.93\.0"\n {2}commit: "c{40}"\nimages:\n/mu);
+		for (const subject of manifest.subjects) {
+			if (
+				["agent-pi", "application-server", "nats", "postgres", "webapp"].includes(subject.image)
+			) {
+				assert.ok(
+					packaged.includes(`  ${subject.image}: "${subject.repository}@${subject.indexDigest}"\n`),
+					subject.image,
+				);
+			}
+		}
+		// The chart digest is signed in the registry, after the push, with no bundle beside it.
+		const signing = calls.indexOf(`["cosign","sign","--yes","${pushed}"]`);
+		assert.ok(signing > push, "the pushed digest is signed");
+		assert.deepEqual(parseJson(await readFile(path.join(archive, "chart-signatures"), "utf8")), [
+			`${chart.repository}@${chart.digest}`,
+			pushed,
+		]);
+		for (const file of [`release-${release}.json`, jointLock]) {
 			const signature = asRecord(
 				parseJson(await readFile(path.join(directory, `${file}.sigstore.json`), "utf8")),
 				file,
