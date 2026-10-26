@@ -1056,6 +1056,17 @@ public class ReviewJobExecutor {
                     e.getClass().getName(),
                     e.getMessage(),
                     e);
+        } else {
+            // The job row keeps types only; the log keeps the message too, masked like every log line, so that an
+            // unclassified cause can still be diagnosed.
+            log.error(
+                    "Review preparation failed: jobId={}, stage={}, kind={}, errorType={}, cause={}",
+                    jobId,
+                    preparation.stage().name(),
+                    preparation.kind().name(),
+                    e.getClass().getName(),
+                    e.getMessage(),
+                    e);
         }
 
         if (isRetryableExecutionFailure(e)) {

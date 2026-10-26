@@ -15,6 +15,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.config.FrozenModel;
@@ -76,6 +79,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.mockito.ArgumentCaptor;
+import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.core.task.AsyncTaskExecutor;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
@@ -697,13 +701,29 @@ class ReviewJobExecutorTest extends BaseUnitTest {
                 .when(pool)
                 .execute(any(Runnable.class));
         var executor = executor(pool);
+        var logger = (Logger) LoggerFactory.getLogger(ReviewJobExecutor.class);
+        var appender = new ListAppender<ILoggingEvent>();
+        appender.start();
+        logger.addAppender(appender);
 
-        assertThat(executor.processJob(job.getId())).isEqualTo(ReviewJobExecutor.StartOutcome.STARTED);
+        try {
+            assertThat(executor.processJob(job.getId())).isEqualTo(ReviewJobExecutor.StartOutcome.STARTED);
+        } finally {
+            logger.detachAppender(appender);
+        }
 
         assertThat(executor.computeCapacity()).isEqualTo(1);
         verify(workerCapacity).releaseReview();
         assertThat(MDC.get("job.id")).isNull();
         verifyNoInteractions(sandbox);
+        // A preparation failure names its stage, kind, exception type and message in the log line itself.
+        assertThat(appender.list)
+                .map(ILoggingEvent::getFormattedMessage)
+                .anySatisfy(line -> assertThat(line)
+                        .startsWith("Review preparation failed: jobId=" + job.getId())
+                        .contains("stage=INPUTS", "kind=INPUT_PREPARATION")
+                        .contains("errorType=" + JobPreparationException.class.getName())
+                        .contains("cause=Input preparation failed"));
     }
 
     @Test

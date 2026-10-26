@@ -90,6 +90,7 @@ This failure occurs before any model call, so it is a failure of the infrastruct
 The worker log names it with its exit code.
 After the last attempt, the job keeps the initializer's exit code and the last 20 lines of its log under `capture.initializationFailure`.
 Credentials in those lines are masked.
+A failure before the sandbox starts is logged with its stage, its kind, such as a repository operation, and the exception type and message.
 
 If private feedback stops after some of its pieces are prepared, a new attempt composes only for the practices that those pieces do not decide.
 The prepared pieces stay as they are, and they keep the room that they use on their destination.
