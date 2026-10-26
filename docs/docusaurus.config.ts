@@ -321,7 +321,7 @@ const config: Config = {
 					],
 				},
 			],
-			copyright: `Built by <a href="https://aet.cit.tum.de/">Applied Education Technologies</a> at <a href="https://www.tum.de/en/">TUM</a>. Source on <a href="${REPO_URL}">GitHub</a>.`,
+			copyright: `Developed at the <a href="https://www.tum.de/en/">Technical University of Munich</a>. There, Hephaestus is the research platform for a study of how AI-generated feedback can improve developers’ application of engineering practices. <a href="https://aet.cit.tum.de/">Applied Education Technologies</a> maintains Hephaestus under the MIT license. Source on <a href="${REPO_URL}">GitHub</a>.`,
 		},
 		announcementBar: {
 			id: "pre-1-0",
