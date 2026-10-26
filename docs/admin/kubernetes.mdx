@@ -601,9 +601,11 @@ For one host, use [Install on one host (k3s)](#install-on-one-host-k3s).
    kubectl label namespace hephaestus hephaestus-sandboxes pod-security.kubernetes.io/enforce=restricted
    ```
 
-2. Create the [Secret](#create-the-secret) and the [PostgreSQL TLS Secret](#postgresql-tls-secret).
+2. Make the OAuth App of your login provider, as [First steps § 1](./first-steps#1-configure-a-login-provider) describes.
+   Then create the [Secret](#create-the-secret) with its client secret, and the [PostgreSQL TLS Secret](#postgresql-tls-secret).
+   The server copies the client secret into the database at its first start.
 3. Write your values file, `site.yaml`, with `host`, `trustedProxies`, `secret.name`, `postgresql.tls.existingSecret`, `route.parentRefs`, and `networkPolicy.gateway` with its pod labels.
-   Add the login provider and the first admin, as [First steps § 1 and § 2](./first-steps) describe.
+   Add `config.github.oauthClientId` and `config.auth.bootstrapAdmins`, as [First steps § 1 and § 2](./first-steps) describe.
    Do not set `release` or `images`: the release chart sets them.
 4. Enable reviews.
    `small.yaml` enables the worker, and the chart does not render it without the sandbox namespace and the Kubernetes API endpoint.
@@ -678,6 +680,22 @@ These values set the server's settings of the same meaning ([Production setup](.
 | `config.monitoring.timeframeDays` | `MONITORING_TIMEFRAME` | `7` |
 | `config.monitoring.syncCron` | `MONITORING_SYNC_CRON`, a Spring cron expression with six fields | `0 0 * * * *` |
 | `config.monitoring.cooldownMinutes` | `MONITORING_SYNC_COOLDOWN_IN_MINUTES` | `60` |
+
+## Integration values
+
+Each integration takes its settings from `site.yaml` and its secrets from the [Secret](#create-the-secret).
+`values.schema.json` describes each value.
+[Integration settings](./production-setup) explains each setting.
+
+| Integration | Values | Secret keys |
+| --- | --- | --- |
+| GitHub login | `config.github.oauthClientId` | `GITHUB_OAUTH_CLIENT_SECRET` |
+| GitHub App | `config.github.appId`, `config.github.appClientId`, `config.github.appInstallationUrl` | `GH_APP_PRIVATE_KEY`, `GH_APP_CLIENT_SECRET` |
+| GitLab | `config.gitlab.*` | `GITLAB_OAUTH_CLIENT_SECRET` |
+| Slack | `config.slack.*` | `HEPHAESTUS_INTEGRATION_SLACK_SIGNING_SECRET`, `HEPHAESTUS_INTEGRATION_SLACK_CLIENT_SECRET` |
+| Outline | `config.outline.*` | `OUTLINE_OAUTH_CLIENT_SECRET` |
+| Email | `config.email.*` | `SPRING_MAIL_PASSWORD` |
+| Provider webhooks | None | `WEBHOOK_SECRET`, `WEBHOOK_ROUTING_SECRET` |
 
 ## Worker
 

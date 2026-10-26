@@ -19,7 +19,10 @@ The [Configuration reference](./configuration-reference) lists every variable wi
 
 ## Base environment variables
 
-The [Install guide](./install#2-configure-env) owns these required base values and their lifecycle constraints:
+These base values are required.
+On Kubernetes, [Secret custody](./secret-custody#inventory) gives their lifecycle constraints.
+On Docker Compose, the [Install guide](./install#2-configure-env) gives them.
+[First steps](./first-steps) covers the login provider and the first admin.
 
 - `HEPHAESTUS_SECURITY_ENCRYPTION_KEY`.
 - `HEPHAESTUS_SECURITY_CREDENTIAL_ENCRYPTION_KEY`.

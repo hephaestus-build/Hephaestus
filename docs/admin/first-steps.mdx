@@ -4,9 +4,9 @@ title: First steps
 description: Configure the login provider and the first admin, then connect data and run the first practice review.
 ---
 
-These steps are the same on each deployment.
-Do them together with the install: on [Kubernetes](./kubernetes), or with the deprecated [Docker Compose install](./install) of the 0.x releases.
-The first two steps set values before the first start.
+These steps are the same on each deployment: the Helm chart on [Kubernetes](./kubernetes), or the deprecated [Docker Compose install](./install) of the 0.x releases.
+Steps 1 and 2 set values before the first start, so the install pages link to them.
+Steps 3 to 7 follow the first start.
 
 ## 1. Configure a login provider
 
@@ -29,11 +29,8 @@ Without a login provider, the instance boots but shows **no sign-in button**.
 
    | Deployment | Client ID | Client secret |
    | --- | --- | --- |
-   | Kubernetes | `config.github.oauthClientId` in your values | `GITHUB_OAUTH_CLIENT_SECRET` in the [Secret](./kubernetes#create-the-secret) |
+   | Kubernetes | `config.github.oauthClientId` in `site.yaml` | `GITHUB_OAUTH_CLIENT_SECRET` in the [Secret](./kubernetes#create-the-secret) |
    | Docker Compose | `GH_OAUTH_CLIENT_ID` in `.env` | `GH_OAUTH_CLIENT_SECRET` in `.env` |
-
-GitLab login works the same way and can be used instead of (or next to) GitHub — see the
-[GitLab rollout bundle](./production-setup#gitlab-rollout-bundle).
 
 ## 2. Name the first admin
 
@@ -41,7 +38,7 @@ The admin UI requires admin access.
 The **first instance admin must therefore come from operator config**, not the UI.
 
 1. Before the first start, set the first admin.
-   On Kubernetes, set `config.auth.bootstrapAdmins` in your values.
+   On Kubernetes, set `config.auth.bootstrapAdmins` in `site.yaml`.
    On Docker Compose, set it in `.env`:
 
    ```bash
@@ -54,7 +51,8 @@ The **first instance admin must therefore come from operator config**, not the U
 
 2. On public github.com, prefer the numeric ID (`github:1234567`, from `https://api.github.com/users/<login>`).
    Others can reclaim abandoned handles.
-3. If you omitted the value, add it and apply the change.
+3. If you omitted the value, add it.
+   Then run the install command again: `helm upgrade --install` on Kubernetes, or `docker compose up -d` on Docker Compose.
 
 For the break-glass bootstrap token, see [Instance admin](./instance-admin#bootstrap-and-recovery).
 
@@ -104,11 +102,11 @@ Both have procedures in
 ## 5. Optional integrations
 
 All optional integrations are off by default.
-[Integration settings](./production-setup) lists the settings of each.
-The [Kubernetes](./kubernetes#install) page names the chart value of each setting.
+[Integration settings](./production-setup) describes the settings of each.
+On Kubernetes, [Integration values](./kubernetes#integration-values) names the chart values and the Secret keys of each.
 
 1. Enable the desired integrations.
-2. Apply the change: run `helm upgrade` on Kubernetes, or `docker compose up -d` on Docker Compose.
+2. Run the install command again: the `helm upgrade --install` command of [Install](./kubernetes#install) step 6 on Kubernetes, or `docker compose --env-file .env --env-file release-lock.env up -d` on Docker Compose.
 
 | Add-on             | What it gives you                                                                                             | Where                                                         |
 | ------------------ | ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
@@ -155,7 +153,7 @@ Provider](./ai-providers)).
 The procedure runs one review and lets you read its feedback before anyone else can:
 
 1. Open **Practices → Review settings → How much**.
-2. Set the **Workspace default** to **Review before sending**.
+2. Set the **Workspace default** to **Approve first**.
    Each piece of feedback waits for your approval.
 3. Follow [First successful review](./practice-review#first-successful-review).
 4. When the review finishes, open **Practices → Practice reviews**. Its feedback is listed under

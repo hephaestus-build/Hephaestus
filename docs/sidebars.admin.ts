@@ -9,8 +9,8 @@ const sidebars: SidebarsConfig = {
 			collapsed: false,
 			items: [
 				{ type: "doc", id: "kubernetes", label: "Kubernetes (Helm chart)" },
-				"first-steps",
 				{ type: "doc", id: "install", label: "Docker Compose (0.x, deprecated)" },
+				"first-steps",
 				"pull-based-deployment",
 				"runtime-roles",
 				"reference-deployment",
