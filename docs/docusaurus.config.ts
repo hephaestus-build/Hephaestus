@@ -182,8 +182,8 @@ const config: Config = {
 				docsDir: ["user", "contributor", "admin"],
 				searchContextByPaths: [
 					{ label: { en: "User guide" }, path: "user" },
-					{ label: { en: "Contributor guide" }, path: "contributor" },
 					{ label: { en: "Admin guide" }, path: "admin" },
+					{ label: { en: "Contributor guide" }, path: "contributor" },
 				],
 				hideSearchBarWithNoSearchContext: false,
 				useAllContextsWithNoSearchContext: true,
@@ -228,17 +228,17 @@ const config: Config = {
 				},
 				{
 					type: "docSidebar",
-					sidebarId: "contributorSidebar",
-					docsPluginId: "contributor-docs",
-					position: "left",
-					label: "Contributor guide",
-				},
-				{
-					type: "docSidebar",
 					sidebarId: "adminSidebar",
 					docsPluginId: "admin-docs",
 					position: "left",
 					label: "Admin guide",
+				},
+				{
+					type: "docSidebar",
+					sidebarId: "contributorSidebar",
+					docsPluginId: "contributor-docs",
+					position: "left",
+					label: "Contributor guide",
 				},
 
 				{
