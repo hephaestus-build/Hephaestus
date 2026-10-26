@@ -23,9 +23,13 @@ import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-/** Allocates drafts only from this attempt's admitted results and verified anchors. */
+/** Allocates drafts only from this attempt's admitted results, verified anchors and permitted text. */
 public final class FeedbackDraftBuilder {
+    private static final Logger log = LoggerFactory.getLogger(FeedbackDraftBuilder.class);
+
     private FeedbackDraftBuilder() {}
 
     public static List<FeedbackDraft> build(
@@ -39,9 +43,21 @@ public final class FeedbackDraftBuilder {
         var byId = admitted.stream().collect(Collectors.toMap(AdmittedResultSnapshot::id, Function.identity()));
         var historyById =
                 historical.stream().collect(Collectors.toMap(ResultHistoryEntry::resultId, Function.identity()));
+        var texts = new FeedbackTextPolicy(admitted);
         var drafts = new ArrayList<FeedbackDraft>();
         for (var piece : request.composition()) {
             if (!allowedResults.containsAll(piece.resultIds())) throw new AdmissionConflictException();
+            var refusal = texts.refusal(piece);
+            if (refusal != null) {
+                log.info(
+                        "Refused composed {} feedback of review job {}: {} in {}",
+                        piece.destination(),
+                        job.getId(),
+                        refusal.rule(),
+                        refusal.field());
+                throw new FeedbackTextRefusedException(
+                        piece.destination(), refusal.rule().name(), refusal.field());
+            }
             var support = piece.resultIds().stream()
                     .filter(byId::containsKey)
                     .map(id -> Objects.requireNonNull(byId.get(id)))

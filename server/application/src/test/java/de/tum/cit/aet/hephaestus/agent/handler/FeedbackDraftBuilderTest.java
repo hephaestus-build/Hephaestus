@@ -24,8 +24,11 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Function;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
 
 class FeedbackDraftBuilderTest extends BaseUnitTest {
@@ -263,5 +266,84 @@ class FeedbackDraftBuilderTest extends BaseUnitTest {
         if (destination == FeedbackDestination.ON_WORK)
             assertThat(stored.publicationContext()).isEqualTo("captured-request-context");
         else assertThat(stored.publicationContext()).isNull();
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        "ON_WORK, summary, summary",
+        "ON_WORK, note, notes[0]",
+        "CONVERSATION, summary, summary",
+        "PRACTICE_PAGE, title, page.title",
+        "PRACTICE_PAGE, body, page.body",
+        "PRACTICE_PAGE, nextStep, page.nextStep"
+    })
+    void shouldRefuseThePackageWhenAnyModelWrittenTextBreaksTheTextPolicy(
+            FeedbackDestination destination, String field, String expectedField) {
+        var job = RuntimeReviewTestData.job();
+        UUID resultId = UUID.randomUUID(), problemId = UUID.randomUUID();
+        var candidate = mock(ResultCandidate.class);
+        when(candidate.developerId()).thenReturn(5L);
+        var admitted = List.of(new AdmittedResultSnapshot(
+                resultId, candidate, List.of(new AdmittedProblemSnapshot(problemId, mock(ProblemCandidate.class)))));
+        var anchors = Map.of(
+                new ComposedFeedback.Anchor(problemId, 0), new FeedbackAnchor("Export.java", 4, 4, CitationSide.NEW));
+        Function<String, PrepareFeedbackRequestDTO> request = words -> {
+            @Nullable String summary = field.equals("summary") ? words : null;
+            var notes = field.equals("note")
+                    ? List.of(new ComposedFeedback.Note(problemId, 0, words))
+                    : List.<ComposedFeedback.Note>of();
+            var page = destination == FeedbackDestination.PRACTICE_PAGE
+                    ? new ComposedFeedback.Page(
+                            field.equals("title") ? words : "Keep the failure cause",
+                            field.equals("body") ? words : "Two handlers drop the cause.",
+                            field.equals("nextStep") ? words : "Rethrow the failure with its cause.")
+                    : null;
+            var copy = switch (destination) {
+                case ON_WORK ->
+                    field.equals("note")
+                            ? new FeedbackCompositionTrace.CopySupport(
+                                    FeedbackCopyKind.LINE_NOTE,
+                                    0,
+                                    List.of(new FeedbackCompositionTrace.Support(resultId, problemId)))
+                            : new FeedbackCompositionTrace.CopySupport(
+                                    FeedbackCopyKind.SUMMARY,
+                                    0,
+                                    List.of(new FeedbackCompositionTrace.Support(resultId, null)));
+                case CONVERSATION ->
+                    new FeedbackCompositionTrace.CopySupport(
+                            FeedbackCopyKind.CHAT_TURN,
+                            0,
+                            List.of(new FeedbackCompositionTrace.Support(resultId, null)));
+                case PRACTICE_PAGE ->
+                    new FeedbackCompositionTrace.CopySupport(
+                            FeedbackCopyKind.SUMMARY, 0, List.of(new FeedbackCompositionTrace.Support(resultId, null)));
+            };
+            var piece = new ComposedFeedback(
+                    destination,
+                    List.of(resultId),
+                    summary,
+                    notes,
+                    null,
+                    new FeedbackCompositionTrace(List.of(copy), List.of(), null, resultId),
+                    page);
+            return new PrepareFeedbackRequestDTO(
+                    job.getReviewId(),
+                    job.getId(),
+                    job.getAttempt(),
+                    List.of(resultId),
+                    List.of(piece),
+                    destination == FeedbackDestination.ON_WORK,
+                    null);
+        };
+        assertThat(FeedbackDraftBuilder.build(
+                        job, request.apply("Keep the failure cause."), admitted, List.of(), anchors))
+                .hasSize(1);
+        assertThatThrownBy(() -> FeedbackDraftBuilder.build(
+                        job, request.apply("Ask @octocat about the cause."), admitted, List.of(), anchors))
+                .isInstanceOfSatisfying(FeedbackTextRefusedException.class, refused -> {
+                    assertThat(refused.destination()).isEqualTo(destination);
+                    assertThat(refused.rule()).isEqualTo("MENTION");
+                    assertThat(refused.field()).isEqualTo(expectedField);
+                });
     }
 }

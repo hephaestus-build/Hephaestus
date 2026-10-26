@@ -137,6 +137,38 @@ void test("an unanswered request remains unavailable without retrying a server s
 	assert.equal(calls, 1);
 });
 
+void test("a text refusal names its rule and field; without them it stays an untyped refusal", async (t) => {
+	for (const [body, expected] of [
+		[
+			{ code: "FEEDBACK_TEXT_REFUSED", destination: "ON_WORK", rule: "LINK", field: "notes[0]" },
+			{
+				state: "REFUSED",
+				publication: "FEEDBACK_TEXT_REFUSED",
+				text: { rule: "LINK", field: "notes[0]" },
+			},
+		],
+		[{ code: "FEEDBACK_TEXT_REFUSED", rule: "LINK" }, { state: "REFUSED" }],
+		[{ code: "FEEDBACK_TEXT_REFUSED", rule: "SPELLING", field: "summary" }, { state: "REFUSED" }],
+	] as const) {
+		let calls = 0;
+		const server = createServer((_request, response) => {
+			calls += 1;
+			response.writeHead(409, { "Content-Type": "application/problem+json" });
+			response.end(JSON.stringify({ status: 409, ...body }));
+		});
+		t.after(() => {
+			server.closeAllConnections();
+			server.close();
+		});
+		const url = await listen(server);
+		assert.deepEqual(
+			await prepareFeedback({ url, token: "synthetic-token", payload, timeoutMs: 10_000 }),
+			expected,
+		);
+		assert.equal(calls, 1);
+	}
+});
+
 void test("a typed publication refusal is final and says that fresh history may help", async (t) => {
 	for (const [body, expected] of [
 		[

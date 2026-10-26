@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.PreparedEvidence;
 import de.tum.cit.aet.hephaestus.agent.handler.AdmissionConflictException;
 import de.tum.cit.aet.hephaestus.agent.handler.EvidenceSnapshotFixtures;
+import de.tum.cit.aet.hephaestus.agent.handler.FeedbackTextRefusedException;
 import de.tum.cit.aet.hephaestus.agent.handler.PublicationContextRefusedException;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.handler.RetainedFeedbackTestData;
@@ -403,6 +404,36 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                     });
             assertThat(sends.findByFeedbackIdAndWorkspaceId(feedbackId, review.workspaceId()))
                     .hasValueSatisfying(send -> assertThat(send.getState()).isEqualTo(FeedbackSendState.DONE));
+        }
+    }
+
+    @Test
+    void shouldStoreNoFeedbackWhenTheComposedTextLinksBeyondTheCompositionInput() {
+        try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
+            var response = admission.admit(review.identity(), request(review));
+            var context = admission.publicFeedbackHistory(review.identity()).publicationContext();
+
+            assertThatThrownBy(() -> admission.prepareFeedback(
+                            review.identity(),
+                            composition(
+                                    review,
+                                    response,
+                                    SUMMARY + " See [the fix](https://other.example.net/fix).",
+                                    context)))
+                    .isInstanceOfSatisfying(FeedbackTextRefusedException.class, refused -> {
+                        assertThat(refused.rule()).isEqualTo("LINK");
+                        assertThat(refused.field()).isEqualTo("summary");
+                    });
+
+            assertThat(feedback.findByWorkspaceIdAndReviewIdOrderByCreatedAtAscIdAsc(
+                            review.workspaceId(), review.reviewId()))
+                    .isEmpty();
+            assertThat(jobs.findById(review.identity().jobId()).orElseThrow().getPublicReviewDigest())
+                    .isNull();
+            assertThat(admission
+                            .prepareFeedback(review.identity(), composition(review, response, SUMMARY, context))
+                            .feedbackIds())
+                    .containsExactly(FeedbackIds.onWork(review.workspaceId(), review.reviewId(), review.developerId()));
         }
     }
 

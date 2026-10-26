@@ -30,6 +30,7 @@ import {
 	type FeedbackPreparation,
 	type FeedbackPreparationReceipt,
 	type PublicationRefusal,
+	type TextRefusal,
 } from "./pi-feedback-preparation.ts";
 import { trimmedText } from "./pi-result-normalize.ts";
 import {
@@ -928,7 +929,7 @@ export async function prepareComposedFeedback(options: PreparationOptions): Prom
 				options.recordFailure("PUBLIC_REVIEW", result.publication ?? "SERVER_REFUSED");
 			} else if (entry.privateIndex !== undefined) {
 				refused.add(entry.privateIndex);
-				options.recordFailure("PRIVATE_FEEDBACK", "SERVER_REFUSED");
+				options.recordFailure("PRIVATE_FEEDBACK", result.publication ?? "SERVER_REFUSED");
 			}
 		}
 		if (result.state === "PREPARED") {
@@ -1084,6 +1085,31 @@ export const MAX_PUBLIC_RECOMPOSITIONS = 2;
 
 const REVIEW_FINAL = "The review on this work is final; this composition accepts nothing more.";
 
+const TEXT_RULES: Record<TextRefusal["rule"], string> = {
+	LINK: "has a link that no cited quote supplies. Write no links: Hephaestus adds its own",
+	MENTION:
+		"has an @-mention or Slack mention. Mention no one, and put code such as `@Override` in backticks",
+	HTML: "has raw HTML. Put code such as `List<String>` in backticks",
+	IMAGE: "has an image. Write no images",
+	HIDDEN_CHARACTER: "has a hidden or direction-changing character. Remove it",
+};
+
+/** What the composer must rewrite: the server names the rule and the field, never the text. */
+export function textRefusal({ rule, field }: TextRefusal): string {
+	return `${fieldName(field)} ${TEXT_RULES[rule]}.`;
+}
+
+function fieldName(field: string): string {
+	if (field === "summary") {
+		return "The summary";
+	}
+	const note = /^notes\[(?<index>\d+)\]$/u.exec(field)?.groups?.index;
+	if (note !== undefined) {
+		return `Inline note ${Number(note) + 1}`;
+	}
+	return `The card's ${field === "page.nextStep" ? "next step" : field.slice("page.".length)}`;
+}
+
 type ReviewToolRuntime = Pick<
 	FeedbackToolRuntime,
 	"admitted" | "feedback" | "persist" | "onStored"
@@ -1178,6 +1204,16 @@ export function createReviewRecorder(
 			throw error;
 		}
 		const prepared = await runtime.preparePublic?.();
+		if (prepared?.state === "REFUSED" && prepared.publication === "FEEDBACK_TEXT_REFUSED") {
+			// The server prepared nothing and named the text to rewrite; this session may send the review again.
+			runtime.feedback.review = previous;
+			runtime.feedback.publicationContext = previousContext;
+			runtime.persist();
+			return runtime.refusal(
+				toolCallId,
+				`review refused, nothing was stored: ${textRefusal(prepared.text)}\nSend the whole review again.`,
+			);
+		}
 		if (prepared?.state === "REFUSED" && prepared.publication !== undefined) {
 			// The server prepared nothing. Changed history earns a fresh session; unknown delivery requires readback.
 			runtime.feedback.review = previous;

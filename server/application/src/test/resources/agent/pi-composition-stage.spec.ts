@@ -13,10 +13,12 @@ import {
 	persistComposedFeedback,
 	compositionOwed,
 	stagePrivateHistory,
+	textRefusal,
 	undecidedPrivatePractices,
 	type ComposedFeedback,
 	type PublicReviewState,
 } from "../../../main/resources/agent/pi-composition-stage.ts";
+import type { FeedbackPreparation } from "../../../main/resources/agent/pi-feedback-preparation.ts";
 
 const notOnRecord = (reason: string, destination: string) =>
 	new RegExp(`${reason} rests on feedback recorded as delivered on ${destination}`, "u");
@@ -83,6 +85,106 @@ void test("a review becomes final only after its complete envelope is written", 
 	} finally {
 		rmSync(cwd, { recursive: true, force: true });
 	}
+});
+
+void test("a text the server's policy refuses stores nothing and the same session may send the review again", async () => {
+	const feedback: ComposedFeedback = {
+		compositionFailures: [],
+		contractVersion: 3,
+		admissionDigest: "a".repeat(64),
+		results: [],
+		preparedTargets: [],
+		feedback: [],
+		review: null,
+		preparation: null,
+	};
+	const state: PublicReviewState = { final: false, reviewContext: "HELD" };
+	const resultId = "123e4567-e89b-42d3-a456-426614174000";
+	const sent: (string | undefined)[] = [];
+	const answers: FeedbackPreparation[] = [
+		{
+			state: "REFUSED",
+			publication: "FEEDBACK_TEXT_REFUSED",
+			text: { rule: "LINK", field: "summary" },
+		},
+		{
+			state: "PREPARED",
+			receipt: {
+				feedbackIds: [],
+				preparedAt: "2026-10-25T00:00:00Z",
+				contentDigest: "b".repeat(64),
+			},
+		},
+	];
+	const record = createReviewRecorder(
+		false,
+		new Map([
+			[
+				resultId,
+				{
+					practiceSlug: "handles-errors",
+					outcome: "NOT_MET",
+					problems: [{ problemId: "problem-1", citations: [] }],
+				},
+			],
+		]),
+		new Map(),
+		state,
+		() => "",
+		{
+			admitted: () => true,
+			feedback,
+			persist: () => undefined,
+			onStored: () => undefined,
+			refusal: async (_id, text) => ({ content: [{ type: "text", text }], details: { stored: 0 } }),
+			preparePublic: async () => {
+				sent.push(feedback.review?.summary?.body);
+				return answers.shift() ?? null;
+			},
+		},
+	);
+	const review = (body: string) => ({
+		decisions: [{ resultId, disposition: "RAISE" }],
+		summary: { body, basedOn: [resultId] },
+	});
+
+	const refused = await record(
+		"first",
+		review("Keep the cause, see https://other.example.net/fix."),
+	);
+	assert.equal(refused.details.stored, 0);
+	assert.equal(refused.terminate, undefined);
+	const [said] = refused.content;
+	assert.ok(said?.type === "text");
+	assert.match(
+		said.text,
+		/^review refused, nothing was stored: The summary has a link that no cited quote supplies\./u,
+	);
+	assert.match(said.text, /Send the whole review again\.$/u);
+	assert.equal(feedback.review, null);
+	assert.equal(state.final, false);
+
+	const stored = await record(
+		"second",
+		review("Keep the failure cause when the handler gives up."),
+	);
+	assert.equal(stored.details.stored, 1);
+	assert.equal(state.final, true);
+	assert.deepEqual(sent, [
+		"Keep the cause, see https://other.example.net/fix.",
+		"Keep the failure cause when the handler gives up.",
+	]);
+});
+
+void test("a text refusal names the field the composer wrote", () => {
+	assert.equal(
+		textRefusal({ rule: "MENTION", field: "notes[1]" }),
+		"Inline note 2 has an @-mention or Slack mention. Mention no one, and put code such as `@Override` in backticks.",
+	);
+	assert.equal(
+		textRefusal({ rule: "HIDDEN_CHARACTER", field: "page.nextStep" }),
+		"The card's next step has a hidden or direction-changing character. Remove it.",
+	);
 });
 
 void test("missing private routing closes only that destination and records its own failure", () => {
@@ -774,69 +876,84 @@ void test("preparation retains exact copy support, the second citation, quiet wi
 	assert.match(text, new RegExp(`"replacesId":"${previousId}"`, "u"));
 });
 
-void test("a refused private package preserves accepted public feedback", async (t) => {
+void test("a refused private package preserves accepted public feedback and records its typed reason", async (t) => {
 	const { prepareComposedFeedback } =
 		await import("../../../main/resources/agent/pi-composition-stage.ts");
-	const resultId = "00000000-0000-4000-8000-000000000001";
-	const feedback: ComposedFeedback = {
-		contractVersion: 3,
-		admissionDigest: "a".repeat(64),
-		compositionFailures: [],
-		preparedTargets: [],
-		preparation: null,
-		results: [
-			{ resultId, practiceSlug: "tokens", outcome: "NOT_MET", problems: [], citations: [] },
-		],
-		review: {
-			summary: { body: "Check the token before forwarding.", basedOn: [{ resultId }] },
-			inline: [],
-			withheld: [],
-		},
-		feedback: [
+	for (const [refusal, recorded] of [
+		[null, "SERVER_REFUSED"],
+		[
 			{
+				code: "FEEDBACK_TEXT_REFUSED",
 				destination: "CONVERSATION",
-				practiceSlug: "tokens",
-				action: "NEW",
-				basedOn: [{ resultId }],
-				title: "Token boundaries",
-				notes: {
-					situation: "Unchecked tokens.",
-					capability: "Locate the boundary.",
-					evidenceSummary: "The handler forwards unchecked tokens.",
-					inConversationLearning: "Explain the boundary.",
-				},
+				rule: "MENTION",
+				field: "summary",
 			},
+			"FEEDBACK_TEXT_REFUSED",
 		],
-	};
-	let calls = 0;
-	t.mock.method(globalThis, "fetch", async () => {
-		calls += 1;
-		return calls === 1
-			? Response.json({
-					feedbackIds: [],
-					contentDigest: "a".repeat(64),
-					preparedAt: "2026-10-15T00:00:00Z",
-				})
-			: new Response(null, { status: 409 });
-	});
-	const failures: string[] = [];
-	await prepareComposedFeedback({
-		feedback,
-		admitted: true,
-		expired: false,
-		url: "https://example.test/prepare",
-		token: "synthetic",
-		task: { reviewId: resultId, jobId: resultId, attempt: 0 },
-		timeoutMs: 1000,
-		persist: () => undefined,
-		recordFailure: (phase, reason) => {
-			failures.push(`${phase}:${reason}`);
-		},
-	});
-	assert.ok(feedback.review?.summary);
-	assert.equal(feedback.preparation?.contentDigest, "a".repeat(64));
-	assert.deepEqual(feedback.feedback, []);
-	assert.deepEqual(failures, ["PRIVATE_FEEDBACK:SERVER_REFUSED"]);
+	] as const) {
+		const resultId = "00000000-0000-4000-8000-000000000001";
+		const feedback: ComposedFeedback = {
+			contractVersion: 3,
+			admissionDigest: "a".repeat(64),
+			compositionFailures: [],
+			preparedTargets: [],
+			preparation: null,
+			results: [
+				{ resultId, practiceSlug: "tokens", outcome: "NOT_MET", problems: [], citations: [] },
+			],
+			review: {
+				summary: { body: "Check the token before forwarding.", basedOn: [{ resultId }] },
+				inline: [],
+				withheld: [],
+			},
+			feedback: [
+				{
+					destination: "CONVERSATION",
+					practiceSlug: "tokens",
+					action: "NEW",
+					basedOn: [{ resultId }],
+					title: "Token boundaries",
+					notes: {
+						situation: "Unchecked tokens.",
+						capability: "Locate the boundary.",
+						evidenceSummary: "The handler forwards unchecked tokens.",
+						inConversationLearning: "Explain the boundary.",
+					},
+				},
+			],
+		};
+		const refusedBody = refusal === null ? null : JSON.stringify(refusal);
+		let calls = 0;
+		t.mock.method(globalThis, "fetch", async () => {
+			calls += 1;
+			return calls === 1
+				? Response.json({
+						feedbackIds: [],
+						contentDigest: "a".repeat(64),
+						preparedAt: "2026-10-15T00:00:00Z",
+					})
+				: new Response(refusedBody, { status: 409 });
+		});
+		const failures: string[] = [];
+		await prepareComposedFeedback({
+			feedback,
+			admitted: true,
+			expired: false,
+			url: "https://example.test/prepare",
+			token: "synthetic",
+			task: { reviewId: resultId, jobId: resultId, attempt: 0 },
+			timeoutMs: 1000,
+			persist: () => undefined,
+			recordFailure: (phase, reason) => {
+				failures.push(`${phase}:${reason}`);
+			},
+		});
+		assert.ok(feedback.review?.summary);
+		assert.equal(feedback.preparation?.contentDigest, "a".repeat(64));
+		assert.deepEqual(feedback.feedback, []);
+		assert.deepEqual(failures, [`PRIVATE_FEEDBACK:${recorded}`]);
+		t.mock.restoreAll();
+	}
 });
 
 void test("the card tool and preparation share the server's title/body/nextStep fixture", async (t) => {
@@ -1248,6 +1365,7 @@ void test("only composition the run stopped is owed: the review on the work from
 		"SERVER_REFUSED",
 		"PUBLIC_DELIVERY_UNRESOLVED",
 		"PUBLIC_HISTORY_CHANGED",
+		"FEEDBACK_TEXT_REFUSED",
 	] as const) {
 		const owed = { admitting: true, reviewOnWork: true };
 		assert.equal(
