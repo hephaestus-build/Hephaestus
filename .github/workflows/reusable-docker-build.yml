@@ -409,6 +409,8 @@ jobs:
     # A skipped build means the push reuses every selected image from the merge queue.
     if: ${{ inputs.publish && !cancelled() && (needs.build.result == 'success' || needs.build.result == 'skipped') }}
     permissions:
+      # Compares this commit with the one the branch tag names.
+      contents: read
       packages: write
       id-token: write
       attestations: write
@@ -671,20 +673,25 @@ jobs:
       - name: Publish verified image tags
         env:
           DIGESTS: ${{ toJSON(steps.digest.outputs) }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          # Runs on main do not wait for each other, so an older commit's run can finish last. Only the
-          # run of the branch's current head moves the branch tag, checked just before it moves; every
-          # run keeps its commit tag. An unreadable head leaves the branch tag where it is.
+          # Runs on main do not wait for each other, so an older commit's run can finish last. The branch
+          # tag moves only forward: it stays when the commit it names already descends from this one. A
+          # run moves all four branch tags together, so the webapp image's revision label names that
+          # commit. An unreadable label or comparison moves the tag, so it never stays behind.
           stale=""
           if [ "$GITHUB_EVENT_NAME" = push ]; then
-            head=$(git ls-remote "https://github.com/$GITHUB_REPOSITORY.git" "$GITHUB_REF" | cut -f1 || true)
-            if [[ ! "$head" =~ ^[0-9a-f]{40}$ ]]; then
-              echo "::warning::Could not read the head of $GITHUB_REF; the $GITHUB_REF_NAME tag stays where it is"
-              stale="$GITHUB_REF_NAME"
-            elif [ "$head" != "$GITHUB_SHA" ]; then
-              echo "$GITHUB_REF_NAME is at $head, so the $GITHUB_REF_NAME tag stays where it is"
-              stale="$GITHUB_REF_NAME"
+            current=$(docker buildx imagetools inspect "$INPUTS_REGISTRY/hephaestus-build/webapp:$GITHUB_REF_NAME" \
+              --format '{{ json .Image }}' 2>/dev/null |
+              jq -r '[.. | objects | .config?.Labels?["org.opencontainers.image.revision"]? // empty][0] // empty' ||
+              true)
+            if [[ "$current" =~ ^[0-9a-f]{40}$ ]]; then
+              status=$(gh api "repos/$GITHUB_REPOSITORY/compare/$GITHUB_SHA...$current" --jq .status || true)
+              if [ "$status" = ahead ] || [ "$status" = identical ]; then
+                echo "The $GITHUB_REF_NAME tag names $current, which descends from this commit, so it stays"
+                stale="$GITHUB_REF_NAME"
+              fi
             fi
           fi
           for name in $(jq -r '.[]' <<< "$IMAGES"); do

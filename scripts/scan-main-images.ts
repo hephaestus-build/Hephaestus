@@ -28,7 +28,7 @@ import { PLATFORMS } from "./scan-upstream-images.ts";
 /**
  * The first-party images to scan, in inventory order.
  *
- * `reusable-docker-build.yml` moves the `github.ref_name` tag on the push run of main's head, so
+ * `reusable-docker-build.yml` moves the `github.ref_name` tag forward on every push, so
  * `<registry>/<owner>/<image>:main` names the newest main build that published, and nothing new has to
  * be published for this to have a subject.
  */

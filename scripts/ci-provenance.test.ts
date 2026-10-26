@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
+import { spawnSync, type SpawnSyncReturns } from "node:child_process";
 import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -904,7 +904,7 @@ if (tool === 'docker' && args.includes('--format')) {
 
 // The publish step runs on Linux; the other tests that run workflow shell skip Windows too.
 void test(
-	"only the run of the branch's head moves the branch tag",
+	"the branch tag only moves forward",
 	{ skip: process.platform === "win32" },
 	async (t) => {
 		const reusable = parseDocument(
@@ -922,15 +922,24 @@ void test(
 		const webapp = "ghcr.io/hephaestus-build/webapp";
 		const published = `sha256:${"a".repeat(64)}`;
 		const commit = "c".repeat(40);
-		for (const tool of ["docker", "git"]) {
+		const tagged = "d".repeat(40);
+		// `docker` reads the branch tag's revision label and records the tags it publishes; `gh` answers
+		// the comparison of this commit with the tagged one.
+		for (const tool of ["docker", "gh"]) {
 			await writeFile(
 				path.join(directory, tool),
 				`#!/usr/bin/env node
 const fs = require('node:fs');
 const args = process.argv.slice(2);
-if (require('node:path').basename(process.argv[1]) === 'git') {
-  if (process.env.HEAD === 'unreadable') process.exit(128);
-  process.stdout.write(process.env.HEAD + '\\trefs/heads/main\\n');
+if (require('node:path').basename(process.argv[1]) === 'gh') {
+  if (process.env.COMPARE === 'fail') process.exit(1);
+  process.stdout.write(process.env.COMPARE + '\\n');
+  process.exit(0);
+}
+if (args.includes('inspect')) {
+  if (process.env.LABEL === 'none') process.exit(1);
+  const labels = { 'org.opencontainers.image.revision': process.env.LABEL };
+  process.stdout.write(JSON.stringify({ 'linux/amd64': { config: { Labels: labels } } }));
   process.exit(0);
 }
 fs.appendFileSync(process.env.CALL_LOG, JSON.stringify(args.filter((arg, i) => args[i - 1] === '--tag')) + '\\n');
@@ -940,18 +949,22 @@ fs.writeFileSync(args[index + 1], JSON.stringify({ 'containerimage.descriptor': 
 			);
 			await chmod(path.join(directory, tool), 0o755);
 		}
-		for (const [event, head, tags] of [
-			["push", commit, [`${webapp}:main`, `${webapp}:ci-7`, `${webapp}:${commit}`]],
-			["push", "d".repeat(40), [`${webapp}:ci-7`, `${webapp}:${commit}`]],
-			["push", "unreadable", [`${webapp}:ci-7`, `${webapp}:${commit}`]],
-			["merge_group", "d".repeat(40), [`${webapp}:${commit}`]],
+		const all = [`${webapp}:main`, `${webapp}:ci-7`, `${webapp}:${commit}`];
+		const withoutBranch = [`${webapp}:ci-7`, `${webapp}:${commit}`];
+		for (const [event, label, comparison, tags] of [
+			// The tag names an older commit: it moves forward.
+			["push", tagged, "behind", all],
+			// The tag names a newer commit: it stays.
+			["push", tagged, "ahead", withoutBranch],
+			["push", commit, "identical", withoutBranch],
+			// Nothing tells the order: it moves, so it never stays behind.
+			["push", "none", "behind", all],
+			["push", tagged, "fail", all],
+			["merge_group", tagged, "ahead", [`${webapp}:${commit}`]],
 		] as const) {
 			await writeFile(log, "");
-			const metadata =
-				event === "push"
-					? [`${webapp}:main`, `${webapp}:ci-7`, `${webapp}:${commit}`]
-					: [`${webapp}:${commit}`];
-			const result: ReturnType<typeof spawnSync> = spawnSync(
+			const metadata = event === "push" ? all : [`${webapp}:${commit}`];
+			const result: SpawnSyncReturns<string> = spawnSync(
 				"bash",
 				["-e", "-c", String(publication.get("run"))],
 				{
@@ -961,11 +974,11 @@ fs.writeFileSync(args[index + 1], JSON.stringify({ 'containerimage.descriptor': 
 						PATH: `${directory}${path.delimiter}${process.env.PATH ?? ""}`,
 						CALL_LOG: log,
 						DIGEST: published,
-						HEAD: head,
+						LABEL: label,
+						COMPARE: comparison,
 						RUNNER_TEMP: directory,
 						GITHUB_EVENT_NAME: event,
 						GITHUB_REPOSITORY: "hephaestus-build/Hephaestus",
-						GITHUB_REF: "refs/heads/main",
 						GITHUB_REF_NAME: "main",
 						GITHUB_SHA: commit,
 						DOCKER_METADATA_OUTPUT_JSON: JSON.stringify({ tags: metadata }),
@@ -975,9 +988,9 @@ fs.writeFileSync(args[index + 1], JSON.stringify({ 'containerimage.descriptor': 
 					},
 				},
 			);
-			assert.equal(result.status, 0, String(result.stderr));
+			assert.equal(result.status, 0, result.stderr);
 			const calls = await readFile(log, "utf8");
-			assert.deepEqual(JSON.parse(calls.trim()), tags, `${event} at ${head}`);
+			assert.deepEqual(JSON.parse(calls.trim()), tags, `${event}, tag at ${label}, ${comparison}`);
 		}
 	},
 );
