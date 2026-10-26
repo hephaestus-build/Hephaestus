@@ -13,22 +13,11 @@ Maintainers triage issues and pull requests as time permits.
 Security reports are the exception and get priority.
 See [SECURITY.md](SECURITY.md) for how to report vulnerabilities privately.
 
-## Identity and Transparency
+## Branches and Forks
 
-We have different guidelines for members of our organization and external contributors.
-These guidelines support transparency and trust.
-
-### For Members of Our Organization
-
-1. **Real Names Required**: Members must use their full real name in their GitHub profile for accountability.
-2. **Profile Picture**: Members must upload an authentic, professional profile picture. Comic-style images or avatars are not permitted.
-3. **Internal Workflow**: Members should create branches and pull requests directly within the repository.
-
-### For External Contributors
-
-1. **Identity Verification**: Contributions are only accepted from users with real names and authentic profile pictures.
-2. **Forking**: Fork the repository and work on changes in your own branch.
-3. **Pull Request**: Submit a PR from your fork. Make sure your branch is up to date with `main`.
+- Members of our organization create branches and pull requests directly within the repository.
+- External contributors fork the repository and work on a branch of the fork.
+  Submit the pull request from the fork. Make sure your branch is up to date with `main`.
 
 ### Signed Commits
 
