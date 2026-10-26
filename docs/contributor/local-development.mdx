@@ -412,6 +412,23 @@ The command checks these first and names each missing item.
 On macOS, `brew install k3d helm kubectl` installs three of the tools.
 If the `buildpacks/tap/pack` formula fails, use the `pack` release archive.
 
+The native stack (`vp run dev`) is the default inner loop.
+It reloads the webapp at once. Your IDE starts and debugs the JVM.
+It has no NetworkPolicy, no Jobs, no Gateway and no Kubernetes sandbox backend.
+
+Use the cluster before you push a change to one of these:
+
+- The Helm chart (`deploy/chart/`) or its script (`scripts/kubernetes-cluster.ts`).
+- The Kubernetes sandbox backend or the agent gateway of the worker.
+- A runtime role, or a setting that a role binds at start.
+- The agent or PostgreSQL image.
+
+CI runs the cluster jobs for most of these paths, and `vp run check:affected` reminds you of them.
+Debug a defect in the native stack when you can.
+In the cluster, follow the logs of a role with the `kubectl` command that `dev:kubernetes` prints.
+
+`vp run dev:kubernetes` does these steps:
+
 1. It creates the k3d cluster `hephaestus` with two nodes and publishes port 443 on the loopback address only.
    Port 443 must be free. The check stops the command when a program holds it.
    It also creates a local registry, which the nodes use as a mirror of `ghcr.io`.
