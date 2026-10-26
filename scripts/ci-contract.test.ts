@@ -5249,7 +5249,22 @@ void test("a cluster leg is named for its distribution, minor and architecture, 
 	);
 });
 
-void test("a pull request runs the chart and the latest k3s; the floor, kind and the drill wait for the queue", async () => {
+/** Evaluates a `ci-kubernetes.yml` expression for one leg and one value of the `queue` input. */
+function evaluateLeg(source: unknown, queue: boolean, leg: Record<string, string> = {}): string {
+	const parsed = new Parser(
+		new Lexer(String(source).replaceAll(/^\$\{\{\s*|\s*\}\}$/gu, "")).lex().tokens,
+		["inputs", "matrix"],
+		[],
+	).parse();
+	const context: unknown = JSON.parse(
+		JSON.stringify({ inputs: { queue }, matrix: leg }),
+		data.reviver,
+	);
+	assert.ok(context instanceof data.Dictionary);
+	return new Evaluator(parsed, context).evaluate().coerceString();
+}
+
+void test("a pull request runs the chart and the latest k3s on amd64; the queue adds the floor on both architectures, kind and the drill", async () => {
 	const kubernetes = parseDocument(await readFile(".github/workflows/ci-kubernetes.yml", "utf8"));
 	const cicd = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
 	const queue = String(cicd.getIn(["jobs", "Kubernetes", "with", "queue"]));
@@ -5257,28 +5272,49 @@ void test("a pull request runs the chart and the latest k3s; the floor, kind and
 	for (const event of ["merge_group", "push", "workflow_dispatch"]) {
 		assert.match(queue, new RegExp(`github\\.event_name == '${event}'`, "u"));
 	}
-	assert.equal(kubernetes.getIn(["jobs", "calico", "if"]), "inputs.queue");
-	const exclude = kubernetes.getIn(["jobs", "k3d", "strategy", "matrix", "exclude"]);
-	assert.ok(isSeq(exclude));
-	assert.ok(
-		exclude.items.some(
-			(entry) =>
-				isMap(entry) &&
-				/^\$\{\{ !inputs\.queue && '1\.35' \|\| 'none' \}\}$/u.test(String(entry.get("minor"))),
-		),
-	);
+
+	// The matrix GitHub expands: every minor and architecture, less each exclude that matches.
+	const matrix = kubernetes.getIn(["jobs", "k3d", "strategy", "matrix"]);
+	assert.ok(isMap(matrix));
+	const minors = matrix.get("minor");
+	const arches = matrix.get("arch");
+	const exclude = matrix.get("exclude");
+	assert.ok(isSeq(minors) && isSeq(arches) && isSeq(exclude));
 	const steps = kubernetes.getIn(["jobs", "k3d", "steps"]);
 	assert.ok(isSeq(steps));
 	const drill = steps.items.find(
 		(item) => isMap(item) && item.get("name") === "Back up, then restore to a point in time",
 	);
 	assert.ok(isMap(drill));
-	// arm64 runs the lowest minor alone, which only the queue runs.
-	assert.ok(
-		exclude.items.some(
-			(entry) => isMap(entry) && entry.get("minor") === "1.37" && entry.get("arch") === "arm64",
-		),
-	);
+	const legs = (tier: boolean) =>
+		minors.items.flatMap((minor) =>
+			arches.items
+				.map((arch) => ({ minor: String(minor), arch: String(arch) }))
+				.filter(
+					(leg) =>
+						!exclude.items.some(
+							(entry) =>
+								isMap(entry) &&
+								entry.items.every(
+									(pair) =>
+										// An exclude value is a literal unless it is a `${{ }}` expression.
+										(String(pair.value).startsWith("${{")
+											? evaluateLeg(pair.value, tier)
+											: String(pair.value)) ===
+										(String(pair.key) === "minor" ? leg.minor : leg.arch),
+								),
+						),
+				)
+				.map(
+					(leg) =>
+						`${leg.minor} ${leg.arch}${evaluateLeg(drill.get("if"), tier, leg) === "true" ? " drill" : ""}`,
+				),
+		);
+	assert.deepEqual(legs(false), ["1.37 amd64"]);
+	assert.deepEqual(legs(true), ["1.35 amd64", "1.35 arm64", "1.37 amd64 drill"]);
+	assert.equal(evaluateLeg(kubernetes.getIn(["jobs", "calico", "if"]), false), "false");
+	assert.equal(evaluateLeg(kubernetes.getIn(["jobs", "calico", "if"]), true), "true");
+
 	// kubeconform validates the render on the lowest and the latest minor of the legs.
 	const schemaSteps = kubernetes.getIn(["jobs", "schema", "steps"]);
 	assert.ok(isSeq(schemaSteps));
@@ -5286,22 +5322,9 @@ void test("a pull request runs the chart and the latest k3s; the floor, kind and
 		(item) => isMap(item) && String(item.get("name")).startsWith("Lint the chart"),
 	);
 	assert.ok(isMap(lintStep));
-	const lint = String(lintStep.get("run"));
-	const legMinors = kubernetes.getIn(["jobs", "k3d", "strategy", "matrix", "minor"]);
-	assert.ok(isSeq(legMinors));
+	const versions = minors.items.map((minor) => `${String(minor)}.0`);
 	assert.match(
-		lint,
-		new RegExp(
-			`for version in ${legMinors.items.map((minor) => `${String(minor)}\\.0`).join(" ")}; do`,
-			"u",
-		),
-	);
-	// The drill runs on the latest minor, in the queue only.
-	const minors = kubernetes.getIn(["jobs", "k3d", "strategy", "matrix", "minor"]);
-	assert.ok(isSeq(minors));
-	const latest = String(minors.items.at(-1));
-	assert.equal(
-		String(drill.get("if")),
-		`\${{ inputs.queue && matrix.minor == '${latest}' && matrix.arch == 'amd64' }}`,
+		String(lintStep.get("run")),
+		new RegExp(`for version in ${versions.join(" ").replaceAll(".", String.raw`\.`)}; do`, "u"),
 	);
 });
