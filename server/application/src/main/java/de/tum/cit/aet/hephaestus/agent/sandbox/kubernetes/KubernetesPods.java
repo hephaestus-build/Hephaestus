@@ -667,6 +667,26 @@ public class KubernetesPods {
         }
     }
 
+    /**
+     * The last {@code lines} lines of the container's log, read with the log API's own bounds, or empty when it cannot
+     * be read.
+     */
+    public String tail(String name, String container, int lines, int bytes) {
+        try {
+            String text = client.pods()
+                    .inNamespace(worker.namespace())
+                    .withName(name)
+                    .inContainer(container)
+                    .limitBytes(bytes)
+                    .tailingLines(lines)
+                    .getLog();
+            return text == null ? "" : text;
+        } catch (KubernetesClientException e) {
+            log.debug("Could not read the log tail of sandbox Pod {}: HTTP {}", name, e.getCode());
+            return "";
+        }
+    }
+
     // --- Pod state ---
 
     public static boolean terminal(Pod pod) {

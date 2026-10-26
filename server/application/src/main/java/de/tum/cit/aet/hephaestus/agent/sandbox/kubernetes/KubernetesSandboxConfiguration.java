@@ -16,6 +16,7 @@ import io.fabric8.kubernetes.client.KubernetesClient;
 import io.fabric8.kubernetes.client.KubernetesClientBuilder;
 import io.fabric8.kubernetes.client.KubernetesClientException;
 import io.micrometer.core.instrument.Gauge;
+import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.binder.MeterBinder;
 import java.time.Duration;
 import org.slf4j.Logger;
@@ -98,12 +99,18 @@ public class KubernetesSandboxConfiguration {
     }
 
     @Bean
+    public SandboxExits sandboxExits(KubernetesPods pods, MeterRegistry meters) {
+        return new SandboxExits(pods, meters);
+    }
+
+    @Bean
     public SandboxBackend kubernetesSandboxBackend(
             KubernetesPods pods,
             KubernetesReviewJobs reviewJobs,
             KubernetesWorker worker,
-            KubernetesLiveWorkers liveWorkers) {
-        return new KubernetesSandboxBackend(pods, reviewJobs, worker, liveWorkers);
+            KubernetesLiveWorkers liveWorkers,
+            SandboxExits exits) {
+        return new KubernetesSandboxBackend(pods, reviewJobs, worker, liveWorkers, exits);
     }
 
     @Bean(destroyMethod = "close")
@@ -112,9 +119,10 @@ public class KubernetesSandboxConfiguration {
             KubernetesPods pods,
             KubernetesWorker worker,
             AgentImageProperties agentImageProperties,
-            KubernetesLiveWorkers liveWorkers) {
+            KubernetesLiveWorkers liveWorkers,
+            SandboxExits exits) {
         return new KubernetesExecSandboxes(
-                sandboxKubernetesClient, pods, worker, agentImageProperties.reference(), liveWorkers);
+                sandboxKubernetesClient, pods, worker, agentImageProperties.reference(), liveWorkers, exits);
     }
 
     @Bean

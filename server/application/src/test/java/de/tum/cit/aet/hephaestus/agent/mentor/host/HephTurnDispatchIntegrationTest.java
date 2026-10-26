@@ -47,6 +47,7 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import org.hibernate.Session;
 import org.hibernate.SessionEventListener;
@@ -133,6 +134,10 @@ class HephTurnDispatchIntegrationTest extends AbstractWorkspaceIntegrationTest {
     private final class FakeHost extends HephHost {
         final BlockingQueue<JsonNode> frames = new LinkedBlockingQueue<>();
         volatile boolean starts = true;
+
+        /** How many of the next starts fail, as a host that exits before its channel opens. */
+        final AtomicInteger failsFirst = new AtomicInteger();
+
         volatile @Nullable RuntimeException breaksOnce;
         volatile Runnable beforeStart = () -> {};
         volatile Runnable lost = () -> {};
@@ -162,6 +167,9 @@ class HephTurnDispatchIntegrationTest extends AbstractWorkspaceIntegrationTest {
             if (failure != null) {
                 breaksOnce = null;
                 throw failure;
+            }
+            if (failsFirst.getAndUpdate(left -> Math.max(0, left - 1)) > 0) {
+                return false;
             }
             return starts;
         }
@@ -440,6 +448,19 @@ class HephTurnDispatchIntegrationTest extends AbstractWorkspaceIntegrationTest {
         await().atMost(NOTIFIED).until(() -> row(asked).getStatus() == MentorTurn.Status.FAILED);
         assertThat(row(asked).getError()).isEqualTo(HephTurnDispatcher.COULD_NOT_START);
         assertThat(host.frames).isEmpty();
+    }
+
+    @Test
+    void shouldStartTheTurnOnceOnAFreshHostWhenTheFirstHostDidNotStart() throws Exception {
+        host.failsFirst.set(1);
+
+        MentorTurn asked = ask("Anything new?");
+
+        assertThat(host.next("start").path("turnId").asString())
+                .isEqualTo(asked.getId().toString());
+        assertThat(host.frames)
+                .noneMatch(frame -> "start".equals(frame.path("type").asString()));
+        assertThat(row(asked).getStatus()).isEqualTo(MentorTurn.Status.RUNNING);
     }
 
     @Test

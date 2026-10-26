@@ -84,6 +84,9 @@ public final class AgentMetrics {
     public static final String SANDBOX_IMAGE_PULL_DURATION = "sandbox.image.pull.duration";
     public static final String SANDBOX_IMAGE_PULL_FAILURE = "sandbox.image.pull.failure";
     public static final String SANDBOX_IMAGE_PULL_SKIPPED = "sandbox.image.pull.skipped";
+    /** Sandbox Pods removed, tagged by {@code kind} (what they ran) and {@code reason} (why they ended). */
+    public static final String SANDBOX_EXITS = "sandbox.exits";
+
     public static final String SANDBOX_ISOLATION_PASSED = "sandbox.isolation.passed";
     public static final String SANDBOX_ISOLATION_PROCESS_LIMIT = "sandbox.isolation.process_limit";
     public static final String SANDBOX_ISOLATION_USER_NAMESPACES = "sandbox.isolation.user_namespaces";

@@ -26,6 +26,7 @@ import io.fabric8.mockwebserver.http.RecordedRequest;
 import io.fabric8.mockwebserver.http.Response;
 import io.fabric8.mockwebserver.http.WebSocket;
 import io.fabric8.mockwebserver.http.WebSocketListener;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import io.vertx.core.Handler;
 import io.vertx.core.Vertx;
 import io.vertx.core.buffer.Buffer;
@@ -630,12 +631,14 @@ class KubernetesExecSandboxesTest {
                 new KubernetesClientBuilder().withConfig(config).build();
         client = shared;
         var worker = KubernetesFixtures.worker(TURNS);
+        var pods = new KubernetesPods(shared, worker, 10, ImagePullPolicy.IF_NOT_PRESENT);
         return new KubernetesExecSandboxes(
                 shared,
-                new KubernetesPods(shared, worker, 10, ImagePullPolicy.IF_NOT_PRESENT),
+                pods,
                 worker,
                 "agent",
-                KubernetesFixtures.live(KubernetesFixtures.WORKER_ID));
+                KubernetesFixtures.live(KubernetesFixtures.WORKER_ID),
+                new SandboxExits(pods, new SimpleMeterRegistry()));
     }
 
     private KubernetesClient shared() {

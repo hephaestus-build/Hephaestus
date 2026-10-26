@@ -304,7 +304,8 @@ class KubernetesSandboxRuntimeTest {
 
     @Test
     void shouldStartListAndRemoveTurnSandbox() throws Exception {
-        var sandboxes = new KubernetesExecSandboxes(api(), pods, worker, IMAGE, liveWorkers);
+        var sandboxes = new KubernetesExecSandboxes(
+                api(), pods, worker, IMAGE, liveWorkers, new SandboxExits(pods, new SimpleMeterRegistry()));
         String sandboxId = UUID.randomUUID().toString();
         CompletableFuture<String> created =
                 CompletableFuture.supplyAsync(() -> sandboxes.create(sandboxId, LIMITS), background);
@@ -575,7 +576,11 @@ class KubernetesSandboxRuntimeTest {
         var unprovedPods = new KubernetesPods(api(), unproved, 10, ImagePullPolicy.IF_NOT_PRESENT);
         var adapter = new SandboxAttemptRunner(
                 new KubernetesSandboxBackend(
-                        unprovedPods, new KubernetesReviewJobs(api(), unproved), unproved, liveWorkers),
+                        unprovedPods,
+                        new KubernetesReviewJobs(api(), unproved),
+                        unproved,
+                        liveWorkers,
+                        new SandboxExits(unprovedPods, new SimpleMeterRegistry())),
                 new SandboxWorkspaceManager(),
                 sessions,
                 meters);
@@ -590,7 +595,13 @@ class KubernetesSandboxRuntimeTest {
         assertThatThrownBy(() -> adapter.execute(spec(UUID.randomUUID())))
                 .isInstanceOf(SandboxInfrastructureException.class)
                 .hasMessageContaining("isolation probe");
-        try (var turns = new KubernetesExecSandboxes(api(), unprovedPods, unproved, IMAGE, liveWorkers)) {
+        try (var turns = new KubernetesExecSandboxes(
+                api(),
+                unprovedPods,
+                unproved,
+                IMAGE,
+                liveWorkers,
+                new SandboxExits(unprovedPods, new SimpleMeterRegistry()))) {
             assertThatThrownBy(() -> turns.create("turn", LIMITS)).isInstanceOf(SandboxInfrastructureException.class);
         }
         assertThat(api().batch().v1().jobs().inNamespace(SANDBOXES).list().getItems())
@@ -661,8 +672,13 @@ class KubernetesSandboxRuntimeTest {
         WorkerRegistryRepository unreadable = mock(WorkerRegistryRepository.class);
         when(unreadable.findLiveWorkerIds(anyLong())).thenThrow(new IllegalStateException("database unavailable"));
 
-        List<SandboxBackend.Listed> listed =
-                new KubernetesSandboxBackend(pods, reviewJobs, worker, new KubernetesLiveWorkers(unreadable)).list();
+        List<SandboxBackend.Listed> listed = new KubernetesSandboxBackend(
+                        pods,
+                        reviewJobs,
+                        worker,
+                        new KubernetesLiveWorkers(unreadable),
+                        new SandboxExits(pods, new SimpleMeterRegistry()))
+                .list();
 
         assertThat(listed)
                 .singleElement()
@@ -747,7 +763,8 @@ class KubernetesSandboxRuntimeTest {
     void shouldCallEveryOtherWorkerOfATurnSandboxGone() {
         createSandbox("turn-here", KubernetesWorker.KIND_TURN, labels -> labels);
         createSandbox("turn-of-gone-worker", KubernetesWorker.KIND_TURN, KubernetesSandboxRuntimeTest::gone);
-        try (var sandboxes = new KubernetesExecSandboxes(api(), pods, worker, IMAGE, liveWorkers)) {
+        try (var sandboxes = new KubernetesExecSandboxes(
+                api(), pods, worker, IMAGE, liveWorkers, new SandboxExits(pods, new SimpleMeterRegistry()))) {
             assertThat(sandboxes.list())
                     .extracting(ExecSandboxes.Listed::id, ExecSandboxes.Listed::workerGone)
                     .containsExactlyInAnyOrder(tuple("turn-here", false), tuple("turn-of-gone-worker", true));
@@ -772,7 +789,8 @@ class KubernetesSandboxRuntimeTest {
     // --- fixtures ---
 
     private KubernetesSandboxBackend backend() {
-        return new KubernetesSandboxBackend(pods, reviewJobs, worker, liveWorkers);
+        return new KubernetesSandboxBackend(
+                pods, reviewJobs, worker, liveWorkers, new SandboxExits(pods, new SimpleMeterRegistry()));
     }
 
     private SandboxAttemptRunner adapter() {

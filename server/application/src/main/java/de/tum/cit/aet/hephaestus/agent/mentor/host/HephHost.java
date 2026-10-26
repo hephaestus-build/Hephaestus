@@ -77,22 +77,31 @@ public class HephHost {
             launched = host;
         }
         if (launched == null) {
+            HostSandbox.Host starting = new HostSandbox.Host(UUID.randomUUID());
+            synchronized (lock) {
+                if (closed) {
+                    return false;
+                }
+                // Current before the launch returns: the process connects as soon as it runs, and the launch returns
+                // only once the backend has seen it run. A host that a later launch replaced is not current, and its
+                // channel is refused.
+                host = starting;
+            }
             try {
-                launched = sandbox.launch(HephHostSpec.spec());
+                launched = sandbox.launch(starting.id(), HephHostSpec.spec());
             } catch (IOException e) {
                 // The class only: the sandbox logs a cause it knows, such as a worker container it cannot identify.
                 log.warn("Could not start the Heph host: {}", e.getClass().getSimpleName());
+                forget(starting);
                 return false;
             } catch (RuntimeException e) {
                 log.warn("Could not start the Heph host: {}", e.getClass().getSimpleName(), e);
+                forget(starting);
                 return false;
             }
             boolean shutDown;
             synchronized (lock) {
-                shutDown = closed;
-                if (!shutDown) {
-                    host = launched;
-                }
+                shutDown = closed || !launched.equals(host);
             }
             if (shutDown) {
                 sandbox.remove(launched);
@@ -138,6 +147,32 @@ public class HephHost {
     /** Whether the sandbox runtime starts a host now; a running host also needs it for the sandboxes of its turns. */
     boolean sandboxReady() {
         return sandbox.ready();
+    }
+
+    /**
+     * Stops counting a host whose launch failed as the current one, with the channel it may have opened before the
+     * launch failed: a ready channel of a removed host would take the next turn.
+     */
+    private void forget(HostSandbox.Host starting) {
+        WebSocketSession early;
+        synchronized (lock) {
+            if (!starting.equals(host)) {
+                return;
+            }
+            early = socket;
+            host = null;
+            socket = null;
+            channel = null;
+        }
+        if (early != null) {
+            try {
+                early.close();
+            } catch (IOException e) {
+                log.debug(
+                        "Could not close the channel of a Heph host that did not start: {}",
+                        e.getClass().getSimpleName());
+            }
+        }
     }
 
     boolean isReady() {

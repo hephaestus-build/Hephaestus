@@ -52,8 +52,7 @@ public class SandboxHosts implements HostSandbox {
     }
 
     @Override
-    public Host launch(HostSpec spec) throws IOException {
-        UUID id = UUID.randomUUID();
+    public Host launch(UUID id, HostSpec spec) throws IOException {
         String token = ReviewJob.generateJobToken();
         SandboxGatewaySessions.Session session = null;
         SandboxBackend.Handle handle = null;

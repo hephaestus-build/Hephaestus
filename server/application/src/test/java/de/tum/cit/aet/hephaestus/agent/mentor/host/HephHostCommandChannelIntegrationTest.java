@@ -73,8 +73,8 @@ class HephHostCommandChannelIntegrationTest {
         final List<Host> launched = new CopyOnWriteArrayList<>();
 
         @Override
-        public Host launch(HostSpec spec) {
-            Host host = new Host(UUID.randomUUID());
+        public Host launch(UUID id, HostSpec spec) {
+            Host host = new Host(id);
             launched.add(host);
             return host;
         }

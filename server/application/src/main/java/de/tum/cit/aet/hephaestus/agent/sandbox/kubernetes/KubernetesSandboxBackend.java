@@ -45,17 +45,20 @@ public class KubernetesSandboxBackend implements SandboxBackend {
     private final KubernetesReviewJobs reviewJobs;
     private final KubernetesWorker worker;
     private final KubernetesLiveWorkers liveWorkers;
+    private final SandboxExits exits;
     private final Map<String, Sandbox> sandboxes = new ConcurrentHashMap<>();
 
     public KubernetesSandboxBackend(
             KubernetesPods pods,
             KubernetesReviewJobs reviewJobs,
             KubernetesWorker worker,
-            KubernetesLiveWorkers liveWorkers) {
+            KubernetesLiveWorkers liveWorkers,
+            SandboxExits exits) {
         this.pods = pods;
         this.reviewJobs = reviewJobs;
         this.worker = worker;
         this.liveWorkers = liveWorkers;
+        this.exits = exits;
     }
 
     /** A sandbox that this process launched: its Job or Pod, and the Pod once a review's Job has created it. */
@@ -257,6 +260,8 @@ public class KubernetesSandboxBackend implements SandboxBackend {
         } catch (SandboxException e) {
             failure = e;
         }
+        // Before any delete: the Pod's exit code and log go with it.
+        if (pod != null) exits.record(review ? SandboxExits.Kind.REVIEW : SandboxExits.Kind.HOST, pod);
         if (review) {
             try {
                 reviewJobs.delete(handle.id());
