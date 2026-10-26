@@ -57,6 +57,8 @@ spec:
               value: {{ printf "https://%s/api" .Values.host | quote }}
             - name: LEGAL_PROFILE
               value: {{ .Values.webapp.legalProfile | quote }}
+            - name: SECURITY_CONTACT
+              value: {{ .Values.webapp.securityContact | quote }}
             - name: DEPLOYMENT_ENVIRONMENT
               value: {{ .Values.deploymentEnvironment | quote }}
           ports:

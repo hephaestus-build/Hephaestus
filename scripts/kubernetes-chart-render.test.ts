@@ -599,6 +599,23 @@ await test("the webapp runs the non-root image with one writable subtree on 8080
 	]);
 });
 
+await test("the webapp takes its security contact from one URI value", () => {
+	const contact = "mailto:security@example.invalid";
+	const webapp = workload(
+		rendered([...layersFor("small"), { webapp: { securityContact: contact } }]),
+		"webapp",
+	);
+	assert.equal(envValue(webapp, "SECURITY_CONTACT"), contact);
+	assert.equal(envValue(workload(rendered(layersFor("small")), "webapp"), "SECURITY_CONTACT"), "");
+	for (const refused of ["mailto:a b@example.invalid", "javascript:alert(1)"]) {
+		assert.match(
+			render([...layersFor("small"), { webapp: { securityContact: refused } }]).stderr,
+			/securityContact/u,
+			refused,
+		);
+	}
+});
+
 await test("the route attaches to the platform Gateway and strips only /api", () => {
 	const resources = rendered(layersFor("small"));
 	const routes = resources.filter((resource) => kindOf(resource) === "HTTPRoute");

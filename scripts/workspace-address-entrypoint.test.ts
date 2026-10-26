@@ -41,10 +41,8 @@ function createFixture(): Fixture {
 	const image = path.join(directory, "image");
 	const html = path.join(image, "html");
 	mkdirSync(path.join(html, "assets"), { recursive: true });
-	mkdirSync(path.join(html, ".well-known"));
 	writeFileSync(path.join(html, "index.html"), INDEX_TEMPLATE);
 	writeFileSync(path.join(html, "assets/app.0123abcd.js"), "console.log('app');\n");
-	writeFileSync(path.join(html, ".well-known/security.txt"), "Contact: security@example.invalid\n");
 	const envTs = path.join(image, "environment.ts");
 	copyFileSync("webapp/src/environment/index.ts", envTs);
 	setWritable(image, false);
@@ -299,6 +297,96 @@ void describe("webapp container entrypoint", () => {
 			const restarted = runEntrypoint(fixture, { APPLICATION_VERSION: "2.0.0" });
 			assert.equal(restarted.status, 0, restarted.stderr);
 			assert.equal(served(fixture, restarted.envConfigs).envConfig, envConfig);
+		} finally {
+			removeFixture(fixture);
+		}
+	});
+	void test("security.txt names only this deployment's contact and address", () => {
+		const fixture = createFixture();
+		try {
+			const started = Date.now();
+			const result = runEntrypoint(fixture, {
+				APPLICATION_CLIENT_URL: "https://hephaestus.example.invalid/",
+				SECURITY_CONTACT: "mailto:security@example.invalid",
+			});
+			const finished = Date.now();
+			assert.equal(result.status, 0, result.stderr);
+			const fields = readFileSync(path.join(fixture.runtime, ".well-known/security.txt"), "utf8")
+				.split("\n")
+				.filter((line) => line !== "" && !line.startsWith("#"))
+				.map((line) => line.split(": ", 2));
+			assert.deepEqual(
+				fields.map(([field]) => field),
+				["Contact", "Canonical", "Expires"],
+			);
+			const value = (name: string) => fields.find(([field]) => field === name)?.[1];
+			assert.equal(value("Contact"), "mailto:security@example.invalid");
+			assert.equal(
+				value("Canonical"),
+				"https://hephaestus.example.invalid/.well-known/security.txt",
+			);
+			// The file states whole seconds, read from the clock between these two readings.
+			const expires = Date.parse(value("Expires") ?? "");
+			const span = 364 * 86_400_000;
+			assert.ok(expires >= Math.floor(started / 1000) * 1000 + span, value("Expires"));
+			assert.ok(expires <= finished + span, value("Expires"));
+		} finally {
+			removeFixture(fixture);
+		}
+	});
+
+	void test("security.txt names no canonical host where the file is served on many or without TLS", () => {
+		const environments: Record<string, string>[] = [
+			{ APPLICATION_CLIENT_URL: "http://localhost:8080" },
+			{
+				APPLICATION_CLIENT_URL:
+					"https://hephaestus.example.invalid/\nContact: mailto:x@attacker.invalid",
+			},
+			{
+				APPLICATION_CLIENT_URL: "https://hephaestus.example.invalid",
+				HEPHAESTUS_WORKSPACE_SUBDOMAINS_ENABLED: "true",
+				HEPHAESTUS_WORKSPACE_SUBDOMAINS_BASE_DOMAIN: "hephaestus.example.invalid",
+			},
+		];
+		for (const env of environments) {
+			const fixture = createFixture();
+			try {
+				const result = runEntrypoint(fixture, {
+					...env,
+					SECURITY_CONTACT: "mailto:security@example.invalid",
+				});
+				assert.equal(result.status, 0, result.stderr);
+				const body = readFileSync(path.join(fixture.runtime, ".well-known/security.txt"), "utf8");
+				assert.ok(!body.includes("Canonical:"), body);
+				assert.ok(!body.includes("attacker"), body);
+			} finally {
+				removeFixture(fixture);
+			}
+		}
+	});
+
+	void test("without a security contact there is no security.txt, also after a restart", () => {
+		const fixture = createFixture();
+		try {
+			const contact = { SECURITY_CONTACT: "mailto:security@example.invalid" };
+			assert.equal(runEntrypoint(fixture, contact).status, 0);
+			const result = runEntrypoint(fixture, {});
+			assert.equal(result.status, 0, result.stderr);
+			assert.ok(!result.runtimeFiles.includes(path.join(".well-known", "security.txt")));
+		} finally {
+			removeFixture(fixture);
+		}
+	});
+
+	void test("a security contact that is not one URI stops the container before it writes files", () => {
+		const fixture = createFixture();
+		try {
+			const result = runEntrypoint(fixture, {
+				SECURITY_CONTACT: "mailto:a@example.invalid\nCanonical: https://attacker.invalid/",
+			});
+			assert.equal(result.status, 1);
+			assert.match(result.stderr, /SECURITY_CONTACT must be one/u);
+			assert.deepEqual(result.runtimeFiles, []);
 		} finally {
 			removeFixture(fixture);
 		}

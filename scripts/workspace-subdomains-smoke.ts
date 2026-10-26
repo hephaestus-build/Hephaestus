@@ -743,6 +743,8 @@ try {
 			baseDomain: base,
 			workspaceSubdomainsEnabled: enabled === "true",
 		});
+		// The smoke stack sets no SECURITY_CONTACT, so nginx answers a real 404, not the SPA shell.
+		await expectStatus(port, base, "/.well-known/security.txt", 404);
 		if (enabled === "true") {
 			const page = await get(port, `acme.${base}`, "/");
 			const configPath = /src="(?<path>\/env-config[^"]+)"/u.exec(page.body)?.groups?.path;

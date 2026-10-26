@@ -36,6 +36,29 @@ extract_env_vars() {
   grep -oE '[A-Z_]+\?:' "$ENV_TS" | sed 's/\?:$//' | grep -v '^__'
 }
 
+# The file names the operator of this deployment, so without SECURITY_CONTACT there is none: a report
+# about an installation goes to whoever runs it. RFC 9116 § 2.5.2: a reader distrusts the file on a
+# host that Canonical does not list, and a web Canonical is https. Workspace addresses serve it on
+# many hosts, so only a single https origin gets one; Canonical is optional.
+write_security_txt() {
+  local file="${RUNTIME_DIR}/.well-known/security.txt" expires
+  if [[ -z "${SECURITY_CONTACT:-}" ]]; then
+    rm -f "$file"
+    return
+  fi
+  # RFC 9116 § 2.5.5 recommends an expiry less than a year away. Each start renews it, and every
+  # release restarts the webapp.
+  TZ=UTC printf -v expires '%(%Y-%m-%dT%H:%M:%SZ)T' "$(( $(printf '%(%s)T' -1) + 364 * 86400 ))"
+  {
+    echo "Contact: ${SECURITY_CONTACT}"
+    if [[ "${HEPHAESTUS_WORKSPACE_SUBDOMAINS_ENABLED:-false}" == false \
+      && "${APPLICATION_CLIENT_URL:-}" =~ ^https://[^[:space:]/]+/?$ ]]; then
+      echo "Canonical: ${APPLICATION_CLIENT_URL%/}/.well-known/security.txt"
+    fi
+    echo "Expires: ${expires}"
+  } > "$file"
+}
+
 main() {
   # Recover git metadata from build-time variables if runtime vars are empty/missing
   # An empty runtime GIT_COMMIT or GIT_BRANCH would otherwise override the baked values.
@@ -61,6 +84,10 @@ main() {
     log "ERROR: APPLICATION_CLIENT_URL is required when workspace subdomains are enabled."
     exit 1
   fi
+  if [[ -n "${SECURITY_CONTACT:-}" && ! "$SECURITY_CONTACT" =~ ^(mailto:|https://|tel:)[^[:space:]]+$ ]]; then
+    log "ERROR: SECURITY_CONTACT must be one mailto:, https:// or tel: URI."
+    exit 1
+  fi
   if [[ ! -f "$INDEX_TEMPLATE" ]]; then
     log "ERROR: index.html not found: $INDEX_TEMPLATE"
     exit 1
@@ -70,7 +97,7 @@ main() {
     "$(escape_for_js "${APPLICATION_CLIENT_URL:-}")" \
     "$(escape_for_js "${HEPHAESTUS_WORKSPACE_SUBDOMAINS_BASE_DOMAIN:-}")" \
     "$subdomains" > "${RUNTIME_DIR}/.well-known/hephaestus.json"
-
+  write_security_txt
 
   # Extract all env var names from TypeScript (single source of truth)
   local -a all_vars=()
