@@ -33,6 +33,11 @@ on:
         required: false
         type: string
         default: "false"
+      gradle_dependencies:
+        description: "Whether Gradle dependency inputs changed"
+        required: false
+        type: string
+        default: "false"
     secrets:
       CHROMATIC_PROJECT_TOKEN:
         required: false
@@ -52,6 +57,7 @@ jobs:
     with:
       leg: server
       pmd_canary: ${{ inputs.pmd_canary }}
+      gradle_dependencies: ${{ inputs.gradle_dependencies }}
 
   tooling:
     name: "Tooling and Docs"

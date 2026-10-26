@@ -12,6 +12,11 @@ on:
         required: false
         type: string
         default: "false"
+      gradle_dependencies:
+        description: "Whether Gradle dependency inputs changed"
+        required: false
+        type: string
+        default: "false"
 
 permissions: {}
 
@@ -84,6 +89,11 @@ jobs:
       - name: PMD canary
         if: inputs.leg == 'server' && inputs.pmd_canary == 'true'
         run: vp run gate:pmd-canary
+
+      # Gradle only adds verification entries. The pull request decides drift, so a merge group skips it.
+      - name: Gradle verification metadata
+        if: inputs.leg == 'server' && inputs.gradle_dependencies == 'true' && github.event_name == 'pull_request'
+        run: node scripts/check-gradle-verification-metadata.ts
 
       # CI installs with --ignore-scripts, so prepare never runs: both hooks are dispatched here instead.
       - name: Commit-msg hook

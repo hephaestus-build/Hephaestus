@@ -62,6 +62,7 @@ jobs:
       release-images: ${{ steps.filter.outputs.release-images }}
       docker-config: ${{ steps.filter.outputs.docker-config }}
       pmd-canary: ${{ steps.filter.outputs.pmd-canary }}
+      gradle-dependencies: ${{ steps.filter.outputs.gradle-dependencies }}
       version-bump: ${{ steps.version_bump.outputs.changed }}
       version: ${{ steps.version.outputs.version }}
       release-candidate: ${{ steps.release_candidate.outputs.release-candidate }}
@@ -315,6 +316,7 @@ jobs:
               - 'pnpm-workspace.yaml'
             application-server:
               - 'server/**'
+              - 'scripts/check-gradle-verification-metadata.ts'
               - 'scripts/e2e-identity-seed-database.ts'
               - 'scripts/e2e-setup.ts'
               - 'scripts/lib/json.ts'
@@ -589,6 +591,14 @@ jobs:
               - 'scripts/run-gradlew.ts'
               - '.github/workflows/ci-quality-gates.yml'
               - '.github/workflows/ci-quality-leg.yml'
+            gradle-dependencies:
+              - 'server/**/*.gradle.kts'
+              - 'server/**/gradle.lockfile'
+              - 'server/*-gradle.lockfile'
+              - 'server/gradle.properties'
+              - 'server/gradle/**'
+              - 'server/gradlew*'
+              - 'scripts/check-gradle-verification-metadata.ts'
 
   # `Actionlint` is a required context, and a required context that skips still satisfies the
   # ruleset — docs/contributor/ci-cd.mdx § Merge policy says why.
@@ -684,6 +694,7 @@ jobs:
       application_server_changed: ${{ (needs.detect-changes.outputs.application-server == 'true' || needs.detect-changes.outputs.quality-config == 'true' || needs.detect-changes.outputs.unfiltered == 'true') && 'true' || 'false' }}
       tooling_changed: ${{ (needs.detect-changes.outputs.tooling == 'true' || needs.detect-changes.outputs.quality-config == 'true' || needs.detect-changes.outputs.unfiltered == 'true') && 'true' || 'false' }}
       pmd_canary: ${{ (needs.detect-changes.outputs.pmd-canary == 'true' || needs.detect-changes.outputs.unfiltered == 'true') && 'true' || 'false' }}
+      gradle_dependencies: ${{ needs.detect-changes.outputs.gradle-dependencies }}
 
   # Package once; artifact checks and the image independently consume the same JAR.
   server-package:
