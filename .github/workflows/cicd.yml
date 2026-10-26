@@ -704,7 +704,9 @@ jobs:
       pmd_canary: ${{ (needs.detect-changes.outputs.pmd-canary == 'true' || needs.detect-changes.outputs.unfiltered == 'true') && 'true' || 'false' }}
       gradle_dependencies: ${{ needs.detect-changes.outputs.gradle-dependencies }}
 
-  # Package once; artifact checks and the image independently consume the same JAR.
+  # Package once; artifact checks and the image independently consume the same JAR. A run that
+  # publishes every image packages even when its diff holds no code, such as a bot's pin bump in
+  # ci-kubernetes.yml, which carries no changeset and starts the Kubernetes legs.
   server-package:
     name: "App Server: Package"
     needs: [detect-changes]
@@ -712,6 +714,7 @@ jobs:
       needs.detect-changes.outputs.should_skip != 'true' && needs.detect-changes.outputs.queue-images-complete != 'true' && (
         needs.detect-changes.outputs.unfiltered == 'true' ||
         needs.detect-changes.outputs.head-images == 'true' ||
+        needs.detect-changes.outputs.all-images == 'true' ||
         needs.detect-changes.outputs.any-code == 'true' ||
         needs.detect-changes.outputs.build-config == 'true' ||
         needs.detect-changes.outputs.test-config == 'true'

@@ -1014,6 +1014,11 @@ Right after a merge, that run is still building, so the pull request builds ever
   runs the Kubernetes legs builds every image. Those legs install every image under the group's
   commit. The Version PR's branch builds them all. `detect-changes` decides both once, as
   `platforms` and `all-images`, and hands them to every image build in the run.
+  A run that builds every image also packages the server for the App Server image. It does so
+  even when its diff holds no code, such as a bot's pin bump in `ci-kubernetes.yml`.
+  `scripts/ci-image-set.test.ts` evaluates the workflow's own conditions and path filters. It covers
+  every event and every change of up to three representative files. It fails when a job that
+  installs every image can run while no job builds or aliases one of them.
 - A job's `timeout-minutes` is a hang detector of at least 15 minutes.
   This holds whatever the job's usual duration is.
   GitHub documents only that it cancels a job that runs longer than its limit
