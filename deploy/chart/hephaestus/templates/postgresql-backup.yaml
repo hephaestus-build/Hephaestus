@@ -81,7 +81,7 @@ spec:
   template:
     metadata:
       labels:
-        {{- include "hephaestus.labels" (dict "root" . "component" "postgresql-backup") | nindent 8 }}
+        {{- include "hephaestus.podLabels" (dict "root" . "component" "postgresql-backup") | nindent 8 }}
     spec:
       restartPolicy: Never
       automountServiceAccountToken: false

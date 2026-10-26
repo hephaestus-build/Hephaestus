@@ -17,7 +17,7 @@ spec:
   template:
     metadata:
       labels:
-        {{- include "hephaestus.labels" (dict "root" . "component" "migration") | nindent 8 }}
+        {{- include "hephaestus.podLabels" (dict "root" . "component" "migration") | nindent 8 }}
     spec:
       restartPolicy: Never
       automountServiceAccountToken: false

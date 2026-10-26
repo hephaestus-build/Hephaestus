@@ -30,6 +30,16 @@ app.kubernetes.io/instance: {{ .root.Release.Name }}
 app.kubernetes.io/component: {{ .component }}
 {{- end -}}
 
+{{/*
+The labels of a Pod template: no release version and no chart version, so that an upgrade restarts
+only the Pods whose own specification changed, not PostgreSQL and NATS on every release.
+*/}}
+{{- define "hephaestus.podLabels" -}}
+{{ include "hephaestus.selectorLabels" . }}
+app.kubernetes.io/managed-by: {{ .root.Release.Service }}
+app.kubernetes.io/part-of: hephaestus
+{{- end -}}
+
 {{- define "hephaestus.labels" -}}
 {{ include "hephaestus.selectorLabels" . }}
 app.kubernetes.io/managed-by: {{ .root.Release.Service }}

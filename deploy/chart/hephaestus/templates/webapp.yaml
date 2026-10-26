@@ -35,7 +35,7 @@ spec:
   template:
     metadata:
       labels:
-        {{- include "hephaestus.labels" (dict "root" . "component" "webapp") | nindent 8 }}
+        {{- include "hephaestus.podLabels" (dict "root" . "component" "webapp") | nindent 8 }}
     spec:
       serviceAccountName: {{ $name }}
       automountServiceAccountToken: false
