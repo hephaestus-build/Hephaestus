@@ -5119,6 +5119,53 @@ const usesHelm = (item: unknown) =>
 const installsHelm = (item: unknown) =>
 	isMap(item) && item.get("uses") === "./.github/actions/setup-helm";
 
+void test("the chart signing rehearsal runs steps 2 to 4 of Verify the release chart and writes no release", async () => {
+	const rehearsal = parseDocument(
+		await readFile(".github/workflows/chart-signing-rehearsal.yml", "utf8"),
+	);
+	const workflow: unknown = rehearsal.toJS();
+	const top = asRecord(workflow, "chart signing rehearsal");
+	assert.deepEqual(top.on, { workflow_dispatch: null });
+	assert.deepEqual(top.permissions, {});
+	const rehearse = asRecord(asRecord(top.jobs, "jobs").rehearse, "rehearse");
+	assert.deepEqual(rehearse.permissions, {
+		contents: "read",
+		packages: "write",
+		"id-token": "write",
+	});
+	// The verification names the default-branch identity, which only a run from main has.
+	assert.equal(rehearse.if, "github.ref == 'refs/heads/main'");
+	const operatorStep = String(
+		namedStep(rehearsal, ["jobs", "rehearse"], "Verify the chart as an operator").get("run"),
+	);
+	const performed = new Set(operatorStep.split("\n").map((line) => line.trim()));
+	// Steps 2 to 4 of the documented block, except the release's identity, which the rehearsal
+	// replaces with its own. Step 1 reads a release asset that a rehearsal has not.
+	const documented = /## Verify the release chart\n[\s\S]*?```bash\n(?<block>[\s\S]*?)```/u.exec(
+		await readFile("docs/admin/kubernetes.mdx", "utf8"),
+	)?.groups?.block;
+	assert.ok(documented !== undefined);
+	const commands = documented
+		.split("\n")
+		.map((line) => line.trim())
+		.filter((line) =>
+			/^(?:cosign verify|helm pull|helm show chart|--certificate-oidc-issuer)/u.test(line),
+		);
+	assert.equal(commands.length, 4);
+	for (const command of commands) {
+		assert.ok(performed.has(command), `the rehearsal does not run: ${command}`);
+	}
+	assert.ok(performed.has('--certificate-identity "$IDENTITY" \\'));
+	assert.doesNotMatch(
+		JSON.stringify(workflow),
+		/gh release|\/charts\/hephaestus|release-image-lock/u,
+	);
+	const signing = String(
+		namedStep(rehearsal, ["jobs", "rehearse"], "Publish and sign a rehearsal chart").get("run"),
+	);
+	assert.match(signing, /^node scripts\/keyless-sign\.ts sign --yes "\$chart"$/mu);
+});
+
 void test("every job that runs Helm installs the pinned one first, and the render gate runs on Linux and Windows", async () => {
 	const release = parseDocument(await readFile(".github/workflows/release.yml", "utf8"));
 	const helmJobs: string[] = [];

@@ -3,9 +3,11 @@
  *
  * Each case runs `helm template` on the real chart, a real profile, values that kubernetes-chart.ts
  * prepares from a synthetic lock over the real release image inventory, and operator values that
- * name a Secret but hold no secret value. The chart source names no image, so a source render
- * passes the prepared values as a CI run passes its own; one case renders a release package instead. The assertions read the parsed resources. A render is not
+ * name a Secret but hold no secret value. The assertions read the parsed resources. A render is not
  * a cluster: admission, network enforcement, volume start-up and upgrades stay with the cluster tests.
+ *
+ * The chart source names no image, so a source render passes the prepared values as a CI run
+ * passes its own. One case renders a release package instead, which pins its images itself.
  *
  * The worker renders only with the names of what an operator qualified on the sandbox nodes. These
  * cases pass synthetic names: a render proves which names and which authority the worker receives,

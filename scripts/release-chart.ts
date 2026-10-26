@@ -98,9 +98,10 @@ export async function pullChart(
 	release: string,
 	destination: string,
 	run: Execute = execute,
+	repository = chartRepository(release),
 ): Promise<string> {
-	if (chart.repository !== chartRepository(release)) {
-		throw new Error(`the lock names chart ${chart.repository}, not ${chartRepository(release)}`);
+	if (chart.repository !== repository) {
+		throw new Error(`the lock names chart ${chart.repository}, not ${repository}`);
 	}
 	await run("helm", [
 		"pull",
@@ -216,7 +217,8 @@ export async function packageReleaseChart(
 
 /**
  * Package the release chart, push it, and pull it back by the digest the push reported. The round
- * trip must return the packaged bytes, or the digest is refused.
+ * trip must return the packaged bytes, or the digest is refused. Only the signing rehearsal passes
+ * a repository other than the release's own.
  */
 export async function publishReleaseChart(
 	release: string,
@@ -224,9 +226,9 @@ export async function publishReleaseChart(
 	values: ChartValues,
 	destination: string,
 	run: Execute = execute,
+	repository = chartRepository(release),
 ): Promise<{ chart: ReleaseChart; package: string }> {
 	const packaged = await packageReleaseChart(release, source, values, destination, run);
-	const repository = chartRepository(release);
 	const pushed = await run("helm", [
 		"push",
 		packaged,
@@ -239,7 +241,7 @@ export async function publishReleaseChart(
 	const chart = { repository, version: chartVersion(release), digest };
 	const scratch = await mkdtemp(path.join(destination, ".roundtrip-"));
 	try {
-		const pulled = await pullChart(chart, release, scratch, run);
+		const pulled = await pullChart(chart, release, scratch, run, repository);
 		if ((await sha256(pulled)) !== (await sha256(packaged))) {
 			throw new Error(`the chart pulled by ${digest} differs from the package that was pushed`);
 		}
