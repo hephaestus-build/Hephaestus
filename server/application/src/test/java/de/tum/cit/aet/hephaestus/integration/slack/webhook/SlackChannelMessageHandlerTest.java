@@ -248,12 +248,27 @@ class SlackChannelMessageHandlerTest extends BaseUnitTest {
         handler.onMessage(natsMessage("""
             {"type":"event_callback","team_id":"T1","event":{
               "type":"message","subtype":"message_changed","channel":"C1","ts":"200.9",
-              "message":{"ts":"100.1","user":"U1","text":"edited body"}}}
+              "message":{"ts":"100.1","user":"U1","text":"edited body","edited":{"user":"U1","ts":"300.5"}}}}
             """));
 
         verify(messageRepository)
-                .applyEdit(eq(WORKSPACE), eq("C1"), eq("100.1"), eq("edited body"), any(Instant.class));
+                .applyEdit(WORKSPACE, "C1", "100.1", "edited body", Instant.ofEpochSecond(300, 500_000_000));
         // Row existed → no re-ingest.
+        verify(messageRepository, never()).insertIfAbsent(anyLong(), any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void messageChanged_withoutAnEdit_changesNothing() {
+        when(workspaceResolver.resolveWorkspaceId("T1")).thenReturn(Optional.of(WORKSPACE));
+
+        // Slack also sends message_changed when a reply or an unfurl changes the message; its author edited nothing.
+        handler.onMessage(natsMessage("""
+            {"type":"event_callback","team_id":"T1","event":{
+              "type":"message","subtype":"message_changed","channel":"C1","ts":"200.9",
+              "message":{"ts":"100.1","user":"U1","text":"original body","reply_count":2}}}
+            """));
+
+        verify(messageRepository, never()).applyEdit(anyLong(), any(), any(), any(), any());
         verify(messageRepository, never()).insertIfAbsent(anyLong(), any(), any(), any(), any(), any(), any(), any());
     }
 
@@ -272,7 +287,7 @@ class SlackChannelMessageHandlerTest extends BaseUnitTest {
         handler.onMessage(natsMessage("""
             {"type":"event_callback","team_id":"T1","event":{
               "type":"message","subtype":"message_changed","channel":"C1","ts":"200.9",
-              "message":{"ts":"100.1","user":"U1","thread_ts":"100.0","text":"edited body"}}}
+              "message":{"ts":"100.1","user":"U1","thread_ts":"100.0","text":"edited body","edited":{"user":"U1","ts":"300.5"}}}}
             """));
 
         // Re-ingest ran through the gated path and persisted the EDITED text under the resolved workspace + member id.
@@ -292,7 +307,7 @@ class SlackChannelMessageHandlerTest extends BaseUnitTest {
         handler.onMessage(natsMessage("""
             {"type":"event_callback","team_id":"T1","event":{
               "type":"message","subtype":"message_changed","channel":"C1","ts":"200.9",
-              "message":{"ts":"100.1","user":"U1","text":"edited body"}}}
+              "message":{"ts":"100.1","user":"U1","text":"edited body","edited":{"user":"U1","ts":"300.5"}}}}
             """));
 
         verify(messageRepository, never()).insertIfAbsent(anyLong(), any(), any(), any(), any(), any(), any(), any());
@@ -305,7 +320,7 @@ class SlackChannelMessageHandlerTest extends BaseUnitTest {
         handler.onMessage(natsMessage("""
             {"type":"event_callback","team_id":"T1","event":{
               "type":"message","subtype":"message_changed","channel":"C1","ts":"200.9",
-              "message":{"ts":"100.1","user":"U1","text":"edited body"}}}
+              "message":{"ts":"100.1","user":"U1","text":"edited body","edited":{"user":"U1","ts":"300.5"}}}}
             """));
 
         // Kill switch off: the edit path short-circuits before resolving the tenant or touching persistence.

@@ -668,7 +668,11 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
     public PullRequest processClosed(GitLabMergeRequestEventDTO event, ProcessingContext context) {
         Issue.State before = getExistingState(event, context);
         PullRequest pr = processInternal(event, context);
-        if (pr != null && before != Issue.State.CLOSED && before != Issue.State.MERGED) {
+        // A stale hook leaves the stored state as it was; only a close that this hook stored is announced.
+        if (pr != null
+                && pr.getState() == Issue.State.CLOSED
+                && before != Issue.State.CLOSED
+                && before != Issue.State.MERGED) {
             eventPublisher.publishEvent(new ScmDomainEvent.PullRequestClosed(
                     ScmEventPayload.PullRequestData.from(pr), false, EventContext.from(context)));
             log.debug("Closed merge request: prId={}", pr.getId());
@@ -681,7 +685,7 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
     public PullRequest processReopened(GitLabMergeRequestEventDTO event, ProcessingContext context) {
         Issue.State before = getExistingState(event, context);
         PullRequest pr = processInternal(event, context);
-        if (pr != null && before != Issue.State.OPEN) {
+        if (pr != null && pr.getState() == Issue.State.OPEN && before != Issue.State.OPEN) {
             eventPublisher.publishEvent(new ScmDomainEvent.PullRequestReopened(
                     ScmEventPayload.PullRequestData.from(pr), EventContext.from(context)));
             log.debug("Reopened merge request: prId={}", pr.getId());

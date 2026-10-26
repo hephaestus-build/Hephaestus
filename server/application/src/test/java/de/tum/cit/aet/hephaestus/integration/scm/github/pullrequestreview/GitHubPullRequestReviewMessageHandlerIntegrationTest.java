@@ -28,6 +28,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.ClassPathResource;
 import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 class GitHubPullRequestReviewMessageHandlerIntegrationTest extends BaseIntegrationTest {
 
@@ -229,6 +230,38 @@ class GitHubPullRequestReviewMessageHandlerIntegrationTest extends BaseIntegrati
                 .get()
                 .satisfies(review -> {
                     assertThat(review.isDismissed()).isTrue();
+                });
+    }
+
+    @Test
+    void shouldKeepADismissedReviewDismissedWhenAnOlderSubmissionArrives() throws Exception {
+        GitHubPullRequestReviewEventDTO dismissEvent = loadPayload("pull_request_review.dismissed");
+        createTestPullRequest(
+                required(dismissEvent.pullRequest().getDatabaseId()),
+                dismissEvent.pullRequest().number());
+        PullRequestReview existingReview = new PullRequestReview();
+        existingReview.setNativeId(required(dismissEvent.review().id()));
+        existingReview.setProvider(gitProvider);
+        existingReview.setState(PullRequestReview.State.APPROVED);
+        existingReview.setPullRequest(testPullRequest);
+        reviewRepository.save(existingReview);
+        handler.handleEvent(dismissEvent);
+
+        // The submission GitHub sent before the dismissal, delivered again after it.
+        ClassPathResource resource = new ClassPathResource("github/pull_request_review.dismissed.json");
+        ObjectNode submitted = (ObjectNode) objectMapper.readTree(resource.getContentAsString(StandardCharsets.UTF_8));
+        submitted.put("action", "submitted");
+        ObjectNode review = (ObjectNode) submitted.get("review");
+        review.put("state", "approved");
+        review.put("updated_at", review.get("submitted_at").asString());
+        handler.handleEvent(objectMapper.treeToValue(submitted, GitHubPullRequestReviewEventDTO.class));
+
+        assertThat(reviewRepository.findByNativeIdAndProviderId(
+                        required(dismissEvent.review().id()), gitProviderId()))
+                .get()
+                .satisfies(stored -> {
+                    assertThat(stored.isDismissed()).isTrue();
+                    assertThat(stored.getState()).isEqualTo(PullRequestReview.State.APPROVED);
                 });
     }
 

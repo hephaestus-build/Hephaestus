@@ -104,6 +104,21 @@ public class GitLabIssueProcessor extends BaseGitLabProcessor {
             log.debug("Skipped confidential issue: iid={}", attrs.iid());
             return null;
         }
+        // An older hook would restore older work and record it as new (sync-lifecycle.md).
+        Instant eventUpdatedAt = parseGitLabTimestamp(attrs.updatedAt());
+        Instant storedUpdatedAt = issueRepository
+                .findByRepositoryIdAndNumber(
+                        Objects.requireNonNull(context.repository()).getId(), attrs.iid())
+                .map(Issue::getUpdatedAt)
+                .orElse(null);
+        if (eventUpdatedAt != null && storedUpdatedAt != null && eventUpdatedAt.isBefore(storedUpdatedAt)) {
+            log.debug(
+                    "Skipped stale issue hook: iid={}, existingUpdatedAt={}, eventUpdatedAt={}",
+                    attrs.iid(),
+                    storedUpdatedAt,
+                    eventUpdatedAt);
+            return null;
+        }
 
         User author = resolveWebhookAuthor(event, Objects.requireNonNull(context.providerId()));
         Long providerId = Objects.requireNonNull(
@@ -442,7 +457,7 @@ public class GitLabIssueProcessor extends BaseGitLabProcessor {
     @Nullable
     public Issue processClosed(GitLabIssueEventDTO event, ProcessingContext context) {
         Issue issue = processInternal(event, context);
-        if (issue != null) {
+        if (issue != null && issue.getState() == Issue.State.CLOSED) {
             eventPublisher.publishEvent(new ScmDomainEvent.IssueClosed(
                     ScmEventPayload.IssueData.from(issue), "completed", EventContext.from(context)));
             log.debug("Closed issue: issueId={}", issue.getId());
@@ -454,7 +469,7 @@ public class GitLabIssueProcessor extends BaseGitLabProcessor {
     @Nullable
     public Issue processReopened(GitLabIssueEventDTO event, ProcessingContext context) {
         Issue issue = processInternal(event, context);
-        if (issue != null) {
+        if (issue != null && issue.getState() == Issue.State.OPEN) {
             ScmEventPayload.IssueData issueData = ScmEventPayload.IssueData.from(issue);
             eventPublisher.publishEvent(
                     new ScmDomainEvent.IssueUpdated(issueData, Set.of("state"), actorContext(event, context)));

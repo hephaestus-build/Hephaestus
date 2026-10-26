@@ -284,6 +284,23 @@ class GitLabIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
         }
 
         @Test
+        void shouldKeepTheReopenedIssueOpenWhenTheCloseHookIsRedelivered() throws Exception {
+            handler.handleEvent(loadPayload("issue.open"));
+            handler.handleEvent(loadPayload("issue.close"));
+            handler.handleEvent(loadPayload("issue.reopen"));
+            eventListener.clear();
+
+            handler.handleEvent(loadPayload("issue.close"));
+
+            assertThat(issueRepository
+                            .findByRepositoryIdAndNumber(savedRepo.getId(), ISSUE_IID)
+                            .orElseThrow()
+                            .getState())
+                    .isEqualTo(Issue.State.OPEN);
+            assertThat(eventListener.ofType(ScmDomainEvent.IssueClosed.class)).isEmpty();
+        }
+
+        @Test
         void shouldUpdateIssueOnUpdateEvent() throws Exception {
             handler.handleEvent(loadPayload("issue.open"));
             eventListener.clear();

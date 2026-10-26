@@ -252,6 +252,33 @@ class SlackConversationProjectorIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    @DisplayName("ordered edit: an older or redelivered edit never replaces a later one")
+    void olderEdit_keepsTheLaterText() {
+        long ws = newWorkspace();
+        seedChannel(ws, "C1", "ACTIVE");
+        seedMessage(ws, "C1", "100.0", null, "original");
+        Instant first = Instant.parse("2026-10-26T10:00:00Z");
+        Instant second = first.plusSeconds(60);
+
+        assertThat(messageRepository.applyEdit(ws, "C1", "100.0", "first edit", first))
+                .isEqualTo(1);
+        assertThat(messageRepository.applyEdit(ws, "C1", "100.0", "second edit", second))
+                .isEqualTo(1);
+        assertThat(messageRepository.applyEdit(ws, "C1", "100.0", "first edit", first))
+                .isZero();
+        assertThat(messageRepository.applyEdit(ws, "C1", "100.0", "second edit", second))
+                .isZero();
+
+        assertThat(jdbc.queryForObject(
+                        "SELECT text FROM slack_message WHERE workspace_id = ? AND slack_channel_id = ? AND slack_ts = ?",
+                        String.class,
+                        ws,
+                        "C1",
+                        "100.0"))
+                .isEqualTo("second edit");
+    }
+
+    @Test
     @DisplayName("durable tombstone: a delete arriving before its base insert cannot be resurrected by the reorder")
     void tombstoneBeforeInsert_isNotResurrected() {
         long ws = newWorkspace();

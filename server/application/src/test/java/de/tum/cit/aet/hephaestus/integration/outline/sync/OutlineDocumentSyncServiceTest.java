@@ -535,6 +535,25 @@ class OutlineDocumentSyncServiceTest extends BaseUnitTest {
     }
 
     @Test
+    void refreshDocument_olderPrefetchedMeta_leavesTheNewerMirrorAsItIs() {
+        OutlineDocument row = mirrored("doc-1");
+        row.setTitle("Renamed later");
+        row.setBodyMarkdown("# later");
+        row.setContentHash("later-hash");
+        row.setOutlineUpdatedAt(T2);
+        inMirror(row);
+
+        service(10).refreshDocument(WORKSPACE, "documents.update", "doc-1", meta("doc-1", T1));
+        service(10).refreshDocument(WORKSPACE, "documents.delete", "doc-1", meta("doc-1", T1));
+
+        assertThat(row.getTitle()).isEqualTo("Renamed later");
+        assertThat(row.getOutlineUpdatedAt()).isEqualTo(T2);
+        assertThat(row.isDeleted()).isFalse();
+        verify(outlineApiClient, never()).exportDocument(anyString(), anyString(), anyString());
+        verify(documentRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
     void refreshDocument_prefetchedMetaMissingCollectionId_fallsBackToDocumentsInfo() {
         when(documentRepository.findSnapshotByDocumentId(WORKSPACE, CONNECTION, "doc-1"))
                 .thenReturn(Optional.empty());

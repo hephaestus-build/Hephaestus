@@ -59,7 +59,8 @@ public class SlackChannelMessageHandler extends AbstractIntegrationMessageHandle
                     changed.path("ts").asString(""),
                     changed.path("thread_ts").asString(null),
                     changed.path("user").asString(""),
-                    changed.path("text").asString(""));
+                    changed.path("text").asString(""),
+                    changed.path("edited").path("ts").asString(null));
             return;
         }
         if (event.has("bot_id")) {

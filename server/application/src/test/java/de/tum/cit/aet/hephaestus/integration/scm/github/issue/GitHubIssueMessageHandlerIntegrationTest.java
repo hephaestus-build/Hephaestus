@@ -220,6 +220,23 @@ class GitHubIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
         }
 
         @Test
+        void shouldKeepTheEditedIssueWhenTheOpenedDeliveryIsReplayed() throws Exception {
+            handler.handleEvent(loadPayload("issues.opened"));
+            GitHubIssueEventDTO editedEvent = loadPayload("issues.edited");
+            handler.handleEvent(editedEvent);
+            eventListener.clear();
+
+            handler.handleEvent(loadPayload("issues.opened"));
+
+            Issue issue = issueRepository
+                    .findByRepositoryIdAndNumber(testRepository.getId(), 20)
+                    .orElseThrow();
+            assertThat(issue.getBody()).isEqualTo(editedEvent.issue().body());
+            assertThat(issue.getUpdatedAt()).isEqualTo(editedEvent.issue().updatedAt());
+            assertThat(eventListener.ofType(ScmDomainEvent.IssueUpdated.class)).isEmpty();
+        }
+
+        @Test
         void shouldPreserveAnEditorWhoIsNotTheIssueAuthor() throws Exception {
             handler.handleEvent(loadPayload("issues.opened"));
             eventListener.clear();

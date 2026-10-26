@@ -32,6 +32,7 @@ import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Consumer;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -105,8 +106,15 @@ public class GitHubPullRequestProcessor extends BaseGitHubProcessor {
     @Transactional
     @Nullable
     public PullRequest process(GitHubPullRequestDTO dto, ProcessingContext context) {
-        return processInternal(dto, context, true);
+        Processed processed = processInternal(dto, context, true);
+        return processed == null ? null : processed.pullRequest();
     }
+
+    /**
+     * The stored pull request after a payload. It is {@code superseded} when the payload was older than the stored row
+     * and the stored work has since moved past the version the payload describes.
+     */
+    private record Processed(PullRequest pullRequest, boolean superseded) {}
 
     /**
      * Internal method that handles pull request processing.
@@ -116,7 +124,7 @@ public class GitHubPullRequestProcessor extends BaseGitHubProcessor {
      *                              when called from processClosed() which emits its own events.
      */
     @Nullable
-    private PullRequest processInternal(
+    private Processed processInternal(
             GitHubPullRequestDTO dto, ProcessingContext context, boolean emitLifecycleOnCreate) {
         Repository repository = context.repository();
         if (repository == null || repository.getId() == null) {
@@ -199,7 +207,7 @@ public class GitHubPullRequestProcessor extends BaseGitHubProcessor {
                             Set.of("relationships", ScmItemEvents.CLOSING_ISSUES_FIELD),
                             EventContext.from(context)));
                 }
-                return stored;
+                return new Processed(stored, !holdsVersion(dto, stored));
             }
         }
 
@@ -314,7 +322,45 @@ public class GitHubPullRequestProcessor extends BaseGitHubProcessor {
             }
         }
 
-        return pr;
+        return new Processed(pr, false);
+    }
+
+    /**
+     * Whether the stored pull request holds the version an older payload describes. The head, the base, the title and
+     * the description are the version inputs a payload carries.
+     */
+    private boolean holdsVersion(GitHubPullRequestDTO dto, PullRequest pr) {
+        return (dto.head() == null || Objects.equals(dto.head().sha(), pr.getHeadRefOid()))
+                && (dto.base() == null || Objects.equals(dto.base().sha(), pr.getBaseRefOid()))
+                && Objects.requireNonNullElse(sanitize(dto.title()), "").equals(pr.getTitle())
+                // A webhook sends no description as null, sync as "".
+                && Objects.requireNonNullElse(sanitize(dto.body()), "")
+                        .equals(Objects.requireNonNullElse(pr.getBody(), ""));
+    }
+
+    /**
+     * Processes a payload and publishes its lifecycle event. A payload whose version the stored work has moved past
+     * publishes nothing: an occasion recorded from it would name the later work (sync-lifecycle.md § A redelivered or
+     * older payload changes nothing).
+     */
+    @Nullable
+    private PullRequest processLifecycle(
+            GitHubPullRequestDTO dto,
+            ProcessingContext context,
+            boolean emitLifecycleOnCreate,
+            Consumer<PullRequest> publish) {
+        Processed processed = processInternal(dto, context, emitLifecycleOnCreate);
+        if (processed == null) {
+            return null;
+        }
+        if (processed.superseded()) {
+            log.debug(
+                    "Skipped superseded pull request event: prId={}",
+                    processed.pullRequest().getId());
+        } else {
+            publish.accept(processed.pullRequest());
+        }
+        return processed.pullRequest();
     }
 
     /**
@@ -456,24 +502,23 @@ public class GitHubPullRequestProcessor extends BaseGitHubProcessor {
     @Transactional
     @Nullable
     public PullRequest processClosed(GitHubPullRequestDTO dto, ProcessingContext context) {
-        PullRequest pr = processInternal(dto, context, false);
-        if (pr == null) {
-            return null;
-        }
-        boolean wasMerged = dto.isMerged();
-        ScmEventPayload.PullRequestData prData = ScmEventPayload.PullRequestData.from(pr);
-        EventContext eventContext = EventContext.from(context);
+        return processLifecycle(dto, context, false, pr -> {
+            if (pr.getState() == Issue.State.OPEN) {
+                return;
+            }
+            boolean wasMerged = dto.isMerged();
+            ScmEventPayload.PullRequestData prData = ScmEventPayload.PullRequestData.from(pr);
+            EventContext eventContext = EventContext.from(context);
 
-        eventPublisher.publishEvent(new ScmDomainEvent.PullRequestClosed(prData, wasMerged, eventContext));
+            eventPublisher.publishEvent(new ScmDomainEvent.PullRequestClosed(prData, wasMerged, eventContext));
 
-        if (wasMerged) {
-            eventPublisher.publishEvent(new ScmDomainEvent.PullRequestMerged(prData, eventContext));
-            log.info("Merged pull request: prId={}, prNumber={}", pr.getId(), pr.getNumber());
-        } else {
-            log.debug("Closed pull request: prId={}, merged=false", pr.getId());
-        }
-
-        return pr;
+            if (wasMerged) {
+                eventPublisher.publishEvent(new ScmDomainEvent.PullRequestMerged(prData, eventContext));
+                log.info("Merged pull request: prId={}, prNumber={}", pr.getId(), pr.getNumber());
+            } else {
+                log.debug("Closed pull request: prId={}, merged=false", pr.getId());
+            }
+        });
     }
 
     /**
@@ -482,14 +527,14 @@ public class GitHubPullRequestProcessor extends BaseGitHubProcessor {
     @Transactional
     @Nullable
     public PullRequest processReopened(GitHubPullRequestDTO dto, ProcessingContext context) {
-        PullRequest pr = processInternal(dto, context, true);
-        if (pr == null) {
-            return null;
-        }
-        eventPublisher.publishEvent(new ScmDomainEvent.PullRequestReopened(
-                ScmEventPayload.PullRequestData.from(pr), EventContext.from(context)));
-        log.debug("Reopened pull request: prId={}", pr.getId());
-        return pr;
+        return processLifecycle(dto, context, true, pr -> {
+            if (pr.getState() != Issue.State.OPEN) {
+                return;
+            }
+            eventPublisher.publishEvent(new ScmDomainEvent.PullRequestReopened(
+                    ScmEventPayload.PullRequestData.from(pr), EventContext.from(context)));
+            log.debug("Reopened pull request: prId={}", pr.getId());
+        });
     }
 
     /**
@@ -498,14 +543,14 @@ public class GitHubPullRequestProcessor extends BaseGitHubProcessor {
     @Transactional
     @Nullable
     public PullRequest processReadyForReview(GitHubPullRequestDTO dto, ProcessingContext context) {
-        PullRequest pr = processInternal(dto, context, true);
-        if (pr == null) {
-            return null;
-        }
-        eventPublisher.publishEvent(new ScmDomainEvent.PullRequestReady(
-                ScmEventPayload.PullRequestData.from(pr), EventContext.from(context)));
-        log.debug("Marked pull request ready for review: prId={}", pr.getId());
-        return pr;
+        return processLifecycle(dto, context, true, pr -> {
+            if (pr.isDraft()) {
+                return;
+            }
+            eventPublisher.publishEvent(new ScmDomainEvent.PullRequestReady(
+                    ScmEventPayload.PullRequestData.from(pr), EventContext.from(context)));
+            log.debug("Marked pull request ready for review: prId={}", pr.getId());
+        });
     }
 
     /**
@@ -514,14 +559,14 @@ public class GitHubPullRequestProcessor extends BaseGitHubProcessor {
     @Transactional
     @Nullable
     public PullRequest processConvertedToDraft(GitHubPullRequestDTO dto, ProcessingContext context) {
-        PullRequest pr = processInternal(dto, context, true);
-        if (pr == null) {
-            return null;
-        }
-        eventPublisher.publishEvent(new ScmDomainEvent.PullRequestDrafted(
-                ScmEventPayload.PullRequestData.from(pr), EventContext.from(context)));
-        log.debug("Converted pull request to draft: prId={}", pr.getId());
-        return pr;
+        return processLifecycle(dto, context, true, pr -> {
+            if (!pr.isDraft()) {
+                return;
+            }
+            eventPublisher.publishEvent(new ScmDomainEvent.PullRequestDrafted(
+                    ScmEventPayload.PullRequestData.from(pr), EventContext.from(context)));
+            log.debug("Converted pull request to draft: prId={}", pr.getId());
+        });
     }
 
     /**
@@ -530,14 +575,11 @@ public class GitHubPullRequestProcessor extends BaseGitHubProcessor {
     @Transactional
     @Nullable
     public PullRequest processSynchronize(GitHubPullRequestDTO dto, ProcessingContext context) {
-        PullRequest pr = processInternal(dto, context, true);
-        if (pr == null) {
-            return null;
-        }
-        eventPublisher.publishEvent(new ScmDomainEvent.PullRequestSynchronized(
-                ScmEventPayload.PullRequestData.from(pr), EventContext.from(context)));
-        log.debug("Synchronized pull request: prId={}", pr.getId());
-        return pr;
+        return processLifecycle(dto, context, true, pr -> {
+            eventPublisher.publishEvent(new ScmDomainEvent.PullRequestSynchronized(
+                    ScmEventPayload.PullRequestData.from(pr), EventContext.from(context)));
+            log.debug("Synchronized pull request: prId={}", pr.getId());
+        });
     }
 
     /**
@@ -546,20 +588,17 @@ public class GitHubPullRequestProcessor extends BaseGitHubProcessor {
     @Transactional
     @Nullable
     public PullRequest processLabeled(GitHubPullRequestDTO dto, GitHubLabelDTO labelDto, ProcessingContext context) {
-        PullRequest pr = processInternal(dto, context, true);
-        if (pr == null) {
-            return null;
-        }
-        Label label = findOrCreateLabel(
-                labelDto, Objects.requireNonNull(context.repository(), "Label event requires a repository"));
-        if (label != null) {
-            eventPublisher.publishEvent(new ScmDomainEvent.PullRequestLabeled(
-                    ScmEventPayload.PullRequestData.from(pr),
-                    ScmEventPayload.LabelData.from(label),
-                    EventContext.from(context)));
-            log.debug("Labeled pull request: prId={}, labelName={}", pr.getId(), label.getName());
-        }
-        return pr;
+        return processLifecycle(dto, context, true, pr -> {
+            Label label = findOrCreateLabel(
+                    labelDto, Objects.requireNonNull(context.repository(), "Label event requires a repository"));
+            if (label != null) {
+                eventPublisher.publishEvent(new ScmDomainEvent.PullRequestLabeled(
+                        ScmEventPayload.PullRequestData.from(pr),
+                        ScmEventPayload.LabelData.from(label),
+                        EventContext.from(context)));
+                log.debug("Labeled pull request: prId={}, labelName={}", pr.getId(), label.getName());
+            }
+        });
     }
 
     /**
@@ -568,20 +607,17 @@ public class GitHubPullRequestProcessor extends BaseGitHubProcessor {
     @Transactional
     @Nullable
     public PullRequest processUnlabeled(GitHubPullRequestDTO dto, GitHubLabelDTO labelDto, ProcessingContext context) {
-        PullRequest pr = processInternal(dto, context, true);
-        if (pr == null) {
-            return null;
-        }
-        Label label = findOrCreateLabel(
-                labelDto, Objects.requireNonNull(context.repository(), "Label event requires a repository"));
-        if (label != null) {
-            eventPublisher.publishEvent(new ScmDomainEvent.PullRequestUnlabeled(
-                    ScmEventPayload.PullRequestData.from(pr),
-                    ScmEventPayload.LabelData.from(label),
-                    EventContext.from(context)));
-            log.debug("Unlabeled pull request: prId={}, labelName={}", pr.getId(), label.getName());
-        }
-        return pr;
+        return processLifecycle(dto, context, true, pr -> {
+            Label label = findOrCreateLabel(
+                    labelDto, Objects.requireNonNull(context.repository(), "Label event requires a repository"));
+            if (label != null) {
+                eventPublisher.publishEvent(new ScmDomainEvent.PullRequestUnlabeled(
+                        ScmEventPayload.PullRequestData.from(pr),
+                        ScmEventPayload.LabelData.from(label),
+                        EventContext.from(context)));
+                log.debug("Unlabeled pull request: prId={}, labelName={}", pr.getId(), label.getName());
+            }
+        });
     }
 
     private Issue.State convertState(@Nullable String state) {

@@ -190,6 +190,13 @@ public class GitLabPullRequestReviewCommentProcessor {
 
     private PullRequestReviewComment updateComment(
             PullRequestReviewComment existing, DiffNoteData data, CommentContext context) {
+        // An older hook would restore older words (sync-lifecycle.md).
+        if (existing.getUpdatedAt() != null
+                && data.updatedAt() != null
+                && data.updatedAt().isBefore(existing.getUpdatedAt())) {
+            log.debug("Skipped stale diff note: commentId={}", existing.getId());
+            return existing;
+        }
         PullRequestReviewThread thread = context.thread();
         PullRequest pr = context.pr();
         Long scopeId = Objects.requireNonNull(context.scopeId());

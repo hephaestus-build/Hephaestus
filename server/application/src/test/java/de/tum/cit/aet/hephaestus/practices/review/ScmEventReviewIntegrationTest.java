@@ -64,6 +64,8 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.events.EventContext;
 import de.tum.cit.aet.hephaestus.integration.scm.events.ScmDomainEvent;
 import de.tum.cit.aet.hephaestus.integration.scm.events.ScmEventPayload;
+import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequest.GitHubPullRequestProcessor;
+import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequest.dto.GitHubPullRequestDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequest.GitLabHeadPipeline;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequest.GitLabMergeRequestProcessor;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.pullrequest.GitLabMergeRequestReadinessReader;
@@ -130,6 +132,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -217,6 +220,9 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
 
     @Autowired
     GitLabMergeRequestProcessor mergeRequests;
+
+    @Autowired
+    GitHubPullRequestProcessor pullRequestProcessor;
 
     @Autowired
     IssueRepository issueRows;
@@ -1395,6 +1401,99 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
     }
 
     @Test
+    void shouldStartNoSecondReviewWhenAReadyDeliveryIsReplayedAfterASynchronize() {
+        var prepared = prepare(
+                IdentityProviderType.GITHUB,
+                false,
+                Map.of(),
+                false,
+                List.of(ScmItemEvents.PULL_REQUEST_READY, ScmItemEvents.PULL_REQUEST_SYNCHRONIZED));
+        var ready = pullRequestPayload(prepared, "b".repeat(40), Instant.now().plusSeconds(60));
+        var synchronize =
+                pullRequestPayload(prepared, "c".repeat(40), Instant.now().plusSeconds(120));
+        deliver(prepared, "ready_for_review", ready);
+        deliver(prepared, "synchronize", synchronize);
+        var occasions = itemEvents(prepared);
+        var admitted = itemReviews(prepared).stream().map(Review::getId).toList();
+        assertThat(occasions)
+                .extracting(ItemEvent::getName)
+                .containsExactlyInAnyOrder(
+                        ScmItemEvents.PULL_REQUEST_READY.value(), ScmItemEvents.PULL_REQUEST_SYNCHRONIZED.value());
+        assertThat(admitted).hasSize(2);
+
+        // The provider delivers both again after the push: the ready payload still names the first head.
+        deliver(prepared, "ready_for_review", ready);
+        deliver(prepared, "synchronize", synchronize);
+
+        assertThat(itemEvents(prepared))
+                .extracting(ItemEvent::getId)
+                .containsExactlyInAnyOrderElementsOf(
+                        occasions.stream().map(ItemEvent::getId).toList());
+        assertThat(itemReviews(prepared)).extracting(Review::getId).containsExactlyInAnyOrderElementsOf(admitted);
+        assertThat(occasions)
+                .filteredOn(occasion -> occasion.getName().equals(ScmItemEvents.PULL_REQUEST_READY.value()))
+                .singleElement()
+                .extracting(ItemEvent::getItemVersion)
+                .isEqualTo(prepared.version().value());
+    }
+
+    private GitHubPullRequestDTO pullRequestPayload(Prepared prepared, String head, Instant updatedAt) {
+        var pull = Objects.requireNonNull(transactions.execute(
+                ignored -> pulls.findById(Objects.requireNonNull(prepared.item().sourceId()))
+                        .orElseThrow()));
+        var author = Objects.requireNonNull(transactions.execute(ignored ->
+                users.findById(Objects.requireNonNull(pull.getAuthor()).getId()).orElseThrow()));
+        return new JsonMapper()
+                .readValue(
+                        """
+                        {"id": %d, "node_id": "PR_node", "number": %d, "title": "%s", "body": "%s",
+                         "state": "open", "html_url": "%s", "created_at": "%s", "updated_at": "%s",
+                         "draft": false, "merged": false, "commits": 1,
+                         "user": {"id": %d, "login": "%s", "type": "User"},
+                         "head": {"ref": "topic", "sha": "%s"}, "base": {"ref": "main", "sha": "%s"}}
+                        """.formatted(
+                                        pull.getNativeId(),
+                                        pull.getNumber(),
+                                        pull.getTitle(),
+                                        pull.getBody(),
+                                        pull.getHtmlUrl(),
+                                        pull.getCreatedAt(),
+                                        updatedAt,
+                                        author.getNativeId(),
+                                        author.getLogin(),
+                                        head,
+                                        pull.getBaseRefOid()),
+                        GitHubPullRequestDTO.class);
+    }
+
+    private void deliver(Prepared prepared, String action, GitHubPullRequestDTO payload) {
+        transactions.executeWithoutResult(ignored -> {
+            var repository = repositories
+                    .findById(Objects.requireNonNull(pulls.findById(Objects.requireNonNull(
+                                            prepared.item().sourceId()))
+                                    .orElseThrow()
+                                    .getRepository())
+                            .getId())
+                    .orElseThrow();
+            var context = ProcessingContext.forWebhook(prepared.item().workspaceId(), repository, action);
+            if (action.equals("ready_for_review")) pullRequestProcessor.processReadyForReview(payload, context);
+            else pullRequestProcessor.processSynchronize(payload, context);
+        });
+    }
+
+    private List<ItemEvent> itemEvents(Prepared prepared) {
+        return jdbc
+                .queryForList(
+                        "SELECT id FROM item_event WHERE workspace_id=? AND item_id=?",
+                        UUID.class,
+                        prepared.item().workspaceId(),
+                        prepared.item().itemId())
+                .stream()
+                .map(id -> events.findById(Objects.requireNonNull(id)).orElseThrow())
+                .toList();
+    }
+
+    @Test
     void shouldStateThatAReferencedOccasionsEvidenceExpiredAndNeverPinTheCurrentWorkInItsPlace() {
         var prepared = prepare(IdentityProviderType.GITLAB, false);
         publish(prepared);
@@ -2395,6 +2494,15 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
 
     private Prepared prepare(
             IdentityProviderType type, boolean reviewed, Map<String, Set<String>> state, boolean draft) {
+        return prepare(type, reviewed, state, draft, List.of());
+    }
+
+    private Prepared prepare(
+            IdentityProviderType type,
+            boolean reviewed,
+            Map<String, Set<String>> state,
+            boolean draft,
+            List<ItemEventName> alsoOn) {
         var fixture = fixture(type);
         var workspace = fixture.workspace();
         workspace.getFeatures().setPracticesEnabled(true);
@@ -2417,7 +2525,7 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
         var original = DefinitionTestFixtures.definition(kind, "Describe the work", "Explain the work.", null);
         var definition = new PracticeDefinition(
                 original.name(),
-                new ReviewOn(List.of(name), state),
+                new ReviewOn(Stream.concat(Stream.of(name), alsoOn.stream()).toList(), state),
                 original.appliesWhen(),
                 reviewed ? AboutRole.REVIEWER : AboutRole.AUTHOR,
                 original.reads(),

@@ -273,6 +273,15 @@ public class GitLabIssueCommentProcessor extends BaseGitLabProcessor {
             return null;
         }
         boolean isNew = existingOpt.isEmpty();
+        // An older hook would restore older words (sync-lifecycle.md).
+        Instant eventUpdatedAt = attrs.updatedAt() == null ? null : parseGitLabTimestamp(attrs.updatedAt());
+        if (!isNew
+                && eventUpdatedAt != null
+                && existingOpt.get().getUpdatedAt() != null
+                && eventUpdatedAt.isBefore(existingOpt.get().getUpdatedAt())) {
+            log.debug("Skipped stale note: noteId={}", attrs.id());
+            return existingOpt.get();
+        }
         IssueComment comment = existingOpt.orElseGet(IssueComment::new);
         Set<String> changedFields = new HashSet<>();
 

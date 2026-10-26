@@ -209,6 +209,16 @@ public class GitHubIssueCommentProcessor extends BaseGitHubProcessor {
         Long providerId = Objects.requireNonNull(context.providerId());
         Optional<IssueComment> existingOpt = commentRepository.findByNativeIdAndProviderId(commentId, providerId);
         boolean isNew = existingOpt.isEmpty();
+        // An older payload would restore older words (sync-lifecycle.md).
+        if (!isNew
+                && dto.updatedAt() != null
+                && existingOpt.get().getUpdatedAt() != null
+                && dto.updatedAt().isBefore(existingOpt.get().getUpdatedAt())) {
+            log.debug(
+                    "Skipped stale comment update: commentId={}",
+                    existingOpt.get().getId());
+            return existingOpt.get();
+        }
 
         IssueComment comment = existingOpt.orElseGet(IssueComment::new);
         Set<String> changedFields = new HashSet<>();

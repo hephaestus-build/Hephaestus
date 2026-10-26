@@ -178,6 +178,28 @@ class GitHubIssueCommentMessageHandlerIntegrationTest extends BaseIntegrationTes
     }
 
     @Test
+    void shouldKeepTheEditedCommentWhenTheCreatedDeliveryIsReplayed() throws Exception {
+        GitHubIssueCommentEventDTO createEvent = loadPayload("issue_comment.created");
+        createTestIssue(
+                required(createEvent.issue().getDatabaseId()),
+                createEvent.issue().number());
+        handler.handleEvent(createEvent);
+        GitHubIssueCommentEventDTO editEvent = loadPayload("issue_comment.edited");
+        handler.handleEvent(editEvent);
+
+        handler.handleEvent(loadPayload("issue_comment.created"));
+
+        assertThat(commentRepository.findByNativeIdAndProviderId(
+                        required(editEvent.comment().id()), gitProviderId()))
+                .get()
+                .satisfies(comment -> {
+                    assertThat(comment.getBody()).isEqualTo(editEvent.comment().body());
+                    assertThat(comment.getUpdatedAt())
+                            .isEqualTo(editEvent.comment().updatedAt());
+                });
+    }
+
+    @Test
     void shouldDeleteCommentOnDeletedEvent() throws Exception {
         // Given - first create the comment
         GitHubIssueCommentEventDTO createEvent = loadPayload("issue_comment.created");
