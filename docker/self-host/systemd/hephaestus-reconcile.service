@@ -1,7 +1,8 @@
 [Unit]
 Description=Reconcile this host to its Hephaestus release channel
 Documentation=https://docs.hephaestus.build/admin/pull-based-deployment
-Requires=docker.service
+# Wants, not Requires: a host that follows its channel with the chart may have no Docker.
+Wants=docker.service
 After=docker.service network-online.target
 Wants=network-online.target
 
@@ -18,6 +19,11 @@ StateDirectoryMode=0750
 # timer in /etc/systemd/system at that release and reloads systemd itself.
 ExecStart=/usr/bin/env node /var/lib/hephaestus/tooling/scripts/reconcile-deployment.ts
 TimeoutStartSec=30min
+# Helm keeps its cache, configuration and data in the state directory: ProtectHome hides /root.
+# Only a host whose stack is `chart` starts Helm.
+Environment=HELM_CACHE_HOME=/var/lib/hephaestus/helm/cache
+Environment=HELM_CONFIG_HOME=/var/lib/hephaestus/helm/config
+Environment=HELM_DATA_HOME=/var/lib/hephaestus/helm/data
 
 NoNewPrivileges=yes
 ProtectSystem=strict
