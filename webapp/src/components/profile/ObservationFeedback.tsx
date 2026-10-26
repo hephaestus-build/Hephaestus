@@ -5,6 +5,10 @@ import type { OwnFeedbackRef } from "@/api/types.gen";
 import { InlineLink } from "@/components/common/InlineLink";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { useNow } from "@/components/common/use-now";
+import {
+	isPartialDelivery,
+	PARTIAL_DELIVERY_DESCRIPTION,
+} from "@/components/practice-vocabulary/delivery-state-defs";
 import { FEEDBACK_DESTINATION_DEFS } from "@/components/practice-vocabulary/feedback-destination-defs";
 import { FEEDBACK_RESOLUTION_DEFS } from "@/components/practice-vocabulary/feedback-resolution-defs";
 import { FEEDBACK_USEFULNESS_DEFS } from "@/components/practice-vocabulary/feedback-usefulness-defs";
@@ -45,7 +49,7 @@ const FEEDBACK_BOX = "rounded-xl border border-foreground/15 bg-background p-3 s
  */
 export function ObservationFeedback({ feedback: given, links }: ObservationFeedbackProps) {
 	const today = new Date(useNow());
-	const feedback = deliveredOnly(given);
+	const feedback = exposedFeedback(given);
 	if (feedback.length === 0) {
 		return null;
 	}
@@ -67,14 +71,14 @@ export function ObservationFeedback({ feedback: given, links }: ObservationFeedb
 							{index + 1}
 						</span>
 						<StatusBadge def={FEEDBACK_DESTINATION_DEFS[piece.destination]} />
-						{/* Only delivered feedback reaches this block, so a state label would say nothing:
-						    the time it was delivered does. */}
-						{piece.deliveredAt !== null && (
+						{/* Full delivery needs no state label; partial delivery is described below. */}
+						{piece.deliveredAt !== null && !isPartialDelivery(piece) && (
 							<time dateTime={piece.deliveredAt.toISOString()} className="text-muted-foreground">
 								Delivered {formatDayTime(piece.deliveredAt, today)}
 							</time>
 						)}
 					</p>
+					{isPartialDelivery(piece) && <p className="text-sm">{PARTIAL_DELIVERY_DESCRIPTION}</p>}
 					<FeedbackWhere feedback={piece} links={links} />
 					<ResponseLine feedback={piece} />
 				</li>
@@ -83,9 +87,9 @@ export function ObservationFeedback({ feedback: given, links }: ObservationFeedb
 	);
 }
 
-/** The feedback that reached the developer: the only feedback the developer pages name. */
-export function deliveredOnly(feedback: OwnFeedbackRef[]): OwnFeedbackRef[] {
-	return feedback.filter((piece) => piece.state === "DELIVERED");
+/** The feedback with a confirmed first exposure, from the server's visible feedback. */
+export function exposedFeedback(feedback: OwnFeedbackRef[]): OwnFeedbackRef[] {
+	return feedback.filter((piece) => piece.deliveredAt !== null);
 }
 
 /** The way to the feedback where it lives: its comment on the work, or its place in Hephaestus. */
@@ -96,7 +100,7 @@ function FeedbackWhere({
 	feedback: OwnFeedbackRef;
 	links: ObservationFeedbackLinks | undefined;
 }) {
-	if (feedback.state !== "DELIVERED") {
+	if (feedback.deliveredAt === null) {
 		return null;
 	}
 	if (feedback.destination === "ON_WORK") {

@@ -9,6 +9,21 @@ import {
 import { FEEDBACK_DECISION_DEFS } from "./feedback-decision-defs";
 
 describe("deliveryOutcome for unconfirmed feedback", () => {
+	it.each(["UNCONFIRMED", "FAILED"] as const)(
+		"describes confirmed partial exposure when %s",
+		(state) => {
+			const outcome = deliveryOutcome({
+				destination: "ON_WORK",
+				state,
+				stopReason: null,
+				withdrawn: false,
+				deliveredAt: new Date("2026-10-14T10:00:00Z"),
+			});
+			expect(outcome.description).toBe(
+				"Part of this feedback appeared on the work; the rest could not be confirmed.",
+			);
+		},
+	);
 	it("names no conversation for a write on the work", () => {
 		const outcome = deliveryOutcome({
 			destination: "ON_WORK",

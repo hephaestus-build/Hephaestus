@@ -105,4 +105,24 @@ class FeedbackCopyDeliveryIntegrationTest extends AbstractFeedbackDeliveryIntegr
         assertThat(provider.summaryCreates).isEqualTo(1);
         assertThat(provider.noteCreates).isEqualTo(1);
     }
+
+    @Test
+    void shouldNotReportDeliveryUntilARetriedSiblingCopyPosts() {
+        prepare(true);
+        provider.noteFailure = Failure.BEFORE_CREATE;
+        sender.send(workspace.getId(), feedbackId);
+        var first = current().getDeliveredAt();
+        assertThat(first).isNotNull();
+        due();
+        newSender().send(workspace.getId(), feedbackId);
+        assertThat(current().getState()).isEqualTo(FeedbackState.FAILED);
+        assertThat(current().getDeliveredAt()).isEqualTo(first);
+        provider.noteFailure = Failure.NONE;
+        store.retry(workspace.getId(), feedbackId, developerId);
+        assertThat(current().getState()).isEqualTo(FeedbackState.UNCONFIRMED);
+        newSender().send(workspace.getId(), feedbackId);
+        assertThat(current().getState()).isEqualTo(FeedbackState.DELIVERED);
+        assertThat(current().getDeliveredAt()).isEqualTo(first);
+        assertThat(provider.summaryCreates).isEqualTo(1);
+    }
 }

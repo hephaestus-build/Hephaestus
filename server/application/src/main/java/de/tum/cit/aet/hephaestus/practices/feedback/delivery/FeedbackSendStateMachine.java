@@ -36,11 +36,14 @@ public final class FeedbackSendStateMachine {
         if (feedback.getState() == FeedbackState.REPLACED || feedback.getState() == FeedbackState.REJECTED) {
             return new Projection(feedback.getState(), feedback.getStopReason(), deliveredAt);
         }
+        if (copies.stream().anyMatch(copy -> copy.getState() == FeedbackCopyState.FAILED)) {
+            return new Projection(FeedbackState.FAILED, null, deliveredAt);
+        }
+        if (deliveredAt != null && copies.stream().anyMatch(copy -> copy.getState() == FeedbackCopyState.PLANNED)) {
+            return new Projection(FeedbackState.UNCONFIRMED, FeedbackStopReason.DELIVERY_UNCONFIRMED, deliveredAt);
+        }
         if (deliveredAt != null) {
             return new Projection(FeedbackState.DELIVERED, null, deliveredAt);
-        }
-        if (copies.stream().anyMatch(copy -> copy.getState() == FeedbackCopyState.FAILED)) {
-            return new Projection(FeedbackState.FAILED, null, null);
         }
         if ((copies.isEmpty() && withheldReason != null)
                 || (!copies.isEmpty()

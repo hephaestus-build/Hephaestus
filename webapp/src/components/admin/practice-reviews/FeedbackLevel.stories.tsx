@@ -368,9 +368,12 @@ export const DeliveredSummaryComment: Story = {
 };
 
 export const PartialPackage: Story = {
-	args: { feedback: ready(partialPackageFeedbackDetail) },
+	args: { feedback: ready({ ...partialPackageFeedbackDetail, state: "FAILED" }) },
 	play: async () => {
 		const panelElement = await settledDrawerPanel();
+		within(panelElement).getByText(
+			"Part of this feedback appeared on the work; the rest could not be confirmed.",
+		);
 		await expect(panelElement.querySelector("[data-sheet-status]")).toHaveTextContent(
 			/1 posted · 2 failed/u,
 		);

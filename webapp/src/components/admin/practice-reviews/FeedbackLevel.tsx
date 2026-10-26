@@ -23,6 +23,8 @@ import { UNVERIFIED_HISTORY_NOTE } from "@/components/practice-vocabulary/claim-
 import {
 	DELIVERY_STATE_DEFS,
 	deliveryOutcome,
+	isPartialDelivery,
+	PARTIAL_DELIVERY_DESCRIPTION,
 	withdrawalMark,
 } from "@/components/practice-vocabulary/delivery-state-defs";
 import {
@@ -212,6 +214,9 @@ export function FeedbackLevel({
 		<>
 			{header}
 			<DrawerBody className="flex flex-col gap-8 pt-2">
+				{isPartialDelivery(record) && (
+					<p className="text-sm text-muted-foreground">{PARTIAL_DELIVERY_DESCRIPTION}</p>
+				)}
 				{record.unverifiedHistory && (
 					<p className="text-sm text-muted-foreground">{UNVERIFIED_HISTORY_NOTE}</p>
 				)}

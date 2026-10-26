@@ -36,7 +36,7 @@ import {
 } from "./evidence";
 import { EvidenceFileBlock } from "./EvidenceFileBlock";
 import {
-	deliveredOnly,
+	exposedFeedback,
 	type ObservationFeedbackLinks,
 	ObservationFeedback,
 } from "./ObservationFeedback";
@@ -173,11 +173,10 @@ function ReasonSections({ reasons }: { reasons: ResultReasons }) {
 }
 
 /**
- * The feedback an observation shows: only what was delivered. Feedback that is ready, withheld or
- * failed never reached the developer, so the developer pages do not name it.
+ * The feedback an observation shows: only what has a confirmed first exposure.
  */
 function deliveredFeedback(result: ResultList | ResultDetail) {
-	return isResultDetail(result) ? deliveredOnly(result.feedback) : [];
+	return isResultDetail(result) ? exposedFeedback(result.feedback) : [];
 }
 
 export function ReviewResultRow({

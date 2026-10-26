@@ -201,6 +201,7 @@ Hephaestus never sends an open question as feedback.
 | **Practice feedback** | The full name for feedback when the surrounding text does not establish its context. | message, AI feedback, feedback item, ledger unit, AI mentoring, AI code review |
 | **Destination** | Where feedback is intended to appear: on the work, on the practice page, or in conversation. | channel, location, surface |
 | **Delivery** | Whether feedback is awaiting approval, ready, delivered, withheld, rejected, replaced, failed or unconfirmed. | surface |
+| **Partial delivery** | At least one copy appeared on the work, while another copy failed or its appearance is unconfirmed. | delivered |
 | **Copy** | One appearance of feedback: a summary, line note, file note or conversation answer. | placement |
 | **Decision** | An admin action on feedback: approve, reject, withdraw or restore. |  |
 | **Response** | The developer's answer to feedback. Resolution and usefulness are separate dimensions. |  |

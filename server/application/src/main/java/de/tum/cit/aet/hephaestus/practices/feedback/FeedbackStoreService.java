@@ -238,11 +238,12 @@ public class FeedbackStoreService implements FeedbackStore, ConversationClaims {
         var check = check(row, true);
         if (!check.allowed()) throw conflict("Current delivery policy does not permit this retry.");
         if (copies.retryAbsent(workspaceId, feedbackId) == 0) throw conflict("No absent copy can be retried.");
+        boolean exposed = row.getDeliveredAt() != null;
         feedback.updateDelivery(
                 workspaceId,
                 feedbackId,
-                row.getDeliveredAt() == null ? FeedbackState.READY : FeedbackState.DELIVERED,
-                null,
+                exposed ? FeedbackState.UNCONFIRMED : FeedbackState.READY,
+                exposed ? FeedbackStopReason.DELIVERY_UNCONFIRMED : null,
                 row.getDeliveredAt());
         sendQueue.queue(row, FeedbackSendAction.POST, FeedbackSendState.PENDING);
     }
