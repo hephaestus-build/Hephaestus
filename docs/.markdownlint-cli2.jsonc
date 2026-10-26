@@ -64,8 +64,7 @@
 		// inline code spans (`de.tum.cit.aet.hephaestus`) and in link text that mirrors a URL.
 		"MD044": false,
 
-		// The bare URLs here are deliberate: contact addresses and instance URLs in the DSMS
-		// record-of-processing, where the URL is the datum, plus ADR reference lists. GFM autolinks a
+		// The bare URLs here are deliberate: ADR reference lists, where the URL is the datum. GFM autolinks a
 		// bare URL so nothing renders broken, and the rule's `<...>` fix form would put angle brackets
 		// into MDX, which parses them as JSX.
 		"MD034": false,

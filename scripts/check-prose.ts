@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -40,17 +40,23 @@ export function parsePaths(source: string): readonly string[] {
 	return paths;
 }
 
+/**
+ * Every enforced page that still exists stays enforced, under its new name after a rename. A deleted
+ * page has no prose left to check, so it leaves the list with its file.
+ */
 export function assertGrowth(
 	before: readonly string[],
 	after: readonly string[],
 	renames: ReadonlyMap<string, string> = new Map(),
+	exists: (file: string) => boolean = () => true,
 ): void {
-	const lost = before.filter(
-		(file) => !after.includes(file) && !after.includes(renames.get(file) ?? file),
-	);
+	const lost = before.filter((file) => {
+		const current = renames.get(file) ?? file;
+		return !after.includes(file) && !after.includes(current) && exists(current);
+	});
 	if (lost.length > 0) {
 		throw new Error(
-			`STE enforcement lost paths: ${lost.join(", ")}. Restore them; get maintainer review for an explicit rename or deletion.`,
+			`STE enforcement lost paths: ${lost.join(", ")}. Each page still exists, so restore its entry, or carry it to the page's new name.`,
 		);
 	}
 }
@@ -109,6 +115,7 @@ export function checkRatchet(
 			parsePaths(execFileSync("git", ["show", `${revision}:${enforcedList}`], options)),
 			paths,
 			renames,
+			(file) => existsSync(path.join(cwd, file)),
 		);
 	}
 	for (const file of paths) {

@@ -65,7 +65,8 @@ await test("STE paths are explicit, unique, and grow only", () => {
 	);
 	assert.throws(() => parsePaths('[".claude/skills/composition-patterns/other.json"]'));
 	assert.doesNotThrow(() => assertGrowth(["a.md"], ["a.md", "b.md"]));
-	assert.throws(() => assertGrowth(["a.md"], ["b.md"]), /Restore them/u);
+	assert.throws(() => assertGrowth(["a.md"], ["b.md"]), /restore its entry/u);
+	assert.doesNotThrow(() => assertGrowth(["a.md"], ["b.md"], new Map(), () => false));
 });
 
 await test("the shared words preserve boundaries, case, and technical names", () => {
@@ -289,23 +290,29 @@ await test("the path ratchet compares the actual base and rejects shrinkage, mis
 for (const scenario of [
 	{
 		name: "retains enforcement across a committed rename",
-		rename: true,
+		change: "rename",
 		enforced: ["new.md"],
 		retained: true,
 	},
 	{
-		name: "rejects deletion of an enforced page",
-		rename: false,
+		name: "accepts deletion of an enforced page together with its entry",
+		change: "delete",
+		enforced: ["other.md"],
+		retained: true,
+	},
+	{
+		name: "rejects un-enforcing a page that still exists",
+		change: "none",
 		enforced: ["other.md"],
 		retained: false,
 	},
 	{
 		name: "rejects a rename to an unenforced page",
-		rename: true,
+		change: "rename",
 		enforced: ["other.md"],
 		retained: false,
 	},
-]) {
+] as const) {
 	await test(`the path ratchet ${scenario.name}`, async () => {
 		const directory = await mkdtemp(path.join(tmpdir(), "ste-rename-"));
 		try {
@@ -333,13 +340,13 @@ for (const scenario of [
 			await writeFile(manifest, '["old.md"]');
 			commit("Initial enforced page");
 			const base = git("rev-parse", "HEAD").trim();
-			if (scenario.rename) {
+			if (scenario.change === "rename") {
 				await rename(path.join(directory, "old.md"), path.join(directory, "new.md"));
-			} else {
+			} else if (scenario.change === "delete") {
 				await rm(path.join(directory, "old.md"));
 			}
 			await writeFile(manifest, JSON.stringify(scenario.enforced));
-			commit("Move or delete the enforced page");
+			commit("Move, delete or un-enforce the enforced page");
 			if (scenario.retained) {
 				assert.deepEqual(checkRatchet(base, directory), scenario.enforced);
 			} else {

@@ -94,7 +94,6 @@ const sidebars: SidebarsConfig = {
 							id: "dsms/record-of-processing",
 							label: "Record of Processing (Art. 30)",
 						},
-						{ type: "doc", id: "dsms/dpia-prescreen", label: "DPIA Pre-Screen (Art. 35)" },
 						{ type: "doc", id: "dsms/processor-checklist", label: "Processor Checklist (Art. 28)" },
 						{
 							type: "doc",
@@ -102,11 +101,6 @@ const sidebars: SidebarsConfig = {
 							label: "Artifact-Source Governance",
 						},
 						{ type: "doc", id: "dsms/personal-data-map", label: "Personal-Data Map" },
-						{
-							type: "doc",
-							id: "dsms/tum-privacy-notice-changes",
-							label: "TUM Privacy Notice Changes",
-						},
 					],
 				},
 			],

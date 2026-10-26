@@ -40,7 +40,8 @@ See the [release](https://github.com/vale-cli/vale/releases/tag/v3.24.0) and its
 
 The list can grow, but the gate rejects removal of a path from the base branch.
 A missing base revision is an error, not permission to skip this check.
-A rename or deletion needs an explicit policy change and maintainer review.
+A deleted page leaves the list with its file.
+Removing the entry of a page that still exists needs an explicit policy change and maintainer review.
 
 The UI rule `hephaestus/ui-text-voice` uses [oxlint's JavaScript plugin API](https://oxc.rs/docs/guide/usage/linter/js-plugins.html) to read JSX literals.
 
