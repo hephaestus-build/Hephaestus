@@ -161,9 +161,15 @@ broker. See [Consumers that outlive their deployment](#consumers-that-outlive-th
 
 ## How long a delivery is actually kept
 
-The self-host `.env.example` overrides the application defaults below with `512MB` per stream and
-`6GB` for GitHub. Its broker defaults are `NATS_JS_MAX_MEM=1G` and
-`NATS_JS_MAX_FILE_BYTES=10737418240` (10 GiB). The four configured stream bounds must fit within
+Two environment files ship, with different numbers:
+
+- `docker/.env.example` (the reference deployment) keeps the application defaults below: `1GB` per
+  stream, `10GB` for GitHub, and a broker cap of `NATS_JS_MAX_FILE_BYTES=17179869184` (16 GiB).
+- `docker/self-host/.env.example` (one small host) sets `512MB` per stream, `6GB` for GitHub,
+  `NATS_JS_MAX_MEM=1G` and `NATS_JS_MAX_FILE_BYTES=10737418240` (10 GiB). At the 7-day age, its
+  GitHub bound fits about 460 MB of deliveries a day.
+
+The four configured stream bounds must fit within
 the broker's file-storage cap. Do not size that cap above the volume's available space.
 
 Each stream carries two bounds:
@@ -214,7 +220,7 @@ stream, so those are transport buffers and nothing more.
 
 ## The storage budget, and why it is not just a number
 
-`NATS_JS_MAX_FILE_BYTES` is 10 GiB in the self-host `.env.example` and 16 GiB without an override.
+`NATS_JS_MAX_FILE_BYTES` is 16 GiB in `docker/.env.example` and without an override, and 10 GiB in `docker/self-host/.env.example`.
 It sets the broker's JetStream budget and the total against which the receiver checks per-stream bounds.
 **The receiver refuses to start if the four bounds sum above that budget:**
 
