@@ -33,7 +33,9 @@ CI installs and upgrades the chart on Kubernetes 1.35, the lowest version that t
 It also runs 1.35 on `arm64`, the minor version of the `arm64` host that the maintainers deploy to.
 A pull request runs only the latest minor version on `amd64`. When a change touches the chart or the sandbox runtime, the merge queue runs all of them before the commit reaches `main`. A nightly run repeats them on `main`.
 One more run uses three nodes, Calico for network policy, and an external PostgreSQL.
-Each run starts two workers, and each worker passes its isolation probe on that cluster.
+Each run starts two workers with the `dev.yaml` profile, and each worker passes its isolation probe on that cluster.
+In the merge queue, the 1.35 run on `amd64` uses `small.yaml` and `small-16gib.yaml` instead, with one worker, on a runner of 16 GiB.
+Each upgrade must keep the PostgreSQL and NATS Pods: only a change to their own image or settings restarts them.
 On the latest minor version, the `amd64` run also backs up to an S3 server and restores to a point in time, as [Backup and restore](#backup-and-restore) describes.
 [Install on one host (k3s)](#install-on-one-host-k3s) states what the release workflow tests before it publishes a release.
 When a Kubernetes minor version reaches its end of life upstream, the next Hephaestus release can drop it.
@@ -472,7 +474,7 @@ A second run of the same release changes nothing that the first run made.
 A run with the files of a newer release upgrades the host.
 
 Before it publishes a release, the release workflow runs `k3s-install.sh` on Ubuntu 24.04 on `amd64` and on `arm64`.
-It runs the command twice, then an upgrade that restarts every role.
+It runs the command twice, then an upgrade that restarts every role except PostgreSQL and NATS, whose Pods must stay.
 That run differs from your install in these points:
 
 - A local CA issues the Gateway certificate, because `Let's Encrypt` cannot reach a CI runner. CI does not test the HTTP-01 challenge of the `Let's Encrypt` issuer.

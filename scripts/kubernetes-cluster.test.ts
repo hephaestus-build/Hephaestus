@@ -24,7 +24,9 @@ import {
 	NAMESPACE,
 	operatorValues,
 	RELEASE,
+	restartedPods,
 	SANDBOXES,
+	statefulPods,
 } from "./kubernetes-cluster.ts";
 import { isRecord } from "./lib/json.ts";
 
@@ -285,4 +287,38 @@ await test("the summary gives the address, the trust steps for the system, and t
 			true,
 		);
 	}
+});
+
+const statefulPod = (name: string, component: string, uid: string, deleting = false) => ({
+	metadata: {
+		name,
+		uid,
+		labels: { "app.kubernetes.io/component": component },
+		...(deleting ? { deletionTimestamp: "2026-10-26T18:00:00Z" } : {}),
+	},
+});
+
+await test("an upgrade check names each PostgreSQL or NATS Pod that it replaced or lost", () => {
+	const before = statefulPods({
+		items: [
+			statefulPod("heph-postgresql-0", "postgresql", "a"),
+			statefulPod("heph-nats-0", "nats", "b"),
+			statefulPod("heph-server-1", "server", "c"),
+		],
+	});
+	assert.deepEqual(
+		[...before],
+		[
+			["heph-postgresql-0", "a"],
+			["heph-nats-0", "b"],
+		],
+	);
+	assert.deepEqual(restartedPods(before, before), []);
+	const after = statefulPods({
+		items: [
+			statefulPod("heph-postgresql-0", "postgresql", "d"),
+			statefulPod("heph-nats-0", "nats", "b", true),
+		],
+	});
+	assert.deepEqual(restartedPods(before, after), ["heph-postgresql-0", "heph-nats-0"]);
 });
