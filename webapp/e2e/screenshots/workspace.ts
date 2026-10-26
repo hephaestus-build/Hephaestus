@@ -69,6 +69,7 @@ function pullRequest(number: number, title: string): Wire<ItemRef> {
 const retries = pullRequest(214, "Retry the ingest client with backoff");
 const paging = pullRequest(219, "Page the dashboard query");
 const metrics = pullRequest(223, "Export queue depth as a metric");
+const cache = pullRequest(226, "Expire cached tenant lookups");
 
 function result(
 	item: Wire<ItemRef>,
@@ -123,6 +124,7 @@ const groups: Group[] = [
 				standing: "DEVELOPING",
 				name: "State how to verify the change",
 				results: [
+					result(paging, "NOT_MET", "The description does not say how to check the paging."),
 					result(
 						metrics,
 						"NOT_MET",
@@ -170,6 +172,7 @@ const groups: Group[] = [
 						"Add a test that checks the delay doubles after each failed attempt.",
 					),
 					result(paging, "MET", "A test covers the last, partial page."),
+					result(cache, "NOT_MET", "The cache expiry has no test."),
 				],
 			},
 		],
@@ -207,7 +210,7 @@ const groupStandings: Wire<PracticeGroupStanding>[] = groups.map((group) => ({
 	guidance: null,
 	guidanceSource: null,
 	results: group.practices.flatMap((practice) => practice.results),
-	sources: [{ count: 3, itemKind: "scm.pull_request" }],
+	sources: [{ count: 4, itemKind: "scm.pull_request" }],
 	standing: group.standing,
 	trendSupport: null,
 }));
@@ -229,7 +232,7 @@ const overview: Wire<PracticeProfileOverview> = {
 			cleanNeeded: null,
 			direction: null,
 			evidence: [metrics],
-			feedbackId: "feedback-metrics",
+			feedbackId: "feedback-verify",
 			from: null,
 			groupName: "Packaging work for review",
 			groupSlug: "review-ready-work",
@@ -241,16 +244,22 @@ const overview: Wire<PracticeProfileOverview> = {
 		},
 	],
 	latestReview: { at: daysAgo(1), item: metrics, reviewId: "review-223", status: "COMPLETE" },
-	reviewedItems: [retries, paging, metrics],
+	reviewedItems: [retries, paging, metrics, cache],
 	window: { since: daysAgo(28), until: NOW.toISOString() },
 };
 
+interface Evidence {
+	item: Wire<ItemRef>;
+	summary: string;
+	daysAgo: number;
+}
+
+/** Open feedback on a pattern: the server raises one only after it recurs, so it cites two pieces of work. */
 function feedback(
 	id: string,
 	practice: { slug: string; name: string; group: Group },
-	item: Wire<ItemRef>,
-	text: { headline: string; body: string; nextStep: string; summary: string },
-	preparedDaysAgo: number,
+	text: { headline: string; body: string; nextStep: string },
+	evidence: [Evidence, Evidence],
 ): Wire<PracticePageFeedback> {
 	return {
 		body: text.body,
@@ -258,15 +267,13 @@ function feedback(
 		cleanWork: [],
 		closedAt: null,
 		closedBy: null,
-		evidence: [
-			{
-				item,
-				recordedAt: daysAgo(preparedDaysAgo),
-				resultId: `${id}-result`,
-				reviewId: `${id}-review`,
-				summary: text.summary,
-			},
-		],
+		evidence: evidence.map((piece, index) => ({
+			item: piece.item,
+			recordedAt: daysAgo(piece.daysAgo),
+			resultId: `${id}-result-${index}`,
+			reviewId: `${id}-review-${index}`,
+			summary: piece.summary,
+		})),
 		groupName: practice.group.name,
 		groupSlug: practice.group.slug,
 		headline: text.headline,
@@ -274,7 +281,7 @@ function feedback(
 		nextStep: text.nextStep,
 		practiceName: practice.name,
 		practiceSlug: practice.slug,
-		preparedAt: daysAgo(preparedDaysAgo),
+		preparedAt: daysAgo(evidence[1].daysAgo),
 		readAt: null,
 		response: null,
 		unverifiedHistory: false,
@@ -290,37 +297,48 @@ const practiceFeedback: Wire<PracticePageFeedback>[] =
 		? []
 		: [
 				feedback(
-					"feedback-metrics",
+					"feedback-verify",
 					{
 						slug: "states-how-to-verify-the-change",
 						name: "State how to verify the change",
 						group: packaging,
 					},
-					metrics,
 					{
 						headline: "Reviewers cannot see how to check your change",
 						body: "Your last two pull requests describe the change well, but neither says how a reviewer can see that it works.",
 						nextStep:
 							"Add a short “How to verify” section with the command or the screen that shows the result.",
-						summary: "The description does not say how to see the new metric.",
 					},
-					1,
+					[
+						{
+							item: paging,
+							summary: "The description does not say how to check the paging.",
+							daysAgo: 4,
+						},
+						{
+							item: metrics,
+							summary: "The description does not say how to see the new metric.",
+							daysAgo: 1,
+						},
+					],
 				),
 				feedback(
-					"feedback-retries",
+					"feedback-tests",
 					{
 						slug: "ships-tests-with-the-change",
 						name: "Include tests with the change",
 						group: testing,
 					},
-					retries,
 					{
 						headline: "New behavior arrives without a test",
-						body: "The retry delay in #214 changes how the client behaves under load, and no test pins it down.",
-						nextStep: "Add a test that checks the delay doubles after each failed attempt.",
-						summary: "The retry delay has no test.",
+						body: "The retry delay in #214 and the cache expiry in #226 change how the service behaves, and no test pins either down.",
+						nextStep:
+							"Add a test for each new timing rule, such as a check that the retry delay doubles.",
 					},
-					6,
+					[
+						{ item: retries, summary: "The retry delay has no test.", daysAgo: 9 },
+						{ item: cache, summary: "The cache expiry has no test.", daysAgo: 6 },
+					],
 				),
 			];
 
@@ -538,6 +556,11 @@ export const handlers = (role: WorkspaceMembership["role"]) => [
 	http.get(`${ws}/practices/feedback/practice-page`, () => HttpResponse.json(practiceFeedback)),
 	http.get(`${ws}/mentor/conversation`, () => HttpResponse.json(conversation)),
 	http.get(`${ws}/mentor/entries`, () => HttpResponse.json(entries)),
-	// No live updates: each screen shows one moment.
-	http.get(`${ws}/mentor/events`, () => new HttpResponse(null, { status: 204 })),
+	// An open stream with no events: each screen shows one moment. The long retry keeps the browser
+	// from reconnecting, and from showing that live updates paused, while it captures.
+	http.get(
+		`${ws}/mentor/events`,
+		() =>
+			new HttpResponse("retry: 3600000\n\n", { headers: { "Content-Type": "text/event-stream" } }),
+	),
 ];

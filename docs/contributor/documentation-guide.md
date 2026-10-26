@@ -172,9 +172,10 @@ import Screenshot from "@site/src/components/Screenshot";
 
 `vp run generate:docs-screenshots` makes every image from the built web app:
 
-- The app reads a synthetic workspace from `webapp/e2e/screenshots/workspace.ts`. No server or database runs.
+- The app reads a synthetic workspace from `webapp/e2e/screenshots/workspace.ts`. No server or database runs. Some data comes from fixture builders that the stories share. A change to them can change an image.
+- The live event stream of the app stays open with no events. A new screen with another stream needs the same answer in `workspace.ts`.
 - The capture uses a 1280 by 800 viewport, a fixed clock, and the UTC time zone. It blocks every request to another site, so no avatar of a real person appears.
-- Each screen is captured in the light and the dark color scheme. The images go to `docs/static/img/user/<page>/<name>.<scheme>.webp`.
+- Chromium encodes each image as WebP. Each screen is captured in the light and the dark color scheme. The images go to `docs/static/img/user/<page>/<name>.<scheme>.webp`.
 - An image of more than 150 KB fails the capture.
 - A request that `workspace.ts` does not answer fails the capture, so no image shows an error by accident.
 

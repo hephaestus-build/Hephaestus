@@ -3,7 +3,7 @@
  * The API is the synthetic workspace in `workspace.ts`; a request that it does not answer fails the
  * capture, so a screen never shows an error state that the guide does not describe.
  */
-import { mkdir, stat, writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { type Browser, expect, type Locator, type Page, test } from "@playwright/test";
@@ -104,15 +104,12 @@ async function open(
 }
 
 /** Playwright writes PNG or JPEG only; Chromium's own capture encodes WebP. */
-async function captureWebp(page: Page, file: string): Promise<number> {
+async function captureWebp(page: Page): Promise<Buffer> {
 	// A focused field blinks its caret, so two captures of the same screen would differ.
 	await page.addStyleTag({ content: "* { caret-color: transparent !important; }" });
 	const session = await page.context().newCDPSession(page);
 	const { data } = await session.send("Page.captureScreenshot", { format: "webp", quality: 90 });
-	await mkdir(path.dirname(file), { recursive: true });
-	await writeFile(file, Buffer.from(data, "base64"));
-	const { size } = await stat(file);
-	return size;
+	return Buffer.from(data, "base64");
 }
 
 // oxlint-disable-next-line vitest/prefer-each -- Playwright has no `test.each`; a loop is its idiom.
@@ -123,12 +120,16 @@ for (const shot of shots) {
 				const unanswered = new Set<string>();
 				const page = await open(browser, shot, colorScheme, unanswered);
 				await page.goto(shot.route);
-				await page.waitForLoadState("networkidle");
-				expect([...unanswered], "requests that workspace.ts does not answer").toEqual([]);
 				await expect(shot.ready(page)).toBeVisible();
+				await page.waitForLoadState("networkidle");
+				const image = await captureWebp(page);
+				// Checked after the capture, so a request made while the screen settled counts too.
+				expect([...unanswered], "requests that workspace.ts does not answer").toEqual([]);
+				expect(image.byteLength).toBeLessThanOrEqual(MAX_BYTES);
 
 				const file = path.join(OUTPUT, shot.page, `${shot.name}.${colorScheme}.webp`);
-				expect(await captureWebp(page, file)).toBeLessThanOrEqual(MAX_BYTES);
+				await mkdir(path.dirname(file), { recursive: true });
+				await writeFile(file, image);
 				await page.context().close();
 			});
 		}
