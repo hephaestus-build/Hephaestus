@@ -98,6 +98,31 @@ function stripHeadingAnchors(node: HtmlNode): void {
 
 const dropHeadingAnchors = () => stripHeadingAnchors;
 
+/*
+ * The theme is one `hephaestus-theme` cookie across the Hephaestus hosts (ADR 0053, amendment of
+ * 2026-10-26). Before paint, the head script copies the cookie into the storage key that the
+ * Docusaurus colour-mode script in <body> reads; that key carries the site-storage namespace, which
+ * only the build knows, and Docusaurus's own inline script derives it the same way.
+ * `src/theme/ColorModeToggle` writes the reader's choice back to the cookie.
+ */
+function themeCookiePlugin(context: LoadContext): Plugin {
+	const { type, namespace } = context.siteStorage;
+	const storage = `window[${JSON.stringify(type)}]`;
+	const key = JSON.stringify(`theme${namespace}`);
+	return {
+		name: "theme-cookie",
+		injectHtmlTags: () => ({
+			headTags: [
+				{
+					tagName: "script",
+					// The first valid cookie wins, as in the web app's `readThemeCookie`.
+					innerHTML: `(function(){var c;document.cookie.split(";").some(function(e){var p=e.trim().split("=");if(p[0]==="hephaestus-theme"&&(p[1]==="light"||p[1]==="dark"||p[1]==="system")){c=p[1];return true}return false});try{if(c==="light"||c==="dark"){${storage}.setItem(${key},c)}else if(c==="system"){${storage}.removeItem(${key})}}catch(e){}})();`,
+				},
+			],
+		}),
+	};
+}
+
 const config: Config = {
 	title: "Hephaestus documentation",
 	tagline: "Learn from the work you’re already doing",
@@ -166,6 +191,7 @@ const config: Config = {
 
 	plugins: [
 		rawMermaidSourcePlugin,
+		themeCookiePlugin,
 		[
 			"@docusaurus/plugin-content-docs",
 			{

@@ -265,7 +265,9 @@ Workspace detail and list responses expose the canonical `workspaceAddress` for 
 
 ## Browser state and navigation
 
-Each origin keeps its own theme and **View as user** session.
+Each origin keeps its own **View as user** session.
+The theme is the exception: the `hephaestus-theme` cookie on the base domain holds it, so it stays the same on every workspace host.
+The cookie can hold only `light`, `dark` or `system`, so another host under the base domain can change only the theme.
 No browser storage or session token is copied between hosts.
 The workspace-specific **View as user** entry opens on the workspace host before it stores the view.
 Instance administration stays on the apex.

@@ -40,6 +40,8 @@
     <!-- Path is rewritten to content-hashed version at container startup -->
     <!-- e.g., /env-config.js becomes /env-config.a1b2c3d4.js for optimal caching -->
     <script src="/env-config.js"></script>
+    <!-- Applies the theme cookie before the first paint; the app's ThemeProvider takes over after. -->
+    <script src="/theme-init.js"></script>
     <!-- The manifest link is injected by src/main.tsx (localhost gets manifest-dev.json). An
          inline script here would violate the deployed Content-Security-Policy (script-src 'self'
          in webapp/docker/security-headers.conf and the Traefik edge middleware). -->

@@ -1,18 +1,41 @@
 import { createContext, useContext, useEffect, useState } from "react";
 
-const THEMES = ["dark", "light", "system"] as const;
+import environment from "@/environment";
 
-type Theme = (typeof THEMES)[number];
+import { isTheme, readThemeCookie, type Theme, themeCookies } from "./theme-cookie";
 
-/** The stored theme is user-writable, so anything unrecognised falls back to the default. */
-function isTheme(value: string | null): value is Theme {
-	return THEMES.some((theme) => theme === value);
+/**
+ * The per-origin key that held the theme before the cookie; read once, then cleared. Drop it, here
+ * and in `theme-init.js`, once no supported release predates the cookie.
+ */
+const LEGACY_STORAGE_KEY = "theme";
+
+function readLegacyTheme(): Theme | undefined {
+	try {
+		const legacy = localStorage.getItem(LEGACY_STORAGE_KEY);
+		return isTheme(legacy) ? legacy : undefined;
+	} catch {
+		return undefined;
+	}
+}
+
+function writeThemeCookie(theme: Theme) {
+	const scope = {
+		hostname: window.location.hostname,
+		secure: window.location.protocol === "https:",
+		workspaceSubdomains: environment.workspaceSubdomains,
+	};
+	for (const cookie of themeCookies(theme, scope)) {
+		// oxlint-disable-next-line unicorn/no-document-cookie -- `theme-init.js` must read it synchronously before paint; the async Cookie Store cannot serve that read.
+		document.cookie = cookie;
+	}
 }
 
 interface ThemeProviderProps {
 	children?: React.ReactNode;
 	defaultTheme?: Theme;
-	storageKey?: string;
+	/** Off where the theme is chosen around the app, as in Storybook: no cookie is read or written. */
+	persistent?: boolean;
 }
 
 interface ThemeProviderState {
@@ -36,13 +59,31 @@ const ThemeProviderContext = createContext<ThemeProviderState>(NO_PROVIDER);
 export function ThemeProvider({
 	children,
 	defaultTheme = "system",
-	storageKey = "theme",
+	persistent = true,
 	...props
 }: ThemeProviderProps) {
 	const [theme, setTheme] = useState<Theme>(() => {
-		const stored = localStorage.getItem(storageKey);
-		return isTheme(stored) ? stored : defaultTheme;
+		if (!persistent) {
+			return defaultTheme;
+		}
+		return readThemeCookie(document.cookie) ?? readLegacyTheme() ?? defaultTheme;
 	});
+
+	// A choice from before the cookie moves into it once, so it reaches the other hosts too.
+	useEffect(() => {
+		if (!persistent) {
+			return;
+		}
+		const legacy = readLegacyTheme();
+		if (legacy !== undefined && readThemeCookie(document.cookie) === undefined) {
+			writeThemeCookie(legacy);
+		}
+		try {
+			localStorage.removeItem(LEGACY_STORAGE_KEY);
+		} catch {
+			// Blocked storage holds no legacy choice to clear.
+		}
+	}, [persistent]);
 
 	useEffect(() => {
 		const root = window.document.documentElement;
@@ -69,7 +110,9 @@ export function ThemeProvider({
 	const contextValue: ThemeProviderState = {
 		theme,
 		setTheme: (next: Theme) => {
-			localStorage.setItem(storageKey, next);
+			if (persistent) {
+				writeThemeCookie(next);
+			}
 			setTheme(next);
 		},
 	};

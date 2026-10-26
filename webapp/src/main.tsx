@@ -93,7 +93,7 @@ function Root() {
 		<TanstackQuery.Provider>
 			<AuthProvider>
 				<SessionKeepAlive />
-				<ThemeProvider defaultTheme="dark" storageKey="theme">
+				<ThemeProvider>
 					<WrappedRouterProvider />
 					<TanstackDevtools router={router} />
 				</ThemeProvider>
