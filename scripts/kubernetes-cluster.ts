@@ -566,7 +566,11 @@ const GATEWAY_TLS = "gateway-tls";
 export async function prepare(options: PrepareOptions): Promise<{ rotated: boolean }> {
 	await mkdir(options.work, { recursive: true, mode: 0o700 });
 	await chmod(options.work, 0o700);
-	await gatewayApi(options.work);
+	// k3s installs the Gateway API definitions with Traefik, through a Helm chart that cannot adopt
+	// definitions that someone else installed first. `gateway` waits for them.
+	if (options.gateway === undefined) {
+		await gatewayApi(options.work);
+	}
 	await namespace(NAMESPACE);
 	await namespace(SANDBOXES);
 	await namespace(GATEWAY_NAMESPACE, {});
