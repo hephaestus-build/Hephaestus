@@ -47,21 +47,23 @@ Hephaestus gives feedback on every piece of work it can assess, so experienced p
 
 - **Practices**: Start from a curated catalog or write your own.
   Each states what good work looks like.
+  The catalog covers scoping, issues, reviews, testing, security, version control, and recorded decisions.
 - **Feedback on the Work**: A comment on the pull request, merge request, or issue.
 - **Practice Page**: Each developer's private view of feedback and progress per practice.
-  Workspace admins see the feedback records behind it.
-- **Conversations**: A weekly digest you can turn on starts the conversation.
+  Workspace admins see the observations and delivery status behind it.
+- **Conversations**: A weekly digest you can turn on arrives in the conversation.
   Developers ask why, ask for an example, or disagree.
   In the conversation, Hephaestus goes by Heph.
   Conversations run in the web app and, if Slack is connected, in a direct message.
-- **Approval**: Off, Approve first, or Automatic, per workspace, practice group, or practice.
+- **Feedback Mode**: Off, Approve first, or Automatic, per workspace, practice group, or practice.
+  Approve first holds feedback on the work until a workspace admin approves it.
 - **Your Stack**: Works with GitHub, GitLab, Slack, and Outline.
   Your own model provider: OpenAI, Azure OpenAI, or any OpenAI-compatible endpoint.
   Helm on your Kubernetes.
 
 Developers decide what to do with feedback: fix the work, ask why, or disagree.
 Merge decisions stay with your reviewers.
-Each member chooses **In-house**, **Cloud**, or **No AI** for the practice reviews about them and their conversations.
+Each member chooses which models may handle their work: **In-house**, **Cloud**, or **No AI**.
 
 [MIT](./LICENSE) ·
 [Helm chart](https://docs.hephaestus.build/admin/kubernetes) ·
