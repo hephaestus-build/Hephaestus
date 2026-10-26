@@ -141,10 +141,32 @@ async function archiveOf(root: string, entries: Record<string, string>): Promise
 	return archive;
 }
 
+/**
+ * The skip of a test whose host lacks `missing`. CI must run it, so there the test runs and fails on the
+ * missing precondition; elsewhere the skip is announced, so that it cannot pass unnoticed.
+ */
+function skipUnless(missing: string | false): string | false {
+	if (missing === false || process.env.CI === "true") {
+		return false;
+	}
+	console.log(`::warning::gateway-init extraction test skipped: ${missing}`);
+	return missing;
+}
+
+/** Fails a test that CI runs on a host without its precondition. */
+function requirePrecondition(missing: string | false): void {
+	if (missing !== false) {
+		assert.fail(`CI must run this test on a Linux runner as a non-root user: ${missing}`);
+	}
+}
+
+const noGnuTar = gnuTar ? false : "the sandbox image extracts with GNU tar, which this host lacks";
+
 void test(
 	"extracts into a sandbox user's own workspace whose directories exist already, as on Docker's tmpfs",
-	{ skip: gnuTar ? false : "the sandbox image extracts with GNU tar, which this host lacks" },
+	{ skip: skipUnless(noGnuTar) },
 	async () => {
+		requirePrecondition(noGnuTar);
 		const workspace = await mkdtemp(path.join(tmpdir(), "gateway-extract-workspace-"));
 		try {
 			await mkdir(path.join(workspace, "work"));
@@ -185,9 +207,9 @@ const rootOwnedTmp = (() => {
 	}
 })();
 
-function notOwnedSkip(): string | false {
+function notOwnedMissing(): string | false {
 	if (!gnuTar) {
-		return "the sandbox image extracts with GNU tar, which this host lacks";
+		return noGnuTar;
 	}
 	if (process.getuid?.() === 0) {
 		return "root may change any directory, so no directory here is one that the test user does not own";
@@ -200,8 +222,9 @@ function notOwnedSkip(): string | false {
 
 void test(
 	"extracts into directories that the sandbox user may write but does not own, as Kubernetes emptyDir mount points",
-	{ skip: notOwnedSkip() },
+	{ skip: skipUnless(notOwnedMissing()) },
 	async () => {
+		requirePrecondition(notOwnedMissing());
 		const unique = `gateway-extract-${process.pid}-${Date.now()}`;
 		const archive = await archiveOf("tmp", { [`tmp/${unique}/work/README.md`]: "readme" });
 		try {
