@@ -24,6 +24,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.UnaryOperator;
 import org.jspecify.annotations.Nullable;
@@ -60,6 +61,11 @@ class LlmProxyService {
 
     /** The refusal of a model call after its review attempt's work deadline. */
     static final String WORK_TIME_OVER = "This review's work time has ended; it makes no more model calls.";
+
+    private static final String AI_CHOICE_REFUSED = "Your AI choice no longer permits this model in this workspace.";
+
+    /** Names which of the proxy's own rules refused a call, so an in-process caller need not read the refusal's words. */
+    static final String REFUSAL_HEADER = "Hephaestus-Proxy-Refusal";
 
     /** The provider sent no byte for the idle bound of the call. */
     static final String UPSTREAM_STALLED = "upstream_stalled";
@@ -202,13 +208,18 @@ class LlmProxyService {
         return "'" + field + "' must hold at most " + max + " entries";
     }
 
-    // A null practiceScript denotes a review or Heph call.
+    /**
+     * Serves one call on a routing: the AI-choice, budget, connection, deadline and usage rules. A null practiceScript
+     * denotes a review or Heph call. A null response serves a worker step in-process: the call must not stream, and a
+     * provider that answers with a stream anyway is refused.
+     */
     @SuppressWarnings("try") // The scope installs the current span and restores it on close.
-    private @Nullable ResponseEntity<?> serve(
+    @Nullable
+    ResponseEntity<?> serve(
             ProxyRouting routing,
             LlmApiProtocol protocol,
             @Nullable PracticeScriptCall practiceScript,
-            HttpServletResponse response,
+            @Nullable HttpServletResponse response,
             HttpHeaders incomingHeaders,
             byte[] body) {
         accounting.recordGatewayRequest(body.length);
@@ -230,7 +241,7 @@ class LlmProxyService {
                 var inFlight = callsInFlight.begin(routing.attempt())) {
             var result = forward(routing, protocol, practiceScript, response, incomingHeaders, body, span, inFlight);
             int status = result == null
-                    ? response.getStatus()
+                    ? Objects.requireNonNull(response).getStatus()
                     : result.getStatusCode().value();
             span.tag("http.response.status_code", status);
             if (status >= 400) recordSpanError(span, Integer.toString(status));
@@ -259,16 +270,18 @@ class LlmProxyService {
             ProxyRouting routing,
             LlmApiProtocol protocol,
             @Nullable PracticeScriptCall practiceScript,
-            HttpServletResponse response,
+            @Nullable HttpServletResponse response,
             HttpHeaders incomingHeaders,
             byte[] body,
             Span span,
             ProxyCallsInFlight.Call call) {
-        if (workTimeOver(routing)) return workTimeOverRefusal();
+        if (workTimeOver(routing))
+            return refusal(HttpStatus.FORBIDDEN, ReviewModelGateway.Refusal.WORK_TIME, WORK_TIME_OVER);
         // A scan call may wait for its attempt's previous call, at most until the work deadline.
         var lease = scanCalls.acquire(routing, body);
         try {
-            if (workTimeOver(routing)) return workTimeOverRefusal();
+            if (workTimeOver(routing))
+                return refusal(HttpStatus.FORBIDDEN, ReviewModelGateway.Refusal.WORK_TIME, WORK_TIME_OVER);
             return forwardWithinScanBudget(
                     routing, protocol, practiceScript, response, incomingHeaders, body, span, call);
         } finally {
@@ -280,18 +293,19 @@ class LlmProxyService {
             ProxyRouting routing,
             LlmApiProtocol protocol,
             @Nullable PracticeScriptCall practiceScript,
-            HttpServletResponse response,
+            @Nullable HttpServletResponse response,
             HttpHeaders incomingHeaders,
             byte[] body,
             Span span,
             ProxyCallsInFlight.Call call) {
         ProxyRouting.BilledAttempt attempt = routing.attempt();
         if (call.isCancelled()) {
-            return ResponseEntity.status(HttpStatus.CONFLICT).body("This turn attempt has ended");
+            return refusal(
+                    HttpStatus.CONFLICT, ReviewModelGateway.Refusal.ATTEMPT_ENDED, "This turn attempt has ended");
         }
 
         if (!requestPolicy.allows(routing)) {
-            return ResponseEntity.status(403).body("Your AI choice no longer permits this model in this workspace.");
+            return refusal(HttpStatus.FORBIDDEN, ReviewModelGateway.Refusal.AI_CHOICE, AI_CHOICE_REFUSED);
         }
 
         // A practice script call is refused with 402, which no rate limit answers, so its runner can tell a
@@ -300,10 +314,13 @@ class LlmProxyService {
                 practiceScript == null ? HttpStatus.TOO_MANY_REQUESTS : HttpStatus.PAYMENT_REQUIRED;
         // Before any credential is resolved or the network touched. Never interrupts a live stream.
         if (accounting.refuseForBudget(routing)) {
-            return ResponseEntity.status(spendingRefusal).body(budgetReachedMessage(routing.connectionScope()));
+            return refusal(
+                    spendingRefusal,
+                    ReviewModelGateway.Refusal.BUDGET,
+                    budgetReachedMessage(routing.connectionScope()));
         }
         if (practiceScript != null && accounting.refuseForDirectModelCap(routing, attempt)) {
-            return ResponseEntity.status(spendingRefusal).body("Practice script budget spent");
+            return refusal(spendingRefusal, ReviewModelGateway.Refusal.BUDGET, "Practice script budget spent");
         }
 
         LlmModelResolver.ProxyCredential credential =
@@ -360,7 +377,7 @@ class LlmProxyService {
         try {
             if (workTimeOver(routing)) {
                 permit.released();
-                return workTimeOverRefusal();
+                return refusal(HttpStatus.FORBIDDEN, ReviewModelGateway.Refusal.WORK_TIME, WORK_TIME_OVER);
             }
             upstream = callUpstream(exchange, prepared.body(), span, response, tap, deadline, reviewStream);
             if (rejectedOurUsageRequest(upstream, prepared)) {
@@ -372,12 +389,11 @@ class LlmProxyService {
                 accounting.recordStreamUsageUnsupported(routing.apiProtocol());
                 if (!requestPolicy.allows(routing)) {
                     permit.released();
-                    return ResponseEntity.status(403)
-                            .body("Your AI choice no longer permits this model in this workspace.");
+                    return refusal(HttpStatus.FORBIDDEN, ReviewModelGateway.Refusal.AI_CHOICE, AI_CHOICE_REFUSED);
                 }
                 if (workTimeOver(routing)) {
                     permit.released();
-                    return workTimeOverRefusal();
+                    return refusal(HttpStatus.FORBIDDEN, ReviewModelGateway.Refusal.WORK_TIME, WORK_TIME_OVER);
                 }
                 upstream = callUpstream(
                         exchange, prepared.withoutUsageRequestOrBody(), span, response, tap, deadline, reviewStream);
@@ -409,7 +425,8 @@ class LlmProxyService {
                     e.getClass().getSimpleName());
             accounting.recordError(routing.apiProtocol());
             // The work deadline is answered as such; any other failure as before.
-            if (workTimeOver(routing)) return workTimeOverRefusal();
+            if (workTimeOver(routing))
+                return refusal(HttpStatus.FORBIDDEN, ReviewModelGateway.Refusal.WORK_TIME, WORK_TIME_OVER);
             return ResponseEntity.status(502).body("Upstream request failed");
         }
 
@@ -432,7 +449,7 @@ class LlmProxyService {
             String stall = "the model provider's stream sent nothing for "
                     + bounds.idle().toSeconds() + " seconds";
             log.warn("LLM upstream stalled for principal {}: {}", routing.principalDescription(), stall);
-            errors.writeStallFrame(response, stall);
+            if (response != null) errors.writeStallFrame(response, stall);
         }
         var outcome = upstream.streamOutcome();
         if (outcome != null)
@@ -524,7 +541,7 @@ class LlmProxyService {
             Exchange exchange,
             byte[] outgoingBody,
             Span span,
-            HttpServletResponse response,
+            @Nullable HttpServletResponse response,
             ProxyStreamUsageTap tap,
             @Nullable Instant deadline,
             boolean reviewStream) {
@@ -593,8 +610,8 @@ class LlmProxyService {
     }
 
     // Not 429 or 5xx, so neither the runner nor a model client asks again; the words avoid what retry classifiers read.
-    private static ResponseEntity<String> workTimeOverRefusal() {
-        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(WORK_TIME_OVER);
+    private static ResponseEntity<String> refusal(HttpStatus status, ReviewModelGateway.Refusal rule, String message) {
+        return ResponseEntity.status(status).header(REFUSAL_HEADER, rule.name()).body(message);
     }
 
     /** Narrow on purpose: a blanket retry on 4xx would double every bad request the runner makes. */

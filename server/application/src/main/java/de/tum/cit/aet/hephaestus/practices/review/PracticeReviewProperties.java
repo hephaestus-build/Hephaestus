@@ -4,6 +4,8 @@ import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import java.time.Duration;
+import org.hibernate.validator.constraints.time.DurationMin;
 import org.jspecify.annotations.Nullable;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.bind.DefaultValue;
@@ -32,6 +34,8 @@ import org.springframework.validation.annotation.Validated;
  * @param directModelSearchUnitsPerAttempt The search units that the direct reranking calls of one review attempt may
  *                                         bill, for providers such as Cohere that bill search units. The proxy counts
  *                                         them and refuses further direct calls.
+ * @param compositionTimeout  the longest the worker composes the feedback of one review attempt after its sandbox
+ *                            ends. A destination still open then is withheld as not composed.
  */
 @Validated
 @ConfigurationProperties(prefix = "hephaestus.practice-review")
@@ -44,4 +48,5 @@ public record PracticeReviewProperties(
         @Min(1000) @DefaultValue("16000") int practiceOutputTokens,
         @Min(1) @Max(32) @DefaultValue("3") int practiceConcurrency,
         @Min(1) @DefaultValue("200000") long directModelTokensPerAttempt,
-        @Min(1) @DefaultValue("1000") long directModelSearchUnitsPerAttempt) {}
+        @Min(1) @DefaultValue("1000") long directModelSearchUnitsPerAttempt,
+        @DurationMin(minutes = 1) @DefaultValue("PT10M") Duration compositionTimeout) {}

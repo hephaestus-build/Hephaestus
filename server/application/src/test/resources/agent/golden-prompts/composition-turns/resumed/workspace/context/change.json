@@ -1,0 +1,9 @@
+{
+	"base_sha": "1111111111111111111111111111111111111111",
+	"head_sha": "2222222222222222222222222222222222222222",
+	"changed_paths": [
+		"src/App.java",
+		"README.md"
+	],
+	"diff": "diff --git a/src/App.java b/src/App.java\nindex 1111111..2222222 100644\n--- a/src/App.java\n+++ b/src/App.java\n@@ -10,6 +10,10 @@ final class App {\n     String fetch(String id) {\n-        return client.get(id);\n+        try {\n+            return client.get(id);\n+        } catch (IOException e) {\n+            return null;\n+        }\n     }\n }\ndiff --git a/README.md b/README.md\nindex 3333333..4444444 100644\n--- a/README.md\n+++ b/README.md\n@@ -1,2 +1,3 @@\n # App\n Fetches records.\n+Retries are not supported.\n"
+}

@@ -1,0 +1,65 @@
+{
+	"contractVersion": 4,
+	"readAt": "2026-10-20T10:06:00Z",
+	"publicationContext": "v1:7:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+	"history": {
+		"item": {
+			"id": "7",
+			"kind": "scm.pull_request",
+			"parentId": "1",
+			"provider": "GITHUB",
+			"label": "acme/app#7",
+			"title": "Retry record fetches",
+			"url": "https://github.com/acme/app/pull/7"
+		},
+		"feedback": [
+			{
+				"id": "70000000-0000-4000-8000-000000000001",
+				"destination": "ON_WORK",
+				"state": "DELIVERED",
+				"deliveredAt": "2026-10-19T12:00:00Z",
+				"itemVersion": "3333333333333333333333333333333333333333",
+				"body": "Record the IOException instead of returning null.",
+				"bodyUnavailable": false,
+				"currentness": "CURRENT",
+				"withdrawn": false,
+				"basedOn": [
+					{
+						"resultId": "50000000-0000-4000-8000-000000000001",
+						"practiceSlug": "handles-errors",
+						"practiceVersionId": "11",
+						"outcome": "NOT_MET"
+					}
+				],
+				"copies": [
+					{
+						"id": "71000000-0000-4000-8000-000000000001",
+						"kind": "LINE_NOTE",
+						"body": "This catch hides the failure.",
+						"path": "src/App.java",
+						"startLine": 15,
+						"endLine": 15,
+						"side": "NEW",
+						"externalRef": "c1",
+						"externalUrl": "https://github.com/acme/app/pull/7#discussion_r1",
+						"postedAt": "2026-10-19T12:00:00Z",
+						"state": "POSTED"
+					}
+				]
+			},
+			{
+				"id": "70000000-0000-4000-8000-000000000002",
+				"destination": "ON_WORK",
+				"state": "DELIVERED",
+				"deliveredAt": "2026-10-20T10:03:00Z",
+				"itemVersion": "2222222222222222222222222222222222222222",
+				"body": null,
+				"bodyUnavailable": true,
+				"currentness": "STALE",
+				"withdrawn": false,
+				"basedOn": [],
+				"copies": []
+			}
+		]
+	}
+}

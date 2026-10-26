@@ -1,0 +1,21 @@
+{
+	"workItems": [
+		{
+			"number": 3,
+			"url": "https://github.com/acme/app/issues/3",
+			"title": "Fetch fails silently",
+			"state": "open",
+			"how": "closesOnMerge",
+			"body": "Fetch returns null.",
+			"assignees": [
+				"dev"
+			]
+		},
+		"not a record"
+	],
+	"unresolvedReferences": [
+		9,
+		"x"
+	],
+	"truncated": false
+}

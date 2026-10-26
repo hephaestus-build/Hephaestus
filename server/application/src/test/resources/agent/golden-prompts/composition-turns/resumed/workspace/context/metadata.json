@@ -1,0 +1,23 @@
+{
+	"title": "Retry record fetches",
+	"pr_url": "https://github.com/acme/app/pull/7",
+	"repository_full_name": "acme/app",
+	"pr_number": 7,
+	"state": "open",
+	"is_draft": false,
+	"is_merged": false,
+	"source_branch": "retry",
+	"target_branch": "main",
+	"commit_sha": "2222222222222222222222222222222222222222",
+	"author": "dev",
+	"author_id": 100,
+	"body": "Wraps the client call.\n\nCloses #3.",
+	"labels": [
+		"backend"
+	],
+	"basis": {
+		"captured_at": "2026-10-20T10:00:00Z",
+		"other_fields": "CAPTURE",
+		"admitted_at": "not a time"
+	}
+}

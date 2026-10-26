@@ -1,0 +1,300 @@
+{
+	"contractVersion": 4,
+	"reviewId": "10000000-0000-4000-8000-000000000001",
+	"jobId": "20000000-0000-4000-8000-000000000001",
+	"attempt": 1,
+	"admissionDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+	"admitted": [
+		{
+			"practiceSlug": "handles-errors",
+			"itemId": "7",
+			"resultId": "30000000-0000-4000-8000-000000000001",
+			"outcome": "NOT_MET",
+			"summary": "The new catch swallows the failure",
+			"explanation": "The catch block returns null and records nothing.",
+			"evidence": {
+				"citations": [
+					{
+						"sourceKind": "scm.pull-request.diff",
+						"sourcePath": "context/change.json",
+						"path": "src/App.java",
+						"side": "NEW",
+						"commit": "2222222222222222222222222222222222222222",
+						"startLine": 15,
+						"endLine": 16,
+						"quote": "} catch (IOException e) {",
+						"verification": {
+							"status": "VERIFIED",
+							"itemSha256": "5b248fd7ab18a9a2039b0b33e0d5dcc488ff69b807a406196b6b841085c1615f",
+							"quoteSha256": "f2692f77255e0d34149a9593126a4082262cae4d35f39f9754e6f1bcc4371ed9"
+						},
+						"index": 0,
+						"anchorable": true
+					}
+				]
+			},
+			"example": {
+				"citation": {
+					"sourceKind": "scm.pull-request.diff",
+					"sourcePath": "context/change.json",
+					"path": "src/App.java",
+					"side": "NEW",
+					"commit": "2222222222222222222222222222222222222222",
+					"startLine": 13,
+					"endLine": 13,
+					"quote": "try {",
+					"verification": {
+						"status": "VERIFIED",
+						"itemSha256": "5b248fd7ab18a9a2039b0b33e0d5dcc488ff69b807a406196b6b841085c1615f",
+						"quoteSha256": "03d9aba6351173e5f8c479f3e786247afca28bd814dd42e6477fa51b48c9fe36"
+					},
+					"index": 0,
+					"anchorable": false
+				},
+				"note": "The try wraps the whole call."
+			},
+			"coverage": {
+				"source": "claimed",
+				"complete": true,
+				"selected": 1,
+				"checked": 1,
+				"total": 1
+			},
+			"problems": [
+				{
+					"id": "40000000-0000-4000-8000-000000000001",
+					"severity": "MAJOR",
+					"summary": "The failure is dropped",
+					"resultId": "30000000-0000-4000-8000-000000000001",
+					"position": 0,
+					"key": "swallowed-io",
+					"explanation": "The catch returns null without recording the IOException.",
+					"citations": [
+						{
+							"sourceKind": "scm.pull-request.diff",
+							"sourcePath": "context/change.json",
+							"path": "src/App.java",
+							"side": "NEW",
+							"commit": "2222222222222222222222222222222222222222",
+							"startLine": 15,
+							"endLine": 16,
+							"quote": "} catch (IOException e) {",
+							"verification": {
+								"status": "VERIFIED",
+								"itemSha256": "5b248fd7ab18a9a2039b0b33e0d5dcc488ff69b807a406196b6b841085c1615f",
+								"quoteSha256": "f2692f77255e0d34149a9593126a4082262cae4d35f39f9754e6f1bcc4371ed9"
+							},
+							"index": 0,
+							"anchorable": true
+						},
+						{
+							"sourceKind": "scm.pull-request.diff",
+							"sourcePath": "context/change.json",
+							"path": "context/change.json#/diff",
+							"side": "NEW",
+							"commit": null,
+							"startLine": 6,
+							"endLine": 11,
+							"quote": "+        try {",
+							"verification": {
+								"status": "VERIFIED",
+								"itemSha256": "465e9561825f0597f43b67ed7a358b2bada6a286f02afeff13f69f900ad30730",
+								"quoteSha256": "5e53e3750f96313e3cfaab1497d84dd754db37b57cafe0362210757843ac6753"
+							},
+							"index": 1,
+							"anchorable": false
+						}
+					],
+					"basis": {
+						"type": "introduced",
+						"head": 0,
+						"explanation": "The change adds the catch that drops the failure."
+					},
+					"nextStep": "Record or rethrow the failure.",
+					"publicEligible": true
+				}
+			],
+			"summaryOnly": false,
+			"publicEligible": true
+		},
+		{
+			"practiceSlug": "describes-changes",
+			"itemId": "7",
+			"resultId": "30000000-0000-4000-8000-000000000002",
+			"outcome": "NOT_MET",
+			"summary": "The description omits the reason",
+			"explanation": "It names the change but not why it is needed.",
+			"evidence": {
+				"citations": [
+					{
+						"sourceKind": "scm.pull-request.core",
+						"sourcePath": "context/description.md",
+						"path": "context/description.md",
+						"side": null,
+						"commit": null,
+						"startLine": 1,
+						"endLine": 1,
+						"quote": "Wraps the client call.",
+						"verification": {
+							"status": "VERIFIED",
+							"itemSha256": "88148dcf4649d02af1ba89b8fc6c16e3194cb8bc603bf1c5987b509419f7b9af",
+							"quoteSha256": "7615dee5b90b77209f5b0226d3e2a9003b62f84c043c774ef120660e59848b6f"
+						},
+						"index": 0,
+						"anchorable": false
+					}
+				]
+			},
+			"example": null,
+			"coverage": {
+				"source": "claimed",
+				"complete": true,
+				"selected": 1,
+				"checked": 1,
+				"total": 1
+			},
+			"problems": [
+				{
+					"id": "40000000-0000-4000-8000-000000000002",
+					"severity": "MINOR",
+					"summary": "No reason is given",
+					"resultId": "30000000-0000-4000-8000-000000000002",
+					"position": 0,
+					"key": null,
+					"explanation": "The description lists the change without its purpose.",
+					"citations": [],
+					"basis": null,
+					"nextStep": null,
+					"publicEligible": true
+				}
+			],
+			"summaryOnly": true,
+			"publicEligible": true
+		},
+		{
+			"practiceSlug": "tests-behavior",
+			"itemId": "7",
+			"resultId": "30000000-0000-4000-8000-000000000003",
+			"outcome": "MET",
+			"summary": "A test covers the fetch",
+			"explanation": "AppTest calls fetch with a failing client.",
+			"evidence": {
+				"citations": []
+			},
+			"example": null,
+			"coverage": {
+				"source": "claimed",
+				"complete": true,
+				"selected": 1,
+				"checked": 1,
+				"total": 1
+			},
+			"problems": [],
+			"summaryOnly": false,
+			"publicEligible": true
+		},
+		{
+			"practiceSlug": "checks-inputs",
+			"itemId": "7",
+			"resultId": "30000000-0000-4000-8000-000000000004",
+			"outcome": "COULD_NOT_DETERMINE",
+			"summary": "The id source is not visible",
+			"explanation": null,
+			"evidence": {
+				"citations": [],
+				"openQuestions": [
+					"Where does the id come from?"
+				],
+				"inapplicability": "ignored"
+			},
+			"example": null,
+			"coverage": {
+				"source": "claimed",
+				"complete": false,
+				"selected": 0,
+				"checked": 0,
+				"total": 1
+			},
+			"problems": [],
+			"summaryOnly": false,
+			"publicEligible": true
+		}
+	],
+	"withheld": [
+		{
+			"practiceSlug": "names-things",
+			"itemId": "7",
+			"reason": "NO_EVIDENCE"
+		}
+	],
+	"practicePageSupport": {
+		"state": "COMPLETE",
+		"readAt": "2026-10-20T10:05:00Z",
+		"practices": [
+			{
+				"practiceSlug": "handles-errors",
+				"decision": "ADMIT",
+				"stopReason": null,
+				"occurrences": [
+					{
+						"resultId": "50000000-0000-4000-8000-000000000001",
+						"itemKind": "scm.pull_request",
+						"itemId": "5",
+						"outcome": "NOT_MET",
+						"origin": "EVENT",
+						"summary": "A catch swallowed a failure",
+						"explanation": "The handler returned an empty list.",
+						"evidence": {
+							"citations": []
+						},
+						"practiceVersionId": "11",
+						"recordedAt": "2026-09-01T10:00:00Z"
+					},
+					{
+						"resultId": "30000000-0000-4000-8000-000000000001",
+						"itemKind": "scm.pull_request",
+						"itemId": "7",
+						"outcome": "NOT_MET",
+						"origin": "EVENT",
+						"summary": "The new catch swallows the failure",
+						"explanation": null,
+						"evidence": null,
+						"practiceVersionId": null,
+						"recordedAt": "2026-10-20T10:01:00Z"
+					}
+				]
+			},
+			{
+				"practiceSlug": "describes-changes",
+				"decision": "GATE_REFUSED",
+				"stopReason": "FEEDBACK_OFF",
+				"occurrences": []
+			}
+		]
+	},
+	"conversationEligibility": {
+		"state": "COMPLETE",
+		"readAt": "2026-10-20T10:05:00Z",
+		"results": [
+			{
+				"resultId": "30000000-0000-4000-8000-000000000001",
+				"decision": "ADMIT",
+				"stopReason": null
+			},
+			{
+				"resultId": "30000000-0000-4000-8000-000000000002",
+				"decision": "ADMIT",
+				"stopReason": null
+			}
+		]
+	},
+	"privateHistory": null,
+	"publicReviewed": true,
+	"privateProgress": {
+		"decidedResultIds": [
+			"30000000-0000-4000-8000-000000000002"
+		],
+		"practicePageDeliveries": 0,
+		"conversationDeliveries": 1
+	}
+}

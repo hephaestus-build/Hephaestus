@@ -401,62 +401,38 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
             @Param("graceCutoff") Instant graceCutoff, @Param("leaseTtlSeconds") long leaseTtlSeconds);
 
     /**
-     * Locks this exact owned attempt, as erasure's cancellation locks it before marking receipts, and finds it only
-     * while it can be continued: no saved output, an admission recorded with its attempt, and that admission's kept
-     * inputs current, unexpired and vouched for by the admitting attempt's READY receipt that indexes every person
-     * they copied. A receipt erased, purged, unfinished or of another attempt finds nothing. Erasure that begins after
-     * this lock cancels the requeued attempt; one that marked the receipt before it leaves the attempt to fail.
+     * Hands an owned admitted attempt on to a new attempt that measures nothing and composes what is still open, from
+     * the inputs its admission retained or, without them, by withholding. The attempt after the retry limit composes
+     * nothing; it only withholds what is still open.
      */
-    @WorkspaceAgnostic("ID-based fenced lookup; the basis and receipt joins pin the job's own workspace")
-    @Query(value = """
-        SELECT j.id FROM review_job j
-        JOIN review_composition_basis b ON b.job_id = j.id AND b.workspace_id = j.workspace_id
-        JOIN person_evidence_copy c
-          ON c.id = b.copy_id AND c.job_id = j.id AND c.workspace_id = j.workspace_id
-        WHERE j.id = :id AND j.status = 'RUNNING' AND j.worker_id = :workerId AND j.attempt = :attempt
-          AND j.output IS NULL
-          AND b.basis_version = :version AND b.expires_at > :now AND b.admission_attempt <= j.attempt
-          AND b.admission_digest = j.admission_digest
-          AND j.admission_attempt = b.admission_attempt
-          AND c.payload ->> 'attempt' = CAST(b.admission_attempt AS text)
-        FOR NO KEY UPDATE OF j
-        """, nativeQuery = true)
-    List<UUID> lockContinuableAttempt(
-            @Param("id") UUID id,
-            @Param("workerId") String workerId,
-            @Param("attempt") int attempt,
-            @Param("version") int version,
-            @Param("now") Instant now);
-
     @WorkspaceAgnostic("ID-based fenced requeue; caller is @WorkspaceAgnostic sweeper or worker-local drain")
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query("UPDATE ReviewJob j SET j.status = 'QUEUED', j.workerId = null, j.startedAt = null, j.executionStartedAt ="
             + " null, j.attempt = j.attempt + 1, j.availableAt = :#{#request.availableAt}, j.llmCalls = 0,"
             + " j.llmInputTokens = 0, j.llmOutputTokens = 0, j.llmReasoningTokens = 0, j.llmCacheReadTokens = 0,"
             + " j.llmCacheWriteTokens = 0 WHERE j.id = :id AND j.status = 'RUNNING' AND j.workerId = :workerId AND"
-            + " j.attempt = :#{#request.attempt} AND j.attempt < :#{#request.maxRetries} AND"
-            + " j.output IS NULL AND NOT (" + NOT_ADMITTED + ") "
-            + "AND EXISTS (SELECT 1 FROM ReviewCompositionBasis b WHERE b.jobId = j.id "
-            + "AND b.workspaceId = j.workspaceId AND b.expiresAt > :#{#request.now} "
-            + "AND b.admissionDigest = j.admissionDigest)")
-    int requeueLockedForComposition(
+            + " j.attempt = :#{#request.attempt} AND j.attempt <= :#{#request.maxRetries} AND"
+            + " j.output IS NULL AND NOT (" + NOT_ADMITTED + ")")
+    int requeueAdmittedForComposition(
             @Param("id") UUID id, @Param("workerId") String workerId, @Param("request") CompositionRequeue request);
 
-    record CompositionRequeue(int attempt, int maxRetries, Instant now, Instant availableAt) {}
+    record CompositionRequeue(int attempt, int maxRetries, Instant availableAt) {}
 
-    /** Ends an owned admitted attempt without discarding proof; admitted attempts must not be requeued. */
+    /**
+     * Ends an owned admitted attempt as completed, with its results kept: a lost composition never fails a review whose
+     * results were admitted.
+     */
     @WorkspaceAgnostic("ID-based fenced terminal write; caller is @WorkspaceAgnostic sweeper or worker-local drain")
     @Modifying(flushAutomatically = true, clearAutomatically = true)
-    @Query("UPDATE ReviewJob j SET j.status = de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus.FAILED, "
-            + "j.completedAt = :now, j.errorMessage = :error "
+    @Query("UPDATE ReviewJob j SET j.status = de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus.COMPLETED, "
+            + "j.completedAt = :now "
             + "WHERE j.id = :id AND j.status = 'RUNNING' AND j.workerId = :workerId AND j.attempt = :attempt "
             + "AND NOT (" + NOT_ADMITTED + ")")
-    int failAdmittedOwnedBy(
+    int completeAdmittedOwnedBy(
             @Param("id") UUID id,
             @Param("workerId") String workerId,
             @Param("attempt") int attempt,
-            @Param("now") Instant now,
-            @Param("error") String error);
+            @Param("now") Instant now);
 
     /** Pool rejection leaves attempt, availability, and token unchanged because no sandbox executed. */
     @WorkspaceAgnostic("ID-based self-fenced requeue; caller is the claiming worker itself")

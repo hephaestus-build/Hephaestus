@@ -10,6 +10,7 @@ public final class AgentMetrics {
     public static final String AGENT_JOB_BUDGET_HELD = "agent.job.budget.held";
     public static final String AGENT_JOB_BUDGET_REFUSED = "agent.job.budget.refused";
     public static final String AGENT_JOB_CLAIM_LATENCY = "agent.job.claim.latency";
+    public static final String AGENT_JOB_COMPOSITION_STOPPED = "agent.job.composition.stopped";
     public static final String AGENT_JOB_CONCURRENCY_REJECTED = "agent.job.concurrency.rejected";
     public static final String AGENT_JOB_DELIVERY_FAILURE = "agent.job.delivery.failure";
     public static final String AGENT_JOB_DELIVERY_RECOVERED = "agent.job.delivery.recovered";

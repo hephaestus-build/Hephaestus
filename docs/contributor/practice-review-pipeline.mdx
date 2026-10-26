@@ -243,6 +243,11 @@ The [data model](./practice-feedback-schema.md) owns current-result identity and
 
 ## Compose feedback
 
+The worker composes after the sandbox ends: the sandbox measures and admits, and never composes.
+Composition runs in the attempt that admitted the results, before the attempt ends.
+It reads the inputs that admission retained, the admitted results, and the server's reads of routing and history.
+It first composes the review on the work, then the private feedback, which reads the review it follows.
+
 Composition reads admitted, eligible results and their problems.
 It never sends an open question or an example alone.
 Feedback on the work speaks about Not met results for the eligible developer.
@@ -257,8 +262,8 @@ Support references and anchors retain the exact evidence links.
 The review on the work also gets the whole code that its public Not met citations name.
 Each cited text resolves to its one manifest entry, as admission resolved it.
 The source file that a citation names does not decide which text it is.
-A file is shown only when its pinned bytes match the digest of that file's captured text.
-A citation of lines in the captured change record shows the one changed file whose diff section holds those lines.
+A file is shown only when its retained bytes match the digest admission verified.
+A citation of lines in the captured change record shows the one changed file whose section of the captured change holds those lines.
 
 Historical advice claims require confirmed shown words with authorized source custody.
 Unavailable history is a failed or refused read, not an empty history.
@@ -279,65 +284,98 @@ As on the work, current or stale words delivered by the history read can show th
 Only current words delivered before the work was captured can show that nothing material changed.
 Withdrawn, unverifiable or unavailable words establish neither.
 
-The runner stages this history only for private composition.
-A continued attempt reads it again without changing the original evidence or admission.
+Only private composition reads this history.
+A resumed attempt reads it again without changing the original evidence or admission.
 
 Private cards and conversation feedback have their own permission and model gates.
 No conversation brief is prepared unless an available Mentor model respects the developer's AI choice.
-The host prepares the final public package before a private session starts.
+The worker prepares the final public package before the private session starts.
 A private setup failure or deadline does not erase that prepared review.
 The destinations remain independently eligible.
 
-The run can stop composition at its safety ceiling or after a stall.
-Then the runner can ask for a new attempt of the same job in two cases:
+### One bounded session per destination group
 
-- Private feedback stopped after an accepted public review. Some Not met practices still have no private decision.
-- The public review itself stopped, and the stopped attempt is the one that admitted the results.
+Each session is one conversation with the attempt's frozen model through the proxy, with the attempt's AI choice, budget and usage rules.
+The review on the work has one tool, `report_review`.
+Private feedback has `report_feedback`.
+Each turn shows everything its session may use, so no session reads files.
+A session makes at most the model calls of one practice's turn for each practice that it decides, and at most three practices' worth.
+Each call asks for no more than the attempt's output limit.
 
-In the second case the public review gets one more returned attempt.
-That attempt does not ask again when its own time runs out.
-The server checks the job before it grants the attempt.
-For the public attempt, it also checks the returned composition report against the original admission.
-A response the runner lost does not undo the public review the server accepted.
+No call starts after the composition deadline.
+The deadline is the composition timeout after the sandbox ends, and at the latest one minute before the stale-job sweep would end the attempt.
+The proxy refuses a later call.
+Provider failures are retried after a pause that doubles each time, within the deadline.
 
-When the sandbox stops the run at its time limit, the runner cannot ask.
-The server then makes the same checks on the timed-out attempt before it ends the job.
-Without an accepted public review, the attempt continues only if its composition report says the run stopped the public review.
-A sandbox stop usually leaves no such report.
-If the attempt cannot continue, the existing ownership-fenced terminal path applies.
+The checks answer each call.
+A refused review or piece goes back to the model with every reason, so that the model can correct it.
+Preparation answers too: a package that the server refuses goes back the same way.
+A review whose public history changed while it was composed is composed again from a new history read, at most twice.
+A session that ends without a decision for a practice it may carry asks the model once more.
 
-Recovery after a lost or stopped worker is separate.
-It continues an admitted review in a new attempt in the same way, within the existing shared retry limit.
+### Decisions and withholdings
 
-Each composer request asks for no more output than its turn has left.
-Each turn keeps its existing allowance.
-The passes of a phase do not share one budget.
+Each destination ends with prepared feedback or a withholding that the server records.
+A destination that no composed decision reached gets the cause that stopped it, a `CompositionStop`.
+A destination that the server did not route gets no withholding.
+A composition stop never fails the review.
+The `agent.job.composition.stopped` counter records each stop with its cause and outcome.
 
-Each new attempt uses the original admission, its results and the retained original inputs.
-Its task envelope is its own and names the new attempt. The retained inputs never supply it.
+A cause that another attempt would meet again withholds at once, with the most specific reason:
 
-It reads routing, consent and erasure again.
-Like the first attempt, it composes the public review only if none is accepted.
-Then it composes private feedback only for the practices that no prepared private piece decides.
-The retry limit and the original expiry of those inputs stay in effect.
+- The workspace's AI choice refuses the model: No AI.
+- The retained inputs were erased: Evidence not permitted.
+- The server refuses to publish the review on the work: the server's own reason.
+- Every other cause is withheld as Not composed:
+  - The budget is spent, or the deadline passed.
+  - The provider refused the request, or the inputs exceed the context window.
+  - The inputs are gone, or the model decided nothing after the second request.
 
-The admission answer states this progress without words.
-It names the admitted results that the review's prepared private pieces rest on, for the reviewed developer.
-A piece decides the practice it names and every practice in its support, whether it delivers or withholds.
-It also counts the pieces composed for delivery on each private destination.
-A piece that the server withheld after it was composed for delivery still counts.
-A composer's withholding does not count.
+A passing cause withholds nothing and hands the attempt on:
 
-The new attempt starts from that progress.
-It closes the decided practices on every destination, including the support of a grouped conversation.
+- The provider fails past the session's calls or deadline.
+- The routing read of the destination fails.
+- An unexpected failure stops the composition.
+
+The attempt at the retry limit withholds what a passing cause leaves open, as Not composed.
+If a destination whose routing read failed is withheld, preparation reads the routing again.
+A destination that is not eligible then keeps the server's own reason.
+
+Progress is recorded per destination.
+The review on the work is decided when its package is prepared.
+A practice is decided on a private destination when a prepared piece on that destination rests on its result, whether the piece delivers or withholds.
+A page card does not decide the conversation for its practice.
+The worker asks the model once more about each destination that is still open for a practice, during the same session.
+
+### Resuming a lost attempt
+
+A lost or handed-on attempt resumes as a new attempt of the same job.
+That attempt starts no sandbox and measures nothing.
+It composes only what no prepared row decides, from the inputs that its admission retained.
 Each destination keeps only the room that the earlier pieces left.
-Pieces of the same attempt do not close each other.
 
-A practice can still get a practice-page card and conversation notes in one attempt.
-Prepared pieces are never composed or prepared again.
-When every Not met practice is decided, the new attempt composes no private feedback and records no private failure.
-A new attempt does not see a public review that an earlier attempt composed.
-Its private feedback can repeat a point of that review.
+Every admitted attempt is handed on, whatever its retained inputs permit.
+The new attempt checks the inputs before it stages anything:
+
+- Inputs whose receipt is erased or does not index every person that it copied are never staged.
+  The attempt withholds each open destination as Evidence not permitted.
+- Inputs that are gone or expired withhold each open destination as Not composed.
+  So do inputs of an earlier basis version or of another admission.
+
+The handed-on attempts use the job's retry limit with its backoff.
+The attempt after the limit composes nothing and withholds each open destination as Not composed.
+If that attempt is lost too, the job is completed with its results kept, and the open destinations stay unrecorded.
+
+A claim check can refuse a handed-on attempt: the developer declined AI, the budget is spent, or the model is gone.
+The attempt is then claimed to withhold what is open with that cause, without a model call.
+An erasure still cancels it, because an erased person gets no new rows.
+
+The new attempt reads routing, consent and erasure again.
+The original expiry of the retained inputs stays in effect.
+A new attempt reads the review on the work that an earlier attempt prepared, with its wording.
+Each note is mapped back to the admitted citation it rests on, so the private feedback follows that review as in one run.
+
+### Placement and support
 
 The composer selects an inline citation by problem ID and citation index.
 Preparation resolves that exact admitted citation.
@@ -377,10 +415,11 @@ A text contains no link that a cited quote of the work did not supply.
 It contains no GitHub, GitLab or Slack mention, no raw HTML, no image and no hidden or bidirectional control character.
 Code spans and code blocks can quote code, but not Slack syntax.
 
-If one text breaks the policy, preparation refuses the package with `FEEDBACK_TEXT_REFUSED` and stores nothing.
+If one text breaks the policy, preparation refuses the package and stores nothing.
 The refusal names the rule and the field, never the text.
-The public composer rewrites that text and sends the review again in the same session.
-A refused private piece records `FEEDBACK_TEXT_REFUSED` as its composition failure.
+The composer tells the model the rule and the field in the same session.
+The model rewrites that text and sends the review or the piece again.
+A destination whose text the model does not correct within the session's calls is withheld as Not composed.
 
 ## Deliver copies
 

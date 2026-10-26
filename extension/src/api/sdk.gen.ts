@@ -1266,9 +1266,9 @@ export const admitResults = <ThrowOnError extends boolean = false>(options: Opti
 });
 
 /**
- * Prepare feedback for an admitted item review
+ * Refused: a sandbox prepares no feedback
  *
- * Requires the same fenced worker credential and admitted ITEM review. Preparation persists the package before a provider write.
+ * The worker composes and prepares the feedback after the sandbox ends. A sandbox that asks is answered 410.
  */
 export const prepareFeedback = <ThrowOnError extends boolean = false>(options: Options<PrepareFeedbackData, ThrowOnError>): RequestResult<PrepareFeedbackResponses, unknown, ThrowOnError> => (options.client ?? client).post<PrepareFeedbackResponses, unknown, ThrowOnError>({
     security: [{
@@ -1285,9 +1285,9 @@ export const prepareFeedback = <ThrowOnError extends boolean = false>(options: O
 });
 
 /**
- * Read authorized feedback receipts for the current item review
+ * Refused: a sandbox reads no feedback history
  *
- * Requires the same fenced worker credential and admitted ITEM review. Returns confirmed same-item, same-developer copy history; a refused read is not an empty history.
+ * The worker reads the history when it composes the feedback after the sandbox ends. A sandbox that asks is answered 410.
  */
 export const readPublicFeedbackHistory = <ThrowOnError extends boolean = false>(options?: Options<ReadPublicFeedbackHistoryData, ThrowOnError>): RequestResult<ReadPublicFeedbackHistoryResponses, unknown, ThrowOnError> => (options?.client ?? client).post<ReadPublicFeedbackHistoryResponses, unknown, ThrowOnError>({
     security: [{

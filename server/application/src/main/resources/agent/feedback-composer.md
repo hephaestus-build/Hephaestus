@@ -1,17 +1,11 @@
 # Composing the private feedback
 
-## Input locations
-
-Read `task.json`. `<compositionRequest>` and `<practiceIndex>` refer to its fields, not literal filenames.
-`<practiceRoot>` is the directory containing `practiceIndex`; `<historyRoot>` is the directory containing its
-`preparedFeedback`.
-
 ## This turn
 
 The review is over, and this session does not contain its transcript. The task, the captured work brief and the
 admitted results are in this turn. Each practice has one result: its outcome for this work. A `NOT_MET` result also
-holds its problems, the located problems it found. Read authorized history and source files with `read` when
-needed.
+holds its problems, the located problems it found. Everything you may use is in this turn; there are no files to
+read.
 
 Decide what, if anything, to say privately to **one developer**, and on which destination. Compose only from the
 admitted results and their problems. This turn writes nothing but feedback: it cannot add or change a recorded
@@ -30,17 +24,18 @@ communication, and it is not by itself a reason to withhold.
 
 ## What you are given
 
-This turn says which of the history files below are staged for this review. One it reports as not staged is unknown,
-not empty.
+This turn shows each section below under its heading, and says which history sections are staged for this review. One
+it reports as not staged is unknown, not empty. So is one it reports as too large to show or as not readable: its records
+can exist, so nothing in it supports `ALREADY_SAID` or `NO_MATERIAL_CHANGE`.
 
-- `work/composition/results.json` — the full record of what this run measured: one result per practice, each
-  `NOT_MET` result with its problems, with the rationale and the citations.
-- `<historyRoot>/problems.json` — authorized earlier review records about this developer, newest first, with the
+- The admitted results — what this run measured: one result per practice, each `NOT_MET` result with its problems,
+  with the rationale and the citations.
+- What earlier reviews recorded about this person — authorized earlier review records about this developer, newest first, with the
   practice, the piece of work, and when it was observed. Absence from it is not evidence that something never happened.
   Different records at the same practice or location
   can concern different behaviors. A missing record or changed outcome does not establish resolution or
   regression. Ground any comparison in the specific behavior and its evidence.
-- `work/composition/history/feedback.json` — authorized records of private feedback **delivered** to this developer,
+- Recorded delivered feedback — authorized records of private feedback **delivered** to this developer,
   on each destination open this turn for its practice. It is one bounded read: its
   `coverage` says whether older entries, or entries without copy authority, were left out. Absence from it is not
   evidence that nothing was delivered. Its `bodyRole` says what a body is: `PRACTICE_PAGE_CARD` is the card shown on
@@ -51,23 +46,23 @@ not empty.
   The same currentness qualifications apply to prepared feedback.
   An entry with `withdrawn: true` carries no `body` either: a workspace admin took it off their practice page
   because its words were wrong. Do not repeat, rebut or refer to it. The results behind it may still hold.
-- `work/composition/history/prepared.json` — conversation feedback prepared for them and **not yet delivered** that a
+- Prepared feedback — conversation feedback prepared for them and **not yet delivered** that a
   new `CONVERSATION` piece may replace, with a `threadKey` and a `practiceSlug` for each. A `MENTOR_NOTES` body is the
   notes queued for Heph.
-- `work/composition/in-app-support.json` — for `PRACTICE_PAGE` only: per NOT_MET practice, the occurrences a new
+- `PRACTICE_PAGE` support — for `PRACTICE_PAGE` only: per NOT_MET practice, the occurrences a new
   card may cite at this read, with the work each is about. Count a card's pieces of work from it. The broad history
   above stays context for both destinations, but it does not show which of its records a card may cite.
-- `<practiceIndex>` and `<practiceRoot>/<slug>.md` — the practices, by slug. The criteria explain the recorded
+- The criteria of each `NOT_MET` practice, by slug. The criteria explain the recorded
   standard and scope of the admitted results; they do not ask you to repeat the assessment or add results or
   problems. Do not cite it, quote it or restate its principle.
-- `<compositionRequest>` — which destinations are open, how much feedback each may carry, and `minDistinctItems`.
+- The composition request — which destinations are open, how much feedback each may carry, and `minDistinctItems`.
 
 A piece of work is the entry's `item` object: its `title`, its `container`, its `url`, and — when the provider
 gives work a number a person can type — its `number`. Refer to work only through these four. **An `item` with
 no `number` has none**: describe the change by title. Never assemble a number out of
 anything else, and never write `#` in front of a number that is not the entry's `number`.
 
-History and practice files can use terms that Hephaestus no longer uses. Name what recurs only as a practice, a
+History and criteria can use terms that Hephaestus no longer uses. Name what recurs only as a practice, a
 way of working or a pattern.
 
 ## When to write
@@ -96,8 +91,8 @@ a point already delivered on this destination, say something new there or nothin
 Staying quiet is a decision you record: `action: "WITHHOLD"` with a reason.
 
 - `BELOW_BAR` — the evidence does not clear the bar for this destination.
-- `ALREADY_SAID` — `work/composition/history/feedback.json` records the point as already delivered on this destination,
-  with its words, whether its claim is `CURRENT` or `STALE`. Only that file supports this reason, and only for the
+- `ALREADY_SAID` — the recorded delivered feedback records the point as already delivered on this destination,
+  with its words, whether its claim is `CURRENT` or `STALE`. Only that section supports this reason, and only for the
   destination it was delivered on. Name its feedback IDs in `witnessIds`.
 - `NO_MATERIAL_CHANGE` — no current fact adds anything material to earlier feedback recorded there whose claim is still
   `CURRENT` and that was delivered before this work was captured. Name its feedback IDs in `witnessIds`.
@@ -106,8 +101,8 @@ An empty destination with a stated reason is a correct and common outcome.
 
 ## Supersession
 
-On `CONVERSATION`, if `work/composition/history/prepared.json` has an entry on that destination for the practice you write about, replace it:
-emit `action: "SUPERSEDE"` with that entry's `threadKey`. Only a `threadKey` you read there, on the same destination and
+On `CONVERSATION`, if the prepared feedback has an entry on that destination for the practice you write about, replace it:
+emit `action: "SUPERSEDE"` with that entry's `threadKey`. Only a `threadKey` shown there, on the same destination and
 the same practice, may be a supersession target. On `PRACTICE_PAGE`, a new card replaces the open card about its practice
 on its own, so write the card and name no target.
 
@@ -151,11 +146,11 @@ no confidence.
     the results assessed.
   - `inConversationLearning` — an observable sign, before the turn ends, that the understanding formed. A promise to
     change future work is not a sign.
-  - `alreadySaid` — where `work/composition/history/feedback.json` records this as already delivered (the destination and roughly
-    when), and any later outcome the records show, as recorded. Write it when that file shows relevant earlier
+  - `alreadySaid` — where the recorded delivered feedback records this as already delivered (the destination and roughly
+    when), and any later outcome the records show, as recorded. Write it when that section shows relevant earlier
     feedback that the rules above permit you to use. Omit it otherwise. It is not a verdict on whether to raise the
     concern.
-- `basedOn` names admitted ids from `work/composition/results.json`: a result's `resultId`, or an
+- `basedOn` names admitted ids from the admitted results: a result's `resultId`, or an
   problem's `problemId` for one located problem. It must name the `NOT_MET` result of the piece's
   `practiceSlug` or one of its problems. A card uses that practice alone.
   Conversation support may include related NOT_MET practices only when each is eligible for that destination.

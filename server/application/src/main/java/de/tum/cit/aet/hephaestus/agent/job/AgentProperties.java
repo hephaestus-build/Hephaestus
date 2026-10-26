@@ -25,6 +25,10 @@ import org.springframework.validation.annotation.Validated;
  *                          and {@code output} are stripped to NULL
  * @param rowRetention      Age, counted from the end of a job, at which an ended job row that waits for no delivery
  *                          is deleted. Must be at least the payload retention.
+ * @param maxConcurrentCompositions The most review attempts one worker runs at once. An attempt composes its feedback
+ *                          after its sandbox ends, and then it holds no sandbox slot. Thus this setting bounds the
+ *                          concurrent compositions. The sandbox slots still bound the attempts that hold a sandbox. A
+ *                          value below the sandbox slots also lowers the sandboxes in use.
  */
 @Validated
 @ConfigurationProperties(prefix = "hephaestus.agent")
@@ -41,7 +45,8 @@ public record AgentProperties(
         Duration heartbeatInterval,
 
         @DefaultValue("P14D") @NotNull Duration payloadRetention,
-        @DefaultValue("P90D") @NotNull Duration rowRetention) {
+        @DefaultValue("P90D") @NotNull Duration rowRetention,
+        @DefaultValue("16") @Min(1) int maxConcurrentCompositions) {
     /** Floor for {@link #pollInterval}: below this the poll loop busy-spins against the DB. */
     public static final Duration MIN_POLL_INTERVAL = Duration.ofMillis(100);
 

@@ -2333,8 +2333,8 @@ paths:
       - result-admission
   /internal/llm/prepare-feedback:
     post:
-      description: Requires the same fenced worker credential and admitted ITEM review.
-        Preparation persists the package before a provider write.
+      description: The worker composes and prepares the feedback after the sandbox
+        ends. A sandbox that asks is answered 410.
       operationId: prepareFeedback
       requestBody:
         content:
@@ -2351,14 +2351,13 @@ paths:
           description: OK
       security:
       - workerBearer: []
-      summary: Prepare feedback for an admitted item review
+      summary: "Refused: a sandbox prepares no feedback"
       tags:
       - result-admission
   /internal/llm/public-feedback-history:
     post:
-      description: "Requires the same fenced worker credential and admitted ITEM review.\
-        \ Returns confirmed same-item, same-developer copy history; a refused read\
-        \ is not an empty history."
+      description: The worker reads the history when it composes the feedback after
+        the sandbox ends. A sandbox that asks is answered 410.
       operationId: readPublicFeedbackHistory
       responses:
         "200":
@@ -2369,7 +2368,7 @@ paths:
           description: OK
       security:
       - workerBearer: []
-      summary: Read authorized feedback receipts for the current item review
+      summary: "Refused: a sandbox reads no feedback history"
       tags:
       - result-admission
   /notifications/unsubscribe/{token}:
@@ -8687,6 +8686,7 @@ paths:
             - UNCORROBORATED
             - PUBLIC_HISTORY_CHANGED
             - PUBLIC_DELIVERY_UNRESOLVED
+            - NOT_COMPOSED
       - in: query
         name: withdrawn
         required: false
@@ -8876,6 +8876,7 @@ paths:
             - UNCORROBORATED
             - PUBLIC_HISTORY_CHANGED
             - PUBLIC_DELIVERY_UNRESOLVED
+            - NOT_COMPOSED
       - in: query
         name: withdrawn
         required: false
@@ -9050,6 +9051,7 @@ paths:
             - UNCORROBORATED
             - PUBLIC_HISTORY_CHANGED
             - PUBLIC_DELIVERY_UNRESOLVED
+            - NOT_COMPOSED
       - in: query
         name: withdrawn
         required: false
@@ -13851,6 +13853,7 @@ components:
           - UNCORROBORATED
           - PUBLIC_HISTORY_CHANGED
           - PUBLIC_DELIVERY_UNRESOLVED
+          - NOT_COMPOSED
     ConfigAuditActorRef:
       type: object
       description: |-
@@ -15587,6 +15590,7 @@ components:
           - UNCORROBORATED
           - PUBLIC_HISTORY_CHANGED
           - PUBLIC_DELIVERY_UNRESOLVED
+          - NOT_COMPOSED
           - null
         stage:
           type: string
@@ -15782,6 +15786,7 @@ components:
           - UNCORROBORATED
           - PUBLIC_HISTORY_CHANGED
           - PUBLIC_DELIVERY_UNRESOLVED
+          - NOT_COMPOSED
           - null
         writeStartedAt:
           type:
@@ -20711,6 +20716,7 @@ components:
           - UNCORROBORATED
           - PUBLIC_HISTORY_CHANGED
           - PUBLIC_DELIVERY_UNRESOLVED
+          - NOT_COMPOSED
           - null
       required:
       - decision
@@ -21939,6 +21945,8 @@ components:
       - threadKey
     QuietDecision:
       type: object
+      description: "Why results stay unsaid: the composer's reason with the prior\
+        \ advice it rests on, or NOT_COMPOSED."
       properties:
         basedOn:
           type: array
@@ -22478,6 +22486,7 @@ components:
           - UNCORROBORATED
           - PUBLIC_HISTORY_CHANGED
           - PUBLIC_DELIVERY_UNRESOLVED
+          - NOT_COMPOSED
           - null
       required:
       - decision
@@ -23550,6 +23559,7 @@ components:
           - UNCORROBORATED
           - PUBLIC_HISTORY_CHANGED
           - PUBLIC_DELIVERY_UNRESOLVED
+          - NOT_COMPOSED
           - null
         textHidden:
           type: boolean
@@ -23758,6 +23768,7 @@ components:
           - UNCORROBORATED
           - PUBLIC_HISTORY_CHANGED
           - PUBLIC_DELIVERY_UNRESOLVED
+          - NOT_COMPOSED
           - null
         textHidden:
           type: boolean

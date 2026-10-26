@@ -2,7 +2,9 @@ package de.tum.cit.aet.hephaestus.practices.feedback;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
 
+import de.tum.cit.aet.hephaestus.agent.composer.WorkerFeedbackComposer;
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.PreparedEvidence;
 import de.tum.cit.aet.hephaestus.agent.handler.AdmissionConflictException;
@@ -13,7 +15,11 @@ import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.handler.RetainedFeedbackTestData;
 import de.tum.cit.aet.hephaestus.agent.handler.composition.ComposedFeedback;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
+import de.tum.cit.aet.hephaestus.agent.job.AgentProperties;
+import de.tum.cit.aet.hephaestus.agent.job.ReviewCompositionContinuation;
+import de.tum.cit.aet.hephaestus.agent.job.ReviewJobAssignments;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
+import de.tum.cit.aet.hephaestus.agent.proxy.ReviewModelGateway;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.AdmissionRequestDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.AdmissionResponseDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.AdmittedResultDTO;
@@ -33,6 +39,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.CredentialBundleCon
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.core.framework.ItemDescriptorRegistry;
 import de.tum.cit.aet.hephaestus.integration.core.item.Item;
 import de.tum.cit.aet.hephaestus.integration.core.item.ItemRepository;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
@@ -54,6 +61,7 @@ import de.tum.cit.aet.hephaestus.practices.feedback.delivery.FeedbackSendRecover
 import de.tum.cit.aet.hephaestus.practices.model.Result;
 import de.tum.cit.aet.hephaestus.practices.result.ProblemRepository;
 import de.tum.cit.aet.hephaestus.practices.result.ResultRepository;
+import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewProperties;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewAdmissionData;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewIntegrationData;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewItemRepository;
@@ -71,12 +79,14 @@ import de.tum.cit.aet.hephaestus.practices.spi.FeedbackState;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackStopReason;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewItemState;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.Severity;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.ScriptedGitHub;
 import de.tum.cit.aet.hephaestus.testconfig.TestUserFactory;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.RepositoryToMonitorRepository;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.List;
@@ -91,6 +101,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.server.ResponseStatusException;
 import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.ObjectNode;
@@ -123,6 +134,27 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private ReviewJobRepository jobs;
+
+    @Autowired
+    private ReviewCompositionContinuation continuation;
+
+    @Autowired
+    private ReviewJobAssignments assignments;
+
+    @Autowired
+    private ItemDescriptorRegistry descriptors;
+
+    @Autowired
+    private PracticeReviewProperties reviewProperties;
+
+    @Autowired
+    private AgentProperties agentProperties;
+
+    @Autowired
+    private MeterRegistry meters;
+
+    @Autowired
+    private TransactionTemplate transactions;
 
     @Autowired
     private ReviewItemRepository reviewItems;
@@ -434,6 +466,63 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                             .prepareFeedback(review.identity(), composition(review, response, SUMMARY, context))
                             .feedbackIds())
                     .containsExactly(FeedbackIds.onWork(review.workspaceId(), review.reviewId(), review.developerId()));
+        }
+    }
+
+    @Test
+    void shouldWithholdTheFeedbackAsNotComposedAndStillCompleteTheReviewWhenTheComposerHasNoTimeLeft() {
+        try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
+            admission.admit(review.identity(), request(review));
+            var job = jobs.findById(review.identity().jobId()).orElseThrow();
+
+            // The composer is a worker bean; here it runs on the application's own admission. The stale-job sweep is
+            // due, so it withholds what is open without a model call.
+            var composer = new WorkerFeedbackComposer(
+                    admission,
+                    files,
+                    continuation,
+                    mock(ReviewModelGateway.class),
+                    assignments,
+                    descriptors,
+                    reviewProperties,
+                    agentProperties,
+                    meters,
+                    mapper);
+            composer.composeAfterMeasurement(job, WORKER, Instant.now());
+
+            assertThat(feedback.findByWorkspaceIdAndReviewIdOrderByCreatedAtAscIdAsc(
+                            review.workspaceId(), review.reviewId()))
+                    .isNotEmpty()
+                    .allSatisfy(withheld -> {
+                        assertThat(withheld.getState()).isEqualTo(FeedbackState.WITHHELD);
+                        assertThat(withheld.getStopReason()).isEqualTo(FeedbackStopReason.NOT_COMPOSED);
+                    })
+                    .extracting(Feedback::getDestination)
+                    .contains(FeedbackDestination.ON_WORK);
+            // The composition left the attempt running and owned, so the worker's terminal write completes it.
+            Integer completed = transactions.execute(status -> jobs.transitionStatusOwnedBy(
+                    job.getId(), ReviewJobStatus.COMPLETED, Instant.now(), null, WORKER, job.getAttempt()));
+            assertThat(completed).isOne();
+            assertThat(jobs.findById(job.getId()).orElseThrow().getStatus()).isEqualTo(ReviewJobStatus.COMPLETED);
+        }
+    }
+
+    @Test
+    void shouldReadTheAcceptedReviewOnTheWorkBackForAnAttemptThatComposesAfterIt() {
+        try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
+            var response = admission.admit(review.identity(), request(review));
+            var context = admission.publicFeedbackHistory(review.identity()).publicationContext();
+            admission.prepareFeedback(review.identity(), composition(review, response, SUMMARY, context));
+            var job = jobs.findById(review.identity().jobId()).orElseThrow();
+
+            assertThat(admission.preparedReview(job)).hasValueSatisfying(prepared -> {
+                assertThat(prepared.summary()).isEqualTo(SUMMARY);
+                assertThat(prepared.summaryBasis())
+                        .extracting(FeedbackCompositionTrace.Support::resultId)
+                        .containsExactly(response.admitted().getFirst().resultId());
+                assertThat(prepared.notes()).isEmpty();
+                assertThat(prepared.withheld()).isEmpty();
+            });
         }
     }
 

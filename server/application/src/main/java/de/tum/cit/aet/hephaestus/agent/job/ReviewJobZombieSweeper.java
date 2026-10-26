@@ -36,7 +36,8 @@ public class ReviewJobZombieSweeper {
 
     private static final Logger log = LoggerFactory.getLogger(ReviewJobZombieSweeper.class);
 
-    private static final Duration RUNNING_BUFFER = SandboxLayout.RESULT_UPLOAD_GRACE.plusMinutes(5);
+    /** How long past its job timeout a running attempt is left before the sweep ends it. */
+    static final Duration RUNNING_BUFFER = SandboxLayout.RESULT_UPLOAD_GRACE.plusMinutes(5);
 
     // Allow startup time for a claimed worker to publish its first heartbeat.
     private static final Duration ORPHAN_STARTUP_GRACE = Duration.ofMinutes(2);
@@ -55,6 +56,7 @@ public class ReviewJobZombieSweeper {
     private final Counter zombieReaped;
     private final Counter orphanRequeued;
     private final Counter orphanFailed;
+    private final Counter compositionUnrecorded;
     private final Counter snapshotUnreadable;
     private final ReviewJobTelemetry jobTelemetry;
 
@@ -82,6 +84,11 @@ public class ReviewJobZombieSweeper {
                 .register(meterRegistry);
         this.orphanFailed = Counter.builder(AgentMetrics.AGENT_JOB_ORPHAN_FAILED)
                 .description("Orphaned jobs that hit the retry cap and were failed")
+                .register(meterRegistry);
+        this.compositionUnrecorded = Counter.builder(AgentMetrics.AGENT_JOB_COMPOSITION_STOPPED)
+                .description("Destinations of an admitted review left without a recorded reason")
+                .tag("cause", "retries_exhausted")
+                .tag("outcome", "unrecorded")
                 .register(meterRegistry);
         this.snapshotUnreadable = Counter.builder(AgentMetrics.AGENT_JOB_SNAPSHOT_UNREADABLE)
                 .description("Terminal accounting events whose config snapshot could not be read; billed UNPRICED")
@@ -174,6 +181,11 @@ public class ReviewJobZombieSweeper {
                 if (outcome == ReviewJobRecovery.Outcome.REQUEUED) {
                     orphanRequeued.increment();
                     log.warn("Requeued orphaned job {} (retry {})", orphan.getJobId(), orphan.getAttempt() + 1);
+                } else if (outcome == ReviewJobRecovery.Outcome.COMPLETED) {
+                    // The attempt after the retry limit was lost too: the review completes with what is still open
+                    // left without a recorded reason.
+                    compositionUnrecorded.increment();
+                    log.warn("Orphaned job {} completed with its open feedback unrecorded", orphan.getJobId());
                 } else if (outcome == ReviewJobRecovery.Outcome.FAILED) {
                     orphanFailed.increment();
                     log.warn("Orphaned job {} failed at attempt {}", orphan.getJobId(), orphan.getAttempt());

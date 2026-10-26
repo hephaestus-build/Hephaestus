@@ -2,7 +2,6 @@ package de.tum.cit.aet.hephaestus.agent.job;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.runtime.AgentResult.LlmUsage;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageEventRepository;
@@ -206,18 +205,18 @@ class ReviewJobTerminalStorageIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    void shouldPreserveAdmissionFactsWhenALostWriterFails() {
+    void shouldPreserveAdmissionFactsWhenALostWriterIsCompleted() {
         var job = running("runtime-terminal-admitted");
         job.setAdmissionAttempt(0);
         job.setAdmissionDigest("a".repeat(64));
         jobs.saveAndFlush(job);
-        assertThat(transactions.<Integer>execute(status -> jobs.failAdmittedOwnedBy(
-                        job.getId(), "owner", 0, Instant.now(), ResultAdmissionService.INTERRUPTED_AFTER_ADMISSION)))
+        assertThat(transactions.<Integer>execute(
+                        status -> jobs.completeAdmittedOwnedBy(job.getId(), "owner", 0, Instant.now())))
                 .isEqualTo(1);
         var stored = jobs.findById(job.getId()).orElseThrow();
         assertThat(stored.getAdmissionAttempt()).isZero();
         assertThat(stored.getAdmissionDigest()).isEqualTo("a".repeat(64));
         assertThat(stored.getAttempt()).isZero();
-        assertThat(stored.getStatus()).isEqualTo(ReviewJobStatus.FAILED);
+        assertThat(stored.getStatus()).isEqualTo(ReviewJobStatus.COMPLETED);
     }
 }

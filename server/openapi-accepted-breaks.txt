@@ -28,3 +28,18 @@ in API GET /workspaces/{workspaceSlug}/practices/tiles added the new required `q
 in API GET /workspaces/{workspaceSlug}/practices/tiles the response's body `type` changed from `array<object>` to `object` for status `200`
 in API GET /workspaces/{workspaceSlug}/practices/workspace-overview removed the required property `developers` from the response with the `200` status
 in API GET /workspaces/{workspaceSlug}/practices/workspace-overview removed the required property `practices` from the response with the `200` status
+
+# #3230: feedback that the worker could not compose is withheld with the new NOT_COMPOSED stop reason.
+in API POST /internal/llm/admit-results added the new `NOT_COMPOSED` enum value to the `conversationEligibility/anyOf[#/components/schemas/ConversationEligibility]/results/items/stopReason` response property for the response status `200`
+in API POST /internal/llm/admit-results added the new `NOT_COMPOSED` enum value to the `practicePageSupport/anyOf[#/components/schemas/PracticePageSupport]/oneOf[#/components/schemas/CompletePracticePageSupport]/practices/items/stopReason` response property for the response status `200`
+in API GET /workspaces/{workspaceSlug}/practices/reviews/feedback added the new `NOT_COMPOSED` enum value to the `content/items/stopReason` response property for the response status `200`
+in API GET /workspaces/{workspaceSlug}/practices/reviews/feedback/{feedbackId} added the new `NOT_COMPOSED` enum value to the `checks/items/reason` response property for the response status `200`
+in API GET /workspaces/{workspaceSlug}/practices/reviews/feedback/{feedbackId} added the new `NOT_COMPOSED` enum value to the `copies/items/stopReason` response property for the response status `200`
+in API GET /workspaces/{workspaceSlug}/practices/reviews/feedback/{feedbackId} added the new `NOT_COMPOSED` enum value to the `stopReason` response property for the response status `200`
+in API POST /workspaces/{workspaceSlug}/practices/reviews/feedback/{feedbackId}/recheck added the new `NOT_COMPOSED` enum value to the `checks/items/reason` response property for the response status `202`
+in API POST /workspaces/{workspaceSlug}/practices/reviews/feedback/{feedbackId}/recheck added the new `NOT_COMPOSED` enum value to the `copies/items/stopReason` response property for the response status `202`
+in API POST /workspaces/{workspaceSlug}/practices/reviews/feedback/{feedbackId}/recheck added the new `NOT_COMPOSED` enum value to the `stopReason` response property for the response status `202`
+in API POST /workspaces/{workspaceSlug}/practices/reviews/feedback/{feedbackId}/retry added the new `NOT_COMPOSED` enum value to the `checks/items/reason` response property for the response status `202`
+in API POST /workspaces/{workspaceSlug}/practices/reviews/feedback/{feedbackId}/retry added the new `NOT_COMPOSED` enum value to the `copies/items/stopReason` response property for the response status `202`
+in API POST /workspaces/{workspaceSlug}/practices/reviews/feedback/{feedbackId}/retry added the new `NOT_COMPOSED` enum value to the `stopReason` response property for the response status `202`
+in API GET /workspaces/{workspaceSlug}/practices/reviews/{reviewId}/feedback-checks added the new `NOT_COMPOSED` enum value to the `items/reason` response property for the response status `200`

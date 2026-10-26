@@ -1,0 +1,10 @@
+{
+	"title": "Fetch fails silently",
+	"html_url": "https://github.com/acme/app/issues/3",
+	"repository_full_name": "acme/app",
+	"issue_number": 3,
+	"state": "open",
+	"author": "dev",
+	"author_id": "100",
+	"body": null
+}

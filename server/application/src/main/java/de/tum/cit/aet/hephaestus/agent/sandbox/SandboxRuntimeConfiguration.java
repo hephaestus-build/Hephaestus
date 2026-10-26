@@ -76,18 +76,18 @@ public class SandboxRuntimeConfiguration {
     }
 
     /**
-     * Bounded platform thread pool for sandbox executions.
+     * Platform threads for review attempts, one per claimed attempt.
      *
-     * <p>Uses direct handoff ({@code queueCapacity=0}) so that when all threads are occupied,
-     * submissions are rejected immediately. That rejection is the backpressure: the claim is undone
-     * and the row goes back to QUEUED for a later poll.
+     * <p>The executor's claim bound limits simultaneous sandboxes to {@code maxConcurrentContainers}. An attempt whose
+     * sandbox ended keeps its thread while the worker composes its feedback, but not its sandbox slot, so the pool is
+     * not that bound. It hands off directly ({@code queueCapacity=0}): a rejected submission undoes the claim and the
+     * row goes back to QUEUED for a later poll.
      */
     @Bean(name = "sandboxExecutor")
     public AsyncTaskExecutor sandboxExecutor(SandboxProperties properties) {
         var executor = new ThreadPoolTaskExecutor();
-        int maxPool = properties.maxConcurrentContainers();
-        executor.setCorePoolSize(Math.min(2, maxPool));
-        executor.setMaxPoolSize(maxPool);
+        executor.setCorePoolSize(Math.min(2, properties.maxConcurrentContainers()));
+        executor.setMaxPoolSize(Integer.MAX_VALUE);
         executor.setQueueCapacity(0);
         executor.setAllowCoreThreadTimeOut(true);
         executor.setThreadNamePrefix("sandbox-");

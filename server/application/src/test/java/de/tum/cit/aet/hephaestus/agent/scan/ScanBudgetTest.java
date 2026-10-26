@@ -30,6 +30,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ScanExecutionSnapshot;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -49,7 +50,7 @@ class ScanBudgetTest extends BaseUnitTest {
             policy,
             admission,
             monthly,
-            new PracticeReviewProperties(false, 15, 5, null, 12, 16000, 3, 200000, 1000));
+            new PracticeReviewProperties(false, 15, 5, null, 12, 16000, 3, 200000, 1000, Duration.ofMinutes(10)));
     private final ReviewAssignmentSnapshot assignment = RuntimeReviewTestData.assignment(null, null);
     private final ScanExecutionSnapshot scan = new ScanExecutionSnapshot(
             RuntimeReviewTestData.review(ReviewKind.SCAN, assignment),

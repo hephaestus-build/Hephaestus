@@ -1,0 +1,224 @@
+{
+	"contractVersion": "1",
+	"catalogDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+	"itemKind": "scm.pull_request",
+	"capturedAt": "2026-10-20T10:00:00Z",
+	"sources": [
+		{
+			"kind": "scm.pull-request.core",
+			"state": {
+				"availability": "AVAILABLE",
+				"content": "TEXT",
+				"completeness": "COMPLETE",
+				"limitations": [],
+				"facts": {
+					"immutableIdentity": "2222222222222222222222222222222222222222"
+				}
+			},
+			"citation": {
+				"side": "OPTIONAL",
+				"commit": "OPTIONAL"
+			},
+			"files": [
+				{
+					"path": "context/metadata.json"
+				},
+				{
+					"path": "context/description.md"
+				}
+			]
+		},
+		{
+			"kind": "scm.linked-work-items",
+			"state": {
+				"availability": "AVAILABLE",
+				"content": "TEXT",
+				"completeness": "PARTIAL",
+				"limitations": [
+					"Only the first page of links is captured."
+				]
+			},
+			"citation": {
+				"side": "OPTIONAL",
+				"commit": "OPTIONAL"
+			},
+			"files": [
+				{
+					"path": "context/linked_work_items.json"
+				}
+			]
+		},
+		{
+			"kind": "scm.pull-request.comments",
+			"state": {
+				"availability": "AVAILABLE",
+				"content": "TEXT",
+				"completeness": "COMPLETE",
+				"limitations": []
+			},
+			"citation": {
+				"side": "OPTIONAL",
+				"commit": "OPTIONAL"
+			},
+			"files": [
+				{
+					"path": "context/comments.json"
+				}
+			]
+		},
+		{
+			"kind": "scm.general-review-comments",
+			"state": {
+				"availability": "UNAVAILABLE",
+				"reasonCode": "PROVIDER_ERROR"
+			},
+			"citation": {
+				"side": "FORBIDDEN",
+				"commit": "FORBIDDEN"
+			},
+			"files": []
+		},
+		{
+			"kind": "scm.review-threads",
+			"state": {
+				"availability": "AVAILABLE",
+				"content": "TEXT",
+				"completeness": "COMPLETE",
+				"limitations": []
+			},
+			"citation": {
+				"side": "OPTIONAL",
+				"commit": "OPTIONAL"
+			},
+			"files": [
+				{
+					"path": "context/review_threads.json"
+				}
+			]
+		},
+		{
+			"kind": "scm.repository.tree",
+			"state": {
+				"availability": "AVAILABLE",
+				"content": "TEXT",
+				"completeness": "PARTIAL",
+				"limitations": [
+					"Submodules are not captured."
+				],
+				"facts": {
+					"immutableIdentity": "2222222222222222222222222222222222222222:refs/heads/retry"
+				}
+			},
+			"citation": {
+				"side": "OPTIONAL",
+				"commit": "OPTIONAL"
+			},
+			"files": [
+				{
+					"path": "repos/reviewed/.git/HEAD"
+				},
+				{
+					"path": "repos/reviewed/.git/hephaestus-captured-refs"
+				}
+			]
+		},
+		{
+			"kind": "scm.pull-request.diff",
+			"state": {
+				"availability": "AVAILABLE",
+				"content": "TEXT",
+				"completeness": "COMPLETE",
+				"limitations": [],
+				"facts": {
+					"immutableIdentity": "1111111111111111111111111111111111111111:2222222222222222222222222222222222222222"
+				}
+			},
+			"citation": {
+				"side": "OPTIONAL",
+				"commit": "OPTIONAL"
+			},
+			"files": [
+				{
+					"path": "context/change.json"
+				}
+			]
+		}
+	],
+	"refusals": [],
+	"files": [
+		{
+			"kind": "scm.pull-request.core",
+			"file": {
+				"path": "context/metadata.json"
+			}
+		},
+		{
+			"kind": "scm.pull-request.core",
+			"file": {
+				"path": "context/description.md"
+			}
+		},
+		{
+			"kind": "scm.linked-work-items",
+			"file": {
+				"path": "context/linked_work_items.json"
+			}
+		},
+		{
+			"kind": "scm.pull-request.comments",
+			"file": {
+				"path": "context/comments.json"
+			}
+		},
+		{
+			"kind": "scm.review-threads",
+			"file": {
+				"path": "context/review_threads.json"
+			}
+		},
+		{
+			"kind": "scm.repository.tree",
+			"file": {
+				"path": "repos/reviewed/.git/HEAD"
+			}
+		},
+		{
+			"kind": "scm.repository.tree",
+			"file": {
+				"path": "repos/reviewed/.git/hephaestus-captured-refs"
+			}
+		},
+		{
+			"kind": "scm.pull-request.diff",
+			"file": {
+				"path": "context/change.json"
+			}
+		}
+	],
+	"citableTexts": [
+		{
+			"source": "scm.repository.tree",
+			"path": "src/App.java",
+			"side": "NEW",
+			"commit": "2222222222222222222222222222222222222222",
+			"stagedPath": "texts/app-head.java",
+			"sha256": "5b248fd7ab18a9a2039b0b33e0d5dcc488ff69b807a406196b6b841085c1615f"
+		},
+		{
+			"source": "scm.pull-request.diff",
+			"path": "src/App.java",
+			"side": "NEW",
+			"commit": "2222222222222222222222222222222222222222",
+			"stagedPath": "texts/app-head.java",
+			"sha256": "5b248fd7ab18a9a2039b0b33e0d5dcc488ff69b807a406196b6b841085c1615f"
+		},
+		{
+			"source": "scm.pull-request.diff",
+			"path": "context/change.json#/diff",
+			"side": "NEW",
+			"commit": null,
+			"stagedPath": "texts/change-diff.txt",
+			"sha256": "465e9561825f0597f43b67ed7a358b2bada6a286f02afeff13f69f900ad30730"
+		}
+	]
+}

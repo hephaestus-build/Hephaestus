@@ -36,7 +36,8 @@ The kernel can kill a container or sandbox.
 
 To use a smaller memory budget, lower the limits in `.env` before the first start.
 
-A worker runs no more reviews at once than `SANDBOX_MAX_CONCURRENT` and its review capacity allow.
+A worker runs no more review sandboxes at once than `SANDBOX_MAX_CONCURRENT` and its review capacity allow.
+A review whose sandbox has ended writes its feedback without a sandbox, so it does not count against these limits.
 The application default of `SANDBOX_MAX_CONCURRENT` is 5.
 The self-hosted Compose file sets 1.
 The review capacity (`HEPHAESTUS_WORKER_REVIEW_MAX`) defaults to `auto`: the number of CPUs minus 1.

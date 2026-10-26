@@ -1,0 +1,1378 @@
+{
+	"contractVersion": 4,
+	"readAt": "2026-10-20T10:06:00Z",
+	"publicationContext": "v1:7:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+	"history": {
+		"item": {
+			"id": "7",
+			"kind": "scm.pull_request",
+			"parentId": "1",
+			"provider": "GITHUB",
+			"label": "acme/app#7",
+			"title": "Retry record fetches",
+			"url": "https://github.com/acme/app/pull/7"
+		},
+		"feedback": [
+			{
+				"id": "70000000-0000-4000-8000-000000000001",
+				"destination": "ON_WORK",
+				"state": "DELIVERED",
+				"deliveredAt": "2026-10-19T12:00:00Z",
+				"itemVersion": "3333333333333333333333333333333333333333",
+				"body": "Earlier advice 0: record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure ",
+				"bodyUnavailable": false,
+				"currentness": "CURRENT",
+				"withdrawn": false,
+				"basedOn": [
+					{
+						"resultId": "50000000-0000-4000-8000-000000000001",
+						"practiceSlug": "handles-errors",
+						"practiceVersionId": "11",
+						"outcome": "NOT_MET"
+					}
+				],
+				"copies": [
+					{
+						"id": "71000000-0000-4000-8000-000000000001",
+						"kind": "LINE_NOTE",
+						"body": "This catch hides the failure.",
+						"path": "src/App.java",
+						"startLine": 15,
+						"endLine": 15,
+						"side": "NEW",
+						"externalRef": "c1",
+						"externalUrl": "https://github.com/acme/app/pull/7#discussion_r1",
+						"postedAt": "2026-10-19T12:00:00Z",
+						"state": "POSTED"
+					}
+				]
+			},
+			{
+				"id": "70000001-0000-4000-8000-000000000001",
+				"destination": "ON_WORK",
+				"state": "DELIVERED",
+				"deliveredAt": "2026-10-19T12:00:00Z",
+				"itemVersion": "3333333333333333333333333333333333333333",
+				"body": "Earlier advice 1: record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure ",
+				"bodyUnavailable": false,
+				"currentness": "CURRENT",
+				"withdrawn": false,
+				"basedOn": [
+					{
+						"resultId": "50000000-0000-4000-8000-000000000001",
+						"practiceSlug": "handles-errors",
+						"practiceVersionId": "11",
+						"outcome": "NOT_MET"
+					}
+				],
+				"copies": [
+					{
+						"id": "71000000-0000-4000-8000-000000000001",
+						"kind": "LINE_NOTE",
+						"body": "This catch hides the failure.",
+						"path": "src/App.java",
+						"startLine": 15,
+						"endLine": 15,
+						"side": "NEW",
+						"externalRef": "c1",
+						"externalUrl": "https://github.com/acme/app/pull/7#discussion_r1",
+						"postedAt": "2026-10-19T12:00:00Z",
+						"state": "POSTED"
+					}
+				]
+			},
+			{
+				"id": "70000002-0000-4000-8000-000000000001",
+				"destination": "ON_WORK",
+				"state": "DELIVERED",
+				"deliveredAt": "2026-10-19T12:00:00Z",
+				"itemVersion": "3333333333333333333333333333333333333333",
+				"body": "Earlier advice 2: record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure ",
+				"bodyUnavailable": false,
+				"currentness": "CURRENT",
+				"withdrawn": false,
+				"basedOn": [
+					{
+						"resultId": "50000000-0000-4000-8000-000000000001",
+						"practiceSlug": "handles-errors",
+						"practiceVersionId": "11",
+						"outcome": "NOT_MET"
+					}
+				],
+				"copies": [
+					{
+						"id": "71000000-0000-4000-8000-000000000001",
+						"kind": "LINE_NOTE",
+						"body": "This catch hides the failure.",
+						"path": "src/App.java",
+						"startLine": 15,
+						"endLine": 15,
+						"side": "NEW",
+						"externalRef": "c1",
+						"externalUrl": "https://github.com/acme/app/pull/7#discussion_r1",
+						"postedAt": "2026-10-19T12:00:00Z",
+						"state": "POSTED"
+					}
+				]
+			},
+			{
+				"id": "70000003-0000-4000-8000-000000000001",
+				"destination": "ON_WORK",
+				"state": "DELIVERED",
+				"deliveredAt": "2026-10-19T12:00:00Z",
+				"itemVersion": "3333333333333333333333333333333333333333",
+				"body": "Earlier advice 3: record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure ",
+				"bodyUnavailable": false,
+				"currentness": "CURRENT",
+				"withdrawn": false,
+				"basedOn": [
+					{
+						"resultId": "50000000-0000-4000-8000-000000000001",
+						"practiceSlug": "handles-errors",
+						"practiceVersionId": "11",
+						"outcome": "NOT_MET"
+					}
+				],
+				"copies": [
+					{
+						"id": "71000000-0000-4000-8000-000000000001",
+						"kind": "LINE_NOTE",
+						"body": "This catch hides the failure.",
+						"path": "src/App.java",
+						"startLine": 15,
+						"endLine": 15,
+						"side": "NEW",
+						"externalRef": "c1",
+						"externalUrl": "https://github.com/acme/app/pull/7#discussion_r1",
+						"postedAt": "2026-10-19T12:00:00Z",
+						"state": "POSTED"
+					}
+				]
+			},
+			{
+				"id": "70000004-0000-4000-8000-000000000001",
+				"destination": "ON_WORK",
+				"state": "DELIVERED",
+				"deliveredAt": "2026-10-19T12:00:00Z",
+				"itemVersion": "3333333333333333333333333333333333333333",
+				"body": "Earlier advice 4: record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure ",
+				"bodyUnavailable": false,
+				"currentness": "CURRENT",
+				"withdrawn": false,
+				"basedOn": [
+					{
+						"resultId": "50000000-0000-4000-8000-000000000001",
+						"practiceSlug": "handles-errors",
+						"practiceVersionId": "11",
+						"outcome": "NOT_MET"
+					}
+				],
+				"copies": [
+					{
+						"id": "71000000-0000-4000-8000-000000000001",
+						"kind": "LINE_NOTE",
+						"body": "This catch hides the failure.",
+						"path": "src/App.java",
+						"startLine": 15,
+						"endLine": 15,
+						"side": "NEW",
+						"externalRef": "c1",
+						"externalUrl": "https://github.com/acme/app/pull/7#discussion_r1",
+						"postedAt": "2026-10-19T12:00:00Z",
+						"state": "POSTED"
+					}
+				]
+			},
+			{
+				"id": "70000005-0000-4000-8000-000000000001",
+				"destination": "ON_WORK",
+				"state": "DELIVERED",
+				"deliveredAt": "2026-10-19T12:00:00Z",
+				"itemVersion": "3333333333333333333333333333333333333333",
+				"body": "Earlier advice 5: record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure ",
+				"bodyUnavailable": false,
+				"currentness": "CURRENT",
+				"withdrawn": false,
+				"basedOn": [
+					{
+						"resultId": "50000000-0000-4000-8000-000000000001",
+						"practiceSlug": "handles-errors",
+						"practiceVersionId": "11",
+						"outcome": "NOT_MET"
+					}
+				],
+				"copies": [
+					{
+						"id": "71000000-0000-4000-8000-000000000001",
+						"kind": "LINE_NOTE",
+						"body": "This catch hides the failure.",
+						"path": "src/App.java",
+						"startLine": 15,
+						"endLine": 15,
+						"side": "NEW",
+						"externalRef": "c1",
+						"externalUrl": "https://github.com/acme/app/pull/7#discussion_r1",
+						"postedAt": "2026-10-19T12:00:00Z",
+						"state": "POSTED"
+					}
+				]
+			},
+			{
+				"id": "70000006-0000-4000-8000-000000000001",
+				"destination": "ON_WORK",
+				"state": "DELIVERED",
+				"deliveredAt": "2026-10-19T12:00:00Z",
+				"itemVersion": "3333333333333333333333333333333333333333",
+				"body": "Earlier advice 6: record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure ",
+				"bodyUnavailable": false,
+				"currentness": "CURRENT",
+				"withdrawn": false,
+				"basedOn": [
+					{
+						"resultId": "50000000-0000-4000-8000-000000000001",
+						"practiceSlug": "handles-errors",
+						"practiceVersionId": "11",
+						"outcome": "NOT_MET"
+					}
+				],
+				"copies": [
+					{
+						"id": "71000000-0000-4000-8000-000000000001",
+						"kind": "LINE_NOTE",
+						"body": "This catch hides the failure.",
+						"path": "src/App.java",
+						"startLine": 15,
+						"endLine": 15,
+						"side": "NEW",
+						"externalRef": "c1",
+						"externalUrl": "https://github.com/acme/app/pull/7#discussion_r1",
+						"postedAt": "2026-10-19T12:00:00Z",
+						"state": "POSTED"
+					}
+				]
+			},
+			{
+				"id": "70000007-0000-4000-8000-000000000001",
+				"destination": "ON_WORK",
+				"state": "DELIVERED",
+				"deliveredAt": "2026-10-19T12:00:00Z",
+				"itemVersion": "3333333333333333333333333333333333333333",
+				"body": "Earlier advice 7: record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure ",
+				"bodyUnavailable": false,
+				"currentness": "CURRENT",
+				"withdrawn": false,
+				"basedOn": [
+					{
+						"resultId": "50000000-0000-4000-8000-000000000001",
+						"practiceSlug": "handles-errors",
+						"practiceVersionId": "11",
+						"outcome": "NOT_MET"
+					}
+				],
+				"copies": [
+					{
+						"id": "71000000-0000-4000-8000-000000000001",
+						"kind": "LINE_NOTE",
+						"body": "This catch hides the failure.",
+						"path": "src/App.java",
+						"startLine": 15,
+						"endLine": 15,
+						"side": "NEW",
+						"externalRef": "c1",
+						"externalUrl": "https://github.com/acme/app/pull/7#discussion_r1",
+						"postedAt": "2026-10-19T12:00:00Z",
+						"state": "POSTED"
+					}
+				]
+			},
+			{
+				"id": "70000008-0000-4000-8000-000000000001",
+				"destination": "ON_WORK",
+				"state": "DELIVERED",
+				"deliveredAt": "2026-10-19T12:00:00Z",
+				"itemVersion": "3333333333333333333333333333333333333333",
+				"body": "Earlier advice 8: record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure ",
+				"bodyUnavailable": false,
+				"currentness": "CURRENT",
+				"withdrawn": false,
+				"basedOn": [
+					{
+						"resultId": "50000000-0000-4000-8000-000000000001",
+						"practiceSlug": "handles-errors",
+						"practiceVersionId": "11",
+						"outcome": "NOT_MET"
+					}
+				],
+				"copies": [
+					{
+						"id": "71000000-0000-4000-8000-000000000001",
+						"kind": "LINE_NOTE",
+						"body": "This catch hides the failure.",
+						"path": "src/App.java",
+						"startLine": 15,
+						"endLine": 15,
+						"side": "NEW",
+						"externalRef": "c1",
+						"externalUrl": "https://github.com/acme/app/pull/7#discussion_r1",
+						"postedAt": "2026-10-19T12:00:00Z",
+						"state": "POSTED"
+					}
+				]
+			},
+			{
+				"id": "70000009-0000-4000-8000-000000000001",
+				"destination": "ON_WORK",
+				"state": "DELIVERED",
+				"deliveredAt": "2026-10-19T12:00:00Z",
+				"itemVersion": "3333333333333333333333333333333333333333",
+				"body": "Earlier advice 9: record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure ",
+				"bodyUnavailable": false,
+				"currentness": "CURRENT",
+				"withdrawn": false,
+				"basedOn": [
+					{
+						"resultId": "50000000-0000-4000-8000-000000000001",
+						"practiceSlug": "handles-errors",
+						"practiceVersionId": "11",
+						"outcome": "NOT_MET"
+					}
+				],
+				"copies": [
+					{
+						"id": "71000000-0000-4000-8000-000000000001",
+						"kind": "LINE_NOTE",
+						"body": "This catch hides the failure.",
+						"path": "src/App.java",
+						"startLine": 15,
+						"endLine": 15,
+						"side": "NEW",
+						"externalRef": "c1",
+						"externalUrl": "https://github.com/acme/app/pull/7#discussion_r1",
+						"postedAt": "2026-10-19T12:00:00Z",
+						"state": "POSTED"
+					}
+				]
+			},
+			{
+				"id": "70000010-0000-4000-8000-000000000001",
+				"destination": "ON_WORK",
+				"state": "DELIVERED",
+				"deliveredAt": "2026-10-19T12:00:00Z",
+				"itemVersion": "3333333333333333333333333333333333333333",
+				"body": "Earlier advice 10: record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure ",
+				"bodyUnavailable": false,
+				"currentness": "CURRENT",
+				"withdrawn": false,
+				"basedOn": [
+					{
+						"resultId": "50000000-0000-4000-8000-000000000001",
+						"practiceSlug": "handles-errors",
+						"practiceVersionId": "11",
+						"outcome": "NOT_MET"
+					}
+				],
+				"copies": [
+					{
+						"id": "71000000-0000-4000-8000-000000000001",
+						"kind": "LINE_NOTE",
+						"body": "This catch hides the failure.",
+						"path": "src/App.java",
+						"startLine": 15,
+						"endLine": 15,
+						"side": "NEW",
+						"externalRef": "c1",
+						"externalUrl": "https://github.com/acme/app/pull/7#discussion_r1",
+						"postedAt": "2026-10-19T12:00:00Z",
+						"state": "POSTED"
+					}
+				]
+			},
+			{
+				"id": "70000011-0000-4000-8000-000000000001",
+				"destination": "ON_WORK",
+				"state": "DELIVERED",
+				"deliveredAt": "2026-10-19T12:00:00Z",
+				"itemVersion": "3333333333333333333333333333333333333333",
+				"body": "Earlier advice 11: record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure ",
+				"bodyUnavailable": false,
+				"currentness": "CURRENT",
+				"withdrawn": false,
+				"basedOn": [
+					{
+						"resultId": "50000000-0000-4000-8000-000000000001",
+						"practiceSlug": "handles-errors",
+						"practiceVersionId": "11",
+						"outcome": "NOT_MET"
+					}
+				],
+				"copies": [
+					{
+						"id": "71000000-0000-4000-8000-000000000001",
+						"kind": "LINE_NOTE",
+						"body": "This catch hides the failure.",
+						"path": "src/App.java",
+						"startLine": 15,
+						"endLine": 15,
+						"side": "NEW",
+						"externalRef": "c1",
+						"externalUrl": "https://github.com/acme/app/pull/7#discussion_r1",
+						"postedAt": "2026-10-19T12:00:00Z",
+						"state": "POSTED"
+					}
+				]
+			},
+			{
+				"id": "70000012-0000-4000-8000-000000000001",
+				"destination": "ON_WORK",
+				"state": "DELIVERED",
+				"deliveredAt": "2026-10-19T12:00:00Z",
+				"itemVersion": "3333333333333333333333333333333333333333",
+				"body": "Earlier advice 12: record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure ",
+				"bodyUnavailable": false,
+				"currentness": "CURRENT",
+				"withdrawn": false,
+				"basedOn": [
+					{
+						"resultId": "50000000-0000-4000-8000-000000000001",
+						"practiceSlug": "handles-errors",
+						"practiceVersionId": "11",
+						"outcome": "NOT_MET"
+					}
+				],
+				"copies": [
+					{
+						"id": "71000000-0000-4000-8000-000000000001",
+						"kind": "LINE_NOTE",
+						"body": "This catch hides the failure.",
+						"path": "src/App.java",
+						"startLine": 15,
+						"endLine": 15,
+						"side": "NEW",
+						"externalRef": "c1",
+						"externalUrl": "https://github.com/acme/app/pull/7#discussion_r1",
+						"postedAt": "2026-10-19T12:00:00Z",
+						"state": "POSTED"
+					}
+				]
+			},
+			{
+				"id": "70000013-0000-4000-8000-000000000001",
+				"destination": "ON_WORK",
+				"state": "DELIVERED",
+				"deliveredAt": "2026-10-19T12:00:00Z",
+				"itemVersion": "3333333333333333333333333333333333333333",
+				"body": "Earlier advice 13: record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure ",
+				"bodyUnavailable": false,
+				"currentness": "CURRENT",
+				"withdrawn": false,
+				"basedOn": [
+					{
+						"resultId": "50000000-0000-4000-8000-000000000001",
+						"practiceSlug": "handles-errors",
+						"practiceVersionId": "11",
+						"outcome": "NOT_MET"
+					}
+				],
+				"copies": [
+					{
+						"id": "71000000-0000-4000-8000-000000000001",
+						"kind": "LINE_NOTE",
+						"body": "This catch hides the failure.",
+						"path": "src/App.java",
+						"startLine": 15,
+						"endLine": 15,
+						"side": "NEW",
+						"externalRef": "c1",
+						"externalUrl": "https://github.com/acme/app/pull/7#discussion_r1",
+						"postedAt": "2026-10-19T12:00:00Z",
+						"state": "POSTED"
+					}
+				]
+			},
+			{
+				"id": "70000014-0000-4000-8000-000000000001",
+				"destination": "ON_WORK",
+				"state": "DELIVERED",
+				"deliveredAt": "2026-10-19T12:00:00Z",
+				"itemVersion": "3333333333333333333333333333333333333333",
+				"body": "Earlier advice 14: record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure ",
+				"bodyUnavailable": false,
+				"currentness": "CURRENT",
+				"withdrawn": false,
+				"basedOn": [
+					{
+						"resultId": "50000000-0000-4000-8000-000000000001",
+						"practiceSlug": "handles-errors",
+						"practiceVersionId": "11",
+						"outcome": "NOT_MET"
+					}
+				],
+				"copies": [
+					{
+						"id": "71000000-0000-4000-8000-000000000001",
+						"kind": "LINE_NOTE",
+						"body": "This catch hides the failure.",
+						"path": "src/App.java",
+						"startLine": 15,
+						"endLine": 15,
+						"side": "NEW",
+						"externalRef": "c1",
+						"externalUrl": "https://github.com/acme/app/pull/7#discussion_r1",
+						"postedAt": "2026-10-19T12:00:00Z",
+						"state": "POSTED"
+					}
+				]
+			},
+			{
+				"id": "70000015-0000-4000-8000-000000000001",
+				"destination": "ON_WORK",
+				"state": "DELIVERED",
+				"deliveredAt": "2026-10-19T12:00:00Z",
+				"itemVersion": "3333333333333333333333333333333333333333",
+				"body": "Earlier advice 15: record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure ",
+				"bodyUnavailable": false,
+				"currentness": "CURRENT",
+				"withdrawn": false,
+				"basedOn": [
+					{
+						"resultId": "50000000-0000-4000-8000-000000000001",
+						"practiceSlug": "handles-errors",
+						"practiceVersionId": "11",
+						"outcome": "NOT_MET"
+					}
+				],
+				"copies": [
+					{
+						"id": "71000000-0000-4000-8000-000000000001",
+						"kind": "LINE_NOTE",
+						"body": "This catch hides the failure.",
+						"path": "src/App.java",
+						"startLine": 15,
+						"endLine": 15,
+						"side": "NEW",
+						"externalRef": "c1",
+						"externalUrl": "https://github.com/acme/app/pull/7#discussion_r1",
+						"postedAt": "2026-10-19T12:00:00Z",
+						"state": "POSTED"
+					}
+				]
+			},
+			{
+				"id": "70000016-0000-4000-8000-000000000001",
+				"destination": "ON_WORK",
+				"state": "DELIVERED",
+				"deliveredAt": "2026-10-19T12:00:00Z",
+				"itemVersion": "3333333333333333333333333333333333333333",
+				"body": "Earlier advice 16: record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure ",
+				"bodyUnavailable": false,
+				"currentness": "CURRENT",
+				"withdrawn": false,
+				"basedOn": [
+					{
+						"resultId": "50000000-0000-4000-8000-000000000001",
+						"practiceSlug": "handles-errors",
+						"practiceVersionId": "11",
+						"outcome": "NOT_MET"
+					}
+				],
+				"copies": [
+					{
+						"id": "71000000-0000-4000-8000-000000000001",
+						"kind": "LINE_NOTE",
+						"body": "This catch hides the failure.",
+						"path": "src/App.java",
+						"startLine": 15,
+						"endLine": 15,
+						"side": "NEW",
+						"externalRef": "c1",
+						"externalUrl": "https://github.com/acme/app/pull/7#discussion_r1",
+						"postedAt": "2026-10-19T12:00:00Z",
+						"state": "POSTED"
+					}
+				]
+			},
+			{
+				"id": "70000017-0000-4000-8000-000000000001",
+				"destination": "ON_WORK",
+				"state": "DELIVERED",
+				"deliveredAt": "2026-10-19T12:00:00Z",
+				"itemVersion": "3333333333333333333333333333333333333333",
+				"body": "Earlier advice 17: record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure ",
+				"bodyUnavailable": false,
+				"currentness": "CURRENT",
+				"withdrawn": false,
+				"basedOn": [
+					{
+						"resultId": "50000000-0000-4000-8000-000000000001",
+						"practiceSlug": "handles-errors",
+						"practiceVersionId": "11",
+						"outcome": "NOT_MET"
+					}
+				],
+				"copies": [
+					{
+						"id": "71000000-0000-4000-8000-000000000001",
+						"kind": "LINE_NOTE",
+						"body": "This catch hides the failure.",
+						"path": "src/App.java",
+						"startLine": 15,
+						"endLine": 15,
+						"side": "NEW",
+						"externalRef": "c1",
+						"externalUrl": "https://github.com/acme/app/pull/7#discussion_r1",
+						"postedAt": "2026-10-19T12:00:00Z",
+						"state": "POSTED"
+					}
+				]
+			},
+			{
+				"id": "70000018-0000-4000-8000-000000000001",
+				"destination": "ON_WORK",
+				"state": "DELIVERED",
+				"deliveredAt": "2026-10-19T12:00:00Z",
+				"itemVersion": "3333333333333333333333333333333333333333",
+				"body": "Earlier advice 18: record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure ",
+				"bodyUnavailable": false,
+				"currentness": "CURRENT",
+				"withdrawn": false,
+				"basedOn": [
+					{
+						"resultId": "50000000-0000-4000-8000-000000000001",
+						"practiceSlug": "handles-errors",
+						"practiceVersionId": "11",
+						"outcome": "NOT_MET"
+					}
+				],
+				"copies": [
+					{
+						"id": "71000000-0000-4000-8000-000000000001",
+						"kind": "LINE_NOTE",
+						"body": "This catch hides the failure.",
+						"path": "src/App.java",
+						"startLine": 15,
+						"endLine": 15,
+						"side": "NEW",
+						"externalRef": "c1",
+						"externalUrl": "https://github.com/acme/app/pull/7#discussion_r1",
+						"postedAt": "2026-10-19T12:00:00Z",
+						"state": "POSTED"
+					}
+				]
+			},
+			{
+				"id": "70000019-0000-4000-8000-000000000001",
+				"destination": "ON_WORK",
+				"state": "DELIVERED",
+				"deliveredAt": "2026-10-19T12:00:00Z",
+				"itemVersion": "3333333333333333333333333333333333333333",
+				"body": "Earlier advice 19: record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure ",
+				"bodyUnavailable": false,
+				"currentness": "CURRENT",
+				"withdrawn": false,
+				"basedOn": [
+					{
+						"resultId": "50000000-0000-4000-8000-000000000001",
+						"practiceSlug": "handles-errors",
+						"practiceVersionId": "11",
+						"outcome": "NOT_MET"
+					}
+				],
+				"copies": [
+					{
+						"id": "71000000-0000-4000-8000-000000000001",
+						"kind": "LINE_NOTE",
+						"body": "This catch hides the failure.",
+						"path": "src/App.java",
+						"startLine": 15,
+						"endLine": 15,
+						"side": "NEW",
+						"externalRef": "c1",
+						"externalUrl": "https://github.com/acme/app/pull/7#discussion_r1",
+						"postedAt": "2026-10-19T12:00:00Z",
+						"state": "POSTED"
+					}
+				]
+			},
+			{
+				"id": "70000020-0000-4000-8000-000000000001",
+				"destination": "ON_WORK",
+				"state": "DELIVERED",
+				"deliveredAt": "2026-10-19T12:00:00Z",
+				"itemVersion": "3333333333333333333333333333333333333333",
+				"body": "Earlier advice 20: record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure ",
+				"bodyUnavailable": false,
+				"currentness": "CURRENT",
+				"withdrawn": false,
+				"basedOn": [
+					{
+						"resultId": "50000000-0000-4000-8000-000000000001",
+						"practiceSlug": "handles-errors",
+						"practiceVersionId": "11",
+						"outcome": "NOT_MET"
+					}
+				],
+				"copies": [
+					{
+						"id": "71000000-0000-4000-8000-000000000001",
+						"kind": "LINE_NOTE",
+						"body": "This catch hides the failure.",
+						"path": "src/App.java",
+						"startLine": 15,
+						"endLine": 15,
+						"side": "NEW",
+						"externalRef": "c1",
+						"externalUrl": "https://github.com/acme/app/pull/7#discussion_r1",
+						"postedAt": "2026-10-19T12:00:00Z",
+						"state": "POSTED"
+					}
+				]
+			},
+			{
+				"id": "70000021-0000-4000-8000-000000000001",
+				"destination": "ON_WORK",
+				"state": "DELIVERED",
+				"deliveredAt": "2026-10-19T12:00:00Z",
+				"itemVersion": "3333333333333333333333333333333333333333",
+				"body": "Earlier advice 21: record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure ",
+				"bodyUnavailable": false,
+				"currentness": "CURRENT",
+				"withdrawn": false,
+				"basedOn": [
+					{
+						"resultId": "50000000-0000-4000-8000-000000000001",
+						"practiceSlug": "handles-errors",
+						"practiceVersionId": "11",
+						"outcome": "NOT_MET"
+					}
+				],
+				"copies": [
+					{
+						"id": "71000000-0000-4000-8000-000000000001",
+						"kind": "LINE_NOTE",
+						"body": "This catch hides the failure.",
+						"path": "src/App.java",
+						"startLine": 15,
+						"endLine": 15,
+						"side": "NEW",
+						"externalRef": "c1",
+						"externalUrl": "https://github.com/acme/app/pull/7#discussion_r1",
+						"postedAt": "2026-10-19T12:00:00Z",
+						"state": "POSTED"
+					}
+				]
+			},
+			{
+				"id": "70000022-0000-4000-8000-000000000001",
+				"destination": "ON_WORK",
+				"state": "DELIVERED",
+				"deliveredAt": "2026-10-19T12:00:00Z",
+				"itemVersion": "3333333333333333333333333333333333333333",
+				"body": "Earlier advice 22: record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure ",
+				"bodyUnavailable": false,
+				"currentness": "CURRENT",
+				"withdrawn": false,
+				"basedOn": [
+					{
+						"resultId": "50000000-0000-4000-8000-000000000001",
+						"practiceSlug": "handles-errors",
+						"practiceVersionId": "11",
+						"outcome": "NOT_MET"
+					}
+				],
+				"copies": [
+					{
+						"id": "71000000-0000-4000-8000-000000000001",
+						"kind": "LINE_NOTE",
+						"body": "This catch hides the failure.",
+						"path": "src/App.java",
+						"startLine": 15,
+						"endLine": 15,
+						"side": "NEW",
+						"externalRef": "c1",
+						"externalUrl": "https://github.com/acme/app/pull/7#discussion_r1",
+						"postedAt": "2026-10-19T12:00:00Z",
+						"state": "POSTED"
+					}
+				]
+			},
+			{
+				"id": "70000023-0000-4000-8000-000000000001",
+				"destination": "ON_WORK",
+				"state": "DELIVERED",
+				"deliveredAt": "2026-10-19T12:00:00Z",
+				"itemVersion": "3333333333333333333333333333333333333333",
+				"body": "Earlier advice 23: record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure ",
+				"bodyUnavailable": false,
+				"currentness": "CURRENT",
+				"withdrawn": false,
+				"basedOn": [
+					{
+						"resultId": "50000000-0000-4000-8000-000000000001",
+						"practiceSlug": "handles-errors",
+						"practiceVersionId": "11",
+						"outcome": "NOT_MET"
+					}
+				],
+				"copies": [
+					{
+						"id": "71000000-0000-4000-8000-000000000001",
+						"kind": "LINE_NOTE",
+						"body": "This catch hides the failure.",
+						"path": "src/App.java",
+						"startLine": 15,
+						"endLine": 15,
+						"side": "NEW",
+						"externalRef": "c1",
+						"externalUrl": "https://github.com/acme/app/pull/7#discussion_r1",
+						"postedAt": "2026-10-19T12:00:00Z",
+						"state": "POSTED"
+					}
+				]
+			},
+			{
+				"id": "70000024-0000-4000-8000-000000000001",
+				"destination": "ON_WORK",
+				"state": "DELIVERED",
+				"deliveredAt": "2026-10-19T12:00:00Z",
+				"itemVersion": "3333333333333333333333333333333333333333",
+				"body": "Earlier advice 24: record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure ",
+				"bodyUnavailable": false,
+				"currentness": "CURRENT",
+				"withdrawn": false,
+				"basedOn": [
+					{
+						"resultId": "50000000-0000-4000-8000-000000000001",
+						"practiceSlug": "handles-errors",
+						"practiceVersionId": "11",
+						"outcome": "NOT_MET"
+					}
+				],
+				"copies": [
+					{
+						"id": "71000000-0000-4000-8000-000000000001",
+						"kind": "LINE_NOTE",
+						"body": "This catch hides the failure.",
+						"path": "src/App.java",
+						"startLine": 15,
+						"endLine": 15,
+						"side": "NEW",
+						"externalRef": "c1",
+						"externalUrl": "https://github.com/acme/app/pull/7#discussion_r1",
+						"postedAt": "2026-10-19T12:00:00Z",
+						"state": "POSTED"
+					}
+				]
+			},
+			{
+				"id": "70000025-0000-4000-8000-000000000001",
+				"destination": "ON_WORK",
+				"state": "DELIVERED",
+				"deliveredAt": "2026-10-19T12:00:00Z",
+				"itemVersion": "3333333333333333333333333333333333333333",
+				"body": "Earlier advice 25: record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure ",
+				"bodyUnavailable": false,
+				"currentness": "CURRENT",
+				"withdrawn": false,
+				"basedOn": [
+					{
+						"resultId": "50000000-0000-4000-8000-000000000001",
+						"practiceSlug": "handles-errors",
+						"practiceVersionId": "11",
+						"outcome": "NOT_MET"
+					}
+				],
+				"copies": [
+					{
+						"id": "71000000-0000-4000-8000-000000000001",
+						"kind": "LINE_NOTE",
+						"body": "This catch hides the failure.",
+						"path": "src/App.java",
+						"startLine": 15,
+						"endLine": 15,
+						"side": "NEW",
+						"externalRef": "c1",
+						"externalUrl": "https://github.com/acme/app/pull/7#discussion_r1",
+						"postedAt": "2026-10-19T12:00:00Z",
+						"state": "POSTED"
+					}
+				]
+			},
+			{
+				"id": "70000026-0000-4000-8000-000000000001",
+				"destination": "ON_WORK",
+				"state": "DELIVERED",
+				"deliveredAt": "2026-10-19T12:00:00Z",
+				"itemVersion": "3333333333333333333333333333333333333333",
+				"body": "Earlier advice 26: record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure ",
+				"bodyUnavailable": false,
+				"currentness": "CURRENT",
+				"withdrawn": false,
+				"basedOn": [
+					{
+						"resultId": "50000000-0000-4000-8000-000000000001",
+						"practiceSlug": "handles-errors",
+						"practiceVersionId": "11",
+						"outcome": "NOT_MET"
+					}
+				],
+				"copies": [
+					{
+						"id": "71000000-0000-4000-8000-000000000001",
+						"kind": "LINE_NOTE",
+						"body": "This catch hides the failure.",
+						"path": "src/App.java",
+						"startLine": 15,
+						"endLine": 15,
+						"side": "NEW",
+						"externalRef": "c1",
+						"externalUrl": "https://github.com/acme/app/pull/7#discussion_r1",
+						"postedAt": "2026-10-19T12:00:00Z",
+						"state": "POSTED"
+					}
+				]
+			},
+			{
+				"id": "70000027-0000-4000-8000-000000000001",
+				"destination": "ON_WORK",
+				"state": "DELIVERED",
+				"deliveredAt": "2026-10-19T12:00:00Z",
+				"itemVersion": "3333333333333333333333333333333333333333",
+				"body": "Earlier advice 27: record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure ",
+				"bodyUnavailable": false,
+				"currentness": "CURRENT",
+				"withdrawn": false,
+				"basedOn": [
+					{
+						"resultId": "50000000-0000-4000-8000-000000000001",
+						"practiceSlug": "handles-errors",
+						"practiceVersionId": "11",
+						"outcome": "NOT_MET"
+					}
+				],
+				"copies": [
+					{
+						"id": "71000000-0000-4000-8000-000000000001",
+						"kind": "LINE_NOTE",
+						"body": "This catch hides the failure.",
+						"path": "src/App.java",
+						"startLine": 15,
+						"endLine": 15,
+						"side": "NEW",
+						"externalRef": "c1",
+						"externalUrl": "https://github.com/acme/app/pull/7#discussion_r1",
+						"postedAt": "2026-10-19T12:00:00Z",
+						"state": "POSTED"
+					}
+				]
+			},
+			{
+				"id": "70000028-0000-4000-8000-000000000001",
+				"destination": "ON_WORK",
+				"state": "DELIVERED",
+				"deliveredAt": "2026-10-19T12:00:00Z",
+				"itemVersion": "3333333333333333333333333333333333333333",
+				"body": "Earlier advice 28: record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure ",
+				"bodyUnavailable": false,
+				"currentness": "CURRENT",
+				"withdrawn": false,
+				"basedOn": [
+					{
+						"resultId": "50000000-0000-4000-8000-000000000001",
+						"practiceSlug": "handles-errors",
+						"practiceVersionId": "11",
+						"outcome": "NOT_MET"
+					}
+				],
+				"copies": [
+					{
+						"id": "71000000-0000-4000-8000-000000000001",
+						"kind": "LINE_NOTE",
+						"body": "This catch hides the failure.",
+						"path": "src/App.java",
+						"startLine": 15,
+						"endLine": 15,
+						"side": "NEW",
+						"externalRef": "c1",
+						"externalUrl": "https://github.com/acme/app/pull/7#discussion_r1",
+						"postedAt": "2026-10-19T12:00:00Z",
+						"state": "POSTED"
+					}
+				]
+			},
+			{
+				"id": "70000029-0000-4000-8000-000000000001",
+				"destination": "ON_WORK",
+				"state": "DELIVERED",
+				"deliveredAt": "2026-10-19T12:00:00Z",
+				"itemVersion": "3333333333333333333333333333333333333333",
+				"body": "Earlier advice 29: record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure ",
+				"bodyUnavailable": false,
+				"currentness": "CURRENT",
+				"withdrawn": false,
+				"basedOn": [
+					{
+						"resultId": "50000000-0000-4000-8000-000000000001",
+						"practiceSlug": "handles-errors",
+						"practiceVersionId": "11",
+						"outcome": "NOT_MET"
+					}
+				],
+				"copies": [
+					{
+						"id": "71000000-0000-4000-8000-000000000001",
+						"kind": "LINE_NOTE",
+						"body": "This catch hides the failure.",
+						"path": "src/App.java",
+						"startLine": 15,
+						"endLine": 15,
+						"side": "NEW",
+						"externalRef": "c1",
+						"externalUrl": "https://github.com/acme/app/pull/7#discussion_r1",
+						"postedAt": "2026-10-19T12:00:00Z",
+						"state": "POSTED"
+					}
+				]
+			},
+			{
+				"id": "70000030-0000-4000-8000-000000000001",
+				"destination": "ON_WORK",
+				"state": "DELIVERED",
+				"deliveredAt": "2026-10-19T12:00:00Z",
+				"itemVersion": "3333333333333333333333333333333333333333",
+				"body": "Earlier advice 30: record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure ",
+				"bodyUnavailable": false,
+				"currentness": "CURRENT",
+				"withdrawn": false,
+				"basedOn": [
+					{
+						"resultId": "50000000-0000-4000-8000-000000000001",
+						"practiceSlug": "handles-errors",
+						"practiceVersionId": "11",
+						"outcome": "NOT_MET"
+					}
+				],
+				"copies": [
+					{
+						"id": "71000000-0000-4000-8000-000000000001",
+						"kind": "LINE_NOTE",
+						"body": "This catch hides the failure.",
+						"path": "src/App.java",
+						"startLine": 15,
+						"endLine": 15,
+						"side": "NEW",
+						"externalRef": "c1",
+						"externalUrl": "https://github.com/acme/app/pull/7#discussion_r1",
+						"postedAt": "2026-10-19T12:00:00Z",
+						"state": "POSTED"
+					}
+				]
+			},
+			{
+				"id": "70000031-0000-4000-8000-000000000001",
+				"destination": "ON_WORK",
+				"state": "DELIVERED",
+				"deliveredAt": "2026-10-19T12:00:00Z",
+				"itemVersion": "3333333333333333333333333333333333333333",
+				"body": "Earlier advice 31: record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure ",
+				"bodyUnavailable": false,
+				"currentness": "CURRENT",
+				"withdrawn": false,
+				"basedOn": [
+					{
+						"resultId": "50000000-0000-4000-8000-000000000001",
+						"practiceSlug": "handles-errors",
+						"practiceVersionId": "11",
+						"outcome": "NOT_MET"
+					}
+				],
+				"copies": [
+					{
+						"id": "71000000-0000-4000-8000-000000000001",
+						"kind": "LINE_NOTE",
+						"body": "This catch hides the failure.",
+						"path": "src/App.java",
+						"startLine": 15,
+						"endLine": 15,
+						"side": "NEW",
+						"externalRef": "c1",
+						"externalUrl": "https://github.com/acme/app/pull/7#discussion_r1",
+						"postedAt": "2026-10-19T12:00:00Z",
+						"state": "POSTED"
+					}
+				]
+			},
+			{
+				"id": "70000032-0000-4000-8000-000000000001",
+				"destination": "ON_WORK",
+				"state": "DELIVERED",
+				"deliveredAt": "2026-10-19T12:00:00Z",
+				"itemVersion": "3333333333333333333333333333333333333333",
+				"body": "Earlier advice 32: record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure ",
+				"bodyUnavailable": false,
+				"currentness": "CURRENT",
+				"withdrawn": false,
+				"basedOn": [
+					{
+						"resultId": "50000000-0000-4000-8000-000000000001",
+						"practiceSlug": "handles-errors",
+						"practiceVersionId": "11",
+						"outcome": "NOT_MET"
+					}
+				],
+				"copies": [
+					{
+						"id": "71000000-0000-4000-8000-000000000001",
+						"kind": "LINE_NOTE",
+						"body": "This catch hides the failure.",
+						"path": "src/App.java",
+						"startLine": 15,
+						"endLine": 15,
+						"side": "NEW",
+						"externalRef": "c1",
+						"externalUrl": "https://github.com/acme/app/pull/7#discussion_r1",
+						"postedAt": "2026-10-19T12:00:00Z",
+						"state": "POSTED"
+					}
+				]
+			},
+			{
+				"id": "70000033-0000-4000-8000-000000000001",
+				"destination": "ON_WORK",
+				"state": "DELIVERED",
+				"deliveredAt": "2026-10-19T12:00:00Z",
+				"itemVersion": "3333333333333333333333333333333333333333",
+				"body": "Earlier advice 33: record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure ",
+				"bodyUnavailable": false,
+				"currentness": "CURRENT",
+				"withdrawn": false,
+				"basedOn": [
+					{
+						"resultId": "50000000-0000-4000-8000-000000000001",
+						"practiceSlug": "handles-errors",
+						"practiceVersionId": "11",
+						"outcome": "NOT_MET"
+					}
+				],
+				"copies": [
+					{
+						"id": "71000000-0000-4000-8000-000000000001",
+						"kind": "LINE_NOTE",
+						"body": "This catch hides the failure.",
+						"path": "src/App.java",
+						"startLine": 15,
+						"endLine": 15,
+						"side": "NEW",
+						"externalRef": "c1",
+						"externalUrl": "https://github.com/acme/app/pull/7#discussion_r1",
+						"postedAt": "2026-10-19T12:00:00Z",
+						"state": "POSTED"
+					}
+				]
+			},
+			{
+				"id": "70000034-0000-4000-8000-000000000001",
+				"destination": "ON_WORK",
+				"state": "DELIVERED",
+				"deliveredAt": "2026-10-19T12:00:00Z",
+				"itemVersion": "3333333333333333333333333333333333333333",
+				"body": "Earlier advice 34: record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure ",
+				"bodyUnavailable": false,
+				"currentness": "CURRENT",
+				"withdrawn": false,
+				"basedOn": [
+					{
+						"resultId": "50000000-0000-4000-8000-000000000001",
+						"practiceSlug": "handles-errors",
+						"practiceVersionId": "11",
+						"outcome": "NOT_MET"
+					}
+				],
+				"copies": [
+					{
+						"id": "71000000-0000-4000-8000-000000000001",
+						"kind": "LINE_NOTE",
+						"body": "This catch hides the failure.",
+						"path": "src/App.java",
+						"startLine": 15,
+						"endLine": 15,
+						"side": "NEW",
+						"externalRef": "c1",
+						"externalUrl": "https://github.com/acme/app/pull/7#discussion_r1",
+						"postedAt": "2026-10-19T12:00:00Z",
+						"state": "POSTED"
+					}
+				]
+			},
+			{
+				"id": "70000035-0000-4000-8000-000000000001",
+				"destination": "ON_WORK",
+				"state": "DELIVERED",
+				"deliveredAt": "2026-10-19T12:00:00Z",
+				"itemVersion": "3333333333333333333333333333333333333333",
+				"body": "Earlier advice 35: record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure ",
+				"bodyUnavailable": false,
+				"currentness": "CURRENT",
+				"withdrawn": false,
+				"basedOn": [
+					{
+						"resultId": "50000000-0000-4000-8000-000000000001",
+						"practiceSlug": "handles-errors",
+						"practiceVersionId": "11",
+						"outcome": "NOT_MET"
+					}
+				],
+				"copies": [
+					{
+						"id": "71000000-0000-4000-8000-000000000001",
+						"kind": "LINE_NOTE",
+						"body": "This catch hides the failure.",
+						"path": "src/App.java",
+						"startLine": 15,
+						"endLine": 15,
+						"side": "NEW",
+						"externalRef": "c1",
+						"externalUrl": "https://github.com/acme/app/pull/7#discussion_r1",
+						"postedAt": "2026-10-19T12:00:00Z",
+						"state": "POSTED"
+					}
+				]
+			},
+			{
+				"id": "70000036-0000-4000-8000-000000000001",
+				"destination": "ON_WORK",
+				"state": "DELIVERED",
+				"deliveredAt": "2026-10-19T12:00:00Z",
+				"itemVersion": "3333333333333333333333333333333333333333",
+				"body": "Earlier advice 36: record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure ",
+				"bodyUnavailable": false,
+				"currentness": "CURRENT",
+				"withdrawn": false,
+				"basedOn": [
+					{
+						"resultId": "50000000-0000-4000-8000-000000000001",
+						"practiceSlug": "handles-errors",
+						"practiceVersionId": "11",
+						"outcome": "NOT_MET"
+					}
+				],
+				"copies": [
+					{
+						"id": "71000000-0000-4000-8000-000000000001",
+						"kind": "LINE_NOTE",
+						"body": "This catch hides the failure.",
+						"path": "src/App.java",
+						"startLine": 15,
+						"endLine": 15,
+						"side": "NEW",
+						"externalRef": "c1",
+						"externalUrl": "https://github.com/acme/app/pull/7#discussion_r1",
+						"postedAt": "2026-10-19T12:00:00Z",
+						"state": "POSTED"
+					}
+				]
+			},
+			{
+				"id": "70000037-0000-4000-8000-000000000001",
+				"destination": "ON_WORK",
+				"state": "DELIVERED",
+				"deliveredAt": "2026-10-19T12:00:00Z",
+				"itemVersion": "3333333333333333333333333333333333333333",
+				"body": "Earlier advice 37: record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure ",
+				"bodyUnavailable": false,
+				"currentness": "CURRENT",
+				"withdrawn": false,
+				"basedOn": [
+					{
+						"resultId": "50000000-0000-4000-8000-000000000001",
+						"practiceSlug": "handles-errors",
+						"practiceVersionId": "11",
+						"outcome": "NOT_MET"
+					}
+				],
+				"copies": [
+					{
+						"id": "71000000-0000-4000-8000-000000000001",
+						"kind": "LINE_NOTE",
+						"body": "This catch hides the failure.",
+						"path": "src/App.java",
+						"startLine": 15,
+						"endLine": 15,
+						"side": "NEW",
+						"externalRef": "c1",
+						"externalUrl": "https://github.com/acme/app/pull/7#discussion_r1",
+						"postedAt": "2026-10-19T12:00:00Z",
+						"state": "POSTED"
+					}
+				]
+			},
+			{
+				"id": "70000038-0000-4000-8000-000000000001",
+				"destination": "ON_WORK",
+				"state": "DELIVERED",
+				"deliveredAt": "2026-10-19T12:00:00Z",
+				"itemVersion": "3333333333333333333333333333333333333333",
+				"body": "Earlier advice 38: record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure ",
+				"bodyUnavailable": false,
+				"currentness": "CURRENT",
+				"withdrawn": false,
+				"basedOn": [
+					{
+						"resultId": "50000000-0000-4000-8000-000000000001",
+						"practiceSlug": "handles-errors",
+						"practiceVersionId": "11",
+						"outcome": "NOT_MET"
+					}
+				],
+				"copies": [
+					{
+						"id": "71000000-0000-4000-8000-000000000001",
+						"kind": "LINE_NOTE",
+						"body": "This catch hides the failure.",
+						"path": "src/App.java",
+						"startLine": 15,
+						"endLine": 15,
+						"side": "NEW",
+						"externalRef": "c1",
+						"externalUrl": "https://github.com/acme/app/pull/7#discussion_r1",
+						"postedAt": "2026-10-19T12:00:00Z",
+						"state": "POSTED"
+					}
+				]
+			},
+			{
+				"id": "70000039-0000-4000-8000-000000000001",
+				"destination": "ON_WORK",
+				"state": "DELIVERED",
+				"deliveredAt": "2026-10-19T12:00:00Z",
+				"itemVersion": "3333333333333333333333333333333333333333",
+				"body": "Earlier advice 39: record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure record the failure ",
+				"bodyUnavailable": false,
+				"currentness": "CURRENT",
+				"withdrawn": false,
+				"basedOn": [
+					{
+						"resultId": "50000000-0000-4000-8000-000000000001",
+						"practiceSlug": "handles-errors",
+						"practiceVersionId": "11",
+						"outcome": "NOT_MET"
+					}
+				],
+				"copies": [
+					{
+						"id": "71000000-0000-4000-8000-000000000001",
+						"kind": "LINE_NOTE",
+						"body": "This catch hides the failure.",
+						"path": "src/App.java",
+						"startLine": 15,
+						"endLine": 15,
+						"side": "NEW",
+						"externalRef": "c1",
+						"externalUrl": "https://github.com/acme/app/pull/7#discussion_r1",
+						"postedAt": "2026-10-19T12:00:00Z",
+						"state": "POSTED"
+					}
+				]
+			}
+		]
+	}
+}

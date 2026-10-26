@@ -113,6 +113,8 @@ services:
       # One concurrent agent sandbox (up to the 3 GiB SANDBOX_MEMORY_BYTES default); size the host from
       # the install guide. The reference defaults to 5 across dedicated machines.
       SANDBOX_MAX_CONCURRENT: ${SANDBOX_MAX_CONCURRENT:-1}
+      AGENT_MAX_CONCURRENT_COMPOSITIONS: ${AGENT_MAX_CONCURRENT_COMPOSITIONS:-16}
+      PRACTICE_REVIEW_COMPOSITION_TIMEOUT: ${PRACTICE_REVIEW_COMPOSITION_TIMEOUT:-10m}
 
   webhook-server:
     # Inherited management listener: internal network only, no host publish or proxy route.

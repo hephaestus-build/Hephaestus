@@ -52,7 +52,8 @@ export const WITHHOLDING_FAMILY_DEFS: StatusDefs<WithholdingFamily> = {
 		label: "Housekeeping",
 		icon: BrushCleaningIcon,
 		badgeVariant: "outline",
-		description: "The pipeline dropped it: a duplicate, an empty body, or a chat that never came.",
+		description:
+			"The pipeline dropped it: a duplicate, an empty body, a chat that never came, or feedback it could not write.",
 	},
 };
 
@@ -94,6 +95,7 @@ const REASON_FAMILY: Record<WithholdingReason, WithholdingFamily> = {
 	EMPTY_AFTER_SANITIZE: "HOUSEKEEPING",
 	CONVERSATION_EXPIRED: "HOUSEKEEPING",
 	DELIVERY_UNCONFIRMED: "HOUSEKEEPING",
+	NOT_COMPOSED: "HOUSEKEEPING",
 };
 
 /**
@@ -144,6 +146,8 @@ export const WITHHOLDING_REASON_DEFS: Record<WithholdingReason, string> = {
 	EMPTY_AFTER_SANITIZE: "Nothing was left to send once the text had been cleaned up.",
 	CONVERSATION_EXPIRED: "It waited for a conversation that never happened, then aged out.",
 	DELIVERY_UNCONFIRMED: "It may have appeared, but that was never confirmed.",
+	NOT_COMPOSED:
+		"The feedback could not be written, for example because time or budget ran out, so nothing was sent.",
 };
 
 export function withholdingFamily(reason: WithholdingReason): WithholdingFamily {

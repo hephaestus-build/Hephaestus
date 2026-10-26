@@ -123,7 +123,9 @@ The same name is the source capture code that causes it.
 | **Readiness**                  | Whether the captured sources meet the practice's declared requirements.                                   | review_practice                |
 | **Job folder**                 | The worker's disposable files and repository copies for one execution attempt.                            | workspace ABI                  |
 | **Runtime non-result**         | An assigned practice that stopped without a candidate. Its stop reason describes execution, not the work. | nonResults                     |
-| **Composition**                | The preparation of feedback from admitted and eligible observations.                                      | feedback composition           |
+| **Composition**                | The preparation of feedback from admitted and eligible observations, by the worker after the sandbox ends. | feedback composition           |
+| **Not composed**               | A withholding for a destination that no composed decision reached, when no more specific reason applies.  | NOT_COMPOSED                   |
+| **Composition stop**           | The cause that left a destination without composed feedback. A passing cause hands the attempt on.        | CompositionStop                |
 | **Send**                       | One leased provider write or retraction of on-work feedback, with its reconciliation state.               | feedback_send                  |
 | **Review digest**              | The digest of the definition inputs that can change an observation from the same evidence.                | practice_version.review_digest |
 | **Heph host**                  | The one long-lived sandboxed process on a worker that runs Heph turns.                      | heph-host.ts, HephHost         |

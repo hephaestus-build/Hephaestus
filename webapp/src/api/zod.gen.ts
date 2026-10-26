@@ -1226,7 +1226,8 @@ export const zFeedbackCheck = z.object({
         'NO_EVIDENCE',
         'UNCORROBORATED',
         'PUBLIC_HISTORY_CHANGED',
-        'PUBLIC_DELIVERY_UNRESOLVED'
+        'PUBLIC_DELIVERY_UNRESOLVED',
+        'NOT_COMPOSED'
     ]).nullable(),
     stage: z.enum([
         'COMPOSITION',
@@ -1305,7 +1306,8 @@ export const zFeedbackCopy = z.object({
         'NO_EVIDENCE',
         'UNCORROBORATED',
         'PUBLIC_HISTORY_CHANGED',
-        'PUBLIC_DELIVERY_UNRESOLVED'
+        'PUBLIC_DELIVERY_UNRESOLVED',
+        'NOT_COMPOSED'
     ]).nullable(),
     writeStartedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).nullable()
 });
@@ -3432,7 +3434,8 @@ export const zResultDecision = z.object({
         'NO_EVIDENCE',
         'UNCORROBORATED',
         'PUBLIC_HISTORY_CHANGED',
-        'PUBLIC_DELIVERY_UNRESOLVED'
+        'PUBLIC_DELIVERY_UNRESOLVED',
+        'NOT_COMPOSED'
     ]).nullable()
 });
 
@@ -3747,7 +3750,8 @@ export const zReviewFeedback = z.object({
         'NO_EVIDENCE',
         'UNCORROBORATED',
         'PUBLIC_HISTORY_CHANGED',
-        'PUBLIC_DELIVERY_UNRESOLVED'
+        'PUBLIC_DELIVERY_UNRESOLVED',
+        'NOT_COMPOSED'
     ]).nullable(),
     textHidden: z.boolean(),
     unverifiedHistory: z.boolean(),
@@ -3847,7 +3851,8 @@ export const zReviewFeedbackDetail = z.object({
         'NO_EVIDENCE',
         'UNCORROBORATED',
         'PUBLIC_HISTORY_CHANGED',
-        'PUBLIC_DELIVERY_UNRESOLVED'
+        'PUBLIC_DELIVERY_UNRESOLVED',
+        'NOT_COMPOSED'
     ]).nullable(),
     textHidden: z.boolean(),
     unverifiedHistory: z.boolean(),
@@ -5425,6 +5430,9 @@ export const zCopySupport = z.object({
     position: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }).optional()
 });
 
+/**
+ * Why results stay unsaid: the composer's reason with the prior advice it rests on, or NOT_COMPOSED.
+ */
 export const zQuietDecision = z.object({
     basedOn: z.array(zSupport).optional(),
     reason: z.string().optional(),
@@ -5491,7 +5499,8 @@ export const zComposedFeedback = z.object({
         'NO_EVIDENCE',
         'UNCORROBORATED',
         'PUBLIC_HISTORY_CHANGED',
-        'PUBLIC_DELIVERY_UNRESOLVED'
+        'PUBLIC_DELIVERY_UNRESOLVED',
+        'NOT_COMPOSED'
     ]).optional()
 });
 
@@ -5578,7 +5587,8 @@ export const zPracticeSupport = z.object({
         'NO_EVIDENCE',
         'UNCORROBORATED',
         'PUBLIC_HISTORY_CHANGED',
-        'PUBLIC_DELIVERY_UNRESOLVED'
+        'PUBLIC_DELIVERY_UNRESOLVED',
+        'NOT_COMPOSED'
     ]).nullable()
 });
 

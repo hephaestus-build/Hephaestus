@@ -4,14 +4,14 @@ import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.JobFolderIndex;
 import de.tum.cit.aet.hephaestus.agent.context.PreparedEvidence;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
-import de.tum.cit.aet.hephaestus.agent.handler.spi.JobPreparationException;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.PreparedJobInputs;
 import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
-import de.tum.cit.aet.hephaestus.agent.task.TaskEnvelope;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
+import java.io.Serial;
 import java.time.Instant;
 import java.util.Base64;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
@@ -20,27 +20,23 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
 
-/** Restores the original captured text for composition without asking an item source to capture again. */
+/** Restores the original composition inputs of an admitted review without asking an item source to capture again. */
 @Component
 @ConditionalOnCaptureRole
 public class ReviewCompositionContinuation {
-    public static final String CONTINUATION_PATH = SandboxLayout.INPUTS_PREFIX + "composition-continuation.json";
     private final ReviewCompositionBasisRepository bases;
     private final JobEvidenceFiles files;
     private final ReviewJobRepository jobs;
-    private final ResultAdmissionService admission;
     private final ObjectMapper mapper;
 
     public ReviewCompositionContinuation(
             ReviewCompositionBasisRepository bases,
             JobEvidenceFiles files,
             ReviewJobRepository jobs,
-            ResultAdmissionService admission,
             ObjectMapper mapper) {
         this.bases = bases;
         this.files = files;
         this.jobs = jobs;
-        this.admission = admission;
         this.mapper = mapper;
     }
 
@@ -48,33 +44,34 @@ public class ReviewCompositionContinuation {
         files.holdCopyAdmission();
     }
 
-    /** Whether the admitted job may still owe private feedback, from the pieces its review already prepared. */
-    public boolean privateFeedbackOwed(ReviewJob job) {
-        return admission.privateFeedbackOwed(job);
-    }
-
+    /**
+     * Hands a lost admitted attempt on to a new attempt that composes what it left open, whatever its retained inputs
+     * permit: the new attempt checks them before it stages anything, and withholds what they no longer permit.
+     */
     @Transactional(propagation = Propagation.MANDATORY)
     public int requeue(ReviewJob job, String workerId, ReviewJobRepository.CompositionRequeue request) {
-        var original = bases.findOriginalCopy(job.getWorkspaceId(), job.getId()).orElse(null);
-        if (original == null
-                || !files.vouchesForOriginalCopy(
-                        original.copyId(), job.getId(), job.getWorkspaceId(), original.admissionAttempt())) return 0;
-        if (jobs.lockContinuableAttempt(
-                        job.getId(), workerId, request.attempt(), ReviewCompositionBasis.VERSION, request.now())
-                .isEmpty()) return 0;
-        return jobs.requeueLockedForComposition(job.getId(), workerId, request);
+        return jobs.requeueAdmittedForComposition(job.getId(), workerId, request);
     }
 
-    public PreparedJobInputs prepareInputs(ReviewJob job) {
+    /**
+     * The retained composition inputs, staged as this attempt's own folder: the folder's person-copy receipt lets the
+     * attempt read earlier feedback again, and the bytes are the ones the admitted citations were verified under. The
+     * caller closes the staged folder. Inputs whose receipt no longer vouches for them, as after an erasure, are never
+     * staged.
+     *
+     * @throws InputsUnavailableException when the inputs were erased, removed, expired or no longer match
+     */
+    public Restored restore(ReviewJob job) {
         var basis = bases.findByWorkspaceIdAndJobId(job.getWorkspaceId(), job.getId())
-                .orElseThrow(() -> unavailable("The original inputs were removed"));
+                .orElseThrow(() -> gone("The original inputs were removed"));
+        if (!files.vouchesForOriginalCopy(
+                basis.getCopyId(), job.getId(), job.getWorkspaceId(), basis.getAdmissionAttempt()))
+            throw new InputsUnavailableException("The original capture was erased", true);
         if (basis.getBasisVersion() != ReviewCompositionBasis.VERSION
                 || !basis.getExpiresAt().isAfter(Instant.now())
                 || !basis.getAdmissionDigest().equals(job.getAdmissionDigest())
-                || basis.getAdmissionAttempt() != ResultAdmissionService.citationAttempt(job)
-                || !files.vouchesForOriginalCopy(
-                        basis.getCopyId(), job.getId(), job.getWorkspaceId(), basis.getAdmissionAttempt())) {
-            throw unavailable("The original capture no longer permits composition");
+                || basis.getAdmissionAttempt() != ResultAdmissionService.citationAttempt(job)) {
+            throw gone("The original capture no longer permits composition");
         }
         var staged = new TreeMap<String, byte[]>();
         basis.getPayload()
@@ -84,28 +81,46 @@ public class ReviewCompositionContinuation {
                         entry.getKey(),
                         Base64.getDecoder().decode(entry.getValue().asString())));
         if (!ReviewCompositionBasis.digest(staged).equals(basis.getBasisDigest()))
-            throw unavailable("The retained inputs do not match their digest");
+            throw gone("The retained inputs do not match their digest");
         byte[] manifestBytes = staged.get(SandboxLayout.MANIFEST_PATH);
-        if (manifestBytes == null) throw unavailable("The original manifest is unavailable");
+        if (manifestBytes == null) throw gone("The original manifest is unavailable");
         var manifest = mapper.readValue(manifestBytes, JobFolderIndex.class);
         for (var text : manifest.citableTexts()) {
             byte[] bytes = staged.get(text.stagedPath());
             if (bytes == null || !ProvenanceDigest.sha256Hex(bytes).equals(text.sha256())) {
-                throw unavailable("The original citable text is unavailable");
+                throw gone("The original citable text is unavailable");
             }
         }
         files.beginPersonCapture(job);
         try {
-            staged.put(CONTINUATION_PATH, mapper.writeValueAsBytes(admission.capturedAdmissionResponse(job)));
-            // The retained inputs are the admitting attempt's; the task is this attempt's own.
-            staged.put(
-                    SandboxLayout.TASK_ENVELOPE_FILENAME,
-                    mapper.writeValueAsBytes(TaskEnvelope.practiceReview(
-                            job.getReviewId(), job.getId(), job.getAttempt(), job.getWorkspaceId())));
-            return files.prepare(job, new PreparedEvidence(staged, Map.of(), List.of(), manifest, List.of()), null);
+            var prepared = files.prepare(
+                    job, new PreparedEvidence(new TreeMap<>(staged), Map.of(), List.of(), manifest, List.of()), null);
+            return new Restored(prepared, Collections.unmodifiableMap(staged));
         } catch (RuntimeException failed) {
             files.abortPersonCapture(job);
             throw failed;
+        }
+    }
+
+    /**
+     * An empty folder for an attempt whose inputs are gone: its person-copy receipt still lets the attempt read and
+     * prepare what it records instead, a withholding per destination.
+     */
+    public Restored stageWithoutInputs(ReviewJob job) {
+        files.beginPersonCapture(job);
+        try {
+            return new Restored(files.prepare(job, new PreparedEvidence(Map.of(), null), null), Map.of());
+        } catch (RuntimeException failed) {
+            files.abortPersonCapture(job);
+            throw failed;
+        }
+    }
+
+    /** The retained inputs of a review, staged for the attempt that composes from them. */
+    public record Restored(PreparedJobInputs staged, Map<String, byte[]> files) implements AutoCloseable {
+        @Override
+        public void close() {
+            staged.close();
         }
     }
 
@@ -114,7 +129,25 @@ public class ReviewCompositionContinuation {
         bases.deleteForJob(job.getWorkspaceId(), job.getId());
     }
 
-    private static JobPreparationException unavailable(String message) {
-        return new JobPreparationException(message);
+    /** The retained inputs cannot be composed from. */
+    public static final class InputsUnavailableException extends RuntimeException {
+        @Serial
+        private static final long serialVersionUID = 1L;
+
+        private final boolean erased;
+
+        public InputsUnavailableException(String message, boolean erased) {
+            super(message);
+            this.erased = erased;
+        }
+
+        /** Whether the inputs were erased, as opposed to removed, expired or changed. */
+        public boolean erased() {
+            return erased;
+        }
+    }
+
+    private static InputsUnavailableException gone(String message) {
+        return new InputsUnavailableException(message, false);
     }
 }
