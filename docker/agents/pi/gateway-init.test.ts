@@ -178,7 +178,8 @@ void test(
 const rootOwnedTmp = (() => {
 	try {
 		const tmp = statSync("/tmp");
-		return tmp.uid === 0 && (tmp.mode & 0o1777) === 0o1777;
+		// The permission bits, sticky bit included, are the last four octal digits of the mode.
+		return tmp.uid === 0 && tmp.mode.toString(8).endsWith("1777");
 	} catch {
 		return false;
 	}
