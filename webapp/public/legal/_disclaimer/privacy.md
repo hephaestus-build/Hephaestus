@@ -1,23 +1,21 @@
 # Privacy statement not configured
 
-This Hephaestus instance has been deployed without a legal profile.
+This Hephaestus instance has been deployed without its own legal pages.
 
 Hephaestus does process personal data by design (sign-in identities, mirrored project work, conversations, observations, feedback, security events and operational logs). The operator of this deployment is the **controller** within the meaning of Art. 4(7) GDPR for that processing and is legally required to provide a transparent privacy statement under Art. 13 and Art. 14 GDPR before you use the service.
 
 ## What this means for you
 
-- This page does not identify the operator. Do not infer TUM responsibility from the upstream project.
+- This page does not identify the operator. The upstream Hephaestus project does not operate this instance.
 - No privacy statement has been configured for the deployment you are looking at.
-- You should not assume that this deployment's processing follows the TUM/AET configuration described in the upstream documentation.
 - Please request a privacy statement directly from the party that deployed this instance before continuing to use it.
 
 ## What the operator must do
 
 See [Legal pages operator guide](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/admin/legal-pages.mdx) for configuration options:
 
-1. Configure `LEGAL_PROFILE` only for a bundled profile that actually describes your controller and deployment, **or**
-2. Mount a custom Markdown override directory at the documented path, **or**
-3. Author deployment-specific privacy content and rebuild the image.
+1. Mount a custom Markdown override directory at the documented path, **or**
+2. Author deployment-specific privacy content and rebuild the image.
 
 Before collecting data, publish a deployment-specific notice that states:
 
@@ -37,7 +35,7 @@ Before collecting data, publish a deployment-specific notice that states:
 The operator must complete the [data-protection package](https://docs.hephaestus.build/admin/dsms/)
 and assess the full DPIA indicated by the current source combination. A source-use engineering
 approval is not controller/DPO approval. Terms acceptance is not research consent or a legal basis
-for all processing. Do not copy TUM legal bases or institutional agreements into another deployment.
+for all processing. Do not copy another operator's legal bases or institutional agreements into your deployment.
 
 ---
 

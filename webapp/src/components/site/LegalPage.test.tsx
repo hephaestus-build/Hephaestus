@@ -10,10 +10,6 @@ import {
 
 import { LegalPage } from "./LegalPage";
 
-vi.mock("@/environment", () => ({
-	default: { legal: { profile: "" } },
-}));
-
 declare global {
 	interface Window {
 		/** Set by the `<script>` in the hostile fixture, if the sanitiser ever lets one run. */
@@ -57,15 +53,13 @@ const HOSTILE_MARKDOWN = `# Hostile
 function makeResolver(markdown: string): typeof resolveLegalContent {
 	return async () => ({
 		markdown,
-		source: "profile",
-		profile: "tumaet",
+		source: "override",
 	});
 }
 
 const disclaimerResolver: typeof resolveLegalContent = async () => ({
 	markdown: "# fallback",
 	source: "disclaimer",
-	profile: "",
 });
 
 describe("LegalPage — XSS guardrail", () => {
@@ -144,13 +138,13 @@ describe("LegalPage — XSS guardrail", () => {
 		"renders the %s disclaimer and warns exactly once across page mounts",
 		async (page) => {
 			using warn = vi.spyOn(console, "warn").mockReturnValue(undefined);
-			const expected = `[legal] Disclaimer fallback served for page=${page}. Configure LEGAL_PROFILE or mount /legal-overrides/. See docs/admin/legal-pages.`;
+			const expected = `[legal] Disclaimer fallback served for page=${page}. Mount /legal-overrides/. See docs/admin/legal-pages.`;
 			const first = render(
 				<LegalPage page={page} title={LEGAL_PAGE_TITLES[page]} resolver={disclaimerResolver} />,
 			);
 			// The load-error alert says the opposite about the deployment; assert the disclaimer copy.
 			const alert = await first.findByRole("alert");
-			expect(alert.textContent).toMatch(/has not been configured with a legal profile/iu);
+			expect(alert.textContent).toMatch(/has not published its own legal pages/iu);
 			expect(warn).toHaveBeenCalledExactlyOnceWith(expected);
 			first.unmount();
 
@@ -158,7 +152,7 @@ describe("LegalPage — XSS guardrail", () => {
 				<LegalPage page={page} title={LEGAL_PAGE_TITLES[page]} resolver={disclaimerResolver} />,
 			);
 			const remountedAlert = await remounted.findByRole("alert");
-			expect(remountedAlert.textContent).toMatch(/has not been configured with a legal profile/iu);
+			expect(remountedAlert.textContent).toMatch(/has not published its own legal pages/iu);
 			expect(warn).toHaveBeenCalledExactlyOnceWith(expected);
 		},
 	);

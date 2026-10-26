@@ -22,7 +22,6 @@ interface RuntimeEnvVars {
 	HEPHAESTUS_WORKSPACE_SUBDOMAINS_BASE_DOMAIN?: string;
 	XSRF_COOKIE_NAME?: string;
 	DEPLOYMENT_ENVIRONMENT?: string;
-	LEGAL_PROFILE?: string;
 	TANSTACK_DEVTOOLS_ENABLED?: string;
 	GIT_BRANCH?: string;
 	GIT_COMMIT?: string;
@@ -45,7 +44,6 @@ const defaults: RuntimeEnvVars = {
 	APPLICATION_SERVER_URL: "http://localhost:8080",
 	XSRF_COOKIE_NAME: SECURE_XSRF_COOKIE_NAME,
 	DEPLOYMENT_ENVIRONMENT: "local",
-	LEGAL_PROFILE: "",
 	TANSTACK_DEVTOOLS_ENABLED: "true",
 	GIT_BRANCH: "",
 	GIT_COMMIT: "",
@@ -109,10 +107,6 @@ const environment = {
 		branch: env("GIT_BRANCH"),
 		commit: env("GIT_COMMIT"),
 		deployedAt: env("DEPLOYED_AT"),
-	},
-
-	legal: {
-		profile: env("LEGAL_PROFILE"),
 	},
 
 	devtools: {

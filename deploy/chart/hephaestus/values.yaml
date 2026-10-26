@@ -186,8 +186,6 @@ webhook:
 
 webapp:
   replicas: 1
-  # docs/admin/legal-pages.mdx. Empty serves the built-in disclaimer.
-  legalProfile: ""
   # The deployment's contact for /.well-known/security.txt: one mailto:, https:// or tel: URI.
   # Empty serves no file.
   securityContact: ""

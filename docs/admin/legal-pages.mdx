@@ -6,11 +6,11 @@ description: How Hephaestus resolves the /imprint and /privacy pages, and what t
 
 Hephaestus ships with two legal pages: `/imprint` and `/privacy`.
 The webapp renders them from Markdown files that nginx serves directly.
-This page explains the webapp's three-layer resolution and each self-hosted operator's responsibilities.
+This page explains how the webapp resolves them and each self-hosted operator's responsibilities.
 
 :::caution[CAUTION: Configure legal notices before admitting users]
-The built-in “not configured” pages are placeholders, not legal notices. Use `LEGAL_PROFILE=tumaet`
-only for the TUM/AET deployment it describes. Other operators must supply their own notices.
+The built-in “not configured” pages are placeholders, not legal notices.
+Each operator must supply their own notices.
 :::
 
 ## First-login consent notice
@@ -242,7 +242,6 @@ Meet all of them before you set `HEPHAESTUS_RESEARCH_ORGANIZATION`, and keep to 
    It sends model providers only pseudonymized data, under a data processing agreement.
 
 Publish the retention and recipient details of the research in your privacy notice.
-The bundled TUM notice shows one way to write these details.
 
 `ConsentService.WORDING_VERSION` identifies the text that an account accepted.
 That text is the first-login screen, published in a signed release and immutable in git.
@@ -266,42 +265,30 @@ Links to the upstream notices do not describe a separately operated deployment.
    It must include data about contributors who never sign in.
 3. Publish the operator identification that your jurisdiction requires.
 
-## Three-layer resolution
+<a id="three-layer-resolution"></a>
+
+## Resolution
 
 At page load, the webapp fetches the relevant Markdown file in this priority order.
 It uses the first file it finds:
 
-| Priority | Path                                        | Typical source                         |
-| -------: | ------------------------------------------- | -------------------------------------- |
-|       1. | `/legal-overrides/<page>.md`                | Bind-mounted by the operator           |
-|       2. | `/legal/profiles/<LEGAL_PROFILE>/<page>.md` | Baked into the image (bundled profile) |
-|       3. | `/legal/_disclaimer/<page>.md`              | Shipped safety-fallback                |
+| Priority | Path                           | Typical source               |
+| -------: | ------------------------------ | ---------------------------- |
+|       1. | `/legal-overrides/<page>.md`   | Mounted by the operator      |
+|       2. | `/legal/_disclaimer/<page>.md` | Shipped safety-fallback      |
 
 `<page>` is `imprint` or `privacy`.
 A banner alerts end users whenever the webapp serves the disclaimer.
 
-## Choosing a configuration mode
+<a id="choosing-a-configuration-mode"></a>
 
-### Mode A — Bundled profile (operators of `hephaestus.build`)
+## Publish your pages
 
-The bundled texts describe the deployment in the [data-protection records](./dsms).
+### Deployment-specific overrides
 
-1. If your deployment is the canonical TUM / AET deployment, set `LEGAL_PROFILE=tumaet` in your environment.
-2. Verify that your enabled services and processing still match those records.
-
-```env
-LEGAL_PROFILE=tumaet
-```
-
-Other operators must **not** select `LEGAL_PROFILE=tumaet`.
-The `tumaet` profile names TU München and the AET research group as the responsible parties.
-This would be legally inaccurate for any other deployment.
-
-### Mode B — Deployment-specific overrides (recommended for forks)
-
-This is the recommended mode for self-hosters.
-You write two Markdown files and bind-mount them into the webapp container.
-They override the bundled profile, if present, and the safety-fallback.
+Every public deployment uses this configuration.
+You write two Markdown files and mount them into the webapp container.
+They replace the safety-fallback.
 
 1. Create a directory next to your Compose file:
 
@@ -316,8 +303,6 @@ They override the bundled profile, if present, and the safety-fallback.
    ```yaml
    services:
      webapp:
-       environment:
-         LEGAL_PROFILE: ""
        volumes:
          - ./legal-overrides:/usr/share/nginx/html/legal-overrides:ro
    ```
@@ -345,11 +330,11 @@ They override the bundled profile, if present, and the safety-fallback.
 The webapp checks file paths on each request.
 Thus, you can update the files in the mount without a redeploy.
 
-Resolution is per page: a single-file override leaves the other page on the next available layer. Verify both pages identify the correct operator.
+Resolution is per page: a single-file override leaves the other page on the built-in fallback. Verify both pages identify the correct operator.
 
-### Mode C — Built-in fallback (developer default, not a production configuration)
+### Built-in fallback (developer default, not a production configuration)
 
-If `LEGAL_PROFILE` is empty and no overrides are mounted, the webapp serves a clear placeholder (`_disclaimer/*.md`).
+If no overrides are mounted, the webapp serves a clear placeholder (`_disclaimer/*.md`).
 It tells visitors that no legal content is configured.
 It asks them to contact the operator directly.
 The UI shows a red banner.
@@ -362,7 +347,7 @@ It is for local development and visible identification of misconfigured deployme
 
 Use Art. 13 GDPR as the outline. Hephaestus processes personal data in at least the following categories, which your privacy notice must cover:
 
-- **Identity and authentication** — Hephaestus-native auth federates to GitHub / LRZ GitLab.
+- **Identity and authentication** — Hephaestus-native auth federates to GitHub or GitLab.
   Each federated identity stores the provider, stable subject id, login, email-at-signup, and display name (ADR 0017).
 - **Repository synchronization** — each configured repository supplies pull/merge requests, issues, reviews, review comments, commit metadata, and author profile information.
   The notice must state the retention triggers that [Data retention](./data-retention) lists.
@@ -450,8 +435,6 @@ SPA-catchall proxies frequently return `200 text/html` for missing files.
    ```sh
    curl -sI https://<your-host>/legal-overrides/privacy.md \
      | grep -E '^(HTTP|Content-Type)'   # expect 200 + text/markdown if overrides are mounted
-   curl -sI https://<your-host>/legal/profiles/<profile>/privacy.md \
-     | grep -E '^(HTTP|Content-Type)'
    curl -sI https://<your-host>/legal/_disclaimer/privacy.md \
      | grep -E '^(HTTP|Content-Type)'   # always 200 + text/markdown
    ```
@@ -477,18 +460,14 @@ Overrides under `/legal-overrides/` use `Cache-Control: no-cache, must-revalidat
 An edit on the host takes effect on the next page load.
 Browsers revalidate every time.
 
-The bundled `/legal/` layer uses `max-age=300`.
-Edits to a bundled profile require a rebuild and up to five minutes for caches to clear.
-No extra registry needs maintenance.
+The bundled fallback under `/legal/` uses `max-age=300`.
 
-1. For a new bundled profile that replaces a previous one, update the text under `webapp/public/legal/profiles/<profile>/` in place.
-2. Rebuild the image.
+<a id="email-activation-and-the-tum-profile"></a>
 
-### Email activation and the TUM profile
+### Email activation
 
-The bundled TUM privacy profile describes TUM/LRZ mail services, not an arbitrary SMTP provider.
 Configuration and a successful test email are technical checks, not institutional approval.
-Self-hosters must publish their own applicable recipient information instead of TUM's notice.
+Your privacy notice must name the mail relay that you configure as a recipient.
 
 1. Keep email disabled until the deployment record confirms the actual service, institutional arrangement, and relay retention terms.
 2. If you use a different relay, update the public notice's recipient and transfer information before you enable it.
