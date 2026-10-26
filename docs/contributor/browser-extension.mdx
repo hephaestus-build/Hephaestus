@@ -260,7 +260,7 @@ self-contained and auto-imports are off, so linting and type checking never read
 
 WXT builds three modes from one source. `production` is what ships: HTTPS only, no manifest `key`, no
 host permission until the user grants one. `development` adds the public key in
-`extension/dev-key.txt`, which pins the id `ijkajblcbajjpjbknfgdiiiljipafiko` so the server's allowlist
+`extension/dev-public-key.txt`, which pins the id `ijkajblcbajjpjbknfgdiiiljipafiko` so the server's allowlist
 and the Chrome identity redirect stay stable, and accepts loopback HTTP. `e2e` is `development` plus
 pre-granted fixture origins, because Playwright cannot answer Chrome's permission prompt. Its
 output is `extension/.output/chrome-mv3-e2e`.

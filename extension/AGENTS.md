@@ -24,7 +24,7 @@ user docs are `docs/admin/browser-extension.mdx` and `docs/user/browser-extensio
 | Script | Does |
 |---|---|
 | `build` / `zip` | Production bundle `.output/chrome-mv3` / reproducible `.output/hephaestus-<version>-production-chrome.zip` |
-| `build:dev` / `zip:dev` | Development bundle `.output/chrome-mv3-dev`: fixed id `ijkajblcbajjpjbknfgdiiiljipafiko` (public key in `dev-key.txt`), loopback HTTP allowed |
+| `build:dev` / `zip:dev` | Development bundle `.output/chrome-mv3-dev`: fixed id `ijkajblcbajjpjbknfgdiiiljipafiko` (public key in `dev-public-key.txt`), loopback HTTP allowed |
 | `build:e2e` | `development` plus pre-granted fixture origins, for Playwright |
 | `test` | Vitest unit project (`src/**/*.test.ts`) |
 | `test:storybook` | Every story as a browser test, axe at `error` |
