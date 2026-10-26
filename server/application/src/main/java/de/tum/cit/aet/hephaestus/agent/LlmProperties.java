@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.agent;
 
-import de.tum.cit.aet.hephaestus.core.security.PrivateHostAllowlist;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
@@ -51,13 +50,7 @@ public record LlmProperties(
     public record Egress(
             @DefaultValue("false") boolean allowLoopback,
             @DefaultValue List<String> privateHosts,
-            @DefaultValue("false") boolean privateHostsAllowHttp) {
-
-        /** @throws IllegalArgumentException for an entry that is no host name, IP address or CIDR range */
-        public PrivateHostAllowlist privateHostAllowlist() {
-            return PrivateHostAllowlist.parse(privateHosts);
-        }
-    }
+            @DefaultValue("false") boolean privateHostsAllowHttp) {}
 
     /** @param dailyUrl overridable so an air-gapped instance can point at a local ECB mirror */
     public record Fx(@NotBlank @DefaultValue(ECB_DAILY_URL) String dailyUrl) {}

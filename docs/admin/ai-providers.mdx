@@ -162,9 +162,18 @@ These rules apply:
 - An entry that is not a host name, an IP address, or a CIDR range stops startup.
 - Only private addresses qualify: `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `100.64.0.0/10`, and `fc00::/7`.
   Loopback, link-local, and public addresses stay refused, even when an entry covers them.
-  The cloud metadata addresses `100.100.100.200` and `fd00:ec2::254` also stay refused.
+  These cloud metadata addresses inside the private ranges also stay refused: `100.100.100.200` (Alibaba Cloud), `fd00:ec2::254` (AWS), and `fd20:ce::254` (Google Cloud).
+  Azure, Oracle Cloud, and Hetzner Cloud use only `169.254.169.254`, which is link-local.
   For a local development setup, use `HEPHAESTUS_LLM_EGRESS_ALLOW_LOOPBACK`.
-- A range lets each admin who configures a provider reach every port of every host in it. Prefer host names or single addresses.
+- A range lets each admin who configures a provider send requests to every port of every host in it.
+  If the range covers the network of this deployment, that includes the services of Hephaestus itself.
+  Examples are PostgreSQL, NATS, the server, and the Kubernetes API.
+  Hephaestus cannot reliably detect these networks, so it does not refuse them.
+  List single hosts or narrow ranges.
+  Never list a range that covers the Pod or Service range of the cluster, or the Compose network.
+- For a host on this list, a failed **Test and fetch models** shows only that the provider is not reachable.
+  The server log has the HTTP status or the error.
+  Thus, the test cannot map your network.
 - The check happens again at connect time, on the address that the connection uses. A host name that is not listed and that changes its DNS answer to a private address is still refused.
 - Plain `http://` stays refused. To permit it for listed hosts, set `HEPHAESTUS_LLM_EGRESS_PRIVATE_HOSTS_ALLOW_HTTP=true`.
   A host is listed if its name is an entry, or if the list covers all its addresses.
@@ -228,6 +237,7 @@ The table preserves the exact result text:
 | “Reachable. Found N models.”                                   | 2xx, with `data[].id` parsed. N can be 0. A 2xx without a `data` array is still reachable.                                                                                                                                                                                   | Nothing.                                                                                              |
 | “The provider answered with HTTP 401 / 403.”                   | The endpoint answered. Your key is wrong, expired, or lacks permission.                                                                                                                                                                                                      | Re-enter the key. On Azure, check for **API key**, not Bearer.                                        |
 | “The provider answered with HTTP 404.”                         | The host is correct but the path is not. Usually, the base URL lacks `/v1` or has an extra path segment.                                                                                                                                                                     | Correct the base URL. Because it is immutable, create the connection again.                           |
+| “Hephaestus could not reach the provider. The server log has the reason.” | The provider is on the operator's private host list ([Model endpoints on your own network](#model-endpoints-on-your-own-network)), and the test failed. The test does not show the cause for these hosts. | Ask the operator to read the server log. |
 | “The provider answered with HTTP 3xx.”                         | The probe refuses a redirect.                                                                                                                                                                                                                                                | Enter the URL the provider serves from.                                                               |
 | “Hephaestus could not reach the provider (`<ExceptionName>`).” | Nothing answered. Causes include DNS failure, refused connection, TLS failure, a 5 s timeout, or the connect-time address guard. The guard rejects the resolved address. The exception message is withheld because it can contain host details. Only the class name appears. | Check the host from the server, not your laptop. The server log has the same class name at INFO.      |
 | “The provider’s response was too large.”                       | `/models` response over 1 MiB.                                                                                                                                                                                                                                               | Almost certainly not an OpenAI-compatible `/models` endpoint.                                         |

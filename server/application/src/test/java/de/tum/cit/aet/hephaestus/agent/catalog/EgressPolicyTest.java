@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.catalog;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.lenient;
@@ -255,10 +256,17 @@ class EgressPolicyTest extends BaseUnitTest {
 
         @ParameterizedTest
         @ValueSource(strings = {"https://10.20.3.4:8000/v1", "https://[fd00:1::7]/v1"})
-        void shouldAcceptHttpsToPrivateAddressInListedRange(String baseUrl) {
+        void shouldAcceptHttpsToPrivateAddressInListedRangeAndReportItPrivate(String baseUrl) {
             stubNoSettingsRow();
 
-            assertThatCode(() -> policy(false).validate(baseUrl)).doesNotThrowAnyException();
+            assertThat(policy(false).validate(baseUrl)).isTrue();
+        }
+
+        @Test
+        void shouldReportAPublicHostNotPrivate() {
+            stubNoSettingsRow();
+
+            assertThat(policy(false).validate("https://8.8.8.8/v1")).isFalse();
         }
 
         @ParameterizedTest

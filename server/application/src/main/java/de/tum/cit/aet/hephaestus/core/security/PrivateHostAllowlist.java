@@ -27,8 +27,13 @@ public final class PrivateHostAllowlist {
     private static final List<InetAddressMatcher> PRIVATE_RANGES =
             matchers(List.of("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "100.64.0.0/10", "fc00::/7"));
 
-    /** Alibaba Cloud's and AWS's IPv6 instance metadata services sit inside the private ranges. */
-    private static final List<InetAddressMatcher> METADATA = matchers(List.of("100.100.100.200", "fd00:ec2::254"));
+    /**
+     * The instance metadata services that sit inside the private ranges: Alibaba Cloud's, AWS's IPv6 and
+     * Google Cloud's IPv6 endpoint. Azure, Oracle Cloud and Hetzner Cloud document only 169.254.169.254,
+     * which is link-local.
+     */
+    private static final List<InetAddressMatcher> METADATA =
+            matchers(List.of("100.100.100.200", "fd00:ec2::254", "fd20:ce::254"));
 
     private final Set<String> hostNames;
     private final List<InetAddressMatcher> ranges;

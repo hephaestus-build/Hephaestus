@@ -1,10 +1,13 @@
 package de.tum.cit.aet.hephaestus.agent.catalog;
 
 import de.tum.cit.aet.hephaestus.agent.LlmProperties;
+import de.tum.cit.aet.hephaestus.core.SsrfGuardedResolverGroup;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.security.PrivateAddressGuard;
 import de.tum.cit.aet.hephaestus.core.security.PrivateHostAllowlist;
+import io.netty.resolver.AddressResolverGroup;
 import java.net.InetAddress;
+import java.net.InetSocketAddress;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.UnknownHostException;
@@ -54,15 +57,28 @@ public class EgressPolicy {
 
     private final PrivateHostAllowlist privateHosts;
     private final boolean privateHostsAllowHttp;
+    private final AddressResolverGroup<InetSocketAddress> resolverGroup;
 
+    /** @throws IllegalArgumentException for a private-hosts entry that is no host name, IP address or CIDR range */
     public EgressPolicy(InstanceLlmSettingsRepository settingsRepository, LlmProperties llmProperties) {
         this.settingsRepository = settingsRepository;
         this.allowLoopback = llmProperties.egress().allowLoopback();
-        this.privateHosts = llmProperties.egress().privateHostAllowlist();
+        this.privateHosts = PrivateHostAllowlist.parse(llmProperties.egress().privateHosts());
         this.privateHostsAllowHttp = llmProperties.egress().privateHostsAllowHttp();
+        this.resolverGroup = new SsrfGuardedResolverGroup(allowLoopback, privateHosts);
     }
 
-    public void validate(String baseUrl) {
+    /** The connect-time half of this policy, for every HTTP client that calls a provider. */
+    public AddressResolverGroup<InetSocketAddress> resolverGroup() {
+        return resolverGroup;
+    }
+
+    /**
+     * @return whether the host resolves to a private address that the operator's list admits. A caller
+     *     that reports on the connection must then not tell an admin more than reachable or not, or the
+     *     list becomes a scanner of the operator's network.
+     */
+    public boolean validate(String baseUrl) {
         URI uri = parse(baseUrl);
         if (uri.getRawUserInfo() != null || uri.getRawQuery() != null || uri.getRawFragment() != null) {
             throw new IllegalArgumentException(NO_CREDENTIALS_OR_QUERY);
@@ -82,7 +98,7 @@ public class EgressPolicy {
             throw new IllegalArgumentException(NOT_PUBLIC_HTTPS);
         }
         if (localDev) {
-            return;
+            return false;
         }
 
         InetAddress[] addresses = resolve(normalizedHost);
@@ -96,6 +112,7 @@ public class EgressPolicy {
             throw new IllegalArgumentException(NOT_PUBLIC_HTTPS);
         }
         assertAllowlisted(normalizedHost);
+        return Arrays.stream(addresses).anyMatch(PrivateAddressGuard::isNonPublic);
     }
 
     private static URI parse(String baseUrl) {

@@ -1,7 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.proxy;
 
-import de.tum.cit.aet.hephaestus.agent.LlmProperties;
-import de.tum.cit.aet.hephaestus.core.WebClientConnectors;
+import de.tum.cit.aet.hephaestus.agent.catalog.EgressPolicy;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
 import io.netty.channel.ChannelOption;
 import io.netty.handler.timeout.WriteTimeoutHandler;
@@ -22,9 +21,9 @@ import reactor.netty.resources.LoopResources;
  *
  * <p>Connect-time SSRF guard: {@code EgressPolicy} validates the upstream host before the call, so
  * without a guarded resolver here a DNS-rebind target (public answer during validation, private answer
- * at connect time) would sail straight through. The {@code allow-loopback} and {@code private-hosts}
- * exemptions are read from {@link LlmProperties} so the validator and this dialler cannot drift on what
- * they mean.
+ * at connect time) would sail straight through. The resolver comes from {@code EgressPolicy} itself, so
+ * the validator and this dialler cannot drift on what the {@code allow-loopback} and {@code private-hosts}
+ * exemptions mean.
  */
 @Configuration
 @ConditionalOnWorkerRole
@@ -52,9 +51,8 @@ class LlmProxyWebClientConfig {
     WebClient llmProxyWebClient(
             ConnectionProvider llmProxyConnectionProvider,
             LoopResources llmProxyLoopResources,
-            LlmProperties llmProperties,
+            EgressPolicy egressPolicy,
             WebClient.Builder webClientBuilder) {
-        LlmProperties.Egress egress = llmProperties.egress();
         // Two independent limits bound a response. responseTimeout is an idle limit: Reactor Netty fails the response
         // when no bytes arrive for 5 minutes, however long the response has run. The total is the caller's: the
         // proxy ends each exchange at the attempt's work deadline, or, for a mentor turn, at its own fixed limits.
@@ -62,7 +60,9 @@ class LlmProxyWebClientConfig {
                 .runOn(llmProxyLoopResources)
                 .responseTimeout(Duration.ofMinutes(5))
                 .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 10_000)
-                .resolver(WebClientConnectors.resolverGroup(egress.allowLoopback(), egress.privateHostAllowlist()))
+                .resolver(egressPolicy.resolverGroup())
+                // Only the configured base URL is egress-validated: a 3xx to anywhere else is not followed.
+                .followRedirect(false)
                 .doOnConnected(conn -> conn.addHandlerLast(new WriteTimeoutHandler(60)));
 
         ExchangeStrategies strategies = ExchangeStrategies.builder()

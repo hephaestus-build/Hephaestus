@@ -303,6 +303,7 @@ The chart cannot compare the two lists, because a host name is not an address ra
 A `cidr` must be in 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 100.64.0.0/10, or fc00::/7, and `ports` must name at least one port.
 Thus, no item can open the link-local range of the cloud metadata service.
 Use `modelEndpoints` only for addresses outside the cluster.
+Do not list a range in `config.llmPrivateHosts` that covers the Pod or Service range of the cluster.
 A NetworkPolicy `ipBlock` does not reliably match Pod addresses.
 For an endpoint in this cluster, use `networkPolicy.workerGatewayPorts` or a policy with a `podSelector`, as the previous section shows.
 

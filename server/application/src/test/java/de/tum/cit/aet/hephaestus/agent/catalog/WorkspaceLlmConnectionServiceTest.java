@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.catalog;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
@@ -12,7 +13,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import de.tum.cit.aet.hephaestus.agent.LlmProperties;
+import de.tum.cit.aet.hephaestus.core.SsrfGuardedResolverGroup;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditAction;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntityType;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntry;
@@ -310,7 +311,7 @@ class WorkspaceLlmConnectionServiceTest extends BaseUnitTest {
             when(connectionRepository.findProbeTargetByIdAndWorkspaceId(5L, 1L))
                     .thenReturn(
                             Optional.of(new LlmProbeTarget("https://api.openai.com", LlmAuthMode.BEARER, "sk-abc")));
-            when(probeService.probeCredential("https://api.openai.com", LlmAuthMode.BEARER, "sk-abc"))
+            when(probeService.probeCredential("https://api.openai.com", LlmAuthMode.BEARER, "sk-abc", false))
                     .thenReturn(LlmProbeResultDTO.reachable(List.of("gpt-5", "gpt-5-mini"), 200));
 
             WorkspaceLlmProbeResultDTO result = connectionService.probe(workspaceContext, 5L);
@@ -324,7 +325,7 @@ class WorkspaceLlmConnectionServiceTest extends BaseUnitTest {
             byoEnabled(true);
             when(connectionRepository.findProbeTargetByIdAndWorkspaceId(5L, 1L))
                     .thenReturn(Optional.of(new LlmProbeTarget("https://api.openai.com", LlmAuthMode.BEARER, null)));
-            when(probeService.probeCredential(any(), any(), any()))
+            when(probeService.probeCredential(any(), any(), any(), anyBoolean()))
                     .thenReturn(LlmProbeResultDTO.unreachable(503, "The provider answered with HTTP 503."));
 
             WorkspaceLlmProbeResultDTO result = connectionService.probe(workspaceContext, 5L);
@@ -340,34 +341,49 @@ class WorkspaceLlmConnectionServiceTest extends BaseUnitTest {
         @DisplayName("a provider whose /models answers 404 reports that status")
         void shouldReportTheProvidersStatusWhenItsModelListAnswers404() throws IOException, InterruptedException {
             try (MockWebServer upstream = new MockWebServer()) {
-                upstream.start();
-                upstream.enqueue(new MockResponse.Builder().code(404).build());
-                when(connectionRepository.findProbeTargetByIdAndWorkspaceId(5L, 1L))
-                        .thenReturn(Optional.of(
-                                new LlmProbeTarget(upstream.url("/v1").toString(), LlmAuthMode.BEARER, null)));
-                var probing = new WorkspaceLlmConnectionService(
-                        connectionRepository,
-                        modelRepository,
-                        workspaceRepository,
-                        egressPolicy,
-                        instanceLlmSettingsService,
-                        new LlmConnectionProbeService(
-                                mock(LlmConnectionRepository.class),
-                                egressPolicy,
-                                new ObjectMapper(),
-                                new LlmProperties(
-                                        "",
-                                        new LlmProperties.Egress(true, List.of(), false),
-                                        new LlmProperties.Fx(LlmProperties.ECB_DAILY_URL)),
-                                RestClient.builder()),
-                        configAudit);
-
-                WorkspaceLlmProbeResultDTO result = probing.probe(workspaceContext, 5L);
+                WorkspaceLlmProbeResultDTO result = probeAnswering404(upstream, false);
 
                 assertThat(result.reachable()).isFalse();
                 assertThat(result.statusCode()).isEqualTo(404);
                 assertThat(upstream.takeRequest().getTarget()).isEqualTo("/v1/models");
             }
+        }
+
+        /** Status and cause would let a workspace admin map the operator's network through the list. */
+        @Test
+        void shouldReportOnlyUnreachableWhenAPrivateHostFails() throws IOException {
+            try (MockWebServer upstream = new MockWebServer()) {
+                WorkspaceLlmProbeResultDTO result = probeAnswering404(upstream, true);
+
+                assertThat(result.reachable()).isFalse();
+                assertThat(result.statusCode()).isNull();
+                assertThat(result.message())
+                        .isEqualTo("Hephaestus could not reach the provider. The server log has the reason.");
+            }
+        }
+
+        private WorkspaceLlmProbeResultDTO probeAnswering404(MockWebServer upstream, boolean privateTarget)
+                throws IOException {
+            upstream.start();
+            upstream.enqueue(new MockResponse.Builder().code(404).build());
+            String baseUrl = upstream.url("/v1").toString();
+            when(connectionRepository.findProbeTargetByIdAndWorkspaceId(5L, 1L))
+                    .thenReturn(Optional.of(new LlmProbeTarget(baseUrl, LlmAuthMode.BEARER, null)));
+            when(egressPolicy.validate(baseUrl)).thenReturn(privateTarget);
+            when(egressPolicy.resolverGroup()).thenReturn(SsrfGuardedResolverGroup.LOOPBACK_EXEMPT_INSTANCE);
+            var probing = new WorkspaceLlmConnectionService(
+                    connectionRepository,
+                    modelRepository,
+                    workspaceRepository,
+                    egressPolicy,
+                    instanceLlmSettingsService,
+                    new LlmConnectionProbeService(
+                            mock(LlmConnectionRepository.class),
+                            egressPolicy,
+                            new ObjectMapper(),
+                            RestClient.builder()),
+                    configAudit);
+            return probing.probe(workspaceContext, 5L);
         }
 
         /**

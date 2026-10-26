@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.core;
 
-import de.tum.cit.aet.hephaestus.core.security.PrivateHostAllowlist;
 import io.netty.resolver.AddressResolverGroup;
 import io.netty.resolver.DefaultAddressResolverGroup;
 import java.net.InetSocketAddress;
@@ -33,19 +32,11 @@ public final class WebClientConnectors {
      * private/reserved range stays blocked either way.
      */
     public static ClientHttpConnector ssrfGuarded(boolean allowLoopback) {
-        return new ReactorClientHttpConnector(HttpClient.create()
-                .resolver(
-                        allowLoopback
-                                ? SsrfGuardedResolverGroup.LOOPBACK_EXEMPT_INSTANCE
-                                : SsrfGuardedResolverGroup.INSTANCE));
+        return new ReactorClientHttpConnector(HttpClient.create().resolver(resolverGroup(allowLoopback)));
     }
 
-    /**
-     * The raw Netty resolver group for callers that build their own {@code HttpClient}: like
-     * {@link #ssrfGuarded(boolean)}, and it also admits the private destinations of {@code privateHosts}.
-     */
-    public static AddressResolverGroup<InetSocketAddress> resolverGroup(
-            boolean allowLoopback, PrivateHostAllowlist privateHosts) {
-        return new SsrfGuardedResolverGroup(allowLoopback, privateHosts);
+    /** The raw Netty resolver group backing {@link #ssrfGuarded(boolean)} — for callers that build their own {@code HttpClient}. */
+    public static AddressResolverGroup<InetSocketAddress> resolverGroup(boolean allowLoopback) {
+        return allowLoopback ? SsrfGuardedResolverGroup.LOOPBACK_EXEMPT_INSTANCE : SsrfGuardedResolverGroup.INSTANCE;
     }
 }

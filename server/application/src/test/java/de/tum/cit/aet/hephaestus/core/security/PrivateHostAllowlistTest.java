@@ -49,6 +49,7 @@ class PrivateHostAllowlistTest extends BaseUnitTest {
                 "224.0.0.1",
                 "100.100.100.200", // Alibaba Cloud metadata, inside 100.64.0.0/10
                 "fd00:ec2::254", // AWS IPv6 metadata, inside fc00::/7
+                "fd20:ce::254", // Google Cloud IPv6 metadata, inside fc00::/7
                 "64:ff9b::a9fe:a9fe", // NAT64 of 169.254.169.254
                 "192.0.0.192", // Oracle Cloud metadata
                 "8.8.8.8", // public: a listed name must not turn it into a "private host"

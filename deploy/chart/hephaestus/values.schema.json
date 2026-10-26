@@ -542,7 +542,7 @@
 					"type": "array",
 					"maxItems": 32,
 					"uniqueItems": true,
-					"items": { "type": "string", "pattern": "^[A-Za-z0-9.:/-]+$" }
+					"items": { "type": "string", "pattern": "^[A-Za-z0-9._:/-]+$" }
 				},
 				"llmPrivateHostsAllowHttp": { "type": "boolean" },
 				"researchOrganization": { "type": "string", "maxLength": 300 },

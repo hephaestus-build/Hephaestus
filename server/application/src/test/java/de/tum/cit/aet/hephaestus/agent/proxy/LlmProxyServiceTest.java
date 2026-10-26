@@ -17,6 +17,8 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.LlmProperties;
+import de.tum.cit.aet.hephaestus.agent.catalog.EgressPolicy;
+import de.tum.cit.aet.hephaestus.agent.catalog.InstanceLlmSettingsRepository;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmAuthMode;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnectionHealth;
@@ -1833,10 +1835,12 @@ class LlmProxyServiceTest extends BaseUnitTest {
                 WebClient configured = config.llmProxyWebClient(
                         pool,
                         loops,
-                        new LlmProperties(
-                                "",
-                                new LlmProperties.Egress(true, List.of(), false),
-                                new LlmProperties.Fx(LlmProperties.ECB_DAILY_URL)),
+                        new EgressPolicy(
+                                mock(InstanceLlmSettingsRepository.class),
+                                new LlmProperties(
+                                        "",
+                                        new LlmProperties.Egress(true, List.of(), false),
+                                        new LlmProperties.Fx(LlmProperties.ECB_DAILY_URL))),
                         WebClient.builder());
                 // The client's first exchange also starts its event loop and opens its pooled connection. That
                 // one-time start is no part of a work deadline, so it happens before the deadline is set.
