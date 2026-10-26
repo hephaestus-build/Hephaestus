@@ -5207,3 +5207,39 @@ void test("every job that runs Helm installs the pinned one first, and the rende
 	assert.match(pathFilter(detection, "tooling"), /- 'deploy\/chart\/\*\*'/u);
 	assert.match(pathFilter(detection, "quality-config"), /- '\.github\/actions\/setup-helm\/\*\*'/u);
 });
+
+void test("a cluster leg is named for its distribution, minor and architecture, and its pinned image has that minor", async () => {
+	const workflow = parseDocument(await readFile(".github/workflows/ci-kubernetes.yml", "utf8"));
+	const name = (leg: string) => String(workflow.getIn(["jobs", leg, "name"]));
+	// A digest or patch version in a name starts a new check history at each image update.
+	const jobs = workflow.get("jobs");
+	assert.ok(isMap(jobs));
+	for (const entry of jobs.items) {
+		assert.doesNotMatch(name(String(entry.key)), /sha256|@|\d+\.\d+\.\d+/u);
+	}
+	assert.equal(name("schema"), "Chart");
+	assert.match(name("k3d"), /^k3s \$\{\{ matrix\.cluster\.minor \}\} \$\{\{ matrix\.arch \}\}$/u);
+	const clusters = workflow.getIn(["jobs", "k3d", "strategy", "matrix", "cluster"]);
+	assert.ok(isSeq(clusters));
+	for (const cluster of clusters.items) {
+		assert.ok(isMap(cluster));
+		const minor = String(cluster.get("minor"));
+		assert.match(minor, /^1\.\d+$/u);
+		assert.match(
+			String(cluster.get("image")),
+			new RegExp(
+				`^docker\\.io/rancher/k3s:v${minor.replace(".", String.raw`\.`)}\\.\\d+-k3s\\d+@sha256:[a-f0-9]{64}$`,
+				"u",
+			),
+		);
+	}
+	const kind = /^kind (?<minor>1\.\d+) Calico$/u.exec(name("calico"));
+	assert.ok(kind?.groups?.minor !== undefined);
+	assert.match(
+		String(workflow.getIn(["jobs", "calico", "env", "NODE_IMAGE"])),
+		new RegExp(
+			`^docker\\.io/kindest/node:v${kind.groups.minor.replace(".", String.raw`\.`)}\\.\\d+@sha256:[a-f0-9]{64}$`,
+			"u",
+		),
+	);
+});

@@ -145,6 +145,17 @@
 				"@vitest/coverage-v8"
 			],
 			"enabled": false
+		},
+		{
+			"description": "Offer a cluster leg's node image the patches of its own minor, which a newer minor would otherwise hide",
+			"matchDepNames": ["docker.io/rancher/k3s", "docker.io/kindest/node"],
+			"separateMinorPatch": true
+		},
+		{
+			"description": "A cluster leg's name states its Kubernetes minor, so moving a leg to another minor is a change to the workflow, not an image update",
+			"matchDepNames": ["docker.io/rancher/k3s", "docker.io/kindest/node"],
+			"matchUpdateTypes": ["major", "minor"],
+			"enabled": false
 		}
 	],
 	"customManagers": [
@@ -264,6 +275,16 @@
 				"image: (?<depName>ghcr.io/trufflesecurity/trufflehog)\\s+version: (?<currentValue>[0-9.]+)@(?<currentDigest>sha256:[a-f0-9]{64})"
 			],
 			"datasourceTemplate": "docker"
+		},
+		{
+			"description": "Track the Kubernetes node images of the cluster legs",
+			"customType": "regex",
+			"managerFilePatterns": ["/^\\.github/workflows/ci-kubernetes\\.yml$/"],
+			"matchStrings": [
+				"(?:image|NODE_IMAGE): (?<depName>docker\\.io/(?:rancher/k3s|kindest/node)):(?<currentValue>v[0-9][^@\\s]*)@(?<currentDigest>sha256:[a-f0-9]{64})"
+			],
+			"datasourceTemplate": "docker",
+			"versioningTemplate": "regex:^v(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)(?:-k3s(?<build>\\d+))?$"
 		}
 	],
 	"vulnerabilityAlerts": {

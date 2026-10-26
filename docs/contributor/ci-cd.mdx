@@ -1019,6 +1019,9 @@ Right after a merge, that run is still building, so the pull request builds ever
   `scripts/ci-image-set.test.ts` evaluates the workflow's own conditions and path filters. It covers
   every event and every change of up to three representative files. It fails when a job that
   installs every image can run while no job builds or aliases one of them.
+- A Kubernetes cluster leg is named for its distribution, minor and architecture, such as
+  `k3s 1.37 amd64`. Its check history thus survives an image update. The job summary names the
+  pinned node image. Renovate updates the image within its minor. A new minor is a workflow change.
 - A job's `timeout-minutes` is a hang detector of at least 15 minutes.
   This holds whatever the job's usual duration is.
   GitHub documents only that it cancels a job that runs longer than its limit
