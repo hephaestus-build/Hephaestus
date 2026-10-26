@@ -269,6 +269,9 @@ jobs:
           # Source lookup is needed only for failure annotations, not successful summaries.
           max-annotations: ${{ (job.status == 'failure' || steps.chromatic.outcome == 'failure') && 50 || 0 }}
           fail-on-error: false
+          # Chromatic writes no report for a build that captures nothing, such as a limited build whose TurboSnap
+          # finds no changed story. Visual coverage never decides the job; scripts/report-chromatic.ts reports it.
+          fail-on-empty: false
       - name: Retain full Storybook and visual test diagnostics
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
