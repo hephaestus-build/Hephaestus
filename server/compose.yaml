@@ -29,8 +29,8 @@ services:
       retries: 10
       start_period: 10s
 
-  # Available for opt-in agent/webhook pipeline work (set the relevant hephaestus.*.nats.enabled
-  # in application-local.yml). Idle otherwise — no Spring connection opens unless enabled.
+  # For webhook and sync pipeline work: set hephaestus.sync.nats.enabled=true in
+  # application-local.yml. Otherwise the server opens no connection to it.
   nats:
     image: synadia/nats-server:2.14.8-alpine3.22@sha256:e7c229e0f6415993d29a7ada7ef61f5fd380d7c1134b9038f70f6eff2813b0a0
     command: ['-js', '-m', '8222']

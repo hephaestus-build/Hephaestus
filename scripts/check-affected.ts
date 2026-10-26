@@ -1,7 +1,12 @@
 import { spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
+import path from "node:path";
+
+import { parse } from "yaml";
 
 import { isSet } from "./lib/env.ts";
 import { environmentWithoutGitRepository } from "./lib/git-environment.ts";
+import { isRecord } from "./lib/json.ts";
 import { CAPTURE_LIMIT_BYTES, repositoryCli } from "./lib/process.ts";
 
 export type Scope = "agents" | "docs" | "extension" | "full" | "server" | "webapp";
@@ -76,43 +81,43 @@ const serverInputsOfTheTooling = [
 ];
 
 export function scopesFor(paths: string[]): Scope[] {
-	if (paths.some((path) => fullGateInputs.some((pattern) => pattern.test(path)))) {
+	if (paths.some((file) => fullGateInputs.some((pattern) => pattern.test(file)))) {
 		return ["full"];
 	}
 	const scopes = new Set<Scope>();
-	for (const path of paths) {
-		if (path.startsWith("docs/images/readme/")) {
+	for (const file of paths) {
+		if (file.startsWith("docs/images/readme/")) {
 			scopes.add("docs");
 			scopes.add("webapp");
-		} else if (path === SHARED_THEME_TOKENS) {
+		} else if (file === SHARED_THEME_TOKENS) {
 			scopes.add("docs");
 			scopes.add("extension");
 			scopes.add("webapp");
-		} else if (webappInputsOfTheExtension.some((pattern) => pattern.test(path))) {
+		} else if (webappInputsOfTheExtension.some((pattern) => pattern.test(file))) {
 			scopes.add("extension");
 			scopes.add("webapp");
-		} else if (path.startsWith("webapp/")) {
+		} else if (file.startsWith("webapp/")) {
 			scopes.add("webapp");
-		} else if (path.startsWith("extension/")) {
+		} else if (file.startsWith("extension/")) {
 			scopes.add("extension");
-		} else if (path.startsWith("server/")) {
-			if (serverInputsOfTheTooling.some((pattern) => pattern.test(path))) {
+		} else if (file.startsWith("server/")) {
+			if (serverInputsOfTheTooling.some((pattern) => pattern.test(file))) {
 				scopes.add("agents");
 			}
-			if (serverInputsOfTheWebapp.some((pattern) => pattern.test(path))) {
+			if (serverInputsOfTheWebapp.some((pattern) => pattern.test(file))) {
 				scopes.add("server");
 				scopes.add("webapp");
-			} else if (/\/resources\/(?:agent|practices\/scripts)\//u.test(path)) {
+			} else if (/\/resources\/(?:agent|practices\/scripts)\//u.test(file)) {
 				scopes.add("agents");
 			} else {
 				scopes.add("server");
 			}
-		} else if (path.startsWith("docker/agents/")) {
+		} else if (file.startsWith("docker/agents/")) {
 			scopes.add("agents");
-		} else if (path.startsWith("deploy/chart/")) {
+		} else if (file.startsWith("deploy/chart/")) {
 			// The chart suites run in test:tooling, which affected:agents runs.
 			scopes.add("agents");
-		} else if (path.startsWith("docs/")) {
+		} else if (file.startsWith("docs/")) {
 			scopes.add("docs");
 		} else {
 			return ["full"];
@@ -175,9 +180,53 @@ function run(command: Command): void {
 	}
 }
 
+/**
+ * The globs of the `kubernetes` path filter in `cicd.yml`: a change to them runs the k3d cluster
+ * jobs in CI.
+ */
+export function clusterGlobs(workflow: string): string[] {
+	const parsed: unknown = parse(workflow);
+	const jobs = isRecord(parsed) && isRecord(parsed.jobs) ? Object.values(parsed.jobs) : [];
+	for (const job of jobs) {
+		const steps = isRecord(job) && Array.isArray(job.steps) ? job.steps : [];
+		for (const step of steps) {
+			if (isRecord(step) && isRecord(step.with) && typeof step.with.filters === "string") {
+				const filters: unknown = parse(step.with.filters);
+				if (isRecord(filters) && Array.isArray(filters.kubernetes)) {
+					return filters.kubernetes.map(String);
+				}
+			}
+		}
+	}
+	throw new Error("cicd.yml has no kubernetes path filter");
+}
+
+/**
+ * Whether a changed path is one that the CI cluster jobs exercise. Git paths use `/` on every
+ * system, so the POSIX matcher reads them. `matchesGlob` skips
+ * dotfiles, which CI's filter matches, so a change to only a dotfile gets no reminder.
+ */
+export function touchesCluster(paths: string[], globs: string[]): boolean {
+	return paths.some((file) => globs.some((glob) => path.posix.matchesGlob(file, glob)));
+}
+
+/** Whether to remind of the cluster. A hint: a workflow that it cannot read skips it and fails no check. */
+function hintsCluster(paths: string[]): boolean {
+	try {
+		const workflow = readFileSync(
+			path.join(import.meta.dirname, "..", ".github", "workflows", "cicd.yml"),
+			"utf8",
+		);
+		return touchesCluster(paths, clusterGlobs(workflow));
+	} catch {
+		return false;
+	}
+}
+
 function main(): void {
 	const requestedBase = parseBase(process.argv.slice(2));
-	const scopes = scopesFor(changedPaths(requestedBase));
+	const paths = changedPaths(requestedBase);
+	const scopes = scopesFor(paths);
 	if (scopes.length === 0) {
 		console.log("No changes detected; no checks ran.");
 		return;
@@ -191,8 +240,14 @@ function main(): void {
 			`Running affected checks for: ${scopes.join(", ")}. This is not the complete local gate.`,
 		);
 	}
+	const clusterHint = hintsCluster(paths);
 	for (const command of commandsFor(scopes)) {
 		run(command);
+	}
+	if (clusterHint) {
+		console.log(
+			"This change runs the CI cluster jobs. Run `vp run dev:kubernetes` to check it on a local cluster.",
+		);
 	}
 	if (scopes.includes("full")) {
 		console.log("Complete local quality gate passed.");

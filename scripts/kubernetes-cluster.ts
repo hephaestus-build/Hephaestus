@@ -1421,6 +1421,9 @@ export async function request(work: string, host: string): Promise<void> {
 			"--retry",
 			"10",
 			"--retry-all-errors",
+			// curl stops retrying a Gateway that never answers after two minutes.
+			"--retry-max-time",
+			"120",
 			"--cacert",
 			path.join(work, "ca.crt"),
 			"--resolve",
