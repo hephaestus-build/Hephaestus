@@ -337,7 +337,7 @@ void describe("webapp container entrypoint", () => {
 	});
 
 	void test("security.txt names no canonical host where the file is served on many or without TLS", () => {
-		for (const env of [
+		const environments: Record<string, string>[] = [
 			{ APPLICATION_CLIENT_URL: "http://localhost:8080" },
 			{
 				APPLICATION_CLIENT_URL:
@@ -348,7 +348,8 @@ void describe("webapp container entrypoint", () => {
 				HEPHAESTUS_WORKSPACE_SUBDOMAINS_ENABLED: "true",
 				HEPHAESTUS_WORKSPACE_SUBDOMAINS_BASE_DOMAIN: "hephaestus.example.invalid",
 			},
-		]) {
+		];
+		for (const env of environments) {
 			const fixture = createFixture();
 			try {
 				const result = runEntrypoint(fixture, env);
