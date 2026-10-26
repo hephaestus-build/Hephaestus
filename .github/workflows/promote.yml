@@ -131,7 +131,12 @@ jobs:
         working-directory: deploy-state
         env:
           CHANNEL_FILE: ${{ steps.release.outputs.channel }}
-        run: cosign sign-blob --yes --bundle "${CHANNEL_FILE}.sigstore.json" "$CHANNEL_FILE"
+        # The release's keyless signer retries a transient token or transparency-log failure. It never
+        # writes over a bundle, so the previous channel's bundle, checked out from deploy-state, goes first.
+        run: |
+          set -euo pipefail
+          rm -f "${CHANNEL_FILE}.sigstore.json"
+          node ../scripts/keyless-sign.ts sign-blob --yes --bundle "${CHANNEL_FILE}.sigstore.json" "$CHANNEL_FILE"
 
       - name: Publish the channel
         id: publish-channel
