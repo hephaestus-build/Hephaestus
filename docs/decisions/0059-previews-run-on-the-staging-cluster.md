@@ -137,7 +137,7 @@ The label workflow uses `pull_request_target` with only `GITHUB_TOKEN`, and it c
 
 ### What changes from ADR 0035
 
-- **Drafts.** A draft no longer keeps a preview. The daily workflow removes its label, because a draft holds one of three slots. When the mechanism ships, the draft rules of [CI/CD § Preview deployments](../contributor/ci-cd.mdx#preview-deployments) change with it.
+- **Drafts.** A draft no longer keeps a preview. The daily workflow removes its label, because a draft holds one of three slots. When the mechanism ships, [CI/CD § The `preview` label](../contributor/ci-cd.mdx#the-preview-label) gets this draft rule.
 - **Rechecks.** The author-association check and the label and head rechecks before a deploy go. Flux reads the list of labelled pull requests at each poll. A pull request that loses the label leaves the list, and the next poll removes its preview.
 - **Image verification.** The build attestation check goes. Flux pulls the commit tag, and nothing verifies the attestation before the pull. A check in the cluster needs an admission controller, such as the Sigstore policy controller. That is one more component.
 - **The publish window.** ADR 0035 kept the previous preview live until CI published the new images. Flux upgrades at once and retries until the images exist. Thus, a preview can be unavailable while CI publishes.
