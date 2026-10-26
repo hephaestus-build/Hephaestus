@@ -331,7 +331,7 @@ export default defineConfig({
 			"gate:agents-format": cached(`vp fmt --check ${agentSources}`),
 			"gate:config-format": cached(configFormatCommand("--check")),
 			"gate:agents-lint": run(`vp exec oxlint ${oxlintFormat}${oxlintTargets}`),
-			"gate:agents-typecheck": cached("tsc -p tsconfig.agents.json --noEmit"),
+			"gate:agents-typecheck": cached("tsc -p tsconfig.node.json --noEmit"),
 			"gate:scripts-typecheck": cached("tsc -p scripts/tsconfig.json --noEmit"),
 			"gate:release-image-inventory": cached("node scripts/check-release-image-inventory.ts"),
 			"gate:tooling-tests": group(["test:tooling"]),

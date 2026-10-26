@@ -34,7 +34,7 @@ const fullGateInputs = [
 	/^pnpm-lock\.yaml$/u,
 	/^pnpm-workspace\.yaml$/u,
 	/^patches\//u,
-	/^tsconfig(?:\.agents)?\.json$/u,
+	/^tsconfig(?:\.node)?\.json$/u,
 	/^\.ox(?:fmt|lint)rc\.json$/u,
 	/^server\/openapi\.yaml$/u,
 	/^webapp\/src\/api\//u,

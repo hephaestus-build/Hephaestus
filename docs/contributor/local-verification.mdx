@@ -263,7 +263,7 @@ Write a rule once.
   It drops their `jsPlugins`, because that path rejects relative plugin paths.
   The file on disk keeps the paths for the CLI and editors.
 - **Type-aware rules need a file named exactly `tsconfig.json`.**
-  The root stub supplies one for the Node trees configured by `tsconfig.agents.json`.
+  The root stub supplies one for the Node trees configured by `tsconfig.node.json`.
   `load-tests/tsconfig.json` types the k6 scripts the same way.
 - **The house rules are one oxlint plugin under `webapp/tools/oxlint/`.**
   All tree configs load it.

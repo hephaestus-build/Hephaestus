@@ -119,7 +119,7 @@ The SPA talks to the server only through the generated client.
 - `extension/` — the Chrome extension. Guide: `extension/AGENTS.md`.
 - `docs/` — user, admin and contributor docs on GitHub Pages.
 - `scripts/` — repository tooling in TypeScript.
-  `tsconfig.agents.json` type-checks it as one project with the agent runner, the practice script toolkit, and the bundled practice scripts.
+  `tsconfig.node.json` type-checks it as one project with the agent runner, the practice script toolkit, and the bundled practice scripts.
   Task naming, lint configuration, and cross-platform commands: `docs/contributor/local-verification.mdx` § Repository tooling.
 
 Skills live in `.claude/skills/<name>/`.
