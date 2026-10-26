@@ -367,13 +367,17 @@ export const DeliveredSummaryComment: Story = {
 	},
 };
 
+/** The summary is on the work and the line notes failed: partly delivered, and still withdrawable. */
 export const PartialPackage: Story = {
-	args: { feedback: ready({ ...partialPackageFeedbackDetail, state: "FAILED" }) },
+	args: { feedback: ready(partialPackageFeedbackDetail) },
 	play: async () => {
 		const panelElement = await settledDrawerPanel();
 		within(panelElement).getByText(
-			"Part of this feedback appeared on the work; the rest could not be confirmed.",
+			"Part of this feedback appeared on the work. Another part failed to post.",
 		);
+		await expect(
+			within(panelElement).getByRole("button", { name: "Withdraw feedback" }),
+		).toBeEnabled();
 		await expect(panelElement.querySelector("[data-sheet-status]")).toHaveTextContent(
 			/1 posted · 2 failed/u,
 		);

@@ -12,12 +12,12 @@ import org.springframework.data.repository.Repository;
 interface WeeklyDigestRepository extends Repository<Feedback, UUID> {
 
     /**
-     * Feedback that reached the developer, by destination. On the work: delivered, or UNCONFIRMED or REPLACED after it
-     * was delivered. In conversation: delivered. Practice page feedback never counts: DELIVERED there means the
+     * Feedback that reached the developer, by destination. On the work: delivered, or UNCONFIRMED, FAILED or REPLACED
+     * after a copy appeared. In conversation: delivered. Practice page feedback never counts: DELIVERED there means the
      * developer already opened it.
      */
     String REACHED = """
-        ((f.destination='ON_WORK' AND f.state IN ('DELIVERED','UNCONFIRMED','REPLACED'))
+        ((f.destination='ON_WORK' AND f.state IN ('DELIVERED','UNCONFIRMED','FAILED','REPLACED'))
           OR (f.destination='CONVERSATION' AND f.state='DELIVERED')) AND f.delivered_at IS NOT NULL
         """;
 

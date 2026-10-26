@@ -24,7 +24,7 @@ import {
 	DELIVERY_STATE_DEFS,
 	deliveryOutcome,
 	isPartialDelivery,
-	PARTIAL_DELIVERY_DESCRIPTION,
+	partialDeliveryDescription,
 	withdrawalMark,
 } from "@/components/practice-vocabulary/delivery-state-defs";
 import {
@@ -214,9 +214,6 @@ export function FeedbackLevel({
 		<>
 			{header}
 			<DrawerBody className="flex flex-col gap-8 pt-2">
-				{isPartialDelivery(record) && (
-					<p className="text-sm text-muted-foreground">{PARTIAL_DELIVERY_DESCRIPTION}</p>
-				)}
 				{record.unverifiedHistory && (
 					<p className="text-sm text-muted-foreground">{UNVERIFIED_HISTORY_NOTE}</p>
 				)}
@@ -733,11 +730,13 @@ function feedbackNow(feedback: FeedbackRecord): ReactNode {
 		case "UNCONFIRMED": {
 			return unconfirmedLine(feedback);
 		}
+		case "FAILED": {
+			return isPartialDelivery(feedback) ? partialDeliveryDescription(feedback) : undefined;
+		}
 		case "DELIVERED":
 		case "WITHHELD":
 		case "REJECTED":
-		case "REPLACED":
-		case "FAILED": {
+		case "REPLACED": {
 			return undefined;
 		}
 	}
@@ -756,7 +755,9 @@ function unconfirmedLine(feedback: FeedbackRecord): string {
 			return "Hephaestus is confirming whether a comment it began writing appeared on the work. Until the provider confirms it, it does not count as delivered.";
 		}
 		case undefined: {
-			return "A write to the work was not confirmed, so it does not count as delivered.";
+			return isPartialDelivery(feedback)
+				? partialDeliveryDescription(feedback)
+				: "A write to the work was not confirmed, so it does not count as delivered.";
 		}
 	}
 }
@@ -835,7 +836,8 @@ function canChangeWithdrawal(feedback: FeedbackRecord): boolean {
 		feedback.withdrawn ||
 		feedback.state === "READY" ||
 		feedback.state === "DELIVERED" ||
-		feedback.state === "UNCONFIRMED"
+		feedback.state === "UNCONFIRMED" ||
+		isPartialDelivery(feedback)
 	);
 }
 

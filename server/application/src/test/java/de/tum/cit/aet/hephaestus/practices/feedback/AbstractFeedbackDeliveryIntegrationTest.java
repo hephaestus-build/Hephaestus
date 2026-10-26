@@ -217,6 +217,7 @@ public abstract class AbstractFeedbackDeliveryIntegrationTest extends AbstractFe
 
     protected enum Failure {
         NONE,
+        NOT_SENT,
         BEFORE_CREATE,
         AFTER_CREATE
     }
@@ -282,6 +283,10 @@ public abstract class AbstractFeedbackDeliveryIntegrationTest extends AbstractFe
             for (var note : notes) {
                 if (!fence.beforeCreate(List.of(note.copyId()), List.copyOf(receipts))) {
                     withheld.add(note.copyId());
+                    continue;
+                }
+                if (noteFailure == Failure.NOT_SENT) {
+                    receipts.add(CopyReceipt.notSent(note.copyId()));
                     continue;
                 }
                 committed(note.copyId());

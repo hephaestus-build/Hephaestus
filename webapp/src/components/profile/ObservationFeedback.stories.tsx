@@ -99,9 +99,10 @@ export const PartlyDelivered: Story = {
 	play: async ({ canvas }) => {
 		await expect(
 			canvas.getByText(
-				"Part of this feedback appeared on the work; the rest could not be confirmed.",
+				"Part of this feedback appeared on the work. The rest is not confirmed yet.",
 			),
 		).toBeVisible();
+		await expect(canvas.getByText(/^First appeared /u)).toBeVisible();
 		await expect(
 			canvas.getByRole("link", { name: /Read the comment on the work/u }),
 		).toHaveAttribute("href", COMMENT_URL);

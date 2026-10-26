@@ -113,9 +113,7 @@ describe("OwnFeedbackList", () => {
 	it("allows a response to the part confirmed on the work", () => {
 		renderList({ ...detailFeedback, state: "UNCONFIRMED" });
 
-		screen.getByText(
-			"Part of this feedback appeared on the work; the rest could not be confirmed.",
-		);
+		screen.getByText("Part of this feedback appeared on the work. The rest is not confirmed yet.");
 		screen.getByRole("button", { name: "Disagree" });
 	});
 });

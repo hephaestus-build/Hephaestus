@@ -2211,7 +2211,11 @@ export const longFeedbackDetail: ReviewFeedbackDetail = feedbackDetail(
 	"44444444-4444-4444-4444-444444444444",
 );
 
-export const partialPackageFeedbackDetail: ReviewFeedbackDetail = longFeedbackDetail;
+/** The summary posted and both line notes failed: partly delivered. */
+export const partialPackageFeedbackDetail: ReviewFeedbackDetail = {
+	...longFeedbackDetail,
+	state: "FAILED",
+};
 
 export const awaitingApprovalFeedbackDetail: ReviewFeedbackDetail = feedbackDetail(
 	"aaaaaaaa-6666-6666-6666-666666666666",

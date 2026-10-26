@@ -9,7 +9,7 @@ import { statusValues } from "@/components/common/status-def";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import {
 	isPartialDelivery,
-	PARTIAL_DELIVERY_DESCRIPTION,
+	partialDeliveryDescription,
 } from "@/components/practice-vocabulary/delivery-state-defs";
 import { FEEDBACK_DESTINATION_DEFS } from "@/components/practice-vocabulary/feedback-destination-defs";
 import {
@@ -44,11 +44,16 @@ export function OwnFeedbackList({ feedback: given, responses }: OwnFeedbackListP
 				<li key={piece.id} className="flex min-w-0 flex-col gap-2.5">
 					<p className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
 						<StatusBadge def={FEEDBACK_DESTINATION_DEFS[piece.destination]} />
-						{piece.deliveredAt !== null && !isPartialDelivery(piece) && (
-							<span>Delivered {formatShortDay(piece.deliveredAt)}</span>
+						{piece.deliveredAt !== null && (
+							<span>
+								{isPartialDelivery(piece) ? "First appeared" : "Delivered"}{" "}
+								{formatShortDay(piece.deliveredAt)}
+							</span>
 						)}
 					</p>
-					{isPartialDelivery(piece) && <p className="text-sm">{PARTIAL_DELIVERY_DESCRIPTION}</p>}
+					{isPartialDelivery(piece) && (
+						<p className="text-sm">{partialDeliveryDescription(piece)}</p>
+					)}
 					<CopyLinks feedback={piece} />
 					{responses !== undefined && piece.deliveredAt !== null && (
 						<FeedbackResponse feedback={piece} responses={responses} />

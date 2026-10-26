@@ -7,7 +7,7 @@ import { StatusBadge } from "@/components/common/StatusBadge";
 import { useNow } from "@/components/common/use-now";
 import {
 	isPartialDelivery,
-	PARTIAL_DELIVERY_DESCRIPTION,
+	partialDeliveryDescription,
 } from "@/components/practice-vocabulary/delivery-state-defs";
 import { FEEDBACK_DESTINATION_DEFS } from "@/components/practice-vocabulary/feedback-destination-defs";
 import { FEEDBACK_RESOLUTION_DEFS } from "@/components/practice-vocabulary/feedback-resolution-defs";
@@ -72,13 +72,16 @@ export function ObservationFeedback({ feedback: given, links }: ObservationFeedb
 						</span>
 						<StatusBadge def={FEEDBACK_DESTINATION_DEFS[piece.destination]} />
 						{/* Full delivery needs no state label; partial delivery is described below. */}
-						{piece.deliveredAt !== null && !isPartialDelivery(piece) && (
+						{piece.deliveredAt !== null && (
 							<time dateTime={piece.deliveredAt.toISOString()} className="text-muted-foreground">
-								Delivered {formatDayTime(piece.deliveredAt, today)}
+								{isPartialDelivery(piece) ? "First appeared" : "Delivered"}{" "}
+								{formatDayTime(piece.deliveredAt, today)}
 							</time>
 						)}
 					</p>
-					{isPartialDelivery(piece) && <p className="text-sm">{PARTIAL_DELIVERY_DESCRIPTION}</p>}
+					{isPartialDelivery(piece) && (
+						<p className="text-sm">{partialDeliveryDescription(piece)}</p>
+					)}
 					<FeedbackWhere feedback={piece} links={links} />
 					<ResponseLine feedback={piece} />
 				</li>

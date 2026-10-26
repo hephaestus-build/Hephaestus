@@ -197,11 +197,17 @@ public class FeedbackSendTransactions {
         if (!owns(workspaceId, feedbackId, owner)) return;
         var active = sends.lockByFeedbackId(workspaceId, feedbackId).orElseThrow();
         var children = copies.lockByFeedbackId(workspaceId, feedbackId);
-        var projection = FeedbackSendStateMachine.project(row, children);
         boolean unresolved = children.stream()
                 .anyMatch(c -> c.getState() == FeedbackCopyState.WRITE_STARTED
                         || (active.getAction() == FeedbackSendAction.RETRACT
                                 && c.getReadback() == FeedbackCopyReadback.TRANSIENT));
+        // A finished post leaves no copy planned: nothing sends it later, and a retry needs it failed.
+        if (active.getAction() == FeedbackSendAction.POST
+                && !unresolved
+                && !visibility.withdrawn(workspaceId, feedbackId)
+                && copies.failUnstarted(workspaceId, feedbackId) > 0)
+            children = copies.lockByFeedbackId(workspaceId, feedbackId);
+        var projection = FeedbackSendStateMachine.project(row, children);
         Instant now = clock.instant();
         if (sends.settle(
                         workspaceId,

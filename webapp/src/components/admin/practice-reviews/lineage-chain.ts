@@ -233,10 +233,14 @@ export function branchOutcome(
 			};
 		}
 		case "FAILED": {
-			return { def, text: def.label, kind: "withheld" };
+			return at === undefined
+				? { def, text: def.label, kind: "withheld" }
+				: { def, text: "Partly delivered, another part failed", at, kind: "delivered" };
 		}
 		case "UNCONFIRMED": {
-			return { def, text: def.label, kind: "other" };
+			return at === undefined || feedback.destination !== "ON_WORK"
+				? { def, text: def.label, kind: "other" }
+				: { def, text: "Partly delivered, the rest unconfirmed", at, kind: "delivered" };
 		}
 	}
 }

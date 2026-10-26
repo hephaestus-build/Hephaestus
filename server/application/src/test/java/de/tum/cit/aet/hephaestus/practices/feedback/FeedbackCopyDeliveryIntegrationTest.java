@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.LookupPresence;
 import de.tum.cit.aet.hephaestus.practices.feedback.delivery.RepeatedSummaryCheck;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCheckStage;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCopyKind;
+import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCopyState;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackIds;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackState;
 import java.util.Objects;
@@ -103,6 +104,22 @@ class FeedbackCopyDeliveryIntegrationTest extends AbstractFeedbackDeliveryIntegr
         assertThat(current().getState()).isEqualTo(FeedbackState.UNCONFIRMED);
         assertThat(current().getDeliveredAt()).isEqualTo(first);
         assertThat(provider.summaryCreates).isEqualTo(1);
+        assertThat(provider.noteCreates).isEqualTo(1);
+    }
+
+    @Test
+    void shouldFailACopyTheProviderNeverSentOnceTheSendSettles() {
+        prepare(true);
+        provider.noteFailure = Failure.NOT_SENT;
+        sender.send(workspace.getId(), feedbackId);
+        assertThat(children().get(1).getState()).isEqualTo(FeedbackCopyState.FAILED);
+        assertThat(children().get(1).getReadback()).isEqualTo(FeedbackCopyReadback.ABSENT);
+        assertThat(current().getState()).isEqualTo(FeedbackState.FAILED);
+        assertThat(current().getDeliveredAt()).isNotNull();
+        provider.noteFailure = Failure.NONE;
+        store.retry(workspace.getId(), feedbackId, developerId);
+        newSender().send(workspace.getId(), feedbackId);
+        assertThat(current().getState()).isEqualTo(FeedbackState.DELIVERED);
         assertThat(provider.noteCreates).isEqualTo(1);
     }
 

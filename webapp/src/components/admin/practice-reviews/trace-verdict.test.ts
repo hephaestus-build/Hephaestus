@@ -202,6 +202,20 @@ describe("traceVerdict on a piece of feedback", () => {
 		expect(verdictOf("state-unconfirmed", piece).end.label).toBe("Not known");
 	});
 
+	it.each([
+		["FAILED", "another part failed to post"],
+		["UNCONFIRMED", "the rest is not confirmed yet"],
+	] as const)(
+		"says a %s piece that partly reached the work was partly delivered",
+		(state, rest) => {
+			const lineage = withFeedback(lineageStateCase("destination-on-work").lineage, { state });
+			expect(traceVerdict(lineage, piece)).toMatchObject({
+				sentence: `Part of this feedback reached the developer on GitHub, and ${rest}.`,
+				end: { kind: "delivered" },
+			});
+		},
+	);
+
 	it("falls back to the review for a record the graph does not hold", () => {
 		const { lineage } = lineageStateCase("complete");
 		expect(traceVerdict(lineage, feedbackNode("missing"))).toStrictEqual(
