@@ -2,6 +2,7 @@
 id: workspace
 title: Workspace basics
 description: Understand how workspaces separate repositories, members, practices, integrations, and settings.
+page_type: feature
 ---
 
 Use this guide to switch workspaces or fix missing workspace content.
@@ -119,39 +120,6 @@ These settings apply only to that workspace.
 [Activity](./activity) is part of each workspace without its own setting.
 That guide explains how to hide members or teams from workspace activity.
 
-## Troubleshooting
-
-For a missing workspace:
-
-1. Confirm that your sign-in identity is linked to a workspace member.
-
-For a missing repository:
-
-1. Check the GitHub App installation or monitored repository list, as applicable to the connection.
-
-For a sync error, ask a workspace admin to check the affected connection.
-If you are a workspace admin:
-
-1. For repository errors, open **Administration → Integrations → GitHub/GitLab → Manage repositories**.
-2. For Slack errors instead, open **Administration → Integrations → Slack**.
-3. Read the affected resource’s last error.
-4. Check its access in the connected service.
-5. Run a new sync.
-
-Each error clears after its affected sync path succeeds.
-A skipped pass keeps its error.
-
-For a missing team:
-
-1. Confirm that the team exists in the connected source platform.
-2. Confirm that it has synced.
-
-For a missing Practice profile:
-
-1. Ask a workspace admin whether practice reviews are on in this workspace.
-
-[Who can use Heph](./ai-mentor#who-can-use-heph) explains what to do if Heph does not answer.
-
 ## Your AI choice
 
 Your AI choice applies across all your workspaces on this instance.
@@ -205,3 +173,36 @@ Membership grants access to one workspace.
 Connecting a provider identity does not grant membership or AI permission.
 A member who leaves loses access while their existing history stays recorded.
 A workspace admin can restore membership through the normal role assignment.
+
+## Troubleshooting
+
+For a missing workspace:
+
+1. Confirm that your sign-in identity is linked to a workspace member.
+
+For a missing repository:
+
+1. Check the GitHub App installation or monitored repository list, as applicable to the connection.
+
+For a sync error, ask a workspace admin to check the affected connection.
+If you are a workspace admin:
+
+1. For repository errors, open **Administration → Integrations → GitHub/GitLab → Manage repositories**.
+2. For Slack errors instead, open **Administration → Integrations → Slack**.
+3. Read the affected resource’s last error.
+4. Check its access in the connected service.
+5. Run a new sync.
+
+Each error clears after its affected sync path succeeds.
+A skipped pass keeps its error.
+
+For a missing team:
+
+1. Confirm that the team exists in the connected source platform.
+2. Confirm that it has synced.
+
+For a missing Practice profile:
+
+1. Ask a workspace admin whether practice reviews are on in this workspace.
+
+[Who can use Heph](./ai-mentor#who-can-use-heph) explains what to do if Heph does not answer.

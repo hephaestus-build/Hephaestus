@@ -19,6 +19,9 @@ What a model writes for a person, such as feedback or a Heph reply, uses the pro
 Both profiles use the same product terms.
 Never add or drop a fact when you rewrite.
 
+This standard owns the sentences and the words.
+The [documentation guide](./documentation-guide.md) owns the page: the guide that a fact goes in, the page type, and its template.
+
 ## Scope
 
 Apply this standard to prose.
@@ -192,7 +195,8 @@ Follow every rule above, plus these:
 - Write headings in sentence case. Start a procedure heading with a verb.
 - Use numbered steps, one action per step, in the imperative.
 - Write the label of a UI element exactly as the UI shows it, in bold.
-- Do not mention repository tooling or source paths.
+
+The [documentation guide](./documentation-guide.md#what-goes-in-another-guide) says what a user page leaves out.
 
 Vale also checks sentence length there: 25 words, and 20 for steps and list items.
 

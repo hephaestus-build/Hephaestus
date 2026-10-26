@@ -19,6 +19,7 @@ const sidebars: SidebarsConfig = {
 				"security-mutation-testing",
 				"coding-guidelines",
 				"simplified-technical-english",
+				"documentation-guide",
 				"structured-logging",
 				"brand-assets",
 				"api-error-handling",
