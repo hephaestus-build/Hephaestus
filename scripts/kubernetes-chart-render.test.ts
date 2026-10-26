@@ -1455,6 +1455,8 @@ await test("practice reviews run exactly when a worker runs, with its Heph turn 
 			assert.equal(envValue(workload(resources, role), "AGENT_ENABLED"), "true", `${name} ${role}`);
 		}
 		assert.equal(env(workload(resources, "webhook"), "AGENT_ENABLED"), undefined, name);
+		// A worker without git checkout reports itself out of service, so its Deployment never rolls out.
+		assert.equal(envValue(workload(resources, "worker"), "GIT_CHECKOUT_ENABLED"), "true", name);
 	}
 	const capacity = (layers: readonly Layer[]) =>
 		envValue(workload(rendered(layers), "worker"), "HEPHAESTUS_WORKER_CAPACITY_MENTOR_MAX");

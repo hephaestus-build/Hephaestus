@@ -237,7 +237,9 @@ worker:
 # Application settings. Each key maps to one setting of docs/admin/production-setup.mdx.
 config:
   releaseCheckEnabled: true
-  gitCheckoutEnabled: false
+  # A practice review reads the repository at its revision. With false, a worker reports itself out of
+  # service (GIT_CHECKOUT_DISABLED) and never becomes ready.
+  gitCheckoutEnabled: true
   durableConsumerName: hephaestus
   consumerInactiveThreshold: 30d
   llmUsageRetention: P400D
