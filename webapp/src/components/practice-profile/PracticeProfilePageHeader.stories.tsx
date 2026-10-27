@@ -1,16 +1,25 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect } from "storybook/test";
+import { expect, within } from "storybook/test";
 
+import { forgetSectionFold } from "@/components/layout/section-folds";
 import { conversation, document, pullRequest } from "@/stories/practice-profile-story-mock-data";
 import { expectNoPageOverflow, expectTargetSize } from "@/stories/reflow";
 import { inStoryYear } from "@/stories/story-clock";
 
-import { PracticeProfilePageHeader } from "./PracticeProfilePageHeader";
+import { GUIDE_FOLD_KEY, PracticeProfilePageHeader } from "./PracticeProfilePageHeader";
+
+/** The ring's legend, apart from the list of points in "How to read this page". */
+const LEGEND = "Practices by standing";
 
 const meta = {
 	component: PracticeProfilePageHeader,
 	parameters: { layout: "padded" },
 	tags: ["autodocs"],
+	// Each story starts from a first visit, so none inherits a guide another story closed.
+	beforeEach: () => {
+		forgetSectionFold(GUIDE_FOLD_KEY);
+		return () => forgetSectionFold(GUIDE_FOLD_KEY);
+	},
 	args: {
 		latestReview: {
 			reviewId: "5d1e2a3b-0000-4000-8000-000000000909",
@@ -36,7 +45,7 @@ export const Default: Story = {
 
 		// Every standing with a count is listed, in the registry's order: what needs attention first,
 		// the same order the ring draws its arcs and the tables sort by.
-		const items = canvas.getAllByRole("listitem");
+		const items = within(canvas.getByRole("list", { name: LEGEND })).getAllByRole("listitem");
 		await expect(items.map((item) => item.textContent)).toEqual([
 			"2Needs attention",
 			"3Mixed",
@@ -65,8 +74,9 @@ export const SomeStandingsAbsent: Story = {
 		counts: { STRENGTH: 9, MIXED: 0, DEVELOPING: 0, NO_OPPORTUNITY: 0, NOT_OBSERVED: 7 },
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.getAllByRole("listitem")).toHaveLength(2);
-		await expect(canvas.queryByText("Needs attention")).toBeNull();
+		const legend = canvas.getByRole("list", { name: LEGEND });
+		await expect(within(legend).getAllByRole("listitem")).toHaveLength(2);
+		await expect(within(legend).queryByText("Needs attention")).toBeNull();
 	},
 };
 
@@ -78,9 +88,11 @@ export const NothingReviewedYet: Story = {
 	play: async ({ canvas }) => {
 		await expect(canvas.getByText("No review yet")).toBeVisible();
 		await expect(canvas.queryByRole("link", { name: /review/iu })).toBeNull();
-		await expect(canvas.getAllByRole("listitem").map((item) => item.textContent)).toEqual([
-			"16No standing yet",
-		]);
+		await expect(
+			within(canvas.getByRole("list", { name: LEGEND }))
+				.getAllByRole("listitem")
+				.map((item) => item.textContent),
+		).toEqual(["16No standing yet"]);
 		await expect(canvas.getByRole("link", { name: "See all practice groups" })).toBeVisible();
 	},
 };
@@ -152,22 +164,35 @@ export const Empty: Story = {
 	play: async ({ canvas }) => {
 		await expect(canvas.getByText("No review yet")).toBeVisible();
 		await expect(canvas.getByText("No practices set up yet")).toBeVisible();
-		await expect(canvas.queryByRole("list")).toBeNull();
+		await expect(canvas.queryByRole("list", { name: LEGEND })).toBeNull();
 		await expect(canvas.getByRole("link", { name: "See all practice groups" })).toBeVisible();
 	},
 };
 
 /**
- * The title, the introduction and the destination stand while the counts load; only the chip and
- * the counts wait, and no count is shown as zero in the meantime.
+ * The title, the introduction, "How to read this page" and the destination stand while the counts
+ * load; only the chip and the counts wait, and no count is shown as zero in the meantime.
  */
 export const Loading: Story = {
 	args: { isLoading: true },
 	play: async ({ canvas }) => {
 		await expect(canvas.getByRole("heading", { level: 1 })).toHaveTextContent("Practice profile");
+		await expect(canvas.getByRole("button", { name: "How to read this page" })).toBeVisible();
 		await expect(canvas.queryByText("16 practices in 5 groups")).toBeNull();
-		await expect(canvas.queryByRole("list")).toBeNull();
+		await expect(canvas.queryByRole("list", { name: LEGEND })).toBeNull();
 		await expect(canvas.getByRole("link", { name: "See all practice groups" })).toBeVisible();
+	},
+};
+
+/** "How to read this page" opens on a first visit, and the reader can close it and open it again. */
+export const GuideClosesAndReopens: Story = {
+	play: async ({ canvas, userEvent }) => {
+		const toggle = canvas.getByRole("button", { name: "How to read this page" });
+		await expect(toggle).toHaveAttribute("aria-expanded", "true");
+		await userEvent.click(toggle);
+		await expect(toggle).toHaveAttribute("aria-expanded", "false");
+		await userEvent.click(toggle);
+		await expect(toggle).toHaveAttribute("aria-expanded", "true");
 	},
 };
 

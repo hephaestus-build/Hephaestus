@@ -8,6 +8,7 @@ import { InlineLink } from "@/components/common/InlineLink";
 import { statusToneClass } from "@/components/common/status-def";
 import { useNow } from "@/components/common/use-now";
 import { DetailStackLink } from "@/components/layout/detail-drawer/DetailStackLink";
+import { useSectionOpen } from "@/components/layout/section-folds";
 import { countsTogether } from "@/components/practice-vocabulary/feedback-text";
 import {
 	isActiveReview,
@@ -21,6 +22,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { asDate, formatDayTime } from "@/lib/dates";
 
 import { ALL_PRACTICE_GROUPS_LEVEL, REVIEWS_LEVEL } from "./practice-profile-search";
+import { PracticeProfileGuide } from "./PracticeProfileGuide";
 
 export interface PracticeProfilePageHeaderProps {
 	/**
@@ -40,11 +42,18 @@ export interface PracticeProfilePageHeaderProps {
 }
 
 /**
- * What a first visit needs to know, in the page's own voice: what is reviewed and how a piece of
- * feedback ends. Everything below the fold is the record this sentence introduces.
+ * What a first visit needs to know, in the page's own voice: what is reviewed. How a piece of
+ * feedback ends is in "How to read this page", under it. Everything below the fold is the record
+ * this sentence introduces.
  */
 const INTRO =
-	"Hephaestus reviews your work against the practices your workspace cares about. What it records appears here. A piece of feedback resolves once your work comes back clean.";
+	"Hephaestus reviews your work against the practices your workspace cares about. What it records appears here.";
+
+/**
+ * Where this browser keeps whether the reader closed "How to read this page". It opens on a first
+ * visit and stays as the reader left it.
+ */
+export const GUIDE_FOLD_KEY = "practice-profile:how-to-read";
 
 export function PracticeProfilePageHeader({
 	latestReview,
@@ -53,6 +62,7 @@ export function PracticeProfilePageHeader({
 	groupCount,
 	isLoading = false,
 }: PracticeProfilePageHeaderProps) {
+	const [guideOpen, setGuideOpen] = useSectionOpen(GUIDE_FOLD_KEY);
 	return (
 		<header className="flex flex-col gap-3">
 			<div className="flex min-w-0 flex-col gap-2">
@@ -66,6 +76,7 @@ export function PracticeProfilePageHeader({
 				</div>
 				<p className="max-w-2xl text-sm text-muted-foreground">{INTRO}</p>
 			</div>
+			<PracticeProfileGuide open={guideOpen} onOpenChange={setGuideOpen} />
 			{/* One link names the destination and covers the card with a pseudo-element, so the whole
 			    card is the pointer path while the words stay the keyboard path. The words turn mentor
 			    blue while the card is hovered, as every inline link on the practice surfaces does on

@@ -11,7 +11,8 @@ import { StatusTooltip } from "./StatusTooltip";
 
 const TREND_CLASS = "flex w-fit flex-wrap items-center gap-x-1 rounded-sm text-sm";
 
-function TrendWords({ def }: { def: StatusDef }) {
+/** A trend's icon and words, in the tone of the element around them. */
+export function TrendWords({ def }: { def: StatusDef }) {
 	const DirectionIcon = def.icon;
 	return (
 		<>
