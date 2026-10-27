@@ -20,10 +20,13 @@ class AccountLoginLookupArchitectureTest extends HephaestusArchitectureTest {
     private static final Set<String> ALLOWED_CALLERS = Set.of(
             "de.tum.cit.aet.hephaestus.workspace.WorkspaceQueryService",
             "de.tum.cit.aet.hephaestus.workspace.WorkspaceResolver",
-            "de.tum.cit.aet.hephaestus.workspace.WorkspaceProvisioningService",
             "de.tum.cit.aet.hephaestus.workspace.adapter.WorkspaceContextResolverAdapter",
-            "de.tum.cit.aet.hephaestus.workspace.adapter.WorkspaceOrganizationMembershipAdapter",
             "de.tum.cit.aet.hephaestus.integration.scm.github.lifecycle.GitHubLifecycleListener");
+
+    @Test
+    void shouldNameOnlyExistingClassesInAllowedCallers() {
+        AllowlistEntries.assertEachNamesAClass("ALLOWED_CALLERS", ALLOWED_CALLERS, classes);
+    }
 
     @Test
     @DisplayName("no new caller of WorkspaceRepository.findByAccountLoginIgnoreCase outside the allowlist")

@@ -46,6 +46,11 @@ class SlackIntegrationArchitectureTest extends HephaestusArchitectureTest {
     private static final Set<String> USER_SCOPED_CONTROLLERS = Set.of("SlackUserPreferencesUserController");
 
     @Test
+    void shouldNameOnlyExistingClassesInUserScopedControllers() {
+        AllowlistEntries.assertEachNamesAClass("USER_SCOPED_CONTROLLERS", USER_SCOPED_CONTROLLERS, classes);
+    }
+
+    @Test
     @DisplayName("every Slack REST controller is workspace-scoped or a hidden webhook receiver")
     void slackControllersAreWorkspaceScopedOrHiddenReceivers() {
         classes()
@@ -118,6 +123,11 @@ class SlackIntegrationArchitectureTest extends HephaestusArchitectureTest {
             // (SlackConversationCandidateSource.settledCandidates → agent's ConversationThreadTriggerScheduler) is
             // itself @WorkspaceAgnostic for exactly this reason, mirroring the two entries above.
             "SlackThreadRepository.findSettledCandidateRows");
+
+    @Test
+    void shouldNameOnlyExistingClassesInUnscopedAllowlist() {
+        AllowlistEntries.assertEachNamesAClass("UNSCOPED_ALLOWLIST", UNSCOPED_ALLOWLIST, classes);
+    }
 
     @Test
     @DisplayName("Slack repository finders carry the workspace predicate in their signature")
@@ -210,6 +220,11 @@ class SlackIntegrationArchitectureTest extends HephaestusArchitectureTest {
      * rule didn't ask for.
      */
     private static final Set<String> SERVICE_STEREOTYPE_ALLOWLIST = Set.of("SlackChannelHistorySyncService");
+
+    @Test
+    void shouldNameOnlyExistingClassesInServiceStereotypeAllowlist() {
+        AllowlistEntries.assertEachNamesAClass("SERVICE_STEREOTYPE_ALLOWLIST", SERVICE_STEREOTYPE_ALLOWLIST, classes);
+    }
 
     /**
      * Directional stereotype-suffix discipline: a name that PROMISES a stereotype must not lie about it.

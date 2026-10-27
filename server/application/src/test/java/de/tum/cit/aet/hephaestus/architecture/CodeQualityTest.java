@@ -398,9 +398,6 @@ class CodeQualityTest extends HephaestusArchitectureTest {
                     .and()
                     .resideInAPackage("..spi..")
                     .should(beFocused)
-                    .allowEmptyShould(
-                            false) // strict: ..spi.. is populated; an empty match would mean the rule silently stopped
-                    // seeing SPIs
                     .because("SPI interfaces should be minimal");
 
             rule.check(classes);

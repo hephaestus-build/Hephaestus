@@ -28,11 +28,6 @@ import org.junit.jupiter.api.Test;
  */
 class IntegrationConsumerBoundaryTest extends HephaestusArchitectureTest {
 
-    private static final List<String> ALLOWED_SYNC_SUBPACKAGES = List.of(
-            // Historical-backfill scheduler + service stay here for the duration of this slice;
-            // they are Slice-C territory and not in scope for the consumer dissolution.
-            "de.tum.cit.aet.hephaestus.integration.scm.sync.backfill");
-
     @Test
     void scmSyncIsEmptyOfNonBackfillCode() {
         List<String> violations = classes.stream()
@@ -41,11 +36,9 @@ class IntegrationConsumerBoundaryTest extends HephaestusArchitectureTest {
                 .collect(Collectors.toList());
 
         assertThat(violations)
-                .as(
-                        "integration/scm/sync/ must be empty of production code — the unified "
-                                + "consumer lives under integration/consumer/ and the per-kind sync drivers live "
-                                + "under integration/<kind>/sync/. Sub-packages allowed: %s",
-                        ALLOWED_SYNC_SUBPACKAGES)
+                .as("integration/scm/sync/ must be empty of production code — the unified "
+                        + "consumer lives under integration/consumer/ and the per-kind sync drivers live "
+                        + "under integration/<kind>/sync/")
                 .isEmpty();
     }
 

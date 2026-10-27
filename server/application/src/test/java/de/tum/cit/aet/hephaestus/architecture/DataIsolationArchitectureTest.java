@@ -96,6 +96,11 @@ class DataIsolationArchitectureTest extends HephaestusArchitectureTest {
             // probe below cannot see it. Scoped, not global — the row names the tenant it grants.
             "LlmModelWorkspaceGrant");
 
+    @Test
+    void shouldNameOnlyExistingClassesInWorkspaceScopedEntities() {
+        AllowlistEntries.assertEachNamesAClass("WORKSPACE_SCOPED_ENTITIES", WORKSPACE_SCOPED_ENTITIES, classes);
+    }
+
     // Package-private so WorkspaceScopedTablesParityTest can compare it with the production allowlist.
     static final Set<String> GLOBAL_ENTITIES = Set.of(
             "User", // Users can belong to multiple workspaces
@@ -137,6 +142,11 @@ class DataIsolationArchitectureTest extends HephaestusArchitectureTest {
             "InstanceSettings", // Singleton instance-wide operator settings (silent-mode brake)
             "ReleaseStart" // The releases this instance started
             );
+
+    @Test
+    void shouldNameOnlyExistingClassesInGlobalEntities() {
+        AllowlistEntries.assertEachNamesAClass("GLOBAL_ENTITIES", GLOBAL_ENTITIES, classes);
+    }
 
     @Nested
     class EntityWorkspaceRelationshipTests {
@@ -339,15 +349,6 @@ class DataIsolationArchitectureTest extends HephaestusArchitectureTest {
                                 return;
                             }
 
-                            if (MultiTenancyArchitectureTest.WORKSPACE_AGNOSTIC_REPOSITORIES.contains(repoName)) {
-                                return;
-                            }
-
-                            String methodKey = repoName + "." + methodName;
-                            if (MultiTenancyArchitectureTest.WORKSPACE_AGNOSTIC_METHODS.contains(methodKey)) {
-                                return;
-                            }
-
                             if (method.isAnnotatedWith(WorkspaceAgnostic.class)) {
                                 return;
                             }
@@ -390,7 +391,7 @@ class DataIsolationArchitectureTest extends HephaestusArchitectureTest {
                                         method,
                                         String.format(
                                                 "ENTITY RETURN RISK: %s.%s returns entity type but appears unscoped."
-                                                        + " Add workspace filtering or add to WORKSPACE_AGNOSTIC_METHODS"
+                                                        + " Add workspace filtering or mark it @WorkspaceAgnostic"
                                                         + " if intentional.",
                                                 repoName, methodName)));
                             }

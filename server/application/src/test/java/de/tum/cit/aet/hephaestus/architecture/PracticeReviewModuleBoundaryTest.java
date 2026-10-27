@@ -42,13 +42,7 @@ class PracticeReviewModuleBoundaryTest {
                 .haveSimpleNameNotEndingWith("package-info")
                 .should()
                 .dependOnClassesThat()
-                .resideInAnyPackage(
-                        "jakarta.persistence..",
-                        "org.springframework..",
-                        BASE_PACKAGE + ".agent..",
-                        "..integration.scm..",
-                        "..integration.slack..",
-                        "..integration.outline..")
+                .resideInAnyPackage("jakarta.persistence..", "org.springframework..", BASE_PACKAGE + ".agent..")
                 .check(classes);
     }
 

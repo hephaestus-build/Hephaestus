@@ -27,15 +27,11 @@ class OutlineIntegrationArchitectureTest extends HephaestusArchitectureTest {
 
     private static final String OUTLINE = "de.tum.cit.aet.hephaestus.integration.outline..";
 
-    private static final String OUTLINE_CONTENT_SOURCE =
-            "de.tum.cit.aet.hephaestus.agent.context.providers.OutlineDocumentContentSource";
-
-    /** The integration module, the projection SPI it implements, and the context provider that reads the mirror. */
+    /** The integration module and the projection SPI it implements. */
     private static final DescribedPredicate<JavaClass> OUTLINE_FOOTPRINT = DescribedPredicate.describe(
-            "belong to the Outline footprint (integration.outline, agent.documentation, OutlineDocumentContentSource)",
+            "belong to the Outline footprint (integration.outline, agent.documentation)",
             javaClass -> javaClass.getPackageName().startsWith("de.tum.cit.aet.hephaestus.integration.outline")
-                    || javaClass.getPackageName().startsWith("de.tum.cit.aet.hephaestus.agent.documentation")
-                    || javaClass.getName().startsWith(OUTLINE_CONTENT_SOURCE));
+                    || javaClass.getPackageName().startsWith("de.tum.cit.aet.hephaestus.agent.documentation"));
 
     @Test
     @DisplayName("every Outline REST controller is workspace-scoped or a hidden webhook receiver")
@@ -72,6 +68,11 @@ class OutlineIntegrationArchitectureTest extends HephaestusArchitectureTest {
      * earn its own entry here.
      */
     private static final Set<String> HANDLER_BASE_ALLOWLIST = Set.of("OutlineWebhookMessageHandler");
+
+    @Test
+    void shouldNameOnlyExistingClassesInHandlerBaseAllowlist() {
+        AllowlistEntries.assertEachNamesAClass("HANDLER_BASE_ALLOWLIST", HANDLER_BASE_ALLOWLIST, classes);
+    }
 
     @Test
     @DisplayName("every Outline NATS consumer extends the core envelope-handler base (or is allowlisted)")
@@ -116,6 +117,11 @@ class OutlineIntegrationArchitectureTest extends HephaestusArchitectureTest {
             // Instance-admin person scope spans workspaces but pins an exact provider/native key.
             "OutlineDocumentRepository.findPersonSourceIds",
             "OutlineCollectionRepository.findDistinctWorkspaceIdsWithPendingSync");
+
+    @Test
+    void shouldNameOnlyExistingClassesInUnscopedAllowlist() {
+        AllowlistEntries.assertEachNamesAClass("UNSCOPED_ALLOWLIST", UNSCOPED_ALLOWLIST, classes);
+    }
 
     @Test
     @DisplayName("Outline repository finders carry the workspace predicate in their signature")

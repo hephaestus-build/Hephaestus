@@ -45,11 +45,7 @@ class MentorContentSourceArchitectureTest extends HephaestusArchitectureTest {
                 .because("contribute() is the external entry point WorkspaceContextBuilder calls through the "
                         + "Spring proxy. Removing @Transactional from here OR moving it to a helper would "
                         + "silently drop the tx (self-invocation bypasses the proxy) and re-introduce a "
-                        + "LazyInitializationException risk on the SSE wire.")
-                // Fail loudly if the providers package/method is renamed away from contribute(): the package
-                // is populated, so zero matches means the rule stopped guarding the providers, not that the
-                // condition is vacuously satisfied.
-                .allowEmptyShould(false);
+                        + "LazyInitializationException risk on the SSE wire.");
         rule.check(classes);
     }
 

@@ -93,26 +93,6 @@ class MultiTenancyArchitectureTest extends HephaestusArchitectureTest {
                         .orElse(false);
     }
 
-    static final Set<String> WORKSPACE_AGNOSTIC_SCHEDULERS = Set.of();
-
-    /**
-     * Repositories that are legitimately workspace-agnostic (shared infrastructure or lookup tables).
-     * Prefer annotating classes with {@link WorkspaceAgnostic} directly over adding here.
-     */
-    static final Set<String> WORKSPACE_AGNOSTIC_REPOSITORIES = Set.of();
-
-    /**
-     * Services that are legitimately workspace-agnostic (user, system, or admin scope).
-     * Prefer annotating classes with {@link WorkspaceAgnostic} directly over adding here.
-     */
-    static final Set<String> WORKSPACE_AGNOSTIC_SERVICES = Set.of();
-
-    /**
-     * Repository methods that are legitimately workspace-agnostic. Format: "RepositoryName.methodName".
-     * Prefer annotating the method or class with {@link WorkspaceAgnostic} directly over adding here.
-     */
-    static final Set<String> WORKSPACE_AGNOSTIC_METHODS = Set.of();
-
     @Nested
     class RepositoryWorkspaceFilteringTests {
 
@@ -147,7 +127,6 @@ class MultiTenancyArchitectureTest extends HephaestusArchitectureTest {
                             }
 
                             String repoName = method.getOwner().getSimpleName();
-                            String methodKey = repoName + "." + method.getName();
 
                             // integration.scm is the inherently workspace-agnostic ETL layer
                             if (isInWorkspaceAgnosticPackage(method.getOwner())) {
@@ -155,14 +134,6 @@ class MultiTenancyArchitectureTest extends HephaestusArchitectureTest {
                             }
 
                             if (method.getOwner().isAnnotatedWith(WorkspaceAgnostic.class)) {
-                                return;
-                            }
-
-                            if (WORKSPACE_AGNOSTIC_REPOSITORIES.contains(repoName)) {
-                                return;
-                            }
-
-                            if (WORKSPACE_AGNOSTIC_METHODS.contains(methodKey)) {
                                 return;
                             }
 
@@ -212,7 +183,7 @@ class MultiTenancyArchitectureTest extends HephaestusArchitectureTest {
                                         method,
                                         String.format(
                                                 "MULTI-TENANCY RISK: %s.%s has @Query without workspace filtering."
-                                                        + " Query: %s... Add to WORKSPACE_AGNOSTIC_METHODS if"
+                                                        + " Query: %s... Mark it @WorkspaceAgnostic if"
                                                         + " intentional.",
                                                 repoName,
                                                 method.getName(),
@@ -249,10 +220,6 @@ class MultiTenancyArchitectureTest extends HephaestusArchitectureTest {
                             }
 
                             if (javaClass.isAnnotatedWith(WorkspaceAgnostic.class)) {
-                                return;
-                            }
-
-                            if (WORKSPACE_AGNOSTIC_REPOSITORIES.contains(repoName)) {
                                 return;
                             }
 
@@ -387,10 +354,6 @@ class MultiTenancyArchitectureTest extends HephaestusArchitectureTest {
                                 return;
                             }
 
-                            if (WORKSPACE_AGNOSTIC_SCHEDULERS.contains(javaClass.getSimpleName())) {
-                                return;
-                            }
-
                             Set<String> dependencies = javaClass.getFields().stream()
                                     .map(f -> f.getRawType().getSimpleName())
                                     .collect(Collectors.toSet());
@@ -415,7 +378,7 @@ class MultiTenancyArchitectureTest extends HephaestusArchitectureTest {
                                                 "SCHEDULED JOB CONTEXT: %s has @Scheduled methods but no workspace"
                                                         + " iteration dependencies. Add SyncTargetProvider or"
                                                         + " WorkspaceRepository to iterate workspaces and set context, or"
-                                                        + " add to WORKSPACE_AGNOSTIC_SCHEDULERS if truly system-wide.",
+                                                        + " mark it @WorkspaceAgnostic if truly system-wide.",
                                                 javaClass.getSimpleName())));
                             }
                         }
@@ -512,8 +475,6 @@ class MultiTenancyArchitectureTest extends HephaestusArchitectureTest {
                                         "Comment", // Through PR -> repository.organization.workspaceId
                                         "Commit", // Through repository.organization.workspaceId
                                         "Project", // Through organization.workspaceId
-                                        "PracticeFeedbackPreparationRequestedEvent", // carries workspaceId directly
-                                        // (conversational routing)
                                         "ApprovedFeedbackReadyEvent", // carries workspaceId directly
                                         "BotCommand", // BotCommandReceivedEvent carries workspaceId directly
                                         "WorkspaceCreatedEvent", // Carries workspaceId + kind
@@ -608,6 +569,12 @@ class MultiTenancyArchitectureTest extends HephaestusArchitectureTest {
                 // GitHubProjectActivityListener handles GitHubProjectEvent payloads whose EventContext
                 // carries scopeId (the originating workspace) — same payload-carries-context contract
                 "GitHubProjectActivityListener");
+
+        @Test
+        void shouldNameOnlyExistingClassesInAsyncListenersWithPayloadContext() {
+            AllowlistEntries.assertEachNamesAClass(
+                    "ASYNC_LISTENERS_WITH_PAYLOAD_CONTEXT", ASYNC_LISTENERS_WITH_PAYLOAD_CONTEXT, classes);
+        }
 
         /** When @Async is combined with @TransactionalEventListener, MDC/ThreadLocal context is lost unless propagated. */
         @Test
@@ -711,10 +678,6 @@ class MultiTenancyArchitectureTest extends HephaestusArchitectureTest {
                                 // This is informational - services may have internal methods
                                 // that are called with workspace context already established
                                 String ownerName = method.getOwner().getSimpleName();
-
-                                if (WORKSPACE_AGNOSTIC_SERVICES.contains(ownerName)) {
-                                    return;
-                                }
 
                                 if (method.getOwner().isAnnotatedWith(WorkspaceAgnostic.class)) {
                                     return;

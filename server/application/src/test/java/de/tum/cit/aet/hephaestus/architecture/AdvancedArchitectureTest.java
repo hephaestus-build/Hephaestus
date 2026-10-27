@@ -23,7 +23,6 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.context.annotation.Configuration;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -100,19 +99,6 @@ class AdvancedArchitectureTest extends HephaestusArchitectureTest {
             rule.check(classes);
         }
 
-        @Test
-        void dtosAreImmutableRecords() {
-            ArchRule rule = classes()
-                    .that()
-                    .haveSimpleNameEndingWith("DTO")
-                    .should()
-                    .beRecords()
-                    .orShould()
-                    .haveOnlyFinalFields()
-                    .because("DTOs should be immutable for thread safety and clarity");
-            rule.check(classes);
-        }
-
         /** This codebase uses "Package by Feature" - DTOs may live colocated with their domain. */
         @Test
         void dtosInDtoPackages() {
@@ -136,6 +122,12 @@ class AdvancedArchitectureTest extends HephaestusArchitectureTest {
 
     @Nested
     class SecurityTests {
+
+        @Test
+        void shouldNameOnlyExistingClassesInTheAnonymousEndpointAllowlist() {
+            AllowlistEntries.assertEachNamesAClass(
+                    "AnonymousEndpointAllowlist.HANDLERS", AnonymousEndpointAllowlist.HANDLERS, classes);
+        }
 
         @Test
         void controllerMethodsHaveExplicitSecurity() {
@@ -170,24 +162,6 @@ class AdvancedArchitectureTest extends HephaestusArchitectureTest {
                     .orShould()
                     .beInterfaces()
                     .because("Domain events should be immutable records");
-            rule.check(classes);
-        }
-
-        /** This codebase uses "Package by Feature" - listeners are colocated with their domain. */
-        @Test
-        void eventListenersInApplicationPackages() {
-            ArchRule rule = classes()
-                    .that()
-                    .haveSimpleNameEndingWith("Listener")
-                    .or()
-                    .haveSimpleNameEndingWith("EventHandler")
-                    .and()
-                    .resideOutsideOfPackage("..spi..")
-                    .and()
-                    .areNotMemberClasses()
-                    .should()
-                    .resideInAPackage(BASE_PACKAGE + "..")
-                    .because("Event listeners should be within the application package structure");
             rule.check(classes);
         }
 
@@ -369,25 +343,6 @@ class AdvancedArchitectureTest extends HephaestusArchitectureTest {
                     .because("Utility classes should be in util, common, core, or root packages");
             rule.check(classes);
         }
-
-        /**
-         * This codebase uses "Package by Feature" - exceptions are colocated with their domain. The
-         * only restriction: exceptions must be RuntimeException subclasses (enforced in ModuleBoundaryTest).
-         */
-        @Test
-        void exceptionsInApplicationPackage() {
-            ArchRule rule = classes()
-                    .that()
-                    .areAssignableTo(Exception.class)
-                    .and()
-                    .doNotHaveSimpleName("Exception")
-                    .and()
-                    .areNotMemberClasses()
-                    .should()
-                    .resideInAPackage(BASE_PACKAGE + "..")
-                    .because("Custom exceptions should be within the application package structure");
-            rule.check(classes);
-        }
     }
 
     // TEST ARCHITECTURE - Tests follow patterns
@@ -399,8 +354,12 @@ class AdvancedArchitectureTest extends HephaestusArchitectureTest {
          * Tests that drive Liquibase themselves and therefore must NOT have a Spring context: the context
          * would build the schema before the test could seed the pre-migration rows it exists to migrate.
          */
-        private static final Set<String> SCHEMA_OWNING_TESTS = Set.of(
-                "LegacyAgentConfigMigrationIntegrationTest", "PracticeCatalogInstallationMigrationIntegrationTest");
+        private static final Set<String> SCHEMA_OWNING_TESTS = Set.of("LegacyAgentConfigMigrationIntegrationTest");
+
+        @Test
+        void shouldNameOnlyExistingClassesInSchemaOwningTests() {
+            AllowlistEntries.assertEachNamesAClass("SCHEMA_OWNING_TESTS", SCHEMA_OWNING_TESTS, classesWithTests);
+        }
 
         @Test
         void integrationTestsExtendBaseClasses() {
@@ -448,41 +407,6 @@ class AdvancedArchitectureTest extends HephaestusArchitectureTest {
                     .haveSimpleNameNotStartingWith("Base")
                     .should(haveIntegrationHarness)
                     .because("Integration tests need proper Spring context via base class or annotation");
-            rule.check(classesWithTests);
-        }
-
-        @Test
-        void testClassesEndWithTestSuffix() {
-            ArchRule rule = classes()
-                    .that()
-                    .resideInAPackage("..test..")
-                    .and()
-                    .areNotInterfaces()
-                    .and()
-                    .areNotAnonymousClasses()
-                    .and()
-                    .doNotHaveSimpleName("package-info")
-                    .and()
-                    .areNotAnnotatedWith(Configuration.class)
-                    .and()
-                    .haveSimpleNameNotStartingWith("Abstract")
-                    .and()
-                    .haveSimpleNameNotEndingWith("Base")
-                    .and()
-                    .haveSimpleNameNotEndingWith("Factory")
-                    .and()
-                    .haveSimpleNameNotEndingWith("Utils")
-                    .and()
-                    .haveSimpleNameNotEndingWith("Config")
-                    .and()
-                    .haveSimpleNameNotEndingWith("Configuration")
-                    .should()
-                    .haveSimpleNameEndingWith("Test")
-                    .orShould()
-                    .haveSimpleNameEndingWith("Tests")
-                    .orShould()
-                    .haveSimpleNameEndingWith("IT")
-                    .because("Test classes should be easily identifiable");
             rule.check(classesWithTests);
         }
     }

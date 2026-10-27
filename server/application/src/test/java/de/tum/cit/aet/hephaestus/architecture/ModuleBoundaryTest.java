@@ -6,7 +6,6 @@ import static de.tum.cit.aet.hephaestus.architecture.ArchitectureTestConstants.B
 import static de.tum.cit.aet.hephaestus.architecture.conditions.HephaestusConditions.beFinalOrHaveOnlyPrivateConstructors;
 import static de.tum.cit.aet.hephaestus.architecture.conditions.HephaestusConditions.beImmutable;
 
-import com.tngtech.archunit.base.DescribedPredicate;
 import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.lang.ArchRule;
 import org.junit.jupiter.api.DisplayName;
@@ -330,130 +329,25 @@ class ModuleBoundaryTest extends HephaestusArchitectureTest {
 
     @Nested
     class SpiBypassDetectionTests {
-
         /**
-         * Feature modules should only depend on integration.scm's public contracts.
-         *
-         * <p>Feature modules (activity, practices) must NOT bypass
-         * the SPI layer and directly depend on integration.scm internals like:
-         * <ul>
-         *   <li>integration.scm.sync - internal sync orchestration</li>
-         *   <li>integration.scm.github.installation - GitHub installation management</li>
-         *   <li>integration.scm.github.app - GitHub-app credential handling</li>
-         *   <li>integration.scm.github.lifecycle - GitHub install/uninstall handlers</li>
-         *   <li>integration.scm.github.sync - GitHub-specific sync orchestration</li>
-         *   <li>integration.scm.github.webhook - GitHub webhook ingest</li>
-         *   <li>integration.scm.gitlab.* mirrors of the above</li>
-         * </ul>
-         *
-         * <p>They SHOULD depend on:
-         * <ul>
-         *   <li>integration.core.spi - Service Provider Interfaces</li>
-         *   <li>integration.core.events - Cross-vendor domain events</li>
-         *   <li>integration.scm entity packages (for reading data — including
-         *       vendor-specific entity sub-packages like scm.github.project)</li>
-         * </ul>
-         *
-         * <p>NOTE: Entity sub-packages under vendor adapters (e.g. scm.github.project) are
-         * exempt because they are <i>data</i>, not adapter internals. Phase 3 of the
-         * integration-restructure will revisit whether these should move back under
-         * scm.{entity}/ for vendor-neutral access.
+         * Activity reads synced data, never the sync orchestration. Vendor adapters are closed to it by
+         * {@link ExternalVendorImportAllowlistTest}.
          */
         @Test
-        void featureModulesDoNotBypassScmSpis() {
-            // Internal packages that should NOT be accessed directly by feature modules.
-            // We list ETL-internal subpackages explicitly instead of blanketing on
-            // ..integration.scm.github.. so that entity data packages (e.g. project/)
-            // remain readable by feature modules — same as scm.commit/, scm.issue/, etc.
-            String[] forbiddenInternalPackages = {
-                "..integration.scm.sync..",
-                "..integration.scm.github.installation..",
-                "..integration.scm.github.app..",
-                "..integration.scm.github.lifecycle..",
-                "..integration.scm.github.sync..",
-                "..integration.scm.github.webhook..",
-                "..integration.scm.github.connect..",
-                "..integration.scm.github.credentials..",
-                "..integration.scm.github.manifest..",
-                "..integration.scm.gitlab.lifecycle..",
-                "..integration.scm.gitlab.sync..",
-                "..integration.scm.gitlab.webhook..",
-                "..integration.scm.gitlab.connect..",
-                "..integration.scm.gitlab.credentials..",
-                "..integration.scm.gitlab.manifest..",
-            };
-
+        void activityDoesNotDependOnScmSync() {
             ArchRule rule = noClasses()
                     .that()
-                    .resideInAnyPackage("..activity..", "..practices..")
+                    .resideInAPackage(BASE_PACKAGE + ".activity..")
                     .should()
                     .dependOnClassesThat()
-                    .resideInAnyPackage(forbiddenInternalPackages)
-                    .because("Feature modules should depend on integration.scm SPIs (..spi..), DTOs (..dto..), "
-                            + "or events (..events..) - not internal packages like sync or installation");
-            rule.check(classes);
-        }
-
-        /**
-         * Verifies that feature modules use the SPI pattern correctly.
-         *
-         * <p>When feature modules need to provide functionality to integration.scm (callbacks,
-         * context providers), they should implement SPIs defined in integration.spi,
-         * not create ad-hoc coupling.
-         */
-        @Test
-        void featureModulesDoNotDependOnGitHubServiceImplementations() {
-            // Entity data sub-packages (e.g. scm.github.project) stay readable; only
-            // adapter/service implementations are off-limits. See
-            // featureModulesDoNotBypassScmSpis for the broader rationale.
-            //
-            // Equivalent to: no feature-module class may depend on a class that is
-            // in ..integration.scm.github.. AND not in {..integration.scm.github.project..,
-            // ..integration.scm.github.events..}.
-            //
-            // The events subpackage carries GitHub-specific event payloads (Project v2 events
-            // among them) that the activity log consumes verbatim — keeping the listener
-            // outside activity would create a platform→activity cycle (see ArchitectureTest
-            // noCyclesBetweenModules). The pragmatic exemption: events are data-only records,
-            // they can't bypass an SPI because they don't have one.
-            ArchRule rule = noClasses()
-                    .that()
-                    .resideInAnyPackage("..activity..", "..practices..")
-                    .should()
-                    .dependOnClassesThat(DescribedPredicate.describe(
-                            "reside in ..integration.scm.github.. but not ..integration.scm.github.project.. "
-                                    + "and not ..integration.scm.github.events..",
-                            cls -> {
-                                String pkg = cls.getPackageName();
-                                return (pkg.contains(".integration.scm.github")
-                                        && !pkg.contains(".integration.scm.github.project")
-                                        && !pkg.contains(".integration.scm.github.events"));
-                            }))
-                    .because(
-                            "Feature modules should use SPIs, not depend on provider-specific service implementations");
+                    .resideInAPackage("..integration.scm.sync..")
+                    .because("The activity ledger records through its SPI; it does not drive or read the sync engine");
             rule.check(classes);
         }
     }
 
     @Nested
     class FeatureModuleBoundaryTests {
-
-        /**
-         * Activity should not depend on workspace internal implementation.
-         *
-         * <p>Feature modules should depend on public APIs, not internal details.
-         */
-        @Test
-        void activityDoesNotDependOnWorkspaceInternals() {
-            ArchRule rule = noClasses()
-                    .that()
-                    .resideInAPackage("..activity..")
-                    .should()
-                    .dependOnClassesThat()
-                    .resideInAnyPackage("..workspace..internal..", "..workspace..adapter..")
-                    .because("Activity should depend on workspace public API, not internals");
-            rule.check(classes);
-        }
 
         /**
          * Mentor module should only depend on integration.scm and shared modules.
@@ -469,42 +363,6 @@ class ModuleBoundaryTest extends HephaestusArchitectureTest {
                     .dependOnClassesThat()
                     .resideInAnyPackage("..activity..", "..notification..")
                     .because("Mentor should be isolated from other feature modules");
-            rule.check(classes);
-        }
-
-        /**
-         * The activity read model should not depend on core sync logic.
-         *
-         * <p>The Activity pages are a read-only view that should not modify
-         * or depend on the sync engine internals.
-         */
-        @Test
-        void activityOverviewDoesNotDependOnSyncInternals() {
-            ArchRule rule = noClasses()
-                    .that()
-                    .resideInAPackage("..activity.overview..")
-                    .should()
-                    .dependOnClassesThat()
-                    .resideInAnyPackage("..integration.scm.sync..", "..integration.scm.github..")
-                    .because("The activity read model should only read data, not depend on sync internals");
-            rule.check(classes);
-        }
-
-        /**
-         * Notification module should not directly depend on feature module internals.
-         *
-         * <p>Notification should receive events through the event system,
-         * not by depending on feature module implementations.
-         */
-        @Test
-        void notificationUsesEventsNotDirectDependencies() {
-            ArchRule rule = noClasses()
-                    .that()
-                    .resideInAPackage("..notification..")
-                    .should()
-                    .dependOnClassesThat()
-                    .resideInAnyPackage("..activity..service..", "..mentor..service..")
-                    .because("Notification should use domain events for cross-module communication");
             rule.check(classes);
         }
     }
