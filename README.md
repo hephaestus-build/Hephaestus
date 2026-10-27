@@ -40,7 +40,8 @@ Workspace admins can approve feedback before it appears on the work.
 
 Developers learn engineering practices by doing the work and getting feedback on it.
 That feedback comes from reviewers and experienced colleagues, and their time is scarce.
-In 37 Apache projects, a [2022 study](https://doi.org/10.1145/3540250.3549167) found that only about a quarter of pull requests received a comment that explained a suggestion.
+In 37 Apache projects, a [2022 study](https://doi.org/10.1145/3540250.3549167) found that only about a quarter of pull requests received an implicit-mentoring comment.
+Such a comment explains a suggestion, an instruction, or a way to fix an error.
 Hephaestus gives feedback on every piece of work it can assess, so experienced people can spend their time where judgment and relationships matter.
 
 ## Features
