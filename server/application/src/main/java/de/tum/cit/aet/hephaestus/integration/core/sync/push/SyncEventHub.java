@@ -6,7 +6,6 @@ import de.tum.cit.aet.hephaestus.integration.core.metrics.IntegrationCoreMetrics
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
-import jakarta.annotation.PreDestroy;
 import java.time.Duration;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -26,6 +25,8 @@ import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.event.ContextClosedEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.http.HttpStatus;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -61,6 +62,9 @@ public class SyncEventHub {
     private final Counter eventsFailed;
 
     private final AtomicBoolean capWarned = new AtomicBoolean(false);
+
+    /** Set when the context closes; guarded by {@code subscribersByWorkspace}. */
+    private boolean closing;
 
     private final Map<Long, Set<Subscriber>> subscribersByWorkspace = new ConcurrentHashMap<>();
 
@@ -114,6 +118,11 @@ public class SyncEventHub {
         emitter.onError(throwable -> deregister(subscriber));
 
         synchronized (subscribersByWorkspace) {
+            if (closing) {
+                // A stream opened now would hold the web server's graceful shutdown; the client retries the next
+                // instance.
+                throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "The server is restarting.");
+            }
             Set<Subscriber> subscribers =
                     subscribersByWorkspace.computeIfAbsent(workspaceId, key -> ConcurrentHashMap.newKeySet());
             if (subscribers.size() >= MAX_EMITTERS_PER_WORKSPACE) {
@@ -312,8 +321,15 @@ public class SyncEventHub {
         }
     }
 
-    @PreDestroy
+    /**
+     * Ends every stream when the context closes, before the lifecycle stops the web server: an open stream would hold
+     * its graceful shutdown until the timeout. The browser reconnects to the next instance, and the client re-reads its workspace on the new stream.
+     */
+    @EventListener(ContextClosedEvent.class)
     void shutdown() {
+        synchronized (subscribersByWorkspace) {
+            closing = true;
+        }
         for (Set<Subscriber> subscribers : new ArrayList<>(subscribersByWorkspace.values())) {
             for (Subscriber subscriber : new ArrayList<>(subscribers)) {
                 deregister(subscriber);

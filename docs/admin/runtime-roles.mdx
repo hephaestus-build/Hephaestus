@@ -536,6 +536,10 @@ The reverse proxy must keep an idle connection open for longer than 20 seconds.
 The bundled Traefik keeps it open for 300 seconds.
 A developer can have at most 10 open streams.
 
+When the server stops, it ends every live stream before it drains its other requests.
+The browser connects again to the next server, which first sends the whole conversation.
+The workspace's sync stream works the same way: on the next connect, the page reads its data again.
+
 The `mentor-turns` rate limit applies to `POST /api/workspaces/{slug}/mentor/turns`.
 `HEPHAESTUS_RATE_LIMIT_MENTOR_TURNS_CAPACITY` (default `20`) and `HEPHAESTUS_RATE_LIMIT_MENTOR_TURNS_PERIOD` (default `10m`) set it.
 The limit counts the questions of one account.
@@ -630,6 +634,11 @@ On SIGTERM, the worker does these actions in order:
 2. It waits up to `hephaestus.worker.drain.timeout` (default 5 min) for active jobs to finish.
 3. It settles each remaining job under its ownership fence before it waits for any container stop.
 4. It stops the settled jobs' containers in parallel, with one 30s cleanup deadline for the batch.
+
+Every shutdown phase of the worker may take `hephaestus.worker.drain.timeout` plus 45 seconds for steps 3 and 4.
+Thus, the drain timeout is the worker's only shutdown setting: `spring.lifecycle.timeout-per-shutdown-phase` (`SHUTDOWN_TIMEOUT`) does not apply to the worker.
+Give the worker a stop grace period of at least the drain timeout plus 1 minute.
+The chart sets `drainTimeoutSeconds` plus 2 minutes, and Compose sets 6 minutes for the default 5-minute drain.
 
 The worker's HTTP connectors, including the sandbox gateway, stay open during step 2.
 Thus, an active review can still send model requests while the worker waits for it.

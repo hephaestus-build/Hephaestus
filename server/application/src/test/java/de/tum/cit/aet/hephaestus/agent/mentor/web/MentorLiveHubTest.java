@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.mentor.web;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -21,6 +22,7 @@ import de.tum.cit.aet.hephaestus.mentor.MentorLedgerEvents;
 import de.tum.cit.aet.hephaestus.mentor.MentorLedgerNotifications;
 import de.tum.cit.aet.hephaestus.mentor.MentorTimeline;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import de.tum.cit.aet.hephaestus.testconfig.WebServerDrainProbe;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.io.IOException;
 import java.time.Duration;
@@ -38,6 +40,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import tools.jackson.databind.ObjectMapper;
 
@@ -182,6 +186,24 @@ class MentorLiveHubTest extends BaseUnitTest {
             logger.detachAppender(appender);
             appender.stop();
         }
+    }
+
+    @Test
+    void shouldEndEveryStreamBeforeTheWebServerDrainsWhenTheContextCloses() {
+        boolean ended = WebServerDrainProbe.heldWhenTheWebServerDrains(
+                MentorLiveHub.class, hub, () -> hub.subscribe(WORKSPACE, ACCOUNT), emitter.completed::get);
+
+        assertThat(ended).isTrue();
+    }
+
+    @Test
+    void shouldRefuseANewStreamWhenTheServerIsClosing() {
+        hub.shutdown();
+
+        assertThatThrownBy(() -> hub.subscribe(WORKSPACE, ACCOUNT))
+                .isInstanceOfSatisfying(
+                        ResponseStatusException.class,
+                        e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE));
     }
 
     /** Records what the hub writes; it can hold the writer inside its first send. */

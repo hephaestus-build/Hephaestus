@@ -10,7 +10,6 @@ import de.tum.cit.aet.hephaestus.mentor.MentorReadDTO;
 import de.tum.cit.aet.hephaestus.mentor.MentorTimeline;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
-import jakarta.annotation.PreDestroy;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayDeque;
@@ -30,6 +29,8 @@ import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.event.ContextClosedEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.http.HttpStatus;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -73,6 +74,9 @@ public class MentorLiveHub implements MentorLedgerNotifications.Listener {
 
     /** Each stream under its account, which owns the conversation. */
     private final Map<Developer, Set<Stream>> streams = new ConcurrentHashMap<>();
+
+    /** Set when the context closes; guarded by {@code streams}. */
+    private boolean closing;
 
     private final ExecutorService reader = Executors.newSingleThreadExecutor(
             Thread.ofVirtual().name("mentor-live-reader").factory());
@@ -128,6 +132,11 @@ public class MentorLiveHub implements MentorLedgerNotifications.Listener {
         emitter.onTimeout(() -> close(stream));
         emitter.onError(failure -> remove(stream));
         synchronized (streams) {
+            if (closing) {
+                // A stream opened now would hold the web server's graceful shutdown; the client retries the next
+                // instance.
+                throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "The server is restarting.");
+            }
             Set<Stream> own = streams.computeIfAbsent(
                     new Developer(workspaceId, accountId), key -> ConcurrentHashMap.newKeySet());
             if (own.size() >= MAX_STREAMS_PER_DEVELOPER) {
@@ -329,8 +338,15 @@ public class MentorLiveHub implements MentorLedgerNotifications.Listener {
         }
     }
 
-    @PreDestroy
+    /**
+     * Ends every stream when the context closes, before the lifecycle stops the web server: an open stream would hold
+     * its graceful shutdown until the timeout. The browser reconnects to the next instance, and the new stream opens with a snapshot.
+     */
+    @EventListener(ContextClosedEvent.class)
     void shutdown() {
+        synchronized (streams) {
+            closing = true;
+        }
         new ArrayList<>(allStreams()).forEach(this::close);
         reader.shutdownNow();
         writers.shutdown();

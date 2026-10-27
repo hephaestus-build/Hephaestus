@@ -133,6 +133,23 @@ describe("useSyncEvents", () => {
 		expect(filter(find(unrelated))).toBe(false);
 	});
 
+	it("catches up when a restarting server ends the stream and the browser reconnects it", () => {
+		const queryClient = new QueryClient();
+		renderHook(() => useSyncEvents(WORKSPACE), { wrapper: wrapper(queryClient) });
+		act(() => latestSource().open());
+		const source = latestSource();
+
+		const invalidate = vi.spyOn(queryClient, "invalidateQueries");
+		// A server that shuts down ends its streams; the browser retries the same source on its own.
+		act(() => source.error());
+		// oxlint-disable-next-line no-restricted-properties -- Reads the faked clock to move it forward: `setSystemTime` takes an absolute instant, so the jump has to be measured from the current one.
+		vi.setSystemTime(Date.now() + 60_000);
+		act(() => source.open());
+
+		expect(latestSource()).toBe(source);
+		expect(invalidate).toHaveBeenCalledOnce();
+	});
+
 	it("throttles catch-up resyncs so a flapping stream cannot storm the cache", () => {
 		const queryClient = new QueryClient();
 		renderHook(() => useSyncEvents(WORKSPACE), { wrapper: wrapper(queryClient) });

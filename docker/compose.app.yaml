@@ -567,7 +567,7 @@ services:
       - worker-git-repos:/data/git-repos
     networks:
       - shared-network
-    # 5m drain budget + 1m headroom; matches spring.lifecycle.timeout-per-shutdown-phase.
+    # The 5m drain budget, the 45 s a shutdown phase may add to it (WorkerPropertiesConfiguration), and headroom.
     stop_grace_period: 6m
     # thc healthcheck (see application-server). The worker fronts no Traefik router, so this is its
     # only health signal.
