@@ -52,11 +52,11 @@ class AuthenticatedGitProviderUserServiceTest extends BaseUnitTest {
         var provider = new IdentityProvider(IdentityProviderType.GITLAB, "https://gitlab.example");
         provider.setId(7L);
         when(identities.activeLinksForAccount(42L))
-                .thenReturn(List.of(new AccountIdentityQuery.IdentityView(10L, 7L, "18024", "")));
+                .thenReturn(List.of(new AccountIdentityQuery.IdentityView(10L, 7L, "90001", "")));
         when(providers.findById(7L)).thenReturn(Optional.of(provider));
         var user = new User();
         user.setId(99L);
-        when(users.findByNativeIdAndProviderId(18024L, 7L)).thenReturn(Optional.of(user));
+        when(users.findByNativeIdAndProviderId(90001L, 7L)).thenReturn(Optional.of(user));
         assertThat(service.resolveCurrentUser()).containsSame(user);
     }
 
@@ -65,7 +65,7 @@ class AuthenticatedGitProviderUserServiceTest extends BaseUnitTest {
         var provider = new IdentityProvider(IdentityProviderType.GITLAB, "https://gitlab.example");
         provider.setId(7L);
         when(identities.activeLinksForAccount(42L))
-                .thenReturn(List.of(new AccountIdentityQuery.IdentityView(10L, 7L, "18024", "")));
+                .thenReturn(List.of(new AccountIdentityQuery.IdentityView(10L, 7L, "90001", "")));
         when(providers.findById(7L)).thenReturn(Optional.of(provider));
         assertThatThrownBy(service::resolveCurrentUser)
                 .isInstanceOf(ResponseStatusException.class)
@@ -77,7 +77,7 @@ class AuthenticatedGitProviderUserServiceTest extends BaseUnitTest {
         var provider = new IdentityProvider(IdentityProviderType.GITLAB, "https://other.example");
         provider.setId(7L);
         when(identities.activeLinksForAccount(42L))
-                .thenReturn(List.of(new AccountIdentityQuery.IdentityView(10L, 7L, "18024", "")));
+                .thenReturn(List.of(new AccountIdentityQuery.IdentityView(10L, 7L, "90001", "")));
         when(providers.findById(7L)).thenReturn(Optional.of(provider));
         assertThatThrownBy(() -> service.resolveCurrentGitLabUser("https://gitlab.example"))
                 .isInstanceOf(ResponseStatusException.class)

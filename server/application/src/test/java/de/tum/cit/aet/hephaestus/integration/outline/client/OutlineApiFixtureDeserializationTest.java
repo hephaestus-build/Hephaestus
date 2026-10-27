@@ -57,7 +57,7 @@ class OutlineApiFixtureDeserializationTest {
         assertThat(parent.getCreatedAt()).isNotNull();
         assertThat(parent.getUpdatedAt()).isNotNull();
         assertThat(parent.getCreatedBy()).isNotNull();
-        assertThat(parent.getCreatedBy().getName()).isEqualTo("Felix Admin");
+        assertThat(parent.getCreatedBy().getName()).isEqualTo("Jordan Admin");
         assertThat(parent.getCollaboratorIds()).isNotEmpty();
 
         // The nested child — proves parentDocumentId maps correctly off a real tree, not just a flat list.

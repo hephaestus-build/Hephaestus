@@ -77,7 +77,7 @@ class GitLabMergeRequestReadinessReaderTest extends BaseUnitTest {
         Map<String, @Nullable Object> node = mergeRequest();
         Map<String, @Nullable Object> tutor = user(90393, "heph_introcourse_tutor_e2e");
         tutor.put("bot", true);
-        Map<String, @Nullable Object> student = user(18024, "ga84xah");
+        Map<String, @Nullable Object> student = user(90001, "ab12cde");
         student.put("bot", false);
         node.put("approvedBy", connection(3, false, List.of(tutor, student, user(7, "tutor"))));
 

@@ -14,7 +14,7 @@ const workspace: SlackUserWorkspacePreferences = {
 	slackTeamId: "T1",
 	slackTeamName: "hephaestus-test",
 	slackUserId: "U1",
-	slackDisplayName: "Felix",
+	slackDisplayName: "Jordan",
 	channelMessagesAllowed: true,
 	activeMonitoredChannelCount: 2,
 };

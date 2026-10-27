@@ -266,7 +266,7 @@ class IssueContentSourceTest extends BaseUnitTest {
         issue.setCommentsCount(2);
         if (total != null) issue.setSubIssuesTotal(total);
         if (completed != null) issue.setSubIssuesCompleted(completed);
-        issue.setAuthor(user("felix"));
+        issue.setAuthor(user("jordan"));
 
         IssueType issueType = new IssueType();
         issueType.setName("Task");
@@ -312,7 +312,7 @@ class IssueContentSourceTest extends BaseUnitTest {
             assertThat(meta.get("repository_full_name").asString()).isEqualTo("owner/repo");
             assertThat(meta.get("repository_id").asLong()).isEqualTo(1L);
             assertThat(meta.get("provider_id").asLong()).isEqualTo(2L);
-            assertThat(meta.get("author").asString()).isEqualTo("felix");
+            assertThat(meta.get("author").asString()).isEqualTo("jordan");
             assertThat(meta.get("issue_type").asString()).isEqualTo("Task");
             assertThat(meta.get("is_locked").asBoolean()).isTrue();
             assertThat(meta.has("comments_count")).isFalse();

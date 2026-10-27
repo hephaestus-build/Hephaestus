@@ -40,7 +40,7 @@ class GitLabUserClassifierTest {
     @ParameterizedTest
     @ValueSource(
             strings = {
-                "ga84xah",
+                "ab12cde",
                 "heph_introcourse_tutor_e2e",
                 "00000000014B3DCE",
                 "group_185885",

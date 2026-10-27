@@ -23,7 +23,7 @@ import org.springframework.stereotype.Component;
  *       {@link UserRepository#findByLogin}</li>
  *   <li>Email local-part match: extracts the portion before {@code @} and matches via
  *       {@link UserRepository#findByLoginAndProviderId}. Covers TUM/LRZ conventions
- *       like {@code ge27coy@mytum.de} or {@code ga84xah@mytum.de} where the local-part
+ *       like {@code ef56ghi@mytum.de} or {@code ab12cde@mytum.de} where the local-part
  *       equals the GitLab login. Skipped for {@code firstname.lastname@domain} style
  *       addresses (any local-part containing {@code .} or {@code +} is ignored).</li>
  *   <li>Display-name match for {@code firstname.lastname@tum.de}-style addresses:
@@ -126,7 +126,7 @@ public class CommitAuthorResolver {
             return userRepository.findByLogin(login).map(User::getId).orElse(null);
         }
 
-        // Strategy 3: email local-part as login (TUM/LRZ pattern ge27coy@mytum.de → "ge27coy").
+        // Strategy 3: email local-part as login (TUM/LRZ pattern ef56ghi@mytum.de → "ef56ghi").
         // Skips bot noreply addresses and local-parts containing dots/plus so that
         // firstname.lastname@tum.de or user+tag@domain do not produce false matches.
         if (GITLAB_BOT_NOREPLY_PATTERN.matcher(email).matches()) {
@@ -188,8 +188,8 @@ public class CommitAuthorResolver {
      * High-confidence path only: the backfill fires only for
      * <ul>
      *   <li>non-noreply, non-bot addresses whose local-part is either a login
-     *       (e.g. {@code go98tod@mytum.de}) or a firstname.lastname pattern
-     *       (e.g. {@code erik.kiessig@tum.de}); and</li>
+     *       (e.g. {@code cd34efg@mytum.de}) or a firstname.lastname pattern
+     *       (e.g. {@code jonas.beispiel@tum.de}); and</li>
      *   <li>resolutions obtained through the heuristic strategies — direct email
      *       match (strategy 1) already implies the email is stored, and GitHub
      *       noreply matches (strategy 2) intentionally do not leak the noreply
@@ -257,8 +257,8 @@ public class CommitAuthorResolver {
     }
 
     /**
-     * Convert a dotted email local-part such as {@code erik.kiessig} into a
-     * display-name candidate {@code "Erik Kiessig"}. Capitalises each dot-separated
+     * Convert a dotted email local-part such as {@code jonas.beispiel} into a
+     * display-name candidate {@code "Jonas Beispiel"}. Capitalises each dot-separated
      * token, lower-cases the remainder, and joins with a single space. Returns
      * {@code null} for inputs that are blank or contain empty tokens.
      */

@@ -427,7 +427,7 @@ await test("prose that merely contains an @ is not a file reference", () => {
 		"Uses @base-ui/react and @Audited on the mutation.",
 		"Pin formatter@0.1.0 exactly.",
 		"Upgraded to @v0.74.0 last week.",
-		"Ping @felix.dietrich about it.",
+		"Ping @max.muster about it.",
 		"Types from @/api/types.gen are already checked.",
 	]) {
 		assert.deepEqual(references(markdown), [], markdown);

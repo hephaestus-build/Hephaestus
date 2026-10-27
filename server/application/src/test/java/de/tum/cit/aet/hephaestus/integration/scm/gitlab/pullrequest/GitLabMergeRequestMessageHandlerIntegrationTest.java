@@ -92,8 +92,8 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
     @Autowired
     private GitLabProjectAdmission projectAdmission;
 
-    private static final long NATIVE_AUTHOR_ID = 18024L;
-    private static final String FIXTURE_AUTHOR_LOGIN = "ga84xah";
+    private static final long NATIVE_AUTHOR_ID = 90001L;
+    private static final String FIXTURE_AUTHOR_LOGIN = "ab12cde";
     private static final String FIXTURE_ORG_LOGIN = "hephaestustest";
     private static final String FIXTURE_REPO_FULL_NAME = "hephaestustest/demo-repository";
 

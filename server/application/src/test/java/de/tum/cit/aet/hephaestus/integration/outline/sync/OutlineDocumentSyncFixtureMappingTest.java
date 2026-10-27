@@ -68,7 +68,7 @@ class OutlineDocumentSyncFixtureMappingTest extends BaseUnitTest {
     private static final String PARENT_DOC_ID = "7d11d73d-1b36-43e3-9f31-b43e98c69b5b";
     private static final String CHILD_DOC_ID = "cec98e59-623c-4392-a343-6e96b0995e51";
     private static final String ADMIN_SUBJECT = "99bdd8e2-176a-42fa-ba0c-4f9c4ce6caa9";
-    private static final String ADMIN_NAME = "Felix Admin";
+    private static final String ADMIN_NAME = "Jordan Admin";
 
     // The exact tolerant policy the running Outline client uses (unknown fields + unknown enum values),
     // so the fixture round-trip exercises production deserialization, not a lax bespoke mapper.

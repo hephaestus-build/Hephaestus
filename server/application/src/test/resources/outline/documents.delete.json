@@ -47,7 +47,7 @@
       "createdAt": "2026-07-11T05:23:19.618Z",
       "createdBy": {
         "id": "99bdd8e2-176a-42fa-ba0c-4f9c4ce6caa9",
-        "name": "Felix Admin",
+        "name": "Jordan Admin",
         "role": "admin",
         "color": "#0300cc",
         "timezone": null,
@@ -63,7 +63,7 @@
       "updatedAt": "2026-07-11T05:23:27.831Z",
       "updatedBy": {
         "id": "99bdd8e2-176a-42fa-ba0c-4f9c4ce6caa9",
-        "name": "Felix Admin",
+        "name": "Jordan Admin",
         "role": "admin",
         "color": "#0300cc",
         "timezone": null,

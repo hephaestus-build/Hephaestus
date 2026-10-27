@@ -74,7 +74,7 @@ type Story = StoryObj<typeof meta>;
 
 const cardBody =
 	"Reviews run against the head of the pull request, and the author is notified once.";
-const menuItemLabel = "Remove felix.dietrich@tum.de from this workspace";
+const menuItemLabel = "Remove max.muster@tum.de from this workspace";
 const optionLabel = "Deliver feedback automatically";
 
 /** Anchored hard right, where the collision shift has to act. */

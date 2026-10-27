@@ -141,7 +141,7 @@ class GitLabNoteSyncServiceTest extends BaseUnitTest {
                 "internal", false,
                 "createdAt", "2026-04-15T10:23:58.766+02:00",
                 "updatedAt", "2026-04-15T10:23:58.766+02:00",
-                "author", Map.of("id", "gid://gitlab/User/31315", "username", "simon.christian.winter")));
+                "author", Map.of("id", "gid://gitlab/User/90002", "username", "erika.maria.sample")));
         assertVendorCouldReturn(GITLAB, DOCUMENT, "project.issue.notes.nodes", nodes);
         Map<String, @Nullable Object> pageInfo = new HashMap<>();
         pageInfo.put("hasNextPage", hasNextPage);

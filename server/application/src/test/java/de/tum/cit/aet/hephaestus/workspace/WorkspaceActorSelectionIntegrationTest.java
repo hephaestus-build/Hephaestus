@@ -42,8 +42,8 @@ class WorkspaceActorSelectionIntegrationTest extends AbstractWorkspaceIntegratio
     @Test
     void shouldReadAWorkspaceAsTheActorOnItsActiveProviderWhenAnotherProviderWasLinkedFirst() {
         User gitlabActor = userRepository.saveAndFlush(
-                TestUserFactory.createUser(264_583_885L, "felix-gitlab", ensureGitLabProvider()));
-        User githubActor = persistUser("felix-github");
+                TestUserFactory.createUser(264_583_885L, "jordan-gitlab", ensureGitLabProvider()));
+        User githubActor = persistUser("jordan-github");
         Account account = persistAccount("Two providers");
         link(account, gitlabActor);
         link(account, githubActor);
@@ -73,10 +73,10 @@ class WorkspaceActorSelectionIntegrationTest extends AbstractWorkspaceIntegratio
     @Test
     void shouldReadAWorkspaceAsTheActorOnItsConnectedInstanceWhenAnotherInstanceOfTheProviderWasLinkedFirst() {
         User saasActor =
-                userRepository.saveAndFlush(TestUserFactory.createUser(4_001L, "felix-saas", ensureGitLabProvider()));
+                userRepository.saveAndFlush(TestUserFactory.createUser(4_001L, "jordan-saas", ensureGitLabProvider()));
         User selfHostedActor = userRepository.saveAndFlush(TestUserFactory.createUser(
                 4_002L,
-                "ga84xah",
+                "ab12cde",
                 gitProviderRepository.save(
                         new IdentityProvider(IdentityProviderType.GITLAB, "https://gitlab.lrz.de"))));
         Account account = persistAccount("Two GitLab instances");

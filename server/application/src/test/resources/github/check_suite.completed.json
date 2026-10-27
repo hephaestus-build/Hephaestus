@@ -47,13 +47,13 @@
     "check_runs_url": "https://api.github.com/repos/HephaestusTest/payload-fixture-repo-renamed/check-suites/30455512345/check-runs",
     "head_commit": {
       "author": {
-        "name": "Felix T.J. Dietrich",
-        "email": "felix_dietrich@gmx.de",
+        "name": "Max E. Muster",
+        "email": "max_muster@example.com",
         "date": "2025-11-02T00:37:05Z"
       },
       "committer": {
-        "name": "Felix T.J. Dietrich",
-        "email": "felix_dietrich@gmx.de",
+        "name": "Max E. Muster",
+        "email": "max_muster@example.com",
         "date": "2025-11-02T00:37:05Z"
       },
       "message": "chore: bootstrap repo",
