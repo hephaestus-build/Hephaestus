@@ -17,7 +17,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * The internal words that the feedback writing guide keeps out of what a developer reads: the terms in
+ * The internal tokens that the feedback writing guide keeps out of what a developer reads: the case-sensitive terms in
  * {@code agent/internal-feedback-terms.json}, which the webapp's card copy test reads too, and every bundled practice
  * slug.
  */
@@ -52,8 +52,7 @@ public final class InternalFeedbackTerms {
                 .path("terms")
                 .forEach(term -> terms.add(Pattern.quote(term.asString())));
         assertThat(terms).isNotEmpty();
-        return Pattern.compile(
-                terms.stream().collect(Collectors.joining("|", "\\b(?:", ")\\b")), Pattern.CASE_INSENSITIVE);
+        return Pattern.compile(terms.stream().collect(Collectors.joining("|", "\\b(?:", ")\\b")));
     }
 
     private static List<String> slugs() {
