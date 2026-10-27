@@ -4,7 +4,12 @@ import path from "node:path";
 import { isDeepStrictEqual } from "node:util";
 
 import { componentEvidence, validateReleaseSbom } from "./check-release-sbom.ts";
-import { advisoryFile, componentAdvisories, evaluate } from "./check-release-vulnerabilities.ts";
+import {
+	advisoryFile,
+	componentAdvisories,
+	evaluate,
+	needsComponentEvidence,
+} from "./check-release-vulnerabilities.ts";
 import { readJsonFileSync } from "./lib/json.ts";
 import { CAPTURE_LIMIT_BYTES } from "./lib/process.ts";
 import {
@@ -411,7 +416,9 @@ export function verifyReleaseEvidence(
 				advisories: new Map(
 					advisoryIds.map((id) => [id, readFileSync(path.join(directory, advisoryFile(id)))]),
 				),
-				evidence: advisoryIds.length > 0 ? componentEvidence(syft, subject) : undefined,
+				evidence: needsComponentEvidence(policy, subject, historical)
+					? componentEvidence(syft, subject)
+					: undefined,
 			},
 		);
 		const policyResult = {

@@ -18,6 +18,8 @@ interface Finding {
 	FixedVersion?: string;
 	InstalledVersion: string;
 	PkgName: string;
+	/** The relative image path of the archive a JVM package was read from; absent for an SBOM record. */
+	PkgPath?: string;
 	Severity: string;
 	/** The Trivy result the finding was reported in: a relative image path and its analyzer type. */
 	Target: string;
@@ -48,6 +50,8 @@ const isJustificationCategory = (value: unknown): value is JustificationCategory
 interface Exception {
 	componentInventory?: string;
 	digest: string;
+	/** A reviewed reachability claim about a library a JVM archive bundles; see {@link JarInventory}. */
+	jarInventory?: string;
 	evidence: string;
 	goAdvisory?: string;
 	expires: string;
@@ -72,6 +76,18 @@ interface ComponentInventory {
 	platform: string;
 }
 
+/**
+ * JVM archives of one image and platform, by absolute path and SHA-256, as captured from one manifest, and the
+ * test that keeps the excepted code out of the execute path. `enforcedBy` names a test file and its test
+ * method: a reachability claim follows byte-identical archives into a rebuilt image only while that test runs.
+ */
+interface JarInventory extends ComponentInventory {
+	enforcedBy: string;
+}
+
+/** `<repository path of a server test class>#<test method>`. */
+const ENFORCING_TEST = /^server\/application\/src\/test\/java\/[\w/]+\.java#\w+$/u;
+
 /** An official Go advisory as reviewed: its id and the SHA-256 of its published JSON bytes. */
 interface GoAdvisory {
 	id: string;
@@ -82,6 +98,7 @@ interface Policy {
 	componentInventories: ComponentInventory[];
 	exceptions: Exception[];
 	goAdvisories: GoAdvisory[];
+	jarInventories: JarInventory[];
 	schemaVersion: 3;
 }
 
@@ -102,7 +119,7 @@ const isException = (value: unknown): value is Exception =>
 		"status",
 		"vulnerability",
 	].every((field) => typeof value[field] === "string") &&
-	["componentInventory", "goAdvisory"].every(
+	["componentInventory", "goAdvisory", "jarInventory"].every(
 		(field) => value[field] === undefined || typeof value[field] === "string",
 	) &&
 	(value.status === "affected" || value.status === "not_affected") &&
@@ -120,9 +137,15 @@ const isComponentInventory = (value: unknown): value is ComponentInventory =>
 		(file) => record(file) && typeof file.path === "string" && typeof file.sha256 === "string",
 	);
 
+const isJarInventory = (value: unknown): value is JarInventory =>
+	isComponentInventory(value) && record(value) && typeof value.enforcedBy === "string";
+
 function isHistoricalException(value: unknown): value is Exception {
 	return (
-		isException(value) && value.componentInventory === undefined && value.goAdvisory === undefined
+		isException(value) &&
+		value.componentInventory === undefined &&
+		value.goAdvisory === undefined &&
+		value.jarInventory === undefined
 	);
 }
 
@@ -139,12 +162,15 @@ function readPolicy(value: unknown, historical: boolean): Policy {
 		Array.isArray(value.goAdvisories) &&
 		value.goAdvisories.every(isGoAdvisory) &&
 		Array.isArray(value.exceptions) &&
-		value.exceptions.every(isException)
+		value.exceptions.every(isException) &&
+		(value.jarInventories === undefined ||
+			(Array.isArray(value.jarInventories) && value.jarInventories.every(isJarInventory)))
 	) {
 		return {
 			componentInventories: value.componentInventories,
 			exceptions: value.exceptions,
 			goAdvisories: value.goAdvisories,
+			jarInventories: value.jarInventories ?? [],
 			schemaVersion: 3,
 		};
 	}
@@ -159,6 +185,7 @@ function readPolicy(value: unknown, historical: boolean): Policy {
 			componentInventories: [],
 			exceptions: value.exceptions,
 			goAdvisories: [],
+			jarInventories: [],
 			schemaVersion: 3,
 		};
 	}
@@ -212,6 +239,8 @@ function parseFindings(results: unknown[]): { findings: Finding[]; goTargets: st
 				FixedVersion: fixedVersion,
 				InstalledVersion: installedVersion,
 				PkgName: packageName,
+				PkgPath:
+					typeof value.PkgPath === "string" && value.PkgPath !== "" ? value.PkgPath : undefined,
 				Severity: severity,
 				Target: target,
 				Type: type,
@@ -230,6 +259,7 @@ function hasEveryField(exception: Exception): boolean {
 		exception.image !== "" &&
 		exception.digest !== "" &&
 		exception.componentInventory !== "" &&
+		exception.jarInventory !== "" &&
 		exception.evidence !== "" &&
 		exception.installedVersion !== "" &&
 		exception.package !== "" &&
@@ -260,6 +290,36 @@ function expiryError(exception: Exception, now: Date): string | undefined {
 		return `exception exceeds 90-day limit: ${exception.vulnerability} (${exception.expires})`;
 	}
 	return undefined;
+}
+
+function jarBindingErrors(
+	exception: Exception,
+	jarInventories: ReadonlyMap<string, JarInventory>,
+): string[] {
+	const { digest, jarInventory = "", vulnerability } = exception;
+	if (exception.componentInventory !== undefined || exception.goAdvisory !== undefined) {
+		return [`a jar inventory exception names no Go inventory or advisory: ${vulnerability}`];
+	}
+	// Only a reachability claim that a test enforces may follow an archive into a rebuilt image.
+	if (
+		exception.status !== "not_affected" ||
+		exception.justificationCategory !== "vulnerable_code_not_in_execute_path"
+	) {
+		return [
+			`jarInventory is only for not_affected vulnerable_code_not_in_execute_path exceptions: ${vulnerability}`,
+		];
+	}
+	const inventory = jarInventories.get(jarInventory);
+	if (inventory === undefined) {
+		return [`exception names an unknown jar inventory: ${jarInventory}`];
+	}
+	if (inventory.image !== exception.image || inventory.platform !== exception.platform) {
+		return [`jar inventory ${inventory.id} is for another image or platform: ${vulnerability}`];
+	}
+	if (inventory.captureDigest !== digest) {
+		return [`exception ${vulnerability} was not reviewed on the manifest of ${inventory.id}`];
+	}
+	return [];
 }
 
 function bindingErrors(
@@ -364,6 +424,23 @@ function inventoryErrors(inventories: readonly ComponentInventory[]): string[] {
 	return errors;
 }
 
+function jarInventoryErrors(inventories: readonly JarInventory[]): string[] {
+	const errors = inventoryErrors(inventories).map((error) =>
+		error.replace("component inventory", "jar inventory"),
+	);
+	for (const inventory of inventories) {
+		if (!ENFORCING_TEST.test(inventory.enforcedBy)) {
+			errors.push(`jar inventory ${inventory.id} names no enforcing test: ${inventory.enforcedBy}`);
+		}
+		for (const file of inventory.files) {
+			if (!file.path.endsWith(".jar")) {
+				errors.push(`jar inventory ${inventory.id} lists a file that is not a jar: ${file.path}`);
+			}
+		}
+	}
+	return errors;
+}
+
 function exceptionErrors(exception: Exception, now: Date): string[] {
 	const errors: string[] = [];
 	if (!/^linux\/(?:amd64|arm64)$/u.test(exception.platform)) {
@@ -392,10 +469,14 @@ function exceptionErrors(exception: Exception, now: Date): string[] {
 function policyErrors(policy: Policy, now: Date): string[] {
 	const errors: string[] = [
 		...inventoryErrors(policy.componentInventories),
+		...jarInventoryErrors(policy.jarInventories),
 		...advisoryErrors(policy.goAdvisories),
 	];
 	const inventories = new Map(
 		policy.componentInventories.map((inventory) => [inventory.id, inventory]),
+	);
+	const jarInventories = new Map(
+		policy.jarInventories.map((inventory) => [inventory.id, inventory]),
 	);
 	const advisories = new Set(policy.goAdvisories.map((advisory) => advisory.id));
 	const exceptionKeys = new Set<string>();
@@ -413,7 +494,9 @@ function policyErrors(policy: Policy, now: Date): string[] {
 		exceptionKeys.add(key);
 		errors.push(
 			...exceptionErrors(exception, now),
-			...bindingErrors(exception, inventories, advisories),
+			...(exception.jarInventory === undefined
+				? bindingErrors(exception, inventories, advisories)
+				: jarBindingErrors(exception, jarInventories)),
 		);
 	}
 	return errors;
@@ -496,11 +579,77 @@ function advisoryHolds(
 	);
 }
 
+/** Whether the subject holds every archive of the inventory, each with the reviewed SHA-256. */
+function jarIdentityHolds(
+	inventory: JarInventory,
+	subject: Subject,
+	evidence: ComponentEvidence | undefined,
+): boolean {
+	return (
+		evidence !== undefined &&
+		evidence.digest === subject.digest &&
+		evidence.platform === subject.platform &&
+		inventory.files.every((file) => evidence.sha256.get(file.path) === file.sha256)
+	);
+}
+
+/**
+ * Whether a JVM finding was read from an inventoried archive. A copy that a Spring Boot jar nests carries the
+ * archive's file name. A finding without a path is a record of an SBOM inside the image; it describes some
+ * archive, so it is covered only while every finding of its package and version that has a path is.
+ */
+function readFromInventory(
+	inventory: JarInventory,
+	finding: Finding,
+	findings: readonly Finding[],
+): boolean {
+	const names = new Set(inventory.files.map((file) => nodePath.posix.basename(file.path)));
+	const inArchive = (path: string) =>
+		imagePath(path) !== undefined && names.has(nodePath.posix.basename(path));
+	if (finding.PkgPath !== undefined) {
+		return inArchive(finding.PkgPath);
+	}
+	const located = findings.filter(
+		(other) =>
+			other.PkgName === finding.PkgName &&
+			other.InstalledVersion === finding.InstalledVersion &&
+			other.PkgPath !== undefined,
+	);
+	return located.length > 0 && located.every((other) => inArchive(other.PkgPath ?? ""));
+}
+
+/** Whether a jar inventory exception covers the finding: reviewed archive, its bytes, its category. */
+function jarExcepted(
+	policy: Policy,
+	exception: Exception,
+	image: string,
+	subject: Subject,
+	finding: Finding,
+	findings: readonly Finding[],
+	evidence: ComponentEvidence | undefined,
+): boolean {
+	const inventory = policy.jarInventories.find(
+		(candidate) => candidate.id === exception.jarInventory,
+	);
+	return (
+		inventory !== undefined &&
+		inventory.image === image &&
+		inventory.platform === subject.platform &&
+		inventory.captureDigest === exception.digest &&
+		exception.status === "not_affected" &&
+		exception.justificationCategory === "vulnerable_code_not_in_execute_path" &&
+		finding.Type === "jar" &&
+		jarIdentityHolds(inventory, subject, evidence) &&
+		readFromInventory(inventory, finding, findings)
+	);
+}
+
 function isExcepted(
 	policy: Policy,
 	image: string,
 	subject: Subject | undefined,
 	finding: Finding,
+	findings: readonly Finding[],
 	goTargets: readonly string[],
 	evidence: ComponentEvidence | undefined,
 	advisories: ReadonlyMap<string, Uint8Array>,
@@ -519,6 +668,9 @@ function isExcepted(
 			new Date(exception.expires) <= now
 		) {
 			return false;
+		}
+		if (exception.jarInventory !== undefined) {
+			return jarExcepted(policy, exception, image, subject, finding, findings, evidence);
 		}
 		if (exception.componentInventory === undefined) {
 			return exception.digest === subject.digest;
@@ -567,6 +719,20 @@ export function componentAdvisories(
 		}
 	}
 	return [...ids].toSorted();
+}
+
+/** Whether an exception for this subject reuses a reviewed claim and so needs the subject's Syft evidence. */
+export function needsComponentEvidence(
+	policyValue: unknown,
+	subject: { image: string; platform: string },
+	historical = false,
+): boolean {
+	return readPolicy(policyValue, historical).exceptions.some(
+		(exception) =>
+			(exception.componentInventory !== undefined || exception.jarInventory !== undefined) &&
+			exception.image === subject.image &&
+			exception.platform === subject.platform,
+	);
 }
 
 /** Where a release evidence bundle keeps the published bytes of one Go advisory, flat beside its reports. */
@@ -646,6 +812,7 @@ export function evaluate(
 				image,
 				subject,
 				finding,
+				findings,
 				goTargets,
 				options.evidence,
 				options.advisories ?? new Map(),
@@ -718,7 +885,7 @@ if (import.meta.main) {
 	const stem = nodePath.join(nodePath.dirname(reportPath), nodePath.basename(reportPath, ".json"));
 	const advisoryIds = componentAdvisories(policy, { image, platform });
 	let identity = syftPath;
-	if (!isSet(identity) && advisoryIds.length > 0) {
+	if (!isSet(identity) && needsComponentEvidence(policy, { image, platform })) {
 		identity = `${stem}.syft.json`;
 		await run("syft", [
 			...syftImageArguments(reference, platform),

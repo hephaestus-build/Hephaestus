@@ -6,6 +6,9 @@ buildscript {
     dependencies {
         classpath(platform("com.fasterxml.jackson:jackson-bom:2.22.3"))
         classpath(platform("tools.jackson:jackson-bom:3.1.7"))
+        constraints {
+            classpath("com.google.guava:guava:33.7.2-jre") { because("CVE-2026-102554") }
+        }
     }
     dependencyLocking { lockMode.set(LockMode.STRICT) }
     configurations.classpath {
