@@ -55,9 +55,11 @@ class GitHubWebhookRepositoryIdentityIntegrationTest extends BaseIntegrationTest
     void setUp() {
         nativeId = 100_000_000L + Integer.toUnsignedLong(UUID.randomUUID().hashCode()) % 900_000_000L;
         owner = "s-" + UUID.randomUUID();
+        // The migration's seed row does not survive a class that cleans the database before this one.
         github = providers
                 .findByTypeAndServerUrl(IdentityProviderType.GITHUB, "https://github.com")
-                .orElseThrow();
+                .orElseGet(
+                        () -> providers.save(new IdentityProvider(IdentityProviderType.GITHUB, "https://github.com")));
         gitlab = providers.save(new IdentityProvider(
                 IdentityProviderType.GITLAB, "https://" + UUID.randomUUID() + ".gitlab.example.test"));
         var workspace = WorkspaceTestFixtures.persistInstallationWorkspace(
