@@ -1163,6 +1163,10 @@ void test("words bounded to the change, or stating what the review did not estab
 	for (const claim of [
 		"I did not search beyond the diff, but no handler exists anywhere in the repository.",
 		"page is not checked, and the checkout contains no @ControllerAdvice.",
+		"The handler is not found in a search of the whole repository: no @ControllerAdvice exists in the repository.",
+		"No @ControllerAdvice exists in the repository (not found by search).",
+		"The scope ends at the diff \u2014 no handler exists in the repository.",
+		"No\u00A0handler exists in the repository.",
 	]) {
 		assert.equal(claimsAbsence(claim), true, claim);
 	}

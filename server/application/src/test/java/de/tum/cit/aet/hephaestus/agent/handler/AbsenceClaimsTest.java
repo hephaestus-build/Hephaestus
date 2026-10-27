@@ -49,7 +49,12 @@ class AbsenceClaimsTest extends BaseUnitTest {
                         "The reviewed change was inspected, and there is no handler elsewhere in the repository.",
                         "I did not search beyond the diff, but no handler exists anywhere in the repository.",
                         "page flows into subList without any check, and no exception handler exists in the repository.",
-                        "page is not checked, and the checkout contains no @ControllerAdvice."))
+                        "page is not checked, and the checkout contains no @ControllerAdvice.",
+                        "The handler is not found in a search of the whole repository: no @ControllerAdvice exists in the"
+                                + " repository.",
+                        "No @ControllerAdvice exists in the repository (not found by search).",
+                        "The scope ends at the diff \u2014 no handler exists in the repository.",
+                        "No\u00A0handler exists in the repository."))
                 .allMatch(AbsenceClaims::claimed);
     }
 

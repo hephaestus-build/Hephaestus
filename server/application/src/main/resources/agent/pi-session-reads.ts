@@ -490,7 +490,8 @@ export class SessionReads {
  * Words that say the repository, beyond the cited lines, lacks something. `AbsenceClaims.java` holds the same markers
  * and admission withholds such a result without a search of the whole checkout, so the session is asked first, once.
  * A clause that states what the review did not establish is a limit of the review, not a claim. Clauses end at a full
- * stop, a semicolon, or a comma before a conjunction, so such a limit cannot hide the claim beside it.
+ * stop, a semicolon, a colon, a dash, a parenthesis or a comma before a conjunction, so such a limit cannot hide the
+ * claim beside it.
  */
 export const ABSENCE_MARKERS = [
 	String.raw`\b(?:no|none|nothing|not any|nowhere|never|lacks?|without|missing|absent)\b[^.]{0,80}\b(?:in|across|throughout|under) (?:the )?(?:whole |entire |reviewed |pinned |checked-out |rest of the )?(?:repository|repo|codebase|code base|checkout|project|application|source tree|src)\b(?!\.\w|[ -](?:code|manifest|inventory|policy|board|tracker)\b)`,
@@ -499,8 +500,8 @@ export const ABSENCE_MARKERS = [
 	String.raw`\b(?:the|this) (?:whole |entire |reviewed |pinned )?(?:repository|repo|codebase|code base|checkout)\b(?! (?:method|call|class|interface|layer|bean|query|lookup|result|field|object|instance|step|action|policy|settings?)s?\b)[^.]{0,40}\b(?:contains no|has no|holds no|defines no|declares no|registers no|lacks?|never|does not|doesn't)\b|\b(?:the|this) (?:project|application)\b(?![ -](?:code|manifest|inventory|policy|board|tracker)\b)[^.]{0,40}\b(?:defines no|declares no|registers no|never)\b`,
 	String.raw`\b(?:nothing else|nothing in the (?:project|application|code ?base|repository|repo|checkout)|no (?:other )?(?:code|callers?)(?! path| (?:in|of)\b)|none of (?:the|its) callers)\b[^.]{0,60}\b(?:catch(?:es)?|handles?)\b(?!\()`,
 ];
-export const ABSENCE_DISCLAIMER = String.raw`\b(?:not|nor|never|without) (?:\w+ ){0,3}?(?:establish|establishes|establishing|established|inspect|inspected|examine|examined|search|searched|judge|judged)\b|\bnot that\b|\b(?:was|were) not (?:examined|inspected|judged)\b|\bno (?:[\w-]+ ){0,8}?(?:was|were) (?:examined|inspected|judged)\b`;
-export const ABSENCE_CLAUSE_END = String.raw`(?<=[.;])[ \t\r\n]+|,[ \t\r\n]+(?=(?:but|and|so|yet|while|though|although)[ \t\r\n])`;
+export const ABSENCE_DISCLAIMER = String.raw`\b(?:did|does|do|could|can|would)(?: not|n't) (?:\w+ ){0,1}?(?:establish|inspect|examine|search|judge)\w*\b|\bnot (?:established|inspected|examined|searched|judged)\b|\bwithout (?:establishing|inspecting|examining|searching|judging)\b|\bnot that\b|\b(?:was|were) not (?:examined|inspected|judged)\b|\bno (?:[\w-]+ ){0,8}?(?:was|were) (?:examined|inspected|judged)\b`;
+export const ABSENCE_CLAUSE_END = String.raw`(?<=[.;:])[ \t\r\n\u00A0]+|,[ \t\r\n\u00A0]+(?=(?:but|and|so|yet|while|though|although)[ \t\r\n\u00A0])|[ \t\r\n\u00A0]+[—–-][ \t\r\n\u00A0]+|[ \t\r\n\u00A0]*[()][ \t\r\n\u00A0]*`;
 const ABSENCE_PATTERNS = ABSENCE_MARKERS.map((marker) => new RegExp(marker, "iu"));
 const DISCLAIMER = new RegExp(ABSENCE_DISCLAIMER, "iu");
 const CLAUSE_END = new RegExp(ABSENCE_CLAUSE_END, "u");

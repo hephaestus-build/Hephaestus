@@ -11,8 +11,8 @@ import java.util.regex.Pattern;
  * failure, or that the code base defines no such thing. Only a search of the whole checkout can show that (ADR 0064 §
  * Absence). This is a short list of markers, not a reading of the prose. It catches the usual wording of such a claim
  * and leaves claims bounded to the change or the cited lines alone. A clause that states what the review did not
- * establish is a limit of the review, not a claim. Clauses end at a full stop, a semicolon, or a comma before a
- * conjunction, so such a limit cannot hide the claim beside it. {@code pi-session-reads.ts} holds the same markers, so the runner
+ * establish is a limit of the review, not a claim. Clauses end at a full stop, a semicolon, a colon, a dash, a
+ * parenthesis or a comma before a conjunction, so such a limit cannot hide the claim beside it. {@code pi-session-reads.ts} holds the same markers, so the runner
  * asks the session once before admission withholds the result.
  */
 final class AbsenceClaims {
@@ -44,13 +44,15 @@ final class AbsenceClaims {
                     + "its) callers)\\b[^.]{0,60}\\b(?:catch(?:es)?|handles?)\\b(?!\\()");
 
     static final String DISCLAIMER =
-            "\\b(?:not|nor|never|without) (?:\\w+ ){0,3}?(?:establish|establishes|establishing|"
-                    + "established|inspect|inspected|examine|examined|search|searched|judge|judged)\\b|"
+            "\\b(?:did|does|do|could|can|would)(?: not|n't) (?:\\w+ ){0,1}?(?:establish|inspect|"
+                    + "examine|search|judge)\\w*\\b|\\bnot (?:established|inspected|examined|searched|"
+                    + "judged)\\b|\\bwithout (?:establishing|inspecting|examining|searching|judging)\\b|"
                     + "\\bnot that\\b|\\b(?:was|were) not (?:examined|inspected|judged)\\b|"
                     + "\\bno (?:[\\w-]+ ){0,8}?(?:was|were) (?:examined|inspected|judged)\\b";
 
     static final String CLAUSE_END =
-            "(?<=[.;])[ \\t\\r\\n]+|,[ \\t\\r\\n]+(?=(?:but|and|so|yet|while|though|although)[ \\t\\r\\n])";
+            "(?<=[.;:])[ \\t\\r\\n\\u00A0]+|,[ \\t\\r\\n\\u00A0]+(?=(?:but|and|so|yet|while|though|"
+                    + "although)[ \\t\\r\\n\\u00A0])|[ \\t\\r\\n\\u00A0]+[—–-][ \\t\\r\\n\\u00A0]+|[ \\t\\r\\n\\u00A0]*[()][ \\t\\r\\n\\u00A0]*";
 
     private static final List<Pattern> PATTERNS =
             MARKERS.stream().map(AbsenceClaims::compile).toList();
