@@ -2579,6 +2579,10 @@ class GitLabWorkspaceEventRoutingIntegrationTest extends BaseIntegrationTest {
     }
 
     private void createStream() throws Exception {
+        // A receiver that an earlier test class booted leaves a stream of this name with its own configuration.
+        if (jsm.getStreamNames().contains(STREAM)) {
+            jsm.deleteStream(STREAM);
+        }
         jsm.addStream(StreamConfiguration.builder()
                 .name(STREAM)
                 .subjects(STREAM + ".>")

@@ -84,6 +84,12 @@ class ScopeConsumerReconcileIntegrationTest {
     void setUp() throws Exception {
         natsConnection = Nats.connect(NatsTestContainer.getServerUrl());
         jsm = natsConnection.jetStreamManagement();
+        // A receiver that an earlier test class booted leaves streams of these names with its own configuration.
+        for (String stream : List.of(STREAM, OUTLINE_STREAM)) {
+            if (jsm.getStreamNames().contains(stream)) {
+                jsm.deleteStream(stream);
+            }
+        }
         jsm.addStream(StreamConfiguration.builder()
                 .name(STREAM)
                 .subjects(STREAM + ".>")
