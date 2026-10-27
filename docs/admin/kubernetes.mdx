@@ -879,11 +879,11 @@ Waiting behind running reviews is normal backlog, and it never ends a review.
 Two cases end queued reviews, with the stop reason `NO_SANDBOX_ROOM`:
 
 - A quota is smaller than one review sandbox. The worker cancels the queued reviews within 30 seconds, with "The sandbox quota is smaller than one review sandbox." It logs one warning.
-- The quota has had no room for a review for an hour while no review ran, so nothing frees room. Usually the Heph host and the turn sandboxes hold it. The worker logs a warning when this starts. After the hour, it cancels the queued reviews with "Hephaestus had no room to run this review in time."
+- Reviews have waited for an hour while the quota had no room for one and no review ran, so nothing frees room. Usually the Heph host and the turn sandboxes hold it. The worker logs a warning when this starts. After the hour, it cancels the queued reviews with "Hephaestus had no room to run this review in time."
 
 A review whose Pod the quota refuses after its claim also waits, and spends none of its retries.
 Its next attempt gets a new number, as every attempt does.
-The waits grow from 30 seconds to 5 minutes, and after about an hour without room it is cancelled with the same reason.
+The waits grow from 30 seconds to 5 minutes. The number of refusals never ends a review. Only the two cases above do.
 
 The metric `sandbox_start_failures_total{kind="review",reason}` counts these refusals and cancellations, with the reasons `quota_exceeded` and `quota_cannot_fit`.
 The gauge `sandbox_review_starved_seconds` shows how long no review could start while none ran. Alert on it well before an hour: the quota is too small for the sandboxes beside the reviews.

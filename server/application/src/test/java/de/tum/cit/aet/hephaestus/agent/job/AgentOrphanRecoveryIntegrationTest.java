@@ -1118,21 +1118,20 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    @DisplayName("a review that found no sandbox room for about an hour is cancelled for capacity, not failed")
-    void shouldCancelAReviewForCapacityOnceTheSandboxQuotaHadNoRoomTooOften() {
-        UUID jobId = runningJobOwnedBy("live-owner", Instant.now(), 4);
-        withCounts(jobId, 0, ReviewJob.MAX_ROOM_REFUSALS);
+    @DisplayName("a review that the quota refused many times waits again: only starvation ends it")
+    void shouldHoldAReviewAgainHoweverOftenTheSandboxQuotaHadNoRoom() {
+        UUID jobId = runningJobOwnedBy("live-owner", Instant.now(), 40);
+        withCounts(jobId, 0, 40);
         ReviewJob running = jobRepository.findById(jobId).orElseThrow();
 
         assertThat(executorOwnedBy("live-owner", refusedSandbox(SandboxCapacityException.Reason.QUOTA_EXCEEDED))
                         .executePrepared(jobId, running, mock(SandboxSpec.class)))
-                .isEqualTo(ReviewJobStatus.CANCELLED);
+                .isNull();
 
-        ReviewJob cancelled = jobRepository.findById(jobId).orElseThrow();
-        assertThat(cancelled.getStatus()).isEqualTo(ReviewJobStatus.CANCELLED);
-        assertThat(cancelled.getCancellationReason()).isEqualTo(ReviewJobCancellationReason.NO_SANDBOX_ROOM);
-        assertThat(cancelled.getErrorMessage()).isEqualTo("Hephaestus had no room to run this review in time.");
-        assertThat(cancelled.getAttempt()).isEqualTo(4);
+        ReviewJob held = jobRepository.findById(jobId).orElseThrow();
+        assertThat(held.getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
+        assertThat(held.getRoomRefusals()).isEqualTo(41);
+        assertThat(held.spentAttempts()).isZero();
     }
 
     @Test
@@ -1234,15 +1233,22 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    @DisplayName("a review cancelled for sandbox room keeps that reason when it settles")
+    @DisplayName("a review cancelled for sandbox room keeps that reason when it settles, claimed or still queued")
     void shouldRecordNoSandboxRoomOnTheReviewWhenSettled() {
-        UUID jobId = runningJobOwnedBy("live-owner", Instant.now(), 1);
-        ReviewJob running = jobRepository.findById(jobId).orElseThrow();
+        UUID claimed = withoutAssignments(runningJobOwnedBy("live-owner", Instant.now(), 1));
+        ReviewJob running = jobRepository.findById(claimed).orElseThrow();
         executorOwnedBy("live-owner", refusedSandbox(SandboxCapacityException.Reason.QUOTA_CANNOT_FIT))
-                .executePrepared(jobId, running, mock(SandboxSpec.class));
+                .executePrepared(claimed, running, mock(SandboxSpec.class));
+        UUID queued = queuedAndDue(withoutAssignments(runningJobOwnedBy("live-owner", Instant.now(), 0)));
+        var tooSmall = mock(SandboxManager.class);
+        when(tooSmall.neverFits(any())).thenReturn(true);
+        executorOwnedBy("live-owner", tooSmall).endReviewsWithoutRoom(Instant.now());
 
         // A tick settles the 100 earliest ended jobs, and earlier tests leave theirs unsettled.
-        jdbc.update("UPDATE review_job SET completed_at = completed_at - interval '100 years' WHERE id = ?", jobId);
+        jdbc.update(
+                "UPDATE review_job SET completed_at = completed_at - interval '100 years' WHERE id IN (?, ?)",
+                claimed,
+                queued);
         var completion = new ReviewJobCompletionService(
                 jobRepository,
                 mock(ReviewWriteGuard.class),
@@ -1254,9 +1260,22 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
                 Clock.systemUTC());
         completion.tick();
 
-        assertThat(jdbc.queryForMap("SELECT status, stop_reason FROM review WHERE id = ?", running.getReviewId()))
-                .containsEntry("status", "CANCELLED")
-                .containsEntry("stop_reason", "NO_SANDBOX_ROOM");
+        for (UUID jobId : List.of(claimed, queued)) {
+            UUID reviewId = jobRepository.findById(jobId).orElseThrow().getReviewId();
+            assertThat(jdbc.queryForMap("SELECT status, stop_reason FROM review WHERE id = ?", reviewId))
+                    .containsEntry("status", "CANCELLED")
+                    .containsEntry("stop_reason", "NO_SANDBOX_ROOM");
+        }
+    }
+
+    /** The job reviews no practice, so settling it touches the review alone; the fixture creates no assignment rows. */
+    private UUID withoutAssignments(UUID jobId) {
+        transactionTemplate.executeWithoutResult(status -> {
+            ReviewJob job = jobRepository.findById(jobId).orElseThrow();
+            job.setInput(new ReviewJobInput(job.getInput().itemId(), List.of()));
+            jobRepository.saveAndFlush(RuntimeJobTestData.persistParent(jdbc, job));
+        });
+        return jobId;
     }
 
     /** The job waits in the queue and is due: nothing holds it back but room. */

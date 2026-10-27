@@ -29,7 +29,8 @@ Thus, no evidence folder, sandbox Job name or job token is used twice.
 
 Two kinds of requeue spend no retry, because they are not the review's fault.
 A worker's drain counts in `drain_count`, at most 3 times.
-A sandbox runtime without room counts in `room_refusals`, for about an hour.
+A sandbox runtime without room counts in `room_refusals`, with no limit.
+Only starvation or a quota that is too small ends such a review.
 `ReviewJob.spentAttempts()` subtracts both, and every retry-budget check reads it.
 
 Admission locks the review before its job and assignment rows.

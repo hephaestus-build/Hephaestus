@@ -329,6 +329,20 @@ class ReviewJobExecutorTest extends BaseUnitTest {
     }
 
     /** An attempt that reaches the sandbox, whose initializer then exits with 2. */
+    @Test
+    void shouldStarveNobodyWhileNoReviewWaitsForSandboxRoom() {
+        var executor = executor(mock(AsyncTaskExecutor.class));
+        Instant start = Instant.now();
+        executor.endReviewsWithoutRoom(start);
+        executor.endReviewsWithoutRoom(start.plus(Duration.ofHours(2)));
+
+        // A review arrives at a runtime that has been full for two hours: its own hour starts now.
+        when(jobs.existsQueuedForRoom()).thenReturn(true);
+        executor.endReviewsWithoutRoom(start.plus(Duration.ofHours(3)));
+
+        verify(jobs, never()).cancelQueuedForRoom(any(), any());
+    }
+
     private ReviewJobExecutor runFailingInitializer(ReviewJob job) {
         when(jobs.findByIdQueuedForUpdateSkipLocked(any(), any())).thenReturn(Optional.of(job));
         when(jobs.findById(job.getId())).thenReturn(Optional.of(job));

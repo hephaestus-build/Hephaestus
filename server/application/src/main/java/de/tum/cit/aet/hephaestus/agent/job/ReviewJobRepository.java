@@ -453,8 +453,8 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
 
     /**
      * The sandbox runtime had no room: the job waits in the queue until {@code availableAt}. The next attempt gets its
-     * own number, as after any claim, so nothing of this one is reused; the refusal is counted instead of a retry, up to
-     * {@link ReviewJob#MAX_ROOM_REFUSALS}.
+     * own number, as after any claim, so nothing of this one is reused; the refusal is counted instead of a retry.
+     * Only starvation ends a review that waits for room, never a count of refusals.
      */
     @WorkspaceAgnostic("ID-based self-fenced requeue; caller is the claiming worker itself")
     @Modifying(flushAutomatically = true, clearAutomatically = true)
@@ -464,12 +464,11 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
             + "j.llmCalls = 0, j.llmInputTokens = 0, j.llmOutputTokens = 0, j.llmReasoningTokens = 0, "
             + "j.llmCacheReadTokens = 0, j.llmCacheWriteTokens = 0 "
             + "WHERE j.id = :id AND j.status = 'RUNNING' AND j.workerId = :workerId AND j.attempt = :attempt "
-            + "AND j.roomRefusals < :maxRefusals AND j.admissionDigest IS NULL")
+            + "AND j.admissionDigest IS NULL")
     int holdForSandboxRoom(
             @Param("id") UUID id,
             @Param("workerId") String workerId,
             @Param("attempt") int attempt,
-            @Param("maxRefusals") int maxRefusals,
             @Param("availableAt") Instant availableAt);
 
     /**
@@ -504,6 +503,12 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
             + "j.cancellationReason = de.tum.cit.aet.hephaestus.agent.job.ReviewJobCancellationReason.NO_SANDBOX_ROOM "
             + "WHERE j.status = 'QUEUED' AND j.availableAt <= :now AND j.admissionDigest IS NULL")
     int cancelQueuedForRoom(@Param("now") Instant now, @Param("error") String error);
+
+    /** Whether a queued review still needs a sandbox: one held for its budget waits for money, not room. */
+    @WorkspaceAgnostic("Fleet-wide capacity verdict over the shared queue; caller is a worker's admission check")
+    @Query("SELECT COUNT(j) > 0 FROM ReviewJob j WHERE j.status = 'QUEUED' AND j.admissionDigest IS NULL "
+            + "AND (j.holdReason IS NULL OR j.holdReason <> 'BUDGET')")
+    boolean existsQueuedForRoom();
 
     /** Pool rejection leaves attempt, availability, and token unchanged because no sandbox executed. */
     @WorkspaceAgnostic("ID-based self-fenced requeue; caller is the claiming worker itself")

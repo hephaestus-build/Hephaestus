@@ -50,12 +50,6 @@ public class ReviewJob {
     /** The sandbox runtime had no room for the attempt's sandbox; nothing of it ran, so it spent no retry. */
     public static final String HOLD_REASON_SANDBOX_ROOM = "SANDBOX_ROOM";
 
-    /**
-     * How often the sandbox runtime may have no room for a review; its waits grow from 30 seconds to 5 minutes, so this
-     * is about an hour. The next refusal cancels the review with {@link ReviewJobCancellationReason#NO_SANDBOX_ROOM}.
-     */
-    public static final int MAX_ROOM_REFUSALS = 15;
-
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
     private static final int TOKEN_BYTES = 32;
 

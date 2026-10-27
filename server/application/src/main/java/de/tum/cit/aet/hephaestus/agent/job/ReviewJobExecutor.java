@@ -1408,10 +1408,10 @@ public class ReviewJobExecutor {
 
     /**
      * Nothing of the sandbox ran, so the attempt is not spent. A sandbox that has no room now waits in the queue for
-     * {@link #ROOM_WAIT} and longer; this hold bounds what an admission before the claim cannot see. A
-     * sandbox that no room can ever hold, or a wait past about an hour, cancels it for capacity.
+     * {@link #ROOM_WAIT} and longer; this hold covers what an admission before the claim cannot see. Only a sandbox
+     * that no room can ever hold cancels it here; {@link #endReviewsWithoutRoom} ends a starved one.
      *
-     * @return FAILED, or null when the job waits or this worker lost it
+     * @return CANCELLED, or null when the job waits or this worker lost it
      */
     private @Nullable ReviewJobStatus withoutRoom(UUID jobId, ReviewJob job, SandboxCapacityException e) {
         Instant now = Instant.now();
@@ -1420,16 +1420,15 @@ public class ReviewJobExecutor {
         SandboxCapacityException.Reason reason =
                 neverFits ? SandboxCapacityException.Reason.QUOTA_CANNOT_FIT : e.reason();
         Objects.requireNonNull(sandboxStartFailures.get(reason)).increment();
-        if (neverFits || job.getRoomRefusals() >= ReviewJob.MAX_ROOM_REFUSALS) {
-            String error = neverFits ? CANNOT_FIT : NO_ROOM_IN_TIME;
-            log.error("No sandbox room for the review, so it is cancelled: reason={}, error={}", reason.tag(), error);
+        if (neverFits) {
+            log.error("No sandbox room can hold the review, so it is cancelled: reason={}", reason.tag());
             Integer cancelled = transactionTemplate.execute(
-                    status -> jobRepository.cancelForRoomOwnedBy(jobId, now, error, workerId, job.getAttempt()));
+                    status -> jobRepository.cancelForRoomOwnedBy(jobId, now, CANNOT_FIT, workerId, job.getAttempt()));
             return cancelled != null && cancelled > 0 ? ReviewJobStatus.CANCELLED : null;
         }
         Instant retryAt = now.plus(roomWait(job.getRoomRefusals()));
-        transactionTemplate.executeWithoutResult(status -> jobRepository.holdForSandboxRoom(
-                jobId, workerId, job.getAttempt(), ReviewJob.MAX_ROOM_REFUSALS, retryAt));
+        transactionTemplate.executeWithoutResult(
+                status -> jobRepository.holdForSandboxRoom(jobId, workerId, job.getAttempt(), retryAt));
         log.warn(
                 "No room for the review's sandbox, so the job waits in the queue: reason={}, retryAt={}",
                 reason.tag(),
@@ -1439,9 +1438,10 @@ public class ReviewJobExecutor {
 
     /**
      * Ends the queued reviews that the sandbox runtime cannot hold, at most every {@link #ROOM_CHECK}: at once when no
-     * room can ever hold one, and after {@link #STARVATION_BOUND} of starvation, when the runtime has had no room for a
-     * review while no review ran anywhere, so nothing would free room. Waiting behind running reviews is backlog, never
-     * starvation. Admission before the claim keeps such reviews queued, so this check, not a refusal, ends them.
+     * room can ever hold one, and after {@link #STARVATION_BOUND} of starvation, when reviews waited and the runtime had
+     * no room for one while no review ran anywhere, so nothing would free room. Waiting behind running reviews is
+     * backlog, never starvation, and a full runtime with an empty queue starves nobody. Admission before the claim
+     * keeps such reviews queued, so this check, not a refusal, ends them.
      */
     void endReviewsWithoutRoom(Instant now) {
         if (now.isBefore(nextRoomCheck)) {
@@ -1450,10 +1450,13 @@ public class ReviewJobExecutor {
         nextRoomCheck = now.plus(ROOM_CHECK);
         ResourceLimits limits = reviewLimits.forAttempt(ResourceLimits.MAX_RUNTIME);
         if (sandboxManager.neverFits(limits)) {
+            starvedSince.set(null);
             cancelQueuedForRoom(now, CANNOT_FIT, SandboxCapacityException.Reason.QUOTA_CANNOT_FIT);
             return;
         }
-        if (sandboxManager.roomFor(limits) > 0 || sandboxManager.reviewsRunning()) {
+        if (sandboxManager.roomFor(limits) > 0
+                || sandboxManager.reviewsRunning()
+                || !jobRepository.existsQueuedForRoom()) {
             starvedSince.set(null);
             return;
         }
