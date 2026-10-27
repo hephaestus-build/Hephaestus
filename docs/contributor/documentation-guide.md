@@ -37,6 +37,13 @@ Langfuse uses the same line: its [self-hosting docs](https://langfuse.com/self-h
 - **Contributor guide.** A contributor page does not repeat an operator procedure or a user procedure. Link the admin or user page.
 - **Decision records.** An ADR in `docs/decisions/` records a decision and its reasons once. A guide page states the current behavior and links the ADR for the reason.
 
+## Current release only
+
+Every page describes what the current release does.
+Delete a page or a section that describes removed or interim behavior, an old setting, or an upgrade path that the release drops.
+Do not write a note about what a feature did before.
+The release note carries the steps that an operator takes to upgrade.
+
 ## Page types
 
 Each page has one type, and the reader's goal decides it.
