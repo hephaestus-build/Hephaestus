@@ -270,11 +270,13 @@ public class SlackChannelConsentService {
 
     private void postAnnouncement(long workspaceId, String channelId) {
         try {
-            slackMessageService.sendForWorkspace(
+            slackMessageService.postMessage(
                     workspaceId,
                     channelId,
+                    null,
                     SlackConsentBlocks.activationNotice(),
-                    SlackConsentBlocks.activationFallbackText());
+                    SlackConsentBlocks.activationFallbackText(),
+                    null);
         } catch (SlackSendException e) {
             log.warn(
                     "Slack consent announcement failed to post: workspaceId={}, channelId={}, error={}",

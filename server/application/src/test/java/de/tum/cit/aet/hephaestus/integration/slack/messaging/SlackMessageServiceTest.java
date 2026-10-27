@@ -80,8 +80,6 @@ class SlackMessageServiceTest extends BaseUnitTest {
 
     private static Stream<Arguments> outboundSends() {
         return Stream.of(
-                Arguments.of(
-                        "sendForWorkspace", (ThrowingSend) s -> s.sendForWorkspace(7L, "C1ABCDEFGH", List.of(), "f")),
                 Arguments.of("sendEphemeralForWorkspace", (ThrowingSend)
                         s -> s.sendEphemeralForWorkspace(7L, "C1ABCDEFGH", "U123", List.of(), "f")),
                 Arguments.of("startStream", (ThrowingSend) s -> s.startStream(7L, "C1ABCDEFGH", "171234.5678", "hi")),
@@ -117,10 +115,10 @@ class SlackMessageServiceTest extends BaseUnitTest {
     }
 
     @Test
-    void sendForWorkspace_noToken_throwsSlackSendException() {
+    void postMessage_noToken_throwsSlackSendException() {
         when(credentialProvider.resolve(any(IntegrationRef.class))).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.sendForWorkspace(7L, "C1ABCDEFGH", List.of(), "fallback"))
+        assertThatThrownBy(() -> service.postMessage(7L, "C1ABCDEFGH", null, List.of(), "fallback", null))
                 .isInstanceOf(SlackSendException.class)
                 .satisfies(ex -> {
                     SlackSendException sse = (SlackSendException) ex;

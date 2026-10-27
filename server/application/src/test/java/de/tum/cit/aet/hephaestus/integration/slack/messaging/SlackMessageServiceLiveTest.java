@@ -75,15 +75,17 @@ class SlackMessageServiceLiveTest {
 
         // The real send: block-kit payload through the app's SlackMessageService to the live channel.
         try {
-            assertThatCode(() -> service.sendForWorkspace(
+            assertThatCode(() -> service.postMessage(
                             workspaceId,
                             channelId,
+                            null,
                             asBlocks(
                                     section(
                                             s -> s.text(
                                                     markdownText(
                                                             ":white_check_mark: Hephaestus #1198 Slack E2E — posted via the app's SlackMessageService (encrypted Connection → decrypt → chat.postMessage).")))),
-                            "Hephaestus #1198 Slack E2E"))
+                            "Hephaestus #1198 Slack E2E",
+                            null))
                     .doesNotThrowAnyException();
         } finally {
             service.close();

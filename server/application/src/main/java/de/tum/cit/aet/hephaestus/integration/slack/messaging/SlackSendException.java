@@ -2,7 +2,7 @@ package de.tum.cit.aet.hephaestus.integration.slack.messaging;
 
 import java.io.Serial;
 
-/** Raised by {@link SlackMessageService#sendForWorkspace}; carries the Slack error code. */
+/** Raised by {@link SlackMessageService} when Slack refuses a call or cannot be reached; carries the Slack error code. */
 public class SlackSendException extends RuntimeException {
 
     @Serial
