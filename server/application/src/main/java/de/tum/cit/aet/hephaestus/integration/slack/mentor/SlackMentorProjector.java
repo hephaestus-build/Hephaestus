@@ -328,12 +328,11 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
     /**
      * Tells the developer once that their question waits, when its turn has not run {@link #WAITING_NOTICE_AFTER} after
      * it was asked. Without it, Slack shows nothing while earlier turns hold the worker's turn slots. The notice says
-     * that Heph answers other questions only when the ledger says the question waits for a free Heph
-     * ({@link MentorTurnWaits}). It goes once the turn runs or ends. A turn that already ran and waits
-     * again gets none: it did start. The notice does not claim the reply: a claim before the turn runs would leave the
-     * reply with this server, and a restart during the wait would lose the answer. So it relies on the one server that
-     * the chart runs, which also keeps the "once" in memory: after a restart, a question that still waits can get it
-     * again.
+     * that Heph answers other questions only when the question waits for a free Heph ({@link MentorTurnWaits}). It
+     * goes once the turn runs or ends. A turn that already ran and waits again gets none: it did start. The notice
+     * does not claim the reply: a claim before the turn runs would leave the reply with this server, and a restart
+     * during the wait would lose the answer. So it relies on the one server that the chart runs, which also keeps the
+     * "once" in memory: after a restart, a question that still waits can get it again.
      */
     private void noticeWaiting(Projection projection, MentorTurn turn, Instant now) {
         if (projection.waitingNoticed || turn.getStartedAt() != null || turn.getAttempt() > 0) {
@@ -347,9 +346,10 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
         if (projection.owner == Owner.ELSEWHERE || !slack.isConnected(projection.workspaceId)) {
             return;
         }
+        String notice = waits.waits(projection.workspaceId, List.of(turn)).containsKey(turn.getId())
+                ? WAITING_FOR_HEPH_NOTICE
+                : WAITING_NOTICE;
         projection.waitingNoticed = true;
-        String notice =
-                waits.waitingFor(turn) == MentorTurn.WaitingFor.FREE_HEPH ? WAITING_FOR_HEPH_NOTICE : WAITING_NOTICE;
         delivery.slackTurn(projection.workspaceId, projection.turnId).ifPresent(asked -> {
             try {
                 projection.notice = slack.postMessage(

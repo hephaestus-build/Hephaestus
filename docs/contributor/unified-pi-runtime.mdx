@@ -79,14 +79,20 @@ A question for a busy conversation waits as `QUEUED`.
 A conversation holds at most `hephaestus.mentor.turn.max-follow-ups` queued turns.
 The next question gets `409` with the reason `FOLLOW_UPS_FULL`.
 
-A queued turn tells its clients why it waits (`MentorTurnDTO.waitingFor`, `MentorTurnWaits`).
+A queued turn tells its clients when it waits for a free Heph (`MentorTurnDTO.waitingFor`, `MentorTurnWaits`).
 The reason comes from the same SQL rule as the claim (`MentorTurnRepository.CLAIMABLE`), so the two cannot disagree.
 
-- `EARLIER_QUESTION`: the claim rule does not let a worker start the turn. An earlier question of its conversation is queued, or a host holds a turn of the conversation.
-- `FREE_HEPH`: a worker may start the turn, and a host holds a turn of another conversation.
-- No value: a worker may start the turn and no host holds a turn. The turn starts at once, or no worker runs.
+- `FREE_HEPH`: a worker may start the turn, and a host holds a turn of another conversation, in any workspace.
+- No value: the server does not know why the turn waits. An earlier question of its conversation waits or runs, the turn starts at once, or no worker runs.
 
-When a turn ends, the server publishes a change for each queued turn of its conversation, so that clients read the new reason.
+All workspaces share the workers' Heph capacity.
+Thus, `FREE_HEPH` depends on turns of other workspaces.
+It tells a member only that Heph answers some other question, never whose question it is.
+
+When a turn ends, the server publishes a change for each queued turn of its conversation.
+If no host holds a turn after the end, no queued turn waits for a free Heph any more.
+Thus, the server then publishes a change for every queued turn.
+Clients then read the new reason.
 
 ### Leases and retries
 

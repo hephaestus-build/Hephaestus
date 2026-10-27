@@ -316,15 +316,18 @@ public class MentorEntryService {
     }
 
     /**
-     * Publishes the turn's change. An ended turn no longer holds back the questions queued after it in its
-     * conversation, so their changes are published too: each now waits for a free Heph or starts.
+     * Publishes the turn's change, and the changes of the queued turns whose reason to wait ({@link MentorTurnWaits})
+     * the end changed. An ended turn no longer holds back the questions queued after it in its conversation. When no
+     * host holds a turn any more, no queued turn waits for a free Heph.
      */
     void turnChanged(MentorTurn turn) {
         events.publishEvent(MentorLedgerEvents.TurnChanged.of(turn));
         if (turn.getStatus().isTerminal()) {
-            turns.findByWorkspaceIdAndConversationIdAndStatus(
+            List<MentorTurn> changed = turns.existsHeld()
+                    ? turns.findByWorkspaceIdAndConversationIdAndStatus(
                             turn.getWorkspaceId(), turn.getConversationId(), MentorTurn.Status.QUEUED)
-                    .forEach(next -> events.publishEvent(MentorLedgerEvents.TurnChanged.of(next)));
+                    : turns.findByStatus(MentorTurn.Status.QUEUED);
+            changed.forEach(next -> events.publishEvent(MentorLedgerEvents.TurnChanged.of(next)));
         }
     }
 

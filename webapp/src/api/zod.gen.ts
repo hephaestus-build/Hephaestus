@@ -2180,7 +2180,7 @@ export const zMentorTurn = z.object({
         'STOPPED'
     ]),
     surface: z.enum(['APP', 'SLACK']),
-    waitingFor: z.enum(['FREE_HEPH', 'EARLIER_QUESTION']).optional()
+    waitingFor: z.enum(['FREE_HEPH']).optional()
 });
 
 /**

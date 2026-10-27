@@ -22,6 +22,9 @@ public interface MentorTurnRepository extends JpaRepository<MentorTurn, UUID> {
 
     Optional<MentorTurn> findByWorkspaceIdAndRequestId(Long workspaceId, String requestId);
 
+    @WorkspaceAgnostic("When no host holds a turn, every workspace's queued turns stop waiting for a free Heph")
+    List<MentorTurn> findByStatus(MentorTurn.Status status);
+
     List<MentorTurn> findByWorkspaceIdAndConversationIdAndStatus(
             Long workspaceId, UUID conversationId, MentorTurn.Status status);
 

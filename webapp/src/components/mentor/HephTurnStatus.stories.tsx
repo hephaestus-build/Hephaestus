@@ -178,24 +178,6 @@ export const WaitingForAFreeHeph: Story = {
 	},
 };
 
-/** A long wait for a free Heph still counts the time and says the developer can leave. */
-export const LongWaitForAFreeHeph: Story = {
-	args: WaitingForAFreeHeph.args,
-	loaders: [askedSecondsAgo(75)],
-	play: async ({ canvas }) => {
-		await expect(
-			await canvas.findByText(
-				"Heph is answering other questions. Yours starts when Heph is free.",
-				{},
-				{ timeout: 3000 },
-			),
-		).toBeVisible();
-		await expect(
-			canvas.getByText(/^1 min \d+ s · You can leave\. The answer stays here\.$/u),
-		).toBeVisible();
-	},
-};
-
 /**
  * From 10 s the line counts the wait and says the developer can leave: the answer lands here
  * either way. There is no progress bar, because nothing can estimate the rest.

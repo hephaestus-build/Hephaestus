@@ -117,7 +117,7 @@ public class MentorTimeline {
     public MentorTurnDTO turn(long workspaceId, long accountId, UUID turnId) {
         MentorTurn turn = ownedTurn(workspaceId, accountId, turnId);
         MentorConversation conversation = conversation(workspaceId, turn.getConversationId());
-        return turn(turn, conversation.getParentEntryId(), waits.waitingFor(turn));
+        return turn(turn, conversation.getParentEntryId(), waitingFor(turn));
     }
 
     @Transactional(readOnly = true)
@@ -155,7 +155,7 @@ public class MentorTimeline {
                         .findByIdAndWorkspaceId(turn.getConversationId(), workspaceId)
                         .map(conversation -> new Owned<>(
                                 conversation.getAccountId(),
-                                turn(turn, conversation.getParentEntryId(), waits.waitingFor(turn)))));
+                                turn(turn, conversation.getParentEntryId(), waitingFor(turn)))));
     }
 
     /**
@@ -414,6 +414,10 @@ public class MentorTimeline {
     /** The link tool calls in a Heph message, in order. */
     private static List<MentorPiEntries.Link> links(MentorEntry entry) {
         return entry.getKind() == MentorEntry.Kind.HEPH ? MentorPiEntries.links(entry.getPayload()) : List.of();
+    }
+
+    private MentorTurn.@Nullable WaitingFor waitingFor(MentorTurn turn) {
+        return waits.waits(turn.getWorkspaceId(), List.of(turn)).get(turn.getId());
     }
 
     private static MentorTurnDTO turn(

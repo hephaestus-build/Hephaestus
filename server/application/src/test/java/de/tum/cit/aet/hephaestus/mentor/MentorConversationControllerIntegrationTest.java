@@ -275,6 +275,21 @@ class MentorConversationControllerIntegrationTest extends AbstractWorkspaceInteg
     }
 
     @Test
+    void shouldSayThatAQuestionWaitsForAFreeHephWhileHephAnswersAnotherConversation() {
+        MentorTurnService.Submission first = submit(main(), "What did the review say?");
+        turns.claimNext(WORKER, Duration.ofMinutes(5)).orElseThrow();
+        MentorConversation thread =
+                conversations.openThread(workspace.getId(), first.question().getId());
+        MentorTurnService.Submission inThread = submit(thread, "And this one?");
+
+        get("/conversation")
+                .jsonPath("$.activeTurns.length()")
+                .isEqualTo(2)
+                .jsonPath("$.activeTurns[?(@.waitingFor == 'FREE_HEPH')].id")
+                .isEqualTo(inThread.turn().getId().toString());
+    }
+
+    @Test
     void shouldOpenAThreadAndCountItsRepliesWhenTheDeveloperRepliesToAMessage() {
         MentorTurnService.Submission question = submit(main(), "What is a good pull request description?");
         UUID parent = question.question().getId();

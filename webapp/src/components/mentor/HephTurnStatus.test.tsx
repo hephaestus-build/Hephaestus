@@ -50,7 +50,7 @@ it("says why a queued turn waits only when the server says it waits for a free H
 	});
 	expect(result.current).toBe("Heph is answering other questions. Yours starts when Heph is free.");
 
-	rerender({ status: "QUEUED", surface: "APP", waitingFor: "EARLIER_QUESTION" });
+	rerender({ status: "QUEUED", surface: "APP" });
 	expect(result.current).toBe("Waiting for Heph to start…");
 });
 

@@ -253,38 +253,38 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
                 conversations.openThread(workspace.getId(), first.question().getId());
         MentorTurnService.Submission inThread = ask(thread, "About this");
 
-        assertThat(waits.waitingFor(stored(inThread.turn()))).isEqualTo(MentorTurn.WaitingFor.FREE_HEPH);
+        assertThat(waits.waits(workspace.getId(), List.of(stored(inThread.turn()))))
+                .containsExactly(entry(inThread.turn().getId(), MentorTurn.WaitingFor.FREE_HEPH));
     }
 
     @Test
-    void shouldSayAFollowUpWaitsForTheEarlierQuestionWhileThatOneWaitsOrRuns() {
-        MentorTurnService.Submission first = ask(main, "First");
-        MentorTurnService.Submission followUp = ask(main, "Follow-up");
+    void shouldSayAQuestionWaitsForAFreeHephWhileHephAnswersAnotherWorkspace() {
+        User other = persistUser("heph-turns-other-developer");
+        Workspace otherWorkspace = createWorkspace("heph-turns-other", "Other", "other-org", AccountType.ORG, other);
+        MentorConversation otherMain = conversations.findOrCreateMain(otherWorkspace.getId(), accountId(other));
+        turns.submit(
+                otherWorkspace.getId(),
+                otherMain.getId(),
+                new MentorTurnService.Question(
+                        MentorTurn.Surface.APP, "Elsewhere", UUID.randomUUID().toString(), null, null));
+        assertThat(turns.claimNext(WORKER, LEASE)).isPresent();
 
-        assertThat(waits.waits(workspace.getId(), List.of(stored(first.turn()), stored(followUp.turn()))))
-                .containsExactly(entry(followUp.turn().getId(), MentorTurn.WaitingFor.EARLIER_QUESTION));
+        MentorTurnService.Submission here = ask(main, "Here");
 
-        MentorTurn running = turns.claimNext(WORKER, LEASE).orElseThrow();
-
-        assertThat(waits.waits(workspace.getId(), List.of(stored(running), stored(followUp.turn()))))
-                .as("a running turn does not wait")
-                .containsExactly(entry(followUp.turn().getId(), MentorTurn.WaitingFor.EARLIER_QUESTION));
+        assertThat(waits.waits(workspace.getId(), List.of(stored(here.turn()))))
+                .as("every workspace shares the workers' Heph capacity")
+                .containsExactly(entry(here.turn().getId(), MentorTurn.WaitingFor.FREE_HEPH));
     }
 
     @Test
-    void shouldSayNothingWaitsWhenTheTurnRunsOrEnded() {
+    void shouldGiveAFollowUpNoReasonWhileTheQuestionBeforeItWaitsOrRuns() {
         ask(main, "First");
-        MentorTurn running = turns.claimNext(WORKER, LEASE).orElseThrow();
-        MentorConversation thread = conversations.openThread(
-                workspace.getId(),
-                turns.question(workspace.getId(), running.getId()).getId());
-        ask(thread, "About this");
-        MentorTurn alsoRunning = turns.claimNext("worker-two", LEASE).orElseThrow();
-        turns.end(alsoRunning.getId(), alsoRunning.getAttempt(), "worker-two", MentorTurn.Status.DONE, List.of(), null);
+        MentorTurnService.Submission followUp = ask(main, "Follow-up");
+        turns.claimNext(WORKER, LEASE).orElseThrow();
 
-        assertThat(waits.waits(workspace.getId(), List.of(stored(running), stored(alsoRunning))))
+        assertThat(waits.waits(workspace.getId(), List.of(stored(followUp.turn()))))
+                .as("it waits for its own conversation, not for a free Heph")
                 .isEmpty();
-        assertThat(waits.waitingFor(stored(alsoRunning))).isNull();
     }
 
     @Test
@@ -302,6 +302,25 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
     }
 
     @Test
+    void shouldStopSayingHephIsBusyAndPublishTheQuestionWhenTheTurnThatHeldHephEnds() {
+        MentorTurnService.Submission first = ask(main, "First");
+        MentorTurn running = turns.claimNext(WORKER, LEASE).orElseThrow();
+        MentorConversation thread =
+                conversations.openThread(workspace.getId(), first.question().getId());
+        MentorTurnService.Submission inThread = ask(thread, "About this");
+        published.clear();
+
+        turns.end(running.getId(), running.getAttempt(), WORKER, MentorTurn.Status.DONE, List.of(), null);
+
+        assertThat(published.stream(MentorLedgerEvents.TurnChanged.class))
+                .extracting(MentorLedgerEvents.TurnChanged::turnId, MentorLedgerEvents.TurnChanged::status)
+                .as("the question in another conversation no longer waits for a free Heph")
+                .contains(tuple(inThread.turn().getId(), MentorTurn.Status.QUEUED));
+        assertThat(waits.waits(workspace.getId(), List.of(stored(inThread.turn()))))
+                .isEmpty();
+    }
+
+    @Test
     void shouldPublishTheFollowUpAgainWhenTheQuestionBeforeItIsDeleted() {
         MentorTurnService.Submission first = ask(main, "First");
         MentorTurnService.Submission followUp = ask(main, "Follow-up");
@@ -312,7 +331,6 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
         assertThat(published.stream(MentorLedgerEvents.TurnChanged.class))
                 .extracting(MentorLedgerEvents.TurnChanged::turnId, MentorLedgerEvents.TurnChanged::status)
                 .contains(tuple(followUp.turn().getId(), MentorTurn.Status.QUEUED));
-        assertThat(waits.waitingFor(stored(followUp.turn()))).isNull();
     }
 
     @Test

@@ -87,8 +87,6 @@ public class MentorTurn implements Persistable<UUID> {
     public enum WaitingFor {
         /** A worker may start it, and Heph answers other questions. */
         FREE_HEPH,
-        /** An earlier question of its conversation waits or Heph answers it. */
-        EARLIER_QUESTION,
     }
 
     /** Where the developer asked. */
