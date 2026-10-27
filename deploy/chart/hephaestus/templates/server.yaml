@@ -50,9 +50,9 @@ spec:
       enableServiceLinks: false
       securityContext:
         {{- include "hephaestus.podSecurityContext" (dict "user" 1002 "group" 1001) | nindent 8 }}
-      # The preStop pause, application.yml's SHUTDOWN_TIMEOUT (20 s), and headroom to drain
-      # in-flight requests.
-      terminationGracePeriodSeconds: 35
+      # The preStop pause, the HTTP phase (SHUTDOWN_TIMEOUT, 20 s), the NATS consumers' wait (10 s) and
+      # headroom. ShutdownFitsGraceTest checks the sum.
+      terminationGracePeriodSeconds: 45
       containers:
         - name: server
           image: {{ include "hephaestus.image" (dict "root" . "name" "application-server") | quote }}

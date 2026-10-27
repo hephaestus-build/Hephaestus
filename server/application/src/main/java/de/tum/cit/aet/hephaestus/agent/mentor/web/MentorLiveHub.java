@@ -30,6 +30,7 @@ import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.SmartLifecycle;
 import org.springframework.http.HttpStatus;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -47,7 +48,7 @@ import tools.jackson.databind.ObjectMapper;
  */
 @Component
 @ConditionalOnServerRole
-public class MentorLiveHub implements MentorLedgerNotifications.Listener {
+public class MentorLiveHub implements MentorLedgerNotifications.Listener, SmartLifecycle {
 
     static final String SNAPSHOT = "snapshot";
     static final String TURN = "turn";
@@ -73,6 +74,11 @@ public class MentorLiveHub implements MentorLedgerNotifications.Listener {
 
     /** Each stream under its account, which owns the conversation. */
     private final Map<Developer, Set<Stream>> streams = new ConcurrentHashMap<>();
+
+    /** Set when the context closes; guarded by {@code streams}. */
+    private boolean closing;
+
+    private volatile boolean running;
 
     private final ExecutorService reader = Executors.newSingleThreadExecutor(
             Thread.ofVirtual().name("mentor-live-reader").factory());
@@ -128,6 +134,11 @@ public class MentorLiveHub implements MentorLedgerNotifications.Listener {
         emitter.onTimeout(() -> close(stream));
         emitter.onError(failure -> remove(stream));
         synchronized (streams) {
+            if (closing) {
+                // A stream opened now would hold the web server's graceful shutdown; the client retries the next
+                // instance.
+                throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "The server is restarting.");
+            }
             Set<Stream> own = streams.computeIfAbsent(
                     new Developer(workspaceId, accountId), key -> ConcurrentHashMap.newKeySet());
             if (own.size() >= MAX_STREAMS_PER_DEVELOPER) {
@@ -329,9 +340,46 @@ public class MentorLiveHub implements MentorLedgerNotifications.Listener {
         }
     }
 
+    /**
+     * Ends every stream when this context stops, in the default phase, before the web server's graceful shutdown: an
+     * open stream would hold that phase until its timeout. A lifecycle phase, unlike a context event, belongs to this
+     * context alone, so a child context that closes ends no stream here. The browser reconnects to the next instance,
+     * and the new stream opens with a snapshot.
+     */
+    @Override
+    public void stop() {
+        endStreams();
+        running = false;
+    }
+
+    @Override
+    public void start() {
+        synchronized (streams) {
+            closing = false;
+        }
+        running = true;
+    }
+
+    @Override
+    public boolean isRunning() {
+        return running;
+    }
+
+    @Override
+    public int getPhase() {
+        return SmartLifecycle.DEFAULT_PHASE;
+    }
+
+    private void endStreams() {
+        synchronized (streams) {
+            closing = true;
+        }
+        new ArrayList<>(allStreams()).forEach(this::close);
+    }
+
     @PreDestroy
     void shutdown() {
-        new ArrayList<>(allStreams()).forEach(this::close);
+        endStreams();
         reader.shutdownNow();
         writers.shutdown();
         try {

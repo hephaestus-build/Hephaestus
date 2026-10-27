@@ -1,10 +1,12 @@
 package de.tum.cit.aet.hephaestus.integration.core.sync.push;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
 
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import de.tum.cit.aet.hephaestus.testconfig.WebServerDrainProbe;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.io.IOException;
 import java.time.Duration;
@@ -21,6 +23,9 @@ import java.util.function.Consumer;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.annotation.AnnotationConfigUtils;
+import org.springframework.context.support.GenericApplicationContext;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import tools.jackson.databind.ObjectMapper;
@@ -151,6 +156,54 @@ class SyncEventHubTest extends BaseUnitTest {
         assertThat(hub.subscriberCount(WORKSPACE_ID)).isZero();
         assertThat(meters.get("integration.sync.sse.subscribers").gauge().value())
                 .isZero();
+    }
+
+    @Test
+    void shouldEndEveryStreamBeforeTheWebServerDrainsWhenTheContextCloses() {
+        SyncEventHub live = newHub(Duration.ofMillis(10));
+        hub = live;
+
+        boolean ended = WebServerDrainProbe.heldWhenTheWebServerDrains(
+                SyncEventHub.class,
+                live,
+                () -> {
+                    live.subscribe(WORKSPACE_ID);
+                    live.subscribe(WORKSPACE_ID);
+                },
+                () -> !createdEmitters.isEmpty() && createdEmitters.stream().allMatch(RecordingEmitter::completed));
+
+        assertThat(ended).isTrue();
+    }
+
+    @Test
+    void shouldKeepAcceptingStreamsWhenAChildContextCloses() {
+        SyncEventHub live = newHub(Duration.ofMillis(10));
+        hub = live;
+        try (GenericApplicationContext parent = new GenericApplicationContext()) {
+            // Event listeners on, as in the application: a closing child publishes its ContextClosedEvent here too.
+            AnnotationConfigUtils.registerAnnotationConfigProcessors(parent);
+            parent.registerBean(SyncEventHub.class, () -> live);
+            parent.refresh();
+            GenericApplicationContext child = new GenericApplicationContext();
+            child.setParent(parent);
+            child.refresh();
+
+            child.close();
+
+            assertThatCode(() -> live.subscribe(WORKSPACE_ID)).doesNotThrowAnyException();
+        }
+    }
+
+    @Test
+    void shouldRefuseANewStreamWhenTheServerIsClosing() {
+        SyncEventHub closed = newHub(Duration.ofMillis(10));
+        hub = closed;
+        closed.shutdown();
+
+        assertThatThrownBy(() -> closed.subscribe(WORKSPACE_ID))
+                .isInstanceOfSatisfying(
+                        ResponseStatusException.class,
+                        e -> assertThat(e.getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE));
     }
 
     @Test

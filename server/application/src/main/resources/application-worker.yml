@@ -24,8 +24,6 @@ spring:
     jpa:
         hibernate:
             ddl-auto: none
-    lifecycle:
-        timeout-per-shutdown-phase: 6m
 
 logging:
     structured:

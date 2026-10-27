@@ -326,7 +326,8 @@ public class ReviewJobExecutor {
                 agentProperties.claimBatchSize());
     }
 
-    private static final Duration POLL_THREAD_JOIN_TIMEOUT = Duration.ofSeconds(10);
+    /** How long stopping waits for the poll thread, so an in-flight claim cannot register after the drain began. */
+    public static final Duration POLL_THREAD_JOIN_TIMEOUT = Duration.ofSeconds(10);
 
     /** Join the poll thread before drain so an in-flight claim cannot register after the worker appears idle. */
     public void stopAcceptingNewJobs() {
@@ -371,8 +372,8 @@ public class ReviewJobExecutor {
         }
     }
 
-    // Share one cleanup deadline across all containers in a drain.
-    private static final Duration DRAIN_CLEANUP_TIMEOUT = Duration.ofSeconds(30);
+    /** One cleanup deadline that all containers in a drain share. */
+    public static final Duration DRAIN_CLEANUP_TIMEOUT = Duration.ofSeconds(30);
 
     /**
      * Settles this worker's jobs before stopping their containers. Unadmitted attempts may requeue;
