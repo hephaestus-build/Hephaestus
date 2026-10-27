@@ -15,6 +15,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryContent;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryHandle;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryLookup;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryWriter;
+import de.tum.cit.aet.hephaestus.integration.scm.feedback.PostedText;
 import de.tum.cit.aet.hephaestus.integration.scm.feedback.ScmFeedbackTargetResolver;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubGraphQlClientProvider;
 import java.util.List;
@@ -68,7 +69,7 @@ public class GitHubSummaryWriter implements SummaryWriter {
         } catch (RuntimeException e) {
             throw new FeedbackNotSentException("GitHub comment not sent: " + e.getMessage(), e);
         }
-        SummaryHandle handle = createComment(scopeId, subjectNodeId, content.externalBody());
+        SummaryHandle handle = createComment(scopeId, subjectNodeId, PostedText.summary(content));
         log.info(
                 "Posted GitHub comment: workspaceId={}, subjectNodeId={}, commentId={}",
                 scopeId,
@@ -113,6 +114,7 @@ public class GitHubSummaryWriter implements SummaryWriter {
                     content.copyId(), "The GitHub rate limit is critical for scope " + scopeId);
         }
 
+        String body = PostedText.summary(content);
         ClientGraphQlResponse response;
         try {
             egressGuard.requireDeliveryAllowed("github.update-summary");
@@ -120,7 +122,7 @@ public class GitHubSummaryWriter implements SummaryWriter {
                     .forScope(scopeId)
                     .documentName("UpdateIssueComment")
                     .variable("id", externalId)
-                    .variable("body", content.externalBody())
+                    .variable("body", body)
                     .execute()
                     .block(GRAPHQL_TIMEOUT);
         } catch (OutboundEgressSuppressedException e) {
@@ -172,7 +174,7 @@ public class GitHubSummaryWriter implements SummaryWriter {
         if (marker == null || marker.isBlank()) {
             return SummaryLookup.unknown();
         }
-        String expectedBody = expected.externalBody();
+        String expectedBody = PostedText.summary(expected);
         long scopeId = target.integration().workspaceId();
         if (gitHubProvider.isRateLimitCritical(scopeId)) {
             return SummaryLookup.unknown();

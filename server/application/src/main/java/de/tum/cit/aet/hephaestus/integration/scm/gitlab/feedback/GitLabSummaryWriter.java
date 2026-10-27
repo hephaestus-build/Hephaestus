@@ -15,6 +15,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryContent;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryHandle;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryLookup;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryWriter;
+import de.tum.cit.aet.hephaestus.integration.scm.feedback.PostedText;
 import de.tum.cit.aet.hephaestus.integration.scm.feedback.ScmFeedbackTargetResolver;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlClientProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.feedback.GitLabMrResolver.MrCoordinates;
@@ -22,7 +23,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
-import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -36,11 +36,6 @@ import org.springframework.stereotype.Component;
 public class GitLabSummaryWriter implements SummaryWriter {
 
     private static final Logger log = LoggerFactory.getLogger(GitLabSummaryWriter.class);
-
-    // GitLab executes line-leading quick actions; escape them in every posted note.
-    private static final Pattern GITLAB_SLASH_COMMAND = Pattern.compile(
-            "^(\\s*/(?:approve|merge|close|reopen|assign|unassign|label|unlabel|lock|unlock|milestone|estimate|spend|award|subscribe|unsubscribe|todo|done|wip|draft|ready|due|remove_due_date|weight|epic|copy_metadata|move|confidential|shrug|tableflip)\\b)",
-            Pattern.CASE_INSENSITIVE | Pattern.MULTILINE);
 
     private final GitLabGraphQlClientProvider gitLabProvider;
     private final GitLabMrResolver mrResolver;
@@ -72,7 +67,7 @@ public class GitLabSummaryWriter implements SummaryWriter {
         } catch (RuntimeException e) {
             throw new FeedbackNotSentException("GitLab note not sent: " + e.getMessage(), e);
         }
-        String body = escapeSlashCommands(content.externalBody());
+        String body = gitLabSummary(content);
 
         ClientGraphQlResponse response;
         try {
@@ -153,7 +148,7 @@ public class GitLabSummaryWriter implements SummaryWriter {
             return CopyUpdateReceipt.transientFailure(
                     content.copyId(), "The GitLab rate limit is critical for scope " + scopeId);
         }
-        String body = escapeSlashCommands(content.externalBody());
+        String body = gitLabSummary(content);
 
         ClientGraphQlResponse response;
         try {
@@ -235,7 +230,7 @@ public class GitLabSummaryWriter implements SummaryWriter {
         if (marker == null || marker.isBlank()) {
             return SummaryLookup.unknown();
         }
-        String expectedBody = escapeSlashCommands(expected.externalBody());
+        String expectedBody = gitLabSummary(expected);
         long scopeId = target.integration().workspaceId();
         if (gitLabProvider.isRateLimitCritical(scopeId)) {
             return SummaryLookup.unknown();
@@ -335,10 +330,12 @@ public class GitLabSummaryWriter implements SummaryWriter {
                         || e.contains("couldn't be found"));
     }
 
-    static String escapeSlashCommands(String body) {
-        if (body == null || body.isEmpty()) {
-            return body;
-        }
-        return GITLAB_SLASH_COMMAND.matcher(body).replaceAll("`$1`");
+    /** The body as GitLab receives it: plain Markdown, no quick action runs and no one is mentioned. */
+    static String gitLabBody(String body) {
+        return PostedText.of(body);
+    }
+
+    static String gitLabSummary(SummaryContent content) {
+        return PostedText.summary(content);
     }
 }

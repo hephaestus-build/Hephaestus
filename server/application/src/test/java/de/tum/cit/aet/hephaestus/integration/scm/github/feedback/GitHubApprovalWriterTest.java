@@ -72,11 +72,11 @@ class GitHubApprovalWriterTest extends BaseUnitTest {
         lenient().when(response.getErrors()).thenReturn(List.of());
         when(spec.execute()).thenReturn(Mono.just(response));
 
-        assertThatCode(() -> channel.approve(target, "looks good")).doesNotThrowAnyException();
+        assertThatCode(() -> channel.approve(target, "looks good, @alice")).doesNotThrowAnyException();
 
         verify(client).documentName("ApprovePullRequest");
         verify(spec).variable(eq("pullRequestId"), eq("PR_node123"));
-        verify(spec).variable(eq("body"), eq("looks good"));
+        verify(spec).variable(eq("body"), eq("looks good\\, <code>\\@alice</code>"));
     }
 
     @Test

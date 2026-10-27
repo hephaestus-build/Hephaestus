@@ -549,7 +549,7 @@ class GitLabLineNoteWriterTest extends BaseUnitTest {
             assertThat(receipt.externalUrl()).isEqualTo(NOTE_URL);
         });
         assertThat(rest.calls()).allSatisfy(call -> assertThat(call.json()).doesNotContainKey("position"));
-        assertThat(bodies().getFirst()).contains("`/approve`", MARKER, "hephaestus-diff-note-ck=result:a:0");
+        assertThat(bodies().getFirst()).contains("\\/approve once fixed", MARKER, "hephaestus-diff-note-ck=result:a:0");
         assertThat(bodies().getLast())
                 .isEqualTo("**[View code at line 10]("
                         + SERVER
@@ -585,6 +585,29 @@ class GitLabLineNoteWriterTest extends BaseUnitTest {
                             + "/docs/My%20Notes%20%28draft%29.md#L3-7)**\n\n"
                             + posted(ranged));
         });
+    }
+
+    @Test
+    void shouldMentionNoOneInALocationCommentWhenThePathOrNoteNamesSomeone() {
+        when(gitLabProvider.forScope(1L)).thenReturn(client);
+        stubDiscussions(List.of(), BOT);
+        when(diffVersions.read(eq(1L), any(), any())).thenReturn(WITHOUT_CITED_LINE);
+        rest.createAsAsked(987654, "DiscussionNote", 1);
+        LineNote note = ScmFeedbackFixtures.line(
+                ScmFeedbackFixtures.range("src/@types/index.d.ts", 3, 7), "Ask @alice", MARKER, "result:a:0");
+
+        channel.postImmutablePackage(
+                ScmFeedbackFixtures.target(
+                        new IntegrationRef(IntegrationKind.GITLAB, 1L, null), "group/project!42", REVIEWED),
+                List.of(note),
+                fence);
+
+        assertThat(rest.calls())
+                .singleElement()
+                .satisfies(call -> assertThat((String) call.json().get("body"))
+                        .contains("/src/%40types/index.d.ts#L3-7")
+                        .contains("Ask <code>\\@alice</code>")
+                        .doesNotContain(" @alice"));
     }
 
     @Test
@@ -748,22 +771,6 @@ class GitLabLineNoteWriterTest extends BaseUnitTest {
         });
         assertThat(fence.attempts).isEmpty();
         assertThat(rest.calls()).isEmpty();
-    }
-
-    @Test
-    void shouldReadAnEarlierFallbackCommentBackAsALocationComment() {
-        when(gitLabProvider.forScope(1L)).thenReturn(client);
-        LineNote kept = item("fix", "result:a:0");
-        stubDiscussions(
-                List.of(discussion(
-                        "gid://Disc/F",
-                        List.of(note("gid://Note/F", "**`src/Foo.java:10`**\n\n" + posted(kept), BOT)))),
-                BOT);
-
-        assertThat(channel.findPosted(target(), List.of(kept))).singleElement().satisfies(receipt -> {
-            assertThat(receipt.externalRef()).isEqualTo("gid://Note/F");
-            assertThat(receipt.actualKind()).isEqualTo(CopyForm.FILE_NOTE);
-        });
     }
 
     @Test
@@ -1371,12 +1378,13 @@ class GitLabLineNoteWriterTest extends BaseUnitTest {
     }
 
     private static String posted(LineNote item) {
-        return item.body() + "\n" + item.writeMarker() + "\n<!-- hephaestus-diff-note-ck=" + item.writeKey() + " -->";
+        return GitLabSummaryWriter.gitLabBody(item.body()) + "\n" + item.writeMarker()
+                + "\n<!-- hephaestus-diff-note-ck=" + item.writeKey() + " -->";
     }
 
     private static String placed(LineNote item) {
-        return item.body() + "\n" + item.writeMarker() + "\n" + GitLabLineNoteWriter.RANGE_PLACEMENT
-                + "\n<!-- hephaestus-diff-note-ck=" + item.writeKey() + " -->";
+        return GitLabSummaryWriter.gitLabBody(item.body()) + "\n" + item.writeMarker() + "\n"
+                + GitLabLineNoteWriter.RANGE_PLACEMENT + "\n<!-- hephaestus-diff-note-ck=" + item.writeKey() + " -->";
     }
 
     private List<String> bodies() {

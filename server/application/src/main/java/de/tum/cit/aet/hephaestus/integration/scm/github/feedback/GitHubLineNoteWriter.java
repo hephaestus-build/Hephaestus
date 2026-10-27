@@ -26,6 +26,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryContent;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryHandle;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryLookup;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmVersion;
+import de.tum.cit.aet.hephaestus.integration.scm.feedback.PostedText;
 import de.tum.cit.aet.hephaestus.integration.scm.feedback.ScmFeedbackFormatter;
 import de.tum.cit.aet.hephaestus.integration.scm.feedback.ScmFeedbackTargetResolver;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubGraphQlClientProvider;
@@ -185,7 +186,8 @@ public class GitHubLineNoteWriter implements LineNoteWriter {
         String encodedPath = Arrays.stream(note.anchor().path().split("/", -1))
                 .map(part -> URLEncoder.encode(part, StandardCharsets.UTF_8).replace("+", "%20"))
                 .collect(Collectors.joining("/"));
-        String body = "**[View file]("
+        // The link is built from known repository data, so it is the bot's own header; the note's text is escaped.
+        String header = "**[View file]("
                 + origin.replaceAll("/+$", "")
                 + "/"
                 + pr.owner()
@@ -195,10 +197,13 @@ public class GitHubLineNoteWriter implements LineNoteWriter {
                 + anchoredCommit
                 + "/"
                 + encodedPath
-                + ")**\n\n"
-                + postedBody(note);
+                + ")**";
         return new SummaryContent(
-                note.copyId(), body, note.writeKey(), ScmFeedbackFormatter.deliveryTag(note.writeKey()));
+                note.copyId(),
+                note.body(),
+                note.writeKey(),
+                note.writeMarker() + "\n\n" + ScmFeedbackFormatter.deliveryTag(note.writeKey()),
+                header);
     }
 
     private CopyWriteResult postMixed(
@@ -526,7 +531,7 @@ public class GitHubLineNoteWriter implements LineNoteWriter {
     }
 
     private static String postedBody(LineNote item) {
-        String body = item.body() + "\n\n" + item.writeMarker();
+        String body = PostedText.of(item.body()) + "\n\n" + item.writeMarker();
         return body + "\n" + ScmFeedbackFormatter.deliveryTag(item.writeKey());
     }
 

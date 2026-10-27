@@ -29,6 +29,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.LookupPresence;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryContent;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryHandle;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryLookup;
+import de.tum.cit.aet.hephaestus.integration.scm.feedback.PostedText;
 import de.tum.cit.aet.hephaestus.integration.scm.feedback.ScmFeedbackFixtures;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubGraphQlClientProvider;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -82,12 +83,13 @@ class GitHubSummaryWriterTest extends BaseUnitTest {
         ClientGraphQlResponse response = mockGraphQlResponse("addComment.commentEdge.node.id", "IC_comment456");
         when(spec.execute()).thenReturn(Mono.just(response));
 
-        SummaryHandle handle = channel.postSummary(target, ScmFeedbackFixtures.summary("body\n\nmarker", "marker"));
+        SummaryHandle handle =
+                channel.postSummary(target, ScmFeedbackFixtures.summary("body for @alice\n\nmarker", "marker"));
 
         assertNotNull(handle);
         assertThat(handle.externalRef()).isEqualTo("IC_comment456");
         assertThat(handle.url()).isEqualTo("https://github.com/owner/repo/pull/42#issuecomment-987654");
-        verify(spec).variable("body", "body\n\nmarker");
+        verify(spec).variable("body", "body for <code>\\@alice</code>\n\nmarker");
     }
 
     @Test
@@ -194,14 +196,17 @@ class GitHubSummaryWriterTest extends BaseUnitTest {
         when(spec.execute()).thenReturn(Mono.just(response));
 
         var outcome = channel.updateSummary(
-                target, new SummaryHandle("IC_prior", null), ScmFeedbackFixtures.summary("new body", "marker"));
+                target,
+                new SummaryHandle("IC_prior", null),
+                ScmFeedbackFixtures.summary("new body for @alice", "marker"));
 
         assertThat(outcome.kind()).isEqualTo(CopyUpdateKind.EDITED);
         assertNotNull(outcome.externalRef());
         assertThat(outcome.externalRef()).isEqualTo("IC_edited");
         assertThat(outcome.externalUrl()).isEqualTo("https://github.com/owner/repo/pull/42#issuecomment-987654");
         verify(spec).variable("id", "IC_prior");
-        verify(spec).variable("body", "new body\n\nmarker");
+        // An edit that adds a name notifies that person, so the edited body mentions no one either.
+        verify(spec).variable("body", "new body for <code>\\@alice</code>\n\nmarker");
     }
 
     @Test
@@ -364,7 +369,7 @@ class GitHubSummaryWriterTest extends BaseUnitTest {
 
     private static final SummaryContent EXPECTED = ScmFeedbackFixtures.summary("Summary text", MARKER);
 
-    private static final String EXACT = EXPECTED.externalBody();
+    private static final String EXACT = PostedText.summary(EXPECTED);
 
     private ClientGraphQlResponse mockCommentsPageResponse(
             String commentsPath,

@@ -36,6 +36,7 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -137,11 +138,11 @@ class GitLabSummaryWriterTest extends BaseUnitTest {
 
         ArgumentCaptor<Object> bodyCaptor = ArgumentCaptor.forClass(Object.class);
         verify(spec).variable(eq("body"), bodyCaptor.capture());
-        assertThat(bodyCaptor.getValue().toString()).contains("`/approve`");
+        assertThat(bodyCaptor.getValue().toString()).startsWith("\\/approve please\nsome body");
     }
 
     @Test
-    void updateSummaryEscapesSlashCommands() {
+    void updateSummaryEscapesSlashCommandsAndMentions() {
         FeedbackTarget target = gitlabTarget();
         when(gitLabProvider.isRateLimitCritical(1L)).thenReturn(false);
 
@@ -169,20 +170,14 @@ class GitLabSummaryWriterTest extends BaseUnitTest {
         channel.updateSummary(
                 target,
                 new SummaryHandle("gid://gitlab/Note/1", null),
-                ScmFeedbackFixtures.summary("/merge now\nrest", "marker"));
+                ScmFeedbackFixtures.summary("/merge now\nrest for @group/sub", "marker"));
 
         ArgumentCaptor<Object> bodyCaptor = ArgumentCaptor.forClass(Object.class);
         verify(spec).variable(eq("body"), bodyCaptor.capture());
-        assertThat(bodyCaptor.getValue().toString()).contains("`/merge`");
-    }
-
-    @Test
-    void escapeSlashCommands_leavesMidLineCommandsUntouched() {
-        // MULTILINE anchors ^ to line-start, so only a line-start "/approve" is an action; mid-line
-        // text is untouched.
-        assertThat(GitLabSummaryWriter.escapeSlashCommands("Please ask them to /approve it"))
-                .isEqualTo("Please ask them to /approve it");
-        assertThat(GitLabSummaryWriter.escapeSlashCommands("/approve\n/merge")).isEqualTo("`/approve`\n`/merge`");
+        // GitLab notifies a name added in an edit, so an edited summary mentions no one either.
+        assertThat(bodyCaptor.getValue().toString())
+                .contains("\\/merge now")
+                .contains("rest for <code>\\@group\\/sub</code>");
     }
 
     @Test
@@ -407,7 +402,7 @@ class GitLabSummaryWriterTest extends BaseUnitTest {
     private static final SummaryContent EXPECTED =
             ScmFeedbackFixtures.summary("/approve once fixed\nSummary text", MARKER);
 
-    private static final String EXACT = GitLabSummaryWriter.escapeSlashCommands(EXPECTED.externalBody());
+    private static final String EXACT = GitLabSummaryWriter.gitLabSummary(EXPECTED);
 
     private static final String BOT = "gid://gitlab/User/1";
 
@@ -500,7 +495,14 @@ class GitLabSummaryWriterTest extends BaseUnitTest {
         GraphQlClient.RequestSpec spec = mockRequestChain();
         ClientGraphQlResponse page = mockMrNotesPage(
                 List.of(
-                        note("gid://gitlab/Note/1", EXPECTED.externalBody()),
+                        // The marker with the text as written, not as it is posted: another copy, not this one.
+                        note(
+                                "gid://gitlab/Note/1",
+                                EXPECTED.body()
+                                                .replace(Objects.requireNonNull(EXPECTED.writeMarker()), "")
+                                                .strip()
+                                        + "\n\n"
+                                        + EXPECTED.writeMarker()),
                         note("gid://gitlab/Note/2", EXACT, "gid://gitlab/User/2")),
                 false,
                 null);

@@ -55,6 +55,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.feedback.PostedText;
 import de.tum.cit.aet.hephaestus.practices.feedback.decision.FeedbackContentDigest;
 import de.tum.cit.aet.hephaestus.practices.feedback.decision.FeedbackDecisionService;
 import de.tum.cit.aet.hephaestus.practices.feedback.delivery.FeedbackSendRecovery;
@@ -418,7 +419,7 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                     github.threads().on(ScriptedGitHub.pullRequest(review.repository(), review.pullRequestNumber()));
             assertThat(posted)
                     .singleElement()
-                    .satisfies(comment -> assertThat(comment.body()).contains(SUMMARY));
+                    .satisfies(comment -> assertThat(comment.body()).contains(PostedText.of(SUMMARY)));
             assertThat(feedback.findByIdAndWorkspaceId(feedbackId, review.workspaceId()))
                     .hasValueSatisfying(row -> {
                         assertThat(row.getState()).isEqualTo(FeedbackState.DELIVERED);
@@ -626,7 +627,7 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
             var posted = github.threads().on(thread);
             assertThat(posted)
                     .singleElement()
-                    .satisfies(comment -> assertThat(comment.body()).contains(SUMMARY));
+                    .satisfies(comment -> assertThat(comment.body()).contains(PostedText.of(SUMMARY)));
             assertThat(feedback.findByIdAndWorkspaceId(feedbackId, review.workspaceId()))
                     .hasValueSatisfying(row -> assertThat(row.getState()).isEqualTo(FeedbackState.DELIVERED));
             assertThat(copies.findByWorkspaceIdAndFeedbackIdOrderByPositionAsc(review.workspaceId(), feedbackId))

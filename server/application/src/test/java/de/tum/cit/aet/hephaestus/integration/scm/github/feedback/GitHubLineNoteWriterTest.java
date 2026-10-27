@@ -30,6 +30,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.LineNote;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryContent;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryHandle;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryLookup;
+import de.tum.cit.aet.hephaestus.integration.scm.feedback.PostedText;
 import de.tum.cit.aet.hephaestus.integration.scm.feedback.ScmFeedbackFixtures;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubGraphQlClientProvider;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -113,8 +114,9 @@ class GitHubLineNoteWriterTest extends BaseUnitTest {
         });
         var posted = ArgumentCaptor.forClass(SummaryContent.class);
         verify(summaries).postSummary(any(), posted.capture());
-        assertThat(posted.getValue().externalBody())
-                .contains("/blob/" + COMMIT + "/src/a%20file.ts", MARKER, "hephaestus-diff-note-ck=file-copy")
+        assertThat(PostedText.summary(posted.getValue()))
+                .startsWith("**[View file](https://github.com/owner/repo/blob/" + COMMIT + "/src/a%20file.ts)**\n\n")
+                .contains(MARKER, "hephaestus-diff-note-ck=file-copy")
                 .doesNotContain("#L", ":null");
         assertThat(fence.attempts).containsExactly(List.of(note.copyId().toString()));
     }
@@ -235,6 +237,31 @@ class GitHubLineNoteWriterTest extends BaseUnitTest {
         assertThat(signalForKey(result, "observation:b:0").externalRef()).isEqualTo("RC_b");
         assertThat(threads.bodies())
                 .containsExactly(posted(item("fix-a", "result:a:0")), posted(item("fix-b", "observation:b:0")));
+    }
+
+    @Test
+    void shouldPostALineNoteThatNamesSomeoneWithTheNameAsCode() {
+        stubPostable();
+        stubReviewThreads(List.of());
+        GraphQlClient.RequestSpec addSpec = stubAddReview(
+                "REVIEW_1",
+                List.of(returned("RC_a", "result:a:0", "https://github.com/owner/repo/pull/42#discussion_r111")));
+        ThreadsCaptor threads = captureThreads(addSpec);
+
+        channel.postImmutablePackage(githubTarget(), List.of(item("Ask @alice", "result:a:0")), fence);
+
+        assertThat(threads.bodies()).singleElement().asString().startsWith("Ask <code>\\@alice</code>\n\n");
+    }
+
+    @Test
+    void shouldRecognizeAPostedLineNoteThatNamedSomeone() {
+        when(gitHubProvider.forScope(1L)).thenReturn(client);
+        var note = item("Ask @alice", "result:a:0");
+        stubReviewThreads(List.of(thread("THREAD_a", "RC_a", authored(note))));
+
+        assertThat(channel.findPosted(githubTarget(), List.of(note)))
+                .extracting(CopyReceipt::externalRef)
+                .containsExactly("RC_a");
     }
 
     @Test
@@ -416,7 +443,7 @@ class GitHubLineNoteWriterTest extends BaseUnitTest {
     }
 
     private static String posted(LineNote item) {
-        return item.body() + "\n\n" + item.writeMarker() + "\n" + ckTag(String.valueOf(item.writeKey()));
+        return PostedText.of(item.body()) + "\n\n" + item.writeMarker() + "\n" + ckTag(String.valueOf(item.writeKey()));
     }
 
     private static Map<String, Object> authored(LineNote item) {
