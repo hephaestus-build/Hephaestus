@@ -214,6 +214,24 @@ class JobEvidenceFilesTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldPrepareTheNextAttemptOfAReviewWhoseRefusedAttemptLeftItsEvidence() throws Exception {
+        var files = new JobEvidenceFiles(new FabricLayout(root.toString()), jobs, clock, personCopies());
+        var job = job();
+        Path source = root.resolve("refused.txt");
+        Files.writeString(source, "captured once\n");
+        var raw = PreparedJobInputsFixtures.inputs(
+                new PreparedEvidence(Map.of(), Map.of("context/refused.txt", source), List.of(), null), null);
+        // The sandbox runtime had no room: the attempt ends, and its unadmitted evidence stays for an hour.
+        PreparedJobInputsFixtures.prepare(files, job, raw).close();
+
+        // The hold moved the job to the next attempt, so the same worker's next claim prepares a folder of its own.
+        job.setAttempt(job.getAttempt() + 1);
+        try (var retried = PreparedJobInputsFixtures.prepare(files, job, raw)) {
+            assertThat(retried.filesOnDisk().get("context/refused.txt")).hasContent("captured once\n");
+        }
+    }
+
+    @Test
     void shouldRetainUnadmittedEvidenceForOneHourAfterTheOwningHandleCloses() throws Exception {
         var files = new JobEvidenceFiles(new FabricLayout(root.toString()), jobs, clock, personCopies());
         var job = job();

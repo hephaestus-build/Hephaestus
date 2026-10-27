@@ -25,5 +25,6 @@ public enum ReviewStopReason {
     MODEL_UNAVAILABLE,
     ERROR,
     LEGACY_SCOPE_UNKNOWN,
-    CONTRACT_CHANGED;
+    CONTRACT_CHANGED,
+    NO_SANDBOX_ROOM;
 }

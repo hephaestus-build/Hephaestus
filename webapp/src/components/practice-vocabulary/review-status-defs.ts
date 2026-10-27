@@ -146,6 +146,7 @@ export const REVIEW_STOP_REASON_SENTENCES: Record<ReviewStopReason, string> = {
 	ERROR: "It stopped on an error.",
 	LEGACY_SCOPE_UNKNOWN: "It ran before Hephaestus recorded what it covered.",
 	CONTRACT_CHANGED: "Hephaestus was upgraded while it waited, so it stopped.",
+	NO_SANDBOX_ROOM: "Hephaestus had no room to run this review in time.",
 };
 
 /** The wire values of the server's `CandidateRefusal`; each withholds an observation that failed that check. */

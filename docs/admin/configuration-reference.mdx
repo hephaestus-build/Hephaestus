@@ -213,7 +213,7 @@ The application reads these variables, but the supported stack does not take the
 | Variable | Setting | Default | Required | Description |
 | --- | --- | --- | --- | --- |
 | `AGENT_CLAIM_BATCH_SIZE` | `hephaestus.agent.claim-batch-size` | `5` |  | Max QUEUED jobs considered per poll iteration. |
-| `AGENT_MAX_RETRIES` | `hephaestus.agent.max-retries` | `5` |  | How many times a job whose worker was lost goes back to the queue before it fails. The counter is the attempt number of the job. |
+| `AGENT_MAX_RETRIES` | `hephaestus.agent.max-retries` | `5` |  | How many times a job whose worker was lost goes back to the queue before it fails. The counter is the attempt number less the attempts that a worker's drain stopped or that found no sandbox room: those spend no retry. |
 | `AGENT_PAYLOAD_RETENTION` | `hephaestus.agent.payload-retention` | `P14D` |  | Age from `completed_at` at which a TERMINAL job's `capture` and `output` are stripped to NULL. |
 | `AGENT_POLL_INTERVAL` | `hephaestus.agent.poll-interval` | `1s` |  | How long the poll loop sleeps when a poll claimed nothing. |
 | `AGENT_ROW_RETENTION` | `hephaestus.agent.row-retention` | `P90D` |  | Age, counted from the end of a job, at which an ended job row that waits for no delivery is deleted. Must be at least the payload retention. |

@@ -84,8 +84,8 @@ public interface ReviewRuntimeRepository extends Repository<ReviewJob, UUID> {
     @Query("""
         SELECT new de.tum.cit.aet.hephaestus.agent.job.ReviewRuntimeRepository$QueueCounts(
           COALESCE(SUM(CASE WHEN j.status='RUNNING' THEN 1L ELSE 0L END),0L),
-          COALESCE(SUM(CASE WHEN j.status='QUEUED' AND j.holdReason IS NULL THEN 1L ELSE 0L END),0L),
-          MIN(CASE WHEN j.status='QUEUED' AND j.holdReason IS NULL THEN j.availableAt ELSE null END),
+          COALESCE(SUM(CASE WHEN j.status='QUEUED' AND (j.holdReason IS NULL OR j.holdReason<>'BUDGET') THEN 1L ELSE 0L END),0L),
+          MIN(CASE WHEN j.status='QUEUED' AND (j.holdReason IS NULL OR j.holdReason<>'BUDGET') THEN j.availableAt ELSE null END),
           COALESCE(SUM(CASE WHEN j.status='QUEUED' AND j.holdReason='BUDGET' THEN 1L ELSE 0L END),0L),
           COALESCE(SUM(CASE WHEN j.completedAt>=:hour AND j.completedAt<=:asOf THEN 1L ELSE 0L END),0L),
           COALESCE(SUM(CASE WHEN j.completedAt>=:day AND j.completedAt<=:asOf THEN 1L ELSE 0L END),0L))

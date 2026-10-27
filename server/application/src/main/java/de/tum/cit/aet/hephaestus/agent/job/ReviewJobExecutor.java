@@ -25,6 +25,7 @@ import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerProperties;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxProperties;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ResourceLimits;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxCancelledException;
+import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxCapacityException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxInfrastructureException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxInitializationException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxManager;
@@ -134,6 +135,18 @@ public class ReviewJobExecutor {
             .multiplier(2)
             .build();
 
+    /** How long a review waits in the queue after the sandbox runtime first had no room for it. */
+    static final Duration ROOM_WAIT = Duration.ofSeconds(30);
+
+    /** The longest wait between two refusals of sandbox room. */
+    static final Duration MAX_ROOM_WAIT = Duration.ofMinutes(5);
+
+    /** The job's error when the sandbox runtime had no room for it in time. */
+    static final String NO_ROOM_IN_TIME = "Hephaestus had no room to run this review in time.";
+
+    /** The job's error when the sandbox quota cannot hold one review sandbox at all. */
+    static final String CANNOT_FIT = "The sandbox quota is smaller than one review sandbox.";
+
     // A failed requeue strands the claim until recovery; this side-effect-free write can be retried.
     private static final RetryPolicy REQUEUE_REJECTED_CLAIM_POLICY = RetryPolicy.builder()
             .includes(Exception.class)
@@ -165,6 +178,15 @@ public class ReviewJobExecutor {
     private final RetryTemplate requeueRetries = retryTemplate(REQUEUE_REJECTED_CLAIM_POLICY);
 
     private final Map<RequeueCause, Counter> infraRetryRequeued = new EnumMap<>(RequeueCause.class);
+
+    /** Reviews that this worker's drain stopped: tried again without spending a retry, or past the drain cap. */
+    private final Counter drainedRequeued;
+
+    private final Counter drainedCancelled;
+    /** Review sandboxes that could not start, by reason: {@code sandbox.start.failures{kind=review}}. */
+    private final Map<SandboxCapacityException.Reason, Counter> sandboxStartFailures =
+            new EnumMap<>(SandboxCapacityException.Reason.class);
+
     private final ReviewJobTelemetry jobTelemetry;
     private final AtomicBoolean running = new AtomicBoolean(false);
     private volatile @Nullable Thread pollThread;
@@ -243,6 +265,23 @@ public class ReviewJobExecutor {
         this.capacityState = capacityState;
         this.workerId = workerProperties.resolvedWorkerId();
 
+        this.drainedRequeued = Counter.builder(AgentMetrics.AGENT_JOB_DRAINED)
+                .description("Reviews that a worker's drain stopped, by outcome")
+                .tag("outcome", "requeued")
+                .register(meterRegistry);
+        this.drainedCancelled = Counter.builder(AgentMetrics.AGENT_JOB_DRAINED)
+                .description("Reviews that a worker's drain stopped, by outcome")
+                .tag("outcome", "cancelled")
+                .register(meterRegistry);
+        for (SandboxCapacityException.Reason reason : SandboxCapacityException.Reason.values()) {
+            sandboxStartFailures.put(
+                    reason,
+                    Counter.builder(AgentMetrics.SANDBOX_START_FAILURES)
+                            .description("Sandboxes that could not start, by kind and reason")
+                            .tag("kind", "review")
+                            .tag("reason", reason.tag())
+                            .register(meterRegistry));
+        }
         for (RequeueCause cause : RequeueCause.values()) {
             infraRetryRequeued.put(
                     cause,
@@ -357,8 +396,11 @@ public class ReviewJobExecutor {
 
     private boolean settleForDrain(UUID jobId, ReviewJobCancellationReason reason) {
         ReviewJob job = jobRepository.findById(jobId).orElse(null);
-        return job != null
-                && recovery.recover(jobId, workerId, job.getAttempt(), reason) != ReviewJobRecovery.Outcome.NONE;
+        if (job == null) return false;
+        ReviewJobRecovery.Outcome outcome = recovery.recover(jobId, workerId, job.getAttempt(), reason);
+        if (outcome == ReviewJobRecovery.Outcome.REQUEUED) drainedRequeued.increment();
+        if (outcome == ReviewJobRecovery.Outcome.CANCELLED) drainedCancelled.increment();
+        return outcome != ReviewJobRecovery.Outcome.NONE;
     }
 
     // docker-java blocking I/O pins virtual threads; use a separate platform-thread pool.
@@ -797,7 +839,12 @@ public class ReviewJobExecutor {
 
     @Nullable
     ReviewJobStatus executePrepared(UUID jobId, ReviewJob job, SandboxSpec sandboxSpec) {
-        SandboxResult result = sandboxManager.execute(sandboxSpec);
+        SandboxResult result;
+        try {
+            result = sandboxManager.execute(sandboxSpec);
+        } catch (SandboxCapacityException e) {
+            return withoutRoom(jobId, job, e);
+        }
         AgentResult agentResult = practiceAgent.parseResult(result);
 
         // Two exits say the run could not reach something it needed, rather than anything about the
@@ -1339,6 +1386,43 @@ public class ReviewJobExecutor {
 
     private void releaseCapacity() {
         capacityState.ifPresent(WorkerCapacityState::releaseReview);
+    }
+
+    /**
+     * Nothing of the sandbox ran, so the attempt is not spent. A sandbox that has no room now waits in the queue for
+     * {@link #ROOM_WAIT} and longer; this hold bounds what an admission before the claim cannot see. A
+     * sandbox that no room can ever hold, or a wait past about an hour, cancels it for capacity.
+     *
+     * @return FAILED, or null when the job waits or this worker lost it
+     */
+    private @Nullable ReviewJobStatus withoutRoom(UUID jobId, ReviewJob job, SandboxCapacityException e) {
+        Objects.requireNonNull(sandboxStartFailures.get(e.reason())).increment();
+        Instant now = Instant.now();
+        boolean neverFits = e.reason() == SandboxCapacityException.Reason.QUOTA_CANNOT_FIT;
+        if (neverFits || job.getRoomRefusals() >= ReviewJob.MAX_ROOM_REFUSALS) {
+            String error = neverFits ? CANNOT_FIT : NO_ROOM_IN_TIME;
+            log.error(
+                    "No sandbox room for the review, so it is cancelled: reason={}, error={}",
+                    e.reason().tag(),
+                    error);
+            Integer cancelled = transactionTemplate.execute(status -> jobRepository.transitionToCancelledOwnedBy(
+                    jobId, now, error, ReviewJobCancellationReason.NO_SANDBOX_ROOM, workerId, job.getAttempt()));
+            return cancelled != null && cancelled > 0 ? ReviewJobStatus.CANCELLED : null;
+        }
+        Instant retryAt = now.plus(roomWait(job.getRoomRefusals()));
+        transactionTemplate.executeWithoutResult(status -> jobRepository.holdForSandboxRoom(
+                jobId, workerId, job.getAttempt(), ReviewJob.MAX_ROOM_REFUSALS, retryAt));
+        log.warn(
+                "No room for the review's sandbox, so the job waits in the queue: reason={}, retryAt={}",
+                e.reason().tag(),
+                retryAt);
+        return null;
+    }
+
+    /** The wait after the given number of earlier refusals: 30 seconds, doubling, at most 5 minutes. */
+    static Duration roomWait(int refusals) {
+        Duration wait = ROOM_WAIT.multipliedBy(1L << Math.min(refusals, 4));
+        return wait.compareTo(MAX_ROOM_WAIT) > 0 ? MAX_ROOM_WAIT : wait;
     }
 
     // Fence late terminal writes on worker and attempt so they cannot end an attempt that was requeued since.

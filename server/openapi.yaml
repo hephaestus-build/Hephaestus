@@ -22546,6 +22546,7 @@ components:
           - ERROR
           - LEGACY_SCOPE_UNKNOWN
           - CONTRACT_CHANGED
+          - NO_SANDBOX_ROOM
           - null
       required:
       - activeJobCount
@@ -22951,6 +22952,7 @@ components:
           - ERROR
           - LEGACY_SCOPE_UNKNOWN
           - CONTRACT_CHANGED
+          - NO_SANDBOX_ROOM
           - null
         usage:
           $ref: "#/components/schemas/ReviewUsage"
@@ -24659,6 +24661,7 @@ components:
           - ERROR
           - LEGACY_SCOPE_UNKNOWN
           - CONTRACT_CHANGED
+          - NO_SANDBOX_ROOM
           - null
       required:
       - activeJobCount
@@ -25041,6 +25044,7 @@ components:
           - ERROR
           - LEGACY_SCOPE_UNKNOWN
           - CONTRACT_CHANGED
+          - NO_SANDBOX_ROOM
       required:
       - practiceSlug
       - reason
@@ -25243,6 +25247,7 @@ components:
           - ERROR
           - LEGACY_SCOPE_UNKNOWN
           - CONTRACT_CHANGED
+          - NO_SANDBOX_ROOM
           - null
       required:
       - baselineScanId
@@ -25641,6 +25646,7 @@ components:
           - ERROR
           - LEGACY_SCOPE_UNKNOWN
           - CONTRACT_CHANGED
+          - NO_SANDBOX_ROOM
           - null
       required:
       - baselineScanId

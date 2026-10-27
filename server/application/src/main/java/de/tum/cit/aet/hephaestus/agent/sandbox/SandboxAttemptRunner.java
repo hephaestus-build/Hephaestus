@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ResourceLimits;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxBackend;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxCancelledException;
+import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxCapacityException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxInitializationException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxManager;
@@ -278,6 +279,11 @@ public class SandboxAttemptRunner implements SandboxManager {
     private SandboxException failed(Exception e, UUID jobId, SandboxBackend.@Nullable Handle handle) {
         if (e instanceof InterruptedException) {
             Thread.currentThread().interrupt();
+        }
+        if (e instanceof SandboxCapacityException capacity) {
+            // Not a failure: nothing ran, and the caller waits for room.
+            log.info("No room for the sandbox: reason={}", capacity.reason().tag());
+            return capacity;
         }
         executionsFailed.increment();
         captureLogsOnError(handle);

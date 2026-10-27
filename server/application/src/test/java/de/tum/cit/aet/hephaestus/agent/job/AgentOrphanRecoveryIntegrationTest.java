@@ -34,6 +34,7 @@ import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerProperties;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxReconciler;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxTestLimits;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxBackend;
+import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxCapacityException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxManager;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxResult;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxSpec;
@@ -126,6 +127,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.task.AsyncTaskExecutor;
@@ -149,6 +151,9 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private ReviewJobRepository jobRepository;
+
+    @Autowired
+    private ReviewRuntimeRepository runtimeRepository;
 
     @Autowired
     private WorkerRegistryRepository workerRegistryRepository;
@@ -1006,6 +1011,214 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
         assertThat(usageCalls(jobId)).isEmpty();
     }
 
+    @ParameterizedTest(name = "{0}")
+    @EnumSource(
+            value = ReviewJobCancellationReason.class,
+            names = {"DRAIN_GRACEFUL", "DRAIN_IMMEDIATE"})
+    @DisplayName("a drained review runs again under a new attempt number without spending a retry")
+    void shouldRequeueADrainedReviewUnderANewAttemptWithoutSpendingARetry(ReviewJobCancellationReason drain) {
+        UUID jobId = runningJobOwnedBy("live-owner", Instant.now(), 2);
+
+        ReviewJobRecovery.Outcome outcome =
+                transactionTemplate.execute(status -> recovery.recover(jobId, "live-owner", 2, drain));
+        assertThat(outcome).isEqualTo(ReviewJobRecovery.Outcome.REQUEUED);
+
+        ReviewJob requeued = jobRepository.findById(jobId).orElseThrow();
+        assertThat(requeued.getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
+        assertThat(requeued.getAttempt())
+                .as("the drained attempt ran, so the next one has its own number")
+                .isEqualTo(3);
+        assertThat(requeued.getDrainCount()).isEqualTo(1);
+        assertThat(requeued.getWorkerId()).isNull();
+    }
+
+    @Test
+    @DisplayName("a review drained at its retry limit still runs again, and a later failure counts only spent retries")
+    void shouldRequeueADrainedReviewAtItsRetryLimitAndCountOnlySpentRetriesAfterwards() {
+        UUID jobId = runningJobOwnedBy("live-owner", Instant.now(), 5);
+
+        assertThat(recoverAfterDrain(jobId, 5)).isEqualTo(ReviewJobRecovery.Outcome.REQUEUED);
+        claimAgain(jobId, "live-owner");
+
+        ReviewJobRecovery.Outcome lost =
+                transactionTemplate.execute(status -> recovery.recover(jobId, "live-owner", 6, null));
+        assertThat(lost)
+                .as("the worker was lost: 5 retries spent of 5, so the review fails")
+                .isEqualTo(ReviewJobRecovery.Outcome.FAILED);
+        ReviewJob failed = jobRepository.findById(jobId).orElseThrow();
+        assertThat(failed.getAttempt()).isEqualTo(6);
+        assertThat(failed.getDrainCount()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName(
+            "a review runs again after its last allowed drain, and the drain after it cancels it with the drain's reason")
+    void shouldCancelAReviewWithTheDrainsReasonOnceItWasDrainedTooOften() {
+        UUID jobId = runningJobOwnedBy("live-owner", Instant.now(), 3);
+        withCounts(jobId, ReviewJob.MAX_DRAINS - 1, 0);
+
+        assertThat(recoverAfterDrain(jobId, 3)).isEqualTo(ReviewJobRecovery.Outcome.REQUEUED);
+        claimAgain(jobId, "live-owner");
+        assertThat(recoverAfterDrain(jobId, 4)).isEqualTo(ReviewJobRecovery.Outcome.CANCELLED);
+
+        ReviewJob cancelled = jobRepository.findById(jobId).orElseThrow();
+        assertThat(cancelled.getStatus()).isEqualTo(ReviewJobStatus.CANCELLED);
+        assertThat(cancelled.getCancellationReason()).isEqualTo(ReviewJobCancellationReason.DRAIN_GRACEFUL);
+        assertThat(cancelled.getErrorMessage()).isEqualTo(ReviewJobRecovery.DRAINED_TOO_OFTEN);
+        assertThat(cancelled.getAttempt()).isEqualTo(4);
+        assertThat(cancelled.getDrainCount()).isEqualTo(ReviewJob.MAX_DRAINS);
+    }
+
+    @Test
+    @DisplayName("an admitted review that a drain stops is handed on as before, without a drain count")
+    void shouldHandOnADrainedAdmittedReviewWithoutCountingTheDrain() {
+        UUID jobId = runningJobOwnedBy("live-owner", Instant.now(), 0);
+        admitWithResult(jobId);
+        acceptPublicReview(jobId);
+        keepOriginalInputs(jobId, 0, "READY", "COMPLETE", Instant.now().plus(Duration.ofHours(1)));
+
+        assertThat(recoverAfterDrain(jobId, 0)).isEqualTo(ReviewJobRecovery.Outcome.REQUEUED);
+
+        ReviewJob handedOn = jobRepository.findById(jobId).orElseThrow();
+        assertThat(handedOn.getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
+        assertThat(handedOn.getAttempt()).isEqualTo(1);
+        assertThat(handedOn.getDrainCount()).isZero();
+    }
+
+    @Test
+    @DisplayName("a review whose sandbox the quota has no room for waits in the queue under a new attempt number")
+    void shouldHoldAReviewUnderANewAttemptWhenTheSandboxQuotaHasNoRoom() {
+        UUID jobId = runningJobOwnedBy("live-owner", Instant.now(), 2);
+        ReviewJob running = jobRepository.findById(jobId).orElseThrow();
+        double counted = sandboxStartFailures(SandboxCapacityException.Reason.QUOTA_EXCEEDED);
+
+        assertThat(executorOwnedBy("live-owner", refusedSandbox(SandboxCapacityException.Reason.QUOTA_EXCEEDED))
+                        .executePrepared(jobId, running, mock(SandboxSpec.class)))
+                .isNull();
+
+        ReviewJob held = jobRepository.findById(jobId).orElseThrow();
+        assertThat(held.getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
+        assertThat(held.getAttempt())
+                .as("nothing of this attempt is reused: its evidence, Job name and token stay its own")
+                .isEqualTo(3);
+        assertThat(held.getRoomRefusals())
+                .as("the refusal is counted instead of a retry")
+                .isEqualTo(1);
+        assertThat(held.getWorkerId()).isNull();
+        assertThat(held.getHoldReason()).isEqualTo(ReviewJob.HOLD_REASON_SANDBOX_ROOM);
+        assertThat(held.getAvailableAt()).isAfter(Instant.now());
+        assertThat(eligibleForClaim(jobId)).as("it waits before the next claim").isFalse();
+        assertThat(sandboxStartFailures(SandboxCapacityException.Reason.QUOTA_EXCEEDED))
+                .isEqualTo(counted + 1);
+    }
+
+    @Test
+    @DisplayName("a review that found no sandbox room for about an hour is cancelled for capacity, not failed")
+    void shouldCancelAReviewForCapacityOnceTheSandboxQuotaHadNoRoomTooOften() {
+        UUID jobId = runningJobOwnedBy("live-owner", Instant.now(), 4);
+        withCounts(jobId, 0, ReviewJob.MAX_ROOM_REFUSALS);
+        ReviewJob running = jobRepository.findById(jobId).orElseThrow();
+
+        assertThat(executorOwnedBy("live-owner", refusedSandbox(SandboxCapacityException.Reason.QUOTA_EXCEEDED))
+                        .executePrepared(jobId, running, mock(SandboxSpec.class)))
+                .isEqualTo(ReviewJobStatus.CANCELLED);
+
+        ReviewJob cancelled = jobRepository.findById(jobId).orElseThrow();
+        assertThat(cancelled.getStatus()).isEqualTo(ReviewJobStatus.CANCELLED);
+        assertThat(cancelled.getCancellationReason()).isEqualTo(ReviewJobCancellationReason.NO_SANDBOX_ROOM);
+        assertThat(cancelled.getErrorMessage()).isEqualTo("Hephaestus had no room to run this review in time.");
+        assertThat(cancelled.getAttempt()).isEqualTo(4);
+    }
+
+    @Test
+    @DisplayName("a review whose sandbox no quota room can ever hold is cancelled for capacity with its own message")
+    void shouldCancelAReviewWhoseSandboxTheQuotaCanNeverHold() {
+        UUID jobId = runningJobOwnedBy("live-owner", Instant.now(), 1);
+        ReviewJob running = jobRepository.findById(jobId).orElseThrow();
+        double counted = sandboxStartFailures(SandboxCapacityException.Reason.QUOTA_CANNOT_FIT);
+
+        assertThat(executorOwnedBy("live-owner", refusedSandbox(SandboxCapacityException.Reason.QUOTA_CANNOT_FIT))
+                        .executePrepared(jobId, running, mock(SandboxSpec.class)))
+                .isEqualTo(ReviewJobStatus.CANCELLED);
+
+        ReviewJob failed = jobRepository.findById(jobId).orElseThrow();
+        assertThat(failed.getStatus()).isEqualTo(ReviewJobStatus.CANCELLED);
+        assertThat(failed.getCancellationReason()).isEqualTo(ReviewJobCancellationReason.NO_SANDBOX_ROOM);
+        assertThat(failed.getAttempt()).isEqualTo(1);
+        assertThat(failed.getErrorMessage()).isEqualTo("The sandbox quota is smaller than one review sandbox.");
+        assertThat(sandboxStartFailures(SandboxCapacityException.Reason.QUOTA_CANNOT_FIT))
+                .isEqualTo(counted + 1);
+    }
+
+    @Test
+    @DisplayName("the queue counts a review that waits for sandbox room as waiting, and only a budget hold as held")
+    void shouldCountASandboxRoomHoldAsWaitingAndOnlyABudgetHoldAsHeld() {
+        UUID room = runningJobOwnedBy("live-owner", Instant.now(), 0);
+        UUID budget = runningJobOwnedBy("live-owner", Instant.now(), 0);
+        heldBy(room, ReviewJob.HOLD_REASON_SANDBOX_ROOM);
+        heldBy(budget, ReviewJob.HOLD_REASON_BUDGET);
+
+        ReviewRuntimeRepository.QueueCounts counts = runtimeRepository.queueCounts(workspace.getId(), Instant.now());
+
+        assertThat(counts.waiting())
+                .as("this test's workspace holds only its own two reviews")
+                .isEqualTo(1);
+        assertThat(counts.held()).isEqualTo(1);
+    }
+
+    /** The job waits in the queue on the hold. */
+    private void heldBy(UUID jobId, String holdReason) {
+        transactionTemplate.executeWithoutResult(status -> {
+            ReviewJob job = jobRepository.findById(jobId).orElseThrow();
+            job.setStatus(ReviewJobStatus.QUEUED);
+            job.setWorkerId(null);
+            job.setHoldReason(holdReason);
+            job.setAvailableAt(Instant.now().plus(Duration.ofMinutes(5)));
+            jobRepository.saveAndFlush(RuntimeJobTestData.persistParent(jdbc, job));
+        });
+    }
+
+    private ReviewJobRecovery.Outcome recoverAfterDrain(UUID jobId, int attempt) {
+        return transactionTemplate.execute(
+                status -> recovery.recover(jobId, "live-owner", attempt, ReviewJobCancellationReason.DRAIN_GRACEFUL));
+    }
+
+    /** The next claim of the requeued job by the worker. */
+    private void claimAgain(UUID jobId, String workerId) {
+        transactionTemplate.executeWithoutResult(status -> {
+            ReviewJob job = jobRepository.findById(jobId).orElseThrow();
+            job.setStatus(ReviewJobStatus.RUNNING);
+            job.setWorkerId(workerId);
+            job.setStartedAt(Instant.now());
+            jobRepository.saveAndFlush(RuntimeJobTestData.persistParent(jdbc, job));
+        });
+    }
+
+    /** The attempts of the job that drains stopped and that found no sandbox room. */
+    private void withCounts(UUID jobId, int drains, int roomRefusals) {
+        transactionTemplate.executeWithoutResult(status -> {
+            ReviewJob job = jobRepository.findById(jobId).orElseThrow();
+            job.setDrainCount(drains);
+            job.setRoomRefusals(roomRefusals);
+            jobRepository.saveAndFlush(RuntimeJobTestData.persistParent(jdbc, job));
+        });
+    }
+
+    private static SandboxManager refusedSandbox(SandboxCapacityException.Reason reason) {
+        var sandbox = mock(SandboxManager.class);
+        when(sandbox.execute(any())).thenThrow(new SandboxCapacityException("no room", reason));
+        return sandbox;
+    }
+
+    private double sandboxStartFailures(SandboxCapacityException.Reason reason) {
+        var counter = meterRegistry
+                .find("sandbox.start.failures")
+                .tag("kind", "review")
+                .tag("reason", reason.tag())
+                .counter();
+        return counter == null ? 0 : counter.count();
+    }
+
     /*
      * The real executor over this database, with the real recovery, continuation, usage and script-run owners. Only
      * the sandbox, which reports a hard timeout without any runner output, and collaborators executePrepared does not
@@ -1015,6 +1228,11 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
         var timedOut = new SandboxResult(124, Map.of(), "stopped", true, Duration.ofMinutes(15));
         var sandbox = mock(SandboxManager.class);
         when(sandbox.execute(any())).thenReturn(timedOut);
+        return executorOwnedBy(workerId, sandbox);
+    }
+
+    private ReviewJobExecutor executorOwnedBy(String workerId, SandboxManager sandbox) {
+        var timedOut = new SandboxResult(124, Map.of(), "stopped", true, Duration.ofMinutes(15));
         var agent = mock(PracticePiAdapter.class);
         when(agent.parseResult(timedOut)).thenReturn(new AgentResult(false, Map.of()));
         var worker = mock(WorkerProperties.class);

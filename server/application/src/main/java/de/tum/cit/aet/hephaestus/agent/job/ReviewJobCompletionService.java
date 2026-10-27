@@ -76,7 +76,9 @@ public class ReviewJobCompletionService {
         var review = assignments.review(job);
         boolean admitted = ResultAdmissionService.isAdmitted(job);
         var reason = job.getStatus() == ReviewJobStatus.CANCELLED
-                ? ReviewStopReason.CANCELLED
+                ? job.getCancellationReason() == ReviewJobCancellationReason.NO_SANDBOX_ROOM
+                        ? ReviewStopReason.NO_SANDBOX_ROOM
+                        : ReviewStopReason.CANCELLED
                 : job.getExecutionStartedAt() == null
                         ? ReviewStopReason.PREPARATION_FAILED
                         : ReviewStopReason.EXECUTION_FAILED;
@@ -130,9 +132,7 @@ public class ReviewJobCompletionService {
                 ? ReviewStopReason.READINESS_REFUSED
                 : completed
                         ? runtimeIncomplete ? ReviewStopReason.EXECUTION_INCOMPLETE : null
-                        : job.getStatus() == ReviewJobStatus.TIMED_OUT
-                                ? ReviewStopReason.TIMED_OUT
-                                : job.getStatus() == ReviewJobStatus.CANCELLED ? ReviewStopReason.CANCELLED : reason;
+                        : job.getStatus() == ReviewJobStatus.TIMED_OUT ? ReviewStopReason.TIMED_OUT : reason;
         reviews.complete(
                 job.getWorkspaceId(),
                 review.id(),
