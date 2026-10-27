@@ -1,5 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.slack.channel;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -64,7 +66,7 @@ class SlackChannelConsentProjectionTest extends BaseUnitTest {
 
         projection.onConsentChanged(new SlackChannelConsentChangedEvent(WORKSPACE, "C1"));
 
-        verify(bucket).put("T1.C1", "ACTIVE");
+        verify(bucket).put(eq("T1.C1"), any(byte[].class));
     }
 
     @Test
@@ -84,8 +86,8 @@ class SlackChannelConsentProjectionTest extends BaseUnitTest {
 
         projection.rebuild();
 
-        verify(bucket).put("T1.C1", "ACTIVE");
-        verify(bucket, never()).put("T1.C2", "ACTIVE");
+        verify(bucket).put(eq("T1.C1"), any(byte[].class));
+        verify(bucket, never()).put(eq("T1.C2"), any(byte[].class));
         verify(bucket).delete("T1.CERASED");
         verify(bucket).delete("T9.CPURGED");
     }

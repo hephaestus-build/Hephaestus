@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.sandbox;
 
 import de.tum.cit.aet.hephaestus.agent.runtime.AgentImageProperties;
 import de.tum.cit.aet.hephaestus.core.release.ImageReference;
+import de.tum.cit.aet.hephaestus.core.runtime.ReceiverComponent;
 import java.util.Set;
 import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
@@ -28,6 +29,7 @@ import org.springframework.stereotype.Component;
  */
 @Component
 @Profile("!specs & !cds-training")
+@ReceiverComponent
 public class AgentImageReferenceGuard {
 
     private static final Logger log = LoggerFactory.getLogger(AgentImageReferenceGuard.class);

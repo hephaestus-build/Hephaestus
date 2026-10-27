@@ -11,9 +11,9 @@ import de.tum.cit.aet.hephaestus.testconfig.NatsTestContainer;
 import io.nats.client.Connection;
 import io.nats.client.JetStreamManagement;
 import io.nats.client.Nats;
-import io.nats.client.api.KeyValueConfiguration;
-import io.nats.client.api.StorageType;
 import io.nats.client.impl.Headers;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityManagerFactory;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -21,9 +21,12 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.HexFormat;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Stream;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import javax.sql.DataSource;
@@ -39,7 +42,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.context.ApplicationContext;
 import org.springframework.data.repository.Repository;
-import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.JdbcOperations;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -97,12 +100,14 @@ class WebhookRoleContextIntegrationTest {
 
     @Test
     void shouldHoldNoDatabaseWhenOnlyTheWebhookRoleRuns() {
+        List<String> persistence = Arrays.stream(context.getBeanDefinitionNames())
+                .filter(name -> isPersistence(context.getType(name)))
+                .map(name -> name + ": " + context.getType(name))
+                .toList();
+        assertThat(persistence)
+                .as("beans of a persistence type in the webhook role")
+                .isEmpty();
         assertThat(context.getBeanNamesForType(DataSource.class)).isEmpty();
-        assertThat(context.getBeanNamesForType(EntityManagerFactory.class)).isEmpty();
-        assertThat(context.getBeanNamesForType(SpringLiquibase.class)).isEmpty();
-        assertThat(context.getBeanNamesForType(Repository.class)).isEmpty();
-        assertThat(context.getBeanNamesForType(JdbcTemplate.class)).isEmpty();
-        assertThat(context.getBeanNamesForType(TransactionManager.class)).isEmpty();
 
         assertThat(context.getBeanNamesForType(WebhookController.class)).hasSize(1);
         assertThat(context.getBeanNamesForType(GitLabConnectionWebhookController.class))
@@ -141,6 +146,9 @@ class WebhookRoleContextIntegrationTest {
     @Test
     void shouldPublishAnOutlineDeliveryOnItsRouteWhenPostgreSqlIsUnreachable() throws Exception {
         OutlineRouteCredential.Issued route = outlineRoutes.issue();
+        // The server projects the routes of the ACTIVE connections.
+        new ProjectedKeys(nats, OutlineWebhookController.ROUTES_BUCKET)
+                .add(OutlineWebhookController.routeKey(route.route()));
         String subscription = UUID.randomUUID().toString();
         byte[] body = ("{\"id\":\"" + UUID.randomUUID() + "\",\"webhookSubscriptionId\":\"" + subscription + "\","
                         + "\"event\":\"documents.update\",\"payload\":{\"id\":\"doc-1\"}}")
@@ -162,6 +170,23 @@ class WebhookRoleContextIntegrationTest {
     }
 
     @Test
+    void shouldRefuseAnOutlineDeliveryOnARouteNoConnectionHolds() throws Exception {
+        // Signed correctly, but no ACTIVE connection holds the route: Outline disables a subscription that gets 410.
+        OutlineRouteCredential.Issued orphan = outlineRoutes.issue();
+        new ProjectedKeys(nats, OutlineWebhookController.ROUTES_BUCKET).add("someOtherRoute");
+        byte[] body = "{\"event\":\"documents.update\"}".getBytes(StandardCharsets.UTF_8);
+        long millis = Instant.now().toEpochMilli();
+        String signature = hmac(orphan.signingSecret().getBytes(StandardCharsets.UTF_8), millis + ".", body);
+
+        HttpResponse<String> response = post(
+                OutlineWebhookController.PATH_PREFIX + orphan.route(),
+                body,
+                Map.of("Outline-Signature", "t=" + millis + ",s=" + signature));
+
+        assertThat(response.statusCode()).isEqualTo(410);
+    }
+
+    @Test
     void shouldRejectAnOutlineDeliveryWhenItIsSignedForAnotherRoute() throws Exception {
         OutlineRouteCredential.Issued signedFor = outlineRoutes.issue();
         OutlineRouteCredential.Issued postedTo = outlineRoutes.issue();
@@ -179,17 +204,25 @@ class WebhookRoleContextIntegrationTest {
 
     @Test
     void shouldPublishOnlyTheSlackChannelMessagesWhoseConsentTheServerProjected() throws Exception {
-        if (!nats.keyValueManagement().getBucketNames().contains(SlackChannelMessagePublishGate.CONSENT_BUCKET)) {
-            nats.keyValueManagement()
-                    .create(KeyValueConfiguration.builder()
-                            .name(SlackChannelMessagePublishGate.CONSENT_BUCKET)
-                            .storageType(StorageType.Memory)
-                            .build());
-        }
-        nats.keyValue(SlackChannelMessagePublishGate.CONSENT_BUCKET).put("T1.CACTIVE", "ACTIVE");
+        new ProjectedKeys(nats, SlackChannelMessagePublishGate.CONSENT_BUCKET).add("T1.CACTIVE");
 
         assertThat(postSlackChannelMessage("CACTIVE").body()).contains("\"ok\"");
         assertThat(postSlackChannelMessage("CPAUSED").body()).contains("\"dropped\"");
+    }
+
+    /** A bean that can reach a database: a connection, an entity manager, a repository, a template or a migrator. */
+    private static boolean isPersistence(@Nullable Class<?> type) {
+        return type != null
+                && (Stream.of(
+                                        DataSource.class,
+                                        EntityManagerFactory.class,
+                                        EntityManager.class,
+                                        Repository.class,
+                                        JdbcOperations.class,
+                                        TransactionManager.class,
+                                        SpringLiquibase.class)
+                                .anyMatch(database -> database.isAssignableFrom(type))
+                        || type.isAnnotationPresent(Entity.class));
     }
 
     private HttpResponse<String> postSlackChannelMessage(String channel) throws Exception {

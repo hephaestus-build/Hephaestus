@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.integration.slack.events;
 
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWebhookRole;
+import de.tum.cit.aet.hephaestus.core.runtime.ReceiverComponent;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.HexFormat;
@@ -22,6 +23,7 @@ import org.springframework.stereotype.Component;
 @Component
 @Conditional(SlackSignatureVerifier.ServerOrWebhookRole.class)
 @ConditionalOnProperty(name = "hephaestus.integration.slack.enabled", havingValue = "true")
+@ReceiverComponent
 public class SlackSignatureVerifier {
 
     /** Matches when either role runs in this process; the two role annotations on one class would require both. */

@@ -243,13 +243,13 @@ The three `runtime.*` rows in a column show the pod's role set:
 - The `webhook` overlay turns off the server and worker roles.
 - The monolith, with no overlay, runs all three.
 
-All three roles independently enforce Outline origin approval.
-The server controls connections and sync.
+The server and the worker enforce Outline origin approval.
+The server controls connections, sync and the change events it consumes.
 The worker projects evidence.
-The webhook role accepts change events.
+The webhook role reads no connection, so it does not need the allowlist.
 
-1. Supply the same allowlist to all roles.
-2. After a change, restart all three roles.
+1. Supply the same allowlist to the server and the worker.
+2. After a change, restart both roles.
 
 The reference Compose files supply the allowlist automatically.
 

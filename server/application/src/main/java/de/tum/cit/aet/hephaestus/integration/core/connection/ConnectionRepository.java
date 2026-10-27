@@ -149,6 +149,28 @@ public interface ConnectionRepository extends JpaRepository<Connection, Long> {
             @Param("subscriptionId") String subscriptionId);
 
     /**
+     * Every ACTIVE Outline connection and the route its change-notification subscription posts to ({@code null} when
+     * none is registered). Deliberately unscoped: the server projects the routes of every workspace to the receiver,
+     * which holds no database, and heals the connections that have none.
+     */
+    @Query(value = """
+        SELECT c.workspace_id AS "workspaceId",
+               c.config ->> 'webhookRoute' AS "route"
+        FROM connection c
+        WHERE c.kind = 'OUTLINE'
+          AND c.state = 'ACTIVE'
+        """, nativeQuery = true)
+    List<OutlineRouteRow> findActiveOutlineRoutes();
+
+    /** One ACTIVE Outline connection's workspace and webhook route. */
+    interface OutlineRouteRow {
+        Long getWorkspaceId();
+
+        @Nullable
+        String getRoute();
+    }
+
+    /**
      * The (workspace, server, route) behind one Outline change-notification
      * subscription. Aliases in the native query above are quoted so the JDBC column labels match
      * these getters exactly (Postgres folds unquoted identifiers to lower-case).

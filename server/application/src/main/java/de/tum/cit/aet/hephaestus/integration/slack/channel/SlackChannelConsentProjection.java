@@ -5,21 +5,14 @@ import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
+import de.tum.cit.aet.hephaestus.integration.core.webhook.ProjectedKeys;
 import de.tum.cit.aet.hephaestus.integration.slack.channel.SlackChannelConsentService.SlackChannelConsentChangedEvent;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannel.ConsentState;
 import de.tum.cit.aet.hephaestus.integration.slack.domain.SlackMonitoredChannelRepository;
 import de.tum.cit.aet.hephaestus.integration.slack.webhook.SlackChannelMessagePublishGate;
-import io.nats.client.JetStreamApiException;
-import io.nats.client.KeyValue;
-import io.nats.client.KeyValueManagement;
-import io.nats.client.api.KeyValueConfiguration;
-import io.nats.client.api.StorageType;
-import java.io.IOException;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Optional;
 import java.util.Set;
-import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -33,8 +26,8 @@ import org.springframework.transaction.event.TransactionalEventListener;
 /**
  * Writes which Slack channels are {@code ACTIVE} to the NATS key-value bucket the receiver's
  * {@link SlackChannelMessagePublishGate} reads, so channel content without consent is dropped before it is stored and
- * the receiver needs no database. A key is {@code <teamId>.<channelId>} and exists only while the channel is
- * {@code ACTIVE}; the bucket holds Slack ids and nothing else.
+ * the receiver needs no database. A key is {@code <teamId>.<channelId>}, it exists only while the channel is
+ * {@code ACTIVE}, and its value is empty; the bucket holds Slack ids and nothing else.
  *
  * <p>A consent change through {@link SlackChannelConsentService} updates its key after commit. A rebuild at start and
  * every minute repairs what that cannot see: an erasure, a disconnected or purged workspace, or an update lost to a
@@ -51,16 +44,13 @@ public class SlackChannelConsentProjection {
 
     private static final Logger log = LoggerFactory.getLogger(SlackChannelConsentProjection.class);
 
-    private final io.nats.client.Connection nats;
+    private final ProjectedKeys consent;
     private final SlackMonitoredChannelRepository channels;
     private final ConnectionService connections;
 
-    /** Guarded by {@code this}. */
-    private @Nullable KeyValue bucket;
-
     public SlackChannelConsentProjection(
             io.nats.client.Connection nats, SlackMonitoredChannelRepository channels, ConnectionService connections) {
-        this.nats = nats;
+        this.consent = new ProjectedKeys(nats, SlackChannelMessagePublishGate.CONSENT_BUCKET);
         this.channels = channels;
         this.connections = connections;
     }
@@ -76,13 +66,12 @@ public class SlackChannelConsentProjection {
                 .filter(ConsentState.ACTIVE::equals)
                 .isPresent();
         try {
-            KeyValue kv = bucket();
             if (active) {
-                kv.put(key, ConsentState.ACTIVE.name());
+                consent.add(key);
             } else {
-                kv.delete(key);
+                consent.remove(key);
             }
-        } catch (IOException | JetStreamApiException e) {
+        } catch (ProjectedKeys.UnavailableException e) {
             log.warn("Slack consent projection update failed; the next rebuild repairs it: {}", e.toString());
         }
     }
@@ -99,22 +88,8 @@ public class SlackChannelConsentProjection {
                             .forEach(channel -> active.add(SlackChannelMessagePublishGate.consentKey(team, channel))));
         }
         try {
-            KeyValue kv = bucket();
-            List<String> stored = kv.keys();
-            for (String key : stored) {
-                if (!active.contains(key)) {
-                    kv.delete(key);
-                }
-            }
-            for (String key : active) {
-                if (!stored.contains(key)) {
-                    kv.put(key, ConsentState.ACTIVE.name());
-                }
-            }
-        } catch (IOException | JetStreamApiException | InterruptedException e) {
-            if (e instanceof InterruptedException) {
-                Thread.currentThread().interrupt();
-            }
+            consent.replaceAll(active);
+        } catch (ProjectedKeys.UnavailableException e) {
             log.warn("Slack consent projection rebuild failed: {}", e.toString());
         }
     }
@@ -124,20 +99,5 @@ public class SlackChannelConsentProjection {
                 .findActive(workspaceId, IntegrationKind.SLACK)
                 .map(Connection::getInstanceKey)
                 .filter(SlackChannelMessagePublishGate::isSlackId);
-    }
-
-    private KeyValue bucket() throws IOException, JetStreamApiException {
-        if (bucket == null) {
-            KeyValueManagement management = nats.keyValueManagement();
-            if (!management.getBucketNames().contains(SlackChannelMessagePublishGate.CONSENT_BUCKET)) {
-                management.create(KeyValueConfiguration.builder()
-                        .name(SlackChannelMessagePublishGate.CONSENT_BUCKET)
-                        .storageType(StorageType.File)
-                        .maxHistoryPerKey(1)
-                        .build());
-            }
-            bucket = nats.keyValue(SlackChannelMessagePublishGate.CONSENT_BUCKET);
-        }
-        return bucket;
     }
 }

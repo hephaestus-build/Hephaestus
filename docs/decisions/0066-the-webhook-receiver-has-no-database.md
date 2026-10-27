@@ -4,7 +4,7 @@
 **Date:** 2026-10-26
 **Authors:** Felix T.J. Dietrich
 
-**Amends:** [ADR 0008](0008-webhook-runtime-role.md) § Consequences (DB connection retained on the webhook pod) and § Residual risks accepted (DataSource on the webhook pod), and [ADR 0023](0023-outline-documentation-integration.md) § 3 (the Outline signing secret).
+**Amends:** [ADR 0005](0005-two-role-runtime-via-conditional-on-property.md) (a webhook-only process is assembled from a scan scope, not from property gates alone), [ADR 0008](0008-webhook-runtime-role.md) § Consequences (DB connection retained on the webhook pod) and § Residual risks accepted (DataSource on the webhook pod), and [ADR 0023](0023-outline-documentation-integration.md) § 3 (the Outline signing secret).
 
 ## Context
 
@@ -67,15 +67,20 @@ The receiver recomputes the secret from the routing secret and the URL, and veri
 The connection stores the route, not a secret.
 The receiver publishes the verified route in the `Hephaestus-Route` header.
 The server drops a delivery whose route is not the one that its subscription registered, so a delivery signed for one connection cannot name another connection's subscription.
-The full sync replaces a subscription that is not on a current route: one without a route, on another URL, or on a retired routing key.
+The server projects the routes that ACTIVE connections hold into the NATS key-value bucket `outline-routes` (key: the route id; value: empty).
+The receiver answers a verified delivery on a route outside that set with `410`, so Outline disables an orphaned subscription: one whose connection was disconnected, or whose upstream deletion failed.
+A route is in the set before its subscription is registered, so the first delivery is never refused; a missing bucket answers `503`.
+The full sync, and a heal at start and every 5 minutes, replace a subscription that is not on a current route: one without a route, on another URL, or on a retired routing key.
+An upgrade or a key rotation therefore needs no operator step.
 This is the same model as the GitLab route credential, and like Svix every subscription has its own secret.
 
-**Slack: (c).** The server writes the `ACTIVE` channels to the NATS key-value bucket `slack-channel-consent`, keyed `<teamId>.<channelId>`.
+**Slack: (c).** The server writes the `ACTIVE` channels to the NATS key-value bucket `slack-channel-consent`, keyed `<teamId>.<channelId>` with an empty value.
 A consent change updates its key after commit.
 A rebuild at start and every minute repairs erasures, purges and updates lost to a NATS outage.
 The receiver fails closed: a missing key drops the channel message, and a missing or unreadable bucket fails the delivery, so nothing is published and Slack retries.
 A consent change through the consent service reaches the receiver right after its commit.
 An erasure, a disconnection, or an update lost to a NATS outage reaches it through the rebuild, at most one minute later.
+A rebuild also recreates a bucket that NATS lost.
 Updates and rebuilds run one at a time, so a rebuild never restores a key that a later change removed.
 The bucket holds Slack team and channel ids with the state `ACTIVE`: no message content, no token, no secret.
 The server still checks consent when it stores a message.
@@ -91,7 +96,7 @@ Option (b) was rejected for Slack: a webhook stream keeps a message for 7 days, 
 - A component that the receiver needs must be in `WebhookReceiverScope`.
   `WebhookReceiverScopeArchitectureTest` fails when a webhook-role component, verifier, deriver, publish gate or secret source falls outside it, or when a listed name no longer names a class.
 - The receiver no longer waits for the schema migration. It reads no schema.
-- The shared `/webhooks/outline` path is gone. An Outline subscription registered before this change posts there and is refused; the next full sync of its workspace registers it again on a route. The release note tells operators how to start that sync at once.
+- The shared `/webhooks/outline` path is gone. An Outline subscription registered before this change posts there and is refused, until the server registers it again on a route within minutes of its start. Outline changes that the previous receiver published carry no route, so the consumer drops them; the next sync recovers their effect.
 - A Slack consent change reaches the receiver after its commit, or after at most one minute through the rebuild.
   Until then, a paused channel's message can be published, and the server drops it when it checks consent.
 - Rotating `hephaestus.webhook.routing.secret` moves Outline subscriptions to the new key at the next reconcile, while `previous-secret` keeps the old routes verifiable.

@@ -3,14 +3,10 @@ package de.tum.cit.aet.hephaestus.integration.slack.webhook;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWebhookRole;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.WebhookPublishGate;
+import de.tum.cit.aet.hephaestus.integration.core.webhook.ProjectedKeys;
 import io.nats.client.Connection;
-import io.nats.client.JetStreamApiException;
-import io.nats.client.KeyValue;
-import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.util.Map;
 import java.util.regex.Pattern;
-import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
@@ -34,15 +30,14 @@ public class SlackChannelMessagePublishGate implements WebhookPublishGate {
 
     private static final Pattern SLACK_ID = Pattern.compile("[A-Z0-9]{1,32}");
 
-    private final Connection nats;
+    private final ProjectedKeys consent;
     private final boolean conversationIngestEnabled;
-    private volatile @Nullable KeyValue consent;
 
     public SlackChannelMessagePublishGate(
             Connection nats,
             @Value("${hephaestus.integration.slack.conversation-ingest.enabled:true}")
                     boolean conversationIngestEnabled) {
-        this.nats = nats;
+        this.consent = new ProjectedKeys(nats, CONSENT_BUCKET);
         this.conversationIngestEnabled = conversationIngestEnabled;
     }
 
@@ -87,19 +82,9 @@ public class SlackChannelMessagePublishGate implements WebhookPublishGate {
         return isActive(teamId, channelId) ? Decision.allow() : Decision.drop("slack-channel-not-active");
     }
 
+    /** Throws {@link ProjectedKeys.UnavailableException} when consent cannot be read, so nothing is published. */
     private boolean isActive(String teamId, String channelId) {
-        try {
-            KeyValue bucket = consent;
-            if (bucket == null) {
-                bucket = nats.keyValue(CONSENT_BUCKET);
-                consent = bucket;
-            }
-            return bucket.get(consentKey(teamId, channelId)) != null;
-        } catch (JetStreamApiException e) {
-            throw new IllegalStateException("Slack consent lookup failed", e);
-        } catch (IOException e) {
-            throw new UncheckedIOException("Slack consent lookup failed", e);
-        }
+        return consent.contains(consentKey(teamId, channelId));
     }
 
     private static boolean isChannelMessage(JsonNode event) {

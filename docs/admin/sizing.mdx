@@ -120,7 +120,7 @@ A workspace sync can hold two connections, so the scheduled syncs use at most ei
 The rest stays free for requests.
 
 The worker profile gives the worker a pool of 32 connections, in Compose and on any other deployment.
-The webhook profile gives the webhook server a pool of 2: only an Outline delivery reads the database, with one query.
+The webhook server has no database and no pool.
 The server keeps the application default of 20.
 `HIKARI_MAXIMUM_POOL_SIZE` overrides the pool size of each JVM that receives it.
 The Compose stacks pass it to the worker only.

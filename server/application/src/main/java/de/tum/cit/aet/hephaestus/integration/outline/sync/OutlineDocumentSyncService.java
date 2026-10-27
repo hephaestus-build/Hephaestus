@@ -197,9 +197,6 @@ public class OutlineDocumentSyncService {
                 done++;
                 reportCollectionDone(handle, done, total, collection.getName());
             }
-            // Self-heal the change-notification subscription each reconcile (Outline auto-disables a
-            // subscription after repeated delivery failures); best-effort, never throws.
-            webhookRegistrar.ensureSubscription(workspaceId);
             retention.enforceSizeCap(workspaceId);
             long stale = mirrorWriter.dropStaleTombstones(workspaceId, now.minus(properties.staleness()));
             log.info(
@@ -216,6 +213,10 @@ public class OutlineDocumentSyncService {
                     SyncPhase.COLLECTIONS,
                     "Collection synchronization stopped at the provider rate limit.",
                     null);
+        } finally {
+            // Self-heal the change-notification subscription each reconcile, also one that stopped early (Outline
+            // auto-disables a subscription after repeated delivery failures); best-effort, never throws.
+            webhookRegistrar.ensureSubscription(workspaceId);
         }
     }
 

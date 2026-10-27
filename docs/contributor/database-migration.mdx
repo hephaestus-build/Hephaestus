@@ -247,8 +247,8 @@ After the upgrade from the previous stable release, the driver runs the previous
    Apart from the delivery id, the two stream messages must have the same subject and body.
    The candidate must keep each header of the previous release with its value. It can add a header.
 
-The webhook receiver reads the database only for an Outline connection, through an entity that step 1 validates.
-Its risk is the NATS contract with the server of the other release.
+The webhook receiver reads no database (ADR 0066).
+Its risk is the NATS contract with the server of the other release: the message headers and the key-value buckets that the server projects.
 Each release tests its own receiver against its own consumer.
 Thus, the server of the previous release reads the messages of the candidate's receiver.
 The test does not prove that the candidate's server reads a message without a header that the candidate added.

@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.core;
 
+import de.tum.cit.aet.hephaestus.core.runtime.ReceiverComponent;
 import java.util.regex.Pattern;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.bind.DefaultValue;
@@ -13,6 +14,7 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  *     without a scheme, port or path, at most 189 characters. Required when subdomains are enabled.
  */
 @ConfigurationProperties("hephaestus.workspace.subdomains")
+@ReceiverComponent
 public record WorkspaceSubdomainProperties(
         @DefaultValue("false") boolean enabled,
         @DefaultValue("") String baseDomain) {

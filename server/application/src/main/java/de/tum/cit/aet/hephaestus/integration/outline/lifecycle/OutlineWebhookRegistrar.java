@@ -1,23 +1,31 @@
 package de.tum.cit.aet.hephaestus.integration.outline.lifecycle;
 
+import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.consumer.IntegrationNatsConsumer;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.outline.client.OutlineWebhookClient;
 import de.tum.cit.aet.hephaestus.integration.outline.client.model.OutlineWebhookSubscription;
+import de.tum.cit.aet.hephaestus.integration.outline.metrics.OutlineMetrics;
 import de.tum.cit.aet.hephaestus.integration.outline.webhook.OutlineRouteCredential;
 import de.tum.cit.aet.hephaestus.integration.outline.webhook.OutlineWebhookController;
 import de.tum.cit.aet.hephaestus.integration.outline.webhook.OutlineWebhookEvents;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.Gauge;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -54,17 +62,62 @@ public class OutlineWebhookRegistrar {
     /** Absent when {@code hephaestus.sync.nats.enabled=false}, so every use goes through {@link ObjectProvider#ifAvailable}. */
     private final ObjectProvider<IntegrationNatsConsumer> natsConsumer;
 
+    /** Absent without NATS or off the server role; then no receiver reads routes either. */
+    private final ObjectProvider<OutlineRouteProjection> routes;
+
+    private final ConnectionRepository connections;
+
+    private final Counter failedDeletions;
+
+    /** ACTIVE connections whose subscription is missing or not on a current route, as of the last heal. */
+    private final AtomicInteger unrouted = new AtomicInteger();
+
     public OutlineWebhookRegistrar(
             ConnectionService connectionService,
             OutlineWebhookClient outlineApiClient,
             OutlineRouteCredential credential,
             @Value("${hephaestus.webhook.external-url:}") String externalUrl,
-            ObjectProvider<IntegrationNatsConsumer> natsConsumer) {
+            ObjectProvider<IntegrationNatsConsumer> natsConsumer,
+            ObjectProvider<OutlineRouteProjection> routes,
+            ConnectionRepository connections,
+            MeterRegistry meterRegistry) {
         this.connectionService = connectionService;
         this.outlineApiClient = outlineApiClient;
         this.credential = credential;
         this.externalUrl = externalUrl;
         this.natsConsumer = natsConsumer;
+        this.routes = routes;
+        this.connections = connections;
+        this.failedDeletions = Counter.builder(OutlineMetrics.OUTLINE_WEBHOOK_SUBSCRIPTION_DELETION_FAILED)
+                .description("Outline subscriptions that Hephaestus could not delete upstream")
+                .register(meterRegistry);
+        Gauge.builder(OutlineMetrics.OUTLINE_WEBHOOK_SUBSCRIPTION_UNROUTED, unrouted, AtomicInteger::get)
+                .description("ACTIVE Outline connections whose subscription is missing or not on a current route")
+                .register(meterRegistry);
+    }
+
+    /**
+     * Registers the subscription of every ACTIVE connection that has none on a current route: after an upgrade, a
+     * routing key rotation, or a registration that failed. Runs at start and every 5 minutes until none is left, so no
+     * operator step and no full sync is needed; {@code outline.webhook.subscription.unrouted} counts what is left.
+     */
+    @Scheduled(fixedDelayString = "PT5M", initialDelayString = "PT30S")
+    @WorkspaceAgnostic(
+            "Heals the Outline subscription of every workspace; each registration is scoped to its workspace")
+    public void healRoutes() {
+        if (externalUrl == null || externalUrl.isBlank() || !credential.isConfigured()) {
+            return;
+        }
+        int left = 0;
+        for (ConnectionRepository.OutlineRouteRow row : connections.findActiveOutlineRoutes()) {
+            String route = row.getRoute();
+            if (route != null && credential.isCurrent(route)) {
+                continue;
+            }
+            ensureSubscription(row.getWorkspaceId());
+            left++;
+        }
+        unrouted.set(left);
     }
 
     /**
@@ -85,7 +138,7 @@ public class OutlineWebhookRegistrar {
      * Ensures the workspace has a live change-notification subscription. Without a stored id this
      * registers one (a quiet no-op when the integration has no external URL, ACTIVE Outline connection,
      * server URL, or token). With a stored id it verifies the subscription upstream: gone,
-     * {@code enabled=false} (Outline auto-disables after 25 consecutive delivery failures), posting to
+     * {@code enabled=false} (Outline disables a subscription whose deliveries fail too often), posting to
      * another URL, or on a route of a retired routing key is replaced: a new subscription is registered and
      * stored, then the old one is deleted upstream; an unverifiable upstream (listing failed) changes nothing.
      */
@@ -157,6 +210,8 @@ public class OutlineWebhookRegistrar {
         OutlineRouteCredential.Issued route = credential.issue();
         String deliveryUrl = deliveryUrl(route.route());
         try {
+            // Allowed first: the receiver refuses a route it does not know, and Outline may deliver at once.
+            routes.ifAvailable(projection -> projection.allow(route.route()));
             String subscriptionId = outlineApiClient.createWebhookSubscription(
                     serverUrl,
                     token,
@@ -168,12 +223,22 @@ public class OutlineWebhookRegistrar {
                 log.warn("outline.webhook: register returned no subscription id for workspaceId={}", workspaceId);
                 return false;
             }
-            connectionService.updateConfig(workspaceId, IntegrationKind.OUTLINE, cfg -> {
-                if (!(cfg instanceof ConnectionConfig.OutlineConfig outlineCfg)) {
-                    throw new IllegalStateException("Expected OutlineConfig on workspace=" + workspaceId);
-                }
-                return outlineCfg.withWebhookSubscription(subscriptionId, route.route());
-            });
+            boolean stored = connectionService
+                    .updateConfig(workspaceId, IntegrationKind.OUTLINE, cfg -> {
+                        if (!(cfg instanceof ConnectionConfig.OutlineConfig outlineCfg)) {
+                            throw new IllegalStateException("Expected OutlineConfig on workspace=" + workspaceId);
+                        }
+                        return outlineCfg.withWebhookSubscription(subscriptionId, route.route());
+                    })
+                    .isPresent();
+            if (!stored) {
+                // The connection left ACTIVE meanwhile: nothing holds this subscription, so it must not stay upstream.
+                log.warn(
+                        "outline.webhook: connection of workspaceId={} is no longer active; deleting the new subscription",
+                        workspaceId);
+                deleteQuietly(serverUrl, token, subscriptionId);
+                return false;
+            }
             log.info("outline.webhook: registered subscription {} for workspaceId={}", subscriptionId, workspaceId);
             // The subject the scope consumer filters on is derived from this id — reconcile now instead of
             // waiting for a restart (fresh register) or the next 6h reconcile (self-heal re-register).
@@ -190,20 +255,24 @@ public class OutlineWebhookRegistrar {
         return externalUrl.replaceAll("/+$", "") + OutlineWebhookController.PATH_PREFIX + route;
     }
 
-    /** Best-effort: a subscription that is already gone upstream leaves nothing to delete. */
+    /**
+     * Deletes a subscription upstream. A failure leaves it posting to a route that the receiver refuses once the route
+     * left the projection, so Outline disables it; it is still counted, because Outline may first retry it for a while.
+     */
     private void deleteQuietly(String serverUrl, String token, String subscriptionId) {
         try {
             outlineApiClient.deleteWebhookSubscription(serverUrl, token, subscriptionId);
         } catch (RuntimeException e) {
-            log.debug("outline.webhook: could not delete stale subscription {}: {}", subscriptionId, e.toString());
+            failedDeletions.increment();
+            log.warn("outline.webhook: could not delete subscription {}: {}", subscriptionId, e.toString());
         }
     }
 
     /**
      * Deactivation-time teardown: the connection just left ACTIVE, so it is resolved by id regardless of
      * state. SUSPENDED connections still carry credentials and get a real upstream delete; UNINSTALLED
-     * ones had their credentials purged — then this only logs that the orphaned subscription will
-     * auto-disable upstream. The stored id/route stay on the row (the ACTIVE-scoped config mutator no
+     * ones had their credentials purged — then this only logs; the receiver refuses the orphaned subscription's
+     * route once the projection drops it, and Outline disables the subscription. The stored id/route stay on the row (the ACTIVE-scoped config mutator no
      * longer reaches it); reactivation's {@link #ensureSubscription} self-heal replaces them.
      *
      * <p>Runs {@link Propagation#NOT_SUPPORTED}, matching {@code GitLabWebhookService}: the upstream

@@ -6,6 +6,7 @@ import org.springframework.stereotype.Component;
 /** Artifact profiles disable runtime responsibilities and must never overlay production. */
 @Component
 @Profile("prod & (specs | cds-training)")
+@ReceiverComponent
 public final class BuildProfileGuard {
 
     public BuildProfileGuard() {

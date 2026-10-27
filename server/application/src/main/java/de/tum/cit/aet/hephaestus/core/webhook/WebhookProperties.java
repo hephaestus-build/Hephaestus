@@ -288,12 +288,13 @@ public record WebhookProperties(
     }
 
     /**
-     * Signing keys for the connection-scoped GitLab webhook credential. {@code secret} signs new hooks;
-     * {@code previousSecret} is still accepted while an operator rotates, until every hook signed with it has been
-     * replaced. Without {@code secret} no connection-scoped hook is registered.
+     * Routing keys for the webhooks Hephaestus registers: the connection-scoped GitLab credential and each Outline
+     * subscription's signing secret. {@code secret} signs new hooks; {@code previousSecret} is still accepted while an
+     * operator rotates, until every hook signed with it has been replaced. Without {@code secret} neither is registered.
      *
-     * @param secret Key that signs the webhook token of each GitLab connection. At least 32 characters, and must differ
-     *     from the webhook secret. GitLab webhook registration is skipped when it is unset.
+     * @param secret Key that signs the webhook token of each GitLab connection and derives the signing secret of each
+     *     Outline subscription. At least 32 characters, and must differ from the webhook secret. GitLab and Outline
+     *     webhook registration is skipped when it is unset.
      * @param previousSecret Previous routing key that the receiver still accepts during a rotation. Keep it until every
      *     hook signed with it is replaced. Requires routing.secret and must differ from it.
      */

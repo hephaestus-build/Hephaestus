@@ -1,7 +1,7 @@
 package de.tum.cit.aet.hephaestus.core.runtime;
 
+import java.io.IOException;
 import java.util.List;
-import java.util.Set;
 import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
 import org.springframework.boot.context.TypeExcludeFilter;
@@ -12,14 +12,14 @@ import org.springframework.core.type.classreading.MetadataReaderFactory;
 
 /**
  * The components a process that runs only the webhook role scans: the receiver, the adapters' {@code webhook}
- * packages, and the few process beans every listener needs. Everything else in the application stays out of the
+ * packages, and the few process beans every listener needs, which carry {@link ReceiverComponent}. Everything else in the application stays out of the
  * context, so the receiver holds no {@code DataSource}, no JPA and no repositories, and a PostgreSQL outage cannot
  * stop it from accepting deliveries (ADR 0066).
  *
  * <p>Spring Boot consults every {@link TypeExcludeFilter} bean during component and configuration-properties
- * scanning, as its test slices do. Names are strings because {@code core} must not depend on the modules it lists.
- * {@code WebhookReceiverScopeArchitectureTest} fails when a receiver component falls outside this scope or a listed name
- * no longer names a class; {@code WebhookRoleContextIntegrationTest} boots the role and posts deliveries.
+ * scanning, as its test slices do. {@code WebhookReceiverScopeArchitectureTest} holds every class in the scope to the
+ * receiver's rule (no persistence type), and {@code WebhookRoleContextIntegrationTest} boots the role and fails on any
+ * persistence bean.
  */
 public final class WebhookReceiverScope extends TypeExcludeFilter {
 
@@ -29,29 +29,6 @@ public final class WebhookReceiverScope extends TypeExcludeFilter {
     private static final Pattern RECEIVER_PACKAGE =
             Pattern.compile(Pattern.quote(ROOT) + "(core\\.webhook|integration(\\.[a-z]+)*\\.webhook)");
 
-    /**
-     * Process beans outside those packages: HTTP security, the NATS connection, logging, release identity, and the
-     * agent image guards, which stop every role on a reference the workers cannot run (ADR 0031).
-     */
-    public static final Set<String> PROCESS_COMPONENTS = Set.of(
-            ROOT + "SecurityConfig",
-            ROOT + "agent.runtime.AgentImageProperties",
-            ROOT + "agent.sandbox.AgentImagePinGuard",
-            ROOT + "agent.sandbox.AgentImageReferenceGuard",
-            ROOT + "config.CorsProperties",
-            ROOT + "core.TimeConfig",
-            ROOT + "core.WorkspaceSubdomainProperties",
-            ROOT + "core.release.ReleaseProperties",
-            ROOT + "core.release.RunningRelease",
-            ROOT + "core.runtime.BuildProfileGuard",
-            ROOT + "core.runtime.RuntimeRoleStartupLogger",
-            ROOT + "core.security.ProxyTrustGuard",
-            ROOT + "integration.core.consumer.NatsConfig",
-            ROOT + "integration.core.consumer.NatsConnectionProperties",
-            ROOT + "integration.slack.events.SlackSignatureVerifier",
-            ROOT + "observability.MdcContextConfiguration",
-            ROOT + "observability.RequestCorrelationFilter");
-
     @Override
     public boolean match(MetadataReader metadataReader, MetadataReaderFactory metadataReaderFactory) {
         String className = metadataReader.getClassMetadata().getClassName();
@@ -60,7 +37,24 @@ public final class WebhookReceiverScope extends TypeExcludeFilter {
         }
         String topLevel = className.split("\\$", 2)[0];
         String packageName = topLevel.substring(0, topLevel.lastIndexOf('.'));
-        return !RECEIVER_PACKAGE.matcher(packageName).matches() && !PROCESS_COMPONENTS.contains(topLevel);
+        return !RECEIVER_PACKAGE.matcher(packageName).matches()
+                && !isReceiverComponent(metadataReader, metadataReaderFactory);
+    }
+
+    /** A nested class belongs to its top-level class: the marker sits there. */
+    private static boolean isReceiverComponent(MetadataReader metadataReader, MetadataReaderFactory readers) {
+        if (metadataReader.getAnnotationMetadata().hasAnnotation(ReceiverComponent.class.getName())) {
+            return true;
+        }
+        String enclosing = metadataReader.getClassMetadata().getEnclosingClassName();
+        if (enclosing == null) {
+            return false;
+        }
+        try {
+            return isReceiverComponent(readers.getMetadataReader(enclosing), readers);
+        } catch (IOException e) {
+            return false;
+        }
     }
 
     @Override

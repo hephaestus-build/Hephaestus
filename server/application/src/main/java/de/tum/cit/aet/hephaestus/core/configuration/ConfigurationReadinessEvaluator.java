@@ -117,7 +117,7 @@ public final class ConfigurationReadinessEvaluator {
                 ConfigurationRequirement.REQUIRED,
                 server || webhook,
                 value -> validWebhookSecret(value) && !Objects.equals(value, property("hephaestus.webhook.secret")),
-                "A routing secret is required to register and verify GitLab group hooks. "
+                "A routing secret is required to register and verify GitLab group hooks and Outline subscriptions. "
                         + "It must have at least 32 printable ASCII characters and differ from the webhook secret.",
                 "webhooks");
         add(
@@ -280,7 +280,8 @@ public final class ConfigurationReadinessEvaluator {
             Predicate<String> predicate,
             String explanation,
             String anchor) {
-        String value = property(subject);
+        // A setting no enabled role reads is not resolved: its placeholder may name a variable this role never gets.
+        String value = applicable ? property(subject) : null;
         boolean configured = requirement != ConfigurationRequirement.OPTIONAL || notBlank(value);
         boolean satisfied = applicable && predicate.test(value);
         add(facts, id, subject, roles, requirement, applicable, configured, satisfied, explanation, anchor);

@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
@@ -19,6 +20,7 @@ import de.tum.cit.aet.hephaestus.core.webhook.WebhookProperties;
 import de.tum.cit.aet.hephaestus.core.webhook.WebhookPropertiesFixture;
 import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionConfig;
+import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.consumer.IntegrationNatsConsumer;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
@@ -29,6 +31,7 @@ import de.tum.cit.aet.hephaestus.integration.outline.client.OutlineClientModels;
 import de.tum.cit.aet.hephaestus.integration.outline.client.model.OutlineWebhookSubscription;
 import de.tum.cit.aet.hephaestus.integration.outline.webhook.OutlineRouteCredential;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Optional;
@@ -36,6 +39,7 @@ import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.UnaryOperator;
 import org.jspecify.annotations.Nullable;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -77,6 +81,14 @@ class OutlineWebhookRegistrarTest extends BaseUnitTest {
     @Mock
     private IntegrationNatsConsumer natsConsumer;
 
+    @Mock
+    private OutlineRouteProjection routes;
+
+    @Mock
+    private ConnectionRepository connectionRepository;
+
+    private final SimpleMeterRegistry meters = new SimpleMeterRegistry();
+
     /**
      * A provider whose {@code ifAvailable} runs its consumer against {@code bean}, or is a no-op when
      * null. {@code lenient()} because most no-op tests never reach the reconcile call at all.
@@ -102,7 +114,20 @@ class OutlineWebhookRegistrarTest extends BaseUnitTest {
 
     private OutlineWebhookRegistrar registrar(String externalUrl, @Nullable IntegrationNatsConsumer consumer) {
         return new OutlineWebhookRegistrar(
-                connectionService, outlineApiClient, CREDENTIAL, externalUrl, providerOf(consumer));
+                connectionService,
+                outlineApiClient,
+                CREDENTIAL,
+                externalUrl,
+                providerOf(consumer),
+                providerOf(routes),
+                connectionRepository,
+                meters);
+    }
+
+    @BeforeEach
+    void storeUpdates() {
+        // An ACTIVE connection takes the update; the tests that need a disconnected one override this.
+        lenient().when(connectionService.updateConfig(anyLong(), any(), any())).thenReturn(Optional.of(connection));
     }
 
     private void stubActiveConnection(ConnectionConfig config) {
@@ -182,6 +207,68 @@ class OutlineWebhookRegistrarTest extends BaseUnitTest {
         // Without this reconcile, the scope consumer (created at boot with only the SCM stream) never
         // picks up the new outline.<subId>.> filter until a restart.
         verifyScopeConsumerReconciled();
+    }
+
+    @Test
+    void ensureSubscription_allowsTheRouteBeforeOutlineCanDeliverOnIt() {
+        stubActiveConnection(config(null, null));
+        stubToken();
+        stubCreateReturning("sub-99");
+
+        registrar(EXTERNAL_URL).ensureSubscription(WORKSPACE_ID);
+
+        InOrder order = inOrder(routes, outlineApiClient);
+        order.verify(routes).allow(anyString());
+        order.verify(outlineApiClient).createWebhookSubscription(any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void ensureSubscription_deletesTheNewSubscriptionWhenTheConnectionLeftActiveMeanwhile() {
+        stubActiveConnection(config(null, null));
+        stubToken();
+        stubCreateReturning("sub-99");
+        when(connectionService.updateConfig(anyLong(), any(), any())).thenReturn(Optional.empty());
+
+        registrar(EXTERNAL_URL).ensureSubscription(WORKSPACE_ID);
+
+        verify(outlineApiClient).deleteWebhookSubscription(SERVER_URL, "tok", "sub-99");
+        verifyNoInteractions(natsConsumer);
+    }
+
+    @Test
+    void ensureSubscription_countsADeletionThatFails() {
+        stubActiveConnection(config("sub-1", null));
+        stubToken();
+        stubCreateReturning("sub-2");
+        doThrow(new OutlineApiException("boom"))
+                .when(outlineApiClient)
+                .deleteWebhookSubscription(SERVER_URL, "tok", "sub-1");
+
+        registrar(EXTERNAL_URL).ensureSubscription(WORKSPACE_ID);
+
+        assertThat(meters.get("outline.webhook.subscription.deletion.failed")
+                        .counter()
+                        .count())
+                .isEqualTo(1);
+    }
+
+    @Test
+    void healRoutes_registersEveryActiveConnectionWithoutACurrentRoute() {
+        ConnectionRepository.OutlineRouteRow unrouted = mock(ConnectionRepository.OutlineRouteRow.class);
+        when(unrouted.getWorkspaceId()).thenReturn(WORKSPACE_ID);
+        when(unrouted.getRoute()).thenReturn(null);
+        ConnectionRepository.OutlineRouteRow routed = mock(ConnectionRepository.OutlineRouteRow.class);
+        when(routed.getRoute()).thenReturn(ROUTE);
+        when(connectionRepository.findActiveOutlineRoutes()).thenReturn(List.of(unrouted, routed));
+        stubActiveConnection(config(null, null));
+        stubToken();
+        stubCreateReturning("sub-99");
+
+        registrar(EXTERNAL_URL).healRoutes();
+
+        verify(outlineApiClient).createWebhookSubscription(any(), any(), any(), any(), any(), any());
+        assertThat(meters.get("outline.webhook.subscription.unrouted").gauge().value())
+                .isEqualTo(1);
     }
 
     @Test
