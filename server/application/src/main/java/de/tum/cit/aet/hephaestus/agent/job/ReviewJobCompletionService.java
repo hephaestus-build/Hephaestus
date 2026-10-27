@@ -82,7 +82,11 @@ public class ReviewJobCompletionService {
                 : job.getExecutionStartedAt() == null
                         ? ReviewStopReason.PREPARATION_FAILED
                         : ReviewStopReason.EXECUTION_FAILED;
-        if (!admitted && (job.getStatus() != ReviewJobStatus.CANCELLED || job.getStartedAt() != null))
+        // A cancel for room ends the practices whether or not a worker claimed the job, so a scan stops binding them.
+        if (!admitted
+                && (job.getStatus() != ReviewJobStatus.CANCELLED
+                        || job.getStartedAt() != null
+                        || reason == ReviewStopReason.NO_SANDBOX_ROOM))
             for (var assignment : assignments.admissible(job))
                 members.fail(
                         job.getWorkspaceId(),

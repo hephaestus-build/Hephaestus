@@ -58,6 +58,9 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
     Optional<ReviewJob> findByReviewIdAndWorkspaceIdAndStatusIn(
             UUID reviewId, long workspaceId, Collection<ReviewJobStatus> statuses);
 
+    boolean existsByReviewIdAndWorkspaceIdAndCancellationReason(
+            UUID reviewId, long workspaceId, ReviewJobCancellationReason cancellationReason);
+
     @Query(
             "SELECT j.id FROM ReviewJob j WHERE j.reviewId=:reviewId AND j.workspaceId=:workspaceId AND j.status IN :statuses")
     Optional<UUID> findActiveId(
