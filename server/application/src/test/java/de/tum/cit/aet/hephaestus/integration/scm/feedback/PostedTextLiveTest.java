@@ -52,7 +52,7 @@ class PostedTextLiveTest {
                     gitLab(gitlabClient, gitlab, project, text.raw()), gitLab(gitlabClient, gitlab, project, wire));
             PostedTextTest.assertQuiet(onGitHub.posted());
             PostedTextTest.assertQuiet(onGitLab.posted());
-            recorded.add(new PostedTextTest.Case(text.body(), text.marker(), wire, onGitHub, onGitLab));
+            recorded.add(new PostedTextTest.Case(text.body(), text.header(), text.marker(), wire, onGitHub, onGitLab));
         }
         assertThat(recorded.stream()
                         .filter(c -> PostedTextTest.live(

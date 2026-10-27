@@ -27,6 +27,7 @@ class PostedTextTest extends BaseUnitTest {
 
     record Case(
             String body,
+            @Nullable String header,
             @Nullable String marker,
             @Nullable String posted,
             @Nullable Rendered github,
@@ -36,11 +37,11 @@ class PostedTextTest extends BaseUnitTest {
             // The writers put a line end before their markers.
             if (marker != null && !marker.startsWith("\n"))
                 throw new IllegalArgumentException("A marker starts a line.");
-            return PostedText.of(body) + (marker == null ? "" : marker);
+            return (header == null ? "" : header + "\n\n") + PostedText.of(body) + (marker == null ? "" : marker);
         }
 
         String raw() {
-            return body + (marker == null ? "" : marker);
+            return (header == null ? "" : header + "\n\n") + body + (marker == null ? "" : marker);
         }
     }
 
@@ -127,5 +128,26 @@ class PostedTextTest extends BaseUnitTest {
         assertThat(PostedText.plain("Use *x*\nthen @alice, #1"))
                 .isEqualTo("Use \\*x\\* then <code>\\@alice</code>\\, <code>\\#1</code>");
         assertThat(PostedText.inlineCode("a`b <c>")).isEqualTo("<code>a\\`b &lt;c&gt;</code>");
+    }
+
+    @Test
+    void shouldKeepTheBotsOwnFileLinkAsALinkOnGitHub() throws IOException {
+        var withLink = cases().stream().filter(c -> c.header() != null).toList();
+        assertThat(withLink)
+                .isNotEmpty()
+                .allSatisfy(c -> assertThat(Objects.requireNonNull(c.github()).posted())
+                        .contains("<a href=\"https://github.com/HephaestusTest/practice-validation/blob/"));
+    }
+
+    @Test
+    void shouldStayWithinTheCommentLimitOnceEscapedAndSayThatItWasShortened() {
+        String plain = "a".repeat(59_000);
+        assertThat(PostedText.of(plain)).isEqualTo(plain);
+
+        String posted = PostedText.of("@a & ".repeat(15_000));
+        assertThat(posted.length()).isLessThanOrEqualTo(PostedText.MAX_POSTED_TEXT);
+        assertThat(posted).endsWith(PostedText.SHORTENED);
+        assertThat(posted.split("<code>", -1).length).isEqualTo(posted.split("</code>", -1).length);
+        assertThat(posted).doesNotEndWith("&" + PostedText.SHORTENED);
     }
 }

@@ -36,6 +36,7 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -494,7 +495,14 @@ class GitLabSummaryWriterTest extends BaseUnitTest {
         GraphQlClient.RequestSpec spec = mockRequestChain();
         ClientGraphQlResponse page = mockMrNotesPage(
                 List.of(
-                        note("gid://gitlab/Note/1", EXPECTED.externalBody()),
+                        // The marker with the text as written, not as it is posted: another copy, not this one.
+                        note(
+                                "gid://gitlab/Note/1",
+                                EXPECTED.body()
+                                                .replace(Objects.requireNonNull(EXPECTED.writeMarker()), "")
+                                                .strip()
+                                        + "\n\n"
+                                        + EXPECTED.writeMarker()),
                         note("gid://gitlab/Note/2", EXACT, "gid://gitlab/User/2")),
                 false,
                 null);

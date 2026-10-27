@@ -114,8 +114,9 @@ class GitHubLineNoteWriterTest extends BaseUnitTest {
         });
         var posted = ArgumentCaptor.forClass(SummaryContent.class);
         verify(summaries).postSummary(any(), posted.capture());
-        assertThat(posted.getValue().externalBody())
-                .contains("/blob/" + COMMIT + "/src/a%20file.ts", MARKER, "hephaestus-diff-note-ck=file-copy")
+        assertThat(PostedText.summary(posted.getValue()))
+                .startsWith("**[View file](https://github.com/owner/repo/blob/" + COMMIT + "/src/a%20file.ts)**\n\n")
+                .contains(MARKER, "hephaestus-diff-note-ck=file-copy")
                 .doesNotContain("#L", ":null");
         assertThat(fence.attempts).containsExactly(List.of(note.copyId().toString()));
     }

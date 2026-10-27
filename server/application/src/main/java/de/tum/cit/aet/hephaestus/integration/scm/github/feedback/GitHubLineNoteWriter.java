@@ -186,7 +186,8 @@ public class GitHubLineNoteWriter implements LineNoteWriter {
         String encodedPath = Arrays.stream(note.anchor().path().split("/", -1))
                 .map(part -> URLEncoder.encode(part, StandardCharsets.UTF_8).replace("+", "%20"))
                 .collect(Collectors.joining("/"));
-        String body = "**[View file]("
+        // The link is built from known repository data, so it is the bot's own header; the note's text is escaped.
+        String header = "**[View file]("
                 + origin.replaceAll("/+$", "")
                 + "/"
                 + pr.owner()
@@ -196,14 +197,13 @@ public class GitHubLineNoteWriter implements LineNoteWriter {
                 + anchoredCommit
                 + "/"
                 + encodedPath
-                + ")**\n\n"
-                + note.body();
-        // The summary writer makes the text safe to post and keeps both hidden markers after it, as a line note has.
+                + ")**";
         return new SummaryContent(
                 note.copyId(),
-                body,
+                note.body(),
                 note.writeKey(),
-                note.writeMarker() + "\n\n" + ScmFeedbackFormatter.deliveryTag(note.writeKey()));
+                note.writeMarker() + "\n\n" + ScmFeedbackFormatter.deliveryTag(note.writeKey()),
+                header);
     }
 
     private CopyWriteResult postMixed(

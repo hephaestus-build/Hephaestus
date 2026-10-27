@@ -31,6 +31,12 @@ public final class PostedText {
     private static final Pattern REFERENCE = Pattern.compile(
             "(?:[A-Za-z0-9_.-]+/[A-Za-z0-9_./-]+)?[#!&$]\\d+|GH-\\d+|[~%](?:\"[^\"\\n]*\"|[A-Za-z0-9_][A-Za-z0-9_.:-]*)");
 
+    // GitHub takes at most 65,536 characters in a comment and GitLab more; the escaped text leaves room for the header
+    // and the hidden markers.
+    static final int MAX_POSTED_TEXT = 60_000;
+
+    static final String SHORTENED = "\n\n(Shortened to fit the comment length limit.)";
+
     // GitLab's quick action reader drops a lone carriage return, so every line end is one before anything else.
     private static final Pattern LINE_END = Pattern.compile("\\r\\n?|[\\u2028\\u2029\\u0085]");
 
@@ -53,20 +59,46 @@ public final class PostedText {
      * line becomes code.
      */
     public static String of(String untrusted) {
-        String[] lines = normalized(untrusted).split("\n", -1);
-        StringBuilder out = new StringBuilder(untrusted.length() + 64);
+        String text = normalized(untrusted);
+        String posted = lines(text);
+        if (posted.length() <= MAX_POSTED_TEXT) return posted;
+        // Escaping lengthens the text, so the cut is found on the escaped result and made in the text before it, at
+        // the last space before the longest prefix that fits.
+        int low = 0;
+        int high = text.length();
+        while (low < high) {
+            int middle = (low + high + 1) >>> 1;
+            if (lines(text.substring(0, middle)).length() + SHORTENED.length() <= MAX_POSTED_TEXT) low = middle;
+            else high = middle - 1;
+        }
+        int cut = Math.max(text.lastIndexOf(' ', low), text.lastIndexOf('\n', low));
+        if (cut <= 0) cut = low;
+        if (cut > 0 && Character.isHighSurrogate(text.charAt(cut - 1))) cut--;
+        return lines(text.substring(0, cut)) + SHORTENED;
+    }
+
+    /**
+     * A summary as it is posted: the bot's own header, the text made literal, then the hidden marker that finds it
+     * again.
+     */
+    public static String summary(SummaryContent content) {
+        String marker = content.writeMarker();
+        String body = marker == null || marker.isBlank()
+                ? content.body()
+                : content.body().replace(marker, "");
+        String header = content.header();
+        String posted = (header == null ? "" : header + "\n\n") + of(body);
+        return marker == null || marker.isBlank() ? posted : posted + "\n\n" + marker;
+    }
+
+    private static String lines(String text) {
+        String[] lines = text.split("\n", -1);
+        StringBuilder out = new StringBuilder(text.length() + 64);
         for (int i = 0; i < lines.length; i++) {
             if (i > 0) out.append('\n');
             out.append(escaped(lines[i].strip()));
         }
         return out.toString().strip();
-    }
-
-    /** A summary as it is posted: its text made literal, then the hidden marker that finds it again. */
-    public static String summary(SummaryContent content) {
-        String marker = content.writeMarker();
-        if (marker == null || marker.isBlank()) return of(content.body());
-        return of(content.body().replace(marker, "")) + "\n\n" + marker;
     }
 
     private static String normalized(String text) {

@@ -29,6 +29,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.LookupPresence;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryContent;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryHandle;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryLookup;
+import de.tum.cit.aet.hephaestus.integration.scm.feedback.PostedText;
 import de.tum.cit.aet.hephaestus.integration.scm.feedback.ScmFeedbackFixtures;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubGraphQlClientProvider;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -368,7 +369,7 @@ class GitHubSummaryWriterTest extends BaseUnitTest {
 
     private static final SummaryContent EXPECTED = ScmFeedbackFixtures.summary("Summary text", MARKER);
 
-    private static final String EXACT = EXPECTED.externalBody();
+    private static final String EXACT = PostedText.summary(EXPECTED);
 
     private ClientGraphQlResponse mockCommentsPageResponse(
             String commentsPath,
