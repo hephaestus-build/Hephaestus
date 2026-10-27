@@ -41,6 +41,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.annotation.AnnotationConfigUtils;
 import org.springframework.context.support.GenericApplicationContext;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
@@ -201,6 +202,8 @@ class MentorLiveHubTest extends BaseUnitTest {
     @Test
     void shouldKeepAcceptingStreamsWhenAChildContextCloses() {
         try (GenericApplicationContext parent = new GenericApplicationContext()) {
+            // Event listeners on, as in the application: a closing child publishes its ContextClosedEvent here too.
+            AnnotationConfigUtils.registerAnnotationConfigProcessors(parent);
             parent.registerBean(MentorLiveHub.class, () -> hub);
             parent.refresh();
             GenericApplicationContext child = new GenericApplicationContext();

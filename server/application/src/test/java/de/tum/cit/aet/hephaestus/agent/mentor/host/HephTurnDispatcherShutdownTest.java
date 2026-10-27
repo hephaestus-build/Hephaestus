@@ -203,6 +203,44 @@ class HephTurnDispatcherShutdownTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldRemoveTheHostAfterTheWorkersDrainTimeoutWhenATurnStillRuns() throws Exception {
+        UUID turnId = UUID.randomUUID();
+        MentorTurn turn = mock(MentorTurn.class);
+        when(turn.getId()).thenReturn(turnId);
+        when(turn.getWorkspaceId()).thenReturn(7L);
+        when(turn.getAttempt()).thenReturn(1);
+        when(turn.getConversationId()).thenReturn(UUID.randomUUID());
+        when(turn.getStatus()).thenReturn(MentorTurn.Status.RUNNING);
+        MentorTurnService turns = mock(MentorTurnService.class);
+        when(turns.require(7L, turnId)).thenReturn(turn);
+        AtomicBoolean claimed = new AtomicBoolean();
+        MentorTurnStarter starter = mock(MentorTurnStarter.class);
+        when(starter.startNext(any(), any()))
+                .thenAnswer(invocation -> claimed.compareAndSet(false, true)
+                        ? Optional.of(new MentorTurnStarter.StartedTurn(
+                                turn, 11L, LlmCatalogTestFixtures.admittedMentorConfig()))
+                        : Optional.empty());
+        HephTurnDispatcher dispatcher =
+                dispatcher(starter, turns, mock(MentorTurnCompletion.class), new HeldHost(), Duration.ofMillis(300));
+        dispatcher.start();
+        dispatcher.resync();
+        await().atMost(Duration.ofSeconds(10)).until(() -> dispatcher.runs(turnId, 1));
+
+        Thread stopping = Thread.ofPlatform().name("worker-stop").daemon(true).unstarted(dispatcher::stop);
+        try {
+            stopping.start();
+
+            assertThat(hephWaits.await(5, TimeUnit.SECONDS))
+                    .as("the host is removed once the worker's drain timeout passed, although the turn still runs")
+                    .isTrue();
+        } finally {
+            release.countDown();
+            dispatcher.ended(turnId, 1);
+            stopping.join(Duration.ofSeconds(10));
+        }
+    }
+
+    @Test
     void shouldLetAClaimThatAlreadyStartedRunItsTurnBeforeTheHostIsRemovedWhenTheWorkerStops() throws Exception {
         UUID turnId = UUID.randomUUID();
         MentorTurn turn = mock(MentorTurn.class);
@@ -304,6 +342,15 @@ class HephTurnDispatcherShutdownTest extends BaseUnitTest {
 
     private HephTurnDispatcher dispatcher(
             MentorTurnStarter starter, MentorTurnService turns, MentorTurnCompletion completion, HephHost host) {
+        return dispatcher(starter, turns, completion, host, Duration.ofMinutes(2));
+    }
+
+    private HephTurnDispatcher dispatcher(
+            MentorTurnStarter starter,
+            MentorTurnService turns,
+            MentorTurnCompletion completion,
+            HephHost host,
+            Duration drainTimeout) {
         return new HephTurnDispatcher(
                 starter,
                 turns,
@@ -320,7 +367,7 @@ class HephTurnDispatcherShutdownTest extends BaseUnitTest {
                 1,
                 Duration.ofMinutes(1),
                 HephTurnDispatcher.STOP_GRACE,
-                Duration.ofMinutes(2));
+                drainTimeout);
     }
 
     /** Stands in for the web server's graceful shutdown, the phase below the drains. */

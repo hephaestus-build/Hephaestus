@@ -483,7 +483,7 @@ For example, it logs the hostname rule or the exit code of the host's workspace 
 A turn that ran in a removed host runs again when its lease expires, if it was on its first attempt.
 A turn on its second attempt fails.
 The next turn that the worker claims starts a new host.
-On a graceful drain, the worker stops claiming turns and waits up to 2 minutes for its running turns.
+On a graceful drain, the worker stops claiming turns and waits for its running turns up to `hephaestus.worker.drain.timeout`, the same timeout as for reviews.
 Then it removes the host.
 If a worker stops without a drain, sandbox maintenance removes its host (see [Configuration readiness](./configuration-readiness.mdx#removing-leftover-sandbox-networks)).
 
@@ -640,7 +640,6 @@ Running Heph turns drain in the same phase, under the same timeout.
 Every other shutdown phase keeps `spring.lifecycle.timeout-per-shutdown-phase` (`SHUTDOWN_TIMEOUT`, 20 seconds).
 Give the worker a stop grace period of at least the drain timeout plus 2 minutes.
 The chart sets `drainTimeoutSeconds` plus 2 minutes.
-Compose sets 7 minutes for the default 5-minute drain: raise `stop_grace_period` when you raise `HEPHAESTUS_WORKER_DRAIN_TIMEOUT`.
 
 The worker's HTTP connectors, including the sandbox gateway, stay open during step 2.
 Thus, an active review can still send model requests while the worker waits for it.
@@ -662,7 +661,6 @@ A Docker call that does not respond to interruption can finish after the deadlin
 The worker does not wait indefinitely for that call.
 Leftover containers remain subject to normal sandbox reconciliation.
 
-The compose template keeps `stop_grace_period: 6m`.
 The Helm chart sets the drain timeout from `worker.drainTimeoutSeconds`, 3600 by default, and the grace period to that value plus two minutes.
 The cleanup deadline does not extend this grace period or guarantee that all containers stop.
 

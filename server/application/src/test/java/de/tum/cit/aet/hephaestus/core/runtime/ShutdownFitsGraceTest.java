@@ -31,7 +31,8 @@ class ShutdownFitsGraceTest extends BaseUnitTest {
     void shouldStopTheServerWithinItsGrace() throws IOException {
         Duration stop = httpPhase().plus(IntegrationNatsConsumer.SHUTDOWN_WAIT).plus(MARGIN);
 
-        assertThat(chartGrace("server.yaml")).isGreaterThanOrEqualTo(preStop().plus(stop));
+        assertThat(chartGrace("server.yaml"))
+                .isGreaterThanOrEqualTo(preStop("server.yaml").plus(stop));
         assertThat(composeGrace("docker/compose.app.yaml", "application-server"))
                 .isGreaterThanOrEqualTo(stop);
     }
@@ -40,7 +41,8 @@ class ShutdownFitsGraceTest extends BaseUnitTest {
     void shouldStopTheWebhookReceiverWithinItsGrace() throws IOException {
         Duration stop = httpPhase().plus(applicationDuration("drain-timeout")).plus(MARGIN);
 
-        assertThat(chartGrace("webhook.yaml")).isGreaterThanOrEqualTo(preStop().plus(stop));
+        assertThat(chartGrace("webhook.yaml"))
+                .isGreaterThanOrEqualTo(preStop("webhook.yaml").plus(stop));
         assertThat(composeGrace("docker/compose.core.yaml", "webhook-server")).isGreaterThanOrEqualTo(stop);
     }
 
@@ -53,7 +55,8 @@ class ShutdownFitsGraceTest extends BaseUnitTest {
         assertThat(grace.find())
                 .as("the worker grace is the drain plus a constant")
                 .isTrue();
-        Duration beyondDrain = WorkerPropertiesConfiguration.drainPhaseTimeout(Duration.ZERO)
+        Duration beyondDrain = preStop("worker.yaml")
+                .plus(WorkerPropertiesConfiguration.drainPhaseTimeout(Duration.ZERO))
                 .plus(httpPhase())
                 .plus(MARGIN);
         assertThat(Duration.ofSeconds(Long.parseLong(grace.group(1)))).isGreaterThanOrEqualTo(beyondDrain);
@@ -84,7 +87,11 @@ class ShutdownFitsGraceTest extends BaseUnitTest {
         return DurationStyle.detectAndParse(matcher.group(1));
     }
 
-    private static Duration preStop() throws IOException {
+    /** The preStop pause of a role whose template includes it, else none. */
+    private static Duration preStop(String template) throws IOException {
+        if (!read("deploy/chart/hephaestus/templates/" + template).contains("include \"hephaestus.preStop\"")) {
+            return Duration.ZERO;
+        }
         Matcher matcher = Pattern.compile("preStop:\\s+sleep:\\s+seconds: (\\d+)")
                 .matcher(read("deploy/chart/hephaestus/templates/_helpers.tpl"));
         assertThat(matcher.find()).isTrue();

@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.runtime.worker;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobExecutor;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
 import java.time.Duration;
+import org.springframework.boot.autoconfigure.context.LifecycleProperties;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.context.properties.bind.Binder;
 import org.springframework.context.annotation.Bean;
@@ -44,7 +45,7 @@ public class WorkerPropertiesConfiguration {
     DefaultLifecycleProcessor lifecycleProcessor(WorkerProperties properties, Environment environment) {
         Duration phaseTimeout = Binder.get(environment)
                 .bind("spring.lifecycle.timeout-per-shutdown-phase", Duration.class)
-                .orElse(Duration.ofSeconds(30));
+                .orElseGet(() -> new LifecycleProperties().getTimeoutPerShutdownPhase());
         DefaultLifecycleProcessor processor = new DefaultLifecycleProcessor();
         processor.setTimeoutPerShutdownPhase(phaseTimeout.toMillis());
         processor.setTimeoutForShutdownPhase(
