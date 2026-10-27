@@ -375,8 +375,8 @@ export const FollowUpsQueued: Story = {
 /**
  * Presses Next and checks that `row` took the change in place while the view stayed where the reader
  * was: the scroller sees no new row, so it has nothing to scroll to. `anchor` is the sent question
- * that the opening view puts at its peek; the scroller can still be moving it there after the first
- * scroll, so the view is read only once it is in place.
+ * that the opening view puts at its peek. The scroller settles the opening view over a few frames,
+ * and can pass the peek on its way, so the view is read only once it holds still at the peek.
  */
 async function expectViewKept(
 	viewport: HTMLElement,
@@ -390,6 +390,10 @@ async function expectViewKept(
 	});
 	if (anchor !== undefined) {
 		await waitFor(async () => {
+			const settledTop = viewport.scrollTop;
+			await nextFrame();
+			await nextFrame();
+			await expect(viewport.scrollTop).toBe(settledTop);
 			const anchorOffset =
 				anchor.getBoundingClientRect().top - viewport.getBoundingClientRect().top;
 			await expect(Math.round(anchorOffset)).toBe(PEEK);
