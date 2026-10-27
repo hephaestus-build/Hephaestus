@@ -18,6 +18,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -36,6 +37,7 @@ import org.springframework.test.web.reactive.server.WebTestClient;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.yaml.snakeyaml.Yaml;
 import reactor.core.Disposable;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
@@ -193,6 +195,47 @@ class MentorLiveIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 assertThat(schemas).containsKey(event.event());
                 assertMatchesSchema(event.data(), Objects.requireNonNull(schemas.get(event.event())));
             }
+        } finally {
+            stream.subscription().dispose();
+        }
+    }
+
+    /** The last turn event of the stream for this turn, as the client reads it. */
+    private static Optional<JsonNode> lastTurn(Stream stream, MentorTurnService.Submission submitted) {
+        String id = submitted.turn().getId().toString();
+        return stream.events().stream()
+                .filter(event -> TURN.equals(event.event())
+                        && event.data() != null
+                        && event.data().contains(id))
+                .reduce((earlier, later) -> later)
+                .map(event -> JsonMapper.shared().readTree(Objects.requireNonNull(event.data())));
+    }
+
+    @Test
+    void shouldSayInTheStreamThatAQuestionWaitsForAFreeHephAndGiveNoReasonForOneThatDoesNot() {
+        Stream stream = open();
+        try {
+            await().atMost(WAIT).until(() -> stream.has(SNAPSHOT, "\"activeTurns\":[]"));
+            awaitListening();
+            // The suite's deployment has one Heph slot (application-test.yml), and a started turn takes it.
+            submit(colleague, "A colleague's question");
+            assertThat(turns.claimNext("worker-heph-live", Duration.ofMinutes(5)))
+                    .isPresent();
+
+            MentorTurnService.Submission waiting = submit(developer, "Is Heph free?");
+            MentorTurnService.Submission followUp = submit(developer, "And after that?");
+
+            await().atMost(WAIT)
+                    .until(() -> lastTurn(stream, waiting).isPresent()
+                            && lastTurn(stream, followUp).isPresent());
+            assertThat(lastTurn(stream, waiting)
+                            .orElseThrow()
+                            .path("waitingFor")
+                            .asString())
+                    .isEqualTo("FREE_HEPH");
+            assertThat(lastTurn(stream, followUp).orElseThrow().has("waitingFor"))
+                    .as("it waits for the question before it, and zod refuses a null")
+                    .isFalse();
         } finally {
             stream.subscription().dispose();
         }

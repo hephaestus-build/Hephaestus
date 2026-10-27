@@ -23,6 +23,7 @@ import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.reactive.server.WebTestClient;
@@ -274,19 +275,65 @@ class MentorConversationControllerIntegrationTest extends AbstractWorkspaceInteg
                 .isEqualTo(turn.getId().toString());
     }
 
+    /** A turn as the API sends it, so a test can tell an absent property from a null one. */
+    private static final ParameterizedTypeReference<Map<String, Object>> TURN_JSON =
+            new ParameterizedTypeReference<>() {};
+
     @Test
-    void shouldSayThatAQuestionWaitsForAFreeHephWhileHephAnswersAnotherConversation() {
+    void shouldSayInEveryReadOfATurnWhetherItWaitsForAFreeHeph() {
+        // The suite's deployment has one Heph slot (application-test.yml), and the started turn takes it.
         MentorTurnService.Submission first = submit(main(), "What did the review say?");
         assertThat(turns.claimNext(WORKER, Duration.ofMinutes(5))).isPresent();
-        MentorConversation thread =
-                conversations.openThread(workspace.getId(), first.question().getId());
-        MentorTurnService.Submission inThread = submit(thread, "And this one?");
+        UUID parent = first.question().getId();
+        UUID waits = UUID.randomUUID();
+        UUID followsUp = UUID.randomUUID();
+
+        ask(waits, "And this one?", parent)
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.turn.waitingFor")
+                .isEqualTo("FREE_HEPH");
+        ask(followsUp, "And after that?", parent)
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.turn.status")
+                .isEqualTo("QUEUED")
+                .jsonPath("$.turn")
+                .value(
+                        TURN_JSON,
+                        turn -> assertThat(turn)
+                                .as("it waits for the question before it, and zod refuses a null")
+                                .doesNotContainKey("waitingFor"));
+        UUID waiting = turnRepository
+                .findByWorkspaceIdAndRequestId(workspace.getId(), waits.toString())
+                .orElseThrow()
+                .getId();
+        UUID followUp = turnRepository
+                .findByWorkspaceIdAndRequestId(workspace.getId(), followsUp.toString())
+                .orElseThrow()
+                .getId();
 
         get("/conversation")
-                .jsonPath("$.activeTurns.length()")
-                .isEqualTo(2)
                 .jsonPath("$.activeTurns[?(@.waitingFor == 'FREE_HEPH')].id")
-                .isEqualTo(inThread.turn().getId().toString());
+                .isEqualTo(waiting.toString())
+                .jsonPath("$.activeTurns[?(@.id == '" + followUp + "')]")
+                .value(
+                        new ParameterizedTypeReference<List<Map<String, Object>>>() {},
+                        found -> assertThat(found)
+                                .singleElement()
+                                .satisfies(turn -> assertThat(turn).doesNotContainKey("waitingFor")));
+        write("PATCH", "/turns/" + followUp + "/status", Map.of("status", "STOPPED"))
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$")
+                .value(
+                        TURN_JSON,
+                        turn -> assertThat(turn)
+                                .containsEntry("status", "STOPPED")
+                                .doesNotContainKey("waitingFor"));
     }
 
     @Test
