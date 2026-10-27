@@ -1,7 +1,5 @@
-package de.tum.cit.aet.hephaestus.practices.review;
+package de.tum.cit.aet.hephaestus.practices.spi;
 
-import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
-import de.tum.cit.aet.hephaestus.practices.spi.ReviewStatus;
 import java.util.Map;
 
 /**

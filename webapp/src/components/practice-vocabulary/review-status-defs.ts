@@ -28,7 +28,7 @@ export const REVIEW_STATUS_DEFS: StatusDefs<ReviewStatus> = {
 		icon: ClockIcon,
 		badgeVariant: "secondary",
 		description:
-			"Waiting for a free worker, for room for its sandbox, or for a retry after a stop.",
+			"Waiting to start: for capacity, for room for its sandbox, for the workspace’s AI budget, or for a retry.",
 	},
 	RUNNING: {
 		label: "Running",
@@ -73,7 +73,7 @@ export const OWN_REVIEW_STATUS_DEFS: StatusDefs<ReviewStatus> = {
 		icon: ClockIcon,
 		badgeVariant: "secondary",
 		description:
-			"The review is waiting for a free worker, for room for its sandbox, or for a retry after a stop.",
+			"The review has not started yet. It waits for capacity, the workspace’s AI budget, or a retry.",
 	},
 	RUNNING: {
 		label: "Running",

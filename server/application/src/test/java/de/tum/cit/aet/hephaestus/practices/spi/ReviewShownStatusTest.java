@@ -1,9 +1,7 @@
-package de.tum.cit.aet.hephaestus.practices.review;
+package de.tum.cit.aet.hephaestus.practices.spi;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
-import de.tum.cit.aet.hephaestus.practices.spi.ReviewStatus;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Tag;

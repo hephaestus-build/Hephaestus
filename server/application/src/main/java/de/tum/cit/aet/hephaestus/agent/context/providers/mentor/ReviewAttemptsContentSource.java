@@ -12,6 +12,9 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ItemLabel;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemSourceAccess;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentQuery;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewRuntimeQuery;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewShownStatus;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -19,6 +22,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -45,6 +49,7 @@ public class ReviewAttemptsContentSource implements ContentSource {
     static final int MAX_ATTEMPTS = 20;
     private final ReviewJobRepository jobs;
     private final ReviewAssignmentQuery assignments;
+    private final ReviewRuntimeQuery runtime;
     private final List<ItemSourceAccess> sources;
     private final RegisteredItemLabels labels;
     private final ObjectMapper objectMapper;
@@ -189,7 +194,18 @@ public class ReviewAttemptsContentSource implements ContentSource {
                         workspaceId,
                         developerId,
                         listed.stream().map(Listed::reviewed).collect(Collectors.toSet()));
-        listed.forEach(entry -> state(entry.row(), recorded.get(entry.reviewed())));
+        // The review's status as every screen shows it: a started review whose job waits reads Queued.
+        Map<UUID, Map<ReviewJobStatus, Long>> jobCounts = recorded.isEmpty()
+                ? Map.of()
+                : runtime.jobCounts(
+                        workspaceId,
+                        listed.stream()
+                                .map(entry -> entry.reviewed().reviewId())
+                                .collect(Collectors.toSet()));
+        listed.forEach(entry -> state(
+                entry.row(),
+                recorded.get(entry.reviewed()),
+                jobCounts.getOrDefault(entry.reviewed().reviewId(), Map.of())));
         // Absence is claimed only from a complete read: an unattributed run or a cut listing could be this item's.
         if (selection.isPresent() && rows.isEmpty())
             root.put("status", attributionComplete && candidates.size() <= 200 ? "NOT_FOUND" : "UNAVAILABLE");
@@ -208,9 +224,10 @@ public class ReviewAttemptsContentSource implements ContentSource {
      * The review's recorded state and assignments for the developer on this work, beside the run's own state. Left
      * out when the review cannot be read; the counts alone are left out when they cannot be complete.
      */
-    private static void state(ObjectNode row, ReviewAssignmentQuery.@Nullable Recorded recorded) {
+    private static void state(
+            ObjectNode row, ReviewAssignmentQuery.@Nullable Recorded recorded, Map<ReviewJobStatus, Long> jobs) {
         if (recorded == null) return;
-        row.put("reviewStatus", recorded.status().name());
+        row.put("reviewStatus", ReviewShownStatus.of(recorded.status(), jobs).name());
         var stopReason = recorded.stopReason();
         if (stopReason != null) row.put("reviewStopReason", stopReason.name());
         var counts = recorded.counts();
