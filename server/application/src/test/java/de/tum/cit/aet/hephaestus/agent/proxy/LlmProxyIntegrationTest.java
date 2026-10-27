@@ -732,7 +732,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 policy,
                 mock(ScanCallGuard.class),
                 new ProxyRoutingService(jobRepository, turnRepository, objectMapper, attemptUsage),
-                new ProxyCallsInFlight(),
+                new ProxyCallsInFlight(3),
                 new LlmConnectionHealth(CircuitBreakerRegistry.ofDefaults()),
                 Duration.ofMinutes(5),
                 Duration.ofMinutes(2));

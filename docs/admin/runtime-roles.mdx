@@ -443,6 +443,26 @@ If it fails, the breaker opens again.
 A rate limit, a request error, or a client that went away does not count.
 [Observability](./observability.mdx#heph-turn-metrics) names the breaker's metrics.
 
+### Model calls in flight for each attempt
+
+The worker limits the model calls that one attempt has in flight at the same time, on every model:
+
+- A Heph turn has at most 2: one call, and one that a stop left open.
+- A practice review has at most 2 × (practice concurrency + 1) + 4.
+  With the default practice concurrency of 3, the limit is 12.
+
+The review limit holds two calls for each practice session, 2 more, and the 4 calls of the practice scripts.
+The proxy notices that a client went away only at its next write to that client.
+Thus, a call that a stalled session left open counts until its provider answers or the work deadline passes.
+The 2 extra calls are for such calls.
+
+The proxy refuses a call past the limit with HTTP 429 and `Retry-After: 1`.
+It refuses the call before the call reaches the provider.
+Thus, no attempt takes more than its share of the provider's capacity.
+`sandbox.gateway.calls_in_flight.refused` counts these refusals.
+
+`PRACTICE_REVIEW_PRACTICE_CONCURRENCY` sets the practice concurrency, and the limit follows it.
+
 ### The Heph host
 
 Each worker starts its Heph host when it claims its first turn.

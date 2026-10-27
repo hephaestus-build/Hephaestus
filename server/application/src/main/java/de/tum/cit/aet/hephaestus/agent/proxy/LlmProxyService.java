@@ -318,6 +318,18 @@ class LlmProxyService {
             ProxyCallsInFlight.Call call) {
         if (workTimeOver(routing))
             return refusal(HttpStatus.FORBIDDEN, ReviewModelGateway.Refusal.WORK_TIME, WORK_TIME_OVER);
+        // Before the scan lock, so a call past the cap holds no thread while the attempt's previous call runs.
+        if (call.isOverCap()) {
+            log.warn(
+                    "Model call refused, its attempt has its most calls in flight: principal={}",
+                    routing.principalDescription());
+            accounting.recordCallsInFlightRefused();
+            // 429, so a model client asks again once one of the attempt's calls has ended.
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                    .header(HttpHeaders.RETRY_AFTER, "1")
+                    .header(REFUSAL_HEADER, ReviewModelGateway.Refusal.CALLS_IN_FLIGHT.name())
+                    .body("This attempt already has its most model calls in flight.");
+        }
         // A scan call may wait for its attempt's previous call, at most until the work deadline.
         var lease = scanCalls.acquire(routing, body);
         try {

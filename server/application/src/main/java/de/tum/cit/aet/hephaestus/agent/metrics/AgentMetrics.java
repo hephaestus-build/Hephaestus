@@ -80,6 +80,7 @@ public final class AgentMetrics {
     public static final String SANDBOX_START_FAILURES = "sandbox.start.failures";
     public static final String SANDBOX_REVIEW_STARVED = "sandbox.review.starved";
     public static final String SANDBOX_EXECUTION_DURATION = "sandbox.execution.duration";
+    public static final String SANDBOX_GATEWAY_CALLS_IN_FLIGHT_REFUSED = "sandbox.gateway.calls_in_flight.refused";
     public static final String SANDBOX_GATEWAY_LIMITER_ERRORS = "sandbox.gateway.limiter.errors";
     public static final String SANDBOX_GATEWAY_REQUESTS = "sandbox.gateway.requests";
     public static final String SANDBOX_GATEWAY_REQUEST_SIZE = "sandbox.gateway.request.size";

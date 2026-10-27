@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.agent.config.AgentBindingLimits;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
+import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewProperties;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -14,6 +15,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import org.jspecify.annotations.Nullable;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 import reactor.core.publisher.Sinks;
@@ -25,6 +27,9 @@ import reactor.core.publisher.Sinks;
  * calls. A turn that ends without its answer also cancels them: a provider that sends nothing would otherwise hold the
  * end. For a Heph turn, it also remembers the attempt's last model call that failed, which the turn records when it
  * fails.
+ *
+ * <p>It also caps the calls one attempt has in flight, at the most that its own runner opens plus slack. A call past the
+ * cap is refused before it reaches the provider, so no attempt holds more than its share of a call pool.
  */
 @Component
 @ConditionalOnWorkerRole
@@ -49,6 +54,13 @@ public class ProxyCallsInFlight {
     /** Far above the Heph turns that one worker runs at once; a bound, not a capacity. */
     private static final int MAX_REMEMBERED_FAILURES = 10_000;
 
+    /** Direct model calls that one review's practice scripts have in flight: {@code MODEL_CONCURRENCY} in
+     * {@code docker/agents/practice-scripts/lib/core/concurrency.ts}. */
+    static final int SCRIPT_CALLS = 4;
+
+    /** A Heph turn has one session: one call, and one that a stop left closing. */
+    static final int TURN_CALLS = 2;
+
     private record Attempt(UUID sourceId, int number) {}
 
     /** One call in flight; closing it records that the call's usage is written. */
@@ -67,6 +79,9 @@ public class ProxyCallsInFlight {
 
         /** How the call failed; {@code null} when it did not. */
         MentorTurn.@Nullable FailedCall failure();
+
+        /** Whether the attempt already had its most calls in flight when this call began; it is not counted. */
+        boolean isOverCap();
 
         @Override
         void close();
@@ -96,6 +111,21 @@ public class ProxyCallsInFlight {
             .maximumSize(MAX_REMEMBERED_FAILURES)
             .build();
 
+    /** The most calls one review attempt has in flight. */
+    private final int reviewCalls;
+
+    @Autowired
+    ProxyCallsInFlight(PracticeReviewProperties properties) {
+        this(properties.practiceConcurrency());
+    }
+
+    public ProxyCallsInFlight(int practiceConcurrency) {
+        // Each practice session has one call open and one that an abort left open: the proxy notices a client that went
+        // away only at its next write, so a silent stream stays counted. The extra 2 cover streams of earlier sessions;
+        // the runner ends measuring after two stalls in a row.
+        this.reviewCalls = 2 * (practiceConcurrency + 1) + SCRIPT_CALLS;
+    }
+
     public Call begin(ProxyRouting.BilledAttempt billed) {
         Attempt attempt = new Attempt(billed.sourceId(), billed.number());
         Cancellation cancel = new Cancellation();
@@ -103,14 +133,22 @@ public class ProxyCallsInFlight {
         synchronized (calls) {
             if (sealed.getIfPresent(attempt) != null) {
                 cancel.send();
-                return call(attempt, cancel, hephTurn);
+                return call(attempt, cancel, hephTurn, false);
             }
-            calls.computeIfAbsent(attempt, key -> new ArrayList<>()).add(cancel);
+            List<Cancellation> open = calls.computeIfAbsent(attempt, key -> new ArrayList<>());
+            if (open.size() >= cap(billed.sourceType())) {
+                return call(attempt, cancel, hephTurn, true);
+            }
+            open.add(cancel);
         }
-        return call(attempt, cancel, hephTurn);
+        return call(attempt, cancel, hephTurn, false);
     }
 
-    private Call call(Attempt attempt, Cancellation cancel, boolean hephTurn) {
+    private int cap(UsageSourceType sourceType) {
+        return sourceType == UsageSourceType.MENTOR_TURN ? TURN_CALLS : reviewCalls;
+    }
+
+    private Call call(Attempt attempt, Cancellation cancel, boolean hephTurn, boolean overCap) {
         return new Call() {
             private MentorTurn.@Nullable FailedCall failure;
 
@@ -136,6 +174,11 @@ public class ProxyCallsInFlight {
             @Override
             public MentorTurn.@Nullable FailedCall failure() {
                 return failure;
+            }
+
+            @Override
+            public boolean isOverCap() {
+                return overCap;
             }
 
             @Override

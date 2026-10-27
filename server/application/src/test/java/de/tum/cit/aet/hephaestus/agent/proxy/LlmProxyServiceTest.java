@@ -74,6 +74,7 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.IntStream;
 import java.util.stream.Stream;
 import mockwebserver3.MockResponse;
 import mockwebserver3.MockWebServer;
@@ -150,7 +151,7 @@ class LlmProxyServiceTest extends BaseUnitTest {
                 requestPolicy,
                 mock(ScanCallGuard.class),
                 routingService,
-                new ProxyCallsInFlight(),
+                new ProxyCallsInFlight(3),
                 new LlmConnectionHealth(CircuitBreakerRegistry.ofDefaults()),
                 HEPH_FIRST_BYTE,
                 HEPH_IDLE);
@@ -707,7 +708,7 @@ class LlmProxyServiceTest extends BaseUnitTest {
                     requestPolicy,
                     mock(ScanCallGuard.class),
                     routingService,
-                    new ProxyCallsInFlight(),
+                    new ProxyCallsInFlight(3),
                     new LlmConnectionHealth(CircuitBreakerRegistry.ofDefaults()),
                     HEPH_FIRST_BYTE,
                     HEPH_IDLE);
@@ -803,7 +804,7 @@ class LlmProxyServiceTest extends BaseUnitTest {
                     requestPolicy,
                     mock(ScanCallGuard.class),
                     routingService,
-                    new ProxyCallsInFlight(),
+                    new ProxyCallsInFlight(3),
                     new LlmConnectionHealth(CircuitBreakerRegistry.ofDefaults()),
                     HEPH_FIRST_BYTE,
                     HEPH_IDLE);
@@ -844,7 +845,7 @@ class LlmProxyServiceTest extends BaseUnitTest {
         private MockWebServer upstream;
         private LlmProxyService streamingController;
         private SimpleMeterRegistry streamingMeterRegistry;
-        private final ProxyCallsInFlight streamingCalls = new ProxyCallsInFlight();
+        private final ProxyCallsInFlight streamingCalls = new ProxyCallsInFlight(3);
         private final LlmConnectionHealth streamingHealth =
                 new LlmConnectionHealth(CircuitBreakerRegistry.ofDefaults());
 
@@ -1419,6 +1420,32 @@ class LlmProxyServiceTest extends BaseUnitTest {
         }
 
         @Test
+        @DisplayName(
+                "a call past its attempt's cap of calls in flight is refused before the provider and may ask again")
+        void shouldRefuseTheCallWhenItsAttemptHasItsMostCallsInFlight() {
+            ProxyRouting routing = streamingRouting();
+            authenticate(routing);
+            IntStream.range(0, REVIEW_CALLS_AT_THREE).forEach(index -> streamingCalls.begin(ATTEMPT));
+
+            ResponseEntity<?> answer = streamingController.proxy(
+                    request("POST", "/internal/llm/chat/completions"),
+                    new MockHttpServletResponse(),
+                    new HttpHeaders(),
+                    "{\"stream\":true,\"messages\":[]}".getBytes(StandardCharsets.UTF_8));
+
+            assertThat(answer).isNotNull();
+            assertThat(answer.getStatusCode().value()).isEqualTo(429);
+            assertThat(answer.getHeaders().getFirst(HttpHeaders.RETRY_AFTER)).isEqualTo("1");
+            assertThat(answer.getHeaders().getFirst(LlmProxyService.REFUSAL_HEADER))
+                    .isEqualTo("CALLS_IN_FLIGHT");
+            assertThat(upstream.getRequestCount()).isZero();
+            assertThat(streamingMeterRegistry
+                            .counter(AgentMetrics.SANDBOX_GATEWAY_CALLS_IN_FLIGHT_REFUSED)
+                            .count())
+                    .isEqualTo(1.0);
+        }
+
+        @Test
         @DisplayName("cancelling an attempt's calls ends a call whose provider sends nothing at once")
         void cancellingTheAttemptsCallsEndsASilentCallAtOnce() throws Exception {
             upstream.enqueue(new MockResponse.Builder()
@@ -1497,7 +1524,7 @@ class LlmProxyServiceTest extends BaseUnitTest {
             CountDownLatch authenticated = new CountDownLatch(1);
             CountDownLatch sealed = new CountDownLatch(1);
             // The pause between authentication and registration, where a stop can end the attempt.
-            ProxyCallsInFlight calls = new ProxyCallsInFlight() {
+            ProxyCallsInFlight calls = new ProxyCallsInFlight(3) {
                 @Override
                 public Call begin(ProxyRouting.BilledAttempt billed) {
                     authenticated.countDown();
@@ -2251,6 +2278,9 @@ class LlmProxyServiceTest extends BaseUnitTest {
 
     /** How long a Heph turn's stream may send no byte in these tests. */
     private static final Duration HEPH_IDLE = Duration.ofMillis(400);
+
+    /** The review cap at practice concurrency 3: 2 × (3 + 1) + 4. */
+    private static final int REVIEW_CALLS_AT_THREE = 12;
 
     private static final ProxyRouting.BilledAttempt ATTEMPT = new ProxyRouting.BilledAttempt(
             UsageSourceType.REVIEW_JOB,
