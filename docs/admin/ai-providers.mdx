@@ -153,9 +153,9 @@ Each entry is one of these:
 
 | Entry | Example | Allows |
 | --- | --- | --- |
-| A host name | `vllm.lab.example` | This exact name, at any private address that it resolves to. Use only a name whose DNS you control. Wildcards are not supported. |
+| A host name | `vllm.lab.example` | This exact name, at any private address that it resolves to. Use only a name whose DNS you control. Wildcards are not supported. A host name is not checked against the addresses of this deployment, so never list the name of a Hephaestus service. |
 | An IP address | `192.168.5.9` | Any host name that resolves to this address. |
-| A CIDR range | `10.20.0.0/16`, `fd00:1::/32` | Any host name that resolves into this range. |
+| A CIDR range | `10.20.0.0/16`, `fd00:1::/48` | Any host name that resolves into this range. It can be no wider than `/16` for IPv4 or `/48` for IPv6. |
 
 These rules apply:
 
@@ -171,9 +171,16 @@ These rules apply:
   | `fd20:ce::/48` | Google Cloud |
   | `fd00:a9fe::/32` | Akamai (Linode) |
   | `fd00:42::/32` | Scaleway |
+  | `fd00:c1::/32` | Oracle Cloud |
+
+  No such list is complete, so a range must also be narrow, as the next rules say.
 
 - An entry stops startup if it is not a host name, an IP address, or a CIDR range.
+  An IPv4 address needs all four parts: `10.1` is refused.
 - A range stops startup if it is not inside one of the private ranges, for example `0.0.0.0/0` or `172.0.0.0/8`.
+- A range stops startup if it is wider than `/16` for IPv4 or `/48` for IPv6, for example `10.0.0.0/8` or `fd00::/8`.
+  List the network that the model server is in.
+- A range stops startup if it is inside a metadata range of the previous table, because it would never connect.
 - A range stops startup if it covers an address of the server or worker itself.
   Such a range admits the services of this deployment, such as PostgreSQL, NATS, and the server.
   On Compose, this check covers the Compose network.

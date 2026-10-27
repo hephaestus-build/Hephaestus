@@ -250,7 +250,7 @@ class EgressPolicyTest extends BaseUnitTest {
                     settingsRepository,
                     new LlmProperties(
                             "",
-                            new LlmProperties.Egress(false, List.of("10.20.0.0/16", "fd00:1::/32"), allowHttp),
+                            new LlmProperties.Egress(false, List.of("10.20.0.0/16", "fd00:1::/48"), allowHttp),
                             new LlmProperties.Fx(LlmProperties.ECB_DAILY_URL)),
                     List.of());
         }

@@ -43,8 +43,9 @@ public record LlmProperties(
      *                               IP addresses or CIDR ranges. A host name entry lets that name resolve to a private
      *                               address. A range admits every host name that resolves into it. Only private
      *                               addresses qualify: loopback, link-local and the known cloud metadata ranges stay
-     *                               blocked. A range outside the private ranges, or one that covers this server's own
-     *                               address, stops startup. Empty allows public hosts only.
+     *                               blocked. A range wider than /16 (IPv4) or /48 (IPv6), outside the private ranges,
+     *                               or covering this server's own address stops startup. Empty allows public hosts
+     *                               only.
      * @param privateHostsAllowHttp Accepts {@code http://} base URLs whose host is in {@code private-hosts}. Every other
      *                               host still needs HTTPS.
      */

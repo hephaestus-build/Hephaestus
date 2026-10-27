@@ -170,6 +170,15 @@ class SsrfGuardedResolverGroupTest extends BaseUnitTest {
             assertThat(result.cause()).isInstanceOf(UnknownHostException.class);
         }
 
+        /** Its bytes start like Google Cloud's metadata /48, which once overran the IPv6 matcher. */
+        @Test
+        void shouldFailAtOnceWhenAHostRebindsToAnIpv4AddressShapedLikeAnIpv6Prefix() throws Exception {
+            Future<InetSocketAddress> result = resolve("attacker.example", "253.32.0.206");
+
+            assertThat(result.isDone()).isTrue();
+            assertThat(result.cause()).isInstanceOf(UnknownHostException.class);
+        }
+
         @Test
         void shouldBlockMetadataAddressEvenForListedHostName() throws Exception {
             assertThat(resolve("vllm.lab.test", "169.254.169.254").isSuccess()).isFalse();
