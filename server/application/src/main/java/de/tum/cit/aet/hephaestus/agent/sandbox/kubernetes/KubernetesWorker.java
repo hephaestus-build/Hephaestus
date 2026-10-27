@@ -1,9 +1,11 @@
 package de.tum.cit.aet.hephaestus.agent.sandbox.kubernetes;
 
+import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ExecSandboxes;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxInfrastructureException;
 import java.util.HashMap;
 import java.util.Map;
 import org.jspecify.annotations.Nullable;
+import org.springframework.context.ApplicationEventPublisher;
 
 /**
  * This worker as its sandboxes record it: the labels of every sandbox it creates, the address of its gateway, and what
@@ -39,12 +41,18 @@ public class KubernetesWorker {
     private final KubernetesSandboxProperties properties;
     private final String workerId;
     private final int gatewayPort;
+    private final ApplicationEventPublisher events;
     private volatile KubernetesIsolationProbe.@Nullable Proof proof;
 
-    public KubernetesWorker(KubernetesSandboxProperties properties, String workerId, int gatewayPort) {
+    public KubernetesWorker(
+            KubernetesSandboxProperties properties,
+            String workerId,
+            int gatewayPort,
+            ApplicationEventPublisher events) {
         this.properties = properties;
         this.workerId = workerId;
         this.gatewayPort = gatewayPort;
+        this.events = events;
     }
 
     public KubernetesSandboxProperties properties() {
@@ -102,7 +110,11 @@ public class KubernetesWorker {
 
     /** Records what the latest isolation probe proved ({@link KubernetesIsolationProbe}). */
     void proved(KubernetesIsolationProbe.Proof latest) {
+        boolean wasIsolated = isolated();
         proof = latest;
+        if (!wasIsolated && latest.passed()) {
+            events.publishEvent(new ExecSandboxes.SandboxRuntimeReady());
+        }
     }
 
     /** What the latest isolation probe proved, or null before the first one ended. */

@@ -498,6 +498,10 @@ The first read of a turn attempt takes one turn sandbox.
 The worker removes it when the attempt ends.
 Each worker also keeps a pool of 2 empty turn sandboxes, so that a turn does not wait for a container start.
 
+The pool fills when the worker starts.
+On Kubernetes, it fills when the first isolation probe passed.
+Thus, the first turn after a restart also takes a sandbox that is already running.
+
 Plan for these containers on each worker, beside the review sandboxes and the Heph host:
 
 - One turn sandbox for each running Heph turn that reads, at most `hephaestus.worker.capacity.mentor-max`.

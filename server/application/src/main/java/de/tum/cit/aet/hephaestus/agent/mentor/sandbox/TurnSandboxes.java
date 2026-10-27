@@ -28,6 +28,7 @@ import java.util.function.Predicate;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.event.EventListener;
 
 /**
  * The turn sandboxes of this worker. A pool of {@link #poolSize} empty sandboxes waits ahead. The first {@code read},
@@ -316,6 +317,16 @@ public class TurnSandboxes implements AutoCloseable {
                 sandboxes.remove(sandbox.id());
             }
         }
+        refill();
+    }
+
+    /**
+     * Fills the pool as soon as the runtime may start sandboxes, so the first turn after a start does not wait for one.
+     * On Kubernetes that is when the first isolation probe passed, after the start's reconcile found the runtime not
+     * ready.
+     */
+    @EventListener
+    public void onRuntimeReady(ExecSandboxes.SandboxRuntimeReady ready) {
         refill();
     }
 

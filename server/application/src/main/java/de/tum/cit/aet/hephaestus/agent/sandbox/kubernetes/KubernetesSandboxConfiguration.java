@@ -26,6 +26,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.health.contributor.Health;
 import org.springframework.boot.health.contributor.HealthIndicator;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -63,13 +64,14 @@ public class KubernetesSandboxConfiguration {
     public KubernetesWorker kubernetesWorker(
             KubernetesSandboxProperties properties,
             WorkerProperties workerProperties,
-            SandboxGatewayProperties gatewayProperties) {
+            SandboxGatewayProperties gatewayProperties,
+            ApplicationEventPublisher events) {
         // The chart's NetworkPolicy names the port, so a port that the web server chooses at start cannot work here.
         if (gatewayProperties.port() == 0) {
             throw new IllegalStateException(
                     "The Kubernetes sandbox runtime needs a fixed sandbox gateway port (SANDBOX_API_PORT)");
         }
-        return new KubernetesWorker(properties, workerProperties.resolvedWorkerId(), gatewayProperties.port());
+        return new KubernetesWorker(properties, workerProperties.resolvedWorkerId(), gatewayProperties.port(), events);
     }
 
     @Bean

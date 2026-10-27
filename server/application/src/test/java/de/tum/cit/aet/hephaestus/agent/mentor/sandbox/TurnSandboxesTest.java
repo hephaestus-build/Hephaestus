@@ -140,6 +140,18 @@ class TurnSandboxesTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldFillThePoolWhenTheRuntimeBecomesReadyAfterTheStartsReconcile() {
+        runtime.ready = false;
+        sandboxes.reconcile((turnId, attempt) -> true);
+        assertThat(runtime.createdCount()).isZero();
+
+        runtime.ready = true;
+        sandboxes.onRuntimeReady(new ExecSandboxes.SandboxRuntimeReady());
+
+        await().atMost(Duration.ofSeconds(5)).until(() -> sandboxes.pooled() == 2);
+    }
+
+    @Test
     void shouldReleaseEveryAssignedSandboxWhenChangesMayHaveBeenMissed() {
         var revocations = new TurnContextRevocations(new TurnContextGenerations(), sandboxes);
         TurnSandboxes.Attempt first = attempt();

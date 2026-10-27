@@ -306,7 +306,7 @@ class KubernetesSandboxLiveTest {
         client = configuration.sandboxKubernetesClient();
         requireServiceAccountClient(client.getConfiguration());
         // The ledger id of this run's worker process, unique as the production one is.
-        worker = new KubernetesWorker(properties, "live-" + UUID.randomUUID(), gatewayProperties.port());
+        worker = new KubernetesWorker(properties, "live-" + UUID.randomUUID(), gatewayProperties.port(), event -> {});
         liveWorkers = KubernetesFixtures.live(worker.workerId());
         requireNoAuthorityInItsOwnNamespace();
         pods = configuration.kubernetesPods(client, worker, sandbox, agentImage);

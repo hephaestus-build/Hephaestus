@@ -21,7 +21,7 @@ final class KubernetesFixtures {
     }
 
     static KubernetesWorker worker(String namespace) {
-        return new KubernetesWorker(properties(namespace), WORKER_ID, 8081);
+        return new KubernetesWorker(properties(namespace), WORKER_ID, 8081, event -> {});
     }
 
     /** The registry as it reads while the given worker processes beat. */

@@ -156,7 +156,7 @@ class KubernetesSandboxRuntimeTest {
                 "hephaestus-conversations",
                 "hephaestus-reviews",
                 Duration.ofMinutes(15));
-        worker = new KubernetesWorker(properties, WORKER_ID, 8081);
+        worker = new KubernetesWorker(properties, WORKER_ID, 8081, event -> {});
         worker.proved(passed());
         WorkerRegistryRepository registry = mock(WorkerRegistryRepository.class);
         when(registry.findLiveWorkerIds(anyLong())).thenReturn(List.of(WORKER_ID));
@@ -601,7 +601,8 @@ class KubernetesSandboxRuntimeTest {
                 new KubernetesSandboxProperties(
                         SANDBOXES, workerName, "10.42.0.7", "", "", "", "", "", "", Duration.ofMinutes(15)),
                 WORKER_ID,
-                8081);
+                8081,
+                event -> {});
         Pod pod = new KubernetesPods(api(), defaults, 10, ImagePullPolicy.IF_NOT_PRESENT)
                 .turnPod(new KubernetesPods.Workload("turn", Map.of(), IMAGE, "sandbox"), LIMITS);
 
@@ -614,7 +615,7 @@ class KubernetesSandboxRuntimeTest {
 
     @Test
     void shouldStartNoSandboxBeforeTheIsolationProbePassed() {
-        var unproved = new KubernetesWorker(properties, WORKER_ID, 8081);
+        var unproved = new KubernetesWorker(properties, WORKER_ID, 8081, event -> {});
         var unprovedPods = new KubernetesPods(api(), unproved, 10, ImagePullPolicy.IF_NOT_PRESENT);
         var adapter = new SandboxAttemptRunner(
                 new KubernetesSandboxBackend(

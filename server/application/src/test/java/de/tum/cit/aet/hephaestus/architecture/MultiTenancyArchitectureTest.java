@@ -539,6 +539,7 @@ class MultiTenancyArchitectureTest extends HephaestusArchitectureTest {
                                         // transaction listener only carries native controls to an equivalent instance.
                                         "PersonProviderInstanceRegistered",
                                         "ContextRefreshedEvent", // Spring lifecycle, no workspace needed
+                                        "SandboxRuntimeReady", // The worker's sandbox runtime may start sandboxes
                                         "WorkspacesInitializedEvent", // Startup lifecycle, signals all workspaces ready
                                         // core.auth (ADR 0017): authentication is USER/SYSTEM-scoped, never
                                         // workspace-scoped (same rationale as the @WorkspaceAgnostic auth controllers

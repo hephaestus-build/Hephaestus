@@ -76,6 +76,9 @@ public interface ExecSandboxes {
         return true;
     }
 
+    /** Published when {@link #ready()} turns true after it was false, so a caller that waited can start sandboxes now. */
+    record SandboxRuntimeReady() {}
+
     /**
      * @param argv the command, run without a shell
      * @param outputLimit how many bytes of each of stdout and stderr are kept; the rest is dropped
