@@ -648,7 +648,7 @@ hephaestus:
             requests-per-minute: ${SANDBOX_API_REQUESTS_PER_MINUTE:120}
         # Each review sandbox; the sizing behind the defaults is in docs/admin/sizing.mdx § Review sandbox limits.
         default-resource-limits:
-            memory-bytes: ${SANDBOX_MEMORY_BYTES:3221225472}  # 3 GiB, tmpfs included
+            memory-bytes: ${SANDBOX_MEMORY_BYTES:3221225472}  # 3 GiB, tmpfs included; Docker only
             cpus: ${SANDBOX_CPUS:1.0}
             pids-limit: ${SANDBOX_PIDS_LIMIT:256}
 

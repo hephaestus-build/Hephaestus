@@ -223,11 +223,13 @@ worker:
   # Two workers on different nodes where the cluster has them: one keeps claiming while the other
   # drains. 0 stops every worker and keeps its objects.
   replicas: 2
-  # The reviews that one worker runs at once. Each review sandbox holds SANDBOX_MEMORY_BYTES, 3 GiB
-  # by default, so the sandbox quota must hold every worker's reviews.
+  # The reviews that one worker runs at once. Each review sandbox requests 640 MiB and is limited to
+  # 1280 MiB (docs/admin/kubernetes.mdx § Sandbox sizes), so the sandbox quota must hold every
+  # worker's reviews.
   reviews: 5
   # The Heph turns that one worker runs at once: auto, or a number. Each running turn holds a turn
-  # sandbox of 1 GiB beside the 2 pooled ones, so the sandbox quota must hold them.
+  # sandbox (160 MiB requested, 544 MiB limit) beside the 2 pooled ones, so the sandbox quota must
+  # hold them.
   # docs/admin/runtime-roles.mdx § Heph capacity.
   hephTurns: auto
   # How long a stopping worker serves its running attempts and claims nothing new. A practice

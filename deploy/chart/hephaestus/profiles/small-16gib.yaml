@@ -12,8 +12,8 @@ worker:
   drainTimeoutSeconds: 600
   hephTurns: 1
   sandbox:
-    # One worker's sandboxes: one review (3 GiB), the Heph host (2 GiB), the turn sandboxes of the pool
-    # and of the running turn (3 x 1 GiB), and the isolation probe (1.5 GiB).
+    # One worker's sandboxes, by memory limit: one review (1280 MiB), the Heph host (1 GiB), the turn
+    # sandboxes of the pool and of the running turn (3 x 544 MiB), and the isolation probe (768 MiB).
     quota:
       enabled: true
       pods: 10

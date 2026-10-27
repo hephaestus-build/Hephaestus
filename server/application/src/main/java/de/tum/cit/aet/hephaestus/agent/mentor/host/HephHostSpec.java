@@ -28,6 +28,9 @@ final class HephHostSpec {
             "pi-text.ts",
             SandboxLayout.PROVIDER_HELPER_FILENAME);
 
+    /** Node's heap, below the host's limit so that its code, buffers and stacks fit beside it. */
+    static final long HEAP_MIB = SandboxLayout.HEPH_HOST_MEMORY_BYTES * 3 / 4 / (1024 * 1024);
+
     /**
      * Many sessions share one process: a larger heap than a practice runner's, and no review workspace. The runtime
      * bounds only the workspace's initialization; the host runs until the worker removes it.
@@ -81,7 +84,7 @@ final class HephHostSpec {
                 "mkdir -p " + WRITABLE
                         + " /home/agent/.local/config && "
                         + String.join(" && ", PiRunnerProfile.PRACTICE_SCRIPT_LIBRARY_SETUP)
-                        + " && exec node --max-old-space-size=1024 --permission"
+                        + " && exec node --max-old-space-size=" + HEAP_MIB + " --permission"
                         + " --allow-fs-read=" + SandboxLayout.WORKSPACE_ROOT
                         + " --allow-fs-read=/opt/pi-sdk --allow-fs-read=/home/agent"
                         + " --allow-fs-read=" + SandboxLayout.PRACTICE_SCRIPT_IMAGE_ROOT

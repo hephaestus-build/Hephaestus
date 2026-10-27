@@ -1,7 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.sandbox.kubernetes;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
@@ -17,7 +16,6 @@ import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.agent.sandbox.ImagePullPolicy;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxAttemptRunner;
-import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxProperties;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxReconciler;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxWorkspaceManager;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ExecSandboxes;
@@ -69,6 +67,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
+import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -181,23 +180,13 @@ class KubernetesSandboxRuntimeTest {
     }
 
     @Test
-    void shouldRefuseAReviewMemoryLimitThatFullMemoryVolumesWouldExhaust() {
-        // The floor that the review sandbox limits changeset names, the same as on Docker.
-        long floor = 2_751_463_424L;
-        assertThatThrownBy(() -> SandboxProperties.requireRoomBeside(floor - 1, KubernetesPods.MEMORY_VOLUME_BYTES))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("SANDBOX_MEMORY_BYTES");
-        assertThatCode(() -> SandboxProperties.requireRoomBeside(floor, KubernetesPods.MEMORY_VOLUME_BYTES))
-                .doesNotThrowAnyException();
-    }
-
-    @Test
     void shouldBuildReviewPodWithRestrictedContainersAndReadOnlyRuntimeWorkspace() {
         Pod pod = pods.workspacePod(
                 new KubernetesPods.Workload("review", Map.of(), IMAGE, "agent"),
                 Map.of("B", "2", "A", "1"),
                 List.of("node", "run.ts"),
-                LIMITS);
+                LIMITS,
+                KubernetesPods.REVIEW);
 
         var spec = pod.getSpec();
         assertThat(spec.getRestartPolicy()).isEqualTo("Never");
@@ -224,9 +213,7 @@ class KubernetesSandboxRuntimeTest {
         Container runtime = spec.getContainers().getFirst();
         for (Container container : List.of(initializer, runtime)) {
             assertRestricted(container, KubernetesPods.SANDBOX_UID);
-            Quantity memory = container.getResources().getLimits().get("memory");
-            assertThat(memory).isNotNull();
-            assertThat(memory.getNumericalAmount()).isEqualByComparingTo(Long.toString(LIMITS.memoryBytes()));
+            assertSized(container, KubernetesPods.REVIEW);
             assertThat(container.getEnv()).extracting("name").containsExactly("A", "B");
             assertThat(container.getCommand()).startsWith(KubernetesPods.RLIMITS.toArray(String[]::new));
         }
@@ -239,7 +226,80 @@ class KubernetesSandboxRuntimeTest {
         assertThat(spec.getVolumes())
                 .filteredOn(volume -> volume.getEmptyDir() != null
                         && "Memory".equals(volume.getEmptyDir().getMedium()))
-                .hasSize(3);
+                .as("only /run, which can hold a credential, is in memory")
+                .singleElement()
+                .satisfies(volume ->
+                        assertThat(mountPath(runtime, volume.getName())).isEqualTo("/run"));
+        assertThat(spec.getVolumes())
+                .filteredOn(volume ->
+                        volume.getEmptyDir() != null && volume.getEmptyDir().getMedium() == null)
+                .extracting(volume -> mountPath(runtime, volume.getName()))
+                .as("the attempt volumes and the scratch places are on disk")
+                .containsExactlyInAnyOrder(
+                        "/workspace",
+                        "/workspace/work",
+                        "/workspace/out",
+                        "/workspace/.pi",
+                        "/workspace/.sessions",
+                        "/tmp",
+                        "/home/agent/.local");
+    }
+
+    @Test
+    void shouldBoundTheDiskOfEverySandboxPodSoThatNoneCanFillItsNode() {
+        Map<String, String> review = Map.of(KubernetesWorker.SANDBOX_KIND, KubernetesWorker.KIND_REVIEW);
+        Map<String, String> host = Map.of(KubernetesWorker.SANDBOX_KIND, KubernetesWorker.KIND_HOST);
+        Pod reviewPod = pods.workspacePod(
+                new KubernetesPods.Workload("r", review, IMAGE, "agent"),
+                Map.of(),
+                List.of("node"),
+                LIMITS,
+                KubernetesPods.REVIEW);
+        Pod hostPod = pods.workspacePod(
+                new KubernetesPods.Workload("h", host, IMAGE, "agent"),
+                Map.of(),
+                List.of("node"),
+                LIMITS,
+                KubernetesPods.HOST);
+        Pod turnPod = pods.turnPod(new KubernetesPods.Workload("t", Map.of(), IMAGE, "sandbox"), LIMITS);
+
+        assertDiskBounded(reviewPod, KubernetesPods.RUNTIME, KubernetesPods.REVIEW);
+        assertDiskBounded(hostPod, KubernetesPods.RUNTIME, KubernetesPods.HOST);
+        assertDiskBounded(turnPod, KubernetesPods.SANDBOX, KubernetesPods.TURN);
+        Pod probePod = pods.probePod(
+                new KubernetesPods.Workload("p", review, IMAGE, "agent"), List.of("true"), LIMITS, 60, true);
+        for (Container each : Stream.concat(
+                        probePod.getSpec().getInitContainers().stream(), probePod.getSpec().getContainers().stream())
+                .toList()) {
+            assertThat(each.getResources().getLimits()).as(each.getName()).containsKey("ephemeral-storage");
+        }
+    }
+
+    /**
+     * Every volume of the Pod on the node's disk has the size limit of its kind, the main container may use them all
+     * with its logs, and every container has a disk limit, which a quota that counts {@code limits.ephemeral-storage}
+     * requires of each.
+     */
+    private static void assertDiskBounded(Pod pod, String main, KubernetesPods.Size size) {
+        var disk = pod.getSpec().getVolumes().stream()
+                .filter(volume ->
+                        volume.getEmptyDir() != null && volume.getEmptyDir().getMedium() == null)
+                .toList();
+        assertThat(disk).as(main).hasSize(size.diskVolumes());
+        assertThat(disk)
+                .allSatisfy(volume -> assertThat(bytes(volume.getEmptyDir().getSizeLimit()))
+                        .as(volume.getName())
+                        .isEqualTo(size.volumeBytes()));
+        long volumes = disk.size() * size.volumeBytes();
+        assertThat(bytes(container(pod, main).getResources().getLimits().get("ephemeral-storage")))
+                .as("all its volumes full, and its logs")
+                .isEqualTo(size.diskLimit())
+                .isGreaterThan(volumes);
+        for (Container each : Stream.concat(
+                        pod.getSpec().getInitContainers().stream(), pod.getSpec().getContainers().stream())
+                .toList()) {
+            assertThat(each.getResources().getLimits()).as(each.getName()).containsKey("ephemeral-storage");
+        }
     }
 
     @Test
@@ -254,7 +314,8 @@ class KubernetesSandboxRuntimeTest {
                                 new KubernetesPods.Workload("r", review, IMAGE, "agent"),
                                 Map.of(),
                                 List.of("node"),
-                                LIMITS)
+                                LIMITS,
+                                KubernetesPods.REVIEW)
                         .getSpec()
                         .getPriorityClassName())
                 .isEqualTo("hephaestus-reviews");
@@ -262,7 +323,8 @@ class KubernetesSandboxRuntimeTest {
                                 new KubernetesPods.Workload("h", host, IMAGE, "agent"),
                                 Map.of(),
                                 List.of("node"),
-                                LIMITS)
+                                LIMITS,
+                                KubernetesPods.HOST)
                         .getSpec()
                         .getPriorityClassName())
                 .isEqualTo("hephaestus-conversations");
@@ -306,17 +368,61 @@ class KubernetesSandboxRuntimeTest {
     }
 
     @Test
-    void shouldRequestTheWholeMemoryLimitAndATenthOfTheCpuLimitOfEachSandboxContainer() {
+    void shouldSizeTheTurnSandboxFromMeasuredUseAndKeepItsWorkspaceOnDisk() {
         Pod pod = pods.turnPod(new KubernetesPods.Workload("turn", Map.of(), IMAGE, "sandbox"), LIMITS);
 
+        Container sandbox = container(pod, KubernetesPods.SANDBOX);
+        assertSized(sandbox, KubernetesPods.TURN);
+        assertThat(Quantity.getAmountInBytes(container(pod, KubernetesPods.STAGER)
+                                .getResources()
+                                .getRequests()
+                                .get("memory"))
+                        .longValueExact())
+                .as("the stager writes the workspace to disk, not into its memory")
+                .isEqualTo(32L * 1024 * 1024);
         for (Container each : pod.getSpec().getContainers()) {
             var limits = each.getResources().getLimits();
             var requests = each.getResources().getRequests();
-            assertThat(requests.get("memory")).as(each.getName()).isEqualTo(limits.get("memory"));
             assertThat(Quantity.getAmountInBytes(requests.get("cpu")).multiply(BigDecimal.TEN))
                     .as(each.getName())
                     .isEqualByComparingTo(Quantity.getAmountInBytes(limits.get("cpu")));
         }
+        assertThat(pod.getSpec().getVolumes())
+                .filteredOn(volume -> volume.getName().equals("workspace"))
+                .singleElement()
+                .satisfies(volume -> {
+                    assertThat(volume.getEmptyDir().getMedium()).isNull();
+                    assertThat(Quantity.getAmountInBytes(volume.getEmptyDir().getSizeLimit())
+                                    .longValueExact())
+                            .isEqualTo(SandboxLayout.TURN_WORKSPACE_BYTES);
+                });
+    }
+
+    /** The container requests the memory and the local disk of its kind, and is limited to both. */
+    private static void assertSized(Container container, KubernetesPods.Size size) {
+        var requests = container.getResources().getRequests();
+        var limits = container.getResources().getLimits();
+        assertThat(bytes(requests.get("memory"))).as(container.getName()).isEqualTo(size.memoryRequest());
+        assertThat(bytes(limits.get("memory"))).as(container.getName()).isEqualTo(size.memoryLimit());
+        assertThat(bytes(requests.get("ephemeral-storage")))
+                .as(container.getName())
+                .isEqualTo(size.diskRequest());
+        assertThat(bytes(limits.get("ephemeral-storage")))
+                .as("no sandbox can fill the node's disk")
+                .isEqualTo(size.diskLimit());
+        assertThat(size.memoryRequest()).isLessThanOrEqualTo(size.memoryLimit());
+    }
+
+    private static long bytes(@Nullable Quantity quantity) {
+        return Quantity.getAmountInBytes(Objects.requireNonNull(quantity)).longValueExact();
+    }
+
+    private static @Nullable String mountPath(Container container, String volume) {
+        return container.getVolumeMounts().stream()
+                .filter(mount -> mount.getName().equals(volume))
+                .map(VolumeMount::getMountPath)
+                .findFirst()
+                .orElse(null);
     }
 
     @Test
@@ -619,16 +725,16 @@ class KubernetesSandboxRuntimeTest {
                 .as("no quota, no bound of its own")
                 .isEqualTo(Integer.MAX_VALUE);
 
-        quotaWithTwoGibibytesFree();
+        quotaWithRoomForTwoReviews();
 
         assertThat(backend().roomFor(LIMITS))
-                .as("2 GiB free hold two 1 GiB reviews")
+                .as("1280 MiB free hold two reviews that request 640 MiB")
                 .isEqualTo(2);
     }
 
     @Test
     void shouldCountALaunchedReviewAgainstTheRoomBeforeItsPodAppears() {
-        quotaWithTwoGibibytesFree();
+        quotaWithRoomForTwoReviews();
         KubernetesSandboxBackend reviews = backend();
         UUID jobId = UUID.randomUUID();
 
@@ -650,7 +756,7 @@ class KubernetesSandboxRuntimeTest {
 
     @Test
     void shouldChargeTheOverheadThatASandboxPodOfTheRuntimeClassShows() {
-        quotaWithTwoGibibytesFree();
+        quotaWithRoomForTwoReviews();
         api().pods()
                 .inNamespace(SANDBOXES)
                 .resource(new PodBuilder()
@@ -669,14 +775,14 @@ class KubernetesSandboxRuntimeTest {
                 .create();
 
         assertThat(new KubernetesSandboxQuota(api(), SANDBOXES, "gvisor").roomFor(LIMITS))
-                .as("2 GiB free hold one 1.5 GiB Pod")
+                .as("1280 MiB free hold one review of 640 MiB with 512 MiB of overhead")
                 .isEqualTo(1);
         assertThat(new KubernetesSandboxQuota(api(), SANDBOXES, "").roomFor(LIMITS))
                 .as("the cluster's default runtime has no overhead")
                 .isEqualTo(2);
     }
 
-    private void quotaWithTwoGibibytesFree() {
+    private void quotaWithRoomForTwoReviews() {
         api().resourceQuotas()
                 .inNamespace(SANDBOXES)
                 .resource(new ResourceQuotaBuilder()
@@ -688,7 +794,7 @@ class KubernetesSandboxRuntimeTest {
                         .endSpec()
                         .withNewStatus()
                         .withHard(Map.of("requests.memory", new Quantity("4Gi")))
-                        .withUsed(Map.of("requests.memory", new Quantity("2Gi")))
+                        .withUsed(Map.of("requests.memory", new Quantity("2816Mi")))
                         .endStatus()
                         .build())
                 .create();
@@ -947,7 +1053,8 @@ class KubernetesSandboxRuntimeTest {
                         name, labels.apply(worker.labels(KubernetesWorker.KIND_REVIEW)), IMAGE, "agent"),
                 Map.of(),
                 List.of("node", "run.ts"),
-                LIMITS);
+                LIMITS,
+                KubernetesPods.REVIEW);
         return api().batch()
                 .v1()
                 .jobs()

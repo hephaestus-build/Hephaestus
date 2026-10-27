@@ -132,28 +132,34 @@ public class KubernetesSandboxQuota {
     }
 
     /**
-     * What one review sandbox counts against a quota, by the quota's resource names: its Pod and its Job, the resources
-     * of its runtime container ({@link KubernetesPods#resources}), and the Pod overhead of its RuntimeClass, which a
-     * quota adds to both requests and limits. The initializer has the same resources and runs before the runtime, and
-     * the isolation gate is smaller, so the runtime's are the Pod's.
+     * What one review sandbox counts against a quota, by the quota's resource names: its Pod and its Job, the
+     * resources of its runtime container at the review's size ({@link KubernetesPods#resources},
+     * {@link KubernetesPods#REVIEW}), and the Pod overhead of its RuntimeClass, which a quota adds to both requests and
+     * limits. The initializer has the same resources and runs before the runtime, and the isolation gate is smaller,
+     * so the runtime's are the Pod's.
      */
     static Map<String, Quantity> footprint(ResourceLimits limits, Map<String, Quantity> overhead) {
-        var resources = KubernetesPods.resources(limits);
+        var resources = KubernetesPods.resources(limits, KubernetesPods.REVIEW);
         Quantity one = new Quantity("1");
         Quantity cpuRequest = plus(resources.getRequests().get("cpu"), overhead.get("cpu"));
         Quantity cpuLimit = plus(resources.getLimits().get("cpu"), overhead.get("cpu"));
         Quantity memoryRequest = plus(resources.getRequests().get("memory"), overhead.get("memory"));
         Quantity memoryLimit = plus(resources.getLimits().get("memory"), overhead.get("memory"));
-        return Map.of(
-                "pods", one,
-                "count/pods", one,
-                "count/jobs.batch", one,
-                "cpu", cpuRequest,
-                "requests.cpu", cpuRequest,
-                "limits.cpu", cpuLimit,
-                "memory", memoryRequest,
-                "requests.memory", memoryRequest,
-                "limits.memory", memoryLimit);
+        Quantity disk = Objects.requireNonNull(resources.getRequests().get("ephemeral-storage"));
+        Quantity diskLimit = Objects.requireNonNull(resources.getLimits().get("ephemeral-storage"));
+        return Map.ofEntries(
+                Map.entry("pods", one),
+                Map.entry("count/pods", one),
+                Map.entry("count/jobs.batch", one),
+                Map.entry("cpu", cpuRequest),
+                Map.entry("requests.cpu", cpuRequest),
+                Map.entry("limits.cpu", cpuLimit),
+                Map.entry("memory", memoryRequest),
+                Map.entry("requests.memory", memoryRequest),
+                Map.entry("limits.memory", memoryLimit),
+                Map.entry("ephemeral-storage", disk),
+                Map.entry("requests.ephemeral-storage", disk),
+                Map.entry("limits.ephemeral-storage", diskLimit));
     }
 
     private static Quantity plus(@Nullable Quantity amount, @Nullable Quantity overhead) {

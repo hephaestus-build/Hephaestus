@@ -519,3 +519,23 @@ These parts of this decision change with it:
 - **§ Revisit triggers**, the Kubernetes-only product decision. ADR 0058 § Revisit trigger replaces it.
 
 The architecture of this decision stays: state and storage, the job folder, the Sandbox Gateway, evidence admission, the sandbox boundary, the Kubernetes execution model, and the three runtime roles.
+
+## Update — 2026-10-26: sandbox scratch on node disk
+
+On Kubernetes, a sandbox Pod keeps only `/run`, where credentials may sit, in memory (16 MiB).
+`/tmp`, `~/.local` and a turn sandbox's workspace are disk `emptyDir` volumes with Docker's tmpfs sizes as their size limits.
+Each container requests node disk.
+Every disk volume of a sandbox Pod has a size limit of its Pod's kind, and each container has a disk limit that holds all its volumes and its logs, so that no sandbox can fill a node's disk.
+The worker sizes the memory of each kind of sandbox Pod from measured use ([`docs/admin/kubernetes.mdx`](../admin/kubernetes.mdx#sandbox-sizes)); `SANDBOX_MEMORY_BYTES` is Docker's.
+
+**Why.**
+A memory volume's pages count against the Pod's memory limit.
+Each review or Heph host Pod therefore had to request 2 GiB more memory than its processes use, and the stager of each turn had to hold the whole turn workspace in memory.
+Requests decide scheduling, so these files filled a node's memory requests while its memory stood mostly unused.
+Docker parity is no Kubernetes reason.
+
+**Cost.**
+Source, model context and temporary files of a sandbox now sit on the node's disk until the kubelet deletes the Pod's volumes, and deletion is not secure erasure.
+The admin guide therefore requires encrypted node storage for sandbox nodes ([`docs/admin/kubernetes.mdx`](../admin/kubernetes.mdx#sandbox-prerequisites)).
+A sandbox that passes a volume's size limit is evicted, where on Docker its writes fail.
+The Docker driver keeps its tmpfs mounts.

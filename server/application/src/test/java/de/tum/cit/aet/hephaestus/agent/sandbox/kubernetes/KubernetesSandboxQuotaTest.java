@@ -20,7 +20,7 @@ import org.junit.jupiter.api.Test;
 
 class KubernetesSandboxQuotaTest extends BaseUnitTest {
 
-    /** The default review sandbox: 3 GiB and one CPU. */
+    /** The default review sandbox: one CPU. Its memory and disk come from {@link KubernetesPods#REVIEW}. */
     private static final ResourceLimits LIMITS =
             new ResourceLimits(3L * 1024 * 1024 * 1024, 1.0, 256, Duration.ofMinutes(30));
 
@@ -28,10 +28,9 @@ class KubernetesSandboxQuotaTest extends BaseUnitTest {
 
     @Test
     void shouldAdmitNoReviewWhenTheQuotaHoldsLessMemoryThanItsSandbox() {
-        // Staging's refusal: 7.38 of 9.5 GiB requested by the Heph host and the turn sandboxes.
+        // 9 of 9.5 GiB requested by the Heph host and the turn sandboxes: 512 MiB is free, a review requests 640.
         var quota = quota(
-                Map.of("requests.memory", "9728Mi", "pods", "10"),
-                Map.of("requests.memory", "7381975040", "pods", "4"));
+                Map.of("requests.memory", "9728Mi", "pods", "10"), Map.of("requests.memory", "9216Mi", "pods", "4"));
 
         assertThat(KubernetesSandboxQuota.fits(List.of(quota), REVIEW)).isZero();
     }
@@ -43,7 +42,7 @@ class KubernetesSandboxQuotaTest extends BaseUnitTest {
                 Map.of("requests.memory", "4Gi", "limits.cpu", "10500m", "pods", "3"));
 
         assertThat(KubernetesSandboxQuota.fits(List.of(quota), REVIEW))
-                .as("1.5 free CPUs hold one review's CPU limit, though 12 GiB would hold four")
+                .as("1.5 free CPUs hold one review's CPU limit, though 12 GiB would hold nineteen")
                 .isEqualTo(1);
     }
 
@@ -73,13 +72,13 @@ class KubernetesSandboxQuotaTest extends BaseUnitTest {
     @Test
     void shouldTellAQuotaSmallerThanOneReviewFromAFullOne() {
         var full = quota(Map.of("requests.memory", "9728Mi"), Map.of("requests.memory", "9728Mi"));
-        var tooSmall = quota(Map.of("requests.memory", "2Gi"), Map.of("requests.memory", "0"));
+        var tooSmall = quota(Map.of("requests.memory", "512Mi"), Map.of("requests.memory", "0"));
 
         assertThat(KubernetesSandboxQuota.neverFits(List.of(full), REVIEW))
                 .as("a full quota frees room when its sandboxes end")
                 .isFalse();
         assertThat(KubernetesSandboxQuota.neverFits(List.of(full, tooSmall), REVIEW))
-                .as("2 GiB never hold a review of 3 GiB")
+                .as("512 MiB never hold a review that requests 640 MiB")
                 .isTrue();
     }
 
@@ -106,6 +105,15 @@ class KubernetesSandboxQuotaTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldCountTheReviewsNodeDiskWhenAQuotaBoundsIt() {
+        var quota = quota(Map.of("requests.ephemeral-storage", "3Gi"), Map.of("requests.ephemeral-storage", "512Mi"));
+
+        assertThat(KubernetesSandboxQuota.fits(List.of(quota), REVIEW))
+                .as("a review requests 1 GiB of node disk for its scratch")
+                .isEqualTo(2);
+    }
+
+    @Test
     void shouldCountThePodWhenAQuotaNamesItAsAnObjectCount() {
         var quota = quota(Map.of("count/pods", "5"), Map.of("count/pods", "4"));
 
@@ -115,13 +123,13 @@ class KubernetesSandboxQuotaTest extends BaseUnitTest {
     @Test
     void shouldChargeTheRuntimeClassOverheadToRequestsAndLimits() {
         var quota = quota(
-                Map.of("requests.memory", "6656Mi", "limits.memory", "6656Mi"),
+                Map.of("requests.memory", "2560Mi", "limits.memory", "2560Mi"),
                 Map.of("requests.memory", "0", "limits.memory", "0"));
         var withOverhead = KubernetesSandboxQuota.footprint(LIMITS, Map.of("memory", new Quantity("512Mi")));
 
         assertThat(KubernetesSandboxQuota.fits(List.of(quota), REVIEW)).isEqualTo(2);
         assertThat(KubernetesSandboxQuota.fits(List.of(quota), withOverhead))
-                .as("6.5 GiB hold one 3.5 GiB Pod")
+                .as("2.5 GiB of limits hold one Pod limited to 1.75 GiB")
                 .isEqualTo(1);
     }
 

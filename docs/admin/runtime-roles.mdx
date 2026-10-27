@@ -450,7 +450,7 @@ A worker that never claims a turn starts no host.
 The host runs in a container of the agent image. Its script comes from the worker, not from the image.
 The host has these fixed limits:
 
-- 2 GiB of memory.
+- 2 GiB of memory on Docker. On Kubernetes, 1 GiB ([Kubernetes § Sandbox sizes](./kubernetes#sandbox-sizes)).
 - 2 CPUs.
 - 256 processes.
 
@@ -513,7 +513,7 @@ Plan for these containers on each worker, beside the review sandboxes and the He
 Each turn sandbox has these fixed limits:
 
 - 1 CPU.
-- 1 GiB of memory, which includes its files.
+- 1 GiB of memory on Docker, which includes its files. On Kubernetes, 512 MiB, and its files are on the node's disk ([Kubernetes § Sandbox sizes](./kubernetes#sandbox-sizes)).
 - 256 processes.
 - No network.
 

@@ -1177,7 +1177,8 @@ class KubernetesSandboxLiveTest {
                         KubernetesSandboxBackend.jobName(jobId, 0), labels, agentImage.reference(), "agent"),
                 Map.of(),
                 List.of("sh", "-c", script),
-                limits(Duration.ofMinutes(5)));
+                limits(Duration.ofMinutes(5)),
+                KubernetesPods.REVIEW);
         // The initializer stays, so that it makes the runtime's mount points, but fills nothing.
         Pod runtimeOnly = new PodBuilder(reviewPod)
                 .editSpec()

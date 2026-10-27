@@ -22,6 +22,15 @@ public final class SandboxLayout {
     /** Container workspace root. */
     public static final String WORKSPACE_ROOT = "/workspace";
 
+    /** Each scratch place, {@code /tmp} and {@code ~/.local}: a tmpfs on Docker, a disk volume on Kubernetes. */
+    public static final long SCRATCH_BYTES = 1024L * 1024 * 1024;
+
+    /** A turn sandbox's workspace: a tmpfs on Docker, a disk volume on Kubernetes. */
+    public static final long TURN_WORKSPACE_BYTES = 512L * 1024 * 1024;
+
+    /** The Heph host's memory limit on Kubernetes. Its Node heap stops at three quarters of it, on both backends. */
+    public static final long HEPH_HOST_MEMORY_BYTES = 1024L * 1024 * 1024;
+
     // ── Job folder (ADR 0041): read-only inputs and separate writable mounts ──────────────────────────────
     //   context/, repos/, inputs/, task.json, INDEX.* — the read-only job folder
     //   work/    — scratch the agent + practice scripts write during the run; NEVER collected
