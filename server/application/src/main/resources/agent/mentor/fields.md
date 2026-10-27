@@ -143,8 +143,14 @@ their current standing.
 A bounded sample of authorized feedback records. `feedbackStates` gives each piece's `feedbackId`, `state`,
 `destination`, `createdAt`, and the `practiceSlugs` and `resultIds` behind it; each result's detail names its review
 and problems. `deliveredFeedback` gives the confirmed words (`body`), `destination` and `deliveredAt`, joined to its
-state by `feedbackId`: only these show that feedback reached them. Long words are cut: read the row's `resource` for
-the whole words. No other state shows whether anything reached them. When a piece has no words available, do not
+state by `feedbackId`: only these show that feedback reached them. A row holds the first 600 characters of the words.
+When its `bodyTruncated` is true, read its `resource` (`inputs/context/delivered_feedback/<feedbackId>.json`) for up to
+2,000 characters; a `bodyTruncated` there marks a further cut, and `bodyChars` gives the full length. Never quote a
+cut piece as complete. That file also names the piece's `reviewId`, `practiceSlugs`, `resultIds` and `problemIds`.
+No other state shows whether anything reached them, and one copy can have a receipt while another stays
+uncertain. Withdrawn pieces are not listed.
+`destination` is `ON_WORK` (on the reviewed work), `PRACTICE_PAGE` (their practice page) or `CONVERSATION` (a
+conversation with you). When a piece has no words available, do not
 guess what it said. A piece missing from the sample is only not visible here.
 
 ## inputs/context/prepared_conversation_feedback.json

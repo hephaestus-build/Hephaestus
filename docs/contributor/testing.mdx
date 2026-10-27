@@ -327,6 +327,24 @@ The host reaches the test's sandbox gateway at `host.docker.internal`. The gatew
 `SANDBOX_API_PORT` names one. If a host firewall admits containers to one port only, set `SANDBOX_API_PORT` to
 that port.
 
+### Heph voice eval
+
+`server/application/src/test/resources/agent/heph-voice.live.ts` sends six questions to a real model through the Heph host.
+The eval composes the prompt as `HephHostSpec` does, from `system.md` and the writing guide, and a fake worker serves a small context folder.
+Each case asserts what an answer must never do and prints one line: `eval <case> outputTokens=<n> words=<n> fieldsRead=<true|false>`.
+
+The file name does not match `*.spec.ts`, so `vp run test:agents` and `vp run check` do not run it.
+It reads the `@LiveLlmTest` credentials in the [meta-annotation cheat sheet](#meta-annotation-cheat-sheet).
+Without them, every case skips.
+From the repository root:
+
+```bash
+HEPHAESTUS_LIVE_LLM_BASE_URL=… HEPHAESTUS_LIVE_LLM_API_KEY=… HEPHAESTUS_LIVE_LLM_MODEL=… \
+  node --test server/application/src/test/resources/agent/heph-voice.live.ts
+```
+
+To compare another prompt, set `HEPHAESTUS_LIVE_HEPH_SYSTEM_PROMPT_FILE` to a file with the whole system prompt. It replaces `system.md` and the writing guide.
+
 ### Live models for practice scripts
 
 Two live tests run a practice program that uses every direct model slot against real models.
