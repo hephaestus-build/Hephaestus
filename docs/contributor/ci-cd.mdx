@@ -364,7 +364,7 @@ The required checks are job names, so a display name does not change them.
 | `practice-guidance-links.yml`         | PR touching practice guidance, weekly, manual                                 | Checks the web links in bundled practice guides                                                                                                                                                                                  |
 | `scorecard.yml`                       | Push to main, branch-protection change, weekly                                | Publishes the OpenSSF Scorecard                                                                                                                                                                                                  |
 | `semgrep.yml`                         | Pull request, push to main                                                    | Tests and scans the repository's own TLS rule pack                                                                                                                                                                               |
-| `kubernetes-nightly.yml`              | Nightly, manual                                                               | Runs every Kubernetes leg on the newest main build that passed CI, with that build's chart, and reports a failure on one tracking issue                                                                                          |
+| `kubernetes-nightly.yml`              | Nightly, manual                                                               | Runs every Kubernetes leg and the sandbox footprint benchmark on the newest main build that passed CI, with its chart and agent image. Reports a failure on one tracking issue                                              |
 | `rescan-images.yml`                   | Weekly, manual                                                                | Rescans main's published images against the release vulnerability policy and keeps one tracking issue in step with the findings. A second job rescans the latest published release's images and reports drift on the vulnerability response issue|
 | `ci-diagnostics.yml`                  | Completed CI/CD runs                                                          | Reports exact-attempt job and step timings without changing the required CI verdict                                                                                                                                              |
 | `ci-profile.yml`                      | Weekly, manual                                                                | Reports advisory performance budgets and profiles server test tiers                                                                                                                                                              |
@@ -808,13 +808,30 @@ Right after a merge, that run is still building, so the pull request builds ever
   The merge queue also runs the lowest supported minor on amd64 and arm64, `kind 1.37 Calico` and
   the backup drill. It tests the commit that `main` receives, so a pull request does not repeat
   them. A dispatch runs the same legs as the queue.
+  arm64 runs only the lowest minor, the minor of the arm64 host.
   A push to `main` that a merge group tested runs no leg, because its commit is the group's commit.
   A push with no merge-group run, such as a direct push, runs every leg.
   `kubernetes-nightly.yml` runs every leg each night on the newest `main` build that passed CI.
   It catches a change that the `kubernetes` filter does not select.
   Such a change reaches staging, and can reach a release, up to a day before the nightly run tests it.
   A failed nightly run updates one tracking issue.
-  arm64 runs only the lowest minor, the minor of the arm64 host.
+- The same workflow's `Sandbox footprint` job measures the review sandbox's memory.
+  `ReviewFootprintStagingLiveTest` stages a review of a large repository at a pinned change: SwiftFormat, 37 practices.
+  `scripts/sandbox-footprint.ts` then runs two reviews at once on the agent image that the tested `main` build published.
+  It pulls that image by its digest. Only the model is a stand-in, so the job needs no credential.
+  The sampler container runs privileged in the host's process namespace, because it reads every container's cgroup and processes.
+  The job has no secret that this could expose.
+  A run fails unless each review submitted every practice, finished, uploaded its result and was sampled.
+  The memory result is informational: no budget is enforced until the sandbox requests file holds the measured need.
+  The two reviews start together. The concurrent peak sums their samples per tick, so drift between them lowers it.
+  A busy merge queue skips the night with a notice, because a busy queue is not a defect in `main`.
+  The job waits for the queue for up to 45 minutes. Then it works for about 15–20 minutes, inside a 90-minute limit.
+  A failed run updates its own tracking issue, "The nightly sandbox footprint run failed".
+- To read a footprint failure, open the run's `sandbox-footprint` artifact:
+  1. Read `verdict.reasons` in `footprint.json`. Each reason names the review, counted from 0, and the check that failed.
+  2. A runtime exit of 137 means that the kernel killed the container. Usually it reached its memory limit.
+  3. Open the review's container logs: `reviews[].initializeLog` and `reviews[].log` give their paths in the artifact.
+  4. Compare the review's `runtime` peak and processes with an earlier green run to find what grew.
 - A job's `timeout-minutes` is a hang detector of at least 15 minutes.
   This holds whatever the job's usual duration is.
   GitHub documents only that it cancels a job that runs longer than its limit

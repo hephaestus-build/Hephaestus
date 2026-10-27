@@ -5367,6 +5367,42 @@ void test("a pull request runs the chart and the latest k3s on amd64; the queue 
 	// A failed scheduled run fails no pull request, so it reports on a tracking issue.
 	assert.equal(nightly.getIn(["jobs", "report", "if"]), "failure()");
 	assert.equal(nightly.getIn(["jobs", "report", "permissions", "issues"]), "write");
+	// The sandbox footprint benchmark: on the tested main build only, read-only, and it yields to the
+	// merge queue by skipping instead of failing; its failure has a tracking issue of its own.
+	const triggers = nightly.get("on");
+	assert.ok(isMap(triggers));
+	assert.deepEqual(
+		triggers.items.map((pair) => String(pair.key)),
+		["schedule", "workflow_dispatch"],
+	);
+	assert.equal(nightly.getIn(["jobs", "footprint", "needs"]), "build");
+	const footprintPermissions = nightly.getIn(["jobs", "footprint", "permissions"]);
+	assert.ok(isMap(footprintPermissions));
+	assert.deepEqual(asRecord(footprintPermissions.toJSON(), "footprint permissions"), {
+		actions: "read",
+		contents: "read",
+	});
+	const footprintSteps = nightly.getIn(["jobs", "footprint", "steps"]);
+	assert.ok(isSeq(footprintSteps));
+	const footprint = footprintSteps.items.filter(isMap);
+	const queueIndex = footprint.findIndex((entry) => entry.get("id") === "queue");
+	assert.ok(queueIndex > 0, "the footprint job waits for the merge queue");
+	assert.doesNotMatch(String(footprint[queueIndex]?.get("run")), /exit 1/u, "a busy queue skips");
+	for (const entry of footprint.slice(queueIndex + 1)) {
+		assert.match(String(entry.get("if")), /steps\.queue\.outputs\.run == 'true'/u);
+	}
+	assert.match(
+		String(footprint.at(-1)?.get("if")),
+		/^always\(\) && /u,
+		"the logs survive a failure",
+	);
+	const reportNeeds = nightly.getIn(["jobs", "report", "needs"]);
+	assert.ok(isSeq(reportNeeds));
+	assert.ok(reportNeeds.items.some((item) => isScalar(item) && item.value === "footprint"));
+	assert.match(
+		String(nightly.getIn(["jobs", "report", "steps", 0, "run"])),
+		/The nightly sandbox footprint run failed/u,
+	);
 
 	// The matrix GitHub expands: every minor and architecture, less each exclude that matches.
 	const matrix = kubernetes.getIn(["jobs", "k3d", "strategy", "matrix"]);
