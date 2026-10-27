@@ -3,11 +3,13 @@ package de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewcommen
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.NoteIdProjection;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.RepositoryItemCountProjection;
+import jakarta.persistence.LockModeType;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -28,6 +30,12 @@ public interface PullRequestReviewCommentRepository extends JpaRepository<PullRe
     int deleteReconciled(@Param("parentId") long parentId, @Param("ids") Collection<Long> ids);
 
     Optional<PullRequestReviewComment> findByNativeIdAndProviderId(Long nativeId, Long providerId);
+
+    /** Locks the comment, so a compare with its stored {@code updated_at} and the write after it are atomic. */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT c FROM PullRequestReviewComment c WHERE c.nativeId = :nativeId AND c.provider.id = :providerId")
+    Optional<PullRequestReviewComment> findForUpdateByNativeIdAndProviderId(
+            @Param("nativeId") Long nativeId, @Param("providerId") Long providerId);
 
     boolean existsByNativeIdAndProviderId(Long nativeId, Long providerId);
 

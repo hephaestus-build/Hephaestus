@@ -214,7 +214,8 @@ public class ScmItemEventRecorder {
                         foundBy,
                         context.actorUserId(),
                         null,
-                        items.retain(item, null, foundBy)));
+                        items.retain(item, null, foundBy),
+                        context.sourceKey()));
                 continue;
             }
             // The occasion keeps the work as this transaction stores it, before its review is admitted later.
@@ -228,7 +229,8 @@ public class ScmItemEventRecorder {
                     foundBy,
                     context.actorUserId(),
                     null,
-                    items.retain(item, version, foundBy)));
+                    items.retain(item, version, foundBy),
+                    context.sourceKey()));
         }
     }
 

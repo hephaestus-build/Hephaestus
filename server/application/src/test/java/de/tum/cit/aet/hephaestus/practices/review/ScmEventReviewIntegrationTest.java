@@ -1415,11 +1415,13 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
         deliver(prepared, "synchronize", synchronize);
         var occasions = itemEvents(prepared);
         var admitted = itemReviews(prepared).stream().map(Review::getId).toList();
+        // A push also records the edit of its head; only the ready and the push are reviewed here.
         assertThat(occasions)
                 .extracting(ItemEvent::getName)
-                .containsExactlyInAnyOrder(
+                .containsOnlyOnce(
                         ScmItemEvents.PULL_REQUEST_READY.value(), ScmItemEvents.PULL_REQUEST_SYNCHRONIZED.value());
         assertThat(admitted).hasSize(2);
+        long jobsBefore = jobs(prepared);
 
         // The provider delivers both again after the push: the ready payload still names the first head.
         deliver(prepared, "ready_for_review", ready);
@@ -1430,11 +1432,56 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
                 .containsExactlyInAnyOrderElementsOf(
                         occasions.stream().map(ItemEvent::getId).toList());
         assertThat(itemReviews(prepared)).extracting(Review::getId).containsExactlyInAnyOrderElementsOf(admitted);
+        assertThat(jobs(prepared)).isEqualTo(jobsBefore);
         assertThat(occasions)
                 .filteredOn(occasion -> occasion.getName().equals(ScmItemEvents.PULL_REQUEST_READY.value()))
                 .singleElement()
                 .extracting(ItemEvent::getItemVersion)
                 .isEqualTo(prepared.version().value());
+    }
+
+    @Test
+    void shouldReviewALateFirstReadyDeliveryOnceWhenAPushWasStoredBeforeIt() {
+        var prepared = prepare(
+                IdentityProviderType.GITHUB,
+                false,
+                Map.of(),
+                false,
+                List.of(ScmItemEvents.PULL_REQUEST_READY, ScmItemEvents.PULL_REQUEST_SYNCHRONIZED));
+        var ready = pullRequestPayload(prepared, "b".repeat(40), Instant.now().plusSeconds(60));
+        var synchronize =
+                pullRequestPayload(prepared, "c".repeat(40), Instant.now().plusSeconds(120));
+
+        // The ready delivery failed in a broker stall; the push after it was stored first.
+        deliver(prepared, "synchronize", synchronize);
+        deliver(prepared, "ready_for_review", ready);
+        var occasions = itemEvents(prepared);
+        var admitted = itemReviews(prepared).stream().map(Review::getId).toList();
+        // A push also records the edit of its head; only the ready and the push are reviewed here.
+        assertThat(occasions)
+                .extracting(ItemEvent::getName)
+                .containsOnlyOnce(
+                        ScmItemEvents.PULL_REQUEST_READY.value(), ScmItemEvents.PULL_REQUEST_SYNCHRONIZED.value());
+        assertThat(admitted).hasSize(2);
+        long jobsBefore = jobs(prepared);
+
+        deliver(prepared, "ready_for_review", ready);
+
+        assertThat(itemEvents(prepared))
+                .extracting(ItemEvent::getId)
+                .containsExactlyInAnyOrderElementsOf(
+                        occasions.stream().map(ItemEvent::getId).toList());
+        assertThat(itemReviews(prepared)).extracting(Review::getId).containsExactlyInAnyOrderElementsOf(admitted);
+        assertThat(jobs(prepared)).isEqualTo(jobsBefore);
+    }
+
+    private long jobs(Prepared prepared) {
+        return Objects.requireNonNull(jdbc.queryForObject(
+                "SELECT count(*) FROM review_job j JOIN review r ON r.id = j.review_id"
+                        + " WHERE r.workspace_id = ? AND r.item_id = ?",
+                Long.class,
+                prepared.item().workspaceId(),
+                prepared.item().itemId()));
     }
 
     private GitHubPullRequestDTO pullRequestPayload(Prepared prepared, String head, Instant updatedAt) {
@@ -1448,7 +1495,9 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
                         """
                         {"id": %d, "node_id": "PR_node", "number": %d, "title": "%s", "body": "%s",
                          "state": "open", "html_url": "%s", "created_at": "%s", "updated_at": "%s",
-                         "draft": false, "merged": false, "commits": 1,
+                         "draft": false, "merged": false, "locked": false, "commits": 1, "additions": 0,
+                         "deletions": 0, "changed_files": 0, "comments": 0, "review_comments": 0,
+                         "maintainerCanModify": false,
                          "user": {"id": %d, "login": "%s", "type": "User"},
                          "head": {"ref": "topic", "sha": "%s"}, "base": {"ref": "main", "sha": "%s"}}
                         """.formatted(

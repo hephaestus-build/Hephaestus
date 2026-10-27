@@ -104,20 +104,20 @@ public class GitLabIssueProcessor extends BaseGitLabProcessor {
             log.debug("Skipped confidential issue: iid={}", attrs.iid());
             return null;
         }
-        // An older hook would restore older work and record it as new (sync-lifecycle.md).
-        Instant eventUpdatedAt = parseGitLabTimestamp(attrs.updatedAt());
-        Instant storedUpdatedAt = issueRepository
-                .findByRepositoryIdAndNumber(
-                        Objects.requireNonNull(context.repository()).getId(), attrs.iid())
-                .map(Issue::getUpdatedAt)
+        // An older hook would restore older work (sync-lifecycle.md). The row lock makes the compare and the write
+        // after it one step.
+        long repositoryId = Objects.requireNonNull(context.repository()).getId();
+        issueRepository.lockByRepositoryIdAndNumber(repositoryId, attrs.iid());
+        Issue stored = issueRepository
+                .findByRepositoryIdAndNumber(repositoryId, attrs.iid())
                 .orElse(null);
-        if (eventUpdatedAt != null && storedUpdatedAt != null && eventUpdatedAt.isBefore(storedUpdatedAt)) {
+        if (stored != null && olderThan(event, stored)) {
             log.debug(
                     "Skipped stale issue hook: iid={}, existingUpdatedAt={}, eventUpdatedAt={}",
                     attrs.iid(),
-                    storedUpdatedAt,
-                    eventUpdatedAt);
-            return null;
+                    stored.getUpdatedAt(),
+                    attrs.updatedAt());
+            return stored;
         }
 
         User author = resolveWebhookAuthor(event, Objects.requireNonNull(context.providerId()));
@@ -219,7 +219,8 @@ public class GitLabIssueProcessor extends BaseGitLabProcessor {
                         .map(ScmEventPayload.IssueData::from)
                         .orElse(null);
         Issue issue = processInternal(event, context);
-        if (issue == null) {
+        // An older hook stored nothing, so its diff describes no change of the stored issue.
+        if (issue == null || olderThan(event, issue)) {
             return issue;
         }
         // GitLab's diff names no date; the stored row says whether this delivery refined one.
@@ -459,7 +460,7 @@ public class GitLabIssueProcessor extends BaseGitLabProcessor {
         Issue issue = processInternal(event, context);
         if (issue != null && issue.getState() == Issue.State.CLOSED) {
             eventPublisher.publishEvent(new ScmDomainEvent.IssueClosed(
-                    ScmEventPayload.IssueData.from(issue), "completed", EventContext.from(context)));
+                    ScmEventPayload.IssueData.from(issue), "completed", keyed(event, EventContext.from(context))));
             log.debug("Closed issue: issueId={}", issue.getId());
         }
         return issue;
@@ -471,12 +472,33 @@ public class GitLabIssueProcessor extends BaseGitLabProcessor {
         Issue issue = processInternal(event, context);
         if (issue != null && issue.getState() == Issue.State.OPEN) {
             ScmEventPayload.IssueData issueData = ScmEventPayload.IssueData.from(issue);
+            eventPublisher.publishEvent(new ScmDomainEvent.IssueUpdated(
+                    issueData, Set.of("state"), keyed(event, actorContext(event, context))));
             eventPublisher.publishEvent(
-                    new ScmDomainEvent.IssueUpdated(issueData, Set.of("state"), actorContext(event, context)));
-            eventPublisher.publishEvent(new ScmDomainEvent.IssueReopened(issueData, EventContext.from(context)));
+                    new ScmDomainEvent.IssueReopened(issueData, keyed(event, EventContext.from(context))));
             log.debug("Reopened issue: issueId={}", issue.getId());
         }
         return issue;
+    }
+
+    /** Whether the hook describes an older state than the stored issue; such a hook changes nothing. */
+    private boolean olderThan(GitLabIssueEventDTO event, Issue stored) {
+        var attrs = event.objectAttributes();
+        Instant eventUpdatedAt = attrs == null ? null : parseGitLabTimestamp(attrs.updatedAt());
+        return eventUpdatedAt != null
+                && stored.getUpdatedAt() != null
+                && eventUpdatedAt.isBefore(stored.getUpdatedAt());
+    }
+
+    /**
+     * {@code context} under this hook's own identity: the issue, the action and the moment it describes. A first close
+     * that arrives after sync stored it still records its occasion; a redelivery records none.
+     */
+    private static EventContext keyed(GitLabIssueEventDTO event, EventContext context) {
+        var attrs = Objects.requireNonNull(event.objectAttributes());
+        return attrs.action() == null || attrs.updatedAt() == null
+                ? context
+                : context.withSourceKey("gitlab:issue:" + attrs.id() + ":" + attrs.action() + ":" + attrs.updatedAt());
     }
 
     private EventContext actorContext(GitLabIssueEventDTO event, ProcessingContext context) {

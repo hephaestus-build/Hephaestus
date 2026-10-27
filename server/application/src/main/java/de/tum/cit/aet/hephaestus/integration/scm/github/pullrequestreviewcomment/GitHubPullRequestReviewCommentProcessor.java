@@ -218,7 +218,7 @@ public class GitHubPullRequestReviewCommentProcessor {
             Long prId,
             @NonNull ProcessingContext context) {
         return commentRepository
-                .findByNativeIdAndProviderId(dto.id(), Objects.requireNonNull(context.providerId()))
+                .findForUpdateByNativeIdAndProviderId(dto.id(), Objects.requireNonNull(context.providerId()))
                 .map(comment -> {
                     // An older edit would restore older words (sync-lifecycle.md).
                     if (comment.getUpdatedAt() != null

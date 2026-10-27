@@ -152,8 +152,9 @@ public class GitLabPullRequestReviewCommentProcessor {
         Long providerId = Objects.requireNonNull(
                 Objects.requireNonNull(context.provider()).getId());
 
+        // The row lock makes the compare with the stored updated_at and the write after it one step.
         Optional<PullRequestReviewComment> existing =
-                commentRepository.findByNativeIdAndProviderId(nativeId, providerId);
+                commentRepository.findForUpdateByNativeIdAndProviderId(nativeId, providerId);
         // Instance-wide note ids cannot move a diff note to another merge request.
         if (existing.map(PullRequestReviewComment::getPullRequest)
                 .filter(parent -> !parent.getId().equals(context.pr().getId()))

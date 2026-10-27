@@ -180,7 +180,7 @@ class GitLabPullRequestReviewCommentProcessorTest extends BaseUnitTest {
 
         @Test
         void shouldPopulateAllPositionMetadataWhenCreatingComment() {
-            when(commentRepository.findByNativeIdAndProviderId(NOTE_NATIVE_ID, PROVIDER_ID))
+            when(commentRepository.findForUpdateByNativeIdAndProviderId(NOTE_NATIVE_ID, PROVIDER_ID))
                     .thenReturn(Optional.empty());
             when(pullRequestRepository.findById(PR_ID)).thenReturn(Optional.of(pr));
             when(commentRepository.save(any(PullRequestReviewComment.class)))
@@ -206,7 +206,7 @@ class GitLabPullRequestReviewCommentProcessorTest extends BaseUnitTest {
 
         @Test
         void shouldKeepTheOldLineAsTheLineWhenTheNoteSitsOnARemovedLine() {
-            when(commentRepository.findByNativeIdAndProviderId(NOTE_NATIVE_ID, PROVIDER_ID))
+            when(commentRepository.findForUpdateByNativeIdAndProviderId(NOTE_NATIVE_ID, PROVIDER_ID))
                     .thenReturn(Optional.empty());
             when(pullRequestRepository.findById(PR_ID)).thenReturn(Optional.of(pr));
             when(commentRepository.save(any(PullRequestReviewComment.class)))
@@ -228,7 +228,7 @@ class GitLabPullRequestReviewCommentProcessorTest extends BaseUnitTest {
 
         @Test
         void shouldFallBackToStartShaWhenBaseShaIsNull() {
-            when(commentRepository.findByNativeIdAndProviderId(NOTE_NATIVE_ID, PROVIDER_ID))
+            when(commentRepository.findForUpdateByNativeIdAndProviderId(NOTE_NATIVE_ID, PROVIDER_ID))
                     .thenReturn(Optional.empty());
             when(pullRequestRepository.findById(PR_ID)).thenReturn(Optional.of(pr));
             when(commentRepository.save(any(PullRequestReviewComment.class)))
@@ -246,7 +246,7 @@ class GitLabPullRequestReviewCommentProcessorTest extends BaseUnitTest {
 
         @Test
         void shouldAttachInReplyToWhenReplyContextIsProvided() {
-            when(commentRepository.findByNativeIdAndProviderId(NOTE_NATIVE_ID, PROVIDER_ID))
+            when(commentRepository.findForUpdateByNativeIdAndProviderId(NOTE_NATIVE_ID, PROVIDER_ID))
                     .thenReturn(Optional.empty());
             when(pullRequestRepository.findById(PR_ID)).thenReturn(Optional.of(pr));
             when(commentRepository.save(any(PullRequestReviewComment.class)))
@@ -267,7 +267,7 @@ class GitLabPullRequestReviewCommentProcessorTest extends BaseUnitTest {
 
         @Test
         void shouldLinkReviewWhenReviewContextIsProvided() {
-            when(commentRepository.findByNativeIdAndProviderId(NOTE_NATIVE_ID, PROVIDER_ID))
+            when(commentRepository.findForUpdateByNativeIdAndProviderId(NOTE_NATIVE_ID, PROVIDER_ID))
                     .thenReturn(Optional.empty());
             when(pullRequestRepository.findById(PR_ID)).thenReturn(Optional.of(pr));
             when(commentRepository.save(any(PullRequestReviewComment.class)))
@@ -291,7 +291,7 @@ class GitLabPullRequestReviewCommentProcessorTest extends BaseUnitTest {
 
         @Test
         void shouldPublishReviewCommentCreatedEventWhenNewCommentIsPersisted() {
-            when(commentRepository.findByNativeIdAndProviderId(NOTE_NATIVE_ID, PROVIDER_ID))
+            when(commentRepository.findForUpdateByNativeIdAndProviderId(NOTE_NATIVE_ID, PROVIDER_ID))
                     .thenReturn(Optional.empty());
             when(pullRequestRepository.findById(PR_ID)).thenReturn(Optional.of(pr));
             when(commentRepository.save(any(PullRequestReviewComment.class)))
@@ -327,7 +327,7 @@ class GitLabPullRequestReviewCommentProcessorTest extends BaseUnitTest {
             other.setId(PR_ID + 1);
             PullRequestReviewComment stored = new PullRequestReviewComment();
             stored.setPullRequest(other);
-            when(commentRepository.findByNativeIdAndProviderId(NOTE_NATIVE_ID, PROVIDER_ID))
+            when(commentRepository.findForUpdateByNativeIdAndProviderId(NOTE_NATIVE_ID, PROVIDER_ID))
                     .thenReturn(Optional.of(stored));
 
             var data = buildDiffNoteData("src/Foo.ts", null, null, 42, null, "head-sha", "base-sha", null);
@@ -347,7 +347,7 @@ class GitLabPullRequestReviewCommentProcessorTest extends BaseUnitTest {
         stored.setThread(thread);
         var root = new PullRequestReviewComment();
         root.setId(77L);
-        when(commentRepository.findByNativeIdAndProviderId(NOTE_NATIVE_ID, PROVIDER_ID))
+        when(commentRepository.findForUpdateByNativeIdAndProviderId(NOTE_NATIVE_ID, PROVIDER_ID))
                 .thenReturn(Optional.of(stored));
         when(pullRequestRepository.findById(PR_ID)).thenReturn(Optional.of(pr));
         when(commentRepository.save(any(PullRequestReviewComment.class)))

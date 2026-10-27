@@ -161,36 +161,39 @@ connection by the sync-job pruner. Global identity rows (`user`, `organization`,
 
 A provider can deliver a webhook again, even hours later.
 JetStream drops a duplicate only inside its deduplication window.
-Thus, each consumer compares the payload with the stored row.
+Two rules make a redelivery harmless.
 Hephaestus keeps no record of processed delivery ids.
 
+**The stored work only moves forward.**
+Each consumer compares the payload with the stored row.
+Pull and merge requests, issues and comments are read with a row lock.
+For these, the compare and the write are one step, also when a sync writes the same row.
+
 - A payload with an older `updated_at` than the stored row changes nothing.
-  It publishes no event.
-- This rule applies to issues, comments, reviews, review comments, diff notes and Outline documents.
+  This rule applies to pull and merge requests, issues, comments, reviews, review comments, notes, diff notes and Outline documents.
 - A Slack edit applies only if its `edited.ts` is later than the stored edit.
 - A Slack change without `edited.ts` is a new reply or an unfurl. It changes nothing.
 - A dismissal is final.
   A second dismissal publishes nothing.
-- A close, reopen, ready or draft event publishes only when the stored state is the payload's state.
 
-A GitHub pull request payload that is not newer than the stored row has a special rule.
-It publishes its lifecycle event only if the stored head, base, title and description are the payload's.
-These are the version inputs that a payload carries.
-The item event then gets the version of the first delivery.
-The unique key on name and version absorbs the redelivery.
+**An event records its item event once.**
+A lifecycle event carries its own identity, the source key.
+For a push, the source key is the head commit.
+For every other action, it is the action and the `updated_at` that the payload describes.
+The unique key on item, name and source key absorbs a second delivery of the same event, whatever version the work has by then.
+The unique key on item, name and version still absorbs a second event of the same name for the same work.
 
-If one input is different, a later change superseded the payload, and the payload publishes nothing.
-Otherwise the item event names the later work and starts a second review.
-A GitLab merge request hook that is not newer than the stored row publishes nothing.
+A close, reopen, ready or draft event publishes when the stored state is the payload's state.
+It publishes also when its payload is older than the stored row.
+Thus, a first delivery that arrives after a later change still records its item event, for the current work.
+A redelivery of it records nothing.
 
-A redelivery with an equal `updated_at` can publish its event again.
-The item event absorbs it by name and version, so no second review starts.
-A pull request's activity is keyed on the stored `updated_at`.
-Thus, a replay after a change that is not a version input, such as a label, adds a second activity entry.
+GitLab offers a merge for review after the read that follows the hook.
+A GitLab ready or push item event comes from the change that the hook stores.
+A hook whose change a sync stored first records no ready or push item event.
 
-This rule has a cost.
-A first delivery that arrives after a later change is also dropped.
-The later change records its own item event for the latest work.
+The activity entry of a lifecycle event uses the same source key.
+Thus, a redelivery adds no second activity entry.
 
 ### Reviewer lists are dated snapshots
 

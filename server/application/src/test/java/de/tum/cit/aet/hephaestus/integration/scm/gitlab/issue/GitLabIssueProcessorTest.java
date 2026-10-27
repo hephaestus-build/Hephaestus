@@ -336,9 +336,9 @@ class GitLabIssueProcessorTest extends BaseUnitTest {
         @Test
         void processCreatesNewIssue() {
             Issue issue = createIssueEntity();
-            // First call: check if exists → empty (new issue)
-            // Second call: after upsert → find the issue
+            // The stale check and the existence check find nothing; the read after the upsert finds the issue.
             when(issueRepository.findByRepositoryIdAndNumber(REPO_ID, ISSUE_IID))
+                    .thenReturn(Optional.empty())
                     .thenReturn(Optional.empty())
                     .thenReturn(Optional.of(issue));
 
@@ -373,9 +373,13 @@ class GitLabIssueProcessorTest extends BaseUnitTest {
         @Test
         void processClosedPublishesEvent() {
             Issue issue = createIssueEntity();
+            // The fetch after the upsert reads the close.
             when(issueRepository.findByRepositoryIdAndNumber(REPO_ID, ISSUE_IID))
                     .thenReturn(Optional.of(issue))
-                    .thenReturn(Optional.of(issue));
+                    .thenAnswer(ignored -> {
+                        issue.setState(Issue.State.CLOSED);
+                        return Optional.of(issue);
+                    });
 
             User author = createUserEntity();
             when(gitLabUserService.findOrCreateUser(any(GitLabWebhookUser.class), eq(PROVIDER_ID)))

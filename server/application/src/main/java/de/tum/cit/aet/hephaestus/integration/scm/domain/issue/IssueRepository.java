@@ -97,6 +97,16 @@ public interface IssueRepository extends JpaRepository<Issue, Long> {
         """)
     Optional<Issue> findByRepositoryIdAndNumber(@Param("repositoryId") long repositoryId, @Param("number") int number);
 
+    /**
+     * Locks the issue without loading it, so a compare with its stored state and the write after it are atomic. The
+     * caller then reads it through {@link #findByRepositoryIdAndNumber}, which fetches what the compare needs.
+     */
+    @Query(
+            value = "SELECT id FROM issue WHERE repository_id = :repositoryId AND number = :number"
+                    + " AND issue_type = 'ISSUE' FOR NO KEY UPDATE",
+            nativeQuery = true)
+    Optional<Long> lockByRepositoryIdAndNumber(@Param("repositoryId") long repositoryId, @Param("number") int number);
+
     @Query("SELECT i FROM Issue i WHERE TYPE(i) = Issue AND i.provider.id = :providerId AND i.nativeId IN :nativeIds")
     List<Issue> findAllIssuesByProviderIdAndNativeIdIn(
             @Param("providerId") Long providerId, @Param("nativeIds") Collection<Long> nativeIds);

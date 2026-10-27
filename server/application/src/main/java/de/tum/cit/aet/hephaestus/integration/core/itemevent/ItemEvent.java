@@ -32,7 +32,10 @@ import tools.jackson.databind.JsonNode;
                     columnNames = {"id", "workspace_id"}),
             @UniqueConstraint(
                     name = "uk_item_event_key",
-                    columnNames = {"workspace_id", "item_id", "name", "item_version"})
+                    columnNames = {"workspace_id", "item_id", "name", "item_version"}),
+            @UniqueConstraint(
+                    name = "uk_item_event_source",
+                    columnNames = {"workspace_id", "item_id", "name", "source_key"})
         },
         indexes = {@Index(name = "idx_item_event_evidence_expiry", columnList = "evidence_expires_at")})
 @Getter
@@ -63,6 +66,14 @@ public class ItemEvent {
     @Nullable
     @Column(name = "pending_fence", length = 1024)
     private String pendingFence;
+
+    /**
+     * The provider event's own identity, so a redelivery of the same event records no second occasion, whatever the
+     * item's version is by then. Null for an occasion whose source has no event identity.
+     */
+    @Nullable
+    @Column(name = "source_key", length = 512)
+    private String sourceKey;
 
     @Column(name = "occurred_at", nullable = false)
     private Instant occurredAt;

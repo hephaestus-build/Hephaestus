@@ -262,8 +262,8 @@ public class GitLabIssueCommentProcessor extends BaseGitLabProcessor {
     private @Nullable IssueComment processCommentInternal(
             NoteAttributes attrs, Issue parent, @Nullable User author, ProcessingContext context) {
         Long issueId = parent.getId();
-        Optional<IssueComment> existingOpt =
-                commentRepository.findByNativeIdAndProviderId(attrs.id(), Objects.requireNonNull(context.providerId()));
+        Optional<IssueComment> existingOpt = commentRepository.findForUpdateByNativeIdAndProviderId(
+                attrs.id(), Objects.requireNonNull(context.providerId()));
         // Note ids are instance-wide; a stored note cannot move to another issue or merge request.
         if (existingOpt
                 .map(IssueComment::getIssue)

@@ -259,8 +259,6 @@ class SlackChannelMessageHandlerTest extends BaseUnitTest {
 
     @Test
     void messageChanged_withoutAnEdit_changesNothing() {
-        when(workspaceResolver.resolveWorkspaceId("T1")).thenReturn(Optional.of(WORKSPACE));
-
         // Slack also sends message_changed when a reply or an unfurl changes the message; its author edited nothing.
         handler.onMessage(natsMessage("""
             {"type":"event_callback","team_id":"T1","event":{

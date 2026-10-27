@@ -153,7 +153,8 @@ public class ActivityEventListener {
                         userRepository.getReferenceById(authorId),
                         repositoryRepository.getReferenceById(pr.repository().id()),
                         ActivityTargetType.PULL_REQUEST,
-                        pr.id()));
+                        pr.id(),
+                        event.context().sourceKey()));
     }
 
     @Async("activityExecutor")
@@ -188,7 +189,8 @@ public class ActivityEventListener {
                         userRepository.getReferenceById(authorId),
                         repositoryRepository.getReferenceById(pr.repository().id()),
                         ActivityTargetType.PULL_REQUEST,
-                        pr.id()));
+                        pr.id(),
+                        event.context().sourceKey()));
     }
 
     @Async("activityExecutor")
@@ -216,7 +218,8 @@ public class ActivityEventListener {
                         userRepository.getReferenceById(authorId),
                         repositoryRepository.getReferenceById(pr.repository().id()),
                         ActivityTargetType.PULL_REQUEST,
-                        pr.id()));
+                        pr.id(),
+                        event.context().sourceKey()));
     }
 
     @Async("activityExecutor")
@@ -244,7 +247,8 @@ public class ActivityEventListener {
                         userRepository.getReferenceById(authorId),
                         repositoryRepository.getReferenceById(pr.repository().id()),
                         ActivityTargetType.PULL_REQUEST,
-                        pr.id()));
+                        pr.id(),
+                        event.context().sourceKey()));
     }
 
     /**
@@ -275,7 +279,8 @@ public class ActivityEventListener {
                         userRepository.getReferenceById(authorId),
                         repositoryRepository.getReferenceById(pr.repository().id()),
                         ActivityTargetType.PULL_REQUEST,
-                        pr.id()));
+                        pr.id(),
+                        event.context().sourceKey()));
     }
 
     /** Handle pull request synchronized (new commits pushed to the branch). */
@@ -304,7 +309,8 @@ public class ActivityEventListener {
                         userRepository.getReferenceById(authorId),
                         repositoryRepository.getReferenceById(pr.repository().id()),
                         ActivityTargetType.PULL_REQUEST,
-                        pr.id()));
+                        pr.id(),
+                        event.context().sourceKey()));
     }
 
     @Async("activityExecutor")
@@ -870,7 +876,8 @@ public class ActivityEventListener {
                         repositoryRepository.getReferenceById(
                                 issueData.repository().id()),
                         ActivityTargetType.ISSUE,
-                        issueData.id()));
+                        issueData.id(),
+                        event.context().sourceKey()));
     }
 
     /**
@@ -904,7 +911,8 @@ public class ActivityEventListener {
                         repositoryRepository.getReferenceById(
                                 issueData.repository().id()),
                         ActivityTargetType.ISSUE,
-                        issueData.id()));
+                        issueData.id(),
+                        event.context().sourceKey()));
     }
 
     /**

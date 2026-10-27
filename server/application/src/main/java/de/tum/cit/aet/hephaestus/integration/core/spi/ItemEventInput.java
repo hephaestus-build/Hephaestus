@@ -11,6 +11,8 @@ import org.jspecify.annotations.Nullable;
  *
  * @param evidence the source's own JSON record of the occasion, retained with it; core reads only its
  *     {@code participants}, with each mirror user id and exact native identity, to find it when a person is erased
+ * @param sourceKey the provider event's own identity; a second occasion of this name with the same key is the same
+ *     event delivered again and records nothing
  */
 public record ItemEventInput(
         long workspaceId,
@@ -22,7 +24,8 @@ public record ItemEventInput(
         FoundBy foundBy,
         @Nullable Long actorUserId,
         @Nullable Long requestedById,
-        @Nullable String evidence) {
+        @Nullable String evidence,
+        @Nullable String sourceKey) {
     /** The largest retained evidence, as UTF-8. A source does not retain a larger record and never truncates one. */
     public static final int MAX_EVIDENCE_BYTES = 1024 * 1024;
 
@@ -46,6 +49,32 @@ public record ItemEventInput(
                 foundBy,
                 actorUserId,
                 requestedById,
+                null,
+                null);
+    }
+
+    public ItemEventInput(
+            long workspaceId,
+            long itemId,
+            ItemEventName name,
+            @Nullable String itemVersion,
+            @Nullable String pendingFence,
+            Instant occurredAt,
+            FoundBy foundBy,
+            @Nullable Long actorUserId,
+            @Nullable Long requestedById,
+            @Nullable String evidence) {
+        this(
+                workspaceId,
+                itemId,
+                name,
+                itemVersion,
+                pendingFence,
+                occurredAt,
+                foundBy,
+                actorUserId,
+                requestedById,
+                evidence,
                 null);
     }
 
@@ -58,7 +87,7 @@ public record ItemEventInput(
             FoundBy foundBy,
             @Nullable Long actorUserId,
             @Nullable Long requestedById) {
-        this(workspaceId, itemId, name, itemVersion, null, occurredAt, foundBy, actorUserId, requestedById, null);
+        this(workspaceId, itemId, name, itemVersion, null, occurredAt, foundBy, actorUserId, requestedById, null, null);
     }
 
     public ItemEventInput {
@@ -70,7 +99,9 @@ public record ItemEventInput(
                 || (pendingFence != null && (pendingFence.isBlank() || pendingFence.length() > 1024))
                 || (actorUserId != null && actorUserId <= 0)
                 || (requestedById != null && requestedById <= 0)
-                || (evidence != null && !fits(evidence))) throw new IllegalArgumentException("Invalid item event");
+                || (evidence != null && !fits(evidence))
+                || (sourceKey != null && (sourceKey.isBlank() || sourceKey.length() > 512)))
+            throw new IllegalArgumentException("Invalid item event");
     }
 
     /** Whether {@code evidence} is a record core can retain: not blank and at most {@link #MAX_EVIDENCE_BYTES}. */

@@ -161,6 +161,8 @@ public class GitHubIssueProcessor extends BaseGitHubProcessor {
 
         // Compare by natural key (repository_id, number), not dbId — the same issue can arrive
         // with different provider IDs from different sources.
+        // The row lock makes the compare with the stored updated_at and the write after it one step.
+        issueRepository.lockByRepositoryIdAndNumber(repository.getId(), dto.number());
         Optional<Issue> existingOpt = issueRepository.findByRepositoryIdAndNumber(repository.getId(), dto.number());
         boolean isNew = existingOpt.isEmpty();
 
@@ -368,10 +370,11 @@ public class GitHubIssueProcessor extends BaseGitHubProcessor {
         Processed processed = processInternal(issueDto, context, true, false);
         if (processed == null) return null;
         Issue issue = processed.issue();
-        if (processed.superseded() || issue.getState() != Issue.State.CLOSED) return issue;
+        // A first close that arrives after a later edit still records its occasion; a redelivery records none.
+        if (issue.getState() != Issue.State.CLOSED) return issue;
         String stateReason = issueDto.stateReason() != null ? issueDto.stateReason() : "completed";
         eventPublisher.publishEvent(new ScmDomainEvent.IssueClosed(
-                ScmEventPayload.IssueData.from(issue), stateReason, EventContext.from(context)));
+                ScmEventPayload.IssueData.from(issue), stateReason, keyed(issueDto, context)));
         log.debug("Closed issue: issueId={}, stateReason={}", issue.getId(), stateReason);
         return issue;
     }
@@ -381,11 +384,21 @@ public class GitHubIssueProcessor extends BaseGitHubProcessor {
         Processed processed = processInternal(issueDto, context, true, true);
         if (processed == null) return null;
         Issue issue = processed.issue();
-        if (processed.superseded() || issue.getState() != Issue.State.OPEN) return issue;
+        if (issue.getState() != Issue.State.OPEN) return issue;
         eventPublisher.publishEvent(
-                new ScmDomainEvent.IssueReopened(ScmEventPayload.IssueData.from(issue), EventContext.from(context)));
+                new ScmDomainEvent.IssueReopened(ScmEventPayload.IssueData.from(issue), keyed(issueDto, context)));
         log.debug("Reopened issue: issueId={}", issue.getId());
         return issue;
+    }
+
+    /** The context of this provider event, under its own identity: the action and the moment the payload describes. */
+    private static EventContext keyed(GitHubIssueDTO dto, ProcessingContext context) {
+        String action = context.webhookAction();
+        return EventContext.from(context)
+                .withSourceKey(
+                        action == null || dto.updatedAt() == null || dto.getDatabaseId() == null
+                                ? null
+                                : "github:issue:" + dto.getDatabaseId() + ":" + action + ":" + dto.updatedAt());
     }
 
     @Transactional

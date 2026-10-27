@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1793066137273-1" author="hephaestus">
+        <addColumn tableName="item_event">
+            <column name="source_key" type="VARCHAR(512)"/>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1793066137273-2" author="hephaestus">
+        <addUniqueConstraint columnNames="workspace_id, item_id, name, source_key" constraintName="uk_item_event_source" tableName="item_event"/>
+    </changeSet>
+</databaseChangeLog>

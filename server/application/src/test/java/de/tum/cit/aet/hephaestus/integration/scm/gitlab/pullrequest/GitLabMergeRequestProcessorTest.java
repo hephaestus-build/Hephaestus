@@ -405,12 +405,14 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
         @Test
         void processClosedPublishesEvent() {
             PullRequest pr = createPullRequestEntity();
-            // 2 calls: stale+isNew check (process), post-upsert fetch (upsertMergeRequest)
             when(pullRequestRepository.findForUpdateByRepositoryIdAndNumber(REPO_ID, MR_IID))
-                    .thenReturn(Optional.of(pr))
                     .thenReturn(Optional.of(pr));
+            // The fetch after the upsert reads the close.
             when(pullRequestRepository.findByRepositoryIdAndNumber(REPO_ID, MR_IID))
-                    .thenReturn(Optional.of(pr));
+                    .thenAnswer(ignored -> {
+                        pr.setState(Issue.State.CLOSED);
+                        return Optional.of(pr);
+                    });
 
             User author = createUserEntity();
             when(gitLabUserService.findOrCreateUser(any(GitLabWebhookUser.class), eq(PROVIDER_ID)))
@@ -433,12 +435,14 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
         void processReopenedPublishesEvent() {
             PullRequest pr = createPullRequestEntity();
             pr.setState(Issue.State.CLOSED);
-            // 2 calls: stale+isNew check (process), post-upsert fetch (upsertMergeRequest)
             when(pullRequestRepository.findForUpdateByRepositoryIdAndNumber(REPO_ID, MR_IID))
-                    .thenReturn(Optional.of(pr))
                     .thenReturn(Optional.of(pr));
+            // The fetch after the upsert reads the reopen.
             when(pullRequestRepository.findByRepositoryIdAndNumber(REPO_ID, MR_IID))
-                    .thenReturn(Optional.of(pr));
+                    .thenAnswer(ignored -> {
+                        pr.setState(Issue.State.OPEN);
+                        return Optional.of(pr);
+                    });
 
             User author = createUserEntity();
             when(gitLabUserService.findOrCreateUser(any(GitLabWebhookUser.class), eq(PROVIDER_ID)))

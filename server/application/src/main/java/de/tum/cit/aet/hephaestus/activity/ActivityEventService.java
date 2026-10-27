@@ -95,7 +95,26 @@ public class ActivityEventService implements ActivityRecorder {
             @Nullable Repository repository,
             ActivityTargetType targetType,
             Long targetId) {
-        return persist(workspaceId, eventType, occurredAt, actor, repository, targetType, targetId);
+        return persist(workspaceId, eventType, occurredAt, actor, repository, targetType, targetId, null);
+    }
+
+    /**
+     * Records the activity of one provider event. A {@code sourceKey}, the event's own identity, keys the row in place
+     * of {@code occurredAt}, so a redelivery that names a later stored time is still the same row.
+     *
+     * @return false for a duplicate event key or missing workspace; true when inserted
+     */
+    @Transactional
+    public boolean record(
+            Long workspaceId,
+            ActivityEventType eventType,
+            Instant occurredAt,
+            @Nullable User actor,
+            @Nullable Repository repository,
+            ActivityTargetType targetType,
+            Long targetId,
+            @Nullable String sourceKey) {
+        return persist(workspaceId, eventType, occurredAt, actor, repository, targetType, targetId, sourceKey);
     }
 
     private boolean persist(
@@ -105,7 +124,8 @@ public class ActivityEventService implements ActivityRecorder {
             @Nullable User actor,
             @Nullable Repository repository,
             ActivityTargetType targetType,
-            Long targetId) {
+            Long targetId,
+            @Nullable String sourceKey) {
         if (actor != null && !admission.hold(actor)) return false;
         if (!workspaceRepository.existsById(workspaceId)) {
             eventsFailedCounter.increment();
@@ -123,7 +143,9 @@ public class ActivityEventService implements ActivityRecorder {
         if (eventType == ActivityEventType.REVIEW_COMMENT_CREATED) {
             eventRepository.deleteReplyOnlyReviewEvents(workspaceId, targetId);
         }
-        String eventKey = ActivityEvent.buildKey(eventType, targetId, occurredAt);
+        String eventKey = sourceKey == null
+                ? ActivityEvent.buildKey(eventType, targetId, occurredAt)
+                : eventType.getValue() + ":" + targetId + ":" + sourceKey;
 
         // ON CONFLICT handles concurrent deliveries without a check-then-insert race.
         Timer eventTimer = getTimerForEventType(eventType);
@@ -168,6 +190,6 @@ public class ActivityEventService implements ActivityRecorder {
             Instant occurredAt,
             ActivityTargetType targetType,
             Long targetId) {
-        return persist(workspaceId, eventType, occurredAt, null, null, targetType, targetId);
+        return persist(workspaceId, eventType, occurredAt, null, null, targetType, targetId, null);
     }
 }

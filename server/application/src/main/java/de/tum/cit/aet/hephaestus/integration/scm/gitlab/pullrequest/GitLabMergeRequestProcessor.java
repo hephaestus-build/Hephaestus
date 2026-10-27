@@ -666,15 +666,11 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
     @Transactional
     @Nullable
     public PullRequest processClosed(GitLabMergeRequestEventDTO event, ProcessingContext context) {
-        Issue.State before = getExistingState(event, context);
         PullRequest pr = processInternal(event, context);
-        // A stale hook leaves the stored state as it was; only a close that this hook stored is announced.
-        if (pr != null
-                && pr.getState() == Issue.State.CLOSED
-                && before != Issue.State.CLOSED
-                && before != Issue.State.MERGED) {
+        // A first close that arrives after sync stored it still records its occasion; a redelivery records none.
+        if (pr != null && pr.getState() == Issue.State.CLOSED) {
             eventPublisher.publishEvent(new ScmDomainEvent.PullRequestClosed(
-                    ScmEventPayload.PullRequestData.from(pr), false, EventContext.from(context)));
+                    ScmEventPayload.PullRequestData.from(pr), false, keyed(event, context)));
             log.debug("Closed merge request: prId={}", pr.getId());
         }
         return pr;
@@ -683,14 +679,23 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
     @Transactional
     @Nullable
     public PullRequest processReopened(GitLabMergeRequestEventDTO event, ProcessingContext context) {
-        Issue.State before = getExistingState(event, context);
         PullRequest pr = processInternal(event, context);
-        if (pr != null && pr.getState() == Issue.State.OPEN && before != Issue.State.OPEN) {
+        if (pr != null && pr.getState() == Issue.State.OPEN) {
             eventPublisher.publishEvent(new ScmDomainEvent.PullRequestReopened(
-                    ScmEventPayload.PullRequestData.from(pr), EventContext.from(context)));
+                    ScmEventPayload.PullRequestData.from(pr), keyed(event, context)));
             log.debug("Reopened merge request: prId={}", pr.getId());
         }
         return pr;
+    }
+
+    /** The context of this hook, under its own identity: the merge request, the action and the moment it describes. */
+    private static EventContext keyed(GitLabMergeRequestEventDTO event, ProcessingContext context) {
+        var attrs = event.objectAttributes();
+        return attrs == null || attrs.updatedAt() == null
+                ? EventContext.from(context)
+                : EventContext.from(context)
+                        .withSourceKey(
+                                "gitlab:merge_request:" + attrs.id() + ":" + attrs.action() + ":" + attrs.updatedAt());
     }
 
     /**
