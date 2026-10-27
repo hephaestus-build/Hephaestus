@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.DataSource;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReview;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewthread.PullRequestReviewThread;
@@ -233,18 +234,40 @@ class ActivityEventServiceIntegrationTest extends BaseIntegrationTest {
         private final Instant closedAt = Instant.parse("2024-01-15T10:00:00Z");
 
         @Test
-        void shouldRecordOneCloseWhenALedgerFromBeforeSourceKeysMeetsTheHookAndTheSync() {
-            // An entry written before source keys existed, then the hook, the sync and a redelivery of the close.
-            for (int report = 0; report < 4; report++) {
-                activityEventService.record(
-                        testWorkspace.getId(),
-                        ActivityEventType.ISSUE_CLOSED,
-                        closedAt,
-                        testUser,
-                        testRepository,
-                        ActivityTargetType.ISSUE,
-                        301L,
-                        null);
+        void shouldAddNoCloseToAnEntryRecordedBeforeSourceKeys() {
+            // The entry an earlier release wrote for this close, with the key shape it wrote.
+            new TransactionTemplate(transactionManager)
+                    .executeWithoutResult(ignored -> activityEventRepository.insertIfAbsent(
+                            UUID.randomUUID(),
+                            "issue.closed:301:" + closedAt.toEpochMilli(),
+                            "ISSUE_CLOSED",
+                            closedAt,
+                            testUser.getId(),
+                            testWorkspace.getId(),
+                            testRepository.getId(),
+                            "issue",
+                            301L));
+            var listener = listener(mock(PullRequestReviewThreadRepository.class));
+            var issue = new Issue();
+            issue.setId(301L);
+            issue.setNumber(12);
+            issue.setTitle("Closed issue");
+            issue.setState(Issue.State.CLOSED);
+            issue.setAuthor(testUser);
+            issue.setRepository(testRepository);
+            issue.setClosedAt(closedAt);
+            var closed = ScmEventPayload.IssueData.from(issue);
+
+            // The hook redelivers the close, and a sync reads the closed issue again. The listener runs in its own
+            // transaction, as it does in production.
+            var byHook = new ScmDomainEvent.IssueClosed(closed, "completed", webhook());
+            var bySync = new ScmDomainEvent.IssueClosed(
+                    closed,
+                    "completed",
+                    EventContext.forSync(testWorkspace.getId(), null, IdentityProviderType.GITLAB, Instant.now()));
+            for (var event : List.of(byHook, bySync)) {
+                new TransactionTemplate(transactionManager)
+                        .executeWithoutResult(ignored -> listener.onIssueClosed(event));
             }
 
             assertThat(rows(ActivityEventType.ISSUE_CLOSED, 301L)).isEqualTo(1);
