@@ -1,54 +1,56 @@
-import { Hammer } from "lucide-react";
-import { HephIcon } from "@/components/brand/HephIcon";
 import { InstitutionalAttribution } from "@/components/layout/InstitutionalAttribution";
-import { FeatureCard, type FeatureData } from "./FeatureCard";
-
-const FEATURES_DATA: FeatureData[] = [
-	{
-		icon: <Hammer className="size-5" strokeWidth={1.7} />,
-		badge: "Core feature",
-		title: "Practice feedback",
-		description: "Specific feedback on how the work was done",
-		content:
-			"Hephaestus reads a contribution and the work around it against the practices a workspace has chosen. Each piece of feedback names the practice it came from and points back to what it saw.",
-	},
-	{
-		icon: <HephIcon size={20} strokeWidth={1.7} animated={false} />,
-		badge: "Core feature",
-		title: "Talk it through",
-		description: "Ask Heph why, or disagree and decide the next step",
-		content:
-			"In chat Hephaestus goes by Heph. It draws on recent project activity, the feedback a developer has received, and selected Outline documents their admins connected. It uses Slack channel messages only with the member’s permission. You can chat in the web app or, when Slack is connected, in Slack.",
-	},
-];
+import { PRODUCT_FEATURES } from "@/components/site/product-features";
+import { ProductFeatureList } from "@/components/site/ProductFeatureList";
 
 export function AboutMissionSection() {
 	return (
 		<section aria-labelledby="about-mission-heading" className="space-y-12">
 			<div>
 				<h2 id="about-mission-heading" className="mb-6 text-3xl font-bold">
-					The mission
+					Why Hephaestus
 				</h2>
 
 				<p className="text-lg leading-relaxed">
-					Developers learn to work well in a team by doing the work and getting feedback on it.
-					Mentors give that feedback: a coach on a university capstone or an experienced maintainer
-					on an open-source project. Mentors cannot review everyone’s work, so some developers get
-					little or none. Hephaestus reviews the routine part, so more developers get feedback.
+					Developers learn engineering practices by doing the work and getting feedback on it. That
+					feedback comes from reviewers and experienced colleagues, and their time is scarce. In 37
+					Apache projects, a{" "}
+					<a
+						href="https://doi.org/10.1145/3540250.3549167"
+						target="_blank"
+						rel="noopener noreferrer"
+						className="underline underline-offset-4 hover:text-mentor"
+					>
+						2022 study
+						<span className="sr-only"> (opens in a new tab)</span>
+					</a>{" "}
+					found that only about a quarter of pull requests received an implicit-mentoring comment.
+					Such a comment explains a suggestion, an instruction, or a way to fix an error. Hephaestus
+					gives feedback on every piece of work it can assess, so experienced people can spend their
+					time where judgment and relationships matter.
 				</p>
 			</div>
 
-			<div className="grid grid-cols-1 gap-8 md:grid-cols-2">
-				{FEATURES_DATA.map((feature) => (
-					<FeatureCard key={feature.title} feature={feature} />
-				))}
+			<div>
+				<h2 className="mb-6 text-2xl font-bold">Features</h2>
+				<ProductFeatureList features={PRODUCT_FEATURES} />
+			</div>
+
+			<div>
+				<h2 className="mb-4 text-2xl font-bold">Where Hephaestus is going</h2>
+				<p className="text-lg leading-relaxed">
+					Practices apply to everyone who contributes to a project, people and coding agents alike.
+					The same evidence-backed feedback can steer a coding agent, and it shows a team which
+					practices it actually applies, so the team can refine them.
+				</p>
 			</div>
 
 			<div className="rounded-2xl border border-border bg-muted/20 p-6 text-center">
-				<h3 className="text-xl font-semibold">Developed at TUM and open source</h3>
+				<h2 className="text-xl font-semibold">Project origins</h2>
 				<p className="mx-auto mt-2 mb-6 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-					Hephaestus is an MIT-licensed open-source project developed by Applied Education
-					Technologies at the Technical University of Munich.
+					Developed at the Technical University of Munich. There, Hephaestus is the research
+					platform for a study of how AI-generated feedback can improve developers’ application of
+					engineering practices. Applied Education Technologies maintains Hephaestus under the MIT
+					license.
 				</p>
 				<InstitutionalAttribution />
 			</div>
