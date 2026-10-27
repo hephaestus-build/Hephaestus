@@ -408,7 +408,8 @@ First initialization, restart, and restore need a start of the release image on 
 Every container of the release has CPU, memory, and ephemeral storage requests and limits.
 The schema refuses a zero value.
 Sandbox containers have CPU and memory limits, and no disk limit, as on Docker ([Known limits](#known-limits)).
-They request their whole memory limit and a tenth of their CPU limit, because the CPU limit is a share of CPU time, not a reserved core ([Sizing](./sizing#review-sandbox-limits)).
+They request the memory that their kind of sandbox was measured to use, below their limit ([Sandbox sizes](#sandbox-sizes)).
+They request a tenth of their CPU limit, because the CPU limit is a share of CPU time, not a reserved core ([Sizing](./sizing#review-sandbox-limits)).
 
 ## Profiles
 
@@ -919,6 +920,12 @@ The sandbox nodes need these items:
 
 1. A network plugin that enforces NetworkPolicy, for egress as well as ingress.
 2. The sandbox namespace with the label `pod-security.kubernetes.io/enforce=restricted`.
+3. Encrypted node storage, for example LUKS or the disk encryption of the cloud provider.
+   A sandbox Pod writes to the node's disk: the review workspace with the repository, `/tmp`, `~/.local` and a turn sandbox's workspace.
+   Only `/run` is in memory.
+   Encryption protects a stolen disk and a backup of it without the key.
+   It does not protect against a compromised running node or a privileged workload on the node.
+   The kubelet deletes a Pod's volumes with the Pod, but deletion does not erase the data from the disk.
 
 These settings are optional:
 
@@ -961,6 +968,28 @@ If the worker stops during a run, the Job's deadline ends a Pod that still waits
 
 Some network plugins apply the policy of a new Pod a few seconds after the Pod starts.
 Each sandbox Pod therefore starts with an init container that waits, at most 60 seconds, until it cannot reach the Kubernetes API.
+
+#### Sandbox sizes
+
+The worker sizes each sandbox Pod from the measured use of that kind of sandbox.
+`SANDBOX_MEMORY_BYTES` applies to Docker only.
+
+| Sandbox Pod | Memory request | Memory limit | Disk request |
+| --- | --- | --- | --- |
+| Review | 640 MiB | 1,280 MiB | 1 GiB |
+| Heph host | 256 MiB | 1 GiB | 256 MiB |
+| Turn sandbox | 128 MiB, and 32 MiB for its stager | 512 MiB, and 32 MiB | 256 MiB |
+
+Each container requests a tenth of its CPU limit, and the isolation init container requests 10m.
+The sandbox quota admits a review by its memory request and limit and its disk request from this table.
+Four large reviews at once peaked at 632 to 657 MiB each.
+One Heph conversation used 136 MiB in the host, and a turn sandbox used 3 MiB.
+The host's Node heap stops at 768 MiB.
+
+`/tmp` and `~/.local` are volumes on the node's disk, each with a size limit of 1 GiB, and a turn sandbox's workspace has a limit of 512 MiB.
+`/run` is in memory, with 16 MiB.
+The kubelet evicts a Pod whose volume passes its size limit, and the worker counts the eviction as a failure of the infrastructure, not of the review.
+No sandbox Pod has a limit for its whole disk: the review workspace holds the repository, which `GIT_MAX_SNAPSHOT_BYTES` bounds.
 
 Kubernetes has no field for two Docker sandbox settings.
 `/tmp`, `/run` and a turn sandbox's `/workspace` are not `noexec`, and a sandbox Pod keeps `/dev/shm` in its private IPC namespace.

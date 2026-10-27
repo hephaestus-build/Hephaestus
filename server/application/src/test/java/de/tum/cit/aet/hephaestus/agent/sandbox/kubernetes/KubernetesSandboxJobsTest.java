@@ -242,7 +242,8 @@ class KubernetesSandboxJobsTest {
                 new KubernetesPods.Workload(name, worker.labels(KubernetesWorker.KIND_REVIEW), "agent", "agent"),
                 Map.of(),
                 List.of("node", "run.ts"),
-                LIMITS);
+                LIMITS,
+                KubernetesPods.REVIEW);
     }
 
     /** The Pod that the Job controller creates for the Job of the name. */

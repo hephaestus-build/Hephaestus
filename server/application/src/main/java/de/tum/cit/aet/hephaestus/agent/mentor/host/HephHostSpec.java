@@ -81,7 +81,7 @@ final class HephHostSpec {
                 "mkdir -p " + WRITABLE
                         + " /home/agent/.local/config && "
                         + String.join(" && ", PiRunnerProfile.PRACTICE_SCRIPT_LIBRARY_SETUP)
-                        + " && exec node --max-old-space-size=1024 --permission"
+                        + " && exec node --max-old-space-size=768 --permission"
                         + " --allow-fs-read=" + SandboxLayout.WORKSPACE_ROOT
                         + " --allow-fs-read=/opt/pi-sdk --allow-fs-read=/home/agent"
                         + " --allow-fs-read=" + SandboxLayout.PRACTICE_SCRIPT_IMAGE_ROOT

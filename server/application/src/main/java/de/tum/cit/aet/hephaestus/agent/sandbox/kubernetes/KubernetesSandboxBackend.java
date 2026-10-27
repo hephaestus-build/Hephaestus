@@ -134,7 +134,8 @@ public class KubernetesSandboxBackend implements SandboxBackend, SandboxRoom {
                 new KubernetesPods.Workload(name, labels, launch.image(), review ? "agent" : "host"),
                 launch.environment().at(worker.gatewayUrl()),
                 launch.command(),
-                launch.limits());
+                launch.limits(),
+                review ? KubernetesPods.REVIEW : KubernetesPods.HOST);
         if (review) {
             Instant end = launch.deadline();
             if (end == null) {

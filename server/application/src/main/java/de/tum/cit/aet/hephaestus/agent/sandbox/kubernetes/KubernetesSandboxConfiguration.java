@@ -83,8 +83,6 @@ public class KubernetesSandboxConfiguration {
             KubernetesWorker worker,
             SandboxProperties properties,
             AgentImageProperties agentImageProperties) {
-        SandboxProperties.requireRoomBeside(
-                properties.defaultResourceLimits().memoryBytes(), KubernetesPods.MEMORY_VOLUME_BYTES);
         return new KubernetesPods(
                 sandboxKubernetesClient,
                 worker,

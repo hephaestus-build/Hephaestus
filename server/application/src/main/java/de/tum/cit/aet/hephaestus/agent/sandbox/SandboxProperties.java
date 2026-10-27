@@ -19,7 +19,8 @@ import org.springframework.validation.annotation.Validated;
  * @param maxConcurrentContainers upper bound on simultaneous sandbox containers
  * @param containerStopTimeoutSeconds SIGTERM → SIGKILL grace period
  * @param reconciliationIntervalSeconds interval between orphan cleanup sweeps
- * @param defaultResourceLimits the limits of each review sandbox; the Heph host and turn sandboxes have their own
+ * @param defaultResourceLimits the limits of each review sandbox; the Heph host and turn sandboxes have their own. On
+ *     Kubernetes, the backend sizes the memory and disk of each sandbox Pod itself ({@code KubernetesPods})
  */
 @Validated
 @ConfigurationProperties(prefix = "hephaestus.sandbox")
@@ -52,7 +53,7 @@ public record SandboxProperties(
      * The resource limits of a review sandbox: its initializer and then its runtime. The defaults and the review usage
      * they rest on are in docs/admin/sizing.mdx § Review sandbox limits.
      *
-     * @param memoryBytes maximum memory in bytes, tmpfs pages included
+     * @param memoryBytes maximum memory in bytes on Docker, tmpfs pages included. Kubernetes sizes each sandbox Pod by its kind
      * @param cpus CPU limit: a share of CPU time the sandbox may use, not a reservation
      * @param pidsLimit maximum process count
      */

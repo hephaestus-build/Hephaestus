@@ -172,10 +172,13 @@ The turn sandbox container is the security boundary, as it is for the shell of a
 - **Boundary.** One container for each turn attempt, from the agent image, under the same `ContainerSecurityPolicy` as a review sandbox.
 - **Lifetime.** The worker removes the container with its files when the attempt ends. It never gives it to another attempt.
 - **Contents.** The [context folder](/contributor/practice-review-glossary#runtime-terms) of one developer in one workspace: `INDEX.md`, the context documents, and repositories that Heph loaded.
-- **Write access.** The folder is read-only. Commands write only to `/tmp`, a memory file system that the container removes with it.
+- **Write access.** The folder is read-only. Commands write only to `/tmp`, which the container removes with it.
+  On Docker, `/tmp` is a memory file system.
+  On Kubernetes, it is a volume on the node's disk with a size limit.
+  The folder is on the node's disk too ([Kubernetes § Sandbox prerequisites](./kubernetes#sandbox-prerequisites)).
 - **Network.** None. The worker stages each file through the Docker API.
 - **Credentials.** None: no Git token, no turn token, and no environment from the host or the worker.
-- **Limits.** 1 CPU, 1 GiB of memory, 256 processes, and 60 seconds for each command.
+- **Limits.** 1 CPU, 1 GiB of memory (512 MiB on Kubernetes, [Sandbox sizes](./kubernetes#sandbox-sizes)), 256 processes, and 60 seconds for each command.
 
 A load checks the workspace, the account and the purpose of the turn.
 It loads only a repository that the workspace monitors on an active connection and that no team hides.
