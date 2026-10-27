@@ -4,50 +4,82 @@ description: Protect admin access with a passkey and recover access if you lose 
 page_type: feature
 ---
 
-A passkey lets your device confirm that it is you.
+A passkey lets your device confirm that it’s you before you use admin access.
 Hephaestus still uses your connected sign-in provider to identify your account.
-A passkey adds protection before you use admin access.
+Your ordinary member access never needs a passkey.
 
-Your instance or workspace can require passkeys for administration.
-You cannot turn off a required policy through your personal settings.
-You can still use your ordinary member access without admin verification.
+## Passkey protection
+
+Your instance or your workspace can require a passkey for administration.
+You cannot turn off a required policy in your personal settings.
+
+Adding your first passkey also turns on **Personal admin protection** for you, even when your instance makes passkeys optional.
+You can turn it off in **Passkeys**.
+Turning it off does not remove an instance or workspace requirement.
+
+Your device confirms the passkey with its screen lock, fingerprint, or face recognition.
+Hephaestus does not receive that biometric data.
+Use a current browser over a secure connection.
+
+Sensitive changes need a recent confirmation.
+When your confirmation has lapsed, **Passkeys** shows **Verify passkey**.
+Select it before you add another passkey, create recovery codes, remove a passkey, or change **Personal admin protection**.
 
 ## Confirm admin access
 
 When an admin page or action needs a passkey, Hephaestus opens a short confirmation page.
 
-- If you already have a passkey, select **Confirm with passkey** and follow your browser's prompt.
-- If you do not have one yet, select **Add passkey**, follow your browser's prompt, then confirm with the new passkey.
+1. Select **Confirm with passkey**.
+2. Follow your browser’s prompt.
 
-After you confirm, Hephaestus takes you back to the page you were on.
-If you were in the middle of a change, make it again: Hephaestus does not repeat a refused action automatically.
-Sensitive changes need a recent confirmation.
-Select **Not now** to leave without confirming.
-If the prompt closes or fails, you can try again from the same page.
+Hephaestus takes you back to the page you were on.
+If you were in the middle of a change, make it again.
+Hephaestus does not repeat a refused action automatically.
 
-Your device can use its screen lock, fingerprint, or face recognition to confirm access.
-Hephaestus does not receive that biometric data.
-Use a current browser over a secure connection.
+If you do not have a passkey yet:
 
-## Manage your passkeys
+1. Select **Add passkey**.
+2. Follow your browser’s prompt.
+3. Select **Confirm with passkey**, and follow the prompt again.
 
-1. Sign in and open **User settings**.
-2. Find **Passkeys**. A name for the device is optional.
-3. Select **Register passkey** and follow your browser's instructions.
-4. Add a second passkey on another device.
-5. Select **Verify passkey**, then **Replace recovery codes**, and store the codes in a safe place outside the browser.
+To leave without confirming, select **Not now**.
 
-Personal protection applies even when your instance makes passkeys optional.
-Turning off personal protection does not remove an instance or workspace requirement.
-Verify a passkey before you change personal protection or recovery codes.
+## Add a passkey
 
-## Remove your last passkey
+1. Open **User settings** and find **Passkeys**.
+2. Optional: Enter a **Passkey name**, such as the name of the device. Without a name, the passkey shows the date you added it.
+3. Select **Register passkey**.
+4. Follow your browser’s prompt.
 
-You can remove your last passkey after you turn off personal protection.
+The passkey appears in the list.
+Adding a passkey signs you out of your other sessions.
+Add a second passkey on another device, so you keep admin access if you lose one.
 
-1. In **Passkeys**, select **Verify passkey** if Hephaestus asks you to confirm.
-2. Turn off **Personal admin protection**.
-3. Select **Remove** next to the passkey, then **Remove last passkey**.
+## Create new recovery codes
+
+Recovery codes let you replace your passkeys if you lose every device.
+
+1. In **Passkeys**, select **Verify passkey** if it appears, and follow your browser’s prompt.
+2. Select **Create new recovery codes**, then **Create codes**.
+3. Select **Copy codes**, and store the codes in a safe place outside the browser.
+
+Hephaestus shows the codes only once.
+New codes make all earlier codes invalid.
+Each code works once.
+
+## Remove a passkey
+
+1. In **Passkeys**, select **Verify passkey** if it appears.
+2. Select **Remove** next to the passkey.
+3. Select **Remove passkey**.
+
+The passkey stops working, and your other sessions end.
+
+To remove your last passkey:
+
+1. Turn off **Personal admin protection**.
+2. Select **Remove** next to the passkey.
+3. Select **Remove last passkey**.
 
 Removing your last passkey also deletes your recovery codes and signs you out of your other sessions.
 You keep your ordinary access.
@@ -56,14 +88,24 @@ You cannot remove your last passkey during recovery.
 
 ## Recover access
 
-If you lose your passkeys, sign in through your usual provider and open **Recover passkeys** in **User settings**.
-Enter a recovery code and select **Start recovery**.
-Recovery removes the old passkeys and signs out your other sessions.
-It does not restore admin access.
-Register and verify a replacement passkey, add another passkey, and replace your recovery codes.
+If you lose your passkeys, use a recovery code.
 
-Each recovery code works once.
-Recovery also invalidates the remaining codes.
-Replacing the codes makes all earlier codes invalid.
-If you have no passkey or recovery code, contact your instance operator.
+1. Sign in through your usual provider and open **User settings**.
+2. In **Passkeys**, open **Recover passkeys**.
+3. Enter a **Recovery code**.
+4. Select **Start recovery**, and confirm with **Start recovery**.
+
+Recovery removes your old passkeys, signs out your other sessions, and makes your other recovery codes invalid.
+It does not restore admin access.
+To get it back, add a passkey and verify it, add a second passkey, and create new recovery codes.
+
+## Troubleshooting
+
+### The browser prompt closed or failed
+
+Try again from the same page.
+
+### You have no passkey and no recovery code
+
+Contact your instance operator.
 A workspace admin cannot reset your passkeys.
