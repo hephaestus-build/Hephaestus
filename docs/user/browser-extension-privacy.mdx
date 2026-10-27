@@ -12,8 +12,8 @@ Its [privacy notice](https://hephaestus.build/privacy) identifies the operator, 
 If you connect to another instance, its operator receives requests instead.
 This page describes extension behavior across instances.
 
-1. Before you connect to an instance, read its privacy notice.
-2. Follow [Connect it to your Hephaestus](./browser-extension#connect-it-to-your-hephaestus) to set up the extension.
+Each instance’s privacy notice applies before you connect to it.
+[Connect it to your Hephaestus](./browser-extension#connect-it-to-your-hephaestus) gives the steps.
 
 ## What it reads and sends
 
@@ -27,7 +27,9 @@ The canonical address includes provider, repository, and work number.
 It excludes query strings, fragments, and subpage paths.
 The extension uploads no page text, source code, form inputs, or screenshots.
 It does not collect a browser history.
+
 The instance resolves only work in accessible workspaces.
+It matches the address against repositories that the workspace already monitors, and it does not fetch the page itself.
 Other pages, such as repository pages, searches, and other sites, are never looked up.
 
 The extension shows only your records, even if you are a workspace admin.
@@ -78,21 +80,18 @@ Optional research participation does not authorize collection or reuse of extens
 
 ## Your controls and privacy requests
 
-1. To stop the extension on a provider site, remove that site’s access in extension settings.
-2. To end the extension session, select **Sign out** in extension settings.
-
+Removing a site’s access in extension settings stops the extension on that site.
+**Sign out** in extension settings ends the extension session.
 Signing out clears credentials and open review views and asks the instance to revoke the session.
 If the instance cannot be reached, signing out still completes locally.
 
-1. If the instance was unreachable when you signed out, open the app’s **User settings** once it is reachable. Revoke the session there.
+If the instance was unreachable when you signed out, the session stays active until it expires or you revoke it in the app’s **User settings**.
 
 Changing the instance disconnects the old account and removes access to that instance before you connect elsewhere.
 The app’s **User settings** also lets you revoke the extension session or sign out everywhere.
 
-For privacy requests:
-
-1. Use the contact in the selected instance’s privacy notice for access, correction, deletion, or an objection to server processing.
-2. Do not put tokens, private work, or personal data in a public support issue.
+The selected instance’s privacy notice names the contact for access, correction, deletion, or an objection to server processing.
+A public support issue is public, so it is no place for tokens, private work, or personal data.
 
 For the default instance, [hephaestus.build/privacy](https://hephaestus.build/privacy) gives contacts and the rights process.
 [Hephaestus support](https://github.com/hephaestus-build/Hephaestus/issues) accepts general extension problem reports.
