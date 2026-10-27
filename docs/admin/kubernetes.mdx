@@ -107,7 +107,7 @@ cosign verify "$CHART@$DIGEST" \
 # 3. The one pull: Helm gets the chart by that digest, never by a tag.
 helm pull "oci://$CHART@$DIGEST" --untar --untardir "chart-$VERSION"
 # 4. The signed chart is the chart of this release.
-helm show chart "chart-$VERSION/hephaestus" | grep -qx "version: $VERSION"
+helm show chart "chart-$VERSION/hephaestus" | grep -x "version: $VERSION" >/dev/null
 ```
 
 The joint lock in step 1 is only a lookup for the chart digest.

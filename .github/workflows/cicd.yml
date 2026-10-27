@@ -784,7 +784,7 @@ jobs:
           mapfile -t jars < <(find application/build/libs -maxdepth 1 -name 'hephaestus-application-*.jar' ! -name '*-sources.jar' ! -name '*-javadoc.jar')
           mapfile -t clients < <(find generated-clients/build/libs -maxdepth 1 -name 'hephaestus-generated-clients-*.jar' ! -name '*-sources.jar' ! -name '*-javadoc.jar')
           (( ${#jars[@]} == 1 )) && (( ${#clients[@]} == 1 ))
-          unzip -p "${jars[0]}" META-INF/MANIFEST.MF | grep -q '^Main-Class: org.springframework.boot.loader'
+          unzip -p "${jars[0]}" META-INF/MANIFEST.MF | grep '^Main-Class: org.springframework.boot.loader' >/dev/null
       - name: Upload the packaged server
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
