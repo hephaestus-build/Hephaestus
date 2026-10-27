@@ -420,17 +420,23 @@ export const readReceiptSchema = z
 		sourcePath: z.string().min(1).max(CANDIDATE_LIMITS.pathChars),
 		path: z.string().min(1).max(CANDIDATE_LIMITS.pathChars),
 		version: z.string().min(1).max(CANDIDATE_LIMITS.versionChars),
-		status: z.enum(["COMPLETE", "TRUNCATED", "FAILED", "BINARY", "ABSENT"]),
+		/** SEARCHED: a search for `pattern` ran over the scope at `path` to the end. It carries no digest or lines. */
+		status: z.enum(["COMPLETE", "TRUNCATED", "FAILED", "BINARY", "ABSENT", "SEARCHED"]),
 		contentDigest: z
 			.string()
 			.regex(/^[0-9a-f]{64}$/u)
 			.optional(),
 		startLine: z.int().min(1).max(2_147_483_647).optional(),
 		endLine: z.int().min(1).max(2_147_483_647).optional(),
+		pattern: z.string().min(1).max(CANDIDATE_LIMITS.warrantFieldChars).optional(),
 	})
 	.refine(
 		(r) => r.endLine === undefined || (r.startLine !== undefined && r.endLine >= r.startLine),
 		"receipt extent must be ordered",
+	)
+	.refine(
+		(r) => (r.status === "SEARCHED") === (r.pattern !== undefined),
+		"only a search receipt names its pattern",
 	);
 export type ReadReceipt = z.infer<typeof readReceiptSchema>;
 

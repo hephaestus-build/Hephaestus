@@ -236,6 +236,10 @@ Listings, metadata, history queries and failed reads of optional paths do not pr
 Session diagnostics retain all observed reads.
 Candidate omissions and failure counts describe only gaps in the sources needed by that result.
 
+In an item review that reads a checkout, a result that says the repository lacks something needs a search of the whole checkout.
+Otherwise admission withholds it as `consulted_source_unread`.
+[Workspace ABI § Claims that the repository lacks something](./agent/workspace-abi.mdx#claims-that-the-repository-lacks-something) has the rules.
+
 The server verifies shape, outcome requirements, quotations, source permission and claim basis.
 One invalid problem, example or citation withholds the complete candidate.
 Other valid practice candidates can continue.

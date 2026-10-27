@@ -169,6 +169,7 @@ const CANDIDATE_REFUSALS = [
 	"source_unavailable",
 	"basis_witness_missing",
 	"duty_quote_unverified",
+	"consulted_source_unread",
 ] as const;
 
 const CANDIDATE_REFUSAL_SENTENCE =

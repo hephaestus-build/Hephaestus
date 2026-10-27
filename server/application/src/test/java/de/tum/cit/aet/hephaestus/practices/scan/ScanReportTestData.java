@@ -224,7 +224,8 @@ public class ScanReportTestData {
                                 ReadReceiptStatus.COMPLETE,
                                 hash,
                                 1,
-                                1)))))
+                                1,
+                                null)))))
                 .recordedAt(review.getCreatedAt())
                 .build());
         for (int position = 0; position < 2; position++)

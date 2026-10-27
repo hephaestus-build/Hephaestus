@@ -14,6 +14,8 @@ import de.tum.cit.aet.hephaestus.agent.proxy.dto.AdmissionResponseDTO;
 import de.tum.cit.aet.hephaestus.evidence.AppliesWhenCheck;
 import de.tum.cit.aet.hephaestus.evidence.CitationSide;
 import de.tum.cit.aet.hephaestus.evidence.ClasspathSourceCatalogRegistry;
+import de.tum.cit.aet.hephaestus.evidence.SourceAuthority;
+import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CandidateRefusal;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
 import de.tum.cit.aet.hephaestus.practices.spi.HostCoverage;
@@ -175,6 +177,8 @@ public class ReviewOutputService {
             }
             try {
                 var verified = verifier.verifyCandidate(job, assignment, review.kind(), candidate, captured);
+                // A scan's search covers its assigned file, whose complete read the scan check above requires.
+                if (review.kind() == ReviewKind.ITEM) requireSearchedAbsence(candidate, captured);
                 admitted.add(result(assignment, verified));
             } catch (CandidateEvidenceVerifier.Unverified refusal) {
                 refusals.add(new WithheldAssignment(
@@ -224,6 +228,50 @@ public class ReviewOutputService {
             retained.set("admission", mapper.valueToTree(receipt));
             owned.setCapture(retained);
         };
+    }
+
+    /**
+     * Refuses a result that says a checkout lacks something: it names the checkout as searched, or its words say the
+     * repository beyond its citations lacks something ({@link AbsenceClaims}), and its receipts hold no search of the
+     * whole checkout that ran to the end, captured complete at the searched commit. A complete read of one file is a
+     * complete source of that file, not of the checkout (ADR 0064 § Absence). Every other source is staged whole in
+     * the job folder. A checkout that the capture did not hold whole is a capture limit, so no search could support
+     * the claim. A could-not-determine result says nothing about the work.
+     */
+    private void requireSearchedAbsence(Candidate candidate, CapturedEvidence captured) {
+        if (candidate.outcome() == ResultOutcome.COULD_NOT_DETERMINE
+                || !(candidate.coverage() instanceof HostCoverage host)) return;
+        var consulted = new ArrayList<SourceKind>();
+        var search = candidate.search();
+        if (search != null) consulted.addAll(search.consulted());
+        var inapplicability = candidate.inapplicability();
+        if (inapplicability != null) consulted.addAll(inapplicability.consulted());
+        boolean claimed = AbsenceClaims.claimed(candidate);
+        if (consulted.isEmpty() && !claimed) return;
+        var checkouts = captured.listedSources().stream()
+                .filter(kind -> catalogs.requireSource(kind).authority() == SourceAuthority.UPSTREAM_SNAPSHOT)
+                .toList();
+        var named = consulted.stream().filter(checkouts::contains).findFirst().orElse(null);
+        if (named == null && (checkouts.isEmpty() || !claimed)) return;
+        var searchable = named == null ? checkouts : List.of(named);
+        boolean searched = host.receipts().stream()
+                .anyMatch(receipt -> receipt.status() == ReadReceiptStatus.SEARCHED
+                        && ".".equals(receipt.path())
+                        && searchable.contains(receipt.sourceKind())
+                        && captured.completeAt(receipt.sourceKind(), receipt.version()));
+        if (searched) return;
+        String claim = named != null
+                ? "The result names " + named.value() + " as searched"
+                : "The result says the repository lacks something beyond its citations";
+        if (searchable.stream().noneMatch(captured::capturedWhole))
+            throw new CandidateEvidenceVerifier.Unverified(
+                    CandidateRefusal.SOURCE_UNAVAILABLE,
+                    claim + ", but the capture does not hold the whole checkout, so no search can show that",
+                    null);
+        throw new CandidateEvidenceVerifier.Unverified(
+                CandidateRefusal.CONSULTED_SOURCE_UNREAD,
+                claim + ", but its receipts hold no search of the whole checkout to the end",
+                null);
     }
 
     private static boolean hasCompleteAssignedRead(

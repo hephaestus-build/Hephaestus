@@ -37,6 +37,8 @@ export function citableTextIndex(value: unknown): CitableText[] {
 /** Primary readiness is not the file inventory: a folder also holds permitted work from other areas. */
 export function folderCitationIndex(value: unknown): {
 	availableSourceKinds: Set<string>;
+	/** Sources captured whole: only a search of one of these can show that it lacks something. */
+	completeSourceKinds: Set<string>;
 	sourceFileSources: Map<string, string>;
 	citationCapabilities: Map<string, CitationCapabilities>;
 } {
@@ -45,7 +47,7 @@ export function folderCitationIndex(value: unknown): {
 			sources: z.array(
 				z.looseObject({
 					kind: z.string(),
-					state: z.looseObject({ availability: z.string() }),
+					state: z.looseObject({ availability: z.string(), completeness: z.string().optional() }),
 					citation: z.strictObject({
 						side: z.enum(["REQUIRED", "OPTIONAL", "FORBIDDEN"]),
 						commit: z.enum(["REQUIRED", "OPTIONAL", "FORBIDDEN"]),
@@ -58,12 +60,16 @@ export function folderCitationIndex(value: unknown): {
 		})
 		.parse(value);
 	const availableSourceKinds = new Set<string>();
+	const completeSourceKinds = new Set<string>();
 	const sourceFileSources = new Map<string, string>();
 	const citationCapabilities = new Map<string, CitationCapabilities>();
 	for (const source of manifest.sources) {
 		citationCapabilities.set(source.kind, source.citation);
 		if (source.state.availability === "AVAILABLE") {
 			availableSourceKinds.add(source.kind);
+			if (source.state.completeness === "COMPLETE") {
+				completeSourceKinds.add(source.kind);
+			}
 		}
 	}
 	for (const entry of manifest.files) {
@@ -77,5 +83,5 @@ export function folderCitationIndex(value: unknown): {
 		sourceFileSources.set(entry.file.path, entry.kind);
 		availableSourceKinds.add(entry.kind);
 	}
-	return { availableSourceKinds, sourceFileSources, citationCapabilities };
+	return { availableSourceKinds, completeSourceKinds, sourceFileSources, citationCapabilities };
 }

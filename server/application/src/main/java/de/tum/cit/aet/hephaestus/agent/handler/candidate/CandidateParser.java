@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.handler.candidate;
 
 import static de.tum.cit.aet.hephaestus.agent.handler.candidate.CandidateLimits.CANDIDATE_BYTES;
+import static de.tum.cit.aet.hephaestus.agent.handler.candidate.CandidateLimits.WARRANT_FIELD_CHARS;
 
 import de.tum.cit.aet.hephaestus.integration.core.spi.CandidateRefusal;
 import de.tum.cit.aet.hephaestus.practices.spi.ClaimBasis;
@@ -11,6 +12,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.HostCoverage;
 import de.tum.cit.aet.hephaestus.practices.spi.InapplicabilityWarrant;
 import de.tum.cit.aet.hephaestus.practices.spi.IntroducedBasis;
 import de.tum.cit.aet.hephaestus.practices.spi.OpenQuestion;
+import de.tum.cit.aet.hephaestus.practices.spi.ReadReceiptStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultCoverage;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultExample;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
@@ -86,6 +88,10 @@ public final class CandidateParser {
                 var end = receipt.endLine();
                 if (start != null && end != null && end < start)
                     throw refuse(CandidateRefusal.MALFORMED_CANDIDATE, "Receipt lines are reversed");
+                var pattern = receipt.pattern();
+                if ((receipt.status() == ReadReceiptStatus.SEARCHED) != (pattern != null)
+                        || (pattern != null && (pattern.isEmpty() || pattern.length() > WARRANT_FIELD_CHARS)))
+                    throw refuse(CandidateRefusal.MALFORMED_CANDIDATE, "Only a search receipt names its pattern");
             }
         }
         return candidate;

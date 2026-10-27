@@ -13,7 +13,11 @@ import {
 	folderCitationIndex,
 	citableTextIndex,
 } from "../../../main/resources/agent/pi-folder-index.ts";
-import { SessionReads } from "../../../main/resources/agent/pi-session-reads.ts";
+import {
+	SessionReads,
+	claimsAbsence,
+	unreadCheckoutClaim,
+} from "../../../main/resources/agent/pi-session-reads.ts";
 
 function read(
 	reads: SessionReads,
@@ -873,4 +877,323 @@ void test("supplied canonical content covers aliases only through the captured s
 		assert.equal(reads.hasCompleteRead(target), false, target);
 		assert.equal(reads.coverage(undefined, undefined, [target]).complete, false, target);
 	}
+});
+
+const TREE = {
+	root: "repos/reviewed",
+	sourcePath: "repos/reviewed/.git/HEAD",
+	version: "4154fb8c",
+	complete: true,
+};
+
+function treeTool(
+	reads: SessionReads,
+	id: string,
+	toolName: string,
+	args: Record<string, unknown>,
+	details: Record<string, unknown> = {},
+) {
+	// A call a codemode script makes arrives as its own tool event under the script's call.
+	reads.note({
+		type: "tool_execution_start",
+		toolCallId: id,
+		toolName,
+		args,
+		parentToolCallId: "codemode",
+	});
+	reads.note({
+		type: "tool_execution_end",
+		toolCallId: id,
+		toolName,
+		isError: false,
+		result: { content: [{ type: "text", text: "No matches found" }], details },
+	});
+}
+
+function checkout(): string {
+	const root = mkdtempSync(path.join(tmpdir(), "session-tree-"));
+	mkdirSync(path.join(root, "repos/reviewed/src"), { recursive: true });
+	mkdirSync(path.join(root, "repos/reviewed/.git"), { recursive: true });
+	writeFileSync(path.join(root, "repos/reviewed/src/UserController.java"), "class A {\n}\n");
+	writeFileSync(path.join(root, "repos/reviewed/.git/config"), "[core]\n");
+	return root;
+}
+
+void test("codemode's whole-checkout searches and complete reads leave receipts that prove them, searches first", () => {
+	const root = checkout();
+	try {
+		const reads = new SessionReads(root, {}, undefined, [], TREE);
+		treeTool(reads, "find", "find", { pattern: "*.java", path: "repos/reviewed" });
+		treeTool(reads, "read", "read", { path: "repos/reviewed/src/UserController.java" });
+		treeTool(reads, "git", "read", { path: "repos/reviewed/.git/config" });
+		treeTool(reads, "grep", "grep", { pattern: "ControllerAdvice" });
+		treeTool(reads, "rooted", "grep", { pattern: "ExceptionHandler", path: "repos/reviewed" });
+
+		const { receipts } = reads.coverage();
+		assert.deepEqual(
+			receipts.map((receipt) => [receipt.status, receipt.path, receipt.pattern]),
+			[
+				["SEARCHED", ".", "ControllerAdvice"],
+				["SEARCHED", ".", "ExceptionHandler"],
+				["COMPLETE", "src/UserController.java", undefined],
+			],
+		);
+		const fileRead = receipts[2];
+		assert.ok(fileRead !== undefined);
+		assert.equal(fileRead.sourcePath, TREE.sourcePath);
+		assert.match(fileRead.contentDigest ?? "", /^[0-9a-f]{64}$/u);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+void test("a search that is cut, filtered, narrower than the checkout, outside it or a listing proves no search", () => {
+	const root = checkout();
+	try {
+		const reads = new SessionReads(root, {}, undefined, [], TREE);
+		treeTool(
+			reads,
+			"cut",
+			"grep",
+			{ pattern: "Advice", path: "repos/reviewed" },
+			{ matchLimitReached: 100 },
+		);
+		treeTool(reads, "glob", "grep", { pattern: "Advice", glob: "*.md" });
+		treeTool(reads, "narrow", "grep", { pattern: "Advice", path: "repos/reviewed/src" });
+		treeTool(reads, "context", "grep", { pattern: "Advice", path: "context" });
+		treeTool(reads, "find", "find", { pattern: "*Advice*", path: "repos/reviewed" });
+
+		assert.deepEqual(reads.coverage().receipts, []);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+void test("a search of a checkout captured only in part proves no search", () => {
+	const root = checkout();
+	try {
+		const reads = new SessionReads(root, {}, undefined, [], { ...TREE, complete: false });
+		treeTool(reads, "grep", "grep", { pattern: "ControllerAdvice" });
+
+		assert.deepEqual(reads.coverage().receipts, []);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+// The error-handling problem that #50's review recorded (review 2435ae89), with its stored basis.
+const PR50_ERROR_HANDLING = {
+	summary:
+		"page parameter is unvalidated; negative or overflowing values throw an unhandled IndexOutOfBoundsException",
+	explanation:
+		"For a negative page, from is negative. Per the JDK contract, List.subList throws IndexOutOfBoundsException when fromIndex is negative. No code catches this and the reviewed checkout contains no @ControllerAdvice or @ExceptionHandler (grep over all 8 Java files found none), so invalid input produces an unhandled exception surfacing as a raw 500.",
+	basis: { explanation: "The diff adds this unvalidated page parameter and the subList slicing." },
+};
+const PR50_VALIDATES_INPUTS = {
+	summary: "Negative page param flows unclamped into subList and throws",
+	explanation:
+		'The added handler\'s only guard on `page` is `@RequestParam(defaultValue = "0")`. The pinned file has no @Min, clamp or other check on the path.',
+	basis: { explanation: "The diff adds the page parameter." },
+};
+
+function hostCoverage(
+	receipts: { status: "COMPLETE" | "SEARCHED"; path: string; pattern?: string }[] = [],
+) {
+	return {
+		source: "host" as const,
+		reads: 3,
+		truncatedReads: 0,
+		failedReads: 0,
+		complete: true as const,
+		receipts: receipts.map((receipt) => ({
+			sourceKind: "scm.repository.tree",
+			sourcePath: TREE.sourcePath,
+			version: TREE.version,
+			...receipt,
+		})),
+	};
+}
+
+const ASK = { checkout: { root: "repos/reviewed", complete: true }, askAboutWords: true };
+const BOUNDARY = "the changed file only; no other files are in the change";
+
+function notMet(
+	problem: { summary: string; explanation: string; basis: { explanation: string } },
+	consulted: string[],
+) {
+	return {
+		outcome: "NOT_MET",
+		summary: "The new page parameter is not validated",
+		explanation: "A negative page reaches subList.",
+		problems: [problem],
+		evidence: { search: { consulted, lookedFor: "a guard on page", boundary: BOUNDARY } },
+	};
+}
+
+void test("#50: a claim that the checkout lacks something goes back to the model until the checkout was searched", () => {
+	const stored = notMet(PR50_ERROR_HANDLING, ["scm.pull-request.diff", "scm.repository.tree"]);
+	const asked = unreadCheckoutClaim(stored, hostCoverage(), ASK);
+	assert.match(
+		asked?.text ?? "",
+		/names scm\.repository\.tree as searched.*path "repos\/reviewed"/u,
+	);
+	assert.equal(asked?.byWords, false);
+	// Reading UserController to its end, as the stored result says it did, is no search of the checkout.
+	assert.notEqual(
+		unreadCheckoutClaim(
+			stored,
+			hostCoverage([{ status: "COMPLETE", path: "src/main/java/UserController.java" }]),
+			ASK,
+		),
+		undefined,
+	);
+	assert.equal(
+		unreadCheckoutClaim(
+			stored,
+			hostCoverage([{ status: "SEARCHED", path: ".", pattern: "ControllerAdvice" }]),
+			ASK,
+		),
+		undefined,
+	);
+});
+
+void test("#50: leaving the tree out of the search does not hide words that say the repository lacks something, once", () => {
+	const hidden = notMet(PR50_ERROR_HANDLING, ["scm.pull-request.diff"]);
+	assert.equal(unreadCheckoutClaim(hidden, hostCoverage(), ASK)?.byWords, true);
+	assert.equal(
+		unreadCheckoutClaim(hidden, hostCoverage(), { ...ASK, askAboutWords: false }),
+		undefined,
+	);
+	// What the cited file itself lacks is not a claim about the rest of the checkout.
+	assert.equal(
+		unreadCheckoutClaim(
+			notMet(PR50_VALIDATES_INPUTS, ["scm.pull-request.diff"]),
+			hostCoverage(),
+			ASK,
+		),
+		undefined,
+	);
+	// A could-not-determine result says nothing about the work.
+	assert.equal(
+		unreadCheckoutClaim({ ...hidden, outcome: "COULD_NOT_DETERMINE" }, hostCoverage(), ASK),
+		undefined,
+	);
+});
+
+void test("without a checkout captured whole, the model is told to remove the claim, not to search", () => {
+	const hidden = notMet(PR50_ERROR_HANDLING, ["scm.pull-request.diff"]);
+	assert.match(
+		unreadCheckoutClaim(hidden, hostCoverage(), {
+			checkout: { complete: false },
+			askAboutWords: true,
+		})?.text ?? "",
+		/no checkout to search\. Remove that claim/u,
+	);
+	assert.match(
+		unreadCheckoutClaim(hidden, hostCoverage(), {
+			checkout: { root: "repos/reviewed", complete: false },
+			askAboutWords: true,
+		})?.text ?? "",
+		/captured only in part, so no search of it can show what the repository lacks\. Remove that claim/u,
+	);
+});
+
+void test("an issue whose review reads no checkout keeps the words its Does not apply rests on", () => {
+	const issue = {
+		outcome: "DOES_NOT_APPLY",
+		summary: "The issue is self-contained",
+		explanation: "The body states its outcome directly.",
+		evidence: {
+			inapplicability: {
+				consulted: ["issue.core"],
+				prerequisite: "an appeal to context recorded somewhere else",
+				ruledOutBy: "the body contains no appeal to context made elsewhere and no links",
+			},
+		},
+	};
+	assert.equal(unreadCheckoutClaim(issue, hostCoverage(), { askAboutWords: true }), undefined);
+});
+
+void test("#50: other wordings of the same claim, in any text the result shows, go back to the model", () => {
+	const claims = [
+		"No @ControllerAdvice or @ExceptionHandler exists in the repository.",
+		"The reviewed checkout contains no @ControllerAdvice.",
+		"Nothing in the project catches IndexOutOfBoundsException.",
+		"The application defines no global exception handler.",
+		"There is no exception handler anywhere in the code.",
+		"None of the callers handle the null.",
+		"Nothing else in the code base validates page.",
+		"The codebase never validates page.",
+	];
+	for (const claim of claims) {
+		const bounded = notMet(PR50_VALIDATES_INPUTS, ["scm.pull-request.diff"]);
+		const { search } = bounded.evidence;
+		for (const submission of [
+			{ ...bounded, summary: claim },
+			{ ...bounded, explanation: claim },
+			{ ...bounded, problems: [{ ...PR50_VALIDATES_INPUTS, nextStep: claim }] },
+			{ ...bounded, problems: [{ ...PR50_VALIDATES_INPUTS, basis: { explanation: claim } }] },
+			{ ...bounded, evidence: { search: { ...search, boundary: claim } } },
+			{ ...bounded, evidence: { search: { ...search, lookedFor: claim } } },
+		]) {
+			assert.equal(unreadCheckoutClaim(submission, hostCoverage(), ASK)?.byWords, true, claim);
+		}
+	}
+});
+
+void test("words bounded to the change, or stating what the review did not establish, are no claim", () => {
+	for (const bounded of [
+		"no test file or test hunk appears anywhere in the change",
+		"no print-style or logger call is added anywhere in the diff",
+		"no other files are in the change",
+		"The change adds no diagnostic call in application code.",
+		"the body contains no appeal to context made elsewhere and no links",
+		"There is no check anywhere on its path that rules out this input.",
+		"No code path in handle() returns 404.",
+		"The checkout step in the workflow has no pinned version.",
+		"This does not establish that unchanged settings elsewhere in the repository are sound.",
+		"I did not inspect files outside the diff or establish that no other generated artifacts exist elsewhere in the repository.",
+		"No test is added anywhere.",
+		"The catch block never logs the error anywhere.",
+		"No code in the handler catches the error.",
+	]) {
+		assert.equal(claimsAbsence(bounded), false, bounded);
+	}
+	// A limit of the review does not hide the claim beside it.
+	for (const claim of [
+		"I did not search beyond the diff, but no handler exists anywhere in the repository.",
+		"page is not checked, and the checkout contains no @ControllerAdvice.",
+		"The handler is not found in a search of the whole repository: no @ControllerAdvice exists in the repository.",
+		"No @ControllerAdvice exists in the repository (not found by search).",
+		"The scope ends at the diff \u2014 no handler exists in the repository.",
+		"No\u00A0handler exists in the repository.",
+	]) {
+		assert.equal(claimsAbsence(claim), true, claim);
+	}
+});
+
+void test("a bounded Met that names the tree for its selected lines is told how to name the diff instead", () => {
+	// handles-errors-instead-of-swallowing-them asks a Met to record evidence.search over the selected pinned source.
+	const met = {
+		outcome: "MET",
+		summary: "The added failure paths keep their error signal",
+		explanation:
+			"Both added catch blocks rethrow with context; the judgement covers the operators the diff adds.",
+		evidence: {
+			search: {
+				consulted: ["scm.repository.tree"],
+				lookedFor: "a swallowed failure in the added operators",
+				boundary: "the selected lines only",
+			},
+		},
+	};
+	assert.match(
+		unreadCheckoutClaim(met, hostCoverage(), ASK)?.text ?? "",
+		/name the source that holds them, such as scm\.pull-request\.diff, in place of scm\.repository\.tree/u,
+	);
+	const diff = { ...met.evidence.search, consulted: ["scm.pull-request.diff"] };
+	assert.equal(
+		unreadCheckoutClaim({ ...met, evidence: { search: diff } }, hostCoverage(), ASK),
+		undefined,
+	);
 });

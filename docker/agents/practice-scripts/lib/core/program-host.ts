@@ -277,13 +277,20 @@ export async function runPracticeProgram(
 	// result is code's decision, measured against the reads, whatever coverage it carries.
 	const decided =
 		reviewed !== null && decisions.has(decisionKey(shaped, reviewed)) ? reviewed : null;
+	// A search proves an absence only for the decision that ran it: the review kept unchanged, or else the code.
+	const searchedBy = new Set(
+		(decided?.receipts ?? services.reader.readReceipts).map((receipt) => JSON.stringify(receipt)),
+	);
+	const proof = readReceipts.filter(
+		(receipt) => receipt.status !== "SEARCHED" || searchedBy.has(JSON.stringify(receipt)),
+	);
 	const coverage = hostCoverage(
 		decided,
 		decided === null
 			? unreadSources(citations, services.requiredSources, readReceipts, job.files?.change != null)
 			: [],
 		services.receipts,
-		readReceipts,
+		proof,
 	);
 	if (decided === null && shaped.outcome === "DOES_NOT_APPLY" && !coverage.complete) {
 		return finished("failed", "invalid-candidate", {
@@ -316,7 +323,7 @@ export async function runPracticeProgram(
 			});
 		}
 	}
-	return finished("ok", null, { candidate, readReceipts });
+	return finished("ok", null, { candidate, readReceipts: proof });
 }
 
 interface Cited {

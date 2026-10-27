@@ -3,9 +3,11 @@ package de.tum.cit.aet.hephaestus.agent.handler;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -22,12 +24,18 @@ import de.tum.cit.aet.hephaestus.evidence.AppliesWhenCheck;
 import de.tum.cit.aet.hephaestus.evidence.ClasspathSourceCatalogRegistry;
 import de.tum.cit.aet.hephaestus.evidence.SourceAbsenceReason;
 import de.tum.cit.aet.hephaestus.evidence.SourceCapture;
+import de.tum.cit.aet.hephaestus.evidence.SourceCaptureFacts;
 import de.tum.cit.aet.hephaestus.evidence.SourceCaptureState;
+import de.tum.cit.aet.hephaestus.evidence.SourceCompleteness;
+import de.tum.cit.aet.hephaestus.evidence.SourceContentState;
 import de.tum.cit.aet.hephaestus.evidence.SourceContractVersion;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CandidateRefusal;
 import de.tum.cit.aet.hephaestus.practices.spi.AdmissionReceipt;
+import de.tum.cit.aet.hephaestus.practices.spi.HostCoverage;
 import de.tum.cit.aet.hephaestus.practices.spi.PinnedPractice;
+import de.tum.cit.aet.hephaestus.practices.spi.ReadReceipt;
+import de.tum.cit.aet.hephaestus.practices.spi.ReadReceiptStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultCandidate;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultStore;
@@ -38,9 +46,11 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStopReason;
 import de.tum.cit.aet.hephaestus.practices.spi.WithheldItem;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
+import java.util.function.UnaryOperator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -174,6 +184,284 @@ class ReviewOutputServiceTest extends BaseUnitTest {
                         RuntimeReviewTestData.assignment(5L, null).id(),
                         CandidateRefusal.COVERAGE_INCONSISTENT,
                         "Host coverage differs from the submitted read receipts");
+    }
+
+    private static final String PR50_HEAD = "4154fb8c8ed570d8fb117a89a894ddedca72d818";
+    private static final SourceKind DIFF = new SourceKind("scm.pull-request.diff");
+    private static final SourceKind TREE = new SourceKind("scm.repository.tree");
+
+    /** #50's capture: its diff, and its checkout at the head commit, captured as {@code completeness} says. */
+    private void pr50Capture(SourceCompleteness completeness) {
+        var whole = new SourceCaptureFacts(Instant.EPOCH, null, null, null);
+        var tree = new SourceCaptureFacts(Instant.EPOCH, null, null, PR50_HEAD + ":" + "b".repeat(40));
+        var manifest = new JobFolderIndex(
+                new SourceContractVersion("2.0.0"),
+                "a".repeat(64),
+                "scm.pull_request",
+                Instant.EPOCH,
+                List.of(
+                        new SourceCapture(
+                                DIFF,
+                                new SourceCaptureState.Available(
+                                        SourceContentState.EMPTY, SourceCompleteness.COMPLETE, whole),
+                                EvidenceSnapshotFixtures.citation(DIFF),
+                                List.of()),
+                        new SourceCapture(
+                                TREE,
+                                new SourceCaptureState.Available(
+                                        SourceContentState.EMPTY,
+                                        completeness,
+                                        tree,
+                                        completeness == SourceCompleteness.COMPLETE
+                                                ? List.of()
+                                                : List.of("submodule_excluded")),
+                                EvidenceSnapshotFixtures.citation(TREE),
+                                List.of())),
+                List.of(),
+                List.of(),
+                List.of());
+        var capture = mapper.createObjectNode();
+        capture.set("manifest", mapper.valueToTree(manifest));
+        job.setCapture(capture);
+        var real = new ClasspathSourceCatalogRegistry(mapper, Clock.systemUTC());
+        when(catalogs.requireSource(any())).thenAnswer(invocation -> real.requireSource(invocation.getArgument(0)));
+        when(files.registerReadReceipts(eq(job), any(), any(), eq(catalogs)))
+                .thenAnswer(invocation -> invocation.getArgument(1));
+        when(verifier.verifyCandidate(eq(job), any(), eq(ReviewKind.ITEM), any(), any()))
+                .thenAnswer(invocation -> invocation.getArgument(3));
+    }
+
+    /**
+     * The error-handling result that #50's review recorded (review 2435ae89): a Not met that says the checkout has no
+     * exception handler, with {@code receipts} as its session proved them. {@code edit} changes the stored text.
+     */
+    private AdmissionRequestDTO pr50ErrorHandling(List<ReadReceipt> receipts, UnaryOperator<ObjectNode> edit) {
+        var candidate = (ObjectNode) mapper.readTree("""
+            {"outcome":"NOT_MET",
+             "summary":"New page parameter is unvalidated; invalid input yields an unhandled exception and a raw 500",
+             "explanation":"A negative page makes from negative, so List.subList throws. No @ControllerAdvice exists in the checkout.",
+             "citations":[],
+             "problems":[{"severity":"MINOR",
+               "summary":"page parameter is unvalidated; negative or overflowing values throw an unhandled IndexOutOfBoundsException",
+               "explanation":"No code catches this and the reviewed checkout contains no @ControllerAdvice or @ExceptionHandler, so invalid input surfaces as a raw 500.",
+               "citations":[{"sourceKind":"scm.pull-request.diff",
+                 "sourcePath":"context/citable/new/src/main/java/com/example/userapi/controller/UserController.java",
+                 "path":"src/main/java/com/example/userapi/controller/UserController.java","side":"NEW",
+                 "startLine":30,"endLine":30,"quote":"        return ResponseEntity.ok(all.subList(from, to));"}],
+               "basis":{"type":"introduced","head":0,"explanation":"The diff adds the unvalidated page parameter."},
+               "nextStep":"Validate page before slicing."}],
+             "evidence":{"search":{"consulted":["scm.pull-request.diff","scm.repository.tree"],
+               "lookedFor":"an error handler for the new page parameter",
+               "boundary":"the changed file plus a repo-wide grep of all 8 Java sources"}}}
+            """);
+        candidate = edit.apply(candidate);
+        candidate.set("coverage", mapper.valueToTree(new HostCoverage(true, null, 3, 0, 0, receipts)));
+        return new AdmissionRequestDTO(
+                3,
+                job.getReviewId(),
+                job.getId(),
+                0,
+                List.of(new SubmittedResultDTO("clear-names", "2", "docs:one", candidate, receipts)),
+                List.of());
+    }
+
+    private static ReadReceipt searched(String version) {
+        return new ReadReceipt(
+                TREE,
+                "repos/reviewed/.git/HEAD",
+                ".",
+                version,
+                ReadReceiptStatus.SEARCHED,
+                null,
+                null,
+                null,
+                "ControllerAdvice|ExceptionHandler");
+    }
+
+    /** The diff alone named as searched: the claim now rests on its words. */
+    private ObjectNode diffOnly(ObjectNode candidate) {
+        ((ObjectNode) candidate.path("evidence").path("search"))
+                .set("consulted", mapper.valueToTree(List.of(DIFF.value())));
+        return candidate;
+    }
+
+    /** The stored #50 texts, each replaced by {@code text}. */
+    private UnaryOperator<ObjectNode> worded(String text) {
+        return candidate -> {
+            candidate.put("summary", "The page parameter is not validated");
+            candidate.put("explanation", text);
+            var problem = (ObjectNode) candidate.path("problems").get(0);
+            problem.put("summary", "Negative page reaches subList");
+            problem.put("explanation", "A negative page makes from negative, so List.subList throws.");
+            return diffOnly(candidate);
+        };
+    }
+
+    private void assertWithheld(CandidateRefusal refusal, String message) {
+        verify(membership)
+                .withhold(1, RuntimeReviewTestData.assignment(5L, null).id(), refusal, message);
+    }
+
+    private static final String NAMED = "The result names scm.repository.tree as searched";
+    private static final String WORDED = "The result says the repository lacks something beyond its citations";
+    private static final String UNSEARCHED = ", but its receipts hold no search of the whole checkout to the end";
+
+    @Test
+    void shouldWithholdAClaimAboutTheCheckoutWhenItsSessionNeitherReadNorSearchedIt() {
+        pr50Capture(SourceCompleteness.COMPLETE);
+        when(results.admit(1, job.getReviewId(), job.getId(), 0, List.of()))
+                .thenReturn(new AdmissionReceipt(List.of(), List.of()));
+
+        service.prepare(job, pr50ErrorHandling(List.of(), UnaryOperator.identity()))
+                .record(job);
+
+        assertWithheld(CandidateRefusal.CONSULTED_SOURCE_UNREAD, NAMED + UNSEARCHED);
+    }
+
+    @Test
+    void shouldWithholdAClaimAboutTheCheckoutWhenItsSessionReadOnlyTheChangedFile() {
+        pr50Capture(SourceCompleteness.COMPLETE);
+        // The stored #50 result read UserController to its end; that is a complete source of one file, not of the tree.
+        var oneFile = List.of(new ReadReceipt(
+                TREE,
+                "repos/reviewed/.git/HEAD",
+                "src/main/java/com/example/userapi/controller/UserController.java",
+                PR50_HEAD,
+                ReadReceiptStatus.COMPLETE,
+                "f77392a044225e8fdda78f2e6da1b952472a1e70f854696c413a88c8ec8aeb67",
+                1,
+                41,
+                null));
+        when(results.admit(1, job.getReviewId(), job.getId(), 0, List.of()))
+                .thenReturn(new AdmissionReceipt(List.of(), List.of()));
+
+        service.prepare(job, pr50ErrorHandling(oneFile, UnaryOperator.identity()))
+                .record(job);
+
+        assertWithheld(CandidateRefusal.CONSULTED_SOURCE_UNREAD, NAMED + UNSEARCHED);
+    }
+
+    @Test
+    void shouldAdmitAClaimAboutTheCheckoutWhenItsSessionSearchedTheWholeCompleteCheckoutToTheEnd() {
+        pr50Capture(SourceCompleteness.COMPLETE);
+
+        service.prepare(job, pr50ErrorHandling(List.of(searched(PR50_HEAD)), UnaryOperator.identity()));
+
+        verify(membership, never()).withhold(anyLong(), any(), any(), any());
+    }
+
+    @Test
+    void shouldWithholdAClaimAboutTheCheckoutWhenTheCaptureLeftFilesOutOfIt() {
+        pr50Capture(SourceCompleteness.PARTIAL);
+        when(results.admit(1, job.getReviewId(), job.getId(), 0, List.of()))
+                .thenReturn(new AdmissionReceipt(List.of(), List.of()));
+
+        service.prepare(job, pr50ErrorHandling(List.of(searched(PR50_HEAD)), UnaryOperator.identity()))
+                .record(job);
+
+        assertWithheld(
+                CandidateRefusal.SOURCE_UNAVAILABLE,
+                NAMED + ", but the capture does not hold the whole checkout, so no search can show that");
+    }
+
+    @Test
+    void shouldWithholdAClaimAboutTheCheckoutWhenTheSearchRanOverAnotherCommit() {
+        pr50Capture(SourceCompleteness.COMPLETE);
+        when(results.admit(1, job.getReviewId(), job.getId(), 0, List.of()))
+                .thenReturn(new AdmissionReceipt(List.of(), List.of()));
+
+        service.prepare(job, pr50ErrorHandling(List.of(searched("c".repeat(40))), UnaryOperator.identity()))
+                .record(job);
+
+        assertWithheld(CandidateRefusal.CONSULTED_SOURCE_UNREAD, NAMED + UNSEARCHED);
+    }
+
+    @Test
+    void shouldWithholdWordsThatSayTheRepositoryLacksSomethingWhenTheResultLeavesTheTreeUnnamed() {
+        pr50Capture(SourceCompleteness.COMPLETE);
+        when(results.admit(1, job.getReviewId(), job.getId(), 0, List.of()))
+                .thenReturn(new AdmissionReceipt(List.of(), List.of()));
+
+        service.prepare(
+                        job,
+                        pr50ErrorHandling(List.of(), worded("The application defines no global exception handler.")))
+                .record(job);
+
+        assertWithheld(CandidateRefusal.CONSULTED_SOURCE_UNREAD, WORDED + UNSEARCHED);
+    }
+
+    @Test
+    void shouldWithholdWordsThatSayTheRepositoryLacksSomethingWhenOnlyAProblemBasisSaysIt() {
+        pr50Capture(SourceCompleteness.COMPLETE);
+        when(results.admit(1, job.getReviewId(), job.getId(), 0, List.of()))
+                .thenReturn(new AdmissionReceipt(List.of(), List.of()));
+
+        service.prepare(job, pr50ErrorHandling(List.of(), candidate -> {
+                    var bounded = worded("The pinned file has no @Min, clamp or other check on the path.")
+                            .apply(candidate);
+                    ((ObjectNode) bounded.path("problems").get(0).path("basis"))
+                            .put(
+                                    "explanation",
+                                    "The diff adds the parameter, and no error mapping exists in the checkout.");
+                    return bounded;
+                }))
+                .record(job);
+
+        assertWithheld(CandidateRefusal.CONSULTED_SOURCE_UNREAD, WORDED + UNSEARCHED);
+    }
+
+    @Test
+    void shouldWithholdWordsThatSayTheRepositoryLacksSomethingWhenOnlyTheSearchBoundarySaysIt() {
+        pr50Capture(SourceCompleteness.COMPLETE);
+        when(results.admit(1, job.getReviewId(), job.getId(), 0, List.of()))
+                .thenReturn(new AdmissionReceipt(List.of(), List.of()));
+
+        service.prepare(job, pr50ErrorHandling(List.of(), candidate -> {
+                    var bounded = worded("The pinned file has no @Min, clamp or other check on the path.")
+                            .apply(candidate);
+                    ((ObjectNode) bounded.path("evidence").path("search"))
+                            .put("boundary", "the changed file; no exception handler exists in the repository");
+                    return bounded;
+                }))
+                .record(job);
+
+        assertWithheld(CandidateRefusal.CONSULTED_SOURCE_UNREAD, WORDED + UNSEARCHED);
+    }
+
+    @Test
+    void shouldAdmitWordsAboutTheCitedLinesWithoutASearch() {
+        pr50Capture(SourceCompleteness.COMPLETE);
+
+        service.prepare(
+                job,
+                pr50ErrorHandling(List.of(), worded("The pinned file has no @Min, clamp or other check on the path.")));
+        verify(membership, never()).withhold(anyLong(), any(), any(), any());
+    }
+
+    @Test
+    void shouldLeaveASourceTheCatalogDoesNotKnowToTheVerifierSoItWithholdsOnlyThatPractice() {
+        pr50Capture(SourceCompleteness.COMPLETE);
+        var unknown = new SourceKind("scm.repository.files");
+        doThrow(new CandidateEvidenceVerifier.Unverified(
+                        CandidateRefusal.SOURCE_UNAVAILABLE, "A warrant names a source that was not captured", null))
+                .when(verifier)
+                .verifyCandidate(eq(job), any(), eq(ReviewKind.ITEM), any(), any());
+        when(results.admit(1, job.getReviewId(), job.getId(), 0, List.of()))
+                .thenReturn(new AdmissionReceipt(List.of(), List.of()));
+
+        service.prepare(job, pr50ErrorHandling(List.of(), candidate -> {
+                    ((ObjectNode) candidate.path("evidence").path("search"))
+                            .set("consulted", mapper.valueToTree(List.of(unknown.value())));
+                    return candidate;
+                }))
+                .record(job);
+
+        verify(membership)
+                .withhold(
+                        1,
+                        RuntimeReviewTestData.assignment(5L, null).id(),
+                        CandidateRefusal.SOURCE_UNAVAILABLE,
+                        "A warrant names a source that was not captured");
     }
 
     @Test

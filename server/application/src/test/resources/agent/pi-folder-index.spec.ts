@@ -28,6 +28,24 @@ await test("the full folder remains citable when a primary readiness source is a
 	assert.equal(result.availableSourceKinds.has("outline.documents"), true);
 });
 
+const available = (kind: string, completeness: string) => ({
+	kind,
+	citation: { side: "OPTIONAL", commit: "OPTIONAL" },
+	state: { availability: "AVAILABLE", completeness },
+});
+
+await test("only a source captured whole counts as complete", () => {
+	const result = folderCitationIndex({
+		sources: [
+			available("scm.repository.tree", "PARTIAL"),
+			available("scm.pull-request.diff", "COMPLETE"),
+		],
+		files: [],
+	});
+	assert.equal(result.availableSourceKinds.has("scm.repository.tree"), true);
+	assert.deepEqual([...result.completeSourceKinds], ["scm.pull-request.diff"]);
+});
+
 await test("missing, duplicate and unsafe folder proofs fail closed", () => {
 	assert.throws(() => folderCitationIndex({ sources: [] }), /files/u);
 	const sourceFile = { kind: "outline.documents", file: { path: "context/docs/c/d.md" } };

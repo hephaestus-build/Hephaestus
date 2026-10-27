@@ -121,7 +121,8 @@ class ScanReportComparisonTest extends BaseUnitTest {
                         ReadReceiptStatus.COMPLETE,
                         "a".repeat(64),
                         1,
-                        1)));
+                        1,
+                        null)));
         var old = candidate("old", ResultOutcome.NOT_MET, host);
         var current = candidate("new", ResultOutcome.MET, host);
         assertThat(ProblemComparison.provesAbsence(old, current, true, true, false, true))

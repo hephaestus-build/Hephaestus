@@ -10,4 +10,7 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo;
     @JsonSubTypes.Type(value = DutyBasis.class, name = "duty"),
     @JsonSubTypes.Type(value = StateBasis.class, name = "state")
 })
-public sealed interface ClaimBasis permits IntroducedBasis, WorsenedBasis, DutyBasis, StateBasis {}
+public sealed interface ClaimBasis permits IntroducedBasis, WorsenedBasis, DutyBasis, StateBasis {
+    /** Why the problem belongs to this work, in the reviewer's words. */
+    String explanation();
+}
