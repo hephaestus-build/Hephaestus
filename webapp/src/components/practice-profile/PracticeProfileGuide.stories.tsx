@@ -49,13 +49,20 @@ export const Default: Story = {
 			within(standings).getByText("No review has looked at this practice in your work yet."),
 		).toBeVisible();
 		await expect(within(standings).getAllByText("No standing yet")).toHaveLength(2);
+		// Five standings, and both marks for a standing read from earlier reviews.
+		await expect(within(standings).getAllByRole("term")).toHaveLength(7);
 		await expect(
-			within(canvas.getByRole("group", { name: "Trends" })).getByText(
+			within(standings).getAllByText("Based on earlier reviews, the criteria might have changed"),
+		).toHaveLength(2);
+		await expect(
+			within(standings).getByText(/The original criterion version is unavailable\./u),
+		).toBeVisible();
+		const trends = canvas.getByRole("group", { name: "Trends" });
+		await expect(within(trends).getAllByRole("term")).toHaveLength(4);
+		await expect(
+			within(trends).getByText(
 				"Recent and earlier work were compared, and the difference is too small to call.",
 			),
-		).toBeVisible();
-		await expect(
-			canvas.getByText("Based on earlier reviews, the criteria might have changed"),
 		).toBeVisible();
 	},
 };

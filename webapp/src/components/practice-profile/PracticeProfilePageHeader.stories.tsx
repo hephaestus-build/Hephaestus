@@ -184,13 +184,15 @@ export const Loading: Story = {
 	},
 };
 
-/** "How to read this page" opens on a first visit, and the reader can close it. */
-export const GuideOpensFirstAndCloses: Story = {
+/** "How to read this page" opens on a first visit, and the reader can close it and open it again. */
+export const GuideClosesAndReopens: Story = {
 	play: async ({ canvas, userEvent }) => {
 		const toggle = canvas.getByRole("button", { name: "How to read this page" });
 		await expect(toggle).toHaveAttribute("aria-expanded", "true");
 		await userEvent.click(toggle);
 		await expect(toggle).toHaveAttribute("aria-expanded", "false");
+		await userEvent.click(toggle);
+		await expect(toggle).toHaveAttribute("aria-expanded", "true");
 	},
 };
 

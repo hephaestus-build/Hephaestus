@@ -26,19 +26,20 @@ export interface PracticeProfileGuideProps {
 const POINTS = [
 	"A practice is one way of working that your workspace cares about. Related practices form a practice group.",
 	"Your standing on a practice comes from your recent reviewed work. It is not a grade. Gray means there is nothing to judge yet.",
-	"A feedback card appears when reviews find the same problem in at least two pieces of your work. It resolves when your next reviewed work comes back clean several times in a row, and the card counts how many more it needs.",
+	"A feedback card appears when reviews find the same problem in at least two pieces of your work. It resolves when several pieces of your work in a row, reviewed after it, come back clean, and the card counts how many more it needs.",
 	"Feedback about one piece of work, such as a pull request, stays on that work. If something is unclear, ask Heph.",
 	GROUP_COLORS_NOTE,
 ] as const;
 
 /**
  * Every standing as the registry words it for one practice, the two kinds of No standing yet each
- * with their own icon and reason, then the mark for a standing read from earlier reviews. The two
- * earlier-review marks share their words, so one entry stands for both.
+ * with their own icon and reason, then both marks for a standing read from earlier reviews. Those
+ * two share a label but not an icon or a sentence, so each is listed for the reader who sees it.
  */
 const STANDING_ENTRIES: StatusDef[] = [
 	...statusValues(PRACTICE_STANDING_DEFS).map((standing) => PRACTICE_STANDING_DEFS[standing]),
 	STANDING_BASIS_DEFS.EARLIER_REVIEWS,
+	STANDING_BASIS_DEFS.EARLIER_REVIEWS_CRITERIA_UNKNOWN,
 ];
 
 const TREND_ENTRIES: StatusDef[] = statusValues(PRACTICE_TREND_DEFS).map(
