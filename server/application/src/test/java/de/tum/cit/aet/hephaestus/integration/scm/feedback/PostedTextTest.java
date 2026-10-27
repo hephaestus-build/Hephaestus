@@ -33,6 +33,9 @@ class PostedTextTest extends BaseUnitTest {
             @Nullable Rendered gitlab) {
         /** The bytes a writer sends: the posted text, then the hidden markers it appends. */
         String wire() {
+            // The writers put a line end before their markers.
+            if (marker != null && !marker.startsWith("\n"))
+                throw new IllegalArgumentException("A marker starts a line.");
             return PostedText.of(body) + (marker == null ? "" : marker);
         }
 
@@ -71,7 +74,8 @@ class PostedTextTest extends BaseUnitTest {
                 .doesNotContain("<!--")
                 .doesNotContain("<?")
                 .doesNotContain("<![CDATA[")
-                .doesNotContain("<!DOCTYPE");
+                .doesNotContain("<!DOCTYPE")
+                .doesNotContainPattern("(?i)href=\"\\s*(?:javascript|data|vbscript):");
     }
 
     static boolean live(String html) {

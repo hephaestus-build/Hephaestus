@@ -61,26 +61,26 @@
 }, {
   "body" : "`x`@alice",
   "marker" : null,
-  "posted" : "`x`<code>@alice</code>",
+  "posted" : "<code>x</code><code>@alice</code>",
   "github" : {
     "raw" : "<p><code class=\"notranslate\">x</code><a class=\"user-mention notranslate\" data-hovercard-type=\"user\" data-hovercard-url=\"/users/alice/hovercard\" data-octo-click=\"hovercard-link-click\" data-octo-dimensions=\"link_type:self\" href=\"https://github.com/alice\">@alice</a></p>",
     "posted" : "<p><code class=\"notranslate\">x</code><code class=\"notranslate\">@alice</code></p>"
   },
   "gitlab" : {
     "raw" : "<p data-sourcepos=\"1:1-1:9\" dir=\"auto\"><code data-sourcepos=\"1:1-1:3\">x</code><a href=\"http://127.0.0.1:8929/alice\" title=\"alice\" class=\"gfm gfm-project_member js-user-link\" data-user=\"2\" data-original=\"@alice\" data-container=\"body\" data-placement=\"top\" data-reference-type=\"user\">@alice</a></p>",
-    "posted" : "<p data-sourcepos=\"1:1-1:22\" dir=\"auto\"><code data-sourcepos=\"1:1-1:3\">x</code><code>@alice</code></p>"
+    "posted" : "<p data-sourcepos=\"1:1-1:33\" dir=\"auto\"><code>x</code><code>@alice</code></p>"
   }
 }, {
   "body" : "[@alice](https://example.test/alice)",
   "marker" : null,
-  "posted" : "[<code>@alice</code>](https://example.test/alice)",
+  "posted" : "[<code>@alice</code>](<https://example.test/alice>)",
   "github" : {
     "raw" : "<p><a href=\"https://example.test/alice\" rel=\"nofollow\">@alice</a></p>",
     "posted" : "<p><a href=\"https://example.test/alice\" rel=\"nofollow\"><code class=\"notranslate\">@alice</code></a></p>"
   },
   "gitlab" : {
     "raw" : "<p data-sourcepos=\"1:1-1:36\" dir=\"auto\"><a data-sourcepos=\"1:1-1:36\" href=\"https://example.test/alice\" rel=\"nofollow noreferrer noopener\" target=\"_blank\">@alice</a></p>",
-    "posted" : "<p data-sourcepos=\"1:1-1:49\" dir=\"auto\"><a data-sourcepos=\"1:1-1:49\" href=\"https://example.test/alice\" rel=\"nofollow noreferrer noopener\" target=\"_blank\"><code>@alice</code></a></p>"
+    "posted" : "<p data-sourcepos=\"1:1-1:51\" dir=\"auto\"><a data-sourcepos=\"1:1-1:51\" href=\"https://example.test/alice\" rel=\"nofollow noreferrer noopener\" target=\"_blank\"><code>@alice</code></a></p>"
   }
 }, {
   "body" : "\\@alice",
@@ -133,14 +133,14 @@
 }, {
   "body" : "a ` b ` c ` @alice",
   "marker" : null,
-  "posted" : "a ` b ` c ` <code>@alice</code>",
+  "posted" : "a <code>b</code> c ` <code>@alice</code>",
   "github" : {
     "raw" : "<p>a <code class=\"notranslate\">b</code> c ` <a class=\"user-mention notranslate\" data-hovercard-type=\"user\" data-hovercard-url=\"/users/alice/hovercard\" data-octo-click=\"hovercard-link-click\" data-octo-dimensions=\"link_type:self\" href=\"https://github.com/alice\">@alice</a></p>",
     "posted" : "<p>a <code class=\"notranslate\">b</code> c ` <code class=\"notranslate\">@alice</code></p>"
   },
   "gitlab" : {
     "raw" : "<p data-sourcepos=\"1:1-1:18\" dir=\"auto\">a <code data-sourcepos=\"1:3-1:7\">b</code> c ` <a href=\"http://127.0.0.1:8929/alice\" title=\"alice\" class=\"gfm gfm-project_member js-user-link\" data-user=\"2\" data-original=\"@alice\" data-container=\"body\" data-placement=\"top\" data-reference-type=\"user\">@alice</a></p>",
-    "posted" : "<p data-sourcepos=\"1:1-1:31\" dir=\"auto\">a <code data-sourcepos=\"1:3-1:7\">b</code> c ` <code>@alice</code></p>"
+    "posted" : "<p data-sourcepos=\"1:1-1:40\" dir=\"auto\">a <code>b</code> c ` <code>@alice</code></p>"
   }
 }, {
   "body" : "// TODO(@alice): handle ` case",
@@ -229,26 +229,26 @@
 }, {
   "body" : "`x @alice` and @bob",
   "marker" : null,
-  "posted" : "`x @alice` and <code>@bob</code>",
+  "posted" : "<code>x <code>@alice</code></code> and <code>@bob</code>",
   "github" : {
     "raw" : "<p><code class=\"notranslate\">x @alice</code> and <a class=\"user-mention notranslate\" data-hovercard-type=\"user\" data-hovercard-url=\"/users/bob/hovercard\" data-octo-click=\"hovercard-link-click\" data-octo-dimensions=\"link_type:self\" href=\"https://github.com/bob\">@bob</a></p>",
-    "posted" : "<p><code class=\"notranslate\">x @alice</code> and <code class=\"notranslate\">@bob</code></p>"
+    "posted" : "<p><code class=\"notranslate\">x <code class=\"notranslate\">@alice</code></code> and <code class=\"notranslate\">@bob</code></p>"
   },
   "gitlab" : {
     "raw" : "<p data-sourcepos=\"1:1-1:19\" dir=\"auto\"><code data-sourcepos=\"1:1-1:10\">x @alice</code> and <a href=\"http://127.0.0.1:8929/bob\" title=\"bob\" class=\"gfm gfm-project_member js-user-link\" data-user=\"3\" data-original=\"@bob\" data-container=\"body\" data-placement=\"top\" data-reference-type=\"user\">@bob</a></p>",
-    "posted" : "<p data-sourcepos=\"1:1-1:32\" dir=\"auto\"><code data-sourcepos=\"1:1-1:10\">x @alice</code> and <code>@bob</code></p>"
+    "posted" : "<p data-sourcepos=\"1:1-1:56\" dir=\"auto\"><code>x <code>@alice</code></code> and <code>@bob</code></p>"
   }
 }, {
   "body" : "**`a`@victim.md:3`**",
   "marker" : null,
-  "posted" : "**`a`<code>@victim.md</code>:3`**",
+  "posted" : "**<code>a</code><code>@victim.md</code>:3`**",
   "github" : {
     "raw" : "<p><strong><code class=\"notranslate\">a</code>@victim.md:3`</strong></p>",
     "posted" : "<p><strong><code class=\"notranslate\">a</code><code class=\"notranslate\">@victim.md</code>:3`</strong></p>"
   },
   "gitlab" : {
     "raw" : "<p data-sourcepos=\"1:1-1:20\" dir=\"auto\"><strong data-sourcepos=\"1:1-1:20\"><code data-sourcepos=\"1:3-1:5\">a</code>@victim.md:3`</strong></p>",
-    "posted" : "<p data-sourcepos=\"1:1-1:33\" dir=\"auto\"><strong data-sourcepos=\"1:1-1:33\"><code data-sourcepos=\"1:3-1:5\">a</code><code>@victim.md</code>:3`</strong></p>"
+    "posted" : "<p data-sourcepos=\"1:1-1:44\" dir=\"auto\"><strong data-sourcepos=\"1:1-1:44\"><code>a</code><code>@victim.md</code>:3`</strong></p>"
   }
 }, {
   "body" : "<details><summary>Ask @alice</summary>",
@@ -277,14 +277,14 @@
 }, {
   "body" : "Run `@alice` in code.",
   "marker" : null,
-  "posted" : "Run `@alice` in code.",
+  "posted" : "Run <code><code>@alice</code></code> in code.",
   "github" : {
     "raw" : "<p>Run <code class=\"notranslate\">@alice</code> in code.</p>",
-    "posted" : "<p>Run <code class=\"notranslate\">@alice</code> in code.</p>"
+    "posted" : "<p>Run <code class=\"notranslate\"><code class=\"notranslate\">@alice</code></code> in code.</p>"
   },
   "gitlab" : {
     "raw" : "<p data-sourcepos=\"1:1-1:21\" dir=\"auto\">Run <code data-sourcepos=\"1:5-1:12\">@alice</code> in code.</p>",
-    "posted" : "<p data-sourcepos=\"1:1-1:21\" dir=\"auto\">Run <code data-sourcepos=\"1:5-1:12\">@alice</code> in code.</p>"
+    "posted" : "<p data-sourcepos=\"1:1-1:45\" dir=\"auto\">Run <code><code>@alice</code></code> in code.</p>"
   }
 }, {
   "body" : "See https://medium.example/@alice/post for more.",
@@ -301,14 +301,14 @@
 }, {
   "body" : "<https://example.test/@alice>",
   "marker" : null,
-  "posted" : "<https://example.test/@alice>",
+  "posted" : "<https://example.test/%40alice>",
   "github" : {
     "raw" : "<p><a href=\"https://example.test/@alice\" rel=\"nofollow\">https://example.test/@alice</a></p>",
-    "posted" : "<p><a href=\"https://example.test/@alice\" rel=\"nofollow\">https://example.test/@alice</a></p>"
+    "posted" : "<p><a href=\"https://example.test/%40alice\" rel=\"nofollow\">https://example.test/%40alice</a></p>"
   },
   "gitlab" : {
     "raw" : "<p data-sourcepos=\"1:1-1:29\" dir=\"auto\"><a data-sourcepos=\"1:1-1:29\" href=\"https://example.test/@alice\" rel=\"nofollow noreferrer noopener\" target=\"_blank\">https://example.test/@alice</a></p>",
-    "posted" : "<p data-sourcepos=\"1:1-1:29\" dir=\"auto\"><a data-sourcepos=\"1:1-1:29\" href=\"https://example.test/@alice\" rel=\"nofollow noreferrer noopener\" target=\"_blank\">https://example.test/@alice</a></p>"
+    "posted" : "<p data-sourcepos=\"1:1-1:31\" dir=\"auto\"><a data-sourcepos=\"1:1-1:31\" href=\"https://example.test/%40alice\" rel=\"nofollow noreferrer noopener\" target=\"_blank\">https://example.test/%40alice</a></p>"
   }
 }, {
   "body" : "<details><summary><code>@alice</code></summary>",
@@ -565,38 +565,38 @@
 }, {
   "body" : "See ![pixel](https://evil.example/t.png) here.",
   "marker" : null,
-  "posted" : "See \\![pixel](https://evil.example/t.png) here.",
+  "posted" : "See \\![pixel](<https://evil.example/t.png>) here.",
   "github" : {
     "raw" : "<p>See <a target=\"_blank\" rel=\"noopener noreferrer nofollow\" href=\"https://camo.githubusercontent.com/5c44c1db2977142a978e4bf93efd74a1323d4fa08c2178f21c6a1943dff3a4c3/68747470733a2f2f6576696c2e6578616d706c652f742e706e67\"><img src=\"https://camo.githubusercontent.com/5c44c1db2977142a978e4bf93efd74a1323d4fa08c2178f21c6a1943dff3a4c3/68747470733a2f2f6576696c2e6578616d706c652f742e706e67\" alt=\"pixel\" data-canonical-src=\"https://evil.example/t.png\" style=\"max-width: 100%;\"></a> here.</p>",
     "posted" : "<p>See !<a href=\"https://evil.example/t.png\" rel=\"nofollow\">pixel</a> here.</p>"
   },
   "gitlab" : {
     "raw" : "<p data-sourcepos=\"1:1-1:46\" dir=\"auto\">See <a class=\"no-attachment-icon\" href=\"https://evil.example/t.png\" target=\"_blank\" rel=\"nofollow noreferrer noopener\"><img data-sourcepos=\"1:5-1:40\" src=\"data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==\" alt=\"pixel\" decoding=\"async\" class=\"lazy\" data-src=\"https://evil.example/t.png\"></a> here.</p>",
-    "posted" : "<p data-sourcepos=\"1:1-1:47\" dir=\"auto\">See <span data-escaped-char=\"\" data-sourcepos=\"1:5-1:6\">!</span><a data-sourcepos=\"1:7-1:41\" href=\"https://evil.example/t.png\" rel=\"nofollow noreferrer noopener\" target=\"_blank\">pixel</a> here.</p>"
+    "posted" : "<p data-sourcepos=\"1:1-1:49\" dir=\"auto\">See <span data-escaped-char=\"\" data-sourcepos=\"1:5-1:6\">!</span><a data-sourcepos=\"1:7-1:43\" href=\"https://evil.example/t.png\" rel=\"nofollow noreferrer noopener\" target=\"_blank\">pixel</a> here.</p>"
   }
 }, {
   "body" : "See ![x][1] here.\n\n[1]: https://evil.example/t.png",
   "marker" : null,
-  "posted" : "See \\![x][1] here.\n\n[1]: https://evil.example/t.png",
+  "posted" : "See \\![x](<https://evil.example/t.png>) here.\n\n",
   "github" : {
     "raw" : "<p>See <a target=\"_blank\" rel=\"noopener noreferrer nofollow\" href=\"https://camo.githubusercontent.com/5c44c1db2977142a978e4bf93efd74a1323d4fa08c2178f21c6a1943dff3a4c3/68747470733a2f2f6576696c2e6578616d706c652f742e706e67\"><img src=\"https://camo.githubusercontent.com/5c44c1db2977142a978e4bf93efd74a1323d4fa08c2178f21c6a1943dff3a4c3/68747470733a2f2f6576696c2e6578616d706c652f742e706e67\" alt=\"x\" data-canonical-src=\"https://evil.example/t.png\" style=\"max-width: 100%;\"></a> here.</p>",
     "posted" : "<p>See !<a href=\"https://evil.example/t.png\" rel=\"nofollow\">x</a> here.</p>"
   },
   "gitlab" : {
     "raw" : "<p data-sourcepos=\"1:1-1:17\" dir=\"auto\">See <a class=\"no-attachment-icon\" href=\"https://evil.example/t.png\" target=\"_blank\" rel=\"nofollow noreferrer noopener\"><img data-sourcepos=\"1:5-1:11\" src=\"data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==\" alt=\"x\" decoding=\"async\" class=\"lazy\" data-src=\"https://evil.example/t.png\"></a> here.</p>",
-    "posted" : "<p data-sourcepos=\"1:1-1:18\" dir=\"auto\">See <span data-escaped-char=\"\" data-sourcepos=\"1:5-1:6\">!</span><a data-sourcepos=\"1:7-1:12\" href=\"https://evil.example/t.png\" rel=\"nofollow noreferrer noopener\" target=\"_blank\">x</a> here.</p>"
+    "posted" : "<p data-sourcepos=\"1:1-1:45\" dir=\"auto\">See <span data-escaped-char=\"\" data-sourcepos=\"1:5-1:6\">!</span><a data-sourcepos=\"1:7-1:39\" href=\"https://evil.example/t.png\" rel=\"nofollow noreferrer noopener\" target=\"_blank\">x</a> here.</p>"
   }
 }, {
   "body" : "Open [this](javascript:alert(1)) now.",
   "marker" : null,
-  "posted" : "Open [this](javascript:alert(1)) now.",
+  "posted" : "Open this now.",
   "github" : {
     "raw" : "<p>Open this now.</p>",
     "posted" : "<p>Open this now.</p>"
   },
   "gitlab" : {
     "raw" : "<p data-sourcepos=\"1:1-1:37\" dir=\"auto\">Open <a data-sourcepos=\"1:6-1:32\">this</a> now.</p>",
-    "posted" : "<p data-sourcepos=\"1:1-1:37\" dir=\"auto\">Open <a data-sourcepos=\"1:6-1:32\">this</a> now.</p>"
+    "posted" : "<p data-sourcepos=\"1:1-1:14\" dir=\"auto\">Open this now.</p>"
   }
 }, {
   "body" : "Open <javascript:alert(1)> now.",
@@ -685,14 +685,14 @@
 }, {
   "body" : "Use `List<String>` and `a && b` here.",
   "marker" : null,
-  "posted" : "Use `List<String>` and `a && b` here.",
+  "posted" : "Use <code>List&lt;String&gt;</code> and <code>a &amp;&amp; b</code> here.",
   "github" : {
     "raw" : "<p>Use <code class=\"notranslate\">List&lt;String&gt;</code> and <code class=\"notranslate\">a &amp;&amp; b</code> here.</p>",
     "posted" : "<p>Use <code class=\"notranslate\">List&lt;String&gt;</code> and <code class=\"notranslate\">a &amp;&amp; b</code> here.</p>"
   },
   "gitlab" : {
     "raw" : "<p data-sourcepos=\"1:1-1:37\" dir=\"auto\">Use <code data-sourcepos=\"1:5-1:18\">List&lt;String&gt;</code> and <code data-sourcepos=\"1:24-1:31\">a &amp;&amp; b</code> here.</p>",
-    "posted" : "<p data-sourcepos=\"1:1-1:37\" dir=\"auto\">Use <code data-sourcepos=\"1:5-1:18\">List&lt;String&gt;</code> and <code data-sourcepos=\"1:24-1:31\">a &amp;&amp; b</code> here.</p>"
+    "posted" : "<p data-sourcepos=\"1:1-1:73\" dir=\"auto\">Use <code>List&lt;String&gt;</code> and <code>a &amp;&amp; b</code> here.</p>"
   }
 }, {
   "body" : "Tom & Jerry <3",
@@ -813,5 +813,269 @@
   "gitlab" : {
     "raw" : "<p dir=\"auto\">\n<a class=\"no-attachment-icon\" href=\"https://evil.example/p.png\" target=\"_blank\" rel=\"nofollow noreferrer noopener\"><img src=\"data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==\" decoding=\"async\" class=\"lazy\" data-src=\"https://evil.example/p.png\"></a>\n<!-- hephaestus-diff-note-ck=k --></p>",
     "posted" : "<p data-sourcepos=\"1:1-2:38\" dir=\"auto\">&lt;p&gt;\n&lt;img src=<a data-sourcepos=\"2:13-2:38\" href=\"https://evil.example/p.png\" rel=\"nofollow noreferrer noopener\" target=\"_blank\">https://evil.example/p.png</a></p>\n<!-- hephaestus-feedback-copy:1 -->\n<!-- hephaestus-diff-note-ck=k -->"
+  }
+}, {
+  "body" : "| a | b |\n|---|---|\n| `x | @alice` | y |",
+  "marker" : null,
+  "posted" : "| a | b |\n|---|---|\n| <code>x \\| <code>@alice</code></code> | y |",
+  "github" : {
+    "raw" : "<markdown-accessiblity-table><table role=\"table\">\n<thead>\n<tr>\n<th>a</th>\n<th>b</th>\n</tr>\n</thead>\n<tbody>\n<tr>\n<td>`x</td>\n<td>@alice`</td>\n</tr>\n</tbody>\n</table></markdown-accessiblity-table>",
+    "posted" : "<markdown-accessiblity-table><table role=\"table\">\n<thead>\n<tr>\n<th>a</th>\n<th>b</th>\n</tr>\n</thead>\n<tbody>\n<tr>\n<td><code class=\"notranslate\">x | <code class=\"notranslate\">@alice</code></code></td>\n<td>y</td>\n</tr>\n</tbody>\n</table></markdown-accessiblity-table>"
+  },
+  "gitlab" : {
+    "raw" : "<table data-sourcepos=\"1:1-3:20\" dir=\"auto\">\n<thead>\n<tr data-sourcepos=\"1:1-1:9\">\n<th data-sourcepos=\"1:2-1:4\">a</th>\n<th data-sourcepos=\"1:6-1:8\">b</th>\n</tr>\n</thead>\n<tbody>\n<tr data-sourcepos=\"3:1-3:20\">\n<td data-sourcepos=\"3:2-3:5\">`x</td>\n<td data-sourcepos=\"3:7-3:15\"><a href=\"http://127.0.0.1:8929/alice\" title=\"alice\" class=\"gfm gfm-project_member js-user-link\" data-user=\"2\" data-original=\"@alice\" data-container=\"body\" data-placement=\"top\" data-reference-type=\"user\">@alice</a>`</td>\n</tr>\n</tbody>\n</table>",
+    "posted" : "<table data-sourcepos=\"1:1-3:45\" dir=\"auto\">\n<thead>\n<tr data-sourcepos=\"1:1-1:9\">\n<th data-sourcepos=\"1:2-1:4\">a</th>\n<th data-sourcepos=\"1:6-1:8\">b</th>\n</tr>\n</thead>\n<tbody>\n<tr data-sourcepos=\"3:1-3:45\">\n<td data-sourcepos=\"3:2-3:40\"><code>x | <code>@alice</code></code></td>\n<td data-sourcepos=\"3:42-3:44\">y</td>\n</tr>\n</tbody>\n</table>"
+  }
+}, {
+  "body" : "| a | b |\n|---|---|\n| [t](https://example.test/x \"x | @alice\") | y |",
+  "marker" : null,
+  "posted" : "| a | b |\n|---|---|\n| [t](<https://example.test/x>) | y |",
+  "github" : {
+    "raw" : "<markdown-accessiblity-table><table role=\"table\">\n<thead>\n<tr>\n<th>a</th>\n<th>b</th>\n</tr>\n</thead>\n<tbody>\n<tr>\n<td>[t](<a href=\"https://example.test/x\" rel=\"nofollow\">https://example.test/x</a> \"x</td>\n<td><a class=\"user-mention notranslate\" data-hovercard-type=\"user\" data-hovercard-url=\"/users/alice/hovercard\" data-octo-click=\"hovercard-link-click\" data-octo-dimensions=\"link_type:self\" href=\"https://github.com/alice\">@alice</a>\")</td>\n</tr>\n</tbody>\n</table></markdown-accessiblity-table>",
+    "posted" : "<markdown-accessiblity-table><table role=\"table\">\n<thead>\n<tr>\n<th>a</th>\n<th>b</th>\n</tr>\n</thead>\n<tbody>\n<tr>\n<td><a href=\"https://example.test/x\" rel=\"nofollow\">t</a></td>\n<td>y</td>\n</tr>\n</tbody>\n</table></markdown-accessiblity-table>"
+  },
+  "gitlab" : {
+    "raw" : "<table data-sourcepos=\"1:1-3:48\" dir=\"auto\">\n<thead>\n<tr data-sourcepos=\"1:1-1:9\">\n<th data-sourcepos=\"1:2-1:4\">a</th>\n<th data-sourcepos=\"1:6-1:8\">b</th>\n</tr>\n</thead>\n<tbody>\n<tr data-sourcepos=\"3:1-3:48\">\n<td data-sourcepos=\"3:2-3:32\">[t](<a data-sourcepos=\"3:7-3:28\" href=\"https://example.test/x\" rel=\"nofollow noreferrer noopener\" target=\"_blank\">https://example.test/x</a> \"x</td>\n<td data-sourcepos=\"3:34-3:43\"><a href=\"http://127.0.0.1:8929/alice\" title=\"alice\" class=\"gfm gfm-project_member js-user-link\" data-user=\"2\" data-original=\"@alice\" data-container=\"body\" data-placement=\"top\" data-reference-type=\"user\">@alice</a>\")</td>\n</tr>\n</tbody>\n</table>",
+    "posted" : "<table data-sourcepos=\"1:1-3:37\" dir=\"auto\">\n<thead>\n<tr data-sourcepos=\"1:1-1:9\">\n<th data-sourcepos=\"1:2-1:4\">a</th>\n<th data-sourcepos=\"1:6-1:8\">b</th>\n</tr>\n</thead>\n<tbody>\n<tr data-sourcepos=\"3:1-3:37\">\n<td data-sourcepos=\"3:2-3:32\"><a data-sourcepos=\"3:3-3:31\" href=\"https://example.test/x\" rel=\"nofollow noreferrer noopener\" target=\"_blank\">t</a></td>\n<td data-sourcepos=\"3:34-3:36\">y</td>\n</tr>\n</tbody>\n</table>"
+  }
+}, {
+  "body" : "| a | b |\n|---|---|\n| `<img src=https://evil.example/t.png>` | `|` |",
+  "marker" : null,
+  "posted" : "| a | b |\n|---|---|\n| <code>&lt;img src\\=https\\:\\/\\/evil\\.example\\/t\\.png&gt;</code> | <code>\\|</code> |",
+  "github" : {
+    "raw" : "<markdown-accessiblity-table><table role=\"table\">\n<thead>\n<tr>\n<th>a</th>\n<th>b</th>\n</tr>\n</thead>\n<tbody>\n<tr>\n<td><code class=\"notranslate\">&lt;img src=https://evil.example/t.png&gt;</code></td>\n<td>`</td>\n</tr>\n</tbody>\n</table></markdown-accessiblity-table>",
+    "posted" : "<markdown-accessiblity-table><table role=\"table\">\n<thead>\n<tr>\n<th>a</th>\n<th>b</th>\n</tr>\n</thead>\n<tbody>\n<tr>\n<td><code class=\"notranslate\">&lt;img src=https://evil.example/t.png&gt;</code></td>\n<td><code class=\"notranslate\">|</code></td>\n</tr>\n</tbody>\n</table></markdown-accessiblity-table>"
+  },
+  "gitlab" : {
+    "raw" : "<table data-sourcepos=\"1:1-3:48\" dir=\"auto\">\n<thead>\n<tr data-sourcepos=\"1:1-1:9\">\n<th data-sourcepos=\"1:2-1:4\">a</th>\n<th data-sourcepos=\"1:6-1:8\">b</th>\n</tr>\n</thead>\n<tbody>\n<tr data-sourcepos=\"3:1-3:48\">\n<td data-sourcepos=\"3:2-3:41\"><code data-sourcepos=\"3:3-3:40\">&lt;img src=https://evil.example/t.png&gt;</code></td>\n<td data-sourcepos=\"3:43-3:44\">`</td>\n</tr>\n</tbody>\n</table>",
+    "posted" : "<table data-sourcepos=\"1:1-3:84\" dir=\"auto\">\n<thead>\n<tr data-sourcepos=\"1:1-1:9\">\n<th data-sourcepos=\"1:2-1:4\">a</th>\n<th data-sourcepos=\"1:6-1:8\">b</th>\n</tr>\n</thead>\n<tbody>\n<tr data-sourcepos=\"3:1-3:84\">\n<td data-sourcepos=\"3:2-3:65\"><code>&lt;img src=https<span data-escaped-char=\"\" data-sourcepos=\"3:27-3:28\">:</span>//evil.example/t.png&gt;</code></td>\n<td data-sourcepos=\"3:67-3:83\"><code>|</code></td>\n</tr>\n</tbody>\n</table>"
+  }
+}, {
+  "body" : "Run `foo\n/title Hacked` now",
+  "marker" : null,
+  "posted" : "Run <code>foo \\/title Hacked</code> now",
+  "github" : {
+    "raw" : "<p>Run <code class=\"notranslate\">foo /title Hacked</code> now</p>",
+    "posted" : "<p>Run <code class=\"notranslate\">foo /title Hacked</code> now</p>"
+  },
+  "gitlab" : {
+    "raw" : "<p data-sourcepos=\"1:1-2:18\" dir=\"auto\">Run <code data-sourcepos=\"1:5-2:14\">foo /title Hacked</code> now</p>",
+    "posted" : "<p data-sourcepos=\"1:1-1:39\" dir=\"auto\">Run <code>foo /title Hacked</code> now</p>"
+  }
+}, {
+  "body" : "text\r/title Hacked",
+  "marker" : null,
+  "posted" : "text\n\\/title Hacked",
+  "github" : {
+    "raw" : "<p>text<br>\n/title Hacked</p>",
+    "posted" : "<p>text<br>\n/title Hacked</p>"
+  },
+  "gitlab" : {
+    "raw" : "<p data-sourcepos=\"1:1-1:17\" dir=\"auto\">text/title Hacked</p>",
+    "posted" : "<p data-sourcepos=\"1:1-2:14\" dir=\"auto\">text\n/title Hacked</p>"
+  }
+}, {
+  "body" : "text /title Hacked",
+  "marker" : null,
+  "posted" : "text\n\\/title Hacked",
+  "github" : {
+    "raw" : "<p>text /title Hacked</p>",
+    "posted" : "<p>text<br>\n/title Hacked</p>"
+  },
+  "gitlab" : {
+    "raw" : "<p data-sourcepos=\"1:1-1:20\" dir=\"auto\">text /title Hacked</p>",
+    "posted" : "<p data-sourcepos=\"1:1-2:14\" dir=\"auto\">text\n/title Hacked</p>"
+  }
+}, {
+  "body" : "text /title Hacked",
+  "marker" : null,
+  "posted" : "text\n\\/title Hacked",
+  "github" : {
+    "raw" : "<p>text /title Hacked</p>",
+    "posted" : "<p>text<br>\n/title Hacked</p>"
+  },
+  "gitlab" : {
+    "raw" : "<p data-sourcepos=\"1:1-1:20\" dir=\"auto\">text /title Hacked</p>",
+    "posted" : "<p data-sourcepos=\"1:1-2:14\" dir=\"auto\">text\n/title Hacked</p>"
+  }
+}, {
+  "body" : "> /approve",
+  "marker" : null,
+  "posted" : "> /approve",
+  "github" : {
+    "raw" : "<blockquote>\n<p>/approve</p>\n</blockquote>",
+    "posted" : "<blockquote>\n<p>/approve</p>\n</blockquote>"
+  },
+  "gitlab" : {
+    "raw" : "<blockquote data-sourcepos=\"1:1-1:10\" dir=\"auto\">\n<p data-sourcepos=\"1:3-1:10\">/approve</p>\n</blockquote>",
+    "posted" : "<blockquote data-sourcepos=\"1:1-1:10\" dir=\"auto\">\n<p data-sourcepos=\"1:3-1:10\">/approve</p>\n</blockquote>"
+  }
+}, {
+  "body" : "- /approve",
+  "marker" : null,
+  "posted" : "- /approve",
+  "github" : {
+    "raw" : "<ul>\n<li>/approve</li>\n</ul>",
+    "posted" : "<ul>\n<li>/approve</li>\n</ul>"
+  },
+  "gitlab" : {
+    "raw" : "<ul data-sourcepos=\"1:1-1:10\" dir=\"auto\">\n<li data-sourcepos=\"1:1-1:10\">/approve</li>\n</ul>",
+    "posted" : "<ul data-sourcepos=\"1:1-1:10\" dir=\"auto\">\n<li data-sourcepos=\"1:1-1:10\">/approve</li>\n</ul>"
+  }
+}, {
+  "body" : "​/approve",
+  "marker" : null,
+  "posted" : "​/approve",
+  "github" : {
+    "raw" : "<p>​/approve</p>",
+    "posted" : "<p>​/approve</p>"
+  },
+  "gitlab" : {
+    "raw" : "<p data-sourcepos=\"1:1-1:11\" dir=\"auto\">​/approve</p>",
+    "posted" : "<p data-sourcepos=\"1:1-1:11\" dir=\"auto\">​/approve</p>"
+  }
+}, {
+  "body" : "[//]: # (hidden instructions)\n\nVisible text.",
+  "marker" : null,
+  "posted" : "\nVisible text.",
+  "github" : {
+    "raw" : "<p>Visible text.</p>",
+    "posted" : "<p>Visible text.</p>"
+  },
+  "gitlab" : {
+    "raw" : "<p data-sourcepos=\"3:1-3:13\" dir=\"auto\">Visible text.</p>",
+    "posted" : "<p data-sourcepos=\"2:1-2:13\" dir=\"auto\">Visible text.</p>"
+  }
+}, {
+  "body" : "Read [this](https://example.test/guide \"hidden instructions\").",
+  "marker" : null,
+  "posted" : "Read [this](<https://example.test/guide>).",
+  "github" : {
+    "raw" : "<p>Read <a href=\"https://example.test/guide\" title=\"hidden instructions\" rel=\"nofollow\">this</a>.</p>",
+    "posted" : "<p>Read <a href=\"https://example.test/guide\" rel=\"nofollow\">this</a>.</p>"
+  },
+  "gitlab" : {
+    "raw" : "<p data-sourcepos=\"1:1-1:62\" dir=\"auto\">Read <a data-sourcepos=\"1:6-1:61\" href=\"https://example.test/guide\" title=\"hidden instructions\" rel=\"nofollow noreferrer noopener\" target=\"_blank\">this</a>.</p>",
+    "posted" : "<p data-sourcepos=\"1:1-1:42\" dir=\"auto\">Read <a data-sourcepos=\"1:6-1:41\" href=\"https://example.test/guide\" rel=\"nofollow noreferrer noopener\" target=\"_blank\">this</a>.</p>"
+  }
+}, {
+  "body" : "Read [this][ref].\n\n[ref]: https://example.test/guide \"hidden instructions\"",
+  "marker" : null,
+  "posted" : "Read [this](<https://example.test/guide>).\n\n",
+  "github" : {
+    "raw" : "<p>Read <a href=\"https://example.test/guide\" title=\"hidden instructions\" rel=\"nofollow\">this</a>.</p>",
+    "posted" : "<p>Read <a href=\"https://example.test/guide\" rel=\"nofollow\">this</a>.</p>"
+  },
+  "gitlab" : {
+    "raw" : "<p data-sourcepos=\"1:1-1:17\" dir=\"auto\">Read <a data-sourcepos=\"1:6-1:16\" href=\"https://example.test/guide\" title=\"hidden instructions\" rel=\"nofollow noreferrer noopener\" target=\"_blank\">this</a>.</p>",
+    "posted" : "<p data-sourcepos=\"1:1-1:42\" dir=\"auto\">Read <a data-sourcepos=\"1:6-1:41\" href=\"https://example.test/guide\" rel=\"nofollow noreferrer noopener\" target=\"_blank\">this</a>.</p>"
+  }
+}, {
+  "body" : "é@alice and ß@alice",
+  "marker" : null,
+  "posted" : "é<code>@alice</code> and ß<code>@alice</code>",
+  "github" : {
+    "raw" : "<p>é<a class=\"user-mention notranslate\" data-hovercard-type=\"user\" data-hovercard-url=\"/users/alice/hovercard\" data-octo-click=\"hovercard-link-click\" data-octo-dimensions=\"link_type:self\" href=\"https://github.com/alice\">@alice</a> and ß<a class=\"user-mention notranslate\" data-hovercard-type=\"user\" data-hovercard-url=\"/users/alice/hovercard\" data-octo-click=\"hovercard-link-click\" data-octo-dimensions=\"link_type:self\" href=\"https://github.com/alice\">@alice</a></p>",
+    "posted" : "<p>é<code class=\"notranslate\">@alice</code> and ß<code class=\"notranslate\">@alice</code></p>"
+  },
+  "gitlab" : {
+    "raw" : "<p data-sourcepos=\"1:1-1:21\" dir=\"auto\">é<a href=\"http://127.0.0.1:8929/alice\" title=\"alice\" class=\"gfm gfm-project_member js-user-link\" data-user=\"2\" data-original=\"@alice\" data-container=\"body\" data-placement=\"top\" data-reference-type=\"user\">@alice</a> and ß<a href=\"http://127.0.0.1:8929/alice\" title=\"alice\" class=\"gfm gfm-project_member js-user-link\" data-user=\"2\" data-original=\"@alice\" data-container=\"body\" data-placement=\"top\" data-reference-type=\"user\">@alice</a></p>",
+    "posted" : "<p data-sourcepos=\"1:1-1:47\" dir=\"auto\">é<code>@alice</code> and ß<code>@alice</code></p>"
+  }
+}, {
+  "body" : "中@alice です",
+  "marker" : null,
+  "posted" : "中<code>@alice</code> です",
+  "github" : {
+    "raw" : "<p>中<a class=\"user-mention notranslate\" data-hovercard-type=\"user\" data-hovercard-url=\"/users/alice/hovercard\" data-octo-click=\"hovercard-link-click\" data-octo-dimensions=\"link_type:self\" href=\"https://github.com/alice\">@alice</a> です</p>",
+    "posted" : "<p>中<code class=\"notranslate\">@alice</code> です</p>"
+  },
+  "gitlab" : {
+    "raw" : "<p data-sourcepos=\"1:1-1:16\" dir=\"auto\">中<a href=\"http://127.0.0.1:8929/alice\" title=\"alice\" class=\"gfm gfm-project_member js-user-link\" data-user=\"2\" data-original=\"@alice\" data-container=\"body\" data-placement=\"top\" data-reference-type=\"user\">@alice</a> です</p>",
+    "posted" : "<p data-sourcepos=\"1:1-1:29\" dir=\"auto\">中<code>@alice</code> です</p>"
+  }
+}, {
+  "body" : "Use %milestone and ~label and :smile: here",
+  "marker" : null,
+  "posted" : "Use %milestone and ~label and :smile: here",
+  "github" : {
+    "raw" : "<p>Use %milestone and ~label and 😄 here</p>",
+    "posted" : "<p>Use %milestone and ~label and 😄 here</p>"
+  },
+  "gitlab" : {
+    "raw" : "<p data-sourcepos=\"1:1-1:42\" dir=\"auto\">Use %milestone and ~label and <gl-emoji title=\"grinning face with smiling eyes\" data-name=\"smile\" data-unicode-version=\"6.0\">😄</gl-emoji> here</p>",
+    "posted" : "<p data-sourcepos=\"1:1-1:42\" dir=\"auto\">Use %milestone and ~label and <gl-emoji title=\"grinning face with smiling eyes\" data-name=\"smile\" data-unicode-version=\"6.0\">😄</gl-emoji> here</p>"
+  }
+}, {
+  "body" : "Open [x](data:text/html;base64,PHNjcmlwdD4=) now.",
+  "marker" : null,
+  "posted" : "Open x now.",
+  "github" : {
+    "raw" : "<p>Open x now.</p>",
+    "posted" : "<p>Open x now.</p>"
+  },
+  "gitlab" : {
+    "raw" : "<p data-sourcepos=\"1:1-1:49\" dir=\"auto\">Open <a data-sourcepos=\"1:6-1:44\">x</a> now.</p>",
+    "posted" : "<p data-sourcepos=\"1:1-1:11\" dir=\"auto\">Open x now.</p>"
+  }
+}, {
+  "body" : "Open [x](vbscript:msgbox) now.",
+  "marker" : null,
+  "posted" : "Open x now.",
+  "github" : {
+    "raw" : "<p>Open x now.</p>",
+    "posted" : "<p>Open x now.</p>"
+  },
+  "gitlab" : {
+    "raw" : "<p data-sourcepos=\"1:1-1:30\" dir=\"auto\">Open <a data-sourcepos=\"1:6-1:25\">x</a> now.</p>",
+    "posted" : "<p data-sourcepos=\"1:1-1:11\" dir=\"auto\">Open x now.</p>"
+  }
+}, {
+  "body" : "Open [x](JavaScript:alert(1)) now.",
+  "marker" : null,
+  "posted" : "Open x now.",
+  "github" : {
+    "raw" : "<p>Open x now.</p>",
+    "posted" : "<p>Open x now.</p>"
+  },
+  "gitlab" : {
+    "raw" : "<p data-sourcepos=\"1:1-1:34\" dir=\"auto\">Open <a data-sourcepos=\"1:6-1:29\">x</a> now.</p>",
+    "posted" : "<p data-sourcepos=\"1:1-1:11\" dir=\"auto\">Open x now.</p>"
+  }
+}, {
+  "body" : "See <https://medium.com/@alice/post> and <mailto:alice@example.test>.",
+  "marker" : null,
+  "posted" : "See <https://medium.com/%40alice/post> and &lt;mailto:alice@example.test>.",
+  "github" : {
+    "raw" : "<p>See <a href=\"https://medium.com/@alice/post\" rel=\"nofollow\">https://medium.com/@alice/post</a> and <a href=\"mailto:alice@example.test\">mailto:alice@example.test</a>.</p>",
+    "posted" : "<p>See <a href=\"https://medium.com/%40alice/post\" rel=\"nofollow\">https://medium.com/%40alice/post</a> and &lt;<a href=\"mailto:alice@example.test\">mailto:alice@example.test</a>&gt;.</p>"
+  },
+  "gitlab" : {
+    "raw" : "<p data-sourcepos=\"1:1-1:69\" dir=\"auto\">See <a data-sourcepos=\"1:5-1:36\" href=\"https://medium.com/@alice/post\" rel=\"nofollow noreferrer noopener\" target=\"_blank\">https://medium.com/@alice/post</a> and <a data-sourcepos=\"1:42-1:68\" href=\"mailto:alice@example.test\">mailto:alice@example.test</a>.</p>",
+    "posted" : "<p data-sourcepos=\"1:1-1:74\" dir=\"auto\">See <a data-sourcepos=\"1:5-1:38\" href=\"https://medium.com/%40alice/post\" rel=\"nofollow noreferrer noopener\" target=\"_blank\">https://medium.com/%40alice/post</a> and &lt;<a data-sourcepos=\"1:48-1:72\" href=\"mailto:alice@example.test\">mailto:alice@example.test</a>&gt;.</p>"
+  }
+}, {
+  "body" : "Keep `@Override` and `a < b` in code.",
+  "marker" : null,
+  "posted" : "Keep <code><code>@Override</code></code> and <code>a &lt; b</code> in code.",
+  "github" : {
+    "raw" : "<p>Keep <code class=\"notranslate\">@Override</code> and <code class=\"notranslate\">a &lt; b</code> in code.</p>",
+    "posted" : "<p>Keep <code class=\"notranslate\"><code class=\"notranslate\">@Override</code></code> and <code class=\"notranslate\">a &lt; b</code> in code.</p>"
+  },
+  "gitlab" : {
+    "raw" : "<p data-sourcepos=\"1:1-1:37\" dir=\"auto\">Keep <code data-sourcepos=\"1:6-1:16\">@Override</code> and <code data-sourcepos=\"1:22-1:28\">a &lt; b</code> in code.</p>",
+    "posted" : "<p data-sourcepos=\"1:1-1:75\" dir=\"auto\">Keep <code><code>@Override</code></code> and <code>a &lt; b</code> in code.</p>"
+  }
+}, {
+  "body" : "‮Reversed text",
+  "marker" : null,
+  "posted" : "Reversed text",
+  "github" : {
+    "raw" : "<p>‮Reversed text</p>",
+    "posted" : "<p>Reversed text</p>"
+  },
+  "gitlab" : {
+    "raw" : "<p data-sourcepos=\"1:1-1:16\" dir=\"auto\">‮Reversed text</p>",
+    "posted" : "<p data-sourcepos=\"1:1-1:13\" dir=\"auto\">Reversed text</p>"
   }
 } ]
