@@ -32,7 +32,7 @@
 
 	"env": { "node": true, "es2023": true },
 
-	// The toolkit link beside the runner (`tsconfig.agents.json#rootDirs`) is linted once, at home.
+	// The toolkit link beside the runner (`tsconfig.node.json#rootDirs`) is linted once, at home.
 	"ignorePatterns": ["server/application/src/main/resources/agent/work/**"],
 
 	"rules": {
@@ -497,7 +497,7 @@
 			"rules": { "import/no-relative-parent-imports": "off" }
 		},
 		{
-			// `tsconfig.agents.json` overlays this directory with `docker/agents/practice-scripts`
+			// `tsconfig.node.json` overlays this directory with `docker/agents/practice-scripts`
 			// through `rootDirs`, and the agent image reproduces that layout under
 			// `/opt/practice-scripts`. Relative imports between scripts, lib/core and domain kits must
 			// resolve in both layouts. The runner's fixtures use the same staged directories.

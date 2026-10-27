@@ -1,6 +1,6 @@
 {
 	// The image runs the gateway as JavaScript: Node's TypeScript loader is the largest part of a small
-	// process's memory. CI type-checks these files (tsconfig.agents.json); this build only emits them.
+	// process's memory. CI type-checks these files (tsconfig.node.json); this build only emits them.
 	"compilerOptions": {
 		"target": "ES2024",
 		"module": "NodeNext",

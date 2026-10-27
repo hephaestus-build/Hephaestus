@@ -1,8 +1,8 @@
 // oxlint's type-aware rules resolve each file's project by looking for the nearest file named
 // exactly `tsconfig.json`. `webapp/`, `docs/` and `scripts/` each have one; the Node agent trees are
-// configured by `tsconfig.agents.json`, which that search does not see — so without this stub every
+// configured by `tsconfig.node.json`, which that search does not see — so without this stub every
 // ambient global (`process`) resolves to an error type there and the whole `no-unsafe-*`
 // family fires on correctly typed code. Settings live in the file below; this only names it.
 {
-	"extends": "./tsconfig.agents.json"
+	"extends": "./tsconfig.node.json"
 }
