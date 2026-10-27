@@ -105,7 +105,7 @@ class SandboxRuntimeSelectionTest {
             assertThat(context.getBean(HostSandbox.class)).isInstanceOf(SandboxHosts.class);
             assertThat(context.getBean(ExecSandboxes.class)).isInstanceOf(KubernetesExecSandboxes.class);
             assertThat(context)
-                    .hasSingleBean(KubernetesReviewJobs.class)
+                    .hasSingleBean(KubernetesSandboxJobs.class)
                     .hasSingleBean(SandboxReconciler.class)
                     .hasSingleBean(KubernetesIsolationProbe.class)
                     .hasBean("sandboxExecutor");
@@ -191,7 +191,7 @@ class SandboxRuntimeSelectionTest {
                     assertThat(context)
                             .doesNotHaveBean(SandboxRuntime.class)
                             .doesNotHaveBean(KubernetesClient.class)
-                            .doesNotHaveBean(KubernetesReviewJobs.class)
+                            .doesNotHaveBean(KubernetesSandboxJobs.class)
                             .doesNotHaveBean(SandboxManager.class);
                 });
     }

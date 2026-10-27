@@ -19,16 +19,17 @@ import java.util.function.BooleanSupplier;
 import org.jspecify.annotations.Nullable;
 
 /**
- * Practice-review attempts as native {@code batch/v1} Jobs: one Job per claimed attempt, named after the job and the
- * attempt, whose Pod template is the review Pod of {@link KubernetesPods#workspacePod}. The Job runs one Pod and
- * replaces none. When its worker no longer bounds it, the control plane does: its deadline stops it, and the TTL
- * controller deletes the finished Job with its Pod.
+ * Sandbox Pods as native {@code batch/v1} Jobs: one Job per practice-review attempt, named after the job and the
+ * attempt, whose Pod template is the review Pod of {@link KubernetesPods#workspacePod}, and one Job per isolation probe
+ * Pod. The Job runs one Pod and replaces none. When its worker no longer bounds it, the control plane does: its deadline
+ * stops it, also while its Pod waits for a node, which a Pod's own deadline does not count, and the TTL controller
+ * deletes the finished Job with its Pod.
  *
  * <p>A Job is a bounded lifecycle only. PostgreSQL keeps every claim, retry, attempt, admission and delivery; the Job
  * controller's own retries are off. The gateway session of the attempt stays the authority over what a result belongs
  * to.
  */
-public class KubernetesReviewJobs {
+public class KubernetesSandboxJobs {
 
     /** The label the Job controller gives each Pod of a Job: the Job's name. */
     static final String JOB_NAME = "batch.kubernetes.io/job-name";
@@ -45,13 +46,13 @@ public class KubernetesReviewJobs {
     private final KubernetesClient client;
     private final KubernetesWorker worker;
 
-    public KubernetesReviewJobs(KubernetesClient client, KubernetesWorker worker) {
+    public KubernetesSandboxJobs(KubernetesClient client, KubernetesWorker worker) {
         this.client = client;
         this.worker = worker;
     }
 
     /**
-     * The Job of a review Pod: the Pod's name and labels, and the Pod as its template.
+     * The Job of a sandbox Pod: the Pod's name and labels, and the Pod as its template.
      *
      * @param activeDeadlineSeconds how long the Job may run, counted from its start
      */
@@ -89,9 +90,9 @@ public class KubernetesReviewJobs {
                     .create();
         } catch (KubernetesClientException e) {
             if (e.getCode() == 409) {
-                throw new SandboxException("A review Job of this name already exists", e);
+                throw new SandboxException("A sandbox Job of this name already exists", e);
             }
-            throw KubernetesPods.failure("Could not create a review Job", e);
+            throw KubernetesPods.failure("Could not create a sandbox Job", e);
         }
     }
 
@@ -112,13 +113,13 @@ public class KubernetesReviewJobs {
                     .withLabel(JOB_NAME, job)
                     .informOnCondition(pods -> !pods.isEmpty());
         } catch (KubernetesClientException e) {
-            throw KubernetesPods.failure("Could not watch the Pods of a review Job", e);
+            throw KubernetesPods.failure("Could not watch the Pods of a sandbox Job", e);
         }
         try {
             while (!cancelled.getAsBoolean()) {
                 long left = deadline - System.nanoTime();
                 if (left <= 0) {
-                    throw new SandboxInfrastructureException("The review Job created no Pod within " + timeout);
+                    throw new SandboxInfrastructureException("The sandbox Job created no Pod within " + timeout);
                 }
                 try {
                     return appeared.get(Math.min(left, CANCEL_POLL.toNanos()), TimeUnit.NANOSECONDS)
@@ -127,10 +128,10 @@ public class KubernetesReviewJobs {
                     // Not yet: look at the cancellation and the deadline again.
                 }
             }
-            throw new SandboxCancelledException("Job cancelled while its review Pod was created");
+            throw new SandboxCancelledException("Job cancelled while its sandbox Pod was created");
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            throw new SandboxInfrastructureException("Interrupted while a review Job created its Pod", e);
+            throw new SandboxInfrastructureException("Interrupted while a sandbox Job created its Pod", e);
         } catch (ExecutionException e) {
             throw watchFailure(e);
         } finally {
@@ -140,9 +141,9 @@ public class KubernetesReviewJobs {
 
     private static SandboxException watchFailure(ExecutionException e) {
         if (e.getCause() instanceof KubernetesClientException api) {
-            return KubernetesPods.failure("Could not watch the Pods of a review Job", api);
+            return KubernetesPods.failure("Could not watch the Pods of a sandbox Job", api);
         }
-        return new SandboxInfrastructureException("Could not watch the Pods of a review Job", e);
+        return new SandboxInfrastructureException("Could not watch the Pods of a sandbox Job", e);
     }
 
     /** The Pod that the Job created, or null before it created one. */
@@ -155,7 +156,7 @@ public class KubernetesReviewJobs {
                     .getItems();
             return pods.isEmpty() ? null : pods.getFirst();
         } catch (KubernetesClientException e) {
-            throw KubernetesPods.failure("Could not read the Pod of a review Job", e);
+            throw KubernetesPods.failure("Could not read the Pod of a sandbox Job", e);
         }
     }
 
@@ -188,7 +189,7 @@ public class KubernetesReviewJobs {
                     .withPropagationPolicy(DeletionPropagation.BACKGROUND)
                     .delete();
         } catch (KubernetesClientException e) {
-            throw KubernetesPods.failure("Could not delete a review Job", e);
+            throw KubernetesPods.failure("Could not delete a sandbox Job", e);
         }
     }
 }

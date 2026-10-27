@@ -48,8 +48,10 @@ import tools.jackson.databind.json.JsonMapper;
  * without host users ({@code hostUsers: false}) gets a user namespace of its own, and how many processes a Pod can
  * start. Where user namespaces take effect, every sandbox Pod runs without host users.
  *
- * <p>The probe Pods have the sandbox's own configuration and image, and the probe deletes them when it ends. Each
- * prints one line of booleans and counts, which is all the worker reads of them.
+ * <p>The probe Pods have the sandbox's own configuration and image. Each is the Pod of a Job of its own
+ * ({@link KubernetesSandboxJobs}), which the probe deletes when it ends. A worker that stops during a run leaves its
+ * Jobs to the control plane: the deadline ends a Pod that still waits for a node, and the TTL controller removes the
+ * Job with its Pod. Each Pod prints one line of booleans and counts, which is all the worker reads of them.
  */
 public class KubernetesIsolationProbe {
 
@@ -63,6 +65,16 @@ public class KubernetesIsolationProbe {
 
     /** How many processes the review probe Pod tries to start. A Pod that starts them all has no process limit. */
     static final int PROCESS_TRIAL = 1024;
+
+    /**
+     * The memory of the Pod that tries {@link #PROCESS_TRIAL} processes. In the agent image on the default runtime, Node
+     * with 1024 children peaked at 204 MiB. A RuntimeClass such as gVisor charges its own overhead to the Pod, and a
+     * probe Pod killed for memory would fail the gates.
+     */
+    static final long TRIAL_MEMORY = 512L * 1024 * 1024;
+
+    /** The memory of a probe Pod that starts no processes: Node alone peaked at 10 MiB. */
+    static final long PROBE_MEMORY = 128L * 1024 * 1024;
 
     static final String CLOSED_KIND = "isolation-probe";
 
@@ -123,17 +135,38 @@ public class KubernetesIsolationProbe {
 
     private final KubernetesClient client;
     private final KubernetesPods pods;
+    private final KubernetesSandboxJobs jobs;
     private final KubernetesWorker worker;
     private final String image;
     private final int managementPort;
+    private final Duration podStart;
 
     public KubernetesIsolationProbe(
-            KubernetesClient client, KubernetesPods pods, KubernetesWorker worker, String image, int managementPort) {
+            KubernetesClient client,
+            KubernetesPods pods,
+            KubernetesSandboxJobs jobs,
+            KubernetesWorker worker,
+            String image,
+            int managementPort) {
+        this(client, pods, jobs, worker, image, managementPort, KubernetesSandboxJobs.CHILD_START);
+    }
+
+    /** @param podStart how long a probe Job may take to create its Pod */
+    KubernetesIsolationProbe(
+            KubernetesClient client,
+            KubernetesPods pods,
+            KubernetesSandboxJobs jobs,
+            KubernetesWorker worker,
+            String image,
+            int managementPort,
+            Duration podStart) {
         this.client = client;
         this.pods = pods;
+        this.jobs = jobs;
         this.worker = worker;
         this.image = image;
         this.managementPort = managementPort;
+        this.podStart = podStart;
     }
 
     /** One address that a probe Pod tries, and whether it must reach it. */
@@ -176,7 +209,8 @@ public class KubernetesIsolationProbe {
     /**
      * Runs the probe, records what it proved and returns it. A run that failed is logged with every gate. A run whose
      * Pods could not run, because the sandbox quota was full or the nodes had no room, proves nothing: a passing proof
-     * before it stands until a later run, and the worker keeps starting sandboxes.
+     * before it stands until a later run, and the worker keeps starting sandboxes. A Job whose Pod the quota refuses
+     * creates none, so such a run waits up to {@link KubernetesSandboxJobs#CHILD_START} for it.
      */
     public Proof run() {
         List<String> failures = new ArrayList<>();
@@ -324,7 +358,8 @@ public class KubernetesIsolationProbe {
     /**
      * What one probe Pod showed: the gates that did not hold, and the line it printed.
      *
-     * @param ran whether the Pod started and ended; one that the API refused or the nodes did not schedule did not
+     * @param ran whether the Pod started and ended; one that the Job controller did not create, for example because
+     *     the sandbox quota was full, or that the nodes did not schedule did not
      */
     record Outcome(List<String> failures, @Nullable JsonNode result, boolean ran) {}
 
@@ -348,19 +383,25 @@ public class KubernetesIsolationProbe {
                 .put("port", target.port())
                 .put("reachable", target.reachable()));
         spec.put("processes", processes);
-        ResourceLimits limits = new ResourceLimits(512L * 1024 * 1024, 0.5, Math.max(processes, 1), time);
+        long memory = processes > 0 ? TRIAL_MEMORY : PROBE_MEMORY;
+        ResourceLimits limits = new ResourceLimits(memory, 0.5, Math.max(processes, 1), time);
         Pod pod = pods.probePod(
                 new KubernetesPods.Workload(name, labels, image, "probe"),
                 List.of("node", "-e", SCRIPT, spec.toString()),
                 limits,
                 time.toSeconds(),
                 hostUsers);
+        Instant end = Instant.now().plus(time);
         try {
-            pods.create(pod);
+            jobs.create(jobs.job(pod, time.toSeconds()));
+            String created = jobs.awaitPod(name, min(time, podStart), () -> false)
+                    .getMetadata()
+                    .getName();
+            Duration left = Duration.between(Instant.now(), end);
             KubernetesPods.Waited ended = pods.waitFor(
-                    name,
+                    created,
                     candidate -> KubernetesPods.terminal(candidate) || KubernetesPods.fatalWaiting(candidate) != null,
-                    time);
+                    left.isNegative() ? Duration.ZERO : left);
             Pod last = ended.pod();
             if (last != null && KubernetesPods.notIsolated(last)) {
                 return new Outcome(
@@ -374,7 +415,7 @@ public class KubernetesIsolationProbe {
                 return new Outcome(
                         List.of(probe + " did not run" + (waiting == null ? "" : ": " + waiting)), null, false);
             }
-            JsonNode result = parse(pods.logs(name, KubernetesPods.RUNTIME));
+            JsonNode result = parse(pods.logs(created, KubernetesPods.RUNTIME));
             if (result == null) {
                 return new Outcome(List.of(probe + " printed no result"), null, true);
             }
@@ -383,14 +424,18 @@ public class KubernetesIsolationProbe {
             return new Outcome(List.of(probe + " failed: " + e.getMessage()), null, false);
         } finally {
             try {
-                pods.delete(name, 0);
+                jobs.delete(name);
             } catch (RuntimeException e) {
                 log.warn(
-                        "Could not delete isolation probe Pod {}: {}",
+                        "Could not delete isolation probe Job {}: {}",
                         name,
                         e.getClass().getSimpleName());
             }
         }
+    }
+
+    private static Duration min(Duration first, Duration second) {
+        return first.compareTo(second) <= 0 ? first : second;
     }
 
     /** The last line of the probe's output, when it is a JSON object. */

@@ -153,10 +153,10 @@ class KubernetesIsolationProbeTest {
     @Test
     void shouldKeepThePassingProofWhenALaterProbeCannotStartItsPodsAndFailWhenAGateFails() {
         KubernetesMockServer api = Objects.requireNonNull(server);
-        var quotaFull = new StatusBuilder()
-                .withCode(403)
-                .withReason("Forbidden")
-                .withMessage("pods \"probe\" is forbidden: exceeded quota: heph-sandbox-quota")
+        var unavailable = new StatusBuilder()
+                .withCode(503)
+                .withReason("ServiceUnavailable")
+                .withMessage("the server is currently unable to handle the request")
                 .build();
         var restricted = new StatusBuilder()
                 .withCode(403)
@@ -167,17 +167,24 @@ class KubernetesIsolationProbeTest {
         api.expect().post().withPath(PODS).andReturn(201, "{}").once();
         api.expect()
                 .post()
-                .withPath("/api/v1/namespaces/" + SANDBOXES + "/pods")
-                .andReturn(403, quotaFull)
+                .withPath("/apis/batch/v1/namespaces/" + SANDBOXES + "/jobs")
+                .andReturn(503, unavailable)
                 .always();
         var worker = KubernetesFixtures.worker(SANDBOXES);
         KubernetesClient client = Objects.requireNonNull(this.client);
         var probe = new KubernetesIsolationProbe(
-                client, new KubernetesPods(client, worker, 10, ImagePullPolicy.IF_NOT_PRESENT), worker, "agent", 9090);
+                client,
+                new KubernetesPods(client, worker, 10, ImagePullPolicy.IF_NOT_PRESENT),
+                new KubernetesSandboxJobs(client, worker),
+                worker,
+                "agent",
+                9090);
         var passed = new KubernetesIsolationProbe.Proof(Instant.EPOCH, List.of(), true, "", 248);
         worker.proved(passed);
 
-        assertThat(probe.run()).as("Pods the quota refused prove nothing").isSameAs(passed);
+        assertThat(probe.run())
+                .as("Pods whose Jobs the API did not create prove nothing")
+                .isSameAs(passed);
         assertThat(worker.isolated()).isTrue();
 
         KubernetesIsolationProbe.Proof failed = probe.run();
@@ -192,6 +199,11 @@ class KubernetesIsolationProbeTest {
         KubernetesClient api = Objects.requireNonNull(client);
         var worker = KubernetesFixtures.worker(SANDBOXES);
         return new KubernetesIsolationProbe(
-                api, new KubernetesPods(api, worker, 10, ImagePullPolicy.IF_NOT_PRESENT), worker, "agent", 8080);
+                api,
+                new KubernetesPods(api, worker, 10, ImagePullPolicy.IF_NOT_PRESENT),
+                new KubernetesSandboxJobs(api, worker),
+                worker,
+                "agent",
+                8080);
     }
 }

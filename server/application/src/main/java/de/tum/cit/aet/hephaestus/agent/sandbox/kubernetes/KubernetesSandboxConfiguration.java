@@ -93,9 +93,9 @@ public class KubernetesSandboxConfiguration {
     }
 
     @Bean
-    public KubernetesReviewJobs kubernetesReviewJobs(
+    public KubernetesSandboxJobs kubernetesSandboxJobs(
             KubernetesClient sandboxKubernetesClient, KubernetesWorker worker) {
-        return new KubernetesReviewJobs(sandboxKubernetesClient, worker);
+        return new KubernetesSandboxJobs(sandboxKubernetesClient, worker);
     }
 
     @Bean
@@ -106,7 +106,7 @@ public class KubernetesSandboxConfiguration {
     @Bean
     public SandboxBackend kubernetesSandboxBackend(
             KubernetesPods pods,
-            KubernetesReviewJobs reviewJobs,
+            KubernetesSandboxJobs reviewJobs,
             KubernetesWorker worker,
             KubernetesLiveWorkers liveWorkers,
             SandboxExits exits,
@@ -139,11 +139,12 @@ public class KubernetesSandboxConfiguration {
     public KubernetesIsolationProbe kubernetesIsolationProbe(
             KubernetesClient sandboxKubernetesClient,
             KubernetesPods pods,
+            KubernetesSandboxJobs jobs,
             KubernetesWorker worker,
             AgentImageProperties agentImageProperties,
             @Value("${management.server.port:9090}") int managementPort) {
         return new KubernetesIsolationProbe(
-                sandboxKubernetesClient, pods, worker, agentImageProperties.reference(), managementPort);
+                sandboxKubernetesClient, pods, jobs, worker, agentImageProperties.reference(), managementPort);
     }
 
     /** The isolation tier as gauges: whether the latest probe passed, the user namespaces, the process limit. */

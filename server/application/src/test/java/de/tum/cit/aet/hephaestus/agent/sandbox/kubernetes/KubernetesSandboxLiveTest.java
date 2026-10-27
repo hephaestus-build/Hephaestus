@@ -235,7 +235,7 @@ class KubernetesSandboxLiveTest {
     private KubernetesClient client;
     private KubernetesWorker worker;
     private KubernetesPods pods;
-    private KubernetesReviewJobs reviewJobs;
+    private KubernetesSandboxJobs reviewJobs;
     private SandboxWorkspaceManager workspaces;
     private LiveSandboxGateway gateway;
     private SimpleMeterRegistry meters;
@@ -314,7 +314,7 @@ class KubernetesSandboxLiveTest {
         gateway = new LiveSandboxGateway(gatewayProperties.port());
         assertEquals(GATEWAY_PORT, gateway.port(), "the gateway listens on the port it was given");
         meters = new SimpleMeterRegistry();
-        reviewJobs = configuration.kubernetesReviewJobs(client, worker);
+        reviewJobs = configuration.kubernetesSandboxJobs(client, worker);
         exits = configuration.sandboxExits(pods, meters);
         backend = configuration.kubernetesSandboxBackend(pods, reviewJobs, worker, liveWorkers, exits, client);
         reviews = new SandboxAttemptRunner(backend, workspaces, gateway.sessions(), meters);
@@ -323,7 +323,12 @@ class KubernetesSandboxLiveTest {
 
         String managementPort = System.getenv("MANAGEMENT_PORT");
         KubernetesIsolationProbe probe = configuration.kubernetesIsolationProbe(
-                client, pods, worker, agentImage, managementPort == null ? 9090 : Integer.parseInt(managementPort));
+                client,
+                pods,
+                reviewJobs,
+                worker,
+                agentImage,
+                managementPort == null ? 9090 : Integer.parseInt(managementPort));
         long probing = System.nanoTime();
         probe.prove();
         log.info("TIMING isolation probe: {} ms", millis(probing));
@@ -534,7 +539,7 @@ class KubernetesSandboxLiveTest {
             assertThat(result.exitCode()).as("the kubelet ended the runtime").isNotZero();
             assertThat(client.pods()
                             .inNamespace(namespace())
-                            .withLabel(KubernetesReviewJobs.JOB_NAME, name)
+                            .withLabel(KubernetesSandboxJobs.JOB_NAME, name)
                             .list()
                             .getItems())
                     .extracting(candidate -> candidate.getMetadata().getUid())
@@ -562,7 +567,7 @@ class KubernetesSandboxLiveTest {
         // made.
         SharedIndexInformer<Pod> children = client.pods()
                 .inNamespace(namespace())
-                .withLabel(KubernetesReviewJobs.JOB_NAME, name)
+                .withLabel(KubernetesSandboxJobs.JOB_NAME, name)
                 .inform(new ResourceEventHandler<>() {
                     @Override
                     public void onAdd(Pod pod) {
@@ -644,7 +649,7 @@ class KubernetesSandboxLiveTest {
         Job production = disposableJob("exit 0", 300);
         assertThat(production.getSpec().getTtlSecondsAfterFinished())
                 .as("the production TTL")
-                .isEqualTo((int) KubernetesReviewJobs.TTL_AFTER_FINISHED.toSeconds());
+                .isEqualTo((int) KubernetesSandboxJobs.TTL_AFTER_FINISHED.toSeconds());
         // A copy with a short TTL, made before the creation, so that the test does not wait for the production one.
         Job shortLived = new JobBuilder(production)
                 .editSpec()
@@ -1055,7 +1060,7 @@ class KubernetesSandboxLiveTest {
     private Pod awaitPodOf(Job job, Predicate<Pod> condition, @Nullable Future<?> execution) {
         CompletableFuture<List<Pod>> found = client.pods()
                 .inNamespace(namespace())
-                .withLabel(KubernetesReviewJobs.JOB_NAME, job.getMetadata().getName())
+                .withLabel(KubernetesSandboxJobs.JOB_NAME, job.getMetadata().getName())
                 .informOnCondition(candidates -> candidates.stream().anyMatch(condition));
         try {
             return found.get(START.toMillis(), TimeUnit.MILLISECONDS).stream()
@@ -1096,7 +1101,7 @@ class KubernetesSandboxLiveTest {
         assertThat(spec.getBackoffLimit()).isZero();
         assertThat(spec.getActiveDeadlineSeconds()).isPositive();
         assertThat(spec.getTtlSecondsAfterFinished())
-                .isEqualTo((int) KubernetesReviewJobs.TTL_AFTER_FINISHED.toSeconds());
+                .isEqualTo((int) KubernetesSandboxJobs.TTL_AFTER_FINISHED.toSeconds());
         assertThat(job.getMetadata().getNamespace()).isEqualTo(namespace());
         assertThat(labelsOf(job))
                 .containsEntry(KubernetesWorker.PART_OF, "hephaestus")
@@ -1122,7 +1127,7 @@ class KubernetesSandboxLiveTest {
         assertThat(owner.getUid()).isEqualTo(job.getMetadata().getUid());
         assertThat(owner.getName()).isEqualTo(job.getMetadata().getName());
         assertThat(labelsOf(pod))
-                .containsEntry(KubernetesReviewJobs.JOB_NAME, job.getMetadata().getName());
+                .containsEntry(KubernetesSandboxJobs.JOB_NAME, job.getMetadata().getName());
         requireCustody(pod, KubernetesWorker.KIND_REVIEW);
     }
 
