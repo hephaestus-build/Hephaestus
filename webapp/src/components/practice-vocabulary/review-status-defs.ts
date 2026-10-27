@@ -62,18 +62,6 @@ export const REVIEW_STATUS_DEFS: StatusDefs<ReviewStatus> = {
 };
 
 /**
- * The status a review shows. A running review whose active invocations all wait for a worker has
- * nothing running yet, so it shows as queued.
- */
-export function shownReviewStatus(
-	review: Pick<ReviewSummary, "status" | "activeJobCount" | "runningJobCount">,
-): ReviewStatus {
-	return review.status === "RUNNING" && review.activeJobCount > 0 && review.runningJobCount === 0
-		? "QUEUED"
-		: review.status;
-}
-
-/**
  * How a review ended, as the developer's own surfaces read it. Those surfaces carry no stop reason,
  * so each sentence must hold for every reason. A partial review may have run to the end with a
  * practice failed or withheld, or may predate a record of what it covered, so it names only scope.

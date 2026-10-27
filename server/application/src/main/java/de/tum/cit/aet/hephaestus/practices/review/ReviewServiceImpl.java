@@ -374,6 +374,11 @@ public class ReviewServiceImpl implements ReviewService {
         var checks = (ObjectNode) review.getChecks().deepCopy();
         checks.put("startedAt", clock.instant().toString());
         review.setChecks(checks);
+        // A scan reviews its practices file by file from now on and records no capture per practice.
+        if (review.getKind() == ReviewKind.SCAN)
+            for (var assignment : assignments.lockAssignments(workspaceId, reviewId))
+                if (assignment.getStatus() == ReviewPracticeStatus.QUEUED)
+                    assignment.setStatus(ReviewPracticeStatus.RUNNING);
         return true;
     }
 

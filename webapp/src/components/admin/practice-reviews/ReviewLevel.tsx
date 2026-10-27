@@ -35,7 +35,6 @@ import {
 	REVIEW_JOB_STATUS_DEFS,
 	REVIEW_PRACTICE_STATUS_DEFS,
 	REVIEW_STATUS_DEFS,
-	shownReviewStatus,
 	REVIEW_STOP_REASON_SENTENCES,
 } from "@/components/practice-vocabulary/review-status-defs";
 import { buttonVariants } from "@/components/ui/button";
@@ -258,7 +257,7 @@ function ReviewStatusLine({ review }: { review: ReviewDetail }) {
 	const elapsed = between(review.createdAt, review.completedAt);
 	return (
 		<SheetStatusLine
-			status={<ReviewStatusMark def={REVIEW_STATUS_DEFS[shownReviewStatus(review)]} />}
+			status={<ReviewStatusMark def={REVIEW_STATUS_DEFS[review.status]} />}
 			figure={elapsed === undefined ? undefined : `${elapsed} from request`}
 			at={at}
 		/>

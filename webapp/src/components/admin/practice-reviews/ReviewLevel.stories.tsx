@@ -26,7 +26,6 @@ import {
 	reviewDetailPreparationFailed,
 	reviewDetailProcessingFailed,
 	reviewDetailQueued,
-	reviewDetailWaitingForWorker,
 	reviewDetailRunning,
 	reviewDetailScanManyJobs,
 	reviewDetailTimedOut,
@@ -385,16 +384,6 @@ export const Queued: Story = {
 	},
 };
 
-/** A started review whose job waits for a worker reads as queued, not running. */
-export const WaitingForAWorker: Story = {
-	args: { review: ready(reviewDetailWaitingForWorker) },
-	play: async () => {
-		const panelElement = await settledDrawerPanel();
-		await expect(panelElement.querySelector("[data-sheet-status]")).toHaveTextContent(/^Queued/u);
-		within(within(panelElement).getByRole("list", { name: "Execution" })).getByText("Queued");
-	},
-};
-
 export const BackingOff: Story = {
 	args: { review: ready(reviewDetailBackingOff) },
 	play: async () => {
@@ -440,7 +429,6 @@ function continuedReview(status: ReviewDetail["status"], job: Partial<ReviewJob>
 		orderedAt: REQUESTED,
 		completedAt: done ? afterRequest(1117) : null,
 		activeJobCount: done ? 0 : 1,
-		runningJobCount: status === "RUNNING" ? 1 : 0,
 		runtime: { jobs: [latest] },
 		stageTiming: [
 			{

@@ -374,6 +374,30 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
     }
 
     @Test
+    void shouldMarkAScanPracticeRunningWhenTheScanStarts() {
+        var pending = admissions.pending(scenario, Instant.now(), scenarioAccountId);
+        long workspaceId = scenario.workspace().getId();
+        UUID reviewId = pending.review().getId();
+        jdbc.sql("UPDATE review SET kind='SCAN',budget_usd=10,status='QUEUED' WHERE workspace_id=:ws AND id=:id")
+                .param("ws", workspaceId)
+                .param("id", reviewId)
+                .update();
+        jdbc.sql("UPDATE review_practice SET status='QUEUED' WHERE workspace_id=:ws AND review_id=:id")
+                .param("ws", workspaceId)
+                .param("id", reviewId)
+                .update();
+
+        assertThat(service.start(workspaceId, reviewId)).isTrue();
+
+        assertThat(pinnedPractices
+                        .findByWorkspaceIdAndReviewIdAndPracticeId(
+                                workspaceId, reviewId, scenario.practice().getId())
+                        .orElseThrow()
+                        .getStatus())
+                .isEqualTo(ReviewPracticeStatus.RUNNING);
+    }
+
+    @Test
     void shouldWaitForTerminalProcessingBeforeClosingACancelledReview() {
         var pending = admissions.pending(scenario, Instant.now(), scenarioAccountId);
         long workspaceId = scenario.workspace().getId();

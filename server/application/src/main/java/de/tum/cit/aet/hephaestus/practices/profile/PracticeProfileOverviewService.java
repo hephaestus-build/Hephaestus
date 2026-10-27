@@ -9,11 +9,14 @@ import de.tum.cit.aet.hephaestus.practices.result.ResultRepository;
 import de.tum.cit.aet.hephaestus.practices.result.ResultView;
 import de.tum.cit.aet.hephaestus.practices.result.ResultViewQuery;
 import de.tum.cit.aet.hephaestus.practices.result.ResultVisibilityPolicy;
+import de.tum.cit.aet.hephaestus.practices.review.ReviewShownStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.CurrentDeveloperLookup;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewRuntimeQuery;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import java.time.Clock;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -30,6 +33,7 @@ public class PracticeProfileOverviewService {
     private final ResultVisibilityPolicy visibility;
     private final Clock clock;
     private final ProfileChangeQuery profileChanges;
+    private final ReviewRuntimeQuery runtime;
 
     public PracticeProfileOverviewDTO getOverview(WorkspaceContext ws) {
         return visibility.asOneRead(ws.id(), () -> readOverview(ws));
@@ -70,7 +74,12 @@ public class PracticeProfileOverviewService {
                                 latest.review().getId(),
                                 latest.result().getRecordedAt(),
                                 latest.item(),
-                                latest.review().getStatus()),
+                                ReviewShownStatus.of(
+                                        latest.review().getStatus(),
+                                        runtime.jobCounts(
+                                                        ws.id(),
+                                                        List.of(latest.review().getId()))
+                                                .getOrDefault(latest.review().getId(), Map.of()))),
                 changes,
                 reviewed);
     }

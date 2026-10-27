@@ -4603,10 +4603,6 @@ export type Review = {
     practices: Array<ReviewPractice>;
     requestedBy: AccountRef | null;
     results: ReviewResultCounts;
-    /**
-     * Active invocations that a worker runs now; the others wait for a worker
-     */
-    runningJobCount: number;
     startedBy: ItemEvent | null;
     status: 'QUEUED' | 'RUNNING' | 'COMPLETE' | 'PARTIAL' | 'FAILED' | 'CANCELLED';
     stopReason: 'TIMED_OUT' | 'EXECUTION_FAILED' | 'PREPARATION_FAILED' | 'PROCESSING_FAILED' | 'PERSON_DATA_ERASED' | 'STALE_ROLLOUT_REVISION' | 'CANCELLED_BY_ADMIN' | 'REPLACED' | 'LEGACY_FAILURE' | 'EXECUTION_INCOMPLETE' | 'RESULT_WITHHELD' | 'READINESS_REFUSED' | 'SUSPECT_LISTING' | 'BUDGET' | 'USAGE_UNVERIFIABLE' | 'DEADLINE' | 'CANCELLED' | 'ENUMERATION_FAILED' | 'ENUMERATION_LIMIT' | 'NO_SCAN_PRACTICES' | 'MODEL_CHANGED' | 'MODEL_UNAVAILABLE' | 'ERROR' | 'LEGACY_SCOPE_UNKNOWN' | 'CONTRACT_CHANGED' | null;
@@ -4694,10 +4690,6 @@ export type ReviewDetail = {
     practices: Array<ReviewPractice>;
     requestedBy: AccountRef | null;
     results: ReviewResultCounts;
-    /**
-     * Active invocations that a worker runs now; the others wait for a worker
-     */
-    runningJobCount: number;
     runtime: ReviewRuntime | null;
     stageTiming: Array<ReviewStageTiming>;
     startedBy: ItemEvent | null;
@@ -5097,10 +5089,6 @@ export type ReviewSummary = {
     practices: Array<ReviewPractice>;
     requestedBy: AccountRef | null;
     results: ReviewResultCounts;
-    /**
-     * Active invocations that a worker runs now; the others wait for a worker
-     */
-    runningJobCount: number;
     startedBy: ItemEvent | null;
     status: 'QUEUED' | 'RUNNING' | 'COMPLETE' | 'PARTIAL' | 'FAILED' | 'CANCELLED';
     stopReason: 'TIMED_OUT' | 'EXECUTION_FAILED' | 'PREPARATION_FAILED' | 'PROCESSING_FAILED' | 'PERSON_DATA_ERASED' | 'STALE_ROLLOUT_REVISION' | 'CANCELLED_BY_ADMIN' | 'REPLACED' | 'LEGACY_FAILURE' | 'EXECUTION_INCOMPLETE' | 'RESULT_WITHHELD' | 'READINESS_REFUSED' | 'SUSPECT_LISTING' | 'BUDGET' | 'USAGE_UNVERIFIABLE' | 'DEADLINE' | 'CANCELLED' | 'ENUMERATION_FAILED' | 'ENUMERATION_LIMIT' | 'NO_SCAN_PRACTICES' | 'MODEL_CHANGED' | 'MODEL_UNAVAILABLE' | 'ERROR' | 'LEGACY_SCOPE_UNKNOWN' | 'CONTRACT_CHANGED' | null;

@@ -82,27 +82,34 @@ public class ReviewSummaryQueryService {
     }
 
     public ReviewRefDTO ref(Review review) {
-        return ref(review, item(review));
+        var jobs = runtime.jobCounts(review.getWorkspaceId(), List.of(review.getId()));
+        return ref(review, item(review), jobs.getOrDefault(review.getId(), Map.of()));
     }
 
     /** Each review's reference, keyed by review id, with the reviewed work of all of them read at once. */
     public Map<UUID, ReviewRefDTO> refs(long workspaceId, Collection<Review> reviews) {
         var items = references.items(
                 workspaceId, reviews.stream().map(Review::getItemId).distinct().toList());
+        var jobs = runtime.jobCounts(
+                workspaceId, reviews.stream().map(Review::getId).toList());
         Map<UUID, ReviewRefDTO> refs = new LinkedHashMap<>();
-        reviews.forEach(review ->
-                refs.put(review.getId(), ref(review, Objects.requireNonNull(items.get(review.getItemId())))));
+        reviews.forEach(review -> refs.put(
+                review.getId(),
+                ref(
+                        review,
+                        Objects.requireNonNull(items.get(review.getItemId())),
+                        jobs.getOrDefault(review.getId(), Map.of()))));
         return refs;
     }
 
-    private static ReviewRefDTO ref(Review review, ItemRefDTO item) {
+    private static ReviewRefDTO ref(Review review, ItemRefDTO item, Map<ReviewJobStatus, Long> jobs) {
         return new ReviewRefDTO(
                 review.getId(),
                 review.getKind(),
                 item,
                 review.getItemVersion(),
                 review.getOrigin(),
-                review.getStatus(),
+                ReviewShownStatus.of(review.getStatus(), jobs),
                 review.getCreatedAt(),
                 review.getCompletedAt());
     }
@@ -146,7 +153,7 @@ public class ReviewSummaryQueryService {
                             Objects.requireNonNull(reads.items.get(review.getItemId())),
                             review.getItemVersion(),
                             review.getOrigin(),
-                            review.getStatus(),
+                            ReviewShownStatus.of(review.getStatus(), jobs),
                             review.getCreatedAt(),
                             review.getCompletedAt(),
                             event,
@@ -162,7 +169,6 @@ public class ReviewSummaryQueryService {
                                     .sum()),
                             Math.toIntExact(jobs.getOrDefault(ReviewJobStatus.QUEUED, 0L)
                                     + jobs.getOrDefault(ReviewJobStatus.RUNNING, 0L)),
-                            Math.toIntExact(jobs.getOrDefault(ReviewJobStatus.RUNNING, 0L)),
                             model));
         }
         return summaries;
@@ -338,7 +344,6 @@ public class ReviewSummaryQueryService {
                 s.feedback(),
                 s.jobCount(),
                 s.activeJobCount(),
-                s.runningJobCount(),
                 s.model(),
                 runtimeDTO,
                 usage(ws, id),

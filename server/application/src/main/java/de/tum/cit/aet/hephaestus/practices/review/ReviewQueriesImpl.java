@@ -41,7 +41,7 @@ public class ReviewQueriesImpl implements ReviewQueries {
             add(
                     where,
                     params,
-                    "q.status IN (:statuses)",
+                    ReviewShownStatus.SQL + " IN (:statuses)",
                     "statuses",
                     filter.status().stream().map(Enum::name).toList());
         if (filter.queueState() != null)

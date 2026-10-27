@@ -5,7 +5,7 @@ import {
 	withheldSentence,
 } from "@/components/admin/practice-scans/scan-display";
 
-import { reviewReasonSentence, shownReviewStatus } from "./review-status-defs";
+import { reviewReasonSentence } from "./review-status-defs";
 
 describe("legacy withholding reasons", () => {
 	it("describes retained ambiguity without selecting a result", () => {
@@ -63,24 +63,6 @@ describe("legacy withholding reasons", () => {
 		expect(knownReasonSentence("UNKNOWN_REASON")).toBeUndefined();
 		expect(withheldSentence("UNKNOWN_REASON")).toBe(
 			"Withheld for a recorded reason that this page cannot describe yet.",
-		);
-	});
-});
-
-describe("shownReviewStatus", () => {
-	it("shows a running review whose active invocations all wait for a worker as queued", () => {
-		expect(shownReviewStatus({ status: "RUNNING", activeJobCount: 1, runningJobCount: 0 })).toBe(
-			"QUEUED",
-		);
-	});
-	it("shows a review with a running invocation as running", () => {
-		expect(shownReviewStatus({ status: "RUNNING", activeJobCount: 2, runningJobCount: 1 })).toBe(
-			"RUNNING",
-		);
-	});
-	it("shows a running review with no active invocation, between its attempt and its end, as running", () => {
-		expect(shownReviewStatus({ status: "RUNNING", activeJobCount: 0, runningJobCount: 0 })).toBe(
-			"RUNNING",
 		);
 	});
 });

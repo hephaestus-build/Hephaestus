@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.integration.core.api.ItemRefDTO;
 import de.tum.cit.aet.hephaestus.practices.review.ProductReferenceQuery;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewRepository;
+import de.tum.cit.aet.hephaestus.practices.review.ReviewShownStatus;
 import de.tum.cit.aet.hephaestus.practices.review.model.Review;
 import de.tum.cit.aet.hephaestus.practices.review.report.FrozenScanReport;
 import de.tum.cit.aet.hephaestus.practices.review.report.ScanReportService;
@@ -96,7 +97,10 @@ public class ScanQueryService {
                 review.getChecks().path("ref").asString(),
                 Objects.requireNonNull(review.getItemVersion()),
                 review.getOrigin(),
-                review.getStatus(),
+                ReviewShownStatus.of(
+                        review.getStatus(),
+                        runtime.jobCounts(review.getWorkspaceId(), List.of(review.getId()))
+                                .getOrDefault(review.getId(), Map.of())),
                 account,
                 review.getCreatedAt(),
                 review.getChecks().path("startedAt").isString()
