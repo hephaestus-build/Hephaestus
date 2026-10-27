@@ -39,6 +39,8 @@ export interface PracticeProfilePageHeaderProps {
 	practiceCount: number;
 	groupCount: number;
 	isLoading?: boolean;
+	/** Leaves out "How to read this page", as the tour's example of this page does: the tour explains it. */
+	hideGuide?: boolean;
 }
 
 /**
@@ -61,6 +63,7 @@ export function PracticeProfilePageHeader({
 	practiceCount,
 	groupCount,
 	isLoading = false,
+	hideGuide = false,
 }: PracticeProfilePageHeaderProps) {
 	const [guideOpen, setGuideOpen] = useSectionOpen(GUIDE_FOLD_KEY);
 	return (
@@ -76,7 +79,7 @@ export function PracticeProfilePageHeader({
 				</div>
 				<p className="max-w-2xl text-sm text-muted-foreground">{INTRO}</p>
 			</div>
-			<PracticeProfileGuide open={guideOpen} onOpenChange={setGuideOpen} />
+			{!hideGuide && <PracticeProfileGuide open={guideOpen} onOpenChange={setGuideOpen} />}
 			{/* One link names the destination and covers the card with a pseudo-element, so the whole
 			    card is the pointer path while the words stay the keyboard path. The words turn mentor
 			    blue while the card is hovered, as every inline link on the practice surfaces does on

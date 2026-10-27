@@ -1,5 +1,8 @@
 // The palette this page and its levels share is `webapp/DESIGN.md` § Practice surfaces palette.
+import { useState } from "react";
+
 import type { GroupRef, PracticeStanding, ProfileReviewRef } from "@/api/types.gen";
+import { HephMark } from "@/components/brand/HephaestusLogo";
 import type { LoadState } from "@/components/common/panel-state";
 import {
 	PracticeTabsList,
@@ -16,6 +19,11 @@ import {
 	PracticeFeedbackCardSkeleton,
 } from "@/components/practice-vocabulary/PracticeFeedbackCard";
 import { countPracticeStandings } from "@/components/practice-vocabulary/standing-counts";
+import { PRACTICE_PROFILE_TOUR } from "@/components/tour/practice-profile-tour";
+import { ProductTour } from "@/components/tour/ProductTour";
+import { TourProfilePageContext } from "@/components/tour/tour-profile-page";
+import { TOUR_STAGES } from "@/components/tour/tour-scenes";
+import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 
 import { newestFirst } from "./practice-feedback-cards";
@@ -23,7 +31,28 @@ import { FeedbackEmpty, type FeedbackEmptyProps } from "./practice-profile-block
 import { FEEDBACK_TABS, type FeedbackTab, type PracticeTab } from "./practice-profile-search";
 import { PracticeProfilePageHeader } from "./PracticeProfilePageHeader";
 
+/** Set once the developer has closed the tour, so it no longer opens by itself. */
+const TOUR_SEEN_KEY = "practice-profile:tour-seen";
+
+/** Where the tour can be started again: the "Take the tour" button. */
+const restartTarget = () => document.querySelector("[data-tour-start]");
+
+/** The tour opens by itself on the first visit; `?tour` in the address opens it again. */
+function tourAsked(): boolean {
+	if (new URLSearchParams(window.location.search).has("tour")) {
+		return true;
+	}
+	try {
+		return window.localStorage.getItem(TOUR_SEEN_KEY) === null;
+	} catch {
+		// Without storage the tour cannot remember a visit, so it waits to be asked.
+		return false;
+	}
+}
+
 export interface PracticeProfilePageProps {
+	/** Leaves out the tour, its button and "How to read this page", as the tour's own example of this page does. */
+	hideTour?: boolean;
 	/** The review the header's latest-review chip names; absent before the first review. */
 	latestReview?: ProfileReviewRef;
 	/** Every practice with a standing, for the header's overview ring. */
@@ -97,6 +126,7 @@ export function PracticeProfilePage({
 	feedbackTab,
 	onFeedbackTabChange,
 	state,
+	hideTour = false,
 }: PracticeProfilePageProps) {
 	const openGroupBySlug = (groupSlug: string) => {
 		const group = groups.find((candidate) => candidate.slug === groupSlug);
@@ -105,6 +135,21 @@ export function PracticeProfilePage({
 		}
 	};
 	const cardsByTab = feedbackCardsByTab(feedbackCards);
+	const [tourOpen, setTourOpen] = useState(() => !hideTour && tourAsked());
+	const closeTour = () => {
+		setTourOpen(false);
+		// `?tour` opened it; once closed, a reload should not open it again.
+		const url = new URL(window.location.href);
+		if (url.searchParams.has("tour")) {
+			url.searchParams.delete("tour");
+			window.history.replaceState(window.history.state, "", url);
+		}
+		try {
+			window.localStorage.setItem(TOUR_SEEN_KEY, "1");
+		} catch {
+			// Without storage the visit is not remembered; the tour still closes.
+		}
+	};
 
 	// The alert alone, as `profile/ProfilePage` does: the header's "No practices set up yet" and a
 	// tab's "No feedback yet" are claims about the workspace, and a failed load has none to make.
@@ -122,13 +167,38 @@ export function PracticeProfilePage({
 	const isLoading = state.status === "loading";
 
 	return (
-		<div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
+		<div className="relative mx-auto flex w-full max-w-6xl flex-col gap-6">
+			{/* The guided tour, told by Heph, and the button that starts it again. */}
+			{!hideTour && (
+				<Button
+					variant="outline"
+					size="sm"
+					data-tour-start=""
+					className="absolute top-0 right-0"
+					onClick={() => setTourOpen(true)}
+				>
+					<HephMark className="mr-0.5 size-4" />
+					Take the tour
+				</Button>
+			)}
+			{!hideTour && (
+				<TourProfilePageContext value={PracticeProfilePage}>
+					<ProductTour
+						steps={PRACTICE_PROFILE_TOUR}
+						open={tourOpen}
+						onClose={closeTour}
+						restartTarget={restartTarget}
+						stages={TOUR_STAGES}
+					/>
+				</TourProfilePageContext>
+			)}
 			<PracticeProfilePageHeader
 				latestReview={latestReview}
 				counts={countPracticeStandings(practices)}
 				practiceCount={practices.length}
 				groupCount={groups.length}
 				isLoading={isLoading}
+				hideGuide={hideTour}
 			/>
 			<Section
 				size="lg"
