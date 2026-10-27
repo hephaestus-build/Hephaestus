@@ -426,7 +426,6 @@ Those messages are not delivered.
 The Compose files publish the broker's client port 4222 on the host's loopback address only.
 A process on that host, such as an operator's tool, connects to `127.0.0.1:4222`.
 A stack on the same host connects over the Docker network `shared-network` to `nats-server:4222`.
-Preview environments connect this way.
 
 The single-host stack publishes no broker port.
 Reach its broker from a container on its network, or with `docker exec`.
