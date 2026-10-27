@@ -20,6 +20,7 @@ import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -103,6 +104,7 @@ public class OutlineWebhookRegistrar {
      * operator step and no full sync is needed; {@code outline.webhook.subscription.unrouted} counts what is left.
      */
     @Scheduled(fixedDelayString = "PT5M", initialDelayString = "PT30S")
+    @SchedulerLock(name = "outline-webhook-heal", lockAtMostFor = "PT15M", lockAtLeastFor = "PT1M")
     @WorkspaceAgnostic(
             "Heals the Outline subscription of every workspace; each registration is scoped to its workspace")
     public void healRoutes() {

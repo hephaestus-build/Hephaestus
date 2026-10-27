@@ -15,6 +15,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -69,6 +70,7 @@ public class OutlineRouteProjection {
 
     @EventListener(ApplicationReadyEvent.class)
     @Scheduled(fixedDelayString = "PT1M", initialDelayString = "PT1M")
+    @SchedulerLock(name = "outline-route-projection", lockAtMostFor = "PT5M", lockAtLeastFor = "PT30S")
     @WorkspaceAgnostic(
             "Projects the webhook routes of every workspace's Outline connection; a route names no workspace")
     public synchronized void rebuild() {

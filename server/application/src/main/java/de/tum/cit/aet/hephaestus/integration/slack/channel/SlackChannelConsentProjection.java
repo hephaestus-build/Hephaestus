@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.integration.slack.webhook.SlackChannelMessagePu
 import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -81,6 +82,7 @@ public class SlackChannelConsentProjection {
 
     @EventListener(ApplicationReadyEvent.class)
     @Scheduled(fixedDelayString = "PT1M", initialDelayString = "PT1M")
+    @SchedulerLock(name = "slack-channel-consent-projection", lockAtMostFor = "PT5M", lockAtLeastFor = "PT30S")
     @WorkspaceAgnostic("Projects the ACTIVE Slack channels of every workspace; each key carries its Slack team")
     public synchronized void rebuild() {
         Set<String> active = new HashSet<>();
