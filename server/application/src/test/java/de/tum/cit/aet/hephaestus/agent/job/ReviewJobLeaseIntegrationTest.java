@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -21,15 +22,14 @@ import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * Real-Postgres proof of the multi-replica orphan-recovery SQL — the logic that makes
- * running more than one worker replica safe. Mock-based unit tests cannot exercise the native
- * liveness query (DB-clock {@code now()}, {@code NOT EXISTS} on {@code worker_registry}) or the CAS
- * {@code requeueOrphan}, so the actual coordination guarantees live here.
+ * Real-Postgres proof of lease recovery, which makes running more than one worker replica safe. Mock-based unit tests
+ * cannot exercise the native lease queries on the database clock or the CAS {@code requeueOrphan}, so the actual
+ * coordination guarantees live here.
  */
-@DisplayName("Orphan recovery SQL (Postgres) Integration")
-class WorkerRegistryOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
+@DisplayName("Review job lease SQL (Postgres) Integration")
+class ReviewJobLeaseIntegrationTest extends BaseIntegrationTest {
 
-    private static final long LEASE_TTL_SECONDS = 60;
+    private static final long LEASE_TTL_SECONDS = AgentProperties.WORKER_LEASE_TTL.toSeconds();
 
     @Autowired
     private ReviewJobRepository jobRepository;
@@ -49,8 +49,7 @@ class WorkerRegistryOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
     @Autowired
     private JdbcTemplate jdbc;
 
-    // This context has worker.enabled=true and NO hephaestus.worker.control.endpoint — the exact
-    // topology where orphan recovery would otherwise silently no-op. required=false so a regression
+    // This context has worker.enabled=true and NO hephaestus.worker.control.endpoint. required=false so a regression
     // (identity bound only when WSS is configured) fails on the assertion, not on context load.
     @Autowired(required = false)
     private WorkerProperties workerProperties;
@@ -60,51 +59,77 @@ class WorkerRegistryOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
     @BeforeEach
     void setUp() {
         databaseTestUtils.cleanDatabase();
-        workspace = workspaceRepository.save(TestEntities.activeWorkspace("orphan-ws"));
+        workspace = workspaceRepository.save(TestEntities.activeWorkspace("lease-ws"));
     }
 
     @Test
-    @DisplayName("a RUNNING job whose owner heartbeats fresh is NOT orphaned")
-    void aliveWorkerNotOrphaned() {
-        runningJob("w-alive", Instant.now().minus(Duration.ofMinutes(5)));
-        registerWorker("w-alive", Instant.now()); // fresh
+    @DisplayName("a running attempt whose lease holds is not recovered")
+    void shouldKeepTheAttemptWhenItsLeaseHolds() {
+        UUID id = runningJob("w-alive");
+        transactionTemplate.execute(s -> jobRepository.lease(id, LEASE_TTL_SECONDS));
 
-        assertThat(findOrphans()).isEmpty();
+        assertThat(expired()).extracting(OrphanedJobRef::getJobId).doesNotContain(id);
     }
 
     @Test
-    @DisplayName("a RUNNING job whose owner's heartbeat is stale IS orphaned")
-    void staleWorkerOrphaned() {
-        UUID id = runningJob("w-stale", Instant.now().minus(Duration.ofMinutes(5)));
-        registerWorker("w-stale", Instant.now().minus(Duration.ofMinutes(5))); // stale
+    @DisplayName("a running attempt whose lease expired is recovered")
+    void shouldRecoverTheAttemptWhenItsLeaseExpired() {
+        UUID id = runningJob("w-gone");
+        jdbc.update("UPDATE review_job SET leased_until = now() - interval '1 minute' WHERE id = ?", id);
 
-        assertThat(findOrphans()).extracting(OrphanedJobRef::getJobId).containsExactly(id);
+        assertThat(expired()).extracting(OrphanedJobRef::getJobId).containsExactly(id);
     }
 
     @Test
-    @DisplayName("a RUNNING job whose owner has no registry row IS orphaned")
-    void missingWorkerOrphaned() {
-        UUID id = runningJob("w-gone", Instant.now().minus(Duration.ofMinutes(5)));
-        // no worker_registry row for w-gone
+    @DisplayName("a running attempt without a lease, from a version before leases, is recovered")
+    void shouldRecoverTheAttemptWhenItHasNoLease() {
+        UUID id = runningJob("w-old");
 
-        assertThat(findOrphans()).extracting(OrphanedJobRef::getJobId).containsExactly(id);
+        assertThat(expired()).extracting(OrphanedJobRef::getJobId).containsExactly(id);
     }
 
     @Test
-    @DisplayName("a just-claimed job (within startup grace) is NOT orphaned even if the worker is unknown")
-    void withinStartupGraceNotOrphaned() {
-        runningJob("w-new", Instant.now().minus(Duration.ofSeconds(30))); // younger than the 2-min grace
-        // no registry row — but grace must protect it
+    @DisplayName("a worker's heartbeat renews the leases of its own running attempts, and of no other worker's")
+    void shouldRenewOnlyItsOwnLeasesWhenAWorkerBeats() {
+        UUID mine = runningJob("w-me");
+        UUID theirs = runningJob("w-other");
+        jdbc.update("UPDATE review_job SET leased_until = now() - interval '1 minute'");
 
-        List<OrphanedJobRef> orphans =
-                jobRepository.findOrphanedRunningJobs(Instant.now().minus(Duration.ofMinutes(2)), LEASE_TTL_SECONDS);
-        assertThat(orphans).isEmpty();
+        int renewed = transactionTemplate.execute(s -> jobRepository.renewLeases("w-me", LEASE_TTL_SECONDS));
+
+        assertThat(renewed).isEqualTo(1);
+        assertThat(expired())
+                .extracting(OrphanedJobRef::getJobId)
+                .containsExactly(theirs)
+                .doesNotContain(mine);
+    }
+
+    @Autowired
+    private AgentProperties agentProperties;
+
+    @Test
+    @DisplayName("this worker's heartbeat renews the lease of an attempt that it runs")
+    void shouldRenewTheLeaseWhenTheWorkerThatRunsTheAttemptBeats() {
+        assertThat(workerProperties).isNotNull();
+        var reporter = new WorkerLivenessReporter(
+                workerRegistryRepository,
+                jobRepository,
+                transactionTemplate,
+                agentProperties,
+                workerProperties,
+                new SimpleMeterRegistry());
+        UUID id = runningJob(workerProperties.resolvedWorkerId());
+        jdbc.update("UPDATE review_job SET leased_until = now() - interval '1 minute' WHERE id = ?", id);
+
+        reporter.beat();
+
+        assertThat(expired()).extracting(OrphanedJobRef::getJobId).doesNotContain(id);
     }
 
     @Test
     @DisplayName("requeueOrphan is a CAS: first caller wins (1), the second is a no-op (0)")
     void requeueOrphanIsCasIdempotent() {
-        UUID id = runningJob("w-stale", Instant.now().minus(Duration.ofMinutes(5)));
+        UUID id = runningJob("w-stale");
 
         // requeueOrphan is @Modifying — wrap in a tx, as the sweeper does. Fenced on worker_id:
         // "w-stale" is the row's actual owner both times, so the fence itself doesn't
@@ -149,19 +174,18 @@ class WorkerRegistryOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
 
     // ── helpers ──
 
-    private List<OrphanedJobRef> findOrphans() {
-        // graceCutoff well in the past so the 5-min-old jobs are eligible; liveness is DB-clock.
-        return jobRepository.findOrphanedRunningJobs(Instant.now().minus(Duration.ofMinutes(2)), LEASE_TTL_SECONDS);
+    private List<OrphanedJobRef> expired() {
+        return jobRepository.findExpiredLeases(jobRepository.databaseNow());
     }
 
-    private UUID runningJob(String workerId, Instant startedAt) {
+    private UUID runningJob(String workerId) {
         ReviewJob job = new ReviewJob();
         RuntimeJobTestData.initialize(job, workspace.getId());
 
         job.setStatus(ReviewJobStatus.RUNNING);
         job.setConfigSnapshot(objectMapper.createObjectNode());
         job.setWorkerId(workerId);
-        job.setStartedAt(startedAt);
+        job.setStartedAt(Instant.now());
         return jobRepository
                 .saveAndFlush(RuntimeJobTestData.persistParent(jdbc, job))
                 .getId();

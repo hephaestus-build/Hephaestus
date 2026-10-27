@@ -311,6 +311,9 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
         assertThat(claimed.getStatus()).isEqualTo(ReviewJobStatus.RUNNING);
         assertThat(claimed.getAttempt()).isEqualTo(1);
         assertThat(claimed.getExecutionStartedAt()).isNull();
+        assertThat(claimed.getLeasedUntil())
+                .as("the claim leases the attempt for one lease from now")
+                .isAfter(Instant.now().plus(AgentProperties.WORKER_LEASE_TTL).minusSeconds(60));
     }
 
     @Test

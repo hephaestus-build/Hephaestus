@@ -22,6 +22,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 // Heartbeats must come from the executing JVM; a lost WSS connection does not mean the worker stopped. Every worker
 // beats, also one that runs no practice reviews: the Kubernetes sandboxes of a worker that no longer beats are removed.
+// Each beat also renews the lease of every review attempt that this worker runs.
 @Component
 @ConditionalOnWorkerRole
 @WorkspaceAgnostic("Fleet-wide worker liveness; not workspace-scoped.")
@@ -30,6 +31,7 @@ public class WorkerLivenessReporter {
     private static final Logger log = LoggerFactory.getLogger(WorkerLivenessReporter.class);
 
     private final WorkerRegistryRepository repository;
+    private final ReviewJobRepository jobs;
     private final TransactionTemplate transactionTemplate;
     private final Duration interval;
     private final String workerId;
@@ -42,20 +44,23 @@ public class WorkerLivenessReporter {
 
     public WorkerLivenessReporter(
             WorkerRegistryRepository repository,
+            ReviewJobRepository jobs,
             TransactionTemplate transactionTemplate,
             AgentProperties agentProperties,
             WorkerProperties workerProperties,
             MeterRegistry meterRegistry) {
         this.repository = repository;
+        this.jobs = jobs;
         this.transactionTemplate = transactionTemplate;
         this.interval = agentProperties.heartbeatInterval();
         this.workerId = workerProperties.resolvedWorkerId();
         this.heartbeatFailures = Counter.builder(AgentMetrics.WORKER_LIVENESS_HEARTBEAT_FAILURES)
-                .description("Failed worker_registry heartbeat writes (a stalled reporter risks false orphaning)")
+                .description(
+                        "Failed worker_registry heartbeat writes (a stalled reporter risks the requeue of its reviews)")
                 .register(meterRegistry);
     }
 
-    // Publish liveness before the first claim, or the sweeper can mistake it for an orphan.
+    // Publish liveness before the first claim: other workers keep a worker's Heph sandboxes only while it beats.
     @EventListener(ApplicationReadyEvent.class)
     @Order(1)
     public void start() {
@@ -71,9 +76,13 @@ public class WorkerLivenessReporter {
         log.info("Worker liveness reporter started: workerId={}, interval={}", workerId, interval);
     }
 
-    private void beat() {
+    /** One heartbeat: this worker's registry row, and the leases of the review attempts that it runs. */
+    void beat() {
         try {
-            transactionTemplate.executeWithoutResult(s -> repository.heartbeat(workerId));
+            transactionTemplate.executeWithoutResult(s -> {
+                repository.heartbeat(workerId);
+                jobs.renewLeases(workerId, AgentProperties.WORKER_LEASE_TTL.toSeconds());
+            });
             if (consecutiveFailures > 0) {
                 log.info(
                         "Worker liveness heartbeat recovered after {} failure(s): workerId={}",
@@ -82,7 +91,7 @@ public class WorkerLivenessReporter {
                 consecutiveFailures = 0;
             }
         } catch (Exception e) {
-            // WARN, never DEBUG: a worker that cannot heartbeat gets falsely orphaned and its jobs
+            // WARN, never DEBUG: a worker that cannot heartbeat loses its leases, and its jobs get
             // double-executed.
             heartbeatFailures.increment();
             consecutiveFailures++;
@@ -99,9 +108,8 @@ public class WorkerLivenessReporter {
         if (scheduler != null) {
             scheduler.shutdownNow();
         }
-        // Deliberately do NOT delete the registry row: drain is best-effort, so a job may still be
-        // RUNNING, and deleting the row would orphan it into an immediate re-run by a sibling. Stopping
-        // the heartbeat instead lets the lease expire, which recovers only genuinely-unfinished jobs.
-        // ReviewJobZombieSweeper purges the row afterwards.
+        // Deliberately do NOT end the leases: drain is best-effort, so a job may still be RUNNING. Stopping
+        // the heartbeat lets each lease expire, which recovers only genuinely-unfinished jobs.
+        // ReviewJobZombieSweeper purges the registry row afterwards.
     }
 }

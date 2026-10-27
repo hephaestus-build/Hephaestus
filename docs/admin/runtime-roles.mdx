@@ -318,7 +318,13 @@ deployment silently does half its job. They do **not** share a gate:
 
 - **Submission** (turning pull request, issue and bot-command events into queued jobs) needs
   this flag **and** the server role. A worker-only container executes jobs. It does not submit these reviews.
-- **Orphan recovery** reclaims a dead worker's stuck jobs.
+- **Orphan recovery** reclaims the jobs of a worker that stopped.
+  A worker holds a lease of 5 minutes on each job that it runs, on the database clock.
+  It renews the lease with each heartbeat (`hephaestus.agent.heartbeat-interval`).
+  The server checks the leases every 20 seconds. When a lease expires, the server requeues the job, or fails it at the retry limit.
+  After the server starts, it requeues nothing for one heartbeat interval. It does the same after a gap of more than 40 seconds between two checks.
+  Every live worker renews its leases within that interval.
+  A job that ran during the upgrade to 1.0 has no lease, so the server requeues it once.
   It needs this flag **and** the server role.
   It therefore does not run twice on a dedicated worker pod.
 - **Execution** (the poll loop that claims and runs jobs) needs this flag **and** the worker role.

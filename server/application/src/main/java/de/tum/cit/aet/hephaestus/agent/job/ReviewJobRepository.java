@@ -412,18 +412,41 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
     @Query("SELECT j FROM ReviewJob j WHERE j.status = 'RUNNING' AND j.startedAt < :cutoff")
     List<ReviewJob> findStaleRunningJobs(@Param("cutoff") Instant cutoff);
 
-    /** Compare heartbeat times on the database clock so application clock skew cannot create false orphans. */
-    @WorkspaceAgnostic("Cross-workspace orphan recovery; caller is @WorkspaceAgnostic sweeper")
+    /**
+     * Running attempts whose lease expired before {@code cutoff}, a time on the database clock. An attempt with no lease
+     * was claimed by a version before leases, which no longer runs.
+     */
+    @WorkspaceAgnostic("Cross-workspace lease recovery; caller is @WorkspaceAgnostic sweeper")
     @Query(
             value = "SELECT j.id AS jobId, j.workspace_id AS workspaceId, j.attempt AS attempt, "
                     + "j.worker_id AS workerId "
                     + "FROM review_job j WHERE j.status = 'RUNNING' AND j.worker_id IS NOT NULL "
-                    + "AND j.started_at < :graceCutoff "
-                    + "AND NOT EXISTS (SELECT 1 FROM worker_registry w WHERE w.worker_id = j.worker_id "
-                    + "AND w.last_heartbeat >= now() - make_interval(secs => :leaseTtlSeconds))",
+                    + "AND (j.leased_until IS NULL OR j.leased_until < :cutoff)",
             nativeQuery = true)
-    List<OrphanedJobRef> findOrphanedRunningJobs(
-            @Param("graceCutoff") Instant graceCutoff, @Param("leaseTtlSeconds") long leaseTtlSeconds);
+    List<OrphanedJobRef> findExpiredLeases(@Param("cutoff") Instant cutoff);
+
+    /** Leases the claimed attempt for {@code ttlSeconds} from now, on the database clock. */
+    @WorkspaceAgnostic("ID-based lease of an attempt that this worker claimed")
+    @Modifying(flushAutomatically = true)
+    @Query(
+            value = "UPDATE review_job SET leased_until = now() + make_interval(secs => :ttlSeconds) "
+                    + "WHERE id = :id AND status = 'RUNNING'",
+            nativeQuery = true)
+    int lease(@Param("id") UUID id, @Param("ttlSeconds") long ttlSeconds);
+
+    /** Renews the leases of every attempt that this worker runs, on the database clock. */
+    @WorkspaceAgnostic("Renews the leases of one worker's attempts across workspaces")
+    @Modifying
+    @Query(
+            value = "UPDATE review_job SET leased_until = now() + make_interval(secs => :ttlSeconds) "
+                    + "WHERE worker_id = :workerId AND status = 'RUNNING'",
+            nativeQuery = true)
+    int renewLeases(@Param("workerId") String workerId, @Param("ttlSeconds") long ttlSeconds);
+
+    /** The database clock, which every lease compares with: the transaction's start, or this statement's without one. */
+    @WorkspaceAgnostic("Reads the database clock")
+    @Query(value = "SELECT now()", nativeQuery = true)
+    Instant databaseNow();
 
     /**
      * Hands an owned admitted attempt on to a new attempt that measures nothing and composes what is still open, from

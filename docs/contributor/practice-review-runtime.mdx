@@ -73,6 +73,13 @@ The [pipeline](./practice-review-pipeline.mdx) owns these stage boundaries.
 
 A failed attempt cannot overwrite its original admitted results.
 A retry runs under a new fence and reuses durable assignment state.
+
+A running attempt holds a lease (`review_job.leased_until`) on the database clock.
+The claim sets it, and the worker's heartbeat renews it (`WorkerLivenessReporter`).
+`ReviewJobZombieSweeper` recovers an attempt whose lease expired one renewal interval before its previous check, and checks the lease again under the row's lock.
+After a start or a stall of its checks, it recovers nothing for one renewal interval.
+An attempt without a lease came from a version before leases, which no longer runs, so it is recovered too.
+
 Delivery recovery reads persisted copies rather than re-running a writer from raw result text.
 Unknown visibility permits readback, not automatic reposting.
 

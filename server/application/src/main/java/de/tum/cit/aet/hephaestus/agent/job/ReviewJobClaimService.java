@@ -242,6 +242,7 @@ public class ReviewJobClaimService {
         job.setWorkerId(workerId);
         job.setConfigSnapshot(snapshot.toJson(objectMapper));
         jobRepository.save(job);
+        jobRepository.lease(job.getId(), AgentProperties.WORKER_LEASE_TTL.toSeconds());
 
         return new ClaimResult(job, snapshot, itemKind);
     }
@@ -255,6 +256,7 @@ public class ReviewJobClaimService {
         job.setHoldReason(null);
         job.setWorkerId(workerId);
         jobRepository.save(job);
+        jobRepository.lease(job.getId(), AgentProperties.WORKER_LEASE_TTL.toSeconds());
         return new ClaimResult(job, ConfigSnapshot.fromJson(job.getConfigSnapshot(), objectMapper), itemKind, cause);
     }
 
