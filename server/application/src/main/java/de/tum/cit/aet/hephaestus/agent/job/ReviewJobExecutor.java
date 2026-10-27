@@ -44,6 +44,7 @@ import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
 import de.tum.cit.aet.hephaestus.practices.spi.ProcessingStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import jakarta.annotation.PreDestroy;
@@ -138,6 +139,12 @@ public class ReviewJobExecutor {
     /** How long a review waits in the queue after the sandbox runtime first had no room for it. */
     static final Duration ROOM_WAIT = Duration.ofSeconds(30);
 
+    /** How often the poll asks the runtime whether queued reviews can still get sandbox room. */
+    static final Duration ROOM_CHECK = Duration.ofSeconds(30);
+
+    /** How long the runtime may have no room for a review while no review runs, before queued reviews end. */
+    static final Duration STARVATION_BOUND = Duration.ofHours(1);
+
     /** The longest wait between two refusals of sandbox room. */
     static final Duration MAX_ROOM_WAIT = Duration.ofMinutes(5);
 
@@ -183,6 +190,12 @@ public class ReviewJobExecutor {
     private final Counter drainedRequeued;
 
     private final Counter drainedCancelled;
+    /** When the poll next asks the runtime about room for queued reviews ({@link #endReviewsWithoutRoom}). */
+    private volatile Instant nextRoomCheck = Instant.EPOCH;
+
+    /** Since when the runtime has had no room for a review while no review ran; empty while it is not starved. */
+    private final AtomicReference<@Nullable Instant> starvedSince = new AtomicReference<>();
+
     /** Review sandboxes that could not start, by reason: {@code sandbox.start.failures{kind=review}}. */
     private final Map<SandboxCapacityException.Reason, Counter> sandboxStartFailures =
             new EnumMap<>(SandboxCapacityException.Reason.class);
@@ -200,7 +213,7 @@ public class ReviewJobExecutor {
      * Claimed jobs that still prepare their sandbox, which the runtime's room does not count yet. A job leaves at its
      * execution fence ({@link #markExecutionStarted}), before its sandbox is launched; for the time of that write and
      * the launch, a poll can read one room too many. That window is accepted: the runtime then refuses the sandbox, and
-     * the refusal requeues the job without spending an attempt (#3355).
+     * the refusal requeues the job without spending a retry.
      */
     private final Set<UUID> preparingJobs = ConcurrentHashMap.newKeySet();
 
@@ -272,6 +285,10 @@ public class ReviewJobExecutor {
         this.drainedCancelled = Counter.builder(AgentMetrics.AGENT_JOB_DRAINED)
                 .description("Reviews that a worker's drain stopped, by outcome")
                 .tag("outcome", "cancelled")
+                .register(meterRegistry);
+        Gauge.builder(AgentMetrics.SANDBOX_REVIEW_STARVED, starvedSince, ReviewJobExecutor::starvedSeconds)
+                .description("How long the sandbox runtime has had no room for a review while no review ran")
+                .baseUnit("seconds")
                 .register(meterRegistry);
         for (SandboxCapacityException.Reason reason : SandboxCapacityException.Reason.values()) {
             sandboxStartFailures.put(
@@ -466,6 +483,7 @@ public class ReviewJobExecutor {
     private void pollLoop() {
         while (running.get()) {
             try {
+                endReviewsWithoutRoom(Instant.now());
                 int capacity = computeCapacity();
                 if (capacity <= 0) {
                     sleepPollInterval();
@@ -1396,17 +1414,17 @@ public class ReviewJobExecutor {
      * @return FAILED, or null when the job waits or this worker lost it
      */
     private @Nullable ReviewJobStatus withoutRoom(UUID jobId, ReviewJob job, SandboxCapacityException e) {
-        Objects.requireNonNull(sandboxStartFailures.get(e.reason())).increment();
         Instant now = Instant.now();
-        boolean neverFits = e.reason() == SandboxCapacityException.Reason.QUOTA_CANNOT_FIT;
+        boolean neverFits = e.reason() == SandboxCapacityException.Reason.QUOTA_CANNOT_FIT
+                || sandboxManager.neverFits(reviewLimits.forAttempt(ResourceLimits.MAX_RUNTIME));
+        SandboxCapacityException.Reason reason =
+                neverFits ? SandboxCapacityException.Reason.QUOTA_CANNOT_FIT : e.reason();
+        Objects.requireNonNull(sandboxStartFailures.get(reason)).increment();
         if (neverFits || job.getRoomRefusals() >= ReviewJob.MAX_ROOM_REFUSALS) {
             String error = neverFits ? CANNOT_FIT : NO_ROOM_IN_TIME;
-            log.error(
-                    "No sandbox room for the review, so it is cancelled: reason={}, error={}",
-                    e.reason().tag(),
-                    error);
-            Integer cancelled = transactionTemplate.execute(status -> jobRepository.transitionToCancelledOwnedBy(
-                    jobId, now, error, ReviewJobCancellationReason.NO_SANDBOX_ROOM, workerId, job.getAttempt()));
+            log.error("No sandbox room for the review, so it is cancelled: reason={}, error={}", reason.tag(), error);
+            Integer cancelled = transactionTemplate.execute(
+                    status -> jobRepository.cancelForRoomOwnedBy(jobId, now, error, workerId, job.getAttempt()));
             return cancelled != null && cancelled > 0 ? ReviewJobStatus.CANCELLED : null;
         }
         Instant retryAt = now.plus(roomWait(job.getRoomRefusals()));
@@ -1414,9 +1432,58 @@ public class ReviewJobExecutor {
                 jobId, workerId, job.getAttempt(), ReviewJob.MAX_ROOM_REFUSALS, retryAt));
         log.warn(
                 "No room for the review's sandbox, so the job waits in the queue: reason={}, retryAt={}",
-                e.reason().tag(),
+                reason.tag(),
                 retryAt);
         return null;
+    }
+
+    /**
+     * Ends the queued reviews that the sandbox runtime cannot hold, at most every {@link #ROOM_CHECK}: at once when no
+     * room can ever hold one, and after {@link #STARVATION_BOUND} of starvation, when the runtime has had no room for a
+     * review while no review ran anywhere, so nothing would free room. Waiting behind running reviews is backlog, never
+     * starvation. Admission before the claim keeps such reviews queued, so this check, not a refusal, ends them.
+     */
+    void endReviewsWithoutRoom(Instant now) {
+        if (now.isBefore(nextRoomCheck)) {
+            return;
+        }
+        nextRoomCheck = now.plus(ROOM_CHECK);
+        ResourceLimits limits = reviewLimits.forAttempt(ResourceLimits.MAX_RUNTIME);
+        if (sandboxManager.neverFits(limits)) {
+            cancelQueuedForRoom(now, CANNOT_FIT, SandboxCapacityException.Reason.QUOTA_CANNOT_FIT);
+            return;
+        }
+        if (sandboxManager.roomFor(limits) > 0 || sandboxManager.reviewsRunning()) {
+            starvedSince.set(null);
+            return;
+        }
+        Instant since = starvedSince.get();
+        if (since == null) {
+            starvedSince.set(now);
+            log.warn(
+                    "The sandbox quota has no room for a review while no review runs: other sandboxes, such as Heph's,"
+                            + " hold it. Raise worker.sandbox.quota (docs/admin/kubernetes.mdx); queued reviews end"
+                            + " after {} without room",
+                    STARVATION_BOUND);
+            return;
+        }
+        if (Duration.between(since, now).compareTo(STARVATION_BOUND) >= 0) {
+            cancelQueuedForRoom(now, NO_ROOM_IN_TIME, SandboxCapacityException.Reason.QUOTA_EXCEEDED);
+        }
+    }
+
+    private void cancelQueuedForRoom(Instant now, String error, SandboxCapacityException.Reason reason) {
+        Integer cancelled = transactionTemplate.execute(status -> jobRepository.cancelQueuedForRoom(now, error));
+        if (cancelled != null && cancelled > 0) {
+            Objects.requireNonNull(sandboxStartFailures.get(reason)).increment(cancelled);
+            log.error("Cancelled {} queued reviews without sandbox room: reason={}", cancelled, reason.tag());
+        }
+    }
+
+    /** How long the runtime has had no room for a review while no review ran; zero when it is not starved. */
+    private static double starvedSeconds(AtomicReference<@Nullable Instant> starvedSince) {
+        Instant since = starvedSince.get();
+        return since == null ? 0 : Duration.between(since, Instant.now()).toSeconds();
     }
 
     /** The wait after the given number of earlier refusals: 30 seconds, doubling, at most 5 minutes. */

@@ -96,6 +96,24 @@ public class KubernetesSandboxBackend implements SandboxBackend, SandboxRoom {
     }
 
     @Override
+    public boolean neverFits(ResourceLimits limits) {
+        return quota.neverFits(limits);
+    }
+
+    /** A review Job with an active Pod, of any worker; a Job whose Pod the quota refused has none. */
+    @Override
+    public boolean reviewsRunning() {
+        try {
+            return reviewJobs.list().stream()
+                    .anyMatch(job -> job.getStatus() != null
+                            && job.getStatus().getActive() != null
+                            && job.getStatus().getActive() > 0);
+        } catch (RuntimeException e) {
+            return true;
+        }
+    }
+
+    @Override
     public Handle launch(Launch launch) {
         worker.requireIsolation();
         boolean review = launch.kind() == Kind.REVIEW;

@@ -71,6 +71,34 @@ class KubernetesSandboxQuotaTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldTellAQuotaSmallerThanOneReviewFromAFullOne() {
+        var full = quota(Map.of("requests.memory", "9728Mi"), Map.of("requests.memory", "9728Mi"));
+        var tooSmall = quota(Map.of("requests.memory", "2Gi"), Map.of("requests.memory", "0"));
+
+        assertThat(KubernetesSandboxQuota.neverFits(List.of(full), REVIEW))
+                .as("a full quota frees room when its sandboxes end")
+                .isFalse();
+        assertThat(KubernetesSandboxQuota.neverFits(List.of(full, tooSmall), REVIEW))
+                .as("2 GiB never hold a review of 3 GiB")
+                .isTrue();
+    }
+
+    @Test
+    void shouldNotJudgeAScopedOrUnobservedQuotaTooSmall() {
+        var terminating = quota(Map.of("requests.memory", "1Gi"), Map.of("requests.memory", "0"));
+        terminating.setSpec(
+                new ResourceQuotaSpecBuilder().withScopes("Terminating").build());
+        var unobserved = new ResourceQuotaBuilder()
+                .withNewMetadata()
+                .withName("new")
+                .endMetadata()
+                .build();
+
+        assertThat(KubernetesSandboxQuota.neverFits(List.of(terminating, unobserved), REVIEW))
+                .isFalse();
+    }
+
+    @Test
     void shouldAdmitNothingWhenAQuotaIsOverspent() {
         var overspent = quota(Map.of("pods", "4"), Map.of("pods", "6"));
 

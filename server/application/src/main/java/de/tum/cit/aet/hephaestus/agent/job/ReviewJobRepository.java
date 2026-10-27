@@ -472,6 +472,39 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
             @Param("maxRefusals") int maxRefusals,
             @Param("availableAt") Instant availableAt);
 
+    /**
+     * Cancels this worker's attempt for capacity: nothing of its sandbox ran, so it has no execution time either.
+     *
+     * @return rows updated (0 or 1)
+     */
+    @WorkspaceAgnostic("ID-based fenced cancel; caller is the claiming worker itself")
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("UPDATE ReviewJob j SET j.status = de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus.CANCELLED, "
+            + "j.completedAt = :now, j.errorMessage = :error, j.executionStartedAt = null, "
+            + "j.cancellationReason = de.tum.cit.aet.hephaestus.agent.job.ReviewJobCancellationReason.NO_SANDBOX_ROOM "
+            + "WHERE j.id = :id AND j.status = 'RUNNING' AND j.workerId = :workerId AND j.attempt = :attempt")
+    int cancelForRoomOwnedBy(
+            @Param("id") UUID id,
+            @Param("now") Instant now,
+            @Param("error") String error,
+            @Param("workerId") String workerId,
+            @Param("attempt") int attempt);
+
+    /**
+     * Cancels for capacity every queued review that needs a sandbox and is due: the sandbox runtime cannot hold it.
+     * Admitted reviews that only compose need no sandbox and stay. Several workers may run it; the second changes
+     * nothing.
+     *
+     * @return the reviews cancelled
+     */
+    @WorkspaceAgnostic("Fleet-wide capacity verdict over the shared queue; caller is a worker's admission check")
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("UPDATE ReviewJob j SET j.status = de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus.CANCELLED, "
+            + "j.completedAt = :now, j.errorMessage = :error, "
+            + "j.cancellationReason = de.tum.cit.aet.hephaestus.agent.job.ReviewJobCancellationReason.NO_SANDBOX_ROOM "
+            + "WHERE j.status = 'QUEUED' AND j.availableAt <= :now AND j.admissionDigest IS NULL")
+    int cancelQueuedForRoom(@Param("now") Instant now, @Param("error") String error);
+
     /** Pool rejection leaves attempt, availability, and token unchanged because no sandbox executed. */
     @WorkspaceAgnostic("ID-based self-fenced requeue; caller is the claiming worker itself")
     @Modifying(flushAutomatically = true, clearAutomatically = true)

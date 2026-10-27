@@ -76,7 +76,7 @@ public class ReviewJobRecovery {
             bill(owned, counts);
             return Outcome.CANCELLED;
         }
-        Instant availableAt = now.plus(ReviewJobBackoff.compute(attempt + 1));
+        Instant availableAt = now.plus(ReviewJobBackoff.compute(owned.spentAttempts() + 1));
         int changed = owned.spentAttempts() < properties.maxRetries()
                 ? jobs.requeueOrphan(jobId, workerId, properties.maxRetries(), availableAt)
                 : 0;
@@ -126,7 +126,7 @@ public class ReviewJobRecovery {
                 job.getId(),
                 workerId,
                 properties.maxRetries(),
-                Instant.now().plus(ReviewJobBackoff.compute(job.getAttempt() + 1)));
+                Instant.now().plus(ReviewJobBackoff.compute(locked.spentAttempts() + 1)));
         if (changed > 0 && bill) bill(locked, counts);
         return changed > 0;
     }

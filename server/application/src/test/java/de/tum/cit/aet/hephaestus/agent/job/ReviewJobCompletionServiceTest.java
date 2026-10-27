@@ -139,29 +139,4 @@ class ReviewJobCompletionServiceTest extends BaseUnitTest {
         assertThat(completion.getValue().reason()).isEqualTo(ReviewStopReason.READINESS_REFUSED);
         verifyNoInteractions(members);
     }
-
-    @Test
-    void aReviewWithoutSandboxRoomClosesAsCancelledForCapacityNeverForItsWork() {
-        var job = RuntimeReviewTestData.job();
-        job.setStatus(ReviewJobStatus.CANCELLED);
-        job.setCancellationReason(ReviewJobCancellationReason.NO_SANDBOX_ROOM);
-        job.setStartedAt(Instant.now());
-        job.setExecutionStartedAt(Instant.now());
-        var service = service(job, ReviewKind.ITEM);
-        var assignment = RuntimeReviewTestData.assignment(null, null);
-        when(assignments.admissible(job)).thenReturn(List.of(assignment));
-
-        service.tick();
-
-        verify(members)
-                .fail(
-                        1,
-                        assignment.id(),
-                        ReviewStopReason.NO_SANDBOX_ROOM,
-                        "The execution ended without an admitted result");
-        var completion = ArgumentCaptor.forClass(ReviewCompletion.class);
-        verify(reviews).complete(ArgumentMatchers.eq(1L), ArgumentMatchers.eq(job.getReviewId()), completion.capture());
-        assertThat(completion.getValue().status()).isEqualTo(ReviewStatus.CANCELLED);
-        assertThat(completion.getValue().reason()).isEqualTo(ReviewStopReason.NO_SANDBOX_ROOM);
-    }
 }

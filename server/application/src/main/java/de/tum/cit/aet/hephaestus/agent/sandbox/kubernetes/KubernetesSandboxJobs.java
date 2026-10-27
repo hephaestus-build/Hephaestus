@@ -4,21 +4,14 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxCancelledException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxCapacityException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxInfrastructureException;
-import io.fabric8.kubernetes.api.model.Container;
 import io.fabric8.kubernetes.api.model.DeletionPropagation;
 import io.fabric8.kubernetes.api.model.Pod;
-import io.fabric8.kubernetes.api.model.PodSpec;
-import io.fabric8.kubernetes.api.model.Quantity;
-import io.fabric8.kubernetes.api.model.ResourceQuota;
-import io.fabric8.kubernetes.api.model.ResourceRequirements;
 import io.fabric8.kubernetes.api.model.batch.v1.Job;
 import io.fabric8.kubernetes.api.model.batch.v1.JobBuilder;
 import io.fabric8.kubernetes.client.KubernetesClient;
 import io.fabric8.kubernetes.client.KubernetesClientException;
-import java.math.BigDecimal;
 import java.time.Duration;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -67,9 +60,6 @@ public class KubernetesSandboxJobs {
 
     /** Whether the API refused this worker the events of the sandbox namespace: it stops asking. */
     private final AtomicBoolean eventsDenied = new AtomicBoolean();
-
-    /** Whether the API refused this worker the quotas of the sandbox namespace: it warns once. */
-    private final AtomicBoolean quotasDenied = new AtomicBoolean();
 
     public KubernetesSandboxJobs(KubernetesClient client, KubernetesWorker worker) {
         this.client = client;
@@ -173,7 +163,8 @@ public class KubernetesSandboxJobs {
     /**
      * Throws when the Job controller reported that the sandbox quota refused this Job's Pod and no Pod of it exists: a
      * Pod that the controller created once room freed wins over its earlier refusal. The event names the Job by its
-     * UID, so the event of an earlier Job of the same name does not count. A worker that may not read the events stops
+     * UID, so the event of an earlier Job of the same name does not count. Whether the quota can ever hold the Pod, the
+     * caller asks the quota ({@code SandboxRoom#neverFits}). A worker that may not read the events stops
      * looking after one warning and leaves the wait to its timeout.
      */
     void requireRoom(String job) {
@@ -201,9 +192,7 @@ public class KubernetesSandboxJobs {
             if (refused && podOf(job) == null) {
                 throw new SandboxCapacityException(
                         "The sandbox quota has no room for the Pod of a review Job",
-                        fitsAtAll(read)
-                                ? SandboxCapacityException.Reason.QUOTA_EXCEEDED
-                                : SandboxCapacityException.Reason.QUOTA_CANNOT_FIT);
+                        SandboxCapacityException.Reason.QUOTA_EXCEEDED);
             }
         } catch (KubernetesClientException e) {
             if (e.getCode() == 403 && eventsDenied.compareAndSet(false, true)) {
@@ -216,76 +205,6 @@ public class KubernetesSandboxJobs {
         } catch (RuntimeException e) {
             log.debug("Could not read whether the sandbox quota refused review Job {}", job, e);
         }
-    }
-
-    /**
-     * Whether the Job's Pod needs no more than each quota of the namespace holds; true when that cannot be read. A
-     * quota with scopes applies to some Pods only, and this cannot tell which, so it never proves that a Pod cannot fit.
-     */
-    private boolean fitsAtAll(Job read) {
-        try {
-            PodSpec spec = read.getSpec().getTemplate().getSpec();
-            for (ResourceQuota quota : client.resourceQuotas()
-                    .inNamespace(worker.namespace())
-                    .list()
-                    .getItems()) {
-                if (quota.getSpec() == null
-                        || (quota.getSpec().getScopes() != null
-                                && !quota.getSpec().getScopes().isEmpty())
-                        || quota.getSpec().getScopeSelector() != null) {
-                    continue;
-                }
-                Map<String, Quantity> hard = quota.getSpec().getHard();
-                for (Map.Entry<String, Quantity> each :
-                        hard == null ? Map.<String, Quantity>of().entrySet() : hard.entrySet()) {
-                    BigDecimal need = need(spec, each.getKey());
-                    if (need != null && need.compareTo(Quantity.getAmountInBytes(each.getValue())) > 0) {
-                        return false;
-                    }
-                }
-            }
-            return true;
-        } catch (KubernetesClientException e) {
-            if (e.getCode() == 403 && quotasDenied.compareAndSet(false, true)) {
-                log.warn("The worker may not read the quotas of the sandbox namespace, so it cannot tell a sandbox that"
-                        + " never fits. Grant get and list on resourcequotas there (docs/admin/kubernetes.mdx)");
-            }
-            return true;
-        }
-    }
-
-    /**
-     * What the Pod counts against a quota's resource, as the quota admission counts it: the larger of its containers'
-     * sum and its largest init container. Null for a resource that is no memory, CPU, local disk or Pod count.
-     */
-    static @Nullable BigDecimal need(PodSpec spec, String resource) {
-        if (resource.equals("pods")) {
-            return BigDecimal.ONE;
-        }
-        boolean limits = resource.startsWith("limits.");
-        String name = resource.startsWith("requests.")
-                ? resource.substring("requests.".length())
-                : limits ? resource.substring("limits.".length()) : resource;
-        if (!List.of("memory", "cpu", "ephemeral-storage").contains(name)) {
-            return null;
-        }
-        BigDecimal containers = BigDecimal.ZERO;
-        for (Container container : spec.getContainers()) {
-            containers = containers.add(amount(container, limits, name));
-        }
-        BigDecimal init = BigDecimal.ZERO;
-        for (Container container : spec.getInitContainers()) {
-            init = init.max(amount(container, limits, name));
-        }
-        return containers.max(init);
-    }
-
-    private static BigDecimal amount(Container container, boolean limits, String name) {
-        ResourceRequirements resources = container.getResources();
-        Map<String, Quantity> values =
-                resources == null ? null : limits ? resources.getLimits() : resources.getRequests();
-        Quantity value = values == null ? null : values.get(name);
-        return value == null ? BigDecimal.ZERO : Quantity.getAmountInBytes(value);
     }
 
     private static SandboxException watchFailure(ExecutionException e) {

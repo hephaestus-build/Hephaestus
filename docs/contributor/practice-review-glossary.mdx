@@ -128,7 +128,7 @@ The same name is the source capture code that causes it.
 | **Job folder**                 | The worker's disposable files and repository copies for one execution attempt.                            | workspace ABI                  |
 | **Runtime non-result**         | An assigned practice that stopped without a candidate. Its stop reason describes execution, not the work. | nonResults                     |
 | **No-fault attempt**           | An attempt that ended for a reason that is not the review's: a worker's drain or no sandbox room. It gets a new number but spends no retry. | drain_count, room_refusals, ReviewJob.spentAttempts |
-| **No sandbox room**            | The stop reason of a review that the sandbox runtime had no room for in about an hour. It describes capacity, never the work. "Hephaestus had no room to run this review in time." | NO_SANDBOX_ROOM |
+| **No sandbox room**            | The stop reason of a review that the sandbox runtime had no room for in about an hour, or that no room can ever hold. It describes capacity, never the work. "Hephaestus had no room to run this review in time." | NO_SANDBOX_ROOM |
 | **Composition**                | The preparation of feedback from admitted and eligible observations, by the worker after the sandbox ends. | feedback composition           |
 | **Not composed**               | A withholding for a destination that no composed decision reached, when no more specific reason applies.  | NOT_COMPOSED                   |
 | **Composition stop**           | The cause that left a destination without composed feedback. A passing cause hands the attempt on.        | CompositionStop                |

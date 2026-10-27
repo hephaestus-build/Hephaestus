@@ -127,6 +127,16 @@ public class SandboxAttemptRunner implements SandboxManager {
     }
 
     @Override
+    public boolean neverFits(ResourceLimits limits) {
+        return backend instanceof SandboxRoom room && room.neverFits(limits);
+    }
+
+    @Override
+    public boolean reviewsRunning() {
+        return !(backend instanceof SandboxRoom room) || room.reviewsRunning();
+    }
+
+    @Override
     public SandboxResult execute(SandboxSpec spec) throws SandboxException {
         UUID jobId = spec.jobId();
         AtomicBoolean cancelled = new AtomicBoolean(false);

@@ -87,9 +87,11 @@ import de.tum.cit.aet.hephaestus.practices.spi.FeedbackStopReason;
 import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentId;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentStore;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewMethod;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewService;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewWriteGuard;
 import de.tum.cit.aet.hephaestus.practices.spi.Severity;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.LlmCatalogTestFixtures;
@@ -154,6 +156,9 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private ReviewRuntimeRepository runtimeRepository;
+
+    @Autowired
+    private ReviewAssignmentStore members;
 
     @Autowired
     private WorkerRegistryRepository workerRegistryRepository;
@@ -1144,6 +1149,9 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
         ReviewJob failed = jobRepository.findById(jobId).orElseThrow();
         assertThat(failed.getStatus()).isEqualTo(ReviewJobStatus.CANCELLED);
         assertThat(failed.getCancellationReason()).isEqualTo(ReviewJobCancellationReason.NO_SANDBOX_ROOM);
+        assertThat(failed.getExecutionStartedAt())
+                .as("nothing of the sandbox ran")
+                .isNull();
         assertThat(failed.getAttempt()).isEqualTo(1);
         assertThat(failed.getErrorMessage()).isEqualTo("The sandbox quota is smaller than one review sandbox.");
         assertThat(sandboxStartFailures(SandboxCapacityException.Reason.QUOTA_CANNOT_FIT))
@@ -1176,6 +1184,91 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
             job.setAvailableAt(Instant.now().plus(Duration.ofMinutes(5)));
             jobRepository.saveAndFlush(RuntimeJobTestData.persistParent(jdbc, job));
         });
+    }
+
+    @Test
+    @DisplayName(
+            "queued reviews that no sandbox room can ever hold are cancelled, and admitted ones that only compose stay")
+    void shouldCancelQueuedReviewsWhenNoSandboxRoomCanEverHoldThem() {
+        UUID waiting = queuedAndDue(runningJobOwnedBy("live-owner", Instant.now(), 0));
+        UUID composing = runningJobOwnedBy("live-owner", Instant.now(), 0);
+        admitWithResult(composing);
+        queuedAndDue(composing);
+        var sandbox = mock(SandboxManager.class);
+        when(sandbox.neverFits(any())).thenReturn(true);
+
+        executorOwnedBy("live-owner", sandbox).endReviewsWithoutRoom(Instant.now());
+
+        ReviewJob cancelled = jobRepository.findById(waiting).orElseThrow();
+        assertThat(cancelled.getStatus()).isEqualTo(ReviewJobStatus.CANCELLED);
+        assertThat(cancelled.getCancellationReason()).isEqualTo(ReviewJobCancellationReason.NO_SANDBOX_ROOM);
+        assertThat(cancelled.getErrorMessage()).isEqualTo("The sandbox quota is smaller than one review sandbox.");
+        assertThat(jobRepository.findById(composing).orElseThrow().getStatus())
+                .as("composition needs no sandbox")
+                .isEqualTo(ReviewJobStatus.QUEUED);
+    }
+
+    @Test
+    @DisplayName("queued reviews end after an hour without room while no review runs, and never behind running reviews")
+    void shouldEndQueuedReviewsAfterAnHourOfStarvationButNeverForBacklog() {
+        UUID backlog = queuedAndDue(runningJobOwnedBy("live-owner", Instant.now(), 0));
+        var busy = mock(SandboxManager.class);
+        when(busy.reviewsRunning()).thenReturn(true);
+        var behindRunningReviews = executorOwnedBy("live-owner", busy);
+        Instant start = Instant.now();
+        behindRunningReviews.endReviewsWithoutRoom(start);
+        behindRunningReviews.endReviewsWithoutRoom(start.plus(Duration.ofHours(2)));
+        assertThat(jobRepository.findById(backlog).orElseThrow().getStatus())
+                .as("waiting behind running reviews is backlog")
+                .isEqualTo(ReviewJobStatus.QUEUED);
+
+        var starved = executorOwnedBy("live-owner", mock(SandboxManager.class));
+        starved.endReviewsWithoutRoom(start);
+        assertThat(jobRepository.findById(backlog).orElseThrow().getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
+        starved.endReviewsWithoutRoom(start.plus(Duration.ofMinutes(61)));
+
+        ReviewJob ended = jobRepository.findById(backlog).orElseThrow();
+        assertThat(ended.getStatus()).isEqualTo(ReviewJobStatus.CANCELLED);
+        assertThat(ended.getCancellationReason()).isEqualTo(ReviewJobCancellationReason.NO_SANDBOX_ROOM);
+        assertThat(ended.getErrorMessage()).isEqualTo("Hephaestus had no room to run this review in time.");
+    }
+
+    @Test
+    @DisplayName("a review cancelled for sandbox room keeps that reason when it settles")
+    void shouldRecordNoSandboxRoomOnTheReviewWhenSettled() {
+        UUID jobId = runningJobOwnedBy("live-owner", Instant.now(), 1);
+        ReviewJob running = jobRepository.findById(jobId).orElseThrow();
+        executorOwnedBy("live-owner", refusedSandbox(SandboxCapacityException.Reason.QUOTA_CANNOT_FIT))
+                .executePrepared(jobId, running, mock(SandboxSpec.class));
+
+        // A tick settles the 100 earliest ended jobs, and earlier tests leave theirs unsettled.
+        jdbc.update("UPDATE review_job SET completed_at = completed_at - interval '100 years' WHERE id = ?", jobId);
+        var completion = new ReviewJobCompletionService(
+                jobRepository,
+                mock(ReviewWriteGuard.class),
+                assignments,
+                members,
+                reviews,
+                mock(ReviewJobLifecycleService.class),
+                transactionTemplate,
+                Clock.systemUTC());
+        completion.tick();
+
+        assertThat(jdbc.queryForMap("SELECT status, stop_reason FROM review WHERE id = ?", running.getReviewId()))
+                .containsEntry("status", "CANCELLED")
+                .containsEntry("stop_reason", "NO_SANDBOX_ROOM");
+    }
+
+    /** The job waits in the queue and is due: nothing holds it back but room. */
+    private UUID queuedAndDue(UUID jobId) {
+        transactionTemplate.executeWithoutResult(status -> {
+            ReviewJob job = jobRepository.findById(jobId).orElseThrow();
+            job.setStatus(ReviewJobStatus.QUEUED);
+            job.setWorkerId(null);
+            job.setAvailableAt(Instant.now().minus(Duration.ofMinutes(1)));
+            jobRepository.saveAndFlush(RuntimeJobTestData.persistParent(jdbc, job));
+        });
+        return jobId;
     }
 
     private ReviewJobRecovery.Outcome recoverAfterDrain(UUID jobId, int attempt) {
