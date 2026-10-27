@@ -34,6 +34,7 @@ public record FeedbackQueryFilter(
         @Nullable List<FeedbackStopReason> stopReason,
         @Nullable Boolean withdrawn,
         @Nullable Boolean disagreed,
+        @Nullable Boolean partlyDelivered,
         @Nullable ReviewFeedbackSort sort,
 
         @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) @Nullable

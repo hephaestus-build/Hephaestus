@@ -82,6 +82,8 @@ public interface FeedbackQueryRepository extends Repository<Feedback, UUID> {
             AND (q->>'location' IS NULL OR f.location=q->>'location')
             AND (q->>'withdrawn' IS NULL OR COALESCE(f.withdrawn,false)=CAST(q->>'withdrawn' AS boolean))
             AND (q->>'disagreed' IS NULL OR COALESCE(f.disagreed,false)=CAST(q->>'disagreed' AS boolean))
+            AND (q->>'partlyDelivered' IS NULL OR (f.destination='ON_WORK' AND f.state IN ('FAILED','UNCONFIRMED')
+              AND f.delivered_at IS NOT NULL)=CAST(q->>'partlyDelivered' AS boolean))
             AND (q->>'from' IS NULL OR f.created_at>=CAST(q->>'from' AS timestamptz))
             AND (q->>'to' IS NULL OR f.created_at<CAST(q->>'to' AS timestamptz))
             AND ((q->>'practiceSlug' IS NULL AND q->>'groupSlug' IS NULL) OR EXISTS (

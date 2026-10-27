@@ -8840,6 +8840,11 @@ paths:
         schema:
           type: boolean
       - in: query
+        name: partlyDelivered
+        required: false
+        schema:
+          type: boolean
+      - in: query
         name: sort
         required: false
         schema:
@@ -9030,6 +9035,11 @@ paths:
         schema:
           type: boolean
       - in: query
+        name: partlyDelivered
+        required: false
+        schema:
+          type: boolean
+      - in: query
         name: sort
         required: false
         schema:
@@ -9201,6 +9211,11 @@ paths:
           type: boolean
       - in: query
         name: disagreed
+        required: false
+        schema:
+          type: boolean
+      - in: query
+        name: partlyDelivered
         required: false
         schema:
           type: boolean

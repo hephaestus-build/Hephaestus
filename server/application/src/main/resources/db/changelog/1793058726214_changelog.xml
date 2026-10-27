@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1793058726214-1" author="hephaestus">
+      <preConditions onFail="HALT" onError="HALT">
+        <dbms type="postgresql"/>
+        <tableExists tableName="feedback"/><tableExists tableName="feedback_copy"/>
+      </preConditions>
+      <comment>Feedback stored as delivered while one of its copies failed or never posted reads failed or unconfirmed, as the delivery projection now records it.</comment>
+      <sql splitStatements="false"><![CDATA[
+SET LOCAL lock_timeout='30s';
+UPDATE feedback f SET
+  state=CASE WHEN c.started THEN 'UNCONFIRMED' WHEN c.failed THEN 'FAILED' ELSE 'UNCONFIRMED' END,
+  stop_reason=CASE WHEN c.failed AND NOT c.started THEN NULL ELSE 'DELIVERY_UNCONFIRMED' END
+FROM (
+  SELECT workspace_id,feedback_id,
+    bool_or(state='WRITE_STARTED') AS started,bool_or(state='FAILED') AS failed
+  FROM feedback_copy WHERE state IN ('WRITE_STARTED','FAILED','PLANNED')
+  GROUP BY workspace_id,feedback_id
+) c
+WHERE f.state='DELIVERED' AND c.workspace_id=f.workspace_id AND c.feedback_id=f.id;
+      ]]></sql>
+      <!-- The earlier release reads both states, and restoring DELIVERED would only restore the wrong label. -->
+      <rollback/>
+    </changeSet>
+</databaseChangeLog>

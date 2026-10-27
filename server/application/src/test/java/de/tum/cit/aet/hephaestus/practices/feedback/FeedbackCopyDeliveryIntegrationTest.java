@@ -9,9 +9,12 @@ import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCheckStage;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCopyKind;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCopyState;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackIds;
+import de.tum.cit.aet.hephaestus.practices.spi.FeedbackSendAction;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackState;
 import java.util.Objects;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import org.springframework.beans.factory.annotation.Autowired;
 
 class FeedbackCopyDeliveryIntegrationTest extends AbstractFeedbackDeliveryIntegrationTest {
@@ -121,6 +124,28 @@ class FeedbackCopyDeliveryIntegrationTest extends AbstractFeedbackDeliveryIntegr
         newSender().send(workspace.getId(), feedbackId);
         assertThat(current().getState()).isEqualTo(FeedbackState.DELIVERED);
         assertThat(provider.noteCreates).isEqualTo(1);
+    }
+
+    @Test
+    @Timeout(value = 120, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
+    void shouldLeaveACopyThatWithdrawalStoppedForTheRetractionAndNotFailIt() {
+        prepare(true);
+        // A decision row, not the decision service: the service would wait on the write that this hook interrupts.
+        provider.beforeNotes = () -> jdbc.update(
+                "INSERT INTO feedback_decision(id,workspace_id,feedback_id,action,note) VALUES (?,?,?,'WITHDRAW',?)",
+                UUID.randomUUID(),
+                workspace.getId(),
+                feedbackId,
+                "Withdraw this guidance.");
+        sender.send(workspace.getId(), feedbackId);
+        assertThat(children().get(1).getState()).isEqualTo(FeedbackCopyState.PLANNED);
+        assertThat(children().get(1).getReadback()).isNull();
+        assertThat(sends.findById(feedbackId).orElseThrow().getAction()).isEqualTo(FeedbackSendAction.RETRACT);
+        due();
+        newSender().send(workspace.getId(), feedbackId);
+        assertThat(children().get(0).getState()).isEqualTo(FeedbackCopyState.RETRACTED);
+        assertThat(children().get(1).getState()).isEqualTo(FeedbackCopyState.PLANNED);
+        assertThat(provider.noteCreates).isZero();
     }
 
     @Test

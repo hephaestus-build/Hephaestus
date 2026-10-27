@@ -16,10 +16,12 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface ResultRepository extends JpaRepository<Result, UUID>, ResultQueries {
+    // Partly delivered feedback counts: the developer saw the copy that appeared, as their own pages show it.
     @Query(value = """
         SELECT DISTINCT ON (b.result_id) b.result_id AS resultId,f.body FROM feedback_basis b JOIN feedback f
           ON f.id=b.feedback_id AND f.workspace_id=b.workspace_id
-        WHERE b.workspace_id=:workspaceId AND b.result_id IN (:ids) AND f.state='DELIVERED'
+        WHERE b.workspace_id=:workspaceId AND b.result_id IN (:ids)
+          AND (f.state='DELIVERED' OR (f.state IN ('FAILED','UNCONFIRMED') AND f.delivered_at IS NOT NULL))
           AND f.destination IN ('ON_WORK','CONVERSATION') AND f.body IS NOT NULL
           AND NOT COALESCE((SELECT d.action='WITHDRAW' FROM feedback_decision d WHERE d.workspace_id=f.workspace_id AND d.feedback_id=f.id AND d.action IN ('WITHDRAW','RESTORE') ORDER BY d.decided_at DESC,d.id::text DESC LIMIT 1),false)
         ORDER BY b.result_id,f.delivered_at DESC,f.id::text DESC
