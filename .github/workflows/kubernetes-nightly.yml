@@ -54,7 +54,7 @@ jobs:
     name: "Sandbox footprint"
     needs: build
     runs-on: ubuntu-24.04
-    # Up to 60 minutes of waiting for the merge queue, then about 15-20 minutes of work.
+    # Up to 45 minutes of waiting for the merge queue leaves 45 minutes for about 15-20 minutes of work.
     timeout-minutes: 90
     permissions:
       actions: read
@@ -78,7 +78,8 @@ jobs:
           REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
-          for _ in $(seq 1 60); do
+          deadline=$((SECONDS + 45 * 60))
+          while [ "$SECONDS" -lt "$deadline" ]; do
             runs=$(gh run list -R "$REPOSITORY" --workflow cicd.yml --event merge_group --limit 5 \
               --json databaseId,status -q '.[] | select(.status != "completed") | .databaseId')
             queued=0
@@ -97,7 +98,7 @@ jobs:
             echo "$queued merge-group jobs are queued; waiting a minute"
             sleep 60
           done
-          echo "::notice::The merge queue stayed busy for an hour, so tonight's sandbox footprint run is skipped."
+          echo "::notice::The merge queue stayed busy for 45 minutes, so tonight's sandbox footprint run is skipped."
           echo "run=false" >> "$GITHUB_OUTPUT"
       - uses: ./.github/actions/setup-caches
         if: steps.queue.outputs.run == 'true'

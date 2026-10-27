@@ -825,7 +825,7 @@ Right after a merge, that run is still building, so the pull request builds ever
   The memory result is informational: no budget is enforced until the sandbox requests file holds the measured need.
   The two reviews start together. The concurrent peak sums their samples per tick, so drift between them lowers it.
   A busy merge queue skips the night with a notice, because a busy queue is not a defect in `main`.
-  The job waits for the queue for up to 60 minutes, then works for about 15–20 minutes.
+  The job waits for the queue for up to 45 minutes. Then it works for about 15–20 minutes, inside a 90-minute limit.
   A failed run updates its own tracking issue, "The nightly sandbox footprint run failed".
 - To read a footprint failure, open the run's `sandbox-footprint` artifact:
   1. Read `verdict.reasons` in `footprint.json`. Each reason names the review, counted from 0, and the check that failed.

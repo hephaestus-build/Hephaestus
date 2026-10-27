@@ -502,9 +502,11 @@ setInterval(() => {
   for (const line of ids) {
     const [label, id] = line.split(" ");
     const cg = find(id); if (!cg) continue;
-    const current = read(cg + "/memory.current"); if (current === null) continue;
-    const stat = Object.fromEntries((read(cg + "/memory.stat") ?? "").trim().split("\n").map((l) => { const [k, v] = l.split(" "); return [k, Number(v)]; }));
-    const cpu = Object.fromEntries((read(cg + "/cpu.stat") ?? "").trim().split("\n").map((l) => { const [k, v] = l.split(" "); return [k, Number(v)]; }));
+    // A container that exits between these reads takes its cgroup with it: skip that tick.
+    const current = read(cg + "/memory.current"); const memoryStat = read(cg + "/memory.stat"); const cpuStat = read(cg + "/cpu.stat");
+    if (current === null || memoryStat === null || cpuStat === null) continue;
+    const stat = Object.fromEntries(memoryStat.trim().split("\n").map((l) => { const [k, v] = l.split(" "); return [k, Number(v)]; }));
+    const cpu = Object.fromEntries(cpuStat.trim().split("\n").map((l) => { const [k, v] = l.split(" "); return [k, Number(v)]; }));
     const procs = (read(cg + "/cgroup.procs") ?? "").split("\n").filter(Boolean).map((pid) => {
       const status = read("/proc/" + pid + "/status") ?? "";
       const kb = (k) => Number((new RegExp("^" + k + ":\\s+(\\d+)", "m").exec(status) ?? [0, 0])[1]) * 1024;
@@ -564,7 +566,10 @@ function startSampler(): ChildProcess {
 		failures.push(`the sampler did not start: ${error.message}`);
 	});
 	sampler.stderr.pipe(process.stderr);
-	createInterface({ input: sampler.stdout }).on("line", (line) => {
+	const lines = createInterface({ input: sampler.stdout });
+	let lastLine = "";
+	lines.on("line", (line) => {
+		lastLine = line;
 		const sample = parseSample(line);
 		if (sample === null) {
 			malformed.push(line);
@@ -572,6 +577,14 @@ function startSampler(): ChildProcess {
 			samples.push(sample);
 		}
 	});
+	// Stopping the sampler can cut its last write short; that line is not a reading error.
+	samplerClosed = (async () => {
+		await once(lines, "close");
+		// A readable line never equals an unreadable one, so this drops only an unreadable last line.
+		if (lastLine !== "" && malformed.at(-1) === lastLine) {
+			malformed.pop();
+		}
+	})();
 	return sampler;
 }
 
@@ -855,9 +868,12 @@ function sampleCount(label: string): number {
 }
 
 let sampler: ChildProcess | undefined;
+let samplerClosed: Promise<void> = Promise.resolve();
 async function stopSampler() {
 	sampler?.kill("SIGTERM");
 	await succeeds("docker", ["rm", "-f", `${runId}-sampler`]);
+	// A sampler that never started may never close its output.
+	await Promise.race([samplerClosed, sleep(5000)]);
 }
 
 /** Removes what the run left in Docker: a review that failed midway leaves containers and volumes. */
