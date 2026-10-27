@@ -38,7 +38,7 @@ Keep the outage short.
 2. Install this release for the server, worker and webhook roles.
 3. Use the agent image of this release.
    If you pin a custom agent image, rebuild it from the matching source.
-   Its `hephaestus.agent.runtime-contract` label must be `8`.
+   Its `hephaestus.agent.runtime-contract` label must be `9`.
 4. Start the server role.
    The migration runs at its startup.
 5. Start the worker and webhook roles.

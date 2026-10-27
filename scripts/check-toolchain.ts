@@ -194,12 +194,23 @@ const imageWorkspace = asRecord(
 if (imageWorkspace.minimumReleaseAge !== releaseAge) {
 	throw new Error(`docker/agents/pi/pnpm-workspace.yaml must set minimumReleaseAge ${releaseAge}`);
 }
-const imageEngines = asRecord(
+const imageManifest = asRecord(
 	readJsonFileSync("docker/agents/pi/package.json"),
 	"docker/agents/pi/package.json",
-).engines;
+);
+const { engines: imageEngines } = imageManifest;
 if (!isRecord(imageEngines) || imageEngines.pnpm !== version) {
 	throw new Error(`docker/agents/pi/package.json must pin pnpm ${version} through engines`);
+}
+// The image build emits the gateway with its own compiler; the gate type-checks it with the root's.
+const { typescript } = asRecord(manifest.devDependencies, "package.json#devDependencies");
+if (
+	asRecord(imageManifest.devDependencies, "docker/agents/pi/package.json#devDependencies")
+		.typescript !== typescript
+) {
+	throw new Error(
+		`docker/agents/pi/package.json must pin typescript ${String(typescript)}, as package.json does`,
+	);
 }
 expectConfig("allowBuilds", {
 	"@nestjs/core": false,

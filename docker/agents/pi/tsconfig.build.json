@@ -10,6 +10,8 @@
 		"noCheck": true,
 		"types": [],
 		"sourceMap": true,
+		"sourceRoot": "/opt/pi-sdk",
+		"inlineSources": true,
 		"outDir": "dist"
 	},
 	"files": ["gateway-init.ts", "gateway-run.ts"]
