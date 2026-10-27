@@ -197,9 +197,9 @@ do not retry, and say what you cannot see. `NOT_VISIBLE` means that you cannot r
   problems, open questions and explanation. `wordsUnavailable` means the words cannot be used here;
   `omittedForSize` counts rows left out. *Reading review history* below explains these limits.
 - `inputs/context/delivered_feedback.json` — a bounded sample of authorized feedback records.
-  `feedbackStates` gives each piece's `feedbackId`, `state`, `destination` and `createdAt`.
-  `deliveredFeedback` gives the body, destination and confirmed `deliveredAt` when those words are available.
-  Rows in both name the `reviewId`, `practiceSlugs`, `resultIds` and `problemIds` behind the piece.
+  `feedbackStates` gives each piece's `feedbackId`, `state`, `destination`, `createdAt`, `practiceSlugs` and `resultIds`.
+  `deliveredFeedback` gives the confirmed `deliveredAt`, the destination and the first 600 characters of the words when those words are available.
+  When a row's `bodyTruncated` is true, read its `resource` for up to 2,000 characters of the words; a `bodyTruncated` in that file marks a further cut. Read a result's detail for its review and problems.
   When discussing feedback they received, use these confirmed words, or visible conversation history.
   A result is not proof that feedback reached them. *Feedback is not a result* below explains the states.
 - `inputs/context/recent_authored_work.json` — the developer's **own authored PRs and issues**, most recently active

@@ -78,3 +78,17 @@ What survives a loss, for each state:
 
 Revisit when one practice runs long enough that its own loss is costly.
 Revisit when composition needs the result of one practice before the review seals.
+
+## Update — 2026-10-27 (a retry keeps what an earlier attempt withheld)
+
+[#3313](https://github.com/hephaestus-build/Hephaestus/pull/3313) ships the part of **Retry** that applies before staging exists.
+A retry of the same job leaves out every practice whose membership an earlier attempt ended.
+It does not capture or measure that practice again.
+Thus, a readiness refusal that a source caused because it was not ready then stays a withholding for that item version.
+We accept this: the refusal has its own recorded reason, and a newer item version gets a new review.
+
+Today every ended membership before admission is a capture withholding.
+A requeued job that an earlier attempt admitted continues with composition and does not prepare again (`ResultAdmissionService.isContinuation`).
+Thus, a retry that has no open practice cannot occur yet.
+When per-practice staging ships, a retry can find every practice staged.
+That retry must seal and compose, not record a readiness refusal.

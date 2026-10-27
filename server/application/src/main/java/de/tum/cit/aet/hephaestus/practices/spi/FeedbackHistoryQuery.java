@@ -8,9 +8,16 @@ import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 
 public interface FeedbackHistoryQuery {
-    /** The developer's own feedback in the {@linkplain FeedbackState#VISIBLE_TO_DEVELOPER states they may learn of}. */
+    /**
+     * The developer's own feedback in the {@linkplain FeedbackState#VISIBLE_TO_DEVELOPER states they may learn of},
+     * without withdrawn pieces, as their Practice profile shows it.
+     */
     List<FeedbackHistoryEntry> forDeveloper(long workspaceId, long developerAccountId, Instant since, int limit);
 
+    /**
+     * The item's feedback that {@code viewerAccountId} may read: their own in every state, and delivered feedback on the
+     * work. Not a developer-facing read: its caller keeps only delivered feedback on the work.
+     */
     List<FeedbackHistoryEntry> forItem(long workspaceId, long itemId, long viewerAccountId, int limit);
 
     /**
