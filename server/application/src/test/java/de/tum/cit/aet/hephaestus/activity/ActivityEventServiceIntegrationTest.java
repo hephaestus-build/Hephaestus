@@ -5,17 +5,25 @@ import static org.assertj.core.api.Assertions.assertThat;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.common.DataSource;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReview;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.events.EventContext;
+import de.tum.cit.aet.hephaestus.integration.scm.events.ScmDomainEvent;
 import de.tum.cit.aet.hephaestus.integration.scm.events.ScmEventIdentity;
+import de.tum.cit.aet.hephaestus.integration.scm.events.ScmEventPayload;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.time.Instant;
 import java.util.List;
+import java.util.Objects;
+import java.util.Set;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -247,6 +255,115 @@ class ActivityEventServiceIntegrationTest extends BaseIntegrationTest {
             }
 
             assertThat(rows(ActivityEventType.ISSUE_REOPENED, 302L)).isEqualTo(2);
+        }
+
+        @Test
+        void shouldRecordARedeliveredCommentEditOnceAndTwoEditsInOneSecondTwice() {
+            var edit = commentEdit(closedAt, "First words");
+            var secondEditInTheSameSecond = commentEdit(closedAt, "Second words");
+
+            for (var event : List.of(edit, edit, secondEditInTheSameSecond, secondEditInTheSameSecond)) {
+                recordEdit(ActivityEventType.COMMENT_UPDATED, ActivityTargetType.ISSUE_COMMENT, 303L, event);
+            }
+
+            assertThat(rows(ActivityEventType.COMMENT_UPDATED, 303L)).isEqualTo(2);
+        }
+
+        @Test
+        void shouldRecordARedeliveredDiscussionCommentEditOnce() {
+            var comment = new ScmEventPayload.DiscussionCommentData(
+                    304L,
+                    "Edited answer",
+                    null,
+                    false,
+                    testUser.getId(),
+                    closedAt,
+                    closedAt,
+                    50L,
+                    testRepository.getId());
+            var edit = new ScmDomainEvent.DiscussionCommentEdited(comment, 50L, Set.of("body"), webhook());
+
+            recordEdit(ActivityEventType.DISCUSSION_COMMENT_EDITED, ActivityTargetType.DISCUSSION_COMMENT, 304L, edit);
+            recordEdit(ActivityEventType.DISCUSSION_COMMENT_EDITED, ActivityTargetType.DISCUSSION_COMMENT, 304L, edit);
+
+            assertThat(rows(ActivityEventType.DISCUSSION_COMMENT_EDITED, 304L)).isEqualTo(1);
+        }
+
+        @Test
+        void shouldRecordARedeliveredDismissalOnceAfterTheReviewChanged() {
+            var review = new ScmEventPayload.ReviewData(
+                    305L,
+                    "Looks good",
+                    PullRequestReview.State.APPROVED,
+                    true,
+                    null,
+                    testUser.getId(),
+                    true,
+                    51L,
+                    closedAt,
+                    closedAt,
+                    testRepository.getId());
+            var later = new ScmEventPayload.ReviewData(
+                    305L,
+                    "Looks good",
+                    PullRequestReview.State.APPROVED,
+                    true,
+                    null,
+                    testUser.getId(),
+                    true,
+                    51L,
+                    closedAt,
+                    closedAt.plusSeconds(3600),
+                    testRepository.getId());
+
+            for (var data : List.of(review, later)) {
+                var dismissal = new ScmDomainEvent.ReviewDismissed(data, webhook());
+                activityEventService.record(
+                        testWorkspace.getId(),
+                        ActivityEventType.REVIEW_DISMISSED,
+                        Objects.requireNonNull(data.updatedAt()),
+                        testUser,
+                        testRepository,
+                        ActivityTargetType.REVIEW,
+                        305L,
+                        ScmEventIdentity.of(dismissal));
+            }
+
+            assertThat(rows(ActivityEventType.REVIEW_DISMISSED, 305L)).isEqualTo(1);
+        }
+
+        private ScmDomainEvent.CommentUpdated commentEdit(Instant at, String body) {
+            var comment = new ScmEventPayload.CommentData(
+                    303L, body, null, testUser.getId(), at.minusSeconds(600), at, 52L, testRepository.getId());
+            return new ScmDomainEvent.CommentUpdated(comment, 52L, Set.of("body"), webhook());
+        }
+
+        private void recordEdit(
+                ActivityEventType type,
+                ActivityTargetType target,
+                long targetId,
+                ScmDomainEvent.ContextualEvent event) {
+            activityEventService.record(
+                    testWorkspace.getId(),
+                    type,
+                    closedAt,
+                    testUser,
+                    testRepository,
+                    target,
+                    targetId,
+                    ScmEventIdentity.of(event));
+        }
+
+        private EventContext webhook() {
+            return new EventContext(
+                    UUID.randomUUID(),
+                    Instant.now(),
+                    testWorkspace.getId(),
+                    null,
+                    DataSource.WEBHOOK,
+                    "edited",
+                    "hook",
+                    IdentityProviderType.GITHUB);
         }
 
         private long rows(ActivityEventType type, long targetId) {

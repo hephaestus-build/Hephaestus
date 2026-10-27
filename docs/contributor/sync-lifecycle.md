@@ -184,6 +184,9 @@ A lifecycle event has one identity, its source key.
   A force-push back to an earlier head is a new move.
 - A ready, draft or reopen is the change and the moment that the provider dates.
 - A close or a merge is the stored `closedAt` or `mergedAt`, which the webhook and the sync store alike.
+- An edit of a comment is its `updated_at` and its text, so two edits in one second are two edits.
+- A dismissal is once per review, because a dismissal is final.
+- A thread resolution is its `resolvedAt`.
 
 The unique key on item, name and source key absorbs a second report of the same event, whatever version the work has by then.
 The unique key on item, name and version still absorbs a second event of the same name for the same work.

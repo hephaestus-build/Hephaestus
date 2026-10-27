@@ -5,7 +5,6 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -17,7 +16,6 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.discussioncomment.Discus
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReview;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewthread.PullRequestReviewThread;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewthread.PullRequestReviewThreadRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
@@ -297,96 +295,6 @@ class ActivityEventListenerTest extends BaseUnitTest {
             listener.onReviewSubmitted(event);
 
             verifyNoInteractions(activityEventService);
-        }
-    }
-
-    /** A redelivered event keys its activity on the event's own date, so the second row is a duplicate. */
-    @Nested
-    class RedeliveryTests {
-
-        private final Instant eventAt = Instant.parse("2026-10-20T08:15:00Z");
-
-        @Test
-        void shouldKeyARedeliveredCommentEditOnTheEditsDate() {
-            var comment = new ScmEventPayload.CommentData(
-                    81L, "edited", null, 100L, eventAt.minusSeconds(600), eventAt, 60L, 200L);
-            var edit = new ScmDomainEvent.CommentUpdated(comment, 60L, Set.of("body"), createContext());
-
-            listener.onCommentUpdated(edit);
-            listener.onCommentUpdated(edit);
-
-            verify(activityEventService, times(2))
-                    .record(
-                            eq(42L),
-                            eq(ActivityEventType.COMMENT_UPDATED),
-                            eq(eventAt),
-                            eq(testUser),
-                            eq(testRepository),
-                            eq(ActivityTargetType.ISSUE_COMMENT),
-                            eq(81L));
-        }
-
-        @Test
-        void shouldKeyARedeliveredReviewCommentEditOnTheEditsDate() {
-            var comment = new ScmEventPayload.ReviewCommentData(
-                    82L, "edited", "src/Main.java", 3, null, null, 100L, eventAt.minusSeconds(600), eventAt, 50L, 200L);
-            var edit = new ScmDomainEvent.ReviewCommentEdited(comment, 50L, Set.of("body"), createContext());
-
-            listener.onReviewCommentEdited(edit);
-            listener.onReviewCommentEdited(edit);
-
-            verify(activityEventService, times(2))
-                    .record(
-                            eq(42L),
-                            eq(ActivityEventType.REVIEW_COMMENT_EDITED),
-                            eq(eventAt),
-                            eq(testUser),
-                            eq(testRepository),
-                            eq(ActivityTargetType.REVIEW_COMMENT),
-                            eq(82L));
-        }
-
-        @Test
-        void shouldKeyADismissalOnTheReviewsUpdateDate() {
-            PullRequestReview review = createReview(83L, createPullRequest(51L));
-            review.setDismissed(true);
-            review.setUpdatedAt(eventAt);
-
-            listener.onReviewDismissed(new ScmDomainEvent.ReviewDismissed(createReviewData(review), createContext()));
-
-            verify(activityEventService)
-                    .record(
-                            eq(42L),
-                            eq(ActivityEventType.REVIEW_DISMISSED),
-                            eq(eventAt),
-                            eq(testUser),
-                            eq(testRepository),
-                            eq(ActivityTargetType.REVIEW),
-                            eq(83L));
-        }
-
-        @Test
-        void shouldKeyAThreadResolutionOnTheResolveDate() {
-            var thread = new PullRequestReviewThread();
-            thread.setId(84L);
-            thread.setState(PullRequestReviewThread.State.RESOLVED);
-            thread.setResolvedAt(eventAt);
-            thread.setResolvedBy(testUser);
-            thread.setPullRequest(createPullRequest(52L));
-            when(reviewThreadRepository.findById(84L)).thenReturn(Optional.of(thread));
-
-            listener.onReviewThreadResolved(new ScmDomainEvent.ReviewThreadResolved(
-                    ScmEventPayload.ReviewThreadData.from(thread).orElseThrow(), createContext()));
-
-            verify(activityEventService)
-                    .record(
-                            eq(42L),
-                            eq(ActivityEventType.REVIEW_THREAD_RESOLVED),
-                            eq(eventAt),
-                            eq(testUser),
-                            eq(testRepository),
-                            eq(ActivityTargetType.REVIEW_THREAD),
-                            eq(84L));
         }
     }
 

@@ -439,10 +439,8 @@ public class ActivityEventListener {
                     reviewData.repositoryId());
             return;
         }
-        // A dismissal is final, so one stable date keys it once.
-        Instant occurredAt = reviewData.updatedAt() != null
-                ? reviewData.updatedAt()
-                : reviewData.submittedAt() != null ? reviewData.submittedAt() : Instant.now();
+        // The dismissal stores its own date on the review; an undated one happened about now, since it just arrived.
+        Instant occurredAt = reviewData.updatedAt() != null ? reviewData.updatedAt() : Instant.now();
         safeRecord(
                 "review dismissed",
                 reviewData.id(),
@@ -453,7 +451,8 @@ public class ActivityEventListener {
                         userRepository.getReferenceById(authorId),
                         repositoryRepository.getReferenceById(repositoryId),
                         ActivityTargetType.REVIEW,
-                        reviewData.id()));
+                        reviewData.id(),
+                        ScmEventIdentity.of(event)));
     }
 
     /**
@@ -561,8 +560,7 @@ public class ActivityEventListener {
                     commentData.repositoryId());
             return;
         }
-        // The edit's own date keys it, so a redelivered edit is a duplicate. An undated edit happened about
-        // now, since it just arrived.
+        // An undated edit happened about now, since it just arrived.
         Instant occurredAt = commentData.updatedAt() != null ? commentData.updatedAt() : Instant.now();
         safeRecord(
                 "comment updated",
@@ -574,7 +572,8 @@ public class ActivityEventListener {
                         userRepository.getReferenceById(authorId),
                         repositoryRepository.getReferenceById(repositoryId),
                         ActivityTargetType.ISSUE_COMMENT,
-                        commentData.id()));
+                        commentData.id(),
+                        ScmEventIdentity.of(event)));
     }
 
     /**
@@ -666,8 +665,7 @@ public class ActivityEventListener {
                     commentData.repositoryId());
             return;
         }
-        // The edit's own date keys it, so a redelivered edit is a duplicate. An undated edit happened about
-        // now, since it just arrived.
+        // An undated edit happened about now, since it just arrived.
         Instant occurredAt = commentData.updatedAt() != null ? commentData.updatedAt() : Instant.now();
         safeRecord(
                 "review comment edited",
@@ -679,7 +677,8 @@ public class ActivityEventListener {
                         userRepository.getReferenceById(authorId),
                         repositoryRepository.getReferenceById(repositoryId),
                         ActivityTargetType.REVIEW_COMMENT,
-                        commentData.id()));
+                        commentData.id(),
+                        ScmEventIdentity.of(event)));
     }
 
     /**
@@ -759,7 +758,8 @@ public class ActivityEventListener {
                         userRepository.getReferenceById(resolverId),
                         repositoryRepository.getReferenceById(repositoryId),
                         ActivityTargetType.REVIEW_THREAD,
-                        threadData.id()));
+                        threadData.id(),
+                        ScmEventIdentity.of(event)));
     }
 
     /**
@@ -1411,8 +1411,7 @@ public class ActivityEventListener {
                     commentData.repositoryId());
             return;
         }
-        // The edit's own date keys it, so a redelivered edit is a duplicate. An undated edit happened about
-        // now, since it just arrived.
+        // An undated edit happened about now, since it just arrived.
         Instant occurredAt = commentData.updatedAt() != null ? commentData.updatedAt() : Instant.now();
         safeRecord(
                 "discussion comment edited",
@@ -1424,7 +1423,8 @@ public class ActivityEventListener {
                         userRepository.getReferenceById(authorId),
                         repositoryRepository.getReferenceById(repositoryId),
                         ActivityTargetType.DISCUSSION_COMMENT,
-                        commentData.id()));
+                        commentData.id(),
+                        ScmEventIdentity.of(event)));
     }
 
     /**

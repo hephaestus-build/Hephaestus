@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.scm.events;
 
 import java.time.Instant;
+import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -26,8 +27,16 @@ public final class ScmEventIdentity {
     }
 
     /**
-     * The identity of {@code event}. A close or a merge is the stored moment of it, which every path stores alike; any
-     * other event carries the identity its producer gave it, or none.
+     * An edit of a comment: the moment the provider dates it and what it says. Two edits in one second are two edits;
+     * a redelivery of one is the same edit.
+     */
+    public static @Nullable String edit(long itemId, @Nullable Instant at, @Nullable String body) {
+        return at == null ? null : itemId + ":edited:" + at + ":" + Integer.toHexString(Objects.hashCode(body));
+    }
+
+    /**
+     * The identity of {@code event}. A close, a merge, an edit, a dismissal or a resolution is identified by what the
+     * event stores, which every path stores alike; any other event carries the identity its producer gave it, or none.
      */
     public static @Nullable String of(ScmDomainEvent.ContextualEvent event) {
         return switch (event) {
@@ -48,6 +57,25 @@ public final class ScmEventIdentity {
                                 closed.pullRequest().closedAt());
             case ScmDomainEvent.IssueClosed closed ->
                 transition(closed.issue().id(), "closed", closed.issue().closedAt());
+            case ScmDomainEvent.CommentUpdated updated ->
+                edit(
+                        updated.comment().id(),
+                        updated.comment().updatedAt(),
+                        updated.comment().body());
+            case ScmDomainEvent.ReviewCommentEdited edited ->
+                edit(
+                        edited.comment().id(),
+                        edited.comment().updatedAt(),
+                        edited.comment().body());
+            case ScmDomainEvent.DiscussionCommentEdited edited ->
+                edit(
+                        edited.comment().id(),
+                        edited.comment().updatedAt(),
+                        edited.comment().body());
+            // A dismissal is final: a review is dismissed once.
+            case ScmDomainEvent.ReviewDismissed dismissed -> dismissed.review().id() + ":dismissed";
+            case ScmDomainEvent.ReviewThreadResolved resolved ->
+                transition(resolved.thread().id(), "resolved", resolved.thread().resolvedAt());
             default -> event.context().sourceKey();
         };
     }
