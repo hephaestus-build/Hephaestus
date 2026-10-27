@@ -36,6 +36,7 @@ import io.fabric8.kubernetes.api.model.PodBuilder;
 import io.fabric8.kubernetes.api.model.PodConditionBuilder;
 import io.fabric8.kubernetes.api.model.PodStatusBuilder;
 import io.fabric8.kubernetes.api.model.Quantity;
+import io.fabric8.kubernetes.api.model.ResourceQuotaBuilder;
 import io.fabric8.kubernetes.api.model.VolumeMount;
 import io.fabric8.kubernetes.api.model.batch.v1.Job;
 import io.fabric8.kubernetes.api.model.batch.v1.JobBuilder;
@@ -613,6 +614,87 @@ class KubernetesSandboxRuntimeTest {
     }
 
     @Test
+    void shouldAdmitAsManyReviewsAsTheSandboxQuotaHolds() {
+        assertThat(backend().roomFor(LIMITS))
+                .as("no quota, no bound of its own")
+                .isEqualTo(Integer.MAX_VALUE);
+
+        quotaWithTwoGibibytesFree();
+
+        assertThat(backend().roomFor(LIMITS))
+                .as("2 GiB free hold two 1 GiB reviews")
+                .isEqualTo(2);
+    }
+
+    @Test
+    void shouldCountALaunchedReviewAgainstTheRoomBeforeItsPodAppears() {
+        quotaWithTwoGibibytesFree();
+        KubernetesSandboxBackend reviews = backend();
+        UUID jobId = UUID.randomUUID();
+
+        reviews.launch(new SandboxBackend.Launch(
+                SandboxBackend.Kind.REVIEW,
+                jobId,
+                1,
+                IMAGE,
+                List.of("node", "run.ts"),
+                LIMITS,
+                Instant.now().plus(Duration.ofMinutes(7)),
+                gateway -> Map.of()));
+
+        assertThat(storedJob(KubernetesSandboxBackend.jobName(jobId, 1))).isNotNull();
+        assertThat(reviews.roomFor(LIMITS))
+                .as("the quota does not count the Job until the Job controller creates its Pod")
+                .isEqualTo(1);
+    }
+
+    @Test
+    void shouldChargeTheOverheadThatASandboxPodOfTheRuntimeClassShows() {
+        quotaWithTwoGibibytesFree();
+        api().pods()
+                .inNamespace(SANDBOXES)
+                .resource(new PodBuilder()
+                        .withNewMetadata()
+                        .withName("turn-with-overhead")
+                        .endMetadata()
+                        .withNewSpec()
+                        .withRuntimeClassName("gvisor")
+                        .withOverhead(Map.of("memory", new Quantity("512Mi")))
+                        .addNewContainer()
+                        .withName("sandbox")
+                        .withImage(IMAGE)
+                        .endContainer()
+                        .endSpec()
+                        .build())
+                .create();
+
+        assertThat(new KubernetesSandboxQuota(api(), SANDBOXES, "gvisor").roomFor(LIMITS))
+                .as("2 GiB free hold one 1.5 GiB Pod")
+                .isEqualTo(1);
+        assertThat(new KubernetesSandboxQuota(api(), SANDBOXES, "").roomFor(LIMITS))
+                .as("the cluster's default runtime has no overhead")
+                .isEqualTo(2);
+    }
+
+    private void quotaWithTwoGibibytesFree() {
+        api().resourceQuotas()
+                .inNamespace(SANDBOXES)
+                .resource(new ResourceQuotaBuilder()
+                        .withNewMetadata()
+                        .withName("hephaestus-sandbox-quota")
+                        .endMetadata()
+                        .withNewSpec()
+                        .withHard(Map.of("requests.memory", new Quantity("4Gi")))
+                        .endSpec()
+                        .withNewStatus()
+                        .withHard(Map.of("requests.memory", new Quantity("4Gi")))
+                        .withUsed(Map.of("requests.memory", new Quantity("2Gi")))
+                        .endStatus()
+                        .build())
+                .create();
+    }
+
+    @Test
     void shouldStartNoSandboxBeforeTheIsolationProbePassed() {
         var unproved = new KubernetesWorker(properties, WORKER_ID, 8081);
         var unprovedPods = new KubernetesPods(api(), unproved, 10, ImagePullPolicy.IF_NOT_PRESENT);
@@ -622,7 +704,8 @@ class KubernetesSandboxRuntimeTest {
                         new KubernetesReviewJobs(api(), unproved),
                         unproved,
                         liveWorkers,
-                        new SandboxExits(unprovedPods, new SimpleMeterRegistry())),
+                        new SandboxExits(unprovedPods, new SimpleMeterRegistry()),
+                        new KubernetesSandboxQuota(api(), properties.namespace(), properties.runtimeClassName())),
                 new SandboxWorkspaceManager(),
                 sessions,
                 meters);
@@ -719,7 +802,8 @@ class KubernetesSandboxRuntimeTest {
                         reviewJobs,
                         worker,
                         new KubernetesLiveWorkers(unreadable),
-                        new SandboxExits(pods, new SimpleMeterRegistry()))
+                        new SandboxExits(pods, new SimpleMeterRegistry()),
+                        new KubernetesSandboxQuota(api(), properties.namespace(), properties.runtimeClassName()))
                 .list();
 
         assertThat(listed)
@@ -832,7 +916,12 @@ class KubernetesSandboxRuntimeTest {
 
     private KubernetesSandboxBackend backend() {
         return new KubernetesSandboxBackend(
-                pods, reviewJobs, worker, liveWorkers, new SandboxExits(pods, new SimpleMeterRegistry()));
+                pods,
+                reviewJobs,
+                worker,
+                liveWorkers,
+                new SandboxExits(pods, new SimpleMeterRegistry()),
+                new KubernetesSandboxQuota(api(), properties.namespace(), properties.runtimeClassName()));
     }
 
     private SandboxAttemptRunner adapter() {

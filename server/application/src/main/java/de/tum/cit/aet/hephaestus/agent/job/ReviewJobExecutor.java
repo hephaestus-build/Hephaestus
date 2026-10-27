@@ -173,6 +173,15 @@ public class ReviewJobExecutor {
     private final Map<UUID, Integer> localRunningJobs = new ConcurrentHashMap<>();
     // The locally running jobs whose sandbox has ended, or that never start one: they compose and hold no sandbox slot.
     private final Set<UUID> composingJobs = ConcurrentHashMap.newKeySet();
+
+    /**
+     * Claimed jobs that still prepare their sandbox, which the runtime's room does not count yet. A job leaves at its
+     * execution fence ({@link #markExecutionStarted}), before its sandbox is launched; for the time of that write and
+     * the launch, a poll can read one room too many. That window is accepted: the runtime then refuses the sandbox, and
+     * the refusal requeues the job without spending an attempt (#3355).
+     */
+    private final Set<UUID> preparingJobs = ConcurrentHashMap.newKeySet();
+
     private final int sandboxSlots;
 
     private final Optional<WorkerCapacityState> capacityState;
@@ -468,6 +477,14 @@ public class ReviewJobExecutor {
                 .count();
         long free =
                 Math.min(slots - holding, agentProperties.maxConcurrentCompositions() - (long) localRunningJobs.size());
+        if (free <= 0) {
+            return 0;
+        }
+        // A review whose sandbox the runtime cannot hold now waits in the queue; claimed, it would spend an attempt.
+        // The
+        // runtime counts a sandbox once it launched, so the claims that still prepare theirs take room too.
+        long room = sandboxManager.roomFor(reviewLimits.forAttempt(ResourceLimits.MAX_RUNTIME));
+        free = Math.min(free, room - preparingJobs.size());
         return (int) Math.min(Math.max(0, free), agentProperties.claimBatchSize());
     }
 
@@ -519,6 +536,7 @@ public class ReviewJobExecutor {
         // back to QUEUED and no execution then runs to release the count. Since the count is the hard
         // claim bound, one leaked entry would retire a slot for this worker's lifetime.
         localRunningJobs.put(jobId, claim.job().getAttempt());
+        preparingJobs.add(jobId);
         capacityState.ifPresent(WorkerCapacityState::claimReview);
         return startExecution(jobId, claim);
     }
@@ -562,6 +580,7 @@ public class ReviewJobExecutor {
         } finally {
             releaseCapacity();
             localRunningJobs.remove(jobId);
+            preparingJobs.remove(jobId);
         }
     }
 
@@ -710,6 +729,7 @@ public class ReviewJobExecutor {
             } finally {
                 if (!composingJobs.remove(jobId)) releaseCapacity();
                 localRunningJobs.remove(jobId, job.getAttempt());
+                preparingJobs.remove(jobId);
                 MDC.remove(MDC_JOB_ID);
                 MDC.remove(StructuredLogKeys.WORKSPACE_ID);
                 MDC.remove(MDC_JOB_TYPE);
@@ -924,6 +944,7 @@ public class ReviewJobExecutor {
     }
 
     private boolean markExecutionStarted(UUID jobId, int attempt) {
+        preparingJobs.remove(jobId);
         Integer updated = transactionTemplate.execute(
                 status -> jobRepository.markExecutionStarted(jobId, workerId, attempt, Instant.now()));
         return updated != null && updated == 1;

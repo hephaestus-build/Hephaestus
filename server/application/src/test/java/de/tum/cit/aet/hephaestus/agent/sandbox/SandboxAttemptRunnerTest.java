@@ -7,7 +7,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.withSettings;
 
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
@@ -21,6 +24,7 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxInfrastructureException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxInitializationException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxResult;
+import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxRoom;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxSpec;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -73,6 +77,25 @@ class SandboxAttemptRunnerTest extends BaseUnitTest {
         meterRegistry = new SimpleMeterRegistry();
         backend = new FakeSandboxBackend(gatewaySessions);
         runner = new SandboxAttemptRunner(backend, workspaceManager, gatewaySessions, meterRegistry);
+    }
+
+    @Test
+    void shouldAskABackendThatBoundsItsSandboxesForTheirRoom() {
+        SandboxBackend bounded = mock(SandboxBackend.class, withSettings().extraInterfaces(SandboxRoom.class));
+        when(((SandboxRoom) bounded).roomFor(any())).thenReturn(3);
+
+        assertThat(new SandboxAttemptRunner(bounded, workspaceManager, gatewaySessions, meterRegistry)
+                        .roomFor(SandboxTestLimits.ATTEMPT))
+                .isEqualTo(3);
+    }
+
+    @Test
+    void shouldSetNoBoundWhenTheBackendSetsNone() {
+        SandboxBackend unbounded = mock(SandboxBackend.class);
+
+        assertThat(new SandboxAttemptRunner(unbounded, workspaceManager, gatewaySessions, meterRegistry)
+                        .roomFor(SandboxTestLimits.ATTEMPT))
+                .isEqualTo(Integer.MAX_VALUE);
     }
 
     private static SandboxSpec spec(Map<String, String> environment) {

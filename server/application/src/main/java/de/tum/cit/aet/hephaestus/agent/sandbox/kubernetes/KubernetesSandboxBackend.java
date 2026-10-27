@@ -1,9 +1,11 @@
 package de.tum.cit.aet.hephaestus.agent.sandbox.kubernetes;
 
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
+import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ResourceLimits;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxBackend;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxInfrastructureException;
+import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxRoom;
 import io.fabric8.kubernetes.api.model.HasMetadata;
 import io.fabric8.kubernetes.api.model.Pod;
 import io.fabric8.kubernetes.api.model.batch.v1.Job;
@@ -31,7 +33,7 @@ import org.slf4j.LoggerFactory;
  * ends without its worker: a review Job at the attempt's upload deadline, which the TTL controller then removes with its
  * Pod; a Heph host when its command channel to the worker closes. {@code SandboxReconciler} removes what remains.
  */
-public class KubernetesSandboxBackend implements SandboxBackend {
+public class KubernetesSandboxBackend implements SandboxBackend, SandboxRoom {
 
     private static final Logger log = LoggerFactory.getLogger(KubernetesSandboxBackend.class);
 
@@ -46,6 +48,7 @@ public class KubernetesSandboxBackend implements SandboxBackend {
     private final KubernetesWorker worker;
     private final KubernetesLiveWorkers liveWorkers;
     private final SandboxExits exits;
+    private final KubernetesSandboxQuota quota;
     private final Map<String, Sandbox> sandboxes = new ConcurrentHashMap<>();
 
     public KubernetesSandboxBackend(
@@ -53,12 +56,14 @@ public class KubernetesSandboxBackend implements SandboxBackend {
             KubernetesReviewJobs reviewJobs,
             KubernetesWorker worker,
             KubernetesLiveWorkers liveWorkers,
-            SandboxExits exits) {
+            SandboxExits exits,
+            KubernetesSandboxQuota quota) {
         this.pods = pods;
         this.reviewJobs = reviewJobs;
         this.worker = worker;
         this.liveWorkers = liveWorkers;
         this.exits = exits;
+        this.quota = quota;
     }
 
     /** A sandbox that this process launched: its Job or Pod, and the Pod once a review's Job has created it. */
@@ -77,6 +82,17 @@ public class KubernetesSandboxBackend implements SandboxBackend {
     @Override
     public boolean ready() {
         return worker.isolated();
+    }
+
+    /** The quota counts a review's Pod once the Job controller created it; a launched Job without one takes room too. */
+    @Override
+    public int roomFor(ResourceLimits limits) {
+        int room = quota.roomFor(limits);
+        if (room == Integer.MAX_VALUE) return room;
+        long launching = sandboxes.values().stream()
+                .filter(sandbox -> sandbox.pod == null)
+                .count();
+        return (int) Math.max(0, room - launching);
     }
 
     @Override
