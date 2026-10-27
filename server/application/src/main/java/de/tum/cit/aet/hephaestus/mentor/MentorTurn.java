@@ -64,6 +64,16 @@ public class MentorTurn implements Persistable<UUID> {
         }
     }
 
+    /**
+     * A model call of an attempt that failed, as the LLM proxy saw it. It holds no text of the provider, the call or
+     * an exception.
+     *
+     * @param kind the exception's simple class name, the stream's outcome, or a closed kind of the proxy, such as
+     *     {@code upstream_stalled} or {@code upstream_status}
+     * @param status the HTTP status the provider answered; {@code null} when it answered none
+     */
+    public record FailedCall(String kind, @Nullable Integer status) {}
+
     /** Where the developer asked. */
     public enum Surface {
         APP,
@@ -152,6 +162,25 @@ public class MentorTurn implements Persistable<UUID> {
     @Column(name = "error", columnDefinition = "TEXT")
     private String error;
 
+    /**
+     * Why the attempt failed, for the operator: the host's reason and kind of failure, or why the worker ended the
+     * attempt itself. It names closed kinds only, never a host's, a provider's or an exception's text. {@code null}
+     * unless the turn is {@code FAILED}.
+     */
+    @Nullable
+    @Column(name = "failure_cause", length = 200)
+    private String failureCause;
+
+    /** The kind of the failed attempt's last model call that failed: {@link FailedCall#kind}. */
+    @Nullable
+    @Column(name = "failed_call", length = 64)
+    private String failedCall;
+
+    /** The status the provider answered that call with: {@link FailedCall#status}. */
+    @Nullable
+    @Column(name = "failed_call_status")
+    private Integer failedCallStatus;
+
     /** The app page the developer asked from, as the app described it; Heph reads it in the turn's situation. */
     @Nullable
     @Column(name = "page_context", length = 500)
@@ -202,6 +231,9 @@ public class MentorTurn implements Persistable<UUID> {
         this.partial = null;
         this.admission = null;
         this.error = null;
+        this.failureCause = null;
+        this.failedCall = null;
+        this.failedCallStatus = null;
         resetUsage();
     }
 
@@ -251,6 +283,16 @@ public class MentorTurn implements Persistable<UUID> {
         this.error = status == Status.FAILED ? reason : null;
         this.leasedUntil = null;
         this.partial = null;
+    }
+
+    /** Records why a {@code FAILED} turn failed, for the operator; a turn in any other state records nothing. */
+    void recordFailure(@Nullable String cause, @Nullable FailedCall call) {
+        if (status != Status.FAILED) {
+            return;
+        }
+        this.failureCause = cause;
+        this.failedCall = call == null ? null : call.kind();
+        this.failedCallStatus = call == null ? null : call.status();
     }
 
     /** Returns the turn to the queue for one more attempt after its lease expired. */

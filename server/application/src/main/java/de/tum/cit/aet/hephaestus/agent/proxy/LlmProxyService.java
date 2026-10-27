@@ -12,6 +12,7 @@ import de.tum.cit.aet.hephaestus.core.proxy.ProxyStreamingUtils;
 import de.tum.cit.aet.hephaestus.core.proxy.ProxyStreamingUtils.StreamOutcome;
 import de.tum.cit.aet.hephaestus.core.proxy.ProxyStreamingUtils.UpstreamResult;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
+import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
 import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
 import io.micrometer.core.instrument.Timer;
 import io.micrometer.tracing.Span;
@@ -31,6 +32,8 @@ import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
+import org.slf4j.event.Level;
+import org.slf4j.spi.LoggingEventBuilder;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.http.HttpHeaders;
@@ -72,6 +75,9 @@ class LlmProxyService {
 
     /** The connection's breaker refuses calls after repeated failures. */
     static final String UPSTREAM_PAUSED = "upstream_paused";
+
+    /** The provider answered with a status other than 2xx. */
+    static final String UPSTREAM_STATUS = "upstream_status";
 
     private final WebClient webClient;
     private final LlmModelResolver resolver;
@@ -239,8 +245,9 @@ class LlmProxyService {
         if (routing.workspaceId() != null) span.tag("hephaestus.workspace.id", routing.workspaceId());
         long started = System.nanoTime();
         String ended = "error";
-        try (var ignored = tracer.withSpan(span);
-                var inFlight = callsInFlight.begin(routing.attempt())) {
+        ProxyCallsInFlight.Call inFlight = callsInFlight.begin(routing.attempt());
+        try (inFlight;
+                var ignored = tracer.withSpan(span)) {
             var result = forward(routing, protocol, practiceScript, response, incomingHeaders, body, span, inFlight);
             int status = result == null
                     ? Objects.requireNonNull(response).getStatus()
@@ -255,17 +262,23 @@ class LlmProxyService {
             throw e;
         } finally {
             // One line per model call of a Heph turn, as for its tool calls (HephToolCalls): a turn that keeps
-            // calling shows as a run of them. A retry of a failed call is its own line.
-            if (routing.attempt().sourceType() == UsageSourceType.MENTOR_TURN)
-                log.atInfo()
+            // calling shows as a run of them. A retry of a failed call is its own line, and a failed call a warning.
+            if (routing.attempt().sourceType() == UsageSourceType.MENTOR_TURN) {
+                MentorTurn.FailedCall failure = inFlight.failure();
+                LoggingEventBuilder line = log.atLevel(failure == null ? Level.INFO : Level.WARN)
                         .addKeyValue("event.name", "heph.turn.model_call")
                         .addKeyValue("turn.id", routing.attempt().sourceId())
                         .addKeyValue("turn.attempt", routing.attempt().number())
                         .addKeyValue("outcome", ended)
                         .addKeyValue(
                                 "duration.ms",
-                                Duration.ofNanos(System.nanoTime() - started).toMillis())
-                        .log("Heph model call");
+                                Duration.ofNanos(System.nanoTime() - started).toMillis());
+                if (failure != null) {
+                    line = line.addKeyValue("failure", failure.kind());
+                    if (failure.status() != null) line = line.addKeyValue("failure.status", failure.status());
+                }
+                line.log(failure == null ? "Heph model call" : "Heph model call failed");
+            }
             span.end();
             accounting.stopTimer(timer, routing.apiProtocol());
             MDC.remove("proxy.principal");
@@ -373,6 +386,7 @@ class LlmProxyService {
         LlmConnectionHealth.Permit permit = health.acquire(routing.connectionScope(), routing.connectionId());
         if (permit == null) {
             accounting.recordError(routing.apiProtocol());
+            call.failed(new MentorTurn.FailedCall(UPSTREAM_PAUSED, null));
             return errors.providerError(
                     HttpStatus.SERVICE_UNAVAILABLE,
                     UPSTREAM_PAUSED,
@@ -425,8 +439,10 @@ class LlmProxyService {
                 String stall = "the model provider sent no first byte within "
                         + bounds.firstByte().toSeconds() + " seconds";
                 log.warn("LLM upstream stalled for principal {}: {}", routing.principalDescription(), stall);
+                call.failed(new MentorTurn.FailedCall(UPSTREAM_STALLED, null));
                 return errors.providerError(HttpStatus.GATEWAY_TIMEOUT, UPSTREAM_STALLED, stall);
             }
+            call.failed(new MentorTurn.FailedCall(e.getClass().getSimpleName(), null));
             if (e instanceof WebClientRequestException) {
                 log.warn(
                         "LLM upstream unreachable for principal {}: reason={}",
@@ -469,9 +485,10 @@ class LlmProxyService {
         }
         var outcome = upstream.streamOutcome();
         if (outcome != null)
-            return settleStream(routing, attempt, practiceScript, span, upstream.status(), outcome, tap);
+            return settleStream(routing, attempt, practiceScript, span, upstream.status(), outcome, tap, call);
         boolean served = upstream.status() >= 200 && upstream.status() < 300;
         if (!served) {
+            call.failed(new MentorTurn.FailedCall(UPSTREAM_STATUS, upstream.status()));
             logUnserved(routing, upstream.status());
             accounting.recordError(routing.apiProtocol());
         }
@@ -495,16 +512,22 @@ class LlmProxyService {
             Span span,
             int status,
             ProxyStreamingUtils.StreamOutcome outcome,
-            ProxyStreamUsageTap tap) {
+            ProxyStreamUsageTap tap,
+            ProxyCallsInFlight.Call call) {
         boolean served = status >= 200 && status < 300;
-        if (!served) logUnserved(routing, status);
+        if (!served) {
+            call.failed(new MentorTurn.FailedCall(UPSTREAM_STATUS, status));
+            logUnserved(routing, status);
+        }
         span.tag("hephaestus.stream.outcome", outcome.name());
         if (outcome != ProxyStreamingUtils.StreamOutcome.COMPLETED) {
             recordSpanError(span, outcome.name());
             accounting.recordError(routing.apiProtocol());
             // Names the caller beside the outcome; the shared stream code knows neither.
-            if (outcome != ProxyStreamingUtils.StreamOutcome.CLIENT_DISCONNECTED)
+            if (outcome != ProxyStreamingUtils.StreamOutcome.CLIENT_DISCONNECTED) {
                 log.warn("LLM stream for principal {} ended with outcome={}", routing.principalDescription(), outcome);
+                call.failed(new MentorTurn.FailedCall(outcome.name().toLowerCase(Locale.ROOT), status));
+            }
         }
         if (served) {
             if (tap.hasMalformedUsage()) {

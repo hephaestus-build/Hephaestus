@@ -479,15 +479,30 @@ A high `failed` share with no lease expiries shows one of these causes:
 - Turns cannot start a host.
 - Turns get an error from the model.
 
-The worker logs each failed attempt at `WARN` as `Heph turn <id> attempt <n> failed: <reason>`.
+The worker logs each failed attempt at `WARN` as `Heph turn <id> attempt <n> failed: <reason>; last failed model call: <call>`.
 The reason tells which of these happened, for example `its Heph host reported ERROR: model_error`.
 The Heph host reports a kind of failure from a closed set, for example `model_error`, `context_overflow` or `upstream_stalled`.
 It does not report the error text of the model provider, a tool or the worker, or the messages of the conversation.
-For the status of a failed model call, see the worker's `LLM upstream` lines.
 A worker that ends an attempt itself names the class of the failure, for example `starting it failed: IllegalStateException`.
+
+The worker logs each failed model call of a turn at `WARN` as `Heph model call failed`.
+The line has the turn id, the attempt, the kind of failure and the status that the provider sent.
+It does not have the request or the response.
+
+The turn row keeps the cause, so the cause stays after the worker stops:
+
+| Column of `mentor_turn` | Holds |
+|---|---|
+| `failure_cause` | The reason of the log line |
+| `failed_call` | The kind of the last failed model call of the attempt: an exception class, a stream outcome such as `upstream_idle`, or `upstream_stalled`, `upstream_paused` or `upstream_status` |
+| `failed_call_status` | The HTTP status that the provider sent for that call, if it sent one |
+| `llm_calls` | The model calls of the attempt that completed |
+
+The first three columns are empty for a turn that did not fail.
 
 A turn that admission declines, for example because the budget is spent, is logged at `INFO` as `was declined at its start`.
 A turn whose second attempt loses its lease fails on the server role, which logs it at `INFO` as `Mentor turn lease expired`.
+Its `failure_cause` is `its lease expired on its last attempt`.
 
 An increase in `mentor_turn_claim_failure_total` shows a worker that claims turns but cannot start them.
 The worker fails each such turn and continues to claim.

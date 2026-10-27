@@ -538,7 +538,8 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
                     turn.turnId,
                     turn.attempt,
                     workerId,
-                    new MentorTurnCompletion.Ending(outcome, List.of(), error, cause));
+                    new MentorTurnCompletion.Ending(
+                            outcome, List.of(), error, cause, callsInFlight.takeLastFailed(turn.turnId, turn.attempt)));
         } catch (MentorLeaseLostException alreadyEnded) {
             log.debug("Heph turn {} ended before this worker ended it", turn.turnId);
         } finally {

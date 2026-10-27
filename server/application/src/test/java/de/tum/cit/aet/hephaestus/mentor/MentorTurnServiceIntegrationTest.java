@@ -446,6 +446,9 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
         MentorTurn failed = stored(first);
         assertThat(failed.getStatus()).isEqualTo(MentorTurn.Status.FAILED);
         assertThat(failed.getError()).isNotBlank();
+        assertThat(failed.getFailureCause())
+                .as("the cause outlives the worker that lost the lease")
+                .isEqualTo("its lease expired on its last attempt");
         assertThat(turns.expireLease(first.getId())).isEmpty();
     }
 

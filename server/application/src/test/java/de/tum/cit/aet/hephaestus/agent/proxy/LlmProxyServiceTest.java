@@ -27,6 +27,7 @@ import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
 import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.JobJwt;
+import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
 import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
@@ -1202,6 +1203,81 @@ class LlmProxyServiceTest extends BaseUnitTest {
                             .asString())
                     .isEqualTo("upstream_stalled");
             assertThat(String.valueOf(result.getBody())).contains("no first byte within 1 seconds");
+            assertThat(streamingCalls.takeLastFailed(
+                            routing.sourceId(), routing.attempt().number()))
+                    .isEqualTo(new MentorTurn.FailedCall(LlmProxyService.UPSTREAM_STALLED, null));
+        }
+
+        @Test
+        @DisplayName("a Heph turn attempt remembers its last failed model call by kind and status, once")
+        void aHephAttemptRemembersItsLastFailedModelCall() throws Exception {
+            ProxyRouting routing = hephTurnRouting(upstream.url("/v1").toString());
+            authenticate(routing);
+            stubCredential(
+                    routing,
+                    new LlmModelResolver.ProxyCredential(
+                            upstream.url("/v1").toString(),
+                            "openai-completions",
+                            LlmAuthMode.BEARER,
+                            "catalog-model",
+                            "secret"));
+            upstream.enqueue(new MockResponse.Builder()
+                    .code(503)
+                    .addHeader("Content-Type", "application/json")
+                    .body("{\"error\":{\"message\":\"overloaded\"}}")
+                    .build());
+            controllerProxy(new MockHttpServletResponse());
+            UUID turnId = routing.sourceId();
+            int attempt = routing.attempt().number();
+            assertThat(streamingCalls.takeLastFailed(turnId, attempt))
+                    .isEqualTo(new MentorTurn.FailedCall(LlmProxyService.UPSTREAM_STATUS, 503));
+
+            upstream.enqueue(new MockResponse.Builder()
+                    .code(503)
+                    .addHeader("Content-Type", "application/json")
+                    .body("{\"error\":{\"message\":\"overloaded\"}}")
+                    .build());
+            controllerProxy(new MockHttpServletResponse());
+            upstream.enqueue(new MockResponse.Builder()
+                    .code(200)
+                    .addHeader("Content-Type", "text/event-stream")
+                    .body("data: {\"choices\":[{\"delta\":{\"content\":\"Let me\"}}]}\n\n")
+                    .bodyDelay(3, TimeUnit.SECONDS)
+                    .build());
+            controllerProxy(new MockHttpServletResponse());
+
+            assertThat(streamingCalls.takeLastFailed(turnId, attempt))
+                    .as("the stream that went silent is the last failed call")
+                    .isEqualTo(new MentorTurn.FailedCall("upstream_idle", 200));
+            assertThat(streamingCalls.takeLastFailed(turnId, attempt))
+                    .as("the attempt's end read it")
+                    .isNull();
+        }
+
+        @Test
+        @DisplayName("a review's failed model call is not remembered")
+        void aReviewsFailedModelCallIsNotRemembered() throws Exception {
+            ProxyRouting routing = streamingRouting();
+            authenticate(routing);
+            stubCredential(
+                    routing,
+                    new LlmModelResolver.ProxyCredential(
+                            upstream.url("/v1").toString(),
+                            "openai-completions",
+                            LlmAuthMode.BEARER,
+                            "catalog-model",
+                            "secret"));
+            upstream.enqueue(new MockResponse.Builder()
+                    .code(503)
+                    .addHeader("Content-Type", "application/json")
+                    .body("{\"error\":{\"message\":\"overloaded\"}}")
+                    .build());
+
+            controllerProxy(new MockHttpServletResponse());
+
+            assertThat(streamingCalls.takeLastFailed(
+                            routing.sourceId(), routing.attempt().number()))
+                    .isNull();
         }
 
         @Test
