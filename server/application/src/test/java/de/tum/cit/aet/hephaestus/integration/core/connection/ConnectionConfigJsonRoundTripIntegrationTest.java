@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.integration.core.connection;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -16,6 +17,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Set;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -317,7 +319,42 @@ class ConnectionConfigJsonRoundTripIntegrationTest extends BaseIntegrationTest {
                 .isEmpty();
     }
 
-    private void persistActiveOutline(Workspace ws, String subscriptionId, String route) {
+    /**
+     * The route projection and the heal read every ACTIVE Outline connection through this native query. A broken
+     * filter or a renamed JSON key would refuse every live subscription within a minute, so it runs against real
+     * Postgres.
+     */
+    @Test
+    void activeOutlineRoutes_holdEveryActiveConnectionAndItsRoute() {
+        Workspace unrouted = workspaceRepository.save(WorkspaceTestFixtures.activeWorkspace("conn-routes-unrouted"));
+        Workspace suspendedWorkspace =
+                workspaceRepository.save(WorkspaceTestFixtures.activeWorkspace("conn-routes-suspended"));
+        persistActiveOutline(workspace, "sub-routed", "key/route-routed");
+        persistActiveOutline(unrouted, "sub-unrouted", null);
+        Connection suspended = new Connection(
+                suspendedWorkspace,
+                IntegrationKind.OUTLINE,
+                "https://outline.example.com/sub-suspended-route",
+                new ConnectionConfig.OutlineConfig(
+                        "https://outline.example.com", "sub-suspended-route", "key/route-suspended", Set.of()));
+        suspended.setState(IntegrationState.SUSPENDED);
+        connectionRepository.save(suspended);
+        entityManager.flush();
+        entityManager.clear();
+
+        var mine = connectionRepository.findActiveOutlineRoutes().stream()
+                .filter(row -> Set.of(workspace.getId(), unrouted.getId(), suspendedWorkspace.getId())
+                        .contains(row.getWorkspaceId()))
+                .toList();
+
+        assertThat(mine)
+                .extracting(
+                        ConnectionRepository.OutlineRouteRow::getWorkspaceId,
+                        ConnectionRepository.OutlineRouteRow::getRoute)
+                .containsExactlyInAnyOrder(tuple(workspace.getId(), "key/route-routed"), tuple(unrouted.getId(), null));
+    }
+
+    private void persistActiveOutline(Workspace ws, String subscriptionId, @Nullable String route) {
         Connection conn = new Connection(
                 ws,
                 IntegrationKind.OUTLINE,

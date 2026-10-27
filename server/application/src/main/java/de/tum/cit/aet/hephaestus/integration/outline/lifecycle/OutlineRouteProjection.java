@@ -31,6 +31,9 @@ import org.springframework.stereotype.Component;
  * <p>A route is allowed before its subscription is registered, so the first delivery is never refused, and a rebuild
  * keeps it for {@link #REGISTRATION_GRACE} until the connection stores it. A rebuild at start and every minute removes
  * routes that left the database, and recreates the bucket when NATS lost it.
+ *
+ * <p>The grace lives in this process's memory, so exactly one server process may allow and rebuild (ADR 0066): another
+ * process's rebuild would remove a route allowed here until its connection stores it.
  */
 @Component
 @ConditionalOnServerRole

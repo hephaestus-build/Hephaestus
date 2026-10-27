@@ -26,8 +26,9 @@ import org.springframework.web.bind.annotation.RestController;
  * Receives an Outline change notification on the route its subscription was registered with. The signing secret is
  * derived from the route ({@link OutlineRouteCredential}), so nothing is read from the database. A verified delivery
  * on a route that no ACTIVE connection holds (the server projects the current routes into {@value #ROUTES_BUCKET})
- * gets {@code 410}, so Outline disables the orphaned subscription. Any other is published with its route in
- * {@link #HEADER_ROUTE}; the server drops it unless the subscription the body names registered that route.
+ * gets {@code 410}, and an unreadable projection {@code 503}. Outline retries neither and counts every non-2xx answer
+ * toward disabling the subscription, so a {@code 503} is lost, not retried. Any other delivery is published with its
+ * route in {@link #HEADER_ROUTE}; the server drops it unless the subscription the body names registered that route.
  *
  * <p>Active only on the webhook runtime role.
  */

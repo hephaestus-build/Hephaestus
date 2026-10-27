@@ -60,20 +60,18 @@ public final class ProjectedKeys {
      * fails once; the second try looks the bucket up again and creates it.
      */
     public void replaceAll(Set<String> keys) {
-        try {
-            replaceAll(kv(true), keys);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw unavailable(e);
-        } catch (IOException | JetStreamApiException | RuntimeException first) {
-            handle = null;
+        for (int attempt = 1; ; attempt++) {
             try {
                 replaceAll(kv(true), keys);
+                return;
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 throw unavailable(e);
             } catch (IOException | JetStreamApiException | RuntimeException e) {
-                throw unavailable(e);
+                if (attempt == 2) {
+                    throw unavailable(e);
+                }
+                handle = null;
             }
         }
     }

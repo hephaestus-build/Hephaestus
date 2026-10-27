@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.consumer.IntegrationNatsConsumer;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ApiCredentialProvider.BearerToken;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
+import de.tum.cit.aet.hephaestus.integration.core.webhook.ProjectedKeys;
 import de.tum.cit.aet.hephaestus.integration.outline.client.OutlineWebhookClient;
 import de.tum.cit.aet.hephaestus.integration.outline.client.model.OutlineWebhookSubscription;
 import de.tum.cit.aet.hephaestus.integration.outline.metrics.OutlineMetrics;
@@ -114,7 +115,11 @@ public class OutlineWebhookRegistrar {
             if (route != null && credential.isCurrent(route)) {
                 continue;
             }
-            ensureSubscription(row.getWorkspaceId());
+            try {
+                ensureSubscription(row.getWorkspaceId());
+            } catch (RuntimeException e) {
+                log.warn("outline.webhook: heal failed for workspaceId={}: {}", row.getWorkspaceId(), e.toString());
+            }
             left++;
         }
         unrouted.set(left);
@@ -141,8 +146,11 @@ public class OutlineWebhookRegistrar {
      * {@code enabled=false} (Outline disables a subscription whose deliveries fail too often), posting to
      * another URL, or on a route of a retired routing key is replaced: a new subscription is registered and
      * stored, then the old one is deleted upstream; an unverifiable upstream (listing failed) changes nothing.
+     *
+     * <p>Serialized: the heal, the activation listener and the sync can reach the same route-less workspace at once,
+     * and two registrations would leave the loser's subscription upstream.
      */
-    public void ensureSubscription(long workspaceId) {
+    public synchronized void ensureSubscription(long workspaceId) {
         if (externalUrl == null || externalUrl.isBlank() || !credential.isConfigured()) {
             return;
         }
@@ -166,6 +174,8 @@ public class OutlineWebhookRegistrar {
             if (storedRoute != null && credential.isCurrent(storedRoute)) {
                 Boolean healthy = isSubscriptionHealthy(serverUrl, token, storedId, deliveryUrl(storedRoute));
                 if (healthy == null || healthy) {
+                    // A reactivated connection's route left the projection while it was not ACTIVE.
+                    allowQuietly(storedRoute);
                     return; // healthy, or unverifiable — don't churn a subscription we cannot see
                 }
             }
@@ -209,10 +219,11 @@ public class OutlineWebhookRegistrar {
         // and are published to the durable `outline` stream (ADR 0023 §3, ADR 0066).
         OutlineRouteCredential.Issued route = credential.issue();
         String deliveryUrl = deliveryUrl(route.route());
+        String subscriptionId = null;
         try {
             // Allowed first: the receiver refuses a route it does not know, and Outline may deliver at once.
             routes.ifAvailable(projection -> projection.allow(route.route()));
-            String subscriptionId = outlineApiClient.createWebhookSubscription(
+            subscriptionId = outlineApiClient.createWebhookSubscription(
                     serverUrl,
                     token,
                     SUBSCRIPTION_NAME,
@@ -223,12 +234,13 @@ public class OutlineWebhookRegistrar {
                 log.warn("outline.webhook: register returned no subscription id for workspaceId={}", workspaceId);
                 return false;
             }
+            String created = subscriptionId;
             boolean stored = connectionService
                     .updateConfig(workspaceId, IntegrationKind.OUTLINE, cfg -> {
                         if (!(cfg instanceof ConnectionConfig.OutlineConfig outlineCfg)) {
                             throw new IllegalStateException("Expected OutlineConfig on workspace=" + workspaceId);
                         }
-                        return outlineCfg.withWebhookSubscription(subscriptionId, route.route());
+                        return outlineCfg.withWebhookSubscription(created, route.route());
                     })
                     .isPresent();
             if (!stored) {
@@ -247,7 +259,19 @@ public class OutlineWebhookRegistrar {
         } catch (RuntimeException e) {
             // Best-effort: the periodic reconcile still keeps the mirror fresh without a subscription.
             log.warn("outline.webhook: registration failed for workspaceId={}: {}", workspaceId, e.toString());
+            if (subscriptionId != null && !subscriptionId.isBlank()) {
+                // Created but not stored: nothing holds it, so it must not stay upstream.
+                deleteQuietly(serverUrl, token, subscriptionId);
+            }
             return false;
+        }
+    }
+
+    private void allowQuietly(String route) {
+        try {
+            routes.ifAvailable(projection -> projection.allow(route));
+        } catch (ProjectedKeys.UnavailableException e) {
+            log.warn("outline.webhook: could not project route; the next rebuild adds it: {}", e.toString());
         }
     }
 

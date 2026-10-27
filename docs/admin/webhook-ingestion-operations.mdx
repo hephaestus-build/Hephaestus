@@ -109,6 +109,27 @@ After that, only the reconciliation sync recovers their effect.
 | Slack | Yes. Slack retries 3 times: at once, after 1 minute and after 5 minutes. With [Delayed Events](https://docs.slack.dev/apis/events-api/) turned on in the Slack app, it also retries every hour for 24 hours. The receiver answers Slack within 2 seconds and stores a retry once, by its `event_id`. | Reconciliation of monitored channels. |
 | Outline | No. Outline waits 5 seconds and does not retry. It disables a subscription when 80 % of its deliveries in 24 hours fail. | Reconciliation of the Outline connection. |
 
+## Key-value buckets that the receiver reads
+
+The receiver has no database.
+The server writes two NATS key-value buckets from PostgreSQL, at start and every minute:
+
+| Bucket | Holds | Without it |
+| --- | --- | --- |
+| `outline-routes` | The route id of each active Outline connection. | Outline deliveries get `503`. |
+| `slack-channel-consent` | The Slack team and channel ids of each monitored channel. | Slack deliveries get `503`, and Slack retries them. |
+
+The buckets hold no secret and no content.
+The server recreates a lost bucket within one minute of its start.
+Do not delete them while the server is down: Outline does not retry a refused delivery.
+When at least 80 % of at least 10 deliveries in 24 hours failed, Outline disables the subscription and emails the Outline admin.
+The server registers it again at the next full sync.
+
+Two server meters show the state of Outline subscriptions:
+
+- `outline.webhook.subscription.unrouted` counts the active Outline connections that wait for a subscription on a current route. The server retries every 5 minutes.
+- `outline.webhook.subscription.deletion.failed` counts upstream deletions that failed. Outline disables such a subscription after its deliveries are refused.
+
 ## What to alert on
 
 The receiver exports these Micrometer meters on its private management listener. See

@@ -68,8 +68,15 @@ The connection stores the route, not a secret.
 The receiver publishes the verified route in the `Hephaestus-Route` header.
 The server drops a delivery whose route is not the one that its subscription registered, so a delivery signed for one connection cannot name another connection's subscription.
 The server projects the routes that ACTIVE connections hold into the NATS key-value bucket `outline-routes` (key: the route id; value: empty).
-The receiver answers a verified delivery on a route outside that set with `410`, so Outline disables an orphaned subscription: one whose connection was disconnected, or whose upstream deletion failed.
-A route is in the set before its subscription is registered, so the first delivery is never refused; a missing bucket answers `503`.
+The receiver answers a verified delivery on a route outside that set with `410`, and a missing or unreadable bucket with `503`.
+Outline retries no delivery and counts every non-2xx answer the same way.
+It disables a subscription when at least 80 % of at least 10 deliveries in 24 hours failed.
+Thus, an orphaned subscription (one whose connection was disconnected, or whose upstream deletion failed) is disabled, and a `503` is lost and counted, not retried.
+A route is in the set before its subscription is registered, so the first delivery is never refused.
+A rebuild keeps a route that was allowed in the last 5 minutes, until its connection stores it.
+This grace lives in the memory of the one server process; the chart runs one server replica with the `Recreate` strategy.
+With several server processes, one process's rebuild would remove a route that another process allowed, until that process stores it: at most one minute of `410` for a new subscription.
+Before the server runs more than one replica, the allow time must move into the key's value, and a rebuild must keep the keys whose value is younger than the grace.
 The full sync, and a heal at start and every 5 minutes, replace a subscription that is not on a current route: one without a route, on another URL, or on a retired routing key.
 An upgrade or a key rotation therefore needs no operator step.
 This is the same model as the GitLab route credential, and like Svix every subscription has its own secret.
@@ -94,12 +101,17 @@ Option (b) was rejected for Slack: a webhook stream keeps a message for 7 days, 
   `WebhookRoleContextIntegrationTest` boots the role with no reachable database and posts GitHub, Outline and Slack deliveries.
 - The webhook Pod needs no database credentials, no encryption keys and no network path to PostgreSQL.
 - A component that the receiver needs must be in `WebhookReceiverScope`.
-  `WebhookReceiverScopeArchitectureTest` fails when a webhook-role component, verifier, deriver, publish gate or secret source falls outside it, or when a listed name no longer names a class.
+  `WebhookReceiverScopeArchitectureTest` fails when a webhook-role component, verifier, deriver, publish gate or secret source falls outside it.
+  It also fails when a class that the scope admits for the webhook role reaches a persistence type.
+  The walk follows dependencies and the type arguments of fields and parameters, such as `ObjectProvider<T>`, through every application class outside the scope.
+- `@ReceiverComponent` is opt-in.
+  A component for all roles outside a `webhook` package, such as a startup guard, is absent from the receiver until it carries the marker.
+  We accept this risk: a rule for the inverse would have to tell a guard from every other ungated component.
 - The receiver no longer waits for the schema migration. It reads no schema.
 - The shared `/webhooks/outline` path is gone. An Outline subscription registered before this change posts there and is refused, until the server registers it again on a route within minutes of its start. Outline changes that the previous receiver published carry no route, so the consumer drops them; the next sync recovers their effect.
 - A Slack consent change reaches the receiver after its commit, or after at most one minute through the rebuild.
   Until then, a paused channel's message can be published, and the server drops it when it checks consent.
-- Rotating `hephaestus.webhook.routing.secret` moves Outline subscriptions to the new key at the next reconcile, while `previous-secret` keeps the old routes verifiable.
+- Rotating `hephaestus.webhook.routing.secret` moves Outline subscriptions to the new key within 5 minutes through the heal, while `previous-secret` keeps the old routes verifiable.
 
 ## Revisit trigger
 

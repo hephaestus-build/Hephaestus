@@ -236,6 +236,20 @@ class OutlineWebhookRegistrarTest extends BaseUnitTest {
     }
 
     @Test
+    void ensureSubscription_deletesTheNewSubscriptionWhenStoringItFails() {
+        stubActiveConnection(config(null, null));
+        stubToken();
+        stubCreateReturning("sub-99");
+        when(connectionService.updateConfig(anyLong(), any(), any()))
+                .thenThrow(new IllegalStateException("optimistic lock"));
+
+        registrar(EXTERNAL_URL).ensureSubscription(WORKSPACE_ID);
+
+        verify(outlineApiClient).deleteWebhookSubscription(SERVER_URL, "tok", "sub-99");
+        verifyNoInteractions(natsConsumer);
+    }
+
+    @Test
     void ensureSubscription_countsADeletionThatFails() {
         stubActiveConnection(config("sub-1", null));
         stubToken();
@@ -291,6 +305,18 @@ class OutlineWebhookRegistrarTest extends BaseUnitTest {
         verify(connectionService, never()).updateConfig(anyLongMatcher(), any(), any());
         // Nothing changed upstream — the scope consumer must not be poked.
         verifyNoInteractions(natsConsumer);
+    }
+
+    @Test
+    void ensureSubscription_projectsTheRouteOfAHealthyStoredSubscription() {
+        stubActiveConnection(config("sub-1", ROUTE));
+        stubToken();
+        when(outlineApiClient.listWebhookSubscriptions(SERVER_URL, "tok")).thenReturn(List.of(upstream("sub-1", true)));
+
+        registrar(EXTERNAL_URL).ensureSubscription(WORKSPACE_ID);
+
+        // A reactivated connection's route left the projection while the connection was not ACTIVE.
+        verify(routes).allow(ROUTE);
     }
 
     @Test
