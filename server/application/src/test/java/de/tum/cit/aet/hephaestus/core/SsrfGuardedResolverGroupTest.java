@@ -144,7 +144,7 @@ class SsrfGuardedResolverGroupTest extends BaseUnitTest {
     class PrivateHosts {
 
         private final PrivateHostAllowlist allowlist =
-                PrivateHostAllowlist.parse(List.of("vllm.lab.test", "10.20.0.0/16"));
+                PrivateHostAllowlist.parse(List.of("vllm.lab.test", "10.20.0.0/16"), List.of());
 
         private Future<InetSocketAddress> resolve(String host, String literalIp) throws Exception {
             InetSocketAddress fixed = new InetSocketAddress(InetAddress.getByName(literalIp), 443);

@@ -42,8 +42,9 @@ public record LlmProperties(
      * @param privateHosts           Model endpoints on private networks that provider base URLs may use, as host names,
      *                               IP addresses or CIDR ranges. A host name entry lets that name resolve to a private
      *                               address. A range admits every host name that resolves into it. Only private
-     *                               addresses qualify: loopback, link-local and cloud metadata addresses stay
-     *                               blocked. Empty allows public hosts only.
+     *                               addresses qualify: loopback, link-local and the known cloud metadata ranges stay
+     *                               blocked. A range outside the private ranges, or one that covers this server's own
+     *                               address, stops startup. Empty allows public hosts only.
      * @param privateHostsAllowHttp Accepts {@code http://} base URLs whose host is in {@code private-hosts}. Every other
      *                               host still needs HTTPS.
      */

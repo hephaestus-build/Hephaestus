@@ -116,6 +116,10 @@ public class LlmConnectionProbeService {
                         }
                         byte[] response = clientResponse.getBody().readNBytes(MAX_RESPONSE_BYTES + 1);
                         if (response.length > MAX_RESPONSE_BYTES) {
+                            if (privateTarget) {
+                                log.info("LLM connection probe of a private host failed: response too large");
+                                return LlmProbeResultDTO.unreachable(null, PRIVATE_UNREACHABLE);
+                            }
                             return LlmProbeResultDTO.unreachable(status, "The provider’s response was too large.");
                         }
                         JsonNode body = objectMapper.readTree(response);

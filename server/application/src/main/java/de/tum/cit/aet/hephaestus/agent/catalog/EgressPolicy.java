@@ -8,13 +8,18 @@ import de.tum.cit.aet.hephaestus.core.security.PrivateHostAllowlist;
 import io.netty.resolver.AddressResolverGroup;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.net.NetworkInterface;
+import java.net.SocketException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.UnknownHostException;
 import java.util.Arrays;
+import java.util.Collection;
+import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.stream.Collectors;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 /**
@@ -59,11 +64,19 @@ public class EgressPolicy {
     private final boolean privateHostsAllowHttp;
     private final AddressResolverGroup<InetSocketAddress> resolverGroup;
 
-    /** @throws IllegalArgumentException for a private-hosts entry that is no host name, IP address or CIDR range */
+    /** @throws IllegalArgumentException for a private-hosts entry that {@link PrivateHostAllowlist#parse} refuses */
+    @Autowired
     public EgressPolicy(InstanceLlmSettingsRepository settingsRepository, LlmProperties llmProperties) {
+        this(settingsRepository, llmProperties, ownAddresses());
+    }
+
+    EgressPolicy(
+            InstanceLlmSettingsRepository settingsRepository,
+            LlmProperties llmProperties,
+            Collection<InetAddress> ownAddresses) {
         this.settingsRepository = settingsRepository;
         this.allowLoopback = llmProperties.egress().allowLoopback();
-        this.privateHosts = PrivateHostAllowlist.parse(llmProperties.egress().privateHosts());
+        this.privateHosts = PrivateHostAllowlist.parse(llmProperties.egress().privateHosts(), ownAddresses);
         this.privateHostsAllowHttp = llmProperties.egress().privateHostsAllowHttp();
         this.resolverGroup = new SsrfGuardedResolverGroup(allowLoopback, privateHosts);
     }
@@ -113,6 +126,17 @@ public class EgressPolicy {
         }
         assertAllowlisted(normalizedHost);
         return Arrays.stream(addresses).anyMatch(PrivateAddressGuard::isNonPublic);
+    }
+
+    /** The addresses of this process: on Compose its network, on Kubernetes its Pod's address. */
+    private static List<InetAddress> ownAddresses() {
+        try {
+            return NetworkInterface.networkInterfaces()
+                    .flatMap(NetworkInterface::inetAddresses)
+                    .toList();
+        } catch (SocketException e) {
+            throw new IllegalStateException("Cannot read this server's network addresses", e);
+        }
     }
 
     private static URI parse(String baseUrl) {

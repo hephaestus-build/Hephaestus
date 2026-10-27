@@ -159,21 +159,36 @@ Each entry is one of these:
 
 These rules apply:
 
-- An entry that is not a host name, an IP address, or a CIDR range stops startup.
 - Only private addresses qualify: `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `100.64.0.0/10`, and `fc00::/7`.
-  Loopback, link-local, and public addresses stay refused, even when an entry covers them.
-  These cloud metadata addresses inside the private ranges also stay refused: `100.100.100.200` (Alibaba Cloud), `fd00:ec2::254` (AWS), and `fd20:ce::254` (Google Cloud).
-  Azure, Oracle Cloud, and Hetzner Cloud use only `169.254.169.254`, which is link-local.
-  For a local development setup, use `HEPHAESTUS_LLM_EGRESS_ALLOW_LOOPBACK`.
-- A range lets each admin who configures a provider send requests to every port of every host in it.
-  If the range covers the network of this deployment, that includes the services of Hephaestus itself.
-  Examples are PostgreSQL, NATS, the server, and the Kubernetes API.
-  Hephaestus cannot reliably detect these networks, so it does not refuse them.
-  List single hosts or narrow ranges.
-  Never list a range that covers the Pod or Service range of the cluster, or the Compose network.
-- For a host on this list, a failed **Test and fetch models** shows only that the provider is not reachable.
-  The server log has the HTTP status or the error.
-  Thus, the test cannot map your network.
+  Loopback, link-local, and public addresses stay refused, even when a host name entry resolves to them.
+  Every cloud metadata service at a `169.254.x.x` address is link-local, so it stays refused.
+- These metadata and credential ranges inside the private ranges also stay refused:
+
+  | Range | Provider |
+  | --- | --- |
+  | `100.100.100.200` | Alibaba Cloud |
+  | `fd00:ec2::/32` | AWS: instance metadata, EKS Pod Identity, DNS, and time |
+  | `fd20:ce::/48` | Google Cloud |
+  | `fd00:a9fe::/32` | Akamai (Linode) |
+  | `fd00:42::/32` | Scaleway |
+
+- An entry stops startup if it is not a host name, an IP address, or a CIDR range.
+- A range stops startup if it is not inside one of the private ranges, for example `0.0.0.0/0` or `172.0.0.0/8`.
+- A range stops startup if it covers an address of the server or worker itself.
+  Such a range admits the services of this deployment, such as PostgreSQL, NATS, and the server.
+  On Compose, this check covers the Compose network.
+  On Kubernetes, it covers the address of the Pod, but not the whole Pod range or the Service range.
+  Thus, never list a range that covers the Pod or Service range of the cluster.
+- List single hosts or narrow ranges.
+  A range lets admins send requests to every port of every host in it.
+  These admins include the workspace admins of every workspace while **Let workspaces add providers and models** is on.
+  A typical vLLM or Ollama server needs no key.
+  Any workspace can then use it as its own provider.
+  Its use does not count against a shared model's budget.
+  Turn that setting off to keep the list to the connections of instance admins.
+- For a host on this list, a failed **Test and fetch models** shows no HTTP status and no error.
+  The server log has them.
+- For a local development setup, use `HEPHAESTUS_LLM_EGRESS_ALLOW_LOOPBACK`.
 - The check happens again at connect time, on the address that the connection uses. A host name that is not listed and that changes its DNS answer to a private address is still refused.
 - Plain `http://` stays refused. To permit it for listed hosts, set `HEPHAESTUS_LLM_EGRESS_PRIVATE_HOSTS_ALLOW_HTTP=true`.
   A host is listed if its name is an entry, or if the list covers all its addresses.
