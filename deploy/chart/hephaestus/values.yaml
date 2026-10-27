@@ -244,6 +244,12 @@ worker:
     # Optional. The RuntimeClass of every sandbox pod, for example gVisor's. Empty uses the
     # cluster's default runtime.
     runtimeClassName: ""
+    # The RuntimeClass's overhead.podFixed, which the quotas count with each sandbox Pod's requests.
+    # Set it for a class with an overhead, such as gVisor or Kata on some clusters.
+    # Only the chart reads it: the worker reads the overhead from its Pods.
+    podOverhead:
+      cpuMillis: 0
+      memoryMi: 0
     # Optional. The shipped seccomp profile as a Localhost profile, relative to the kubelet's
     # seccomp directory. Empty uses RuntimeDefault.
     seccompProfile: ""

@@ -1896,6 +1896,39 @@ for (const name of ["small", "small-16gib"] as const) {
 	});
 }
 
+/** The requests that each tier's quota holds, rendered from these layers. */
+const tierHard = (layers: Layer[]) => {
+	const resources = rendered(layers);
+	return (tier: "reviews" | "conversations") => {
+		const quota = get(tierQuota(resources, tier), "spec", "hard");
+		return {
+			pods: Number(get(quota, "pods")),
+			millicpu: Math.round(amount(get(quota, "requests.cpu")) * 1000),
+			memory: amount(get(quota, "requests.memory")),
+		};
+	};
+};
+
+await test("each tier's quota counts the RuntimeClass overhead of every sandbox Pod that it holds", () => {
+	const without = tierHard(layersFor("small"));
+	const withOverhead = tierHard([
+		...layersFor("small"),
+		{
+			worker: {
+				runtime: { runtimeClassName: "gvisor", podOverhead: { cpuMillis: 100, memoryMi: 40 } },
+			},
+		},
+	]);
+	for (const tier of ["reviews", "conversations"] as const) {
+		const { pods, millicpu, memory } = without(tier);
+		assert.deepEqual(
+			withOverhead(tier),
+			{ pods, millicpu: millicpu + pods * 100, memory: memory + pods * 40 * 2 ** 20 },
+			tier,
+		);
+	}
+});
+
 const strategy = (name: (typeof profiles)[number], component: string) =>
 	get(workload(rendered(layersFor(name)), component), "spec", "strategy");
 

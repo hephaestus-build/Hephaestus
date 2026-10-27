@@ -41,16 +41,20 @@ included, has its isolation probe there, and its Heph host and turn sandboxes in
 {{- $reviews := mul $replicas (int .Values.worker.reviews) }}
 {{- /* Requests, not limits: sandbox Pods are Burstable, and a quota on limits would admit about half the reviews
 that the node holds. The scheduler places Pods by their requests; a limit bounds one Pod's own peak. */}}
+{{- /* A quota counts a Pod's RuntimeClass overhead with its requests, so each Pod adds the class's overhead. */}}
+{{- $overhead := $runtime.podOverhead }}
+{{- $reviewPods := add (mul $reviews (int $review.pods)) (mul $running (int $probe.pods)) }}
+{{- $conversationPods := mul $running (add (int $host.pods) (mul $turnSandboxes (int $turn.pods))) }}
 {{- $tiers := list
   (dict "tier" "reviews"
-    "pods" (add (mul $reviews (int $review.pods)) (mul $running (int $probe.pods)))
-    "memoryMi" (add (mul $reviews (int $review.memoryMi)) (mul $running (int $probe.memoryMi)))
-    "cpuMillis" (add (mul $reviews (int $review.cpuMillis)) (mul $running (int $probe.cpuMillis)))
+    "pods" $reviewPods
+    "memoryMi" (add (mul $reviews (int $review.memoryMi)) (mul $running (int $probe.memoryMi)) (mul $reviewPods (int $overhead.memoryMi)))
+    "cpuMillis" (add (mul $reviews (int $review.cpuMillis)) (mul $running (int $probe.cpuMillis)) (mul $reviewPods (int $overhead.cpuMillis)))
     "diskMi" (add (mul $reviews (int $review.ephemeralStorageMi)) (mul $running (int $probe.ephemeralStorageMi))))
   (dict "tier" "conversations"
-    "pods" (mul $running (add (int $host.pods) (mul $turnSandboxes (int $turn.pods))))
-    "memoryMi" (mul $running (add (int $host.memoryMi) (mul $turnSandboxes (int $turn.memoryMi))))
-    "cpuMillis" (mul $running (add (int $host.cpuMillis) (mul $turnSandboxes (int $turn.cpuMillis))))
+    "pods" $conversationPods
+    "memoryMi" (add (mul $running (add (int $host.memoryMi) (mul $turnSandboxes (int $turn.memoryMi)))) (mul $conversationPods (int $overhead.memoryMi)))
+    "cpuMillis" (add (mul $running (add (int $host.cpuMillis) (mul $turnSandboxes (int $turn.cpuMillis)))) (mul $conversationPods (int $overhead.cpuMillis)))
     "diskMi" (mul $running (add (int $host.ephemeralStorageMi) (mul $turnSandboxes (int $turn.ephemeralStorageMi))))) }}
 {{- if eq (include "hephaestus.priorityClass" (dict "root" . "tier" "reviews")) (include "hephaestus.priorityClass" (dict "root" . "tier" "conversations")) }}
 {{- fail "priorityClasses.reviews and priorityClasses.conversations must differ: each tier's quota selects its Pods by PriorityClass" }}

@@ -191,10 +191,7 @@ public class KubernetesPods {
             ATTEMPT_VOLUMES.size() + SCRATCH_PATHS.size(),
             100);
 
-    /**
-     * The Heph host: 136 MiB with one conversation, in the same volumes as a review. A turn uses about 0.12
-     * CPU-seconds, at a p95 of 1 to 4m, so it requests 50m of its one CPU.
-     */
+    /** The Heph host, in the same volumes as a review. It is idle between turns, so it requests 50m of its one CPU. */
     static final Size HOST = new Size(
             256 * MIB,
             SandboxLayout.HEPH_HOST_MEMORY_BYTES,

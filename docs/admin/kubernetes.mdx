@@ -439,6 +439,8 @@ A chart test adds up what that node holds during an upgrade, with backups on:
 The worker upgrades by `Recreate`, with a drain of at most 10 minutes.
 Each upgrade stops the worker first, so reviews and Heph turns stop for the drain and for the new worker's start and isolation probe.
 A surge would run a second Heph host and turn pool beside the old ones, which the node's CPU does not hold.
+The old worker's Heph sandboxes stay until the new worker removes them, within a minute of its start.
+Until then, the new worker's Heph sandboxes can find no room in the conversations quota, so they wait and are tried again.
 
 The table gives the measured resident memory of each role and the chart's sizes.
 Each JVM role requests all of its memory limit, because the heap is sized from the limit, and the limit is the measurement plus headroom.
@@ -472,6 +474,10 @@ A chart test adds up what one node of 16 GiB holds, with backups on:
 | Steady: every role, one backup, one review, the Heph host, two pooled turn sandboxes and 8 running turns | 9.5 GiB of 15.4 GiB | 2.75 of 3.75 |
 | The same, with the isolation probe | 10.3 GiB | — |
 | An upgrade: the old worker gone, the webhook and webapp surge, the migration and stanza Jobs, the new worker's probe, and the old worker's pooled turn sandboxes | 10.9 GiB of 15.4 GiB | 2.40 of 3.75 |
+
+The table counts requests.
+Sandbox Pods may use more than they request, up to their limits.
+If every sandbox Pod used its limit at the same time, the node would be full.
 
 A chart test derives the Heph turns of both single-node profiles: 8, the worker's automatic number, as long as one more turn sandbox would still fit.
 
@@ -835,8 +841,11 @@ It writes these objects into it:
   The chart derives both from `sandbox-pod-requests.json` and from `worker.replicas`, `worker.reviews` and `worker.hephTurns`.
   They count requests, not limits: sandbox Pods may use more than they request, up to their limits.
   Thus, Heph's sandboxes never take a review's room, and reviews never take Heph's.
+  A quota also counts the Pod overhead of a RuntimeClass, such as gVisor's on some clusters.
+  For such a class, set `worker.runtime.podOverhead` to its `overhead.podFixed`: `cpuMillis` and `memoryMi`.
+  The chart then adds the overhead to each Pod in the quotas.
   Set `worker.sandbox.quota.enabled=false` to manage the quotas yourself.
-  Do this with a RuntimeClass that adds a Pod overhead, such as gVisor's: a quota counts the overhead too, and the chart cannot know it.
+  `priorityClasses.reviews` and `priorityClasses.conversations` must name different classes, because each quota selects its Pods by class.
   During a rolling update, the chart's quotas hold the workers of the new and the old version. A worker that still drains during a second update can find no room: its sandbox then waits and is tried again.
   A worker claims a practice review only when every quota that counts review Pods has room for the review's Pod.
   An unscoped quota counts them, and so does a quota that selects the reviews' PriorityClass.
@@ -945,6 +954,7 @@ The sandbox nodes need these items:
 These settings are optional:
 
 - `worker.runtime.runtimeClassName`: a RuntimeClass for sandbox Pods. gVisor (`runsc`) is recommended for workloads from people that you do not trust.
+- `worker.runtime.podOverhead`: the RuntimeClass's `overhead.podFixed`, as `cpuMillis` and `memoryMi`. The sandbox quotas count it with each Pod.
 - `worker.runtime.seccompProfile`: the bundled `sandbox/agent-seccomp-profile.json` as a Localhost profile. Put the file below the kubelet's seccomp directory on every sandbox node, and set its relative path. Without it, sandbox Pods use `RuntimeDefault`.
 - `worker.runtime.nodeSelector` and `worker.runtime.tolerations`: the nodes of sandbox Pods.
 - A kubelet `podPidsLimit` on the sandbox nodes.
