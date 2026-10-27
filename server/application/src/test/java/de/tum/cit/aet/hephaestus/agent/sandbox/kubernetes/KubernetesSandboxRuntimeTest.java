@@ -67,6 +67,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
+import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -230,12 +231,75 @@ class KubernetesSandboxRuntimeTest {
                 .satisfies(volume ->
                         assertThat(mountPath(runtime, volume.getName())).isEqualTo("/run"));
         assertThat(spec.getVolumes())
-                .filteredOn(volume -> volume.getEmptyDir() != null
-                        && volume.getEmptyDir().getMedium() == null
-                        && volume.getEmptyDir().getSizeLimit() != null)
+                .filteredOn(volume ->
+                        volume.getEmptyDir() != null && volume.getEmptyDir().getMedium() == null)
                 .extracting(volume -> mountPath(runtime, volume.getName()))
-                .as("the scratch places are on disk, each with a size limit")
-                .containsExactlyInAnyOrder("/tmp", "/home/agent/.local");
+                .as("the attempt volumes and the scratch places are on disk")
+                .containsExactlyInAnyOrder(
+                        "/workspace",
+                        "/workspace/work",
+                        "/workspace/out",
+                        "/workspace/.pi",
+                        "/workspace/.sessions",
+                        "/tmp",
+                        "/home/agent/.local");
+    }
+
+    @Test
+    void shouldBoundTheDiskOfEverySandboxPodSoThatNoneCanFillItsNode() {
+        Map<String, String> review = Map.of(KubernetesWorker.SANDBOX_KIND, KubernetesWorker.KIND_REVIEW);
+        Map<String, String> host = Map.of(KubernetesWorker.SANDBOX_KIND, KubernetesWorker.KIND_HOST);
+        Pod reviewPod = pods.workspacePod(
+                new KubernetesPods.Workload("r", review, IMAGE, "agent"),
+                Map.of(),
+                List.of("node"),
+                LIMITS,
+                KubernetesPods.REVIEW);
+        Pod hostPod = pods.workspacePod(
+                new KubernetesPods.Workload("h", host, IMAGE, "agent"),
+                Map.of(),
+                List.of("node"),
+                LIMITS,
+                KubernetesPods.HOST);
+        Pod turnPod = pods.turnPod(new KubernetesPods.Workload("t", Map.of(), IMAGE, "sandbox"), LIMITS);
+
+        assertDiskBounded(reviewPod, KubernetesPods.RUNTIME, KubernetesPods.REVIEW);
+        assertDiskBounded(hostPod, KubernetesPods.RUNTIME, KubernetesPods.HOST);
+        assertDiskBounded(turnPod, KubernetesPods.SANDBOX, KubernetesPods.TURN);
+        Pod probePod = pods.probePod(
+                new KubernetesPods.Workload("p", review, IMAGE, "agent"), List.of("true"), LIMITS, 60, true);
+        for (Container each : Stream.concat(
+                        probePod.getSpec().getInitContainers().stream(), probePod.getSpec().getContainers().stream())
+                .toList()) {
+            assertThat(each.getResources().getLimits()).as(each.getName()).containsKey("ephemeral-storage");
+        }
+    }
+
+    /**
+     * Every volume of the Pod on the node's disk has the size limit of its kind, the main container may use them all
+     * with its logs, and every container has a disk limit, which a quota that counts {@code limits.ephemeral-storage}
+     * requires of each.
+     */
+    private static void assertDiskBounded(Pod pod, String main, KubernetesPods.Size size) {
+        var disk = pod.getSpec().getVolumes().stream()
+                .filter(volume ->
+                        volume.getEmptyDir() != null && volume.getEmptyDir().getMedium() == null)
+                .toList();
+        assertThat(disk).as(main).hasSize(size.diskVolumes());
+        assertThat(disk)
+                .allSatisfy(volume -> assertThat(bytes(volume.getEmptyDir().getSizeLimit()))
+                        .as(volume.getName())
+                        .isEqualTo(size.volumeBytes()));
+        long volumes = disk.size() * size.volumeBytes();
+        assertThat(bytes(container(pod, main).getResources().getLimits().get("ephemeral-storage")))
+                .as("all its volumes full, and its logs")
+                .isEqualTo(size.diskLimit())
+                .isGreaterThan(volumes);
+        for (Container each : Stream.concat(
+                        pod.getSpec().getInitContainers().stream(), pod.getSpec().getContainers().stream())
+                .toList()) {
+            assertThat(each.getResources().getLimits()).as(each.getName()).containsKey("ephemeral-storage");
+        }
     }
 
     @Test
@@ -330,11 +394,11 @@ class KubernetesSandboxRuntimeTest {
                     assertThat(volume.getEmptyDir().getMedium()).isNull();
                     assertThat(Quantity.getAmountInBytes(volume.getEmptyDir().getSizeLimit())
                                     .longValueExact())
-                            .isEqualTo(KubernetesPods.TURN_WORKSPACE_BYTES);
+                            .isEqualTo(SandboxLayout.TURN_WORKSPACE_BYTES);
                 });
     }
 
-    /** The container requests the memory and the local disk of its kind, and is limited to its memory. */
+    /** The container requests the memory and the local disk of its kind, and is limited to both. */
     private static void assertSized(Container container, KubernetesPods.Size size) {
         var requests = container.getResources().getRequests();
         var limits = container.getResources().getLimits();
@@ -343,9 +407,9 @@ class KubernetesSandboxRuntimeTest {
         assertThat(bytes(requests.get("ephemeral-storage")))
                 .as(container.getName())
                 .isEqualTo(size.diskRequest());
-        assertThat(limits)
-                .as("a repository of up to the snapshot bound must not evict the Pod")
-                .doesNotContainKey("ephemeral-storage");
+        assertThat(bytes(limits.get("ephemeral-storage")))
+                .as("no sandbox can fill the node's disk")
+                .isEqualTo(size.diskLimit());
         assertThat(size.memoryRequest()).isLessThanOrEqualTo(size.memoryLimit());
     }
 

@@ -67,6 +67,7 @@ To give PostgreSQL more memory, raise `POSTGRES_MEM_LIMIT` and restart the `post
 ## Review sandbox limits
 
 Each review sandbox has a limit of 3 GiB of memory (`SANDBOX_MEMORY_BYTES`), 1 CPU (`SANDBOX_CPUS`), and 256 processes (`SANDBOX_PIDS_LIMIT`).
+On Kubernetes, the worker sizes each sandbox Pod by its kind and ignores `SANDBOX_MEMORY_BYTES` ([Kubernetes § Sandbox sizes](./kubernetes#sandbox-sizes)).
 The CPU limit is a share of CPU time that the sandbox can use, not a reserved core.
 The memory limit holds the sandbox's temporary file systems, which can grow to 2.06 GiB, and its processes.
 Hephaestus refuses to start if `SANDBOX_MEMORY_BYTES` leaves less than 512 MiB beside those file systems.
@@ -95,7 +96,7 @@ The self-hosted stack runs one container for each runtime role: one server, one 
 You scale the work of the worker, not the number of containers:
 
 - **Practice reviews.** `SANDBOX_MAX_CONCURRENT` sets how many review sandboxes the worker runs at once.
-  Each concurrent review sandbox may use up to `SANDBOX_MEMORY_BYTES` (default 3 GiB).
+  On Docker, each concurrent review sandbox may use up to `SANDBOX_MEMORY_BYTES` (default 3 GiB).
   The self-hosted Compose file allows 1 concurrent sandbox.
   Raise `SANDBOX_MAX_CONCURRENT` only with sufficient RAM.
   [Worker pod env vars](./runtime-roles#worker-pod-env-vars) explains how it caps the review capacity of the worker.

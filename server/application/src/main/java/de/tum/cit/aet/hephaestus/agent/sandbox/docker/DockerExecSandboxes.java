@@ -8,6 +8,7 @@ import com.github.dockerjava.api.exception.NotFoundException;
 import com.github.dockerjava.api.model.Frame;
 import com.github.dockerjava.api.model.HostConfig;
 import com.github.dockerjava.api.model.StreamType;
+import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ExecSandboxes;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ResourceLimits;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxException;
@@ -46,7 +47,8 @@ public class DockerExecSandboxes implements ExecSandboxes, AutoCloseable {
     private static final String HOSTNAME = "sandbox";
 
     /** The memory file system that holds the context folder; the image's {@code /workspace} is under it. */
-    static final String WORKSPACE_TMPFS = "rw,noexec,nosuid,nodev,size=536870912,mode=0755";
+    static final String WORKSPACE_TMPFS =
+            "rw,noexec,nosuid,nodev,size=" + SandboxLayout.TURN_WORKSPACE_BYTES + ",mode=0755";
 
     private static final SecurityProfile PROFILE =
             new SecurityProfile(null, "none", List.of("ALL"), Map.of("/workspace", WORKSPACE_TMPFS));

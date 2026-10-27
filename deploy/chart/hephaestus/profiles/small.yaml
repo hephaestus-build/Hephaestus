@@ -25,9 +25,9 @@ worker:
   resources:
     limits: { ephemeral-storage: 12Gi }
   sandbox:
-    # While the old worker drains beside the new one: one review (3 GiB), two Heph hosts (2 x 2 GiB),
-    # two turn pools (2 x 3.3 GiB: 2 pooled sandboxes and the hephTurns running one), and the new
-    # worker's isolation probe (1.5 GiB).
+    # While the old worker drains beside the new one, by memory limit: one review (1280 MiB), two Heph
+    # hosts (2 x 1 GiB), two turn pools (2 x 3 x 544 MiB: 2 pooled sandboxes and the hephTurns running
+    # one), and the new worker's isolation probe (768 MiB).
     quota:
       enabled: true
       pods: 12

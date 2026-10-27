@@ -525,7 +525,7 @@ The architecture of this decision stays: state and storage, the job folder, the 
 On Kubernetes, a sandbox Pod keeps only `/run`, where credentials may sit, in memory (16 MiB).
 `/tmp`, `~/.local` and a turn sandbox's workspace are disk `emptyDir` volumes with Docker's tmpfs sizes as their size limits.
 Each container requests node disk.
-No sandbox Pod limits its whole disk, because its attempt volumes hold the repository, which the server bounds.
+Every disk volume of a sandbox Pod has a size limit of its Pod's kind, and each container has a disk limit that holds all its volumes and its logs, so that no sandbox can fill a node's disk.
 The worker sizes the memory of each kind of sandbox Pod from measured use ([`docs/admin/kubernetes.mdx`](../admin/kubernetes.mdx#sandbox-sizes)); `SANDBOX_MEMORY_BYTES` is Docker's.
 
 **Why.**

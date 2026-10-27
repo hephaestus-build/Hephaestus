@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.sandbox.docker;
 
+import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxProperties;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ResourceLimits;
 import java.util.ArrayList;
@@ -21,9 +22,9 @@ public class ContainerSecurityPolicy {
 
     private static final Set<String> ALLOWED_IPC_MODES = Set.of("none", "private");
 
-    private static final long TMP_BYTES = 1024L * 1024 * 1024;
+    private static final long TMP_BYTES = SandboxLayout.SCRATCH_BYTES;
     private static final long RUN_BYTES = 64L * 1024 * 1024;
-    private static final long AGENT_LOCAL_BYTES = 1024L * 1024 * 1024;
+    private static final long AGENT_LOCAL_BYTES = SandboxLayout.SCRATCH_BYTES;
 
     private static final Map<String, String> MANDATORY_TMPFS = Map.of(
             "/tmp",

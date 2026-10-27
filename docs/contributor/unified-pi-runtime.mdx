@@ -644,8 +644,8 @@ The request fixtures `sandbox-read`, `sandbox-exec` and `sandbox-load` in `agent
 | --- | --- |
 | Image and policy | The agent image of the release, under `ContainerSecurityPolicy` |
 | Process | `sleep infinity` under Docker `--init`, as root. Commands run as user 1000. |
-| Folder | `/workspace`, a tmpfs of 512 MiB, read-only for the user |
-| Scratch | `/tmp`, the tmpfs of the policy |
+| Folder | `/workspace`, 512 MiB, read-only for the user: a tmpfs on Docker, a volume on the node's disk on Kubernetes |
+| Scratch | `/tmp`: the tmpfs of the policy on Docker, a volume on the node's disk on Kubernetes |
 | Network | `none` |
 | Limits | 1 CPU, 1 GiB of memory, 256 processes (`TurnSandboxes.LIMITS`) |
 | Labels | `hephaestus.kind=heph-sandbox`, `hephaestus.heph-sandbox=<id>`, `hephaestus.heph-worker=<worker id>`, and the owner and creator labels |

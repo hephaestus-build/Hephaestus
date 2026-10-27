@@ -407,7 +407,7 @@ First initialization, restart, and restore need a start of the release image on 
 
 Every container of the release has CPU, memory, and ephemeral storage requests and limits.
 The schema refuses a zero value.
-Sandbox containers have CPU and memory limits, and no disk limit, as on Docker ([Known limits](#known-limits)).
+Sandbox containers have CPU, memory, and disk limits ([Sandbox sizes](#sandbox-sizes)).
 They request the memory that their kind of sandbox was measured to use, below their limit ([Sandbox sizes](#sandbox-sizes)).
 They request a tenth of their CPU limit, because the CPU limit is a share of CPU time, not a reserved core ([Sizing](./sizing#review-sandbox-limits)).
 
@@ -432,7 +432,7 @@ A chart test adds up what that node holds during an upgrade, with backups on:
 | --- | --- | --- | --- |
 | Server, webhook role, worker, webapp, PostgreSQL with pgBackRest, NATS | 7.9 GiB | 1.25 | The volumes of PostgreSQL and NATS, and bounded caches |
 | An upgrade: the new webhook, webapp and worker Pods beside the old ones, the migration Job, the stanza Job and one backup | 5.1 GiB | 1.0 | The new Pods' caches |
-| The sandbox quota: one review, the Heph hosts and the turn sandboxes of the old and the new worker while the old one drains, and the new worker's isolation probe | 16 GiB | 1.2 | No limit, as on Docker |
+| The sandbox quota: one review, the Heph hosts and the turn sandboxes of the old and the new worker while the old one drains, and the new worker's isolation probe | 16 GiB | 1.2 | The disk limit of each sandbox Pod ([Sandbox sizes](#sandbox-sizes)) |
 | Total, against the node less what k3s requests | 29 GiB of 31 GiB | 3.45 of 3.75 | 83 GiB of the 110 GiB left beside images and review workspaces |
 
 The table gives the measured resident memory of each role and the chart's sizes.
@@ -456,7 +456,7 @@ For one node of 16 GiB, apply `small-16gib.yaml` after `small.yaml`:
 --values deploy/chart/hephaestus/profiles/small-16gib.yaml
 ```
 
-It keeps every sandbox at its full size, and changes these items:
+It changes these items:
 
 - The worker upgrades by `Recreate`. Each upgrade stops the worker first, so reviews and Heph turns stop for the drain, at most 10 minutes, and for the new worker's start and isolation probe.
 - The webhook role keeps its rolling update: it receives provider deliveries during an upgrade.
@@ -974,11 +974,16 @@ Each sandbox Pod therefore starts with an init container that waits, at most 60 
 The worker sizes each sandbox Pod from the measured use of that kind of sandbox.
 `SANDBOX_MEMORY_BYTES` applies to Docker only.
 
-| Sandbox Pod | Memory request | Memory limit | Disk request |
-| --- | --- | --- | --- |
-| Review | 640 MiB | 1,280 MiB | 1 GiB |
-| Heph host | 256 MiB | 1 GiB | 256 MiB |
-| Turn sandbox | 128 MiB, and 32 MiB for its stager | 512 MiB, and 32 MiB | 256 MiB |
+| Sandbox Pod | Memory request | Memory limit | Disk request | Size limit of each disk volume | Disk limit |
+| --- | --- | --- | --- | --- | --- |
+| Review | 640 MiB | 1,280 MiB | 1 GiB | 1 GiB, 7 volumes | 7 GiB and 64 MiB |
+| Heph host | 256 MiB | 1 GiB | 256 MiB | 1 GiB, 7 volumes | 7 GiB and 64 MiB |
+| Turn sandbox | 128 MiB, and 32 MiB for its stager | 512 MiB, and 32 MiB | 256 MiB, and 16 MiB | 512 MiB, 3 volumes | 1.5 GiB and 64 MiB, and 16 MiB |
+
+A review and the Heph host have seven volumes on the node's disk: the workspace, `work`, `out`, `.pi`, `.sessions`, `/tmp` and `~/.local`.
+A turn sandbox has three: its workspace, `/tmp` and `~/.local`.
+The disk limit of the main container holds all the volumes full and 64 MiB for its logs.
+Each other container, such as the isolation init container and the stager, has a disk limit of 16 MiB for its logs.
 
 Each container requests a tenth of its CPU limit, and the isolation init container requests 10m.
 The sandbox quota admits a review by its memory request and limit and its disk request from this table.
@@ -986,10 +991,11 @@ Four large reviews at once peaked at 632 to 657 MiB each.
 One Heph conversation used 136 MiB in the host, and a turn sandbox used 3 MiB.
 The host's Node heap stops at 768 MiB.
 
-`/tmp` and `~/.local` are volumes on the node's disk, each with a size limit of 1 GiB, and a turn sandbox's workspace has a limit of 512 MiB.
 `/run` is in memory, with 16 MiB.
-The kubelet evicts a Pod whose volume passes its size limit, and the worker counts the eviction as a failure of the infrastructure, not of the review.
-No sandbox Pod has a limit for its whole disk: the review workspace holds the repository, which `GIT_MAX_SNAPSHOT_BYTES` bounds.
+The kubelet evicts a Pod whose volume passes its size limit, or whose disk use passes its disk limit.
+Thus, no sandbox can fill the node's disk and cause the eviction of other Pods.
+The worker counts the eviction as a failure of the infrastructure, and the review spends a retry: a review whose sandbox keeps filling its disk ends at `AGENT_MAX_RETRIES`.
+The sandbox quota counts the disk requests and limits, if it has entries for them.
 
 Kubernetes has no field for two Docker sandbox settings.
 `/tmp`, `/run` and a turn sandbox's `/workspace` are not `noexec`, and a sandbox Pod keeps `/dev/shm` in its private IPC namespace.
@@ -1152,7 +1158,9 @@ The worker's `/actuator/prometheus` on its management port shows the same tier i
 - The server runs as one replica until the server processes provider events in order across replicas.
 - The worker records the isolation tier in its log and metrics, not with each review. A record for each review needs a schema change.
 - Turn sandboxes take their commands through `pods/exec` until they pull them through the gateway, as the Heph host does.
-- Sandboxes have no disk limit, as on Docker. A review that fills the node's disk puts the node under disk pressure.
+- The kubelet enforces sandbox disk limits by eviction after it measures the use, not when a process writes.
+  A sandbox can pass its limit until the next measurement, for some seconds.
+  Only file system project quotas (`LocalStorageCapacityIsolationFSQuotaMonitoring`) refuse the write itself.
 - The chart has no migration from a Compose installation yet.
 
 ## What CI does not show

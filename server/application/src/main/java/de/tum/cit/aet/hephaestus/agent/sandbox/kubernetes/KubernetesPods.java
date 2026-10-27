@@ -148,35 +148,56 @@ public class KubernetesPods {
 
     private static final long MIB = 1024L * 1024;
 
-    /**
-     * The scratch places of every sandbox Pod that Docker gives as tmpfs, here on the node's disk with Docker's sizes.
-     * Reviews used at most 2 MiB of them.
-     */
-    private static final Map<String, Long> SCRATCH_VOLUMES =
-            Map.of("/tmp", 1024 * MIB, "/home/agent/.local", 1024 * MIB);
+    /** The scratch places of every sandbox Pod that Docker gives as tmpfs, here on the node's disk. */
+    private static final List<String> SCRATCH_PATHS = List.of("/home/agent/.local", "/tmp");
 
     /** The scratch place that can hold a credential stays in memory: its pages count against the memory limit. */
     private static final Map<String, Long> MEMORY_VOLUMES = Map.of("/run", 16 * MIB);
 
-    /** A turn sandbox's workspace, on disk, with the size of Docker's {@code DockerExecSandboxes.WORKSPACE_TMPFS}. */
-    static final long TURN_WORKSPACE_BYTES = 512 * MIB;
+    /** What a container writes besides its volumes, its own logs, with headroom; a side container writes less. */
+    private static final long LOG_BYTES = 64 * MIB;
+
+    private static final long SIDE_LOG_BYTES = 16 * MIB;
 
     /**
-     * The memory that one kind of sandbox Pod requests and may use, and the local disk it requests. Kubernetes sizes its
-     * sandbox Pods here, from measured use; {@link ResourceLimits#memoryBytes()} is the Docker backend's, whose tmpfs
-     * places count against memory. The disk has no limit for the Pod: its attempt volumes hold a repository of up to the
-     * server's snapshot bound, and only each scratch place has a size limit.
+     * The memory that one kind of sandbox Pod requests and may use, and its local disk. Kubernetes sizes its sandbox
+     * Pods here, from measured use; {@link ResourceLimits#memoryBytes()} is the Docker backend's, whose tmpfs places
+     * count against memory. Each of the Pod's {@code diskVolumes} volumes on the node's disk has a size limit of {@code
+     * volumeBytes}, and the Pod's main container may use them all and its logs ({@link #diskLimit}). The kubelet evicts
+     * the Pod past either bound, so that no sandbox can fill the node's disk.
      */
-    record Size(long memoryRequest, long memoryLimit, long diskRequest) {}
+    record Size(long memoryRequest, long memoryLimit, long diskRequest, long volumeBytes, int diskVolumes) {
 
-    /** A review: four large reviews at once peaked at 632 to 657 MiB each, p95 596 to 626; 515 MiB of disk each. */
-    static final Size REVIEW = new Size(640 * MIB, 1280 * MIB, 1024 * MIB);
+        long diskLimit() {
+            return diskVolumes * volumeBytes + LOG_BYTES;
+        }
+    }
 
-    /** The Heph host: 136 MiB with one conversation; Node's heap stops at 768 MiB ({@code HephHostSpec}). */
-    static final Size HOST = new Size(256 * MIB, 1024 * MIB, 256 * MIB);
+    /**
+     * A review: four large reviews at once peaked at 632 to 657 MiB each, p95 596 to 626; 515 MiB of disk each. Its
+     * attempt volumes and scratch places each hold one scratch size.
+     */
+    static final Size REVIEW = new Size(
+            640 * MIB,
+            1280 * MIB,
+            1024 * MIB,
+            SandboxLayout.SCRATCH_BYTES,
+            ATTEMPT_VOLUMES.size() + SCRATCH_PATHS.size());
 
-    /** A turn sandbox's command container: 3 MiB measured. A repository that a turn loads lands on its disk. */
-    static final Size TURN = new Size(128 * MIB, 512 * MIB, 256 * MIB);
+    /** The Heph host: 136 MiB with one conversation, in the same volumes as a review. */
+    static final Size HOST = new Size(
+            256 * MIB,
+            SandboxLayout.HEPH_HOST_MEMORY_BYTES,
+            256 * MIB,
+            SandboxLayout.SCRATCH_BYTES,
+            ATTEMPT_VOLUMES.size() + SCRATCH_PATHS.size());
+
+    /**
+     * A turn sandbox's command container: 3 MiB measured. Its workspace, where a repository that a turn loads lands,
+     * and its scratch places each hold Docker's turn workspace size.
+     */
+    static final Size TURN =
+            new Size(128 * MIB, 512 * MIB, 256 * MIB, SandboxLayout.TURN_WORKSPACE_BYTES, 1 + SCRATCH_PATHS.size());
 
     /** The stager of a turn sandbox: a shell that sleeps, 1 MiB measured. It writes the workspace to disk. */
     private static final Quantity STAGER_MEMORY = new Quantity(Long.toString(32 * MIB));
@@ -265,8 +286,8 @@ public class KubernetesPods {
                                 .build())
                         .toList();
         List<Volume> volumes = new ArrayList<>();
-        ATTEMPT_VOLUMES.keySet().forEach(name -> volumes.add(diskVolume(name)));
-        volumes.addAll(scratchVolumes());
+        ATTEMPT_VOLUMES.keySet().forEach(name -> volumes.add(diskVolume(name, size.volumeBytes())));
+        volumes.addAll(scratchVolumes(size));
         ResourceRequirements resources = resources(limits, size);
         Container initializer = base(INITIALIZER, workload.image(), SANDBOX_UID)
                 .withCommand(limited(INITIALIZER_COMMAND))
@@ -295,8 +316,8 @@ public class KubernetesPods {
      */
     public Pod turnPod(Workload workload, ResourceLimits limits) {
         List<Volume> volumes = new ArrayList<>();
-        volumes.add(diskVolume("workspace", TURN_WORKSPACE_BYTES));
-        volumes.addAll(scratchVolumes());
+        volumes.add(diskVolume("workspace", TURN.volumeBytes()));
+        volumes.addAll(scratchVolumes(TURN));
         List<VolumeMount> sandboxMounts = new ArrayList<>();
         sandboxMounts.add(mount("workspace", WORKSPACE, true));
         sandboxMounts.addAll(scratchMounts());
@@ -309,8 +330,20 @@ public class KubernetesPods {
                 .withCommand(limited(List.of("sleep", "infinity")))
                 .withVolumeMounts(mount("workspace", WORKSPACE, false))
                 .withResources(new ResourceRequirementsBuilder()
-                        .withLimits(Map.of("cpu", new Quantity(STAGER_CPU_MILLICORES + "m"), "memory", STAGER_MEMORY))
-                        .withRequests(Map.of("cpu", cpuRequest(STAGER_CPU_MILLICORES), "memory", STAGER_MEMORY))
+                        .withLimits(Map.of(
+                                "cpu",
+                                new Quantity(STAGER_CPU_MILLICORES + "m"),
+                                "memory",
+                                STAGER_MEMORY,
+                                "ephemeral-storage",
+                                bytes(SIDE_LOG_BYTES)))
+                        .withRequests(Map.of(
+                                "cpu",
+                                cpuRequest(STAGER_CPU_MILLICORES),
+                                "memory",
+                                STAGER_MEMORY,
+                                "ephemeral-storage",
+                                bytes(SIDE_LOG_BYTES)))
                         .build())
                 .build();
         // The sandbox ends itself at the latest at its limits' runtime: no worker needs to be alive to bound it.
@@ -334,23 +367,25 @@ public class KubernetesPods {
             ResourceLimits limits,
             long activeDeadlineSeconds,
             boolean hostUsers) {
+        Size size = probeSize(limits);
         Container probe = base(RUNTIME, workload.image(), SANDBOX_UID)
                 .withCommand(command)
                 .withVolumeMounts(scratchMounts())
-                .withResources(resources(limits, probeSize(limits)))
+                .withResources(resources(limits, size))
                 .build();
         return pod(workload, SANDBOX_UID, activeDeadlineSeconds, !hostUsers)
                 .editSpec()
                 .withInitContainers(isolation(workload.image()))
                 .withContainers(probe)
-                .withVolumes(scratchVolumes())
+                .withVolumes(scratchVolumes(size))
                 .endSpec()
                 .build();
     }
 
     /** The init container that waits for the Pod's network policy ({@link #ISOLATION_SCRIPT}). */
     private Container isolation(String image) {
-        Map<String, Quantity> bounds = Map.of("cpu", ISOLATION_CPU, "memory", ISOLATION_MEMORY);
+        Map<String, Quantity> bounds =
+                Map.of("cpu", ISOLATION_CPU, "memory", ISOLATION_MEMORY, "ephemeral-storage", bytes(SIDE_LOG_BYTES));
         return base(ISOLATION, image, SANDBOX_UID)
                 .withCommand(limited(List.of("node", "-e", ISOLATION_SCRIPT, Long.toString(ISOLATION_WAIT.toMillis()))))
                 .withResources(new ResourceRequirementsBuilder()
@@ -461,13 +496,19 @@ public class KubernetesPods {
     }
 
     /**
-     * A sandbox container's bounds. It requests its whole memory limit, so that the node never overcommits it. Its CPU
-     * limit is a share of CPU time, as on Docker, not a reserved core: it requests a tenth of it ({@link #cpuRequest}).
+     * A sandbox container's bounds: the memory and disk of its {@link Size}. Its CPU limit is a share of CPU time, as on
+     * Docker, not a reserved core: it requests a tenth of it ({@link #cpuRequest}).
      */
     static ResourceRequirements resources(ResourceLimits limits, Size size) {
         long millicores = Math.max(1, Math.round(limits.cpus() * 1000));
         return new ResourceRequirementsBuilder()
-                .withLimits(Map.of("cpu", new Quantity(millicores + "m"), "memory", bytes(size.memoryLimit())))
+                .withLimits(Map.of(
+                        "cpu",
+                        new Quantity(millicores + "m"),
+                        "memory",
+                        bytes(size.memoryLimit()),
+                        "ephemeral-storage",
+                        bytes(size.diskLimit())))
                 .withRequests(Map.of(
                         "cpu",
                         cpuRequest(millicores),
@@ -480,7 +521,8 @@ public class KubernetesPods {
 
     /** A probe Pod requests the memory it is given and writes nothing but its line of output. */
     private static Size probeSize(ResourceLimits limits) {
-        return new Size(limits.memoryBytes(), limits.memoryBytes(), 16 * MIB);
+        return new Size(
+                limits.memoryBytes(), limits.memoryBytes(), SIDE_LOG_BYTES, SIDE_LOG_BYTES, SCRATCH_PATHS.size());
     }
 
     private static Quantity bytes(long bytes) {
@@ -495,14 +537,13 @@ public class KubernetesPods {
         return new Quantity(Math.max(1, limitMillicores / 10) + "m");
     }
 
-    /** The scratch places of {@link #SCRATCH_VOLUMES} on disk and of {@link #MEMORY_VOLUMES} in memory. */
-    private static List<Volume> scratchVolumes() {
+    /** The scratch places of {@link #SCRATCH_PATHS} on disk and of {@link #MEMORY_VOLUMES} in memory. */
+    private static List<Volume> scratchVolumes(Size size) {
         List<Volume> list = new ArrayList<>();
-        int index = 0;
-        for (Long bytes : new TreeMap<>(SCRATCH_VOLUMES).values()) {
-            list.add(diskVolume("scratch-" + index++, bytes));
+        for (int index = 0; index < SCRATCH_PATHS.size(); index++) {
+            list.add(diskVolume("scratch-" + index, size.volumeBytes()));
         }
-        index = 0;
+        int index = 0;
         for (Long bytes : new TreeMap<>(MEMORY_VOLUMES).values()) {
             list.add(memoryVolume("memory-" + index++, bytes));
         }
@@ -512,7 +553,7 @@ public class KubernetesPods {
     private static List<VolumeMount> scratchMounts() {
         List<VolumeMount> mounts = new ArrayList<>();
         int index = 0;
-        for (String path : new TreeMap<>(SCRATCH_VOLUMES).keySet()) {
+        for (String path : SCRATCH_PATHS) {
             mounts.add(mount("scratch-" + index++, path, false));
         }
         index = 0;
@@ -527,14 +568,6 @@ public class KubernetesPods {
         ATTEMPT_VOLUMES.forEach((name, path) -> mounts.add(mount(name, path, runtime && path.equals(WORKSPACE))));
         mounts.addAll(scratchMounts());
         return mounts;
-    }
-
-    private static Volume diskVolume(String name) {
-        return new VolumeBuilder()
-                .withName(name)
-                .withNewEmptyDir()
-                .endEmptyDir()
-                .build();
     }
 
     /** A volume on the node's disk; the kubelet evicts the Pod when it holds more than {@code bytes}. */

@@ -1056,6 +1056,26 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    @DisplayName("a sandbox that its node evicts again and again spends a retry each time, unbilled, until the limit")
+    void shouldBoundTheRetriesOfASandboxThatIsEvictedEveryTime() {
+        UUID jobId = runningJobOwnedBy("live-owner", Instant.now(), 4);
+
+        // An eviction before the sandbox ran: no model call to bill, as for a workspace that overfills its volume.
+        Boolean retried = transactionTemplate.execute(
+                status -> recovery.retryUnadmitted(jobRepository.findById(jobId).orElseThrow(), "live-owner", false));
+        assertThat(retried).isTrue();
+        assertThat(jobRepository.findById(jobId).orElseThrow().getAttempt()).isEqualTo(5);
+        claimAgain(jobId, "live-owner");
+
+        Boolean again = transactionTemplate.execute(
+                status -> recovery.retryUnadmitted(jobRepository.findById(jobId).orElseThrow(), "live-owner", false));
+        assertThat(again)
+                .as("5 retries spent of 5: the next eviction fails the review")
+                .isFalse();
+        assertThat(jobRepository.findById(jobId).orElseThrow().getStatus()).isEqualTo(ReviewJobStatus.RUNNING);
+    }
+
+    @Test
     @DisplayName(
             "a review runs again after its last allowed drain, and the drain after it cancels it with the drain's reason")
     void shouldCancelAReviewWithTheDrainsReasonOnceItWasDrainedTooOften() {

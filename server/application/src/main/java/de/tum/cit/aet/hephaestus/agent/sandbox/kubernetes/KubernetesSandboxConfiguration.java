@@ -83,6 +83,13 @@ public class KubernetesSandboxConfiguration {
             KubernetesWorker worker,
             SandboxProperties properties,
             AgentImageProperties agentImageProperties) {
+        long memoryBytes = properties.defaultResourceLimits().memoryBytes();
+        if (memoryBytes != Long.parseLong(SandboxProperties.DEFAULT_MEMORY_BYTES)) {
+            log.warn(
+                    "SANDBOX_MEMORY_BYTES is set to {}, but it applies to Docker only: Kubernetes sizes each sandbox Pod"
+                            + " by its kind (docs/admin/kubernetes.mdx, Sandbox sizes). Remove it",
+                    memoryBytes);
+        }
         return new KubernetesPods(
                 sandboxKubernetesClient,
                 worker,
