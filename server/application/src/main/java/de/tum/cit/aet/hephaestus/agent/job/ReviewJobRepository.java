@@ -494,8 +494,9 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
 
     /**
      * Cancels for capacity every queued review that needs a sandbox and is due: the sandbox runtime cannot hold it.
-     * Admitted reviews that only compose need no sandbox and stay. Several workers may run it; the second changes
-     * nothing.
+     * Admitted reviews that only compose need no sandbox and stay. A budget hold outlives its {@code availableAt} until
+     * the next claim, and such a review waits for money, not room, so it stays too. Several workers may run it; the
+     * second changes nothing.
      *
      * @return the reviews cancelled
      */
@@ -504,7 +505,8 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
     @Query("UPDATE ReviewJob j SET j.status = de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus.CANCELLED, "
             + "j.completedAt = :now, j.errorMessage = :error, "
             + "j.cancellationReason = de.tum.cit.aet.hephaestus.agent.job.ReviewJobCancellationReason.NO_SANDBOX_ROOM "
-            + "WHERE j.status = 'QUEUED' AND j.availableAt <= :now AND j.admissionDigest IS NULL")
+            + "WHERE j.status = 'QUEUED' AND j.availableAt <= :now AND j.admissionDigest IS NULL "
+            + "AND (j.holdReason IS NULL OR j.holdReason <> 'BUDGET')")
     int cancelQueuedForRoom(@Param("now") Instant now, @Param("error") String error);
 
     /** Whether a queued review still needs a sandbox: one held for its budget waits for money, not room. */

@@ -1186,13 +1186,15 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    @DisplayName(
-            "queued reviews that no sandbox room can ever hold are cancelled, and admitted ones that only compose stay")
+    @DisplayName("queued reviews that no sandbox room can ever hold are cancelled; composing and budget-held ones stay")
     void shouldCancelQueuedReviewsWhenNoSandboxRoomCanEverHoldThem() {
         UUID waiting = queuedAndDue(runningJobOwnedBy("live-owner", Instant.now(), 0));
         UUID composing = runningJobOwnedBy("live-owner", Instant.now(), 0);
         admitWithResult(composing);
         queuedAndDue(composing);
+        UUID budgetHeld = queuedAndDue(runningJobOwnedBy("live-owner", Instant.now(), 0));
+        // Its hold has run out, and no claim has cleared it yet.
+        jdbc.update("UPDATE review_job SET hold_reason = 'BUDGET' WHERE id = ?", budgetHeld);
         var sandbox = mock(SandboxManager.class);
         when(sandbox.neverFits(any())).thenReturn(true);
 
@@ -1205,6 +1207,11 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
         assertThat(jobRepository.findById(composing).orElseThrow().getStatus())
                 .as("composition needs no sandbox")
                 .isEqualTo(ReviewJobStatus.QUEUED);
+        ReviewJob held = jobRepository.findById(budgetHeld).orElseThrow();
+        assertThat(held.getStatus())
+                .as("a budget hold waits for money, not room")
+                .isEqualTo(ReviewJobStatus.QUEUED);
+        assertThat(held.getHoldReason()).isEqualTo(ReviewJob.HOLD_REASON_BUDGET);
     }
 
     @Test
