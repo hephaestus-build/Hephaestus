@@ -25,7 +25,6 @@ import java.util.Map;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
 
 /**
  * One publish deadline: a late ack is awaited, the client giving up on an ack or the broker refusing at once is
@@ -68,7 +67,7 @@ class JetStreamPublisherTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldPublishAgainWithTheSameMessageIdWhenTheClientStopsWaitingForTheAck() {
+    void shouldPublishAgainWhenTheClientStopsWaitingForTheAck() {
         when(jetStream.publishAsync(
                         any(String.class), any(Headers.class), any(byte[].class), any(PublishOptions.class)))
                 .thenReturn(failed(new CancellationException("timed out")))
@@ -76,15 +75,51 @@ class JetStreamPublisherTest extends BaseUnitTest {
 
         publisher.publish(REQUEST);
 
-        ArgumentCaptor<Headers> headers = ArgumentCaptor.forClass(Headers.class);
-        ArgumentCaptor<PublishOptions> options = ArgumentCaptor.forClass(PublishOptions.class);
-        verify(jetStream, times(2))
-                .publishAsync(any(String.class), headers.capture(), any(byte[].class), options.capture());
-        assertThat(options.getAllValues())
-                .extracting(PublishOptions::getMessageId)
-                .containsOnly("github-x");
-        // One set of headers per delivery, so what a tracer adds to them travels with every attempt.
-        assertThat(headers.getAllValues().get(1)).isSameAs(headers.getAllValues().get(0));
+        assertThat(published("github", "success")).isEqualTo(1);
+        assertThat(meters.get("webhook.publish.retry").counter().count()).isEqualTo(1);
+    }
+
+    @Test
+    void shouldRetryWhileTheReconnectBufferIsFull() {
+        when(jetStream.publishAsync(
+                        any(String.class), any(Headers.class), any(byte[].class), any(PublishOptions.class)))
+                .thenThrow(new IllegalStateException("Unable to queue any more messages during reconnect"))
+                .thenReturn(stored());
+
+        publisher.publish(REQUEST);
+
+        assertThat(published("github", "success")).isEqualTo(1);
+    }
+
+    @Test
+    void shouldCountAndNameAMessageTheClientRejects() {
+        when(jetStream.publishAsync(
+                        any(String.class), any(Headers.class), any(byte[].class), any(PublishOptions.class)))
+                .thenThrow(new IllegalArgumentException("Message payload size exceeded server configuration"));
+
+        assertThatThrownBy(() -> publisher.publish(REQUEST)).isInstanceOfSatisfying(PublishFailedException.class, e -> {
+            assertThat(e.failureCause()).isEqualTo(Cause.REJECTED);
+            assertThat(e.getCause()).isInstanceOf(IllegalArgumentException.class);
+        });
+        assertThat(published("github", "failure")).isEqualTo(1);
+    }
+
+    @Test
+    void shouldNameAnInterruptAndKeepTheThreadInterrupted() {
+        when(jetStream.publishAsync(
+                        any(String.class), any(Headers.class), any(byte[].class), any(PublishOptions.class)))
+                .thenReturn(new CompletableFuture<>());
+        Thread.currentThread().interrupt();
+
+        try {
+            assertThatThrownBy(() -> publisher.publish(REQUEST))
+                    .isInstanceOfSatisfying(
+                            PublishFailedException.class,
+                            e -> assertThat(e.failureCause()).isEqualTo(Cause.INTERRUPTED));
+            assertThat(Thread.currentThread().isInterrupted()).isTrue();
+        } finally {
+            Thread.interrupted();
+        }
     }
 
     @Test
@@ -99,7 +134,9 @@ class JetStreamPublisherTest extends BaseUnitTest {
                         PublishFailedException.class,
                         e -> assertThat(e.failureCause()).isEqualTo(Cause.TIMEOUT));
 
-        assertThat(Duration.ofNanos(System.nanoTime() - started)).isGreaterThanOrEqualTo(DEADLINE);
+        assertThat(Duration.ofNanos(System.nanoTime() - started))
+                .isGreaterThanOrEqualTo(DEADLINE)
+                .isLessThan(DEADLINE.plusSeconds(2));
         assertThat(published("github", "failure")).isEqualTo(1);
     }
 

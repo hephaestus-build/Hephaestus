@@ -59,8 +59,7 @@ class WebhookStreamMonitorTest extends BaseUnitTest {
         Duration second = monitor.nextDelay(slow, first);
 
         assertThat(first).isEqualTo(interval.multipliedBy(2));
-        assertThat(second).isEqualTo(interval.multipliedBy(4));
-        assertThat(monitor.nextDelay(slow, interval.multipliedBy(8))).isEqualTo(interval.multipliedBy(10));
+        assertThat(second).isEqualTo(interval.multipliedBy(2));
         assertThat(monitor.nextDelay(Duration.ofMillis(20), second)).isEqualTo(interval);
     }
 

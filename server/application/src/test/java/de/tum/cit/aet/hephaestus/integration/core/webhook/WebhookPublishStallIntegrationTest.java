@@ -11,8 +11,10 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import io.nats.client.Connection;
 import io.nats.client.Nats;
+import io.nats.client.PublishOptions;
 import io.nats.client.api.StorageType;
 import io.nats.client.api.StreamConfiguration;
+import io.nats.client.impl.Headers;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -64,6 +66,7 @@ class WebhookPublishStallIntegrationTest extends BaseIntegrationTest {
                         .name("github")
                         .subjects("github.>")
                         .storageType(StorageType.File)
+                        .duplicateWindow(properties.stream().duplicateWindow())
                         .build());
     }
 
@@ -108,6 +111,27 @@ class WebhookPublishStallIntegrationTest extends BaseIntegrationTest {
 
         await().atMost(GITHUB_RESPONSE_WINDOW).until(answer::isDone);
         assertThat(answer.join().getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);
+        assertThat(connection
+                        .jetStreamManagement()
+                        .getStreamInfo("github")
+                        .getStreamState()
+                        .getMsgCount())
+                .isEqualTo(1);
+    }
+
+    @Test
+    void shouldStoreOneCopyWhenADeliveryStoredBeforeIsPublishedAgain() throws Exception {
+        // An earlier attempt the broker stored but whose ack never reached the receiver.
+        Headers headers = new Headers().add("X-GitHub-Delivery", "acked-late");
+        connection
+                .jetStream()
+                .publish(
+                        "github.acme.repo.pull_request",
+                        headers,
+                        "{\"action\":\"opened\"}".getBytes(StandardCharsets.UTF_8),
+                        PublishOptions.builder().messageId("github-acked-late").build());
+
+        assertThat(deliver(pipeline(), "acked-late").getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);
         assertThat(connection
                         .jetStreamManagement()
                         .getStreamInfo("github")

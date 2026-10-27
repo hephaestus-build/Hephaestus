@@ -53,6 +53,7 @@ class WebhookIngestionCannotFailSilentlyTest extends BaseUnitTest {
 
     private static final Path NATS_COMPOSE = Path.of("..", "..", "docker", "compose.core.yaml");
     private static final Path SHIPPED_ENV = Path.of("..", "..", "docker", ".env.example");
+    private static final Path ALERTS = Path.of("..", "..", "deploy", "observability", "hephaestus-alerts.yml");
     private static final Path CHART_VALUES = Path.of("..", "..", "deploy", "chart", "hephaestus", "values.yaml");
 
     /** GitHub deliveries a busy instance receives in a day. */
@@ -152,6 +153,23 @@ class WebhookIngestionCannotFailSilentlyTest extends BaseUnitTest {
         assertThat(configured)
                 .as("a name no contributor answers to is a member the probe silently never evaluates")
                 .isSubsetOf(union(Set.of("readinessState"), CONTRIBUTOR_BEANS.values()));
+    }
+
+    @Test
+    void aBackedOffMonitorStillPollsBeforeItsStaleAlertFires() throws IOException {
+        Matcher threshold = Pattern.compile("webhook_stream_poll_age_seconds\\{[^}]*} > (\\d+)")
+                .matcher(Files.readString(ALERTS));
+        assertThat(threshold.find())
+                .as("HephaestusStreamPollStale reads the poll age")
+                .isTrue();
+        Duration oldestPoll = shippedStream()
+                .monitorInterval()
+                .multipliedBy(WebhookStreamMonitor.MAX_BACKOFF_INTERVALS)
+                .plus(WebhookStreamMonitor.SLOW_POLL);
+
+        assertThat(oldestPoll)
+                .as("a slow broker backs the monitor off; the alert must still mean that it cannot read the broker")
+                .isLessThan(Duration.ofSeconds(Long.parseLong(threshold.group(1))));
     }
 
     @Test

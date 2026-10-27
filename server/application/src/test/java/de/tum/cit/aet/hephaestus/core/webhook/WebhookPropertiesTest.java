@@ -57,6 +57,22 @@ class WebhookPropertiesTest extends BaseUnitTest {
     }
 
     @Test
+    void refusesAnAgeBoundShorterThanTheDedupWindow() {
+        assertThatThrownBy(() -> new WebhookProperties.Stream(
+                        Duration.ofHours(3),
+                        Duration.ofHours(2),
+                        Map.of(),
+                        gibibytes(1),
+                        Map.of(),
+                        gibibytes(12),
+                        false,
+                        Duration.ofMinutes(5),
+                        Duration.ofSeconds(60)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("maxAge");
+    }
+
+    @Test
     void refusesAStreamBoundOfZeroBytes() {
         assertThatThrownBy(() -> stream(Duration.ofMinutes(10), DataSize.ofBytes(0), Map.of()))
                 .isInstanceOf(IllegalArgumentException.class)

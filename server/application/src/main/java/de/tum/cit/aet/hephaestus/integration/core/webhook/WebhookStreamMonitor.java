@@ -46,7 +46,8 @@ import org.slf4j.LoggerFactory;
  *
  * <p>Each poll asks the broker's JetStream API for stream and consumer state. A broker on a saturated disk
  * answers those requests slowly, and the receiver's publishes share that broker, so a slow poll doubles the delay
- * to the next one, up to ten intervals, and a fast poll restores the interval.
+ * to the next one, up to two intervals, and a fast poll restores the interval. Two intervals keep the poll age below
+ * the {@code HephaestusStreamPollStale} alert, so a slow broker does not read as a monitor that cannot read it.
  */
 class WebhookStreamMonitor {
 
@@ -55,7 +56,7 @@ class WebhookStreamMonitor {
     /** A poll slower than this read a broker under pressure. A healthy broker answers in milliseconds. */
     static final Duration SLOW_POLL = Duration.ofSeconds(2);
 
-    private static final int MAX_BACKOFF_INTERVALS = 10;
+    static final int MAX_BACKOFF_INTERVALS = 2;
     private static final Usage UNKNOWN = new Usage(0, 0, 0, 0, 0, 0, 0, 0);
 
     private final JetStreamManagement jsm;

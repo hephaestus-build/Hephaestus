@@ -189,7 +189,7 @@ webhook late, or retries a failed delivery, dates it by its arrival, not by when
 it. And a provider's redelivery that reaches the receiver after `hephaestus.webhook.stream.duplicate-window`
 (3 hours by default) is a new message with a new date. Either can restate an old list over a sync
 page read in between, until the next sync reads the list again.
-`GitHubWebhookRedelivery` asks GitHub to redeliver failed deliveries for up to an hour after the original.
+`GitHubWebhookRedelivery` asks GitHub to redeliver failed deliveries for up to two hours after the original.
 Thus, after a broker stall, a late copy is a normal event, not a rare one.
 
 GitLab's webhooks state each reviewer's review from 18.6

@@ -87,6 +87,7 @@ public class GitHubWebhookRedelivery {
     static final int MAX_ATTEMPTS = REDELIVERY_DUE.size() + 1;
 
     /** How old an event's original delivery may be. It covers the last due time and the run that requests it. */
+    // Public so a test can hold the stream's dedup window above it.
     public static final Duration WINDOW = Duration.ofHours(2);
 
     /** At GitHub's largest page, a run reads at most 10,000 deliveries. */

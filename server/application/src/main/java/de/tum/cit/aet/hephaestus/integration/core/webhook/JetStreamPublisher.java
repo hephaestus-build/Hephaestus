@@ -34,7 +34,9 @@ import org.slf4j.LoggerFactory;
  * client stops waiting first (its request cleanup runs every 5 s), the next attempt carries the same
  * {@code Nats-Msg-Id}, so a copy that the broker stored late is acknowledged as a duplicate, not stored twice. A
  * failure that the broker answers at once (no responders while no stream listens, a dropped connection) is retried
- * with jittered exponential backoff until the deadline. A refusal by the stream is final.
+ * with jittered exponential backoff until the deadline. A refusal by the stream is final. When the deadline ends the
+ * publish, the last attempt's cause is the one reported: no responders followed by a stall in the tail reads
+ * {@code timeout}.
  */
 public class JetStreamPublisher {
 
@@ -58,6 +60,9 @@ public class JetStreamPublisher {
         this.retryCounter =
                 Counter.builder(IntegrationCoreMetrics.WEBHOOK_PUBLISH_RETRY).register(meterRegistry);
     }
+
+    /** An attempt needs this long to be worth sending: a copy whose ack nobody awaits only loads the broker. */
+    static final Duration MIN_ATTEMPT = Duration.ofMillis(250);
 
     private static final String SUCCESS = "success";
     private static final String FAILURE = "failure";
@@ -115,7 +120,8 @@ public class JetStreamPublisher {
                         .build();
             } catch (IllegalArgumentException e) {
                 count(request, FAILURE);
-                throw new PublishFailedException(new Failure(Cause.REJECTED, "no stream for the subject"), 0, request.subject());
+                throw new PublishFailedException(
+                        new Failure(Cause.REJECTED, "no stream for the subject", e), 0, request.subject());
             }
             while (true) {
                 attempts++;
@@ -126,7 +132,7 @@ public class JetStreamPublisher {
                 }
                 long pause =
                         failure.cause() == Cause.TIMEOUT ? 0 : TimeUnit.MILLISECONDS.toNanos(backoff.apply(attempts));
-                if (!failure.cause().retryable() || deadline - System.nanoTime() <= pause) {
+                if (!failure.cause().retryable() || deadline - System.nanoTime() - pause < MIN_ATTEMPT.toNanos()) {
                     count(request, FAILURE);
                     throw new PublishFailedException(failure, attempts, request.subject());
                 }
@@ -137,7 +143,7 @@ public class JetStreamPublisher {
             Thread.currentThread().interrupt();
             count(request, FAILURE);
             throw new PublishFailedException(
-                    new Failure(Cause.INTERRUPTED, "interrupted"), attempts, request.subject());
+                    new Failure(Cause.INTERRUPTED, "interrupted", e), attempts, request.subject());
         } finally {
             inFlight.arriveAndDeregister();
         }
@@ -153,12 +159,17 @@ public class JetStreamPublisher {
                     .get(Math.max(0, deadline - System.nanoTime()), TimeUnit.NANOSECONDS);
             return null;
         } catch (TimeoutException | CancellationException e) {
-            return new Failure(Cause.TIMEOUT, "no ack before the deadline");
+            return new Failure(Cause.TIMEOUT, "no ack before the deadline", e);
         } catch (ExecutionException e) {
             return classify(e.getCause());
         } catch (IllegalStateException e) {
-            // The client refuses a request on a closed or draining connection.
-            return new Failure(Cause.CONNECTION_CLOSED, String.valueOf(e.getMessage()));
+            // The client refuses a request on a closed or draining connection, which is final, and while its reconnect
+            // buffer is full, which passes.
+            String message = String.valueOf(e.getMessage());
+            return new Failure(message.contains("reconnect") ? Cause.CONNECTION : Cause.CONNECTION_CLOSED, message, e);
+        } catch (RuntimeException e) {
+            // The client rejects the message itself, for example a payload over the broker's max_payload.
+            return new Failure(Cause.REJECTED, e.getClass().getSimpleName(), e);
         }
     }
 
@@ -171,21 +182,23 @@ public class JetStreamPublisher {
             cause = cause.getCause();
         }
         if (cause instanceof TimeoutException || cause instanceof CancellationException) {
-            return new Failure(Cause.TIMEOUT, "no ack before the client stopped waiting");
+            return new Failure(Cause.TIMEOUT, "no ack before the client stopped waiting", cause);
         }
         if (cause instanceof JetStreamApiException api) {
             String description = String.valueOf(api.getErrorDescription());
+            String lower = description.toLowerCase(Locale.ROOT);
+            // A stream at its bound with discard-new, or a broker out of storage.
             Cause refusal =
-                    description.toLowerCase(Locale.ROOT).contains("maximum") ? Cause.STREAM_FULL : Cause.REJECTED;
-            return new Failure(refusal, "code " + api.getApiErrorCode() + ": " + description);
+                    lower.contains("maximum") || lower.contains("insufficient") ? Cause.STREAM_FULL : Cause.REJECTED;
+            return new Failure(refusal, "code " + api.getApiErrorCode() + ": " + description, api);
         }
         if (cause instanceof IOException io) {
             // The client turns a status reply into "Error Publishing: <status>"; 503 is NATS' "no responders".
             String message = String.valueOf(io.getMessage());
-            return new Failure(message.contains("503") ? Cause.NO_RESPONDERS : Cause.CONNECTION, message);
+            return new Failure(message.contains("503") ? Cause.NO_RESPONDERS : Cause.CONNECTION, message, io);
         }
         return new Failure(
-                Cause.REJECTED, cause == null ? "unknown" : cause.getClass().getSimpleName());
+                Cause.REJECTED, cause == null ? "unknown" : cause.getClass().getSimpleName(), cause);
     }
 
     /** Why a publish ended without an ack; {@code TIMEOUT} and the transient causes are retried within the deadline. */
@@ -214,8 +227,14 @@ public class JetStreamPublisher {
         }
     }
 
-    /** A cause and the broker's or client's own words for it. */
-    public record Failure(Cause cause, String detail) {}
+    /** A cause, the broker's or client's own words for it, and what was thrown. */
+    public record Failure(
+            Cause cause, String detail, @Nullable Throwable error) {
+
+        public Failure(Cause cause, String detail) {
+            this(cause, detail, null);
+        }
+    }
 
     /**
      * Derives the JetStream stream name from the subject prefix (first dot-segment).
@@ -251,8 +270,10 @@ public class JetStreamPublisher {
         private final String detail;
 
         public PublishFailedException(Failure failure, int attempts, String subject) {
-            super("Webhook not stored: cause=" + failure.cause().label() + ", attempts=" + attempts + ", subject="
-                    + subject + ", detail=" + failure.detail());
+            super(
+                    "Webhook not stored: cause=" + failure.cause().label() + ", attempts=" + attempts + ", subject="
+                            + subject + ", detail=" + failure.detail(),
+                    failure.error());
             this.failureCause = failure.cause();
             this.attempts = attempts;
             this.detail = failure.detail();

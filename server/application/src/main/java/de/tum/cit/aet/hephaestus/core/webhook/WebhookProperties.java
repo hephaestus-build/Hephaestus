@@ -175,9 +175,9 @@ public record WebhookProperties(
             // Replay-defense invariant: the JetStream dedup window MUST be >= the largest per-vendor
             // timestamp replay tolerance, otherwise a captured-but-still-timestamp-valid request can be
             // replayed once its dedup entry has expired (the 2-5 min band). The widest vendor tolerance
-            // is 5m (GitLab whsec TIMESTAMP_TOLERANCE, Slack v0 MAX_DRIFT_SECONDS); we set 10m to also
-            // cover GitHub — which has NO timestamp, so the dedup window keyed on X-GitHub-Delivery is
-            // its ONLY replay defense — plus provider redelivery horizons. See REPLAY_TOLERANCE_FLOOR.
+            // is 5m (GitLab whsec TIMESTAMP_TOLERANCE, Slack v0 MAX_DRIFT_SECONDS). GitHub has NO timestamp,
+            // so the dedup window keyed on X-GitHub-Delivery is its ONLY replay defense, and 3h outlasts the
+            // 2h look-back of GitHubWebhookRedelivery. See REPLAY_TOLERANCE_FLOOR.
             @DefaultValue("3h") Duration duplicateWindow,
             @DefaultValue("7d") Duration maxAge,
             @DefaultValue Map<String, Duration> maxAgeByStream,
@@ -208,6 +208,10 @@ public record WebhookProperties(
             }
             if (maxAge.isZero() || maxAge.isNegative()) {
                 throw new IllegalArgumentException("stream.maxAge must be positive, got: " + maxAge);
+            }
+            if (maxAge.compareTo(duplicateWindow) < 0) {
+                throw new IllegalArgumentException("stream.maxAge (" + maxAge + ") must be >= duplicateWindow ("
+                        + duplicateWindow + "): the broker refuses a dedup window longer than the age bound");
             }
             maxAgeByStream = maxAgeByStream == null ? Map.of() : Map.copyOf(maxAgeByStream);
             for (Map.Entry<String, Duration> e : maxAgeByStream.entrySet()) {
