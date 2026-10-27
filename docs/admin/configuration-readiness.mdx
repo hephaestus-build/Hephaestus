@@ -67,7 +67,8 @@ The application process enables server, optionally with a colocated worker.
 
 ## Database
 
-Every role uses PostgreSQL.
+The server and worker roles use PostgreSQL.
+The webhook role has no database and needs none of these settings.
 `DATABASE_URL` must be a PostgreSQL URL.
 The production profile adds the `jdbc:` prefix.
 Spring Boot and Liquibase perform separate connection and migration health checks.
@@ -89,6 +90,9 @@ Do not change the general encryption key on an existing installation.
 Rotate the credential key with the documented online procedure.
 
 :::
+
+The server and worker roles require both keys.
+The webhook role stores no secret and needs neither key.
 
 1. Set each encryption key to exactly 32 printable, non-space ASCII characters.
 2. Keep both keys with the backup set, in separate storage with separate credentials.

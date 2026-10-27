@@ -204,6 +204,35 @@ class WebhookIngestPipelineTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldAnswer503AndPublishNothingWhenAPublishGateCannotRead() {
+        WebhookPublishGate gate = new WebhookPublishGate() {
+            @Override
+            public IntegrationKind kind() {
+                return IntegrationKind.SLACK;
+            }
+
+            @Override
+            public Decision evaluate(JsonNode payload, Map<String, String> headers) {
+                throw new ProjectedKeys.UnavailableException("slack-channel-consent", new IllegalStateException());
+            }
+        };
+        WebhookIngestPipeline pipeline = new WebhookIngestPipeline(
+                List.of(stubVerifier(IntegrationKind.SLACK, new VerificationResult.Verified())),
+                List.of(stubDeriver(IntegrationKind.SLACK, "slack.T.C.message", "slack-Ev1")),
+                publisher,
+                objectMapper,
+                List.of(gate));
+
+        ResponseEntity<?> resp = pipeline.handle(
+                IntegrationKind.SLACK,
+                "{\"event\":{\"type\":\"message\"}}".getBytes(StandardCharsets.UTF_8),
+                headers());
+
+        assertProblem(resp, HttpStatus.SERVICE_UNAVAILABLE, "gate-unavailable");
+        verify(publisher, never()).publishFast(any(), any());
+    }
+
+    @Test
     void publishGateCanDropVerifiedWebhookBeforeDurablePublish() {
         WebhookPublishGate gate = new WebhookPublishGate() {
             @Override

@@ -1,14 +1,20 @@
 package de.tum.cit.aet.hephaestus.integration.slack.webhook;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import de.tum.cit.aet.hephaestus.integration.slack.events.SlackChannelConsentGate;
-import de.tum.cit.aet.hephaestus.integration.slack.events.SlackWorkspaceResolver;
+import de.tum.cit.aet.hephaestus.integration.core.webhook.ProjectedKeys;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import io.nats.client.Connection;
+import io.nats.client.JetStreamApiException;
+import io.nats.client.KeyValue;
+import io.nats.client.KeyValueManagement;
+import io.nats.client.api.KeyValueEntry;
+import java.io.IOException;
 import java.util.Map;
-import java.util.Optional;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
@@ -19,10 +25,10 @@ import tools.jackson.databind.ObjectMapper;
 class SlackChannelMessagePublishGateTest extends BaseUnitTest {
 
     @Mock
-    private SlackWorkspaceResolver workspaceResolver;
+    private Connection nats;
 
     @Mock
-    private SlackChannelConsentGate consentGate;
+    private KeyValue consent;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -30,8 +36,8 @@ class SlackChannelMessagePublishGateTest extends BaseUnitTest {
     void dropsChannelMessageWhenChannelIsNotActive() throws Exception {
         JsonNode payload = objectMapper.readTree(
                 "{\"team_id\":\"T1\",\"event\":{\"type\":\"message\",\"channel_type\":\"channel\",\"channel\":\"C1\"}}");
-        when(workspaceResolver.resolveWorkspaceId("T1")).thenReturn(Optional.of(42L));
-        when(consentGate.ingestAllowed(42L, "C1")).thenReturn(false);
+        stubBucket();
+        when(consent.get("T1.C1")).thenReturn(null);
 
         var decision = gate(true).evaluate(payload, Map.of());
 
@@ -40,37 +46,61 @@ class SlackChannelMessagePublishGateTest extends BaseUnitTest {
     }
 
     @Test
-    void dropsChannelMessageWhenWorkspaceIsUnknown() throws Exception {
+    void failsTheDeliveryWhenTheConsentBucketIsMissing() throws Exception {
         JsonNode payload = objectMapper.readTree(
-                "{\"team_id\":\"T-UNKNOWN\",\"event\":{\"type\":\"message\",\"channel_type\":\"channel\",\"channel\":\"C1\"}}");
-        when(workspaceResolver.resolveWorkspaceId("T-UNKNOWN")).thenReturn(Optional.empty());
+                "{\"team_id\":\"T1\",\"event\":{\"type\":\"message\",\"channel_type\":\"channel\",\"channel\":\"C1\"}}");
+        JetStreamApiException streamNotFound = mock(JetStreamApiException.class);
+        stubBucket();
+        when(consent.get("T1.C1")).thenThrow(streamNotFound);
+
+        // Nothing is published, and Slack retries once the server has created the bucket.
+        assertThatThrownBy(() -> gate(true).evaluate(payload, Map.of()))
+                .isInstanceOf(ProjectedKeys.UnavailableException.class);
+    }
+
+    @Test
+    void failsTheDeliveryWhenConsentCannotBeRead() throws Exception {
+        JsonNode payload = objectMapper.readTree(
+                "{\"team_id\":\"T1\",\"event\":{\"type\":\"message\",\"channel_type\":\"channel\",\"channel\":\"C1\"}}");
+        stubBucket();
+        when(consent.get("T1.C1")).thenThrow(new IOException("timeout"));
+
+        // Nothing is published; Slack retries the delivery.
+        assertThatThrownBy(() -> gate(true).evaluate(payload, Map.of()))
+                .isInstanceOf(ProjectedKeys.UnavailableException.class);
+    }
+
+    @Test
+    void dropsChannelMessageWhoseIdsAreNotSlackIdsWithoutALookup() throws Exception {
+        JsonNode payload = objectMapper.readTree(
+                "{\"team_id\":\"T1\",\"event\":{\"type\":\"message\",\"channel_type\":\"channel\",\"channel\":\"C1.>\"}}");
 
         var decision = gate(true).evaluate(payload, Map.of());
 
         assertThat(decision.publish()).isFalse();
-        assertThat(decision.reason()).isEqualTo("slack-channel-not-active");
-        verifyNoInteractions(consentGate);
+        assertThat(decision.reason()).isEqualTo("slack-channel-message-malformed-id");
+        verifyNoInteractions(nats);
     }
 
     @Test
     void allowsMessageDeletedThroughRegardlessOfConsentState() throws Exception {
         // The delete must reach the tombstone in every consent state (PAUSED/REVOKED included), so the gate never
-        // even resolves the workspace or consults the consent gate for this subtype.
+        // even reads consent for this subtype.
         JsonNode payload = objectMapper.readTree(
                 "{\"team_id\":\"T1\",\"event\":{\"type\":\"message\",\"subtype\":\"message_deleted\",\"channel_type\":\"channel\",\"channel\":\"C1\"}}");
 
         var decision = gate(true).evaluate(payload, Map.of());
 
         assertThat(decision.publish()).isTrue();
-        verifyNoInteractions(workspaceResolver, consentGate);
+        verifyNoInteractions(nats);
     }
 
     @Test
     void allowsActiveChannelMessage() throws Exception {
         JsonNode payload = objectMapper.readTree(
                 "{\"team_id\":\"T1\",\"event\":{\"type\":\"message\",\"channel_type\":\"group\",\"channel\":\"G1\"}}");
-        when(workspaceResolver.resolveWorkspaceId("T1")).thenReturn(Optional.of(42L));
-        when(consentGate.ingestAllowed(42L, "G1")).thenReturn(true);
+        stubBucket();
+        when(consent.get("T1.G1")).thenReturn(mock(KeyValueEntry.class));
 
         var decision = gate(true).evaluate(payload, Map.of());
 
@@ -98,7 +128,12 @@ class SlackChannelMessagePublishGateTest extends BaseUnitTest {
         assertThat(decision.reason()).isEqualTo("slack-channel-ingest-disabled");
     }
 
+    private void stubBucket() throws Exception {
+        when(nats.keyValueManagement()).thenReturn(mock(KeyValueManagement.class));
+        when(nats.keyValue(SlackChannelMessagePublishGate.CONSENT_BUCKET)).thenReturn(consent);
+    }
+
     private SlackChannelMessagePublishGate gate(boolean conversationIngestEnabled) {
-        return new SlackChannelMessagePublishGate(workspaceResolver, consentGate, conversationIngestEnabled);
+        return new SlackChannelMessagePublishGate(nats, conversationIngestEnabled);
     }
 }

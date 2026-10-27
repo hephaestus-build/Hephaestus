@@ -1,47 +1,36 @@
 package de.tum.cit.aet.hephaestus.integration.outline.webhook;
 
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWebhookRole;
-import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
-import de.tum.cit.aet.hephaestus.integration.core.spi.WebhookSecretSource;
-import de.tum.cit.aet.hephaestus.integration.core.spi.WebhookSecretSource.SecretLookup;
-import de.tum.cit.aet.hephaestus.integration.core.spi.WebhookSignatureVerifier;
+import de.tum.cit.aet.hephaestus.integration.core.spi.WebhookSignatureVerifier.VerificationResult;
+import de.tum.cit.aet.hephaestus.integration.core.spi.WebhookSignatureVerifier.WebhookRequest;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Clock;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import org.jspecify.annotations.Nullable;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 /**
- * SPI-shaped verifier for inbound Outline change-notification deliveries on the unified
- * {@code /webhooks/outline} JetStream lane. Outline signs each delivery with
+ * Verifies an inbound Outline change-notification delivery against the secret of the route it was posted to
+ * ({@link OutlineRouteCredential}). Outline signs each delivery with
  * {@code HMAC_SHA256(secret, "<timestamp>." + rawBody)} and sends the result in the
- * {@code Outline-Signature: t=<ts>,s=<hex>} header, where {@code t} is epoch <em>milliseconds</em>.
+ * {@code Outline-Signature: t=<ts>,s=<hex>} header, where {@code t} is epoch <em>milliseconds</em>. This class
+ * recomputes the digest over the exact request bytes, compares constant-time, and enforces a
+ * ±{@value #MAX_SKEW_SECONDS}s replay window on the timestamp.
  *
- * <p>The signing secret is scoped per subscription: the subscription id arrives in the event body as
- * an untrusted routing key that selects the stored secret ({@link OutlineWebhookSecretSource}), so a
- * forged id selects a secret the attacker does not hold and the HMAC fails. This class resolves that
- * secret via the OUTLINE-filtered {@link WebhookSecretSource} (the {@code GitLabWebhookSignatureVerifier}
- * ctor pattern), recomputes the digest over the exact request bytes, compares constant-time, and enforces
- * a ±{@value #MAX_SKEW_SECONDS}s replay window on the timestamp.
- *
- * <p>Webhook-role only, matching {@code SlackWebhookSignatureVerifier}. The bootstrap's
- * {@code WebhookSignatureVerifier}/{@code SubjectKeyDeriver} requirement is itself gated on the
- * webhook role, so a non-webhook role boots cleanly without these beans.
+ * <p>Webhook-role only: {@link OutlineWebhookController} is its one caller.
  */
 @Component
 @ConditionalOnWebhookRole
 @ConditionalOnProperty(name = "hephaestus.integration.outline.enabled", havingValue = "true", matchIfMissing = false)
-public class OutlineWebhookSignatureVerifier implements WebhookSignatureVerifier {
+public class OutlineWebhookSignatureVerifier {
 
     static final String HEADER_SIGNATURE = "outline-signature";
     private static final String HMAC_ALG = "HmacSHA256";
@@ -49,34 +38,14 @@ public class OutlineWebhookSignatureVerifier implements WebhookSignatureVerifier
     /** Outline's replay window; {@code t} is millis, the window is seconds. */
     static final long MAX_SKEW_SECONDS = 300;
 
-    private final WebhookSecretSource secretSource;
     private final Clock clock;
 
-    @Autowired
-    public OutlineWebhookSignatureVerifier(List<WebhookSecretSource> secretSources) {
-        this(pickOutlineSource(secretSources), Clock.systemUTC());
-    }
-
-    /** Test-friendly constructor — direct injection of the source + clock. */
-    OutlineWebhookSignatureVerifier(WebhookSecretSource secretSource, Clock clock) {
-        this.secretSource = secretSource;
+    public OutlineWebhookSignatureVerifier(Clock clock) {
         this.clock = clock;
     }
 
-    private static WebhookSecretSource pickOutlineSource(List<WebhookSecretSource> sources) {
-        return sources.stream()
-                .filter(s -> s.kind() == IntegrationKind.OUTLINE)
-                .findFirst()
-                .orElseThrow(() -> new IllegalStateException("No WebhookSecretSource bean registered for OUTLINE"));
-    }
-
-    @Override
-    public IntegrationKind kind() {
-        return IntegrationKind.OUTLINE;
-    }
-
-    @Override
-    public VerificationResult verify(WebhookRequest request) {
+    /** Verifies a delivery posted to a route against that route's {@code secret}. */
+    public VerificationResult verify(WebhookRequest request, byte[] secret) {
         Map<String, String> headers = normalizeHeaders(request.headers());
         Optional<ParsedSignature> parsed = parse(headers.get(HEADER_SIGNATURE));
         if (parsed.isEmpty()) {
@@ -102,12 +71,7 @@ public class OutlineWebhookSignatureVerifier implements WebhookSignatureVerifier
             return new VerificationResult.Invalid("malformed-signature-hex");
         }
 
-        Optional<byte[]> secret = secretSource.getSecret(new SecretLookup(headers, request.body()));
-        if (secret.isEmpty()) {
-            return new VerificationResult.Invalid("unresolved-secret");
-        }
-
-        byte[] expected = computeHmac(secret.get(), signature.timestamp(), request.body());
+        byte[] expected = computeHmac(secret, signature.timestamp(), request.body());
         if (expected == null) {
             return new VerificationResult.Invalid("hmac-init-failed");
         }

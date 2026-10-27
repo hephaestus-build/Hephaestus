@@ -167,19 +167,18 @@ public class ConnectionService {
 
     /**
      * Resolves the ACTIVE Outline Connection that registered the given change-notification
-     * subscription id, returning its workspace and stored signing secret. The subscription id
-     * arrives in an inbound webhook body as an <em>untrusted routing key</em> — it only selects
-     * which stored secret to verify against, so a forged id simply matches nothing. Empty when no
-     * ACTIVE Outline connection carries that subscription (or it has no stored secret).
+     * subscription id, returning its workspace and the route the subscription posts to. The
+     * subscription id comes from a delivery body; the consumer accepts the delivery only when the
+     * route it was received on is the one returned here. Empty when no ACTIVE Outline connection
+     * carries that subscription (or it has no stored route).
      *
-     * <p>Reached from {@code OutlineWebhookSecretSource#getSecret} BEFORE the HMAC comparison, on a
-     * route the auth rate limiter exempts — so it must be a single indexed probe, never a scan over
-     * the connected fleet. {@link ConnectionRepository#findOutlineSubscriptionsBySubscriptionId}
+     * <p>Reached once per consumed delivery, so it is a single indexed probe, never a scan over the
+     * connected fleet. {@link ConnectionRepository#findOutlineSubscriptionsBySubscriptionId}
      * supplies exactly that.
      *
      * <p>Fail-closed on ambiguity: a subscription id is globally unique at Outline, so more than one
      * ACTIVE match means corrupt data. We reject the delivery rather than pick a row — guessing would
-     * let a hostile/duplicated row decide which workspace's secret verifies a delivery.
+     * let a hostile/duplicated row decide which workspace a delivery refreshes.
      */
     @Transactional(readOnly = true)
     public Optional<OutlineSubscription> findOutlineSubscription(@Nullable String subscriptionId) {
@@ -199,19 +198,19 @@ public class ConnectionService {
             return Optional.empty();
         }
         ConnectionRepository.OutlineSubscriptionProjection match = matches.getFirst();
-        String secret = match.getSigningSecret();
+        String route = match.getRoute();
         String serverUrl = match.getServerUrl();
-        if (secret == null
-                || secret.isBlank()
+        if (route == null
+                || route.isBlank()
                 || serverUrl == null
                 || serverUrl.isBlank()
                 || match.getWorkspaceId() == null) {
             return Optional.empty();
         }
-        return Optional.of(new OutlineSubscription(match.getWorkspaceId(), serverUrl, secret));
+        return Optional.of(new OutlineSubscription(match.getWorkspaceId(), serverUrl, route));
     }
 
-    public record OutlineSubscription(long workspaceId, String serverUrl, String signingSecret) {}
+    public record OutlineSubscription(long workspaceId, String serverUrl, String route) {}
 
     /**
      * Decrypts the stored {@link BearerToken} for the workspace's ACTIVE Connection,

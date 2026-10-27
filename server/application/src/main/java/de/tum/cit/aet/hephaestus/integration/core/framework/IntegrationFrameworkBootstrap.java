@@ -14,6 +14,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.SubjectParser;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryWriter;
 import de.tum.cit.aet.hephaestus.integration.core.spi.TokenRefresher;
 import de.tum.cit.aet.hephaestus.integration.core.spi.WebhookSignatureVerifier;
+import de.tum.cit.aet.hephaestus.integration.core.webhook.IntegrationKindRouting;
 import jakarta.annotation.PostConstruct;
 import java.util.ArrayList;
 import java.util.EnumSet;
@@ -51,6 +52,7 @@ public class IntegrationFrameworkBootstrap {
     private final List<ApprovalWriter> approvalChannels;
     private final List<IntegrationLifecycleListener> lifecycleListeners;
     private final ReviewContractValidator reviewContract;
+    private final IntegrationKindRouting sharedWebhookRoutes;
     private final boolean webhookRoleEnabled;
 
     public IntegrationFrameworkBootstrap(
@@ -65,6 +67,7 @@ public class IntegrationFrameworkBootstrap {
             List<ApprovalWriter> approvalChannels,
             List<IntegrationLifecycleListener> lifecycleListeners,
             ReviewContractValidator reviewContract,
+            IntegrationKindRouting sharedWebhookRoutes,
             @Value("${" + RuntimeRole.WEBHOOK_PROPERTY + ":true}") boolean webhookRoleEnabled) {
         this.manifests = manifests;
         this.signatureVerifiers = signatureVerifiers;
@@ -77,6 +80,7 @@ public class IntegrationFrameworkBootstrap {
         this.approvalChannels = approvalChannels;
         this.lifecycleListeners = lifecycleListeners;
         this.reviewContract = reviewContract;
+        this.sharedWebhookRoutes = sharedWebhookRoutes;
         this.webhookRoleEnabled = webhookRoleEnabled;
     }
 
@@ -127,11 +131,14 @@ public class IntegrationFrameworkBootstrap {
             // GitHub/GitLab still self-validate at construction time in their
             // WebhookSignatureVerifier (missing-bean DI failure / IllegalStateException).
             if (webhookRoleEnabled) {
-                require(
-                        kind,
-                        "WebhookSignatureVerifier",
-                        anyMatchKind(signatureVerifiers, v -> v.kind() == kind),
-                        violations);
+                // A kind with its own receiver endpoint (Outline's route) verifies there.
+                if (sharedWebhookRoutes.routes(kind)) {
+                    require(
+                            kind,
+                            "WebhookSignatureVerifier",
+                            anyMatchKind(signatureVerifiers, v -> v.kind() == kind),
+                            violations);
+                }
                 require(kind, "SubjectKeyDeriver", anyMatchKind(subjectKeyDerivers, s -> s.kind() == kind), violations);
             }
             require(kind, "SubjectParser", anyMatchKind(subjectParsers, s -> s.kind() == kind), violations);

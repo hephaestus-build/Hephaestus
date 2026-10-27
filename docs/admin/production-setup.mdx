@@ -246,18 +246,17 @@ The compose files pass the same value to each:
 - **application-worker:** assembles agent context.
   The Outline content source has no runtime-role gate.
   Without the flag, reviews that require wiki evidence decline, and Heph turns omit wiki context.
-- **webhook-server:** without the flag, no Outline signature verifier registers.
-  Every delivery to `POST /webhooks/outline` returns `501`.
+- **webhook-server:** without the flag, no Outline delivery endpoint registers.
+  Every delivery to `POST /webhooks/outline/…` returns `404`.
   Outline counts these as failures and **auto-disables the subscription after 25 failures**.
 
 There is **no Outline signing-secret environment variable**.
 Slack has one global signing secret.
-Outline instead creates a secret per subscription when Hephaestus registers it.
-The connection row stores it encrypted.
-The receiver reads it through JPA.
+Each Outline subscription has its own secret, which Hephaestus derives from `WEBHOOK_ROUTING_SECRET` and the subscription's address.
+Nothing stores it.
 
 A workspace connection's activation automatically registers the subscription.
-Its delivery URL is `https://<host>/webhooks/outline`.
+Its delivery URL is `https://<host>/webhooks/outline/<key>/<route>`, one route for each subscription.
 It comes from `WEBHOOK_EXTERNAL_URL`, which defaults to the application host.
 
 `OUTLINE_OAUTH_*` is independent of the workspace connection.

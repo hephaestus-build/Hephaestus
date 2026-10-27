@@ -224,7 +224,7 @@ public sealed interface ConnectionConfig
 
     /**
      * Outline — the server host and (when the change-notification subscription is registered)
-     * its id plus signing secret. Which collections are mirrored is NOT config: the
+     * its id plus the route it posts to ({@code keyId/routeId}, from which the receiver derives its signing secret). Which collections are mirrored is NOT config: the
      * {@code outline_collection} registry is the single source of truth, populated post-connect
      * through the admin surface.
      *
@@ -234,16 +234,16 @@ public sealed interface ConnectionConfig
     record OutlineConfig(
             @Nullable String serverUrl,
             @Nullable String webhookSubscriptionId,
-            @Nullable String webhookSecret,
+            @Nullable String webhookRoute,
             Set<String> enabledStreams)
             implements ConnectionConfig {
         /**
-         * Returns a copy with the change-notification subscription id and signing secret
+         * Returns a copy with the change-notification subscription id and route
          * replaced, stamped after the subscription is registered. Pair with
          * {@code connectionService.updateConfig(...)} to persist the swap atomically.
          */
-        public OutlineConfig withWebhookSubscription(@Nullable String subscriptionId, @Nullable String signingSecret) {
-            return new OutlineConfig(serverUrl, subscriptionId, signingSecret, enabledStreams);
+        public OutlineConfig withWebhookSubscription(@Nullable String subscriptionId, @Nullable String route) {
+            return new OutlineConfig(serverUrl, subscriptionId, route, enabledStreams);
         }
     }
 }

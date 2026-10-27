@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.core.consumer;
 
+import de.tum.cit.aet.hephaestus.core.runtime.ReceiverComponent;
 import jakarta.validation.Valid;
 import java.time.Duration;
 import java.time.temporal.ChronoUnit;
@@ -26,6 +27,7 @@ import org.springframework.validation.annotation.Validated;
  */
 @Validated
 @ConfigurationProperties(prefix = "hephaestus.sync.nats")
+@ReceiverComponent
 public record NatsConnectionProperties(
         @DefaultValue("false") boolean enabled,
         @Nullable String server,

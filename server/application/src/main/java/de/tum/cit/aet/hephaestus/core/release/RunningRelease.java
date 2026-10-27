@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.core.release;
 
 import de.tum.cit.aet.hephaestus.core.release.ReleaseStatusDTO.RunningReleaseDTO;
+import de.tum.cit.aet.hephaestus.core.runtime.ReceiverComponent;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
 import java.util.regex.Pattern;
 import org.springframework.beans.factory.annotation.Value;
@@ -15,6 +16,7 @@ import org.springframework.stereotype.Component;
  * own, because release promotion tags an already-built image.
  */
 @Component
+@ReceiverComponent
 public class RunningRelease implements InfoContributor {
     /** {@code IMAGE_TAG} as a lock renders it; nine digits per part keeps {@code Version.parse} within int. */
     static final Pattern RELEASE_VERSION =

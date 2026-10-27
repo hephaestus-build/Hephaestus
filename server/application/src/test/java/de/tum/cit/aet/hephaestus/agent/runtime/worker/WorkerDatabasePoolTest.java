@@ -13,7 +13,7 @@ import org.springframework.core.io.ClassPathResource;
 import org.springframework.mock.env.MockEnvironment;
 import org.springframework.mock.env.MockPropertySource;
 
-/** The database pool each role binds from the shipped configuration, without the host's own environment. */
+/** The database pool each database role binds from the shipped configuration, without the host's own environment. */
 class WorkerDatabasePoolTest extends BaseUnitTest {
 
     @Test
@@ -29,16 +29,6 @@ class WorkerDatabasePoolTest extends BaseUnitTest {
     @Test
     void shouldUseOperatorPoolSizeWhenWorkerReceivesOverride() throws IOException {
         assertThat(poolSize("worker", "48")).isEqualTo(48);
-    }
-
-    @Test
-    void shouldGiveTheReceiverTwoConnectionsWhenWebhookProfileIsActive() throws IOException {
-        assertThat(poolSize("webhook", null)).isEqualTo(2);
-    }
-
-    @Test
-    void shouldUseOperatorPoolSizeWhenWebhookReceivesOverride() throws IOException {
-        assertThat(poolSize("webhook", "6")).isEqualTo(6);
     }
 
     private static int poolSize(@Nullable String profile, @Nullable String override) throws IOException {

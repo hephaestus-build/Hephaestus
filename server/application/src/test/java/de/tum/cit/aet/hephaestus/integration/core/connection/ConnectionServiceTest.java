@@ -321,7 +321,8 @@ class ConnectionServiceTest extends BaseUnitTest {
         Connection outline = connection(
                 57L,
                 IntegrationKind.OUTLINE,
-                new ConnectionConfig.OutlineConfig("https://outline.example", "subscription-1", "secret-1", Set.of()));
+                new ConnectionConfig.OutlineConfig(
+                        "https://outline.example", "subscription-1", "key/route-1", Set.of()));
 
         service.transition(gitLab, uninstallRequest("gitlab"));
         service.transition(outline, uninstallRequest("outline"));
@@ -331,7 +332,7 @@ class ConnectionServiceTest extends BaseUnitTest {
         assertThat(gitLabConfig.gitlabGroupId()).isEqualTo(12L);
         var outlineConfig = (ConnectionConfig.OutlineConfig) outline.getConfig();
         assertThat(outlineConfig.webhookSubscriptionId()).isNull();
-        assertThat(outlineConfig.webhookSecret()).isNull();
+        assertThat(outlineConfig.webhookRoute()).isNull();
         assertThat(outlineConfig.serverUrl()).isEqualTo("https://outline.example");
     }
 
@@ -482,7 +483,7 @@ class ConnectionServiceTest extends BaseUnitTest {
         verify(connectionRepository, never()).save(any());
     }
 
-    // Webhooks bypass the auth limiter; resolve one subscription by its indexed id without scanning stored secrets.
+    // Every consumed delivery resolves one subscription by its indexed id without scanning the fleet.
     @Nested
     class FindOutlineSubscription {
 
@@ -492,7 +493,7 @@ class ConnectionServiceTest extends BaseUnitTest {
          * {@code UnfinishedStubbingException}.
          */
         private ConnectionRepository.OutlineSubscriptionProjection projection(
-                Long workspaceId, @Nullable String secret) {
+                Long workspaceId, @Nullable String route) {
             return new ConnectionRepository.OutlineSubscriptionProjection() {
                 @Override
                 public Long getWorkspaceId() {
@@ -505,29 +506,29 @@ class ConnectionServiceTest extends BaseUnitTest {
                 }
 
                 @Override
-                public @Nullable String getSigningSecret() {
-                    return secret;
+                public @Nullable String getRoute() {
+                    return route;
                 }
             };
         }
 
         @Test
-        void resolvesTheMatchingSubscriptionToItsWorkspaceAndSecret() {
+        void resolvesTheMatchingSubscriptionToItsWorkspaceAndRoute() {
             when(connectionRepository.findOutlineSubscriptionsBySubscriptionId("sub-b"))
-                    .thenReturn(List.of(projection(2L, "secret-b")));
+                    .thenReturn(List.of(projection(2L, "key/route-b")));
 
             var resolved = service.findOutlineSubscription("sub-b");
 
             assertThat(resolved).isPresent();
             assertThat(resolved.get().workspaceId()).isEqualTo(2L);
             assertThat(resolved.get().serverUrl()).isEqualTo("https://wiki.example.com");
-            assertThat(resolved.get().signingSecret()).isEqualTo("secret-b");
+            assertThat(resolved.get().route()).isEqualTo("key/route-b");
         }
 
         @Test
         void resolvesWithASingleIndexedLookupAndNeverEnumeratesTheFleet() {
             when(connectionRepository.findOutlineSubscriptionsBySubscriptionId("sub-b"))
-                    .thenReturn(List.of(projection(2L, "secret-b")));
+                    .thenReturn(List.of(projection(2L, "key/route-b")));
 
             service.findOutlineSubscription("sub-b");
 
@@ -539,7 +540,7 @@ class ConnectionServiceTest extends BaseUnitTest {
         }
 
         @Test
-        void aForgedSubscriptionIdResolvesToNoSecret() {
+        void aForgedSubscriptionIdResolvesToNoRoute() {
             when(connectionRepository.findOutlineSubscriptionsBySubscriptionId("forged"))
                     .thenReturn(List.of());
 
@@ -547,31 +548,31 @@ class ConnectionServiceTest extends BaseUnitTest {
         }
 
         @Test
-        void aDeliveryForWorkspaceANeverSelectsWorkspaceBsSecret() {
+        void aDeliveryForWorkspaceANeverSelectsWorkspaceBsRoute() {
             when(connectionRepository.findOutlineSubscriptionsBySubscriptionId("sub-a"))
-                    .thenReturn(List.of(projection(1L, "secret-a")));
+                    .thenReturn(List.of(projection(1L, "key/route-a")));
             when(connectionRepository.findOutlineSubscriptionsBySubscriptionId("sub-b"))
-                    .thenReturn(List.of(projection(2L, "secret-b")));
+                    .thenReturn(List.of(projection(2L, "key/route-b")));
 
             var a = service.findOutlineSubscription("sub-a").orElseThrow();
             var b = service.findOutlineSubscription("sub-b").orElseThrow();
 
             assertThat(a.workspaceId()).isEqualTo(1L);
-            assertThat(a.signingSecret()).isEqualTo("secret-a");
+            assertThat(a.route()).isEqualTo("key/route-a");
             assertThat(b.workspaceId()).isEqualTo(2L);
-            assertThat(b.signingSecret()).isEqualTo("secret-b");
+            assertThat(b.route()).isEqualTo("key/route-b");
         }
 
         @Test
         void failsClosedWhenTwoActiveConnectionsClaimTheSameSubscriptionId() {
             when(connectionRepository.findOutlineSubscriptionsBySubscriptionId("sub-dup"))
-                    .thenReturn(List.of(projection(1L, "secret-a"), projection(2L, "secret-b")));
+                    .thenReturn(List.of(projection(1L, "key/route-a"), projection(2L, "key/route-b")));
 
             assertThat(service.findOutlineSubscription("sub-dup")).isEmpty();
         }
 
         @Test
-        void isEmptyWhenTheSubscriptionMatchesButNoSecretIsStored() {
+        void isEmptyWhenTheSubscriptionMatchesButNoRouteIsStored() {
             when(connectionRepository.findOutlineSubscriptionsBySubscriptionId("sub-a"))
                     .thenReturn(List.of(projection(1L, null)));
 

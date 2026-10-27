@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.integration.core.connection;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -16,6 +17,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Set;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -250,16 +252,11 @@ class ConnectionConfigJsonRoundTripIntegrationTest extends BaseIntegrationTest {
         assertThat(cfg.enabledStreams()).containsExactly("messages");
     }
 
-    /**
-     * The webhook signing secret must survive the JSONB round-trip. This is the persistence half of
-     * the API-boundary redaction in {@code ConnectionDetailDTO}: Hibernate serializes this column
-     * with the same Jackson {@code ObjectMapper}, so had we redacted with {@code @JsonIgnore} on the
-     * record component instead, this test would fail — the stored secret would be destroyed on write.
-     */
+    /** The webhook route survives the JSONB round-trip: the receiver derives the subscription's secret from it. */
     @Test
-    void outlineConfig_roundTrips_includingTheWebhookSecret() {
+    void outlineConfig_roundTrips_includingTheWebhookRoute() {
         ConnectionConfig.OutlineConfig original = new ConnectionConfig.OutlineConfig(
-                "https://outline.example.com", "sub-abc", "ENC:v2:ciphertext", Set.of("documents"));
+                "https://outline.example.com", "sub-abc", "key/route", Set.of("documents"));
         Long id = persistAndClear(IntegrationKind.OUTLINE, "https://outline.example.com", original);
 
         Connection reloaded = connectionRepository.findById(id).orElseThrow();
@@ -267,14 +264,14 @@ class ConnectionConfigJsonRoundTripIntegrationTest extends BaseIntegrationTest {
         ConnectionConfig.OutlineConfig cfg = (ConnectionConfig.OutlineConfig) reloaded.getConfig();
         assertThat(cfg.serverUrl()).isEqualTo("https://outline.example.com");
         assertThat(cfg.webhookSubscriptionId()).isEqualTo("sub-abc");
-        assertThat(cfg.webhookSecret()).isEqualTo("ENC:v2:ciphertext");
+        assertThat(cfg.webhookRoute()).isEqualTo("key/route");
         assertThat(cfg.enabledStreams()).containsExactly("documents");
 
         assertDiscriminator(id, "OUTLINE");
     }
 
     /**
-     * The unauthenticated webhook hot path resolves its signing secret through the JSONB expression
+     * The Outline consumer resolves a delivery's subscription through the JSONB expression
      * index {@code ix_connection_outline_subscription}. Exercised against real Postgres because the
      * {@code ->>} operator, the quoted projection aliases, and the ACTIVE/OUTLINE predicates only
      * exist in native SQL — a mock cannot tell us the query parses, let alone that it isolates
@@ -284,22 +281,22 @@ class ConnectionConfigJsonRoundTripIntegrationTest extends BaseIntegrationTest {
     void outlineSubscriptionLookup_isKeyedOnTheSubscriptionAndNeverCrossesWorkspaces() {
         Workspace other = workspaceRepository.save(WorkspaceTestFixtures.activeWorkspace("conn-roundtrip-b"));
 
-        persistActiveOutline(workspace, "sub-a", "secret-a");
-        persistActiveOutline(other, "sub-b", "secret-b");
+        persistActiveOutline(workspace, "sub-a", "key/route-a");
+        persistActiveOutline(other, "sub-b", "key/route-b");
         entityManager.flush();
         entityManager.clear();
 
         var a = connectionRepository.findOutlineSubscriptionsBySubscriptionId("sub-a");
         assertThat(a).hasSize(1);
         assertThat(a.getFirst().getWorkspaceId()).isEqualTo(workspace.getId());
-        assertThat(a.getFirst().getSigningSecret()).isEqualTo("secret-a");
+        assertThat(a.getFirst().getRoute()).isEqualTo("key/route-a");
 
         var b = connectionRepository.findOutlineSubscriptionsBySubscriptionId("sub-b");
         assertThat(b).hasSize(1);
         assertThat(b.getFirst().getWorkspaceId()).isEqualTo(other.getId());
-        assertThat(b.getFirst().getSigningSecret()).isEqualTo("secret-b");
+        assertThat(b.getFirst().getRoute()).isEqualTo("key/route-b");
 
-        // A forged id matches nothing: the delivery is rejected before any HMAC comparison.
+        // A forged id matches nothing.
         assertThat(connectionRepository.findOutlineSubscriptionsBySubscriptionId("forged"))
                 .isEmpty();
     }
@@ -322,12 +319,47 @@ class ConnectionConfigJsonRoundTripIntegrationTest extends BaseIntegrationTest {
                 .isEmpty();
     }
 
-    private void persistActiveOutline(Workspace ws, String subscriptionId, String secret) {
+    /**
+     * The route projection and the heal read every ACTIVE Outline connection through this native query. A broken
+     * filter or a renamed JSON key would refuse every live subscription within a minute, so it runs against real
+     * Postgres.
+     */
+    @Test
+    void activeOutlineRoutes_holdEveryActiveConnectionAndItsRoute() {
+        Workspace unrouted = workspaceRepository.save(WorkspaceTestFixtures.activeWorkspace("conn-routes-unrouted"));
+        Workspace suspendedWorkspace =
+                workspaceRepository.save(WorkspaceTestFixtures.activeWorkspace("conn-routes-suspended"));
+        persistActiveOutline(workspace, "sub-routed", "key/route-routed");
+        persistActiveOutline(unrouted, "sub-unrouted", null);
+        Connection suspended = new Connection(
+                suspendedWorkspace,
+                IntegrationKind.OUTLINE,
+                "https://outline.example.com/sub-suspended-route",
+                new ConnectionConfig.OutlineConfig(
+                        "https://outline.example.com", "sub-suspended-route", "key/route-suspended", Set.of()));
+        suspended.setState(IntegrationState.SUSPENDED);
+        connectionRepository.save(suspended);
+        entityManager.flush();
+        entityManager.clear();
+
+        var mine = connectionRepository.findActiveOutlineRoutes().stream()
+                .filter(row -> Set.of(workspace.getId(), unrouted.getId(), suspendedWorkspace.getId())
+                        .contains(row.getWorkspaceId()))
+                .toList();
+
+        assertThat(mine)
+                .extracting(
+                        ConnectionRepository.OutlineRouteRow::getWorkspaceId,
+                        ConnectionRepository.OutlineRouteRow::getRoute)
+                .containsExactlyInAnyOrder(tuple(workspace.getId(), "key/route-routed"), tuple(unrouted.getId(), null));
+    }
+
+    private void persistActiveOutline(Workspace ws, String subscriptionId, @Nullable String route) {
         Connection conn = new Connection(
                 ws,
                 IntegrationKind.OUTLINE,
                 "https://outline.example.com/" + subscriptionId,
-                new ConnectionConfig.OutlineConfig("https://outline.example.com", subscriptionId, secret, Set.of()));
+                new ConnectionConfig.OutlineConfig("https://outline.example.com", subscriptionId, route, Set.of()));
         conn.setState(IntegrationState.ACTIVE);
         connectionRepository.save(conn);
     }

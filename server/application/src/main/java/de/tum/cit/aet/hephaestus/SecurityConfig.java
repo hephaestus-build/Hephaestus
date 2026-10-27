@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.core.auth.AuthProperties;
 import de.tum.cit.aet.hephaestus.core.auth.clientsession.InstalledClientRegistry;
 import de.tum.cit.aet.hephaestus.core.auth.ratelimit.AuthRateLimitFilter;
 import de.tum.cit.aet.hephaestus.core.auth.web.PublicActivityReadRequestMatcher;
+import de.tum.cit.aet.hephaestus.core.runtime.ReceiverComponent;
 import de.tum.cit.aet.hephaestus.core.security.SecurityHeaders;
 import de.tum.cit.aet.hephaestus.core.security.SecurityUtils;
 import de.tum.cit.aet.hephaestus.core.security.StaleAuthCookieFilter;
@@ -69,6 +70,7 @@ import tools.jackson.databind.ObjectMapper;
 
 @Configuration
 @EnableMethodSecurity(prePostEnabled = true)
+@ReceiverComponent
 public class SecurityConfig {
 
     private final CorsProperties corsProperties;
@@ -213,7 +215,7 @@ public class SecurityConfig {
                         "/webhooks/gitlab/connections/**",
                         "/webhooks/slack",
                         "/webhooks/slack/interactivity",
-                        "/webhooks/outline",
+                        "/webhooks/outline/**",
                         "/oauth/callback/**")
                 .sessionManagement(sessions -> sessions.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .csrf(csrf -> csrf.disable())

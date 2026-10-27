@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineDocumentEvent
 import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineDocumentEventRepository;
 import de.tum.cit.aet.hephaestus.integration.outline.sync.OutlineDocumentSyncScheduler;
 import io.nats.client.Message;
+import io.nats.client.impl.Headers;
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
 import java.util.Optional;
@@ -34,7 +35,10 @@ import tools.jackson.databind.ObjectMapper;
  * <p>All Outline events collapse onto a single logical key ({@link #EVENT_TYPE}); routing happens on the body's
  * event name, while the specific event still travels on the subject and dedup key for observability.
  *
- * <p>The workspace is resolved from the subscription id in the (HMAC-covered) body, never from the subject.
+ * <p>The workspace is resolved from the subscription id in the (HMAC-covered) body, never from the subject. The
+ * receiver verified the delivery against the route it was posted to ({@link OutlineWebhookController#HEADER_ROUTE});
+ * a delivery whose route is not the one that subscription registered was signed for another connection and is
+ * dropped.
  * Throwing propagates to the consumer's poison handler rather than being swallowed.
  */
 @Component
@@ -80,6 +84,10 @@ public class OutlineWebhookMessageHandler implements IntegrationMessageHandler {
             // The subscription was deleted/disconnected between publish and consume. Nothing to
             // refresh; ACK-as-no-op (returning normally) rather than NAK-looping forever.
             log.debug("outline.consumer: no ACTIVE subscription for delivery, skipping");
+            return;
+        }
+        if (!subscription.get().route().equals(route(msg))) {
+            log.warn("outline.consumer: delivery route does not match its subscription, dropping");
             return;
         }
         long workspaceId = subscription.get().workspaceId();
@@ -130,6 +138,11 @@ public class OutlineWebhookMessageHandler implements IntegrationMessageHandler {
                     workspaceId,
                     e.toString());
         }
+    }
+
+    private static @Nullable String route(Message msg) {
+        Headers headers = msg.getHeaders();
+        return headers == null ? null : headers.getFirst(OutlineWebhookController.HEADER_ROUTE);
     }
 
     private Delivery parse(byte[] body) {

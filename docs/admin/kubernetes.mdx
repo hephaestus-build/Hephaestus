@@ -70,7 +70,8 @@ Each server replica without a configured token key ring signs worker tokens with
 Two server versions never serve the same schema at the same time.
 
 The `Recreate` strategy applies only to the server.
-The webhook role and the worker also connect to the database, and their rollouts do not wait for the server.
+The worker also connects to the database, and its rollout does not wait for the server.
+The webhook role has no database.
 [Database maintenance](#database-maintenance) gives the order of the roles for a change of the database or of a schema that needs every role stopped.
 
 ## Verify the release chart
@@ -1056,25 +1057,26 @@ Roll forward to fix a failed upgrade.
 ### Database maintenance
 
 Use this procedure when the release notes require it, before you change PostgreSQL itself, or before you change the CA in its TLS Secret.
-The server, the webhook role and the workers are the database roles.
+The server and the workers are the database roles.
+The webhook role has no database, so it keeps receiving deliveries into NATS JetStream through every phase.
 Each phase is one `helm upgrade` with the replica counts of that phase:
 
-| Phase | `server.replicas` | `webhook.replicas` | `worker.replicas` | Before the next phase |
-| --- | --- | --- | --- | --- |
-| 1. Stop the writers | 0 | 0 | 0 | The old pods of the three roles are gone. The worker's sandbox pods are gone. |
-| 2. Change the database | 0 | 0 | 0 | PostgreSQL and NATS are ready and accept connections. |
-| 3. Migrate | 1 | 0 | 0 | The migration Job of the revision completed. The server is ready. |
-| 4. Restore | 1 | The prior count | The prior count | The pods of the three roles are ready. |
+| Phase | `server.replicas` | `worker.replicas` | Before the next phase |
+| --- | --- | --- | --- |
+| 1. Stop the writers | 0 | 0 | The old pods of the two roles are gone. The worker's sandbox pods are gone. |
+| 2. Change the database | 0 | 0 | PostgreSQL is ready and accepts connections. |
+| 3. Migrate | 1 | 0 | The migration Job of the revision completed. The server is ready. |
+| 4. Restore | 1 | The prior count | The pods of the two roles are ready. The server consumes the deliveries that the receiver published meanwhile. |
 
-Phase 1 uses the verified chart and the values of the current release, with only the three counts changed.
+Phase 1 uses the verified chart and the values of the current release, with only the two counts changed.
 Phase 2 applies the change.
 The change can be the new release values, a new PostgreSQL configuration, or a new CA in the TLS Secret and a restart of PostgreSQL.
 Phase 3 runs the new release's migration Job and starts its server alone.
 
-Before phase 1, record the current `webhook.replicas` and `worker.replicas`, and back up the database and the NATS JetStream data.
+Before phase 1, record the current `worker.replicas`, and back up the database and the NATS JetStream data.
 A count of 0 is a desired state: check on the cluster that the pods stopped, that the sandbox Pods and Jobs are gone, and that the migrations completed before the next phase.
 Set `worker.replicas=0` to stop the workers; `worker.enabled=false` removes the worker objects.
-While `webhook.replicas` is 0, provider deliveries reach no receiver, and each provider decides whether it retries.
+A change of NATS itself stops reception: while NATS is down, the receiver answers deliveries with `503`, and each provider decides whether it retries.
 
 ## Uninstall
 

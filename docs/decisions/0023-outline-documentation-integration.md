@@ -1,6 +1,6 @@
 # ADR 0023: Outline documentation integration — a content source, not a detection surface
 
-**Status:** Accepted (amended 2026-08-08 — a document is a reviewable artifact)
+**Status:** Accepted (amended 2026-08-08 — a document is a reviewable artifact; 2026-10-26 — the signing secret is derived from a route, [0066](0066-the-webhook-receiver-has-no-database.md))
 **Date:** 2026-07-04
 **Authors:** Felix T.J. Dietrich
 **Builds on:** [ADR 0015](0015-unified-integration-framework.md) (integration framework), [ADR 0020](0020-context-fabric-everything-is-an-integration.md) (context fabric), [ADR 0014](0014-per-row-aes-gcm-aad-binding.md) (credential encryption), [ADR 0007](0007-sandbox-spi-shape.md) (sandbox SPI shape)
@@ -66,6 +66,11 @@ subscribes to `outline.<subscriptionId>.>` and hands each event to `OutlineWebho
 point: an app-server redeploy no longer drops in-flight deliveries (the reason ADR 0008 decoupled the
 webhook role), and a handler failure reaches the poison handler (NAK + backoff, ACK-after-N) instead
 of a swallowed catch.
+
+> Superseded by [ADR 0066](0066-the-webhook-receiver-has-no-database.md) for verification and secret storage:
+> the subscription posts to `/webhooks/outline/{keyId}/{routeId}`, the receiver derives its signing secret from
+> the route, and the connection stores the route instead of an encrypted secret. The two paragraphs below
+> describe the earlier design.
 
 Each delivery names its subscription in the body. That subscription id is an **untrusted routing
 key**: `OutlineWebhookSecretSource` parses it out of the body (not a header, so the secret source is

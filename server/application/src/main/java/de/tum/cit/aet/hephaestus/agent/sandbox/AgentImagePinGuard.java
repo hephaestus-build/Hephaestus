@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.sandbox;
 
 import de.tum.cit.aet.hephaestus.agent.runtime.AgentImageProperties;
 import de.tum.cit.aet.hephaestus.core.release.ImageReference;
+import de.tum.cit.aet.hephaestus.core.runtime.ReceiverComponent;
 import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -12,6 +13,7 @@ import org.springframework.stereotype.Component;
 @Component
 @Profile("!specs & !cds-training")
 @ConditionalOnProperty(prefix = "hephaestus.agent.image", name = "require-digest", havingValue = "true")
+@ReceiverComponent
 public class AgentImagePinGuard {
 
     public AgentImagePinGuard(AgentImageProperties properties) {

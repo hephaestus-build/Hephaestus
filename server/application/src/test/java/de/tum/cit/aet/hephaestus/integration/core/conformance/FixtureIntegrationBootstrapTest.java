@@ -21,6 +21,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.CopyCapability;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationManifest;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemEventName;
+import de.tum.cit.aet.hephaestus.integration.core.webhook.IntegrationKindRouting;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
 import de.tum.cit.aet.hephaestus.practices.PracticeGuidance;
 import de.tum.cit.aet.hephaestus.practices.PracticeItemOptions;
@@ -127,6 +128,7 @@ class FixtureIntegrationBootstrapTest extends BaseUnitTest {
                 List.of(),
                 List.of(FixtureIntegration.lifecycleListener()),
                 validator(),
+                new IntegrationKindRouting(),
                 true);
     }
 

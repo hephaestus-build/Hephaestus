@@ -16,15 +16,13 @@ import org.springframework.stereotype.Component;
 @Component
 public class IntegrationKindRouting {
 
-    private static final Map<String, IntegrationKind> ROUTES = Map.of(
-            "github",
-            IntegrationKind.GITHUB,
-            "gitlab",
-            IntegrationKind.GITLAB,
-            "slack",
-            IntegrationKind.SLACK,
-            "outline",
-            IntegrationKind.OUTLINE);
+    private static final Map<String, IntegrationKind> ROUTES =
+            Map.of("github", IntegrationKind.GITHUB, "gitlab", IntegrationKind.GITLAB, "slack", IntegrationKind.SLACK);
+
+    /** Whether the shared {@code /webhooks/{kind}} endpoint serves {@code kind}. */
+    public boolean routes(IntegrationKind kind) {
+        return ROUTES.containsValue(kind);
+    }
 
     public Optional<IntegrationKind> resolve(@Nullable String pathSegment) {
         if (pathSegment == null) return Optional.empty();

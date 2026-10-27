@@ -56,6 +56,9 @@ public class SlackChannelConsentService {
      */
     public record SlackChannelActivatedEvent(long workspaceId, String slackChannelId) {}
 
+    /** A channel's consent state changed. {@link SlackChannelConsentProjection} carries it to the receiver. */
+    public record SlackChannelConsentChangedEvent(long workspaceId, String slackChannelId) {}
+
     public SlackChannelConsentService(
             SlackMonitoredChannelRepository monitoredChannelRepository,
             SlackChannelConsentEventRepository consentEventRepository,
@@ -292,6 +295,7 @@ public class SlackChannelConsentService {
         Long actorAccountId = SecurityUtils.getCurrentAccountId().orElse(null);
         consentEventRepository.save(
                 new SlackChannelConsentEvent(workspaceId, slackChannelId, from, to, actorAccountId, reason));
+        eventPublisher.publishEvent(new SlackChannelConsentChangedEvent(workspaceId, slackChannelId));
         if (to == ConsentState.PAUSED || to == ConsentState.REVOKED) {
             // A running Heph turn may hold the channel's threads in its context folder.
             eventPublisher.publishEvent(new AgentContextChangedEvent(workspaceId));

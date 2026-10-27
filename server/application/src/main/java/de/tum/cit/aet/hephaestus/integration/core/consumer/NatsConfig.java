@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.core.consumer;
 
+import de.tum.cit.aet.hephaestus.core.runtime.ReceiverComponent;
 import io.nats.client.Connection;
 import io.nats.client.Nats;
 import io.nats.client.Options;
@@ -11,6 +12,7 @@ import org.springframework.core.env.Environment;
 
 @Configuration
 @ConditionalOnProperty(name = "hephaestus.sync.nats.enabled", havingValue = "true")
+@ReceiverComponent
 public class NatsConfig {
 
     private final NatsConnectionProperties natsProperties;

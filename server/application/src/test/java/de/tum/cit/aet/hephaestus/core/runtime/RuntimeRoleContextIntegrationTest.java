@@ -122,6 +122,8 @@ class RuntimeRoleContextIntegrationTest {
                     application.getBeanFactory().setConversionService(conversion);
                 })
                 .withInitializer(new ConfigDataApplicationContextInitializer())
+                // SpringApplication applies this from spring.factories; a webhook-only context scans only the receiver.
+                .withInitializer(new WebhookReceiverScope.Initializer())
                 .withInitializer(application -> configuration
                         .getContextCustomizers()
                         .forEach(customizer -> customizer.customizeContext(application, configuration)))

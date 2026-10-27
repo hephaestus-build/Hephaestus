@@ -14,6 +14,7 @@ import org.springframework.stereotype.Component;
  * idle. Reads property values directly to avoid coupling to any role-conditional bean.
  */
 @Component
+@ReceiverComponent
 public class RuntimeRoleStartupLogger {
 
     private static final Logger log = LoggerFactory.getLogger(RuntimeRoleStartupLogger.class);

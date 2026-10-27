@@ -68,6 +68,13 @@ Each role has a Spring profile YAML that turns off the other two flags and remov
 - `application-webhook.yml`: `runtime.server=false` and `runtime.worker=false`.
   It enables sync NATS and disables the agent job queue.
   Webhook pods never claim jobs.
+  The webhook role has no database.
+  It loads only the receiver.
+  It needs no database settings and no encryption keys.
+  It starts and accepts deliveries while PostgreSQL is down.
+  It reaches only NATS.
+  Outline deliveries verify against a secret derived from `WEBHOOK_ROUTING_SECRET`.
+  Slack consent comes from a NATS key-value bucket that the server writes ([ADR 0066](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0066-the-webhook-receiver-has-no-database.md)).
 - No `application-server.yml` exists.
   The monolith default *is* the server profile.
 
@@ -112,7 +119,8 @@ It starts no web server and no runtime role.
 It exits with status 0 when the schema is current, and with a non-zero status when the migration fails.
 
 Under the `prod` profile, no role migrates at start.
-Each role waits until the database holds every change set of its release.
+The server and worker roles wait until the database holds every change set of their release.
+The webhook role reads no database and does not wait.
 The wait reads the migration history and writes nothing.
 A schema that is ahead of the role is correct: during a rollout, the previous release runs against the new schema.
 
@@ -124,7 +132,6 @@ Run the migration once for each release, before the new roles start:
 
 - **Compose.** The shipped stacks contain a one-shot `database-migration` service.
   The server and the worker start only after it completes successfully.
-  The webhook receiver of the single-host stack also waits for it.
   Run `docker compose run --rm -T --no-deps database-migration` first.
   `--no-deps` keeps Compose from restarting PostgreSQL under the running roles.
   The command ends with the exit status of the migration, and the previous roles keep serving until then.
@@ -135,7 +142,7 @@ Run the migration once for each release, before the new roles start:
   A plain `docker compose up -d` alone stops the previous roles for the whole migration.
   [Pull-based deployment](./pull-based-deployment#how-an-apply-stops-the-worker) runs the migration first.
 - **Kubernetes.** The [Helm chart](./kubernetes#upgrades) runs the migration as a Job of each revision, beside the new roles.
-  The roles wait for the Job.
+  The server and worker roles wait for the Job.
 - **Other deployments.** Run the image once with the `migrate` profile, then start the new roles.
 
 ### One migration at a time
@@ -236,13 +243,13 @@ The three `runtime.*` rows in a column show the pod's role set:
 - The `webhook` overlay turns off the server and worker roles.
 - The monolith, with no overlay, runs all three.
 
-All three roles independently enforce Outline origin approval.
-The server controls connections and sync.
+The server and the worker enforce Outline origin approval.
+The server controls connections, sync and the change events it consumes.
 The worker projects evidence.
-The webhook role accepts change events.
+The webhook role reads no connection, so it does not need the allowlist.
 
-1. Supply the same allowlist to all roles.
-2. After a change, restart all three roles.
+1. Supply the same allowlist to the server and the worker.
+2. After a change, restart both roles.
 
 The reference Compose files supply the allowlist automatically.
 
