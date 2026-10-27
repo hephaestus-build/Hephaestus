@@ -232,6 +232,19 @@ const config: Config = {
 			},
 		],
 		[
+			// Pages that moved keep their old URLs, because links outside the site still use them.
+			"@docusaurus/plugin-client-redirects",
+			{
+				redirects: [
+					{ from: "/contributor/practice-catalogue", to: "/contributor/practice-catalog" },
+					{
+						from: "/contributor/buildpacks-cds-decision",
+						to: `${REPO_URL}/blob/main/docs/decisions/0067-the-server-image-builds-with-buildpacks-and-cds.md`,
+					},
+				],
+			},
+		],
+		[
 			"@signalwire/docusaurus-plugin-llms-txt",
 			{
 				siteDescription: DESCRIPTION,

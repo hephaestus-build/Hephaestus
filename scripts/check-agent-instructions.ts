@@ -168,7 +168,7 @@ const INTENTIONALLY_MISSING_PATHS = [
 		reason: "the staged history record, written into the agent workspace",
 	},
 	{
-		document: "docs/contributor/practice-catalogue.md",
+		document: "docs/contributor/practice-catalog.md",
 		value: "work/practice-scripts-out/<slug>.md",
 		reason:
 			"the practice script section of a practice, written inside the agent workspace for its turn",

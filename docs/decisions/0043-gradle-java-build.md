@@ -24,7 +24,7 @@ Gradle's task dependencies, without local artifact installation.
 
 Use the upstream GraphQL and OpenAPI generators, Error Prone/NullAway, Spotless, PMD, JaCoCo and PIT.
 Liquibase runs through its supported CLI on the application classpath. The opt-in Maven AOT profile
-is removed because runtime-dependent bean selection requires [AOT to remain off](../admin/buildpacks-cds-decision.md).
+is removed because runtime-dependent bean selection requires [AOT to remain off](0067-the-server-image-builds-with-buildpacks-and-cds.md).
 
 JUnit tags select the test tiers; Gradle dry-run discovery checks tier and shard coverage without
 reimplementing runner selection semantics. Test execution is neither cached nor considered up to

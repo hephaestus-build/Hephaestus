@@ -6,5 +6,3 @@
 # Auth and identity: ADR 0017.
 server/application/src/main/java/de/tum/cit/aet/hephaestus/core/auth/   @FelixTJDietrich @hephaestus-build/maintainer
 docs/decisions/0017-replace-keycloak-with-spring-native-auth.md          @FelixTJDietrich
-docs/auth-glossary.md                                                     @FelixTJDietrich
-docs/auth-architecture.md                                                 @FelixTJDietrich

@@ -13,7 +13,7 @@ The [product vocabulary](./practice-feedback-language.md) defines both terms.
 Other pages own the related facts:
 
 - [Add a visual and a guide](/admin/writing-practices#add-a-visual-and-a-guide) owns the markup that the server accepts, the limits, and the `pv-*` color classes.
-- [Bundled visuals and guides](./practice-catalogue.md#bundled-visuals-and-guides) owns the files and the catalog fields.
+- [Bundled visuals and guides](./practice-catalog.md#bundled-visuals-and-guides) owns the files and the catalog fields.
 
 The rules below are strict.
 All bundled practices use one grammar, so a developer learns it once.
@@ -570,7 +570,7 @@ More rules:
 - After the name and the year, write one sentence that says what the source supports.
 - Say so in the entry when a source argues for a kind of product that its publisher sells. An example is a study of code review by a seller of review tools.
 - Official documentation of a platform or tool needs no such note.
-- Do not state a claim more strongly than its class allows. The [catalog curation rules](./practice-catalogue.md#authoring-experience) give the classes.
+- Do not state a claim more strongly than its class allows. The [catalog curation rules](./practice-catalog.md#authoring-experience) give the classes.
 - Read the claim in the source itself, not in a summary. Do not cite a source for a number that the practice does not use.
 - Do not cite blog platforms, AI summaries, marketing pages, Wikipedia, or pages behind a paywall with no public abstract.
 

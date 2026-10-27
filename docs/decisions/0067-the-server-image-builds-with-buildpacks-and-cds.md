@@ -1,8 +1,10 @@
----
-id: buildpacks-cds-decision
-title: Server image build through Paketo Buildpacks + Application CDS
-description: How and why the application-server image is built with Paketo Cloud Native Buildpacks and Application CDS.
----
+# ADR 0067: The server image builds with Paketo Buildpacks and Application CDS
+
+**Status:** Accepted
+**Date:** 2026-05-19
+**Authors:** Felix T.J. Dietrich
+
+This decision was first recorded as a contributor page. It moved here unchanged, so that every decision lives in `docs/decisions/`.
 
 CI uses `pack` (Paketo Cloud Native Buildpacks) to build the `application-server` image from the executable JAR that it packaged and tested.
 Application Class Data Sharing (CDS) is enabled.
@@ -32,7 +34,7 @@ Thus, context refresh succeeds without a reachable Postgres.
 
 Compose's runtime `SPRING_PROFILES_ACTIVE=prod` overrides the default that the buildpack sets.
 Paketo writes `env.launch/<KEY>.default`, which yields to the runtime environment.
-The [build-only profile boundary](/admin/runtime-roles#build-only-profiles) keeps runtime bootstrap out of training.
+The [build-only profile boundary](https://docs.hephaestus.build/admin/runtime-roles#build-only-profiles) keeps runtime bootstrap out of training.
 It rejects a production/build-profile combination.
 Authentication types remain available for class loading without configured deployment secrets.
 
@@ -46,7 +48,7 @@ The dependency security gate checks the server runtime and the Gradle plugin cla
 The plugin classpath includes the Spring Boot buildpack platform and the GraphQL and OpenAPI generators.
 Its native Gradle lockfile is included in the checkout scan and the submitted GitHub dependency graph.
 A container scan does not check these build dependencies.
-See [dependency security controls](./ci-cd.mdx#security-and-supply-chain-controls) for the scan inputs and policy.
+See [dependency security controls](https://docs.hephaestus.build/contributor/ci-cd#security-and-supply-chain-controls) for the scan inputs and policy.
 
 CI builds the image with `pack`, not Gradle's `bootBuildImage` task.
 The plugin classpath still takes part in the security gate even when that task is not used.
@@ -101,7 +103,7 @@ The build-once guarantee does not apply until that path also downloads `applicat
 
 1. Add a `Dockerfile` for `server/application` again.
 2. Add an `application-server` target to `docker/docker-bake.hcl`, and remove the Buildpacks steps from `.github/workflows/reusable-docker-build.yml`.
-3. Use the [upgrade rollback procedure](/admin/upgrade#rollback).
+3. Use the [upgrade rollback procedure](https://docs.hephaestus.build/admin/upgrade#rollback).
 
 Detection uses an error spike in the logs of the new `service.version` or a Prometheus alert.
 The alert condition is `application_ready_time_seconds > 15` for three consecutive deploys.
