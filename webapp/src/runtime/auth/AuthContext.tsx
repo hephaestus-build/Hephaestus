@@ -6,7 +6,7 @@ import { authClient, toUserProfile, type UserProfile } from "./auth-client";
 import {
 	isAppAdmin as computeIsAppAdmin,
 	currentUserQueryOptions,
-	sessionUnavailable,
+	serverUnreachable,
 } from "./guard";
 
 import { hasText } from "@/lib/text";
@@ -26,6 +26,8 @@ export interface AuthContextType {
 	isError: boolean;
 	/** Who the server says is signed in. Unavailable means it could not answer; the session may still hold. */
 	session: Session;
+	/** Reads the identity again now, as when the reader asks to try again. */
+	retrySession: () => void;
 	username: string | undefined;
 	userRoles: string[];
 	isAppAdmin: boolean;
@@ -83,7 +85,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 		...currentUserQueryOptions(),
 		// Ask again while the server cannot answer, doubling the wait up to 30 seconds.
 		refetchInterval: ({ state }) =>
-			state.data === undefined && state.status === "error" && sessionUnavailable(state.error)
+			state.data === undefined && state.status === "error" && serverUnreachable(state.error)
 				? Math.min(
 						UNAVAILABLE_RETRY_FIRST_MS * 2 ** (state.errorUpdateCount - 1),
 						UNAVAILABLE_RETRY_CAP_MS,
@@ -129,7 +131,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 	let session: Session = "signed-out";
 	if (user !== null) {
 		session = "signed-in";
-	} else if (lastError !== null && sessionUnavailable(lastError)) {
+	} else if (lastError !== null && serverUnreachable(lastError)) {
 		session = "unavailable";
 	} else if (isLoading) {
 		session = "loading";
@@ -140,6 +142,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
 		isLoading,
 		isError,
 		session,
+		retrySession: () => {
+			void userQuery.refetch();
+		},
 		username,
 		userRoles: viewed ? [] : (user?.roles ?? []),
 		isAppAdmin,

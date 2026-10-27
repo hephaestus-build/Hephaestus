@@ -34,6 +34,7 @@ const meta = {
 		),
 		onLogin: fn(),
 		onLogout: fn(),
+		onRetrySession: fn(),
 	},
 	decorators: [
 		(Story) => (
@@ -109,13 +110,30 @@ export const LoggedOut: Story = {
 export const Unavailable: Story = {
 	args: {
 		session: "unavailable",
+		sidebarTrigger: undefined,
+	},
+	play: async ({ args, canvas }) => {
+		canvas.getByText("Hephaestus is not reachable right now");
+		await expect(canvas.queryByRole("button", { name: "Sign in" })).toBeNull();
+		await userEvent.click(canvas.getByRole("button", { name: "Try again" }));
+		await expect(args.onRetrySession).toHaveBeenCalledOnce();
+	},
+};
+
+/** The message and its retry fit beside the controls on the narrowest screen. */
+export const UnavailableMobile: Story = {
+	args: {
+		session: "unavailable",
+		sidebarTrigger: undefined,
+	},
+	parameters: {
+		viewport: { defaultViewport: "reflow" },
+		chromatic: { viewports: [320] },
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText("Hephaestus is not reachable right now")).toHaveAttribute(
-			"aria-live",
-			"polite",
-		);
-		await expect(canvas.queryByRole("button", { name: "Sign in" })).toBeNull();
+		await expectNoPageOverflow();
+		await expect(canvas.getByText("Not reachable")).toBeVisible();
+		await expect(canvas.getByRole("button", { name: "Retry" })).toBeVisible();
 	},
 };
 

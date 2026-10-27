@@ -46,6 +46,8 @@ export interface HeaderProps {
 	feedbackDialog?: React.ReactNode;
 	onLogin: () => void;
 	onLogout: () => void;
+	/** Reads the session again when the server could not answer. */
+	onRetrySession: () => void;
 }
 
 export default function Header({
@@ -63,6 +65,7 @@ export default function Header({
 	avatarUrl,
 	onLogin,
 	onLogout,
+	onRetrySession,
 }: HeaderProps) {
 	const hasWorkspace = Boolean(workspaceSlug);
 	const badge = resolveHeaderBadge(version, environmentName, isProduction, pullRequest);
@@ -223,9 +226,24 @@ export default function Header({
 						)
 					)}
 					{/* Mounted before its text, so that screen readers announce the change. */}
-					<p aria-live="polite" className="text-sm text-muted-foreground empty:sr-only">
-						{session === "unavailable" ? "Hephaestus is not reachable right now" : null}
+					<p
+						aria-live="polite"
+						className="text-xs leading-tight text-muted-foreground empty:sr-only max-sm:max-w-16 sm:text-sm"
+					>
+						{session === "unavailable" ? (
+							<>
+								{/* A phone has room for the short forms; only the shown one is read out. */}
+								<span className="sm:hidden">Not reachable</span>
+								<span className="max-sm:hidden">Hephaestus is not reachable right now</span>
+							</>
+						) : null}
 					</p>
+					{session === "unavailable" && (
+						<Button variant="outline" size="sm" onClick={onRetrySession}>
+							<span className="sm:hidden">Retry</span>
+							<span className="max-sm:hidden">Try again</span>
+						</Button>
+					)}
 				</div>
 			</div>
 		</header>

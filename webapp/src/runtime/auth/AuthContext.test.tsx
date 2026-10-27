@@ -144,3 +144,33 @@ it("reads a refused session as signed out and does not ask again", async () => {
 		vi.useRealTimers();
 	}
 });
+
+it("asks an unreachable server again after 2, 4 and 8 seconds, and then at most every 30", async () => {
+	vi.useFakeTimers({ shouldAdvanceTime: true });
+	try {
+		const askedAt: number[] = [];
+		server.use(
+			http.get("*/user", () => {
+				// oxlint-disable-next-line no-restricted-properties -- The backoff schedules on this mocked clock.
+				askedAt.push(Date.now());
+				return new HttpResponse(null, { status: 503 });
+			}),
+		);
+		renderSession();
+		await screen.findByText("Session: unavailable");
+		const waits = [2000, 4000, 8000, 16_000, 30_000, 30_000];
+		for (const wait of waits) {
+			await act(async () => vi.advanceTimersByTimeAsync(wait));
+		}
+
+		// The mocked clock also moves with real time, so a gap may run a little past its wait.
+		const gaps = askedAt.slice(1).map((at, index) => at - Number(askedAt.at(index)));
+		expect(gaps).toHaveLength(waits.length);
+		for (const [index, wait] of waits.entries()) {
+			expect(gaps[index]).toBeGreaterThanOrEqual(wait);
+			expect(gaps[index]).toBeLessThan(wait + 1000);
+		}
+	} finally {
+		vi.useRealTimers();
+	}
+});

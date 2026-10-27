@@ -43,6 +43,7 @@ function Chrome() {
 				name="Test developer"
 				onLogin={vi.fn()}
 				onLogout={vi.fn()}
+				onRetrySession={vi.fn()}
 			/>
 			<AppSidebar
 				isAdmin={false}

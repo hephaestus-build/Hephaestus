@@ -401,6 +401,7 @@ function HeaderContainer() {
 		isAuthenticated,
 		isLoading,
 		session,
+		retrySession,
 		userProfile,
 		userView,
 		logout,
@@ -437,6 +438,7 @@ function HeaderContainer() {
 				) : null
 			}
 			onLogin={openLogin}
+			onRetrySession={retrySession}
 			onLogout={() => {
 				void logout();
 			}}

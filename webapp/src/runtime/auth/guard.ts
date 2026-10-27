@@ -11,41 +11,54 @@ import { isRecord } from "@/lib/is-record";
 import { QUERY_STALE_TIME_MS } from "@/runtime/tanstack-query/query-defaults";
 import { clearUserViewUnlessOperator } from "@/runtime/user-view/session";
 
+/** How long the identity read waits for an answer before the server counts as unreachable. */
+export const IDENTITY_READ_TIMEOUT_MS = 10_000;
+
+/** Statuses that say the server could not answer now, not that it refused the request. */
+function unreachableStatus(status: number): boolean {
+	return status >= 500 || status === 408 || status === 429;
+}
+
+/**
+ * Whether a failed read means that the server could not answer: no response, a timeout, a server
+ * error or a rate limit. Any other 4xx is the server's answer, such as a refused session or no access,
+ * and asking again does not change it. Reads both a generated client's error body and an error whose
+ * cause is the response.
+ */
+export function serverUnreachable(error: unknown): boolean {
+	if (error instanceof Error && error.cause instanceof Response) {
+		return unreachableStatus(error.cause.status);
+	}
+	if (isRecord(error) && typeof error.status === "number") {
+		return unreachableStatus(error.status);
+	}
+	return true;
+}
+
 export function currentUserQueryOptions() {
 	return queryOptions({
 		...getCurrentUserOptions(),
 		retry: false,
 		staleTime: QUERY_STALE_TIME_MS,
 		// Route guards await this shared request even when AuthProvider has no mounted observer, so
-		// its lifetime is deliberately independent of observer unmounts — hence no `signal`.
+		// it ignores observer unmounts and ends only at its own deadline, which reads as unreachable.
 		queryFn: async () => {
-			const { data, error, response } = await getCurrentUser();
+			const { data, error, response } = await getCurrentUser({
+				signal: AbortSignal.timeout(IDENTITY_READ_TIMEOUT_MS),
+			});
 			// Every request waits for this identity, so a view left in the tab by another account, or
 			// by a session that has ended, is dropped here before any request can carry it.
 			if (data !== undefined && response?.ok === true) {
 				clearUserViewUnlessOperator(data.id);
 				return data;
 			}
-			if (response?.status === 401) {
+			if (response !== undefined && !unreachableStatus(response.status)) {
 				clearUserViewUnlessOperator(undefined);
 			}
 			// The generated client's error body need not contain the actual HTTP status.
 			throw new Error("Could not verify your session.", { cause: response ?? error });
 		},
 	});
-}
-
-/**
- * Whether a failed identity read means that the server could not answer. Only a 401 or 403 is an
- * answer about the session, and signing in, as another account if need be, is its remedy. A server
- * error or a lost connection signs no one out.
- */
-export function sessionUnavailable(error: unknown): boolean {
-	return !(
-		error instanceof Error &&
-		error.cause instanceof Response &&
-		(error.cause.status === 401 || error.cause.status === 403)
-	);
 }
 
 /** Use cached identity during revalidation; cold-load outages reach the router error surface. */
@@ -60,7 +73,8 @@ export async function resolveCurrentUser(
 		});
 		return user;
 	} catch (error) {
-		if (error instanceof Error && error.cause instanceof Response && error.cause.status === 401) {
+		// A refused session has no identity; a server that cannot answer reaches the error surface.
+		if (!serverUnreachable(error)) {
 			return null;
 		}
 		throw error;
@@ -73,31 +87,29 @@ export function isAppAdmin(
 	return user?.appRole === "APP_ADMIN";
 }
 
-function isServerRefusal(error: unknown): boolean {
-	if (!isRecord(error)) {
-		return false;
-	}
-	const { status } = error;
-	return typeof status === "number" && status >= 400 && status < 500;
-}
-
 export function workspaceMembershipQueryOptions(workspaceSlug: string) {
 	return {
 		...getOwnMembershipOptions({ path: { workspaceSlug } }),
 		staleTime: QUERY_STALE_TIME_MS,
 		// Retrying a refusal would stall the redirect of everyone who is legitimately not a member.
-		retry: (failureCount: number, error: unknown) => !isServerRefusal(error) && failureCount < 2,
+		retry: (failureCount: number, error: unknown) => serverUnreachable(error) && failureCount < 2,
 	};
 }
 
-/** Revalidate stale membership before navigation; unverifiable membership grants no access. */
+/**
+ * Revalidate stale membership before navigation. A refusal is no membership, so it grants no access;
+ * a server that cannot answer reaches the router error surface instead of a verdict on the reader.
+ */
 export async function resolveWorkspaceMembership(
 	queryClient: QueryClient,
 	workspaceSlug: string,
 ): Promise<WorkspaceMembership | null> {
 	try {
 		return await queryClient.query(workspaceMembershipQueryOptions(workspaceSlug));
-	} catch {
+	} catch (error) {
+		if (serverUnreachable(error)) {
+			throw error;
+		}
 		return null;
 	}
 }
