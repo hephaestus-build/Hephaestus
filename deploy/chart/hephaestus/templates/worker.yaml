@@ -80,6 +80,10 @@ rules:
   - apiGroups: ["batch"]
     resources: ["jobs"]
     verbs: ["get", "list", "watch", "create", "delete"]
+  # The Job controller reports a quota refusal of a review Pod as an event; the quota tells whether it can ever fit.
+  - apiGroups: [""]
+    resources: ["events", "resourcequotas"]
+    verbs: ["get", "list"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding

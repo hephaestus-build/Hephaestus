@@ -1054,6 +1054,8 @@ await test("an enabled worker receives its runtime settings, its sandbox namespa
 				"/pods/exec:get",
 				"/pods/log:get",
 				...["create", "delete", "get", "list", "watch"].map((verb) => `batch/jobs:${verb}`),
+				// A quota refusal of a review Pod: the Job controller's event, and whether it can ever fit.
+				...["get", "list"].flatMap((verb) => [`/events:${verb}`, `/resourcequotas:${verb}`]),
 			],
 		],
 	]);
