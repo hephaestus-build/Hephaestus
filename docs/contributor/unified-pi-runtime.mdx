@@ -802,7 +802,7 @@ The host rebuilds the Pi session of a turn from rows.
 Nothing about a conversation stays in the host after the turn.
 The request has four parts, in this order:
 
-1. The system prompt `agent/mentor/system.md`. It is the same for each turn.
+1. The system prompt `agent/mentor/system.md` and the [shared feedback writing guide](./practice-feedback-language.md#writing-feedback). They are the same for each turn.
 2. The tools. They are the same for each turn of one worker.
 3. The path from the server (`MentorContextPathBuilder`). It is the same bytes for each turn of one conversation, until it changes.
 4. The situation (`MentorSituation`). The host adds it as the last message and never stores it.

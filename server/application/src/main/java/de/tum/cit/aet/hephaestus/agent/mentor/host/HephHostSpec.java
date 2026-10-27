@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.mentor.host;
 
+import de.tum.cit.aet.hephaestus.agent.runtime.FeedbackWritingGuide;
 import de.tum.cit.aet.hephaestus.agent.runtime.PiRunnerProfile;
 import de.tum.cit.aet.hephaestus.agent.runtime.PiRuntimeFactory;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
@@ -47,7 +48,10 @@ final class HephHostSpec {
         for (String sidecar : SIDECARS) {
             files.put(sidecar, PiRuntimeFactory.loadClasspathResource(sidecar));
         }
-        files.put(SandboxLayout.MENTOR_SYSTEM_PROMPT_PATH, PiRuntimeFactory.loadClasspathResource("mentor/system.md"));
+        String system = new String(PiRuntimeFactory.loadClasspathResource("mentor/system.md"), StandardCharsets.UTF_8);
+        files.put(
+                SandboxLayout.MENTOR_SYSTEM_PROMPT_PATH,
+                (system + "\n\n" + FeedbackWritingGuide.text()).getBytes(StandardCharsets.UTF_8));
         files.put(SandboxLayout.NODE_PACKAGE_JSON_FILENAME, "{\"type\":\"module\"}\n".getBytes(StandardCharsets.UTF_8));
         return files;
     }

@@ -14,6 +14,7 @@ import de.tum.cit.aet.hephaestus.agent.job.ReviewJobAssignments;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.proxy.ReviewModelGateway;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.PrepareFeedbackRequestDTO;
+import de.tum.cit.aet.hephaestus.agent.runtime.FeedbackWritingGuide;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
 import de.tum.cit.aet.hephaestus.integration.core.framework.ItemDescriptorRegistry;
@@ -142,9 +143,13 @@ public class WorkerFeedbackComposer {
         this.meters = meters;
         this.mapper = mapper;
         this.providerRetryPause = providerRetryPause;
-        String style = prompt("feedback-style.md");
+        String style = sharedStyle();
         this.reviewSystem = style + "\n\n" + prompt("review-composer.md");
         this.privateSystem = style + "\n\n" + prompt("feedback-composer.md");
+    }
+
+    static String sharedStyle() {
+        return prompt("feedback-style.md") + "\n\n" + FeedbackWritingGuide.text();
     }
 
     static String prompt(String name) {

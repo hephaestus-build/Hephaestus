@@ -121,7 +121,10 @@ dependencies {
 
 // agent/work/ holds the toolkit link for editors and tests; the practice runtime creates the real
 // one.
-tasks.processResources { exclude("agent/work/**") }
+tasks.processResources {
+    exclude("agent/work/**")
+    from(rootProject.file("../docs/contributor/practice-feedback-language.md")) { into("agent") }
+}
 
 tasks.processTestResources {
     from(rootProject.file("../docs/db/archive/v0.77.4")) { into("db") }

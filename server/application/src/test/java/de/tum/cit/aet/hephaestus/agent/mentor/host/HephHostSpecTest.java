@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.mentor.host;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import de.tum.cit.aet.hephaestus.agent.runtime.FeedbackWritingGuide;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.HostSandbox;
 import java.nio.charset.StandardCharsets;
@@ -33,6 +34,8 @@ class HephHostSpecTest {
         assertThat(files)
                 .containsKeys(reached.stream().filter(path -> !linked(path)).toArray(String[]::new));
         assertThat(files).containsKey(SandboxLayout.MENTOR_SYSTEM_PROMPT_PATH);
+        assertThat(new String(files.get(SandboxLayout.MENTOR_SYSTEM_PROMPT_PATH), StandardCharsets.UTF_8))
+                .endsWith(FeedbackWritingGuide.text());
         assertThat(reached)
                 .as("the provider helper imports the practice-script toolkit")
                 .anyMatch(HephHostSpecTest::linked);

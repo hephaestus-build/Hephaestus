@@ -70,8 +70,13 @@ const serverInputsOfTheWebapp = [
 	/^server\/application\/src\/main\/resources\/practices\/default-catalog\.json$/u,
 	/^server\/application\/src\/main\/resources\/practices\/guidance\//u,
 	/^server\/application\/src\/main\/resources\/contracts\/source-use\//u,
+	/^server\/application\/src\/test\/resources\/agent\/internal-feedback-terms\.json$/u,
 	/^server\/application\/src\/main\/java\/de\/tum\/cit\/aet\/hephaestus\/practices\/PracticeGuidanceRules\.java$/u,
 ];
+
+// The docs page the server packages into its jar (`processResources` in `server/application/build.gradle.kts`):
+// the composers and Heph read its feedback writing guide. Keep in step with the server filters in `cicd.yml`.
+export const FEEDBACK_WRITING_GUIDE = "docs/contributor/practice-feedback-language.md";
 
 // Server resources the tooling tests judge (`practice-catalog-schema.test.ts`, `practice-guidance.test.ts`).
 // Keep in step with the `tooling` filter in `cicd.yml`.
@@ -86,7 +91,10 @@ export function scopesFor(paths: string[]): Scope[] {
 	}
 	const scopes = new Set<Scope>();
 	for (const file of paths) {
-		if (file.startsWith("docs/images/readme/")) {
+		if (file === FEEDBACK_WRITING_GUIDE) {
+			scopes.add("docs");
+			scopes.add("server");
+		} else if (file.startsWith("docs/images/readme/")) {
 			scopes.add("docs");
 			scopes.add("webapp");
 		} else if (file === SHARED_THEME_TOKENS) {

@@ -252,9 +252,11 @@ jobs:
               - 'scripts/check-story-sort.ts'
               - 'scripts/install-browser-deps.ts'
               # The fixture tests compare the webapp's catalog fixtures with these server resources,
-              # the practice guidance stories render the bundled guidance, and the SVG sanitizer test
-              # compares its allowlist with the server's.
+              # the practice guidance stories render the bundled guidance, the SVG sanitizer test
+              # compares its allowlist with the server's, and the card copy test reads the internal
+              # feedback terms.
               - 'server/application/src/main/resources/practices/default-catalog.json'
+              - 'server/application/src/test/resources/agent/internal-feedback-terms.json'
               - 'server/application/src/main/resources/practices/guidance/**'
               - 'server/application/src/main/java/de/tum/cit/aet/hephaestus/practices/PracticeGuidanceRules.java'
               - 'server/application/src/main/resources/contracts/source-use/**'
@@ -320,6 +322,8 @@ jobs:
               - 'pnpm-workspace.yaml'
             application-server:
               - 'server/**'
+              # The server packages the feedback writing guide into its jar.
+              - 'docs/contributor/practice-feedback-language.md'
               - 'scripts/check-gradle-verification-metadata.ts'
               - 'scripts/e2e-identity-seed-database.ts'
               - 'scripts/e2e-setup.ts'
@@ -392,6 +396,8 @@ jobs:
             application-server-image:
               - 'scripts/summarize-buildpack-log.ts'
               - 'server/application/src/main/**'
+              # The server packages the feedback writing guide into its jar.
+              - 'docs/contributor/practice-feedback-language.md'
               - 'server/application/build.gradle.kts'
               - 'server/application/gradle.lockfile'
               - 'server/application/project.toml'

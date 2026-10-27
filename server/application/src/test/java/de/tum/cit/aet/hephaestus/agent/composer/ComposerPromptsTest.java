@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.composer;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import de.tum.cit.aet.hephaestus.agent.runtime.FeedbackWritingGuide;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -35,6 +36,11 @@ class ComposerPromptsTest {
                 getClass().getResourceAsStream("/agent/golden-prompts/composition-contracts.md"))) {
             assertThat(actual).isEqualTo(new String(golden.readAllBytes(), StandardCharsets.UTF_8));
         }
+    }
+
+    @Test
+    void sharedStyleIncludesTheWritingGuide() {
+        assertThat(WorkerFeedbackComposer.sharedStyle()).endsWith(FeedbackWritingGuide.text());
     }
 
     private static String section(String text, String heading) {
