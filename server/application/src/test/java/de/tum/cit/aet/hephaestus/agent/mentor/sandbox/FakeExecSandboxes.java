@@ -53,6 +53,9 @@ public final class FakeExecSandboxes implements ExecSandboxes {
     /** Sees each staging while its archive is still open; a staging fails when it throws a {@link SandboxException}. */
     public volatile Consumer<Staging> onStage = staging -> {};
 
+    /** Runs at the start of each {@link #list}: a test makes the list wait, as a stalled Kubernetes API does. */
+    public volatile Runnable onList = () -> {};
+
     @Override
     public boolean ready() {
         return ready;
@@ -111,6 +114,7 @@ public final class FakeExecSandboxes implements ExecSandboxes {
 
     @Override
     public List<Listed> list() {
+        onList.run();
         List<Listed> all = new ArrayList<>(others);
         running.forEach((id, sandboxId) -> all.add(new Listed(id, sandboxId, SELF, false)));
         return all;

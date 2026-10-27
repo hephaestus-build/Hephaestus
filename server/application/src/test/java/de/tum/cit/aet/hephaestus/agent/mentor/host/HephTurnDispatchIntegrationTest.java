@@ -45,6 +45,7 @@ import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -59,6 +60,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.jdbc.autoconfigure.DataSourceProperties;
 import org.springframework.context.ApplicationContext;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.scheduling.config.ScheduledTaskRegistrar;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -322,6 +324,43 @@ class HephTurnDispatchIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 .containsExactly("It is ready.");
         assertThat(slotsTaken()).as("an ended turn takes no slot").isZero();
         awaitSandboxRemoved("the ended attempt");
+    }
+
+    @Test
+    void shouldRenewTheLeaseOfARunningTurnWhileTheSandboxReconcileWaitsOnTheSandboxApi() throws Exception {
+        MentorTurn asked = ask("Is the deployment ready?");
+        host.next("start");
+        Instant claimedUntil = Objects.requireNonNull(row(asked).getLeasedUntil());
+        CountDownLatch listing = new CountDownLatch(1);
+        CountDownLatch answers = new CountDownLatch(1);
+        FakeExecSandboxes stalled = new FakeExecSandboxes();
+        stalled.onList = () -> {
+            listing.countDown();
+            try {
+                answers.await();
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+            }
+        };
+        var configuration = new HephHostConfiguration();
+        ScheduledTaskRegistrar reconciles =
+                configuration.turnSandboxReconciles(dispatcher, new TurnSandboxes(stalled, 0));
+        ScheduledTaskRegistrar ticks = configuration.hephTurnTicks(dispatcher);
+        reconciles.afterPropertiesSet();
+        ticks.afterPropertiesSet();
+        try {
+            assertThat(listing.await(5, TimeUnit.SECONDS))
+                    .as("the reconcile waits for the sandbox list")
+                    .isTrue();
+            clock.advance(LEASE.dividedBy(2));
+
+            await().atMost(HephTurnDispatcher.TICK.multipliedBy(3))
+                    .untilAsserted(() -> assertThat(row(asked).getLeasedUntil()).isAfter(claimedUntil));
+        } finally {
+            answers.countDown();
+            ticks.destroy();
+            reconciles.destroy();
+        }
     }
 
     @Test

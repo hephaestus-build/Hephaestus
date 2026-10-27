@@ -107,13 +107,22 @@ public class HephHostConfiguration {
     }
 
     /**
-     * The dispatcher's tick, on the worker's own scheduler: workers run without {@code @EnableScheduling}. The tick
-     * stops when this bean is destroyed, after the dispatcher's drain, so leases are renewed while turns drain.
+     * The dispatcher's tick, alone on the thread of this registrar: workers run without {@code @EnableScheduling}. The
+     * tick renews the leases of running turns, so no sandbox call may wait on its thread: a Kubernetes API that stalls
+     * for a minute would expire the lease of a turn that runs well. The tick stops when this bean is destroyed, after
+     * the dispatcher's drain, so leases are renewed while turns drain.
      */
     @Bean
-    ScheduledTaskRegistrar hephTurnTicks(HephTurnDispatcher dispatcher, TurnSandboxes sandboxes) {
+    ScheduledTaskRegistrar hephTurnTicks(HephTurnDispatcher dispatcher) {
         var tasks = new ScheduledTaskRegistrar();
         tasks.addFixedDelayTask(new FixedDelayTask(dispatcher::tick, HephTurnDispatcher.TICK, HephTurnDispatcher.TICK));
+        return tasks;
+    }
+
+    /** {@link TurnSandboxes#reconcile} on a thread of its own: it lists and removes sandboxes, which can wait. */
+    @Bean
+    ScheduledTaskRegistrar turnSandboxReconciles(HephTurnDispatcher dispatcher, TurnSandboxes sandboxes) {
+        var tasks = new ScheduledTaskRegistrar();
         tasks.addFixedDelayTask(
                 new FixedDelayTask(() -> sandboxes.reconcile(dispatcher::runs), SANDBOX_RECONCILE, Duration.ZERO));
         return tasks;
