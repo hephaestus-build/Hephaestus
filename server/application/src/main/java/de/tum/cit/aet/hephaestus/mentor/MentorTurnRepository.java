@@ -22,9 +22,6 @@ public interface MentorTurnRepository extends JpaRepository<MentorTurn, UUID> {
 
     Optional<MentorTurn> findByWorkspaceIdAndRequestId(Long workspaceId, String requestId);
 
-    @WorkspaceAgnostic("When no host holds a turn, every workspace's queued turns stop waiting for a free Heph")
-    List<MentorTurn> findByStatus(MentorTurn.Status status);
-
     List<MentorTurn> findByWorkspaceIdAndConversationIdAndStatus(
             Long workspaceId, UUID conversationId, MentorTurn.Status status);
 
@@ -152,14 +149,45 @@ public interface MentorTurnRepository extends JpaRepository<MentorTurn, UUID> {
             nativeQuery = true)
     List<UUID> findClaimableIds(@Param("workspaceId") Long workspaceId, @Param("ids") Collection<UUID> ids);
 
-    /** Whether a host holds a turn now: one that runs, or a stopped one whose host still commits its answer. */
-    @WorkspaceAgnostic("Every workspace shares the workers' Heph capacity")
+    /**
+     * The turns that hold a Heph slot now: those that run, and stopped ones whose host still commits their answer.
+     * Every workspace counts, because every workspace shares the workers' Heph slots.
+     */
+    @WorkspaceAgnostic("Every workspace shares the workers' Heph slots")
     @Query("""
-            SELECT COUNT(t) > 0 FROM MentorTurn t
+            SELECT COUNT(t) FROM MentorTurn t
             WHERE t.status = de.tum.cit.aet.hephaestus.mentor.MentorTurn.Status.RUNNING
                OR (t.status = de.tum.cit.aet.hephaestus.mentor.MentorTurn.Status.STOPPED AND t.leasedUntil IS NOT NULL)
             """)
-    boolean existsHeld();
+    long countHeld();
+
+    /** A queued turn, with what {@link MentorLedgerEvents.TurnChanged} names. */
+    interface QueuedTurn {
+        Long getWorkspaceId();
+
+        UUID getConversationId();
+
+        UUID getId();
+
+        String getSurface();
+
+        int getAttempt();
+    }
+
+    /**
+     * The newest {@code limit} turns that a worker may start ({@link #CLAIMABLE}), in every workspace. Locks nothing
+     * and loads no entity.
+     */
+    @WorkspaceAgnostic(
+            "Every workspace shares the workers' Heph slots, so a change of them changes every workspace's waits")
+    @Query(value = """
+            SELECT t.workspace_id AS workspaceId, t.conversation_id AS conversationId, t.id AS id,
+                   t.surface AS surface, t.attempt AS attempt
+            """ + CLAIMABLE + """
+            ORDER BY t.created_at DESC, t.id DESC
+            LIMIT :limit
+            """, nativeQuery = true)
+    List<QueuedTurn> findClaimable(@Param("limit") int limit);
 
     /**
      * The database clock at the start of the transaction. A turn's start takes it, because redactions and person

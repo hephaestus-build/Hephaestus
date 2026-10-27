@@ -153,7 +153,8 @@ public class MentorTurnService {
                 MentorEntryDraft.question(
                         asked.surface().entrySurface(), asked.text(), turn.getId(), requestId, asked.slackTs()));
         entryService.appended(conversation, List.of(question));
-        changed(turn);
+        // A new question is the last of its conversation, so no other turn's reason to wait changes.
+        events.publishEvent(MentorLedgerEvents.TurnChanged.of(turn));
         return new Submission(turn, question, true);
     }
 

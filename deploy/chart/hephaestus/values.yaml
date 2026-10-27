@@ -229,7 +229,8 @@ worker:
   reviews: 5
   # The Heph turns that one worker runs at once: auto, or a number. Each running turn holds a turn
   # sandbox (160 MiB requested, 544 MiB limit) beside the 2 pooled ones, so the sandbox quota must
-  # hold them.
+  # hold them. The server gets replicas times this as its Heph capacity: while every worker runs as
+  # many turns, a question that could start next says that Heph answers other questions.
   # docs/admin/runtime-roles.mdx § Heph capacity.
   hephTurns: auto
   # How long a stopping worker serves its running attempts and claims nothing new. A practice

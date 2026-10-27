@@ -22,9 +22,10 @@ public record MentorTurnDTO(
         MentorTurn.@NonNull Status status,
 
         @Schema(
-                description = "Why a queued turn has not started: FREE_HEPH while Heph answers other questions and"
-                        + " this one starts when Heph is free. Absent when the turn does not wait, or when the server"
-                        + " cannot tell why it waits.")
+                description = "Why a queued turn has not started. FREE_HEPH: a worker may start it, and every Heph"
+                        + " slot of the deployment is taken, so it starts when one is free. Absent when the turn does"
+                        + " not wait, waits for an earlier question of its conversation, or waits for a reason that"
+                        + " the server does not know, such as a server without a configured Heph capacity.")
         MentorTurn.@Nullable WaitingFor waitingFor,
 
         @Schema(

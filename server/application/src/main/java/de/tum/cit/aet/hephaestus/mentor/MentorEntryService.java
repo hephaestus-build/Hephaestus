@@ -316,19 +316,13 @@ public class MentorEntryService {
     }
 
     /**
-     * Publishes the turn's change, and the changes of the queued turns whose reason to wait ({@link MentorTurnWaits})
-     * the end changed. An ended turn no longer holds back the questions queued after it in its conversation. When no
-     * host holds a turn any more, no queued turn waits for a free Heph.
+     * Publishes a change of a turn that already waited: a start, an end, a stop or a requeue. Each can take or give
+     * back a Heph slot, or let the next question of the conversation start, so the reasons other turns wait for can
+     * change too ({@link MentorTurnWaits}).
      */
     void turnChanged(MentorTurn turn) {
         events.publishEvent(MentorLedgerEvents.TurnChanged.of(turn));
-        if (turn.getStatus().isTerminal()) {
-            List<MentorTurn> changed = turns.existsHeld()
-                    ? turns.findByWorkspaceIdAndConversationIdAndStatus(
-                            turn.getWorkspaceId(), turn.getConversationId(), MentorTurn.Status.QUEUED)
-                    : turns.findByStatus(MentorTurn.Status.QUEUED);
-            changed.forEach(next -> events.publishEvent(MentorLedgerEvents.TurnChanged.of(next)));
-        }
+        events.publishEvent(new MentorTurnWaits.SlotsChanged(turn.getWorkspaceId()));
     }
 
     /** Stops a turn the caller locked, unless it ended. */

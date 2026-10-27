@@ -80,19 +80,41 @@ A conversation holds at most `hephaestus.mentor.turn.max-follow-ups` queued turn
 The next question gets `409` with the reason `FOLLOW_UPS_FULL`.
 
 A queued turn tells its clients when it waits for a free Heph (`MentorTurnDTO.waitingFor`, `MentorTurnWaits`).
-The reason comes from the same SQL rule as the claim (`MentorTurnRepository.CLAIMABLE`), so the two cannot disagree.
+Two facts decide the reason, and both are rows:
 
-- `FREE_HEPH`: a worker may start the turn, and a host holds a turn of another conversation, in any workspace.
-- No value: the server does not know why the turn waits. An earlier question of its conversation waits or runs, the turn starts at once, or no worker runs.
+- A worker may start the turn. The SQL rule is the same as the claim (`MentorTurnRepository.CLAIMABLE`), so the two cannot disagree.
+- The turns that hold a Heph slot are at least `hephaestus.mentor.turn.capacity`.
+  A turn holds a slot while it runs, and while it is stopped and its host still commits the answer (`MentorTurnRepository.countHeld`).
 
-All workspaces share the workers' Heph capacity.
+The capacity is the number of turns that all workers together run at once.
+The Helm chart sets it on the server to `worker.replicas` multiplied by `worker.hephTurns`.
+The chart helper `hephaestus.hephTurns` resolves `worker.hephTurns` for the server and the workers, so the two numbers agree.
+
+- `FREE_HEPH`: a worker may start the turn, and every Heph slot of the deployment is taken.
+- No value: the server knows no reason.
+  The turn starts at once, waits behind an earlier question of its conversation, or the server has no capacity.
+
+A turn whose worker stopped holds its slot until the lease reaper takes it back.
+During a rollout, the turns of the draining workers count too.
+Thus, for a short time, a question can show `FREE_HEPH` while a new worker has a free slot.
+It starts at the next claim.
+
+All workspaces share the workers' Heph slots.
 Thus, `FREE_HEPH` depends on turns of other workspaces.
-It tells a member only that Heph answers some other question, never whose question it is.
+It tells a member only that every slot answers some question, never whose question it is.
 
-When a turn ends, the server publishes a change for each queued turn of its conversation.
-If no host holds a turn after the end, no queued turn waits for a free Heph any more.
-Thus, the server then publishes a change for every queued turn.
-Clients then read the new reason.
+A start, an end, a stop, and a requeue can each change the held slots.
+They can also let the next question of a conversation start.
+Each of these changes publishes `MentorTurnWaits.SlotsChanged`.
+After the change commits, `MentorTurnWaits.publishWaits` publishes a turn change for each turn that a worker may start.
+Only these turns can wait for a free Heph.
+
+Because the publication comes after the commit, two changes that commit together each read the other.
+Clients read the new reason when they receive the change.
+
+The publication covers all workspaces, newest turn first, and at most 100 turns.
+A turn past that bound shows its new reason at its next read.
+The process that commits the change publishes it, also a worker without the capacity, because the reader computes the reason.
 
 ### Leases and retries
 

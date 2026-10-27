@@ -1530,11 +1530,50 @@ await test("practice reviews run exactly when a worker runs, with its Heph turn 
 		// A worker without git checkout reports itself out of service, so its Deployment never rolls out.
 		assert.equal(envValue(workload(resources, "worker"), "GIT_CHECKOUT_ENABLED"), "true", name);
 	}
-	const capacity = (layers: readonly Layer[]) =>
-		envValue(workload(rendered(layers), "worker"), "HEPHAESTUS_WORKER_CAPACITY_MENTOR_MAX");
-	assert.equal(capacity(layersFor("small")), "1");
-	assert.equal(capacity([...layersFor("small"), { worker: { hephTurns: "auto" } }]), "auto");
-	assert.equal(capacity([...layersFor("small"), { worker: { hephTurns: 0 } }]), "0");
+	// The worker's Heph turns and the server's Heph capacity come from one resolved worker.hephTurns. Its auto is
+	// the number in the chart's table, which the worker's own auto matches.
+	const table = readJsonFileSync(path.join(chart, "sandbox-pod-requests.json"));
+	assert.ok(isRecord(table) && typeof table.autoHephTurns === "number");
+	const auto = table.autoHephTurns;
+	const capacities = (layers: readonly Layer[]) => {
+		const resources = rendered(layers);
+		return {
+			worker: envValue(workload(resources, "worker"), "HEPHAESTUS_WORKER_CAPACITY_MENTOR_MAX"),
+			server: envValue(workload(resources, "server"), "HEPHAESTUS_MENTOR_TURN_CAPACITY"),
+		};
+	};
+	assert.deepEqual(capacities(layersFor("small")), { worker: "1", server: "1" });
+	assert.deepEqual(capacities([...layersFor("small"), { worker: { hephTurns: "auto" } }]), {
+		worker: String(auto),
+		server: String(auto),
+	});
+	assert.deepEqual(
+		capacities([...layersFor("small"), { worker: { replicas: 3, hephTurns: "auto" } }]),
+		{
+			worker: String(auto),
+			server: String(3 * auto),
+		},
+	);
+	assert.deepEqual(capacities([...layersFor("small"), { worker: { replicas: 2, hephTurns: 5 } }]), {
+		worker: "5",
+		server: "10",
+	});
+	// No Heph slot at all: the server knows no capacity, so no question says that every slot is taken.
+	assert.deepEqual(capacities([...layersFor("small"), { worker: { hephTurns: 0 } }]), {
+		worker: "0",
+		server: undefined,
+	});
+	assert.equal(
+		env(
+			workload(rendered([...layersFor("small"), { worker: { replicas: 0 } }]), "server"),
+			"HEPHAESTUS_MENTOR_TURN_CAPACITY",
+		),
+		undefined,
+	);
+	assert.equal(
+		env(workload(rendered(layersFor("dev")), "server"), "HEPHAESTUS_MENTOR_TURN_CAPACITY"),
+		undefined,
+	);
 });
 
 /** The server's SMTP authentication and TLS settings for an email configuration. */

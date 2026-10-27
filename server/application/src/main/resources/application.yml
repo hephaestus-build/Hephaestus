@@ -652,8 +652,11 @@ hephaestus:
             cpus: ${SANDBOX_CPUS:1.0}
             pids-limit: ${SANDBOX_PIDS_LIMIT:256}
 
-    # Per-workspace readiness of Heph is the Heph model binding. hephaestus.worker.capacity.mentor-max and the
+    # Per-workspace readiness of Heph is the Heph model binding. hephaestus.worker.capacity.mentor-max and the other
     # hephaestus.mentor.turn.* keys keep their code defaults: docs/admin/runtime-roles.mdx § Tunables.
+    mentor:
+        turn:
+            capacity: ${HEPHAESTUS_MENTOR_TURN_CAPACITY:}
 
     # Dev-only actuator for manually triggering PR reviews (never enable in production).
     # Layered safety: (1) this flag, (2) not in endpoint exposure list, (3) Spring Security auth.

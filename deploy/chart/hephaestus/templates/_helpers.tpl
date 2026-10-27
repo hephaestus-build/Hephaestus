@@ -566,6 +566,19 @@ PostgreSQL volume.
 {{- and .Values.postgresql.bundled .Values.postgresql.backup.enabled .Values.postgresql.backup.restore.enabled -}}
 {{- end -}}
 
+{{/*
+The Heph turns that one worker runs at once, as a number: worker.hephTurns, where auto is the autoHephTurns of
+sandbox-pod-requests.json, the number that the worker itself resolves auto to. The worker's capacity, the server's
+capacity and the sandbox quotas all read it here.
+*/}}
+{{- define "hephaestus.hephTurns" -}}
+{{- if eq (toString .Values.worker.hephTurns) "auto" -}}
+{{- (.Files.Get "sandbox-pod-requests.json" | fromJson).autoHephTurns | int -}}
+{{- else -}}
+{{- .Values.worker.hephTurns | int -}}
+{{- end -}}
+{{- end -}}
+
 {{/* A database role's replica count: its own, or 0 while a restore runs. */}}
 {{- define "hephaestus.replicas" -}}
 {{- if eq (include "hephaestus.restoring" .root) "true" -}}0{{- else -}}{{ .replicas }}{{- end -}}
