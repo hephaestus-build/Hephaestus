@@ -9,6 +9,7 @@ import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -33,6 +34,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import org.junit.jupiter.api.BeforeEach;
@@ -67,6 +69,9 @@ class ReviewJobZombieSweeperTest extends BaseUnitTest {
     private static final Instant START = Instant.parse("2026-10-27T20:00:00Z");
 
     private final AtomicReference<Instant> databaseClock = new AtomicReference<>(START);
+
+    /** The sweeper's monotonic clock, which a test advances to stall the checks. */
+    private final AtomicLong ticker = new AtomicLong();
 
     private static final AgentProperties AGENT_PROPS = new AgentProperties(
             true, Duration.ofSeconds(1), 5, 5, Duration.ofSeconds(25), Duration.ofDays(14), Duration.ofDays(90), 16);
@@ -104,6 +109,7 @@ class ReviewJobZombieSweeperTest extends BaseUnitTest {
                 new ReviewJobTelemetry(meterRegistry, Tracer.NOOP),
                 new ReviewJobRecovery(jobRepository, AGENT_PROPS, objectMapper, attemptUsage, Optional.empty()),
                 AGENT_PROPS);
+        sweeper.ticker = ticker::get;
         lenient().when(jobRepository.databaseNow()).thenAnswer(inv -> databaseClock.get());
         // The first lease check after a start reaps nothing; each test's check then follows it, past the quiet time.
         databaseClock.set(START);
@@ -272,6 +278,7 @@ class ReviewJobZombieSweeperTest extends BaseUnitTest {
             Instant resumed =
                     START.plusSeconds(30).plus(ReviewJobZombieSweeper.STALL_GAP).plusSeconds(1);
             databaseClock.set(resumed);
+            ticker.addAndGet(ReviewJobZombieSweeper.STALL_GAP.plusSeconds(1).toNanos());
 
             sweeper.recoverOrphanedJobs();
             databaseClock.set(resumed.plusSeconds(20));
@@ -281,6 +288,23 @@ class ReviewJobZombieSweeperTest extends BaseUnitTest {
             databaseClock.set(resumed.plus(AGENT_PROPS.heartbeatInterval()).plusSeconds(1));
             sweeper.recoverOrphanedJobs();
             verify(jobRepository).findExpiredLeases(resumed.plusSeconds(20).minus(AGENT_PROPS.heartbeatInterval()));
+        }
+
+        @Test
+        @DisplayName("checks that each take longer than the stall gap still recover expired leases")
+        void shouldRecoverWhenEveryCheckIsSlow() {
+            when(jobRepository.findExpiredLeases(any())).thenAnswer(inv -> {
+                ticker.addAndGet(ReviewJobZombieSweeper.STALL_GAP.plusSeconds(5).toNanos());
+                return List.of();
+            });
+            Instant check = START.plusSeconds(30);
+            for (int i = 0; i < 3; i++) {
+                sweeper.recoverOrphanedJobs();
+                check = check.plus(ReviewJobZombieSweeper.STALL_GAP).plusSeconds(25);
+                databaseClock.set(check);
+            }
+
+            verify(jobRepository, times(3)).findExpiredLeases(any());
         }
 
         @Test

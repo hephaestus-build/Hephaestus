@@ -13,6 +13,11 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import org.awaitility.Awaitility;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -127,6 +132,42 @@ class ReviewJobLeaseIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    @DisplayName("a heartbeat that waits on the requeue's row lock renews nothing once the attempt is requeued")
+    void shouldNotRenewALeaseThatARequeueTookUnderTheRowLock() throws Exception {
+        UUID id = runningJob("w-racing");
+        jdbc.update("UPDATE review_job SET leased_until = now() - interval '1 minute' WHERE id = ?", id);
+        var locked = new CountDownLatch(1);
+        var requeue = new CountDownLatch(1);
+
+        try (var threads = Executors.newVirtualThreadPerTaskExecutor()) {
+            Future<Integer> sweeper = threads.submit(() -> transactionTemplate.execute(s -> {
+                assertThat(jobRepository.lockById(id)).isPresent();
+                locked.countDown();
+                await(requeue);
+                return jobRepository.requeueOrphan(id, "w-racing", 5, Instant.now());
+            }));
+            await(locked);
+            Future<Integer> heartbeat = threads.submit(
+                    () -> transactionTemplate.execute(s -> jobRepository.renewLeases("w-racing", LEASE_TTL_SECONDS)));
+            Awaitility.await()
+                    .atMost(Duration.ofSeconds(30))
+                    .until(() -> Boolean.TRUE.equals(jdbc.queryForObject(
+                            "SELECT EXISTS (SELECT 1 FROM pg_locks l JOIN pg_stat_activity a ON a.pid = l.pid"
+                                    + " WHERE NOT l.granted AND a.query LIKE 'UPDATE review_job SET leased_until%')",
+                            Boolean.class)));
+            requeue.countDown();
+
+            assertThat(sweeper.get(30, TimeUnit.SECONDS)).isEqualTo(1);
+            assertThat(heartbeat.get(30, TimeUnit.SECONDS))
+                    .as("the requeued attempt is no longer this worker's")
+                    .isZero();
+        }
+        ReviewJob requeued = jobRepository.findById(id).orElseThrow();
+        assertThat(requeued.getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
+        assertThat(requeued.getWorkerId()).isNull();
+    }
+
+    @Test
     @DisplayName("requeueOrphan is a CAS: first caller wins (1), the second is a no-op (0)")
     void requeueOrphanIsCasIdempotent() {
         UUID id = runningJob("w-stale");
@@ -173,6 +214,15 @@ class ReviewJobLeaseIntegrationTest extends BaseIntegrationTest {
     }
 
     // ── helpers ──
+
+    private static void await(CountDownLatch latch) {
+        try {
+            assertThat(latch.await(30, TimeUnit.SECONDS)).isTrue();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException(e);
+        }
+    }
 
     private List<OrphanedJobRef> expired() {
         return jobRepository.findExpiredLeases(jobRepository.databaseNow());

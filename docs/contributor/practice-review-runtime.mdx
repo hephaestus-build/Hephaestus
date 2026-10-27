@@ -77,8 +77,11 @@ A retry runs under a new fence and reuses durable assignment state.
 A running attempt holds a lease (`review_job.leased_until`) on the database clock.
 The claim sets it, and the worker's heartbeat renews it (`WorkerLivenessReporter`).
 `ReviewJobZombieSweeper` recovers an attempt whose lease expired one renewal interval before its previous check, and checks the lease again under the row's lock.
-After a start or a stall of its checks, it recovers nothing for one renewal interval.
 An attempt without a lease came from a version before leases, which no longer runs, so it is recovered too.
+
+After a start or a stall, the sweeper recovers nothing for one renewal interval.
+A stall is a gap longer than `STALL_GAP` from the end of one check until the next check reads the database clock.
+The recoveries of a slow check do not count, so a slow check cannot postpone recovery.
 
 Delivery recovery reads persisted copies rather than re-running a writer from raw result text.
 Unknown visibility permits readback, not automatic reposting.

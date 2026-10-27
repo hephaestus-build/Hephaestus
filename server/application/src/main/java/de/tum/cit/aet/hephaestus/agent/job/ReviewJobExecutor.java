@@ -88,7 +88,6 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
-import org.springframework.core.annotation.Order;
 import org.springframework.core.retry.RetryException;
 import org.springframework.core.retry.RetryListener;
 import org.springframework.core.retry.RetryPolicy;
@@ -311,7 +310,6 @@ public class ReviewJobExecutor {
     }
 
     @EventListener(ApplicationReadyEvent.class)
-    @Order(2) // WorkerLivenessReporter must register this worker before the first claim.
     public void start() {
         if (!running.compareAndSet(false, true)) {
             return;

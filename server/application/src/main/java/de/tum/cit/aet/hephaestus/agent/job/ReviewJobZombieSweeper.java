@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
+import java.util.function.LongSupplier;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -59,8 +60,18 @@ public class ReviewJobZombieSweeper {
     private final ReviewJobTelemetry jobTelemetry;
     private final Duration renewEvery;
 
-    /** A gap between two lease checks longer than this means that the database or this process stalled. */
+    /**
+     * A gap from the end of one lease check until the next one reads the database clock longer than this means that
+     * this process or the database stalled. The checks run with a fixed delay of 20 seconds, so the recoveries of a slow
+     * check never make such a gap: only a stalled scheduler or a slow clock read does.
+     */
     static final Duration STALL_GAP = Duration.ofSeconds(40);
+
+    /** A monotonic clock for the gaps between checks; tests replace it. */
+    LongSupplier ticker = System::nanoTime;
+
+    /** The ticker at the end of the last lease check. */
+    private long lastCheckEnded;
 
     // Only the scheduler's fixed-delay run of recoverOrphanedJobs reads and writes these; it never overlaps itself.
     /** The database clock at this sweeper's last lease check that ran; null before the first. */
@@ -177,17 +188,26 @@ public class ReviewJobZombieSweeper {
      * Requeue RUNNING jobs whose lease expired, so another worker picks them up instead of waiting out the full job
      * timeout; jobs past the retry cap are failed instead.
      *
-     * <p>A stalled database or disk stops the renewals and this check alike. After a start, or after a gap between two
-     * checks longer than {@link #STALL_GAP}, no lease counts as expired for one renewal interval: every live worker
-     * renews within it. After that, a lease counts as expired when it ended one renewal interval before the previous
+     * <p>A stalled database or disk stops the renewals and this check alike. After a start, or after a gap from the end
+     * of one check to the next longer than {@link #STALL_GAP}, no lease counts as expired for one renewal interval: every
+     * live worker renews within it. After that, a lease counts as expired when it ended one renewal interval before the previous
      * check, and the recovery checks the lease again under the row's lock.
      */
     @Scheduled(fixedDelay = 20, timeUnit = TimeUnit.SECONDS, initialDelay = 30)
     public void recoverOrphanedJobs() {
+        try {
+            recoverExpiredLeases();
+        } finally {
+            lastCheckEnded = ticker.getAsLong();
+        }
+    }
+
+    private void recoverExpiredLeases() {
         Instant now = jobRepository.databaseNow();
+        boolean stalled = ticker.getAsLong() - lastCheckEnded > STALL_GAP.toNanos();
         Instant previous = lastLeaseCheck;
         lastLeaseCheck = now;
-        if (previous == null || Duration.between(previous, now).compareTo(STALL_GAP) > 0) {
+        if (previous == null || stalled) {
             quietUntil = now.plus(renewEvery);
         }
         if (previous == null || (quietUntil != null && now.isBefore(quietUntil))) {
