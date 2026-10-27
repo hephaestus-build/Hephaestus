@@ -749,19 +749,19 @@ hephaestus:
             validity-days: ${WEBHOOK_TOKEN_ROTATION_VALIDITY_DAYS:90}
         # ─── Inbound receiver (integration.webhook.*) ───
         publish:
-            # Every attempt and its backoff must end inside the provider's 10s response window
-            # (GitHub, GitLab). After that the provider has failed the delivery, and a later attempt
-            # only holds a request thread against a broker that is already slow. A second attempt
-            # carries the same Nats-Msg-Id, so a first attempt that stored late is answered as a
-            # duplicate, not stored twice. max-retries counts attempts, including the first.
-            timeout: 4s
-            max-retries: 2
+            # Every attempt and its backoff end inside the provider's 10s response window (GitHub,
+            # GitLab), with room to read the request and write the answer. After that the provider has
+            # failed the delivery, and a later attempt only holds a request thread against a broker
+            # that is already slow.
+            deadline: 8s
             retry-base-delay: 200ms
         stream:
             # Must be >= the max vendor replay tolerance (5m: GitLab whsec + Slack v0). GitHub has
             # no timestamp, so this dedup window keyed on X-GitHub-Delivery is its only replay
-            # defense; 10m also covers provider redelivery horizons. See WebhookProperties.Stream.
-            duplicate-window: 10m
+            # defense. It also outlasts the 2h look-back of the GitHub redelivery job, so a delivery
+            # that was stored but answered late is not stored again when the job redelivers it. The
+            # broker keeps one message id per stored message for this long. See WebhookProperties.Stream.
+            duplicate-window: 3h
             # The bound that holds a stream in steady state. Consumers acknowledge within seconds, so
             # the age only decides how long an offline deployment can resume from the stream;
             # reconciliation repairs what it misses inside hephaestus.sync.timeframe-days. Sized so a

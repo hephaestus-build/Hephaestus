@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import de.tum.cit.aet.hephaestus.core.webhook.WebhookProperties;
+import de.tum.cit.aet.hephaestus.integration.scm.github.app.GitHubWebhookRedelivery;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -19,11 +20,13 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
+import org.springframework.boot.autoconfigure.availability.ApplicationAvailabilityAutoConfiguration;
 import org.springframework.boot.context.properties.bind.Binder;
 import org.springframework.boot.convert.DurationStyle;
 import org.springframework.boot.env.YamlPropertySourceLoader;
 import org.springframework.boot.health.actuate.endpoint.HealthEndpoint;
 import org.springframework.boot.health.actuate.endpoint.HealthEndpointGroups;
+import org.springframework.boot.health.autoconfigure.actuate.endpoint.AvailabilityProbesAutoConfiguration;
 import org.springframework.boot.health.autoconfigure.actuate.endpoint.HealthEndpointAutoConfiguration;
 import org.springframework.boot.health.autoconfigure.registry.HealthContributorRegistryAutoConfiguration;
 import org.springframework.boot.health.contributor.Health;
@@ -52,6 +55,7 @@ class WebhookIngestionCannotFailSilentlyTest extends BaseUnitTest {
 
     private static final Path NATS_COMPOSE = Path.of("..", "..", "docker", "compose.core.yaml");
     private static final Path SHIPPED_ENV = Path.of("..", "..", "docker", ".env.example");
+    private static final Path ALERTS = Path.of("..", "..", "deploy", "observability", "hephaestus-alerts.yml");
     private static final Path CHART_VALUES = Path.of("..", "..", "deploy", "chart", "hephaestus", "values.yaml");
 
     /** GitHub deliveries a busy instance receives in a day. */
@@ -98,6 +102,31 @@ class WebhookIngestionCannotFailSilentlyTest extends BaseUnitTest {
                                     .as("the worker's own configuration")
                                     .isTrue();
                         }));
+    }
+
+    @Test
+    void livenessAsksOnlyWhetherTheProcessRuns() {
+        // A broker in liveness turns a slow disk into a restart loop that drops the deliveries in flight.
+        ApplicationContextRunner runner = new ApplicationContextRunner()
+                .withConfiguration(AutoConfigurations.of(
+                        ApplicationAvailabilityAutoConfiguration.class,
+                        HealthContributorRegistryAutoConfiguration.class,
+                        HealthEndpointAutoConfiguration.class,
+                        AvailabilityProbesAutoConfiguration.class))
+                .withPropertyValues(shippedPropertyValues("management."));
+        for (String bean : CONTRIBUTOR_BEANS.keySet()) {
+            runner = runner.withBean(
+                    bean, HealthIndicator.class, () -> () -> Health.up().build());
+        }
+        runner.run(context -> assertThat(
+                        context.getBean(HealthEndpointGroups.class).get("liveness"))
+                .isNotNull()
+                .satisfies(group -> {
+                    assertThat(group.isMember("livenessState")).isTrue();
+                    assertThat(CONTRIBUTOR_BEANS.values())
+                            .as("no contributor of any role belongs in liveness")
+                            .noneMatch(group::isMember);
+                }));
     }
 
     @Test
@@ -151,6 +180,31 @@ class WebhookIngestionCannotFailSilentlyTest extends BaseUnitTest {
         assertThat(configured)
                 .as("a name no contributor answers to is a member the probe silently never evaluates")
                 .isSubsetOf(union(Set.of("readinessState"), CONTRIBUTOR_BEANS.values()));
+    }
+
+    @Test
+    void aBackedOffMonitorStillPollsBeforeItsStaleAlertFires() throws IOException {
+        Matcher threshold = Pattern.compile("webhook_stream_poll_age_seconds\\{[^}]*} > (\\d+)")
+                .matcher(Files.readString(ALERTS));
+        assertThat(threshold.find())
+                .as("HephaestusStreamPollStale reads the poll age")
+                .isTrue();
+        Duration oldestPoll = shippedStream()
+                .monitorInterval()
+                .multipliedBy(WebhookStreamMonitor.MAX_BACKOFF_INTERVALS)
+                .plus(WebhookStreamMonitor.SLOW_POLL);
+
+        assertThat(oldestPoll)
+                .as("a slow broker backs the monitor off; the alert must still mean that it cannot read the broker")
+                .isLessThan(Duration.ofSeconds(Long.parseLong(threshold.group(1))));
+    }
+
+    @Test
+    void theDedupWindowOutlastsTheGitHubRedeliveryLookBack() throws IOException {
+        // A delivery stored after GitHub stopped waiting failed there; the job redelivers it within its window.
+        assertThat(shippedStream().duplicateWindow())
+                .as("a redelivery inside the window must be answered as a duplicate, not stored again")
+                .isGreaterThan(GitHubWebhookRedelivery.WINDOW);
     }
 
     @Test

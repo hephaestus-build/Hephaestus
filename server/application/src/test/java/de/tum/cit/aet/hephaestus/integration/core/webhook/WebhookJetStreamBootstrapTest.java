@@ -167,6 +167,25 @@ class WebhookJetStreamBootstrapTest extends BaseUnitTest {
     }
 
     @Test
+    void widensTheDedupWindowOfAnExistingStreamWithoutAnOptIn() throws Exception {
+        // A stream created with a shorter window than the configured one; widening deletes nothing.
+        StreamInfo info = existing(
+                builder -> builder.duplicateWindow(
+                        properties.stream().duplicateWindow().dividedBy(2)),
+                state(GIBIBYTE / 2, 10, 1));
+        JetStreamManagement jsm = mock(JetStreamManagement.class);
+        when(jsm.getStreamInfo(anyString())).thenReturn(info);
+
+        new WebhookJetStreamBootstrap(jsm, properties).bootstrap();
+
+        ArgumentCaptor<StreamConfiguration> captor = ArgumentCaptor.forClass(StreamConfiguration.class);
+        verify(jsm, times(4)).updateStream(captor.capture());
+        assertThat(captor.getAllValues())
+                .allSatisfy(config -> assertThat(config.getDuplicateWindow())
+                        .isEqualTo(properties.stream().duplicateWindow()));
+    }
+
+    @Test
     void appliesALimitThatCannotDeleteAnything() throws Exception {
         // Stream already inside the new bound: applying it costs nothing, so nobody has to opt in.
         StreamInfo info = existing(builder -> builder.maxBytes(4 * GIBIBYTE), state(GIBIBYTE / 2, 10, 1));

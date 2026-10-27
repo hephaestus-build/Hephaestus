@@ -1,6 +1,6 @@
 # ADR 0008: Webhook as a third runtime role (`webhook-server` container)
 
-**Status:** Accepted (amended 2026-08-22 — webhook ingestion cannot fail silently; 2026-09-17 — receiver surface corrected; 2026-09-26 — the loss counter is withdrawn; 2026-10-09 — mentor schedulers, [ADR 0057](0057-one-heph-conversation-per-developer.md))
+**Status:** Accepted (amended 2026-08-22 — webhook ingestion cannot fail silently; 2026-09-17 — receiver surface corrected; 2026-09-26 — the loss counter is withdrawn; 2026-10-09 — mentor schedulers, [ADR 0057](0057-one-heph-conversation-per-developer.md); 2026-10-27 — one publish deadline)
 **Date:** 2026-05-20
 **Authors:** Webhook substrate epic (#1110)
 
@@ -57,7 +57,7 @@ Option 1. Concretely:
 - `WebhookConfiguration` reuses the existing `Connection natsConnection` bean from
   `config.NatsConfig` — no new NATS connection per pod. Publisher uses Resilience4j Retry with
   exponential backoff + ±25% jitter; stream creation is `addStream`-or-`getStreamInfo` with
-  WARN-on-drift (never `updateStream`).
+  WARN-on-drift (never `updateStream`). (Superseded by the 2026-10-27 update.)
 
   > Superseded in part by the 2026-08-22 update, §"Limits may be corrected in place; shape still
   > may not": the *limit* fields are now reconciled on an existing stream. Subjects, retention,
@@ -159,7 +159,7 @@ The receiver exposes Micrometer instruments under the `webhook.*` namespace:
 - `webhook.publish{outcome=success|failure}` — counter per NATS publish attempt outcome. The
   receiver's primary SLI.
 - `webhook.publish.retry` — counter per Resilience4j retry event. Spike indicates NATS pressure
-  or transient broker errors.
+  or transient broker errors. (Superseded by the 2026-10-27 update.)
 - `webhook.rejected{provider, reason}` — counter for every request rejected before publish
   (bad signature, bad token, oversize, invalid JSON, etc.). Lets ops separate scan traffic from
   misconfigured providers.
@@ -184,7 +184,7 @@ review is appropriate. The `duplicate-window` is currently 2 minutes (JetStream 
 provider redelivery uses the same delivery-UUID so a wider window only protects against
 adversarial replays).
 
-> Superseded on the dedup window: it is 10 minutes, floored at the widest per-vendor timestamp
+> Superseded on the dedup window (itself superseded by the 2026-10-27 update, 3 hours): it is 10 minutes, floored at the widest per-vendor timestamp
 > tolerance (`WebhookProperties.Stream.REPLAY_TOLERANCE_FLOOR`, 5 minutes — GitLab `whsec` and
 > Slack v0). "A wider window only protects against adversarial replays" does not hold for GitHub,
 > whose deliveries carry no timestamp at all, so for them the window is the only replay defence.
@@ -496,7 +496,7 @@ Decision: the server role runs `GitHubWebhookRedelivery` every 10 minutes under 
 follows GitHub's documented procedure: group the past hour's deliveries by GUID, and redeliver the
 latest attempt of each GUID whose original delivery is in that hour, has no success, and was not
 refused with a `4xx`, up to four attempts in total. The stream's duplicate window keeps a redelivery of
-a stored delivery from being stored twice within 10 minutes. `github.webhook.redelivery{outcome}`
+a stored delivery from being stored twice within 10 minutes (superseded by the 2026-10-27 update: 3 hours). `github.webhook.redelivery{outcome}`
 counts requested, refused and unreadable runs. The `github.webhook.unrecovered` gauge counts GitHub
 events that failed every attempt; it is the first loss signal measured where loss happens.
 
@@ -552,7 +552,7 @@ Ingestion still cannot fail silently.
 
 The receiver made 5 attempts of 9 seconds each.
 GitHub and GitLab fail a delivery after 10 seconds, so attempts after the first held a request thread for an answer nobody read.
-Decision: 2 attempts of 4 seconds each.
+Decision: 2 attempts of 4 seconds each. (Superseded by the 2026-10-27 update.)
 The second attempt carries the same `Nats-Msg-Id`, so a first attempt that stored late is answered as a duplicate.
 `WebhookPublishStallIntegrationTest` pauses a real broker and asserts that the receiver answers `503` before GitHub stops waiting, while its health indicator stays UP.
 The answer while the broker is slow stays `503`.
@@ -606,3 +606,33 @@ Considered and rejected:
 - **Interest retention.** It removes a message once every consumer has acknowledged it.
   A durable that a former deployment left behind keeps all its messages, and a long-lived broker can hold many such durables with large backlogs.
   It also changes the shape of existing streams.
+
+## Update — 2026-10-27 (one publish deadline; amends "Every publish attempt ends inside the provider's response window")
+
+A broker IO stall on staging failed 6.6 % of GitHub publishes in 23 minutes, and the `503` log named only an exception class.
+Two attempts of 4 seconds retried a failure that the broker answers at once (no responders, a dropped connection) only once, 200 ms later.
+
+Decision: one deadline for the whole publish, `hephaestus.webhook.publish.deadline` (8 s), inside the providers' 10 s window.
+
+- An attempt waits for its ack until the deadline.
+  The NATS client stops waiting after its request cleanup interval (5 to 10 s); the next attempt carries the same `Nats-Msg-Id`, so a copy that the broker stored late is acknowledged as a duplicate.
+- A failure that the broker answers at once is retried with jittered exponential backoff until the deadline.
+- A refusal by the stream, and a message that the client rejects, are final.
+- The `503` log carries `event.name=webhook.publish.failed`, `webhook.publish.reason` and `webhook.publish.attempts`. The reasons are a closed set: `timeout`, `no_responders`, `connection`, `connection_closed`, `stream_full`, `rejected`, `interrupted`.
+- `webhook.publish{outcome}` still counts each delivery once.
+
+This does not absorb a stall longer than the deadline: the 10 s provider window caps what any receiver can wait.
+The cause of such a stall is the broker's storage.
+
+### The dedup window outlasts the redelivery look-back (amends the 10-minute window)
+
+The window grows from 10 minutes to 3 hours, longer than the 2-hour look-back of `GitHubWebhookRedelivery`.
+A key from a body hash is deduplicated for 3 hours too. Only a delivery without its provider's event id gets one: GitHub always sends `X-GitHub-Delivery`, GitLab sends `X-Gitlab-Event-UUID` since 14.8 and `Idempotency-Key` since 17.4, and an Outline delivery carries its own `id`. A body hash therefore keys only a malformed delivery.
+A delivery that the broker stored after GitHub stopped waiting is then not stored again when the job redelivers it.
+The broker keeps one message id per stored message for the window: about 12,500 ids at 100,000 deliveries a day, 1 to 2 MB.
+An existing stream gets the new window at the first start, as a limit update.
+
+### The stream monitor backs off within its alert
+
+A poll slower than 2 seconds doubles the delay to the next one, up to two intervals.
+Two intervals keep the poll age below `HephaestusStreamPollStale`, so that alert still means that the receiver cannot read the broker.

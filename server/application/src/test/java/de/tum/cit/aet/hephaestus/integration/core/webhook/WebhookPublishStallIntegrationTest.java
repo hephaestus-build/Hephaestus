@@ -11,8 +11,10 @@ import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import io.nats.client.Connection;
 import io.nats.client.Nats;
+import io.nats.client.PublishOptions;
 import io.nats.client.api.StorageType;
 import io.nats.client.api.StreamConfiguration;
+import io.nats.client.impl.Headers;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -46,6 +48,8 @@ class WebhookPublishStallIntegrationTest extends BaseIntegrationTest {
     @Autowired
     private WebhookProperties properties;
 
+    private final SimpleMeterRegistry meters = new SimpleMeterRegistry();
+
     private GenericContainer<?> broker;
     private Connection connection;
 
@@ -64,6 +68,7 @@ class WebhookPublishStallIntegrationTest extends BaseIntegrationTest {
                         .name("github")
                         .subjects("github.>")
                         .storageType(StorageType.File)
+                        .duplicateWindow(properties.stream().duplicateWindow())
                         .build());
     }
 
@@ -75,13 +80,7 @@ class WebhookPublishStallIntegrationTest extends BaseIntegrationTest {
 
     @Test
     void shouldAnswer503BeforeGitHubStopsWaitingWhileTheBrokerStalls() throws IOException {
-        JetStreamPublisher publisher = new JetStreamPublisher(
-                connection.jetStream(),
-                new WebhookProducerBeans().webhookPublishRetry(properties),
-                properties,
-                new SimpleMeterRegistry());
-        WebhookIngestPipeline pipeline = new WebhookIngestPipeline(
-                List.of(new AcceptingVerifier()), List.of(new FixedSubject()), publisher, new ObjectMapper());
+        WebhookIngestPipeline pipeline = pipeline();
         WebhookHealthIndicator health = new WebhookHealthIndicator(connection);
         assertThat(deliver(pipeline, "first").getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);
 
@@ -98,6 +97,57 @@ class WebhookPublishStallIntegrationTest extends BaseIntegrationTest {
                     .unpauseContainerCmd(broker.getContainerId())
                     .exec();
         }
+    }
+
+    @Test
+    void shouldStoreADeliveryWhenTheStreamReturnsWithinTheDeadline() throws Exception {
+        WebhookIngestPipeline pipeline = pipeline();
+        StreamConfiguration github =
+                connection.jetStreamManagement().getStreamInfo("github").getConfiguration();
+        connection.jetStreamManagement().deleteStream("github");
+
+        // No stream listens: the broker answers every attempt at once with "no responders".
+        CompletableFuture<ResponseEntity<?>> answer = CompletableFuture.supplyAsync(() -> deliver(pipeline, "returns"));
+        // The receiver is retrying: let it fail at least twice before the stream returns.
+        await().atMost(Duration.ofSeconds(5))
+                .until(() -> meters.get("webhook.publish.retry").counter().count() >= 2);
+        connection.jetStreamManagement().addStream(github);
+
+        await().atMost(GITHUB_RESPONSE_WINDOW).until(answer::isDone);
+        assertThat(answer.join().getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);
+        assertThat(connection
+                        .jetStreamManagement()
+                        .getStreamInfo("github")
+                        .getStreamState()
+                        .getMsgCount())
+                .isEqualTo(1);
+    }
+
+    @Test
+    void shouldStoreOneCopyWhenADeliveryStoredBeforeIsPublishedAgain() throws Exception {
+        // An earlier attempt the broker stored but whose ack never reached the receiver.
+        Headers headers = new Headers().add("X-GitHub-Delivery", "acked-late");
+        connection
+                .jetStream()
+                .publish(
+                        "github.acme.repo.pull_request",
+                        headers,
+                        "{\"action\":\"opened\"}".getBytes(StandardCharsets.UTF_8),
+                        PublishOptions.builder().messageId("github-acked-late").build());
+
+        assertThat(deliver(pipeline(), "acked-late").getStatusCode()).isEqualTo(HttpStatus.ACCEPTED);
+        assertThat(connection
+                        .jetStreamManagement()
+                        .getStreamInfo("github")
+                        .getStreamState()
+                        .getMsgCount())
+                .isEqualTo(1);
+    }
+
+    private WebhookIngestPipeline pipeline() throws IOException {
+        JetStreamPublisher publisher = new JetStreamPublisher(connection.jetStream(), properties, meters);
+        return new WebhookIngestPipeline(
+                List.of(new AcceptingVerifier()), List.of(new FixedSubject()), publisher, new ObjectMapper());
     }
 
     private static ResponseEntity<?> deliver(WebhookIngestPipeline pipeline, String delivery) {

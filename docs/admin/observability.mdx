@@ -255,6 +255,21 @@ Prometheus evaluates rules.
 Your Alertmanager or equivalent controls notification delivery, grouping, and silences.
 See the [Prometheus alerting guidance](https://prometheus.io/docs/practices/alerting/).
 
+## Health probes
+
+Each probe group answers one question.
+The probes read only state inside the process.
+A slow or missing dependency therefore never restarts a Pod, and never takes every Pod out of rotation at once.
+
+| Group | Members | Question |
+| --- | --- | --- |
+| Liveness (`/actuator/health/liveness`, `/livez`) | `livenessState` | Does the process run? |
+| Readiness (`/actuator/health/readiness`, `/readyz`) | `readinessState`, and on a worker `practiceReview` and `kubernetesSandbox` | Can this Pod serve now? |
+
+NATS (`integrationConsumer`) and JetStream (`webhook`) are in neither group.
+They stay in `/actuator/health` and the metrics, which the alerts read.
+While the broker is slow, the receiver stays ready and answers deliveries with `503`.
+
 ## Database statement statistics
 
 The bundled PostgreSQL image loads [`pg_stat_statements`](https://www.postgresql.org/docs/current/pgstatstatements.html).

@@ -238,7 +238,10 @@ class GitLabWebhookIngressIntegrationTest extends BaseIntegrationTest {
 
     @Test
     void shouldReturnRetryableProblemDetailsWhenPublishFails() {
-        doThrow(new JetStreamPublisher.PublishFailedException("private publish failure", new RuntimeException()))
+        doThrow(new JetStreamPublisher.PublishFailedException(
+                        new JetStreamPublisher.Failure(JetStreamPublisher.Cause.TIMEOUT, "private publish failure"),
+                        1,
+                        "gitlab.connection"))
                 .when(publisher)
                 .publish(any());
         try {

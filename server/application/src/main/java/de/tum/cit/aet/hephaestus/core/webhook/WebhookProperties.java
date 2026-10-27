@@ -124,16 +124,17 @@ public record WebhookProperties(
         }
     }
 
+    /**
+     * @param deadline How long a delivery may wait to be stored before the receiver answers 503. Must end inside the
+     *     providers' 10 s response window.
+     * @param retryBaseDelay First backoff after a failure that the broker answers at once; it doubles per attempt.
+     */
     public record Publish(
-            @DefaultValue("4s") Duration timeout,
-            @DefaultValue("2") int maxRetries,
+            @DefaultValue("8s") Duration deadline,
             @DefaultValue("200ms") Duration retryBaseDelay) {
         public Publish {
-            if (timeout.isZero() || timeout.isNegative()) {
-                throw new IllegalArgumentException("publish.timeout must be positive, got: " + timeout);
-            }
-            if (maxRetries < 1) {
-                throw new IllegalArgumentException("publish.maxRetries must be >= 1, got: " + maxRetries);
+            if (deadline.isZero() || deadline.isNegative() || deadline.compareTo(Duration.ofSeconds(10)) >= 0) {
+                throw new IllegalArgumentException("publish.deadline must be positive and below 10s, got: " + deadline);
             }
             if (retryBaseDelay.isZero() || retryBaseDelay.isNegative()) {
                 throw new IllegalArgumentException("publish.retryBaseDelay must be positive, got: " + retryBaseDelay);
@@ -152,7 +153,7 @@ public record WebhookProperties(
      * against what a shed message costs (ADR 0008).
      *
      * @param maxAge Longest time a webhook stream keeps a message, for each stream without an entry in
-     *     max-age-by-stream. Must be positive.
+     *     max-age-by-stream. Must be at least duplicate-window.
      * @param maxBytes Storage bound of each webhook stream without an entry in max-bytes-by-stream. At the bound,
      *     JetStream deletes the oldest messages to admit new ones. Must be at least 4 times http.max-payload-bytes.
      * @param maxBytesByStream Storage bounds keyed by stream name that override max-bytes for that stream. The github
@@ -174,10 +175,10 @@ public record WebhookProperties(
             // Replay-defense invariant: the JetStream dedup window MUST be >= the largest per-vendor
             // timestamp replay tolerance, otherwise a captured-but-still-timestamp-valid request can be
             // replayed once its dedup entry has expired (the 2-5 min band). The widest vendor tolerance
-            // is 5m (GitLab whsec TIMESTAMP_TOLERANCE, Slack v0 MAX_DRIFT_SECONDS); we set 10m to also
-            // cover GitHub — which has NO timestamp, so the dedup window keyed on X-GitHub-Delivery is
-            // its ONLY replay defense — plus provider redelivery horizons. See REPLAY_TOLERANCE_FLOOR.
-            @DefaultValue("10m") Duration duplicateWindow,
+            // is 5m (GitLab whsec TIMESTAMP_TOLERANCE, Slack v0 MAX_DRIFT_SECONDS). GitHub has NO timestamp,
+            // so the dedup window keyed on X-GitHub-Delivery is its ONLY replay defense, and 3h outlasts the
+            // 2h look-back of GitHubWebhookRedelivery. See REPLAY_TOLERANCE_FLOOR.
+            @DefaultValue("3h") Duration duplicateWindow,
             @DefaultValue("7d") Duration maxAge,
             @DefaultValue Map<String, Duration> maxAgeByStream,
             @DefaultValue("1GB") DataSize maxBytes,
@@ -207,6 +208,10 @@ public record WebhookProperties(
             }
             if (maxAge.isZero() || maxAge.isNegative()) {
                 throw new IllegalArgumentException("stream.maxAge must be positive, got: " + maxAge);
+            }
+            if (maxAge.compareTo(duplicateWindow) < 0) {
+                throw new IllegalArgumentException("stream.maxAge (" + maxAge + ") must be >= duplicateWindow ("
+                        + duplicateWindow + "): the broker refuses a dedup window longer than the age bound");
             }
             maxAgeByStream = maxAgeByStream == null ? Map.of() : Map.copyOf(maxAgeByStream);
             for (Map.Entry<String, Duration> e : maxAgeByStream.entrySet()) {
