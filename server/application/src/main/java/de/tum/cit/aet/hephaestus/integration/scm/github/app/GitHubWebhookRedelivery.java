@@ -173,8 +173,10 @@ public class GitHubWebhookRedelivery {
         this.unavailable = outcome(meterRegistry, "unavailable");
         this.paused = outcome(meterRegistry, "paused");
         this.truncated = outcome(meterRegistry, "truncated");
+        // The registry holds its gauge's state weakly by default, and the gauge reads NaN once nothing else holds it.
         Gauge.builder(GitHubMetrics.GITHUB_WEBHOOK_UNRECOVERED, unrecovered, AtomicInteger::get)
                 .description("GitHub webhook events of the last two hours that failed every delivery attempt")
+                .strongReference(true)
                 .register(meterRegistry);
     }
 
