@@ -14,14 +14,18 @@
  *
  *   node scripts/sandbox-footprint.ts --stage <dir> [--image <ref>] [--reviews <n>] [--memory 3g]
  *     [--tool-calls 12] [--latency-ms 1500] [--node-options "--max-old-space-size=256"]
- *     [--practice-concurrency <n>] [--out <file>]
+ *     [--practice-concurrency <n>] [--work <dir>] [--out <file>]
+ *
+ * The work directory receives the container logs, `samples.jsonl` and, without `--out`,
+ * `footprint.json`. The run exits 1 unless its verdict shows that every review was measured.
  */
-import { spawn } from "node:child_process";
+import { spawn, type ChildProcess } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { once } from "node:events";
 import { createReadStream, createWriteStream } from "node:fs";
-import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { isIPv4 } from "node:net";
 import { cpus, loadavg, tmpdir } from "node:os";
 import path from "node:path";
 import { createInterface } from "node:readline";
@@ -30,7 +34,18 @@ import { setTimeout as sleep } from "node:timers/promises";
 import { parseArgs } from "node:util";
 
 import { asRecord, asString, asStringArray, isRecord, parseJson } from "./lib/json.ts";
-import { output, run } from "./lib/process.ts";
+import { exitStatus, output, run, succeeds } from "./lib/process.ts";
+import {
+	BUDGETS,
+	largest,
+	NOT_STARTED,
+	parseSample,
+	positiveInteger,
+	REPORT_MAP_LIMIT,
+	SAMPLE_MS,
+	verdict,
+	type Sample,
+} from "./lib/sandbox-footprint-report.ts";
 import { percentile } from "./lib/statistics.ts";
 
 const { values: options } = parseArgs({
@@ -47,17 +62,23 @@ const { values: options } = parseArgs({
 		"node-options": { type: "string", default: "" },
 		"practice-concurrency": { type: "string", default: "" },
 		label: { type: "string", default: "baseline" },
+		work: { type: "string" },
 		out: { type: "string" },
 	},
 });
 
 const stage = path.resolve(required(options.stage, "--stage"));
 const { image } = options;
-const reviews = Number(options.reviews);
-const toolCalls = Number(options["tool-calls"]);
-const latencyMs = Number(options["latency-ms"]);
-const run_id = `fp-${randomUUID().slice(0, 8)}`;
-const SAMPLE_MS = 250;
+const reviews = positiveInteger(options.reviews, "--reviews");
+const toolCalls = positiveInteger(options["tool-calls"], "--tool-calls");
+const latencyMs = positiveInteger(options["latency-ms"], "--latency-ms");
+const workSeconds = positiveInteger(options["work-seconds"], "--work-seconds");
+const budgetSeconds = positiveInteger(options["budget-seconds"], "--budget-seconds");
+const practiceConcurrency =
+	options["practice-concurrency"] === ""
+		? null
+		: positiveInteger(options["practice-concurrency"], "--practice-concurrency");
+const runId = `fp-${randomUUID().slice(0, 8)}`;
 
 /** The memory volumes of a review Pod (KubernetesPods.MEMORY_VOLUMES) and its disk volumes (attemptVolumes). */
 const MEMORY_VOLUMES = {
@@ -132,37 +153,53 @@ async function readableFiles(): Promise<string[]> {
 	return files;
 }
 
-const work = await mkdtemp(path.join(tmpdir(), `${run_id}-`));
+const practices = asStringArray(spec.practices, "spec.practices").length;
+
+const work = await workDirectory(options.work);
 const archive = path.join(work, "workspace.tar");
-const listing = await output("ls", ["-A", stage]);
-const entries = listing.split("\n").filter(Boolean);
-// The image's GNU tar writes the archive as the gateway does: plain relative names, no host metadata.
-const tar = spawn("docker", [
-	"run",
-	"--rm",
-	"-v",
-	`${stage}:/src:ro`,
-	"-w",
-	"/src",
-	"--entrypoint",
-	"tar",
-	image,
-	"--create",
-	"--format=gnu",
-	"--file",
-	"-",
-	...entries,
-]);
-tar.stderr.pipe(process.stderr);
-const [tarExited]: [unknown[], unknown] = await Promise.all([
-	once(tar, "exit"),
-	pipeline(tar.stdout, createWriteStream(archive)),
-]);
-const [tarExit] = tarExited;
-if (tarExit !== 0) {
-	throw new Error(`tar exited ${String(tarExit)}`);
+
+async function workDirectory(dir: string | undefined): Promise<string> {
+	if (dir === undefined) {
+		return mkdtemp(path.join(tmpdir(), `${runId}-`));
+	}
+	const resolved = path.resolve(dir);
+	await mkdir(resolved, { recursive: true });
+	const present = await readdir(resolved);
+	if (present.length > 0) {
+		throw new Error(`--work ${resolved} must be empty or absent`);
+	}
+	return resolved;
 }
-const { size: archiveBytes } = await stat(archive);
+
+/** Writes the staged workspace as the archive that the gateway serves; returns its size. */
+async function packWorkspace(): Promise<number> {
+	const listing = await output("ls", ["-A", stage]);
+	const entries = listing.split("\n").filter(Boolean);
+	// The image's GNU tar writes the archive as the gateway does: plain relative names, no host metadata.
+	const tar = spawn("docker", [
+		"run",
+		"--rm",
+		"-v",
+		`${stage}:/src:ro`,
+		"-w",
+		"/src",
+		"--entrypoint",
+		"tar",
+		image,
+		"--create",
+		"--format=gnu",
+		"--file",
+		"-",
+		...entries,
+	]);
+	tar.stderr.pipe(process.stderr);
+	await Promise.all([once(tar, "exit"), pipeline(tar.stdout, createWriteStream(archive))]);
+	if (tar.exitCode !== 0) {
+		throw new Error(`tar exited with ${exitStatus(tar.exitCode, tar.signalCode)}`);
+	}
+	const { size } = await stat(archive);
+	return size;
+}
 
 // ---------------------------------------------------------------- stand-in gateway and model
 
@@ -174,6 +211,11 @@ interface ModelStats {
 }
 const modelStats: ModelStats = { calls: 0, toolCalls: 0, submits: 0, promptBytesMax: 0 };
 const sessions = new Set<string>();
+/** The result uploads per session, which the verdict reads. */
+const uploads = new Map<string, number>();
+function recordUpload(session = "") {
+	uploads.set(session, (uploads.get(session) ?? 0) + 1);
+}
 
 async function body(request: IncomingMessage): Promise<Buffer> {
 	const chunks: Buffer[] = [];
@@ -349,13 +391,15 @@ async function serve(request: IncomingMessage, response: ServerResponse) {
 					JSON.stringify({ protocolVersion: 3, workspaceByteBudget: 512 * 1024 * 1024 }),
 				);
 			} else if (request.method === "GET" && route === "/workspace") {
+				const { size } = await stat(archive);
 				response.writeHead(200, {
 					"content-type": "application/x-tar",
-					"content-length": String(archiveBytes),
+					"content-length": String(size),
 				});
 				createReadStream(archive).pipe(response);
 			} else if (request.method === "POST" && route === "/result") {
 				const uploaded = await body(request);
+				recordUpload(runtime.session);
 				response.writeHead(204, {
 					etag: `"${createHash("sha256").update(uploaded).digest("hex")}"`,
 				});
@@ -390,13 +434,46 @@ async function serve(request: IncomingMessage, response: ServerResponse) {
 const server = createServer((request, response) => {
 	void serve(request, response);
 });
-server.listen(0, "0.0.0.0");
-await once(server, "listening");
-const address = server.address();
-if (address === null || typeof address === "string") {
-	throw new Error("The stand-in gateway has no TCP port");
+
+function gatewayPort(): number {
+	const address = server.address();
+	if (address === null || typeof address === "string") {
+		throw new Error("The stand-in gateway has no TCP port");
+	}
+	return address.port;
 }
-const { port } = address;
+
+/**
+ * Where the gateway listens: on Linux, the default bridge's gateway, which `host-gateway` resolves
+ * to; Docker Desktop forwards that name to the host's loopback. Never every interface.
+ */
+async function gatewayHost(): Promise<string> {
+	if (process.platform !== "linux") {
+		return "127.0.0.1";
+	}
+	const gateways = await output("docker", [
+		"network",
+		"inspect",
+		"bridge",
+		"--format",
+		"{{range .IPAM.Config}}{{.Gateway}} {{end}}",
+	]).catch((error: unknown) => {
+		throw new Error(`docker network inspect bridge failed: ${errorMessage(error)}`, {
+			cause: error,
+		});
+	});
+	const gateway = gateways.split(/\s+/u).find((candidate) => isIPv4(candidate));
+	if (gateway === undefined) {
+		throw new Error(
+			`The Docker bridge network has no IPv4 gateway address ("${gateways.trim()}"); the stand-in gateway has nowhere the sandbox can reach it`,
+		);
+	}
+	return gateway;
+}
+
+function errorMessage(error: unknown): string {
+	return error instanceof Error ? error.message : String(error);
+}
 
 // ---------------------------------------------------------------- sampler
 
@@ -448,66 +525,8 @@ setInterval(() => {
 }, ${SAMPLE_MS});
 `;
 
-interface Sample {
-	t: number;
-	label: string;
-	current: number;
-	peak: number;
-	anon: number;
-	file: number;
-	shmem: number;
-	kernel: number;
-	cpuUsec: number;
-	throttledUsec: number;
-	pids: number;
-	procs: {
-		pid: number;
-		cmd: string;
-		rss: number;
-		hwm: number;
-		anon: number;
-		file: number;
-		shmem: number;
-	}[];
-	tmpfs?: Record<string, number>;
-}
-
-const SAMPLE_NUMBERS = [
-	"t",
-	"current",
-	"peak",
-	"anon",
-	"file",
-	"shmem",
-	"kernel",
-	"cpuUsec",
-	"throttledUsec",
-	"pids",
-] as const;
-const PROCESS_NUMBERS = ["pid", "rss", "hwm", "anon", "file", "shmem"] as const;
-
-function isSample(value: unknown): value is Sample {
-	return (
-		isRecord(value) &&
-		typeof value.label === "string" &&
-		SAMPLE_NUMBERS.every((key) => typeof value[key] === "number") &&
-		Array.isArray(value.procs) &&
-		value.procs.every(
-			(proc) =>
-				isRecord(proc) &&
-				typeof proc.cmd === "string" &&
-				PROCESS_NUMBERS.every((key) => typeof proc[key] === "number"),
-		) &&
-		(value.tmpfs === undefined ||
-			(isRecord(value.tmpfs) &&
-				Object.values(value.tmpfs).every((bytes) => typeof bytes === "number")))
-	);
-}
-
 const benchDir = path.join(work, "bench");
-await mkdir(benchDir);
 const idsFile = path.join(benchDir, "ids");
-await writeFile(idsFile, "");
 const watched: string[] = [];
 async function watch(label: string, id: string) {
 	watched.push(`${label} ${id}`);
@@ -515,37 +534,46 @@ async function watch(label: string, id: string) {
 }
 
 const samples: Sample[] = [];
-const sampler = spawn("docker", [
-	"run",
-	"--rm",
-	"--name",
-	`${run_id}-sampler`,
-	"--privileged",
-	"--pid=host",
-	"--cgroupns=host",
-	"--user",
-	"0",
-	"-v",
-	"/sys/fs/cgroup:/sys/fs/cgroup:ro",
-	"-v",
-	`${benchDir}:/bench:ro`,
-	"--entrypoint",
-	"node",
-	image,
-	"-e",
-	SAMPLER,
-]);
-sampler.stderr.pipe(process.stderr);
-// A line the report cannot read fails the run at its end, after cleanup, instead of vanishing.
+/** Lines the report cannot read: they fail the verdict instead of vanishing. */
 const malformed: string[] = [];
-createInterface({ input: sampler.stdout }).on("line", (line) => {
-	const value = parseJson(line);
-	if (isSample(value)) {
-		samples.push(value);
-	} else {
-		malformed.push(line);
-	}
-});
+/** What stopped the run or a review before it ended: each fails the verdict. */
+const failures: string[] = [];
+
+function startSampler(): ChildProcess {
+	const sampler = spawn("docker", [
+		"run",
+		"--rm",
+		"--name",
+		`${runId}-sampler`,
+		"--privileged",
+		"--pid=host",
+		"--cgroupns=host",
+		"--user",
+		"0",
+		"-v",
+		"/sys/fs/cgroup:/sys/fs/cgroup:ro",
+		"-v",
+		`${benchDir}:/bench:ro`,
+		"--entrypoint",
+		"node",
+		image,
+		"-e",
+		SAMPLER,
+	]);
+	sampler.once("error", (error) => {
+		failures.push(`the sampler did not start: ${error.message}`);
+	});
+	sampler.stderr.pipe(process.stderr);
+	createInterface({ input: sampler.stdout }).on("line", (line) => {
+		const sample = parseSample(line);
+		if (sample === null) {
+			malformed.push(line);
+		} else {
+			samples.push(sample);
+		}
+	});
+	return sampler;
+}
 
 // ---------------------------------------------------------------- one review
 
@@ -557,8 +585,14 @@ interface ReviewRun {
 	runtimeMs: number;
 	startMs: number;
 	diskBytes: Record<string, number>;
+	uploads: number;
+	initializeLog: string;
 	log: string;
 }
+
+/** What the run created in Docker and has not removed yet, for the cleanup after a failure. */
+const containers = new Set<string>();
+const volumesCreated = new Set<string>();
 
 function environment(sessionId: string): string[] {
 	const env: Record<string, string> = {};
@@ -572,20 +606,20 @@ function environment(sessionId: string): string[] {
 	env.GIT_CONFIG_COUNT = String(GIT_SECURITY.length);
 	env.GIT_TERMINAL_PROMPT = "0";
 	env.GIT_ATTR_NOSYSTEM = "1";
-	const gateway = `http://host.docker.internal:${port}`;
+	const gateway = `http://host.docker.internal:${String(gatewayPort())}`;
 	env.LLM_PROXY_URL = `${gateway}/internal/llm`;
 	env.LLM_PROXY_TOKEN = "footprint-token";
 	env.SANDBOX_RUNTIME_URL = `${gateway}/internal/llm/runtime/${sessionId}`;
-	const deadline = Date.now() + Number(options["work-seconds"]) * 1000;
+	const deadline = Date.now() + workSeconds * 1000;
 	env.SANDBOX_WORK_DEADLINE_MS = String(deadline);
 	env.SANDBOX_UPLOAD_DEADLINE_MS = String(deadline + 120_000);
 	// The live staging's budget is a test's; a review's is the binding's.
-	env.AGENT_BUDGET_MS = String(Number(options["budget-seconds"]) * 1000);
+	env.AGENT_BUDGET_MS = String(budgetSeconds * 1000);
 	if (options["node-options"] !== "") {
 		env.NODE_OPTIONS = options["node-options"];
 	}
-	if (options["practice-concurrency"] !== "") {
-		env.PI_PRACTICE_CONCURRENCY = options["practice-concurrency"];
+	if (practiceConcurrency !== null) {
+		env.PI_PRACTICE_CONCURRENCY = String(practiceConcurrency);
 	}
 	return Object.entries(env).flatMap(([key, value]) => ["--env", `${key}=${value}`]);
 }
@@ -638,6 +672,7 @@ async function container(
 	// Created first, so the sampler knows the container before its first process runs.
 	const created = await output("docker", ["create", ...args]);
 	const id = created.trim();
+	containers.add(id);
 	await watch(label, id);
 	await sleep(SAMPLE_MS);
 	await run("docker", ["start", id], { stdout: "ignore" });
@@ -651,15 +686,17 @@ async function container(
 		await output("sh", ["-c", `docker logs ${id} 2>&1 | tail -n 400`]).catch(() => ""),
 	);
 	await run("docker", ["rm", "-f", id], { stdout: "ignore" });
+	containers.delete(id);
 	return { exit, ms };
 }
 
 async function review(index: number): Promise<ReviewRun> {
 	const sessionId = randomUUID();
 	sessions.add(sessionId);
-	const volumes = DISK_VOLUMES.map((_, v) => `${run_id}-${index}-v${v}`);
+	const volumes = DISK_VOLUMES.map((_, v) => `${runId}-${index}-v${v}`);
 	for (const volume of volumes) {
 		await run("docker", ["volume", "create", volume], { stdout: "ignore" });
+		volumesCreated.add(volume);
 	}
 	// As a Pod's fsGroup leaves an emptyDir: root's, writable by group 1000, new files in that group.
 	await run("docker", [
@@ -675,8 +712,8 @@ async function review(index: number): Promise<ReviewRun> {
 		volumes.map((_, i) => `chown 0:1000 /v${i} && chmod 2775 /v${i}`).join(" && "),
 	]);
 	const startMs = Date.now();
-	const init = await container(`review-${index}/initialize`, `${run_id}-${index}-init`, [
-		...podFlags(`${run_id}-${index}-init`, volumes, false),
+	const init = await container(`review-${index}/initialize`, `${runId}-${index}-init`, [
+		...podFlags(`${runId}-${index}-init`, volumes, false),
 		...environment(sessionId),
 		"--entrypoint",
 		RLIMITS[0] ?? "",
@@ -686,10 +723,10 @@ async function review(index: number): Promise<ReviewRun> {
 		"-c",
 		"ln -s /opt/pi-sdk/node_modules /workspace/node_modules && exec node /opt/pi-sdk/gateway-init.ts",
 	]);
-	let runtime = { exit: -1, ms: 0 };
+	let runtime = { exit: NOT_STARTED, ms: 0 };
 	if (init.exit === 0) {
-		runtime = await container(`review-${index}/runtime`, `${run_id}-${index}-runtime`, [
-			...podFlags(`${run_id}-${index}-runtime`, volumes, true),
+		runtime = await container(`review-${index}/runtime`, `${runId}-${index}-runtime`, [
+			...podFlags(`${runId}-${index}-runtime`, volumes, true),
 			...environment(sessionId),
 			"--entrypoint",
 			RLIMITS[0] ?? "",
@@ -720,6 +757,7 @@ async function review(index: number): Promise<ReviewRun> {
 	}
 	for (const volume of volumes) {
 		await run("docker", ["volume", "rm", "-f", volume], { stdout: "ignore" });
+		volumesCreated.delete(volume);
 	}
 	sessions.delete(sessionId);
 	return {
@@ -730,22 +768,13 @@ async function review(index: number): Promise<ReviewRun> {
 		runtimeMs: runtime.ms,
 		startMs,
 		diskBytes: disk,
-		log: path.join(work, `${run_id}-${index}-runtime.log`),
+		uploads: uploads.get(sessionId) ?? 0,
+		initializeLog: `${runId}-${index}-init.log`,
+		log: `${runId}-${index}-runtime.log`,
 	};
 }
 
 // ---------------------------------------------------------------- run and report
-
-const load = loadavg();
-const startedAt = new Date().toISOString();
-await sleep(1500);
-const runs = await Promise.all(Array.from({ length: reviews }, async (_, index) => review(index)));
-sampler.kill("SIGTERM");
-await run("docker", ["rm", "-f", `${run_id}-sampler`], {
-	stdout: "ignore",
-	stderr: "ignore",
-}).catch(() => undefined);
-server.close();
 
 const MiB = (bytes: number) => Math.round((bytes / 1_048_576) * 10) / 10;
 function summarize(label: string) {
@@ -802,67 +831,129 @@ function summarize(label: string) {
 		cpuSeconds: Math.round(last.cpuUsec / 1e4) / 100,
 		throttledSeconds: Math.round(last.throttledUsec / 1e4) / 100,
 		processes: Object.fromEntries(
-			[...byProcess]
-				.filter(([, v]) => v.anon > 1_048_576)
-				.toSorted((a, b) => b[1].anon - a[1].anon)
-				.map(([cmd, v]) => [
-					cmd,
-					{ anonMiB: MiB(v.anon), largestRssMiB: MiB(v.rss), atOnce: v.count },
-				]),
+			largest(
+				[...byProcess].filter(([, v]) => v.anon > 1_048_576),
+				([, v]) => v.anon,
+				REPORT_MAP_LIMIT,
+			).map(([cmd, v]) => [
+				cmd,
+				{ anonMiB: MiB(v.anon), largestRssMiB: MiB(v.rss), atOnce: v.count },
+			]),
 		),
 		tmpfsPeak: Object.fromEntries(
-			[...tmpfs]
-				.filter(([, b]) => b > 0)
-				.toSorted((a, b) => b[1] - a[1])
-				.map(([dir, bytes]) => [dir, MiB(bytes)]),
+			largest(
+				[...tmpfs].filter(([, b]) => b > 0),
+				([, bytes]) => bytes,
+				REPORT_MAP_LIMIT,
+			).map(([dir, bytes]) => [dir, MiB(bytes)]),
 		),
 	};
 }
 
-// The node-wide sum of every sandbox's memory.current per tick: what concurrent reviews hold together.
-const ticks = new Map<number, number>();
-for (const s of samples) {
-	const bucket = Math.round(s.t / SAMPLE_MS);
-	ticks.set(bucket, (ticks.get(bucket) ?? 0) + s.current);
+function sampleCount(label: string): number {
+	return samples.filter((s) => s.label === label).length;
 }
-const report = {
-	label: options.label,
-	startedAt,
-	host: {
-		loadavg: load.map((l) => Math.round(l * 10) / 10),
-		cpus: cpus().length,
-		platform: process.platform,
-	},
-	image,
-	stage,
-	practices: asStringArray(spec.practices, "spec.practices").length,
-	workspaceArchiveMiB: MiB(archiveBytes),
-	limits: { memory: options.memory, cpus: options.cpus, nodeOptions: options["node-options"] },
-	model: { toolCallsPerSession: toolCalls, latencyMs, ...modelStats },
-	reviews: runs.map((r) => ({
-		...r,
-		diskMiB: Object.fromEntries(Object.entries(r.diskBytes).map(([k, v]) => [k, MiB(v)])),
-		initialize: summarize(`review-${r.index}/initialize`),
-		runtime: summarize(`review-${r.index}/runtime`),
-	})),
-	concurrentPeakMiB: MiB(Math.max(0, ...ticks.values())),
-	work,
-};
-await writeFile(
-	path.join(work, "samples.jsonl"),
-	samples.map((sample) => JSON.stringify(sample)).join("\n"),
-);
-const text = JSON.stringify(report, null, 2);
-if (options.out !== undefined) {
-	await writeFile(options.out, `${text}\n`);
+
+let sampler: ChildProcess | undefined;
+async function stopSampler() {
+	sampler?.kill("SIGTERM");
+	await succeeds("docker", ["rm", "-f", `${runId}-sampler`]);
 }
-process.stdout.write(`${text}\n`);
-await rm(archive, { force: true });
-if (malformed.length > 0) {
-	process.stderr.write(
-		`${String(malformed.length)} sampler lines were unreadable; the first: ${malformed[0] ?? ""}\n`,
+
+/** Removes what the run left in Docker: a review that failed midway leaves containers and volumes. */
+async function cleanUp() {
+	await stopSampler();
+	for (const id of containers) {
+		await succeeds("docker", ["rm", "-f", id]);
+	}
+	for (const volume of volumesCreated) {
+		await succeeds("docker", ["volume", "rm", "-f", volume]);
+	}
+	server.close();
+	await rm(archive, { force: true });
+	await rm(benchDir, { recursive: true, force: true });
+}
+
+const outFile =
+	options.out === undefined ? path.join(work, "footprint.json") : path.resolve(options.out);
+const load = loadavg();
+const startedAt = new Date().toISOString();
+const runs: ReviewRun[] = [];
+// What a failed run still reports; a run that ends replaces it with the full report.
+let report: Record<string, unknown> = { label: options.label, startedAt, options };
+try {
+	await mkdir(benchDir);
+	await writeFile(idsFile, "");
+	const archiveBytes = await packWorkspace();
+	server.listen(0, await gatewayHost());
+	await once(server, "listening");
+	sampler = startSampler();
+	await sleep(1500);
+	const settled = await Promise.allSettled(
+		Array.from({ length: reviews }, async (_, index) => review(index)),
 	);
+	for (const [index, result] of settled.entries()) {
+		if (result.status === "fulfilled") {
+			runs.push(result.value);
+		} else {
+			failures.push(`review ${String(index)}: ${errorMessage(result.reason)}`);
+		}
+	}
+	await stopSampler();
+
+	// The node-wide sum of every sandbox's memory.current per tick: what concurrent reviews hold together.
+	const ticks = new Map<number, number>();
+	for (const s of samples) {
+		const bucket = Math.round(s.t / SAMPLE_MS);
+		ticks.set(bucket, (ticks.get(bucket) ?? 0) + s.current);
+	}
+	report = {
+		label: options.label,
+		startedAt,
+		host: {
+			loadavg: load.map((l) => Math.round(l * 10) / 10),
+			cpus: cpus().length,
+			platform: process.platform,
+		},
+		image,
+		stage,
+		practices,
+		workspaceArchiveMiB: MiB(archiveBytes),
+		limits: { memory: options.memory, cpus: options.cpus, nodeOptions: options["node-options"] },
+		model: { toolCallsPerSession: toolCalls, latencyMs, ...modelStats },
+		reviews: runs.map((r) => ({
+			...r,
+			diskMiB: Object.fromEntries(Object.entries(r.diskBytes).map(([k, v]) => [k, MiB(v)])),
+			initialize: summarize(`review-${r.index}/initialize`),
+			runtime: summarize(`review-${r.index}/runtime`),
+		})),
+		concurrentPeakMiB: MiB(Math.max(0, ...ticks.values())),
+	};
+} catch (error) {
+	failures.push(`the run stopped: ${errorMessage(error)}`);
+} finally {
+	await cleanUp();
+	const decided = verdict({
+		reviews: runs.map((r) => ({
+			...r,
+			initSamples: sampleCount(`review-${r.index}/initialize`),
+			runtimeSamples: sampleCount(`review-${r.index}/runtime`),
+		})),
+		practices,
+		submits: modelStats.submits,
+		malformed,
+		errors: failures,
+	});
+	await writeFile(
+		path.join(work, "samples.jsonl"),
+		samples.map((sample) => JSON.stringify(sample)).join("\n"),
+	);
+	const text = JSON.stringify({ ...report, verdict: decided, budgets: BUDGETS }, null, 2);
+	await writeFile(outFile, `${text}\n`);
+	process.stdout.write(`${text}\n`);
+	for (const reason of decided.reasons) {
+		process.stderr.write(`sandbox footprint: ${reason}\n`);
+	}
+	process.exitCode = decided.passed ? 0 : 1;
 }
-process.exit(
-	malformed.length === 0 && runs.every((r) => r.initExit === 0 && r.runtimeExit === 0) ? 0 : 1,
-);
+process.exit();

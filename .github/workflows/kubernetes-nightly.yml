@@ -54,6 +54,7 @@ jobs:
     name: "Sandbox footprint"
     needs: build
     runs-on: ubuntu-24.04
+    # Up to 60 minutes of waiting for the merge queue, then about 15-20 minutes of work.
     timeout-minutes: 90
     permissions:
       actions: read
@@ -68,28 +69,49 @@ jobs:
       - uses: ./.github/actions/setup-toolchain
         with:
           install: "none"
-      - uses: ./.github/actions/setup-caches
-      # The 20 runners are shared with the merge queue, which carries accepted work.
+      # The 20 runners are shared with the merge queue, which carries accepted work. A busy queue is
+      # not a defect in main, so the benchmark skips that night instead of failing.
       - name: Wait while merge-group jobs are queued
+        id: queue
         env:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
           for _ in $(seq 1 60); do
+            runs=$(gh run list -R "$REPOSITORY" --workflow cicd.yml --event merge_group --limit 5 \
+              --json databaseId,status -q '.[] | select(.status != "completed") | .databaseId')
             queued=0
-            for id in $(gh run list -R "$REPOSITORY" --workflow cicd.yml --event merge_group --limit 5 \
-              --json databaseId,status -q '.[] | select(.status != "completed") | .databaseId'); do
-              queued=$((queued + $(gh api "repos/$REPOSITORY/actions/runs/$id/jobs?per_page=100" \
-                --jq '[.jobs[] | select(.status == "queued")] | length')))
+            for id in $runs; do
+              jobs=$(gh api "repos/$REPOSITORY/actions/runs/$id/jobs?per_page=100" \
+                --jq '[(.jobs | length), ([.jobs[] | select(.status == "queued")] | length)] | @tsv')
+              read -r total waiting <<< "$jobs"
+              # A merge-group run that has not fanned out yet has no jobs, but it will.
+              if [ "$total" -eq 0 ]; then waiting=1; fi
+              queued=$((queued + waiting))
             done
-            [ "$queued" -eq 0 ] && exit 0
+            if [ "$queued" -eq 0 ]; then
+              echo "run=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
             echo "$queued merge-group jobs are queued; waiting a minute"
             sleep 60
           done
-          echo "::error::The merge queue stayed busy for an hour"
-          exit 1
+          echo "::notice::The merge queue stayed busy for an hour, so tonight's sandbox footprint run is skipped."
+          echo "run=false" >> "$GITHUB_OUTPUT"
+      - uses: ./.github/actions/setup-caches
+        if: steps.queue.outputs.run == 'true'
+      - name: Resolve the agent image of the tested build
+        if: steps.queue.outputs.run == 'true'
+        id: image
+        run: |
+          set -euo pipefail
+          node scripts/resolve-release-images.ts "$COMMIT" release-images.tsv
+          reference=$(awk -F '\t' '$1 == "agent-pi" { print $2 "@" $3 }' release-images.tsv)
+          [ -n "$reference" ] || { echo "::error::No agent-pi image for $COMMIT"; exit 1; }
+          echo "reference=$reference" >> "$GITHUB_OUTPUT"
       - name: Stage a review of the large fixture
+        if: steps.queue.outputs.run == 'true'
         env:
           FOOTPRINT_STAGE_DIR: ${{ runner.temp }}/footprint-stage
           FOOTPRINT_REPO: ${{ runner.temp }}/swiftformat
@@ -101,24 +123,27 @@ jobs:
           cd server
           ./gradlew :application:liveTest --tests '*ReviewFootprintStagingLiveTest*' --console=plain
       - name: Measure two reviews at once
+        if: steps.queue.outputs.run == 'true'
         env:
+          IMAGE: ${{ steps.image.outputs.reference }}
           STAGE: ${{ runner.temp }}/footprint-stage
         run: |
           set -euo pipefail
-          image="ghcr.io/hephaestus-build/agent-pi:$COMMIT"
-          docker pull --quiet "$image"
-          node scripts/sandbox-footprint.ts --stage "$STAGE" --image "$image" --reviews 2 \
-            --label "nightly-$COMMIT" --out footprint.json
-      - name: Keep the report
-        if: always()
+          docker pull --quiet "$IMAGE"
+          node scripts/sandbox-footprint.ts --stage "$STAGE" --image "$IMAGE" --reviews 2 \
+            --label "nightly-$COMMIT" --work sandbox-footprint
+      # The report, each container's log and the raw samples: a failure is read from these.
+      - name: Keep the report, the logs and the samples
+        if: always() && steps.queue.outputs.run == 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: sandbox-footprint
-          path: footprint.json
-          if-no-files-found: ignore
+          path: sandbox-footprint/
+          if-no-files-found: warn
           retention-days: 30
 
-  # A scheduled run has no pull request to fail, so a failure is reported on one tracking issue.
+
+  # A scheduled run has no pull request to fail, so each failed job reports on its own tracking issue.
   report:
     name: "Report a failure"
     needs: [build, Kubernetes, footprint]
@@ -128,20 +153,32 @@ jobs:
     permissions:
       issues: write
     steps:
-      - name: Report the failure on the tracking issue
+      - name: Report each failed job on its tracking issue
         env:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
           COMMIT: ${{ needs.build.outputs.commit }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          BUILD: ${{ needs.build.result }}
+          KUBERNETES: ${{ needs.Kubernetes.result }}
+          FOOTPRINT: ${{ needs.footprint.result }}
         run: |
           set -euo pipefail
-          title="The nightly Kubernetes run failed"
-          body="The nightly cluster run on \`${COMMIT:-no commit}\` failed: $RUN_URL"
-          number=$(gh issue list -R "$REPOSITORY" --state open --search "\"$title\" in:title" --json number,title |
-            jq -r --arg title "$title" '[.[] | select(.title == $title)][0].number // empty')
-          if [ -n "$number" ]; then
-            gh issue comment "$number" -R "$REPOSITORY" --body "$body"
-          else
-            gh issue create -R "$REPOSITORY" --title "$title" --body "$body"
+          report() {
+            local title=$1 body=$2 number
+            number=$(gh issue list -R "$REPOSITORY" --state open --search "\"$title\" in:title" --json number,title |
+              jq -r --arg title "$title" '[.[] | select(.title == $title)][0].number // empty')
+            if [ -n "$number" ]; then
+              gh issue comment "$number" -R "$REPOSITORY" --body "$body"
+            else
+              gh issue create -R "$REPOSITORY" --title "$title" --body "$body"
+            fi
+          }
+          if [ "$BUILD" = failure ] || [ "$KUBERNETES" = failure ]; then
+            report "The nightly Kubernetes run failed" \
+              "The nightly cluster run on \`${COMMIT:-no commit}\` failed: $RUN_URL"
+          fi
+          if [ "$FOOTPRINT" = failure ]; then
+            report "The nightly sandbox footprint run failed" \
+              "The nightly sandbox footprint run on \`${COMMIT:-no commit}\` failed: $RUN_URL. The \`sandbox-footprint\` artifact holds the report (its \`verdict.reasons\`), each container's log and the samples."
           fi
