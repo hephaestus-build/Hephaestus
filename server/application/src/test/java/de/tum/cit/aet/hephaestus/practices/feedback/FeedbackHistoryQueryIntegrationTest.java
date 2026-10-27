@@ -36,10 +36,12 @@ import de.tum.cit.aet.hephaestus.practices.spi.ResultEndReason;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultHistoryEntry;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultHistoryQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
+import java.sql.Timestamp;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -393,7 +395,12 @@ class FeedbackHistoryQueryIntegrationTest extends AbstractFeedbackIntegrationTes
         var withdrawn = piece(FeedbackDestination.PRACTICE_PAGE, FeedbackState.DELIVERED, AT);
         bind(shown, proof);
         bind(withdrawn, proof);
+        // The withdrawn piece is the newest, so a read with a limit of 1 must page past it.
+        jdbc.update(
+                "UPDATE feedback SET created_at=? WHERE id=?", Timestamp.from(AT.plusSeconds(60)), withdrawn.getId());
         when(visibility.withdrawn(workspace.getId(), withdrawn.getId())).thenReturn(true);
+        when(visibility.withdrawnAt(eq(workspace.getId()), argThat(ids -> ids.contains(withdrawn.getId()))))
+                .thenReturn(Map.of(withdrawn.getId(), AT));
 
         assertThat(history.forDeveloper(workspace.getId(), developerId, AT.minusSeconds(1), 10))
                 .extracting(FeedbackHistoryEntry::feedbackId)
@@ -401,10 +408,17 @@ class FeedbackHistoryQueryIntegrationTest extends AbstractFeedbackIntegrationTes
                 .doesNotContain(withdrawn.getId());
         assertThat(history.find(workspace.getId(), withdrawn.getId(), developerId))
                 .isEmpty();
-        // A withdrawn piece does not use up the limit: one more row than a caller lists still finds what is kept.
+        // A withdrawn piece does not use up the limit.
         assertThat(history.forDeveloper(workspace.getId(), developerId, AT.minusSeconds(1), 1))
                 .extracting(FeedbackHistoryEntry::feedbackId)
                 .containsExactly(shown.getId());
+        // A caller that lists one piece asks for two: behind the withdrawn piece, both kept pieces show that more
+        // exist.
+        var also = piece(FeedbackDestination.ON_WORK, FeedbackState.DELIVERED, AT);
+        bind(also, proof);
+        assertThat(history.forDeveloper(workspace.getId(), developerId, AT.minusSeconds(1), 2))
+                .extracting(FeedbackHistoryEntry::feedbackId)
+                .containsExactlyInAnyOrder(shown.getId(), also.getId());
     }
 
     /** The timeline names the work and practice that a problem and shown feedback are about, as the developer reads them. */

@@ -62,7 +62,7 @@ public class FeedbackHistoryQueryService implements FeedbackHistoryQuery {
                 cb.equal(row.get("workspaceId"), workspaceId),
                 cb.equal(row.get("id"), feedbackId),
                 cb.equal(row.get("developerId"), developerAccountId));
-        return readOwn(selected, developerAccountId, 1).stream().findFirst();
+        return readOwn(workspaceId, selected, developerAccountId, 1).stream().findFirst();
     }
 
     @Override
@@ -73,7 +73,7 @@ public class FeedbackHistoryQueryService implements FeedbackHistoryQuery {
                 cb.equal(row.get("workspaceId"), workspaceId),
                 cb.equal(row.get("developerId"), developerAccountId),
                 cb.greaterThanOrEqualTo(row.get("createdAt"), since));
-        return readOwn(selected, developerAccountId, limit);
+        return readOwn(workspaceId, selected, developerAccountId, limit);
     }
 
     @Override
@@ -203,20 +203,25 @@ public class FeedbackHistoryQueryService implements FeedbackHistoryQuery {
      * The developer's own pieces as they may learn of them: in a state they may see, and not withdrawn, as their
      * Practice profile reads them ({@code ResultPresentation.ownFeedback}).
      */
-    private List<FeedbackHistoryEntry> readOwn(Specification<Feedback> selected, long developerAccountId, int limit) {
+    private List<FeedbackHistoryEntry> readOwn(
+            long workspaceId, Specification<Feedback> selected, long developerAccountId, int limit) {
         if (limit < 1) throw new IllegalArgumentException("A history read needs a positive limit.");
         Specification<Feedback> visible =
                 selected.and((row, query, cb) -> row.get("state").in(FeedbackState.VISIBLE_TO_DEVELOPER));
-        // Withdrawal is a decision on the piece, read per row: page on until the limit holds pieces that are kept, so
-        // a caller that asks for one more row than it lists still learns whether more exist.
+        // Withdrawal is a decision on the piece, not a column: page on until the limit holds pieces that are kept, so
+        // a caller that asks for one more row than it lists still learns whether more exist. One query per page skips
+        // the withdrawn rows before their full read.
         List<FeedbackHistoryEntry> kept = new ArrayList<>();
         for (int page = 0; kept.size() < limit; page++) {
             var rows = feedback.findAll(
                             visible, PageRequest.of(page, limit, Sort.by(Sort.Direction.DESC, "createdAt", "id")))
                     .getContent();
+            var withdrawn = visibility.withdrawnAt(
+                    workspaceId, rows.stream().map(Feedback::getId).toList());
             for (var row : rows) {
+                if (withdrawn.containsKey(row.getId()) || kept.size() >= limit) continue;
                 var facts = facts(row, developerAccountId, SourceUsePurpose.CONVERSATIONAL_MENTORING);
-                if (!facts.withdrawn() && kept.size() < limit) kept.add(facts.entry());
+                if (!facts.withdrawn()) kept.add(facts.entry());
             }
             if (rows.size() < limit) break;
         }

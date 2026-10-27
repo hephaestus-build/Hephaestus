@@ -89,8 +89,13 @@ class DeliveredFeedbackContentSourceTest extends BaseUnitTest {
         UUID feedbackId = UUID.randomUUID();
         when(feedback.forDeveloper(eq(1L), eq(2L), any(), eq(31))).thenReturn(List.of(entry));
         when(entry.feedbackId()).thenReturn(feedbackId);
-        when(entry.reviewId()).thenReturn(UUID.randomUUID());
-        when(entry.problemIds()).thenReturn(List.of(UUID.randomUUID()));
+        UUID reviewId = UUID.randomUUID();
+        UUID resultId = UUID.randomUUID();
+        UUID problemId = UUID.randomUUID();
+        when(entry.reviewId()).thenReturn(reviewId);
+        when(entry.resultIds()).thenReturn(List.of(resultId));
+        when(entry.problemIds()).thenReturn(List.of(problemId));
+        when(entry.practiceSlugs()).thenReturn(List.of("describe-why"));
         when(entry.state()).thenReturn(FeedbackState.DELIVERED);
         when(entry.destination()).thenReturn(FeedbackDestination.ON_WORK);
         when(entry.createdAt()).thenReturn(now);
@@ -116,15 +121,41 @@ class DeliveredFeedbackContentSourceTest extends BaseUnitTest {
 
         var detail = source.read(1L, 2L, resource).orElseThrow();
         assertThat(detail.path("body").asString()).hasSize(DeliveredFeedbackContentSource.MAX_BODY_CHARS);
+        assertThat(detail.path("bodyTruncated").asBoolean()).isTrue();
         assertThat(detail.path("bodyChars").asInt()).isEqualTo(body.length());
+        assertThat(detail.path("reviewId").asString()).isEqualTo(reviewId.toString());
+        assertThat(detail.path("resultIds").get(0).asString()).isEqualTo(resultId.toString());
+        assertThat(detail.path("problemIds").get(0).asString()).isEqualTo(problemId.toString());
+        assertThat(detail.path("practiceSlugs").get(0).asString()).isEqualTo("describe-why");
+        // The account guard is in FeedbackHistoryQuery.find: a piece it does not return is NOT_FOUND here.
+        when(feedback.find(1L, feedbackId, 3L)).thenReturn(Optional.empty());
         assertThat(source.read(1L, 3L, resource).orElseThrow().path("status").asString())
                 .isEqualTo("NOT_FOUND");
+    }
+
+    @Test
+    void shouldAnswerNotFoundForAPieceWithoutAReceiptAndNothingForAPathItDoesNotOwn() {
+        var feedback = mock(FeedbackHistoryQuery.class);
+        var entry = mock(FeedbackHistoryEntry.class);
+        UUID feedbackId = UUID.randomUUID();
+        when(feedback.find(1L, feedbackId, 2L)).thenReturn(Optional.of(entry));
+        when(entry.deliveredAt()).thenReturn(null);
+        var source = new DeliveredFeedbackContentSource(
+                feedback, mock(HistoryCopies.class), mock(ConversationConsentGate.class), new JsonMapper());
+
+        assertThat(source.read(1L, 2L, DeliveredFeedbackContentSource.resourceOf(feedbackId))
+                        .orElseThrow()
+                        .path("status")
+                        .asString())
+                .isEqualTo("NOT_FOUND");
+        assertThat(source.read(1L, 2L, "inputs/context/results_history/" + UUID.randomUUID() + ".json"))
+                .isEmpty();
     }
 
     @ParameterizedTest
     @EnumSource(
             value = FeedbackState.class,
-            names = {"READY", "AWAITING_APPROVAL", "FAILED"})
+            names = {"READY", "UNCONFIRMED", "FAILED"})
     void shouldKeepPreparedOrFailedFeedbackSeparateFromConfirmedWords(FeedbackState state) {
         var feedback = mock(FeedbackHistoryQuery.class);
         var entry = mock(FeedbackHistoryEntry.class);

@@ -970,6 +970,7 @@ This table gives the fixed limits that only contributors change.
 | Smallest Heph model | 32,768 tokens of context, 4,096 tokens of output | `AgentBindingLimits` |
 | Entries per end | 500 | `HephTurnController` |
 | Search hits | 20 | `MentorEntryService.MAX_SEARCH_HITS` |
+| Words of a delivered piece in `delivered_feedback.json`, and in its item `delivered_feedback/<id>.json` | 600 and 2,000 characters. `bodyTruncated` marks a cut. | `DeliveredFeedbackContentSource` |
 | Prepared conversation feedback in one turn's context | 3 pieces | `PreparedConversationFeedbackContentSource` |
 | Age of prepared conversation feedback | 14 days | `ConversationFeedbackTtlSweeper.TTL_DAYS` |
 
