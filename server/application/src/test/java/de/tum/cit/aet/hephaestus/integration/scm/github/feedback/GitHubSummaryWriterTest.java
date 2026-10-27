@@ -88,7 +88,7 @@ class GitHubSummaryWriterTest extends BaseUnitTest {
         assertNotNull(handle);
         assertThat(handle.externalRef()).isEqualTo("IC_comment456");
         assertThat(handle.url()).isEqualTo("https://github.com/owner/repo/pull/42#issuecomment-987654");
-        verify(spec).variable("body", "body for `@alice`\n\nmarker");
+        verify(spec).variable("body", "body for <code>@alice</code>\n\nmarker");
     }
 
     @Test
@@ -195,14 +195,17 @@ class GitHubSummaryWriterTest extends BaseUnitTest {
         when(spec.execute()).thenReturn(Mono.just(response));
 
         var outcome = channel.updateSummary(
-                target, new SummaryHandle("IC_prior", null), ScmFeedbackFixtures.summary("new body", "marker"));
+                target,
+                new SummaryHandle("IC_prior", null),
+                ScmFeedbackFixtures.summary("new body for @alice", "marker"));
 
         assertThat(outcome.kind()).isEqualTo(CopyUpdateKind.EDITED);
         assertNotNull(outcome.externalRef());
         assertThat(outcome.externalRef()).isEqualTo("IC_edited");
         assertThat(outcome.externalUrl()).isEqualTo("https://github.com/owner/repo/pull/42#issuecomment-987654");
         verify(spec).variable("id", "IC_prior");
-        verify(spec).variable("body", "new body\n\nmarker");
+        // An edit that adds a name notifies that person, so the edited body mentions no one either.
+        verify(spec).variable("body", "new body for <code>@alice</code>\n\nmarker");
     }
 
     @Test

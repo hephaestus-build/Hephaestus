@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.integration.scm.feedback;
 
+import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackNotSentException;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -15,24 +16,31 @@ import org.commonmark.parser.IncludeSourceSpans;
 import org.commonmark.parser.Parser;
 
 /**
- * Turns every GitHub or GitLab user, team or group mention in a body that Hephaestus writes into code, so neither a
- * comment nor a later edit of it notifies anyone by name. The composer already refuses a mention in model-written
- * prose; this covers every other text that reaches the provider.
+ * Turns every GitHub or GitLab user, team or group mention in a body that Hephaestus writes into an HTML code element,
+ * so neither a comment nor a later edit of it notifies anyone by name. The composer already refuses a mention in
+ * model-written prose; this covers every other text that reaches the provider. An HTML code element, unlike a backtick
+ * fence, cannot pair with a backtick elsewhere in the body, and both providers link no name inside it. The character
+ * reference for the at sign is no escape: GitHub links it.
  */
 public final class ProviderMentions {
 
     private ProviderMentions() {}
 
     // Both providers link @name at the start of a rendered text run or after a character that cannot be part of a
-    // name; `@org/team` and `@group/subgroup` name a team or a subgroup.
-    private static final Pattern MENTION = Pattern.compile("(?<![A-Za-z0-9_])@[A-Za-z0-9][A-Za-z0-9_-]*(?:[./][A-Za-z0-9_-]+)*");
+    // name; `@org/team` and `@group/subgroup` name a team or a subgroup. A name right after another (`@a@b`) is linked
+    // once the first is code, so one token runs to the end of the chain.
+    private static final Pattern MENTION =
+            Pattern.compile("(?<![A-Za-z0-9_])@[A-Za-z0-9_][A-Za-z0-9_-]*(?:[./@][A-Za-z0-9_-]+)*");
 
-    // A bare web address renders as a link, and a name inside a link notifies no one. An autolink ends before `)`.
-    private static final Pattern BARE_LINK = Pattern.compile("(?i)(?:https?://|ftp://|www\\.)[^\\s<>\"'`\\\\)]+");
+    // A bare web address with a host renders as a link, and a name inside a link notifies no one. `https://@name`
+    // has no host and stays a mention. An autolink ends before `)`.
+    private static final Pattern BARE_LINK =
+            Pattern.compile("(?i)(?:https?://|ftp://|www\\.)[A-Za-z0-9][^\\s<>\"'`\\\\)]*");
 
     private static final Pattern TAG = Pattern.compile("<[^>]*>");
 
-    private static final Pattern BACKTICKS = Pattern.compile("`+");
+    // Markdown punctuation that would still act inside an HTML code element, and the characters HTML would read.
+    private static final Pattern MARKDOWN_PUNCTUATION = Pattern.compile("[!\"#$%'()*+,\\-./:;=?@\\[\\\\\\]^_`{|}~]");
 
     private static final Parser MARKDOWN = Parser.builder()
             .includeSourceSpans(IncludeSourceSpans.BLOCKS_AND_INLINES)
@@ -40,11 +48,23 @@ public final class ProviderMentions {
 
     private record Edit(int from, int to, String replacement) {}
 
+    /**
+     * The body with every mention in an HTML code element. Escaping its own output changes nothing.
+     *
+     * @throws FeedbackNotSentException if the body cannot be read as Markdown; nothing was sent
+     */
     public static String escape(String body) {
+        try {
+            return escapeMarkdown(body);
+        } catch (RuntimeException e) {
+            throw new FeedbackNotSentException("Feedback text could not be checked for mentions", e);
+        }
+    }
+
+    private static String escapeMarkdown(String body) {
         List<Edit> edits = new ArrayList<>();
-        boolean[] unplaced = {false};
         MARKDOWN.parse(body).accept(new AbstractVisitor() {
-            // The rendered text decides: `&#64;name` and a name right after other inline markup are mentions too.
+            // The rendered text decides: `\\@name` and a name right after other inline markup are mentions too.
             @Override
             public void visit(Text text) {
                 if (text.getPrevious() instanceof HtmlInline open
@@ -53,25 +73,23 @@ public final class ProviderMentions {
                 List<int[]> names = names(literal, 0, literal.length());
                 if (names.isEmpty()) return;
                 List<SourceSpan> spans = text.getSourceSpans();
-                if (spans.isEmpty()) {
-                    unplaced[0] = true;
-                    return;
-                }
-                int from = spans.getFirst().getInputIndex();
+                if (spans.isEmpty()) throw new IllegalStateException("A text run has no place in the body.");
                 int to = spans.getLast().getInputIndex() + spans.getLast().getLength();
-                if (body.substring(from, to).equals(literal)) {
-                    for (int[] name : names) {
-                        int start = from + name[0];
-                        int end = from + name[1];
-                        String found = body.substring(start, end);
-                        // Next to a code span, a backtick fence would join it; an HTML code element stays apart.
-                        boolean besideCode = (start > 0 && body.charAt(start - 1) == '`')
-                                || (end < body.length() && body.charAt(end) == '`');
-                        edits.add(new Edit(start, end, besideCode ? "<code>" + found + "</code>" : code(found)));
-                    }
+                String source = body.substring(spans.getFirst().getInputIndex(), to);
+                // A paragraph drops the spaces around its text, which the span may still hold.
+                int from = spans.getFirst().getInputIndex()
+                        + (source.equals(literal)
+                                ? 0
+                                : source.length() - source.stripLeading().length());
+                if (source.equals(literal) || source.strip().equals(literal)) {
+                    for (int[] name : names)
+                        edits.add(new Edit(
+                                from + name[0],
+                                from + name[1],
+                                "<code>" + literal.substring(name[0], name[1]) + "</code>"));
                 } else {
                     // Escapes or character references move the name in the source; the whole run becomes code.
-                    edits.add(new Edit(from, to, code(literal)));
+                    edits.add(new Edit(spans.getFirst().getInputIndex(), to, code(literal)));
                 }
             }
 
@@ -99,7 +117,6 @@ public final class ProviderMentions {
                     edits.add(new Edit(name[0], name[1], "<code>" + body.substring(name[0], name[1]) + "</code>"));
             }
         });
-        if (unplaced[0]) return MENTION.matcher(body).replaceAll(match -> code(match.group()));
         if (edits.isEmpty()) return body;
         edits.sort(Comparator.comparingInt(Edit::from));
         StringBuilder out = new StringBuilder(body.length() + edits.size() * 13);
@@ -129,13 +146,11 @@ public final class ProviderMentions {
         }
     }
 
-    // A fence one backtick longer than any run inside keeps the text whole; spaces keep an edge backtick apart.
+    // Markdown still reads inside an HTML code element, so a whole run's punctuation is escaped and it renders as
+    // written. A name alone needs none: its characters start no Markdown.
     private static String code(String text) {
-        int longest = 0;
-        Matcher run = BACKTICKS.matcher(text);
-        while (run.find()) longest = Math.max(longest, run.end() - run.start());
-        String fence = "`".repeat(longest + 1);
-        boolean pad = text.startsWith("`") || text.endsWith("`");
-        return fence + (pad ? " " : "") + text + (pad ? " " : "") + fence;
+        String inert =
+                MARKDOWN_PUNCTUATION.matcher(text).replaceAll(match -> Matcher.quoteReplacement("\\" + match.group()));
+        return "<code>" + inert.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;") + "</code>";
     }
 }

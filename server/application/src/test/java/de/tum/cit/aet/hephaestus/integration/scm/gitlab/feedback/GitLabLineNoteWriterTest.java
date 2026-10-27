@@ -602,10 +602,12 @@ class GitLabLineNoteWriterTest extends BaseUnitTest {
                 List.of(note),
                 fence);
 
-        assertThat(rest.calls()).singleElement().satisfies(call -> assertThat((String) call.json().get("body"))
-                .contains("/src/%40types/index.d.ts#L3-7")
-                .contains("Ask `@alice`")
-                .doesNotContain(" @alice"));
+        assertThat(rest.calls())
+                .singleElement()
+                .satisfies(call -> assertThat((String) call.json().get("body"))
+                        .contains("/src/%40types/index.d.ts#L3-7")
+                        .contains("Ask <code>@alice</code>")
+                        .doesNotContain(" @alice"));
     }
 
     @Test
@@ -1392,12 +1394,13 @@ class GitLabLineNoteWriterTest extends BaseUnitTest {
     }
 
     private static String posted(LineNote item) {
-        return item.body() + "\n" + item.writeMarker() + "\n<!-- hephaestus-diff-note-ck=" + item.writeKey() + " -->";
+        return GitLabSummaryWriter.gitLabBody(item.body()) + "\n" + item.writeMarker()
+                + "\n<!-- hephaestus-diff-note-ck=" + item.writeKey() + " -->";
     }
 
     private static String placed(LineNote item) {
-        return item.body() + "\n" + item.writeMarker() + "\n" + GitLabLineNoteWriter.RANGE_PLACEMENT
-                + "\n<!-- hephaestus-diff-note-ck=" + item.writeKey() + " -->";
+        return GitLabSummaryWriter.gitLabBody(item.body()) + "\n" + item.writeMarker() + "\n"
+                + GitLabLineNoteWriter.RANGE_PLACEMENT + "\n<!-- hephaestus-diff-note-ck=" + item.writeKey() + " -->";
     }
 
     private List<String> bodies() {

@@ -114,6 +114,7 @@ public class GitHubSummaryWriter implements SummaryWriter {
                     content.copyId(), "The GitHub rate limit is critical for scope " + scopeId);
         }
 
+        String body = ProviderMentions.escape(content.externalBody());
         ClientGraphQlResponse response;
         try {
             egressGuard.requireDeliveryAllowed("github.update-summary");
@@ -121,7 +122,7 @@ public class GitHubSummaryWriter implements SummaryWriter {
                     .forScope(scopeId)
                     .documentName("UpdateIssueComment")
                     .variable("id", externalId)
-                    .variable("body", ProviderMentions.escape(content.externalBody()))
+                    .variable("body", body)
                     .execute()
                     .block(GRAPHQL_TIMEOUT);
         } catch (OutboundEgressSuppressedException e) {
