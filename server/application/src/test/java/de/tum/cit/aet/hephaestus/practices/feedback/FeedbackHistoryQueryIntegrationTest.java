@@ -26,6 +26,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.Currentness;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCopyKind;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackCopyState;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackDestination;
+import de.tum.cit.aet.hephaestus.practices.spi.FeedbackHistoryEntry;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackIds;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackState;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackStopReason;
@@ -381,6 +382,29 @@ class FeedbackHistoryQueryIntegrationTest extends AbstractFeedbackIntegrationTes
             assertThat(history.find(workspace.getId(), id, developerId)).isPresent();
         for (var id : hidden)
             assertThat(history.find(workspace.getId(), id, developerId)).isEmpty();
+    }
+
+    /** A withdrawn piece is gone for the developer: Heph reads it as their Practice profile does. */
+    @Test
+    void shouldLeaveOutAWithdrawnPieceAsTheProfileDoes() {
+        var proof = result();
+        authorize(proof);
+        var shown = piece(FeedbackDestination.PRACTICE_PAGE, FeedbackState.DELIVERED, AT);
+        var withdrawn = piece(FeedbackDestination.PRACTICE_PAGE, FeedbackState.DELIVERED, AT);
+        bind(shown, proof);
+        bind(withdrawn, proof);
+        when(visibility.withdrawn(workspace.getId(), withdrawn.getId())).thenReturn(true);
+
+        assertThat(history.forDeveloper(workspace.getId(), developerId, AT.minusSeconds(1), 10))
+                .extracting(FeedbackHistoryEntry::feedbackId)
+                .contains(shown.getId())
+                .doesNotContain(withdrawn.getId());
+        assertThat(history.find(workspace.getId(), withdrawn.getId(), developerId))
+                .isEmpty();
+        // A withdrawn piece does not use up the limit: one more row than a caller lists still finds what is kept.
+        assertThat(history.forDeveloper(workspace.getId(), developerId, AT.minusSeconds(1), 1))
+                .extracting(FeedbackHistoryEntry::feedbackId)
+                .containsExactly(shown.getId());
     }
 
     /** The timeline names the work and practice that a problem and shown feedback are about, as the developer reads them. */

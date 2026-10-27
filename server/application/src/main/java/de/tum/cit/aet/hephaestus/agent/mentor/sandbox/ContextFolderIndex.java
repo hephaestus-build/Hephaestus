@@ -80,6 +80,8 @@ final class ContextFolderIndex {
                         + " detail\n")
                 .append("- `inputs/context/issue/<issueId>.json`: one issue they wrote or are assigned to\n")
                 .append("- `inputs/context/results_history/<resultId>.json`: one result in detail\n")
+                .append("- `inputs/context/delivered_feedback/<feedbackId>.json`: the whole words of one piece of"
+                        + " delivered feedback\n")
                 .append("- `inputs/context/review_attempts/pull_request/<id>.json` and `.../issue/<id>.json`: the"
                         + " practice-review runs of one piece of work\n");
         for (String section : loaderSections) {

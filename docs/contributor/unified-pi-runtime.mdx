@@ -679,7 +679,7 @@ The script reads the stream with `head -c`, because docker-java does not close t
 The folder stages them with indentation, so that `read` can page them by line.
 
 An item document is lazy.
-Examples are `issue/<id>.json`, `merge_readiness/<id>.json`, `results_history/<id>.json` and `review_attempts/<kind>/<id>.json` under `inputs/context/`.
+Examples are `issue/<id>.json`, `merge_readiness/<id>.json`, `results_history/<id>.json`, `delivered_feedback/<id>.json` and `review_attempts/<kind>/<id>.json` under `inputs/context/`.
 A `read` of an item path that is not staged asks the owning `ContentSource.read`.
 The worker stages the document and returns its first page.
 A path that no source owns, or that the turn may not see, gets `NOT_FOUND`.
@@ -835,7 +835,7 @@ The source of each document is in the module that owns its data:
 
 | Document under `inputs/context/` | Source |
 | --- | --- |
-| `user.json`, `workspace.json`, `practice_catalog.json`, `practice_profile.json`, `delivered_feedback.json`, `prepared_conversation_feedback.json`, `weekly_digest.json` | `agent/context/providers/mentor/` |
+| `user.json`, `workspace.json`, `practice_catalog.json`, `practice_profile.json`, `delivered_feedback.json` with the item path `delivered_feedback/<id>`, `prepared_conversation_feedback.json`, `weekly_digest.json` | `agent/context/providers/mentor/` |
 | `results_history.json` and `review_attempts.json`, and the item paths `results_history/<id>` and `review_attempts/<kind>/<id>` | `ResultHistoryContentSource` and `ReviewAttemptsContentSource` in `agent/context/providers/mentor/` |
 | `recent_authored_work.json`, `activity.json`, `merge_readiness.json`, and the item paths `merge_readiness/<id>` and `issue/<id>` | `integration/scm/context/` |
 | `slack_conversations.json` | `integration/slack/capture/ConversationCaptureSource` |

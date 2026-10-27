@@ -61,10 +61,8 @@ public class FeedbackHistoryQueryService implements FeedbackHistoryQuery {
         Specification<Feedback> selected = (row, query, cb) -> cb.and(
                 cb.equal(row.get("workspaceId"), workspaceId),
                 cb.equal(row.get("id"), feedbackId),
-                cb.equal(row.get("developerId"), developerAccountId),
-                row.get("state").in(FeedbackState.VISIBLE_TO_DEVELOPER));
-        return read(selected, developerAccountId, 1, SourceUsePurpose.CONVERSATIONAL_MENTORING).stream()
-                .findFirst();
+                cb.equal(row.get("developerId"), developerAccountId));
+        return readOwn(selected, developerAccountId, 1).stream().findFirst();
     }
 
     @Override
@@ -74,9 +72,8 @@ public class FeedbackHistoryQueryService implements FeedbackHistoryQuery {
         Specification<Feedback> selected = (row, query, cb) -> cb.and(
                 cb.equal(row.get("workspaceId"), workspaceId),
                 cb.equal(row.get("developerId"), developerAccountId),
-                row.get("state").in(FeedbackState.VISIBLE_TO_DEVELOPER),
                 cb.greaterThanOrEqualTo(row.get("createdAt"), since));
-        return read(selected, developerAccountId, limit, SourceUsePurpose.CONVERSATIONAL_MENTORING);
+        return readOwn(selected, developerAccountId, limit);
     }
 
     @Override
@@ -200,6 +197,30 @@ public class FeedbackHistoryQueryService implements FeedbackHistoryQuery {
                 .stream()
                 .map(row -> facts(row, viewerAccountId, purpose).entry())
                 .toList();
+    }
+
+    /**
+     * The developer's own pieces as they may learn of them: in a state they may see, and not withdrawn, as their
+     * Practice profile reads them ({@code ResultPresentation.ownFeedback}).
+     */
+    private List<FeedbackHistoryEntry> readOwn(Specification<Feedback> selected, long developerAccountId, int limit) {
+        if (limit < 1) throw new IllegalArgumentException("A history read needs a positive limit.");
+        Specification<Feedback> visible =
+                selected.and((row, query, cb) -> row.get("state").in(FeedbackState.VISIBLE_TO_DEVELOPER));
+        // Withdrawal is a decision on the piece, read per row: page on until the limit holds pieces that are kept, so
+        // a caller that asks for one more row than it lists still learns whether more exist.
+        List<FeedbackHistoryEntry> kept = new ArrayList<>();
+        for (int page = 0; kept.size() < limit; page++) {
+            var rows = feedback.findAll(
+                            visible, PageRequest.of(page, limit, Sort.by(Sort.Direction.DESC, "createdAt", "id")))
+                    .getContent();
+            for (var row : rows) {
+                var facts = facts(row, developerAccountId, SourceUsePurpose.CONVERSATIONAL_MENTORING);
+                if (!facts.withdrawn() && kept.size() < limit) kept.add(facts.entry());
+            }
+            if (rows.size() < limit) break;
+        }
+        return List.copyOf(kept);
     }
 
     /** One history row as {@code purpose} may see it, with the support it was judged on. */
