@@ -83,7 +83,7 @@ export function DeliveryBreakdownCard({
 			<CardContent className="@container flex flex-1 flex-col gap-4">
 				<div className="grid grid-cols-1 gap-x-6 gap-y-4 @md:grid-cols-2">
 					<BreakdownTable
-						caption="Delivered by where it appeared"
+						caption="Delivered and partly delivered"
 						what="delivered feedback by where it appeared"
 						state={delivered}
 						empty={`Nothing delivered ${range.during}`}

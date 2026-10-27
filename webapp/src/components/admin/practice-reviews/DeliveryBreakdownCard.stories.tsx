@@ -86,10 +86,11 @@ type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {
 	play: async ({ canvas, userEvent }) => {
-		await expect(rowsOf(canvas, "Delivered by where it appeared")).toEqual([
+		await expect(rowsOf(canvas, "Delivered and partly delivered")).toEqual([
 			"On GitHub: 8",
 			"In conversation in Slack: 2",
 			"On the practice page: 4",
+			"Partly delivered: 1",
 		]);
 		await expect(rowsOf(canvas, "Withheld by reason")).toEqual([
 			"The work moved on: 2",
@@ -105,6 +106,11 @@ export const Default: Story = {
 				location: "GITHUB",
 			},
 		});
+		await expect(linkOf(canvas, "1, Partly delivered").search).toEqual({
+			from: reviewOverviewScope.from,
+			to: reviewOverviewScope.to,
+			partlyDelivered: "true",
+		});
 		await expect(linkOf(canvas, "2, The work moved on").search).toEqual({
 			from: reviewOverviewScope.from,
 			to: reviewOverviewScope.to,
@@ -114,8 +120,8 @@ export const Default: Story = {
 		await expect(linkOf(canvas, "1, Rejected").search.state).toBe("REJECTED");
 		// Each split heads its table with its total, which the Feedback tile beside it counts too.
 		await expect(
-			canvas.getByText("Delivered by where it appeared").nextElementSibling,
-		).toHaveTextContent("14");
+			canvas.getByText("Delivered and partly delivered").nextElementSibling,
+		).toHaveTextContent("15");
 		await expect(canvas.getByText("Withheld by reason").nextElementSibling).toHaveTextContent("4");
 		// The whole row is the link: its words stretch over the row.
 		await expect(canvas.getByRole("link", { name: "8, On GitHub" }).closest("tr")).toHaveClass(
@@ -205,7 +211,7 @@ export const OneSplitFailed: Story = {
 	args: { withheld: { status: "error", error: { status: 500 }, onRetry: fn() } },
 	play: async ({ canvas }) => {
 		canvas.getByText("We could not load withheld feedback by reason");
-		await expect(rowsOf(canvas, "Delivered by where it appeared")).toHaveLength(3);
+		await expect(rowsOf(canvas, "Delivered and partly delivered")).toHaveLength(4);
 		await expect(canvas.getByRole("button", { name: "Retry" })).toBeEnabled();
 	},
 };
@@ -218,7 +224,7 @@ export const Stale: Story = {
 	},
 	play: async ({ canvas }) => {
 		await expect(
-			canvas.getByRole("table", { name: "Delivered by where it appeared" }),
+			canvas.getByRole("table", { name: "Delivered and partly delivered" }),
 		).toHaveAttribute("aria-busy", "true");
 		await expect(rateOf(canvas, /^Feedback failed to deliver/u)).toHaveAttribute(
 			"aria-busy",
