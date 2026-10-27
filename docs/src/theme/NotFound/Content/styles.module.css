@@ -1,4 +1,6 @@
+/* The search bar places its shortcut hint at the right edge of its container, which is sized for the navbar. */
 .search {
+	width: fit-content;
 	margin: 1.5rem 0;
 }
 
