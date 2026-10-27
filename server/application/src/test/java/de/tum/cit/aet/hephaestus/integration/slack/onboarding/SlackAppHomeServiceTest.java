@@ -103,6 +103,7 @@ class SlackAppHomeServiceTest extends BaseUnitTest {
         assertThat(rendered).doesNotContain("What project-practice issue should I follow up on");
         assertThat(json).doesNotContain("\\\\n");
         assertThat(rendered).contains("Enabled for you"); // mentor-status anchor
+        assertThat(rendered).contains("It replies only in your direct messages"); // channel-behavior claim
         assertThat(rendered).contains("Linked as `octocat`"); // identity anchor
         assertThat(rendered).contains("Allowed, 1 active channel"); // channel-count anchor
         assertThat(rendered).contains("Stop using my messages"); // opt-out wording

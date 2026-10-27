@@ -172,7 +172,7 @@ Hephaestus never sends an open question as feedback.
 | Term | Meaning | Avoid for this concept |
 | --- | --- | --- |
 | **Feedback** | Guidance that Hephaestus writes from observations for a developer. | message, feedbacks |
-| **Practice feedback** | The full name for feedback when the surrounding text does not establish its context. It also names the product category: feedback on how developers apply engineering practices. | message, AI feedback, feedback item, ledger unit, AI mentoring, AI code review |
+| **Practice feedback** | The full name for feedback when the surrounding text does not establish its context. | message, AI feedback, feedback item, ledger unit, AI mentoring, AI code review |
 | **Destination** | Where feedback is intended to appear: on the work, on the practice page, or in conversation. | channel, location, surface |
 | **Delivery** | Whether feedback is awaiting approval, ready, delivered, withheld, rejected, replaced, failed or unconfirmed. | surface |
 | **Copy** | One appearance of feedback: a summary, line note, file note or Heph answer. | placement |
