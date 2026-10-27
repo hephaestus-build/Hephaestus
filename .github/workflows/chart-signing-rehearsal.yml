@@ -80,5 +80,5 @@ jobs:
             --certificate-identity "$IDENTITY" \
             --certificate-oidc-issuer https://token.actions.githubusercontent.com
           helm pull "oci://$CHART@$DIGEST" --untar --untardir "chart-$VERSION"
-          helm show chart "chart-$VERSION/hephaestus" | grep -qx "version: $VERSION"
+          helm show chart "chart-$VERSION/hephaestus" | grep -x "version: $VERSION" >/dev/null
           echo "Verified $CHART@$DIGEST as chart $VERSION" >> "$GITHUB_STEP_SUMMARY"

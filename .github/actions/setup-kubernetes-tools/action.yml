@@ -49,5 +49,6 @@ runs:
         install -m 0755 "$work/kind" "$install_dir/kind"
         install -m 0755 "$work/kubeconform" "$install_dir/kubeconform"
         echo "$install_dir" >> "$GITHUB_PATH"
-        "$install_dir/k3d" version | grep -q "k3d version $K3D_VERSION"
-        "$install_dir/kind" version | grep -q "kind $KIND_VERSION"
+        # Not grep -q: it exits at the first match, and under pipefail the writer then fails with SIGPIPE (141).
+        "$install_dir/k3d" version | grep "k3d version $K3D_VERSION" >/dev/null
+        "$install_dir/kind" version | grep "kind $KIND_VERSION" >/dev/null

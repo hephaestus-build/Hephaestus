@@ -89,7 +89,7 @@ jobs:
             node scripts/verify-changesets.ts /tmp/pending-changeset-status.json --migration "${migration_changed[@]}"
           fi
 
-          if git diff --name-only "$BASE_SHA"...HEAD -- server/application/src/main/resources/db/changelog/ | grep -q .; then
+          if git diff --name-only "$BASE_SHA"...HEAD -- server/application/src/main/resources/db/changelog/ | grep . >/dev/null; then
             echo "::notice::This PR contains Liquibase changesets — the release notes will flag the migration automatically. If the operator must act, add **Operators:** to its changeset and a matching .migration fragment."
           fi
 
