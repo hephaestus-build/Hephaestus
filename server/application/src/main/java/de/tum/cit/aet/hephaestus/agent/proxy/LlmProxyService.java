@@ -222,6 +222,7 @@ class LlmProxyService {
      * denotes a review or Heph call. A null response serves a worker step in-process: the call must not stream, and a
      * provider that answers with a stream anyway is refused.
      */
+    @SuppressWarnings("try") // The scope installs the current span and restores it on close.
     @Nullable
     ResponseEntity<?> serve(
             ProxyRouting routing,
@@ -231,77 +232,69 @@ class LlmProxyService {
             HttpHeaders incomingHeaders,
             byte[] body) {
         accounting.recordGatewayRequest(body.length);
+        // Begun first and closed last, so that nothing before the provider call can leave it open for the turn's end.
         try (ProxyCallsInFlight.Call inFlight = callsInFlight.begin(routing.attempt())) {
-            return serve(routing, protocol, practiceScript, response, incomingHeaders, body, inFlight);
-        }
-    }
-
-    @SuppressWarnings("try") // The scope installs the current span and restores it on close.
-    private @Nullable ResponseEntity<?> serve(
-            ProxyRouting routing,
-            LlmApiProtocol protocol,
-            @Nullable PracticeScriptCall practiceScript,
-            @Nullable HttpServletResponse response,
-            HttpHeaders incomingHeaders,
-            byte[] body,
-            ProxyCallsInFlight.Call inFlight) {
-        MDC.put("proxy.principal", routing.principalDescription());
-        MDC.put("proxy.apiProtocol", routing.apiProtocol());
-        Timer.Sample timer = accounting.startTimer();
-        String operation = operationName(protocol);
-        Span span = tracer.spanBuilder()
-                .name("gen_ai." + operation)
-                .kind(Span.Kind.CLIENT)
-                .tag("gen_ai.operation.name", operation)
-                .tag("hephaestus.pi_request.sha256", ProvenanceDigest.sha256Hex(body))
-                .start();
-        if (routing.sourceId() != null)
-            span.tag("hephaestus.job.id", routing.sourceId().toString());
-        if (routing.workspaceId() != null) span.tag("hephaestus.workspace.id", routing.workspaceId());
-        long started = System.nanoTime();
-        String ended = "error";
-        try (var ignored = tracer.withSpan(span)) {
-            var result = forward(routing, protocol, practiceScript, response, incomingHeaders, body, span, inFlight);
-            int status = result == null
-                    ? Objects.requireNonNull(response).getStatus()
-                    : result.getStatusCode().value();
-            if (status >= 400 && inFlight.failure() == null) {
-                // The proxy answered itself: a refusal names its rule, any other answer is the gateway's own.
-                String refused = result == null ? null : result.getHeaders().getFirst(REFUSAL_HEADER);
-                inFlight.failed(new MentorTurn.FailedCall(
-                        refused == null ? GATEWAY_ERROR : "refused_" + refused.toLowerCase(Locale.ROOT), status));
-            }
-            ended = Integer.toString(status);
-            span.tag("http.response.status_code", status);
-            if (status >= 400) recordSpanError(span, Integer.toString(status));
-            return result;
-        } catch (RuntimeException e) {
-            ended = e.getClass().getSimpleName();
-            recordSpanError(span, e.getClass().getSimpleName());
-            throw e;
-        } finally {
-            // One line per model call of a Heph turn, as for its tool calls (HephToolCalls): a turn that keeps
-            // calling shows as a run of them. A retry of a failed call is its own line, and a failed call a warning.
-            if (routing.attempt().sourceType() == UsageSourceType.MENTOR_TURN) {
-                MentorTurn.FailedCall failure = inFlight.failure();
-                LoggingEventBuilder line = log.atLevel(failure == null ? Level.INFO : Level.WARN)
-                        .addKeyValue("event.name", "heph.turn.model_call")
-                        .addKeyValue("turn.id", routing.attempt().sourceId())
-                        .addKeyValue("turn.attempt", routing.attempt().number())
-                        .addKeyValue("outcome", ended)
-                        .addKeyValue(
-                                "duration.ms",
-                                Duration.ofNanos(System.nanoTime() - started).toMillis());
-                if (failure != null) {
-                    line = line.addKeyValue("failure", failure.kind());
-                    if (failure.status() != null) line = line.addKeyValue("failure.status", failure.status());
+            MDC.put("proxy.principal", routing.principalDescription());
+            MDC.put("proxy.apiProtocol", routing.apiProtocol());
+            Timer.Sample timer = accounting.startTimer();
+            String operation = operationName(protocol);
+            Span span = tracer.spanBuilder()
+                    .name("gen_ai." + operation)
+                    .kind(Span.Kind.CLIENT)
+                    .tag("gen_ai.operation.name", operation)
+                    .tag("hephaestus.pi_request.sha256", ProvenanceDigest.sha256Hex(body))
+                    .start();
+            if (routing.sourceId() != null)
+                span.tag("hephaestus.job.id", routing.sourceId().toString());
+            if (routing.workspaceId() != null) span.tag("hephaestus.workspace.id", routing.workspaceId());
+            long started = System.nanoTime();
+            String ended = "error";
+            try (var ignored = tracer.withSpan(span)) {
+                var result =
+                        forward(routing, protocol, practiceScript, response, incomingHeaders, body, span, inFlight);
+                int status = result == null
+                        ? Objects.requireNonNull(response).getStatus()
+                        : result.getStatusCode().value();
+                if (status >= 400 && inFlight.failure() == null) {
+                    // The proxy answered itself: a refusal names its rule, any other answer is the gateway's own.
+                    String refused = result == null ? null : result.getHeaders().getFirst(REFUSAL_HEADER);
+                    inFlight.failed(new MentorTurn.FailedCall(
+                            refused == null ? GATEWAY_ERROR : "refused_" + refused.toLowerCase(Locale.ROOT), status));
                 }
-                line.log(failure == null ? "Heph model call" : "Heph model call failed");
+                ended = Integer.toString(status);
+                span.tag("http.response.status_code", status);
+                if (status >= 400) recordSpanError(span, Integer.toString(status));
+                return result;
+            } catch (RuntimeException e) {
+                ended = e.getClass().getSimpleName();
+                recordSpanError(span, e.getClass().getSimpleName());
+                throw e;
+            } finally {
+                // One line per model call of a Heph turn, as for its tool calls (HephToolCalls): a turn that keeps
+                // calling shows as a run of them. A retry of a failed call is its own line, and a failed call a
+                // warning.
+                if (routing.attempt().sourceType() == UsageSourceType.MENTOR_TURN) {
+                    MentorTurn.FailedCall failure = inFlight.failure();
+                    LoggingEventBuilder line = log.atLevel(failure == null ? Level.INFO : Level.WARN)
+                            .addKeyValue("event.name", "heph.turn.model_call")
+                            .addKeyValue("turn.id", routing.attempt().sourceId())
+                            .addKeyValue("turn.attempt", routing.attempt().number())
+                            .addKeyValue("outcome", ended)
+                            .addKeyValue(
+                                    "duration.ms",
+                                    Duration.ofNanos(System.nanoTime() - started)
+                                            .toMillis());
+                    if (failure != null) {
+                        line = line.addKeyValue("failure", failure.kind());
+                        if (failure.status() != null) line = line.addKeyValue("failure.status", failure.status());
+                    }
+                    line.log(failure == null ? "Heph model call" : "Heph model call failed");
+                }
+                span.end();
+                accounting.stopTimer(timer, routing.apiProtocol());
+                MDC.remove("proxy.principal");
+                MDC.remove("proxy.apiProtocol");
             }
-            span.end();
-            accounting.stopTimer(timer, routing.apiProtocol());
-            MDC.remove("proxy.principal");
-            MDC.remove("proxy.apiProtocol");
         }
     }
 
@@ -457,7 +450,8 @@ class LlmProxyService {
                 accounting.recordUpstreamStalled(routing.apiProtocol());
                 String stall = "the model provider sent no first byte within "
                         + bounds.firstByte().toSeconds() + " seconds";
-                warnCall(routing, "LLM upstream stalled for principal {}: {}", routing.principalDescription(), stall);
+                if (!routing.hephTurn())
+                    log.warn("LLM upstream stalled for principal {}: {}", routing.principalDescription(), stall);
                 call.failed(new MentorTurn.FailedCall(UPSTREAM_STALLED, null));
                 return errors.providerError(HttpStatus.GATEWAY_TIMEOUT, UPSTREAM_STALLED, stall);
             }
@@ -466,19 +460,19 @@ class LlmProxyService {
             call.failed(
                     new MentorTurn.FailedCall(failure.isEmpty() ? e.getClass().getName() : failure, null));
             if (e instanceof WebClientRequestException) {
-                warnCall(
-                        routing,
-                        "LLM upstream unreachable for principal {}: reason={}",
-                        routing.principalDescription(),
-                        e.getClass().getSimpleName());
+                if (!routing.hephTurn())
+                    log.warn(
+                            "LLM upstream unreachable for principal {}: reason={}",
+                            routing.principalDescription(),
+                            e.getClass().getSimpleName());
                 accounting.recordError(routing.apiProtocol());
                 return ResponseEntity.status(502).body("Upstream provider unreachable");
             }
-            warnCall(
-                    routing,
-                    "LLM upstream request failed for principal {}: reason={}",
-                    routing.principalDescription(),
-                    e.getClass().getSimpleName());
+            if (!routing.hephTurn())
+                log.warn(
+                        "LLM upstream request failed for principal {}: reason={}",
+                        routing.principalDescription(),
+                        e.getClass().getSimpleName());
             accounting.recordError(routing.apiProtocol());
             // The work deadline is answered as such; any other failure as before.
             if (workTimeOver(routing))
@@ -504,7 +498,8 @@ class LlmProxyService {
             accounting.recordUpstreamStalled(routing.apiProtocol());
             String stall = "the model provider's stream sent nothing for "
                     + bounds.idle().toSeconds() + " seconds";
-            warnCall(routing, "LLM upstream stalled for principal {}: {}", routing.principalDescription(), stall);
+            if (!routing.hephTurn())
+                log.warn("LLM upstream stalled for principal {}: {}", routing.principalDescription(), stall);
             if (response != null) errors.writeStallFrame(response, stall);
         }
         var outcome = upstream.streamOutcome();
@@ -549,11 +544,11 @@ class LlmProxyService {
             accounting.recordError(routing.apiProtocol());
             // Names the caller beside the outcome; the shared stream code knows neither.
             if (outcome != ProxyStreamingUtils.StreamOutcome.CLIENT_DISCONNECTED) {
-                warnCall(
-                        routing,
-                        "LLM stream for principal {} ended with outcome={}",
-                        routing.principalDescription(),
-                        outcome);
+                if (!routing.hephTurn())
+                    log.warn(
+                            "LLM stream for principal {} ended with outcome={}",
+                            routing.principalDescription(),
+                            outcome);
                 call.failed(new MentorTurn.FailedCall(outcome.name().toLowerCase(Locale.ROOT), status));
             }
         }
@@ -572,16 +567,11 @@ class LlmProxyService {
         // The sandbox only sees "error" from its model client; the trace carries the status on the
         // span and this is its log-side counterpart, for an operator reading logs rather than
         // traces. Status and principal only: the body can quote the request.
-        warnCall(
-                routing,
-                "LLM upstream answered a call for principal {} with status={}",
-                routing.principalDescription(),
-                status);
-    }
-
-    /** Warns about a failed call. A Heph turn's call logs one line with its turn instead, at its end in serve(). */
-    private static void warnCall(ProxyRouting routing, String format, Object... arguments) {
-        if (routing.attempt().sourceType() != UsageSourceType.MENTOR_TURN) log.warn(format, arguments);
+        if (!routing.hephTurn())
+            log.warn(
+                    "LLM upstream answered a call for principal {} with status={}",
+                    routing.principalDescription(),
+                    status);
     }
 
     /**

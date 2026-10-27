@@ -77,6 +77,7 @@ import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.context.ApplicationContext;
 import org.springframework.core.annotation.Order;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.converter.json.JacksonJsonHttpMessageConverter;
@@ -552,7 +553,7 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
             call.failed(new MentorTurn.FailedCall("upstream_status", 503));
         }
         MentorTurnCompletion failingOnce = mock(MentorTurnCompletion.class);
-        doThrow(new IllegalStateException("the database went away"))
+        doThrow(new DataAccessResourceFailureException("the database went away"))
                 .doAnswer(AdditionalAnswers.delegatesTo(completion))
                 .when(failingOnce)
                 .end(any(), anyInt(), any(), any());
