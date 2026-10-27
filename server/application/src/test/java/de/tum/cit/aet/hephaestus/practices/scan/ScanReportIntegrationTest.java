@@ -250,6 +250,29 @@ class ScanReportIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldListAStartedScanWhoseInvocationWaitsAsQueuedInItsRowFilterAndDetail() {
+        var scan = data.scan(scenario, ReviewStatus.RUNNING, Instant.now());
+        invocation(scan.getWorkspaceId(), scan.getId(), ReviewJobStatus.QUEUED);
+        var adapter = new ReviewRuntimeQueryAdapter(
+                jobs, mock(ReviewAssignmentQuery.class), runtimeRows, mock(ReviewTimingFactsQuery.class));
+        when(runtime.jobCounts(anyLong(), anyCollection()))
+                .thenAnswer(call -> adapter.jobCounts(call.getArgument(0), call.getArgument(1)));
+
+        assertThat(query.list(scan.getWorkspaceId(), null, ReviewStatus.QUEUED, PageRequest.of(0, 20))
+                        .getContent())
+                .singleElement()
+                .satisfies(row -> {
+                    assertThat(row.id()).isEqualTo(scan.getId());
+                    assertThat(row.status()).isEqualTo(ReviewStatus.QUEUED);
+                });
+        assertThat(query.list(scan.getWorkspaceId(), null, ReviewStatus.RUNNING, PageRequest.of(0, 20))
+                        .getContent())
+                .isEmpty();
+        assertThat(query.detail(scan.getWorkspaceId(), scan.getId()).summary().status())
+                .isEqualTo(ReviewStatus.QUEUED);
+    }
+
+    @Test
     void shouldReadScanProgressAndReportsWithoutSelectingJobPayloads() {
         var scan = data.scan(scenario, ReviewStatus.RUNNING, Instant.now());
         var result = data.result(scenario, scan);
@@ -568,6 +591,15 @@ class ScanReportIntegrationTest extends BaseIntegrationTest {
         var detail = refused.getDetail();
         assertThat(detail).isNotNull();
         assertThat(detail.path("captureDecision").path("status").asString()).isEqualTo("FAILED");
+        // One refused file leaves the practice running for the scan's other files.
+        assertThat(jdbc.sql("SELECT status FROM review_practice WHERE workspace_id=:ws AND review_id=:review AND"
+                                + " practice_id=:practice")
+                        .param("ws", scan.getWorkspaceId())
+                        .param("review", scan.getId())
+                        .param("practice", scenario.owner().practice().getId())
+                        .query(String.class)
+                        .single())
+                .isEqualTo("RUNNING");
         assertThat(detail.path("custody").path("complete").asBoolean()).isFalse();
         assertThat(detail.path("custody").path("sourceJobIds").get(0).asString())
                 .isEqualTo(job.toString());

@@ -5,12 +5,13 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewStatus;
 import java.util.Map;
 
 /**
- * The status that a review reports, as the glossary defines it: a started review whose invocations all
- * wait for a worker is Queued, not Running. The stored status turns Running when the review is handed to
- * the queue, which the invocation fence relies on; nothing runs until a worker claims a job.
+ * The status that a review reports, as the glossary defines it: a started review is Queued while an
+ * invocation waits for a worker and none runs. The stored status turns Running when the review is handed
+ * to the queue, which the invocation fence relies on; nothing runs until a worker claims a job.
  *
  * <p>{@link #of} and {@link #SQL} state the same rule, one for a review in hand and one for a filter or
- * count over many; {@code ReviewSummaryControllerIntegrationTest} holds them equal.
+ * count over many. The summary and scan integration tests hold them equal; a review has at most one
+ * active job ({@code uk_review_job_active_review}).
  */
 public final class ReviewShownStatus {
 
