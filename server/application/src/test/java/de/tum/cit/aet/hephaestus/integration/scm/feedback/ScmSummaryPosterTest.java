@@ -11,21 +11,21 @@ class ScmSummaryPosterTest extends BaseUnitTest {
     class Sanitize {
 
         @Test
-        void shouldBacktickEscapeAtMentions() {
+        void shouldTurnAtMentionsIntoCode() {
             assertThat(ScmFeedbackFormatter.sanitize("Hello @user123 please review"))
-                    .contains("`@user123`");
+                    .contains("<code>@user123</code>");
         }
 
         @Test
         void shouldEscapeAtMentionsAfterPunctuation() {
-            assertThat(ScmFeedbackFormatter.sanitize("(@user123)")).contains("`@user123`");
-            assertThat(ScmFeedbackFormatter.sanitize("[@user123]")).contains("`@user123`");
+            assertThat(ScmFeedbackFormatter.sanitize("(@user123)")).contains("<code>@user123</code>");
+            assertThat(ScmFeedbackFormatter.sanitize("[@user123]")).contains("<code>@user123</code>");
             // A provider links a mention after any non-word character, so the class cannot stop at
             // brackets.
-            assertThat(ScmFeedbackFormatter.sanitize("cc,@user123")).contains("`@user123`");
-            assertThat(ScmFeedbackFormatter.sanitize("cc.@user123")).contains("`@user123`");
-            assertThat(ScmFeedbackFormatter.sanitize("cc:@user123")).contains("`@user123`");
-            assertThat(ScmFeedbackFormatter.sanitize("cc/@user123")).contains("`@user123`");
+            assertThat(ScmFeedbackFormatter.sanitize("cc,@user123")).contains("<code>@user123</code>");
+            assertThat(ScmFeedbackFormatter.sanitize("cc.@user123")).contains("<code>@user123</code>");
+            assertThat(ScmFeedbackFormatter.sanitize("cc:@user123")).contains("<code>@user123</code>");
+            assertThat(ScmFeedbackFormatter.sanitize("cc/@user123")).contains("<code>@user123</code>");
         }
 
         @Test
@@ -150,7 +150,7 @@ class ScmSummaryPosterTest extends BaseUnitTest {
             assertThat(result).isEqualTo("HelloWorld");
 
             result = ScmFeedbackFormatter.sanitize("@\u200busername");
-            assertThat(result).isEqualTo("`@username`");
+            assertThat(result).isEqualTo("<code>@username</code>");
         }
 
         @Test
@@ -206,7 +206,7 @@ class ScmSummaryPosterTest extends BaseUnitTest {
                     + " ![pixel](https://evil.example/t.png) [x](javascript:alert) <!-- hidden"
                     + " -->done";
             assertThat(ScmFeedbackFormatter.sanitize(prose))
-                    .isEqualTo("Ask `@someone` to review. alert(1)<b>bold</b>  x done");
+                    .isEqualTo("Ask <code>@someone</code> to review. alert(1)<b>bold</b>  x done");
         }
 
         @Test
@@ -239,7 +239,8 @@ class ScmSummaryPosterTest extends BaseUnitTest {
             assertThat(ScmFeedbackFormatter.sanitize(multiline)).isEqualTo(multiline);
 
             // Escaped backticks move the name in the source, so the whole text run becomes code.
-            assertThat(ScmFeedbackFormatter.sanitize("Not code: \\`@State\\`")).isEqualTo("`` Not code: `@State` ``");
+            assertThat(ScmFeedbackFormatter.sanitize("Not code: \\`@State\\`"))
+                    .isEqualTo("<code>Not code\\: \\`\\@State\\`</code>");
         }
 
         @Test
@@ -283,12 +284,12 @@ class ScmSummaryPosterTest extends BaseUnitTest {
 
         @Test
         void shouldEscapeAtMentionsAfterMarkdownChars() {
-            assertThat(ScmFeedbackFormatter.sanitize("*@user*")).contains("`@user`");
-            assertThat(ScmFeedbackFormatter.sanitize(">@user")).contains("`@user`");
-            assertThat(ScmFeedbackFormatter.sanitize("**@user**")).contains("`@user`");
+            assertThat(ScmFeedbackFormatter.sanitize("*@user*")).contains("<code>@user</code>");
+            assertThat(ScmFeedbackFormatter.sanitize(">@user")).contains("<code>@user</code>");
+            assertThat(ScmFeedbackFormatter.sanitize("**@user**")).contains("<code>@user</code>");
             String underscore = ScmFeedbackFormatter.sanitize("_@user_");
-            assertThat(underscore).contains("`@user");
-            assertThat(underscore).doesNotMatch(".*(?<!`)@user.*");
+            assertThat(underscore).contains("<code>@user");
+            assertThat(underscore).doesNotMatch(".*(?<!>)@user.*");
         }
 
         @Test

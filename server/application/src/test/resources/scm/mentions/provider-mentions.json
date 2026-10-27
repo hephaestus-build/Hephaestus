@@ -1,0 +1,122 @@
+[
+  {
+    "body": "Ask @alice first.",
+    "escaped": "Ask <code>@alice</code> first."
+  },
+  {
+    "body": "@all of you",
+    "escaped": "<code>@all</code> of you"
+  },
+  {
+    "body": "Tell @org/reviewers and @group/sub/team now",
+    "escaped": "Tell <code>@org/reviewers</code> and <code>@group/sub/team</code> now"
+  },
+  {
+    "body": "*@alice* and (@bob)",
+    "escaped": "*<code>@alice</code>* and (<code>@bob</code>)"
+  },
+  {
+    "body": "_x_@alice",
+    "escaped": "_x_<code>@alice</code>"
+  },
+  {
+    "body": "`x`@alice",
+    "escaped": "`x`<code>@alice</code>"
+  },
+  {
+    "body": "[@alice](https://example.test/alice)",
+    "escaped": "[<code>@alice</code>](https://example.test/alice)"
+  },
+  {
+    "body": "\\@alice",
+    "escaped": "<code>\\@alice</code>"
+  },
+  {
+    "body": "Ask &#64;alice",
+    "escaped": "<code>Ask \\@alice</code>"
+  },
+  {
+    "body": "stray ` here @alice",
+    "escaped": "stray ` here <code>@alice</code>"
+  },
+  {
+    "body": "@alice ` then",
+    "escaped": "<code>@alice</code> ` then"
+  },
+  {
+    "body": "a ` b ` c ` @alice",
+    "escaped": "a ` b ` c ` <code>@alice</code>"
+  },
+  {
+    "body": "// TODO(@alice): handle ` case",
+    "escaped": "// TODO(<code>@alice</code>): handle ` case"
+  },
+  {
+    "body": "@alice@bob",
+    "escaped": "<code>@alice@bob</code>"
+  },
+  {
+    "body": "@bob/teamx@y.z",
+    "escaped": "<code>@bob/teamx@y.z</code>"
+  },
+  {
+    "body": "https://@alice",
+    "escaped": "https://<code>@alice</code>"
+  },
+  {
+    "body": "www.@alice",
+    "escaped": "www.<code>@alice</code>"
+  },
+  {
+    "body": "@_alice",
+    "escaped": "<code>@_alice</code>"
+  },
+  {
+    "body": "See https://example.test/a)@alice",
+    "escaped": "See https://example.test/a)<code>@alice</code>"
+  },
+  {
+    "body": "`x @alice` and @bob",
+    "escaped": "`x @alice` and <code>@bob</code>"
+  },
+  {
+    "body": "**`a`@victim.md:3`**",
+    "escaped": "**`a`<code>@victim.md</code>:3`**"
+  },
+  {
+    "body": "<details><summary>Ask @alice</summary>",
+    "escaped": "<details><summary>Ask <code>@alice</code></summary>"
+  },
+  {
+    "body": "Mail a@b.example about it.",
+    "escaped": "Mail a@b.example about it."
+  },
+  {
+    "body": "Run `@alice` in code.",
+    "escaped": "Run `@alice` in code."
+  },
+  {
+    "body": "See https://medium.example/@alice/post for more.",
+    "escaped": "See https://medium.example/@alice/post for more."
+  },
+  {
+    "body": "<https://example.test/@alice>",
+    "escaped": "<https://example.test/@alice>"
+  },
+  {
+    "body": "<details><summary><code>@alice</code></summary>",
+    "escaped": "<details><summary><code>@alice</code></summary>"
+  },
+  {
+    "body": "<!-- hephaestus-feedback-copy:1 -->",
+    "escaped": "<!-- hephaestus-feedback-copy:1 -->"
+  },
+  {
+    "body": "Fixes #123 and !45, which notify no one by name.",
+    "escaped": "Fixes #123 and !45, which notify no one by name."
+  },
+  {
+    "body": "Before @alice\n\n```\n@Override\nvoid run() {}\n```\n",
+    "escaped": "Before <code>@alice</code>\n\n```\n@Override\nvoid run() {}\n```\n"
+  }
+]

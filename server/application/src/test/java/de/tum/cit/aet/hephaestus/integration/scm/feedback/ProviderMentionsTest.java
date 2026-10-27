@@ -3,53 +3,38 @@ package de.tum.cit.aet.hephaestus.integration.scm.feedback;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
-import org.junit.jupiter.api.Test;
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.List;
+import java.util.Objects;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.MethodSource;
+import tools.jackson.databind.json.JsonMapper;
 
 class ProviderMentionsTest extends BaseUnitTest {
 
-    @ParameterizedTest
-    @CsvSource(
-            delimiter = '|',
-            quoteCharacter = '"',
-            textBlock = """
-            Ask @alice first.                               | Ask `@alice` first.
-            @all of you                                     | `@all` of you
-            Tell @org/reviewers and @group/sub/team now     | Tell `@org/reviewers` and `@group/sub/team` now
-            *@alice* and (@bob)                             | *`@alice`* and (`@bob`)
-            _x_@alice                                       | _x_`@alice`
-            `x`@alice                                       | `x`<code>@alice</code>
-            [@alice](https://example.test/alice)            | [`@alice`](https://example.test/alice)
-            \\@alice                                        | `@alice`
-            \\\\@alice                                      | `\\@alice`
-            Ask &#64;alice                                  | `Ask @alice`
-            See https://example.test/a)@alice               | See https://example.test/a)`@alice`
-            "<details><summary>Ask @alice</summary>"        | "<details><summary>Ask <code>@alice</code></summary>"
-            """)
-    void shouldTurnEveryMentionIntoCode(String body, String expected) {
-        assertThat(ProviderMentions.escape(body)).isEqualTo(expected);
-        assertThat(ProviderMentions.escape(expected)).isEqualTo(expected);
+    /**
+     * A body and the text Hephaestus posts for it. {@code ProviderMentionsLiveTest} renders each escaped body with the
+     * GitHub and GitLab Markdown APIs and finds no mention in it.
+     */
+    record Case(String body, String escaped) {}
+
+    static List<Case> cases() throws IOException {
+        try (InputStream json = Objects.requireNonNull(
+                ProviderMentionsTest.class.getResourceAsStream("/scm/mentions/provider-mentions.json"))) {
+            return List.of(JsonMapper.builder().build().readValue(json, Case[].class));
+        }
     }
 
     @ParameterizedTest
-    @CsvSource(
-            delimiter = '|',
-            quoteCharacter = '"',
-            textBlock = """
-            Mail a@b.example about it.
-            Run `@alice` in code.
-            See https://medium.example/@alice/post for more.
-            "<details><summary><code>@alice</code></summary>"
-            <!-- hephaestus-feedback-copy:1 -->
-            """)
-    void shouldLeaveTextThatMentionsNoOne(String body) {
-        assertThat(ProviderMentions.escape(body)).isEqualTo(body);
+    @MethodSource("cases")
+    void shouldPostEachBodyWithItsMentionsAsCode(Case mention) {
+        assertThat(ProviderMentions.escape(mention.body())).isEqualTo(mention.escaped());
     }
 
-    @Test
-    void shouldLeaveACodeBlockAsWritten() {
-        String body = "Before @alice\n\n```\n@Override\nvoid run() {}\n```\n";
-        assertThat(ProviderMentions.escape(body)).isEqualTo("Before `@alice`\n\n```\n@Override\nvoid run() {}\n```\n");
+    @ParameterizedTest
+    @MethodSource("cases")
+    void shouldLeaveAnEscapedBodyAsItIs(Case mention) {
+        assertThat(ProviderMentions.escape(mention.escaped())).isEqualTo(mention.escaped());
     }
 }

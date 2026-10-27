@@ -238,6 +238,31 @@ class GitHubLineNoteWriterTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldPostALineNoteThatNamesSomeoneWithTheNameAsCode() {
+        stubPostable();
+        stubReviewThreads(List.of());
+        GraphQlClient.RequestSpec addSpec = stubAddReview(
+                "REVIEW_1",
+                List.of(returned("RC_a", "result:a:0", "https://github.com/owner/repo/pull/42#discussion_r111")));
+        ThreadsCaptor threads = captureThreads(addSpec);
+
+        channel.postImmutablePackage(githubTarget(), List.of(item("Ask @alice", "result:a:0")), fence);
+
+        assertThat(threads.bodies()).singleElement().asString().startsWith("Ask <code>@alice</code>\n\n");
+    }
+
+    @Test
+    void shouldRecognizeAPostedLineNoteThatNamedSomeone() {
+        when(gitHubProvider.forScope(1L)).thenReturn(client);
+        var note = item("Ask @alice", "result:a:0");
+        stubReviewThreads(List.of(thread("THREAD_a", "RC_a", authored(note))));
+
+        assertThat(channel.findPosted(githubTarget(), List.of(note)))
+                .extracting(CopyReceipt::externalRef)
+                .containsExactly("RC_a");
+    }
+
+    @Test
     void shouldNotDeliverAThreadTheReviewReturnedWithoutItsTagOrItsId() {
         stubPostable();
         stubReviewThreads(List.of());
@@ -416,7 +441,8 @@ class GitHubLineNoteWriterTest extends BaseUnitTest {
     }
 
     private static String posted(LineNote item) {
-        return item.body() + "\n\n" + item.writeMarker() + "\n" + ckTag(String.valueOf(item.writeKey()));
+        return item.body().replace("@alice", "<code>@alice</code>") + "\n\n" + item.writeMarker() + "\n"
+                + ckTag(String.valueOf(item.writeKey()));
     }
 
     private static Map<String, Object> authored(LineNote item) {

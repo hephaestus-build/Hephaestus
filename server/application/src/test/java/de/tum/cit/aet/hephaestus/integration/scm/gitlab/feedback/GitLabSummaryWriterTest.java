@@ -174,7 +174,7 @@ class GitLabSummaryWriterTest extends BaseUnitTest {
         ArgumentCaptor<Object> bodyCaptor = ArgumentCaptor.forClass(Object.class);
         verify(spec).variable(eq("body"), bodyCaptor.capture());
         // GitLab notifies a name added in an edit, so an edited summary mentions no one either.
-        assertThat(bodyCaptor.getValue().toString()).contains("`/merge`").contains("rest for `@group/sub`");
+        assertThat(bodyCaptor.getValue().toString()).contains("`/merge`").contains("rest for <code>@group/sub</code>");
     }
 
     @Test
