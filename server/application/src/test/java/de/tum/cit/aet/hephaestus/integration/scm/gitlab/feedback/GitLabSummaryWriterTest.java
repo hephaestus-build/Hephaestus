@@ -137,7 +137,7 @@ class GitLabSummaryWriterTest extends BaseUnitTest {
 
         ArgumentCaptor<Object> bodyCaptor = ArgumentCaptor.forClass(Object.class);
         verify(spec).variable(eq("body"), bodyCaptor.capture());
-        assertThat(bodyCaptor.getValue().toString()).contains("`/approve`");
+        assertThat(bodyCaptor.getValue().toString()).startsWith("\\/approve please\nsome body");
     }
 
     @Test
@@ -174,16 +174,9 @@ class GitLabSummaryWriterTest extends BaseUnitTest {
         ArgumentCaptor<Object> bodyCaptor = ArgumentCaptor.forClass(Object.class);
         verify(spec).variable(eq("body"), bodyCaptor.capture());
         // GitLab notifies a name added in an edit, so an edited summary mentions no one either.
-        assertThat(bodyCaptor.getValue().toString()).contains("`/merge`").contains("rest for <code>@group/sub</code>");
-    }
-
-    @Test
-    void escapeSlashCommands_leavesMidLineCommandsUntouched() {
-        // MULTILINE anchors ^ to line-start, so only a line-start "/approve" is an action; mid-line
-        // text is untouched.
-        assertThat(GitLabSummaryWriter.escapeSlashCommands("Please ask them to /approve it"))
-                .isEqualTo("Please ask them to /approve it");
-        assertThat(GitLabSummaryWriter.escapeSlashCommands("/approve\n/merge")).isEqualTo("`/approve`\n`/merge`");
+        assertThat(bodyCaptor.getValue().toString())
+                .contains("\\/merge now")
+                .contains("rest for <code>@group/sub</code>");
     }
 
     @Test
@@ -408,7 +401,7 @@ class GitLabSummaryWriterTest extends BaseUnitTest {
     private static final SummaryContent EXPECTED =
             ScmFeedbackFixtures.summary("/approve once fixed\nSummary text", MARKER);
 
-    private static final String EXACT = GitLabSummaryWriter.escapeSlashCommands(EXPECTED.externalBody());
+    private static final String EXACT = GitLabSummaryWriter.gitLabSummary(EXPECTED);
 
     private static final String BOT = "gid://gitlab/User/1";
 

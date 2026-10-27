@@ -549,7 +549,7 @@ class GitLabLineNoteWriterTest extends BaseUnitTest {
             assertThat(receipt.externalUrl()).isEqualTo(NOTE_URL);
         });
         assertThat(rest.calls()).allSatisfy(call -> assertThat(call.json()).doesNotContainKey("position"));
-        assertThat(bodies().getFirst()).contains("`/approve`", MARKER, "hephaestus-diff-note-ck=result:a:0");
+        assertThat(bodies().getFirst()).contains("\\/approve once fixed", MARKER, "hephaestus-diff-note-ck=result:a:0");
         assertThat(bodies().getLast())
                 .isEqualTo("**[View code at line 10]("
                         + SERVER
