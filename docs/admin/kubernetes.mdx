@@ -799,6 +799,8 @@ It writes these objects into it:
   A worker claims a practice review only when every quota of the sandbox namespace has room for the review's Pod.
   It counts the reviews that it claimed but has not started yet.
   Otherwise the review stays queued.
+  The worker's Role lets it list the quotas; its permissions are listed below.
+  It reads the Pod overhead of the sandbox RuntimeClass from its own sandbox Pods.
   A scoped quota does not hold a review back, and neither do quotas that the worker cannot read.
   A Heph sandbox or another worker can still take the room after the claim.
   The quota then refuses the review's Pod, and the review is tried again.

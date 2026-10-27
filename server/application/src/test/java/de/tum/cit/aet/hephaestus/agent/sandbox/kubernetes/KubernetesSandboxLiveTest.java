@@ -526,7 +526,8 @@ class KubernetesSandboxLiveTest {
                             worker,
                             liveWorkers,
                             new SandboxExits(pods, new SimpleMeterRegistry()),
-                            new KubernetesSandboxQuota(client, namespace()))
+                            new KubernetesSandboxQuota(
+                                    client, namespace(), worker.properties().runtimeClassName()))
                     .kill(new SandboxBackend.Handle(name));
 
             SandboxResult result = running.get(pods.stopGraceSeconds() + 90, TimeUnit.SECONDS);

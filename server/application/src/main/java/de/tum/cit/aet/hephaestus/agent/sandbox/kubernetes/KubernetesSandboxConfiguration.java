@@ -117,7 +117,10 @@ public class KubernetesSandboxConfiguration {
                 worker,
                 liveWorkers,
                 exits,
-                new KubernetesSandboxQuota(sandboxKubernetesClient, worker.namespace()));
+                new KubernetesSandboxQuota(
+                        sandboxKubernetesClient,
+                        worker.namespace(),
+                        worker.properties().runtimeClassName()));
     }
 
     @Bean(destroyMethod = "close")

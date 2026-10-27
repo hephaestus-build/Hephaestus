@@ -648,6 +648,34 @@ class KubernetesSandboxRuntimeTest {
                 .isEqualTo(1);
     }
 
+    @Test
+    void shouldChargeTheOverheadThatASandboxPodOfTheRuntimeClassShows() {
+        quotaWithTwoGibibytesFree();
+        api().pods()
+                .inNamespace(SANDBOXES)
+                .resource(new PodBuilder()
+                        .withNewMetadata()
+                        .withName("turn-with-overhead")
+                        .endMetadata()
+                        .withNewSpec()
+                        .withRuntimeClassName("gvisor")
+                        .withOverhead(Map.of("memory", new Quantity("512Mi")))
+                        .addNewContainer()
+                        .withName("sandbox")
+                        .withImage(IMAGE)
+                        .endContainer()
+                        .endSpec()
+                        .build())
+                .create();
+
+        assertThat(new KubernetesSandboxQuota(api(), SANDBOXES, "gvisor").roomFor(LIMITS))
+                .as("2 GiB free hold one 1.5 GiB Pod")
+                .isEqualTo(1);
+        assertThat(new KubernetesSandboxQuota(api(), SANDBOXES, "").roomFor(LIMITS))
+                .as("the cluster's default runtime has no overhead")
+                .isEqualTo(2);
+    }
+
     private void quotaWithTwoGibibytesFree() {
         api().resourceQuotas()
                 .inNamespace(SANDBOXES)
@@ -677,7 +705,7 @@ class KubernetesSandboxRuntimeTest {
                         unproved,
                         liveWorkers,
                         new SandboxExits(unprovedPods, new SimpleMeterRegistry()),
-                        new KubernetesSandboxQuota(api(), properties.namespace())),
+                        new KubernetesSandboxQuota(api(), properties.namespace(), properties.runtimeClassName())),
                 new SandboxWorkspaceManager(),
                 sessions,
                 meters);
@@ -775,7 +803,7 @@ class KubernetesSandboxRuntimeTest {
                         worker,
                         new KubernetesLiveWorkers(unreadable),
                         new SandboxExits(pods, new SimpleMeterRegistry()),
-                        new KubernetesSandboxQuota(api(), properties.namespace()))
+                        new KubernetesSandboxQuota(api(), properties.namespace(), properties.runtimeClassName()))
                 .list();
 
         assertThat(listed)
@@ -893,7 +921,7 @@ class KubernetesSandboxRuntimeTest {
                 worker,
                 liveWorkers,
                 new SandboxExits(pods, new SimpleMeterRegistry()),
-                new KubernetesSandboxQuota(api(), properties.namespace()));
+                new KubernetesSandboxQuota(api(), properties.namespace(), properties.runtimeClassName()));
     }
 
     private SandboxAttemptRunner adapter() {

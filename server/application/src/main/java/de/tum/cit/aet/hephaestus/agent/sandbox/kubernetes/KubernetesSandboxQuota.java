@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.sandbox.kubernetes;
 
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ResourceLimits;
+import io.fabric8.kubernetes.api.model.Pod;
 import io.fabric8.kubernetes.api.model.Quantity;
 import io.fabric8.kubernetes.api.model.ResourceQuota;
 import io.fabric8.kubernetes.client.KubernetesClient;
@@ -8,7 +9,9 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -24,12 +27,18 @@ public class KubernetesSandboxQuota {
 
     private final KubernetesClient client;
     private final String namespace;
+    private final String runtimeClassName;
     private final AtomicBoolean unreadable = new AtomicBoolean();
     private final AtomicBoolean full = new AtomicBoolean();
 
-    public KubernetesSandboxQuota(KubernetesClient client, String namespace) {
+    /** The RuntimeClass's Pod overhead once a sandbox Pod showed it; fixed for the class. */
+    private volatile @Nullable Map<String, Quantity> overhead;
+
+    /** @param runtimeClassName the RuntimeClass of the sandbox Pods; blank for the cluster's default */
+    public KubernetesSandboxQuota(KubernetesClient client, String namespace, String runtimeClassName) {
         this.client = client;
         this.namespace = namespace;
+        this.runtimeClassName = runtimeClassName;
     }
 
     /** @return {@link Integer#MAX_VALUE} without a quota, or when the quotas cannot be read: as before, a start decides */
@@ -47,7 +56,7 @@ public class KubernetesSandboxQuota {
             return Integer.MAX_VALUE;
         }
         unreadable.set(false);
-        int room = fits(quotas, footprint(limits));
+        int room = fits(quotas, footprint(limits, overhead()));
         if (room == 0 && full.compareAndSet(false, true)) {
             log.info("Reviews wait for room in the sandbox quota: namespace={}", namespace);
         } else if (room > 0 && full.compareAndSet(true, false)) {
@@ -57,24 +66,65 @@ public class KubernetesSandboxQuota {
     }
 
     /**
-     * What one review sandbox counts against a quota, by the quota's resource names: its Pod and its Job, and the
-     * resources of its runtime container ({@link KubernetesPods#resources}). The initializer has the same resources and
-     * runs before the runtime, and the isolation gate is smaller, so the runtime's are the Pod's.
+     * The Pod overhead of the sandbox RuntimeClass, which a quota charges beside the containers' resources. The
+     * RuntimeClass admission writes it into each Pod it admits, so a sandbox Pod of the class shows it, and the worker
+     * needs no right to read the cluster-wide RuntimeClass. Until such a Pod exists, it counts none: the admission then
+     * decides, as before.
      */
-    static Map<String, Quantity> footprint(ResourceLimits limits) {
+    private Map<String, Quantity> overhead() {
+        Map<String, Quantity> known = overhead;
+        if (known != null) return known;
+        if (runtimeClassName.isBlank()) return Map.of();
+        try {
+            for (Pod pod : client.pods().inNamespace(namespace).list().getItems()) {
+                var spec = pod.getSpec();
+                if (spec != null && runtimeClassName.equals(spec.getRuntimeClassName())) {
+                    Map<String, Quantity> shown =
+                            spec.getOverhead() == null ? Map.of() : Map.copyOf(spec.getOverhead());
+                    overhead = shown;
+                    return shown;
+                }
+            }
+        } catch (RuntimeException e) {
+            log.debug(
+                    "Sandbox Pods unreadable for the Pod overhead: error={}",
+                    e.getClass().getSimpleName());
+        }
+        return Map.of();
+    }
+
+    /**
+     * What one review sandbox counts against a quota, by the quota's resource names: its Pod and its Job, the resources
+     * of its runtime container ({@link KubernetesPods#resources}), and the Pod overhead of its RuntimeClass, which a
+     * quota adds to both requests and limits. The initializer has the same resources and runs before the runtime, and
+     * the isolation gate is smaller, so the runtime's are the Pod's.
+     */
+    static Map<String, Quantity> footprint(ResourceLimits limits, Map<String, Quantity> overhead) {
         var resources = KubernetesPods.resources(limits);
         Quantity one = new Quantity("1");
-        Quantity cpuRequest = resources.getRequests().get("cpu");
-        Quantity memoryRequest = resources.getRequests().get("memory");
+        Quantity cpuRequest = plus(resources.getRequests().get("cpu"), overhead.get("cpu"));
+        Quantity cpuLimit = plus(resources.getLimits().get("cpu"), overhead.get("cpu"));
+        Quantity memoryRequest = plus(resources.getRequests().get("memory"), overhead.get("memory"));
+        Quantity memoryLimit = plus(resources.getLimits().get("memory"), overhead.get("memory"));
         return Map.of(
                 "pods", one,
+                "count/pods", one,
                 "count/jobs.batch", one,
                 "cpu", cpuRequest,
                 "requests.cpu", cpuRequest,
-                "limits.cpu", resources.getLimits().get("cpu"),
+                "limits.cpu", cpuLimit,
                 "memory", memoryRequest,
                 "requests.memory", memoryRequest,
-                "limits.memory", resources.getLimits().get("memory"));
+                "limits.memory", memoryLimit);
+    }
+
+    private static Quantity plus(@Nullable Quantity amount, @Nullable Quantity overhead) {
+        Quantity base = Objects.requireNonNull(amount, "KubernetesPods.resources sets every CPU and memory amount");
+        return overhead == null
+                ? base
+                : new Quantity(base.getNumericalAmount()
+                        .add(overhead.getNumericalAmount())
+                        .toPlainString());
     }
 
     /** The fewest whole footprints that any quota still holds; a resource the footprint does not use never bounds it. */

@@ -21,8 +21,10 @@ import org.junit.jupiter.api.Test;
 class KubernetesSandboxQuotaTest extends BaseUnitTest {
 
     /** The default review sandbox: 3 GiB and one CPU. */
-    private static final Map<String, Quantity> REVIEW = KubernetesSandboxQuota.footprint(
-            new ResourceLimits(3L * 1024 * 1024 * 1024, 1.0, 256, Duration.ofMinutes(30)));
+    private static final ResourceLimits LIMITS =
+            new ResourceLimits(3L * 1024 * 1024 * 1024, 1.0, 256, Duration.ofMinutes(30));
+
+    private static final Map<String, Quantity> REVIEW = KubernetesSandboxQuota.footprint(LIMITS, Map.of());
 
     @Test
     void shouldAdmitNoReviewWhenTheQuotaHoldsLessMemoryThanItsSandbox() {
@@ -76,6 +78,26 @@ class KubernetesSandboxQuotaTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldCountThePodWhenAQuotaNamesItAsAnObjectCount() {
+        var quota = quota(Map.of("count/pods", "5"), Map.of("count/pods", "4"));
+
+        assertThat(KubernetesSandboxQuota.fits(List.of(quota), REVIEW)).isEqualTo(1);
+    }
+
+    @Test
+    void shouldChargeTheRuntimeClassOverheadToRequestsAndLimits() {
+        var quota = quota(
+                Map.of("requests.memory", "6656Mi", "limits.memory", "6656Mi"),
+                Map.of("requests.memory", "0", "limits.memory", "0"));
+        var withOverhead = KubernetesSandboxQuota.footprint(LIMITS, Map.of("memory", new Quantity("512Mi")));
+
+        assertThat(KubernetesSandboxQuota.fits(List.of(quota), REVIEW)).isEqualTo(2);
+        assertThat(KubernetesSandboxQuota.fits(List.of(quota), withOverhead))
+                .as("6.5 GiB hold one 3.5 GiB Pod")
+                .isEqualTo(1);
+    }
+
+    @Test
     void shouldLeaveAScopedQuotaToTheAdmissionWhenItMayNotCountTheReview() {
         var terminating = quota(Map.of("pods", "2"), Map.of("pods", "2"));
         terminating.setSpec(
@@ -89,7 +111,7 @@ class KubernetesSandboxQuotaTest extends BaseUnitTest {
         KubernetesClient client = mock(KubernetesClient.class);
         when(client.resourceQuotas()).thenThrow(new KubernetesClientException("forbidden", 403, null));
 
-        assertThat(new KubernetesSandboxQuota(client, "sandboxes")
+        assertThat(new KubernetesSandboxQuota(client, "sandboxes", "")
                         .roomFor(new ResourceLimits(3L * 1024 * 1024 * 1024, 1.0, 256, Duration.ofMinutes(30))))
                 .isEqualTo(Integer.MAX_VALUE);
     }
