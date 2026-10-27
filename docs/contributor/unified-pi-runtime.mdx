@@ -82,6 +82,8 @@ The next question gets `409` with the reason `FOLLOW_UPS_FULL`.
 ### Leases and retries
 
 The worker renews the lease every third of `hephaestus.mentor.turn.lease`, while the turn runs on a live host.
+The renewal tick has a thread of its own (`HephHostConfiguration.hephTurnTicks`).
+No sandbox call runs on that thread, so a stalled Kubernetes API cannot expire the lease of a turn that runs well.
 Each host call checks that the attempt runs on this worker (`MentorLeaseLostException`).
 The worker knows that without a read: a lost lease, the end, and a lost host remove the attempt.
 Each write of the attempt is also conditional on the lease, the attempt, and the worker.
