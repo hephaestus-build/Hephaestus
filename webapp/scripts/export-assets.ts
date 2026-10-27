@@ -48,6 +48,8 @@ interface ReadmeCapture {
 	selector: string;
 	viewportWidth: number;
 	expectedWidth: number;
+	/** WebP for an image only the docs site shows; the GitHub README keeps PNG. */
+	format: "png" | "webp";
 }
 
 const readmeCaptures: ReadmeCapture[] = [
@@ -57,6 +59,7 @@ const readmeCaptures: ReadmeCapture[] = [
 		selector: '[data-readme-export="landing-hero"]',
 		viewportWidth: 1440,
 		expectedWidth: 1280,
+		format: "png",
 	},
 	{
 		name: "feedback-scene",
@@ -64,6 +67,7 @@ const readmeCaptures: ReadmeCapture[] = [
 		selector: '[data-readme-export="feedback-scene"]',
 		viewportWidth: 1024,
 		expectedWidth: 896,
+		format: "webp",
 	},
 ];
 
@@ -383,9 +387,36 @@ async function captureReadmeImage(
 			`${capture.name} export width was ${bounds?.width ?? "missing"}px; expected ${capture.expectedWidth}px.`,
 		);
 	}
-	await surface.screenshot({
-		path: await output(path.resolve(readmeImageDirectory, `${capture.name}-${theme}.png`)),
-	});
+	const target = path.resolve(readmeImageDirectory, `${capture.name}-${theme}.${capture.format}`);
+	const png = await surface.screenshot();
+	await writeFile(
+		await output(target),
+		capture.format === "png" ? png : await encodeWebp(page, png),
+	);
+}
+
+/**
+ * Playwright writes only PNG and JPEG, so the same Chromium encodes the WebP, and no image library
+ * is needed. JPEG would blur the interface text.
+ */
+async function encodeWebp(page: Page, png: Buffer): Promise<Buffer> {
+	const encoded = await page.evaluate(async (base64) => {
+		const source = await fetch(`data:image/png;base64,${base64}`);
+		const bitmap = await createImageBitmap(await source.blob());
+		const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+		const context = canvas.getContext("2d");
+		if (context === null) {
+			throw new Error("Chromium gave no 2D canvas context to encode the WebP.");
+		}
+		context.drawImage(bitmap, 0, 0);
+		const webp = await canvas.convertToBlob({ type: "image/webp", quality: 0.9 });
+		let binary = "";
+		for (const byte of new Uint8Array(await webp.arrayBuffer())) {
+			binary += String.fromCodePoint(byte);
+		}
+		return btoa(binary);
+	}, png.toString("base64"));
+	return Buffer.from(encoded, "base64");
 }
 
 async function exportReadmeImages(activeBrowser: Browser): Promise<void> {
