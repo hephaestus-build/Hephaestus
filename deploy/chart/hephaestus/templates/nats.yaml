@@ -65,6 +65,7 @@ spec:
         checksum/config: {{ printf "%d-%d-%s" $maxFile (int64 .Values.nats.maxPayloadBytes) .Values.nats.jetstream.maxMemory | sha256sum }}
     spec:
       automountServiceAccountToken: false
+      priorityClassName: {{ include "hephaestus.priorityClass" (dict "root" $ "tier" "roles") }}
       enableServiceLinks: false
       securityContext:
         {{- include "hephaestus.podSecurityContext" (dict "user" 1000 "group" 1000) | nindent 8 }}

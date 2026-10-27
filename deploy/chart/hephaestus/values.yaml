@@ -201,6 +201,16 @@ webapp:
 # runtime.probeInterval, each worker proves that the cluster enforces the sandbox boundary; it stops
 # at its start, and runs no new sandbox later, if it does not.
 # docs/admin/kubernetes.mdx § Sandbox prerequisites.
+# The PriorityClasses of the Pods, highest first: roles, conversations, reviews
+# (docs/admin/kubernetes.mdx § Priorities). The chart creates them, which needs permission to create
+# cluster-wide objects. Where that is not allowed, set create to false and name three classes that
+# exist, with their values in that order.
+priorityClasses:
+  create: true
+  roles: ""
+  conversations: ""
+  reviews: ""
+
 worker:
   enabled: false
   # Two workers on different nodes where the cluster has them: one keeps claiming while the other

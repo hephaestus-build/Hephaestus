@@ -358,6 +358,15 @@ public class KubernetesPods {
         return exit != null && exit != 0;
     }
 
+    /** A Heph host or turn sandbox is a conversation; a review and every probe Pod rank below it. */
+    private static @Nullable String priorityClass(Workload workload, KubernetesSandboxProperties properties) {
+        String kind = workload.labels().get(KubernetesWorker.SANDBOX_KIND);
+        boolean conversation = !workload.labels().containsKey(KubernetesWorker.PROBE)
+                && (KubernetesWorker.KIND_HOST.equals(kind) || KubernetesWorker.KIND_TURN.equals(kind));
+        String name = conversation ? properties.conversationPriorityClass() : properties.reviewPriorityClass();
+        return name.isEmpty() ? null : name;
+    }
+
     /**
      * @param userNamespace whether the Pod runs in a user namespace of its own ({@code hostUsers: false}): its root is
      *     then no user of the node. Only where the isolation probe showed that the nodes support it
@@ -378,6 +387,7 @@ public class KubernetesPods {
                 .withEnableServiceLinks(false)
                 .withHostname(workload.hostname())
                 .withRuntimeClassName(properties.runtimeClassName().isEmpty() ? null : properties.runtimeClassName())
+                .withPriorityClassName(priorityClass(workload, properties))
                 .withNodeSelector(properties.nodeSelectorMap().isEmpty() ? null : properties.nodeSelectorMap())
                 .withTolerations(properties.tolerationList())
                 .withHostUsers(userNamespace ? Boolean.FALSE : null)

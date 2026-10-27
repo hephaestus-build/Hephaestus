@@ -153,6 +153,8 @@ class KubernetesSandboxRuntimeTest {
                 "hephaestus/agent-seccomp-profile.json",
                 "",
                 "",
+                "hephaestus-conversations",
+                "hephaestus-reviews",
                 Duration.ofMinutes(15));
         worker = new KubernetesWorker(properties, WORKER_ID, 8081);
         worker.proved(passed());
@@ -237,6 +239,46 @@ class KubernetesSandboxRuntimeTest {
                 .filteredOn(volume -> volume.getEmptyDir() != null
                         && "Memory".equals(volume.getEmptyDir().getMedium()))
                 .hasSize(3);
+    }
+
+    @Test
+    void shouldRankConversationsAboveReviewsAndEveryProbeWithTheReviews() {
+        Map<String, String> review = Map.of(KubernetesWorker.SANDBOX_KIND, KubernetesWorker.KIND_REVIEW);
+        Map<String, String> host = Map.of(KubernetesWorker.SANDBOX_KIND, KubernetesWorker.KIND_HOST);
+        Map<String, String> turn = Map.of(KubernetesWorker.SANDBOX_KIND, KubernetesWorker.KIND_TURN);
+        Map<String, String> turnProbe =
+                Map.of(KubernetesWorker.SANDBOX_KIND, KubernetesWorker.KIND_TURN, KubernetesWorker.PROBE, "run");
+
+        assertThat(pods.workspacePod(
+                                new KubernetesPods.Workload("r", review, IMAGE, "agent"),
+                                Map.of(),
+                                List.of("node"),
+                                LIMITS)
+                        .getSpec()
+                        .getPriorityClassName())
+                .isEqualTo("hephaestus-reviews");
+        assertThat(pods.workspacePod(
+                                new KubernetesPods.Workload("h", host, IMAGE, "agent"),
+                                Map.of(),
+                                List.of("node"),
+                                LIMITS)
+                        .getSpec()
+                        .getPriorityClassName())
+                .isEqualTo("hephaestus-conversations");
+        assertThat(pods.turnPod(new KubernetesPods.Workload("t", turn, IMAGE, "sandbox"), LIMITS)
+                        .getSpec()
+                        .getPriorityClassName())
+                .isEqualTo("hephaestus-conversations");
+        assertThat(pods.probePod(
+                                new KubernetesPods.Workload("p", turnProbe, IMAGE, "agent"),
+                                List.of("true"),
+                                LIMITS,
+                                60,
+                                true)
+                        .getSpec()
+                        .getPriorityClassName())
+                .as("a probe never displaces a person's conversation")
+                .isEqualTo("hephaestus-reviews");
     }
 
     @Test
@@ -556,7 +598,7 @@ class KubernetesSandboxRuntimeTest {
     void shouldUseTheClustersDefaultRuntimeAndRuntimeDefaultSeccompWhenNoneIsNamed() {
         var defaults = new KubernetesWorker(
                 new KubernetesSandboxProperties(
-                        SANDBOXES, workerName, "10.42.0.7", "", "", "", "", Duration.ofMinutes(15)),
+                        SANDBOXES, workerName, "10.42.0.7", "", "", "", "", "", "", Duration.ofMinutes(15)),
                 WORKER_ID,
                 8081);
         Pod pod = new KubernetesPods(api(), defaults, 10, ImagePullPolicy.IF_NOT_PRESENT)
