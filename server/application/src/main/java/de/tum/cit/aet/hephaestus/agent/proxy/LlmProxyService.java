@@ -444,7 +444,8 @@ class LlmProxyService {
             }
             // An anonymous class has no simple name.
             String failure = e.getClass().getSimpleName();
-            call.failed(new MentorTurn.FailedCall(failure.isEmpty() ? e.getClass().getName() : failure, null));
+            call.failed(
+                    new MentorTurn.FailedCall(failure.isEmpty() ? e.getClass().getName() : failure, null));
             if (e instanceof WebClientRequestException) {
                 log.warn(
                         "LLM upstream unreachable for principal {}: reason={}",

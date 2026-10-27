@@ -1209,7 +1209,8 @@ class LlmProxyServiceTest extends BaseUnitTest {
         }
 
         @Test
-        @DisplayName("a Heph turn attempt remembers its last failed model call by kind and status until its end forgets it")
+        @DisplayName(
+                "a Heph turn attempt remembers its last failed model call by kind and status until its end forgets it")
         void aHephAttemptRemembersItsLastFailedModelCall() throws Exception {
             ProxyRouting routing = hephTurnRouting(upstream.url("/v1").toString());
             authenticate(routing);
