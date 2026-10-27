@@ -71,6 +71,7 @@ import type { FeedbackMode } from "@/lib/practice-feedback-mode";
 import { hasText } from "@/lib/text";
 import { minutesAfter, minutesBefore, STORY_NOW } from "@/stories/story-clock";
 
+import type { DeliveredCounts } from "./delivery-breakdown";
 import type { OutcomeScope } from "./review-outcomes";
 import type { OverviewRegionState } from "./review-states";
 
@@ -2903,6 +2904,11 @@ export const deliveredByLocationCounts: ReasonCount[] = [
 	{ reason: "SLACK", description: FEEDBACK_LOCATION_DEFS.SLACK.label, count: 2 },
 	{ reason: "PRACTICE_PAGES", description: FEEDBACK_LOCATION_DEFS.PRACTICE_PAGES.label, count: 4 },
 ];
+
+export const deliveredCounts: DeliveredCounts = {
+	byLocation: deliveredByLocationCounts,
+	partlyDelivered: 1,
+};
 
 export const withheldByReasonCounts: ReasonCount[] = [
 	{ reason: "VOLUME_CAPPED", description: withholdingReasonSentence("VOLUME_CAPPED"), count: 1 },

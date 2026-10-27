@@ -14,7 +14,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
 import { CardTitleLink } from "./CardTitleLink";
-import { type BreakdownRow, deliveredByLocation, withheldByReason } from "./delivery-breakdown";
+import {
+	type BreakdownRow,
+	type DeliveredCounts,
+	deliveredByLocation,
+	withheldByReason,
+} from "./delivery-breakdown";
 import { OVERVIEW_TYPE } from "./overview-type-scale";
 import { type AttentionTone, percentText, shareOf } from "./review-attention";
 import { PROBLEM_THRESHOLDS } from "./review-attention-thresholds";
@@ -24,7 +29,7 @@ import type { AttentionGroup, AttentionRange } from "./ReviewAttention";
 import { ReviewListLink } from "./ReviewListLink";
 
 export type DeliveredByLocationState = PanelState<{
-	counts: ReasonCount[];
+	counts: DeliveredCounts;
 	stale: boolean;
 }>;
 
@@ -114,7 +119,7 @@ export function DeliveryBreakdownCard({
 const BREAKDOWN_INFO = [
 	{
 		term: "Delivered",
-		text: "counts the feedback that reached the developer, by where it appeared.",
+		text: "counts the feedback that reached the developer, by where it appeared. Partly delivered feedback appeared on the work, but another part of it failed or is not confirmed.",
 	},
 	{
 		term: "Withheld",

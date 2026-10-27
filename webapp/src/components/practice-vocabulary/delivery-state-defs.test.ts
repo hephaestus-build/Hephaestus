@@ -21,9 +21,11 @@ describe("deliveryOutcome for unconfirmed feedback", () => {
 			deliveredAt: new Date("2026-10-14T10:00:00Z"),
 		} as const;
 		expect(deliveryOutcome(facts)).toMatchObject({ label: "Partly delivered", description });
-		expect(deliveryOutcome({ ...facts, withdrawn: true }).description).toBe(
-			DELIVERY_STATE_DEFS[state].description,
-		);
+		expect(deliveryOutcome({ ...facts, withdrawn: true })).toMatchObject({
+			label: "Partly delivered",
+			description,
+		});
+		expect(withdrawalMark({ ...facts, withdrawn: true })).toBe(FEEDBACK_DECISION_DEFS.WITHDRAW);
 	});
 	it("names no conversation for a write on the work", () => {
 		const outcome = deliveryOutcome({

@@ -211,7 +211,7 @@ describe("traceVerdict on a piece of feedback", () => {
 			const lineage = withFeedback(lineageStateCase("destination-on-work").lineage, { state });
 			expect(traceVerdict(lineage, piece)).toMatchObject({
 				sentence: `Part of this feedback reached the developer on GitHub, and ${rest}.`,
-				end: { kind: "delivered" },
+				end: { kind: "delivered", label: "Partly delivered" },
 			});
 		},
 	);

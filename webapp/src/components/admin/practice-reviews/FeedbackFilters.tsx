@@ -31,6 +31,7 @@ export function clearedFeedbackFacets(): Partial<FeedbackSearch> {
 		location: undefined,
 		withdrawn: undefined,
 		disagreed: undefined,
+		partlyDelivered: undefined,
 	};
 }
 
@@ -46,7 +47,8 @@ function hasFeedbackFacet(search: FeedbackSearch): boolean {
 		(search.withheldFamily?.length ?? 0) > 0 ||
 		search.location !== undefined ||
 		search.withdrawn !== undefined ||
-		search.disagreed !== undefined
+		search.disagreed !== undefined ||
+		search.partlyDelivered !== undefined
 	);
 }
 
@@ -142,6 +144,13 @@ export function FeedbackFilters({
 							label="Developer disagreed"
 							value={search.disagreed ? "Only" : "Excluded"}
 							onClear={() => onPatch({ disagreed: undefined })}
+						/>
+					)}
+					{search.partlyDelivered !== undefined && (
+						<ReferenceFilterPill
+							label="Partly delivered"
+							value={search.partlyDelivered ? "Only" : "Excluded"}
+							onClear={() => onPatch({ partlyDelivered: undefined })}
 						/>
 					)}
 				</>

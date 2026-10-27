@@ -170,6 +170,7 @@ function feedbackFate(feedback: LineageFeedback, item: ItemRef | undefined): Fee
 						"part of it reached the developer, and another part failed to post",
 						{
 							at,
+							label: "Partly delivered",
 						},
 					),
 					clause: ["was partly delivered", "were partly delivered"],
@@ -190,6 +191,7 @@ function feedbackFate(feedback: LineageFeedback, item: ItemRef | undefined): Fee
 						"part of it reached the developer, and the rest is not confirmed yet",
 						{
 							at,
+							label: "Partly delivered",
 						},
 					),
 					clause: ["was partly delivered", "were partly delivered"],

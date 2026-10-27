@@ -6,7 +6,7 @@ import { expectNoPageOverflow } from "@/stories/reflow";
 
 import { DeliveryBreakdownCard } from "./DeliveryBreakdownCard";
 import {
-	deliveredByLocationCounts,
+	deliveredCounts,
 	practiceReviewOverview,
 	readyReviewOverview,
 	reviewOverviewScope,
@@ -69,7 +69,7 @@ const meta = {
 		scope: reviewOverviewScope,
 		range: { label: "Last 30 days", during: "in the last 30 days" },
 		overview: readyReviewOverview(),
-		delivered: { status: "ready", counts: deliveredByLocationCounts, stale: false },
+		delivered: { status: "ready", counts: deliveredCounts, stale: false },
 		withheld: { status: "ready", counts: withheldByReasonCounts, stale: false },
 		failedDeliveries: { state: counted(1), list: FAILED_DELIVERIES, of: 15 },
 	},
@@ -173,7 +173,7 @@ export const NothingYet: Story = {
 			...practiceReviewOverview,
 			feedback: { ...practiceReviewOverview.feedback, withheld: 0, rejected: 0 },
 		}),
-		delivered: { status: "ready", counts: [], stale: false },
+		delivered: { status: "ready", counts: { byLocation: [], partlyDelivered: 0 }, stale: false },
 		withheld: { status: "ready", counts: [], stale: false },
 		failedDeliveries: { state: counted(0), list: FAILED_DELIVERIES, of: 0 },
 	},
@@ -213,7 +213,7 @@ export const OneSplitFailed: Story = {
 /** The previous range's counts stand in while the new ones load: drained and marked busy. */
 export const Stale: Story = {
 	args: {
-		delivered: { status: "ready", counts: deliveredByLocationCounts, stale: true },
+		delivered: { status: "ready", counts: deliveredCounts, stale: true },
 		failedDeliveries: { state: counted(1, true), list: FAILED_DELIVERIES, of: 15 },
 	},
 	play: async ({ canvas }) => {

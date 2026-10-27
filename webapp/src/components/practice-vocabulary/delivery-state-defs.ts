@@ -150,7 +150,8 @@ const WITHDRAWN_READY: StatusDef = {
 
 export function deliveryOutcome(feedback: DeliveryFacts): StatusDef {
 	const { destination, state, stopReason } = feedback;
-	if (isPartialDelivery(feedback) && !feedback.withdrawn) {
+	// Withdrawn, it keeps this outcome and gains the withdrawal mark, as delivered feedback does.
+	if (isPartialDelivery(feedback)) {
 		return {
 			...DELIVERY_STATE_DEFS[state],
 			label: "Partly delivered",

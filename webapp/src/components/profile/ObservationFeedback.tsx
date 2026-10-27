@@ -90,9 +90,9 @@ export function ObservationFeedback({ feedback: given, links }: ObservationFeedb
 	);
 }
 
-/** The feedback with a confirmed first exposure, from the server's visible feedback. */
+/** The delivered and the partly delivered feedback: the only feedback the developer pages name. */
 export function exposedFeedback(feedback: OwnFeedbackRef[]): OwnFeedbackRef[] {
-	return feedback.filter((piece) => piece.deliveredAt !== null);
+	return feedback.filter((piece) => piece.state === "DELIVERED" || isPartialDelivery(piece));
 }
 
 /** The way to the feedback where it lives: its comment on the work, or its place in Hephaestus. */
