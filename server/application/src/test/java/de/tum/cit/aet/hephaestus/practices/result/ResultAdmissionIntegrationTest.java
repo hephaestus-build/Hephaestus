@@ -558,6 +558,44 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
 
     @Test
     void shouldQueueANewItemPracticeAndKeepItSelectableForItsJob() {
+        var id = requestRoleFreeVersion();
+        var workspace = scenario.workspace().getId();
+        var queued = pinnedPractices
+                .findByWorkspaceIdAndReviewIdAndPracticeId(
+                        workspace, id, scenario.practice().getId())
+                .orElseThrow();
+        assertThat(queued.getStatus()).isEqualTo(ReviewPracticeStatus.QUEUED);
+        assertThat(executable.executable(workspace, id, scenario.item().getId()))
+                .containsExactly(new ReviewAssignmentId(
+                        id, scenario.practice().getId(), scenario.item().getId()));
+    }
+
+    @Test
+    void shouldSettleAPracticeThatCaptureNeverReachedAsWithheldWithTheReviewsStopReason() {
+        var id = requestRoleFreeVersion();
+        var workspace = scenario.workspace().getId();
+
+        service.complete(
+                workspace,
+                id,
+                new ReviewCompletion(
+                        ReviewStatus.FAILED,
+                        null,
+                        Instant.now().truncatedTo(ChronoUnit.MICROS),
+                        Instant.now().truncatedTo(ChronoUnit.MICROS)));
+
+        var settled = pinnedPractices
+                .findByWorkspaceIdAndReviewIdAndPracticeId(
+                        workspace, id, scenario.practice().getId())
+                .orElseThrow();
+        assertThat(settled.getStatus())
+                .as("it recorded nothing, so it is not Done")
+                .isEqualTo(ReviewPracticeStatus.WITHHELD);
+        assertThat(settled.getReason()).isEqualTo(ReviewStopReason.EXECUTION_INCOMPLETE.name());
+    }
+
+    /** Requests a review of a practice that is about no role, so its practice waits for capture. */
+    private UUID requestRoleFreeVersion() {
         var definition = DefinitionTestFixtures.definition();
         scenario = data.scenario(new PracticeDefinition(
                 definition.name(),
@@ -571,8 +609,7 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
                 definition.scan(),
                 definition.lineNotes(),
                 definition.guidance()));
-        var workspace = scenario.workspace().getId();
-        when(models.models(eq(workspace), anyList()))
+        when(models.models(eq(scenario.workspace().getId()), anyList()))
                 .thenReturn(List.of(
                         new BoundModelSlot("chat", ModelKind.CHAT, null),
                         new BoundModelSlot("decision", ModelKind.DECISION, null),
@@ -582,15 +619,7 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
                                 "review",
                                 ModelKind.CHAT,
                                 new FrozenModel("instance:1", "OPENAI_COMPLETIONS", "test-model", null, Map.of()))));
-        var id = requestSelectedVersion();
-        var queued = pinnedPractices
-                .findByWorkspaceIdAndReviewIdAndPracticeId(
-                        workspace, id, scenario.practice().getId())
-                .orElseThrow();
-        assertThat(queued.getStatus()).isEqualTo(ReviewPracticeStatus.QUEUED);
-        assertThat(executable.executable(workspace, id, scenario.item().getId()))
-                .containsExactly(new ReviewAssignmentId(
-                        id, scenario.practice().getId(), scenario.item().getId()));
+        return requestSelectedVersion();
     }
 
     private UUID requestSelectedVersion() {
