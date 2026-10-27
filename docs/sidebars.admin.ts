@@ -12,7 +12,6 @@ const sidebars: SidebarsConfig = {
 				"first-steps",
 				{ type: "doc", id: "install", label: "Docker Compose (0.x, deprecated)" },
 				"pull-based-deployment",
-				"runtime-roles",
 			],
 		},
 		{
@@ -20,7 +19,6 @@ const sidebars: SidebarsConfig = {
 			label: "Configure",
 			collapsed: false,
 			items: [
-				"configuration-reference",
 				"configuration-readiness",
 				"production-setup",
 				"integrations",
@@ -62,7 +60,6 @@ const sidebars: SidebarsConfig = {
 				},
 				"backup-restore",
 				"troubleshooting",
-				"sizing",
 				"production-operations-runbook",
 				"observability",
 				"instance-admin",
@@ -73,11 +70,10 @@ const sidebars: SidebarsConfig = {
 		},
 		{
 			type: "category",
-			label: "Security",
+			label: "Security and compliance",
 			collapsed: false,
 			items: [
 				"threat-model",
-				"network-egress",
 				"data-retention",
 				"secret-custody",
 				"credential-key-rotation",
@@ -85,36 +81,40 @@ const sidebars: SidebarsConfig = {
 				"legal-pages",
 				{
 					type: "category",
-					label: "Data-Protection Documentation",
+					label: "Data-protection documentation",
 					link: { type: "doc", id: "dsms/dsms" },
 					items: [
 						{
 							type: "doc",
 							id: "dsms/record-of-processing",
-							label: "Record of Processing (Art. 30)",
+							label: "Record of processing (Art. 30)",
 						},
-						{ type: "doc", id: "dsms/processor-checklist", label: "Processor Checklist (Art. 28)" },
+						{ type: "doc", id: "dsms/processor-checklist", label: "Processor checklist (Art. 28)" },
 						{
 							type: "doc",
 							id: "dsms/item-source-governance",
-							label: "Artifact-Source Governance",
+							label: "Artifact-source governance",
 						},
-						{ type: "doc", id: "dsms/personal-data-map", label: "Personal-Data Map" },
+						{ type: "doc", id: "dsms/personal-data-map", label: "Personal-data map" },
 					],
 				},
-			],
-		},
-		{
-			type: "category",
-			label: "Policies",
-			collapsed: false,
-			items: [
-				"compatibility-policy",
 				{
 					type: "link",
 					label: "Security policy",
 					href: "https://github.com/hephaestus-build/Hephaestus/blob/main/SECURITY.md",
 				},
+			],
+		},
+		{
+			type: "category",
+			label: "Reference",
+			collapsed: false,
+			items: [
+				"configuration-reference",
+				"runtime-roles",
+				"network-egress",
+				"sizing",
+				"compatibility-policy",
 			],
 		},
 	],
