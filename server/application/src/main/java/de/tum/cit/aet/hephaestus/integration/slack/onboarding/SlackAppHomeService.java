@@ -175,7 +175,7 @@ public class SlackAppHomeService {
                 section(
                         s -> s.text(
                                 markdownText(
-                                        "*Account settings.* Use this Home tab to control how Hephaestus uses your Slack messages. Open Hephaestus to manage your sign-in, your connected accounts, and your research participation."))),
+                                        "*Account settings.* Use this Home tab to control how Hephaestus uses your Slack messages. Open Hephaestus to manage your sign-in, your connected accounts, the weekly digest, and your research participation."))),
                 actions(a -> a.elements(asElements(button(b -> b.text(plainText("Open account settings"))
                         .url(url)
                         .actionId(ACTION_OPEN_HEPHAESTUS)

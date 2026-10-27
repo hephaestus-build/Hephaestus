@@ -108,7 +108,7 @@ class SlackAppHomeServiceTest extends BaseUnitTest {
         assertThat(rendered).contains("Allowed, 1 active channel"); // channel-count anchor
         assertThat(rendered).contains("Stop using my messages"); // opt-out wording
         assertThat(rendered).contains(SlackAppHomeService.ACTION_CHANNEL_MESSAGES_OPT_OUT);
-        assertThat(rendered).contains("research participation", "Open account settings");
+        assertThat(rendered).contains("research participation", "the weekly digest", "Open account settings");
         assertThat(rendered).doesNotContain("research_opt_out", "research_opt_in", "Research use is", "*Research use*");
         // The unwired quiet-hours control must not reach users until its write path exists.
         assertThat(rendered).doesNotContain("open_quiet_hours");
