@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRep
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.events.ScmDomainEvent;
+import de.tum.cit.aet.hephaestus.integration.scm.events.ScmEventIdentity;
 import java.time.Instant;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -143,6 +144,8 @@ public class ActivityEventListener {
             occurredAt = Instant.now();
         }
         final Instant finalOccurredAt = occurredAt;
+        // A close or a merge is its stored moment, so the time key already identifies it on every path and
+        // matches the entries recorded before source keys existed.
         safeRecord(
                 "PR merged",
                 pr.id(),
@@ -153,7 +156,8 @@ public class ActivityEventListener {
                         userRepository.getReferenceById(authorId),
                         repositoryRepository.getReferenceById(pr.repository().id()),
                         ActivityTargetType.PULL_REQUEST,
-                        pr.id()));
+                        pr.id(),
+                        null));
     }
 
     @Async("activityExecutor")
@@ -178,6 +182,8 @@ public class ActivityEventListener {
             occurredAt = Instant.now();
         }
         final Instant finalOccurredAt = occurredAt;
+        // A close or a merge is its stored moment, so the time key already identifies it on every path and
+        // matches the entries recorded before source keys existed.
         safeRecord(
                 "PR closed",
                 pr.id(),
@@ -188,7 +194,8 @@ public class ActivityEventListener {
                         userRepository.getReferenceById(authorId),
                         repositoryRepository.getReferenceById(pr.repository().id()),
                         ActivityTargetType.PULL_REQUEST,
-                        pr.id()));
+                        pr.id(),
+                        null));
     }
 
     @Async("activityExecutor")
@@ -216,7 +223,8 @@ public class ActivityEventListener {
                         userRepository.getReferenceById(authorId),
                         repositoryRepository.getReferenceById(pr.repository().id()),
                         ActivityTargetType.PULL_REQUEST,
-                        pr.id()));
+                        pr.id(),
+                        ScmEventIdentity.of(event)));
     }
 
     @Async("activityExecutor")
@@ -244,7 +252,8 @@ public class ActivityEventListener {
                         userRepository.getReferenceById(authorId),
                         repositoryRepository.getReferenceById(pr.repository().id()),
                         ActivityTargetType.PULL_REQUEST,
-                        pr.id()));
+                        pr.id(),
+                        ScmEventIdentity.of(event)));
     }
 
     /**
@@ -275,7 +284,8 @@ public class ActivityEventListener {
                         userRepository.getReferenceById(authorId),
                         repositoryRepository.getReferenceById(pr.repository().id()),
                         ActivityTargetType.PULL_REQUEST,
-                        pr.id()));
+                        pr.id(),
+                        ScmEventIdentity.of(event)));
     }
 
     /** Handle pull request synchronized (new commits pushed to the branch). */
@@ -304,7 +314,8 @@ public class ActivityEventListener {
                         userRepository.getReferenceById(authorId),
                         repositoryRepository.getReferenceById(pr.repository().id()),
                         ActivityTargetType.PULL_REQUEST,
-                        pr.id()));
+                        pr.id(),
+                        ScmEventIdentity.of(event)));
     }
 
     @Async("activityExecutor")
@@ -859,6 +870,8 @@ public class ActivityEventListener {
             occurredAt = Instant.now();
         }
         final Instant finalOccurredAt = occurredAt;
+        // A close or a merge is its stored moment, so the time key already identifies it on every path and
+        // matches the entries recorded before source keys existed.
         safeRecord(
                 "issue closed",
                 issueData.id(),
@@ -870,7 +883,8 @@ public class ActivityEventListener {
                         repositoryRepository.getReferenceById(
                                 issueData.repository().id()),
                         ActivityTargetType.ISSUE,
-                        issueData.id()));
+                        issueData.id(),
+                        null));
     }
 
     /**
@@ -904,7 +918,8 @@ public class ActivityEventListener {
                         repositoryRepository.getReferenceById(
                                 issueData.repository().id()),
                         ActivityTargetType.ISSUE,
-                        issueData.id()));
+                        issueData.id(),
+                        ScmEventIdentity.of(event)));
     }
 
     /**

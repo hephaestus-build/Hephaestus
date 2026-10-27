@@ -21,8 +21,32 @@ public record EventContext(
         @Nullable String webhookAction,
         @NonNull String correlationId,
         @Nullable IdentityProviderType providerType,
-        @Nullable Long actorUserId) {
+        @Nullable Long actorUserId,
+        @Nullable String sourceKey) {
     private static final Logger log = LoggerFactory.getLogger(EventContext.class);
+
+    public EventContext(
+            @NonNull UUID eventId,
+            @NonNull Instant occurredAt,
+            @Nullable Long scopeId,
+            @Nullable RepositoryRef repository,
+            @NonNull DataSource source,
+            @Nullable String webhookAction,
+            @NonNull String correlationId,
+            @Nullable IdentityProviderType providerType,
+            @Nullable Long actorUserId) {
+        this(
+                eventId,
+                occurredAt,
+                scopeId,
+                repository,
+                source,
+                webhookAction,
+                correlationId,
+                providerType,
+                actorUserId,
+                null);
+    }
 
     public EventContext(
             @NonNull UUID eventId,
@@ -78,6 +102,24 @@ public record EventContext(
                 null,
                 UUID.randomUUID().toString(),
                 providerType);
+    }
+
+    /**
+     * This context for the provider event {@code sourceKey} names: its own identity, such as the action and the
+     * payload's {@code updated_at}. An occasion recorded under it is recorded once, however often the event arrives.
+     */
+    public EventContext withSourceKey(@Nullable String sourceKey) {
+        return new EventContext(
+                eventId,
+                occurredAt,
+                scopeId,
+                repository,
+                source,
+                webhookAction,
+                correlationId,
+                providerType,
+                actorUserId,
+                sourceKey);
     }
 
     public boolean isWebhook() {

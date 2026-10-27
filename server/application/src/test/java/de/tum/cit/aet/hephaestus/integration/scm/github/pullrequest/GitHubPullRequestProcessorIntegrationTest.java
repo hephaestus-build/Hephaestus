@@ -53,6 +53,7 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -199,7 +200,8 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
                 id, number, "This is the body of test PR #" + number, Instant.parse("2025-11-01T21:42:45Z"));
     }
 
-    private GitHubPullRequestDTO createBasicPullRequestDto(Long id, int number, String body, Instant updatedAt) {
+    private GitHubPullRequestDTO createBasicPullRequestDto(
+            Long id, int number, @Nullable String body, Instant updatedAt) {
         return new GitHubPullRequestDTO(
                 id, // id (webhook style - no databaseId)
                 null, // databaseId (null for webhook payloads)
@@ -1253,6 +1255,21 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
     class ProcessReadyForReview {
 
         @Test
+        void shouldPublishReadyWhenSyncStoredAnEmptyDescriptionAndTheWebhookSendsNone() {
+            Instant updatedAt = Instant.parse("2025-11-02T09:00:00Z");
+            processor.process(createBasicPullRequestDto(FIXTURE_PR_ID, 28, "", updatedAt), createContext());
+            eventListener.clear();
+
+            // The webhook for the same change sends no description as null.
+            processor.processReadyForReview(
+                    createBasicPullRequestDto(FIXTURE_PR_ID, 28, null, updatedAt),
+                    ProcessingContext.forWebhook(testWorkspace.getId(), testRepository, "ready_for_review"));
+
+            assertThat(eventListener.ofType(ScmDomainEvent.PullRequestReady.class))
+                    .hasSize(1);
+        }
+
+        @Test
         void shouldPublishPullRequestReadyEvent() {
             GitHubPullRequestDTO draftDto = new GitHubPullRequestDTO(
                     FIXTURE_PR_ID,
@@ -1462,7 +1479,7 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
                     null // requestedTeams
                     );
 
-            PullRequest result = processor.processSynchronize(syncDto, createContext());
+            PullRequest result = processor.processSynchronize(syncDto, null, createContext());
             assertNotNull(result);
 
             assertThat(result.getCommits()).isEqualTo(3);

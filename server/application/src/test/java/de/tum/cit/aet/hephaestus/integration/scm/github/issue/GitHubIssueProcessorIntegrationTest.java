@@ -1267,8 +1267,8 @@ class GitHubIssueProcessorIntegrationTest extends BaseIntegrationTest {
                     null,
                     "https://example.com",
                     0,
-                    Instant.now(),
-                    Instant.now(),
+                    Instant.parse("2025-11-01T10:00:00Z"), // a provider date has second precision
+                    Instant.parse("2025-11-01T10:00:00Z"),
                     null,
                     false, // locked
                     createAuthorDto(),

@@ -161,6 +161,39 @@ class GitLabIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
     class BasicLifecycleEvents {
 
         @Test
+        void shouldReportACloseOnlyFromTheSyncThatStoresIt() {
+            var closed = new GitLabIssueProcessor.SyncIssueData(
+                    "gid://gitlab/Issue/" + NATIVE_ISSUE_ID,
+                    String.valueOf(ISSUE_IID),
+                    FIXTURE_ISSUE_TITLE,
+                    FIXTURE_ISSUE_BODY,
+                    "closed",
+                    false,
+                    FIXTURE_ISSUE_HTML_URL,
+                    "2026-01-31T17:00:00Z",
+                    "2026-01-31T18:00:00Z",
+                    "2026-01-31T18:00:00Z",
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    0,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null);
+
+            processor.processFromSync(closed, savedRepo, null);
+            processor.processFromSync(closed, savedRepo, null);
+
+            // Re-reading a closed issue is no event: its close is reported once.
+            assertThat(eventListener.ofType(ScmDomainEvent.IssueClosed.class)).hasSize(1);
+        }
+
+        @Test
         void shouldAdvanceTheContentVersionWhenSyncChangesAnOpenIssue() throws Exception {
             handler.handleEvent(loadPayload("issue.open"));
             Issue before = issueRepository
@@ -281,6 +314,23 @@ class GitLabIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
             assertThat(issue.getState()).isEqualTo(Issue.State.OPEN);
 
             assertThat(eventListener.ofType(ScmDomainEvent.IssueReopened.class)).hasSize(1);
+        }
+
+        @Test
+        void shouldKeepTheReopenedIssueOpenWhenTheCloseHookIsRedelivered() throws Exception {
+            handler.handleEvent(loadPayload("issue.open"));
+            handler.handleEvent(loadPayload("issue.close"));
+            handler.handleEvent(loadPayload("issue.reopen"));
+            eventListener.clear();
+
+            handler.handleEvent(loadPayload("issue.close"));
+
+            assertThat(issueRepository
+                            .findByRepositoryIdAndNumber(savedRepo.getId(), ISSUE_IID)
+                            .orElseThrow()
+                            .getState())
+                    .isEqualTo(Issue.State.OPEN);
+            assertThat(eventListener.ofType(ScmDomainEvent.IssueClosed.class)).isEmpty();
         }
 
         @Test

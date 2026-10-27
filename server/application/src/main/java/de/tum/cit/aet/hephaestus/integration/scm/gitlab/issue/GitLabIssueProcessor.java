@@ -18,6 +18,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.events.EventContext;
 import de.tum.cit.aet.hephaestus.integration.scm.events.ScmDomainEvent;
+import de.tum.cit.aet.hephaestus.integration.scm.events.ScmEventIdentity;
 import de.tum.cit.aet.hephaestus.integration.scm.events.ScmEventPayload;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.BaseGitLabProcessor;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabProperties;
@@ -103,6 +104,21 @@ public class GitLabIssueProcessor extends BaseGitLabProcessor {
         if (event.isConfidential()) {
             log.debug("Skipped confidential issue: iid={}", attrs.iid());
             return null;
+        }
+        // An older hook would restore older work (sync-lifecycle.md). The row lock makes the compare and the write
+        // after it one step.
+        long repositoryId = Objects.requireNonNull(context.repository()).getId();
+        issueRepository.lockByRepositoryIdAndNumber(repositoryId, attrs.iid());
+        Issue stored = issueRepository
+                .findByRepositoryIdAndNumber(repositoryId, attrs.iid())
+                .orElse(null);
+        if (stored != null && olderThan(event, stored)) {
+            log.debug(
+                    "Skipped stale issue hook: iid={}, existingUpdatedAt={}, eventUpdatedAt={}",
+                    attrs.iid(),
+                    stored.getUpdatedAt(),
+                    attrs.updatedAt());
+            return stored;
         }
 
         User author = resolveWebhookAuthor(event, Objects.requireNonNull(context.providerId()));
@@ -204,7 +220,8 @@ public class GitLabIssueProcessor extends BaseGitLabProcessor {
                         .map(ScmEventPayload.IssueData::from)
                         .orElse(null);
         Issue issue = processInternal(event, context);
-        if (issue == null) {
+        // An older hook stored nothing, so its diff describes no change of the stored issue.
+        if (issue == null || olderThan(event, issue)) {
             return issue;
         }
         // GitLab's diff names no date; the stored row says whether this delivery refined one.
@@ -399,11 +416,12 @@ public class GitLabIssueProcessor extends BaseGitLabProcessor {
             }
         }
 
-        // Emit the close event for CLOSED issues on every sync, not just on create, so a sync
-        // backfills ISSUE_CLOSED activity for issues that were already closed when first ingested.
-        // The activity_event (workspace_id, event_key) unique constraint dedupes, so replaying an
-        // existing close is a safe no-op.
-        if (issueState == Issue.State.CLOSED) {
+        // A sync reports a close only when it stores one; re-reading a closed issue is no event. The ledger repair
+        // backfills the activity of a close that no event reported.
+        if (issueState == Issue.State.CLOSED
+                && (previous == null
+                        || previous.state() != Issue.State.CLOSED
+                        || !Objects.equals(previous.closedAt(), issue.getClosedAt()))) {
             eventPublisher.publishEvent(new ScmDomainEvent.IssueClosed(
                     ScmEventPayload.IssueData.from(issue),
                     stateReason != null ? stateReason : "completed",
@@ -442,7 +460,7 @@ public class GitLabIssueProcessor extends BaseGitLabProcessor {
     @Nullable
     public Issue processClosed(GitLabIssueEventDTO event, ProcessingContext context) {
         Issue issue = processInternal(event, context);
-        if (issue != null) {
+        if (issue != null && issue.getState() == Issue.State.CLOSED) {
             eventPublisher.publishEvent(new ScmDomainEvent.IssueClosed(
                     ScmEventPayload.IssueData.from(issue), "completed", EventContext.from(context)));
             log.debug("Closed issue: issueId={}", issue.getId());
@@ -454,14 +472,31 @@ public class GitLabIssueProcessor extends BaseGitLabProcessor {
     @Nullable
     public Issue processReopened(GitLabIssueEventDTO event, ProcessingContext context) {
         Issue issue = processInternal(event, context);
-        if (issue != null) {
+        if (issue != null && issue.getState() == Issue.State.OPEN) {
             ScmEventPayload.IssueData issueData = ScmEventPayload.IssueData.from(issue);
+            eventPublisher.publishEvent(new ScmDomainEvent.IssueUpdated(
+                    issueData, Set.of("state"), reopened(event, issue, actorContext(event, context))));
             eventPublisher.publishEvent(
-                    new ScmDomainEvent.IssueUpdated(issueData, Set.of("state"), actorContext(event, context)));
-            eventPublisher.publishEvent(new ScmDomainEvent.IssueReopened(issueData, EventContext.from(context)));
+                    new ScmDomainEvent.IssueReopened(issueData, reopened(event, issue, EventContext.from(context))));
             log.debug("Reopened issue: issueId={}", issue.getId());
         }
         return issue;
+    }
+
+    /** Whether the hook describes an older state than the stored issue; such a hook changes nothing. */
+    private boolean olderThan(GitLabIssueEventDTO event, Issue stored) {
+        var attrs = event.objectAttributes();
+        Instant eventUpdatedAt = attrs == null ? null : parseGitLabTimestamp(attrs.updatedAt());
+        return eventUpdatedAt != null
+                && stored.getUpdatedAt() != null
+                && eventUpdatedAt.isBefore(stored.getUpdatedAt());
+    }
+
+    /** {@code context} under the identity of this reopen, which the hook dates. */
+    private EventContext reopened(GitLabIssueEventDTO event, Issue issue, EventContext context) {
+        var attrs = event.objectAttributes();
+        return context.withSourceKey(ScmEventIdentity.transition(
+                issue.getId(), "reopened", attrs == null ? null : parseGitLabTimestamp(attrs.updatedAt())));
     }
 
     private EventContext actorContext(GitLabIssueEventDTO event, ProcessingContext context) {

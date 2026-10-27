@@ -124,7 +124,8 @@ public class GitHubPullRequestMessageHandler extends AbstractIntegrationMessageH
             case GitHubEventAction.PullRequest.READY_FOR_REVIEW -> prProcessor.processReadyForReview(prDto, context);
             case GitHubEventAction.PullRequest.CONVERTED_TO_DRAFT ->
                 prProcessor.processConvertedToDraft(prDto, context);
-            case GitHubEventAction.PullRequest.SYNCHRONIZE -> prProcessor.processSynchronize(prDto, context);
+            case GitHubEventAction.PullRequest.SYNCHRONIZE ->
+                prProcessor.processSynchronize(prDto, event.before(), context);
             case GitHubEventAction.PullRequest.LABELED -> {
                 if (event.label() != null) {
                     prProcessor.processLabeled(prDto, event.label(), context);

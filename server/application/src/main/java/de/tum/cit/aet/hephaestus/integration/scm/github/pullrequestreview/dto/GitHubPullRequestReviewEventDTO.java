@@ -50,7 +50,7 @@ public record GitHubPullRequestReviewEventDTO(
             @JsonProperty("submitted_at") @Nullable Instant submittedAt,
             @JsonProperty("commit_id") @Nullable String commitId,
             @Nullable Instant createdAt,
-            @Nullable Instant updatedAt,
+            @JsonProperty("updated_at") @Nullable Instant updatedAt,
             @Nullable Boolean authorCanPushToRepository) {
         // STATIC FACTORY METHODS FOR GRAPHQL RESPONSES
 

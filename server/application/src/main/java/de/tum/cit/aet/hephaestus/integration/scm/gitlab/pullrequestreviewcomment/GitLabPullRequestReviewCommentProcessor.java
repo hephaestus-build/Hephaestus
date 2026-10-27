@@ -152,8 +152,9 @@ public class GitLabPullRequestReviewCommentProcessor {
         Long providerId = Objects.requireNonNull(
                 Objects.requireNonNull(context.provider()).getId());
 
+        // The row lock makes the compare with the stored updated_at and the write after it one step.
         Optional<PullRequestReviewComment> existing =
-                commentRepository.findByNativeIdAndProviderId(nativeId, providerId);
+                commentRepository.findForUpdateByNativeIdAndProviderId(nativeId, providerId);
         // Instance-wide note ids cannot move a diff note to another merge request.
         if (existing.map(PullRequestReviewComment::getPullRequest)
                 .filter(parent -> !parent.getId().equals(context.pr().getId()))
@@ -190,6 +191,13 @@ public class GitLabPullRequestReviewCommentProcessor {
 
     private PullRequestReviewComment updateComment(
             PullRequestReviewComment existing, DiffNoteData data, CommentContext context) {
+        // An older hook would restore older words (sync-lifecycle.md).
+        if (existing.getUpdatedAt() != null
+                && data.updatedAt() != null
+                && data.updatedAt().isBefore(existing.getUpdatedAt())) {
+            log.debug("Skipped stale diff note: commentId={}", existing.getId());
+            return existing;
+        }
         PullRequestReviewThread thread = context.thread();
         PullRequest pr = context.pr();
         Long scopeId = Objects.requireNonNull(context.scopeId());

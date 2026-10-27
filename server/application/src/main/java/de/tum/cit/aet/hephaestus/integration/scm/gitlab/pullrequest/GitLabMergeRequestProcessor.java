@@ -26,6 +26,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.events.EventContext;
 import de.tum.cit.aet.hephaestus.integration.scm.events.ScmDomainEvent;
+import de.tum.cit.aet.hephaestus.integration.scm.events.ScmEventIdentity;
 import de.tum.cit.aet.hephaestus.integration.scm.events.ScmEventPayload;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.BaseGitLabProcessor;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabProperties;
@@ -583,6 +584,15 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
                             attrs.id(),
                             existing.getUpdatedAt(),
                             eventUpdatedAt);
+                    // A sync can store a push before its hook arrives; the push is still this hook's event.
+                    String head =
+                            attrs.lastCommit() != null ? attrs.lastCommit().id() : null;
+                    if (attrs.oldrev() != null && head != null && head.equals(existing.getHeadRefOid())) {
+                        eventPublisher.publishEvent(new ScmDomainEvent.PullRequestSynchronized(
+                                ScmEventPayload.PullRequestData.from(existing),
+                                EventContext.from(context)
+                                        .withSourceKey(ScmEventIdentity.push(existing.getId(), attrs.oldrev(), head))));
+                    }
                     return existing;
                 }
             }
@@ -646,16 +656,24 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
         // pull request opened ready is: raising Ready as well would review the same head twice.
         var prData = ScmEventPayload.PullRequestData.from(pr);
         var eventCtx = EventContext.from(context);
+        Instant hookAt = parseGitLabTimestamp(attrs.updatedAt());
         if (pushed) {
-            eventPublisher.publishEvent(new ScmDomainEvent.PullRequestSynchronized(prData, eventCtx));
+            eventPublisher.publishEvent(new ScmDomainEvent.PullRequestSynchronized(
+                    prData,
+                    eventCtx.withSourceKey(ScmEventIdentity.push(
+                            pr.getId(),
+                            attrs.oldrev() != null ? attrs.oldrev() : previousHead,
+                            Objects.requireNonNull(headRefOid)))));
             log.debug("Merge request received new commits: prId={}, iid={}", pr.getId(), attrs.iid());
         }
         if (!isNew && wasDraft != null) {
             if (wasDraft && !attrs.draft()) {
-                eventPublisher.publishEvent(new ScmDomainEvent.PullRequestReady(prData, eventCtx));
+                eventPublisher.publishEvent(new ScmDomainEvent.PullRequestReady(
+                        prData, eventCtx.withSourceKey(ScmEventIdentity.transition(pr.getId(), "ready", hookAt))));
                 log.info("Merge request marked ready: prId={}, iid={}", pr.getId(), attrs.iid());
             } else if (!wasDraft && attrs.draft()) {
-                eventPublisher.publishEvent(new ScmDomainEvent.PullRequestDrafted(prData, eventCtx));
+                eventPublisher.publishEvent(new ScmDomainEvent.PullRequestDrafted(
+                        prData, eventCtx.withSourceKey(ScmEventIdentity.transition(pr.getId(), "draft", hookAt))));
                 log.info("Merge request converted to draft: prId={}, iid={}", pr.getId(), attrs.iid());
             }
         }
@@ -666,9 +684,9 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
     @Transactional
     @Nullable
     public PullRequest processClosed(GitLabMergeRequestEventDTO event, ProcessingContext context) {
-        Issue.State before = getExistingState(event, context);
         PullRequest pr = processInternal(event, context);
-        if (pr != null && before != Issue.State.CLOSED && before != Issue.State.MERGED) {
+        // A first close that arrives after sync stored it still records its occasion; a redelivery records none.
+        if (pr != null && pr.getState() == Issue.State.CLOSED) {
             eventPublisher.publishEvent(new ScmDomainEvent.PullRequestClosed(
                     ScmEventPayload.PullRequestData.from(pr), false, EventContext.from(context)));
             log.debug("Closed merge request: prId={}", pr.getId());
@@ -679,11 +697,14 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
     @Transactional
     @Nullable
     public PullRequest processReopened(GitLabMergeRequestEventDTO event, ProcessingContext context) {
-        Issue.State before = getExistingState(event, context);
         PullRequest pr = processInternal(event, context);
-        if (pr != null && before != Issue.State.OPEN) {
+        if (pr != null && pr.getState() == Issue.State.OPEN) {
+            var attrs = event.objectAttributes();
+            Instant reopenedAt = attrs == null ? null : parseGitLabTimestamp(attrs.updatedAt());
             eventPublisher.publishEvent(new ScmDomainEvent.PullRequestReopened(
-                    ScmEventPayload.PullRequestData.from(pr), EventContext.from(context)));
+                    ScmEventPayload.PullRequestData.from(pr),
+                    EventContext.from(context)
+                            .withSourceKey(ScmEventIdentity.transition(pr.getId(), "reopened", reopenedAt))));
             log.debug("Reopened merge request: prId={}", pr.getId());
         }
         return pr;
@@ -1127,6 +1148,14 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
                 changedFields.add(ScmItemEvents.CLOSING_ISSUES_FIELD);
             }
             eventPublisher.publishEvent(new ScmDomainEvent.PullRequestUpdated(prData, changedFields, eventCtx));
+            // A push this sync stored is the push its hook reports, under the same identity: the hook that arrives
+            // later records nothing new, and a lost hook loses no review.
+            if (headMoved) {
+                eventPublisher.publishEvent(new ScmDomainEvent.PullRequestSynchronized(
+                        prData,
+                        eventCtx.withSourceKey(ScmEventIdentity.push(
+                                pr.getId(), previousHead, Objects.requireNonNull(pr.getHeadRefOid())))));
+            }
             // A merge the webhook missed is recorded as the sync found it, so a later delivery of
             // it can still claim it; a sync records it without starting a review.
             if (isMerged && previousState != Issue.State.MERGED) {
@@ -1141,10 +1170,14 @@ public class GitLabMergeRequestProcessor extends BaseGitLabProcessor {
         // Reconciliation must recover draft transitions from missed webhooks.
         if (wasDraft != null) {
             if (wasDraft && !data.draft()) {
-                eventPublisher.publishEvent(new ScmDomainEvent.PullRequestReady(prData, eventCtx));
+                eventPublisher.publishEvent(new ScmDomainEvent.PullRequestReady(
+                        prData,
+                        eventCtx.withSourceKey(ScmEventIdentity.transition(pr.getId(), "ready", pr.getUpdatedAt()))));
                 log.info("Merge request found ready during sync: prId={}, iid={}", pr.getId(), data.iid());
             } else if (!wasDraft && data.draft()) {
-                eventPublisher.publishEvent(new ScmDomainEvent.PullRequestDrafted(prData, eventCtx));
+                eventPublisher.publishEvent(new ScmDomainEvent.PullRequestDrafted(
+                        prData,
+                        eventCtx.withSourceKey(ScmEventIdentity.transition(pr.getId(), "draft", pr.getUpdatedAt()))));
                 log.info("Merge request found converted to draft during sync: prId={}, iid={}", pr.getId(), data.iid());
             }
         }

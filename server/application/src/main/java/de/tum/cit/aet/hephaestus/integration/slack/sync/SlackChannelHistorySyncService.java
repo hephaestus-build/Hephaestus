@@ -259,7 +259,14 @@ public class SlackChannelHistorySyncService {
         String channelId = channel.getSlackChannelId();
         if (message.getEdited() != null) {
             ingestService.editMessage(
-                    teamId, channelId, message.getTs(), message.getThreadTs(), message.getUser(), text);
+                    teamId,
+                    channelId,
+                    new SlackIngestService.Edit(
+                            message.getTs(),
+                            message.getThreadTs(),
+                            message.getUser(),
+                            text,
+                            message.getEdited().getTs()));
         } else {
             ingestService.ingestChannelMessage(
                     teamId, channelId, message.getTs(), message.getThreadTs(), message.getUser(), text);

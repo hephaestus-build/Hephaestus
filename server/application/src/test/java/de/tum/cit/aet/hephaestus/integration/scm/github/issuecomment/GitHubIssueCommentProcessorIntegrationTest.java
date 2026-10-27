@@ -47,6 +47,7 @@ import java.math.BigInteger;
 import java.net.URI;
 import java.time.Instant;
 import java.time.OffsetDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
@@ -202,8 +203,8 @@ class GitHubIssueCommentProcessorIntegrationTest extends BaseIntegrationTest {
                 body,
                 null,
                 "OWNER",
-                Instant.now(),
-                Instant.now());
+                Instant.now().truncatedTo(ChronoUnit.SECONDS),
+                Instant.now().truncatedTo(ChronoUnit.SECONDS));
     }
 
     private Repository storedRepository(IdentityProvider provider, long nativeId, String nameWithOwner) {

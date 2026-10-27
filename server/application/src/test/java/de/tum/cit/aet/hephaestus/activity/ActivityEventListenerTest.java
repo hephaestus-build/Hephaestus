@@ -139,7 +139,8 @@ class ActivityEventListenerTest extends BaseUnitTest {
                             eq(testUser),
                             eq(testRepository),
                             eq(ActivityTargetType.PULL_REQUEST),
-                            eq(2L));
+                            eq(2L),
+                            any());
             verify(userRepository, never()).getReferenceById(999L);
         }
 
@@ -182,7 +183,8 @@ class ActivityEventListenerTest extends BaseUnitTest {
                             eq(testUser),
                             eq(testRepository),
                             eq(ActivityTargetType.PULL_REQUEST),
-                            eq(3L));
+                            eq(3L),
+                            any());
         }
 
         @Test
@@ -216,7 +218,8 @@ class ActivityEventListenerTest extends BaseUnitTest {
                             eq(testUser),
                             eq(testRepository),
                             eq(ActivityTargetType.PULL_REQUEST),
-                            eq(5L));
+                            eq(5L),
+                            isNull());
         }
     }
 
@@ -239,7 +242,8 @@ class ActivityEventListenerTest extends BaseUnitTest {
                             eq(testUser),
                             eq(testRepository),
                             eq(ActivityTargetType.PULL_REQUEST),
-                            eq(6L));
+                            eq(6L),
+                            isNull());
         }
     }
 
@@ -370,7 +374,8 @@ class ActivityEventListenerTest extends BaseUnitTest {
                             eq(testUser),
                             eq(testRepository),
                             eq(ActivityTargetType.ISSUE),
-                            eq(12L));
+                            eq(12L),
+                            any());
         }
 
         @Test
@@ -405,7 +410,8 @@ class ActivityEventListenerTest extends BaseUnitTest {
                             isNull(), // null actor - user deleted or bot
                             eq(testRepository),
                             eq(ActivityTargetType.ISSUE),
-                            eq(15L));
+                            eq(15L),
+                            any());
         }
     }
 

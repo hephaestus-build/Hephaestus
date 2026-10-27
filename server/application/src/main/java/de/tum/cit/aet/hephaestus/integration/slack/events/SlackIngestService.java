@@ -175,23 +175,33 @@ public class SlackIngestService {
         messageRepository.tombstone(workspaceId, teamId, channelId, deletedTs, Instant.now());
     }
 
+    /** One edit of a message: the message's own fields as edited, and {@code editedTs}, Slack's time of the edit. */
+    public record Edit(
+            String ts,
+            @Nullable String threadTs,
+            @Nullable String authorSlackUserId,
+            @Nullable String text,
+            @Nullable String editedTs) {}
+
     /**
      * Slack {@code message_changed}: replace the stored text with the edited body ({@code event.message}) and
      * stamp {@code edited_at}. Durable against out-of-order delivery, at parity with the tombstone: when the base
      * insert has not yet arrived (a NAK-redelivered reorder), the edited body is routed back through the fully-gated
      * {@link #ingestChannelMessage} so it is stored durably AND consent-safely (consent + forward-only watermark +
-     * participant firewall + identity stamp), rather than lost. A no-op only when the row is already tombstoned
-     * (never resurrected). Honors the channel-ingest kill switch, like ingest and tombstone.
+     * participant firewall + identity stamp), rather than lost. A no-op when the row is tombstoned (never
+     * resurrected) or holds a later edit. Honors the channel-ingest kill switch, like ingest and tombstone.
      */
     @Transactional
-    public void editMessage(
-            String teamId,
-            String channelId,
-            String ts,
-            @Nullable String threadTs,
-            @Nullable String authorSlackUserId,
-            @Nullable String text) {
-        if (!conversationIngestEnabled || channelId.isEmpty() || ts.isEmpty()) {
+    public void editMessage(String teamId, String channelId, Edit edit) {
+        String ts = edit.ts();
+        String threadTs = edit.threadTs();
+        String authorSlackUserId = edit.authorSlackUserId();
+        String text = edit.text();
+        String editedTs = edit.editedTs();
+        // Without the edit's own time a change cannot be ordered: Slack also sends message_changed for a new reply
+        // or an unfurl, which edit nothing.
+        Long editedMicros = SlackTs.toEpochMicros(editedTs);
+        if (!conversationIngestEnabled || channelId.isEmpty() || ts.isEmpty() || editedMicros == null) {
             return;
         }
         Optional<Long> workspaceOpt = workspaceResolver.resolveWorkspaceId(teamId);
@@ -199,11 +209,12 @@ public class SlackIngestService {
             return;
         }
         long workspaceId = workspaceOpt.get();
+        Instant editedAt = Instant.ofEpochSecond(editedMicros / 1_000_000L, (editedMicros % 1_000_000L) * 1_000L);
 
         // Normal case: the base row exists -> scoped UPDATE swaps in the edited text. The deleted_at IS NULL guard in
         // applyEdit means a delete-then-edit reorder no-ops (updated == 0, row present) and never resurrects a
         // tombstone.
-        int updated = messageRepository.applyEdit(workspaceId, channelId, ts, text, Instant.now());
+        int updated = messageRepository.applyEdit(workspaceId, channelId, ts, text, editedAt);
         if (updated > 0) {
             return;
         }
@@ -214,7 +225,7 @@ public class SlackIngestService {
             // Stamp edited_at (insertIfAbsent does not): a row born from message_changed genuinely is an edited
             // message,
             // so the projector's `edited` flag reads true. Idempotent second write on the now-present row.
-            messageRepository.applyEdit(workspaceId, channelId, ts, text, Instant.now());
+            messageRepository.applyEdit(workspaceId, channelId, ts, text, editedAt);
         }
     }
 

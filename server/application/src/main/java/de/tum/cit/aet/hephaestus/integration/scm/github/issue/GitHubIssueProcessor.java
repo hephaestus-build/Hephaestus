@@ -17,6 +17,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.events.EventContext;
 import de.tum.cit.aet.hephaestus.integration.scm.events.ScmDomainEvent;
+import de.tum.cit.aet.hephaestus.integration.scm.events.ScmEventIdentity;
 import de.tum.cit.aet.hephaestus.integration.scm.events.ScmEventPayload;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.BaseGitHubProcessor;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubMisfiledWork;
@@ -106,8 +107,12 @@ public class GitHubIssueProcessor extends BaseGitHubProcessor {
      */
     @Transactional
     public @Nullable Issue process(GitHubIssueDTO dto, ProcessingContext context) {
-        return processInternal(dto, context, true, true);
+        Processed processed = processInternal(dto, context, true, true);
+        return processed == null ? null : processed.issue();
     }
+
+    /** The stored issue after a payload; {@code superseded} when the payload is older than the stored issue. */
+    private record Processed(Issue issue, boolean superseded) {}
 
     /**
      * Process a GitHub issue DTO as a "stub" entity for referential integrity. Does NOT publish
@@ -121,7 +126,8 @@ public class GitHubIssueProcessor extends BaseGitHubProcessor {
      */
     @Transactional
     public @Nullable Issue processStub(GitHubIssueDTO dto, ProcessingContext context) {
-        return processInternal(dto, context, false, false);
+        Processed processed = processInternal(dto, context, false, false);
+        return processed == null ? null : processed.issue();
     }
 
     /**
@@ -135,7 +141,7 @@ public class GitHubIssueProcessor extends BaseGitHubProcessor {
      *                          close publishes its own lifecycle event
      * @return the created or updated Issue entity
      */
-    private @Nullable Issue processInternal(
+    private @Nullable Processed processInternal(
             GitHubIssueDTO dto, ProcessingContext context, boolean publishEvents, boolean emitDerivedEvents) {
         // Use getDatabaseId() which falls back to id for webhook payloads
         Long dbId = dto.getDatabaseId();
@@ -156,8 +162,23 @@ public class GitHubIssueProcessor extends BaseGitHubProcessor {
 
         // Compare by natural key (repository_id, number), not dbId — the same issue can arrive
         // with different provider IDs from different sources.
+        // The row lock makes the compare with the stored updated_at and the write after it one step.
+        issueRepository.lockByRepositoryIdAndNumber(repository.getId(), dto.number());
         Optional<Issue> existingOpt = issueRepository.findByRepositoryIdAndNumber(repository.getId(), dto.number());
         boolean isNew = existingOpt.isEmpty();
+
+        // An older payload would restore older work and record it as new (sync-lifecycle.md).
+        if (!isNew
+                && dto.updatedAt() != null
+                && existingOpt.get().getUpdatedAt() != null
+                && dto.updatedAt().isBefore(existingOpt.get().getUpdatedAt())) {
+            log.debug(
+                    "Skipped stale issue update: issueId={}, existingUpdatedAt={}, dtoUpdatedAt={}",
+                    existingOpt.get().getId(),
+                    existingOpt.get().getUpdatedAt(),
+                    dto.updatedAt());
+            return new Processed(existingOpt.get(), true);
+        }
 
         // Resolve related entities BEFORE the upsert
         User author = dto.author() != null ? findOrCreateUser(dto.author(), providerId) : null;
@@ -241,7 +262,7 @@ public class GitHubIssueProcessor extends BaseGitHubProcessor {
             log.debug("Created stub issue (no event): issueId={}, issueNumber={}", dbId, dto.number());
         }
 
-        return issue;
+        return new Processed(issue, false);
     }
 
     /**
@@ -303,8 +324,10 @@ public class GitHubIssueProcessor extends BaseGitHubProcessor {
     @Transactional
     public @Nullable Issue processTyped(
             GitHubIssueDTO issueDto, GitHubIssueTypeDTO typeDto, @Nullable String orgLogin, ProcessingContext context) {
-        Issue issue = processInternal(issueDto, context, true, true);
-        if (issue == null) return null;
+        Processed processed = processInternal(issueDto, context, true, true);
+        if (processed == null) return null;
+        Issue issue = processed.issue();
+        if (processed.superseded()) return issue;
 
         if (typeDto != null && orgLogin != null) {
             IssueType issueType = findOrCreateIssueType(typeDto, orgLogin);
@@ -324,8 +347,10 @@ public class GitHubIssueProcessor extends BaseGitHubProcessor {
 
     @Transactional
     public @Nullable Issue processUntyped(GitHubIssueDTO issueDto, ProcessingContext context) {
-        Issue issue = processInternal(issueDto, context, true, true);
-        if (issue == null) return null;
+        Processed processed = processInternal(issueDto, context, true, true);
+        if (processed == null) return null;
+        Issue issue = processed.issue();
+        if (processed.superseded()) return issue;
 
         IssueType previousType = issue.getIssueType();
         if (previousType != null) {
@@ -343,8 +368,11 @@ public class GitHubIssueProcessor extends BaseGitHubProcessor {
 
     @Transactional
     public @Nullable Issue processClosed(GitHubIssueDTO issueDto, ProcessingContext context) {
-        Issue issue = processInternal(issueDto, context, true, false);
-        if (issue == null) return null;
+        Processed processed = processInternal(issueDto, context, true, false);
+        if (processed == null) return null;
+        Issue issue = processed.issue();
+        // A first close that arrives after a later edit still records its occasion; a redelivery records none.
+        if (issue.getState() != Issue.State.CLOSED) return issue;
         String stateReason = issueDto.stateReason() != null ? issueDto.stateReason() : "completed";
         eventPublisher.publishEvent(new ScmDomainEvent.IssueClosed(
                 ScmEventPayload.IssueData.from(issue), stateReason, EventContext.from(context)));
@@ -354,18 +382,24 @@ public class GitHubIssueProcessor extends BaseGitHubProcessor {
 
     @Transactional
     public @Nullable Issue processReopened(GitHubIssueDTO issueDto, ProcessingContext context) {
-        Issue issue = processInternal(issueDto, context, true, true);
-        if (issue == null) return null;
-        eventPublisher.publishEvent(
-                new ScmDomainEvent.IssueReopened(ScmEventPayload.IssueData.from(issue), EventContext.from(context)));
+        Processed processed = processInternal(issueDto, context, true, true);
+        if (processed == null) return null;
+        Issue issue = processed.issue();
+        if (issue.getState() != Issue.State.OPEN) return issue;
+        eventPublisher.publishEvent(new ScmDomainEvent.IssueReopened(
+                ScmEventPayload.IssueData.from(issue),
+                EventContext.from(context)
+                        .withSourceKey(ScmEventIdentity.transition(issue.getId(), "reopened", issueDto.updatedAt()))));
         log.debug("Reopened issue: issueId={}", issue.getId());
         return issue;
     }
 
     @Transactional
     public @Nullable Issue processLabeled(GitHubIssueDTO issueDto, GitHubLabelDTO labelDto, ProcessingContext context) {
-        Issue issue = processInternal(issueDto, context, true, true);
-        if (issue == null) return null;
+        Processed processed = processInternal(issueDto, context, true, true);
+        if (processed == null) return null;
+        Issue issue = processed.issue();
+        if (processed.superseded()) return issue;
         Label label = findOrCreateLabel(
                 labelDto, Objects.requireNonNull(context.repository(), "Issue event requires a repository"));
         if (label != null) {
@@ -381,8 +415,10 @@ public class GitHubIssueProcessor extends BaseGitHubProcessor {
     @Transactional
     public @Nullable Issue processUnlabeled(
             GitHubIssueDTO issueDto, GitHubLabelDTO labelDto, ProcessingContext context) {
-        Issue issue = processInternal(issueDto, context, true, true);
-        if (issue == null) return null;
+        Processed processed = processInternal(issueDto, context, true, true);
+        if (processed == null) return null;
+        Issue issue = processed.issue();
+        if (processed.superseded()) return issue;
         Label label = findOrCreateLabel(
                 labelDto, Objects.requireNonNull(context.repository(), "Issue event requires a repository"));
         if (label != null) {

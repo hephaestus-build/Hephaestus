@@ -234,21 +234,22 @@ public interface SlackMessageRepository extends JpaRepository<SlackMessage, Long
     /**
      * Slack {@code message_changed}: replace the rendered {@code text} with the edited body and stamp
      * {@code edited_at}. Scoped JPQL UPDATE carrying the {@code workspace_id} predicate. Never resurrects a
-     * tombstoned row ({@code deleted_at IS NULL} guard). Returns rows affected — a {@code 0} lets
-     * {@code SlackIngestService.editMessage} tell an already-tombstoned row (present, skip) from a not-yet-ingested
+     * tombstoned row ({@code deleted_at IS NULL} guard), and never replaces a later edit with an older or redelivered
+     * one ({@code edited_at} guard). Returns rows affected — a {@code 0} lets
+     * {@code SlackIngestService.editMessage} tell a tombstoned or newer row (present, skip) from a not-yet-ingested
      * one (re-ingest the edited body through the full consent stack), making edits durable against out-of-order
      * delivery at parity with the tombstone.
      */
     @Modifying
     @Transactional
     @Query(
-            "UPDATE SlackMessage m SET m.text = :text, m.editedAt = :now WHERE m.workspaceId = :workspaceId AND m.slackChannelId = :slackChannelId AND m.slackTs = :slackTs AND m.deletedAt IS NULL")
+            "UPDATE SlackMessage m SET m.text = :text, m.editedAt = :editedAt WHERE m.workspaceId = :workspaceId AND m.slackChannelId = :slackChannelId AND m.slackTs = :slackTs AND m.deletedAt IS NULL AND (m.editedAt IS NULL OR m.editedAt < :editedAt)")
     int applyEdit(
             @Param("workspaceId") Long workspaceId,
             @Param("slackChannelId") String slackChannelId,
             @Param("slackTs") String slackTs,
             @Param("text") @Nullable String text,
-            @Param("now") Instant now);
+            @Param("editedAt") Instant editedAt);
 
     /**
      * Agent-owned {@code ConversationThreadProjection} SPI: the non-tombstoned turns of one thread (root

@@ -262,8 +262,8 @@ public class GitLabIssueCommentProcessor extends BaseGitLabProcessor {
     private @Nullable IssueComment processCommentInternal(
             NoteAttributes attrs, Issue parent, @Nullable User author, ProcessingContext context) {
         Long issueId = parent.getId();
-        Optional<IssueComment> existingOpt =
-                commentRepository.findByNativeIdAndProviderId(attrs.id(), Objects.requireNonNull(context.providerId()));
+        Optional<IssueComment> existingOpt = commentRepository.findForUpdateByNativeIdAndProviderId(
+                attrs.id(), Objects.requireNonNull(context.providerId()));
         // Note ids are instance-wide; a stored note cannot move to another issue or merge request.
         if (existingOpt
                 .map(IssueComment::getIssue)
@@ -273,6 +273,15 @@ public class GitLabIssueCommentProcessor extends BaseGitLabProcessor {
             return null;
         }
         boolean isNew = existingOpt.isEmpty();
+        // An older hook would restore older words (sync-lifecycle.md).
+        Instant eventUpdatedAt = attrs.updatedAt() == null ? null : parseGitLabTimestamp(attrs.updatedAt());
+        if (!isNew
+                && eventUpdatedAt != null
+                && existingOpt.get().getUpdatedAt() != null
+                && eventUpdatedAt.isBefore(existingOpt.get().getUpdatedAt())) {
+            log.debug("Skipped stale note: noteId={}", attrs.id());
+            return existingOpt.get();
+        }
         IssueComment comment = existingOpt.orElseGet(IssueComment::new);
         Set<String> changedFields = new HashSet<>();
 

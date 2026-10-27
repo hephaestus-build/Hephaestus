@@ -84,7 +84,7 @@ public class GitHubPullRequestReviewMessageHandler
                 log.warn("Skipped review dismissal: reason=missingReviewId");
                 return;
             }
-            reviewProcessor.processDismissed(reviewDto.id(), context);
+            reviewProcessor.processDismissed(reviewDto.id(), reviewDto.updatedAt(), context);
         } else {
             reviewProcessor.processWithParentCreation(reviewDto, prDto, context);
         }

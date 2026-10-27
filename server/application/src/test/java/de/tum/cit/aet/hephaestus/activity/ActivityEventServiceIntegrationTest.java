@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.events.ScmEventIdentity;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
@@ -204,6 +205,54 @@ class ActivityEventServiceIntegrationTest extends BaseIntegrationTest {
             assertThat(first).isTrue();
             assertThat(second).isTrue();
             assertThat(activityEventRepository.findAll()).hasSize(2);
+        }
+    }
+
+    /** The activity of one provider event is one row, whichever path reports it and however often. */
+    @Nested
+    class OneEventIdentity {
+
+        private final Instant closedAt = Instant.parse("2024-01-15T10:00:00Z");
+
+        @Test
+        void shouldRecordOneCloseWhenALedgerFromBeforeSourceKeysMeetsTheHookAndTheSync() {
+            // An entry written before source keys existed, then the hook, the sync and a redelivery of the close.
+            for (int report = 0; report < 4; report++) {
+                activityEventService.record(
+                        testWorkspace.getId(),
+                        ActivityEventType.ISSUE_CLOSED,
+                        closedAt,
+                        testUser,
+                        testRepository,
+                        ActivityTargetType.ISSUE,
+                        301L,
+                        null);
+            }
+
+            assertThat(rows(ActivityEventType.ISSUE_CLOSED, 301L)).isEqualTo(1);
+        }
+
+        @Test
+        void shouldRecordTwoReopensThatTheProviderDatesApart() {
+            for (var reopenedAt : List.of(closedAt, closedAt.plusSeconds(60), closedAt)) {
+                activityEventService.record(
+                        testWorkspace.getId(),
+                        ActivityEventType.ISSUE_REOPENED,
+                        Instant.now(),
+                        testUser,
+                        testRepository,
+                        ActivityTargetType.ISSUE,
+                        302L,
+                        ScmEventIdentity.transition(302L, "reopened", reopenedAt));
+            }
+
+            assertThat(rows(ActivityEventType.ISSUE_REOPENED, 302L)).isEqualTo(2);
+        }
+
+        private long rows(ActivityEventType type, long targetId) {
+            return activityEventRepository.findAll().stream()
+                    .filter(row -> row.getEventType() == type && row.getTargetId() == targetId)
+                    .count();
         }
     }
 

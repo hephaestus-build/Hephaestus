@@ -23,11 +23,14 @@ public interface ItemEventRepository extends JpaRepository<ItemEvent, UUID> {
     Optional<ItemEvent> findByWorkspaceIdAndItemIdAndNameAndItemVersion(
             long workspaceId, long itemId, String name, String itemVersion);
 
+    Optional<ItemEvent> findByWorkspaceIdAndItemIdAndNameAndSourceKey(
+            long workspaceId, long itemId, String name, String sourceKey);
+
     @Modifying
     @Query(
             value =
-                    "INSERT INTO item_event(id, workspace_id, item_id, name, item_version, occurred_at, found_by, actor_user_id, requested_by_id, state, decided_at, evidence, evidence_expires_at) VALUES (:id, :workspaceId, :itemId, :name, :itemVersion, :occurredAt, :foundBy, :actorUserId, :requestedById, 'RECORDED', :now, CAST(:evidence AS jsonb), "
-                            + RECORD_EXPIRY + ") ON CONFLICT (workspace_id, item_id, name, item_version) DO NOTHING",
+                    "INSERT INTO item_event(id, workspace_id, item_id, name, item_version, source_key, occurred_at, found_by, actor_user_id, requested_by_id, state, decided_at, evidence, evidence_expires_at) VALUES (:id, :workspaceId, :itemId, :name, :itemVersion, :sourceKey, :occurredAt, :foundBy, :actorUserId, :requestedById, 'RECORDED', :now, CAST(:evidence AS jsonb), "
+                            + RECORD_EXPIRY + ") ON CONFLICT DO NOTHING",
             nativeQuery = true)
     int insertIfAbsent(
             @Param("id") UUID id,
@@ -35,6 +38,7 @@ public interface ItemEventRepository extends JpaRepository<ItemEvent, UUID> {
             @Param("itemId") long itemId,
             @Param("name") String name,
             @Param("itemVersion") String itemVersion,
+            @Param("sourceKey") @Nullable String sourceKey,
             @Param("occurredAt") Instant occurredAt,
             @Param("foundBy") String foundBy,
             @Param("actorUserId") @Nullable Long actorUserId,
@@ -47,11 +51,11 @@ public interface ItemEventRepository extends JpaRepository<ItemEvent, UUID> {
     @Modifying
     @Query(
             value =
-                    "INSERT INTO item_event(id, workspace_id, item_id, name, item_version, pending_fence, occurred_at, found_by, actor_user_id, state, decided_at, evidence, evidence_expires_at) "
-                            + "SELECT :id, :workspaceId, :itemId, :name, NULL, :fence, :occurredAt, :foundBy, :actorUserId, 'RECORDED', :now, CAST(:evidence AS jsonb), "
+                    "INSERT INTO item_event(id, workspace_id, item_id, name, item_version, pending_fence, source_key, occurred_at, found_by, actor_user_id, state, decided_at, evidence, evidence_expires_at) "
+                            + "SELECT :id, :workspaceId, :itemId, :name, NULL, :fence, :sourceKey, :occurredAt, :foundBy, :actorUserId, 'RECORDED', :now, CAST(:evidence AS jsonb), "
                             + RECORD_EXPIRY + " "
                             + "WHERE NOT EXISTS (SELECT 1 FROM item_event e WHERE e.workspace_id = :workspaceId AND e.item_id = :itemId AND e.name = :name "
-                            + "AND e.item_version IS NULL AND e.pending_fence = :fence)",
+                            + "AND e.item_version IS NULL AND e.pending_fence = :fence) ON CONFLICT DO NOTHING",
             nativeQuery = true)
     int insertUnresolvedIfAbsent(
             @Param("id") UUID id,
@@ -59,6 +63,7 @@ public interface ItemEventRepository extends JpaRepository<ItemEvent, UUID> {
             @Param("itemId") long itemId,
             @Param("name") String name,
             @Param("fence") String fence,
+            @Param("sourceKey") @Nullable String sourceKey,
             @Param("occurredAt") Instant occurredAt,
             @Param("foundBy") String foundBy,
             @Param("actorUserId") @Nullable Long actorUserId,

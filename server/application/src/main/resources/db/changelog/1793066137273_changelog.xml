@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1793066137273-1" author="hephaestus">
+        <addColumn tableName="item_event">
+            <column name="source_key" type="VARCHAR(512)"/>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1793066137273-2" author="hephaestus">
+        <sql splitStatements="false"><![CDATA[
+SET LOCAL lock_timeout='30s';
+ALTER TABLE item_event ADD CONSTRAINT uk_item_event_source UNIQUE (workspace_id, item_id, name, source_key);
+]]></sql>
+        <rollback>
+            <sql>ALTER TABLE item_event DROP CONSTRAINT uk_item_event_source;</sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

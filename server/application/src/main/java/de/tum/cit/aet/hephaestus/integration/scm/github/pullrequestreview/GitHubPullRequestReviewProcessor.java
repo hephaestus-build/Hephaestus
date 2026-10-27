@@ -185,17 +185,24 @@ public class GitHubPullRequestReviewProcessor extends BaseGitHubProcessor {
     }
 
     /**
-     * Process a review dismissal.
+     * Process a review dismissal. A dismissal is final, so a redelivered one changes nothing.
      *
      * @param reviewNativeId the native ID of the review to dismiss
+     * @param dismissedAt the review's {@code updated_at} in the dismissal payload, which orders later payloads
      * @param context processing context with scope information
      */
     @Transactional
-    public void processDismissed(Long reviewNativeId, @NonNull ProcessingContext context) {
+    public void processDismissed(
+            Long reviewNativeId, @Nullable Instant dismissedAt, @NonNull ProcessingContext context) {
         reviewRepository
                 .findByNativeIdAndProviderId(reviewNativeId, Objects.requireNonNull(context.providerId()))
+                .filter(review -> !review.isDismissed())
                 .ifPresent(review -> {
                     review.setDismissed(true);
+                    if (dismissedAt != null
+                            && (review.getUpdatedAt() == null || dismissedAt.isAfter(review.getUpdatedAt()))) {
+                        review.setUpdatedAt(dismissedAt);
+                    }
                     review = reviewRepository.save(review);
                     ScmEventPayload.ReviewData.from(review)
                             .ifPresent(reviewData -> eventPublisher.publishEvent(
@@ -208,6 +215,13 @@ public class GitHubPullRequestReviewProcessor extends BaseGitHubProcessor {
             PullRequestReview review,
             GitHubPullRequestReviewEventDTO.GitHubReviewDTO dto,
             @NonNull ProcessingContext context) {
+        // An older payload would restore an older review, also one dismissed since (sync-lifecycle.md).
+        if (review.getUpdatedAt() != null
+                && dto.updatedAt() != null
+                && dto.updatedAt().isBefore(review.getUpdatedAt())) {
+            log.debug("Skipped stale review update: reviewId={}", dto.id());
+            return review;
+        }
         boolean wasSubmitted = review.getSubmittedAt() != null && review.getState() != PullRequestReview.State.PENDING;
         review.setBody(dto.body());
         if (dto.submittedAt() != null) review.setSubmittedAt(dto.submittedAt());

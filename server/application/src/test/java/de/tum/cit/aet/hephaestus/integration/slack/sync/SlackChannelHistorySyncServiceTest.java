@@ -280,20 +280,27 @@ class SlackChannelHistorySyncServiceTest extends BaseUnitTest {
         service.syncWorkspace(WS);
 
         verify(ingestService, never()).ingestChannelMessage(any(), any(), any(), any(), any(), any());
-        verify(ingestService, never()).editMessage(any(), any(), any(), any(), any(), any());
+        verify(ingestService, never()).editMessage(any(), any(), any());
     }
 
     @Test
     void editedMessage_routesThroughEditMessage() {
         stubChannels(channel(ANNOUNCED, null));
         Message edited = plain("1783000006.000000", "U1", "fixed wording");
-        edited.setEdited(new Message.Edited());
+        var edit = new Message.Edited();
+        edit.setTs("1783000016.000000");
+        edited.setEdited(edit);
         when(slackMessageService.fetchHistoryPage(eq(WS), eq(CHANNEL), anyString(), anyString(), any(), anyInt()))
                 .thenReturn(new HistoryPage(List.of(edited), null));
 
         service.syncWorkspace(WS);
 
-        verify(ingestService).editMessage(TEAM, CHANNEL, "1783000006.000000", null, "U1", "fixed wording");
+        verify(ingestService)
+                .editMessage(
+                        TEAM,
+                        CHANNEL,
+                        new SlackIngestService.Edit(
+                                "1783000006.000000", null, "U1", "fixed wording", "1783000016.000000"));
         verify(ingestService, never()).ingestChannelMessage(any(), any(), any(), any(), any(), any());
     }
 

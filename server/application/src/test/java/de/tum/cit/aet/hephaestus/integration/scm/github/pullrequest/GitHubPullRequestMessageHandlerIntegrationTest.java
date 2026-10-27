@@ -661,7 +661,8 @@ class GitHubPullRequestMessageHandlerIntegrationTest extends BaseIntegrationTest
                     null, // sender
                     null, // label
                     null, // requestedReviewer
-                    null // changes
+                    null, // changes
+                    null // before
                     );
 
             assertThatCode(() -> handler.handleEvent(event)).doesNotThrowAnyException();

@@ -740,6 +740,7 @@ class ResultAdmissionIntegrationTest extends AbstractResultAdmissionIntegrationT
                     input.itemId(),
                     input.name().value(),
                     Objects.requireNonNull(input.itemVersion()),
+                    null,
                     input.occurredAt(),
                     input.foundBy().name(),
                     input.actorUserId(),

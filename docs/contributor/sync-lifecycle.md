@@ -157,6 +157,57 @@ operational audit only (kind, type, status, timestamps), no mirrored third-party
 connection by the sync-job pruner. Global identity rows (`user`, `organization`,
 `identity_provider`) are cross-tenant shared and never touched here.
 
+### A redelivered or older payload changes nothing
+
+A provider can deliver a webhook again, even hours later.
+JetStream drops a duplicate only inside its deduplication window.
+Two rules make a redelivery harmless.
+Hephaestus keeps no record of processed delivery ids.
+
+**The stored work only moves forward.**
+Each consumer compares the payload with the stored row.
+Pull and merge requests, issues and comments are read with a row lock.
+For these, the compare and the write are one step, also when a sync writes the same row.
+
+- A payload with an older `updated_at` than the stored row changes nothing.
+  This rule applies to pull and merge requests, issues, comments, reviews, review comments, notes, diff notes and Outline documents.
+- A Slack edit applies only if its `edited.ts` is later than the stored edit.
+- A Slack change without `edited.ts` is a new reply or an unfurl. It changes nothing.
+- A dismissal is final.
+  A second dismissal publishes nothing.
+
+**An event records its item event once.**
+A lifecycle event has one identity, its source key.
+`ScmEventIdentity` derives it, and the webhook, a late delivery, a redelivery and the sync derive the same key for the same change:
+
+- A push is the move from one head commit to the next.
+  A force-push back to an earlier head is a new move.
+- A ready, draft or reopen is the change and the moment that the provider dates.
+- A close or a merge is the stored `closedAt` or `mergedAt`, which the webhook and the sync store alike.
+
+The unique key on item, name and source key absorbs a second report of the same event, whatever version the work has by then.
+The unique key on item, name and version still absorbs a second event of the same name for the same work.
+The activity entry of the event uses the same source key, so each path adds one entry.
+The activity entry of a close or a merge keeps its time key, which is the stored `closedAt` or `mergedAt`.
+That key identifies the same moment on every path, and it matches the entries recorded before source keys existed.
+A sync reports a close or a merge only when it stores one, so a sync that reads a closed issue again adds nothing.
+
+A close, reopen, ready or draft event publishes when the stored state is the payload's state.
+It publishes also when its payload is older than the stored row.
+Thus, a first delivery that arrives after a later change still records its item event, for the current work.
+A redelivery of it records nothing.
+
+A GitLab sync records the ready, draft and push changes that it stores, under the same source key as their hook.
+Thus, a hook that arrives after the sync records nothing new, and a lost hook loses no review.
+GitLab offers a merge for review after the read that follows the hook.
+GitHub redelivers a failed delivery, so its sync records no push or ready for a stored pull request.
+
+Provider dates have second precision.
+A push in the same second as the stored change is applied only if it continues from the stored head.
+An older push in that second records its own item event key and never moves the head back.
+An item event recorded before the source key existed has no key.
+A redelivery of such an event can record a second item event if the work moved since.
+
 ### Reviewer lists are dated snapshots
 
 A pull or merge request's review requests arrive whole from webhooks and sync.

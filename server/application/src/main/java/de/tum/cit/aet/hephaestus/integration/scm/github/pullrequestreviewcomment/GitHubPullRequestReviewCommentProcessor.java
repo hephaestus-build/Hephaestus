@@ -218,8 +218,15 @@ public class GitHubPullRequestReviewCommentProcessor {
             Long prId,
             @NonNull ProcessingContext context) {
         return commentRepository
-                .findByNativeIdAndProviderId(dto.id(), Objects.requireNonNull(context.providerId()))
+                .findForUpdateByNativeIdAndProviderId(dto.id(), Objects.requireNonNull(context.providerId()))
                 .map(comment -> {
+                    // An older edit would restore older words (sync-lifecycle.md).
+                    if (comment.getUpdatedAt() != null
+                            && dto.updatedAt() != null
+                            && dto.updatedAt().isBefore(comment.getUpdatedAt())) {
+                        log.debug("Skipped stale comment edit: commentId={}", dto.id());
+                        return comment;
+                    }
                     comment.setBody(dto.body());
                     comment.setUpdatedAt(dto.updatedAt());
                     PullRequestReviewComment saved = commentRepository.save(comment);

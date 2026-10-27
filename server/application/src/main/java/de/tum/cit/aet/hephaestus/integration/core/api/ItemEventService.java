@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.core.api;
 
 import de.tum.cit.aet.hephaestus.integration.core.item.ItemRepository;
+import de.tum.cit.aet.hephaestus.integration.core.itemevent.ItemEvent;
 import de.tum.cit.aet.hephaestus.integration.core.itemevent.ItemEventLedgerProperties;
 import de.tum.cit.aet.hephaestus.integration.core.itemevent.ItemEventRepository;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemEventInput;
@@ -60,6 +61,7 @@ public class ItemEventService {
                             input.itemId(),
                             input.name().value(),
                             fence,
+                            input.sourceKey(),
                             input.occurredAt(),
                             input.foundBy().name(),
                             input.actorUserId(),
@@ -73,6 +75,7 @@ public class ItemEventService {
             return repository
                     .findByWorkspaceIdAndItemIdAndNameAndItemVersionIsNullAndPendingFence(
                             input.workspaceId(), input.itemId(), input.name().value(), fence)
+                    .or(() -> bySource(input))
                     .orElseThrow()
                     .getId();
         }
@@ -82,6 +85,7 @@ public class ItemEventService {
                 input.itemId(),
                 input.name().value(),
                 version,
+                input.sourceKey(),
                 input.occurredAt(),
                 input.foundBy().name(),
                 input.actorUserId(),
@@ -97,9 +101,19 @@ public class ItemEventService {
         var existing = repository
                 .findByWorkspaceIdAndItemIdAndNameAndItemVersion(
                         input.workspaceId(), input.itemId(), input.name().value(), version)
+                .or(() -> bySource(input))
                 .orElseThrow();
         observeSource(input.workspaceId(), input.itemId(), input.name());
         return existing.getId();
+    }
+
+    /** The occasion an earlier delivery of the same provider event recorded, whatever version it named. */
+    private Optional<ItemEvent> bySource(ItemEventInput input) {
+        String sourceKey = input.sourceKey();
+        return sourceKey == null
+                ? Optional.empty()
+                : repository.findByWorkspaceIdAndItemIdAndNameAndSourceKey(
+                        input.workspaceId(), input.itemId(), input.name().value(), sourceKey);
     }
 
     /** Open occasions on the item that still have no pinned version, oldest first. Reads no retained record. */

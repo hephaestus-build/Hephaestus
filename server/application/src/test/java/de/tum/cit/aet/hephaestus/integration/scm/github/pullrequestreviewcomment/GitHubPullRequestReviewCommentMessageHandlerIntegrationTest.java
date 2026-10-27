@@ -28,6 +28,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.ClassPathResource;
 import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 class GitHubPullRequestReviewCommentMessageHandlerIntegrationTest extends BaseIntegrationTest {
 
@@ -184,6 +185,26 @@ class GitHubPullRequestReviewCommentMessageHandlerIntegrationTest extends BaseIn
     }
 
     @Test
+    void shouldKeepTheLaterEditWhenAnOlderEditArrives() throws Exception {
+        GitHubPullRequestReviewCommentEventDTO createEvent = loadPayload("pull_request_review_comment.created");
+        createTestPullRequest(
+                required(createEvent.pullRequest().getDatabaseId()),
+                createEvent.pullRequest().number());
+        handler.handleEvent(createEvent);
+        GitHubPullRequestReviewCommentEventDTO editEvent = loadPayload("pull_request_review_comment.edited");
+        handler.handleEvent(editEvent);
+
+        // The created payload, delivered as an edit, carries the older words and the older updated_at.
+        handler.handleEvent(loadPayload("pull_request_review_comment.created", "edited"));
+
+        assertThat(commentRepository.findByNativeIdAndProviderId(
+                        editEvent.comment().id(), gitProviderId()))
+                .get()
+                .satisfies(comment -> assertThat(comment.getBody())
+                        .isEqualTo(editEvent.comment().body()));
+    }
+
+    @Test
     void shouldDeleteReviewCommentOnDeletedEvent() throws Exception {
         // Given - first create the comment
         GitHubPullRequestReviewCommentEventDTO createEvent = loadPayload("pull_request_review_comment.created");
@@ -205,6 +226,13 @@ class GitHubPullRequestReviewCommentMessageHandlerIntegrationTest extends BaseIn
         assertThat(commentRepository.findByNativeIdAndProviderId(
                         deleteEvent.comment().id(), gitProviderId()))
                 .isEmpty();
+    }
+
+    private GitHubPullRequestReviewCommentEventDTO loadPayload(String filename, String action) throws IOException {
+        ClassPathResource resource = new ClassPathResource("github/" + filename + ".json");
+        ObjectNode json = (ObjectNode) objectMapper.readTree(resource.getContentAsString(StandardCharsets.UTF_8));
+        json.put("action", action);
+        return objectMapper.treeToValue(json, GitHubPullRequestReviewCommentEventDTO.class);
     }
 
     private GitHubPullRequestReviewCommentEventDTO loadPayload(String filename) throws IOException {

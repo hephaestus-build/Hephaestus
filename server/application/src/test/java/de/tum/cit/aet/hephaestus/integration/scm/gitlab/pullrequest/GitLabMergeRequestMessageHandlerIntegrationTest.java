@@ -341,6 +341,24 @@ class GitLabMergeRequestMessageHandlerIntegrationTest extends BaseIntegrationTes
             assertThat(eventListener.ofType(ScmDomainEvent.PullRequestReopened.class))
                     .hasSize(1);
         }
+
+        @Test
+        void shouldKeepTheReopenedMergeRequestOpenWhenTheCloseHookIsRedelivered() throws Exception {
+            receive(loadPayload("merge_request.open"));
+            receive(loadPayload("merge_request.close"));
+            receive(loadPayload("merge_request.reopen"));
+            eventListener.clear();
+
+            receive(loadPayload("merge_request.close"));
+
+            transactionTemplate.executeWithoutResult(status -> assertThat(pullRequestRepository
+                            .findByRepositoryIdAndNumber(savedRepo.getId(), MR3_IID)
+                            .orElseThrow()
+                            .getState())
+                    .isEqualTo(Issue.State.OPEN));
+            assertThat(eventListener.ofType(ScmDomainEvent.PullRequestClosed.class))
+                    .isEmpty();
+        }
     }
 
     @Nested

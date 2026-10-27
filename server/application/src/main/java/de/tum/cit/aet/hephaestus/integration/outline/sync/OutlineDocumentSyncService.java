@@ -374,6 +374,15 @@ public class OutlineDocumentSyncService {
         }
         Optional<OutlineDocumentSnapshot> mirrored =
                 documentRepository.findSnapshotByDocumentId(workspaceId, ctx.connectionId(), documentId);
+        // An older payload would restore older words or state (sync-lifecycle.md).
+        Instant payloadUpdatedAt = prefetchedMeta == null ? null : prefetchedMeta.getUpdatedAt();
+        if (payloadUpdatedAt != null
+                && mirrored.map(OutlineDocumentSnapshot::outlineUpdatedAt)
+                        .filter(payloadUpdatedAt::isBefore)
+                        .isPresent()) {
+            log.debug("Skipped stale Outline delivery: workspaceId={}, event={}", workspaceId, eventName);
+            return;
+        }
         if (TOMBSTONE_EVENTS.contains(eventName)) {
             mirrored.filter(d -> !d.isDeleted())
                     .ifPresent(d -> retention.tombstone(
@@ -381,7 +390,9 @@ public class OutlineDocumentSyncService {
             return;
         }
         if (ARCHIVE_EVENT.equals(eventName)) {
-            Instant archivedAt = Instant.now();
+            Instant archivedAt = prefetchedMeta != null && prefetchedMeta.getArchivedAt() != null
+                    ? prefetchedMeta.getArchivedAt()
+                    : Instant.now();
             mirrored.filter(d -> !d.isDeleted()).ifPresent(d -> {
                 var archived = mirrorWriter.updateDocument(
                         workspaceId, ctx.connectionId(), documentId, doc -> doc.setArchivedAt(archivedAt));
