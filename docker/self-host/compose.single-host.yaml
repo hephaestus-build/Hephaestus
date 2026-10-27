@@ -8,7 +8,8 @@
 #
 # Merge rules that matter (docs.docker.com/reference/compose-file/merge/):
 #   mappings (environment, depends_on) merge per key — list them individually
-#   sequences (command, ports, volumes) append — use !override to replace
+#   sequences (ports, volumes, labels) merge — use !override to replace them
+#   command and entrypoint are replaced without it; !override there only states the intent
 # =============================================================================
 
 services:
