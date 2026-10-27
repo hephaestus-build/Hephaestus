@@ -37,7 +37,6 @@ public class GitLabSummaryWriter implements SummaryWriter {
 
     private static final Logger log = LoggerFactory.getLogger(GitLabSummaryWriter.class);
 
-    // GitLab executes line-leading quick actions; escape them in every posted note.
     private final GitLabGraphQlClientProvider gitLabProvider;
     private final GitLabMrResolver mrResolver;
     private final OutboundEgressGuard egressGuard;

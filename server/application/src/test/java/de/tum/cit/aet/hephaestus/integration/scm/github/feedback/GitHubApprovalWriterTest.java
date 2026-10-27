@@ -76,7 +76,7 @@ class GitHubApprovalWriterTest extends BaseUnitTest {
 
         verify(client).documentName("ApprovePullRequest");
         verify(spec).variable(eq("pullRequestId"), eq("PR_node123"));
-        verify(spec).variable(eq("body"), eq("looks good, <code>@alice</code>"));
+        verify(spec).variable(eq("body"), eq("looks good\\, <code>\\@alice</code>"));
     }
 
     @Test

@@ -96,8 +96,6 @@ public class GitHubLineNoteWriter implements LineNoteWriter {
         if (feedbackItems.isEmpty()) {
             return CopyWriteResult.of(List.of());
         }
-        // Each body is escaped before any note is written, so a body that cannot be escaped stops the whole package.
-        feedbackItems.forEach(note -> PostedText.of(note.body()));
         long scopeId = target.integration().workspaceId();
         if (gitHubProvider.isRateLimitCritical(scopeId)) {
             log.warn(

@@ -57,8 +57,6 @@ class PostedTextTest extends BaseUnitTest {
     private static final Pattern QUICK_ACTION = Pattern.compile(
             "^\\/(?<cmd>[a-z0-9_]+)(?:[ ](?<arg>[^\\n]*))?(?:\\s*\\n|$)", Pattern.CASE_INSENSITIVE | Pattern.MULTILINE);
 
-    private static final Pattern FENCED = Pattern.compile("(?m)^```[\\s\\S]*?^```");
-
     private static final Pattern OWN_MARKER = Pattern.compile("<!--[ ]*hephaestus[^<>]*-->");
 
     /** What a rendered comment must not hold: a mention, an image, a script, an event attribute or hidden markup. */
@@ -95,10 +93,8 @@ class PostedTextTest extends BaseUnitTest {
     @ParameterizedTest
     @MethodSource("cases")
     void shouldLeaveNoLineThatGitLabRunsAsAQuickAction(Case text) {
-        assertThat(QUICK_ACTION
-                        .matcher(FENCED.matcher(text.wire()).replaceAll(""))
-                        .find())
-                .isFalse();
+        // GitLab deletes carriage returns before it reads the lines; nothing else is taken out first.
+        assertThat(QUICK_ACTION.matcher(text.wire().replace("\r", "")).find()).isFalse();
     }
 
     @Test
@@ -122,6 +118,6 @@ class PostedTextTest extends BaseUnitTest {
                 "key",
                 "<!-- hephaestus-feedback-copy:1 -->");
         assertThat(PostedText.summary(content))
-                .isEqualTo("Ask <code>@alice</code> &lt;b>now&lt;/b>\n\n<!-- hephaestus-feedback-copy:1 -->");
+                .isEqualTo("Ask <code>\\@alice</code> &lt;b&gt;now&lt;\\/b&gt;\n\n<!-- hephaestus-feedback-copy:1 -->");
     }
 }

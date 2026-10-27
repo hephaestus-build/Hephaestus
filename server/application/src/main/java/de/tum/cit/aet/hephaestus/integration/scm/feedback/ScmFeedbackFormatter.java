@@ -7,8 +7,6 @@ import de.tum.cit.aet.hephaestus.workspace.spi.WorkspaceSummaryQuery;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import org.commonmark.node.FencedCodeBlock;
-import org.commonmark.parser.Parser;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
 import org.springframework.web.util.HtmlUtils;
@@ -105,8 +103,6 @@ public class ScmFeedbackFormatter {
         return "Answer or disagree in [Hephaestus](" + url + ").";
     }
 
-    private static final Parser MARKDOWN = Parser.builder().build();
-
     private static final Pattern APPROVAL_LANGUAGE = Pattern.compile(
             "^\\s*(?:LGTM|(?:looks good to me)|(?:approved)|(?:ready to merge)|(?:ship it)|(?:approved by\\b[^\\n]*))[.!?]*\\s*$",
             Pattern.CASE_INSENSITIVE | Pattern.MULTILINE);
@@ -117,28 +113,6 @@ public class ScmFeedbackFormatter {
      */
     public static boolean speaksApproval(String body) {
         return APPROVAL_LANGUAGE.matcher(body).find();
-    }
-
-    /**
-     * Closes a fenced block the body leaves open, so text appended after the body is not swallowed
-     * into it. Only a top-level block can run to the end; a block inside a list or quote ends when
-     * its container does.
-     */
-    public static String balanceCodeFences(String text) {
-        FencedCodeBlock open = unclosedFence(text);
-        return open == null ? text : text + "\n" + closingFence(open);
-    }
-
-    private static @Nullable FencedCodeBlock unclosedFence(String text) {
-        return MARKDOWN.parse(text).getLastChild() instanceof FencedCodeBlock block
-                        && block.getClosingFenceLength() == null
-                ? block
-                : null;
-    }
-
-    private static String closingFence(FencedCodeBlock block) {
-        Integer opening = block.getOpeningFenceLength();
-        return block.getFenceCharacter().repeat(opening == null ? 3 : opening);
     }
 
     // Hephaestus appends its markers as the last lines of each copy; a marker-shaped comment earlier in the text,

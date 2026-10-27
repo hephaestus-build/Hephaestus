@@ -119,8 +119,6 @@ public class GitLabLineNoteWriter implements LineNoteWriter {
         if (feedbackItems.isEmpty()) {
             return CopyWriteResult.of(List.of());
         }
-        // Each body is escaped before any note is written, so a body that cannot be escaped stops the whole package.
-        feedbackItems.forEach(item -> GitLabSummaryWriter.gitLabBody(item.body()));
         long scopeId = target.integration().workspaceId();
         String revision;
         try {

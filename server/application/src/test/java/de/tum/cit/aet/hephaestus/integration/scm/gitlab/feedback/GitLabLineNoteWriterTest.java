@@ -606,7 +606,7 @@ class GitLabLineNoteWriterTest extends BaseUnitTest {
                 .singleElement()
                 .satisfies(call -> assertThat((String) call.json().get("body"))
                         .contains("/src/%40types/index.d.ts#L3-7")
-                        .contains("Ask <code>@alice</code>")
+                        .contains("Ask <code>\\@alice</code>")
                         .doesNotContain(" @alice"));
     }
 

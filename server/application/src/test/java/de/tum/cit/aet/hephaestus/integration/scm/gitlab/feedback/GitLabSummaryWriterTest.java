@@ -176,7 +176,7 @@ class GitLabSummaryWriterTest extends BaseUnitTest {
         // GitLab notifies a name added in an edit, so an edited summary mentions no one either.
         assertThat(bodyCaptor.getValue().toString())
                 .contains("\\/merge now")
-                .contains("rest for <code>@group/sub</code>");
+                .contains("rest for <code>\\@group\\/sub</code>");
     }
 
     @Test

@@ -88,7 +88,7 @@ class GitHubSummaryWriterTest extends BaseUnitTest {
         assertNotNull(handle);
         assertThat(handle.externalRef()).isEqualTo("IC_comment456");
         assertThat(handle.url()).isEqualTo("https://github.com/owner/repo/pull/42#issuecomment-987654");
-        verify(spec).variable("body", "body for <code>@alice</code>\n\nmarker");
+        verify(spec).variable("body", "body for <code>\\@alice</code>\n\nmarker");
     }
 
     @Test
@@ -205,7 +205,7 @@ class GitHubSummaryWriterTest extends BaseUnitTest {
         assertThat(outcome.externalUrl()).isEqualTo("https://github.com/owner/repo/pull/42#issuecomment-987654");
         verify(spec).variable("id", "IC_prior");
         // An edit that adds a name notifies that person, so the edited body mentions no one either.
-        verify(spec).variable("body", "new body for <code>@alice</code>\n\nmarker");
+        verify(spec).variable("body", "new body for <code>\\@alice</code>\n\nmarker");
     }
 
     @Test

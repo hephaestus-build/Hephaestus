@@ -249,7 +249,7 @@ class GitHubLineNoteWriterTest extends BaseUnitTest {
 
         channel.postImmutablePackage(githubTarget(), List.of(item("Ask @alice", "result:a:0")), fence);
 
-        assertThat(threads.bodies()).singleElement().asString().startsWith("Ask <code>@alice</code>\n\n");
+        assertThat(threads.bodies()).singleElement().asString().startsWith("Ask <code>\\@alice</code>\n\n");
     }
 
     @Test
