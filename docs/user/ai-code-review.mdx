@@ -4,20 +4,20 @@ description: How Hephaestus reviews pull requests, merge requests, and issues fo
 page_type: feature
 ---
 
-Hephaestus reviews eligible work against your workspace’s practices.
-It records observations before deciding whether feedback would help you.
+Hephaestus reviews eligible work against your workspace’s practices and records observations before it decides whether feedback would help you.
 Developers decide what to do with feedback: fix the work, ask why, or disagree.
 Merge decisions stay with your reviewers.
 
-## Read an observation
+## Observations
 
 An observation says Met, Not met, Does not apply or Could not determine.
 Not met lists the problems and their evidence.
 Each problem has its own severity: Critical, Major, Minor or Trivial.
-An open question explains what the evidence could not settle. It is never sent as feedback.
+An open question explains what the evidence could not settle.
+It is never sent as feedback.
 
-If Hephaestus cannot capture required evidence, it records no observation.
-Withheld means the review stopped that candidate with a recorded reason.
+If Hephaestus cannot capture the evidence it needs, it records no observation.
+Withheld means that the review stopped feedback before delivery and recorded why.
 It does not mean your work failed a practice.
 
 ## Where feedback appears
@@ -31,55 +31,73 @@ If GitLab cannot place it on the diff, Hephaestus opens an overview discussion t
 
 A conversation link alone does not count as delivered feedback.
 Heph must show the feedback to you.
-A review can record observations without sending a comment.
 Feedback about your reviewing stays on your own practice pages or in your conversation.
 It does not address another author’s work as yours.
 
-## Respond to feedback
+## Feedback mode
 
-Responses on GitHub or GitLab do not save your answer in Hephaestus.
-Use the feedback link to open your own records.
-Other developers see only their own records when they follow that link.
+Your workspace’s feedback mode decides when feedback reaches you:
 
-You can say whether you addressed the feedback or whether it fits your work.
-Use **Disagree** if you think it is wrong, and give your reason.
-You can also rate whether it helped you.
-Your answer and rating stay separate, so removing a rating does not remove a disagreement.
+- **Off** keeps observations and sends no feedback, on the work, on practice pages, or in conversation.
+- **Approve first** keeps feedback on the work until a workspace admin approves it. Practice pages and Heph show feedback without waiting. This is the default.
+- **Automatic** sends feedback without waiting for approval.
 
-A disagreement does not change the observation or your standing by itself.
-Workspace admins can read the disagreement and inspect the observation.
-Your private card text and unrelated rating notes stay private.
-Undo your response to remove its current answer while preserving the history.
+Workspace admins can set a different mode for a practice group or a single practice.
+[Workspace basics](./workspace#practices-and-ai) explains where they choose it.
 
-## Correct feedback
+## Corrections by workspace admins
 
-An admin can mark an observation incorrect when it was wrong when made.
+A workspace admin can mark an observation incorrect when it was wrong when made.
 The observation stays in history with the reason and stops supporting new feedback.
-The system requests a correction to existing provider comments where the provider supports it.
-An unsupported correction leaves the posted words visible with its recorded state.
-Removing the mark rechecks eligibility without posting an earlier confirmed comment again.
+Hephaestus asks GitHub or GitLab to correct an existing comment where the provider supports it.
+Otherwise, the posted words stay visible, and Hephaestus records the state of the correction.
+If the admin removes the mark later, Hephaestus checks again whether the observation can support feedback.
+It does not post an earlier confirmed comment again.
 
-An admin can accept an observation to remove it from open-problem lists.
+A workspace admin can accept an observation to remove it from open-problem lists.
 Acceptance does not change the outcome or claim that you fixed the work.
 It does not override an incorrect mark.
 
-An admin can withdraw a private card whose words were wrong.
-Its supporting observations stay unchanged. Restore reverses the withdrawal if the card remains eligible.
+A workspace admin can withdraw a private card whose words were wrong.
+Its observations stay unchanged.
+Restoring the card reverses the withdrawal if the card can still be shown.
 A withdrawn card accepts no new response.
+
+## Respond to feedback
+
+Replies and reactions on GitHub or GitLab do not save your answer in Hephaestus.
+Answer in Hephaestus instead.
+The footer of each Hephaestus comment says “Answer or disagree in Hephaestus.”
+
+1. Follow the **Hephaestus** link in that footer. Or open the card on your [Practice profile](./practice-profile).
+2. If you addressed the feedback, select **I fixed this**. If it does not apply to your work, select **Does not fit my work**.
+3. To disagree, select **Disagree**, enter what is wrong in this feedback, and select **Send**.
+4. Optional: Rate the feedback with **Helpful** or **Not helpful**.
+
+The card shows your answer.
+Workspace admins can read your disagreement and inspect the observation.
+Your private card text and unrelated rating notes stay private.
+Other developers who follow the same link see only their own records.
+
+Your answer and your rating stay separate, so removing a rating does not remove a disagreement.
+A disagreement does not change the observation or your standing by itself.
+When you undo a response, its current answer goes away, and its history stays.
 
 ## Request another review
 
-Use **Request review** on eligible work in [Activity](./activity.mdx#request-a-review) or in the browser extension.
-In **Reviews of your work** on your Practice profile, use **Request another review** in the row of a work's latest review.
-A request follows your AI choice, workspace scope and source-access checks.
-Once it is accepted, **View requested review** opens the new review and shows how far it got.
+1. On your [Practice profile](./practice-profile), select the review chip beside the title to open **Reviews of your work**.
+2. In the row of the work’s latest review, select **Request another review**.
+3. Once Hephaestus accepts the request, select **View requested review** to see how far the new review got.
+
+You can also select **Request review** on eligible work in [Activity](./activity.mdx#request-a-review) or in the browser extension.
+A request follows your AI choice, the workspace’s review scope, and the access checks of the source.
 
 The review you asked from keeps its own status.
 The new review keeps earlier observations in history.
-The newest eligible claim is selected by recorded order rather than by who started the review.
-An older review cannot silently replace newer proof.
+Of the reviews that can count, the one that Hephaestus recorded last counts, whoever started it.
+An older review cannot silently replace a newer one.
 
-## Stop comments
+## Stop comments on your work
 
 1. Open **User settings**.
 2. Under **Practice feedback**, turn off **Comments on your work**.
@@ -89,3 +107,16 @@ Reviews can still record observations that workspace admins may inspect.
 It does not delete earlier comments or observations.
 Turn the setting on again to allow future comments.
 Your AI choice is a separate account-wide limit.
+
+## Troubleshooting
+
+### No comment appeared on your work
+
+A review can record observations without sending a comment.
+Check these causes:
+
+- The feedback mode is **Approve first**, and a workspace admin has not approved the feedback yet.
+- The feedback mode is **Off**.
+- You turned off **Comments on your work**.
+- Hephaestus could not capture the evidence, so it recorded no observation.
+- The review withheld the feedback. [Observations](#observations) explains what that means.
