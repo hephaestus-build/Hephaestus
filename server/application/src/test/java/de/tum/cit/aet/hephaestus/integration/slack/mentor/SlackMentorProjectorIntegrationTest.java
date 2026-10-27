@@ -1695,7 +1695,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
                 running,
                 MentorTurn.Status.FAILED,
                 linkingAnswer(running, "unused"),
-                "Heph took too long to reply and stopped. Try again.");
+                "Heph reached its time limit and stopped this reply. Try again.");
         changed(running);
 
         verify(slack)
@@ -1704,7 +1704,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
                         eq(CHANNEL),
                         isNull(),
                         anyList(),
-                        eq("Heph took too long to reply and stopped. Try again."),
+                        eq("Heph reached its time limit and stopped this reply. Try again."),
                         eq(SlackMentorPosts.metadata(asked.question().getId())));
         assertThat(question(asked).getSlackDelivery()).isEqualTo(MentorEntry.SlackDelivery.DELIVERED);
         assertThat(question(asked).getSlackTs()).isEqualTo("100.1");

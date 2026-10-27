@@ -1,5 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.config;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import de.tum.cit.aet.hephaestus.agent.catalog.DataHandlingFacts;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnection;
@@ -7,6 +9,7 @@ import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnectionRepository;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmDataOperator;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModel;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelRepository;
+import de.tum.cit.aet.hephaestus.agent.catalog.ReasoningEffort;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.testconfig.LlmCatalogTestFixtures;
 import de.tum.cit.aet.hephaestus.testconfig.TestAuthUtils;
@@ -40,6 +43,9 @@ class AgentBindingControllerIntegrationTest extends AbstractWorkspaceIntegration
 
     @Autowired
     private LlmModelRepository llmModelRepository;
+
+    @Autowired
+    private WorkspaceAgentBindingRepository bindingRepository;
 
     private Workspace setupWorkspace(String slug) {
         User owner = persistUser(slug + "-owner");
@@ -126,6 +132,73 @@ class AgentBindingControllerIntegrationTest extends AbstractWorkspaceIntegration
                 .isEqualTo(List.of(List.of("IN_HOUSE", "CLOUD")))
                 .jsonPath("$[?(@.purpose == 'PRACTICE_EMBEDDING')].servedTiers")
                 .isEqualTo(List.of(List.of()));
+    }
+
+    @Test
+    @WithAdminUser
+    @DisplayName("one model runs Heph at a low reasoning effort and reviews at the effort each binding sets")
+    void shouldStoreAReasoningEffortForEachPurposeOfOneModel() {
+        Workspace workspace = setupWorkspace("binding-effort");
+        LlmModel model = seedInstanceModel("binding-effort");
+
+        put(workspace, "MENTOR", Map.of("instanceModelId", model.getId()))
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.reasoningEffort")
+                .isEqualTo("LOW")
+                .jsonPath("$.timeoutSeconds")
+                .isEqualTo(AgentBindingLimits.MAX_HEPH_TURN_SECONDS);
+        put(workspace, "PRACTICE_REVIEW", Map.of("instanceModelId", model.getId(), "reasoningEffort", "HIGH"))
+                .expectStatus()
+                .isOk()
+                .expectBody(Void.class);
+
+        assertThat(bindingRepository.findByWorkspaceIdAndPurpose(workspace.getId(), AgentPurpose.MENTOR))
+                .singleElement()
+                .extracting(WorkspaceAgentBinding::getReasoningEffort)
+                .isEqualTo(ReasoningEffort.LOW);
+        assertThat(bindingRepository.findByWorkspaceIdAndPurpose(workspace.getId(), AgentPurpose.PRACTICE_REVIEW))
+                .singleElement()
+                .extracting(WorkspaceAgentBinding::getReasoningEffort)
+                .isEqualTo(ReasoningEffort.HIGH);
+
+        put(workspace, "MENTOR", Map.of("instanceModelId", model.getId(), "clearReasoningEffort", true))
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.reasoningEffort")
+                .doesNotExist();
+        assertThat(bindingRepository.findByWorkspaceIdAndPurpose(workspace.getId(), AgentPurpose.MENTOR))
+                .singleElement()
+                .extracting(WorkspaceAgentBinding::getReasoningEffort)
+                .isNull();
+
+        put(workspace, "MENTOR", Map.of("instanceModelId", model.getId(), "reasoningEffort", "EXTREME"))
+                .expectStatus()
+                .isBadRequest()
+                .expectBody(Void.class);
+        put(
+                        workspace,
+                        "MENTOR",
+                        Map.of(
+                                "instanceModelId",
+                                model.getId(),
+                                "timeoutSeconds",
+                                AgentBindingLimits.MAX_HEPH_TURN_SECONDS + 1))
+                .expectStatus()
+                .isBadRequest()
+                .expectBody(Void.class);
+    }
+
+    private WebTestClient.ResponseSpec put(Workspace workspace, String purpose, Map<String, Object> body) {
+        return webTestClient
+                .put()
+                .uri("/workspaces/{slug}/agents/{purpose}", workspace.getWorkspaceSlug(), purpose)
+                .headers(TestAuthUtils.withCurrentUser())
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(body)
+                .exchange();
     }
 
     private WebTestClient.BodyContentSpec assign(Workspace workspace, String purpose, String tier, LlmModel model) {

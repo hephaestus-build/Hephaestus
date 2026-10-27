@@ -6,12 +6,7 @@ import { AGENT_PURPOSE_DEFS } from "@/components/practice-vocabulary/agent-purpo
 import { Label } from "@/components/ui/label";
 import { expectGenuinelyDisabled } from "@/test/controls";
 
-import {
-	mockAvailableModels,
-	mockDecisionModel,
-	mockReasoningDecisionModel,
-	mockRerankModel,
-} from "./fixtures";
+import { mockAvailableModels, mockRerankModel } from "./fixtures";
 import { ModelPicker } from "./ModelPicker";
 
 const meta = {
@@ -142,30 +137,6 @@ export const NoEmbeddingModelOwnProvidersBlocked: Story = {
 		await expect(
 			canvas.getByRole("combobox", { name: "Embedding model" }),
 		).toHaveAccessibleDescription("No embedding model yet. Ask an instance admin to share one.");
-	},
-};
-
-export const ReasoningDecisionModel: Story = {
-	args: {
-		purpose: "PRACTICE_DECISION",
-		availableModels: [mockDecisionModel, mockReasoningDecisionModel],
-		value: { scope: "SHARED", id: mockReasoningDecisionModel.id },
-	},
-	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("combobox")).toHaveAccessibleDescription(
-			"This model reasons before it answers. Decisions need a model that answers at once with token probabilities.",
-		);
-	},
-};
-
-export const DecisionModelAnswersAtOnce: Story = {
-	args: {
-		purpose: "PRACTICE_DECISION",
-		availableModels: [mockDecisionModel, mockReasoningDecisionModel],
-		value: { scope: "SHARED", id: mockDecisionModel.id },
-	},
-	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("combobox")).not.toHaveAccessibleDescription();
 	},
 };
 

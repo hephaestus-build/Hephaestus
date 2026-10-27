@@ -19,7 +19,6 @@ const base = {
 	connectionId: 1,
 	connectionDisplayName: "OpenAI production",
 	enabled: true,
-	reasoningEffort: "MEDIUM",
 	visibility: "PUBLIC",
 	grantedWorkspaceIds: [],
 	currentPrice: price,
@@ -37,7 +36,6 @@ const mockModels: LlmModel[] = [
 		dataHandlingTier: "IN_HOUSE",
 		operatedBy: "OWN_ORGANISATION",
 		dataHandlingNote: "Garching data centre",
-		reasoningEffort: undefined,
 		visibility: "GRANTED",
 		grantedWorkspaceIds: [10, 11],
 		currentPrice: {
@@ -67,7 +65,6 @@ const mockModels: LlmModel[] = [
 		upstreamModelId: "vendor/new-model",
 		dataHandlingTier: "UNDECLARED",
 		enabled: false,
-		reasoningEffort: undefined,
 		currentPrice: undefined,
 	},
 ];

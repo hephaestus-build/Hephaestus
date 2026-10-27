@@ -100,8 +100,6 @@ function optionLabel(model: AvailableLlmModel): string {
 	return `${model.displayName}, ${model.connectionDisplayName}, ${tier}, ${priceLabel(model, "workspace")}`;
 }
 
-const REASONING_HINT =
-	"This model reasons before it answers. Decisions need a model that answers at once with token probabilities.";
 /**
  * The host's limit is a budget and the workspace's own is a cap. Only an instance admin prices a
  * shared model; the workspace prices its own.
@@ -141,11 +139,6 @@ function purposeHint(
 				, then add its model.
 			</>
 		);
-	}
-	// `NONE` is an effort that asks for no reasoning, which is what a decision needs.
-	const reasons = selected?.reasoningEffort !== undefined && selected.reasoningEffort !== "NONE";
-	if (purpose === "PRACTICE_DECISION" && reasons) {
-		return REASONING_HINT;
 	}
 	if (
 		purpose === "PRACTICE_RERANKING" &&

@@ -50,7 +50,6 @@ erDiagram
         BOOLEAN enabled "NOT NULL"
         TIMESTAMPTZ created_at "NOT NULL"
         TIMESTAMPTZ updated_at
-        VARCHAR(16) reasoning_effort
         VARCHAR(200) data_handling_note
         VARCHAR(24) operated_by
         VARCHAR(16) brand
@@ -277,6 +276,7 @@ erDiagram
         TIMESTAMPTZ created_at "NOT NULL"
         TIMESTAMPTZ updated_at
         VARCHAR(24) data_handling_tier UK "NOT NULL"
+        VARCHAR(16) reasoning_effort
     }
 
     WorkspaceLlmConnection {
@@ -313,7 +313,6 @@ erDiagram
         BOOLEAN enabled "NOT NULL"
         TIMESTAMPTZ created_at "NOT NULL"
         TIMESTAMPTZ updated_at
-        VARCHAR(16) reasoning_effort
         VARCHAR(200) data_handling_note
         VARCHAR(24) operated_by
         VARCHAR(16) brand

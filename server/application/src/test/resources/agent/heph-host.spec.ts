@@ -191,7 +191,7 @@ void test("a turn sends every entry Pi appended after the stored path once, with
 	);
 });
 
-void test("a turn that keeps calling its model stops at the call limit and fails as too long", async () => {
+void test("a turn that keeps calling its model stops at the call limit and fails as an error", async () => {
 	const worker = fakeWorker(contextOf([], "Why is this item not met?"));
 	let requests = 0;
 	const looping = Array.from({ length: 60 }, () => () => {
@@ -204,7 +204,7 @@ void test("a turn that keeps calling its model stops at the call limit and fails
 	const end = await runTurn(worker, fauxModels(looping));
 
 	assert.equal(end.outcome, "FAILED");
-	assert.equal(end.reason, "DEADLINE");
+	assert.equal(end.reason, "ERROR");
 	assert.equal(end.detail, "call_limit");
 	assert.equal(requests, 40);
 });

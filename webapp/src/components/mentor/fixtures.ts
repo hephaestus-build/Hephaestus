@@ -136,7 +136,7 @@ export const FOLLOW_UPS_FULL =
 export const FAILED_FOLLOW_UP: MentorEntry = {
 	...FOLLOW_UP,
 	turnStatus: "FAILED",
-	turnError: "Heph took too long to answer.",
+	turnError: "Heph reached its time limit and stopped this reply. Try again.",
 };
 
 /** Monday 5 to Sunday 11 October 2026 in Berlin: the week the digest fixtures read. */

@@ -19,7 +19,6 @@ export const mockAvailableModels: AvailableLlmModel[] = [
 		pricingMode: "PRICED",
 		per1mInputUsd: 3,
 		per1mOutputUsd: 15,
-		reasoningEffort: "MEDIUM",
 	},
 	{
 		dataHandlingTier: "IN_HOUSE",
@@ -40,7 +39,6 @@ export const mockAvailableModels: AvailableLlmModel[] = [
 		brand: "OPENAI",
 		purposes: ["PRACTICE_REVIEW", "MENTOR"],
 		pricingMode: "UNPRICED",
-		reasoningEffort: "MEDIUM",
 	},
 ];
 
@@ -55,13 +53,6 @@ export const mockDecisionModel: AvailableLlmModel = {
 	pricingMode: "PRICED",
 	per1mInputUsd: 0.05,
 	per1mOutputUsd: 0.4,
-};
-
-export const mockReasoningDecisionModel: AvailableLlmModel = {
-	...mockDecisionModel,
-	id: 4,
-	displayName: "o4-mini",
-	reasoningEffort: "LOW",
 };
 
 export const mockEmbeddingModel: AvailableLlmModel = {

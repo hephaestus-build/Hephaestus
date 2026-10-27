@@ -301,7 +301,11 @@ describe("applyTurn", () => {
 	it("marks a failed turn's question failed and takes the turn off the running ones", () => {
 		conversation({ activeTurns: [turn("RUNNING")] });
 
-		applyTurn(queryClient, SLUG, turn("FAILED", { error: "Heph took too long to answer." }));
+		applyTurn(
+			queryClient,
+			SLUG,
+			turn("FAILED", { error: "Heph reached its time limit and stopped this reply. Try again." }),
+		);
 
 		expect(
 			queryClient.getQueryData<MentorConversation>(conversationKey)?.activeTurns,
@@ -310,7 +314,7 @@ describe("applyTurn", () => {
 			queryClient.getQueryData<InfiniteData<MentorEntryPage>>(entriesKey)?.pages[0]?.entries[0];
 		expect(question).toMatchObject({
 			turnStatus: "FAILED",
-			turnError: "Heph took too long to answer.",
+			turnError: "Heph reached its time limit and stopped this reply. Try again.",
 		});
 	});
 
@@ -330,7 +334,11 @@ describe("applyTurn", () => {
 		const question = entry(1, { kind: "USER", turnId: turn("QUEUED").id, turnStatus: "QUEUED" });
 		conversation({ activeTurns: [] });
 
-		applyTurn(queryClient, SLUG, turn("FAILED", { error: "Heph took too long to answer." }));
+		applyTurn(
+			queryClient,
+			SLUG,
+			turn("FAILED", { error: "Heph reached its time limit and stopped this reply. Try again." }),
+		);
 		applySubmission(queryClient, SLUG, { question, turn: turn("QUEUED") });
 
 		expect(
@@ -338,7 +346,7 @@ describe("applyTurn", () => {
 		).toStrictEqual([]);
 		expect(mainEntries()[0]).toMatchObject({
 			turnStatus: "FAILED",
-			turnError: "Heph took too long to answer.",
+			turnError: "Heph reached its time limit and stopped this reply. Try again.",
 		});
 	});
 

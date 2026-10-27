@@ -29,10 +29,6 @@ public record CreateLlmModelRequestDTO(
         Integer maxOutputTokens,
 
         @Nullable
-        @Schema(description = "Reasoning effort to request; null sends none, so the provider's own default applies")
-        ReasoningEffort reasoningEffort,
-
-        @Nullable
         @Schema(description = "Who operates the systems the work is sent to; omit to leave the model undeclared")
         LlmDataOperator operatedBy,
 

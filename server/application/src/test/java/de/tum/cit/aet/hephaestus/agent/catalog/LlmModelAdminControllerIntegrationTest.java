@@ -50,8 +50,7 @@ class LlmModelAdminControllerIntegrationTest extends AbstractWorkspaceIntegratio
 
     private LlmModelDTO createModel(Long connectionId, String slug) {
         // Models start inactive until an explicit price declaration is supplied.
-        var request =
-                new CreateLlmModelRequestDTO(slug, "Test Model", "gpt-5", null, null, null, null, null, false, null);
+        var request = new CreateLlmModelRequestDTO(slug, "Test Model", "gpt-5", null, null, null, null, false, null);
         return Objects.requireNonNull(webTestClient
                 .post()
                 .uri("/admin/llm/connections/{connectionId}/models", connectionId)
@@ -64,49 +63,6 @@ class LlmModelAdminControllerIntegrationTest extends AbstractWorkspaceIntegratio
                 .expectBody(LlmModelDTO.class)
                 .returnResult()
                 .getResponseBody());
-    }
-
-    @Test
-    void shouldStoreAReasoningEffortAndRefuseOneOutsideTheScale() {
-        LlmConnection connection = seedConnection();
-        LlmModelDTO created = createModel(connection.getId(), "gpt-5-effort");
-
-        webTestClient
-                .patch()
-                .uri("/admin/llm/models/{id}", created.id())
-                .headers(h -> h.setBearerAuth(ADMIN_TOKEN))
-                .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue("{\"reasoningEffort\":\"XHIGH\"}")
-                .exchange()
-                .expectStatus()
-                .isOk()
-                .expectBody()
-                .jsonPath("$.reasoningEffort")
-                .isEqualTo("XHIGH");
-
-        webTestClient
-                .patch()
-                .uri("/admin/llm/models/{id}", created.id())
-                .headers(h -> h.setBearerAuth(ADMIN_TOKEN))
-                .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue("{\"reasoningEffort\":\"EXTREME\"}")
-                .exchange()
-                .expectStatus()
-                .isBadRequest()
-                .expectBody(Void.class);
-
-        webTestClient
-                .patch()
-                .uri("/admin/llm/models/{id}", created.id())
-                .headers(h -> h.setBearerAuth(ADMIN_TOKEN))
-                .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue("{\"clearReasoningEffort\":true}")
-                .exchange()
-                .expectStatus()
-                .isOk()
-                .expectBody()
-                .jsonPath("$.reasoningEffort")
-                .doesNotExist();
     }
 
     @Test
@@ -140,8 +96,7 @@ class LlmModelAdminControllerIntegrationTest extends AbstractWorkspaceIntegratio
                 .jsonPath("$.length()")
                 .isEqualTo(1);
 
-        var updateRequest =
-                new UpdateLlmModelRequestDTO("Renamed Model", null, null, null, null, null, null, null, null, null);
+        var updateRequest = new UpdateLlmModelRequestDTO("Renamed Model", null, null, null, null, null, null, null);
         webTestClient
                 .patch()
                 .uri("/admin/llm/models/{id}", created.id())
@@ -181,7 +136,6 @@ class LlmModelAdminControllerIntegrationTest extends AbstractWorkspaceIntegratio
                 "declared-model",
                 "Declared Model",
                 "gpt-5",
-                null,
                 null,
                 null,
                 LlmDataOperator.PROVIDER,
@@ -235,7 +189,7 @@ class LlmModelAdminControllerIntegrationTest extends AbstractWorkspaceIntegratio
                 .uri("/admin/llm/models/{id}", created.id())
                 .headers(h -> h.setBearerAuth(ADMIN_TOKEN))
                 .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(new UpdateLlmModelRequestDTO(null, null, null, null, null, null, null, null, null, null))
+                .bodyValue(new UpdateLlmModelRequestDTO(null, null, null, null, null, null, null, null))
                 .exchange()
                 .expectStatus()
                 .isOk()
@@ -255,7 +209,6 @@ class LlmModelAdminControllerIntegrationTest extends AbstractWorkspaceIntegratio
                 "activated-model",
                 "Activated Model",
                 "gpt-5",
-                null,
                 null,
                 null,
                 LlmDataOperator.OWN_ORGANISATION,
@@ -293,7 +246,7 @@ class LlmModelAdminControllerIntegrationTest extends AbstractWorkspaceIntegratio
                 .headers(h -> h.setBearerAuth(ADMIN_TOKEN))
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(new UpdateLlmModelRequestDTO(
-                        null, null, null, null, null, LlmDataOperator.OWN_ORGANISATION, null, true, null, null))
+                        null, null, null, LlmDataOperator.OWN_ORGANISATION, null, true, null, null))
                 .exchange()
                 .expectStatus()
                 .isOk()
@@ -473,7 +426,7 @@ class LlmModelAdminControllerIntegrationTest extends AbstractWorkspaceIntegratio
                 // Different slug, SAME upstream model id as "dup-first" — only the upstream-id guard can
                 // reject this, so a pass cannot be the slug-conflict handler answering by accident.
                 .bodyValue(new CreateLlmModelRequestDTO(
-                        "dup-second", "Test Model", "gpt-5", null, null, null, null, null, false, null))
+                        "dup-second", "Test Model", "gpt-5", null, null, null, null, false, null))
                 .exchange()
                 .expectStatus()
                 .isEqualTo(409)

@@ -678,7 +678,7 @@ it("keeps a deleted message's thread to read and delete in, but offers no reply 
 		parentEntryId: parent.id,
 		turnId: "a9000000-0000-4000-8000-000000000001",
 		turnStatus: "FAILED",
-		turnError: "Heph took too long to answer.",
+		turnError: "Heph reached its time limit and stopped this reply. Try again.",
 	});
 	serve(fake);
 
@@ -687,7 +687,7 @@ it("keeps a deleted message's thread to read and delete in, but offers no reply 
 	await within(panel).findByText("A reply I want gone too.");
 	within(panel).getByText("Here is what I would change.");
 	within(panel).getByText("This message was deleted.");
-	within(panel).getByText("Heph took too long to answer.");
+	within(panel).getByText("Heph reached its time limit and stopped this reply. Try again.");
 	// A deleted message's thread is not a thread the server does not know.
 	expect(within(panel).queryByText("We could not find this thread")).toBeNull();
 	// The server refuses every new reply to a deleted message, so nothing here asks for one.

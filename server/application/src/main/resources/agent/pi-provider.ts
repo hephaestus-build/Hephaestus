@@ -224,7 +224,7 @@ export function registerHephaestusProvider(
 		reasoning: setting.reasoning,
 		...(setting.thinkingLevelMap ? { thinkingLevelMap: setting.thinkingLevelMap } : {}),
 		// Pi decides from the base URL whether an OpenAI-compatible endpoint takes reasoning_effort, and
-		// ours is the LLM proxy's; the effort was configured for this model, so it is sent.
+		// ours is the LLM proxy's; the effort was configured for this assignment, so it is sent.
 		...(setting.reasoning && config.apiProtocol === "openai-completions"
 			? { compat: { supportsReasoningEffort: true } }
 			: {}),

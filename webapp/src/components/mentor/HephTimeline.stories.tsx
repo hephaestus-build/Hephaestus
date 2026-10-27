@@ -812,7 +812,9 @@ export const Failed: Story = {
 		}),
 	},
 	play: async ({ args, canvas, userEvent }) => {
-		await expect(canvas.getByText("Heph took too long to answer.")).toBeVisible();
+		await expect(
+			canvas.getByText("Heph reached its time limit and stopped this reply. Try again."),
+		).toBeVisible();
 		const tryAgain = canvas.getByRole("button", { name: /^Try again \(/u });
 		await expectTargetSize(tryAgain);
 		await userEvent.click(tryAgain);
@@ -832,7 +834,9 @@ export const CannotAsk: Story = {
 		composer: undefined,
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText("Heph took too long to answer.")).toBeVisible();
+		await expect(
+			canvas.getByText("Heph reached its time limit and stopped this reply. Try again."),
+		).toBeVisible();
 		await expect(canvas.queryByRole("button", { name: /^Try again \(/u })).toBeNull();
 		await expect(canvas.queryByRole("button", { name: /^Reply in thread \(/u })).toBeNull();
 		await expect(

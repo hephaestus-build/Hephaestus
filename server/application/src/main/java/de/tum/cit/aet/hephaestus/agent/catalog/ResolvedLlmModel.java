@@ -9,7 +9,8 @@ import org.jspecify.annotations.Nullable;
  * component, so an API key here would leak into any log line. The key is resolved live and separately
  * by {@link LlmModelResolver#resolveCredential}.
  *
- * <p>{@code apiProtocol} is Pi's own {@code api} token, passed through verbatim.
+ * <p>{@code apiProtocol} is Pi's own {@code api} token, passed through verbatim. {@code reasoningEffort} comes from the
+ * binding, not the model: each purpose asks the same model for its own effort.
  */
 public record ResolvedLlmModel(
         String baseUrl,

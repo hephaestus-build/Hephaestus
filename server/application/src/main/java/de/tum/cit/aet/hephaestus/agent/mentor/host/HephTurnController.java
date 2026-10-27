@@ -255,7 +255,7 @@ public class HephTurnController {
         String error = outcome != MentorTurn.Status.FAILED
                 ? null
                 : switch (reason) {
-                    case DEADLINE -> HephTurnDispatcher.TOOK_TOO_LONG;
+                    case DEADLINE -> HephTurnDispatcher.TIME_LIMIT_REACHED;
                     case STALLED -> HephTurnDispatcher.MODEL_STOPPED_ANSWERING;
                     case ERROR -> HephTurnDispatcher.COULD_NOT_FINISH;
                 };

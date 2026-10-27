@@ -23,7 +23,6 @@ import { Field, FieldDescription, FieldLegend, FieldSet } from "@/components/ui/
 import { Spinner } from "@/components/ui/spinner";
 import type { AdminLlmModelSaveBody } from "@/lib/admin-llm-model-save";
 import type { FieldErrors, LlmModelFormField } from "@/lib/llm-form-validation";
-import { reasoningEffortOf, reasoningEffortUpdateOf } from "@/lib/reasoning-effort";
 
 import {
 	modelDetailsBodyOf,
@@ -122,11 +121,9 @@ function AdminLlmModelFormDialogContent({
 			? {
 					...metadataShared,
 					clearBrand: fields.brand === undefined,
-					...reasoningEffortUpdateOf(fields.reasoningEffort),
 				}
 			: {
 					...metadataShared,
-					reasoningEffort: reasoningEffortOf(fields.reasoningEffort),
 					upstreamModelId: fields.upstreamModelId.trim(),
 				};
 

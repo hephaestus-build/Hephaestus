@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.config;
 
+import de.tum.cit.aet.hephaestus.agent.catalog.ReasoningEffort;
 import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;
@@ -19,6 +20,12 @@ public record AgentBindingDTO(
         int timeoutSeconds,
         int maxConcurrentJobs,
         @NonNull Boolean enabled,
+
+        @Nullable
+        @Schema(
+                description = "Reasoning effort requested of the model for this purpose; null sends none, and the"
+                        + " provider's own default applies")
+        ReasoningEffort reasoningEffort,
 
         @NonNull @Schema(description = "True when the bound model is available to run right now")
         Boolean ready,
@@ -41,12 +48,10 @@ public record AgentBindingDTO(
                 binding.getWorkspaceModel() == null
                         ? null
                         : binding.getWorkspaceModel().getId(),
-                // The timeout that applies: a Heph turn stops at its ceiling whatever an older binding stored.
-                binding.getPurpose() == AgentPurpose.MENTOR
-                        ? Math.min(binding.getTimeoutSeconds(), AgentBindingLimits.MAX_HEPH_TURN_SECONDS)
-                        : binding.getTimeoutSeconds(),
+                binding.getTimeoutSeconds(),
                 binding.getMaxConcurrentJobs(),
                 binding.isEnabled(),
+                binding.getReasoningEffort(),
                 ready,
                 List.copyOf(servedTiers));
     }

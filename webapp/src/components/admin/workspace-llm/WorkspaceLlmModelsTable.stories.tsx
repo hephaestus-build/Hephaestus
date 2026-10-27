@@ -14,7 +14,6 @@ const base = {
 	connectionId: 1,
 	connectionDisplayName: "My OpenAI account",
 	enabled: true,
-	reasoningEffort: "MEDIUM",
 	pricingMode: "PRICED",
 	per1mInputUsd: 0.25,
 	per1mOutputUsd: 2,

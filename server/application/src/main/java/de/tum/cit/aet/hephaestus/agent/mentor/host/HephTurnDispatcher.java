@@ -47,7 +47,7 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
     private static final Logger log = LoggerFactory.getLogger(HephTurnDispatcher.class);
 
     static final String COULD_NOT_START = "Heph could not start. Try again in a moment.";
-    static final String TOOK_TOO_LONG = "Heph took too long to reply and stopped. Try again.";
+    static final String TIME_LIMIT_REACHED = "Heph reached its time limit and stopped this reply. Try again.";
     static final String COULD_NOT_FINISH = "Heph could not finish this reply. Try again.";
     static final String MODEL_STOPPED_ANSWERING =
             "Heph's AI model stopped responding, so Heph could not finish this reply. Try again in a moment.";
@@ -487,7 +487,7 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
                         finish(
                                 turn,
                                 MentorTurn.Status.FAILED,
-                                TOOK_TOO_LONG,
+                                TIME_LIMIT_REACHED,
                                 "its Heph host did not end it within " + stopGrace + " after its deadline");
                     } else {
                         finish(turn, MentorTurn.Status.STOPPED, null, null);

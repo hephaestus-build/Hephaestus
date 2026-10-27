@@ -419,13 +419,19 @@ If the lease of the second attempt also expires, the turn fails with **Heph coul
 The lease end and its expiry both use the database clock.
 Thus, a clock difference between the server and the worker does not take back a running turn.
 
-The timeout of the workspace's Heph model binding is the deadline of each attempt, at most 300 seconds.
-A binding accepts no longer Heph timeout, and an older binding with a longer one acts as 300 seconds.
-A turn also stops after 40 model calls, retries included.
+The timeout of the workspace's Heph model binding is the deadline of each attempt, at most 900 seconds.
+A new Heph binding gets 900 seconds, and a binding accepts no longer Heph timeout.
+The deadline is a ceiling for a turn that keeps making progress.
+A turn whose model stops sending fails earlier, at the bounds of the LLM proxy below.
+A reasoning model that writes about 35 tokens a second took up to 152 seconds for one call.
+900 seconds hold about 5 such calls.
 
-At the deadline or the call limit, the worker stops the turn.
-The turn fails with **Heph took too long to reply and stopped. Try again.**
+At the deadline, the worker stops the turn.
+The turn fails with **Heph reached its time limit and stopped this reply. Try again.**
 The worker ends a stopped turn itself if the Heph host does not end it within 30 seconds.
+
+A turn also stops after 40 model calls, retries included.
+It then fails with **Heph could not finish this reply. Try again.**
 
 The worker's LLM proxy cuts a Heph model call whose provider stays silent too long.
 Two bounds apply:
@@ -436,6 +442,7 @@ Two bounds apply:
 
 Any byte counts, also an SSE comment that a gateway sends to keep the connection alive.
 The turn's deadline also bounds both, because the stop at the deadline cancels the call.
+Thus, a stalled call ends the turn within these bounds, and the deadline ends only a turn that keeps making progress.
 The turn fails with **Heph's AI model stopped responding, so Heph could not finish this reply. Try again in a moment.**
 The worker logs the cut call and the failure with the reason `STALLED` and the bound that was passed.
 

@@ -163,9 +163,15 @@ The host stores no result for it.
 In the stopped turn, Pi gives each open tool call a result when it builds a request (`transformMessages`).
 For later turns, the path builder removes the tool calls from the cut-off answer (`MentorContextPathBuilder.keepCutOffAnswer`).
 
-The deadline of a turn is the LLM timeout of the Heph model binding, at most five minutes (`AgentBindingLimits.MAX_HEPH_TURN_SECONDS`).
-A worker runs few turns at once, so a longer turn would keep every question queued behind it waiting.
+The deadline of a turn is the LLM timeout of the Heph model binding, at most 15 minutes (`AgentBindingLimits.MAX_HEPH_TURN_SECONDS`).
+The deadline is the hard ceiling of a turn that keeps making progress.
+A stall ends a turn earlier: the worker's LLM proxy cuts a silent model call (`LlmProxyService`, `upstream_stalled`), and the host ends the turn as `STALLED`.
+The ceiling holds about 5 calls of a reasoning model that writes about 35 tokens a second, each as long as the longest measured call.
+A worker runs few turns at once, so a turn as long as a review would keep every question queued behind it waiting.
+
 At the deadline, the worker sends `stop` with the reason `deadline`.
+The host script enforces no time limit of its own.
+`HephHostSpec.LIMITS` bounds only how long the host takes to start, not a turn.
 
 If the host does not end the turn within `HephTurnDispatcher.STOP_GRACE` after a `developer` or `deadline` stop, the worker ends it.
 A turn that the developer stopped then stays `STOPPED`.
@@ -188,8 +194,8 @@ Its question stays in the path with a marker ([The path](#the-path)), and the de
 | --- | --- | --- |
 | Admission refuses the turn. The causes are no model, no AI choice, budget, unpriced usage, and a model below Heph's smallest model ([Limits](#limits)). A requested erasure of the developer's personal data is also a cause. | The worker, before the host runs (`MentorTurnStarter`). | The refusal text. |
 | The host does not start, or its channel does not open within `HephTurnDispatcher.HOST_READY_TIMEOUT`, on two hosts in a row. | The worker. | "Heph could not start. Try again in a moment." |
-| The deadline passes. | The host, with the reason `DEADLINE`. If the host is silent for `STOP_GRACE`, the worker. | "Heph took too long to reply and stopped. Try again." |
-| The turn reaches its model call limit. | The host, with the reason `DEADLINE` and the detail `call_limit`. | "Heph took too long to reply and stopped. Try again." |
+| The deadline passes. | The host, with the reason `DEADLINE`. If the host is silent for `STOP_GRACE`, the worker. | "Heph reached its time limit and stopped this reply. Try again." |
+| The turn reaches its model call limit. | The host, with the reason `ERROR` and the detail `call_limit`. | "Heph could not finish this reply. Try again." |
 | The provider of a model call sends no response headers within `hephaestus.mentor.turn.model-first-byte-timeout`, or its stream sends no byte for `model-idle-timeout`, or its breaker refuses the call. The proxy answers with the code `upstream_stalled` or `upstream_paused`. | The host, with the reason `STALLED`. | "Heph's AI model stopped responding, so Heph could not finish this reply. Try again in a moment." |
 | The provider breaker of the admitted model's connection is open ([Runtime roles](/admin/runtime-roles#provider-breaker)). | The worker, before the host runs (`MentorTurnStarter`). | "Heph's AI model is not responding right now, so Heph did not start this reply. Try again in a few minutes." |
 | Pi writes no answer, or the model call fails. | The host, with the reason `ERROR` and a `detail`. | "Heph could not finish this reply. Try again." |

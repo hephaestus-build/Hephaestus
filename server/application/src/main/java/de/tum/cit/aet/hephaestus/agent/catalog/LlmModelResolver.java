@@ -39,7 +39,7 @@ public class LlmModelResolver {
                     instance.getUpstreamModelId(),
                     instance.getContextWindow(),
                     instance.getMaxOutputTokens(),
-                    instance.getReasoningEffort());
+                    config.getReasoningEffort());
         }
         WorkspaceLlmModel byo = config.getWorkspaceModel();
         if (byo != null) {
@@ -53,7 +53,7 @@ public class LlmModelResolver {
                     byo.getUpstreamModelId(),
                     byo.getContextWindow(),
                     byo.getMaxOutputTokens(),
-                    byo.getReasoningEffort());
+                    config.getReasoningEffort());
         }
         throw new IllegalStateException("The binding does not reference a model");
     }

@@ -1,7 +1,7 @@
-import type { LlmModel } from "@/api/types.gen";
+import type { AgentBinding } from "@/api/types.gen";
 
 /** The server's effort choices; each provider and model supports its own subset. */
-export type ReasoningEffort = NonNullable<LlmModel["reasoningEffort"]>;
+export type ReasoningEffort = NonNullable<AgentBinding["reasoningEffort"]>;
 
 /** No effort set: none is sent, and the provider's own default applies. */
 export const PROVIDER_DEFAULT_EFFORT = "PROVIDER_DEFAULT";
@@ -24,12 +24,7 @@ export function isReasoningEffortChoice(value: unknown): value is ReasoningEffor
 	return REASONING_EFFORT_CHOICES.some((choice) => choice.value === value);
 }
 
-/** The choice as the create request carries it: absent for the provider default. */
-export function reasoningEffortOf(choice: ReasoningEffortChoice): ReasoningEffort | undefined {
-	return choice === PROVIDER_DEFAULT_EFFORT ? undefined : choice;
-}
-
-/** The choice as an update carries it: the provider default clears whatever was set. */
+/** The choice as a binding write carries it: the provider default clears whatever was set. */
 export function reasoningEffortUpdateOf(
 	choice: ReasoningEffortChoice,
 ): { reasoningEffort: ReasoningEffort } | { clearReasoningEffort: true } {

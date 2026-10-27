@@ -81,7 +81,6 @@ class WorkspaceLlmModelControllerIntegrationTest extends AbstractWorkspaceIntegr
                 null,
                 null,
                 null,
-                null,
                 true,
                 PricingMode.NO_CHARGE,
                 null,
@@ -153,22 +152,7 @@ class WorkspaceLlmModelControllerIntegrationTest extends AbstractWorkspaceIntegr
                 .isEqualTo(1);
 
         var updateRequest = new UpdateWorkspaceLlmModelRequestDTO(
-                "Renamed Model",
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null);
+                "Renamed Model", null, null, null, null, null, null, null, null, null, null, null, null, null);
         webTestClient
                 .patch()
                 .uri("/workspaces/{slug}/llm/models/{id}", workspace.getWorkspaceSlug(), created.id())
@@ -210,7 +194,6 @@ class WorkspaceLlmModelControllerIntegrationTest extends AbstractWorkspaceIntegr
                 "declared-model",
                 "Declared Model",
                 "gpt-5-secret-upstream-id",
-                null,
                 null,
                 null,
                 LlmDataOperator.PROVIDER,
@@ -279,7 +262,7 @@ class WorkspaceLlmModelControllerIntegrationTest extends AbstractWorkspaceIntegr
                 .headers(TestAuthUtils.withCurrentUser())
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(new UpdateWorkspaceLlmModelRequestDTO(
-                        null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null))
+                        null, null, null, null, null, null, null, null, null, null, null, null, null, null))
                 .exchange()
                 .expectStatus()
                 .isOk()
@@ -434,8 +417,7 @@ class WorkspaceLlmModelControllerIntegrationTest extends AbstractWorkspaceIntegr
                 .headers(TestAuthUtils.withCurrentUser())
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(new UpdateWorkspaceLlmModelRequestDTO(
-                        null, null, null, null, null, null, null, false, null, null, null, null, null, null, null,
-                        null))
+                        null, null, null, null, null, false, null, null, null, null, null, null, null, null))
                 .exchange()
                 .expectStatus()
                 .isOk()

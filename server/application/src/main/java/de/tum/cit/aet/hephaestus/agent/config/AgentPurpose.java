@@ -39,6 +39,14 @@ public enum AgentPurpose {
         };
     }
 
+    /**
+     * Whether a reasoning effort reaches this purpose's model calls. A decision call reads a set effort as a reasoning
+     * model, and asks it for none. Embedding and reranking calls take no effort.
+     */
+    public boolean takesReasoningEffort() {
+        return kind == ModelKind.CHAT || kind == ModelKind.DECISION;
+    }
+
     public boolean accepts(LlmApiProtocol protocol) {
         return protocol.serves(kind);
     }

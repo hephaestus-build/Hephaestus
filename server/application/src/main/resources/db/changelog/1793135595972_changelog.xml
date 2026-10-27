@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <!--
+        The reasoning effort moves from the model to the agent binding, so each purpose asks the same model for its own
+        effort. Reviews and decisions keep the effort their model had. Heph asks for at most LOW: a reasoning model at
+        MEDIUM wrote one answer for longer than a Heph turn may take. A model without an effort keeps none on every
+        purpose: such a model may refuse a reasoning parameter. Embedding and reranking calls take no effort.
+    -->
+    <changeSet id="1793135595972-1" author="hephaestus">
+        <addColumn tableName="workspace_agent_binding">
+            <column name="reasoning_effort" type="VARCHAR(16)"/>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1793135595972-2" author="hephaestus">
+        <preConditions onFail="HALT" onFailMessage="the reasoning effort of both model catalogs and the binding column are required to move the effort to the binding">
+            <columnExists tableName="llm_model" columnName="reasoning_effort"/>
+            <columnExists tableName="workspace_llm_model" columnName="reasoning_effort"/>
+            <columnExists tableName="workspace_agent_binding" columnName="reasoning_effort"/>
+        </preConditions>
+        <sql>
+            UPDATE workspace_agent_binding binding
+            SET reasoning_effort = CASE
+                    WHEN binding.purpose = 'MENTOR' AND model.effort IN ('MEDIUM', 'HIGH', 'XHIGH', 'MAX') THEN 'LOW'
+                    ELSE model.effort
+                END
+            FROM (
+                SELECT b.id, coalesce(instance_model.reasoning_effort, own_model.reasoning_effort) AS effort
+                FROM workspace_agent_binding b
+                LEFT JOIN llm_model instance_model ON instance_model.id = b.instance_model_id
+                LEFT JOIN workspace_llm_model own_model ON own_model.id = b.workspace_model_id
+            ) model
+            WHERE model.id = binding.id
+              AND binding.purpose IN ('PRACTICE_REVIEW', 'PRACTICE_DECISION', 'MENTOR')
+              AND model.effort IS NOT NULL
+        </sql>
+        <rollback/>
+    </changeSet>
+    <!--
+        A Heph turn may take up to 900 seconds (AgentBindingLimits.MAX_HEPH_TURN_SECONDS), and a new Heph binding
+        gets that. A Heph binding at the former ceiling of 300 seconds, or above it, gets the new ceiling. A shorter
+        timeout was an administrator's choice and stays.
+    -->
+    <changeSet id="1793135595972-3" author="hephaestus">
+        <preConditions onFail="HALT" onFailMessage="workspace_agent_binding.timeout_seconds is required to raise the Heph turn ceiling">
+            <columnExists tableName="workspace_agent_binding" columnName="timeout_seconds"/>
+        </preConditions>
+        <sql>
+            UPDATE workspace_agent_binding
+            SET timeout_seconds = 900, updated_at = now()
+            WHERE purpose = 'MENTOR'
+              AND timeout_seconds &gt;= 300
+              AND timeout_seconds &lt;&gt; 900
+        </sql>
+        <!-- The previous release ends a turn at 300 seconds whatever its binding stores. -->
+        <rollback/>
+    </changeSet>
+    <changeSet id="1793135595972-4" author="hephaestus">
+        <preConditions onFail="MARK_RAN">
+            <columnExists tableName="llm_model" columnName="reasoning_effort"/>
+        </preConditions>
+        <dropColumn columnName="reasoning_effort" tableName="llm_model"/>
+        <rollback>
+            <addColumn tableName="llm_model">
+                <column name="reasoning_effort" type="VARCHAR(16)"/>
+            </addColumn>
+            <!-- A model gets back the effort that all its review bindings agree on. -->
+            <sql>
+                UPDATE llm_model model
+                SET reasoning_effort = review.effort
+                FROM (
+                    SELECT instance_model_id AS id, min(reasoning_effort) AS effort
+                    FROM workspace_agent_binding
+                    WHERE purpose = 'PRACTICE_REVIEW' AND instance_model_id IS NOT NULL
+                    GROUP BY instance_model_id
+                    HAVING count(reasoning_effort) = count(*) AND count(DISTINCT reasoning_effort) = 1
+                ) review
+                WHERE model.id = review.id
+            </sql>
+        </rollback>
+    </changeSet>
+    <changeSet id="1793135595972-5" author="hephaestus">
+        <preConditions onFail="MARK_RAN">
+            <columnExists tableName="workspace_llm_model" columnName="reasoning_effort"/>
+        </preConditions>
+        <dropColumn columnName="reasoning_effort" tableName="workspace_llm_model"/>
+        <rollback>
+            <addColumn tableName="workspace_llm_model">
+                <column name="reasoning_effort" type="VARCHAR(16)"/>
+            </addColumn>
+            <!-- A model gets back the effort that all its review bindings agree on. -->
+            <sql>
+                UPDATE workspace_llm_model model
+                SET reasoning_effort = review.effort
+                FROM (
+                    SELECT workspace_model_id AS id, min(reasoning_effort) AS effort
+                    FROM workspace_agent_binding
+                    WHERE purpose = 'PRACTICE_REVIEW' AND workspace_model_id IS NOT NULL
+                    GROUP BY workspace_model_id
+                    HAVING count(reasoning_effort) = count(*) AND count(DISTINCT reasoning_effort) = 1
+                ) review
+                WHERE model.id = review.id
+            </sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

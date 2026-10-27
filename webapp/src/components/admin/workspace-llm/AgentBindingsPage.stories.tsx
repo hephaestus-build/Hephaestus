@@ -322,7 +322,9 @@ export const CloudModelUnused: Story = {
 		const note =
 			"Cloud members’ reviews run on an In-house model, so this model is not used. Assign a Cloud model for practice reviews to use it.";
 		await expect(cloud.getByText(note)).toBeVisible();
-		await expect(cloud.getByRole("combobox", { name: /Cloud/u })).toHaveAccessibleDescription(note);
+		await expect(
+			cloud.getByRole("combobox", { name: /^Model for Cloud/u }),
+		).toHaveAccessibleDescription(note);
 		const inHouse = row(within(canvas.getByRole("region", { name: "Decision model" })), "In-house");
 		await expect(inHouse.queryByText(/reviews run on an In-house model/u)).toBeNull();
 	},
@@ -395,7 +397,9 @@ export const TiersPartiallyCovered: Story = {
 		await expect(row(reviews, "In-house").queryByText(/ready/iu)).toBeNull();
 		await expect(row(reviews, "Cloud").getByText("Not ready")).toBeVisible();
 
-		await userEvent.click(row(reviews, "Cloud").getByRole("combobox", { name: /Cloud/u }));
+		await userEvent.click(
+			row(reviews, "Cloud").getByRole("combobox", { name: /^Model for Cloud/u }),
+		);
 		await expect(await screen.findByRole("option", { name: /^GPT-5,/u })).toBeVisible();
 		await expect(screen.queryByRole("option", { name: /Local Llama/u })).toBeNull();
 		await expect(screen.queryByRole("option", { name: /My OpenAI key/u })).toBeNull();
@@ -447,7 +451,7 @@ export const SlotRejected: Story = {
 			{ purpose: "PRACTICE_REVIEW", tier: "IN_HOUSE" },
 			expect.objectContaining({ instanceModelId: 2 }),
 		);
-		const picker = inHouse.getByRole("combobox", { name: /In-house/u });
+		const picker = inHouse.getByRole("combobox", { name: /^Model for In-house/u });
 		await expect(picker).toHaveTextContent("Local Llama (self-hosted)");
 		await expect(picker).toHaveAttribute("aria-invalid", "true");
 		await expect(inHouse.getByRole("alert")).toHaveTextContent(
@@ -474,7 +478,7 @@ export const BoundModelMoved: Story = {
 	play: async ({ canvas }) => {
 		const inHouse = row(await openPurpose(canvas, "Practice reviews"), "In-house");
 		await expect(inHouse.getByText("Not ready")).toBeVisible();
-		const picker = inHouse.getByRole("combobox", { name: /In-house/u });
+		const picker = inHouse.getByRole("combobox", { name: /^Model for In-house/u });
 		await expect(picker).toHaveTextContent("GPT-5");
 		await expect(picker).toHaveAccessibleDescription(
 			"GPT-5 is now declared as Cloud and no longer serves this assignment. Choose another model, or clear the assignment.",
@@ -490,7 +494,7 @@ export const BoundModelMovedNoAlternative: Story = {
 	},
 	play: async ({ canvas }) => {
 		const inHouse = row(await openPurpose(canvas, "Practice reviews"), "In-house");
-		const picker = inHouse.getByRole("combobox", { name: /In-house/u });
+		const picker = inHouse.getByRole("combobox", { name: /^Model for In-house/u });
 		await expect(picker).toBeDisabled();
 		await expect(picker).toHaveAccessibleDescription(
 			"GPT-5 is now declared as Cloud and no longer serves this assignment. Clear the assignment, or ask an instance admin for a model declared as In-house.",
@@ -545,7 +549,9 @@ export const NoModelsAvailable: Story = {
 			row(reviews, UNCHOSEN_ROW).getByText(/No model for this purpose is available yet/u),
 		).toBeVisible();
 		const embedding = row(await openPurpose(canvas, "Embedding model"), "Cloud");
-		await expect(embedding.getByRole("combobox", { name: /Cloud/u })).toHaveAccessibleDescription(
+		await expect(
+			embedding.getByRole("combobox", { name: /^Model for Cloud/u }),
+		).toHaveAccessibleDescription(
 			"No embedding model yet. Connect a provider with the Embeddings API under Your providers, then add its model.",
 		);
 		await expect(embedding.queryByText(/No model for this purpose/u)).toBeNull();
@@ -676,12 +682,77 @@ export const AdvancedDisclosure: Story = {
 		const mentor = row(await openPurpose(canvas, "Heph"), "In-house");
 		await openAdvanced(mentor);
 		await expect(mentor.queryByLabelText(/^Max concurrent runs/u)).toBeNull();
-		await expect(mentor.getByLabelText(/^Timeout \(seconds\)/u)).toHaveValue(300);
+		await expect(mentor.getByLabelText(/^Timeout \(seconds\)/u)).toHaveValue(900);
 		await expect(
 			row(await openPurpose(canvas, "Embedding model"), "In-house").queryByRole("button", {
 				name: /^Advanced/u,
 			}),
 		).toBeNull();
+	},
+};
+
+/**
+ * Heph asks its model for its own reasoning effort, apart from reviews on the same model. A new Heph
+ * assignment starts at Low, so a reasoning model answers within the turn.
+ */
+export const HephReasoningEffort: Story = {
+	args: {
+		bindings: [
+			binding("IN_HOUSE", inHouseModel, { reasoningEffort: "HIGH" }),
+			binding("IN_HOUSE", inHouseModel, { purpose: "MENTOR", reasoningEffort: "MEDIUM" }),
+		],
+	},
+	play: async ({ canvas, args }) => {
+		const reviews = await openPurpose(canvas, "Practice reviews");
+		await expect(
+			row(reviews, "In-house").getByRole("combobox", { name: "Reasoning effort for In-house" }),
+		).toHaveTextContent("High");
+		const heph = await openPurpose(canvas, "Heph");
+		const inHouse = row(heph, "In-house");
+		const effort = inHouse.getByRole("combobox", { name: "Reasoning effort for In-house" });
+		await expect(effort).toHaveTextContent("Medium");
+		await expect(effort).toHaveAccessibleDescription(
+			/^Heph answers while someone waits\. Low keeps a reasoning model fast\./u,
+		);
+		await expect(
+			row(heph, "Cloud").getByRole("combobox", { name: "Reasoning effort for Cloud" }),
+		).toHaveTextContent("Low");
+
+		await userEvent.click(effort);
+		await userEvent.click(await screen.findByRole("option", { name: "Provider default" }));
+		await userEvent.click(inHouse.getByRole("button", { name: /^Save assignment/u }));
+		await expect(args.onSave).toHaveBeenCalledWith(
+			{ purpose: "MENTOR", tier: "IN_HOUSE" },
+			expect.objectContaining({ clearReasoningEffort: true }),
+		);
+	},
+};
+
+/** A decision needs an answer at once, so a decision assignment that asks for reasoning says so. */
+export const DecisionModelReasons: Story = {
+	args: {
+		bindings: [
+			...reviewsOnBothTiers,
+			binding("CLOUD", mockDecisionModel, { purpose: "PRACTICE_DECISION", reasoningEffort: "LOW" }),
+		],
+	},
+	play: async ({ canvas }) => {
+		const cloud = row(await openPurpose(canvas, "Decision model"), "Cloud");
+		const effort = cloud.getByRole("combobox", { name: "Reasoning effort for Cloud" });
+		await expect(effort).toHaveAccessibleDescription(
+			/This model reasons before it answers\. Decisions need a model that answers at once with token probabilities\.$/u,
+		);
+		await userEvent.click(effort);
+		await userEvent.click(await screen.findByRole("option", { name: "None" }));
+		await expect(effort).not.toHaveAccessibleDescription(/reasons before it answers/u);
+	},
+};
+
+/** Embedding and reranking calls take no reasoning effort, so their rows offer none. */
+export const NoEffortForEmbeddings: Story = {
+	play: async ({ canvas }) => {
+		const embedding = row(await openPurpose(canvas, "Embedding model"), "In-house");
+		await expect(embedding.queryByRole("combobox", { name: /^Reasoning effort/u })).toBeNull();
 	},
 };
 
@@ -764,7 +835,7 @@ export const RefreshFailed: Story = {
 		await expect(canvas.getByText("We could not refresh AI models")).toBeVisible();
 		await expect(canvas.getByRole("button", { name: "Retry" })).toBeEnabled();
 		const inHouse = row(await openPurpose(canvas, "Practice reviews"), "In-house");
-		await expect(inHouse.getByRole("combobox", { name: /In-house/u })).toHaveTextContent(
+		await expect(inHouse.getByRole("combobox", { name: /^Model for In-house/u })).toHaveTextContent(
 			"Local Llama",
 		);
 		await expect(inHouse.getByRole("button", { name: /^Save assignment/u })).toBeEnabled();
