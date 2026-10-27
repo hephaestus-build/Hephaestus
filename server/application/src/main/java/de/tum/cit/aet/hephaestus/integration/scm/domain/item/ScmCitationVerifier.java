@@ -22,16 +22,24 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.eclipse.jgit.patch.FileHeader;
 import org.eclipse.jgit.patch.Patch;
 import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Component;
+import tools.jackson.core.JsonParser;
+import tools.jackson.core.JsonToken;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 /** Checks SCM reference semantics against the pinned item and captured range, never live work. */
 @Component
 @ConditionalOnCaptureRole
 public class ScmCitationVerifier implements CitationVerifier {
+    /** A string inside one check run of a record: the record path, then the run's index. */
+    private static final Pattern CHECK_RUN_POINTER = Pattern.compile("([^#]+)#/head_check_runs/runs/(\\d+)(?:/.*)?");
+
     private final ObjectMapper mapper;
 
     public ScmCitationVerifier(ObjectMapper mapper) {
@@ -79,6 +87,11 @@ public class ScmCitationVerifier implements CitationVerifier {
                 if (citation.side() != CitationSide.NEW || citation.commit() != null)
                     refused.add(refusal(
                             citation.index(), "This SCM record does not support a repository commit or base side"));
+                else if (unfinishedRun(check, citation))
+                    refused.add(new CitationRefusal(
+                            citation.index(),
+                            CandidateRefusal.UNFINISHED_RUN_CITED,
+                            "The citation names a check run that had not finished, which has no outcome"));
                 continue;
             }
             if (head == null || !safePath(citation.path())) {
@@ -174,6 +187,72 @@ public class ScmCitationVerifier implements CitationVerifier {
         if (citation.source().equals(PullRequestContentSource.DIFF.value()))
             return citation.side() == expectedSide && (citation.commit() == null || commit.equals(citation.commit()));
         return commit.equals(citation.commit());
+    }
+
+    /**
+     * Whether the citation shows a check run of the captured pull request record that had not finished when it was
+     * read: a string inside that run, or lines of the whole record that cover it. Such a run has no result, so it
+     * supports no claim about the build or the tests. A pointer elsewhere in the record names no run.
+     */
+    private boolean unfinishedRun(CitationCheck check, CitationToCheck citation) {
+        if (!citation.source().equals(PullRequestContentSource.CORE.value())) return false;
+        Matcher pointer = CHECK_RUN_POINTER.matcher(citation.path());
+        boolean intoRun = pointer.matches();
+        if (!intoRun && citation.path().contains("#")) return false;
+        String recordPath = intoRun ? pointer.group(1) : citation.path();
+        if (!safePath(recordPath)) return false;
+        try {
+            List<RunLines> runs =
+                    runLines(Files.readAllBytes(check.evidence().source().resolve(recordPath)));
+            if (intoRun) {
+                int index = Integer.parseInt(pointer.group(2));
+                return index >= runs.size() || !runs.get(index).finished();
+            }
+            return runs.stream()
+                    .anyMatch(run ->
+                            !run.finished() && run.first() <= citation.endLine() && run.last() >= citation.startLine());
+        } catch (IOException | RuntimeException unreadable) {
+            return intoRun;
+        }
+    }
+
+    /** Where each check run of a record stands in its text, and whether it had finished. */
+    private record RunLines(long first, long last, boolean finished) {}
+
+    private List<RunLines> runLines(byte[] record) {
+        JsonNode runs = mapper.readTree(record).path("head_check_runs").path("runs");
+        if (!runs.isArray() || runs.isEmpty()) return List.of();
+        List<RunLines> lines = new ArrayList<>();
+        try (JsonParser parser = mapper.createParser(record)) {
+            if (parser.nextToken() != JsonToken.START_OBJECT) return List.of();
+            while (parser.nextToken() == JsonToken.PROPERTY_NAME) {
+                String field = parser.currentName();
+                parser.nextToken();
+                if (!"head_check_runs".equals(field)) {
+                    parser.skipChildren();
+                    continue;
+                }
+                while (parser.nextToken() == JsonToken.PROPERTY_NAME) {
+                    String inner = parser.currentName();
+                    parser.nextToken();
+                    if (!"runs".equals(inner)) {
+                        parser.skipChildren();
+                        continue;
+                    }
+                    while (parser.nextToken() == JsonToken.START_OBJECT) {
+                        long first = parser.currentTokenLocation().getLineNr();
+                        parser.skipChildren();
+                        long last = parser.currentTokenLocation().getLineNr();
+                        lines.add(new RunLines(
+                                first,
+                                last,
+                                runs.path(lines.size()).path("finished").asBoolean(false)));
+                    }
+                    return lines;
+                }
+            }
+        }
+        return lines;
     }
 
     private static boolean code(CitationToCheck citation) {

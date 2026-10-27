@@ -44,6 +44,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmVersion;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.label.Label;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.milestone.Milestone;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.CheckState;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.HeadCheckRuns;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.MergeStateStatus;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
@@ -432,6 +433,44 @@ class PullRequestContentSourceTest extends BaseUnitTest {
                     .files()
                     .get("context/metadata.json"));
             assertThat(outdated.has("head_checks")).isFalse();
+        }
+
+        @Test
+        void shouldWriteTheCheckRunsOnlyWhenTheyWereListedForTheReviewedHead() throws Exception {
+            Instant readAt = Instant.parse("2026-10-26T12:00:00Z");
+            var run = new HeadCheckRuns.Run(
+                    "server tests",
+                    "CI",
+                    "failure",
+                    true,
+                    "https://github.com/acme/web/actions/runs/1",
+                    Instant.parse("2026-10-26T11:50:00Z"),
+                    Instant.parse("2026-10-26T11:58:00Z"));
+            PullRequest reviewed = pullRequest();
+            reviewed.observeHeadCheckRuns(new HeadCheckRuns(HEAD, List.of(run), false, readAt));
+            PullRequest other = pullRequest();
+            other.observeHeadCheckRuns(new HeadCheckRuns("e".repeat(40), List.of(run), true, readAt));
+            stubGit();
+
+            mirroredPullRequest = reviewed;
+            JsonNode listed = objectMapper.readTree(provider.capture(request(sampleMetadata()), Set.of(CORE))
+                    .files()
+                    .get("context/metadata.json"));
+            JsonNode runs = listed.get("head_check_runs");
+            assertThat(runs.get("complete").asBoolean()).isFalse();
+            assertThat(runs.get("observed_at").asString()).isEqualTo("2026-10-26T12:00:00Z");
+            JsonNode entry = runs.get("runs").get(0);
+            assertThat(entry.get("name").asString()).isEqualTo("server tests");
+            assertThat(entry.get("group").asString()).isEqualTo("CI");
+            assertThat(entry.get("state").asString()).isEqualTo("failure");
+            assertThat(entry.get("finished").asBoolean()).isTrue();
+            assertThat(entry.get("finished_at").asString()).isEqualTo("2026-10-26T11:58:00Z");
+
+            mirroredPullRequest = other;
+            JsonNode unlisted = objectMapper.readTree(provider.capture(request(sampleMetadata()), Set.of(CORE))
+                    .files()
+                    .get("context/metadata.json"));
+            assertThat(unlisted.has("head_check_runs")).isFalse();
         }
 
         @Test

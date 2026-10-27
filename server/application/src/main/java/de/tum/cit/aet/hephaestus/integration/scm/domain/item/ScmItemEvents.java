@@ -15,6 +15,8 @@ public final class ScmItemEvents {
     public static final ItemEventName PULL_REQUEST_READY = new ItemEventName("scm.pull_request.ready");
     public static final ItemEventName PULL_REQUEST_SYNCHRONIZED = new ItemEventName("scm.pull_request.synchronized");
     public static final ItemEventName PULL_REQUEST_EDITED = new ItemEventName("scm.pull_request.edited");
+    public static final ItemEventName PULL_REQUEST_CHECKS_COMPLETED =
+            new ItemEventName("scm.pull_request.checks_completed");
     public static final ItemEventName PULL_REQUEST_LINKED_ISSUE_UPDATED =
             new ItemEventName("scm.pull_request.linked_issue_updated");
     public static final ItemEventName PULL_REQUEST_REVIEW_SUBMITTED =

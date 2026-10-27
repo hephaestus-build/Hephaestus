@@ -70,6 +70,7 @@ public class GitHubManifest implements IntegrationManifest {
                                 ScmItemEvents.PULL_REQUEST_OPENED,
                                 ScmItemEvents.PULL_REQUEST_READY,
                                 ScmItemEvents.PULL_REQUEST_SYNCHRONIZED,
+                                ScmItemEvents.PULL_REQUEST_CHECKS_COMPLETED,
                                 ScmItemEvents.PULL_REQUEST_EDITED,
                                 ScmItemEvents.PULL_REQUEST_LINKED_ISSUE_UPDATED,
                                 ScmItemEvents.PULL_REQUEST_MERGED,

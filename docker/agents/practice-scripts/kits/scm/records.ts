@@ -64,6 +64,29 @@ export const pullRequestRecordSchema = z.object({
 		"NO_PIPELINE",
 		"SKIPPED",
 	]),
+	/**
+	 * The single runs behind `head_checks`, when a read listed them for the reviewed head: GitHub check runs and commit
+	 * statuses. Absent means not read, not that the head has no runs.
+	 */
+	head_check_runs: z
+		.object({
+			/** The source contract's `head_check_runs` rule says what true means; it never proves a run absent. */
+			complete: z.boolean(),
+			observed_at: z.string(),
+			runs: z.array(
+				z.object({
+					name: z.string(),
+					group: z.string().optional(),
+					/** The provider's word in lower case: the conclusion once finished, the status before. */
+					state: z.string(),
+					finished: z.boolean(),
+					url: z.string().optional(),
+					started_at: z.string().optional(),
+					finished_at: z.string().optional(),
+				}),
+			),
+		})
+		.optional(),
 });
 
 export const issueRecordSchema = z.object({

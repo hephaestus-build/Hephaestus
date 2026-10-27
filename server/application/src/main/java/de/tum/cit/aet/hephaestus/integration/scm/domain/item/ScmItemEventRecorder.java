@@ -59,6 +59,7 @@ public class ScmItemEventRecorder {
             case ScmDomainEvent.PullRequestCreated ignored -> ScmItemEvents.PULL_REQUEST_OPENED;
             case ScmDomainEvent.PullRequestReady ignored -> ScmItemEvents.PULL_REQUEST_READY;
             case ScmDomainEvent.PullRequestSynchronized ignored -> ScmItemEvents.PULL_REQUEST_SYNCHRONIZED;
+            case ScmDomainEvent.PullRequestChecksCompleted ignored -> ScmItemEvents.PULL_REQUEST_CHECKS_COMPLETED;
             case ScmDomainEvent.PullRequestMerged ignored -> ScmItemEvents.PULL_REQUEST_MERGED;
             case ScmDomainEvent.PullRequestClosed closed ->
                 closed.wasMerged() ? null : ScmItemEvents.PULL_REQUEST_CLOSED;

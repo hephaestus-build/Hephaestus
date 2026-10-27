@@ -53,6 +53,8 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmItemEvents;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmItemService;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmVersion;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmWorkCapture;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.HeadCheckRuns;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.HeadCheckRunsRecorder;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReview;
@@ -179,6 +181,9 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
 
     @Autowired
     PullRequestRepository pulls;
+
+    @Autowired
+    HeadCheckRunsRecorder checkRuns;
 
     @Autowired
     PullRequestReviewRepository providerReviews;
@@ -686,6 +691,64 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
             executor.shutdownNow();
             assertThat(executor.awaitTermination(20, TimeUnit.SECONDS)).isTrue();
         }
+    }
+
+    // GitLab captures no check runs yet: a trigger job reports success when it starts its child pipeline.
+    @Test
+    void shouldRecordChecksCompletedOnceAtTheHeadVersionOnlyWhenTheWholeListOfRunsEnded() {
+        var prepared = prepare(IdentityProviderType.GITHUB, false);
+        var item = prepared.item();
+        var pull = pulls.findById(Objects.requireNonNull(item.sourceId())).orElseThrow();
+        long repositoryId = Objects.requireNonNull(pull.getRepository()).getId();
+        var context = Objects.requireNonNull(transactions.execute(status -> ProcessingContext.forWebhook(
+                item.workspaceId(), repositories.findById(repositoryId).orElseThrow(), "completed")));
+        String head = Objects.requireNonNull(pull.getHeadRefOid());
+        Instant readAt = Instant.now().truncatedTo(ChronoUnit.MICROS);
+        var running = new HeadCheckRuns(
+                head,
+                List.of(checkRun("build", "in_progress", false), checkRun("test", "success", true)),
+                true,
+                readAt);
+        // Every listed run ended, but the provider still waited for one it had not listed yet.
+        var partial =
+                new HeadCheckRuns(head, List.of(checkRun("build", "success", true)), false, readAt.plusSeconds(30));
+        var ended = new HeadCheckRuns(
+                head,
+                List.of(checkRun("build", "failure", true), checkRun("test", "success", true)),
+                true,
+                readAt.plusSeconds(60));
+        var rerun = new HeadCheckRuns(
+                head,
+                List.of(checkRun("build", "success", true), checkRun("test", "success", true)),
+                true,
+                readAt.plusSeconds(180));
+
+        checkRuns.observe(repositoryId, running, context);
+        checkRuns.observe(repositoryId, partial, context);
+        assertThat(checksCompleted(item)).isEmpty();
+
+        checkRuns.observe(repositoryId, ended, context);
+        checkRuns.observe(repositoryId, new HeadCheckRuns(head, ended.runs(), true, readAt.plusSeconds(120)), context);
+        assertThat(checksCompleted(item)).containsExactly(prepared.version().value());
+
+        // One occasion per pushed version: a re-run that ends differently replaces the runs and records no second one.
+        checkRuns.observe(repositoryId, rerun, context);
+        assertThat(checksCompleted(item)).containsExactly(prepared.version().value());
+        assertThat(pulls.findById(pull.getId()).orElseThrow().getHeadCheckRuns())
+                .isEqualTo(rerun);
+    }
+
+    private List<@Nullable String> checksCompleted(ItemRef item) {
+        return jdbc.queryForList(
+                "SELECT item_version FROM item_event WHERE workspace_id=? AND item_id=? AND name=?",
+                String.class,
+                item.workspaceId(),
+                item.itemId(),
+                ScmItemEvents.PULL_REQUEST_CHECKS_COMPLETED.value());
+    }
+
+    private static HeadCheckRuns.Run checkRun(String name, String state, boolean finished) {
+        return new HeadCheckRuns.Run(name, "ci", state, finished, null, null, null);
     }
 
     @ParameterizedTest

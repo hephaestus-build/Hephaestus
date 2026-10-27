@@ -413,6 +413,45 @@ A later observation replaces the state outright, including a pipeline that passe
 A record of unknown age accepts any dated observation.
 GitHub's check paths remain undated and unchanged.
 
+### Check runs of the head
+
+A pull request also stores the single runs behind its check state (`head_check_runs`), with the commit that they are about.
+
+- **GitHub.** A check suite of the head completes, whatever it concluded, or a commit status of the head ends.
+  Then the server reads the check runs, commit statuses and check suites of that commit (`GetCommitCheckRuns`).
+  It reads one page of 100 runs and asks only for what the Checks and Commit statuses permissions grant.
+  The list is complete only when nothing GitHub knows of is still to come.
+  It fits one page, and the rollup is neither pending nor expected.
+  Every listed run has ended, and every check suite with runs has completed.
+  A failed rollup is no such sign, because GitHub reports a failure while other runs still go.
+  A suite without runs is left aside, because an app that never posts a run leaves it queued.
+  A CI that has posted nothing yet cannot be seen, so a later workflow or status can still add runs.
+  An incomplete list never records that the checks finished.
+- **GitLab.** Not captured yet.
+  A trigger job reports success when it creates its child pipeline, not when that pipeline ends.
+  Each pipeline hook of a commit lists only its own pipeline.
+  Thus, no hook shows which runs of the commit finished.
+
+Scheduled sync does not read runs.
+A failed read records nothing, and the stored runs stay.
+A read that is older than the stored read of the same commit changes nothing.
+A read that shows the same runs keeps the stored read and its time.
+The server stores at most 200 runs, cuts names to 200 characters and keeps links without user information or a query.
+
+When the stored runs change and every run of the head has ended, the server records the item event `scm.pull_request.checks_completed`.
+The event pins the same item version as the push, because the runs are not part of the version.
+
+The occasion key holds one event of a name per version, so the checks complete once per pushed version.
+A re-run on the same head that ends differently starts no new review until the next push.
+Its runs still replace the stored runs, so a later review of that version reads them.
+Keying the occasion on the run set needs a change of the occasion's unique key, which waits for an expand and contract window.
+
+Each read that records no completion logs why: the list is incomplete, a run has not finished, or the head has no rollup.
+The server reads again only when another suite or status of the head ends.
+Thus, a read that lags the last hook records no completion.
+Checks that never finish, and a head without checks, record none either.
+A practice that must review every push also selects **Opened**, **Ready** or **Synchronized**.
+
 ## Documented asymmetries and residuals
 
 - **Slack has no deletion *sweep* at all.** Its content model is append-plus-watermark.

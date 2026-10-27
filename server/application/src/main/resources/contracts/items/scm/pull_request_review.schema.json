@@ -142,6 +142,56 @@
         "NO_PIPELINE",
         "SKIPPED"
       ]
+    },
+    "head_check_runs": {
+      "type": "object",
+      "required": [
+        "complete",
+        "observed_at",
+        "runs"
+      ],
+      "properties": {
+        "complete": {
+          "type": "boolean"
+        },
+        "observed_at": {
+          "type": "string"
+        },
+        "runs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "name",
+              "state",
+              "finished"
+            ],
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "group": {
+                "type": "string"
+              },
+              "state": {
+                "type": "string"
+              },
+              "finished": {
+                "type": "boolean"
+              },
+              "url": {
+                "type": "string"
+              },
+              "started_at": {
+                "type": "string"
+              },
+              "finished_at": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
     }
   },
   "required": [

@@ -1,0 +1,63 @@
+# The single check runs and commit statuses of one commit, read when a check suite or a status of it ends.
+# A commit with more contexts than one page is read as incomplete, not paged: a pull request's evidence
+# then says the list is partial. It asks only for what the Checks and Commit statuses permissions grant;
+# a workflow name would need the Actions permission.
+
+query GetCommitCheckRuns($owner: String!, $name: String!, $oid: GitObjectID!) {
+    rateLimit {
+        cost
+        limit
+        remaining
+        resetAt
+    }
+    repository(owner: $owner, name: $name) {
+        object(oid: $oid) {
+            __typename
+            ... on Commit {
+                oid
+                # A suite that has runs and has not completed can still add runs that the rollup does not list yet.
+                checkSuites(first: 50) {
+                    pageInfo {
+                        hasNextPage
+                    }
+                    nodes {
+                        status
+                        checkRuns(first: 1) {
+                            totalCount
+                        }
+                    }
+                }
+                statusCheckRollup {
+                    state
+                    contexts(first: 100) {
+                        pageInfo {
+                            hasNextPage
+                        }
+                        nodes {
+                            __typename
+                            ... on CheckRun {
+                                name
+                                status
+                                conclusion
+                                detailsUrl
+                                startedAt
+                                completedAt
+                                checkSuite {
+                                    app {
+                                        name
+                                    }
+                                }
+                            }
+                            ... on StatusContext {
+                                context
+                                state
+                                targetUrl
+                                createdAt
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

@@ -12,6 +12,8 @@ final class ScmEventSources {
     static final EventTypeKey GITHUB_PULL_REQUEST_REVIEW =
             new EventTypeKey(IntegrationKind.GITHUB, "repository.pull_request_review");
     static final EventTypeKey GITHUB_ISSUES = new EventTypeKey(IntegrationKind.GITHUB, "repository.issues");
+    static final EventTypeKey GITHUB_CHECK_SUITE = new EventTypeKey(IntegrationKind.GITHUB, "repository.check_suite");
+    static final EventTypeKey GITHUB_STATUS = new EventTypeKey(IntegrationKind.GITHUB, "repository.status");
     static final EventTypeKey GITLAB_MERGE_REQUEST = new EventTypeKey(IntegrationKind.GITLAB, "merge_request");
     static final EventTypeKey GITLAB_NOTE = new EventTypeKey(IntegrationKind.GITLAB, "note");
     static final EventTypeKey GITLAB_ISSUE = new EventTypeKey(IntegrationKind.GITLAB, "issue");
