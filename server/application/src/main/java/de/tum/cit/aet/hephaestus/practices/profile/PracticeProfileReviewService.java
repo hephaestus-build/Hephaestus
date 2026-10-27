@@ -15,6 +15,9 @@ import de.tum.cit.aet.hephaestus.practices.review.ReviewSummaryQueryService;
 import de.tum.cit.aet.hephaestus.practices.review.dto.OutcomeVectorDTO;
 import de.tum.cit.aet.hephaestus.practices.spi.CurrentDeveloperLookup;
 import de.tum.cit.aet.hephaestus.practices.spi.EvidenceAuthorization;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewRuntimeQuery;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewShownStatus;
 import de.tum.cit.aet.hephaestus.practices.trace.OwnItemTraceQueryService;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import java.time.Instant;
@@ -47,6 +50,7 @@ public class PracticeProfileReviewService {
     private final OwnItemTraceQueryService traces;
     private final EvidenceAuthorization authorization;
     private final ProductItemRepository items;
+    private final ReviewRuntimeQuery runtime;
 
     private static final Comparator<List<ResultView>> OLDEST_FIRST = Comparator.comparing(
                     (List<ResultView> v) -> v.getFirst().review().getCreatedAt())
@@ -87,10 +91,16 @@ public class PracticeProfileReviewService {
                                 && v.practice().getGroup().getSlug().equals(groupSlug)))
                 .forEach(v -> byReview.computeIfAbsent(v.result().getReviewId(), id -> new ArrayList<>())
                         .add(v));
+        // The filter matches the status that each row shows, not the stored one.
+        var jobs = statuses == null || statuses.isEmpty()
+                ? Map.<UUID, Map<ReviewJobStatus, Long>>of()
+                : runtime.jobCounts(ws.id(), byReview.keySet());
         var ordered = byReview.values().stream()
                 .filter(v -> statuses == null
                         || statuses.isEmpty()
-                        || statuses.contains(v.getFirst().review().getStatus()))
+                        || statuses.contains(ReviewShownStatus.of(
+                                v.getFirst().review().getStatus(),
+                                jobs.getOrDefault(v.getFirst().review().getId(), Map.of()))))
                 .sorted(filter.oldestFirst() ? OLDEST_FIRST : OLDEST_FIRST.reversed())
                 .toList();
         var shown = ordered.stream()

@@ -111,6 +111,9 @@ A missing, failed, redacted or incomplete required source records a readiness re
 It produces no result for that practice.
 Other practices can run when their required sources are available.
 
+A practice of an item review stays Queued until capture records it as Ready or Withheld.
+The request does not make it Ready.
+
 Before capture, the server compares each practice's pinned reads with the current source catalog.
 A practice that pins another source contract, or reads a source that the catalog does not have or does not apply to the item, records `source_contract_unsupported`.
 That practice is withheld, and its sources are not captured.

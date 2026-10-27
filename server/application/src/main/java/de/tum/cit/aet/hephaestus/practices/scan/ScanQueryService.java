@@ -19,6 +19,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewRuntimeQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewService;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewShownStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStatus;
 import java.time.Instant;
 import java.util.List;
@@ -47,8 +48,11 @@ public class ScanQueryService {
 
     public Page<ScanSummaryDTO> list(
             long workspaceId, @Nullable Long repositoryItemId, @Nullable ReviewStatus status, Pageable pageable) {
-        var page = reviews.findScans(ReviewKind.SCAN, workspaceId, repositoryItemId, status, pageable);
+        var page = reviews.findScans(
+                ReviewKind.SCAN.name(), workspaceId, repositoryItemId, status == null ? null : status.name(), pageable);
         if (page.isEmpty()) return page.map(this::summary);
+        var jobs =
+                runtime.jobCounts(workspaceId, page.stream().map(Review::getId).toList());
         var refs = references.items(
                 workspaceId, page.stream().map(Review::getItemId).distinct().toList());
         var accounts = references.accounts(
@@ -65,7 +69,8 @@ public class ScanQueryService {
                 Objects.requireNonNull(refs.get(r.getItemId())),
                 r.getRequestedById() == null ? null : accounts.get(r.getRequestedById()),
                 Objects.requireNonNull(recorded.get(r)),
-                Objects.requireNonNull(counts.get(r.getId()))));
+                Objects.requireNonNull(counts.get(r.getId())),
+                jobs.getOrDefault(r.getId(), Map.of())));
     }
 
     public ScanSummaryDTO summary(Review review) {
@@ -81,7 +86,9 @@ public class ScanQueryService {
                 Objects.requireNonNull(refs.get(review.getItemId())),
                 account,
                 frozen,
-                reports.currentCounts(review));
+                reports.currentCounts(review),
+                runtime.jobCounts(review.getWorkspaceId(), List.of(review.getId()))
+                        .getOrDefault(review.getId(), Map.of()));
     }
 
     private ScanSummaryDTO summary(
@@ -89,14 +96,15 @@ public class ScanQueryService {
             ItemRefDTO repository,
             @Nullable AccountRefDTO account,
             FrozenScanReport frozen,
-            ScanCountsDTO counts) {
+            ScanCountsDTO counts,
+            Map<ReviewJobStatus, Long> jobs) {
         return new ScanSummaryDTO(
                 review.getId(),
                 repository,
                 review.getChecks().path("ref").asString(),
                 Objects.requireNonNull(review.getItemVersion()),
                 review.getOrigin(),
-                review.getStatus(),
+                ReviewShownStatus.of(review.getStatus(), jobs),
                 account,
                 review.getCreatedAt(),
                 review.getChecks().path("startedAt").isString()

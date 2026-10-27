@@ -3,11 +3,14 @@ package de.tum.cit.aet.hephaestus.practices.review;
 import de.tum.cit.aet.hephaestus.practices.review.model.Review;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewListSort;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewQueueState;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewShownStatus;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewStatus;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.stream.Stream;
 import org.hibernate.Session;
 import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.Page;
@@ -37,13 +40,27 @@ public class ReviewQueriesImpl implements ReviewQueries {
                 filter.kind() == null ? null : filter.kind().name());
         add(where, params, "q.created_at>=:from", "from", filter.from());
         add(where, params, "q.created_at<:to", "to", filter.to());
-        if (filter.status() != null && !filter.status().isEmpty())
+        if (filter.status() != null && !filter.status().isEmpty()) {
+            // A shown status comes from these stored ones, so the status index narrows the rows first.
             add(
                     where,
                     params,
-                    "q.status IN (:statuses)",
+                    "q.status IN (:stored)",
+                    "stored",
+                    filter.status().stream()
+                            .flatMap(status -> status == ReviewStatus.QUEUED
+                                    ? Stream.of(ReviewStatus.QUEUED, ReviewStatus.RUNNING)
+                                    : Stream.of(status))
+                            .map(Enum::name)
+                            .distinct()
+                            .toList());
+            add(
+                    where,
+                    params,
+                    ReviewShownStatus.SQL + " IN (:statuses)",
                     "statuses",
                     filter.status().stream().map(Enum::name).toList());
+        }
         if (filter.queueState() != null)
             where.append(" AND EXISTS(SELECT 1 FROM review_job j WHERE j.workspace_id=q.workspace_id AND"
                     + " j.review_id=q.id AND " + queueStatePredicate(filter.queueState()) + ")");

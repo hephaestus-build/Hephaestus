@@ -8,6 +8,7 @@ import java.time.Instant;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
 class PracticeProfileOverviewIntegrationTest extends BaseIntegrationTest {
@@ -16,6 +17,9 @@ class PracticeProfileOverviewIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     WebTestClient http;
+
+    @Autowired
+    JdbcClient jdbc;
 
     Scenario scenario;
 
@@ -47,6 +51,37 @@ class PracticeProfileOverviewIntegrationTest extends BaseIntegrationTest {
                 .jsonPath("$.goingWell")
                 .doesNotExist()
                 .jsonPath("$.reviewedItems.length()")
+                .isEqualTo(0);
+    }
+
+    @Test
+    void shouldReportTheReadersReviewAsQueuedWhileItsJobWaitsForAWorker() {
+        var waiting = data.result(scenario, ResultOutcome.MET, Instant.now());
+        data.activeJob(waiting, "QUEUED", null);
+        // The stored status turns Running when a review is handed to the queue, before a worker claims it.
+        jdbc.sql("UPDATE review SET status='RUNNING',stop_reason=NULL,completed_at=NULL WHERE id=:id")
+                .param("id", waiting.getReviewId())
+                .update();
+
+        get("/practice-profile/overview")
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.latestReview.status")
+                .isEqualTo("QUEUED");
+        get("/practice-profile/reviews?status=QUEUED")
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.content[0].review.id")
+                .isEqualTo(waiting.getReviewId().toString())
+                .jsonPath("$.content[0].review.status")
+                .isEqualTo("QUEUED");
+        get("/practice-profile/reviews?status=RUNNING")
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.content.length()")
                 .isEqualTo(0);
     }
 

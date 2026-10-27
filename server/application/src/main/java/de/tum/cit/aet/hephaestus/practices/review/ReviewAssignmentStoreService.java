@@ -124,6 +124,10 @@ public class ReviewAssignmentStoreService implements ReviewAssignmentStore {
                 assignment.setCaptureDecision(decision.facts());
                 assignment.setStatus(decision.status());
                 assignment.setReason(decision.reason());
+            } else if (assignment.getStatus() == ReviewPracticeStatus.QUEUED
+                    || assignment.getStatus() == ReviewPracticeStatus.READY) {
+                // A scan records capture per file; its practice runs from the first file a worker captures.
+                assignment.setStatus(ReviewPracticeStatus.RUNNING);
             }
             boolean refused = decision.status() == ReviewPracticeStatus.WITHHELD
                     || decision.status() == ReviewPracticeStatus.FAILED;
