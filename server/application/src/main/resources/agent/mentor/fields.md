@@ -85,7 +85,7 @@ Runs of Hephaestus's automated practice review about this developer within `cove
 `reviewId`, `jobId`, `itemId`, `itemKind`, `attempt`, execution `status`, `processingStatus` and the run times
 `availableAt` (when a run could start; a retry moves it), `startedAt` and `completedAt`. They do not say who asked
 for the review or why. These describe a run, not what it observed and not whether feedback reached anyone. `reviewStatus` gives the review's
-recorded state, with `reviewStopReason` where it recorded one; a `COMPLETED` run can belong to a `PARTIAL` review.
+status as the screens show it (`QUEUED` while its run waits to start), with `reviewStopReason` where it recorded one; a `COMPLETED` run can belong to a `PARTIAL` review.
 `assignmentCounts` counts that review's practices about this developer on this work: `total`, then `judged`,
 `reused`, `withheld` and `pending`. They are not outcomes. A field is absent where it could not be read completely.
 `listingComplete: false` and `hasMore: true` mean the listing is incomplete. The file holds no evidence or

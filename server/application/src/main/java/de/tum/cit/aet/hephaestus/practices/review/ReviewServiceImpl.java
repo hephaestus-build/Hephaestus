@@ -418,10 +418,18 @@ public class ReviewServiceImpl implements ReviewService {
                                         ? ReviewStopReason.EXECUTION_INCOMPLETE
                                         : completion.reason());
         review.setCompletedAt(completion.completedAt());
-        for (var assignment : assignments.lockAssignments(workspaceId, reviewId))
-            if (assignment.getStatus() != ReviewPracticeStatus.WITHHELD
-                    && assignment.getStatus() != ReviewPracticeStatus.FAILED)
+        for (var assignment : assignments.lockAssignments(workspaceId, reviewId)) {
+            if (assignment.getStatus() == ReviewPracticeStatus.QUEUED) {
+                // Capture never reached it, so it recorded nothing: it ends withheld for the reason the review stopped.
+                assignment.setStatus(ReviewPracticeStatus.WITHHELD);
+                assignment.setReason(
+                        Objects.requireNonNullElse(review.getStopReason(), ReviewStopReason.EXECUTION_INCOMPLETE)
+                                .name());
+            } else if (assignment.getStatus() != ReviewPracticeStatus.WITHHELD
+                    && assignment.getStatus() != ReviewPracticeStatus.FAILED) {
                 assignment.setStatus(ReviewPracticeStatus.DONE);
+            }
+        }
         if (review.getKind() == ReviewKind.SCAN) reports.freeze(workspaceId, reviewId);
         if ((status == ReviewStatus.COMPLETE || status == ReviewStatus.PARTIAL)
                 && memberships.existsByWorkspaceIdAndReviewIdAndStateInAndResultIdIsNotNull(
