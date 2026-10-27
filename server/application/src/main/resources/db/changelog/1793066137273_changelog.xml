@@ -10,5 +10,8 @@
 SET LOCAL lock_timeout='30s';
 ALTER TABLE item_event ADD CONSTRAINT uk_item_event_source UNIQUE (workspace_id, item_id, name, source_key);
 ]]></sql>
+        <rollback>
+            <sql>ALTER TABLE item_event DROP CONSTRAINT uk_item_event_source;</sql>
+        </rollback>
     </changeSet>
 </databaseChangeLog>
