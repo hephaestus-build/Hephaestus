@@ -14,6 +14,7 @@ import static org.mockito.Mockito.withSettings;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.HostSandbox;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -24,7 +25,9 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -56,9 +59,17 @@ class HephHostTest extends BaseUnitTest {
         final List<Host> removed = new CopyOnWriteArrayList<>();
         volatile boolean running = true;
 
+        /** What the host's process does while the launch has not returned yet. */
+        volatile Consumer<UUID> whileLaunching = id -> {};
+
+        /** The launch fails after the host's process ran. */
+        volatile boolean launchFails;
+
         @Override
-        public Host launch(HostSpec spec) {
-            Host host = new Host(UUID.randomUUID());
+        public Host launch(UUID id, HostSpec spec) throws IOException {
+            whileLaunching.accept(id);
+            if (launchFails) throw new IOException("the backend lost the host");
+            Host host = new Host(id);
             launched.add(host);
             return host;
         }
@@ -119,6 +130,31 @@ class HephHostTest extends BaseUnitTest {
         assertThat(sandbox.launched).hasSize(1);
         host.send("{\"type\":\"stop\"}");
         verify(channel).sendMessage(new TextMessage("{\"type\":\"stop\"}"));
+    }
+
+    /** The process connects as soon as it runs, and the launch returns only once the backend has seen it run. */
+    @Test
+    void shouldAcceptTheChannelOfAHostThatConnectsBeforeItsLaunchReturns() {
+        WebSocketSession channel = socket("early");
+        AtomicBoolean accepted = new AtomicBoolean();
+        sandbox.whileLaunching = id -> accepted.set(host.connected(id, channel));
+
+        assertThat(host.awaitReady(READY)).isTrue();
+
+        assertThat(accepted).isTrue();
+        assertThat(host.isReady()).isTrue();
+    }
+
+    @Test
+    void shouldForgetTheEarlyChannelOfAHostWhoseLaunchFailed() throws Exception {
+        WebSocketSession channel = socket("early");
+        sandbox.whileLaunching = id -> host.connected(id, channel);
+        sandbox.launchFails = true;
+
+        assertThat(host.awaitReady(READY)).isFalse();
+
+        assertThat(host.isReady()).isFalse();
+        verify(channel).close();
     }
 
     @Test

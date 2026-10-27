@@ -1641,18 +1641,49 @@ const NodeWebSocket = WebSocket as unknown as new (
 ) => WebSocket;
 
 /**
+ * Waits before each new try to open the command channel when the last try never opened. The worker accepts the
+ * channel as soon as it launches the host (`HephHost`), so a try fails only when the worker or the network is briefly
+ * unavailable. This is a safety net: 15 seconds of tries, then the host exits and the worker starts another.
+ */
+const CONNECT_DELAYS_MS = [1000, 2000, 4000, 8000];
+
+/**
  * Opens the command channel to the worker and runs its commands on `host` until the channel closes. The worker pings
- * the channel; Node's WebSocket answers each ping itself.
+ * the channel; Node's WebSocket answers each ping itself. A channel that never opened is tried again after each of
+ * `connectDelaysMs`; a channel that opened and closed is not, because the worker closed it or is gone.
  */
 export async function runCommands(
 	runtimeUrl: string,
 	token: string,
 	host: Pick<HephHost, "start" | "stop">,
+	connectDelaysMs: readonly number[] = CONNECT_DELAYS_MS,
 ): Promise<void> {
 	const url = new URL(`${runtimeUrl}/commands`);
 	url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+	for (const delayMs of [...connectDelaysMs, null]) {
+		if (await commandChannel(url, token, host)) {
+			return;
+		}
+		if (delayMs === null) {
+			return;
+		}
+		log(`command channel did not open; trying again in ${delayMs} ms`);
+		await sleep(delayMs);
+	}
+}
+
+/** Runs one command channel until it closes; whether it opened. */
+async function commandChannel(
+	url: URL,
+	token: string,
+	host: Pick<HephHost, "start" | "stop">,
+): Promise<boolean> {
+	let opened = false;
 	const socket = new NodeWebSocket(url, { headers: { Authorization: `Bearer ${token}` } });
-	socket.addEventListener("open", () => log("command channel open"));
+	socket.addEventListener("open", () => {
+		opened = true;
+		log("command channel open");
+	});
 	socket.addEventListener("message", (event) => {
 		const command = typeof event.data === "string" ? parseCommand(event.data) : null;
 		if (command === null) {
@@ -1667,6 +1698,7 @@ export async function runCommands(
 	socket.addEventListener("close", () => closed.resolve(undefined));
 	socket.addEventListener("error", () => closed.resolve(undefined));
 	await closed.promise;
+	return opened;
 }
 
 async function main() {

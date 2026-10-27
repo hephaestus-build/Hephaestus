@@ -15,6 +15,7 @@ import io.fabric8.kubernetes.api.model.Pod;
 import io.fabric8.kubernetes.api.model.PodBuilder;
 import io.fabric8.kubernetes.client.KubernetesClient;
 import io.fabric8.kubernetes.client.server.mock.EnableKubernetesMockClient;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.List;
@@ -64,7 +65,12 @@ class KubernetesExecLoggingTest {
         ListAppender<ILoggingEvent> clientEvents = attach(CATEGORY);
         ListAppender<ILoggingEvent> ownedEvents = attach(owner);
         try (var sandboxes = new KubernetesExecSandboxes(
-                api, pods, worker, "agent", KubernetesFixtures.live(KubernetesFixtures.WORKER_ID))) {
+                api,
+                pods,
+                worker,
+                "agent",
+                KubernetesFixtures.live(KubernetesFixtures.WORKER_ID),
+                new SandboxExits(pods, new SimpleMeterRegistry()))) {
             logging.setLogLevel(owner, LogLevel.WARN);
 
             // Without the shipped entry the client's logger inherits an ordinary level and writes the URL.

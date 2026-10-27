@@ -85,7 +85,7 @@ class DockerSandboxHostsTest extends BaseUnitTest {
         when(creator.labels()).thenReturn(Map.of());
         when(creator.outsideContainer()).thenReturn(false);
 
-        assertThatThrownBy(() -> sandbox.launch(SPEC)).isInstanceOf(IOException.class);
+        assertThatThrownBy(() -> sandbox.launch(UUID.randomUUID(), SPEC)).isInstanceOf(IOException.class);
 
         verify(networks, never()).createJobNetwork(any(), anyBoolean(), any());
         verify(session).close();
@@ -97,7 +97,7 @@ class DockerSandboxHostsTest extends BaseUnitTest {
         when(creator.outsideContainer()).thenReturn(true);
         when(networks.createJobNetwork(any(), anyBoolean(), any())).thenThrow(new IllegalStateException("stop here"));
 
-        assertThatThrownBy(() -> sandbox.launch(SPEC)).hasMessage("stop here");
+        assertThatThrownBy(() -> sandbox.launch(UUID.randomUUID(), SPEC)).hasMessage("stop here");
 
         verify(networks).createJobNetwork(any(), eq(true), any());
     }
@@ -109,7 +109,7 @@ class DockerSandboxHostsTest extends BaseUnitTest {
                         SandboxLabels.CREATOR_CONTAINER, "3f2a9c1b7d4e", SandboxLabels.CREATOR_STARTED_AT, "t1"));
         when(networks.createJobNetwork(any(), anyBoolean(), any())).thenThrow(new IllegalStateException("stop here"));
 
-        assertThatThrownBy(() -> sandbox.launch(SPEC)).hasMessage("stop here");
+        assertThatThrownBy(() -> sandbox.launch(UUID.randomUUID(), SPEC)).hasMessage("stop here");
 
         verify(networks).createJobNetwork(any(), eq(false), any());
     }
@@ -153,7 +153,7 @@ class DockerSandboxHostsTest extends BaseUnitTest {
         doNothing().when(containers).startContainer("initializer-1");
         doThrow(new IllegalStateException("stop here")).when(containers).startContainer("host-1");
 
-        assertThatThrownBy(() -> sandbox.launch(SPEC)).hasMessage("stop here");
+        assertThatThrownBy(() -> sandbox.launch(UUID.randomUUID(), SPEC)).hasMessage("stop here");
 
         verify(containers).forceRemove("host-1");
         verify(volumes).removeVolume("volume-1");

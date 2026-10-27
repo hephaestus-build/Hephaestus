@@ -239,6 +239,7 @@ class KubernetesSandboxLiveTest {
     private SandboxWorkspaceManager workspaces;
     private LiveSandboxGateway gateway;
     private SimpleMeterRegistry meters;
+    private SandboxExits exits;
     private SandboxBackend backend;
     private KubernetesLiveWorkers liveWorkers;
     private SandboxManager reviews;
@@ -314,10 +315,11 @@ class KubernetesSandboxLiveTest {
         assertEquals(GATEWAY_PORT, gateway.port(), "the gateway listens on the port it was given");
         meters = new SimpleMeterRegistry();
         reviewJobs = configuration.kubernetesReviewJobs(client, worker);
-        backend = configuration.kubernetesSandboxBackend(pods, reviewJobs, worker, liveWorkers);
+        exits = configuration.sandboxExits(pods, meters);
+        backend = configuration.kubernetesSandboxBackend(pods, reviewJobs, worker, liveWorkers, exits);
         reviews = new SandboxAttemptRunner(backend, workspaces, gateway.sessions(), meters);
         hosts = new SandboxHosts(backend, workspaces, gateway.sessions(), agentImage.reference());
-        turns = configuration.kubernetesExecSandboxes(client, pods, worker, agentImage, liveWorkers);
+        turns = configuration.kubernetesExecSandboxes(client, pods, worker, agentImage, liveWorkers, exits);
 
         String managementPort = System.getenv("MANAGEMENT_PORT");
         KubernetesIsolationProbe probe = configuration.kubernetesIsolationProbe(
@@ -518,7 +520,9 @@ class KubernetesSandboxLiveTest {
             Job job = awaitJob(name, running);
             Pod pod = awaitPodOf(job, candidate -> KubernetesPods.running(candidate, KubernetesPods.RUNTIME), running);
 
-            new KubernetesSandboxBackend(pods, reviewJobs, worker, liveWorkers).kill(new SandboxBackend.Handle(name));
+            new KubernetesSandboxBackend(
+                            pods, reviewJobs, worker, liveWorkers, new SandboxExits(pods, new SimpleMeterRegistry()))
+                    .kill(new SandboxBackend.Handle(name));
 
             SandboxResult result = running.get(pods.stopGraceSeconds() + 90, TimeUnit.SECONDS);
             assertThat(result.exitCode()).as("the kubelet ended the runtime").isNotZero();
@@ -663,11 +667,13 @@ class KubernetesSandboxLiveTest {
         ResourceLimits limits = limits(Duration.ofMinutes(3));
 
         long started = System.nanoTime();
-        HostSandbox.Host host = hosts.launch(new HostSandbox.HostSpec(
-                Map.of("payload.bin", payload),
-                Map.of(),
-                List.of("sh", "-c", "sha256sum /workspace/payload.bin && exec sleep 3600"),
-                limits));
+        HostSandbox.Host host = hosts.launch(
+                UUID.randomUUID(),
+                new HostSandbox.HostSpec(
+                        Map.of("payload.bin", payload),
+                        Map.of(),
+                        List.of("sh", "-c", "sha256sum /workspace/payload.bin && exec sleep 3600"),
+                        limits));
         log.info("TIMING host launch to its process running: {} ms", millis(started));
         String name = "hephaestus-host-" + host.id();
         track(name);
@@ -903,7 +909,13 @@ class KubernetesSandboxLiveTest {
         String sandbox = turns.create(sandboxId, limits(ResourceLimits.MAX_RUNTIME));
         String uid = present(sandbox).getMetadata().getUid();
         KubernetesExecSandboxes runtime = new KubernetesSandboxConfiguration()
-                .kubernetesExecSandboxes(client, pods, worker, agentImage, KubernetesFixtures.live(worker.workerId()));
+                .kubernetesExecSandboxes(
+                        client,
+                        pods,
+                        worker,
+                        agentImage,
+                        KubernetesFixtures.live(worker.workerId()),
+                        new SandboxExits(pods, new SimpleMeterRegistry()));
         try {
             assertThat(text(runtime.exec(
                                     sandbox, new ExecSandboxes.Command(List.of("echo", "owned"), COMMAND, OUTPUT_LIMIT))

@@ -390,9 +390,22 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
             sandboxes.release(earlier.turnId, earlier.attempt);
             stop(earlier, "lease");
         }
+        Instant readyBy = clock.instant().plus(HOST_READY_TIMEOUT);
         if (!host.awaitReady(HOST_READY_TIMEOUT)) {
-            finish(attempt, MentorTurn.Status.FAILED, COULD_NOT_START, "its Heph host did not start");
-            return;
+            // One fresh host, within the same wait, before the turn fails: a host can exit before its channel opens,
+            // and the next one usually starts. The attempt sends its start once, to a ready host. A lease lost during
+            // the wait marks the attempt stopped, so its host is told to stop right after the start.
+            Duration left = Duration.between(clock.instant(), readyBy);
+            boolean retry = running.get(attempt.turnId) == attempt && left.isPositive();
+            if (retry)
+                log.warn(
+                        "Heph turn {} attempt {} waits for a fresh Heph host: the last one did not start",
+                        attempt.turnId,
+                        attempt.attempt);
+            if (!retry || !host.awaitReady(left)) {
+                finish(attempt, MentorTurn.Status.FAILED, COULD_NOT_START, "its Heph host did not start, twice");
+                return;
+            }
         }
         // A stop before this turn was registered here sent no notification this dispatcher acted on.
         if (turns.require(attempt.workspaceId, attempt.turnId).getStatus() == MentorTurn.Status.STOPPED) {

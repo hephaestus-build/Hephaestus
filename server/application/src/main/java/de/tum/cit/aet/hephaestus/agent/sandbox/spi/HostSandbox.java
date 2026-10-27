@@ -44,8 +44,11 @@ public interface HostSandbox {
         return true;
     }
 
-    /** Starts a host, and returns once its process runs. */
-    Host launch(HostSpec spec) throws IOException;
+    /**
+     * Starts the host {@code id}, and returns once its process runs. The caller names the host, so that it can accept the
+     * host's channel before this returns: the process connects as soon as it runs, before the backend sees it run.
+     */
+    Host launch(UUID id, HostSpec spec) throws IOException;
 
     boolean isRunning(Host host);
 

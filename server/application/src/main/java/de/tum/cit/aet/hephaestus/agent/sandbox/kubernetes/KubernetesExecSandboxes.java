@@ -100,6 +100,7 @@ public class KubernetesExecSandboxes implements ExecSandboxes, AutoCloseable {
     private final KubernetesPods pods;
     private final KubernetesWorker worker;
     private final String image;
+    private final SandboxExits exits;
     private final KubernetesLiveWorkers liveWorkers;
 
     /** Opens each call's exec, so that the call can stop waiting for it. */
@@ -110,12 +111,14 @@ public class KubernetesExecSandboxes implements ExecSandboxes, AutoCloseable {
             KubernetesPods pods,
             KubernetesWorker worker,
             String image,
-            KubernetesLiveWorkers liveWorkers) {
+            KubernetesLiveWorkers liveWorkers,
+            SandboxExits exits) {
         this.liveWorkers = liveWorkers;
         this.client = client;
         this.pods = pods;
         this.worker = worker;
         this.image = image;
+        this.exits = exits;
     }
 
     /** The worker's Pod name: a restarted worker container keeps it, so its next start removes what a crash left. */
@@ -480,6 +483,8 @@ public class KubernetesExecSandboxes implements ExecSandboxes, AutoCloseable {
 
     @Override
     public void remove(String sandbox) {
+        // Before the delete: the Pod's exit code and log go with it.
+        exits.record(SandboxExits.Kind.TURN, sandbox);
         try {
             pods.delete(sandbox, 0);
         } catch (SandboxException e) {

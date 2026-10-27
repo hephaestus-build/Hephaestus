@@ -2266,3 +2266,74 @@ void test("the command channel carries the host's credential, runs its commands,
 		server.close();
 	}
 });
+
+void test("a command channel that did not open is tried again, and the host runs commands once it opens", async () => {
+	const server = createServer();
+	let upgrades = 0;
+	const connected = Promise.withResolvers<Socket>();
+	server.on("upgrade", (request: IncomingMessage, client: Socket) => {
+		upgrades += 1;
+		if (upgrades === 1) {
+			// As a worker that cannot take the host yet: the first try is refused before it opens.
+			client.end("HTTP/1.1 503 Service Unavailable\r\nContent-Length: 0\r\n\r\n");
+			return;
+		}
+		const accept = createHash("sha1")
+			.update(`${String(request.headers["sec-websocket-key"])}258EAFA5-E914-47DA-95CA-C5AB0DC85B11`)
+			.digest("base64");
+		client.write(
+			"HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n" +
+				`Sec-WebSocket-Accept: ${accept}\r\n\r\n`,
+		);
+		connected.resolve(client);
+	});
+	server.listen(0, "127.0.0.1");
+	await once(server, "listening");
+	const address = server.address();
+	assert.ok(address !== null && typeof address === "object");
+	const started = Promise.withResolvers<string>();
+	try {
+		const channel = runCommands(
+			`http://127.0.0.1:${address.port}/internal/llm/runtime/host-1`,
+			"host-token",
+			{ start: (turnId) => started.resolve(turnId), stop: () => undefined },
+			[10, 10],
+		);
+		const client = await connected.promise;
+		client.write(
+			frame(0x1, JSON.stringify({ type: "start", turnId: "t1", attempt: 1, token: "turn-token" })),
+		);
+		assert.equal(await started.promise, "t1");
+		client.destroy();
+		await channel;
+
+		assert.equal(upgrades, 2, "a channel that opened and closed is not tried again");
+	} finally {
+		server.close();
+	}
+});
+
+void test("a command channel that never opens ends after its tries", async () => {
+	const server = createServer();
+	let upgrades = 0;
+	server.on("upgrade", (_request: IncomingMessage, client: Socket) => {
+		upgrades += 1;
+		client.end("HTTP/1.1 503 Service Unavailable\r\nContent-Length: 0\r\n\r\n");
+	});
+	server.listen(0, "127.0.0.1");
+	await once(server, "listening");
+	const address = server.address();
+	assert.ok(address !== null && typeof address === "object");
+	try {
+		await runCommands(
+			`http://127.0.0.1:${address.port}/internal/llm/runtime/host-1`,
+			"host-token",
+			{ start: () => undefined, stop: () => undefined },
+			[10, 10],
+		);
+
+		assert.equal(upgrades, 3);
+	} finally {
+		server.close();
+	}
+});
