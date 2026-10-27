@@ -458,6 +458,7 @@ export default defineConfig({
 			"report:ci-timings": run("node scripts/report-ci-timings.ts"),
 			"report:flakes": run("node scripts/report-flakes.ts"),
 			"report:test-results": run("node scripts/summarize-test-results.ts"),
+			"pr:wait": run("node scripts/pr-wait.ts"),
 			"release:version": run("changeset version && node scripts/sync-release-version.ts"),
 
 			// Local development
