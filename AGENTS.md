@@ -118,7 +118,9 @@ The SPA talks to the server only through the generated client.
 - `webapp/` — React 19, TanStack Router/Query, Tailwind 4. Guides: `webapp/AGENTS.md` and `webapp/DESIGN.md`.
 - `extension/` — the Chrome extension. Guide: `extension/AGENTS.md`.
 - `docs/` — user, admin and contributor docs on GitHub Pages.
-- `scripts/` — repository tooling in TypeScript. `tsconfig.agents.json` also covers the agent runner and practice scripts.
+- `scripts/` — repository tooling in TypeScript.
+  `tsconfig.agents.json` type-checks it as one project with the agent runner, the practice script toolkit, and the bundled practice scripts.
+  Task naming, lint configuration, and cross-platform commands: `docs/contributor/local-verification.mdx` § Repository tooling.
 
 Skills live in `.claude/skills/<name>/`.
 Codex reads only `.agents/skills/`, so the four contribution skills have byte-identical mirrors there.
@@ -202,6 +204,7 @@ Issues follow `CONTRIBUTING.md` § Issues.
   A cast usually indicates that the upstream type is wrong. Use `satisfies`.
 - Validate anything crossing a trust boundary: a webhook body, a hand-parsed stream, or a `JSON.parse`.
   Use a discriminated union, or a `zod` schema where the tree has zod.
+  Only the SPA, the extension, and the practice script toolkit have zod.
   Never log a token, a secret, or a raw request body.
 - A leading `_` marks only what the language or a tool reads that way, never something private.
   Separate import groups with blank lines where evaluation order matters. Oxfmt sorts within a group.
@@ -240,9 +243,6 @@ Bring an older local database to the baseline (`docs/admin/liquibase-baseline-ru
 Each of these reports success and leaves a stale or wrong result.
 
 - **`generate:api:specs` honours `HEPHAESTUS_APPLICATION_JAR`.**
-  If it is set, the script scrapes the spec from that JAR, not from your checkout.
-  Unset it after a CI-style run.
-  Without it, the script packages the server without tests.
-  It boots the JAR under the `specs` profile with isolated HTTP ports.
+  If it is set, the spec comes from that JAR, not from your checkout. Unset it after a CI-style run.
 - **`-PpackagedServer=true`, one Gradle invocation per checkout, and `server/.env` in test JVMs** —
   `server/AGENTS.md` § Build traps.

@@ -58,8 +58,7 @@ It explains how to suppress a rule and why a hooks suppression silences a whole 
 
 ## File naming
 
-`unicorn/filename-case` accepts both cases, so it cannot make the choice for you. What decides it is
-what the file exports:
+`unicorn/filename-case` accepts both cases. What the file exports decides:
 
 - **`PascalCase.tsx`** — a file whose export is a React component. The filename is the component
   name, so `WorkspaceLlmUsagePage.tsx` exports `WorkspaceLlmUsagePage`. Its `.test.tsx` and `.stories.tsx`
@@ -68,9 +67,8 @@ what the file exports:
 - **`kebab-case.ts`** — everything else: helpers, schemas, formatters, hooks, fixtures. A `.tsx` that
   exports a small helper component alongside its formatters is still a helper module.
 
-Colocation does not change the rule: a helper next to the component that uses it is named the same
-way as one in `src/lib/`. `src/routes/**` is exempt from the rule entirely, because TanStack Router
-derives URL segments from the filenames there and the router owns that naming.
+Colocation does not change the rule.
+`src/routes/**` is exempt, because TanStack Router derives URL segments from those filenames.
 
 ## Which admin console a component belongs to
 
@@ -100,31 +98,17 @@ The prefix identifies the scope in imports and in the Storybook sidebar.
 - **Components** (`src/components/**`): presentational, with no exception for a "cohesive section".
   They take their data as props and never import the query layer.
 
-`scripts/check-presentational-components.ts` enforces it, and `vp run check` runs it. Two halves,
-because they fail differently:
+`scripts/check-presentational-components.ts` enforces two rules in `vp run check`:
 
 - **A component may not import the generated query layer or call a TanStack query hook.**
-  `@/api/types.gen` is pure types and stays allowed everywhere.
-  Put `useQuery` in the route file.
-  Pass plain props down.
-  If two routes need the same call, move it to `src/hooks/use-*.ts`.
-- **A story file may not install MSW handlers.** Autodocs mounts every story of a file into one document.
-  `msw-storybook-addon` installs on a single global worker.
-  Thus, the last story's handlers answer for the whole page.
-  One error story silently breaks its siblings' Docs page.
-  Every isolated story, test, and snapshot still passes.
+  `@/api/types.gen` is pure types and stays allowed. Put `useQuery` in the route and pass plain props down.
+- **A story file may not install MSW handlers.** Autodocs mounts every story of a file into one page on one global worker.
+  Thus, one error story silently breaks its siblings' Docs page while every isolated story still passes.
 
-The allowlist inside that script is **shrink-only** — an entry that scans clean fails the build, so it
-cannot go stale. Fix the file, do not add to it.
+Its allowlist is **shrink-only**: an entry that scans clean fails the build. Fix the file instead.
 
-**A story renders with no network at all.**
-A story proves that the component renders what it receives.
-A wire contract is not a rendering fact and does not belong in a story mock.
-Examples include which search params a filter produces and whether a facet reaches the query key.
-Assert the contract in a route test, which owns the query.
-
-Storybook is where you inspect the component.
-The route test checks what it requests.
+**A story renders with no network at all.** It proves what the component renders from its props.
+A wire contract, such as which search params a filter produces, belongs in a route test.
 
 ## Seeding a form from props
 
@@ -270,20 +254,12 @@ Never re-invent `role === "ADMIN"`. Use the shared pieces:
 `getByRole` > `getByLabelText` > `getByText`, and the ladder ends there: a `data-testid` skips past the
 accessible name a screen reader needs anyway.
 
-**`@testing-library/jest-dom` is not registered in the Vitest unit project** — `vite.config.ts` lists
-one setup file, `./src/test/setup-msw.ts`, and it does not import the matchers. So
-`expect(el).toBeInTheDocument()` in a `*.test.tsx` throws `Invalid Chai property` at runtime with `tsc`
-perfectly happy. `vitest/no-restricted-matchers` catches the common ones before you run anything and
-names the replacement in its message. For one it does not list, assert on the plain value.
+**`@testing-library/jest-dom` is not registered in the Vitest unit project.**
+`expect(el).toBeInTheDocument()` in a `*.test.tsx` throws `Invalid Chai property` at runtime, and `tsc` passes.
+`vitest/no-restricted-matchers` names the replacement for the common ones. Otherwise assert on the plain value.
+Stories do have the matchers, so an assertion copied from a story into a route test breaks.
 
-The matchers **are** available in stories, because `expect` from `storybook/test` ships them. Copying
-an assertion out of a story into a route test is exactly how this bites.
-
-A test that holds a response open until an assertion has run uses `deferred()` from `@/test/async`
-— `Promise.withResolvers()` in all but name, for the reason beside `"lib"` in `tsconfig.json`.
-`pending()`, `sleep()`, and `nextFrame()` sit beside it.
-`ObserverStub` (`@/test/observers`) replaces jsdom's missing `IntersectionObserver`/`ResizeObserver`.
-`precedes()` (`@/test/dom`) reads document order without spelling the bitmask.
+Test helpers: `deferred()`, `pending()`, `sleep()`, `nextFrame()` (`@/test/async`), `ObserverStub` (`@/test/observers`), and `precedes()` (`@/test/dom`).
 
 ## Type checking
 
@@ -301,22 +277,13 @@ this reason.
 
 ### Dates from the API
 
-A `format: date-time` field comes back from an SDK call as a real `Date`: `scripts/api-generator/webapp.config.ts` sets
-`transformer: true` on the `@hey-api/sdk` plugin, which wires the generated response transformers into
-every SDK call. Two consequences:
+An SDK call returns a `format: date-time` field as a real `Date`, because `scripts/api-generator/webapp.config.ts` sets `transformer: true`.
+`tsc` cannot see that setting. `src/test/response-transformers.test.ts` fails if it is lost.
 
-- **Fixtures passed straight to a prop use `new Date(…)`** — that is the shape production sends.
-  Fixtures served through **MSW** are JSON and use ISO strings. Type those with `Wire<T>` from
-  `@/lib/dates`, which turns every nested `Date` in a generated view into a `string`.
-- **`asDate()`** (also `@/lib/dates`) takes `Date | string | null | undefined` and returns a `Date` or
-  `undefined` — never an Invalid Date, which renders as the literal text "Invalid Date".
-  Use it for optional fields.
-  Also use it when a timestamp can reach a component as a string despite its `Date` type.
-
-`transformer: true` is load-bearing and invisible to `tsc`: without it the types still say `Date` while
-the client hands back strings, so `.toLocaleDateString()` crashes at runtime.
-`src/test/response-transformers.test.ts` is the guard. It calls the real SDK, so it fails whenever that
-wiring is lost.
+- **Fixtures passed straight to a prop use `new Date(…)`.**
+  Fixtures served through **MSW** are JSON with ISO strings. Type them with `Wire<T>` (`@/lib/dates`).
+- **`asDate()`** (`@/lib/dates`) returns a `Date` or `undefined`, never an Invalid Date.
+  Use it for optional fields, and where a timestamp can arrive as a string.
 
 ## Search params that are UI state
 
