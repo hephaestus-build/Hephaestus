@@ -43,7 +43,8 @@ class HephHostSpecTest {
 
     /**
      * Every model call of a turn sends the system prompt again. Detail that only some answers need belongs in the
-     * context folder's {@code FIELDS.md} or a tool description, which load on demand.
+     * context folder's {@code FIELDS.md}, which Heph reads on demand. The tool descriptions are sent with every call
+     * too, and this budget does not count them.
      */
     @Test
     void shouldKeepTheSystemPromptWithinItsBudgetWhenItStagesIt() {

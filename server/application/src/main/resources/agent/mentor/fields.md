@@ -82,8 +82,9 @@ condition) mean that field is not confirmed.
 ## inputs/context/review_attempts.json
 
 Runs of Hephaestus's automated practice review about this developer within `coverage`. Each `attempts` entry gives
-`reviewId`, `jobId`, `itemId`, `itemKind`, `attempt`, execution `status`, `processingStatus` and timestamps. These
-describe a run, not what it observed and not whether feedback reached anyone. `reviewStatus` gives the review's
+`reviewId`, `jobId`, `itemId`, `itemKind`, `attempt`, execution `status`, `processingStatus` and the run times
+`availableAt` (when a run could start; a retry moves it), `startedAt` and `completedAt`. They do not say who asked
+for the review or why. These describe a run, not what it observed and not whether feedback reached anyone. `reviewStatus` gives the review's
 recorded state, with `reviewStopReason` where it recorded one; a `COMPLETED` run can belong to a `PARTIAL` review.
 `assignmentCounts` counts that review's practices about this developer on this work: `total`, then `judged`,
 `reused`, `withheld` and `pending`. They are not outcomes. A field is absent where it could not be read completely.
@@ -141,17 +142,13 @@ their current standing.
 ## inputs/context/delivered_feedback.json
 
 A bounded sample of authorized feedback records. `feedbackStates` gives each piece's `feedbackId`, `state`,
-`destination`, `createdAt`, and the `practiceSlugs` and `resultIds` behind it; each result's detail names its review
-and problems. `deliveredFeedback` gives the confirmed words (`body`), `destination` and `deliveredAt`, joined to its
-state by `feedbackId`: only these show that feedback reached them. A row holds the first 600 characters of the words.
-When its `bodyTruncated` is true, read its `resource` (`inputs/context/delivered_feedback/<feedbackId>.json`) for up to
-2,000 characters; a `bodyTruncated` there marks a further cut, and `bodyChars` gives the full length. Never quote a
-cut piece as complete. That file also names the piece's `reviewId`, `practiceSlugs`, `resultIds` and `problemIds`.
-No other state shows whether anything reached them, and one copy can have a receipt while another stays
-uncertain. Withdrawn pieces are not listed.
-`destination` is `ON_WORK` (on the reviewed work), `PRACTICE_PAGE` (their practice page) or `CONVERSATION` (a
-conversation with you). When a piece has no words available, do not
-guess what it said. A piece missing from the sample is only not visible here.
+`destination` and `createdAt`. `deliveredFeedback` gives the confirmed words (`body`), `destination` and
+`deliveredAt` when those words are available: only these show that feedback reached them. Rows in both name the
+`reviewId`, `practiceSlugs`, `resultIds` and `problemIds` behind the piece. A withdrawn piece can be listed without
+its words: do not discuss what it said. No other state shows whether anything reached them, and one copy can have a
+receipt while another stays uncertain. `destination` is `ON_WORK` (on the reviewed work), `PRACTICE_PAGE` (their
+practice page) or `CONVERSATION` (a conversation with you). When a piece has no words available, do not guess what
+it said. A piece missing from the sample is only not visible here.
 
 ## inputs/context/prepared_conversation_feedback.json
 
