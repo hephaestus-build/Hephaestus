@@ -92,11 +92,12 @@ await describe("checkPage", async () => {
 	await test("sends a user page's reader to the user or admin guide, not the contributor guide", () => {
 		const link = "See [the pipeline](/contributor/practice-review-pipeline).";
 		assert.deepEqual(check(feature(link)), [
-			"page.md:7: Link the user or admin guide. Only a reference page cites the contributor guide.",
+			"page.md:7: Link the user or admin guide. Only the overview and reference pages link the contributor guide.",
 		]);
 		assert.equal(check(feature("[pipeline]: ../contributor/practice-review-pipeline")).length, 1);
 		assert.equal(check(feature('<a href="/contributor/ci-cd">CI</a>')).length, 1);
 		assert.deepEqual(check(page("title: A\ndescription: B.\npage_type: reference", link)), []);
+		assert.deepEqual(check(page("title: A\ndescription: B.\npage_type: overview", link)), []);
 	});
 
 	await test("keeps repository commands and source paths out of the user guide", () => {

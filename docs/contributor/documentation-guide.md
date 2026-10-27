@@ -32,7 +32,7 @@ Langfuse uses the same line: its [self-hosting docs](https://langfuse.com/self-h
 
 ### What goes in another guide
 
-- **User guide.** A user page has no deployment settings, environment variables, repository tooling, or source paths. It has no internal names, such as a class or a table. If a task needs an operator, name the role and link the admin page: `Ask your instance admin to connect Slack`. A user page does not link to the contributor guide. A reference page can cite a contributor page as evidence.
+- **User guide.** A user page has no deployment settings, environment variables, repository tooling, or source paths. It has no internal names, such as a class or a table. If a task needs an operator, name the role and link the admin page: `Ask your instance admin to connect Slack`. A user page does not link to the contributor guide. The overview links it among the other guides, and a reference page can cite a contributor page as evidence.
 - **Admin guide.** An admin page explains internals only as far as the operator acts on them. Link the contributor page for the rest. Link the user guide for a workspace task in the web app.
 - **Contributor guide.** A contributor page does not repeat an operator procedure or a user procedure. Link the admin or user page.
 - **Decision records.** An ADR in `docs/decisions/` records a decision and its reasons once. A guide page states the current behavior and links the ADR for the reason.
@@ -222,7 +222,7 @@ Do not put two callouts in a row.
 - Each page has a `title`, a `description` of at most 160 characters, and a `page_type` that the guide allows. No page sets an `id`.
 - No page has a `#` heading in its body.
 - No section uses a name from the "Do not use" column.
-- Only a reference page links to the contributor guide.
+- Only the overview and reference pages link to the contributor guide.
 - No inline code names a repository command or a source path.
 - A page shows the product with `Screenshot`, not with a Markdown image.
 - Each `Screenshot` has alt text of at most 155 characters.
