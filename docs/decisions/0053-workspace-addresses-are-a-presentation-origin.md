@@ -73,6 +73,7 @@ Option 6 for the address, and option 3 for TLS.
   A used slug is never given to another workspace.
   A rename redirects through the slug history.
 - Each origin keeps its own browser state: cookie choices, theme, and the admin **View as user** session.
+  The theme changed with the amendment of 2026-10-26 below.
   The Slack connect flow carries its return slug in the signed OAuth state.
 - The base domain must not be on the Public Suffix List.
   If it is, the workspace host and the apex are different sites.
@@ -113,6 +114,30 @@ Option 6 for the address, and option 3 for TLS.
 - The base domain must go on the Public Suffix List.
 - A workspace asks for a custom domain.
 - A workspace host needs its own session, for example for a separate sign-in provider.
+
+## Amendment of 2026-10-26: one theme across hosts
+
+The decision kept the theme in each origin's own storage.
+Thus, a person who switched from one workspace address to another, or to the docs site, saw the theme change.
+Felix asked that the light or dark choice follow the person across these hosts.
+
+The theme is now one preference on the registrable domain:
+
+- The `hephaestus-theme` cookie holds `light`, `dark` or `system`. The default is `system`.
+- The cookie is not `HttpOnly`, because a script reads it before the first paint. It has `SameSite=Lax`, `Path=/` and a lifetime of one year.
+- The web app sets `Domain=` to the workspace base domain when workspace subdomains are on. Otherwise the cookie stays on its host.
+- The docs site sets `Domain=hephaestus.build` only on `docs.hephaestus.build`.
+- A reader accepts only the three known values.
+  Every host under the base domain can set the cookie, so a sibling host can change only the theme.
+
+Cookie choices and the admin **View as user** session stay with each origin.
+The auth cookies stay host-only, with the `__Host-` prefix.
+
+A host-only cookie and a `Domain=` cookie can have the same name.
+The browser then lists the older one first, and every reader takes the first valid value.
+Thus, the web app expires its host-only twin when it writes the shared cookie.
+One case stays: an apex with workspace subdomains off keeps its own cookie.
+The docs site writes the shared cookie, and that apex keeps its own choice.
 
 ## Sources
 

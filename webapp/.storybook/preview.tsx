@@ -122,7 +122,7 @@ function StorybookThemeProvider({ theme, children }: { theme: string; children: 
 		<ThemeProvider
 			key={theme}
 			defaultTheme={theme === "dark" ? "dark" : "light"}
-			storageKey="storybook-theme"
+			persistent={false}
 		>
 			{children}
 		</ThemeProvider>
