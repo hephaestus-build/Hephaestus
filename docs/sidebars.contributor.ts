@@ -43,6 +43,7 @@ const sidebars: SidebarsConfig = {
 				"simplified-technical-english",
 				"documentation-guide",
 				"check-a-docs-page",
+				"add-a-user-guide-screenshot",
 				"structured-logging",
 				"api-error-handling",
 				"brand-assets",

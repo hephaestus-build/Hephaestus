@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
-import { checkPage, type Guide } from "./check-docs-pages.ts";
+import { checkPage, type Guide, screenshotProblems } from "./check-docs-pages.ts";
 
 const page = (frontMatter: string, body: string) => `---\n${frontMatter}\n---\n\n${body}\n`;
 const feature = (body: string) =>
@@ -111,5 +111,74 @@ await describe("checkPage", async () => {
 			'page.md:3: Use a note, tip or caution callout, not "warning".',
 		]);
 		assert.equal(check("::::info\nText.\n::::", "admin").length, 1);
+	});
+
+	await test("asks a user page to show the product with a screenshot component", () => {
+		assert.deepEqual(check(feature("![Practice profile](/img/profile.png)")), [
+			"page.md:7: Show the product with <Screenshot>, which has a light and a dark image.",
+		]);
+	});
+});
+
+const shot = (attributes: string) => `Text.\n\n<Screenshot\n  ${attributes}\n/>`;
+
+await describe("screenshotProblems", async () => {
+	const sizes = new Map([
+		["docs/static/img/user/activity/table.light.webp", 80_000],
+		["docs/static/img/user/activity/table.dark.webp", 80_000],
+		["docs/static/img/user/activity/large.light.webp", 80_000],
+		["docs/static/img/user/activity/large.dark.webp", 200_000],
+		["docs/static/img/user/activity/half.light.webp", 80_000],
+	]);
+	const sizeOf = (image: string) => sizes.get(image);
+
+	await test("accepts a screenshot with alt text and both images within the budget", () => {
+		assert.deepEqual(
+			screenshotProblems("page.md", shot('src="activity/table"\n  alt="Activity table."'), sizeOf),
+			[],
+		);
+	});
+
+	await test("asks for the image in both color schemes", () => {
+		assert.deepEqual(
+			screenshotProblems("page.md", shot('src="activity/half"\n  alt="A"'), sizeOf),
+			[
+				"page.md:3: docs/static/img/user/activity/half.dark.webp does not exist. Run vp run generate:docs-screenshots.",
+			],
+		);
+	});
+
+	await test("holds each image to the size budget", () => {
+		assert.deepEqual(
+			screenshotProblems("page.md", shot('src="activity/large"\n  alt="A"'), sizeOf),
+			[
+				"page.md:3: docs/static/img/user/activity/large.dark.webp is 200000 bytes, over the 150000-byte budget.",
+			],
+		);
+	});
+
+	await test("asks for alt text, because MDX does not check the component's props", () => {
+		assert.deepEqual(screenshotProblems("page.md", shot('src="activity/table"'), sizeOf), [
+			"page.md:3: Give the <Screenshot> a literal alt text that says what the image shows.",
+		]);
+		assert.deepEqual(
+			screenshotProblems(
+				"page.md",
+				shot(`src="activity/table"\n  alt="${"a".repeat(156)}"`),
+				sizeOf,
+			),
+			["page.md:3: Shorten the alt text to 155 characters (156)."],
+		);
+		assert.equal(
+			screenshotProblems("page.md", shot('src="activity/table"\n  alt={description}'), sizeOf)
+				.length,
+			1,
+		);
+	});
+
+	await test("asks for a literal src", () => {
+		assert.deepEqual(screenshotProblems("page.md", '<Screenshot src={name} alt="A" />', sizeOf), [
+			'page.md:1: Give the <Screenshot> a literal src, such as src="practice-profile/overview".',
+		]);
 	});
 });

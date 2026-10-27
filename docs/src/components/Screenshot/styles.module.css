@@ -1,0 +1,13 @@
+.frame {
+	margin-block: 1rem 1.5rem;
+	overflow: hidden;
+	border: 1px solid var(--ifm-color-emphasis-200);
+	border-radius: var(--ifm-global-radius);
+	line-height: 0;
+}
+
+.frame img {
+	width: 100%;
+	height: auto;
+	margin: 0;
+}
