@@ -253,6 +253,8 @@ val integrationInventories =
         "integrationPracticesAndAgentInventory" to "practices-and-agent",
         "integrationApplicationInventory" to "application",
     )
+// The limit of one test task, and of one integration shard.
+val testTaskTimeout: Duration = Duration.ofMinutes(20)
 val testInventories =
     mapOf("testInventory" to "") +
         testTiers.values.filter { it != "live" }.associateBy { "${it}Inventory" } +
@@ -271,7 +273,7 @@ tasks.withType<Test>().configureEach {
     }
     maxHeapSize = "4g"
     maxParallelForks = 1
-    timeout.set(Duration.ofMinutes(20))
+    timeout.set(testTaskTimeout)
     systemProperty("spring.profiles.active", "test")
     systemProperty("file.encoding", "UTF-8")
     // Application.main sets this zone for the whole process. Starting the JVM in it keeps a
@@ -379,6 +381,10 @@ for ((taskName, tag) in testTiers.filterKeys { it != "test" }) {
                 "criteriaCases cannot be combined with HEPHAESTUS_INTEGRATION_SHARD"
             }
             selectIntegrationShard(integrationShard.get())
+            // An unsharded run holds every shard, so it gets every shard's limit.
+            if (integrationShard.get().isEmpty()) {
+                timeout.set(testTaskTimeout.multipliedBy(integrationInventories.size.toLong()))
+            }
         }
         if (tag in setOf("live", "integration") && criteriaCases.isPresent) {
             // Validate the selected inputs before live credentials or model setup are reached.
