@@ -14,6 +14,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewthread.
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewthread.PullRequestReviewThreadRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.events.ScmDomainEvent;
 import de.tum.cit.aet.hephaestus.integration.scm.github.pullrequestreviewthread.dto.GitHubPullRequestReviewThreadEventDTO;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
@@ -27,9 +28,15 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.test.context.event.ApplicationEvents;
+import org.springframework.test.context.event.RecordApplicationEvents;
 import tools.jackson.databind.ObjectMapper;
 
+@RecordApplicationEvents
 class GitHubPullRequestReviewThreadMessageHandlerIntegrationTest extends BaseIntegrationTest {
+
+    @Autowired
+    private ApplicationEvents publications;
 
     @Autowired
     private GitHubPullRequestReviewThreadMessageHandler handler;
@@ -167,6 +174,30 @@ class GitHubPullRequestReviewThreadMessageHandlerIntegrationTest extends BaseInt
             assertThat(t.getState()).isEqualTo(PullRequestReviewThread.State.RESOLVED);
             assertThat(t.getResolvedAt()).isEqualTo(Instant.parse("2025-11-05T12:15:24Z"));
         });
+    }
+
+    @Test
+    void shouldRecordOneResolutionWhenSyncResolvedTheThreadFirstAndTheWebhookIsRedelivered() throws Exception {
+        GitHubPullRequestReviewThreadEventDTO event = loadPayload("pull_request_review_thread.resolved");
+        createTestPullRequest(
+                required(event.pullRequest().getDatabaseId()),
+                event.pullRequest().number());
+        PullRequestReviewThread thread = new PullRequestReviewThread();
+        thread.setNativeId(required(event.thread().getFirstCommentId()));
+        thread.setNodeId(event.thread().nodeId());
+        thread.setPullRequest(testPullRequest);
+        // Sync marks a resolved thread without a date and without an event.
+        thread.setState(PullRequestReviewThread.State.RESOLVED);
+        thread.setProvider(gitProvider);
+        threadRepository.save(thread);
+
+        handler.handleEvent(event);
+        handler.handleEvent(event);
+
+        assertThat(publications.stream(ScmDomainEvent.ReviewThreadResolved.class))
+                .singleElement()
+                .satisfies(resolved ->
+                        assertThat(resolved.thread().resolvedAt()).isEqualTo(Instant.parse("2025-11-05T12:15:24Z")));
     }
 
     @Test

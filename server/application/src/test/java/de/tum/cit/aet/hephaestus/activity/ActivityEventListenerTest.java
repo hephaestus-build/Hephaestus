@@ -650,6 +650,7 @@ class ActivityEventListenerTest extends BaseUnitTest {
                     null, // reviewId - null = standalone
                     100L, // authorId
                     Instant.now(), // createdAt
+                    null, // updatedAt
                     50L, // pullRequestId
                     200L // repositoryId
                     );
@@ -679,6 +680,7 @@ class ActivityEventListenerTest extends BaseUnitTest {
                     42L, // reviewId - linked to review
                     100L, // authorId
                     Instant.now(), // createdAt
+                    null, // updatedAt
                     50L, // pullRequestId
                     200L // repositoryId
                     );
@@ -700,7 +702,17 @@ class ActivityEventListenerTest extends BaseUnitTest {
         @Test
         void skipsWhenScopeIdIsNull() {
             var commentData = new ScmEventPayload.ReviewCommentData(
-                    79L, "body", "path.java", 1, "https://example.com/comment", null, 100L, Instant.now(), 50L, 200L);
+                    79L,
+                    "body",
+                    "path.java",
+                    1,
+                    "https://example.com/comment",
+                    null,
+                    100L,
+                    Instant.now(),
+                    null,
+                    50L,
+                    200L);
             RepositoryRef repoRef = new RepositoryRef(testRepository.getId(), testRepository.getName(), "test");
             EventContext contextWithNullScope = new EventContext(
                     UUID.randomUUID(),
@@ -729,6 +741,7 @@ class ActivityEventListenerTest extends BaseUnitTest {
                     null, // reviewId
                     null, // authorId - null
                     Instant.now(),
+                    null,
                     50L,
                     200L);
             var event = new ScmDomainEvent.ReviewCommentCreated(commentData, 50L, createContext());

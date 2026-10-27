@@ -264,14 +264,14 @@ public class GitHubPullRequestReviewCommentProcessor {
                     comment.getReplies().forEach(reply -> reply.setInReplyTo(null));
 
                     commentRepository.delete(comment);
+                    // Only a delete that removed the comment announces it: a redelivery finds nothing.
+                    eventPublisher.publishEvent(
+                            new ScmDomainEvent.ReviewCommentDeleted(commentId, prId, EventContext.from(context)));
                     log.debug(
                             "Deleted review comment: commentId={}, threadId={}",
                             commentId,
                             thread != null ? thread.getId() : "null");
                 });
-
-        eventPublisher.publishEvent(
-                new ScmDomainEvent.ReviewCommentDeleted(commentId, prId, EventContext.from(context)));
     }
 
     private PullRequestReviewComment createComment(

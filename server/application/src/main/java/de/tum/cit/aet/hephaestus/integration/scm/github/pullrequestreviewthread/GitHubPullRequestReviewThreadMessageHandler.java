@@ -115,9 +115,11 @@ public class GitHubPullRequestReviewThreadMessageHandler
                 // Ensure the sender (who resolved the thread) exists
                 User resolvedBy =
                         userProcessor.ensureExists(event.sender(), Objects.requireNonNull(context.providerId()));
-                // The payload dates the event; one without a date happened about now, since it just
-                // arrived.
-                Instant resolvedAt = event.updatedAt() != null ? event.updatedAt() : Instant.now();
+                // GitHub's thread events document no date of their own. The pull request's updated_at, which the
+                // payload carries, dates the resolution: a redelivery repeats it and a later act moves it.
+                Instant resolvedAt = event.updatedAt() != null
+                        ? event.updatedAt()
+                        : prDto.updatedAt() != null ? prDto.updatedAt() : Instant.now();
                 threadProcessor.resolve(threadId, resolvedBy, resolvedAt, context);
             }
             case GitHubEventAction.PullRequestReviewThread.UNRESOLVED -> {

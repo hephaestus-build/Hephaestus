@@ -439,17 +439,20 @@ public class ActivityEventListener {
                     reviewData.repositoryId());
             return;
         }
+        // The dismissal stores its own date on the review; an undated one happened about now, since it just arrived.
+        Instant occurredAt = reviewData.updatedAt() != null ? reviewData.updatedAt() : Instant.now();
         safeRecord(
                 "review dismissed",
                 reviewData.id(),
                 () -> activityEventService.record(
                         scopeId,
                         ActivityEventType.REVIEW_DISMISSED,
-                        Instant.now(), // Use current time for dismissal
+                        occurredAt,
                         userRepository.getReferenceById(authorId),
                         repositoryRepository.getReferenceById(repositoryId),
                         ActivityTargetType.REVIEW,
-                        reviewData.id()));
+                        reviewData.id(),
+                        ScmEventIdentity.of(event)));
     }
 
     /**
@@ -557,7 +560,8 @@ public class ActivityEventListener {
                     commentData.repositoryId());
             return;
         }
-        Instant occurredAt = Instant.now(); // Use current time for edits
+        // An undated edit happened about now, since it just arrived.
+        Instant occurredAt = commentData.updatedAt() != null ? commentData.updatedAt() : Instant.now();
         safeRecord(
                 "comment updated",
                 commentData.id(),
@@ -568,7 +572,8 @@ public class ActivityEventListener {
                         userRepository.getReferenceById(authorId),
                         repositoryRepository.getReferenceById(repositoryId),
                         ActivityTargetType.ISSUE_COMMENT,
-                        commentData.id()));
+                        commentData.id(),
+                        ScmEventIdentity.of(event)));
     }
 
     /**
@@ -660,7 +665,8 @@ public class ActivityEventListener {
                     commentData.repositoryId());
             return;
         }
-        Instant occurredAt = Instant.now(); // Use current time for edits
+        // An undated edit happened about now, since it just arrived.
+        Instant occurredAt = commentData.updatedAt() != null ? commentData.updatedAt() : Instant.now();
         safeRecord(
                 "review comment edited",
                 commentData.id(),
@@ -671,7 +677,8 @@ public class ActivityEventListener {
                         userRepository.getReferenceById(authorId),
                         repositoryRepository.getReferenceById(repositoryId),
                         ActivityTargetType.REVIEW_COMMENT,
-                        commentData.id()));
+                        commentData.id(),
+                        ScmEventIdentity.of(event)));
     }
 
     /**
@@ -747,11 +754,12 @@ public class ActivityEventListener {
                 () -> activityEventService.record(
                         scopeId,
                         ActivityEventType.REVIEW_THREAD_RESOLVED,
-                        Instant.now(),
+                        threadData.resolvedAt() != null ? threadData.resolvedAt() : Instant.now(),
                         userRepository.getReferenceById(resolverId),
                         repositoryRepository.getReferenceById(repositoryId),
                         ActivityTargetType.REVIEW_THREAD,
-                        threadData.id()));
+                        threadData.id(),
+                        ScmEventIdentity.of(event)));
     }
 
     /**
@@ -1403,7 +1411,8 @@ public class ActivityEventListener {
                     commentData.repositoryId());
             return;
         }
-        Instant occurredAt = Instant.now(); // Use current time for edits
+        // An undated edit happened about now, since it just arrived.
+        Instant occurredAt = commentData.updatedAt() != null ? commentData.updatedAt() : Instant.now();
         safeRecord(
                 "discussion comment edited",
                 commentData.id(),
@@ -1414,7 +1423,8 @@ public class ActivityEventListener {
                         userRepository.getReferenceById(authorId),
                         repositoryRepository.getReferenceById(repositoryId),
                         ActivityTargetType.DISCUSSION_COMMENT,
-                        commentData.id()));
+                        commentData.id(),
+                        ScmEventIdentity.of(event)));
     }
 
     /**
