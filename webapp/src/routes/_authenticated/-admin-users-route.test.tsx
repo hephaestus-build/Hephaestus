@@ -244,6 +244,32 @@ describe("instance users route", () => {
 	});
 });
 
+/**
+ * Edits the search, then waits for the router to resolve the address with `q` and for React to commit
+ * everything that follows from it. The list filters a deferred copy of the term, so its rows and count
+ * render a low-priority pass later; `act` flushes that pass before it returns.
+ */
+async function searched(
+	router: ReturnType<typeof renderRouteAtWithRouter>["router"],
+	edit: () => Promise<void>,
+	q: string | undefined,
+) {
+	const resolved = deferred<undefined>();
+	const unsubscribe = router.subscribe("onResolved", () => {
+		if (router.state.location.search.q === q) {
+			resolved.resolve(undefined);
+		}
+	});
+	try {
+		await act(async () => {
+			await edit();
+			await resolved.promise;
+		});
+	} finally {
+		unsubscribe();
+	}
+}
+
 function serveSearchContinuation(
 	accounts: AdminAccountView[],
 	nextAccount: AdminAccountView,
@@ -361,10 +387,10 @@ describe("instance users list lifecycle", () => {
 			screen.getByText("Showing 2 of 26 loaded users");
 			expect(router.state.location.search.q).toBe("match");
 			expect(screen.queryByRole("button", { name: "Load more" })).toBeNull();
-			await user.clear(search);
-			await screen.findByText("Showing 26 users");
-			await user.type(search, "no-such-account");
-			await screen.findByText("No users found");
+			await searched(router, async () => user.clear(search), undefined);
+			screen.getByText("Showing 26 users");
+			await searched(router, async () => user.type(search, "no-such-account"), "no-such-account");
+			screen.getByText("No users found");
 			expect(reads).toStrictEqual([0, 1, 1]);
 		} finally {
 			cleanup();
