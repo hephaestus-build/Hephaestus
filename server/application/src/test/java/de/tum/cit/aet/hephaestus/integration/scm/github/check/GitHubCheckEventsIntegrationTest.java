@@ -32,6 +32,7 @@ import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -260,6 +261,26 @@ class GitHubCheckEventsIntegrationTest extends BaseIntegrationTest {
         PullRequest stored = pullRequestRepository.findById(onHead.getId()).orElseThrow();
         assertThat(stored.getHeadCheckState()).isNull();
         verifyNoInteractions(checkRuns);
+    }
+
+    @Test
+    void shouldReadTheRunsOfAnOpenHeadAgainWhenItsStoredListHasNotFinished() {
+        PullRequest onHead = persistPullRequest(9, CHECKED_SHA);
+        var running = new HeadCheckRuns.Run("build", "GitHub Actions", "in_progress", false, null, null, null);
+        onHead.observeHeadCheckRuns(new HeadCheckRuns(CHECKED_SHA, List.of(running), true, Instant.now(), null));
+        pullRequestRepository.save(onHead);
+        var passed = new HeadCheckRuns.Run("build", "GitHub Actions", "success", true, null, null, null);
+        GitHubCommitCheckRuns checkRuns = mock(GitHubCommitCheckRuns.class);
+        when(checkRuns.read(anyLong(), eq(repository.getNameWithOwner()), eq(CHECKED_SHA)))
+                .thenReturn(Optional.of(new HeadCheckRuns(CHECKED_SHA, List.of(passed), true, Instant.now(), null)));
+        var reread = new GitHubHeadCheckRunsReread(
+                repositoryRepository, pullRequestRepository, checkRuns, checkRunsRecorder, Clock.systemUTC());
+
+        reread.reread(1L, repository.getNameWithOwner());
+
+        assertThat(pullRequestRepository.findById(onHead.getId()).orElseThrow().getHeadCheckRuns())
+                .isNotNull()
+                .satisfies(runs -> assertThat(runs.finished()).isTrue());
     }
 
     private PullRequest persistPullRequest(int number, String headSha) {

@@ -108,6 +108,11 @@ class GitHubCommitCheckRunsTest extends BaseUnitTest {
         assertThat(runs.complete()).isFalse();
         assertThat(runs.finished()).isFalse();
         assertThat(runs.limitation()).isEqualTo(HeadCheckRuns.AWAITING_APPROVAL);
+        // A suite whose runs ended asking for action ran its CI: its runs say so, and nothing waits for approval.
+        var ran = GitHubGraphQlTestMapper.create()
+                .readValue(json.replace("\"totalCount\": 0", "\"totalCount\": 1"), GHCheckSuiteConnection.class);
+        assertThat(GitHubCommitCheckRuns.toRuns(SHA, rollup(false, "SUCCESS", LINT_PASSED), ran, NO_APP, READ_AT))
+                .hasValueSatisfying(read -> assertThat(read.limitation()).isNull());
     }
 
     @Test

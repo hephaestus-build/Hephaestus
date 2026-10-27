@@ -389,7 +389,8 @@ public class GitHubDataSyncScheduler {
                     return;
                 }
 
-                // A read of check runs that lagged its hook is made up here; no hook reads them again.
+                // A read of check runs that lagged its hook is made up here: only a later suite or status of the
+                // head would read them again.
                 if (!rateLimitTracker.isCritical(session.scopeId())) {
                     for (SyncTarget target : session.syncTargets()) {
                         headCheckRunsReread.reread(session.scopeId(), target.repositoryNameWithOwner());

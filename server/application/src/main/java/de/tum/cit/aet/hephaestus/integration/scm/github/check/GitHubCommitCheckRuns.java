@@ -119,7 +119,11 @@ public class GitHubCommitCheckRuns {
                 && runs.stream().allMatch(HeadCheckRuns.Run::finished)
                 && suitesSettled(suites, ownAppId);
         return Optional.of(new HeadCheckRuns(
-                sha, runs, complete, observedAt, awaitingApproval(suites) ? HeadCheckRuns.AWAITING_APPROVAL : null));
+                sha,
+                runs,
+                complete,
+                observedAt,
+                awaitingApproval(suites, ownAppId) ? HeadCheckRuns.AWAITING_APPROVAL : null));
     }
 
     /**
@@ -139,11 +143,14 @@ public class GitHubCommitCheckRuns {
      * Whether a check suite waits for a maintainer to approve its workflows. GitHub then completes the suite as
      * {@code ACTION_REQUIRED} with no runs, and the rollup can still read success: the CI has not run at all.
      */
-    private static boolean awaitingApproval(@Nullable GHCheckSuiteConnection suites) {
+    private static boolean awaitingApproval(@Nullable GHCheckSuiteConnection suites, long ownAppId) {
         return suites != null
                 && Objects.requireNonNullElse(suites.getNodes(), List.<GHCheckSuite>of()).stream()
-                        .anyMatch(suite ->
-                                suite != null && suite.getConclusion() == GHCheckConclusionState.ACTION_REQUIRED);
+                        .anyMatch(suite -> suite != null
+                                && !ownApp(suite.getApp(), ownAppId)
+                                && suite.getConclusion() == GHCheckConclusionState.ACTION_REQUIRED
+                                && (suite.getCheckRuns() == null
+                                        || suite.getCheckRuns().getTotalCount() == 0));
     }
 
     /** Whether {@code app} is Hephaestus's own GitHub App; without a configured app id, none is. */

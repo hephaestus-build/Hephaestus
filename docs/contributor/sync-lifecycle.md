@@ -439,7 +439,7 @@ A pull request also stores the single runs behind its check state (`head_check_r
   Thus, no hook shows which runs of the commit finished.
 
 Scheduled sync reads the runs again for each open pull request whose stored list of its head has not finished.
-It does so only for a list that the server first read in the last 24 hours.
+It does so only for a list whose runs last changed in the last 24 hours.
 A failed read records nothing, and the stored runs stay.
 A read that is older than the stored read of the same commit changes nothing.
 A read that shows the same runs keeps the stored read and its time.
