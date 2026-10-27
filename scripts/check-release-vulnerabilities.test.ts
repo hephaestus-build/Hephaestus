@@ -906,3 +906,122 @@ await test("official advisory acquisition is bounded and retains raw bytes", asy
 	});
 	await assert.rejects(fetchGoAdvisory(ADVISORY), /native network failure/u);
 });
+
+await test("a jar inventory follows a byte-identical archive and its enforcing test into a rebuilt image", async () => {
+	const shaded = {
+		FixedVersion: "33.7.2",
+		InstalledVersion: "32.1.2-jre",
+		PkgName: "com.google.guava:guava",
+		Severity: "HIGH",
+		VulnerabilityID: "CVE-2",
+	};
+	const archive = "/workspace/lib/graphql-java-25.0.jar";
+	const jarReport = (vulnerabilities: object[]) => ({
+		ArtifactName: subject.reference,
+		Results: [{ Target: "Java", Type: "jar", Vulnerabilities: vulnerabilities }],
+	});
+	const everyCopy = jarReport([
+		{ ...shaded, PkgPath: archive.slice(1) },
+		{ ...shaded, PkgPath: "layers/spring-boot/runner.jar/BOOT-INF/lib/graphql-java-25.0.jar" },
+		// A record of the buildpack's SBOM names no archive.
+		shaded,
+	]);
+	const captured = `sha256:${"b".repeat(64)}`;
+	const jarInventory = {
+		captureDigest: captured,
+		enforcedBy:
+			"server/application/src/test/java/de/tum/cit/aet/hephaestus/architecture/JavaDeserializationArchTest.java#noJavaDeserialization",
+		files: [{ path: archive, sha256: "c".repeat(64) }],
+		id: "server-linux-amd64-jvm",
+		image: "server",
+		platform: "linux/amd64",
+	};
+	const exception = {
+		digest: captured,
+		evidence: "https://github.com/google/guava/commit/b931fe9d6d5cf00bc55714ad3308d086f71850fe",
+		expires: "2026-10-01T00:00:00Z",
+		image: "server",
+		installedVersion: "32.1.2-jre",
+		jarInventory: jarInventory.id,
+		justification: "reachable only through Java deserialization, which the enforcing test forbids",
+		justificationCategory: "vulnerable_code_not_in_execute_path",
+		owner: "@security",
+		package: "com.google.guava:guava",
+		platform: "linux/amd64",
+		status: "not_affected",
+		vulnerability: "CVE-2",
+	};
+	const evidence = (hash: string) => ({
+		digest,
+		goBinaries: new Set<string>(),
+		platform: "linux/amd64",
+		sha256: new Map([[archive, hash]]),
+	});
+	const judge = (
+		scan: object,
+		overrides: { exception?: object; inventoryOverride?: object; sha256?: string } = {},
+	) =>
+		evaluate(
+			"server",
+			scan,
+			{
+				...policy,
+				exceptions: [{ ...exception, ...overrides.exception }],
+				jarInventories: [{ ...jarInventory, ...overrides.inventoryOverride }],
+			},
+			now,
+			subject,
+			{ evidence: evidence(overrides.sha256 ?? "c".repeat(64)) },
+		);
+
+	const passed = judge(everyCopy);
+	assert.deepEqual(passed.errors, []);
+	assert.deepEqual(passed.rejected, [], "the archive, its nested copy and the SBOM record");
+
+	assert.equal(judge(everyCopy, { sha256: "d".repeat(64) }).rejected.length, 3, "another archive");
+	const expired = judge(everyCopy, { exception: { expires: "2026-08-01T00:00:00Z" } });
+	assert.equal(expired.rejected.length, 3);
+	assert.match(expired.errors.join("\n"), /invalid or expired exception: CVE-2/u);
+	assert.match(
+		judge(everyCopy, { inventoryOverride: { enforcedBy: "" } }).errors.join("\n"),
+		/names no enforcing test/u,
+	);
+	assert.match(
+		judge(everyCopy, {
+			exception: { justificationCategory: "vulnerable_code_not_present" },
+		}).errors.join("\n"),
+		/jarInventory is only for not_affected vulnerable_code_not_in_execute_path/u,
+	);
+	assert.deepEqual(
+		judge({
+			ArtifactName: subject.reference,
+			Results: [{ Target: "server (alpine 3.24)", Type: "alpine", Vulnerabilities: [shaded] }],
+		}).rejected,
+		["server|CVE-2|com.google.guava:guava|32.1.2-jre"],
+		"an OS package is not an inventoried archive",
+	);
+	assert.deepEqual(
+		judge(jarReport([{ ...shaded, PkgPath: "workspace/lib/other-1.0.jar" }, shaded])).rejected,
+		[
+			"server|CVE-2|com.google.guava:guava|32.1.2-jre",
+			"server|CVE-2|com.google.guava:guava|32.1.2-jre",
+		],
+		"another archive, and the SBOM record that may describe it",
+	);
+});
+
+await test("each jar inventory of the policy names a test that exists", async () => {
+	const current: unknown = JSON.parse(
+		await readFile(
+			nodePath.join(import.meta.dirname, "../security/vulnerability-policy.json"),
+			"utf8",
+		),
+	);
+	assert.ok(isRecord(current) && Array.isArray(current.jarInventories));
+	for (const entry of current.jarInventories) {
+		assert.ok(isRecord(entry) && typeof entry.enforcedBy === "string");
+		const [file = "", method = ""] = entry.enforcedBy.split("#");
+		const source = await readFile(nodePath.join(import.meta.dirname, "..", file), "utf8");
+		assert.match(source, new RegExp(`@Test\\s+void ${method}\\(`, "u"), entry.enforcedBy);
+	}
+});
