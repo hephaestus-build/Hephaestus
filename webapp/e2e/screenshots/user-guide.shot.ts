@@ -71,6 +71,10 @@ async function open(
 	});
 	// The app defaults to dark and keeps the reader's choice under this key.
 	await context.addInitScript((scheme) => localStorage.setItem("theme", scheme), colorScheme);
+	// A returning reader has closed the practice profile's reading guide, so the image shows the page.
+	await context.addInitScript(() =>
+		localStorage.setItem("hephaestus:section-folded:practice-profile:how-to-read", "true"),
+	);
 	// Nothing outside the app and its fixture API: no avatar or other picture of a real person.
 	await context.route(
 		(url) => url.origin !== new URL(BASE_URL).origin && url.origin !== API,
