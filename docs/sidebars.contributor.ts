@@ -89,6 +89,9 @@ const sidebars: SidebarsConfig = {
 			label: "CI and releases",
 			items: [
 				"ci-cd",
+				"supply-chain-security",
+				"add-a-ci-service",
+				"recover-the-chromatic-baseline",
 				"release-management",
 				"delivery-metrics",
 				"vulnerability-remediation",
