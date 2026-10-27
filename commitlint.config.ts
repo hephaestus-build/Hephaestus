@@ -17,27 +17,38 @@ const TYPES = [
 ];
 
 const SCOPES = [
+	// Where the code lives.
 	"webapp",
 	"extension",
+	// Also the worker that runs the Heph host, and the webhook receiver.
 	"server",
 	"docs",
 
+	// Runtime infrastructure.
 	"deps",
 	"security",
 	"db",
+	// Compose files and shared tooling under docker/. A service's own Dockerfile uses its service scope.
 	"docker",
 
+	// Tooling and process.
 	"ci",
 	// NOT for: application.yml (use 'server'), Dockerfiles (use service scope)
 	"config",
 	"deps-dev",
 	"scripts",
+	// Release engineering, including the automated Version PR.
 	"release",
 
+	// Product areas.
 	"activity",
+	// Accounts, identity links, JWT, and OAuth sign-in.
 	"auth",
+	// The cross-provider framework: webhooks, OAuth, the registry, and the SPI.
 	"integration",
+	// Source control: GitHub and GitLab.
 	"scm",
+	// Heph.
 	"mentor",
 	"notifications",
 	"teams",
