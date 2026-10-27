@@ -1,0 +1,18 @@
+{
+	// The image runs the gateway as JavaScript: Node's TypeScript loader is the largest part of a small
+	// process's memory. CI type-checks these files (tsconfig.agents.json); this build only emits them.
+	"compilerOptions": {
+		"target": "ES2024",
+		"module": "NodeNext",
+		"moduleResolution": "NodeNext",
+		"rewriteRelativeImportExtensions": true,
+		"erasableSyntaxOnly": true,
+		"noCheck": true,
+		"types": [],
+		"sourceMap": true,
+		"sourceRoot": "/opt/pi-sdk",
+		"inlineSources": true,
+		"outDir": "dist"
+	},
+	"files": ["gateway-init.ts", "gateway-run.ts"]
+}

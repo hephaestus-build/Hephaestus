@@ -13,6 +13,13 @@ WORKDIR /opt/practice-scripts
 COPY practice-scripts/package.json practice-scripts/pnpm-lock.yaml practice-scripts/pnpm-workspace.yaml ./
 RUN pnpm install --prod --frozen-lockfile --ignore-scripts
 
+# The gateway runs as JavaScript, so no sandbox process loads Node's TypeScript loader for it.
+FROM dependencies AS gateway
+WORKDIR /opt/pi-sdk
+RUN pnpm install --frozen-lockfile --ignore-scripts
+COPY pi/tsconfig.build.json pi/gateway-capabilities.ts pi/gateway-init.ts pi/gateway-run.ts ./
+RUN pnpm exec tsc -p tsconfig.build.json
+
 # Debian 13: its fd (>= 8.7) takes the `--no-require-git` Pi's find tool passes outside a repository.
 FROM node:${NODE_VERSION}-trixie-slim@sha256:50c3b2f6988dfc307b86e5301d69611af31f4789bdf232863b07d3b02fe55ae0 AS os-packages
 RUN apt-get update -o APT::Update::Error-Mode=any -qq && apt-get upgrade -y -qq && \
@@ -155,12 +162,12 @@ RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack 
         exit 1; \
     fi
 
-COPY pi/gateway-capabilities.ts pi/gateway-init.ts pi/gateway-run.ts /opt/pi-sdk/
+COPY --from=gateway /opt/pi-sdk/dist/ /opt/pi-sdk/
 RUN mkdir -p /workspace/work /workspace/out /workspace/.pi /workspace/.sessions && \
     chown -R 1000:1000 /workspace/work /workspace/out /workspace/.pi /workspace/.sessions && \
     ln -s /opt/pi-sdk/node_modules /workspace/node_modules
 
-LABEL hephaestus.agent.runtime-contract=8
+LABEL hephaestus.agent.runtime-contract=9
 LABEL hephaestus.agent.node-version=${NODE_VERSION}
 LABEL hephaestus.agent.pi-version=${PI_VERSION}
 

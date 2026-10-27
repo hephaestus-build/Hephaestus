@@ -6,6 +6,9 @@
 	"dependencies": {
 		"@earendil-works/pi-coding-agent": "1.0.0"
 	},
+	"devDependencies": {
+		"typescript": "7.0.2"
+	},
 	"engines": {
 		"pnpm": "12.3.4"
 	}

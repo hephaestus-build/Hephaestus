@@ -465,7 +465,7 @@ The worker then tries one fresh host for the waiting turn before the turn fails.
 
 | Property | Value |
 | --- | --- |
-| Image | The agent image of the release, runtime contract 8 (`SandboxLayout.RUNTIME_CONTRACT_VERSION`). It provides Node and the Pi SDK. |
+| Image | The agent image of the release, runtime contract 9 (`SandboxLayout.RUNTIME_CONTRACT_VERSION`). It provides Node and the Pi SDK. |
 | Host script | `heph-host.ts`, its modules, and the system prompt come from the worker JAR. The worker stages them into the workspace (`HephHostSpec`). The image does not hold them. |
 | Process | `node --max-old-space-size=1024 --permission`, with no child-process grant. |
 | Readable paths | The workspace, `/opt/pi-sdk`, the empty home, and the practice-script library (`/opt/practice-scripts`). The provider helper imports that library through the workspace link that the practice runners also use (`PiRunnerProfile.PRACTICE_SCRIPT_LIBRARY_SETUP`). |
