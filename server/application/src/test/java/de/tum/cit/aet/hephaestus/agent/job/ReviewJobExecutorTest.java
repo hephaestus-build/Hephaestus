@@ -701,6 +701,9 @@ class ReviewJobExecutorTest extends BaseUnitTest {
     @BeforeEach
     void sandboxRuntimeReady() {
         when(sandbox.ready()).thenReturn(true);
+        // A claim leases its attempt on the database clock.
+        lenient().when(jobs.lease(any(), anyLong())).thenReturn(1);
+        lenient().when(jobs.databaseNow()).thenAnswer(invocation -> Instant.now());
         lenient().when(sandbox.roomFor(any())).thenReturn(Integer.MAX_VALUE);
     }
 
