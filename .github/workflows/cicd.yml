@@ -322,6 +322,8 @@ jobs:
               - 'pnpm-workspace.yaml'
             application-server:
               - 'server/**'
+              # The server packages the feedback writing guide into its jar.
+              - 'docs/contributor/practice-feedback-language.md'
               - 'scripts/check-gradle-verification-metadata.ts'
               - 'scripts/e2e-identity-seed-database.ts'
               - 'scripts/e2e-setup.ts'
@@ -394,6 +396,8 @@ jobs:
             application-server-image:
               - 'scripts/summarize-buildpack-log.ts'
               - 'server/application/src/main/**'
+              # The server packages the feedback writing guide into its jar.
+              - 'docs/contributor/practice-feedback-language.md'
               - 'server/application/build.gradle.kts'
               - 'server/application/gradle.lockfile'
               - 'server/application/project.toml'

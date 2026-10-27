@@ -9,6 +9,7 @@ import { test } from "node:test";
 import { parse } from "jsonc-parser";
 
 import {
+	FEEDBACK_WRITING_GUIDE,
 	changedPaths,
 	clusterGlobs,
 	commandsFor,
@@ -272,6 +273,23 @@ await test("selects the tooling tests for the bundled catalog and guidance they 
 		assert.ok(
 			globs.some((glob) => asPattern(glob).test(file)),
 			`the tooling filter must select ${file}`,
+		);
+	}
+});
+
+await test("selects the server and its image for the feedback writing guide that the server packages", async () => {
+	assert.ok(
+		readFileSync(path.join(repository, "server/application/build.gradle.kts"), "utf8").includes(
+			`rootProject.file("../${FEEDBACK_WRITING_GUIDE}")`,
+		),
+		"the server packages the guide",
+	);
+	assert.deepEqual(scopesFor([FEEDBACK_WRITING_GUIDE]), ["docs", "server"]);
+	for (const filter of ["application-server", "application-server-image"]) {
+		const globs = await filterGlobs(filter);
+		assert.ok(
+			globs.some((glob) => asPattern(glob).test(FEEDBACK_WRITING_GUIDE)),
+			`the ${filter} filter must select ${FEEDBACK_WRITING_GUIDE}`,
 		);
 	}
 });
