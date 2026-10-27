@@ -105,6 +105,32 @@ class SandboxReconcilerTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldRemoveAReviewOfAnEarlierAttemptOfAnActiveJobAtOnce() {
+        UUID requeued = UUID.randomUUID();
+        var job = new ReviewJob();
+        job.setId(requeued);
+        job.setAttempt(2);
+        when(jobRepository.findByStatusIn(List.of(ReviewJobStatus.QUEUED, ReviewJobStatus.RUNNING)))
+                .thenReturn(List.of(job));
+        when(backend.list())
+                .thenReturn(List.of(
+                        attempt("superseded", requeued, 1),
+                        attempt("current", requeued, 2),
+                        attempt("started-after-the-read", requeued, 3)));
+
+        reconciler.periodicReconciliation();
+
+        verify(backend).remove(new SandboxBackend.Handle("superseded"));
+        verify(backend, never()).remove(new SandboxBackend.Handle("current"));
+        verify(backend, never()).remove(new SandboxBackend.Handle("started-after-the-read"));
+    }
+
+    private static SandboxBackend.Listed attempt(String name, UUID job, int attempt) {
+        return new SandboxBackend.Listed(
+                new SandboxBackend.Handle(name), SandboxBackend.Kind.REVIEW, job, attempt, NOW, false);
+    }
+
+    @Test
     void shouldRemoveAHostOnlyOnceItsWorkerIsGone() {
         activeJobs();
         when(backend.list()).thenReturn(List.of(host("gone", true), host("alive", false)));
