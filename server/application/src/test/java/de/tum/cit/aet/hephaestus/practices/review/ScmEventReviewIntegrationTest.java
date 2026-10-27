@@ -133,6 +133,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -1473,6 +1474,53 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
                         occasions.stream().map(ItemEvent::getId).toList());
         assertThat(itemReviews(prepared)).extracting(Review::getId).containsExactlyInAnyOrderElementsOf(admitted);
         assertThat(jobs(prepared)).isEqualTo(jobsBefore);
+        // The late ready names the work as it is now, the push's head.
+        assertThat(occasions)
+                .filteredOn(occasion -> occasion.getName().equals(ScmItemEvents.PULL_REQUEST_READY.value()))
+                .singleElement()
+                .extracting(ItemEvent::getItemVersion)
+                .isEqualTo(occasions.stream()
+                        .filter(occasion -> occasion.getName().equals(ScmItemEvents.PULL_REQUEST_SYNCHRONIZED.value()))
+                        .findFirst()
+                        .orElseThrow()
+                        .getItemVersion());
+    }
+
+    @Test
+    void shouldRecordAPushBackToAnEarlierHeadButNotItsReplay() {
+        var prepared = prepare(
+                IdentityProviderType.GITHUB, false, Map.of(), false, List.of(ScmItemEvents.PULL_REQUEST_SYNCHRONIZED));
+        String first = "b".repeat(40);
+        String second = "c".repeat(40);
+        deliver(
+                prepared,
+                "synchronize",
+                pullRequestPayload(prepared, first, Instant.now().plusSeconds(60)),
+                null);
+        deliver(
+                prepared,
+                "synchronize",
+                pullRequestPayload(prepared, second, Instant.now().plusSeconds(120)),
+                first);
+
+        // The developer restores the first head after an edit; the work differs from the first push.
+        var restored = pullRequestPayload(prepared, first, Instant.now().plusSeconds(180), "Restored title");
+        deliver(prepared, "synchronize", restored, second);
+        var pushes = synchronizedOccasions(prepared);
+        deliver(prepared, "synchronize", restored, second);
+
+        assertThat(pushes).hasSize(3);
+        assertThat(pushes).extracting(ItemEvent::getItemVersion).doesNotHaveDuplicates();
+        assertThat(synchronizedOccasions(prepared))
+                .extracting(ItemEvent::getId)
+                .containsExactlyInAnyOrderElementsOf(
+                        pushes.stream().map(ItemEvent::getId).toList());
+    }
+
+    private List<ItemEvent> synchronizedOccasions(Prepared prepared) {
+        return itemEvents(prepared).stream()
+                .filter(occasion -> occasion.getName().equals(ScmItemEvents.PULL_REQUEST_SYNCHRONIZED.value()))
+                .toList();
     }
 
     private long jobs(Prepared prepared) {
@@ -1485,6 +1533,11 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
     }
 
     private GitHubPullRequestDTO pullRequestPayload(Prepared prepared, String head, Instant updatedAt) {
+        return pullRequestPayload(prepared, head, updatedAt, null);
+    }
+
+    private GitHubPullRequestDTO pullRequestPayload(
+            Prepared prepared, String head, Instant updatedAt, @Nullable String title) {
         var pull = Objects.requireNonNull(transactions.execute(
                 ignored -> pulls.findById(Objects.requireNonNull(prepared.item().sourceId()))
                         .orElseThrow()));
@@ -1503,7 +1556,7 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
                         """.formatted(
                                         pull.getNativeId(),
                                         pull.getNumber(),
-                                        pull.getTitle(),
+                                        title != null ? title : pull.getTitle(),
                                         pull.getBody(),
                                         pull.getHtmlUrl(),
                                         pull.getCreatedAt(),
@@ -1516,6 +1569,10 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
     }
 
     private void deliver(Prepared prepared, String action, GitHubPullRequestDTO payload) {
+        deliver(prepared, action, payload, null);
+    }
+
+    private void deliver(Prepared prepared, String action, GitHubPullRequestDTO payload, @Nullable String before) {
         transactions.executeWithoutResult(ignored -> {
             var repository = repositories
                     .findById(Objects.requireNonNull(pulls.findById(Objects.requireNonNull(
@@ -1526,7 +1583,7 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
                     .orElseThrow();
             var context = ProcessingContext.forWebhook(prepared.item().workspaceId(), repository, action);
             if (action.equals("ready_for_review")) pullRequestProcessor.processReadyForReview(payload, context);
-            else pullRequestProcessor.processSynchronize(payload, context);
+            else pullRequestProcessor.processSynchronize(payload, before, context);
         });
     }
 

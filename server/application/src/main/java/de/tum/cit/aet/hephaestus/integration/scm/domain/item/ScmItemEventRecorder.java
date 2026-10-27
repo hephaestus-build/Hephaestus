@@ -20,6 +20,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.IssueRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.events.EventContext;
 import de.tum.cit.aet.hephaestus.integration.scm.events.ScmDomainEvent;
+import de.tum.cit.aet.hephaestus.integration.scm.events.ScmEventIdentity;
 import de.tum.cit.aet.hephaestus.integration.scm.events.ScmEventPayload;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.util.Collections;
@@ -74,7 +75,8 @@ public class ScmItemEventRecorder {
                     ScmItemEvents.PULL_REQUEST,
                     null,
                     name,
-                    event.context());
+                    event.context(),
+                    ScmEventIdentity.of(event));
     }
 
     @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)
@@ -92,7 +94,15 @@ public class ScmItemEventRecorder {
             case ScmDomainEvent.IssueReopened ignored -> ScmItemEvents.ISSUE_UPDATED;
             default -> null;
         };
-        if (name != null) record(issue.repository().id(), issue.id(), ScmItemEvents.ISSUE, null, name, event.context());
+        if (name != null)
+            record(
+                    issue.repository().id(),
+                    issue.id(),
+                    ScmItemEvents.ISSUE,
+                    null,
+                    name,
+                    event.context(),
+                    ScmEventIdentity.of(event));
         if (event instanceof ScmDomainEvent.IssueClosed
                 || event instanceof ScmDomainEvent.IssueReopened
                 || (event instanceof ScmDomainEvent.IssueUpdated updated
@@ -107,7 +117,8 @@ public class ScmItemEventRecorder {
                         ScmItemEvents.ISSUE,
                         null,
                         ScmItemEvents.ISSUE_UPDATED,
-                        event.context());
+                        event.context(),
+                        ScmEventIdentity.of(event));
         }
         if (event instanceof ScmDomainEvent.IssueUpdated updated
                 && !Collections.disjoint(updated.changedFields(), ScmItemEvents.LINKED_ISSUE_MATERIAL_FIELDS)) {
@@ -120,7 +131,8 @@ public class ScmItemEventRecorder {
                         ScmItemEvents.PULL_REQUEST,
                         null,
                         ScmItemEvents.PULL_REQUEST_LINKED_ISSUE_UPDATED,
-                        event.context());
+                        event.context(),
+                        ScmEventIdentity.of(event));
             }
         }
     }
@@ -157,7 +169,8 @@ public class ScmItemEventRecorder {
                     ScmItemEvents.PULL_REQUEST_REVIEW,
                     review.pullRequestId(),
                     ScmItemEvents.PULL_REQUEST_REVIEW_SUBMITTED,
-                    event.context());
+                    event.context(),
+                    ScmEventIdentity.of(event));
     }
 
     private void record(
@@ -166,7 +179,8 @@ public class ScmItemEventRecorder {
             ItemKind kind,
             @Nullable Long parentSourceId,
             ItemEventName name,
-            EventContext context) {
+            EventContext context,
+            @Nullable String sourceKey) {
         repositories.claimForIndex(repositoryId);
         var repository = repositories.findById(repositoryId).orElseThrow();
         List<Long> workspaces = queries.monitoredWorkspaces(repository.getNameWithOwner());
@@ -215,7 +229,7 @@ public class ScmItemEventRecorder {
                         context.actorUserId(),
                         null,
                         items.retain(item, null, foundBy),
-                        context.sourceKey()));
+                        sourceKey));
                 continue;
             }
             // The occasion keeps the work as this transaction stores it, before its review is admitted later.
@@ -230,7 +244,7 @@ public class ScmItemEventRecorder {
                     context.actorUserId(),
                     null,
                     items.retain(item, version, foundBy),
-                    context.sourceKey()));
+                    sourceKey));
         }
     }
 

@@ -18,6 +18,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.events.EventContext;
 import de.tum.cit.aet.hephaestus.integration.scm.events.ScmDomainEvent;
+import de.tum.cit.aet.hephaestus.integration.scm.events.ScmEventIdentity;
 import de.tum.cit.aet.hephaestus.integration.scm.events.ScmEventPayload;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.BaseGitLabProcessor;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabProperties;
@@ -460,7 +461,7 @@ public class GitLabIssueProcessor extends BaseGitLabProcessor {
         Issue issue = processInternal(event, context);
         if (issue != null && issue.getState() == Issue.State.CLOSED) {
             eventPublisher.publishEvent(new ScmDomainEvent.IssueClosed(
-                    ScmEventPayload.IssueData.from(issue), "completed", keyed(event, EventContext.from(context))));
+                    ScmEventPayload.IssueData.from(issue), "completed", EventContext.from(context)));
             log.debug("Closed issue: issueId={}", issue.getId());
         }
         return issue;
@@ -473,9 +474,9 @@ public class GitLabIssueProcessor extends BaseGitLabProcessor {
         if (issue != null && issue.getState() == Issue.State.OPEN) {
             ScmEventPayload.IssueData issueData = ScmEventPayload.IssueData.from(issue);
             eventPublisher.publishEvent(new ScmDomainEvent.IssueUpdated(
-                    issueData, Set.of("state"), keyed(event, actorContext(event, context))));
+                    issueData, Set.of("state"), reopened(event, issue, actorContext(event, context))));
             eventPublisher.publishEvent(
-                    new ScmDomainEvent.IssueReopened(issueData, keyed(event, EventContext.from(context))));
+                    new ScmDomainEvent.IssueReopened(issueData, reopened(event, issue, EventContext.from(context))));
             log.debug("Reopened issue: issueId={}", issue.getId());
         }
         return issue;
@@ -490,15 +491,11 @@ public class GitLabIssueProcessor extends BaseGitLabProcessor {
                 && eventUpdatedAt.isBefore(stored.getUpdatedAt());
     }
 
-    /**
-     * {@code context} under this hook's own identity: the issue, the action and the moment it describes. A first close
-     * that arrives after sync stored it still records its occasion; a redelivery records none.
-     */
-    private static EventContext keyed(GitLabIssueEventDTO event, EventContext context) {
-        var attrs = Objects.requireNonNull(event.objectAttributes());
-        return attrs.action() == null || attrs.updatedAt() == null
-                ? context
-                : context.withSourceKey("gitlab:issue:" + attrs.id() + ":" + attrs.action() + ":" + attrs.updatedAt());
+    /** {@code context} under the identity of this reopen, which the hook dates. */
+    private EventContext reopened(GitLabIssueEventDTO event, Issue issue, EventContext context) {
+        var attrs = event.objectAttributes();
+        return context.withSourceKey(ScmEventIdentity.transition(
+                issue.getId(), "reopened", attrs == null ? null : parseGitLabTimestamp(attrs.updatedAt())));
     }
 
     private EventContext actorContext(GitLabIssueEventDTO event, ProcessingContext context) {

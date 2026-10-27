@@ -7,6 +7,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRep
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.events.ScmDomainEvent;
+import de.tum.cit.aet.hephaestus.integration.scm.events.ScmEventIdentity;
 import java.time.Instant;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -154,7 +155,7 @@ public class ActivityEventListener {
                         repositoryRepository.getReferenceById(pr.repository().id()),
                         ActivityTargetType.PULL_REQUEST,
                         pr.id(),
-                        event.context().sourceKey()));
+                        ScmEventIdentity.of(event)));
     }
 
     @Async("activityExecutor")
@@ -190,7 +191,7 @@ public class ActivityEventListener {
                         repositoryRepository.getReferenceById(pr.repository().id()),
                         ActivityTargetType.PULL_REQUEST,
                         pr.id(),
-                        event.context().sourceKey()));
+                        ScmEventIdentity.of(event)));
     }
 
     @Async("activityExecutor")
@@ -219,7 +220,7 @@ public class ActivityEventListener {
                         repositoryRepository.getReferenceById(pr.repository().id()),
                         ActivityTargetType.PULL_REQUEST,
                         pr.id(),
-                        event.context().sourceKey()));
+                        ScmEventIdentity.of(event)));
     }
 
     @Async("activityExecutor")
@@ -248,7 +249,7 @@ public class ActivityEventListener {
                         repositoryRepository.getReferenceById(pr.repository().id()),
                         ActivityTargetType.PULL_REQUEST,
                         pr.id(),
-                        event.context().sourceKey()));
+                        ScmEventIdentity.of(event)));
     }
 
     /**
@@ -280,7 +281,7 @@ public class ActivityEventListener {
                         repositoryRepository.getReferenceById(pr.repository().id()),
                         ActivityTargetType.PULL_REQUEST,
                         pr.id(),
-                        event.context().sourceKey()));
+                        ScmEventIdentity.of(event)));
     }
 
     /** Handle pull request synchronized (new commits pushed to the branch). */
@@ -310,7 +311,7 @@ public class ActivityEventListener {
                         repositoryRepository.getReferenceById(pr.repository().id()),
                         ActivityTargetType.PULL_REQUEST,
                         pr.id(),
-                        event.context().sourceKey()));
+                        ScmEventIdentity.of(event)));
     }
 
     @Async("activityExecutor")
@@ -877,7 +878,7 @@ public class ActivityEventListener {
                                 issueData.repository().id()),
                         ActivityTargetType.ISSUE,
                         issueData.id(),
-                        event.context().sourceKey()));
+                        ScmEventIdentity.of(event)));
     }
 
     /**
@@ -912,7 +913,7 @@ public class ActivityEventListener {
                                 issueData.repository().id()),
                         ActivityTargetType.ISSUE,
                         issueData.id(),
-                        event.context().sourceKey()));
+                        ScmEventIdentity.of(event)));
     }
 
     /**

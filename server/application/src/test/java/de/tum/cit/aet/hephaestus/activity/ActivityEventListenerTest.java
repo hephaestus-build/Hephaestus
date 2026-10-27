@@ -140,7 +140,7 @@ class ActivityEventListenerTest extends BaseUnitTest {
                             eq(testRepository),
                             eq(ActivityTargetType.PULL_REQUEST),
                             eq(2L),
-                            isNull());
+                            any());
             verify(userRepository, never()).getReferenceById(999L);
         }
 
@@ -184,7 +184,7 @@ class ActivityEventListenerTest extends BaseUnitTest {
                             eq(testRepository),
                             eq(ActivityTargetType.PULL_REQUEST),
                             eq(3L),
-                            isNull());
+                            any());
         }
 
         @Test
@@ -375,7 +375,7 @@ class ActivityEventListenerTest extends BaseUnitTest {
                             eq(testRepository),
                             eq(ActivityTargetType.ISSUE),
                             eq(12L),
-                            isNull());
+                            any());
         }
 
         @Test
@@ -411,7 +411,7 @@ class ActivityEventListenerTest extends BaseUnitTest {
                             eq(testRepository),
                             eq(ActivityTargetType.ISSUE),
                             eq(15L),
-                            isNull());
+                            any());
         }
     }
 

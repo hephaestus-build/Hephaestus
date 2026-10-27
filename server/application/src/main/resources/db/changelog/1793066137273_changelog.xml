@@ -6,6 +6,9 @@
         </addColumn>
     </changeSet>
     <changeSet id="1793066137273-2" author="hephaestus">
-        <addUniqueConstraint columnNames="workspace_id, item_id, name, source_key" constraintName="uk_item_event_source" tableName="item_event"/>
+        <sql splitStatements="false"><![CDATA[
+SET LOCAL lock_timeout='30s';
+ALTER TABLE item_event ADD CONSTRAINT uk_item_event_source UNIQUE (workspace_id, item_id, name, source_key);
+]]></sql>
     </changeSet>
 </databaseChangeLog>

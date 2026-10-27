@@ -177,23 +177,31 @@ For these, the compare and the write are one step, also when a sync writes the s
   A second dismissal publishes nothing.
 
 **An event records its item event once.**
-A lifecycle event carries its own identity, the source key.
-For a push, the source key is the head commit.
-For every other action, it is the action and the `updated_at` that the payload describes.
-The unique key on item, name and source key absorbs a second delivery of the same event, whatever version the work has by then.
+A lifecycle event has one identity, its source key.
+`ScmEventIdentity` derives it, and the webhook, a late delivery, a redelivery and the sync derive the same key for the same change:
+
+- A push is the move from one head commit to the next.
+  A force-push back to an earlier head is a new move.
+- A ready, draft or reopen is the change and the moment that the provider dates.
+- A close or a merge is the stored `closedAt` or `mergedAt`, which the webhook and the sync store alike.
+
+The unique key on item, name and source key absorbs a second report of the same event, whatever version the work has by then.
 The unique key on item, name and version still absorbs a second event of the same name for the same work.
+The activity entry of the event uses the same source key, so each path adds one entry.
 
 A close, reopen, ready or draft event publishes when the stored state is the payload's state.
 It publishes also when its payload is older than the stored row.
 Thus, a first delivery that arrives after a later change still records its item event, for the current work.
 A redelivery of it records nothing.
 
+A GitLab sync records the ready, draft and push changes that it stores, under the same source key as their hook.
+Thus, a hook that arrives after the sync records nothing new, and a lost hook loses no review.
 GitLab offers a merge for review after the read that follows the hook.
-A GitLab ready or push item event comes from the change that the hook stores.
-A hook whose change a sync stored first records no ready or push item event.
+GitHub redelivers a failed delivery, so its sync records no push or ready for a stored pull request.
 
-The activity entry of a lifecycle event uses the same source key.
-Thus, a redelivery adds no second activity entry.
+A push in the same second as the stored change is still applied, because provider dates have second precision.
+An item event recorded before the source key existed has no key.
+A redelivery of such an event can record a second item event if the work moved since.
 
 ### Reviewer lists are dated snapshots
 

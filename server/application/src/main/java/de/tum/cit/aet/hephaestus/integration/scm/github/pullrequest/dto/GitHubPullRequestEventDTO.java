@@ -22,7 +22,8 @@ public record GitHubPullRequestEventDTO(
         @JsonProperty("sender") @Nullable GitHubUserDTO sender,
         @JsonProperty("label") @Nullable GitHubLabelDTO label,
         @JsonProperty("requested_reviewer") @Nullable GitHubUserDTO requestedReviewer,
-        @JsonProperty("changes") @Nullable Map<String, Object> changes)
+        @JsonProperty("changes") @Nullable Map<String, Object> changes,
+        @JsonProperty("before") @Nullable String before)
         implements GitHubWebhookEvent {
     @Override
     public GitHubEventAction.PullRequest actionType() {

@@ -11,6 +11,7 @@ import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -36,6 +37,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRep
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.events.ScmDomainEvent;
+import de.tum.cit.aet.hephaestus.integration.scm.events.ScmEventIdentity;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabProperties;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabUserLookup;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.dto.GitLabWebhookLabel;
@@ -324,6 +326,27 @@ class GitLabMergeRequestProcessorTest extends BaseUnitTest {
             processor.process(pushEvent("a".repeat(40), null), createContext());
 
             verify(eventPublisher, never()).publishEvent(any(ScmDomainEvent.PullRequestSynchronized.class));
+        }
+
+        @Test
+        void shouldAnnounceAPushThatASyncStoredFirstUnderTheIdentityTheSyncGaveIt() {
+            PullRequest pr = createPullRequestEntity();
+            // The startup sync stored the push at the hook's own second.
+            pr.setHeadRefOid("b".repeat(40));
+            pr.setUpdatedAt(Instant.parse("2024-01-16T10:00:00Z"));
+            when(pullRequestRepository.findForUpdateByRepositoryIdAndNumber(REPO_ID, MR_IID))
+                    .thenReturn(Optional.of(pr));
+
+            processor.process(pushEvent("b".repeat(40), "a".repeat(40)), createContext());
+            processor.process(pushEvent("b".repeat(40), "a".repeat(40)), createContext());
+
+            ArgumentCaptor<ScmDomainEvent.PullRequestSynchronized> pushes =
+                    ArgumentCaptor.forClass(ScmDomainEvent.PullRequestSynchronized.class);
+            verify(eventPublisher, times(2)).publishEvent(pushes.capture());
+            // The sync keyed the push it stored from the earlier head to this one; the occasion key absorbs both.
+            assertThat(pushes.getAllValues())
+                    .extracting(push -> ScmEventIdentity.of(push))
+                    .containsOnly(ScmEventIdentity.push(pr.getId(), "a".repeat(40), "b".repeat(40)));
         }
 
         private GitLabMergeRequestEventDTO pushEvent(String head, @Nullable String oldrev) {

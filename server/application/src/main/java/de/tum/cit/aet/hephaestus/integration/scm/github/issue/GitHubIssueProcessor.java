@@ -17,6 +17,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.events.EventContext;
 import de.tum.cit.aet.hephaestus.integration.scm.events.ScmDomainEvent;
+import de.tum.cit.aet.hephaestus.integration.scm.events.ScmEventIdentity;
 import de.tum.cit.aet.hephaestus.integration.scm.events.ScmEventPayload;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.BaseGitHubProcessor;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubMisfiledWork;
@@ -374,7 +375,7 @@ public class GitHubIssueProcessor extends BaseGitHubProcessor {
         if (issue.getState() != Issue.State.CLOSED) return issue;
         String stateReason = issueDto.stateReason() != null ? issueDto.stateReason() : "completed";
         eventPublisher.publishEvent(new ScmDomainEvent.IssueClosed(
-                ScmEventPayload.IssueData.from(issue), stateReason, keyed(issueDto, context)));
+                ScmEventPayload.IssueData.from(issue), stateReason, EventContext.from(context)));
         log.debug("Closed issue: issueId={}, stateReason={}", issue.getId(), stateReason);
         return issue;
     }
@@ -385,20 +386,12 @@ public class GitHubIssueProcessor extends BaseGitHubProcessor {
         if (processed == null) return null;
         Issue issue = processed.issue();
         if (issue.getState() != Issue.State.OPEN) return issue;
-        eventPublisher.publishEvent(
-                new ScmDomainEvent.IssueReopened(ScmEventPayload.IssueData.from(issue), keyed(issueDto, context)));
+        eventPublisher.publishEvent(new ScmDomainEvent.IssueReopened(
+                ScmEventPayload.IssueData.from(issue),
+                EventContext.from(context)
+                        .withSourceKey(ScmEventIdentity.transition(issue.getId(), "reopened", issueDto.updatedAt()))));
         log.debug("Reopened issue: issueId={}", issue.getId());
         return issue;
-    }
-
-    /** The context of this provider event, under its own identity: the action and the moment the payload describes. */
-    private static EventContext keyed(GitHubIssueDTO dto, ProcessingContext context) {
-        String action = context.webhookAction();
-        return EventContext.from(context)
-                .withSourceKey(
-                        action == null || dto.updatedAt() == null || dto.getDatabaseId() == null
-                                ? null
-                                : "github:issue:" + dto.getDatabaseId() + ":" + action + ":" + dto.updatedAt());
     }
 
     @Transactional

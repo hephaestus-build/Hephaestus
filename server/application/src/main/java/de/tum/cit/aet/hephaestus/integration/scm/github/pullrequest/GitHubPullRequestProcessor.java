@@ -19,6 +19,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.events.EventContext;
 import de.tum.cit.aet.hephaestus.integration.scm.events.ScmDomainEvent;
+import de.tum.cit.aet.hephaestus.integration.scm.events.ScmEventIdentity;
 import de.tum.cit.aet.hephaestus.integration.scm.events.ScmEventPayload;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.BaseGitHubProcessor;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubMisfiledWork;
@@ -176,8 +177,15 @@ public class GitHubPullRequestProcessor extends BaseGitHubProcessor {
         // snapshots).
         if (!isNew && !promotedFromIssue && !moved) {
             PullRequest existing = existingOpt.get();
+            // Provider dates have second precision: a push in the same second as the stored change is still new work.
+            boolean sameSecondPush = "synchronize".equals(context.webhookAction())
+                    && dto.head() != null
+                    && dto.updatedAt() != null
+                    && dto.updatedAt().equals(existing.getUpdatedAt())
+                    && !Objects.equals(dto.head().sha(), existing.getHeadRefOid());
             if (existing.getUpdatedAt() != null
                     && dto.updatedAt() != null
+                    && !sameSecondPush
                     && !dto.updatedAt().isAfter(existing.getUpdatedAt())) {
                 log.debug(
                         "Skipped stale PR update: prId={}, existingUpdatedAt={}, dtoUpdatedAt={}",
@@ -329,25 +337,42 @@ public class GitHubPullRequestProcessor extends BaseGitHubProcessor {
             ProcessingContext context,
             boolean emitLifecycleOnCreate,
             BiConsumer<PullRequest, EventContext> publish) {
+        return processLifecycle(dto, null, context, emitLifecycleOnCreate, publish);
+    }
+
+    @Nullable
+    private PullRequest processLifecycle(
+            GitHubPullRequestDTO dto,
+            @Nullable String before,
+            ProcessingContext context,
+            boolean emitLifecycleOnCreate,
+            BiConsumer<PullRequest, EventContext> publish) {
         PullRequest pr = processInternal(dto, context, emitLifecycleOnCreate);
         if (pr != null) {
-            publish.accept(pr, EventContext.from(context).withSourceKey(sourceKey(dto, context)));
+            publish.accept(pr, EventContext.from(context).withSourceKey(sourceKey(pr.getId(), dto, before, context)));
         }
         return pr;
     }
 
     /**
-     * The event's identity: a push is its head commit, every other action the moment the payload describes. Two
-     * pushes in one second are two events; a redelivery is the same one.
+     * The identity of the action this payload reports. A close or a merge needs none: its stored moment identifies it
+     * ({@link ScmEventIdentity#of}). A label change records no occasion.
      */
-    private static @Nullable String sourceKey(GitHubPullRequestDTO dto, ProcessingContext context) {
-        String action = context.webhookAction();
-        String moment = "synchronize".equals(action) && dto.head() != null
-                ? dto.head().sha()
-                : dto.updatedAt() != null ? dto.updatedAt().toString() : null;
-        return action == null || moment == null || dto.getDatabaseId() == null
-                ? null
-                : "github:pull_request:" + dto.getDatabaseId() + ":" + action + ":" + moment;
+    private static @Nullable String sourceKey(
+            long pullRequestId, GitHubPullRequestDTO dto, @Nullable String before, ProcessingContext context) {
+        return switch (Objects.requireNonNullElse(context.webhookAction(), "")) {
+            case "synchronize" ->
+                dto.head() == null || dto.head().sha() == null
+                        ? null
+                        : ScmEventIdentity.push(
+                                pullRequestId,
+                                before != null ? before : Objects.toString(dto.updatedAt(), null),
+                                dto.head().sha());
+            case "ready_for_review" -> ScmEventIdentity.transition(pullRequestId, "ready", dto.updatedAt());
+            case "converted_to_draft" -> ScmEventIdentity.transition(pullRequestId, "draft", dto.updatedAt());
+            case "reopened" -> ScmEventIdentity.transition(pullRequestId, "reopened", dto.updatedAt());
+            default -> null;
+        };
     }
 
     /**
@@ -560,8 +585,9 @@ public class GitHubPullRequestProcessor extends BaseGitHubProcessor {
      */
     @Transactional
     @Nullable
-    public PullRequest processSynchronize(GitHubPullRequestDTO dto, ProcessingContext context) {
-        return processLifecycle(dto, context, true, (pr, eventContext) -> {
+    public PullRequest processSynchronize(
+            GitHubPullRequestDTO dto, @Nullable String before, ProcessingContext context) {
+        return processLifecycle(dto, before, context, true, (pr, eventContext) -> {
             eventPublisher.publishEvent(
                     new ScmDomainEvent.PullRequestSynchronized(ScmEventPayload.PullRequestData.from(pr), eventContext));
             log.debug("Synchronized pull request: prId={}", pr.getId());

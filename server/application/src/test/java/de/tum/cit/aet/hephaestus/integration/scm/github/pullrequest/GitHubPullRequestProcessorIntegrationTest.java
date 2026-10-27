@@ -1479,7 +1479,7 @@ class GitHubPullRequestProcessorIntegrationTest extends BaseIntegrationTest {
                     null // requestedTeams
                     );
 
-            PullRequest result = processor.processSynchronize(syncDto, createContext());
+            PullRequest result = processor.processSynchronize(syncDto, null, createContext());
             assertNotNull(result);
 
             assertThat(result.getCommits()).isEqualTo(3);
