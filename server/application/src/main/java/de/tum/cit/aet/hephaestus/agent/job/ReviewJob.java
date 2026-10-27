@@ -44,6 +44,12 @@ import tools.jackson.databind.JsonNode;
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
 public class ReviewJob {
     public static final String HOLD_REASON_BUDGET = "BUDGET";
+
+    /** How many drains a review survives; the next one cancels it with the drain's reason. */
+    public static final int MAX_DRAINS = 3;
+    /** The sandbox runtime had no room for the attempt's sandbox; nothing of it ran, so it spent no retry. */
+    public static final String HOLD_REASON_SANDBOX_ROOM = "SANDBOX_ROOM";
+
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
     private static final int TOKEN_BYTES = 32;
 
@@ -66,6 +72,16 @@ public class ReviewJob {
     @ColumnDefault("0")
     @Column(name = "attempt", nullable = false)
     private int attempt = 0;
+
+    /** The attempts that a worker's drain stopped: each ran, so each has its own number, but none spends a retry. */
+    @ColumnDefault("0")
+    @Column(name = "drain_count", nullable = false)
+    private int drainCount = 0;
+
+    /** The attempts whose sandbox the runtime had no room for: each has its own number, but none spends a retry. */
+    @ColumnDefault("0")
+    @Column(name = "room_refusals", nullable = false)
+    private int roomRefusals = 0;
 
     @Enumerated(EnumType.STRING)
     @ColumnDefault("'NONE'")
@@ -196,5 +212,10 @@ public class ReviewJob {
         } catch (NoSuchAlgorithmException error) {
             throw new IllegalStateException("SHA-256 not available", error);
         }
+    }
+
+    /** The attempts that spent a retry: those that a worker's drain stopped, or that found no sandbox room, did not. */
+    public int spentAttempts() {
+        return attempt - drainCount - roomRefusals;
     }
 }

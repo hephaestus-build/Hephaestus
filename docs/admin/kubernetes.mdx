@@ -870,6 +870,29 @@ The chart refuses a name while `create` is true, and a missing name while it is 
 
 The workers remove what no attempt and no worker uses in the sandbox namespace.
 Do not share it with another release or another application.
+
+### When the sandbox quota is full
+
+A review waits in the queue while the quota has no room for its sandbox.
+Waiting behind running reviews is normal backlog, and it never ends a review.
+
+Two cases end queued reviews, with the stop reason `NO_SANDBOX_ROOM`:
+
+- A quota is smaller than one review sandbox. The worker cancels the queued reviews within 30 seconds, with "The sandbox quota is smaller than one review sandbox." It logs one warning.
+- Reviews have waited for an hour while the quota had no room for one and no review ran, so nothing frees room. Usually the Heph host and the turn sandboxes hold it. The worker logs a warning when this starts. After the hour, it cancels the queued reviews with "Hephaestus had no room to run this review in time."
+
+A scan that loses a file's job this way ends with the same reason. It does not queue its next file.
+
+A review whose Pod the quota refuses after its claim also waits, and spends none of its retries.
+Its next attempt gets a new number, as every attempt does.
+The waits grow from 30 seconds to 5 minutes. The number of refusals never ends a review. Only the two cases above do.
+
+The metric `sandbox_start_failures_total{kind="review",reason}` counts these refusals and cancellations, with the reasons `quota_exceeded` and `quota_cannot_fit`.
+The gauge `sandbox_review_starved_seconds` shows how long no review could start while none ran. Alert on it well before an hour: the quota is too small for the sandboxes beside the reviews.
+
+The worker learns of the refusal from the events of the sandbox namespace, and reads its quotas to tell whether a sandbox can fit at all.
+It needs `get` and `list` on `events` and `resourcequotas` there; the chart's Role grants them.
+Without them, the worker logs one warning, and a refused review waits 2 minutes and spends a retry.
 A sandbox's credential, not the network, binds it to the worker that started it.
 
 The worker reaches the Kubernetes API only at `networkPolicy.kubernetesApi`.
@@ -1021,7 +1044,9 @@ The webhook role and the workers roll: new workers prove the cluster with the is
 An old worker drains for up to `worker.drainTimeoutSeconds`, 60 minutes by default, and Kubernetes no longer counts it while it terminates.
 Start the next upgrade only after the old worker is gone: `kubectl --namespace hephaestus get pods -l app.kubernetes.io/component=worker` shows no `Terminating` Pod.
 A review runs for up to 3 hours.
-When the drain ends first, the review stops: an attempt that was not yet admitted runs again on another worker and spends one of its attempts, and an admitted one keeps its results.
+When the drain ends first, the review stops: an attempt that was not yet admitted runs again on another worker, and an admitted one keeps its results.
+A drained attempt spends none of the review's retries. After 3 drains, the next drain cancels the review with the message "Workers stopped this review for updates too often. It is not tried again."
+The metric `agent_job_drained_total{outcome}` counts drained reviews that run again (`requeued`) and that are cancelled (`cancelled`).
 Read the release notes before the upgrade.
 A release whose migration needs every database role stopped says so, and then the [database maintenance](#database-maintenance) procedure applies instead.
 
@@ -1080,6 +1105,7 @@ While `webhook.replicas` is 0, provider deliveries reach no receiver, and each p
 | --- | --- |
 | A worker stays unready, and its log says that the cluster does not hold the sandbox boundary | The isolation probe failed. The log names each failed check. A failed egress check usually means that the network plugin does not enforce NetworkPolicy, or that `networkPolicy.kubernetesApi` names an address that the plugin does not see. |
 | A worker log says that the network policy did not filter a sandbox Pod in time | The network plugin applied the policy of a new Pod more than 60 seconds after the Pod started. The attempt is tried again. |
+| A review fails with "The sandbox quota is smaller than one review sandbox" | The quota holds less than one review sandbox requests. Raise `worker.sandbox.quota`. |
 | A sandbox Pod stays `Pending` with a quota error | The sandbox namespace's quota is full. Raise `worker.sandbox.quota`, or lower the workers' capacity. |
 | Reviews stay queued, and the worker log says that reviews wait for room in the sandbox quota | The Heph host and the turn sandboxes hold the quota. The reviews start when a sandbox ends. To run them sooner, raise `worker.sandbox.quota` or lower `worker.hephTurns`. |
 | A new Pod restarts during an upgrade, and its log names a pending change set | It waited 10 minutes for the schema. Check the migration Job's log. A longer migration needs the [database maintenance](#database-maintenance) procedure. |

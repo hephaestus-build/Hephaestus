@@ -76,11 +76,17 @@ public class ReviewJobCompletionService {
         var review = assignments.review(job);
         boolean admitted = ResultAdmissionService.isAdmitted(job);
         var reason = job.getStatus() == ReviewJobStatus.CANCELLED
-                ? ReviewStopReason.CANCELLED
+                ? job.getCancellationReason() == ReviewJobCancellationReason.NO_SANDBOX_ROOM
+                        ? ReviewStopReason.NO_SANDBOX_ROOM
+                        : ReviewStopReason.CANCELLED
                 : job.getExecutionStartedAt() == null
                         ? ReviewStopReason.PREPARATION_FAILED
                         : ReviewStopReason.EXECUTION_FAILED;
-        if (!admitted && (job.getStatus() != ReviewJobStatus.CANCELLED || job.getStartedAt() != null))
+        // A cancel for room ends the practices whether or not a worker claimed the job, so a scan stops binding them.
+        if (!admitted
+                && (job.getStatus() != ReviewJobStatus.CANCELLED
+                        || job.getStartedAt() != null
+                        || reason == ReviewStopReason.NO_SANDBOX_ROOM))
             for (var assignment : assignments.admissible(job))
                 members.fail(
                         job.getWorkspaceId(),
@@ -130,9 +136,7 @@ public class ReviewJobCompletionService {
                 ? ReviewStopReason.READINESS_REFUSED
                 : completed
                         ? runtimeIncomplete ? ReviewStopReason.EXECUTION_INCOMPLETE : null
-                        : job.getStatus() == ReviewJobStatus.TIMED_OUT
-                                ? ReviewStopReason.TIMED_OUT
-                                : job.getStatus() == ReviewJobStatus.CANCELLED ? ReviewStopReason.CANCELLED : reason;
+                        : job.getStatus() == ReviewJobStatus.TIMED_OUT ? ReviewStopReason.TIMED_OUT : reason;
         reviews.complete(
                 job.getWorkspaceId(),
                 review.id(),

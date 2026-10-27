@@ -189,6 +189,8 @@ erDiagram
         TIMESTAMPTZ started_at
         TIMESTAMPTZ execution_started_at
         TIMESTAMPTZ completed_at
+        INTEGER drain_count "NOT NULL"
+        INTEGER room_refusals "NOT NULL"
     }
 
     ReviewJobAttemptCharge {

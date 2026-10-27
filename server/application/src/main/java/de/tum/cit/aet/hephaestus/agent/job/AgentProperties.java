@@ -19,7 +19,8 @@ import org.springframework.validation.annotation.Validated;
  * @param pollInterval      how long the poll loop sleeps when a poll claimed nothing
  * @param claimBatchSize    max QUEUED jobs considered per poll iteration
  * @param maxRetries        How many times a job whose worker was lost goes back to the queue before it fails. The
- *                          counter is the attempt number of the job.
+ *                          counter is the attempt number less the attempts that a worker's drain stopped or that
+ *                          found no sandbox room: those spend no retry.
  * @param heartbeatInterval interval between {@code worker_registry} liveness heartbeats
  * @param payloadRetention  age from {@code completed_at} at which a TERMINAL job's {@code capture}
  *                          and {@code output} are stripped to NULL

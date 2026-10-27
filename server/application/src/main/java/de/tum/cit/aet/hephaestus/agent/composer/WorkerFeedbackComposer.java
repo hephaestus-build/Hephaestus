@@ -183,7 +183,7 @@ public class WorkerFeedbackComposer {
      * @throws CompositionHandedOnException when a passing cause left a destination open before the retry limit
      */
     public void composeResumed(ReviewJob job, String workerId, Instant notAfter) {
-        if (job.getAttempt() > agentProperties.maxRetries()) {
+        if (job.spentAttempts() > agentProperties.maxRetries()) {
             withholdWithoutInputs(job, workerId, CompositionStop.RETRIES_EXHAUSTED);
             return;
         }
@@ -304,7 +304,7 @@ public class WorkerFeedbackComposer {
      */
     private void close(
             ReviewJob job, Plan plan, Function<FeedbackDestination, Stop> stops, @Nullable RuntimeException failure) {
-        boolean last = job.getAttempt() >= agentProperties.maxRetries();
+        boolean last = job.spentAttempts() >= agentProperties.maxRetries();
         CompositionStop handedOn = null;
         for (var open : open(job, plan)) {
             var stop = open.routingUnavailable()
@@ -474,7 +474,7 @@ public class WorkerFeedbackComposer {
                     stops.put(FeedbackDestination.ON_WORK, ended);
                     // The private feedback reads the review it follows: a review that another attempt may still
                     // compose comes first.
-                    if (ended.cause().passing() && job.getAttempt() < agentProperties.maxRetries()) {
+                    if (ended.cause().passing() && job.spentAttempts() < agentProperties.maxRetries()) {
                         stops.put(FeedbackDestination.PRACTICE_PAGE, ended);
                         stops.put(FeedbackDestination.CONVERSATION, ended);
                         return;

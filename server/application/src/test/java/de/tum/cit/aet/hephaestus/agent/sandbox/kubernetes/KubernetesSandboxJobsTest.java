@@ -1,14 +1,17 @@
 package de.tum.cit.aet.hephaestus.agent.sandbox.kubernetes;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import de.tum.cit.aet.hephaestus.agent.sandbox.ImagePullPolicy;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ResourceLimits;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxCancelledException;
+import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxCapacityException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxInfrastructureException;
 import io.fabric8.kubernetes.api.model.DeleteOptions;
+import io.fabric8.kubernetes.api.model.EventBuilder;
 import io.fabric8.kubernetes.api.model.Pod;
 import io.fabric8.kubernetes.api.model.PodBuilder;
 import io.fabric8.kubernetes.api.model.batch.v1.Job;
@@ -104,6 +107,78 @@ class KubernetesSandboxJobsTest {
 
         assertThatThrownBy(() -> jobs.awaitPod(name, Duration.ofMillis(500), () -> false))
                 .isExactlyInstanceOf(SandboxInfrastructureException.class);
+    }
+
+    @Test
+    void shouldEndTheWaitAsNoRoomWhenTheSandboxQuotaRefusedThePodOfTheJob() {
+        String name = reviewName();
+        jobs.create(jobs.job(template(name), 900L));
+        refusedByTheQuota(name);
+
+        assertThatThrownBy(() -> jobs.awaitPod(name, Duration.ofSeconds(10), () -> false))
+                .isInstanceOfSatisfying(
+                        SandboxCapacityException.class,
+                        refused ->
+                                assertThat(refused.reason()).isEqualTo(SandboxCapacityException.Reason.QUOTA_EXCEEDED));
+    }
+
+    @Test
+    void shouldTakeThePodOfTheJobOverAnEarlierRefusalOfIt() {
+        String name = reviewName();
+        jobs.create(jobs.job(template(name), 900L));
+        refusedByTheQuota(name);
+        api().pods().inNamespace(SANDBOXES).resource(child(name, name)).create();
+
+        assertThatCode(() -> jobs.requireRoom(name))
+                .as("room freed and the Job controller created the Pod: the refusal is history")
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void shouldNotTakeTheRefusalOfAnEarlierJobOfTheSameNameForThisJob() {
+        String name = reviewName();
+        jobs.create(jobs.job(template(name), 900L));
+        refusedByTheQuota(name, "uid-of-an-earlier-job");
+
+        assertThatThrownBy(() -> jobs.awaitPod(name, Duration.ofSeconds(3), () -> false))
+                .isExactlyInstanceOf(SandboxInfrastructureException.class);
+    }
+
+    /** The event that the Job controller records when the quota refuses the Pod of the Job of the name. */
+    private void refusedByTheQuota(String name) {
+        refusedByTheQuota(
+                name,
+                api().batch()
+                        .v1()
+                        .jobs()
+                        .inNamespace(SANDBOXES)
+                        .withName(name)
+                        .get()
+                        .getMetadata()
+                        .getUid());
+    }
+
+    private void refusedByTheQuota(String name, String uid) {
+        api().v1()
+                .events()
+                .inNamespace(SANDBOXES)
+                .resource(new EventBuilder()
+                        .withNewMetadata()
+                        .withName(name + ".refused")
+                        .endMetadata()
+                        .withNewInvolvedObject()
+                        .withKind("Job")
+                        .withName(name)
+                        .withNamespace(SANDBOXES)
+                        .withUid(uid)
+                        .endInvolvedObject()
+                        .withType("Warning")
+                        .withReason("FailedCreate")
+                        .withMessage("Error creating: pods \"" + name + "-x\" is forbidden: exceeded quota:"
+                                + " hephaestus-sandbox-quota, requested: requests.memory=1Gi,"
+                                + " used: requests.memory=8Gi, limited: requests.memory=8Gi")
+                        .build())
+                .create();
     }
 
     @Test

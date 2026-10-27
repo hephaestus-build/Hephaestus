@@ -635,8 +635,12 @@ The worker's HTTP connectors, including the sandbox gateway, stay open during st
 Thus, an active review can still send model requests while the worker waits for it.
 The HTTP graceful shutdown starts only after the drain.
 
-Unadmitted reviews return to the queue within `AGENT_MAX_RETRIES`, for another worker to claim.
-An exhausted retry budget or a concurrent cancellation leaves the job terminal instead.
+Unadmitted reviews return to the queue for another worker to claim.
+The drain is not the review's fault, so it spends none of `AGENT_MAX_RETRIES`.
+The next attempt still gets its own number, so the stopped sandbox cannot write into it.
+After 3 drains, the next drain cancels the review with its drain reason.
+
+A concurrent cancellation leaves the job terminal instead.
 Admitted results are never measured again.
 An interrupted review without saved completed feedback fails with an explicit reason and retains its results.
 Completed reviews continue through normal delivery and delivery recovery.

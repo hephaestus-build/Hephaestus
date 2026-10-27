@@ -2,10 +2,18 @@ package de.tum.cit.aet.hephaestus.agent.scan;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.agent.handler.RuntimeReviewTestData;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
+import de.tum.cit.aet.hephaestus.agent.job.ReviewJobCancellationReason;
+import de.tum.cit.aet.hephaestus.agent.job.ReviewJobLifecycleService;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobStateConflictException;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewRuntimeQueryAdapter;
@@ -21,13 +29,21 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewOrigin;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewQueue;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewScanReuse;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewScanStore;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewService;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewSnapshot;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewTimingFact;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewTimingFacts;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewTimingFactsQuery;
+import de.tum.cit.aet.hephaestus.practices.spi.ScanExecutionSnapshot;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
+import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
@@ -57,6 +73,9 @@ class ScanReviewIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private ReviewRuntimeRepository runtimeRows;
+
+    @Autowired
+    private ReviewService reviews;
 
     private ReviewJob job(long workspace, UUID review) {
         var job = new ReviewJob();
@@ -136,6 +155,72 @@ class ScanReviewIntegrationTest extends BaseIntegrationTest {
                         first.getReviewId(),
                         workspace.getId())))
                 .isEqualTo("SCAN");
+    }
+
+    @Test
+    void shouldEndAScanForCapacityInsteadOfQueueingItsNextFileOnceCapacityCancelledAJob() {
+        var workspace = workspaces.saveAndFlush(WorkspaceTestFixtures.activeWorkspace("scan-no-sandbox-room"));
+        var cancelled = job(workspace.getId(), UUID.randomUUID());
+        cancelled.setStatus(ReviewJobStatus.CANCELLED);
+        cancelled.setCancellationReason(ReviewJobCancellationReason.NO_SANDBOX_ROOM);
+        cancelled.setCompletedAt(Instant.now());
+        cancelled.setProcessingStatus(ProcessingStatus.FAILED);
+        RuntimeJobTestData.persistParent(jdbc, cancelled);
+        jobs.saveAndFlush(cancelled);
+        jdbc.update(
+                "UPDATE review SET kind='SCAN',budget_usd=10,status='RUNNING' WHERE id=? AND workspace_id=?",
+                cancelled.getReviewId(),
+                workspace.getId());
+        var file = RuntimeReviewTestData.assignment(null, null);
+        var review = new ReviewSnapshot(
+                cancelled.getReviewId(),
+                workspace.getId(),
+                new ItemRef(
+                        workspace.getId(), cancelled.getInput().itemId(), new ItemKind("test.item"), 1L, null, null),
+                ReviewKind.SCAN,
+                new ItemVersion("test:1", null),
+                ReviewOrigin.REQUEST,
+                0,
+                List.of(file.practice()));
+        var scans = mock(ReviewScanStore.class);
+        when(scans.pending(anyLong(), any(), anyInt())).thenReturn(List.of(file));
+        var budget = mock(ScanBudget.class);
+        when(budget.permits(any(), any())).thenReturn(true);
+        var queue = mock(ReviewQueue.class);
+        var driver = new ScanDriver(
+                scans,
+                mock(ReviewScanReuse.class),
+                reviews,
+                mock(ScanService.class),
+                budget,
+                queue,
+                jobs,
+                mock(ReviewJobLifecycleService.class),
+                transactions,
+                new ScanProperties(100, 10000, Duration.ofMinutes(1), Duration.ofHours(24)),
+                Clock.systemUTC());
+
+        transactions.executeWithoutResult(status -> driver.advance(new ScanExecutionSnapshot(
+                review,
+                ReviewStatus.RUNNING,
+                BigDecimal.TEN,
+                Instant.now(),
+                false,
+                true,
+                true,
+                Set.of(file.practice().practiceId()),
+                2,
+                0,
+                0,
+                1)));
+
+        verify(queue, never()).enqueue(any(), anyLong(), any());
+        assertThat(jdbc.queryForMap(
+                        "SELECT status, stop_reason FROM review WHERE id=? AND workspace_id=?",
+                        cancelled.getReviewId(),
+                        workspace.getId()))
+                .containsEntry("status", "CANCELLED")
+                .containsEntry("stop_reason", "NO_SANDBOX_ROOM");
     }
 
     @Test

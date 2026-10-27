@@ -63,11 +63,23 @@ public class ReviewJobRecovery {
         ReviewJobLlmUsage counts = counts(owned);
         hold(owned, counts);
         Instant now = Instant.now();
-        Instant availableAt = now.plus(ReviewJobBackoff.compute(attempt + 1));
-        int changed = attempt < properties.maxRetries()
+        boolean admitted = ResultAdmissionService.isAdmitted(owned);
+        if (drained(cancellation) && !admitted) {
+            // Not the review's fault: the next attempt spends no retry, up to ReviewJob.MAX_DRAINS drains.
+            if (jobs.requeueDrained(jobId, workerId, ReviewJob.MAX_DRAINS, now) > 0) {
+                bill(owned, counts);
+                return Outcome.REQUEUED;
+            }
+            int cancelled = jobs.transitionToCancelledOwnedBy(
+                    jobId, now, DRAINED_TOO_OFTEN, Objects.requireNonNull(cancellation), workerId, attempt);
+            if (cancelled == 0) return Outcome.NONE;
+            bill(owned, counts);
+            return Outcome.CANCELLED;
+        }
+        Instant availableAt = now.plus(ReviewJobBackoff.compute(owned.spentAttempts() + 1));
+        int changed = owned.spentAttempts() < properties.maxRetries()
                 ? jobs.requeueOrphan(jobId, workerId, properties.maxRetries(), availableAt)
                 : 0;
-        boolean admitted = ResultAdmissionService.isAdmitted(owned);
         // An admitted review is handed on even at the retry limit: the attempt after it composes nothing and only
         // withholds what is still open.
         if (changed == 0 && admitted && continuation.isPresent()) {
@@ -82,7 +94,7 @@ public class ReviewJobRecovery {
             bill(owned, counts);
             return Outcome.REQUEUED;
         }
-        if (!admitted && attempt < properties.maxRetries()) return Outcome.NONE;
+        if (!admitted && owned.spentAttempts() < properties.maxRetries()) return Outcome.NONE;
         if (admitted) {
             changed = jobs.completeAdmittedOwnedBy(jobId, workerId, attempt, now);
         } else if (cancellation != null) {
@@ -114,9 +126,17 @@ public class ReviewJobRecovery {
                 job.getId(),
                 workerId,
                 properties.maxRetries(),
-                Instant.now().plus(ReviewJobBackoff.compute(job.getAttempt() + 1)));
+                Instant.now().plus(ReviewJobBackoff.compute(locked.spentAttempts() + 1)));
         if (changed > 0 && bill) bill(locked, counts);
         return changed > 0;
+    }
+
+    /** The error of a review that workers' drains stopped more often than {@link ReviewJob#MAX_DRAINS}. */
+    static final String DRAINED_TOO_OFTEN = "Workers stopped this review for updates too often. It is not tried again.";
+
+    private static boolean drained(@Nullable ReviewJobCancellationReason cancellation) {
+        return cancellation == ReviewJobCancellationReason.DRAIN_GRACEFUL
+                || cancellation == ReviewJobCancellationReason.DRAIN_IMMEDIATE;
     }
 
     private static boolean owns(@Nullable ReviewJob job, String workerId, int attempt) {

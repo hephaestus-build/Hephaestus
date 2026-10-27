@@ -30,6 +30,7 @@ public class KubernetesSandboxQuota {
     private final String runtimeClassName;
     private final AtomicBoolean unreadable = new AtomicBoolean();
     private final AtomicBoolean full = new AtomicBoolean();
+    private final AtomicBoolean tooSmall = new AtomicBoolean();
 
     /** The RuntimeClass's Pod overhead once a sandbox Pod showed it; fixed for the class. */
     private volatile @Nullable Map<String, Quantity> overhead;
@@ -63,6 +64,43 @@ public class KubernetesSandboxQuota {
             log.info("The sandbox quota has room for reviews again: namespace={}", namespace);
         }
         return room;
+    }
+
+    /**
+     * Whether a quota of the namespace is smaller than one review sandbox, so that no wait gives it room. False when the
+     * quotas cannot be read: a start then decides, as for {@link #roomFor}. Warns once each time it becomes true.
+     */
+    public boolean neverFits(ResourceLimits limits) {
+        List<ResourceQuota> quotas;
+        try {
+            quotas = client.resourceQuotas().inNamespace(namespace).list().getItems();
+        } catch (RuntimeException e) {
+            return false;
+        }
+        boolean never = neverFits(quotas, footprint(limits, overhead()));
+        if (never && tooSmall.compareAndSet(false, true)) {
+            log.warn(
+                    "A sandbox quota is smaller than one review sandbox, so reviews are cancelled: raise"
+                            + " worker.sandbox.quota (docs/admin/kubernetes.mdx). namespace={}",
+                    namespace);
+        } else if (!never) {
+            tooSmall.set(false);
+        }
+        return never;
+    }
+
+    /** Whether an unscoped quota's hard bound of a resource that the footprint uses is below one footprint. */
+    static boolean neverFits(List<ResourceQuota> quotas, Map<String, Quantity> footprint) {
+        for (ResourceQuota quota : quotas) {
+            if (quota.getStatus() == null || quota.getStatus().getHard() == null || scoped(quota)) continue;
+            for (var hard : quota.getStatus().getHard().entrySet()) {
+                Quantity need = footprint.get(hard.getKey());
+                if (need != null && hard.getValue().getNumericalAmount().compareTo(need.getNumericalAmount()) < 0) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     /**

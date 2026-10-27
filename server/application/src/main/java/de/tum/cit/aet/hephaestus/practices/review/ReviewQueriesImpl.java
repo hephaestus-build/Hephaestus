@@ -83,7 +83,7 @@ public class ReviewQueriesImpl implements ReviewQueries {
      */
     static String queueStatePredicate(ReviewQueueState state) {
         return switch (state) {
-            case WAITING -> "j.status='QUEUED' AND j.hold_reason IS NULL";
+            case WAITING -> "j.status='QUEUED' AND (j.hold_reason IS NULL OR j.hold_reason<>'BUDGET')";
             case HELD -> "j.status='QUEUED' AND j.hold_reason='BUDGET'";
             case RUNNING -> "j.status='RUNNING'";
         };

@@ -294,7 +294,55 @@ class ReviewJobExecutorTest extends BaseUnitTest {
         assertThat(recorded.get("transcriptTail").asString()).contains("Cannot utime");
     }
 
+    @Test
+    void shouldCountAReviewThatTheDrainSentBackToTheQueue() {
+        var job = configuredJob();
+        recovery = mock(ReviewJobRecovery.class);
+        when(recovery.recover(job.getId(), "worker-1", job.getAttempt(), ReviewJobCancellationReason.DRAIN_GRACEFUL))
+                .thenReturn(ReviewJobRecovery.Outcome.REQUEUED);
+        when(jobs.findByIdQueuedForUpdateSkipLocked(any(), any())).thenReturn(Optional.of(job));
+        when(jobs.findById(job.getId())).thenReturn(Optional.of(job));
+        when(policy.permitsReview(job)).thenReturn(true);
+        var binding = mock(WorkspaceAgentBinding.class);
+        when(binding.getDataHandlingTier()).thenReturn(DataHandlingTier.UNDECLARED);
+        when(binding.getMaxConcurrentJobs()).thenReturn(1);
+        when(policy.binding(job)).thenReturn(Optional.of(binding));
+        when(budgets.decide(job.getWorkspaceId())).thenReturn(LlmBudgetDecision.ALLOWED);
+        when(assignments.load(job)).thenReturn(List.of(RuntimeReviewTestData.assignment(null, null)));
+        // Claimed, and still running: the pool has not started it when the worker drains.
+        var executor = executor(mock(AsyncTaskExecutor.class));
+        assertThat(executor.processJob(job.getId())).isEqualTo(ReviewJobExecutor.StartOutcome.STARTED);
+
+        assertThat(executor.cancelInFlight(ReviewJobCancellationReason.DRAIN_GRACEFUL, Duration.ofSeconds(1)))
+                .isTrue();
+
+        assertThat(meters.get("agent.job.drained")
+                        .tag("outcome", "requeued")
+                        .counter()
+                        .count())
+                .isEqualTo(1);
+        assertThat(meters.get("agent.job.drained")
+                        .tag("outcome", "cancelled")
+                        .counter()
+                        .count())
+                .isZero();
+    }
+
     /** An attempt that reaches the sandbox, whose initializer then exits with 2. */
+    @Test
+    void shouldStarveNobodyWhileNoReviewWaitsForSandboxRoom() {
+        var executor = executor(mock(AsyncTaskExecutor.class));
+        Instant start = Instant.now();
+        executor.endReviewsWithoutRoom(start);
+        executor.endReviewsWithoutRoom(start.plus(Duration.ofHours(2)));
+
+        // A review arrives at a runtime that has been full for two hours: its own hour starts now.
+        when(jobs.existsQueuedForRoom()).thenReturn(true);
+        executor.endReviewsWithoutRoom(start.plus(Duration.ofHours(3)));
+
+        verify(jobs, never()).cancelQueuedForRoom(any(), any());
+    }
+
     private ReviewJobExecutor runFailingInitializer(ReviewJob job) {
         when(jobs.findByIdQueuedForUpdateSkipLocked(any(), any())).thenReturn(Optional.of(job));
         when(jobs.findById(job.getId())).thenReturn(Optional.of(job));

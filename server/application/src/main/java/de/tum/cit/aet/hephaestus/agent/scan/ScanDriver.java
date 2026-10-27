@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.scan;
 
+import de.tum.cit.aet.hephaestus.agent.job.ReviewJobCancellationReason;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobLifecycleService;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobStateConflictException;
@@ -113,6 +114,12 @@ public class ScanDriver {
         if (jobs.hasUnsettledInvocation(review.workspaceId(), review.id())) return;
         if (state.cancellationRequested()) {
             close(state, ReviewStatus.CANCELLED, ReviewStopReason.CANCELLED);
+            return;
+        }
+        // Capacity ends a job only when no room can come, so the scan's next file would end the same way.
+        if (jobs.existsByReviewIdAndWorkspaceIdAndCancellationReason(
+                review.id(), review.workspaceId(), ReviewJobCancellationReason.NO_SANDBOX_ROOM)) {
+            close(state, ReviewStatus.CANCELLED, ReviewStopReason.NO_SANDBOX_ROOM);
             return;
         }
         if (!clock.instant().isBefore(state.createdAt().plus(limits.scanDeadline()))) {

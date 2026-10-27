@@ -399,17 +399,22 @@ public class ReviewServiceImpl implements ReviewService {
                                         .anyMatch(p -> !Boolean.TRUE.equals(p.getListingComplete()))))
                 || memberships.existsByWorkspaceIdAndReviewIdAndStateIn(
                         workspaceId, reviewId, List.of(ReviewItemState.WITHHELD, ReviewItemState.LISTED));
-        var status = review.getChecks().path("cancellationRequested").asBoolean()
+        boolean cancellationRequested =
+                review.getChecks().path("cancellationRequested").asBoolean();
+        var status = cancellationRequested
                 ? ReviewStatus.CANCELLED
                 : completion.status() == ReviewStatus.COMPLETE && incomplete
                         ? ReviewStatus.PARTIAL
                         : completion.status();
         review.setStatus(status);
+        // A cancellation that nobody requested keeps the reason the runtime recorded, such as no sandbox room.
         review.setStopReason(
                 status == ReviewStatus.COMPLETE
                         ? null
                         : status == ReviewStatus.CANCELLED
-                                ? ReviewStopReason.CANCELLED
+                                ? cancellationRequested || completion.reason() == null
+                                        ? ReviewStopReason.CANCELLED
+                                        : completion.reason()
                                 : completion.reason() == null
                                         ? ReviewStopReason.EXECUTION_INCOMPLETE
                                         : completion.reason());

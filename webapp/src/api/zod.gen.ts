@@ -4128,7 +4128,8 @@ export const zReview = z.object({
         'MODEL_UNAVAILABLE',
         'ERROR',
         'LEGACY_SCOPE_UNKNOWN',
-        'CONTRACT_CHANGED'
+        'CONTRACT_CHANGED',
+        'NO_SANDBOX_ROOM'
     ]).nullable()
 });
 
@@ -4261,7 +4262,8 @@ export const zReviewSummary = z.object({
         'MODEL_UNAVAILABLE',
         'ERROR',
         'LEGACY_SCOPE_UNKNOWN',
-        'CONTRACT_CHANGED'
+        'CONTRACT_CHANGED',
+        'NO_SANDBOX_ROOM'
     ]).nullable()
 });
 
@@ -4384,7 +4386,8 @@ export const zReviewDetail = z.object({
         'MODEL_UNAVAILABLE',
         'ERROR',
         'LEGACY_SCOPE_UNKNOWN',
-        'CONTRACT_CHANGED'
+        'CONTRACT_CHANGED',
+        'NO_SANDBOX_ROOM'
     ]).nullable(),
     usage: zReviewUsage
 });
@@ -4516,7 +4519,8 @@ export const zRuntimeNonResult = z.object({
         'MODEL_UNAVAILABLE',
         'ERROR',
         'LEGACY_SCOPE_UNKNOWN',
-        'CONTRACT_CHANGED'
+        'CONTRACT_CHANGED',
+        'NO_SANDBOX_ROOM'
     ])
 });
 
@@ -4833,7 +4837,8 @@ export const zScanDetail = z.object({
         'MODEL_UNAVAILABLE',
         'ERROR',
         'LEGACY_SCOPE_UNKNOWN',
-        'CONTRACT_CHANGED'
+        'CONTRACT_CHANGED',
+        'NO_SANDBOX_ROOM'
     ]).nullable()
 });
 
@@ -4888,7 +4893,8 @@ export const zScanSummary = z.object({
         'MODEL_UNAVAILABLE',
         'ERROR',
         'LEGACY_SCOPE_UNKNOWN',
-        'CONTRACT_CHANGED'
+        'CONTRACT_CHANGED',
+        'NO_SANDBOX_ROOM'
     ]).nullable()
 });
 

@@ -34,6 +34,16 @@ public interface SandboxManager {
         return Integer.MAX_VALUE;
     }
 
+    /** Whether the runtime can never hold one sandbox of these limits; see {@link SandboxRoom#neverFits}. */
+    default boolean neverFits(ResourceLimits limits) {
+        return false;
+    }
+
+    /** Whether a review sandbox runs now; see {@link SandboxRoom#reviewsRunning}. */
+    default boolean reviewsRunning() {
+        return true;
+    }
+
     /**
      * Execute a sandboxed container and return the result.
      *

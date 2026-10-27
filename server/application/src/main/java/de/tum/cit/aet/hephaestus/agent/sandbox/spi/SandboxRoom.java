@@ -9,4 +9,10 @@ public interface SandboxRoom {
 
     /** How many more sandboxes of these limits the runtime admits now; {@link Integer#MAX_VALUE} for no bound. */
     int roomFor(ResourceLimits limits);
+
+    /** Whether no room of the runtime can ever hold one sandbox of these limits, so that waiting does not help. */
+    boolean neverFits(ResourceLimits limits);
+
+    /** Whether a review sandbox runs now, so that its end frees room; true when the runtime cannot tell. */
+    boolean reviewsRunning();
 }

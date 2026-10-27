@@ -24,6 +24,15 @@ Each job has an independent UUID and a workspace-scoped review reference.
 A database index also permits only one active scan per workspace.
 
 Claims carry an attempt fence.
+A requeue after preparation always moves the job to the next attempt number.
+Thus, no evidence folder, sandbox Job name or job token is used twice.
+
+Two kinds of requeue spend no retry, because they are not the review's fault.
+A worker's drain counts in `drain_count`, at most 3 times.
+A sandbox runtime without room counts in `room_refusals`, with no limit.
+Only starvation or a quota that is too small ends such a review.
+`ReviewJob.spentAttempts()` subtracts both, and every retry-budget check reads it.
+
 Admission locks the review before its job and assignment rows.
 Cancellation follows the same order and prevents later admission from publishing through the old attempt.
 Classified preparation reasons describe work, source access, pinned versions and capture failures without raw exception text.

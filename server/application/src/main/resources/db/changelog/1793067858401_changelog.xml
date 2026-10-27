@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1793067858401-1" author="hephaestus">
+        <addColumn tableName="review_job">
+            <column defaultValueNumeric="0" name="drain_count" type="INTEGER">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1793067858401-2" author="hephaestus">
+        <addColumn tableName="review_job">
+            <column defaultValueNumeric="0" name="room_refusals" type="INTEGER">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+    </changeSet>
+    <changeSet id="1793067858401-3" author="hephaestus">
+        <preConditions onFail="HALT">
+            <sqlCheck expectedResult="1">SELECT count(*) FROM pg_constraint WHERE conrelid='review_job'::regclass AND conname='ck_review_job_cancellation'</sqlCheck>
+        </preConditions>
+        <comment>Permit a review job to be cancelled because the sandbox runtime had no room for it in time.</comment>
+        <sql>ALTER TABLE review_job DROP CONSTRAINT ck_review_job_cancellation;</sql>
+        <sql>ALTER TABLE review_job ADD CONSTRAINT ck_review_job_cancellation CHECK(cancellation_reason IS NULL OR cancellation_reason IN ('DRAIN_GRACEFUL','DRAIN_IMMEDIATE','BUDGET_EXHAUSTED','MODEL_UNAVAILABLE','MEMBER_AI_DECLINED','PERSON_DATA_ERASED','CANCELLED_BY_ADMIN','CANCELLED_BY_REQUESTER','CONTRACT_CHANGED','NO_SANDBOX_ROOM'));</sql>
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+DO $$ BEGIN
+    IF EXISTS (SELECT 1 FROM review_job WHERE cancellation_reason='NO_SANDBOX_ROOM') THEN
+        RAISE EXCEPTION 'Cannot remove a cancellation reason used by existing review jobs. Restore a verified backup instead.';
+    END IF;
+END $$;
+ALTER TABLE review_job DROP CONSTRAINT ck_review_job_cancellation;
+ALTER TABLE review_job ADD CONSTRAINT ck_review_job_cancellation CHECK(cancellation_reason IS NULL OR cancellation_reason IN ('DRAIN_GRACEFUL','DRAIN_IMMEDIATE','BUDGET_EXHAUSTED','MODEL_UNAVAILABLE','MEMBER_AI_DECLINED','PERSON_DATA_ERASED','CANCELLED_BY_ADMIN','CANCELLED_BY_REQUESTER','CONTRACT_CHANGED'));
+            ]]></sql>
+        </rollback>
+    </changeSet>
+    <changeSet id="1793067858401-4" author="hephaestus">
+        <preConditions onFail="HALT">
+            <sqlCheck expectedResult="1">SELECT count(*) FROM pg_constraint WHERE conrelid='review'::regclass AND conname='ck_review_stop_reason'</sqlCheck>
+        </preConditions>
+        <comment>Permit a review to stop because the sandbox runtime had no room for it in time.</comment>
+        <sql>ALTER TABLE review DROP CONSTRAINT ck_review_stop_reason;</sql>
+        <sql>ALTER TABLE review ADD CONSTRAINT ck_review_stop_reason CHECK(stop_reason IS NULL OR stop_reason IN ('TIMED_OUT','EXECUTION_FAILED','PREPARATION_FAILED','PROCESSING_FAILED','PERSON_DATA_ERASED','STALE_ROLLOUT_REVISION','CANCELLED_BY_ADMIN','REPLACED','LEGACY_FAILURE','EXECUTION_INCOMPLETE','RESULT_WITHHELD','READINESS_REFUSED','SUSPECT_LISTING','BUDGET','USAGE_UNVERIFIABLE','DEADLINE','CANCELLED','ENUMERATION_FAILED','ENUMERATION_LIMIT','NO_SCAN_PRACTICES','MODEL_CHANGED','MODEL_UNAVAILABLE','ERROR','LEGACY_SCOPE_UNKNOWN','CONTRACT_CHANGED','NO_SANDBOX_ROOM'));</sql>
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+DO $$ BEGIN
+    IF EXISTS (SELECT 1 FROM review WHERE stop_reason='NO_SANDBOX_ROOM') THEN
+        RAISE EXCEPTION 'Cannot remove a stop reason used by existing reviews. Restore a verified backup instead.';
+    END IF;
+END $$;
+ALTER TABLE review DROP CONSTRAINT ck_review_stop_reason;
+ALTER TABLE review ADD CONSTRAINT ck_review_stop_reason CHECK(stop_reason IS NULL OR stop_reason IN ('TIMED_OUT','EXECUTION_FAILED','PREPARATION_FAILED','PROCESSING_FAILED','PERSON_DATA_ERASED','STALE_ROLLOUT_REVISION','CANCELLED_BY_ADMIN','REPLACED','LEGACY_FAILURE','EXECUTION_INCOMPLETE','RESULT_WITHHELD','READINESS_REFUSED','SUSPECT_LISTING','BUDGET','USAGE_UNVERIFIABLE','DEADLINE','CANCELLED','ENUMERATION_FAILED','ENUMERATION_LIMIT','NO_SCAN_PRACTICES','MODEL_CHANGED','MODEL_UNAVAILABLE','ERROR','LEGACY_SCOPE_UNKNOWN','CONTRACT_CHANGED'));
+            ]]></sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

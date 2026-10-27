@@ -58,6 +58,9 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
     Optional<ReviewJob> findByReviewIdAndWorkspaceIdAndStatusIn(
             UUID reviewId, long workspaceId, Collection<ReviewJobStatus> statuses);
 
+    boolean existsByReviewIdAndWorkspaceIdAndCancellationReason(
+            UUID reviewId, long workspaceId, ReviewJobCancellationReason cancellationReason);
+
     @Query(
             "SELECT j.id FROM ReviewJob j WHERE j.reviewId=:reviewId AND j.workspaceId=:workspaceId AND j.status IN :statuses")
     Optional<UUID> findActiveId(
@@ -318,6 +321,23 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
     Optional<ReviewJobLlmUsage> findLlmUsageById(@Param("id") UUID id);
 
     /**
+     * A worker's drain stopped the unadmitted attempt: the next attempt gets its own number, as after any run, and the
+     * drain is counted instead of a retry, up to {@link ReviewJob#MAX_DRAINS}.
+     */
+    @WorkspaceAgnostic("The worker supplies the claimed job id and ownership fence")
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("UPDATE ReviewJob j SET j.status = 'QUEUED', j.workerId = null, j.startedAt = null, j.executionStartedAt ="
+            + " null, j.attempt = j.attempt + 1, j.drainCount = j.drainCount + 1, j.availableAt = :availableAt,"
+            + " j.llmCalls = 0, j.llmInputTokens = 0, j.llmOutputTokens = 0, j.llmReasoningTokens = 0,"
+            + " j.llmCacheReadTokens = 0, j.llmCacheWriteTokens = 0 WHERE j.id = :id AND j.status = 'RUNNING' AND"
+            + " j.workerId = :workerId AND j.drainCount < :maxDrains AND j.admissionDigest IS NULL")
+    int requeueDrained(
+            @Param("id") UUID id,
+            @Param("workerId") String workerId,
+            @Param("maxDrains") int maxDrains,
+            @Param("availableAt") Instant availableAt);
+
+    /**
      * Cancels the RUNNING attempt like {@link #transitionToCancelled}, fenced on the owning worker and the attempt: a
      * draining worker must not cancel a later attempt if the job was orphan-requeued out from under it.
      *
@@ -411,7 +431,7 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
             + " null, j.attempt = j.attempt + 1, j.availableAt = :#{#request.availableAt}, j.llmCalls = 0,"
             + " j.llmInputTokens = 0, j.llmOutputTokens = 0, j.llmReasoningTokens = 0, j.llmCacheReadTokens = 0,"
             + " j.llmCacheWriteTokens = 0 WHERE j.id = :id AND j.status = 'RUNNING' AND j.workerId = :workerId AND"
-            + " j.attempt = :#{#request.attempt} AND j.attempt <= :#{#request.maxRetries} AND"
+            + " j.attempt = :#{#request.attempt} AND j.attempt - j.drainCount - j.roomRefusals <= :#{#request.maxRetries} AND"
             + " j.output IS NULL AND NOT (" + NOT_ADMITTED + ")")
     int requeueAdmittedForComposition(
             @Param("id") UUID id, @Param("workerId") String workerId, @Param("request") CompositionRequeue request);
@@ -433,6 +453,67 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
             @Param("workerId") String workerId,
             @Param("attempt") int attempt,
             @Param("now") Instant now);
+
+    /**
+     * The sandbox runtime had no room: the job waits in the queue until {@code availableAt}. The next attempt gets its
+     * own number, as after any claim, so nothing of this one is reused; the refusal is counted instead of a retry.
+     * Only starvation ends a review that waits for room, never a count of refusals.
+     */
+    @WorkspaceAgnostic("ID-based self-fenced requeue; caller is the claiming worker itself")
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("UPDATE ReviewJob j SET j.status = 'QUEUED', j.workerId = null, j.startedAt = null, "
+            + "j.executionStartedAt = null, j.attempt = j.attempt + 1, j.roomRefusals = j.roomRefusals + 1, "
+            + "j.availableAt = :availableAt, j.holdReason = 'SANDBOX_ROOM', "
+            + "j.llmCalls = 0, j.llmInputTokens = 0, j.llmOutputTokens = 0, j.llmReasoningTokens = 0, "
+            + "j.llmCacheReadTokens = 0, j.llmCacheWriteTokens = 0 "
+            + "WHERE j.id = :id AND j.status = 'RUNNING' AND j.workerId = :workerId AND j.attempt = :attempt "
+            + "AND j.admissionDigest IS NULL")
+    int holdForSandboxRoom(
+            @Param("id") UUID id,
+            @Param("workerId") String workerId,
+            @Param("attempt") int attempt,
+            @Param("availableAt") Instant availableAt);
+
+    /**
+     * Cancels this worker's attempt for capacity: nothing of its sandbox ran, so it has no execution time either.
+     *
+     * @return rows updated (0 or 1)
+     */
+    @WorkspaceAgnostic("ID-based fenced cancel; caller is the claiming worker itself")
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("UPDATE ReviewJob j SET j.status = de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus.CANCELLED, "
+            + "j.completedAt = :now, j.errorMessage = :error, j.executionStartedAt = null, "
+            + "j.cancellationReason = de.tum.cit.aet.hephaestus.agent.job.ReviewJobCancellationReason.NO_SANDBOX_ROOM "
+            + "WHERE j.id = :id AND j.status = 'RUNNING' AND j.workerId = :workerId AND j.attempt = :attempt")
+    int cancelForRoomOwnedBy(
+            @Param("id") UUID id,
+            @Param("now") Instant now,
+            @Param("error") String error,
+            @Param("workerId") String workerId,
+            @Param("attempt") int attempt);
+
+    /**
+     * Cancels for capacity every queued review that needs a sandbox and is due: the sandbox runtime cannot hold it.
+     * Admitted reviews that only compose need no sandbox and stay. A budget hold outlives its {@code availableAt} until
+     * the next claim, and such a review waits for money, not room, so it stays too. Several workers may run it; the
+     * second changes nothing.
+     *
+     * @return the reviews cancelled
+     */
+    @WorkspaceAgnostic("Fleet-wide capacity verdict over the shared queue; caller is a worker's admission check")
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("UPDATE ReviewJob j SET j.status = de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus.CANCELLED, "
+            + "j.completedAt = :now, j.errorMessage = :error, "
+            + "j.cancellationReason = de.tum.cit.aet.hephaestus.agent.job.ReviewJobCancellationReason.NO_SANDBOX_ROOM "
+            + "WHERE j.status = 'QUEUED' AND j.availableAt <= :now AND j.admissionDigest IS NULL "
+            + "AND (j.holdReason IS NULL OR j.holdReason <> 'BUDGET')")
+    int cancelQueuedForRoom(@Param("now") Instant now, @Param("error") String error);
+
+    /** Whether a queued review still needs a sandbox: one held for its budget waits for money, not room. */
+    @WorkspaceAgnostic("Fleet-wide capacity verdict over the shared queue; caller is a worker's admission check")
+    @Query("SELECT COUNT(j) > 0 FROM ReviewJob j WHERE j.status = 'QUEUED' AND j.admissionDigest IS NULL "
+            + "AND (j.holdReason IS NULL OR j.holdReason <> 'BUDGET')")
+    boolean existsQueuedForRoom();
 
     /** Pool rejection leaves attempt, availability, and token unchanged because no sandbox executed. */
     @WorkspaceAgnostic("ID-based self-fenced requeue; caller is the claiming worker itself")
@@ -484,7 +565,7 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
     @Query(
             value = "SELECT   COUNT(*) FILTER (WHERE status = 'QUEUED' AND available_at <= :now) AS depth,  "
                     + " MIN(available_at) FILTER (WHERE status = 'QUEUED' AND available_at <= :now) AS oldestAvailableAt, "
-                    + "  COUNT(*) FILTER (WHERE status = 'QUEUED' AND hold_reason IS NOT NULL) AS held,   COUNT(*) FILTER"
+                    + "  COUNT(*) FILTER (WHERE status = 'QUEUED' AND hold_reason = 'BUDGET') AS held,   COUNT(*) FILTER"
                     + " (WHERE status = 'RUNNING') AS running FROM review_job WHERE status IN ('QUEUED', 'RUNNING')",
             nativeQuery = true)
     QueueHealthSnapshot queueHealthSnapshot(@Param("now") Instant now);
@@ -565,11 +646,12 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
 
     @WorkspaceAgnostic("The worker supplies the claimed job id and ownership fence")
     @Modifying(flushAutomatically = true, clearAutomatically = true)
-    @Query("UPDATE ReviewJob j SET j.status = 'QUEUED', j.workerId = null, j.startedAt = null, j.executionStartedAt ="
-            + " null, j.attempt = j.attempt + 1, j.availableAt = :availableAt,"
-            + " j.llmCalls = 0, j.llmInputTokens = 0, j.llmOutputTokens = 0, j.llmReasoningTokens = 0,"
-            + " j.llmCacheReadTokens = 0, j.llmCacheWriteTokens = 0 WHERE j.id = :id AND j.status = 'RUNNING' AND"
-            + " j.workerId = :workerId AND j.attempt < :maxRetries AND j.admissionDigest IS NULL")
+    @Query(
+            "UPDATE ReviewJob j SET j.status = 'QUEUED', j.workerId = null, j.startedAt = null, j.executionStartedAt ="
+                    + " null, j.attempt = j.attempt + 1, j.availableAt = :availableAt,"
+                    + " j.llmCalls = 0, j.llmInputTokens = 0, j.llmOutputTokens = 0, j.llmReasoningTokens = 0,"
+                    + " j.llmCacheReadTokens = 0, j.llmCacheWriteTokens = 0 WHERE j.id = :id AND j.status = 'RUNNING' AND"
+                    + " j.workerId = :workerId AND j.attempt - j.drainCount - j.roomRefusals < :maxRetries AND j.admissionDigest IS NULL")
     int requeueOrphan(
             @Param("id") UUID id,
             @Param("workerId") String workerId,

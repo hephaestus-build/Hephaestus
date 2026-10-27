@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.sandbox.kubernetes;
 
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxCancelledException;
+import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxCapacityException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxInfrastructureException;
 import io.fabric8.kubernetes.api.model.DeletionPropagation;
@@ -15,8 +16,11 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BooleanSupplier;
 import org.jspecify.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Sandbox Pods as native {@code batch/v1} Jobs: one Job per practice-review attempt, named after the job and the
@@ -31,6 +35,8 @@ import org.jspecify.annotations.Nullable;
  */
 public class KubernetesSandboxJobs {
 
+    private static final Logger log = LoggerFactory.getLogger(KubernetesSandboxJobs.class);
+
     /** The label the Job controller gives each Pod of a Job: the Job's name. */
     static final String JOB_NAME = "batch.kubernetes.io/job-name";
 
@@ -43,8 +49,17 @@ public class KubernetesSandboxJobs {
     /** How often a wait for the Pod of a Job looks at the attempt's cancellation. */
     private static final Duration CANCEL_POLL = Duration.ofMillis(200);
 
+    /** How often a wait for the Pod of a Job reads the Job's events for a refusal of the sandbox quota. */
+    private static final Duration REFUSAL_POLL = Duration.ofSeconds(2);
+
+    /** The quota admission's refusal, in the message of the Job controller's {@code FailedCreate} event. */
+    private static final String QUOTA_REFUSAL = "exceeded quota";
+
     private final KubernetesClient client;
     private final KubernetesWorker worker;
+
+    /** Whether the API refused this worker the events of the sandbox namespace: it stops asking. */
+    private final AtomicBoolean eventsDenied = new AtomicBoolean();
 
     public KubernetesSandboxJobs(KubernetesClient client, KubernetesWorker worker) {
         this.client = client;
@@ -101,6 +116,7 @@ public class KubernetesSandboxJobs {
      *
      * @param cancelled read at least every {@link #CANCEL_POLL}, so a cancellation ends the wait promptly
      * @throws SandboxCancelledException when the attempt was cancelled first
+     * @throws SandboxCapacityException when the sandbox quota refused the Pod: the Job controller would keep trying
      * @throws SandboxInfrastructureException when no Pod of the Job appeared in time, or the Pods cannot be watched:
      *     neither says anything of the review
      */
@@ -116,6 +132,7 @@ public class KubernetesSandboxJobs {
             throw KubernetesPods.failure("Could not watch the Pods of a sandbox Job", e);
         }
         try {
+            long nextRefusalCheck = System.nanoTime() + REFUSAL_POLL.toNanos();
             while (!cancelled.getAsBoolean()) {
                 long left = deadline - System.nanoTime();
                 if (left <= 0) {
@@ -125,7 +142,11 @@ public class KubernetesSandboxJobs {
                     return appeared.get(Math.min(left, CANCEL_POLL.toNanos()), TimeUnit.NANOSECONDS)
                             .getFirst();
                 } catch (TimeoutException e) {
-                    // Not yet: look at the cancellation and the deadline again.
+                    // Not yet: look at the quota, the cancellation and the deadline again.
+                }
+                if (System.nanoTime() - nextRefusalCheck >= 0) {
+                    requireRoom(job);
+                    nextRefusalCheck = System.nanoTime() + REFUSAL_POLL.toNanos();
                 }
             }
             throw new SandboxCancelledException("Job cancelled while its sandbox Pod was created");
@@ -136,6 +157,53 @@ public class KubernetesSandboxJobs {
             throw watchFailure(e);
         } finally {
             appeared.cancel(true);
+        }
+    }
+
+    /**
+     * Throws when the Job controller reported that the sandbox quota refused this Job's Pod and no Pod of it exists: a
+     * Pod that the controller created once room freed wins over its earlier refusal. The event names the Job by its
+     * UID, so the event of an earlier Job of the same name does not count. Whether the quota can ever hold the Pod, the
+     * caller asks the quota ({@code SandboxRoom#neverFits}). A worker that may not read the events stops
+     * looking after one warning and leaves the wait to its timeout.
+     */
+    void requireRoom(String job) {
+        if (eventsDenied.get()) {
+            return;
+        }
+        try {
+            Job read = client.batch()
+                    .v1()
+                    .jobs()
+                    .inNamespace(worker.namespace())
+                    .withName(job)
+                    .get();
+            String uid = read == null ? null : read.getMetadata().getUid();
+            if (uid == null) {
+                return;
+            }
+            // The namespace holds only sandbox Jobs and Pods, so its events are few; the client matches the Job.
+            boolean refused = client.v1().events().inNamespace(worker.namespace()).list().getItems().stream()
+                    .anyMatch(event -> event.getInvolvedObject() != null
+                            && uid.equals(event.getInvolvedObject().getUid())
+                            && "FailedCreate".equals(event.getReason())
+                            && event.getMessage() != null
+                            && event.getMessage().contains(QUOTA_REFUSAL));
+            if (refused && podOf(job) == null) {
+                throw new SandboxCapacityException(
+                        "The sandbox quota has no room for the Pod of a review Job",
+                        SandboxCapacityException.Reason.QUOTA_EXCEEDED);
+            }
+        } catch (KubernetesClientException e) {
+            if (e.getCode() == 403 && eventsDenied.compareAndSet(false, true)) {
+                log.warn("The worker may not read the events of the sandbox namespace, so a review whose Pod the"
+                        + " sandbox quota refuses waits for its timeout and spends a retry. Grant get and list on"
+                        + " events there (docs/admin/kubernetes.mdx)");
+            }
+        } catch (SandboxException e) {
+            throw e;
+        } catch (RuntimeException e) {
+            log.debug("Could not read whether the sandbox quota refused review Job {}", job, e);
         }
     }
 

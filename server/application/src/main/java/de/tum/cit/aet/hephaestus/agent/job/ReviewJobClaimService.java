@@ -230,7 +230,8 @@ public class ReviewJobClaimService {
         }
 
         Instant claimedAt = Instant.now();
-        if (!job.getAvailableAt().isAfter(claimedAt)) {
+        // The first claim only: a requeued review would sample its submission again, later each time.
+        if (job.getAttempt() == 0 && !job.getAvailableAt().isAfter(claimedAt)) {
             claimLatency.record(Duration.between(job.getSubmittedAt(), claimedAt));
         }
         job.setStatus(ReviewJobStatus.RUNNING);

@@ -47,3 +47,15 @@ in API GET /workspaces/{workspaceSlug}/practices/reviews/{reviewId}/feedback-che
 # #3238: the review sandbox composes nothing, so its two internal composition routes are removed. Only the sandbox called them.
 in API POST /internal/llm/prepare-feedback api path removed without deprecation
 in API POST /internal/llm/public-feedback-history api path removed without deprecation
+
+# #3355: a review or scan that no sandbox room could hold ends with the new NO_SANDBOX_ROOM stop reason.
+in API GET /workspaces/{workspaceSlug}/practices/reviews added the new `NO_SANDBOX_ROOM` enum value to the `content/items/stopReason` response property for the response status `200`
+in API GET /workspaces/{workspaceSlug}/practices/reviews/{reviewId} added the new `NO_SANDBOX_ROOM` enum value to the `stopReason` response property for the response status `200`
+in API POST /workspaces/{workspaceSlug}/practices/reviews/{reviewId}/cancel added the new `NO_SANDBOX_ROOM` enum value to the `stopReason` response property for the response status `200`
+in API POST /workspaces/{workspaceSlug}/practices/reviews/{reviewId}/cancel added the new `NO_SANDBOX_ROOM` enum value to the `stopReason` response property for the response status `202`
+in API GET /workspaces/{workspaceSlug}/practices/scans added the new `NO_SANDBOX_ROOM` enum value to the `content/items/stopReason` response property for the response status `200`
+in API POST /workspaces/{workspaceSlug}/practices/scans added the new `NO_SANDBOX_ROOM` enum value to the `stopReason` response property for the response status `202`
+in API GET /workspaces/{workspaceSlug}/practices/scans/{scanId} added the new `NO_SANDBOX_ROOM` enum value to the `stopReason` response property for the response status `200`
+in API GET /workspaces/{workspaceSlug}/practices/scans/{scanId}/report added the new `NO_SANDBOX_ROOM` enum value to the `scan/stopReason` response property for the response status `200`
+in API PATCH /workspaces/{workspaceSlug}/practices/scans/{scanId}/status added the new `NO_SANDBOX_ROOM` enum value to the `stopReason` response property for the response status `200`
+in API PATCH /workspaces/{workspaceSlug}/practices/scans/{scanId}/status added the new `NO_SANDBOX_ROOM` enum value to the `stopReason` response property for the response status `202`
