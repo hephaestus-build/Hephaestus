@@ -53,6 +53,15 @@ catalog:
   "@vitest/coverage-v8": 5.0.5
   vite: npm:@voidzero-dev/vite-plus-core@1.3.0
 
+# The plugin imports these without declaring them; under `nodeLinker: isolated` it cannot reach them.
+# As peers they resolve to the versions `docs/package.json` pins beside the rest of Docusaurus.
+packageExtensions:
+  "@signalwire/docusaurus-plugin-llms-txt@1.2.2":
+    peerDependencies:
+      "@docusaurus/logger": ^3
+      "@docusaurus/utils": ^3
+      "@docusaurus/utils-validation": ^3
+
 overrides:
   "get-uri>basic-ftp": 6.2.1
   "@docusaurus/core>tinypool": 2.1.2

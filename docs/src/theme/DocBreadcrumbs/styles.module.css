@@ -1,0 +1,18 @@
+.row {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.5rem 1rem;
+	margin-bottom: 0.8rem;
+}
+
+/* Infima's own margin would push the trail below the actions. */
+.row > nav {
+	margin-bottom: 0;
+}
+
+/* Right-aligned when the row wraps, so the menu, which opens leftwards, stays on screen. */
+.row > :last-child {
+	margin-inline-start: auto;
+}

@@ -13,6 +13,12 @@ const envBaseUrl = process.env.DOCUSAURUS_BASE_URL;
  */
 const baseUrl = envBaseUrl === undefined || envBaseUrl === "" ? "/" : envBaseUrl;
 
+const GUIDES = [
+	{ path: "user", label: "User guide" },
+	{ path: "admin", label: "Admin guide" },
+	{ path: "contributor", label: "Contributor guide" },
+];
+
 const DESCRIPTION =
 	"Hephaestus reviews the pull requests, issues, and code reviews your team already writes against the engineering practices you choose. It gives each developer feedback that cites their work and names a next step.";
 
@@ -64,6 +70,33 @@ function rejectUnparsedAdmonitions() {
 		visit(tree);
 	};
 }
+
+interface HtmlNode {
+	type: string;
+	tagName?: string;
+	properties?: { className?: unknown };
+	children?: HtmlNode[];
+}
+
+/* Every heading carries Docusaurus's "#" link; in a Markdown twin it is noise after each heading. */
+function stripHeadingAnchors(node: HtmlNode): void {
+	if (node.children === undefined) {
+		return;
+	}
+	node.children = node.children.filter(
+		(child) =>
+			!(
+				child.tagName === "a" &&
+				Array.isArray(child.properties?.className) &&
+				child.properties.className.includes("hash-link")
+			),
+	);
+	for (const child of node.children) {
+		stripHeadingAnchors(child);
+	}
+}
+
+const dropHeadingAnchors = () => stripHeadingAnchors;
 
 const config: Config = {
 	title: "Hephaestus documentation",
@@ -170,6 +203,24 @@ const config: Config = {
 				showLastUpdateAuthor: true,
 				showLastUpdateTime: true,
 				remarkPlugins: [rejectUnparsedAdmonitions],
+			},
+		],
+		[
+			"@signalwire/docusaurus-plugin-llms-txt",
+			{
+				siteDescription: DESCRIPTION,
+				depth: 1,
+				includeOrder: GUIDES.map(({ path }) => `/${path}/**`),
+				onRouteError: "throw",
+				content: {
+					enableLlmsFullTxt: true,
+					excludeRoutes: ["/search"],
+					beforeDefaultRehypePlugins: [dropHeadingAnchors],
+					routeRules: GUIDES.map(({ path, label }) => ({
+						route: `/${path}/**`,
+						categoryName: label,
+					})),
+				},
 			},
 		],
 		[
