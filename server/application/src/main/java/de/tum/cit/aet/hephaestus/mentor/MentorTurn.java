@@ -290,8 +290,11 @@ public class MentorTurn implements Persistable<UUID> {
         if (status != Status.FAILED) {
             return;
         }
-        this.failureCause = cause;
-        this.failedCall = call == null ? null : call.kind();
+        // Cut to the columns: a cause that does not fit must not roll back the end it belongs to.
+        this.failureCause = cause == null ? null : cause.substring(0, Math.min(cause.length(), 200));
+        this.failedCall = call == null
+                ? null
+                : call.kind().substring(0, Math.min(call.kind().length(), 64));
         this.failedCallStatus = call == null ? null : call.status();
     }
 
