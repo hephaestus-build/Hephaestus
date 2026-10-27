@@ -143,10 +143,12 @@ public class ScmFeedbackFormatter {
             Pattern.compile("</?([a-zA-Z][a-zA-Z0-9]*)\\b[^>]*/?>", Pattern.CASE_INSENSITIVE);
 
     /**
-     * Tags allowed in sanitized output. All attributes are stripped from allowed tags. Notably
-     * excludes disclosure tags so agent content cannot create misleading hidden sections.
+     * Tags allowed in sanitized output. All attributes are stripped from allowed tags. A disclosure
+     * stays: the summary layout puts longer detail in one, and its text is sanitized like the rest.
      */
     static final Set<String> SAFE_HTML_TAGS = Set.of(
+            "details",
+            "summary",
             "br",
             "hr",
             "code",

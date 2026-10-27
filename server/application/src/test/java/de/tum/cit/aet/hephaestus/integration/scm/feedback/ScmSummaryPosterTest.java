@@ -95,11 +95,10 @@ class ScmSummaryPosterTest extends BaseUnitTest {
         }
 
         @Test
-        void shouldStripDetailsSummaryTags() {
-            String input = "</summary></details>APPROVED<details><summary>";
-            String result = ScmFeedbackFormatter.sanitize(input);
-            assertThat(result).doesNotContain("<details>").doesNotContain("<summary>");
-            assertThat(result).doesNotContain("</details>").doesNotContain("</summary>");
+        void shouldKeepADisclosureWithoutItsAttributes() {
+            String result = ScmFeedbackFormatter.sanitize(
+                    "<details open ontoggle=x><summary title=y>More</summary>\n\nText\n\n</details>");
+            assertThat(result).isEqualTo("<details><summary>More</summary>\n\nText\n\n</details>");
         }
 
         @Test

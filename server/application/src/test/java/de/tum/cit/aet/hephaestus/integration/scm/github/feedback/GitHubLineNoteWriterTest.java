@@ -30,6 +30,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.LineNote;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryContent;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryHandle;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryLookup;
+import de.tum.cit.aet.hephaestus.integration.scm.feedback.PostedText;
 import de.tum.cit.aet.hephaestus.integration.scm.feedback.ScmFeedbackFixtures;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubGraphQlClientProvider;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -441,8 +442,7 @@ class GitHubLineNoteWriterTest extends BaseUnitTest {
     }
 
     private static String posted(LineNote item) {
-        return item.body().replace("@alice", "<code>@alice</code>") + "\n\n" + item.writeMarker() + "\n"
-                + ckTag(String.valueOf(item.writeKey()));
+        return PostedText.of(item.body()) + "\n\n" + item.writeMarker() + "\n" + ckTag(String.valueOf(item.writeKey()));
     }
 
     private static Map<String, Object> authored(LineNote item) {

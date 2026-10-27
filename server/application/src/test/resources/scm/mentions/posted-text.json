@@ -1,0 +1,30 @@
+[
+  {
+    "body": "Before <!-- hidden note --> after.",
+    "posted": "Before  after."
+  },
+  {
+    "body": "See <img src=\"https://evil.example/t.png\"> here.",
+    "posted": "See  here."
+  },
+  {
+    "body": "See ![pixel](https://evil.example/t.png) here.",
+    "posted": "See  here."
+  },
+  {
+    "body": "Open [this](javascript:alert(1)) now.",
+    "posted": "Open this now."
+  },
+  {
+    "body": "Ask @someone to review. <script>alert(1)</script><b onclick=x>bold</b> done",
+    "posted": "Ask <code>@someone</code> to review. alert(1)<b>bold</b> done"
+  },
+  {
+    "body": "<details open><summary>More</summary>\n\nText\n\n</details>",
+    "posted": "<details><summary>More</summary>\n\nText\n\n</details>"
+  },
+  {
+    "body": "Read [the guide](https://example.test/guide).",
+    "posted": "Read [the guide](https://example.test/guide)."
+  }
+]

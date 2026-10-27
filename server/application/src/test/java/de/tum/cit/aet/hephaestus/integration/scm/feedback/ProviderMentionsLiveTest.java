@@ -12,7 +12,8 @@ import org.springframework.http.MediaType;
 import org.springframework.web.client.RestClient;
 
 /**
- * Renders each escaped fixture body with the providers' own Markdown renderers and finds no mention link in it.
+ * Renders each escaped and each posted fixture body with the providers' own Markdown renderers. It finds no mention
+ * link, no image, no script link and no hidden comment in the result.
  *
  * <p>Skipped unless {@code GITHUB_TOKEN} is set (GitHub) or {@code GITLAB_URL} and {@code GITLAB_TOKEN} are set
  * (GitLab). {@code MENTIONS_GITHUB_REPOSITORY} and {@code MENTIONS_GITLAB_PROJECT} name the repository whose members
@@ -26,22 +27,7 @@ class ProviderMentionsLiveTest {
     void shouldRenderNoGitHubMention(ProviderMentionsTest.Case mention) {
         String token = System.getenv("GITHUB_TOKEN");
         assumeThat(token).as("GITHUB_TOKEN").isNotBlank();
-        String html = RestClient.builder()
-                .baseUrl("https://api.github.com")
-                .build()
-                .post()
-                .uri("/markdown")
-                .header("Authorization", "Bearer " + token)
-                .contentType(MediaType.APPLICATION_JSON)
-                .body(Map.of(
-                        "text",
-                        mention.escaped(),
-                        "mode",
-                        "gfm",
-                        "context",
-                        orDefault(System.getenv("MENTIONS_GITHUB_REPOSITORY"), "HephaestusTest/sandbox")))
-                .retrieve()
-                .body(String.class);
+        String html = gitHub(token, mention.escaped());
         assertThat(html).doesNotContain("user-mention").doesNotContain("team-mention");
     }
 
@@ -72,6 +58,38 @@ class ProviderMentionsLiveTest {
         assertThat(String.valueOf(rendered.get("html")))
                 .doesNotContain("data-reference-type=\"user\"")
                 .doesNotContain("gfm-project_member");
+    }
+
+    @ParameterizedTest
+    @MethodSource("de.tum.cit.aet.hephaestus.integration.scm.feedback.PostedTextTest#cases")
+    void shouldRenderOnlyPlainMarkdownOnGitHub(PostedTextTest.Case text) {
+        String token = System.getenv("GITHUB_TOKEN");
+        assumeThat(token).as("GITHUB_TOKEN").isNotBlank();
+        assertThat(gitHub(token, text.posted()))
+                .doesNotContain("<img")
+                .doesNotContain("javascript:")
+                .doesNotContain("<script")
+                .doesNotContain("onclick")
+                .doesNotContain("user-mention");
+    }
+
+    private static @Nullable String gitHub(String token, String text) {
+        return RestClient.builder()
+                .baseUrl("https://api.github.com")
+                .build()
+                .post()
+                .uri("/markdown")
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(Map.of(
+                        "text",
+                        text,
+                        "mode",
+                        "gfm",
+                        "context",
+                        orDefault(System.getenv("MENTIONS_GITHUB_REPOSITORY"), "HephaestusTest/sandbox")))
+                .retrieve()
+                .body(String.class);
     }
 
     private static String orDefault(@Nullable String value, String fallback) {

@@ -9,7 +9,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ApprovalWriter;
 import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackDeliveryException;
 import de.tum.cit.aet.hephaestus.integration.core.spi.FeedbackTarget;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
-import de.tum.cit.aet.hephaestus.integration.scm.feedback.ProviderMentions;
+import de.tum.cit.aet.hephaestus.integration.scm.feedback.PostedText;
 import de.tum.cit.aet.hephaestus.integration.scm.feedback.ScmFeedbackTargetResolver;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubGraphQlClientProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.github.feedback.GitHubSummaryWriter.PrCoordinates;
@@ -62,7 +62,7 @@ public class GitHubApprovalWriter implements ApprovalWriter {
                 .forScope(scopeId)
                 .documentName("ApprovePullRequest")
                 .variable("pullRequestId", prNodeId)
-                .variable("body", ProviderMentions.escape(message))
+                .variable("body", PostedText.of(message))
                 .execute()
                 .block(GRAPHQL_TIMEOUT);
 

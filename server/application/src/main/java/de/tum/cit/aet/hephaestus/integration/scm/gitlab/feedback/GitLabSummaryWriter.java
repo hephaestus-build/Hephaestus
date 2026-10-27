@@ -15,7 +15,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryContent;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryHandle;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryLookup;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryWriter;
-import de.tum.cit.aet.hephaestus.integration.scm.feedback.ProviderMentions;
+import de.tum.cit.aet.hephaestus.integration.scm.feedback.PostedText;
 import de.tum.cit.aet.hephaestus.integration.scm.feedback.ScmFeedbackTargetResolver;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.common.GitLabGraphQlClientProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.gitlab.feedback.GitLabMrResolver.MrCoordinates;
@@ -73,7 +73,7 @@ public class GitLabSummaryWriter implements SummaryWriter {
         } catch (RuntimeException e) {
             throw new FeedbackNotSentException("GitLab note not sent: " + e.getMessage(), e);
         }
-        String body = gitLabBody(content.externalBody());
+        String body = gitLabSummary(content);
 
         ClientGraphQlResponse response;
         try {
@@ -154,7 +154,7 @@ public class GitLabSummaryWriter implements SummaryWriter {
             return CopyUpdateReceipt.transientFailure(
                     content.copyId(), "The GitLab rate limit is critical for scope " + scopeId);
         }
-        String body = gitLabBody(content.externalBody());
+        String body = gitLabSummary(content);
 
         ClientGraphQlResponse response;
         try {
@@ -236,7 +236,7 @@ public class GitLabSummaryWriter implements SummaryWriter {
         if (marker == null || marker.isBlank()) {
             return SummaryLookup.unknown();
         }
-        String expectedBody = gitLabBody(expected.externalBody());
+        String expectedBody = gitLabSummary(expected);
         long scopeId = target.integration().workspaceId();
         if (gitLabProvider.isRateLimitCritical(scopeId)) {
             return SummaryLookup.unknown();
@@ -336,9 +336,13 @@ public class GitLabSummaryWriter implements SummaryWriter {
                         || e.contains("couldn't be found"));
     }
 
-    /** The body as GitLab receives it: no quick action runs and no one is mentioned. */
+    /** The body as GitLab receives it: plain Markdown, no quick action runs and no one is mentioned. */
     static String gitLabBody(String body) {
-        return escapeSlashCommands(ProviderMentions.escape(body));
+        return escapeSlashCommands(PostedText.of(body));
+    }
+
+    static String gitLabSummary(SummaryContent content) {
+        return escapeSlashCommands(PostedText.summary(content));
     }
 
     static String escapeSlashCommands(String body) {

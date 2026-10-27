@@ -26,7 +26,7 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryContent;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryHandle;
 import de.tum.cit.aet.hephaestus.integration.core.spi.SummaryLookup;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmVersion;
-import de.tum.cit.aet.hephaestus.integration.scm.feedback.ProviderMentions;
+import de.tum.cit.aet.hephaestus.integration.scm.feedback.PostedText;
 import de.tum.cit.aet.hephaestus.integration.scm.feedback.ScmFeedbackFormatter;
 import de.tum.cit.aet.hephaestus.integration.scm.feedback.ScmFeedbackTargetResolver;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubGraphQlClientProvider;
@@ -97,7 +97,7 @@ public class GitHubLineNoteWriter implements LineNoteWriter {
             return CopyWriteResult.of(List.of());
         }
         // Each body is escaped before any note is written, so a body that cannot be escaped stops the whole package.
-        feedbackItems.forEach(note -> ProviderMentions.escape(note.body()));
+        feedbackItems.forEach(note -> PostedText.of(note.body()));
         long scopeId = target.integration().workspaceId();
         if (gitHubProvider.isRateLimitCritical(scopeId)) {
             log.warn(
@@ -199,9 +199,13 @@ public class GitHubLineNoteWriter implements LineNoteWriter {
                 + "/"
                 + encodedPath
                 + ")**\n\n"
-                + postedBody(note);
+                + note.body();
+        // The summary writer makes the text safe to post and keeps both hidden markers after it, as a line note has.
         return new SummaryContent(
-                note.copyId(), body, note.writeKey(), ScmFeedbackFormatter.deliveryTag(note.writeKey()));
+                note.copyId(),
+                body,
+                note.writeKey(),
+                note.writeMarker() + "\n\n" + ScmFeedbackFormatter.deliveryTag(note.writeKey()));
     }
 
     private CopyWriteResult postMixed(
@@ -529,7 +533,7 @@ public class GitHubLineNoteWriter implements LineNoteWriter {
     }
 
     private static String postedBody(LineNote item) {
-        String body = ProviderMentions.escape(item.body()) + "\n\n" + item.writeMarker();
+        String body = PostedText.of(item.body()) + "\n\n" + item.writeMarker();
         return body + "\n" + ScmFeedbackFormatter.deliveryTag(item.writeKey());
     }
 
