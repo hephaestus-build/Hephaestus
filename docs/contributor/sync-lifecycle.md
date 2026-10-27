@@ -188,6 +188,9 @@ A lifecycle event has one identity, its source key.
 The unique key on item, name and source key absorbs a second report of the same event, whatever version the work has by then.
 The unique key on item, name and version still absorbs a second event of the same name for the same work.
 The activity entry of the event uses the same source key, so each path adds one entry.
+The activity entry of a close or a merge keeps its time key, which is the stored `closedAt` or `mergedAt`.
+That key identifies the same moment on every path, and it matches the entries recorded before source keys existed.
+A sync reports a close or a merge only when it stores one, so a sync that reads a closed issue again adds nothing.
 
 A close, reopen, ready or draft event publishes when the stored state is the payload's state.
 It publishes also when its payload is older than the stored row.
@@ -199,7 +202,9 @@ Thus, a hook that arrives after the sync records nothing new, and a lost hook lo
 GitLab offers a merge for review after the read that follows the hook.
 GitHub redelivers a failed delivery, so its sync records no push or ready for a stored pull request.
 
-A push in the same second as the stored change is still applied, because provider dates have second precision.
+Provider dates have second precision.
+A push in the same second as the stored change is applied only if it continues from the stored head.
+An older push in that second records its own item event key and never moves the head back.
 An item event recorded before the source key existed has no key.
 A redelivery of such an event can record a second item event if the work moved since.
 

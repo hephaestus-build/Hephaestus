@@ -1517,6 +1517,41 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
                         pushes.stream().map(ItemEvent::getId).toList());
     }
 
+    @Test
+    void shouldApplyTwoPushesOfOneSecondInOrder() {
+        var prepared = prepare(
+                IdentityProviderType.GITHUB, false, Map.of(), false, List.of(ScmItemEvents.PULL_REQUEST_SYNCHRONIZED));
+        String start = storedHead(prepared);
+        Instant second = Instant.now().plusSeconds(60).truncatedTo(ChronoUnit.SECONDS);
+
+        deliver(prepared, "synchronize", pullRequestPayload(prepared, "b".repeat(40), second), start);
+        deliver(prepared, "synchronize", pullRequestPayload(prepared, "c".repeat(40), second), "b".repeat(40));
+
+        assertThat(storedHead(prepared)).isEqualTo("c".repeat(40));
+        assertThat(synchronizedOccasions(prepared)).hasSize(2);
+    }
+
+    @Test
+    void shouldKeepTheLaterHeadWhenTheEarlierPushOfOneSecondArrivesLast() {
+        var prepared = prepare(
+                IdentityProviderType.GITHUB, false, Map.of(), false, List.of(ScmItemEvents.PULL_REQUEST_SYNCHRONIZED));
+        String start = storedHead(prepared);
+        Instant second = Instant.now().plusSeconds(60).truncatedTo(ChronoUnit.SECONDS);
+
+        deliver(prepared, "synchronize", pullRequestPayload(prepared, "c".repeat(40), second), "b".repeat(40));
+        deliver(prepared, "synchronize", pullRequestPayload(prepared, "b".repeat(40), second), start);
+
+        assertThat(storedHead(prepared)).isEqualTo("c".repeat(40));
+        assertThat(synchronizedOccasions(prepared)).hasSize(1);
+    }
+
+    private String storedHead(Prepared prepared) {
+        var pull = Objects.requireNonNull(transactions.execute(
+                ignored -> pulls.findById(Objects.requireNonNull(prepared.item().sourceId()))
+                        .orElseThrow()));
+        return Objects.requireNonNull(pull.getHeadRefOid());
+    }
+
     private List<ItemEvent> synchronizedOccasions(Prepared prepared) {
         return itemEvents(prepared).stream()
                 .filter(occasion -> occasion.getName().equals(ScmItemEvents.PULL_REQUEST_SYNCHRONIZED.value()))

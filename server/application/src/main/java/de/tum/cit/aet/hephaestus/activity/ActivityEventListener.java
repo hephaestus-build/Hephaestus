@@ -144,6 +144,8 @@ public class ActivityEventListener {
             occurredAt = Instant.now();
         }
         final Instant finalOccurredAt = occurredAt;
+        // A close or a merge is its stored moment, so the time key already identifies it on every path and
+        // matches the entries recorded before source keys existed.
         safeRecord(
                 "PR merged",
                 pr.id(),
@@ -155,7 +157,7 @@ public class ActivityEventListener {
                         repositoryRepository.getReferenceById(pr.repository().id()),
                         ActivityTargetType.PULL_REQUEST,
                         pr.id(),
-                        ScmEventIdentity.of(event)));
+                        null));
     }
 
     @Async("activityExecutor")
@@ -180,6 +182,8 @@ public class ActivityEventListener {
             occurredAt = Instant.now();
         }
         final Instant finalOccurredAt = occurredAt;
+        // A close or a merge is its stored moment, so the time key already identifies it on every path and
+        // matches the entries recorded before source keys existed.
         safeRecord(
                 "PR closed",
                 pr.id(),
@@ -191,7 +195,7 @@ public class ActivityEventListener {
                         repositoryRepository.getReferenceById(pr.repository().id()),
                         ActivityTargetType.PULL_REQUEST,
                         pr.id(),
-                        ScmEventIdentity.of(event)));
+                        null));
     }
 
     @Async("activityExecutor")
@@ -866,6 +870,8 @@ public class ActivityEventListener {
             occurredAt = Instant.now();
         }
         final Instant finalOccurredAt = occurredAt;
+        // A close or a merge is its stored moment, so the time key already identifies it on every path and
+        // matches the entries recorded before source keys existed.
         safeRecord(
                 "issue closed",
                 issueData.id(),
@@ -878,7 +884,7 @@ public class ActivityEventListener {
                                 issueData.repository().id()),
                         ActivityTargetType.ISSUE,
                         issueData.id(),
-                        ScmEventIdentity.of(event)));
+                        null));
     }
 
     /**

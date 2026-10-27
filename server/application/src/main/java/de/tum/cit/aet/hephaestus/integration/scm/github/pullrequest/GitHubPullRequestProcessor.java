@@ -107,7 +107,7 @@ public class GitHubPullRequestProcessor extends BaseGitHubProcessor {
     @Transactional
     @Nullable
     public PullRequest process(GitHubPullRequestDTO dto, ProcessingContext context) {
-        return processInternal(dto, context, true);
+        return processInternal(dto, null, context, true);
     }
 
     /**
@@ -119,7 +119,10 @@ public class GitHubPullRequestProcessor extends BaseGitHubProcessor {
      */
     @Nullable
     private PullRequest processInternal(
-            GitHubPullRequestDTO dto, ProcessingContext context, boolean emitLifecycleOnCreate) {
+            GitHubPullRequestDTO dto,
+            @Nullable String before,
+            ProcessingContext context,
+            boolean emitLifecycleOnCreate) {
         Repository repository = context.repository();
         if (repository == null || repository.getId() == null) {
             log.warn("Skipped pull request processing: reason=missingRepository, prNumber={}", dto.number());
@@ -177,12 +180,13 @@ public class GitHubPullRequestProcessor extends BaseGitHubProcessor {
         // snapshots).
         if (!isNew && !promotedFromIssue && !moved) {
             PullRequest existing = existingOpt.get();
-            // Provider dates have second precision: a push in the same second as the stored change is still new work.
+            // Provider dates have second precision: a push in the same second as the stored change is new work when it
+            // continues from the stored head. Any other push in that second is older, and never moves the head back.
             boolean sameSecondPush = "synchronize".equals(context.webhookAction())
-                    && dto.head() != null
+                    && before != null
+                    && before.equals(existing.getHeadRefOid())
                     && dto.updatedAt() != null
-                    && dto.updatedAt().equals(existing.getUpdatedAt())
-                    && !Objects.equals(dto.head().sha(), existing.getHeadRefOid());
+                    && dto.updatedAt().equals(existing.getUpdatedAt());
             if (existing.getUpdatedAt() != null
                     && dto.updatedAt() != null
                     && !sameSecondPush
@@ -347,7 +351,7 @@ public class GitHubPullRequestProcessor extends BaseGitHubProcessor {
             ProcessingContext context,
             boolean emitLifecycleOnCreate,
             BiConsumer<PullRequest, EventContext> publish) {
-        PullRequest pr = processInternal(dto, context, emitLifecycleOnCreate);
+        PullRequest pr = processInternal(dto, before, context, emitLifecycleOnCreate);
         if (pr != null) {
             publish.accept(pr, EventContext.from(context).withSourceKey(sourceKey(pr.getId(), dto, before, context)));
         }

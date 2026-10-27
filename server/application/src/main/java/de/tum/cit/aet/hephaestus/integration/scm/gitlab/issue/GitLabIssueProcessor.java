@@ -416,11 +416,12 @@ public class GitLabIssueProcessor extends BaseGitLabProcessor {
             }
         }
 
-        // Emit the close event for CLOSED issues on every sync, not just on create, so a sync
-        // backfills ISSUE_CLOSED activity for issues that were already closed when first ingested.
-        // The activity_event (workspace_id, event_key) unique constraint dedupes, so replaying an
-        // existing close is a safe no-op.
-        if (issueState == Issue.State.CLOSED) {
+        // A sync reports a close only when it stores one; re-reading a closed issue is no event. The ledger repair
+        // backfills the activity of a close that no event reported.
+        if (issueState == Issue.State.CLOSED
+                && (previous == null
+                        || previous.state() != Issue.State.CLOSED
+                        || !Objects.equals(previous.closedAt(), issue.getClosedAt()))) {
             eventPublisher.publishEvent(new ScmDomainEvent.IssueClosed(
                     ScmEventPayload.IssueData.from(issue),
                     stateReason != null ? stateReason : "completed",

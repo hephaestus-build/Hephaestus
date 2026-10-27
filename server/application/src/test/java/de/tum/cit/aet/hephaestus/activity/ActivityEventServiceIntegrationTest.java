@@ -5,23 +5,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.common.DataSource;
-import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
-import de.tum.cit.aet.hephaestus.integration.scm.events.EventContext;
-import de.tum.cit.aet.hephaestus.integration.scm.events.ScmDomainEvent;
 import de.tum.cit.aet.hephaestus.integration.scm.events.ScmEventIdentity;
-import de.tum.cit.aet.hephaestus.integration.scm.events.ScmEventPayload;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.time.Instant;
 import java.util.List;
-import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -221,20 +215,9 @@ class ActivityEventServiceIntegrationTest extends BaseIntegrationTest {
         private final Instant closedAt = Instant.parse("2024-01-15T10:00:00Z");
 
         @Test
-        void shouldRecordOneCloseWhenTheHookAndTheSyncBothReportIt() {
-            var closedByHook = closed(new EventContext(
-                    UUID.randomUUID(),
-                    Instant.now(),
-                    testWorkspace.getId(),
-                    null,
-                    DataSource.WEBHOOK,
-                    "close",
-                    "hook",
-                    IdentityProviderType.GITLAB));
-            var closedBySync = closed(
-                    EventContext.forSync(testWorkspace.getId(), null, IdentityProviderType.GITLAB, Instant.now()));
-
-            for (var event : List.of(closedByHook, closedBySync, closedByHook)) {
+        void shouldRecordOneCloseWhenALedgerFromBeforeSourceKeysMeetsTheHookAndTheSync() {
+            // An entry written before source keys existed, then the hook, the sync and a redelivery of the close.
+            for (int report = 0; report < 4; report++) {
                 activityEventService.record(
                         testWorkspace.getId(),
                         ActivityEventType.ISSUE_CLOSED,
@@ -243,7 +226,7 @@ class ActivityEventServiceIntegrationTest extends BaseIntegrationTest {
                         testRepository,
                         ActivityTargetType.ISSUE,
                         301L,
-                        ScmEventIdentity.of(event));
+                        null);
             }
 
             assertThat(rows(ActivityEventType.ISSUE_CLOSED, 301L)).isEqualTo(1);
@@ -264,17 +247,6 @@ class ActivityEventServiceIntegrationTest extends BaseIntegrationTest {
             }
 
             assertThat(rows(ActivityEventType.ISSUE_REOPENED, 302L)).isEqualTo(2);
-        }
-
-        private ScmDomainEvent.IssueClosed closed(EventContext context) {
-            var issue = new Issue();
-            issue.setId(301L);
-            issue.setNumber(12);
-            issue.setTitle("Closed issue");
-            issue.setState(Issue.State.CLOSED);
-            issue.setRepository(testRepository);
-            issue.setClosedAt(closedAt);
-            return new ScmDomainEvent.IssueClosed(ScmEventPayload.IssueData.from(issue), "completed", context);
         }
 
         private long rows(ActivityEventType type, long targetId) {

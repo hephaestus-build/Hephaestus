@@ -261,11 +261,12 @@ public class SlackChannelHistorySyncService {
             ingestService.editMessage(
                     teamId,
                     channelId,
-                    message.getTs(),
-                    message.getThreadTs(),
-                    message.getUser(),
-                    text,
-                    message.getEdited().getTs());
+                    new SlackIngestService.Edit(
+                            message.getTs(),
+                            message.getThreadTs(),
+                            message.getUser(),
+                            text,
+                            message.getEdited().getTs()));
         } else {
             ingestService.ingestChannelMessage(
                     teamId, channelId, message.getTs(), message.getThreadTs(), message.getUser(), text);

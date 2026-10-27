@@ -175,6 +175,14 @@ public class SlackIngestService {
         messageRepository.tombstone(workspaceId, teamId, channelId, deletedTs, Instant.now());
     }
 
+    /** One edit of a message: the message's own fields as edited, and {@code editedTs}, Slack's time of the edit. */
+    public record Edit(
+            String ts,
+            @Nullable String threadTs,
+            @Nullable String authorSlackUserId,
+            @Nullable String text,
+            @Nullable String editedTs) {}
+
     /**
      * Slack {@code message_changed}: replace the stored text with the edited body ({@code event.message}) and
      * stamp {@code edited_at}. Durable against out-of-order delivery, at parity with the tombstone: when the base
@@ -184,14 +192,12 @@ public class SlackIngestService {
      * resurrected) or holds a later edit. Honors the channel-ingest kill switch, like ingest and tombstone.
      */
     @Transactional
-    public void editMessage(
-            String teamId,
-            String channelId,
-            String ts,
-            @Nullable String threadTs,
-            @Nullable String authorSlackUserId,
-            @Nullable String text,
-            @Nullable String editedTs) {
+    public void editMessage(String teamId, String channelId, Edit edit) {
+        String ts = edit.ts();
+        String threadTs = edit.threadTs();
+        String authorSlackUserId = edit.authorSlackUserId();
+        String text = edit.text();
+        String editedTs = edit.editedTs();
         // Without the edit's own time a change cannot be ordered: Slack also sends message_changed for a new reply
         // or an unfurl, which edit nothing.
         Long editedMicros = SlackTs.toEpochMicros(editedTs);

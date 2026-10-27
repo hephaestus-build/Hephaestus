@@ -280,7 +280,7 @@ class SlackChannelHistorySyncServiceTest extends BaseUnitTest {
         service.syncWorkspace(WS);
 
         verify(ingestService, never()).ingestChannelMessage(any(), any(), any(), any(), any(), any());
-        verify(ingestService, never()).editMessage(any(), any(), any(), any(), any(), any(), any());
+        verify(ingestService, never()).editMessage(any(), any(), any());
     }
 
     @Test
@@ -296,7 +296,11 @@ class SlackChannelHistorySyncServiceTest extends BaseUnitTest {
         service.syncWorkspace(WS);
 
         verify(ingestService)
-                .editMessage(TEAM, CHANNEL, "1783000006.000000", null, "U1", "fixed wording", "1783000016.000000");
+                .editMessage(
+                        TEAM,
+                        CHANNEL,
+                        new SlackIngestService.Edit(
+                                "1783000006.000000", null, "U1", "fixed wording", "1783000016.000000"));
         verify(ingestService, never()).ingestChannelMessage(any(), any(), any(), any(), any(), any());
     }
 
