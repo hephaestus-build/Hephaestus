@@ -23,7 +23,7 @@ VALUES (1, 1, 'PRACTICE_REVIEW', 1, true, 600, 2, now(), now())
 ON CONFLICT (id) DO UPDATE SET purpose = EXCLUDED.purpose;
 
 INSERT INTO workspace_agent_binding (id, workspace_id, purpose, instance_model_id, enabled, timeout_seconds, max_concurrent_jobs, created_at, updated_at)
-VALUES (2, 1, 'MENTOR', 2, true, 1200, 1, now(), now())
+VALUES (2, 1, 'MENTOR', 2, true, 300, 1, now(), now())
 ON CONFLICT (id) DO NOTHING;
 
 -- The Heph page offers Heph once a model is ready under some AI choice, and a developer who has not chosen is
@@ -33,7 +33,7 @@ INSERT INTO llm_model (id, connection_id, slug, display_name, upstream_model_id,
 VALUES (3, 1, 'in-house-model', 'In-house model', 'in-house-model', 128000, 32000, false, 'PUBLIC', true, 'OWN_ORGANISATION', now())
 ON CONFLICT (id) DO NOTHING;
 INSERT INTO workspace_agent_binding (id, workspace_id, purpose, data_handling_tier, instance_model_id, enabled, timeout_seconds, max_concurrent_jobs, created_at, updated_at)
-VALUES (3, 1, 'MENTOR', 'IN_HOUSE', 3, true, 1200, 1, now(), now())
+VALUES (3, 1, 'MENTOR', 'IN_HOUSE', 3, true, 300, 1, now(), now())
 ON CONFLICT (id) DO NOTHING;
 
 -- A model with no price never starts a turn, and Heph reads as not set up without one.

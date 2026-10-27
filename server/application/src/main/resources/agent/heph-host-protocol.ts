@@ -254,6 +254,7 @@ export interface PartialSnapshot {
  */
 export const FAILURE_DETAILS = [
 	"deadline",
+	"call_limit",
 	"upstream_stalled",
 	"upstream_paused",
 	"provider_unavailable",

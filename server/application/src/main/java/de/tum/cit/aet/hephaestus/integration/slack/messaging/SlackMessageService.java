@@ -127,15 +127,6 @@ public class SlackMessageService {
         }
     }
 
-    public void sendForWorkspace(long workspaceId, String channelId, List<LayoutBlock> blocks, String fallback) {
-        ChatPostMessageRequest request = ChatPostMessageRequest.builder()
-                .channel(channelId)
-                .blocks(blocks)
-                .text(fallback) // fallback text shown in notifications + accessibility tools
-                .build();
-        callWrite(workspaceId, channelId, methods -> methods.chatPostMessage(request));
-    }
-
     /**
      * A posted message: the conversation it landed in and its {@code ts}. A post addressed to a user id lands in the
      * app's DM with that user, whose channel id the answer names.
@@ -183,6 +174,14 @@ public class SlackMessageService {
                 channelId,
                 methods -> methods.chatUpdate(req ->
                         req.channel(channelId).ts(ts).blocks(blocks).text(text).metadata(metadata)));
+    }
+
+    /** Deletes a message the app wrote. */
+    public void deleteMessage(long workspaceId, String channelId, String ts) {
+        callWrite(
+                workspaceId,
+                channelId,
+                methods -> methods.chatDelete(req -> req.channel(channelId).ts(ts)));
     }
 
     /**

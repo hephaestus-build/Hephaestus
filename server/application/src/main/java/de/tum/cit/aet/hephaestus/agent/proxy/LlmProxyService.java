@@ -237,19 +237,35 @@ class LlmProxyService {
         if (routing.sourceId() != null)
             span.tag("hephaestus.job.id", routing.sourceId().toString());
         if (routing.workspaceId() != null) span.tag("hephaestus.workspace.id", routing.workspaceId());
+        long started = System.nanoTime();
+        String ended = "error";
         try (var ignored = tracer.withSpan(span);
                 var inFlight = callsInFlight.begin(routing.attempt())) {
             var result = forward(routing, protocol, practiceScript, response, incomingHeaders, body, span, inFlight);
             int status = result == null
                     ? Objects.requireNonNull(response).getStatus()
                     : result.getStatusCode().value();
+            ended = Integer.toString(status);
             span.tag("http.response.status_code", status);
             if (status >= 400) recordSpanError(span, Integer.toString(status));
             return result;
         } catch (RuntimeException e) {
+            ended = e.getClass().getSimpleName();
             recordSpanError(span, e.getClass().getSimpleName());
             throw e;
         } finally {
+            // One line per model call of a Heph turn, as for its tool calls (HephToolCalls): a turn that keeps
+            // calling shows as a run of them. A retry of a failed call is its own line.
+            if (routing.attempt().sourceType() == UsageSourceType.MENTOR_TURN)
+                log.atInfo()
+                        .addKeyValue("event.name", "heph.turn.model_call")
+                        .addKeyValue("turn.id", routing.attempt().sourceId())
+                        .addKeyValue("turn.attempt", routing.attempt().number())
+                        .addKeyValue("outcome", ended)
+                        .addKeyValue(
+                                "duration.ms",
+                                Duration.ofNanos(System.nanoTime() - started).toMillis())
+                        .log("Heph model call");
             span.end();
             accounting.stopTimer(timer, routing.apiProtocol());
             MDC.remove("proxy.principal");

@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -157,8 +158,13 @@ class SlackChannelConsentServiceTest extends BaseUnitTest {
         // forward-only boundary stamped + state advanced.
         ArgumentCaptor<List<LayoutBlock>> blocksCaptor = ArgumentCaptor.captor();
         verify(slackMessageService)
-                .sendForWorkspace(
-                        eq(WS), eq(CHANNEL), blocksCaptor.capture(), eq(SlackConsentBlocks.activationFallbackText()));
+                .postMessage(
+                        eq(WS),
+                        eq(CHANNEL),
+                        isNull(),
+                        blocksCaptor.capture(),
+                        eq(SlackConsentBlocks.activationFallbackText()),
+                        isNull());
         assertThat(blocksCaptor.getValue().toString()).doesNotContain("Open Hephaestus", "workspace dashboard");
         assertThat(c.getConsentAnnouncedAt()).isNotNull();
         assertThat(c.getConsentState()).isEqualTo(ConsentState.ACTIVE);
@@ -338,7 +344,7 @@ class SlackChannelConsentServiceTest extends BaseUnitTest {
         stubActor(5L);
         doThrow(new SlackSendException(WS, CHANNEL, "not_in_channel"))
                 .when(slackMessageService)
-                .sendForWorkspace(eq(WS), eq(CHANNEL), anyList(), anyString());
+                .postMessage(eq(WS), eq(CHANNEL), isNull(), anyList(), anyString(), isNull());
 
         assertThatThrownBy(() -> service().transition(WS, CHANNEL, ConsentState.ACTIVE, "go"))
                 .isInstanceOf(SlackSendException.class);

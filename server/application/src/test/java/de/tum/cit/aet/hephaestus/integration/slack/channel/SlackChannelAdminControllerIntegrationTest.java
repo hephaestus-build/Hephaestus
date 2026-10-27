@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.verify;
@@ -143,7 +144,7 @@ class SlackChannelAdminControllerIntegrationTest extends AbstractWorkspaceIntegr
         assertThat(result.consentAnnouncedAt()).isNotNull();
 
         // Announcement side effect fired for this channel.
-        verify(slackMessageService).sendForWorkspace(eq(workspace.getId()), eq("C1"), anyList(), any());
+        verify(slackMessageService).postMessage(eq(workspace.getId()), eq("C1"), isNull(), anyList(), any(), isNull());
 
         // Persisted state: ACTIVE + stamped.
         SlackMonitoredChannel stored = monitoredChannelRepository
@@ -180,7 +181,7 @@ class SlackChannelAdminControllerIntegrationTest extends AbstractWorkspaceIntegr
                         .orElseThrow()
                         .getConsentState())
                 .isEqualTo(ConsentState.PENDING);
-        verify(slackMessageService, never()).sendForWorkspace(anyLong(), any(), anyList(), any());
+        verify(slackMessageService, never()).postMessage(anyLong(), any(), any(), anyList(), any(), any());
     }
 
     @Test

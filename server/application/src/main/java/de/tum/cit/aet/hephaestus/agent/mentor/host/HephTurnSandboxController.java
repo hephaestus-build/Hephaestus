@@ -55,13 +55,17 @@ public class HephTurnSandboxController {
     public ObjectNode read(
             @PathVariable UUID turnId, @Valid @RequestBody ReadRequest request, Authentication authentication) {
         TurnJwt turn = HephTurnController.turn(dispatcher, turnId, authentication);
-        return folder.read(
+        return HephToolCalls.logged(
                 turn,
-                dispatcher.deadline(turn.turnId(), turn.attempt()),
-                contexts.folderDocuments(turn),
-                request.path(),
-                request.offset(),
-                request.limit());
+                "read",
+                () -> folder.read(
+                        turn,
+                        dispatcher.deadline(turn.turnId(), turn.attempt()),
+                        contexts.folderDocuments(turn),
+                        request.path(),
+                        request.offset(),
+                        request.limit()),
+                HephTurnSandboxController::outcome);
     }
 
     public record ExecRequest(
@@ -72,12 +76,16 @@ public class HephTurnSandboxController {
     public ObjectNode exec(
             @PathVariable UUID turnId, @Valid @RequestBody ExecRequest request, Authentication authentication) {
         TurnJwt turn = HephTurnController.turn(dispatcher, turnId, authentication);
-        return folder.exec(
+        return HephToolCalls.logged(
                 turn,
-                dispatcher.deadline(turn.turnId(), turn.attempt()),
-                contexts.folderDocuments(turn),
-                request.command(),
-                request.timeoutMs());
+                "exec",
+                () -> folder.exec(
+                        turn,
+                        dispatcher.deadline(turn.turnId(), turn.attempt()),
+                        contexts.folderDocuments(turn),
+                        request.command(),
+                        request.timeoutMs()),
+                HephTurnSandboxController::outcome);
     }
 
     public record LoadRequest(@NotBlank @Size(max = 512) String path) {}
@@ -86,10 +94,19 @@ public class HephTurnSandboxController {
     public ObjectNode load(
             @PathVariable UUID turnId, @Valid @RequestBody LoadRequest request, Authentication authentication) {
         TurnJwt turn = HephTurnController.turn(dispatcher, turnId, authentication);
-        return folder.load(
+        return HephToolCalls.logged(
                 turn,
-                dispatcher.deadline(turn.turnId(), turn.attempt()),
-                contexts.folderDocuments(turn),
-                request.path());
+                "load",
+                () -> folder.load(
+                        turn,
+                        dispatcher.deadline(turn.turnId(), turn.attempt()),
+                        contexts.folderDocuments(turn),
+                        request.path()),
+                HephTurnSandboxController::outcome);
+    }
+
+    /** {@code ok}, or the refusal code that the folder answered with. */
+    private static String outcome(ObjectNode answer) {
+        return answer.path("ok").asBoolean(true) ? "ok" : answer.path("error").asString("error");
     }
 }

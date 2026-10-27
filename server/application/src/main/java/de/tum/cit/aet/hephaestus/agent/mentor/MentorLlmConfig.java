@@ -29,9 +29,9 @@ public record MentorLlmConfig(
         @Nullable LlmPriceSnapshot priceSnapshot,
         int timeoutSeconds) {
     public MentorLlmConfig {
-        // Reserve shutdown time even for bindings persisted below the runnable floor or above the API ceiling.
+        // Reserve shutdown time even for bindings persisted below the runnable floor or above the Heph turn ceiling.
         timeoutSeconds = Math.clamp(
-                timeoutSeconds, PiRuntimeFactory.TIMEOUT_BUFFER_SECONDS + 1, AgentBindingLimits.MAX_TIMEOUT_SECONDS);
+                timeoutSeconds, PiRuntimeFactory.TIMEOUT_BUFFER_SECONDS + 1, AgentBindingLimits.MAX_HEPH_TURN_SECONDS);
     }
 
     public static MentorLlmConfig fromAdmission(ModelBindingSource config, AdmittedLlmModel admitted) {

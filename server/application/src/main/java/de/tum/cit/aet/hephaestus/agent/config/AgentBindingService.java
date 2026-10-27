@@ -80,6 +80,9 @@ public class AgentBindingService {
             requireModelFitsHeph(binding);
         }
         if (request.timeoutSeconds() != null) {
+            if (purpose == AgentPurpose.MENTOR && request.timeoutSeconds() > AgentBindingLimits.MAX_HEPH_TURN_SECONDS)
+                throw new IllegalArgumentException("Heph stops an answer after %s seconds, so enter %s or less."
+                        .formatted(AgentBindingLimits.MAX_HEPH_TURN_SECONDS, AgentBindingLimits.MAX_HEPH_TURN_SECONDS));
             binding.setTimeoutSeconds(request.timeoutSeconds());
         }
         if (request.maxConcurrentJobs() != null) {
@@ -216,6 +219,7 @@ public class AgentBindingService {
         binding.setWorkspace(workspace);
         binding.setPurpose(purpose);
         binding.setDataHandlingTier(tier);
+        if (purpose == AgentPurpose.MENTOR) binding.setTimeoutSeconds(AgentBindingLimits.MAX_HEPH_TURN_SECONDS);
         return binding;
     }
 

@@ -25,6 +25,7 @@ import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import de.tum.cit.aet.hephaestus.workspace.context.WorkspaceContext;
 import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
+import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -85,6 +86,47 @@ class AgentBindingServiceTest extends BaseUnitTest {
         Workspace w = new Workspace();
         w.setId(1L);
         return w;
+    }
+
+    @Test
+    void shouldStartANewHephBindingAtTheHephTurnCeilingAndRefuseALongerTimeout() {
+        when(workspaceRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(workspace()));
+        when(bindingRepository.findByWorkspaceIdAndPurposeAndDataHandlingTier(
+                        1L, AgentPurpose.MENTOR, DataHandlingTier.UNDECLARED))
+                .thenReturn(Optional.empty());
+        when(llmModelRepository.findById(99L)).thenReturn(Optional.of(model(99L, LlmApiProtocol.OPENAI_COMPLETIONS)));
+        when(llmModelResolver.isAvailable(any(WorkspaceAgentBinding.class))).thenReturn(true);
+        when(bindingRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        WorkspaceAgentBinding saved = service.upsertBinding(
+                context(),
+                AgentPurpose.MENTOR,
+                DataHandlingTier.UNDECLARED,
+                new AgentBindingRequestDTO(99L, null, null, null, true));
+        assertThat(saved.getTimeoutSeconds()).isEqualTo(AgentBindingLimits.MAX_HEPH_TURN_SECONDS);
+
+        assertThatThrownBy(() -> service.upsertBinding(
+                        context(),
+                        AgentPurpose.MENTOR,
+                        DataHandlingTier.UNDECLARED,
+                        new AgentBindingRequestDTO(
+                                99L, null, AgentBindingLimits.MAX_HEPH_TURN_SECONDS + 1, null, true)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Heph stops an answer");
+    }
+
+    @Test
+    void shouldShowAnOlderHephBindingWithTheTimeoutThatApplies() {
+        WorkspaceAgentBinding binding = new WorkspaceAgentBinding();
+        binding.setPurpose(AgentPurpose.MENTOR);
+        binding.setDataHandlingTier(DataHandlingTier.UNDECLARED);
+        binding.setTimeoutSeconds(AgentBindingLimits.MAX_TIMEOUT_SECONDS);
+        assertThat(AgentBindingDTO.from(binding, true, List.of()).timeoutSeconds())
+                .isEqualTo(AgentBindingLimits.MAX_HEPH_TURN_SECONDS);
+
+        binding.setPurpose(AgentPurpose.PRACTICE_REVIEW);
+        assertThat(AgentBindingDTO.from(binding, true, List.of()).timeoutSeconds())
+                .isEqualTo(AgentBindingLimits.MAX_TIMEOUT_SECONDS);
     }
 
     @Test
