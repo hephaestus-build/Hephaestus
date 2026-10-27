@@ -13,7 +13,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
-import java.util.Set;
+import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
@@ -28,6 +28,9 @@ import org.slf4j.MDC;
  * <ul>
  *   <li>A practice review's sandbox goes once its job is neither queued nor running, unless it is younger than the
  *       grace: the job set is read before the sandboxes, so a sandbox started in between is not in it.
+ *   <li>A practice review's sandbox also goes once its job holds a later attempt: a requeue gave the work to a new
+ *       attempt, and the old one's output is skipped. No grace applies, since an attempt starts its sandbox only after
+ *       the job row holds that attempt, so an attempt below the one read is never the current one.
  *   <li>A Heph host goes once the worker that launched it is positively gone.
  * </ul>
  *
@@ -93,13 +96,12 @@ public class SandboxReconciler {
     }
 
     private void sweep() {
-        Set<UUID> activeJobIds;
+        Map<UUID, Integer> activeAttempts;
         List<SandboxBackend.Listed> sandboxes;
         try {
-            activeJobIds =
+            activeAttempts =
                     jobRepository.findByStatusIn(List.of(ReviewJobStatus.QUEUED, ReviewJobStatus.RUNNING)).stream()
-                            .map(ReviewJob::getId)
-                            .collect(Collectors.toSet());
+                            .collect(Collectors.toMap(ReviewJob::getId, ReviewJob::getAttempt));
             sandboxes = backend.list();
         } catch (RuntimeException e) {
             log.warn(
@@ -109,16 +111,20 @@ public class SandboxReconciler {
             return;
         }
         for (SandboxBackend.Listed sandbox : sandboxes) {
-            if (abandoned(sandbox, activeJobIds)) {
+            if (abandoned(sandbox, activeAttempts)) {
                 remove(sandbox);
             }
         }
         completedSweeps.increment();
     }
 
-    private boolean abandoned(SandboxBackend.Listed sandbox, Set<UUID> activeJobIds) {
+    private boolean abandoned(SandboxBackend.Listed sandbox, Map<UUID, Integer> activeAttempts) {
         return switch (sandbox.kind()) {
-            case REVIEW -> !activeJobIds.contains(sandbox.id()) && !isYoung(sandbox.created());
+            case REVIEW -> {
+                Integer current = activeAttempts.get(sandbox.id());
+                Integer attempt = sandbox.attempt();
+                yield current == null ? !isYoung(sandbox.created()) : attempt != null && attempt < current;
+            }
             case HOST -> sandbox.creatorGone();
         };
     }

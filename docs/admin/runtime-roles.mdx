@@ -290,6 +290,7 @@ These model calls take the same proxy path and rules as the sandbox's calls, so 
 Sandbox maintenance follows the worker role in both split-out and single-container deployments.
 The worker removes orphaned sandbox resources at startup and then at a fixed interval.
 These resources include a Heph host whose worker is gone.
+They also include the sandbox of a review attempt after its review moved to a later attempt.
 This maintenance does not enable server-wide scheduled jobs on the worker.
 API-contract generation and CDS training do not run sandbox maintenance, server scheduled jobs or startup sync-job recovery.
 

@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.job;
 import static java.util.Objects.requireNonNull;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -30,7 +31,9 @@ import de.tum.cit.aet.hephaestus.agent.proxy.dto.PrepareFeedbackRequestDTO;
 import de.tum.cit.aet.hephaestus.agent.runtime.AgentResult;
 import de.tum.cit.aet.hephaestus.agent.runtime.PiResultParser;
 import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerProperties;
+import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxReconciler;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxTestLimits;
+import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxBackend;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxManager;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxResult;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxSpec;
@@ -99,9 +102,11 @@ import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.tracing.Tracer;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.List;
@@ -326,6 +331,32 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
         fastForwardAvailableAt(jobId);
 
         assertThat(eligibleForClaim(jobId)).isTrue();
+    }
+
+    @Test
+    void shouldRemoveTheLostAttemptsSandboxOnceTheJobIsRequeuedAndKeepTheNewAttempts() {
+        UUID jobId = runningJobOwnedBy("dead-replica", Instant.now().minus(Duration.ofMinutes(5)), 0);
+        registerStaleWorker("dead-replica");
+        List<SandboxBackend.Listed> sandboxes = new ArrayList<>();
+        sandboxes.add(reviewSandbox("attempt-0", jobId, 0));
+        SandboxBackend backend = mock(SandboxBackend.class);
+        when(backend.list()).thenAnswer(invocation -> List.copyOf(sandboxes));
+        doAnswer(invocation -> sandboxes.removeIf(sandbox -> sandbox.handle().equals(invocation.getArgument(0))))
+                .when(backend)
+                .remove(any());
+        var reconciler = new SandboxReconciler(jobRepository, backend, meterRegistry, Clock.systemUTC());
+
+        sweeper.recoverOrphanedJobs();
+        sandboxes.add(reviewSandbox("attempt-1", jobId, 1));
+        reconciler.periodicReconciliation();
+
+        assertThat(jobRepository.findById(jobId).orElseThrow().getAttempt()).isEqualTo(1);
+        assertThat(sandboxes).extracting(sandbox -> sandbox.handle().id()).containsExactly("attempt-1");
+    }
+
+    private static SandboxBackend.Listed reviewSandbox(String name, UUID jobId, int attempt) {
+        return new SandboxBackend.Listed(
+                new SandboxBackend.Handle(name), SandboxBackend.Kind.REVIEW, jobId, attempt, Instant.now(), false);
     }
 
     @Test
