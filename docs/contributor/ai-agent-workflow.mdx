@@ -106,13 +106,20 @@ Do not leave the predictable conflict for later.
 
 ## Slash commands
 
-| Command           | Does                                                                     |
-| ----------------- | ------------------------------------------------------------------------ |
-| `/land-pr`        | Validate, regenerate, branch, commit, push, and open the PR              |
-| `/fix-ci`         | Read every failing check in one pass, fix in dependency order, push once |
-| `/resolve-review` | Fetch review threads, decide each, reply and resolve                     |
-| `/watch-pr`       | Watch CI and review after a push, and stop when the PR is ready          |
-| `/modernize-pr`   | Rebase an old PR, or continue someone else's, after choosing its fate    |
+| Skill | Say | Does | Uses |
+|---|---|---|---|
+| `/land-pr` | Type it | Validates, regenerates, commits only the task's paths, and opens a PR that leads with the problem | `/watch-pr` |
+| `/watch-pr` | "watch the PR", "babysit it" | Watches CI and review after a push, and stops when the PR is ready to merge | `/fix-ci`, `/resolve-review` |
+| `/fix-ci` | Type it | Reads every failing check in one pass, fixes in dependency order, and pushes once | `/watch-pr` |
+| `/resolve-review` | Type it | Rates each finding, fixes or declines it, replies, and resolves | |
+| `/modernize-pr` | "modernize", "take over #123" | Decides whether an old PR should still exist, then rebases it, or continues someone else's PR | `/land-pr`, `/watch-pr` |
+| `/gh-stack` | "stack this" | Creates and maintains stacked pull requests with the `gh stack` extension | |
+| `/storybook-components` | "grade this component" | Component props, stories, play functions, and the accessibility posture | |
+| `/composition-patterns` | (automatic) | Compound components, render props, and the React 19 API shape | |
+| `/web-design-guidelines` | "review the UI" | Accessibility and UX review against the Web Interface Guidelines | |
+| `/react-best-practices` | (automatic) | Frontend performance, a vendored Vercel pack. Read its applicability table first: much of it is Next.js-only. | |
+
+The first six drive a contribution.
 
 Each lives in `.claude/skills/<name>/SKILL.md`.
 opencode [reads `.claude/skills/` alongside its own](https://opencode.ai/docs/skills/).
@@ -145,8 +152,8 @@ A mirror also causes one `duplicate skill name` warning per skill in opencode's 
 opencode reads both directories and sees the same name twice.
 
 `disable-model-invocation` makes `/land-pr`, `/fix-ci`, and `/resolve-review` typed-only in Claude Code.
-`/watch-pr` and `/modernize-pr` are not typed-only, so the model starts them when you ask for that work. opencode and Codex both
-ignore the field, so there they are ordinary skills the model can reach on its own.
+The model starts the other skills when you say what the table shows.
+opencode and Codex both ignore the field, so there they are ordinary skills the model can reach on its own.
 
 ## Instructions live in `AGENTS.md`, once
 

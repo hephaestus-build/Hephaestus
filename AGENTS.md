@@ -124,17 +124,7 @@ The SPA talks to the server only through the generated client.
 
 Skills live in `.claude/skills/<name>/`.
 Codex reads only `.agents/skills/`, so the six contribution skills have byte-identical mirrors there.
-`docs/contributor/ai-agent-workflow.mdx` § Slash commands has the rules.
-
-| Skill | When |
-|-------|------|
-| `/storybook-components` | Component props and stories. Grade a webapp diff. |
-| `/composition-patterns` | Compound components and React 19 API shape |
-| `/web-design-guidelines` | UI accessibility and UX review |
-| `/react-best-practices` | Frontend performance. Read its applicability table first. |
-| `/fix-ci`, `/land-pr`, `/resolve-review`, `/gh-stack` | CI triage, opening a PR, review comments, stacked PRs |
-| `/watch-pr` | Watching a PR until it is ready to merge |
-| `/modernize-pr` | Rebasing an old PR or continuing someone else's |
+`docs/contributor/ai-agent-workflow.mdx` § Slash commands lists each skill, what to say, what it does, and which skills it uses.
 
 ## Dev servers
 
