@@ -139,6 +139,7 @@ public class KubernetesIsolationProbe {
     private final KubernetesWorker worker;
     private final String image;
     private final int managementPort;
+    private final Duration podStart;
 
     public KubernetesIsolationProbe(
             KubernetesClient client,
@@ -147,12 +148,25 @@ public class KubernetesIsolationProbe {
             KubernetesWorker worker,
             String image,
             int managementPort) {
+        this(client, pods, jobs, worker, image, managementPort, KubernetesSandboxJobs.CHILD_START);
+    }
+
+    /** @param podStart how long a probe Job may take to create its Pod */
+    KubernetesIsolationProbe(
+            KubernetesClient client,
+            KubernetesPods pods,
+            KubernetesSandboxJobs jobs,
+            KubernetesWorker worker,
+            String image,
+            int managementPort,
+            Duration podStart) {
         this.client = client;
         this.pods = pods;
         this.jobs = jobs;
         this.worker = worker;
         this.image = image;
         this.managementPort = managementPort;
+        this.podStart = podStart;
     }
 
     /** One address that a probe Pod tries, and whether it must reach it. */
@@ -380,7 +394,7 @@ public class KubernetesIsolationProbe {
         Instant end = Instant.now().plus(time);
         try {
             jobs.create(jobs.job(pod, time.toSeconds()));
-            String created = jobs.awaitPod(name, min(time, KubernetesSandboxJobs.CHILD_START), () -> false)
+            String created = jobs.awaitPod(name, min(time, podStart), () -> false)
                     .getMetadata()
                     .getName();
             Duration left = Duration.between(Instant.now(), end);
