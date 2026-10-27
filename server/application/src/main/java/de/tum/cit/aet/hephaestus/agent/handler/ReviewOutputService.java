@@ -14,6 +14,8 @@ import de.tum.cit.aet.hephaestus.agent.proxy.dto.AdmissionResponseDTO;
 import de.tum.cit.aet.hephaestus.evidence.AppliesWhenCheck;
 import de.tum.cit.aet.hephaestus.evidence.CitationSide;
 import de.tum.cit.aet.hephaestus.evidence.ClasspathSourceCatalogRegistry;
+import de.tum.cit.aet.hephaestus.evidence.SourceAuthority;
+import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CandidateRefusal;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ConditionalOnCaptureRole;
 import de.tum.cit.aet.hephaestus.practices.spi.HostCoverage;
@@ -35,6 +37,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import org.jspecify.annotations.Nullable;
 import org.springframework.stereotype.Service;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -154,6 +157,16 @@ public class ReviewOutputService {
                         "Host coverage differs from the submitted read receipts"));
                 continue;
             }
+            // A scan's search covers its assigned file, whose complete read the scan check below requires.
+            var unread = review.kind() == ReviewKind.ITEM ? unreadConsultedSource(candidate) : null;
+            if (unread != null) {
+                refusals.add(new WithheldAssignment(
+                        assignment,
+                        CandidateRefusal.CONSULTED_SOURCE_UNREAD,
+                        "The result names " + unread.value()
+                                + " as searched, but its session ran no search of the whole checkout to the end"));
+                continue;
+            }
             try {
                 resolvedManifest = files.registerReadReceipts(job, resolvedManifest, entry.readReceipts(), catalogs);
             } catch (IllegalArgumentException | IllegalStateException refusal) {
@@ -224,6 +237,30 @@ public class ReviewOutputService {
             retained.set("admission", mapper.valueToTree(receipt));
             owned.setCapture(retained);
         };
+    }
+
+    /**
+     * A source that a search for something missing, or a ruling-out of a prerequisite, names as consulted, which a
+     * session reads on demand from a checkout (an upstream snapshot), without a search of the whole checkout that ran
+     * to the end in the host's receipts. Every other source is staged whole in the job folder. A complete read of one
+     * file is a complete source of that file, not of the checkout (ADR 0064 § Absence).
+     */
+    private @Nullable SourceKind unreadConsultedSource(Candidate candidate) {
+        if (!(candidate.coverage() instanceof HostCoverage host)) return null;
+        var consulted = new ArrayList<SourceKind>();
+        var search = candidate.search();
+        if (search != null) consulted.addAll(search.consulted());
+        var inapplicability = candidate.inapplicability();
+        if (inapplicability != null) consulted.addAll(inapplicability.consulted());
+        for (var source : consulted) {
+            if (catalogs.requireSource(source).authority() != SourceAuthority.UPSTREAM_SNAPSHOT) continue;
+            boolean searched = host.receipts().stream()
+                    .anyMatch(receipt -> receipt.sourceKind().equals(source)
+                            && receipt.status() == ReadReceiptStatus.SEARCHED
+                            && ".".equals(receipt.path()));
+            if (!searched) return source;
+        }
+        return null;
     }
 
     private static boolean hasCompleteAssignedRead(

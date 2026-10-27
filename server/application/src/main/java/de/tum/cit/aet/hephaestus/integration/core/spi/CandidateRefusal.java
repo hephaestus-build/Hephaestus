@@ -18,7 +18,8 @@ public enum CandidateRefusal {
     QUOTE_UNVERIFIED("quote_unverified"),
     SOURCE_UNAVAILABLE("source_unavailable"),
     BASIS_WITNESS_MISSING("basis_witness_missing"),
-    DUTY_QUOTE_UNVERIFIED("duty_quote_unverified");
+    DUTY_QUOTE_UNVERIFIED("duty_quote_unverified"),
+    CONSULTED_SOURCE_UNREAD("consulted_source_unread");
 
     private final String wireValue;
 

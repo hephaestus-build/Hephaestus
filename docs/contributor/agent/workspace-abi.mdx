@@ -71,6 +71,8 @@ No authored-person history or blame is inferred from repository file content.
 Read receipts identify source, path, version, read extent and completion state.
 The host supplies trusted receipts separately from the returned candidate.
 A search, listing or isolated quotation cannot establish a full assigned-file read.
+A search receipt (`SEARCHED`, path `.`) records that a grep without a file filter ran over the whole checkout to the end.
+It has no digest or line range, and it proves no file read.
 A failed read is unavailable, not proved absence.
 
 For SCAN, `repos/reviewed/` contains the pinned files without Git metadata.

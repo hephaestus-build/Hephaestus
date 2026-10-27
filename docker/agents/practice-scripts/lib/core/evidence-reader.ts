@@ -246,6 +246,23 @@ export class EvidenceReader {
 		}
 	}
 
+	/**
+	 * A search of the whole checkout's contents that ran to the end, without a file filter. A scan reads only its
+	 * assigned file and context, so its searches prove nothing about the rest of the tree and get no receipt.
+	 */
+	#searchReceipt(record: boolean, truncated: boolean, glob: string | undefined): void {
+		if (!record || truncated || glob !== undefined || this.#sources.permittedPaths !== undefined) {
+			return;
+		}
+		this.#receipt({
+			sourceKind: TREE_SOURCE,
+			sourcePath: this.#sources.treeSourceFile,
+			path: ".",
+			version: this.#sources.headRevision ?? "unavailable",
+			status: "SEARCHED",
+		});
+	}
+
 	#repo(): string {
 		if (this.#sources.repo === null) {
 			throw new UnratedError("unavailable", "this work has no captured file tree");
@@ -376,7 +393,9 @@ export class EvidenceReader {
 					},
 					signal,
 				);
-				return { matches: matches.slice(0, maxResults), truncated: matches.length > maxResults };
+				const truncated = matches.length > maxResults;
+				this.#searchReceipt(recordReceipt, truncated, request.glob);
+				return { matches: matches.slice(0, maxResults), truncated };
 			}
 			case "record": {
 				if (this.#sources.permittedPaths !== undefined) {

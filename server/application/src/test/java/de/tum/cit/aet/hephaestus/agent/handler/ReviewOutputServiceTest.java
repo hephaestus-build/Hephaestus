@@ -3,9 +3,11 @@ package de.tum.cit.aet.hephaestus.agent.handler;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -27,7 +29,10 @@ import de.tum.cit.aet.hephaestus.evidence.SourceContractVersion;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CandidateRefusal;
 import de.tum.cit.aet.hephaestus.practices.spi.AdmissionReceipt;
+import de.tum.cit.aet.hephaestus.practices.spi.HostCoverage;
 import de.tum.cit.aet.hephaestus.practices.spi.PinnedPractice;
+import de.tum.cit.aet.hephaestus.practices.spi.ReadReceipt;
+import de.tum.cit.aet.hephaestus.practices.spi.ReadReceiptStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultCandidate;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultStore;
@@ -38,6 +43,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStopReason;
 import de.tum.cit.aet.hephaestus.practices.spi.WithheldItem;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
@@ -174,6 +180,112 @@ class ReviewOutputServiceTest extends BaseUnitTest {
                         RuntimeReviewTestData.assignment(5L, null).id(),
                         CandidateRefusal.COVERAGE_INCONSISTENT,
                         "Host coverage differs from the submitted read receipts");
+    }
+
+    /**
+     * The error-handling result that #50's review recorded (review 2435ae89): a Not met that claims the checkout has
+     * no exception handler, with {@code receipts} as its session proved them.
+     */
+    private AdmissionRequestDTO pr50ErrorHandling(List<ReadReceipt> receipts) {
+        var candidate = (ObjectNode) mapper.readTree("""
+            {"outcome":"NOT_MET",
+             "summary":"New page parameter is unvalidated; invalid input yields an unhandled exception and a raw 500",
+             "explanation":"A negative page makes from negative, so List.subList throws. No @ControllerAdvice exists in the checkout.",
+             "citations":[],
+             "problems":[{"severity":"MINOR",
+               "summary":"page parameter is unvalidated; negative or overflowing values throw an unhandled IndexOutOfBoundsException",
+               "explanation":"No code catches this and the reviewed checkout contains no @ControllerAdvice or @ExceptionHandler, so invalid input surfaces as a raw 500.",
+               "citations":[{"sourceKind":"scm.pull-request.diff",
+                 "sourcePath":"context/citable/new/src/main/java/com/example/userapi/controller/UserController.java",
+                 "path":"src/main/java/com/example/userapi/controller/UserController.java","side":"NEW",
+                 "startLine":30,"endLine":30,"quote":"        return ResponseEntity.ok(all.subList(from, to));"}],
+               "basis":{"type":"introduced","head":0,"explanation":"The diff adds the unvalidated page parameter."},
+               "nextStep":"Validate page before slicing."}],
+             "evidence":{"search":{"consulted":["scm.pull-request.diff","scm.repository.tree"],
+               "lookedFor":"an error handler for the new page parameter",
+               "boundary":"the changed file plus a repo-wide grep of all 8 Java sources"}}}
+            """);
+        candidate.set("coverage", mapper.valueToTree(new HostCoverage(true, null, 3, 0, 0, receipts)));
+        return new AdmissionRequestDTO(
+                3,
+                job.getReviewId(),
+                job.getId(),
+                0,
+                List.of(new SubmittedResultDTO("clear-names", "2", "docs:one", candidate, receipts)),
+                List.of());
+    }
+
+    private void realCatalog() {
+        var real = new ClasspathSourceCatalogRegistry(mapper, Clock.systemUTC());
+        when(catalogs.requireSource(any())).thenAnswer(invocation -> real.requireSource(invocation.getArgument(0)));
+    }
+
+    @Test
+    void shouldWithholdAClaimAboutTheCheckoutWhenItsSessionNeitherReadNorSearchedIt() {
+        realCatalog();
+        when(results.admit(1, job.getReviewId(), job.getId(), 0, List.of()))
+                .thenReturn(new AdmissionReceipt(List.of(), List.of()));
+
+        service.prepare(job, pr50ErrorHandling(List.of())).record(job);
+
+        verifyNoInteractions(verifier);
+        verify(membership)
+                .withhold(
+                        1,
+                        RuntimeReviewTestData.assignment(5L, null).id(),
+                        CandidateRefusal.CONSULTED_SOURCE_UNREAD,
+                        "The result names scm.repository.tree as searched, but its session ran no search of the whole"
+                                + " checkout to the end");
+    }
+
+    @Test
+    void shouldWithholdAClaimAboutTheCheckoutWhenItsSessionReadOnlyTheChangedFile() {
+        realCatalog();
+        // The stored #50 result read UserController to its end; that is a complete source of one file, not of the tree.
+        var oneFile = List.of(new ReadReceipt(
+                new SourceKind("scm.repository.tree"),
+                "repos/reviewed/.git/HEAD",
+                "src/main/java/com/example/userapi/controller/UserController.java",
+                "4154fb8c8ed570d8fb117a89a894ddedca72d818",
+                ReadReceiptStatus.COMPLETE,
+                "f77392a044225e8fdda78f2e6da1b952472a1e70f854696c413a88c8ec8aeb67",
+                1,
+                41));
+        when(results.admit(1, job.getReviewId(), job.getId(), 0, List.of()))
+                .thenReturn(new AdmissionReceipt(List.of(), List.of()));
+
+        service.prepare(job, pr50ErrorHandling(oneFile)).record(job);
+
+        verifyNoInteractions(verifier);
+        verify(membership)
+                .withhold(
+                        eq(1L),
+                        eq(RuntimeReviewTestData.assignment(5L, null).id()),
+                        eq(CandidateRefusal.CONSULTED_SOURCE_UNREAD),
+                        any());
+    }
+
+    @Test
+    void shouldPassAClaimAboutTheCheckoutOnToVerificationWhenItsSessionSearchedItToTheEnd() {
+        realCatalog();
+        var searched = List.of(new ReadReceipt(
+                new SourceKind("scm.repository.tree"),
+                "repos/reviewed/.git/HEAD",
+                ".",
+                "4154fb8c8ed570d8fb117a89a894ddedca72d818",
+                ReadReceiptStatus.SEARCHED,
+                null,
+                null,
+                null));
+        when(files.registerReadReceipts(eq(job), any(), eq(searched), eq(catalogs)))
+                .thenAnswer(invocation -> invocation.getArgument(1));
+        when(verifier.verifyCandidate(eq(job), any(), eq(ReviewKind.ITEM), any(), any()))
+                .thenAnswer(invocation -> invocation.getArgument(3));
+
+        service.prepare(job, pr50ErrorHandling(searched));
+
+        verify(verifier).verifyCandidate(eq(job), any(), eq(ReviewKind.ITEM), any(), any());
+        verify(membership, never()).withhold(anyLong(), any(), any(), any());
     }
 
     @Test

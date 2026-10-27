@@ -21591,6 +21591,7 @@ components:
           - FAILED
           - BINARY
           - ABSENT
+          - SEARCHED
         version:
           type: string
     ReadSourceOption:

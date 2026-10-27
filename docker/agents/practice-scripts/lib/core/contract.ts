@@ -420,7 +420,8 @@ export const readReceiptSchema = z
 		sourcePath: z.string().min(1).max(CANDIDATE_LIMITS.pathChars),
 		path: z.string().min(1).max(CANDIDATE_LIMITS.pathChars),
 		version: z.string().min(1).max(CANDIDATE_LIMITS.versionChars),
-		status: z.enum(["COMPLETE", "TRUNCATED", "FAILED", "BINARY", "ABSENT"]),
+		/** SEARCHED: a search ran over the scope at `path` to the end. It carries no digest or lines. */
+		status: z.enum(["COMPLETE", "TRUNCATED", "FAILED", "BINARY", "ABSENT", "SEARCHED"]),
 		contentDigest: z
 			.string()
 			.regex(/^[0-9a-f]{64}$/u)

@@ -4260,7 +4260,7 @@ export type ReadReceipt = {
     sourceKind?: string;
     sourcePath?: string;
     startLine?: number;
-    status?: 'COMPLETE' | 'TRUNCATED' | 'FAILED' | 'BINARY' | 'ABSENT';
+    status?: 'COMPLETE' | 'TRUNCATED' | 'FAILED' | 'BINARY' | 'ABSENT' | 'SEARCHED';
     version?: string;
 };
 

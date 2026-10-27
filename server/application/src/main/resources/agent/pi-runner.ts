@@ -98,7 +98,13 @@ import {
 	stopSession,
 	scheduleDeadline,
 } from "./pi-session-lifecycle.ts";
-import { REPAIR_LIMIT, SessionReads, insideRoot } from "./pi-session-reads.ts";
+import {
+	REPAIR_LIMIT,
+	SessionReads,
+	type SessionTree,
+	insideRoot,
+	unreadCheckoutClaim,
+} from "./pi-session-reads.ts";
 import { SUPPORTED_SCHEMA_VERSION, taskPaths, resolveTaskPaths } from "./pi-task-paths.ts";
 import { hasText, isBlank } from "./pi-text.ts";
 import { prepareTurnText } from "./pi-turn-context.ts";
@@ -296,6 +302,13 @@ function readState(reads: SessionReads, target: string): RequiredSourceTrace["re
 		return "complete";
 	}
 	return reads.hasRead(target) ? "partial" : "none";
+}
+
+/** The checkout that a review session reads on demand, when the work has one at a known commit. */
+function sessionTree(sources: EvidenceSources): SessionTree | undefined {
+	return sources.repo === null || sources.headRevision === null
+		? undefined
+		: { root: sources.repo, sourcePath: sources.treeSourceFile, version: sources.headRevision };
 }
 
 function incompleteCoverageText(coverage: Coverage, reads: SessionReads, scan: boolean): string {
@@ -1035,6 +1048,19 @@ export async function runReviewJob(): Promise<void> {
 		}
 		validateProblemClaims(submission.problems ?? [], slug);
 		const coverage = measureCoverage(citations);
+		// A scan's search covers its assigned file, which it must read whole.
+		const unread = scan
+			? undefined
+			: unreadCheckoutClaim(submission, coverage, {
+					checkout: existsSync(`${INPUT_PATHS.repositoryRoot}/.git`),
+					askAboutWords: !askedAboutCheckoutWords.has(slug),
+				});
+		if (unread !== undefined) {
+			if (unread.byWords) {
+				askedAboutCheckoutWords.add(slug);
+			}
+			throw new UnreadEvidenceError(unread.text);
+		}
 		const parsed = parseCandidate({ ...submission, coverage });
 		if (!parsed.ok) {
 			if (parsed.reasonCode === "met_coverage_incomplete") {
@@ -1383,6 +1409,8 @@ export async function runReviewJob(): Promise<void> {
 	}
 
 	const refusals = new Map<string, number>();
+	// Practices already asked once about words that say the checkout lacks something.
+	const askedAboutCheckoutWords = new Set<string>();
 	// Per practice, across its review sessions: the execution report carries these.
 	const reviewSessions = new Map<
 		string,
@@ -2701,6 +2729,7 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 						},
 						undefined,
 						capturedTexts,
+						sessionTree(sources),
 					),
 					reader,
 					domainReads,

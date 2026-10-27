@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import type { AgentSessionEvent } from "@earendil-works/pi-coding-agent";
@@ -6,10 +7,12 @@ import { bashRead, bashReadRanges } from "./pi-bash-reads.ts";
 
 import type { CitableText } from "./pi-folder-index.ts";
 import type { BriefSource } from "./pi-review-brief.ts";
+import { TREE_SOURCE } from "./work/practice-scripts/kits/scm/sources.ts";
 import {
 	CANDIDATE_LIMITS,
 	type Coverage,
 	type Omission,
+	type ReadReceipt,
 } from "./work/practice-scripts/lib/core/contract.ts";
 import {
 	type EvidenceReader,
@@ -20,6 +23,13 @@ import { isJsonObject as isRecord } from "./work/practice-scripts/lib/core/json.
 import { ReadRanges } from "./work/practice-scripts/lib/core/read-ranges.ts";
 
 const READ_TOOLS = new Set(["read", "grep", "find", "ls", "bash"]);
+
+/** The pinned checkout a session reads on demand: where it is, its witness file and the commit it holds. */
+export interface SessionTree {
+	root: string;
+	sourcePath: string;
+	version: string;
+}
 // Bounds each refusal: sources named, and ranges named per source.
 export const REPAIR_LIMIT = 5;
 
@@ -56,6 +66,9 @@ export class SessionReads {
 	readonly #oversized = new Map<string, number>();
 	readonly #root: string;
 	readonly #lineCount: (target: string) => number;
+	readonly #tree: SessionTree | undefined;
+	/** Whether a grep without a file filter searched the whole checkout to the end. */
+	#searchedTree = false;
 
 	constructor(
 		root: string,
@@ -69,9 +82,11 @@ export class SessionReads {
 		lineCount = (target: string) =>
 			readFileSync(path.resolve(root, target), "utf8").split("\n").length,
 		texts: readonly CitableText[] = [],
+		tree?: SessionTree,
 	) {
 		this.#root = root;
 		this.#lineCount = lineCount;
+		this.#tree = tree;
 		const byContent = new Map<string, Set<string>>();
 		const byPath = new Map<string, Set<string>>();
 		for (const text of texts) {
@@ -179,7 +194,72 @@ export class SessionReads {
 		}
 		if (cut) {
 			this.cutSearches.push(named);
+			return;
 		}
+		// A file filter or a narrower path searched part of the checkout, and a file listing searched no contents.
+		if (
+			event.toolName === "grep" &&
+			!(isRecord(args) && typeof args.glob === "string" && args.glob !== "") &&
+			this.#containsTree(target ?? "")
+		) {
+			this.#searchedTree = true;
+		}
+	}
+
+	/** Whether a search over `key` covers the whole checkout. */
+	#containsTree(key: string): boolean {
+		if (this.#tree === undefined) {
+			return false;
+		}
+		const above = path.relative(key, this.#key(this.#tree.root));
+		return (
+			key === "" || above === "" || (!path.isAbsolute(above) && above.split(path.sep)[0] !== "..")
+		);
+	}
+
+	/**
+	 * The checkout's own proof of what this session read: each file read to its last line, with the digest of the
+	 * pinned bytes, and a search of the whole checkout's contents that ran to the end. A search that was cut, failed,
+	 * filtered by file, narrower than the checkout or run through the shell proves no such search.
+	 */
+	treeReceipts(): ReadReceipt[] {
+		const tree = this.#tree;
+		if (tree === undefined) {
+			return [];
+		}
+		const root = this.#key(tree.root);
+		const receipts: ReadReceipt[] = [];
+		for (const key of this.#opened) {
+			const inside = path.relative(root, key);
+			if (inside === "" || inside.split(path.sep)[0] === ".." || !this.ranges.complete(key)) {
+				continue;
+			}
+			try {
+				const bytes = readFileSync(path.resolve(this.#root, key));
+				receipts.push({
+					sourceKind: TREE_SOURCE,
+					sourcePath: tree.sourcePath,
+					path: inside.split(path.sep).join("/"),
+					version: tree.version,
+					status: "COMPLETE",
+					contentDigest: createHash("sha256").update(bytes).digest("hex"),
+					startLine: 1,
+					endLine: this.#lineCount(key),
+				});
+			} catch {
+				// A file that cannot be read again proves no read.
+			}
+		}
+		if (this.#searchedTree) {
+			receipts.push({
+				sourceKind: TREE_SOURCE,
+				sourcePath: tree.sourcePath,
+				path: ".",
+				version: tree.version,
+				status: "SEARCHED",
+			});
+		}
+		return receipts.slice(0, CANDIDATE_LIMITS.receipts);
 	}
 
 	#bash(args: unknown, result: unknown, isError: boolean): void {
@@ -372,11 +452,74 @@ export class SessionReads {
 			reads: this.reads + domainReads.reads,
 			truncatedReads: truncated.length + domainReads.truncatedReads,
 			failedReads: failed.length + domainReads.failedReads,
-			receipts: reader?.readReceipts ?? [],
+			receipts: reader?.readReceipts ?? this.treeReceipts(),
 		};
 		const [first, ...rest] = omitted;
 		return first === undefined
 			? { ...receipts, complete: true }
 			: { ...receipts, complete: false, omitted: [first, ...rest] };
 	}
+}
+
+/**
+ * Words that say the checkout outside the cited lines lacks something. A list of markers, not a reading of the prose:
+ * it sends such a claim back once when the session holds no search of the checkout.
+ */
+const ABSENCE_BEYOND_CITATIONS = [
+	/\b(?:no|none of|nothing|not any|lacks?|without any)\b[^.]{0,80}\b(?:repository|repo|codebase|checkout|other files?|any files?|elsewhere)\b/iu,
+	/\b(?:repository|repo|codebase|checkout)\b[^.]{0,40}\b(?:contains no|has no|holds no|lacks?|none)\b/iu,
+];
+
+/** Why a submission that rests on the checkout cannot be recorded yet, and whether only its words say so. */
+export interface UnreadCheckoutClaim {
+	text: string;
+	byWords: boolean;
+}
+
+/**
+ * A submission whose search for something missing, or whose ruling-out of a prerequisite, names the repository tree
+ * needs a search of the whole checkout in this session: a complete read of one file is a complete source of that file,
+ * not of the tree (ADR 0064 § Absence). With a checkout and `askAboutWords`, a problem whose words say the checkout
+ * lacks something needs the same.
+ */
+export function unreadCheckoutClaim(
+	submission: {
+		search?: { consulted: readonly string[] };
+		inapplicability?: { consulted: readonly string[] };
+		problems?: readonly { summary: string; explanation: string }[];
+	},
+	coverage: Coverage,
+	{ checkout, askAboutWords }: { checkout: boolean; askAboutWords: boolean },
+): UnreadCheckoutClaim | undefined {
+	const searched = (coverage.source === "host" ? coverage.receipts : []).some(
+		(receipt) =>
+			receipt.sourceKind === TREE_SOURCE && receipt.status === "SEARCHED" && receipt.path === ".",
+	);
+	if (searched) {
+		return undefined;
+	}
+	const consulted = [
+		...(submission.search?.consulted ?? []),
+		...(submission.inapplicability?.consulted ?? []),
+	].includes(TREE_SOURCE);
+	const byWords =
+		!consulted &&
+		checkout &&
+		askAboutWords &&
+		(submission.problems ?? []).some((problem) =>
+			ABSENCE_BEYOND_CITATIONS.some((marker) =>
+				marker.test(`${problem.summary} ${problem.explanation}`),
+			),
+		);
+	if (!consulted && !byWords) {
+		return undefined;
+	}
+	return {
+		byWords,
+		text:
+			`${consulted ? `this result names ${TREE_SOURCE} as searched` : "a problem says the checkout lacks something"}, ` +
+			"but this session ran no search of the whole checkout. " +
+			"Call grep with a pattern for what is missing, without a glob and without a narrower path, and read on until the search is not cut, then submit again. " +
+			"If you cannot, remove the claim about the rest of the checkout and keep only what the cited lines show.",
+	};
 }

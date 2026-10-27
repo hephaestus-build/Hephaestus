@@ -13,7 +13,10 @@ import {
 	folderCitationIndex,
 	citableTextIndex,
 } from "../../../main/resources/agent/pi-folder-index.ts";
-import { SessionReads } from "../../../main/resources/agent/pi-session-reads.ts";
+import {
+	SessionReads,
+	unreadCheckoutClaim,
+} from "../../../main/resources/agent/pi-session-reads.ts";
 
 function read(
 	reads: SessionReads,
@@ -873,4 +876,166 @@ void test("supplied canonical content covers aliases only through the captured s
 		assert.equal(reads.hasCompleteRead(target), false, target);
 		assert.equal(reads.coverage(undefined, undefined, [target]).complete, false, target);
 	}
+});
+
+const TREE = {
+	root: "repos/reviewed",
+	sourcePath: "repos/reviewed/.git/HEAD",
+	version: "4154fb8c",
+};
+
+function treeTool(
+	reads: SessionReads,
+	id: string,
+	toolName: string,
+	args: Record<string, unknown>,
+	details: Record<string, unknown> = {},
+) {
+	// A call a codemode script makes arrives as its own tool event under the script's call.
+	reads.note({
+		type: "tool_execution_start",
+		toolCallId: id,
+		toolName,
+		args,
+		parentToolCallId: "codemode",
+	});
+	reads.note({
+		type: "tool_execution_end",
+		toolCallId: id,
+		toolName,
+		isError: false,
+		result: { content: [{ type: "text", text: "No matches found" }], details },
+	});
+}
+
+function checkout(): string {
+	const root = mkdtempSync(path.join(tmpdir(), "session-tree-"));
+	mkdirSync(path.join(root, "repos/reviewed/src"), { recursive: true });
+	writeFileSync(path.join(root, "repos/reviewed/src/UserController.java"), "class A {\n}\n");
+	return root;
+}
+
+void test("codemode's whole-checkout search and complete read leave receipts that prove them", () => {
+	const root = checkout();
+	try {
+		const reads = new SessionReads(root, {}, undefined, [], TREE);
+		treeTool(reads, "find", "find", { pattern: "*.java", path: "repos/reviewed" });
+		treeTool(reads, "grep", "grep", { pattern: "ControllerAdvice" });
+		treeTool(reads, "read", "read", { path: "repos/reviewed/src/UserController.java" });
+
+		const { receipts } = reads.coverage();
+		assert.deepEqual(
+			receipts.map((receipt) => [receipt.status, receipt.path]),
+			[
+				["COMPLETE", "src/UserController.java"],
+				["SEARCHED", "."],
+			],
+		);
+		const [fileRead] = receipts;
+		assert.ok(fileRead !== undefined);
+		assert.equal(fileRead.sourcePath, TREE.sourcePath);
+		assert.match(fileRead.contentDigest ?? "", /^[0-9a-f]{64}$/u);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+void test("a search that is cut, filtered, narrower than the checkout, outside it or a listing proves no search", () => {
+	const root = checkout();
+	try {
+		const reads = new SessionReads(root, {}, undefined, [], TREE);
+		treeTool(
+			reads,
+			"cut",
+			"grep",
+			{ pattern: "Advice", path: "repos/reviewed" },
+			{ matchLimitReached: 100 },
+		);
+		treeTool(reads, "glob", "grep", { pattern: "Advice", glob: "*.md" });
+		treeTool(reads, "narrow", "grep", { pattern: "Advice", path: "repos/reviewed/src" });
+		treeTool(reads, "context", "grep", { pattern: "Advice", path: "context" });
+		treeTool(reads, "find", "find", { pattern: "*Advice*", path: "repos/reviewed" });
+
+		assert.deepEqual(reads.coverage().receipts, []);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+// The error-handling problem that #50's review recorded (review 2435ae89), with its stored basis.
+const PR50_ERROR_HANDLING = {
+	summary:
+		"page parameter is unvalidated; negative or overflowing values throw an unhandled IndexOutOfBoundsException",
+	explanation:
+		"For a negative page, from is negative. Per the JDK contract, List.subList throws IndexOutOfBoundsException when fromIndex is negative. No code catches this and the reviewed checkout contains no @ControllerAdvice or @ExceptionHandler (grep over all 8 Java files found none), so invalid input produces an unhandled exception surfacing as a raw 500.",
+};
+const PR50_VALIDATES_INPUTS = {
+	summary: "Negative page param flows unclamped into subList and throws",
+	explanation:
+		'The added handler\'s only guard on `page` is `@RequestParam(defaultValue = "0")`. The pinned file has no @Min, clamp or other check on the path.',
+};
+
+function hostCoverage(receipts: { status: "COMPLETE" | "SEARCHED"; path: string }[] = []) {
+	return {
+		source: "host" as const,
+		reads: 3,
+		truncatedReads: 0,
+		failedReads: 0,
+		complete: true as const,
+		receipts: receipts.map((receipt) => ({
+			sourceKind: "scm.repository.tree",
+			sourcePath: TREE.sourcePath,
+			version: TREE.version,
+			...receipt,
+		})),
+	};
+}
+
+const ASK = { checkout: true, askAboutWords: true };
+
+void test("#50: a claim that the checkout lacks something goes back to the model until the checkout was searched", () => {
+	const consulted = ["scm.pull-request.diff", "scm.repository.tree"];
+	const stored = { search: { consulted }, problems: [PR50_ERROR_HANDLING] };
+	assert.match(
+		unreadCheckoutClaim(stored, hostCoverage(), ASK)?.text ?? "",
+		/names scm\.repository\.tree as searched/u,
+	);
+	// Reading UserController to its end, as the stored result says it did, is no search of the checkout.
+	assert.notEqual(
+		unreadCheckoutClaim(
+			stored,
+			hostCoverage([{ status: "COMPLETE", path: "src/main/java/UserController.java" }]),
+			ASK,
+		),
+		undefined,
+	);
+	assert.equal(
+		unreadCheckoutClaim(stored, hostCoverage([{ status: "SEARCHED", path: "." }]), ASK),
+		undefined,
+	);
+});
+
+void test("#50: leaving the tree out of the search does not hide words that say the checkout lacks something, once", () => {
+	const hidden = {
+		search: { consulted: ["scm.pull-request.diff"] },
+		problems: [PR50_ERROR_HANDLING],
+	};
+	assert.equal(unreadCheckoutClaim(hidden, hostCoverage(), ASK)?.byWords, true);
+	assert.equal(
+		unreadCheckoutClaim(hidden, hostCoverage(), { checkout: true, askAboutWords: false }),
+		undefined,
+	);
+	assert.equal(
+		unreadCheckoutClaim(hidden, hostCoverage(), { checkout: false, askAboutWords: true }),
+		undefined,
+	);
+	// What the cited file itself lacks is not a claim about the rest of the checkout.
+	assert.equal(
+		unreadCheckoutClaim(
+			{ search: { consulted: ["scm.pull-request.diff"] }, problems: [PR50_VALIDATES_INPUTS] },
+			hostCoverage(),
+			ASK,
+		),
+		undefined,
+	);
 });

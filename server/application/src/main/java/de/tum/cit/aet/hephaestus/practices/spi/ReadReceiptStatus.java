@@ -5,5 +5,7 @@ public enum ReadReceiptStatus {
     TRUNCATED,
     FAILED,
     BINARY,
-    ABSENT;
+    ABSENT,
+    /** A search ran over the scope at the receipt's path to the end; it carries no digest or lines. */
+    SEARCHED;
 }

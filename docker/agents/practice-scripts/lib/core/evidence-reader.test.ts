@@ -157,6 +157,23 @@ void describe("listings and searches", () => {
 			});
 		});
 	}
+	void test("only a search of the whole checkout's contents that ran to the end proves the search", async (t) => {
+		const { reader } = await captures(t);
+		await reader.answer({ op: "grep", pattern: "ControllerAdvice", glob: "*.java" });
+		await reader.answer({ op: "list", glob: "src/**" });
+		assert.deepEqual(reader.readReceipts, []);
+
+		await reader.answer({ op: "grep", pattern: "ControllerAdvice" });
+		assert.deepEqual(reader.readReceipts, [
+			{
+				sourceKind: TREE_SOURCE,
+				sourcePath: "repos/reviewed/.git/HEAD",
+				path: ".",
+				version: HEAD,
+				status: "SEARCHED",
+			},
+		]);
+	});
 	void test("an aborted read or search does no work and changes no receipts", async (t) => {
 		const { reader, receipts } = await captures(t);
 		const signal = AbortSignal.abort(new UnratedError("cancelled", "the attempt ended"));

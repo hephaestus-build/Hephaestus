@@ -3118,7 +3118,8 @@ export const zReadReceipt = z.object({
         'TRUNCATED',
         'FAILED',
         'BINARY',
-        'ABSENT'
+        'ABSENT',
+        'SEARCHED'
     ]).optional(),
     version: z.string().optional()
 });
