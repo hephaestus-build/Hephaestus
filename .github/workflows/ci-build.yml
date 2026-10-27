@@ -120,7 +120,7 @@ jobs:
           vp run db:check-drift || ISSUES_FOUND+=("Schema drift or migration-chain apply failed. Run: vp run db:draft-changelog")
 
           vp run db:generate-erd-docs || ISSUES_FOUND+=("ERD generation failed. Run: vp run db:generate-erd-docs")
-          if ! node scripts/assert-generated-clean.ts docs/contributor/erd/schema.mmd; then
+          if ! node scripts/assert-generated-clean.ts docs/contributor/erd; then
             echo "::error::ERD outdated. Run: vp run db:generate-erd-docs"
             ISSUES_FOUND+=("ERD outdated")
           fi

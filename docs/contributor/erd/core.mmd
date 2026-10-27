@@ -1,0 +1,283 @@
+---
+config:
+    layout: elk
+---
+erDiagram
+    %% Generated automatically from PostgreSQL database schema
+    %% using scripts/generate-mermaid-erd.ts
+    %% To regenerate: vp run db:generate-erd-docs
+
+    direction LR
+
+    Account {
+        BIGINT id PK
+        VARCHAR(255) display_name "NOT NULL"
+        USER-DEFINED primary_email
+        TIMESTAMPTZ primary_email_verified_at
+        VARCHAR(16) app_role "NOT NULL"
+        VARCHAR(16) status "NOT NULL"
+        TIMESTAMPTZ created_at "NOT NULL"
+        TIMESTAMPTZ updated_at "NOT NULL"
+        TIMESTAMPTZ deleted_at
+        BIGINT version "NOT NULL"
+        BOOLEAN public_activity_visible "NOT NULL"
+        VARCHAR(24) ai_choice
+        TIMESTAMPTZ ai_choice_at
+        BOOLEAN feedback_delivery_enabled "NOT NULL"
+        BOOLEAN passkey_protection_enabled "NOT NULL"
+        BOOLEAN passkey_recovery_required "NOT NULL"
+        VARCHAR(64) passkey_user_handle UK
+        VARCHAR(64) time_zone
+    }
+
+    AccountExport {
+        BIGINT id PK
+        BIGINT account_id FK "NOT NULL"
+        VARCHAR(16) status "NOT NULL"
+        TIMESTAMPTZ requested_at "NOT NULL"
+        TIMESTAMPTZ completed_at
+        TIMESTAMPTZ expires_at
+        VARCHAR(128) failure_reason
+        BYTEA payload
+    }
+
+    AccountFeature {
+        BIGINT account_id PK,FK
+        VARCHAR(64) flag PK
+        TIMESTAMPTZ enabled_at "NOT NULL"
+    }
+
+    AuthEvent {
+        BIGINT id PK
+        TIMESTAMPTZ occurred_at PK
+        BIGINT account_id FK
+        BIGINT acting_account_id FK
+        VARCHAR(48) event_type "NOT NULL"
+        VARCHAR(16) result "NOT NULL"
+        VARCHAR(64) failure_reason
+        BIGINT provider_id FK
+        BIGINT workspace_id FK
+        BIGINT identity_id FK
+        INET ip_inet
+        VARCHAR(512) user_agent
+        TEXT details
+        BOOLEAN elevated_via_instance_admin "NOT NULL"
+        BIGINT viewed_actor_id FK
+        BIGINT viewed_account_id FK
+    }
+
+    ClientSession {
+        UUID id PK
+        BIGINT account_id FK "NOT NULL"
+        TIMESTAMPTZ auth_time "NOT NULL"
+        VARCHAR(64) client_id "NOT NULL"
+        VARCHAR(32) client_kind "NOT NULL"
+        TIMESTAMPTZ created_at "NOT NULL"
+        TIMESTAMPTZ revoked_at
+        VARCHAR(32) revoked_reason
+        TIMESTAMPTZ session_expires_at "NOT NULL"
+    }
+
+    ClientSignInHandoff {
+        VARCHAR(64) code_hash PK
+        BIGINT account_id FK "NOT NULL"
+        TIMESTAMPTZ auth_time "NOT NULL"
+        VARCHAR(64) client_id "NOT NULL"
+        VARCHAR(32) client_kind "NOT NULL"
+        VARCHAR(64) code_challenge "NOT NULL"
+        TIMESTAMPTZ consumed_at
+        TIMESTAMPTZ created_at "NOT NULL"
+        TIMESTAMPTZ expires_at "NOT NULL"
+        VARCHAR(255) redirect_uri "NOT NULL"
+        TIMESTAMPTZ session_expires_at "NOT NULL"
+    }
+
+    ConfigAuditEvent {
+        BIGINT id PK
+        TIMESTAMPTZ occurred_at "NOT NULL"
+        BIGINT workspace_id FK
+        VARCHAR(16) actor_kind "NOT NULL"
+        BIGINT actor_account_id FK
+        BIGINT acting_account_id FK
+        VARCHAR(48) entity_type "NOT NULL"
+        VARCHAR(64) entity_id "NOT NULL"
+        VARCHAR(16) action "NOT NULL"
+        ARRAY changed_keys "NOT NULL"
+        TEXT old_value
+        TEXT new_value
+        BOOLEAN elevated_via_instance_admin "NOT NULL"
+    }
+
+    ConsentDecision {
+        BIGINT id PK
+        BIGINT account_id FK
+        VARCHAR(40) purpose "NOT NULL"
+        BOOLEAN granted "NOT NULL"
+        VARCHAR(32) mechanism "NOT NULL"
+        VARCHAR(32) notice_version "NOT NULL"
+        TIMESTAMPTZ occurred_at "NOT NULL"
+        VARCHAR(255) research_organization
+    }
+
+    Identity {
+        BIGINT id PK
+        BIGINT account_id FK "NOT NULL"
+        BIGINT provider_id FK "NOT NULL"
+        VARCHAR(255) provider_user_key "NOT NULL"
+        VARCHAR(255) team_key "NOT NULL"
+        VARCHAR(16) linked_via "NOT NULL"
+        TIMESTAMPTZ linked_at "NOT NULL"
+        TIMESTAMPTZ last_login_at
+        TIMESTAMPTZ disabled_at
+    }
+
+    IdentityRestriction {
+        UUID id PK
+        BIGINT provider_id FK,UK "NOT NULL"
+        VARCHAR(255) provider_user_key UK "NOT NULL"
+        VARCHAR(255) team_key UK "NOT NULL"
+        VARCHAR(16) kind UK "NOT NULL"
+        UUID active_request_id FK
+    }
+
+    InstanceSetting {
+        BIGINT id PK
+        BOOLEAN silent_mode_engaged "NOT NULL"
+        VARCHAR(500) silent_mode_reason
+        TIMESTAMPTZ silent_mode_changed_at
+        BIGINT version "NOT NULL"
+        BIGINT silent_mode_changed_by_account_id FK
+        BOOLEAN public_activity_allowed
+    }
+
+    IssuedJwt {
+        UUID jti PK
+        BIGINT account_id FK "NOT NULL"
+        TIMESTAMPTZ issued_at "NOT NULL"
+        TIMESTAMPTZ expires_at "NOT NULL"
+        TIMESTAMPTZ revoked_at
+        VARCHAR(32) revoked_reason
+        VARCHAR(512) user_agent
+        INET ip_inet
+        VARCHAR(64) refresh_token_hash UK
+        UUID session_id FK
+    }
+
+    JwtSigningKey {
+        VARCHAR(64) kid PK
+        VARCHAR(16) algorithm "NOT NULL"
+        TEXT public_key_pem "NOT NULL"
+        BYTEA private_key_pem "NOT NULL"
+        BOOLEAN active "NOT NULL"
+        TIMESTAMPTZ created_at "NOT NULL"
+        VARCHAR(64) encryption_key_id "NOT NULL"
+    }
+
+    LoginProvider {
+        BIGINT id PK
+        VARCHAR(64) registration_id UK "NOT NULL"
+        VARCHAR(10) type UK "NOT NULL"
+        VARCHAR(255) display_name "NOT NULL"
+        VARCHAR(512) base_url UK "NOT NULL"
+        VARCHAR(512) client_id "NOT NULL"
+        TEXT client_secret "NOT NULL"
+        VARCHAR(512) scopes "NOT NULL"
+        BOOLEAN enabled "NOT NULL"
+        BOOLEAN seeded_from_env "NOT NULL"
+        TIMESTAMPTZ created_at "NOT NULL"
+        TIMESTAMPTZ updated_at "NOT NULL"
+    }
+
+    PasskeyChallenge {
+        UUID id PK
+        TIMESTAMPTZ expires_at "NOT NULL"
+        TEXT options_json "NOT NULL"
+        VARCHAR(16) purpose "NOT NULL"
+        UUID token_id "NOT NULL"
+        BIGINT account_id FK "NOT NULL"
+    }
+
+    PasskeyCredential {
+        VARCHAR(2048) id PK
+        TEXT record_json "NOT NULL"
+        BIGINT account_id FK "NOT NULL"
+    }
+
+    PasskeyRecoveryCode {
+        VARCHAR(64) hash PK
+        BIGINT account_id FK "NOT NULL"
+    }
+
+    PersonDataRequest {
+        UUID id PK
+        BIGINT administrator_account_id FK
+        TIMESTAMPTZ completed_at
+        TEXT completed_json "NOT NULL"
+        TEXT counts_json "NOT NULL"
+        TIMESTAMPTZ created_at "NOT NULL"
+        TIMESTAMPTZ expires_at "NOT NULL"
+        VARCHAR(48) failure_code
+        TEXT scope_json
+        TEXT selections_json
+        VARCHAR(24) state "NOT NULL"
+        BIGINT version "NOT NULL"
+    }
+
+    ReleaseStart {
+        BIGINT id PK
+        VARCHAR(16) channel "NOT NULL"
+        VARCHAR(40) commit_sha
+        VARCHAR(64) environment "NOT NULL"
+        VARCHAR(512) image
+        TIMESTAMPTZ started_at "NOT NULL"
+        VARCHAR(128) version "NOT NULL"
+    }
+
+    WorkerTokenDenylist {
+        VARCHAR(64) jti PK
+        TIMESTAMPTZ revoked_at "NOT NULL"
+        TIMESTAMPTZ expires_at "NOT NULL"
+    }
+
+    IdentityProvider["IdentityProvider · Integration"]
+    User["User · Integration"]
+    Workspace["Workspace · Workspace (Tenancy)"]
+
+    %% Relationships
+    %% One-to-Many relationships
+    Account ||--o{ AccountExport : has
+    Account ||--o{ AccountFeature : has
+    Account ||--o{ AuthEvent : account_id
+    Account ||--o{ AuthEvent : acting_account_id
+    IdentityProvider ||--o{ AuthEvent : references
+    Identity ||--o{ AuthEvent : has
+    Account ||--o{ AuthEvent : viewed_account_id
+    User ||--o{ AuthEvent : references
+    Workspace ||--o{ AuthEvent : has
+    Account ||--o{ ClientSession : has
+    Account ||--o{ ClientSignInHandoff : has
+    Account ||--o{ ConfigAuditEvent : acting_account_id
+    Account ||--o{ ConfigAuditEvent : actor_account_id
+    Workspace ||--o{ ConfigAuditEvent : has
+    Account ||--o{ ConsentDecision : has
+    Account ||--o{ Identity : has
+    IdentityProvider ||--o{ Identity : references
+    IdentityProvider ||--o{ IdentityRestriction : references
+    PersonDataRequest ||--o{ IdentityRestriction : references
+    Account ||--o{ InstanceSetting : has
+    Account ||--o{ IssuedJwt : has
+    ClientSession ||--o{ IssuedJwt : has
+    Account ||--o{ PasskeyChallenge : has
+    Account ||--o{ PasskeyCredential : has
+    Account ||--o{ PasskeyRecoveryCode : has
+    Account ||--o{ PersonDataRequest : has
+
+    %% Styling
+    classDef primaryEntity stroke:#0288d1,stroke-width:2px
+    classDef associationEntity stroke:#8e24aa,stroke-width:2px
+    classDef metadataEntity stroke:#43a047,stroke-width:2px
+    classDef referenceEntity stroke-dasharray:5 5
+
+    class IdentityProvider referenceEntity
+    class User referenceEntity
+    class Workspace referenceEntity

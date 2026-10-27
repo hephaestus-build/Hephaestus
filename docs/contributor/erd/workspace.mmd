@@ -1,0 +1,143 @@
+---
+config:
+    layout: elk
+---
+erDiagram
+    %% Generated automatically from PostgreSQL database schema
+    %% using scripts/generate-mermaid-erd.ts
+    %% To regenerate: vp run db:generate-erd-docs
+
+    direction LR
+
+    Membership {
+        BIGINT workspace_id PK,FK
+        BIGINT account_id PK,FK
+        VARCHAR(16) role "NOT NULL"
+        BOOLEAN hidden "NOT NULL"
+        BOOLEAN review_selected "NOT NULL"
+        BIGINT onboarding_seen_revision
+        BOOLEAN public_activity_seen "NOT NULL"
+        TIMESTAMPTZ joined_at "NOT NULL"
+        TIMESTAMPTZ left_at
+    }
+
+    RepositoryToMonitor {
+        BIGINT id PK,UK
+        TIMESTAMPTZ labels_synced_at
+        TIMESTAMPTZ milestones_synced_at
+        VARCHAR(255) name_with_owner
+        TIMESTAMPTZ repository_synced_at
+        BIGINT workspace_id FK,UK "NOT NULL"
+        TIMESTAMPTZ backfill_last_run_at
+        TIMESTAMPTZ collaborators_synced_at
+        VARCHAR(255) issue_sync_cursor
+        VARCHAR(255) pull_request_sync_cursor
+        INTEGER issue_backfill_high_water_mark
+        INTEGER issue_backfill_checkpoint
+        INTEGER pull_request_backfill_high_water_mark
+        INTEGER pull_request_backfill_checkpoint
+        TIMESTAMPTZ issues_synced_at
+        TIMESTAMPTZ pull_requests_synced_at
+        VARCHAR(255) discussion_sync_cursor
+        TIMESTAMPTZ discussions_synced_at
+        BIGINT native_id UK
+        VARCHAR(2048) historical_backfill_sync_error
+        VARCHAR(2048) recent_sync_error
+        JSONB generated_paths "NOT NULL"
+        TIMESTAMPTZ unavailable_retry_at
+        TIMESTAMPTZ unavailable_since
+        INTEGER backfill_repair_provider_count
+        TIMESTAMPTZ repository_visibility_confirmed_at
+    }
+
+    ReviewScopeRepository {
+        BIGINT workspace_id PK,FK
+        BIGINT repository_monitor_id PK,FK
+        JSONB base_branches "NOT NULL"
+    }
+
+    Workspace {
+        BIGINT id PK
+        TIMESTAMPTZ users_synced_at
+        VARCHAR(120) account_login "NOT NULL"
+        VARCHAR(255) repository_selection
+        BIGINT organization_id FK,UK
+        VARCHAR(10) account_type "NOT NULL"
+        TIMESTAMPTZ created_at "NOT NULL"
+        VARCHAR(120) display_name "NOT NULL"
+        VARCHAR(64) slug UK "NOT NULL"
+        VARCHAR(20) status "NOT NULL"
+        TIMESTAMPTZ updated_at
+        TIMESTAMPTZ members_synced_at
+        TIMESTAMPTZ teams_synced_at
+        TIMESTAMPTZ sub_issues_synced_at
+        TIMESTAMPTZ issue_types_synced_at
+        TIMESTAMPTZ issue_dependencies_synced_at
+        BOOLEAN practices_enabled "NOT NULL"
+        BOOLEAN practice_review_auto_trigger_enabled "NOT NULL"
+        BOOLEAN practice_review_manual_trigger_enabled "NOT NULL"
+        BOOLEAN practice_deliver_to_merged
+        INTEGER practice_cooldown_minutes
+        NUMERIC(10,2) monthly_llm_budget_usd
+        NUMERIC(10,2) monthly_byo_llm_budget_usd
+        VARCHAR(16) practice_default_feedback_mode
+        VARCHAR(24) review_scope_repositories "NOT NULL"
+        VARCHAR(24) review_scope_people "NOT NULL"
+        VARCHAR(16) practice_delivery_status "NOT NULL"
+        BIGINT practice_rollout_revision "NOT NULL"
+        BIGINT practice_config_version "NOT NULL"
+        BOOLEAN public_activity_enabled "NOT NULL"
+        BOOLEAN public_activity_search_engines "NOT NULL"
+        TIMESTAMPTZ practice_catalog_installed_at
+        BOOLEAN admin_passkey_required "NOT NULL"
+    }
+
+    WorkspaceOnboardingSetting {
+        BIGINT workspace_id PK,FK
+        BOOLEAN ai_choice_required "NOT NULL"
+        BOOLEAN enabled "NOT NULL"
+        JSONB required_connection_ids "NOT NULL"
+        BIGINT revision "NOT NULL"
+    }
+
+    WorkspaceSlugHistory {
+        BIGINT id PK
+        TIMESTAMPTZ changed_at "NOT NULL"
+        VARCHAR(64) new_slug "NOT NULL"
+        VARCHAR(64) old_slug "NOT NULL"
+        TIMESTAMPTZ redirect_expires_at
+        BIGINT workspace_id FK "NOT NULL"
+    }
+
+    WorkspaceSlugReservation {
+        VARCHAR(64) slug PK
+    }
+
+    Account["Account · Core"]
+    Organization["Organization · Integration"]
+
+    %% Relationships
+    %% One-to-One relationships
+    Organization ||--|| Workspace : has
+    Workspace ||--|| WorkspaceOnboardingSetting : has
+
+    %% One-to-Many relationships
+    Account ||--o{ Membership : belongs_to
+    Workspace ||--o{ Membership : belongs_to
+    Workspace ||--o{ RepositoryToMonitor : monitors
+    Workspace ||--o{ WorkspaceSlugHistory : has
+
+    %% Many-to-Many relationships
+    RepositoryToMonitor }o--o{ ReviewScopeRepository : reviewed
+    Workspace }o--o{ ReviewScopeRepository : reviewed
+
+    %% Styling
+    classDef primaryEntity stroke:#0288d1,stroke-width:2px
+    classDef associationEntity stroke:#8e24aa,stroke-width:2px
+    classDef metadataEntity stroke:#43a047,stroke-width:2px
+    classDef referenceEntity stroke-dasharray:5 5
+
+    class Account referenceEntity
+    class Organization referenceEntity
+    class RepositoryToMonitor metadataEntity
+    class Workspace primaryEntity

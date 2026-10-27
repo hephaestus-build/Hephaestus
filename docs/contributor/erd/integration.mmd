@@ -1,0 +1,905 @@
+---
+config:
+    layout: elk
+---
+erDiagram
+    %% Generated automatically from PostgreSQL database schema
+    %% using scripts/generate-mermaid-erd.ts
+    %% To regenerate: vp run db:generate-erd-docs
+
+    direction LR
+
+    CommitContributor {
+        BIGINT id PK
+        BIGINT commit_id FK,UK "NOT NULL"
+        BIGINT user_id FK
+        VARCHAR(32) role UK "NOT NULL"
+        VARCHAR(255) name
+        VARCHAR(255) email UK "NOT NULL"
+        INTEGER ordinal "NOT NULL"
+    }
+
+    CommitFileChange {
+        BIGINT id PK
+        VARCHAR(1024) filename "NOT NULL"
+        VARCHAR(32) change_type "NOT NULL"
+        INTEGER additions "NOT NULL"
+        INTEGER deletions "NOT NULL"
+        INTEGER changes "NOT NULL"
+        VARCHAR(1024) previous_filename
+        BIGINT commit_id FK "NOT NULL"
+    }
+
+    CommitPullRequest {
+        BIGINT commit_id PK,FK
+        BIGINT pull_request_id PK,FK
+    }
+
+    Connection {
+        BIGINT id PK,UK
+        BIGINT workspace_id FK,UK "NOT NULL"
+        VARCHAR(48) kind UK "NOT NULL"
+        VARCHAR(128) instance_key UK
+        VARCHAR(256) display_name
+        VARCHAR(32) state "NOT NULL"
+        VARCHAR(512) state_reason
+        JSONB config "NOT NULL"
+        BYTEA credentials_encrypted
+        VARCHAR(64) credentials_alg
+        TIMESTAMPTZ created_at "NOT NULL"
+        TIMESTAMPTZ updated_at "NOT NULL"
+        BIGINT version "NOT NULL"
+        INTEGER credentials_key_version
+        TIMESTAMPTZ credentials_rotation_failed_at
+        VARCHAR(32) attention_problem
+        BIGINT attention_revision "NOT NULL"
+    }
+
+    ConnectionActivity {
+        BIGINT connection_id PK,FK
+        BIGINT workspace_id FK "NOT NULL"
+        TIMESTAMPTZ last_event_at
+        VARCHAR(128) last_event_type
+    }
+
+    ConnectionAudit {
+        BIGINT id PK
+        BIGINT connection_id FK "NOT NULL"
+        VARCHAR(48) event_type "NOT NULL"
+        VARCHAR(32) from_state
+        VARCHAR(32) to_state
+        VARCHAR(32) actor_kind "NOT NULL"
+        VARCHAR(256) actor_ref
+        VARCHAR(64) correlation_id
+        TEXT detail
+        TIMESTAMPTZ occurred_at "NOT NULL"
+        BIGINT actor_account_id FK
+    }
+
+    Discussion {
+        BIGINT id PK
+        TIMESTAMPTZ created_at
+        TIMESTAMPTZ updated_at
+        INTEGER number UK "NOT NULL"
+        VARCHAR(1024) title
+        TEXT body
+        VARCHAR(512) html_url
+        VARCHAR(16) state
+        VARCHAR(32) state_reason
+        INTEGER upvote_count
+        BOOLEAN is_locked
+        VARCHAR(32) active_lock_reason
+        TIMESTAMPTZ closed_at
+        TIMESTAMPTZ answer_chosen_at
+        INTEGER comment_count
+        TIMESTAMPTZ last_sync_at
+        BIGINT repository_id FK,UK
+        BIGINT author_id FK
+        VARCHAR(128) category_id FK
+        BIGINT answer_chosen_by_id FK
+        BIGINT answer_comment_id FK,UK
+        BIGINT native_id UK "NOT NULL"
+        BIGINT provider_id FK,UK "NOT NULL"
+    }
+
+    DiscussionCategory {
+        VARCHAR(128) id PK
+        VARCHAR(255) name
+        VARCHAR(128) slug UK
+        VARCHAR(32) emoji
+        TEXT description
+        BOOLEAN is_answerable "NOT NULL"
+        BIGINT repository_id FK,UK
+        TIMESTAMPTZ created_at
+        TIMESTAMPTZ updated_at
+    }
+
+    DiscussionComment {
+        BIGINT id PK
+        TIMESTAMPTZ created_at
+        TIMESTAMPTZ updated_at
+        TEXT body
+        VARCHAR(512) html_url
+        BOOLEAN is_answer "NOT NULL"
+        BOOLEAN is_minimized "NOT NULL"
+        VARCHAR(64) minimized_reason
+        VARCHAR(32) author_association
+        TIMESTAMPTZ last_sync_at
+        BIGINT discussion_id FK
+        BIGINT author_id FK
+        BIGINT parent_comment_id FK
+        BIGINT native_id UK "NOT NULL"
+        BIGINT provider_id FK,UK "NOT NULL"
+    }
+
+    DiscussionLabel {
+        BIGINT discussion_id PK,FK
+        BIGINT label_id PK,FK
+    }
+
+    GitCommit {
+        BIGINT id PK
+        VARCHAR(40) sha UK "NOT NULL"
+        VARCHAR(1024) message "NOT NULL"
+        TEXT message_body
+        VARCHAR(512) html_url
+        TIMESTAMPTZ authored_at "NOT NULL"
+        TIMESTAMPTZ committed_at "NOT NULL"
+        INTEGER additions "NOT NULL"
+        INTEGER deletions "NOT NULL"
+        INTEGER changed_files "NOT NULL"
+        VARCHAR(255) author_email
+        VARCHAR(255) committer_email
+        BOOLEAN signature_valid
+        BOOLEAN authored_by_committer
+        BOOLEAN committed_via_web
+        INTEGER parent_count
+        TIMESTAMPTZ last_sync_at
+        TIMESTAMPTZ created_at
+        TIMESTAMPTZ updated_at
+        BIGINT repository_id FK,UK "NOT NULL"
+        BIGINT author_id FK
+        BIGINT committer_id FK
+        VARCHAR(32) signature_state
+        BOOLEAN signature_was_signed_by_github
+        VARCHAR(255) signature_signer_login
+        TEXT parent_shas
+        VARCHAR(32) status_check_rollup_state
+        VARCHAR(255) on_behalf_of_login
+        TIMESTAMPTZ git_details_captured_at
+    }
+
+    IdentityProvider {
+        BIGINT id PK
+        VARCHAR(10) type UK "NOT NULL"
+        VARCHAR(512) server_url UK "NOT NULL"
+        TIMESTAMPTZ created_at "NOT NULL"
+    }
+
+    Issue {
+        VARCHAR(31) issue_type UK "NOT NULL"
+        BIGINT id PK
+        TIMESTAMPTZ created_at
+        TIMESTAMPTZ updated_at
+        TIMESTAMPTZ closed_at
+        INTEGER comments_count "NOT NULL"
+        VARCHAR(255) html_url
+        BOOLEAN is_locked "NOT NULL"
+        INTEGER number UK "NOT NULL"
+        VARCHAR(255) state
+        VARCHAR(1024) title
+        INTEGER additions
+        INTEGER changed_files
+        INTEGER commits
+        INTEGER deletions
+        BOOLEAN is_draft
+        BOOLEAN is_merged
+        TIMESTAMPTZ merged_at
+        BIGINT author_id FK
+        BIGINT milestone_id FK
+        BIGINT repository_id FK,UK
+        BIGINT merged_by_id FK
+        TIMESTAMPTZ last_sync_at
+        VARCHAR(32) state_reason
+        TEXT body
+        BIGINT parent_issue_id FK
+        INTEGER sub_issues_total
+        INTEGER sub_issues_completed
+        INTEGER sub_issues_percent_completed
+        VARCHAR(128) issue_type_id FK
+        VARCHAR(255) merge_state_status
+        BOOLEAN mergeable
+        VARCHAR(255) review_decision
+        VARCHAR(255) head_ref_name
+        VARCHAR(40) head_ref_oid
+        VARCHAR(255) base_ref_name
+        VARCHAR(40) base_ref_oid
+        BIGINT native_id UK "NOT NULL"
+        BIGINT provider_id FK,UK "NOT NULL"
+        VARCHAR(40) merge_commit_sha
+        TIMESTAMPTZ deleted_at
+        VARCHAR(40) head_check_sha
+        VARCHAR(16) head_check_state
+        UUID review_snapshot_id
+        VARCHAR(128) review_snapshot_digest
+        TIMESTAMPTZ reviewers_observed_at
+        TIMESTAMPTZ head_check_observed_at
+        TIMESTAMPTZ discussions_observed_at
+    }
+
+    IssueAssignee {
+        BIGINT issue_id PK,FK
+        BIGINT user_id PK,FK
+    }
+
+    IssueBlocking {
+        BIGINT blocked_issue_id PK,FK
+        BIGINT blocking_issue_id PK,FK
+    }
+
+    IssueComment {
+        BIGINT id PK
+        TIMESTAMPTZ created_at
+        TIMESTAMPTZ updated_at
+        VARCHAR(255) author_association
+        VARCHAR(255) html_url
+        BIGINT author_id FK
+        BIGINT issue_id FK
+        TEXT body
+        BIGINT native_id UK "NOT NULL"
+        BIGINT provider_id FK,UK "NOT NULL"
+    }
+
+    IssueLabel {
+        BIGINT issue_id PK,FK
+        BIGINT label_id PK,FK
+    }
+
+    IssueType {
+        VARCHAR(128) id PK
+        VARCHAR(128) name "NOT NULL"
+        TEXT description
+        VARCHAR(20) color "NOT NULL"
+        BOOLEAN is_enabled "NOT NULL"
+        BIGINT organization_id FK "NOT NULL"
+        TIMESTAMPTZ last_sync_at
+    }
+
+    Item {
+        BIGINT id PK,UK
+        BIGINT workspace_id FK,UK "NOT NULL"
+        VARCHAR(64) kind "NOT NULL"
+        BIGINT parent_id FK
+        BIGINT source_id
+        TEXT path
+        TIMESTAMPTZ created_at "NOT NULL"
+        TIMESTAMPTZ removed_at
+    }
+
+    ItemEvent {
+        UUID id PK,UK
+        BIGINT workspace_id FK,UK "NOT NULL"
+        BIGINT item_id FK,UK "NOT NULL"
+        VARCHAR(128) name UK "NOT NULL"
+        TEXT item_version UK
+        TIMESTAMPTZ occurred_at "NOT NULL"
+        VARCHAR(16) found_by "NOT NULL"
+        BIGINT actor_user_id FK
+        BIGINT requested_by_id FK
+        VARCHAR(16) state "NOT NULL"
+        VARCHAR(48) reason
+        TIMESTAMPTZ decided_at "NOT NULL"
+        TIMESTAMPTZ last_attempted_at
+        TIMESTAMPTZ retry_at
+        VARCHAR(1024) pending_fence
+        JSONB evidence
+        TIMESTAMPTZ evidence_expires_at
+    }
+
+    Label {
+        BIGINT id PK
+        VARCHAR(255) color
+        VARCHAR(255) description
+        VARCHAR(255) name UK
+        BIGINT repository_id FK,UK
+        TIMESTAMPTZ last_sync_at
+        TIMESTAMPTZ created_at
+        TIMESTAMPTZ updated_at
+        BIGINT native_id UK "NOT NULL"
+        BIGINT provider_id FK,UK "NOT NULL"
+    }
+
+    Milestone {
+        BIGINT id PK
+        TIMESTAMPTZ created_at
+        TIMESTAMPTZ updated_at
+        TIMESTAMPTZ closed_at
+        TIMESTAMPTZ due_on
+        VARCHAR(255) html_url
+        INTEGER number UK "NOT NULL"
+        VARCHAR(255) state
+        VARCHAR(255) title
+        BIGINT creator_id FK
+        BIGINT repository_id FK,UK
+        TEXT description
+        INTEGER closed_issues_count "NOT NULL"
+        INTEGER open_issues_count "NOT NULL"
+        TIMESTAMPTZ last_sync_at
+        BIGINT native_id UK "NOT NULL"
+        BIGINT provider_id FK,UK "NOT NULL"
+    }
+
+    OauthStateNonce {
+        VARCHAR(32) nonce PK
+        BIGINT workspace_id "NOT NULL"
+        VARCHAR(48) kind "NOT NULL"
+        TIMESTAMPTZ issued_at "NOT NULL"
+        TIMESTAMPTZ consumed_at
+        BIGINT actor_account_id FK
+    }
+
+    Organization {
+        BIGINT id PK
+        TIMESTAMPTZ created_at
+        TIMESTAMPTZ updated_at
+        VARCHAR(255) avatar_url
+        BIGINT native_id UK "NOT NULL"
+        VARCHAR(255) html_url
+        VARCHAR(255) login UK "NOT NULL"
+        VARCHAR(255) name
+        TIMESTAMPTZ last_sync_at
+        BIGINT provider_id FK,UK "NOT NULL"
+    }
+
+    OrganizationMembership {
+        BIGINT organization_id PK
+        BIGINT user_id PK
+        VARCHAR(32) role "NOT NULL"
+    }
+
+    OutlineCollection {
+        BIGINT id PK
+        BIGINT workspace_id FK,UK "NOT NULL"
+        BIGINT connection_id FK,UK "NOT NULL"
+        VARCHAR(64) collection_id UK "NOT NULL"
+        VARCHAR(1024) name
+        VARCHAR(512) url_id
+        VARCHAR(32) color
+        VARCHAR(64) icon
+        VARCHAR(16) state "NOT NULL"
+        VARCHAR(16) sync_status "NOT NULL"
+        TIMESTAMPTZ documents_synced_at
+        VARCHAR(2048) last_sync_error
+        TIMESTAMPTZ created_at "NOT NULL"
+        TIMESTAMPTZ updated_at "NOT NULL"
+        INTEGER documents_upstream
+        INTEGER exports_skipped_for_budget
+        VARCHAR(2048) description
+        BIGINT version "NOT NULL"
+    }
+
+    OutlineDocument {
+        BIGINT id PK
+        BIGINT workspace_id FK,UK "NOT NULL"
+        BIGINT connection_id FK,UK "NOT NULL"
+        VARCHAR(64) document_id UK "NOT NULL"
+        VARCHAR(64) collection_id "NOT NULL"
+        VARCHAR(512) collection_slug
+        VARCHAR(64) parent_document_id
+        VARCHAR(1024) title
+        VARCHAR(512) slug
+        TEXT body_markdown
+        VARCHAR(64) content_hash
+        TIMESTAMPTZ outline_updated_at
+        TIMESTAMPTZ deleted_at
+        TIMESTAMPTZ last_materialized_at
+        TIMESTAMPTZ created_at "NOT NULL"
+        TIMESTAMPTZ updated_at "NOT NULL"
+        VARCHAR(64) created_by_subject
+        VARCHAR(255) created_by_name
+        VARCHAR(64) updated_by_subject
+        VARCHAR(255) updated_by_name
+        TIMESTAMPTZ outline_created_at
+        JSONB collaborator_subjects
+        TIMESTAMPTZ body_evicted_at
+        TIMESTAMPTZ archived_at
+        BIGINT version "NOT NULL"
+    }
+
+    OutlineDocumentEvent {
+        BIGINT id PK
+        BIGINT workspace_id FK "NOT NULL"
+        BIGINT connection_id FK "NOT NULL"
+        VARCHAR(64) document_id "NOT NULL"
+        VARCHAR(64) event_name "NOT NULL"
+        VARCHAR(64) actor_subject
+        TIMESTAMPTZ occurred_at
+        TIMESTAMPTZ created_at "NOT NULL"
+    }
+
+    Project {
+        BIGINT id PK
+        VARCHAR(64) node_id UK
+        VARCHAR(32) owner_type UK "NOT NULL"
+        BIGINT owner_id UK "NOT NULL"
+        INTEGER number UK "NOT NULL"
+        VARCHAR(256) title
+        TEXT short_description
+        TEXT readme
+        BOOLEAN template "NOT NULL"
+        VARCHAR(512) url
+        BOOLEAN closed "NOT NULL"
+        TIMESTAMPTZ closed_at
+        BOOLEAN is_public "NOT NULL"
+        BIGINT creator_id FK
+        TIMESTAMPTZ last_sync_at
+        VARCHAR(256) item_sync_cursor
+        TIMESTAMPTZ items_synced_at
+        VARCHAR(256) field_sync_cursor
+        TIMESTAMPTZ fields_synced_at
+        VARCHAR(256) status_update_sync_cursor
+        TIMESTAMPTZ status_updates_synced_at
+        TIMESTAMPTZ created_at
+        TIMESTAMPTZ updated_at
+        BIGINT native_id UK "NOT NULL"
+        BIGINT provider_id FK,UK "NOT NULL"
+    }
+
+    ProjectField {
+        VARCHAR(64) id PK
+        BIGINT project_id FK,UK "NOT NULL"
+        VARCHAR(256) name UK "NOT NULL"
+        VARCHAR(32) data_type "NOT NULL"
+        TEXT options
+        TIMESTAMPTZ created_at
+        TIMESTAMPTZ updated_at
+    }
+
+    ProjectFieldValue {
+        BIGINT id PK
+        BIGINT item_id FK,UK "NOT NULL"
+        VARCHAR(64) field_id FK,UK "NOT NULL"
+        TEXT text_value
+        DOUBLE number_value
+        DATE date_value
+        VARCHAR(64) single_select_option_id
+        VARCHAR(64) iteration_id
+        TIMESTAMPTZ updated_at
+    }
+
+    ProjectItem {
+        BIGINT id PK
+        VARCHAR(64) node_id UK
+        BIGINT project_id FK,UK "NOT NULL"
+        VARCHAR(32) content_type "NOT NULL"
+        BIGINT issue_id FK
+        BIGINT content_database_id
+        VARCHAR(1024) draft_title
+        TEXT draft_body
+        BOOLEAN archived "NOT NULL"
+        BIGINT creator_id FK
+        TIMESTAMPTZ created_at
+        TIMESTAMPTZ updated_at
+        BIGINT native_id UK "NOT NULL"
+        BIGINT provider_id FK,UK "NOT NULL"
+    }
+
+    ProjectStatusUpdate {
+        BIGINT id PK
+        VARCHAR(64) node_id UK
+        BIGINT project_id FK "NOT NULL"
+        TEXT body
+        TEXT body_html
+        DATE start_date
+        DATE target_date
+        VARCHAR(32) status
+        BIGINT creator_id FK
+        TIMESTAMPTZ created_at
+        TIMESTAMPTZ updated_at
+        BIGINT native_id UK "NOT NULL"
+        BIGINT provider_id FK,UK "NOT NULL"
+    }
+
+    PullRequestClosingIssue {
+        BIGINT pull_request_id PK,FK
+        BIGINT issue_id PK,FK
+    }
+
+    PullRequestRequestedReviewer {
+        BIGINT pull_request_id PK,FK
+        BIGINT user_id PK,FK
+        VARCHAR(32) review_state
+    }
+
+    PullRequestRequestedTeam {
+        BIGINT pull_request_id PK,FK
+        BIGINT team_id PK,FK
+    }
+
+    PullRequestReview {
+        BIGINT id PK
+        VARCHAR(255) commit_id
+        VARCHAR(255) html_url
+        BOOLEAN is_dismissed "NOT NULL"
+        VARCHAR(255) state
+        TIMESTAMPTZ submitted_at
+        BIGINT author_id FK
+        BIGINT pull_request_id FK
+        TEXT body
+        TIMESTAMP created_at
+        TIMESTAMP updated_at
+        BOOLEAN author_can_push_to_repository
+        BIGINT native_id UK "NOT NULL"
+        BIGINT provider_id FK,UK "NOT NULL"
+    }
+
+    PullRequestReviewComment {
+        BIGINT id PK
+        TIMESTAMPTZ created_at
+        TIMESTAMPTZ updated_at
+        VARCHAR(255) author_association
+        VARCHAR(255) commit_id
+        VARCHAR(255) html_url
+        INTEGER line "NOT NULL"
+        VARCHAR(255) original_commit_id
+        INTEGER original_line "NOT NULL"
+        INTEGER original_start_line
+        VARCHAR(255) path
+        INTEGER start_line
+        BIGINT author_id FK
+        BIGINT pull_request_id FK
+        BIGINT review_id FK
+        BIGINT thread_id FK "NOT NULL"
+        BIGINT in_reply_to_id FK
+        TEXT body
+        TEXT diff_hunk
+        BOOLEAN outdated
+        BIGINT native_id UK "NOT NULL"
+        BIGINT provider_id FK,UK "NOT NULL"
+        VARCHAR(16) side
+        VARCHAR(16) start_side
+    }
+
+    PullRequestReviewThread {
+        BIGINT id PK
+        TIMESTAMPTZ created_at
+        TIMESTAMPTZ updated_at
+        VARCHAR(20) state
+        BIGINT pull_request_id FK "NOT NULL"
+        BIGINT root_comment_id FK,UK
+        VARCHAR(128) node_id
+        TEXT path
+        INTEGER line
+        INTEGER start_line
+        VARCHAR(16) side
+        VARCHAR(16) start_side
+        BOOLEAN outdated
+        BOOLEAN collapsed
+        BIGINT resolved_by_id FK
+        BIGINT native_id UK "NOT NULL"
+        BIGINT provider_id FK,UK "NOT NULL"
+        VARCHAR(64) commit_sha
+        VARCHAR(64) original_commit_sha
+        TIMESTAMPTZ resolved_at
+    }
+
+    Repository {
+        BIGINT id PK
+        TIMESTAMPTZ created_at
+        TIMESTAMPTZ updated_at
+        VARCHAR(255) default_branch
+        TEXT description
+        VARCHAR(512) html_url
+        BOOLEAN is_archived "NOT NULL"
+        BOOLEAN is_disabled "NOT NULL"
+        BOOLEAN is_private "NOT NULL"
+        VARCHAR(255) name
+        VARCHAR(150) name_with_owner UK
+        TIMESTAMPTZ pushed_at
+        VARCHAR(255) visibility
+        BIGINT organization_id FK
+        TIMESTAMPTZ last_sync_at
+        BOOLEAN has_discussions_enabled "NOT NULL"
+        BIGINT native_id UK "NOT NULL"
+        BIGINT provider_id FK,UK "NOT NULL"
+    }
+
+    RepositoryCollaborator {
+        BIGINT repository_id PK,FK
+        BIGINT user_id PK,FK
+        VARCHAR(32) permission "NOT NULL"
+    }
+
+    SlackChannelConsentEvent {
+        BIGINT id PK,UK
+        BIGINT workspace_id FK,UK "NOT NULL"
+        VARCHAR(32) slack_channel_id "NOT NULL"
+        VARCHAR(16) from_state
+        VARCHAR(16) to_state "NOT NULL"
+        BIGINT actor_account_id FK
+        TEXT reason
+        TIMESTAMPTZ created_at "NOT NULL"
+    }
+
+    SlackMessage {
+        BIGINT id PK,UK
+        BIGINT workspace_id FK,UK "NOT NULL"
+        VARCHAR(32) slack_team_id "NOT NULL"
+        VARCHAR(32) slack_channel_id UK "NOT NULL"
+        VARCHAR(32) slack_ts UK "NOT NULL"
+        VARCHAR(32) slack_thread_ts
+        VARCHAR(32) author_slack_user_id
+        TEXT text
+        TIMESTAMPTZ edited_at
+        TIMESTAMPTZ deleted_at
+        TIMESTAMPTZ ingested_at "NOT NULL"
+        BIGINT author_account_id FK
+    }
+
+    SlackMonitoredChannel {
+        BIGINT id PK
+        BIGINT workspace_id FK,UK "NOT NULL"
+        VARCHAR(32) slack_team_id "NOT NULL"
+        VARCHAR(32) slack_channel_id UK "NOT NULL"
+        VARCHAR(256) channel_name
+        VARCHAR(16) consent_state "NOT NULL"
+        TIMESTAMPTZ consent_announced_at
+        TIMESTAMPTZ created_at "NOT NULL"
+        VARCHAR(32) last_history_synced_ts
+        TIMESTAMPTZ history_synced_at
+        VARCHAR(2048) last_sync_error
+    }
+
+    SlackParticipantConsent {
+        BIGINT workspace_id PK,FK
+        VARCHAR(32) slack_user_id PK
+        BOOLEAN ingestion_opted_out "NOT NULL"
+        BOOLEAN research_opted_out "NOT NULL"
+        VARCHAR(32) source
+        TIMESTAMPTZ decided_at "NOT NULL"
+    }
+
+    SlackThread {
+        BIGINT id PK,UK
+        BIGINT workspace_id FK,UK "NOT NULL"
+        VARCHAR(32) slack_channel_id UK "NOT NULL"
+        VARCHAR(32) slack_thread_ts UK "NOT NULL"
+        VARCHAR(32) first_ts
+        VARCHAR(32) last_ts
+        INTEGER message_count "NOT NULL"
+        TIMESTAMPTZ created_at "NOT NULL"
+        ARRAY participant_account_ids "NOT NULL"
+        VARCHAR(32) last_reviewed_ts
+    }
+
+    SyncJob {
+        BIGINT id PK
+        BIGINT workspace_id FK "NOT NULL"
+        BIGINT connection_id FK "NOT NULL"
+        VARCHAR(48) kind "NOT NULL"
+        VARCHAR(32) type "NOT NULL"
+        VARCHAR(32) trigger_source "NOT NULL"
+        VARCHAR(32) status "NOT NULL"
+        BOOLEAN cancel_requested "NOT NULL"
+        TIMESTAMPTZ started_at
+        TIMESTAMPTZ finished_at
+        TIMESTAMPTZ created_at "NOT NULL"
+        TIMESTAMPTZ heartbeat_at
+        INTEGER items_processed
+        INTEGER items_total
+        JSONB progress
+        TEXT error_summary
+        BIGINT triggered_by_account_id
+    }
+
+    Team {
+        BIGINT id PK
+        VARCHAR(255) name
+        TIMESTAMPTZ created_at
+        TEXT description
+        VARCHAR(512) html_url
+        TIMESTAMPTZ last_sync_at
+        VARCHAR(255) organization UK
+        BIGINT parent_id
+        VARCHAR(32) privacy
+        TIMESTAMPTZ updated_at
+        BIGINT native_id UK "NOT NULL"
+        BIGINT provider_id FK,UK "NOT NULL"
+        VARCHAR(512) slug UK
+    }
+
+    TeamMembership {
+        VARCHAR(32) role
+        BIGINT user_id PK,FK
+        BIGINT team_id PK,FK
+    }
+
+    TeamRepositoryPermission {
+        VARCHAR(32) permission "NOT NULL"
+        BIGINT repository_id PK,FK
+        BIGINT team_id PK,FK
+    }
+
+    User {
+        BIGINT id PK
+        TIMESTAMPTZ created_at
+        TIMESTAMPTZ updated_at
+        VARCHAR(255) avatar_url
+        VARCHAR(255) email
+        VARCHAR(255) html_url
+        VARCHAR(255) login
+        VARCHAR(255) name
+        VARCHAR(255) type
+        BIGINT native_id UK "NOT NULL"
+        BIGINT provider_id FK,UK "NOT NULL"
+    }
+
+    WorkspaceTeamLabelFilter {
+        BIGINT workspace_id PK,FK
+        BIGINT team_id PK,FK
+        BIGINT label_id PK,FK
+    }
+
+    WorkspaceTeamRepositorySetting {
+        BIGINT workspace_id PK,FK
+        BIGINT team_id PK,FK
+        BIGINT repository_id PK,FK
+        BOOLEAN hidden_from_contributions "NOT NULL"
+    }
+
+    WorkspaceTeamSetting {
+        BIGINT workspace_id PK,FK
+        BIGINT team_id PK,FK
+        BOOLEAN hidden "NOT NULL"
+    }
+
+    Account["Account · Core"]
+    Membership["Membership · Workspace (Tenancy)"]
+    Workspace["Workspace · Workspace (Tenancy)"]
+
+    %% Relationships
+    %% One-to-One relationships
+    DiscussionComment ||--|| Discussion : references
+    PullRequestReviewComment ||--|| PullRequestReviewThread : reviewed
+
+    %% One-to-Many relationships
+    GitCommit ||--o{ CommitContributor : has
+    User ||--o{ CommitContributor : has
+    GitCommit ||--o{ CommitFileChange : has
+    Workspace ||--o{ Connection : has
+    Connection ||--o{ ConnectionAudit : has
+    Account ||--o{ ConnectionAudit : has
+    User ||--o{ Discussion : references
+    User ||--o{ Discussion : authored_by
+    DiscussionCategory ||--o{ Discussion : has
+    IdentityProvider ||--o{ Discussion : references
+    Repository ||--o{ Discussion : has
+    Repository ||--o{ DiscussionCategory : has
+    User ||--o{ DiscussionComment : commented_on
+    Discussion ||--o{ DiscussionComment : commented_on
+    DiscussionComment ||--o{ DiscussionComment : commented_on
+    IdentityProvider ||--o{ DiscussionComment : commented_on
+    User ||--o{ GitCommit : authored_by
+    User ||--o{ GitCommit : references
+    Repository ||--o{ GitCommit : has
+    Repository ||--o{ Issue : has
+    Milestone ||--o{ Issue : has
+    IssueType ||--o{ Issue : has
+    Issue ||--o{ Issue : has
+    IdentityProvider ||--o{ Issue : references
+    User ||--o{ Issue : merged_by
+    User ||--o{ Issue : authored_by
+    Issue ||--o{ IssueComment : commented_on
+    IdentityProvider ||--o{ IssueComment : commented_on
+    User ||--o{ IssueComment : commented_on
+    Organization ||--o{ IssueType : has
+    Item ||--o{ Item : references
+    Workspace ||--o{ Item : has
+    User ||--o{ ItemEvent : has
+    Item ||--o{ ItemEvent : has
+    Account ||--o{ ItemEvent : references
+    Workspace ||--o{ ItemEvent : has
+    Repository ||--o{ Label : labeled
+    IdentityProvider ||--o{ Label : labeled
+    IdentityProvider ||--o{ Milestone : references
+    Repository ||--o{ Milestone : has
+    User ||--o{ Milestone : created_by
+    Account ||--o{ OauthStateNonce : has
+    IdentityProvider ||--o{ Organization : references
+    Connection ||--o{ OutlineCollection : has
+    Workspace ||--o{ OutlineCollection : has
+    Connection ||--o{ OutlineDocument : has
+    Workspace ||--o{ OutlineDocument : has
+    Connection ||--o{ OutlineDocumentEvent : has
+    Workspace ||--o{ OutlineDocumentEvent : has
+    User ||--o{ Project : created_by
+    IdentityProvider ||--o{ Project : references
+    Project ||--o{ ProjectField : has
+    ProjectField ||--o{ ProjectFieldValue : has
+    ProjectItem ||--o{ ProjectFieldValue : has
+    User ||--o{ ProjectItem : created_by
+    Issue ||--o{ ProjectItem : has
+    Project ||--o{ ProjectItem : has
+    IdentityProvider ||--o{ ProjectItem : references
+    User ||--o{ ProjectStatusUpdate : created_by
+    Project ||--o{ ProjectStatusUpdate : has
+    IdentityProvider ||--o{ ProjectStatusUpdate : references
+    IdentityProvider ||--o{ PullRequestReview : reviewed
+    User ||--o{ PullRequestReview : reviewed
+    Issue ||--o{ PullRequestReview : reviewed
+    IdentityProvider ||--o{ PullRequestReviewComment : commented_on
+    PullRequestReviewComment ||--o{ PullRequestReviewComment : commented_on
+    PullRequestReviewThread ||--o{ PullRequestReviewComment : commented_on
+    PullRequestReview ||--o{ PullRequestReviewComment : commented_on
+    Issue ||--o{ PullRequestReviewComment : commented_on
+    User ||--o{ PullRequestReviewComment : commented_on
+    IdentityProvider ||--o{ PullRequestReviewThread : reviewed
+    Issue ||--o{ PullRequestReviewThread : reviewed
+    User ||--o{ PullRequestReviewThread : reviewed
+    Organization ||--o{ Repository : has
+    IdentityProvider ||--o{ Repository : references
+    Account ||--o{ SlackChannelConsentEvent : has
+    Workspace ||--o{ SlackChannelConsentEvent : has
+    Membership ||--o{ SlackMessage : references
+    Workspace ||--o{ SlackMessage : has
+    Workspace ||--o{ SlackMonitoredChannel : has
+    Workspace ||--o{ SlackParticipantConsent : has
+    Workspace ||--o{ SlackThread : has
+    Connection ||--o{ SyncJob : connection_id
+    Connection ||--o{ SyncJob : connection_id
+    Workspace ||--o{ SyncJob : has
+    IdentityProvider ||--o{ Team : references
+    IdentityProvider ||--o{ User : references
+
+    %% Many-to-Many relationships
+    GitCommit }o--o{ CommitPullRequest : has
+    Issue }o--o{ CommitPullRequest : references
+    Connection }o--o{ ConnectionActivity : has
+    Workspace }o--o{ ConnectionActivity : has
+    Discussion }o--o{ DiscussionLabel : labeled
+    Label }o--o{ DiscussionLabel : labeled
+    User }o--o{ IssueAssignee : assigned_to
+    Issue }o--o{ IssueAssignee : assigned_to
+    Issue }o--o{ IssueBlocking : blocked_issue_id
+    Issue }o--o{ IssueBlocking : blocking_issue_id
+    Issue }o--o{ IssueLabel : labeled
+    Label }o--o{ IssueLabel : labeled
+    Issue }o--o{ PullRequestClosingIssue : has
+    Issue }o--o{ PullRequestClosingIssue : references
+    Issue }o--o{ PullRequestRequestedReviewer : reviewed
+    User }o--o{ PullRequestRequestedReviewer : reviewed
+    Issue }o--o{ PullRequestRequestedTeam : references
+    Team }o--o{ PullRequestRequestedTeam : has
+    Repository }o--o{ RepositoryCollaborator : has
+    User }o--o{ RepositoryCollaborator : has
+    User }o--o{ TeamMembership : belongs_to
+    Team }o--o{ TeamMembership : belongs_to
+    Team }o--o{ TeamRepositoryPermission : has
+    Repository }o--o{ TeamRepositoryPermission : has
+    Label }o--o{ WorkspaceTeamLabelFilter : labeled
+    Team }o--o{ WorkspaceTeamLabelFilter : labeled
+    Workspace }o--o{ WorkspaceTeamLabelFilter : labeled
+    Repository }o--o{ WorkspaceTeamRepositorySetting : has
+    Team }o--o{ WorkspaceTeamRepositorySetting : has
+    Workspace }o--o{ WorkspaceTeamRepositorySetting : has
+    Team }o--o{ WorkspaceTeamSetting : has
+    Workspace }o--o{ WorkspaceTeamSetting : has
+
+    %% Styling
+    classDef primaryEntity stroke:#0288d1,stroke-width:2px
+    classDef associationEntity stroke:#8e24aa,stroke-width:2px
+    classDef metadataEntity stroke:#43a047,stroke-width:2px
+    classDef referenceEntity stroke-dasharray:5 5
+
+    class Account referenceEntity
+    class Membership referenceEntity
+    class Workspace referenceEntity
+    class Issue primaryEntity
+    class IssueAssignee associationEntity
+    class IssueLabel associationEntity
+    class Label primaryEntity
+    class Milestone primaryEntity
+    class PullRequestRequestedReviewer associationEntity
+    class Repository primaryEntity
+    class Team primaryEntity
+    class User primaryEntity

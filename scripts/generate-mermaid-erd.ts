@@ -29,7 +29,7 @@ function createLogger(level: LogLevel): Logger {
 	};
 }
 
-interface ColumnInfo {
+export interface ColumnInfo {
 	name: string;
 	type: string;
 	constraints: string[];
@@ -40,7 +40,7 @@ interface ColumnInfo {
 
 type RelationshipCardinality = "||--||" | "||--o{" | "}o--o{";
 
-interface RelationshipInfo {
+export interface RelationshipInfo {
 	childTable: string;
 	childColumn: string;
 	parentTable: string;
@@ -70,7 +70,26 @@ interface GeneratorOptions {
 	logger: Logger;
 }
 
-const DEFAULT_OUTPUT_PATH = "docs/contributor/erd/schema.mmd";
+const DEFAULT_OUTPUT_DIR = "docs/contributor/erd";
+const DEFAULT_SOURCE_ROOT = "server/application/src/main/java/de/tum/cit/aet/hephaestus";
+
+/** Mermaid's default `maxTextSize`: a longer diagram renders only an error. */
+export const MERMAID_MAX_TEXT_SIZE = 50_000;
+
+const UNOWNED_MODULE = { id: "without-entity", displayName: "Tables without an entity" };
+const PARTIAL_FILE = "_modules.mdx";
+
+export interface Module {
+	id: string;
+	displayName: string;
+}
+
+export interface ModuleOwnership {
+	/** In the order the page shows them. */
+	modules: Module[];
+	/** Table name to the id of the module whose entity maps it. */
+	owners: Map<string, string>;
+}
 
 /** Rendered in the order they appear, each heading its own section of the diagram. */
 const CARDINALITY_NAMES = [
@@ -238,9 +257,11 @@ function getEntityStyleClass(tableName: string): string | null {
 	return null;
 }
 
-function buildMermaidContent(
+export function buildMermaidContent(
 	tableData: Map<string, ColumnInfo[]>,
 	relationships: RelationshipInfo[],
+	/** Parent tables drawn in another module's diagram, with that module's name. */
+	references = new Map<string, string>(),
 ): string {
 	const lines: string[] = [
 		"---",
@@ -272,6 +293,14 @@ function buildMermaidContent(
 		}
 
 		lines.push("    }", "");
+	}
+
+	for (const [tableName, moduleName] of references) {
+		const entityName = toEntityName(tableName);
+		lines.push(`    ${entityName}["${entityName} · ${moduleName}"]`);
+	}
+	if (references.size > 0) {
+		lines.push("");
 	}
 
 	lines.push("    %% Relationships");
@@ -315,12 +344,18 @@ function buildMermaidContent(
 	}
 
 	lines.push(
+		// Stroke only: a fixed fill under the theme's text colour is unreadable in one of the two themes.
 		"    %% Styling",
-		"    classDef primaryEntity fill:#e1f5fe,stroke:#01579b,stroke-width:2px",
-		"    classDef associationEntity fill:#f3e5f5,stroke:#4a148c,stroke-width:2px",
-		"    classDef metadataEntity fill:#e8f5e8,stroke:#1b5e20,stroke-width:2px",
+		"    classDef primaryEntity stroke:#0288d1,stroke-width:2px",
+		"    classDef associationEntity stroke:#8e24aa,stroke-width:2px",
+		"    classDef metadataEntity stroke:#43a047,stroke-width:2px",
+		"    classDef referenceEntity stroke-dasharray:5 5",
 		"",
 	);
+
+	for (const tableName of references.keys()) {
+		lines.push(`    class ${toEntityName(tableName)} referenceEntity`);
+	}
 
 	for (const tableName of tableData.keys()) {
 		const entityName = toEntityName(tableName);
@@ -331,6 +366,147 @@ function buildMermaidContent(
 	}
 
 	return `${lines.join("\n")}\n`;
+}
+
+async function javaFiles(directory: string): Promise<string[]> {
+	const entries = await fs.readdir(directory, { recursive: true, withFileTypes: true });
+	return entries
+		.filter((entry) => entry.isFile() && entry.name.endsWith(".java"))
+		.map((entry) => path.join(entry.parentPath, entry.name))
+		.toSorted();
+}
+
+/** The names given at the top level of each `@Table`, `@JoinTable` or `@CollectionTable` in a source. */
+export function tableNames(source: string): string[] {
+	const names: string[] = [];
+	for (const start of source.matchAll(/@(?:Table|JoinTable|CollectionTable)\s*\(/gu)) {
+		// Keep only the annotation's own arguments: a nested `@JoinColumn(name = …)` is a column.
+		let depth = 1;
+		let topLevel = "";
+		for (
+			let index = start.index + start[0].length;
+			index < source.length && depth > 0;
+			index += 1
+		) {
+			const char = source.charAt(index);
+			if (char === '"') {
+				const end = /^"(?:[^"\\]|\\.)*"/u.exec(source.slice(index))?.[0] ?? '"';
+				if (depth === 1) {
+					topLevel += end;
+				}
+				index += end.length - 1;
+				continue;
+			}
+			if (char === "(") {
+				depth += 1;
+			} else if (char === ")") {
+				depth -= 1;
+			}
+			if (depth === 1 && char !== "(" && char !== ")") {
+				topLevel += char;
+			}
+		}
+		const name = /\bname\s*=\s*"(?<name>(?:[^"\\]|\\.)*)"/u.exec(topLevel)?.groups?.name;
+		if (name !== undefined) {
+			// `"\"user\""` names the quoted identifier `user`.
+			names.push(name.replaceAll(String.raw`\"`, ""));
+		}
+	}
+	return names;
+}
+
+/**
+ * Each direct package under the source root is a Spring Modulith module; its `package-info.java`
+ * names it. A table belongs to the module whose sources name it in `@Table`, `@JoinTable` or
+ * `@CollectionTable`.
+ */
+export async function readModuleOwnership(sourceRoot: string): Promise<ModuleOwnership> {
+	const modules: Module[] = [];
+	const owners = new Map<string, string>();
+	const entries = await fs.readdir(sourceRoot, { withFileTypes: true });
+	const packages = entries
+		.filter((entry) => entry.isDirectory())
+		.map((entry) => entry.name)
+		.toSorted();
+	for (const id of packages) {
+		const directory = path.join(sourceRoot, id);
+		const packageInfo = await fs
+			.readFile(path.join(directory, "package-info.java"), "utf8")
+			.catch(() => "");
+		const displayName =
+			/displayName\s*=\s*"(?<name>[^"]+)"/u.exec(packageInfo)?.groups?.name ??
+			id.charAt(0).toUpperCase() + id.slice(1);
+		let owned = 0;
+		for (const file of await javaFiles(directory)) {
+			for (const table of tableNames(await fs.readFile(file, "utf8"))) {
+				const owner = owners.get(table);
+				if (owner !== undefined && owner !== id) {
+					throw new Error(`Table ${table} is mapped in both the ${owner} and the ${id} module.`);
+				}
+				owners.set(table, id);
+				owned += 1;
+			}
+		}
+		if (owned > 0) {
+			modules.push({ id, displayName });
+		}
+	}
+	return { modules, owners };
+}
+
+const binding = (index: number) => `module${index}`;
+
+/** One diagram per module, keyed by file name, plus the partial that renders them in order. */
+export function buildModuleDiagrams(
+	tableData: Map<string, ColumnInfo[]>,
+	relationships: RelationshipInfo[],
+	ownership: ModuleOwnership,
+): Map<string, string> {
+	const moduleOf = (table: string) => ownership.owners.get(table) ?? UNOWNED_MODULE.id;
+	const modules = [...ownership.modules, UNOWNED_MODULE];
+	const nameOf = new Map(modules.map((module) => [module.id, module.displayName]));
+	const files = new Map<string, string>();
+	const shown: Module[] = [];
+	for (const module of modules) {
+		const tables = new Map([...tableData].filter(([table]) => moduleOf(table) === module.id));
+		if (tables.size === 0) {
+			continue;
+		}
+		// A foreign key is drawn once, in its child's module; a parent elsewhere is a reference.
+		const owned = relationships.filter((rel) => tables.has(rel.childTable));
+		const references = new Map(
+			owned
+				.filter((rel) => !tables.has(rel.parentTable))
+				.map((rel) => rel.parentTable)
+				.toSorted()
+				.map((table) => [table, nameOf.get(moduleOf(table)) ?? moduleOf(table)]),
+		);
+		const diagram = buildMermaidContent(tables, owned, references);
+		if (diagram.length >= MERMAID_MAX_TEXT_SIZE) {
+			throw new Error(
+				`The ${module.displayName} diagram has ${diagram.length} characters; Mermaid draws none from ${MERMAID_MAX_TEXT_SIZE}. Split the module's diagram.`,
+			);
+		}
+		files.set(`${module.id}.mmd`, diagram);
+		shown.push(module);
+	}
+	files.set(
+		PARTIAL_FILE,
+		[
+			"{/* Generated by scripts/generate-mermaid-erd.ts. To regenerate: vp run db:generate-erd-docs */}",
+			"",
+			'import Mermaid from "@theme/Mermaid";',
+			...shown.map((module, index) => `import ${binding(index)} from "./${module.id}.mmd";`),
+			"",
+			...shown.flatMap((module, index) => [
+				`## ${module.displayName}`,
+				"",
+				`<Mermaid value={${binding(index)}} />`,
+				"",
+			]),
+		].join("\n"),
+	);
+	return files;
 }
 
 class MermaidErdGenerator {
@@ -370,7 +546,8 @@ class MermaidErdGenerator {
 		}
 	}
 
-	async generate(outputFile: string) {
+	async generate(outputDir: string, sourceRoot: string) {
+		const ownership = await readModuleOwnership(sourceRoot);
 		const tables = await this.getTables();
 		const tableData = new Map<string, ColumnInfo[]>();
 
@@ -380,12 +557,20 @@ class MermaidErdGenerator {
 		}
 
 		const relationships = await this.getForeignKeyRelationships();
-		const content = buildMermaidContent(tableData, relationships);
+		const files = buildModuleDiagrams(tableData, relationships, ownership);
 
-		const outputPath = path.resolve(outputFile);
-		await fs.mkdir(path.dirname(outputPath), { recursive: true });
-		await fs.writeFile(outputPath, content, "utf8");
-		this.logger.info(`ERD written to ${outputFile}`);
+		// A module that loses its last table must lose its diagram too; nothing else there is touched.
+		await fs.mkdir(outputDir, { recursive: true });
+		for (const name of await fs.readdir(outputDir)) {
+			if (name.endsWith(".mmd") || name === PARTIAL_FILE) {
+				await fs.rm(path.join(outputDir, name));
+			}
+		}
+		for (const [name, content] of files) {
+			await fs.writeFile(path.join(outputDir, name), content, "utf8");
+		}
+		const diagrams = [...files.keys()].filter((name) => name.endsWith(".mmd")).length;
+		this.logger.info(`ERD written to ${outputDir} (${diagrams} diagrams)`);
 	}
 
 	private async getTables(): Promise<string[]> {
@@ -698,7 +883,8 @@ interface CliOptions {
 	jdbcUrl?: string;
 	username?: string;
 	password?: string;
-	output?: string;
+	outputDir?: string;
+	sources: string;
 	schema: string;
 	includeLiquibase: boolean;
 	dryRun: boolean;
@@ -713,11 +899,12 @@ async function main() {
 		.argument("[jdbcUrl]", "JDBC URL (jdbc:postgresql://host:port/database)")
 		.argument("[username]", "Database username")
 		.argument("[password]", "Database password")
-		.argument("[outputFile]", "Output file path")
+		.argument("[outputDir]", "Output directory")
 		.option("--jdbc-url <url>", "JDBC URL (overrides positional argument)")
 		.option("--username <username>", "Database username (overrides positional)")
 		.option("--password <password>", "Database password (overrides positional)")
-		.option("--output <file>", "Output file path")
+		.option("--output-dir <dir>", "Output directory, replaced on each run")
+		.option("--sources <dir>", "Java root whose packages are the modules", DEFAULT_SOURCE_ROOT)
 		.option("--schema <schema>", "Database schema to inspect", "public")
 		.option("--include-liquibase", "Include Liquibase metadata tables", false)
 		.option("--dry-run", "Validate configuration and exit", false)
@@ -735,7 +922,7 @@ async function main() {
 	const jdbcUrl = options.jdbcUrl ?? args[0] ?? process.env.HEPHAESTUS_DB_JDBC_URL;
 	const username = options.username ?? args[1] ?? process.env.POSTGRES_USER;
 	const password = options.password ?? args[2] ?? process.env.POSTGRES_PASSWORD;
-	const outputFile = options.output ?? args[3] ?? DEFAULT_OUTPUT_PATH;
+	const outputDir = options.outputDir ?? args[3] ?? DEFAULT_OUTPUT_DIR;
 
 	const logger = createLogger(options.logLevel);
 
@@ -752,8 +939,8 @@ async function main() {
 		"Database password is required. Provide --password or positional argument.",
 	);
 	const resolvedOutput = ensureNonEmpty(
-		outputFile,
-		"Output file path is required. Provide --output or positional argument.",
+		outputDir,
+		"Output directory is required. Provide --output-dir or positional argument.",
 	);
 
 	const parsedJdbc = parseJdbcUrl(resolvedJdbcUrl);
@@ -780,15 +967,17 @@ async function main() {
 
 	await generator.connect();
 	try {
-		await generator.generate(resolvedOutput);
+		await generator.generate(resolvedOutput, options.sources);
 	} finally {
 		await generator.disconnect();
 	}
 }
 
-try {
-	await main();
-} catch (error) {
-	console.error(`ERD generation failed: ${messageOf(error)}`);
-	process.exit(1);
+if (import.meta.main) {
+	try {
+		await main();
+	} catch (error) {
+		console.error(`ERD generation failed: ${messageOf(error)}`);
+		process.exit(1);
+	}
 }

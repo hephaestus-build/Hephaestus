@@ -5,15 +5,18 @@ title: Database Schema
 description: Reference entity-relationship diagram generated from the current Liquibase migrations.
 ---
 
-import Mermaid from "@theme/Mermaid";
-import databaseSchema from "./erd/schema.mmd";
+import Modules from "./erd/_modules.mdx";
 
-`vp run db:generate-erd-docs` generates the ERD below.
-If you change Liquibase migrations, regenerate the ERD.
-The command rewrites `docs/contributor/erd/schema.mmd`.
-This page renders that file directly.
+`vp run db:generate-erd-docs` generates the diagrams below from the migrated schema.
+If you change Liquibase migrations, regenerate them.
+The command rewrites `docs/contributor/erd/`.
 
-<Mermaid value={databaseSchema} />
+Each Spring Modulith module has its own diagram.
+A table belongs to the module whose entity maps it.
+A dashed entity is a table of another module, and its label names that module.
+A foreign key to it appears in this diagram, and the table itself appears in the diagram of its module.
+
+<Modules />
 
 ## Practice model relationships
 

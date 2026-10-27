@@ -1,0 +1,439 @@
+---
+config:
+    layout: elk
+---
+erDiagram
+    %% Generated automatically from PostgreSQL database schema
+    %% using scripts/generate-mermaid-erd.ts
+    %% To regenerate: vp run db:generate-erd-docs
+
+    direction LR
+
+    CatalogEntry {
+        VARCHAR(16) entry_type PK
+        VARCHAR(64) slug PK
+        VARCHAR(64) kind
+        JSONB definition
+        JSONB base
+        INTEGER position
+        TIMESTAMPTZ excluded_at
+        TIMESTAMPTZ created_at "NOT NULL"
+        TIMESTAMPTZ updated_at "NOT NULL"
+    }
+
+    Feedback {
+        UUID id PK,UK
+        BIGINT workspace_id FK,UK "NOT NULL"
+        UUID review_id FK "NOT NULL"
+        BIGINT item_id FK
+        BIGINT developer_id FK,UK "NOT NULL"
+        VARCHAR(24) destination "NOT NULL"
+        VARCHAR(24) state "NOT NULL"
+        VARCHAR(48) stop_reason
+        TEXT body
+        JSONB checks "NOT NULL"
+        UUID replaces_id FK
+        TIMESTAMPTZ created_at "NOT NULL"
+        TIMESTAMPTZ delivered_at
+    }
+
+    FeedbackBasi {
+        UUID id PK,UK
+        BIGINT workspace_id FK,UK "NOT NULL"
+        UUID feedback_id FK,UK "NOT NULL"
+        UUID result_id FK,UK "NOT NULL"
+        UUID problem_id FK,UK
+        BIGINT developer_id FK "NOT NULL"
+        INTEGER ordinal "NOT NULL"
+    }
+
+    FeedbackCopy {
+        UUID id PK,UK
+        BIGINT workspace_id FK,UK "NOT NULL"
+        UUID feedback_id FK,UK "NOT NULL"
+        VARCHAR(16) kind "NOT NULL"
+        INTEGER position UK "NOT NULL"
+        TEXT body
+        TEXT path
+        INTEGER start_line
+        INTEGER end_line
+        VARCHAR(3) side
+        VARCHAR(48) stop_reason
+        VARCHAR(16) readback
+        VARCHAR(512) last_error
+        VARCHAR(16) state "NOT NULL"
+        TIMESTAMPTZ write_started_at
+        TEXT write_key
+        TEXT write_marker
+        TEXT external_ref UK
+        TEXT external_url
+        UUID mentor_entry_id FK
+        TIMESTAMPTZ created_at "NOT NULL"
+        TIMESTAMPTZ posted_at
+        UUID mentor_turn_id FK
+    }
+
+    FeedbackDecision {
+        UUID id PK,UK
+        BIGINT workspace_id FK,UK "NOT NULL"
+        UUID feedback_id FK "NOT NULL"
+        VARCHAR(8) action "NOT NULL"
+        BIGINT actor_account_id FK
+        VARCHAR(500) reason
+        TEXT note
+        VARCHAR(64) content_digest
+        TIMESTAMPTZ decided_at "NOT NULL"
+    }
+
+    FeedbackResponse {
+        UUID id PK,UK
+        BIGINT workspace_id FK,UK "NOT NULL"
+        UUID feedback_id FK "NOT NULL"
+        VARCHAR(16) resolution
+        VARCHAR(16) usefulness
+        TEXT comment
+        TIMESTAMPTZ created_at "NOT NULL"
+    }
+
+    FeedbackSend {
+        UUID feedback_id PK,FK,UK
+        BIGINT workspace_id FK,UK "NOT NULL"
+        VARCHAR(8) action "NOT NULL"
+        VARCHAR(16) state "NOT NULL"
+        VARCHAR(64) lease_owner
+        TIMESTAMPTZ lease_expires_at
+        INTEGER attempts "NOT NULL"
+        TIMESTAMPTZ next_attempt_at "NOT NULL"
+        VARCHAR(512) last_error
+        TIMESTAMPTZ created_at "NOT NULL"
+        TIMESTAMPTZ updated_at "NOT NULL"
+    }
+
+    Practice {
+        BIGINT id PK,FK,UK
+        BIGINT workspace_id FK,UK "NOT NULL"
+        VARCHAR(64) slug UK "NOT NULL"
+        VARCHAR(64) kind "NOT NULL"
+        BIGINT group_id FK
+        INTEGER position "NOT NULL"
+        BIGINT current_version_id FK "NOT NULL"
+        VARCHAR(16) feedback_mode
+        VARCHAR(64) catalog_slug
+        JSONB catalog_base
+        TIMESTAMPTZ created_at "NOT NULL"
+        TIMESTAMPTZ updated_at
+    }
+
+    PracticeGroup {
+        BIGINT id PK,UK
+        BIGINT workspace_id FK,UK "NOT NULL"
+        VARCHAR(64) slug UK "NOT NULL"
+        VARCHAR(128) name "NOT NULL"
+        TEXT description
+        VARCHAR(64) icon
+        VARCHAR(32) color
+        INTEGER position "NOT NULL"
+        BOOLEAN shown_to_developers "NOT NULL"
+        VARCHAR(16) feedback_mode
+        VARCHAR(64) catalog_slug
+        JSONB catalog_base
+        TIMESTAMPTZ created_at "NOT NULL"
+        TIMESTAMPTZ updated_at
+    }
+
+    PracticeVersion {
+        BIGINT id PK,UK
+        BIGINT workspace_id FK,UK "NOT NULL"
+        BIGINT practice_id FK,UK "NOT NULL"
+        INTEGER number UK "NOT NULL"
+        JSONB definition "NOT NULL"
+        VARCHAR(128) name
+        VARCHAR(96) review_digest "NOT NULL"
+        BIGINT created_by_account_id FK
+        TIMESTAMPTZ created_at "NOT NULL"
+    }
+
+    Problem {
+        UUID id PK,UK
+        BIGINT workspace_id FK,UK "NOT NULL"
+        UUID result_id FK,UK "NOT NULL"
+        INTEGER position UK "NOT NULL"
+        VARCHAR(64) key UK
+        VARCHAR(16) severity "NOT NULL"
+        VARCHAR(255) summary "NOT NULL"
+        TEXT explanation "NOT NULL"
+        JSONB citations "NOT NULL"
+        JSONB basis
+        TEXT next_step
+    }
+
+    ResearchDisclosure {
+        UUID id PK,UK
+        TIMESTAMPTZ closed_at
+        VARCHAR(16) closure
+        VARCHAR(64) content_sha256 "NOT NULL"
+        TIMESTAMPTZ created_at "NOT NULL"
+        BIGINT created_by_account_id
+        TIMESTAMPTZ cutoff_at "NOT NULL"
+        INTEGER feedback_count "NOT NULL"
+        INTEGER feedback_excluded_count "NOT NULL"
+        VARCHAR(32) notice_version "NOT NULL"
+        INTEGER participant_count "NOT NULL"
+        INTEGER problem_count "NOT NULL"
+        VARCHAR(40) purpose "NOT NULL"
+        VARCHAR(255) research_organization "NOT NULL"
+        INTEGER result_count "NOT NULL"
+        VARCHAR(64) schema_name "NOT NULL"
+        INTEGER schema_version "NOT NULL"
+        TIMESTAMPTZ use_until "NOT NULL"
+        TIMESTAMPTZ window_from "NOT NULL"
+        TIMESTAMPTZ window_to "NOT NULL"
+        BIGINT workspace_id FK,UK "NOT NULL"
+    }
+
+    ResearchDisclosureSubject {
+        UUID id PK
+        BIGINT account_id UK
+        UUID disclosure_id FK,UK "NOT NULL"
+        BIGINT grant_decision_id
+        VARCHAR(32) participant_key UK "NOT NULL"
+        VARCHAR(24) removal_reason
+        TIMESTAMPTZ removal_required_at
+        TIMESTAMPTZ removed_at
+        BIGINT workspace_id FK "NOT NULL"
+    }
+
+    Result {
+        UUID id PK,UK
+        BIGINT workspace_id FK,UK "NOT NULL"
+        UUID review_id FK "NOT NULL"
+        BIGINT practice_id FK,UK "NOT NULL"
+        BIGINT practice_version_id FK
+        BIGINT item_id FK,UK "NOT NULL"
+        TEXT item_version
+        BIGINT developer_id FK,UK
+        VARCHAR(24) outcome "NOT NULL"
+        VARCHAR(16) severity
+        VARCHAR(255) summary
+        TEXT explanation
+        JSONB evidence
+        JSONB example
+        JSONB coverage
+        SMALLINT evidence_version "NOT NULL"
+        TIMESTAMPTZ recorded_at "NOT NULL"
+        TIMESTAMPTZ ended_at
+        VARCHAR(24) end_reason
+    }
+
+    ResultMark {
+        UUID id PK,UK
+        BIGINT workspace_id FK,UK "NOT NULL"
+        UUID result_id FK "NOT NULL"
+        VARCHAR(16) kind "NOT NULL"
+        VARCHAR(500) reason "NOT NULL"
+        BIGINT created_by_id FK
+        TIMESTAMPTZ created_at "NOT NULL"
+        BIGINT removed_by_id FK
+        TIMESTAMPTZ removed_at
+        VARCHAR(500) removal_reason
+    }
+
+    Review {
+        UUID id PK,UK
+        BIGINT workspace_id FK,UK "NOT NULL"
+        BIGINT item_id FK "NOT NULL"
+        VARCHAR(8) kind "NOT NULL"
+        TEXT item_version
+        TEXT base_version
+        VARCHAR(16) origin "NOT NULL"
+        UUID event_id FK
+        UUID batch_id FK
+        BIGINT requested_by_id FK
+        VARCHAR(16) status "NOT NULL"
+        VARCHAR(48) stop_reason
+        NUMERIC(18,6) budget_usd
+        BIGINT rollout_revision "NOT NULL"
+        TIMESTAMPTZ ordered_at "NOT NULL"
+        TIMESTAMPTZ created_at "NOT NULL"
+        TIMESTAMPTZ admitted_at
+        TIMESTAMPTZ completed_at
+        TIMESTAMPTZ public_review_at
+        JSONB report
+        JSONB inventory_receipt
+        UUID request_key UK
+        VARCHAR(64) request_digest
+        JSONB checks "NOT NULL"
+    }
+
+    ReviewBatch {
+        UUID id PK,UK
+        BIGINT version "NOT NULL"
+        BIGINT workspace_id FK,UK "NOT NULL"
+        VARCHAR(64) kind "NOT NULL"
+        VARCHAR(16) origin "NOT NULL"
+        UUID schedule_id FK
+        TIMESTAMPTZ from_at
+        TIMESTAMPTZ to_at
+        VARCHAR(24) status "NOT NULL"
+        VARCHAR(32) pause_reason
+        NUMERIC(18,6) budget_usd
+        INTEGER estimated_items "NOT NULL"
+        NUMERIC(12,4) estimated_cost_usd
+        BIGINT cursor_item_id FK
+        INTEGER submitted_count "NOT NULL"
+        INTEGER skipped_count "NOT NULL"
+        INTEGER failed_count "NOT NULL"
+        BIGINT requested_by_account_id FK
+        BIGINT confirmed_by_account_id FK
+        TIMESTAMPTZ created_at "NOT NULL"
+        TIMESTAMPTZ started_at
+        TIMESTAMPTZ finished_at
+        TIMESTAMPTZ updated_at "NOT NULL"
+    }
+
+    ReviewBatchTarget {
+        UUID batch_id PK,FK,UK
+        BIGINT item_id PK,FK,UK
+        BIGINT workspace_id FK,UK "NOT NULL"
+    }
+
+    ReviewItem {
+        BIGINT workspace_id FK,UK "NOT NULL"
+        UUID review_id PK,FK,UK
+        BIGINT practice_id PK,FK,UK
+        BIGINT item_id PK,FK,UK
+        TEXT item_version
+        VARCHAR(16) state "NOT NULL"
+        UUID result_id FK
+        UUID job_id FK
+        TIMESTAMPTZ attempted_at
+        VARCHAR(128) reason
+        JSONB detail
+    }
+
+    ReviewPractice {
+        UUID review_id PK,FK,UK
+        BIGINT practice_id PK,FK,UK
+        BIGINT workspace_id FK,UK "NOT NULL"
+        BIGINT practice_version_id FK
+        VARCHAR(16) status "NOT NULL"
+        VARCHAR(48) reason
+        INTEGER items_listed
+        BOOLEAN listing_complete
+        JSONB capture_decision
+        JSONB method
+    }
+
+    ReviewSchedule {
+        UUID id PK,UK
+        BIGINT version "NOT NULL"
+        BIGINT workspace_id FK,UK "NOT NULL"
+        VARCHAR(64) kind UK "NOT NULL"
+        VARCHAR(16) cadence "NOT NULL"
+        INTEGER lookback_days
+        NUMERIC(18,6) budget_usd
+        BOOLEAN enabled "NOT NULL"
+        TIMESTAMPTZ next_run_at "NOT NULL"
+        TIMESTAMPTZ last_run_at
+        BIGINT created_by_account_id FK
+        TIMESTAMPTZ created_at "NOT NULL"
+        TIMESTAMPTZ updated_at "NOT NULL"
+    }
+
+    Account["Account · Core"]
+    Item["Item · Integration"]
+    ItemEvent["ItemEvent · Integration"]
+    Membership["Membership · Workspace (Tenancy)"]
+    MentorEntry["MentorEntry · Mentor"]
+    MentorTurn["MentorTurn · Mentor"]
+    ReviewJob["ReviewJob · Agent"]
+    Workspace["Workspace · Workspace (Tenancy)"]
+
+    %% Relationships
+    %% One-to-One relationships
+    Feedback ||--|| FeedbackSend : has
+    PracticeVersion ||--|| Practice : references
+
+    %% One-to-Many relationships
+    Membership ||--o{ Feedback : references
+    Item ||--o{ Feedback : has
+    Feedback ||--o{ Feedback : references
+    Review ||--o{ Feedback : has
+    Workspace ||--o{ Feedback : has
+    Feedback ||--o{ FeedbackCopy : has
+    MentorEntry ||--o{ FeedbackCopy : has
+    MentorTurn ||--o{ FeedbackCopy : has
+    Workspace ||--o{ FeedbackCopy : has
+    Account ||--o{ FeedbackDecision : has
+    Feedback ||--o{ FeedbackDecision : has
+    Workspace ||--o{ FeedbackDecision : has
+    Feedback ||--o{ FeedbackResponse : has
+    Workspace ||--o{ FeedbackResponse : has
+    Workspace ||--o{ FeedbackSend : has
+    Workspace ||--o{ Practice : has
+    PracticeGroup ||--o{ Practice : has
+    Workspace ||--o{ PracticeGroup : has
+    Account ||--o{ PracticeVersion : has
+    Practice ||--o{ PracticeVersion : has
+    Workspace ||--o{ PracticeVersion : has
+    Result ||--o{ Problem : has
+    Workspace ||--o{ Problem : has
+    Workspace ||--o{ ResearchDisclosure : has
+    ResearchDisclosure ||--o{ ResearchDisclosureSubject : has
+    Membership ||--o{ Result : references
+    Item ||--o{ Result : has
+    Practice ||--o{ Result : has
+    Review ||--o{ Result : has
+    PracticeVersion ||--o{ Result : has
+    Workspace ||--o{ Result : has
+    Account ||--o{ ResultMark : created_by_id
+    Account ||--o{ ResultMark : removed_by_id
+    Result ||--o{ ResultMark : has
+    Workspace ||--o{ ResultMark : has
+    ReviewBatch ||--o{ Review : reviewed
+    ItemEvent ||--o{ Review : reviewed
+    Item ||--o{ Review : reviewed
+    Account ||--o{ Review : reviewed
+    Workspace ||--o{ Review : reviewed
+    Account ||--o{ ReviewBatch : confirmed_by_account_id
+    Item ||--o{ ReviewBatch : reviewed
+    Account ||--o{ ReviewBatch : requested_by_account_id
+    ReviewSchedule ||--o{ ReviewBatch : reviewed
+    Workspace ||--o{ ReviewBatch : reviewed
+    Item ||--o{ ReviewItem : reviewed
+    ReviewJob ||--o{ ReviewItem : reviewed
+    ReviewPractice ||--o{ ReviewItem : reviewed
+    Result ||--o{ ReviewItem : reviewed
+    Workspace ||--o{ ReviewItem : reviewed
+    Practice ||--o{ ReviewPractice : reviewed
+    Review ||--o{ ReviewPractice : reviewed
+    PracticeVersion ||--o{ ReviewPractice : reviewed
+    Workspace ||--o{ ReviewPractice : reviewed
+    Account ||--o{ ReviewSchedule : reviewed
+    Workspace ||--o{ ReviewSchedule : reviewed
+
+    %% Many-to-Many relationships
+    Feedback }o--o{ FeedbackBasi : feedback_id
+    Feedback }o--o{ FeedbackBasi : feedback_id
+    Problem }o--o{ FeedbackBasi : has
+    Result }o--o{ FeedbackBasi : result_id
+    Result }o--o{ FeedbackBasi : result_id
+    Workspace }o--o{ FeedbackBasi : has
+    ReviewBatch }o--o{ ReviewBatchTarget : reviewed
+    Item }o--o{ ReviewBatchTarget : reviewed
+    Workspace }o--o{ ReviewBatchTarget : reviewed
+
+    %% Styling
+    classDef primaryEntity stroke:#0288d1,stroke-width:2px
+    classDef associationEntity stroke:#8e24aa,stroke-width:2px
+    classDef metadataEntity stroke:#43a047,stroke-width:2px
+    classDef referenceEntity stroke-dasharray:5 5
+
+    class Account referenceEntity
+    class Item referenceEntity
+    class ItemEvent referenceEntity
+    class Membership referenceEntity
+    class MentorEntry referenceEntity
+    class MentorTurn referenceEntity
+    class ReviewJob referenceEntity
+    class Workspace referenceEntity
