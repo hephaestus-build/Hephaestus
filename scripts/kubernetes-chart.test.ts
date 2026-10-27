@@ -314,6 +314,11 @@ await test("the schema refuses settings the chart does not own", () => {
 		["no Gateway to attach to", { route: { parentRefs: [] } }],
 		["a Gateway the chart creates", { route: { gateway: { create: true } } }],
 		["a seventeenth worker", { worker: { replicas: 17 } }],
+		["a class name beside classes the chart creates", { priorityClasses: { roles: "high" } }],
+		[
+			"existing classes without all three names",
+			{ priorityClasses: { create: false, roles: "high", conversations: "middle" } },
+		],
 		[
 			"a sandbox namespace that is no DNS label",
 			{ worker: { sandbox: { namespace: "Sandboxes" } } },

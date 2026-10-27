@@ -85,6 +85,7 @@ spec:
     spec:
       restartPolicy: Never
       automountServiceAccountToken: false
+      priorityClassName: {{ include "hephaestus.priorityClass" (dict "root" $ "tier" "roles") }}
       enableServiceLinks: false
       securityContext:
         {{- include "hephaestus.podSecurityContext" (dict "user" 999 "group" 999) | nindent 8 }}

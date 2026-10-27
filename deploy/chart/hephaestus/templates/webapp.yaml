@@ -39,6 +39,7 @@ spec:
     spec:
       serviceAccountName: {{ $name }}
       automountServiceAccountToken: false
+      priorityClassName: {{ include "hephaestus.priorityClass" (dict "root" $ "tier" "roles") }}
       enableServiceLinks: false
       # The image's non-root user. It listens on 8080 and writes only below /tmp/hephaestus-webapp.
       # fsGroup 101 gives that user the volume.

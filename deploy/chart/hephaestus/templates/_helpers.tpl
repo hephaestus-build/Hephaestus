@@ -24,6 +24,18 @@ within the 63 of a DNS label. The app.kubernetes.io/instance label keeps the ful
 {{- include "hephaestus.boundedName" (dict "name" (printf "%s-%s" .root.Release.Name .component) "max" 52) -}}
 {{- end -}}
 
+{{/*
+The PriorityClass of a tier: one that priority.yaml creates, or the operator's. A created
+PriorityClass is cluster-wide, so its name carries the release's namespace as well as its name.
+*/}}
+{{- define "hephaestus.priorityClass" -}}
+{{- if .root.Values.priorityClasses.create -}}
+{{- include "hephaestus.boundedName" (dict "name" (printf "%s-%s-%s" .root.Release.Namespace .root.Release.Name .tier) "max" 63) -}}
+{{- else -}}
+{{- get .root.Values.priorityClasses .tier -}}
+{{- end -}}
+{{- end -}}
+
 {{- define "hephaestus.selectorLabels" -}}
 app.kubernetes.io/name: hephaestus
 app.kubernetes.io/instance: {{ .root.Release.Name }}
@@ -474,6 +486,7 @@ metadata:
 spec:
   restartPolicy: Never
   automountServiceAccountToken: false
+  priorityClassName: {{ include "hephaestus.priorityClass" (dict "root" .root "tier" "roles") }}
   enableServiceLinks: false
   securityContext:
     {{- include "hephaestus.podSecurityContext" (dict "user" 999 "group" 999) | nindent 4 }}

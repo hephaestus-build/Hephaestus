@@ -17,7 +17,7 @@ final class KubernetesFixtures {
 
     static KubernetesSandboxProperties properties(String namespace) {
         return new KubernetesSandboxProperties(
-                namespace, "hephaestus-worker-0", "10.42.0.7", "", "", "", "", Duration.ofMinutes(15));
+                namespace, "hephaestus-worker-0", "10.42.0.7", "", "", "", "", "", "", Duration.ofMinutes(15));
     }
 
     static KubernetesWorker worker(String namespace) {

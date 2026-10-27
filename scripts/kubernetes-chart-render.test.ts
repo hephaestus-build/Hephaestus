@@ -1868,6 +1868,75 @@ await test("the 16 GiB profile runs a review and a Heph turn, and an upgrade, wi
 	);
 });
 
+await test("roles outrank conversations, which outrank reviews, and a review never preempts", () => {
+	const resources = rendered(layersFor("small"));
+	const classes = new Map(
+		resources
+			.filter((resource) => kindOf(resource) === "PriorityClass")
+			.map((resource) => [String(get(resource, "metadata", "name")), resource]),
+	);
+	const worker = workload(resources, "worker");
+	const tier = (variable: string) => classes.get(String(envValue(worker, variable)));
+	const conversations = tier("HEPHAESTUS_SANDBOX_KUBERNETES_CONVERSATION_PRIORITY_CLASS");
+	const reviewClass = tier("HEPHAESTUS_SANDBOX_KUBERNETES_REVIEW_PRIORITY_CLASS");
+	assert.ok(conversations && reviewClass, "the worker names classes that the chart creates");
+	const roleClasses = new Set(
+		[...workloads(resources), ...resources.filter((resource) => kindOf(resource) === "Job")].map(
+			(resource) => get(podSpec(resource), "priorityClassName"),
+		),
+	);
+	assert.equal(roleClasses.size, 1, "every role Pod has the same class");
+	const roles = classes.get(String([...roleClasses][0]));
+	assert.ok(roles, "the roles' class exists");
+	const value = (priority: unknown) => Number(get(priority, "value"));
+	assert.ok(value(roles) > value(conversations) && value(conversations) > value(reviewClass));
+	assert.ok(value(roles) < 1_000_000_000, "below the system classes");
+	assert.equal(get(reviewClass, "preemptionPolicy"), "Never");
+	assert.equal(classes.size, 3);
+	for (const priority of classes.values()) {
+		assert.equal(get(priority, "globalDefault"), false);
+	}
+	// Cluster-wide names: another release or namespace gets its own.
+	const inNamespace = (namespace: string) =>
+		rendered(layersFor("small"), { release: "hephaestus", namespace })
+			.filter((resource) => kindOf(resource) === "PriorityClass")
+			.map((resource) => String(get(resource, "metadata", "name")));
+	const elsewhere = new Set(inNamespace("other"));
+	assert.ok(inNamespace("hephaestus").every((name) => !elsewhere.has(name)));
+	const withoutWorker = rendered(layersFor("dev")).filter(
+		(resource) => kindOf(resource) === "PriorityClass",
+	);
+	assert.equal(withoutWorker.length, 1, "no sandbox classes without a worker");
+});
+
+await test("on a shared cluster, the chart uses the operator's PriorityClasses and creates none", () => {
+	const operators = {
+		roles: "platform-high",
+		conversations: "people-waiting",
+		reviews: "batch-low",
+	};
+	const resources = rendered([
+		...layersFor("small"),
+		{ priorityClasses: { create: false, ...operators } },
+	]);
+	assert.equal(resources.filter((each) => kindOf(each) === "PriorityClass").length, 0);
+	for (const pod of [
+		...workloads(resources),
+		...resources.filter((each) => kindOf(each) === "Job"),
+	]) {
+		assert.equal(get(podSpec(pod), "priorityClassName"), operators.roles, nameOf(pod));
+	}
+	const worker = workload(resources, "worker");
+	assert.equal(
+		envValue(worker, "HEPHAESTUS_SANDBOX_KUBERNETES_CONVERSATION_PRIORITY_CLASS"),
+		operators.conversations,
+	);
+	assert.equal(
+		envValue(worker, "HEPHAESTUS_SANDBOX_KUBERNETES_REVIEW_PRIORITY_CLASS"),
+		operators.reviews,
+	);
+});
+
 await test("every role that runs git writes the JGit configuration to an emptyDir, in every profile", () => {
 	// The root filesystem is read-only, so JGit's default $HOME/.config cannot hold its config lock.
 	for (const [name, role] of profiles.flatMap((shipped) =>

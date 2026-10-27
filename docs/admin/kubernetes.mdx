@@ -53,6 +53,12 @@ When a Kubernetes minor version reaches its end of life upstream, the next Hepha
 | `postgresql-backup` | CronJobs, optional | Full and differential pgBackRest backups ([Backup and restore](#backup-and-restore)). |
 | `nats` | StatefulSet, optional | One NATS JetStream server. |
 | `route` | HTTPRoute | `/`, `/api`, `/webhooks`, and Slack interactivity. |
+| `priority` | PriorityClasses, cluster-wide | The priorities of the role Pods and of the sandboxes ([Worker § Priorities](#priorities)). |
+
+The PriorityClasses are the only cluster-wide objects of the chart.
+The account that installs the chart therefore needs permission to create PriorityClasses.
+Their names contain the release's namespace and name, so two releases never share one.
+On a shared cluster that does not allow this, use classes that exist ([Worker § Priorities](#priorities)).
 
 The migration Job is the only migration owner.
 No role runs Liquibase: each new Pod waits for the schema before it starts, for up to 10 minutes, while the previous release serves.
@@ -796,6 +802,32 @@ It writes these objects into it:
   Turn sandboxes get no other policy, so they have no network.
   The worker policy admits the same sandboxes on the same port.
 - The worker's Role and RoleBinding.
+
+### Priorities
+
+Under memory pressure, the kubelet evicts Pods of a lower priority first.
+The scheduler can also preempt Pods of a lower priority to place one of a higher priority.
+The chart gives every Pod one of three priorities, highest first:
+
+1. The roles, PostgreSQL, NATS, and the migration and backup Jobs. They serve everyone.
+2. The Heph host and the turn sandboxes. A person waits for the answer.
+3. The review sandboxes and the isolation probe. A review is an attempt that runs again. It never preempts another Pod.
+
+A preempted or evicted review counts as an attempt that the worker lost, and the review runs again.
+
+By default, the chart creates the three PriorityClasses.
+If your account cannot create cluster-wide objects, ask the cluster's administrator for three classes, with values in the order above.
+Then set `priorityClasses.create=false` and name them:
+
+```yaml
+priorityClasses:
+  create: false
+  roles: platform-high
+  conversations: people-waiting
+  reviews: batch-low
+```
+
+The chart refuses a name while `create` is true, and a missing name while it is false.
 
 The workers remove what no attempt and no worker uses in the sandbox namespace.
 Do not share it with another release or another application.

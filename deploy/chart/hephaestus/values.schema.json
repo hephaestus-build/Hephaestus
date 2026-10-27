@@ -404,6 +404,33 @@
 				"resources": { "$ref": "#/definitions/resources" }
 			}
 		},
+		"priorityClasses": {
+			"description": "Create the three PriorityClasses, or name three that exist: the roles' above the conversations' above the reviews'.",
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["create", "roles", "conversations", "reviews"],
+			"properties": {
+				"create": { "type": "boolean" },
+				"roles": { "$ref": "#/definitions/name" },
+				"conversations": { "$ref": "#/definitions/name" },
+				"reviews": { "$ref": "#/definitions/name" }
+			},
+			"if": { "properties": { "create": { "const": true } } },
+			"then": {
+				"properties": {
+					"roles": { "type": "string", "const": "" },
+					"conversations": { "type": "string", "const": "" },
+					"reviews": { "type": "string", "const": "" }
+				}
+			},
+			"else": {
+				"properties": {
+					"roles": { "type": "string", "minLength": 1 },
+					"conversations": { "type": "string", "minLength": 1 },
+					"reviews": { "type": "string", "minLength": 1 }
+				}
+			}
+		},
 		"worker": {
 			"type": "object",
 			"additionalProperties": false,

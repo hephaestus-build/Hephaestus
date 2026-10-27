@@ -227,6 +227,7 @@ spec:
       serviceAccountName: {{ $name }}
       # The one role that calls the Kubernetes API, with the Role above.
       automountServiceAccountToken: true
+      priorityClassName: {{ include "hephaestus.priorityClass" (dict "root" $ "tier" "roles") }}
       enableServiceLinks: false
       securityContext:
         {{- include "hephaestus.podSecurityContext" (dict "user" 1002 "group" 1001) | nindent 8 }}
@@ -297,6 +298,10 @@ spec:
               value: {{ $runtime.nodeSelector | toJson | quote }}
             - name: HEPHAESTUS_SANDBOX_KUBERNETES_TOLERATIONS
               value: {{ $runtime.tolerations | toJson | quote }}
+            - name: HEPHAESTUS_SANDBOX_KUBERNETES_CONVERSATION_PRIORITY_CLASS
+              value: {{ include "hephaestus.priorityClass" (dict "root" . "tier" "conversations") | quote }}
+            - name: HEPHAESTUS_SANDBOX_KUBERNETES_REVIEW_PRIORITY_CLASS
+              value: {{ include "hephaestus.priorityClass" (dict "root" . "tier" "reviews") | quote }}
             - name: HEPHAESTUS_SANDBOX_KUBERNETES_PROBE_INTERVAL
               value: {{ $runtime.probeInterval | quote }}
             - name: SANDBOX_API_PORT
