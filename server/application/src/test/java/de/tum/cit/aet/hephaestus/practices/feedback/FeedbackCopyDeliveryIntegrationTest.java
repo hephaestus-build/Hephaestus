@@ -12,10 +12,11 @@ import de.tum.cit.aet.hephaestus.practices.spi.FeedbackIds;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackSendAction;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackState;
 import java.util.Objects;
-import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 
 class FeedbackCopyDeliveryIntegrationTest extends AbstractFeedbackDeliveryIntegrationTest {
     @Autowired
@@ -130,13 +131,10 @@ class FeedbackCopyDeliveryIntegrationTest extends AbstractFeedbackDeliveryIntegr
     @Timeout(value = 120, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
     void shouldLeaveACopyThatWithdrawalStoppedForTheRetractionAndNotFailIt() {
         prepare(true);
-        // A decision row, not the decision service: the service would wait on the write that this hook interrupts.
-        provider.beforeNotes = () -> jdbc.update(
-                "INSERT INTO feedback_decision(id,workspace_id,feedback_id,action,note) VALUES (?,?,?,'WITHDRAW',?)",
-                UUID.randomUUID(),
-                workspace.getId(),
-                feedbackId,
-                "Withdraw this guidance.");
+        // The hook runs inside the recipient write; the withdrawal commits on its own, as an admin's would.
+        var apart = new TransactionTemplate(transactionManager);
+        apart.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        provider.beforeNotes = () -> apart.executeWithoutResult(status -> withdraw());
         sender.send(workspace.getId(), feedbackId);
         assertThat(children().get(1).getState()).isEqualTo(FeedbackCopyState.PLANNED);
         assertThat(children().get(1).getReadback()).isNull();
