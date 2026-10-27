@@ -11,7 +11,7 @@ import {
 	type Snapshot,
 } from "./pr-wait.ts";
 
-const gate: Check = { name: "CI Status Gate", state: "pass", required: true, url: "https://ci/1" };
+const gate: Check = { name: "CI Status Gate", state: "pass", url: "https://ci/1" };
 
 function snapshot(overrides: Partial<Snapshot> = {}): Snapshot {
 	return {
@@ -19,12 +19,13 @@ function snapshot(overrides: Partial<Snapshot> = {}): Snapshot {
 		isDraft: false,
 		url: "https://github.com/o/r/pull/7",
 		head: "abcdef1234",
-		mergeState: "BLOCKED",
+		mergeState: "CLEAN",
 		reviewDecision: "REVIEW_REQUIRED",
 		mine: new Set(["author"]),
 		notes: [],
 		unresolved: [],
 		checks: [gate],
+		requiredNames: ["CI Status Gate"],
 		...overrides,
 	};
 }
@@ -91,23 +92,51 @@ await test("a draft, changes requested, or an unresolved thread on a green head 
 	);
 });
 
-await test("a failed required check stops at once; an optional one does not", () => {
+await test("a failed required check stops at once; a failed optional one is an event only", () => {
 	const failed = evaluate(snapshot({ checks: [{ ...gate, state: "fail" }] }), fresh);
 	assert.deepEqual(
 		[failed.exit, failed.lines],
-		[1, ["required check failed: CI Status Gate https://ci/1"]],
+		[1, ["check failed: CI Status Gate https://ci/1", "required check failed: CI Status Gate"]],
 	);
 
-	const optional: Check = { name: "Preview", state: "fail", required: false, url: "" };
-	assert.equal(settled(snapshot({ checks: [gate, optional], reviewDecision: "APPROVED" })).exit, 0);
+	const optional: Check = { name: "Preview", state: "fail", url: "https://ci/2" };
+	const pr = snapshot({
+		checks: [gate, optional],
+		reviewDecision: "APPROVED",
+		mergeState: "UNSTABLE",
+	});
+	const first = evaluate(pr, fresh);
+	assert.deepEqual([first.exit, first.lines], [undefined, ["check failed: Preview https://ci/2"]]);
+	assert.equal(evaluate(pr, first.memory).exit, 0);
 });
 
-await test("with no required check registered yet, the checks are not done", () => {
-	const optional: Check = { name: "Preview", state: "pass", required: false, url: "" };
+await test("a required check that has not registered yet holds the watch, even when approved", () => {
+	const pr = snapshot({
+		requiredNames: ["CI Status Gate", "Actionlint"],
+		reviewDecision: "APPROVED",
+	});
+	assert.equal(settled(pr).exit, undefined);
+});
+
+await test("approved and green is not ready while GitHub still calls the merge blocked", () => {
 	assert.equal(
-		settled(snapshot({ checks: [optional], reviewDecision: "APPROVED" })).exit,
+		settled(snapshot({ reviewDecision: "APPROVED", mergeState: "BLOCKED" })).exit,
 		undefined,
 	);
+});
+
+await test("a stacked pull request gates on every check it has", () => {
+	const build: Check = { name: "Build", state: "pass", url: "" };
+	const stacked = (last: Check["state"]) =>
+		snapshot({
+			requiredNames: [],
+			checks: [build, { name: "Test", state: last, url: "https://ci/3" }],
+			reviewDecision: "APPROVED",
+		});
+	assert.equal(settled(stacked("pending")).exit, undefined);
+	assert.equal(settled(stacked("pass")).exit, 0);
+	assert.equal(evaluate(stacked("fail"), fresh).exit, 1);
+	assert.equal(settled(snapshot({ requiredNames: [], checks: [] })).exit, undefined);
 });
 
 await test("a conflict stops; behind its base alone does not", () => {
@@ -146,33 +175,39 @@ const response = (pullRequest: Record<string, unknown>) => ({
 
 const threadComment = (id: string) => ({ id, url: `https://t/${id}`, author: { login: "rev" } });
 
-await test("a check run and a commit status map to pass, fail or pending, with required read", () => {
+await test("a check run and a commit status map to pass, fail or pending; the rules name the required", () => {
 	const contexts = connection([
 		{
 			name: "CI Status Gate",
 			status: "COMPLETED",
 			conclusion: "SKIPPED",
 			detailsUrl: "u",
-			isRequired: true,
 		},
-		{ name: "Build", status: "IN_PROGRESS", conclusion: null, detailsUrl: "u", isRequired: false },
+		{ name: "Build", status: "IN_PROGRESS", conclusion: null, detailsUrl: "u" },
 		{
 			name: "Zizmor",
 			status: "COMPLETED",
 			conclusion: "TIMED_OUT",
 			detailsUrl: "u",
-			isRequired: true,
 		},
-		{ context: "deploy", state: "EXPECTED", targetUrl: null, isRequired: false },
+		{ context: "deploy", state: "EXPECTED", targetUrl: null },
 	]);
 	const commits = connection([{ commit: { statusCheckRollup: { contexts } } }], 30);
+	const rules = connection([
+		{ parameters: {} },
+		{
+			parameters: { requiredStatusChecks: [{ context: "CI Status Gate" }, { context: "Zizmor" }] },
+		},
+	]);
+	const pr = parse(response({ commits, baseRef: { rules } }));
+	assert.deepEqual(pr.requiredNames, ["CI Status Gate", "Zizmor"]);
 	assert.deepEqual(
-		parse(response({ commits })).checks.map(({ name, state, required }) => [name, state, required]),
+		pr.checks.map(({ name, state }) => [name, state]),
 		[
-			["CI Status Gate", "pass", true],
-			["Build", "pending", false],
-			["Zizmor", "fail", true],
-			["deploy", "pending", false],
+			["CI Status Gate", "pass"],
+			["Build", "pending"],
+			["Zizmor", "fail"],
+			["deploy", "pending"],
 		],
 	);
 });

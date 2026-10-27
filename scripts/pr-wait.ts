@@ -8,6 +8,11 @@
  * comment, and the agent reads them through the URL as data. `.claude/skills/watch-pr/SKILL.md` says
  * when to run it. Comments by the pull request's author and by the `gh` user are not events.
  *
+ * Ready needs every check that the base branch's rules require, by name, present and green on two
+ * equal polls, an approval, no unresolved thread, no draft, and a mergeable state. On a base without
+ * rules, such as a stacked pull request's, every check counts as required. Every failed check is an
+ * event.
+ *
  * Exit codes: 0 ready or merged; 1 only action can make it ready (a failed required check, a
  * conflict, changes requested, an unresolved thread or a draft on a green head, closed, or GitHub
  * refused); 2 bad arguments, an unknown pull request, or no repository.
@@ -23,7 +28,6 @@ import { output } from "./lib/process.ts";
 export interface Check {
 	readonly name: string;
 	readonly state: "pass" | "fail" | "pending";
-	readonly required: boolean;
 	readonly url: string;
 }
 
@@ -45,6 +49,8 @@ export interface Snapshot {
 	readonly notes: readonly Note[];
 	readonly unresolved: readonly string[];
 	readonly checks: readonly Check[];
+	/** The checks the base branch's rules require, by name. A stacked base usually has none. */
+	readonly requiredNames: readonly string[];
 }
 
 /** What earlier polls saw. The first poll records what exists and reports nothing. */
@@ -62,6 +68,7 @@ export interface Verdict {
 
 // CI and deploy bots report through checks, so their comments repeat what a check already says.
 const STATUS_BOTS = ["github-actions", "vercel", "netlify", "cloudflare"];
+const MERGEABLE: ReadonlySet<string> = new Set(["CLEAN", "BEHIND", "HAS_HOOKS", "UNSTABLE"]);
 
 /** The decision once the required checks are green on two equal polls. */
 function onGreen(pr: Snapshot): { exit?: 0 | 1; line: string } {
@@ -76,7 +83,8 @@ function onGreen(pr: Snapshot): { exit?: 0 | 1; line: string } {
 	if (pr.unresolved.length > 0) {
 		return { exit: 1, line: `unresolved threads on green ${short}: ${pr.unresolved.join(" ")}` };
 	}
-	return pr.reviewDecision === "APPROVED"
+	// GitHub says BLOCKED while a rule is unmet and UNKNOWN while it computes, so both wait.
+	return pr.reviewDecision === "APPROVED" && MERGEABLE.has(pr.mergeState)
 		? { exit: 0, line: `ready on ${short}: ${summary}` }
 		: { line: `required checks green on ${short}: ${summary}` };
 }
@@ -115,19 +123,24 @@ export function evaluate(pr: Snapshot, memory: Memory): Verdict {
 			emit(`note:${note.id}`, `${note.kind} from ${note.author}: ${note.url}`);
 		}
 	}
-	const required = pr.checks.filter((check) => check.required);
-	const failed = required.find((check) => check.state === "fail");
+	for (const check of pr.checks.filter(({ state }) => state === "fail")) {
+		emit(`fail:${pr.head}:${check.name}`, `check failed: ${check.name} ${check.url}`.trimEnd());
+	}
+	// A check that has not registered yet is absent, never green, so the gate is a list of names.
+	// A base without rules, such as a stacked pull request's, gates on every check it has.
+	const gate =
+		pr.requiredNames.length > 0 ? pr.requiredNames : pr.checks.map((check) => check.name);
+	const stateOf = (name: string) => pr.checks.find((check) => check.name === name)?.state;
+	const failed = gate.find((name) => stateOf(name) === "fail");
 	if (pr.mergeState === "DIRTY") {
 		return stop(1, "conflicts with its base: rebase it");
 	}
 	if (failed !== undefined) {
-		return stop(1, `required check failed: ${failed.name} ${failed.url}`.trimEnd());
+		return stop(1, `required check failed: ${failed}`);
 	}
 	// A check registers a few seconds after a push, so only two equal polls call the checks done.
 	const done =
-		required.length > 0 &&
-		required.every((check) => check.state === "pass") &&
-		states === memory.checks;
+		gate.length > 0 && gate.every((name) => stateOf(name) === "pass") && states === memory.checks;
 	if (!done) {
 		return { lines, memory: next };
 	}
@@ -144,9 +157,12 @@ const QUERY = `query($owner: String!, $name: String!, $number: Int!) {
   repository(owner: $owner, name: $name) {
     pullRequest(number: $number) {
       url state isDraft headRefOid mergeStateStatus reviewDecision author { login }
+      baseRef { rules(first: 50) { nodes { parameters {
+        ... on RequiredStatusChecksParameters { requiredStatusChecks { context } }
+      } } } }
       commits(last: 1) { totalCount nodes { commit { statusCheckRollup { contexts(first: 100) { totalCount nodes {
-        ... on CheckRun { name status conclusion detailsUrl isRequired(pullRequestNumber: $number) }
-        ... on StatusContext { context state targetUrl isRequired(pullRequestNumber: $number) }
+        ... on CheckRun { name status conclusion detailsUrl }
+        ... on StatusContext { context state targetUrl }
       } } } } } }
       comments(last: 100) { totalCount nodes { id url author { login } } }
       reviews(last: 100) { totalCount nodes { id url state body author { login } } }
@@ -183,17 +199,24 @@ const conclusionState = (conclusion: string): Check["state"] =>
 	["SUCCESS", "NEUTRAL", "SKIPPED"].includes(conclusion) ? "pass" : "fail";
 
 function toCheck(node: Record<string, unknown>): Check {
-	const required = node.isRequired === true;
 	if (typeof node.context === "string") {
-		return {
-			name: node.context,
-			state: statusState(text(node.state)),
-			required,
-			url: text(node.targetUrl),
-		};
+		return { name: node.context, state: statusState(text(node.state)), url: text(node.targetUrl) };
 	}
 	const state = node.status === "COMPLETED" ? conclusionState(text(node.conclusion)) : "pending";
-	return { name: asString(node.name, "check name"), state, required, url: text(node.detailsUrl) };
+	return { name: asString(node.name, "check name"), state, url: text(node.detailsUrl) };
+}
+
+/** The required check names in the base branch's rules. A deleted base has none. */
+function requiredNames(baseRef: unknown): string[] {
+	if (!isRecord(baseRef)) {
+		return [];
+	}
+	return nodes(baseRef.rules, "rules").flatMap((rule) => {
+		const checks = isRecord(rule.parameters) ? rule.parameters.requiredStatusChecks : undefined;
+		return Array.isArray(checks)
+			? checks.map((check) => asString(asRecord(check, "required check").context, "context"))
+			: [];
+	});
 }
 
 /** The pull request in one GraphQL response, validated at the trust boundary. */
@@ -237,6 +260,7 @@ export function parse(response: unknown): Snapshot {
 		notes,
 		unresolved,
 		checks: isRecord(rollup) ? nodes(rollup.contexts, "checks").map(toCheck) : [],
+		requiredNames: requiredNames(pr.baseRef),
 	};
 }
 
@@ -280,10 +304,11 @@ async function poll(repo: string, number: number): Promise<Snapshot> {
 			quit(2, message);
 		}
 		if (/rate limit/iu.test(message)) {
-			const reset = await gh(["api", "rate_limit", "--jq", ".resources.graphql.reset"]).catch(
-				() => "0",
+			const reset = Number(
+				await gh(["api", "rate_limit", "--jq", ".resources.graphql.reset"]).catch(() => ""),
 			);
-			quit(1, `GitHub rate limit; it resets at ${new Date(Number(reset) * 1000).toISOString()}`);
+			const when = reset > 0 ? new Date(reset * 1000).toISOString() : "an unknown time";
+			quit(1, `GitHub rate limit; it resets at ${when}`);
 		}
 		throw error;
 	}

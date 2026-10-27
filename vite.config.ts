@@ -447,7 +447,6 @@ export default defineConfig({
 				"node scripts/rm.ts webapp/src/api extension/src/api && vp run --filter webapp generate:api && vp run --filter extension generate:api",
 			),
 			"db:draft-changelog": run("node scripts/db-utils.ts draft-changelog"),
-			"pr:wait": run("node scripts/pr-wait.ts"),
 			"db:check-drift": run("node scripts/db-utils.ts check-drift"),
 			"db:generate-erd-docs": run("node scripts/db-utils.ts generate-erd"),
 			"schema:github": run("node scripts/update-github-schema.ts"),
@@ -459,6 +458,7 @@ export default defineConfig({
 			"report:ci-timings": run("node scripts/report-ci-timings.ts"),
 			"report:flakes": run("node scripts/report-flakes.ts"),
 			"report:test-results": run("node scripts/summarize-test-results.ts"),
+			"pr:wait": run("node scripts/pr-wait.ts"),
 			"release:version": run("changeset version && node scripts/sync-release-version.ts"),
 
 			// Local development

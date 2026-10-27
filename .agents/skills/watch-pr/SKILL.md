@@ -30,6 +30,8 @@ A pull request is ready when all of these are true on its latest head:
 - A reviewer approved it after the last push. A push dismisses an earlier approval.
 - Every review thread is resolved.
 - It does not conflict with `main` (`DIRTY`).
+- It is not a draft.
+- On a stacked pull request, whose base has no required checks, every check passes.
 
 `BEHIND` alone is not a blocker.
 The merge queue tests each pull request merged onto the current `main`, so do not rebase only to catch up.
