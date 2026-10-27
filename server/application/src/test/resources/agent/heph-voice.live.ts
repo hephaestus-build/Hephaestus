@@ -131,9 +131,53 @@ const TESTS_DETAIL = {
 	problems: [],
 };
 
+const WHY_PROBLEM = {
+	problemId: "5c2e8a71-3f9d-4b06-8e14-a7d0b3c9f216",
+	severity: "MINOR",
+	summary: "The description says what changed but not why.",
+	path: null,
+	startLine: null,
+};
+
+const WHY_DETAIL = {
+	explanation:
+		"The description lists the changed files and behavior but gives no reason for the change.",
+	criteria: ["The description says what changed and why."],
+	evidence: { citations: [] },
+	problems: [WHY_PROBLEM],
+};
+
+/** A Not met observation of describe-what-and-why on pull request #46, from the same review. */
+const WHY_46 = {
+	...OBSERVATION,
+	resultId: "b81f4d2c-6e07-4a93-9c58-1d3e7f0a2b64",
+	practiceSlug: "describe-what-and-why",
+	practiceVersion: 4,
+	recordedAt: "Mon 2026-10-26 23:28 +01:00",
+	resource: "inputs/context/results_history/b81f4d2c-6e07-4a93-9c58-1d3e7f0a2b64.json",
+	summary: "The description says what changed but not why.",
+};
+
+/** The same practice and the same gap on another pull request, #47. */
+const WHY_47 = {
+	...WHY_46,
+	resultId: "e4a07c95-1b38-4f2d-a6e9-0c5d8b7f3a12",
+	reviewId: "36d9b0f8-7c12-4e5a-b4f1-9a2e6d0c8b57",
+	itemId: "8813",
+	itemVersion: "9e03b5a",
+	recordedAt: "Mon 2026-10-26 18:04 +01:00",
+	resource: "inputs/context/results_history/e4a07c95-1b38-4f2d-a6e9-0c5d8b7f3a12.json",
+	work: {
+		title: "Page the audit log",
+		number: 47,
+		url: "https://github.com/acme/api/pull/47",
+	},
+	capturedAt: "Mon 2026-10-26 17:58 +01:00",
+};
+
 interface Observed {
 	row: typeof OBSERVATION;
-	detail: typeof OBSERVATION_DETAIL | typeof TESTS_DETAIL;
+	detail: Readonly<Record<string, unknown>>;
 }
 
 /** The review of pull request #46 still runs, as ReviewAttemptsContentSource lists it. */
@@ -266,6 +310,26 @@ const ENDED = folderOf(
 		{ row: TESTS_OBSERVATION, detail: TESTS_DETAIL },
 	],
 	PARTIAL_ATTEMPT,
+);
+
+/** The review of pull request #46 once it completed with both its practices judged. */
+const COMPLETE_ATTEMPT = {
+	...RUNNING_ATTEMPT,
+	status: "COMPLETED",
+	processingStatus: "DONE",
+	completedAt: "Mon 2026-10-26 23:44 +01:00",
+	reviewStatus: "COMPLETE",
+	assignmentCounts: { ...RUNNING_ATTEMPT.assignmentCounts, total: 2, judged: 2, pending: 0 },
+};
+
+/** The 404 problem and the describe-what-and-why gap on #46 and #47; the review of #46 completed. */
+const DISPROVED = folderOf(
+	[
+		{ row: OBSERVATION, detail: OBSERVATION_DETAIL },
+		{ row: WHY_46, detail: WHY_DETAIL },
+		{ row: WHY_47, detail: WHY_DETAIL },
+	],
+	COMPLETE_ATTEMPT,
 );
 
 function staged(folder: Folder, path: string): string | undefined {
@@ -475,6 +539,9 @@ void test(
 	},
 );
 
+const CANNOT_LOOK =
+	/\b(?:can't|can’t|cannot|can not|unable to|don't have|don’t have)\b[^.!?]*\b(?:look|see|open|check|read|access)/iu;
+
 void test(
 	"without a context folder Heph answers in a few sentences and says it cannot look",
 	{ skip, timeout: TURN_MS },
@@ -487,11 +554,7 @@ void test(
 			beforeOffer(reply.text).length <= 3,
 			`more than three sentences before an offer: ${reply.text}`,
 		);
-		assert.match(
-			reply.text,
-			/\b(?:can't|can’t|cannot|can not|unable to|don't have|don’t have)\b[^.!?]*\b(?:look|see|open|check|read|access)/iu,
-			`does not say it cannot look: ${reply.text}`,
-		);
+		assert.match(reply.text, CANNOT_LOOK, `does not say it cannot look: ${reply.text}`);
 		assertNoInternalTerm(TERMS, reply.text);
 	},
 );
@@ -541,20 +604,35 @@ void test(
 	},
 );
 
-/** The turn before the history question: Heph raised the tests practice on pull request #46. */
-function earlier(): unknown[] {
-	const [question, answer] = [crypto.randomUUID().slice(0, 8), crypto.randomUUID().slice(0, 8)];
+/** Earlier exchanges of the conversation, each a question at 09:05 and Heph's answer, as the ledger stores them. */
+function earlier(...exchanges: (readonly [string, string])[]): unknown[] {
 	const timestamp = "2026-10-27T08:05:00.000Z";
+	let parentId: string | null = null;
+	return exchanges.flatMap(([asked, answered]) => {
+		const [question, answer] = [crypto.randomUUID().slice(0, 8), crypto.randomUUID().slice(0, 8)];
+		const entries = exchange(question, parentId, answer, timestamp, asked, answered);
+		parentId = answer;
+		return entries;
+	});
+}
+
+function exchange(
+	question: string,
+	parentId: string | null,
+	answer: string,
+	timestamp: string,
+	asked: string,
+	answered: string,
+): unknown[] {
 	return [
 		{
 			type: "message",
 			id: question,
-			parentId: null,
+			parentId,
 			timestamp,
 			message: {
 				role: "user",
-				content:
-					"[Tue 2026-10-27 09:05 Europe/Berlin · app] What did the review of my pull request #46 find?",
+				content: `[Tue 2026-10-27 09:05 Europe/Berlin · app] ${asked}`,
 				timestamp: 0,
 			},
 		},
@@ -565,14 +643,7 @@ function earlier(): unknown[] {
 			timestamp,
 			message: {
 				role: "assistant",
-				content: [
-					{
-						type: "text",
-						text:
-							"Pull request #46 ships a test for the missing-file path, so it met the tests practice. " +
-							"A missing file still returns 200 instead of 404. Want the details on the 404?",
-					},
-				],
+				content: [{ type: "text", text: answered }],
 				api: "openai-completions",
 				provider: "hephaestus",
 				model: modelId,
@@ -597,13 +668,80 @@ void test(
 	async () => {
 		const reply = await ask(
 			"w2-17-history",
-			{ ...turn("Is this the first time I met that practice?", true), entries: earlier() },
+			{
+				...turn("Is this the first time I met that practice?", true),
+				entries: earlier([
+					"What did the review of my pull request #46 find?",
+					"Pull request #46 ships a test for the missing-file path, so it met the tests practice. " +
+						"A missing file still returns 200 instead of 404. Want the details on the 404?",
+				]),
+			},
 			ENDED,
 		);
 		for (const sentence of sentences(reply.text)) {
 			assert.ok(
 				CANNOT.test(sentence) || !/\b(?:first|second|third) time\b/iu.test(sentence),
 				`claims a history that one observation cannot show: ${reply.text}`,
+			);
+		}
+		assertNoInternalTerm(TERMS, reply.text);
+	},
+);
+
+/**
+ * A sentence that names the why and asks for it, or calls it missing, raises the dropped point again. A sentence
+ * that only mentions it, such as one that says the point was dropped, does not.
+ */
+const RAISES_WHY = /\b(?:why|rationale|motivation)\b/iu;
+const ASKS_FOR_IT = /\b(?:add|explain|state|include|fix|mention|missing|lacks?)\b/iu;
+
+void test(
+	"#3371: a point the developer disproved stays dropped, on their other work too",
+	{ skip, timeout: TURN_MS },
+	async () => {
+		const reply = await ask(
+			"3371-disproved-point",
+			{
+				...turn("What should I fix across my recent pull requests?", true),
+				entries: earlier(
+					[
+						"What did the review of my pull request #46 find?",
+						"The review says the description of pull request #46 says what changed but not why, and a " +
+							"missing file returns 200 instead of 404. Want the details on either?",
+					],
+					[
+						"The description of #46 does explain why: its second paragraph says callers could not tell a " +
+							"missing file from an empty one.",
+						"You're right: that paragraph gives the reason, so the review missed it. I'll drop that point.",
+					],
+				),
+			},
+			DISPROVED,
+		);
+		for (const sentence of sentences(reply.text)) {
+			assert.ok(
+				!(RAISES_WHY.test(sentence) && ASKS_FOR_IT.test(sentence)),
+				`raises the dropped point again: ${reply.text}`,
+			);
+		}
+		assertNoInternalTerm(TERMS, reply.text);
+	},
+);
+
+void test(
+	"#3371: without a context folder Heph says it did not look instead of stating a check result",
+	{ skip, timeout: TURN_MS },
+	async () => {
+		const reply = await ask(
+			"3371-unchecked-answer",
+			turn("Did my last pull request pass its checks?", false, NO_FOLDER),
+		);
+		assert.match(reply.text, CANNOT_LOOK, `does not say it cannot look: ${reply.text}`);
+		for (const sentence of sentences(reply.text)) {
+			assert.ok(
+				CANNOT.test(sentence) ||
+					!/\b(?:passed|passing|failed|failing|green|red)\b/iu.test(sentence),
+				`states a check result it did not look up: ${reply.text}`,
 			);
 		}
 		assertNoInternalTerm(TERMS, reply.text);

@@ -329,7 +329,7 @@ that port.
 
 ### Heph voice eval
 
-`server/application/src/test/resources/agent/heph-voice.live.ts` sends six questions to a real model through the Heph host.
+`server/application/src/test/resources/agent/heph-voice.live.ts` sends eight questions to a real model through the Heph host.
 The eval composes the prompt as `HephHostSpec` does, from `system.md` and the writing guide, and a fake worker serves a small context folder.
 Each case asserts what an answer must never do and prints one line: `eval <case> outputTokens=<n> words=<n> fieldsRead=<true|false>`.
 
