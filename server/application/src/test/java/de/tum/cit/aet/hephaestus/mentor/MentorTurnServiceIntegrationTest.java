@@ -76,6 +76,9 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
     @Autowired
     private ApplicationEvents published;
 
+    @Autowired
+    private MentorTurnWaits waits;
+
     private Workspace workspace;
     private MentorConversation main;
     private long account;
@@ -241,7 +244,7 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
     void shouldSayAQuestionWaitsForAFreeHephOnlyWhileHephAnswersAnotherConversation() {
         MentorTurnService.Submission first = ask(main, "First");
 
-        assertThat(turns.waits(workspace.getId(), List.of(stored(first.turn()))))
+        assertThat(waits.waits(workspace.getId(), List.of(stored(first.turn()))))
                 .as("nothing holds Heph, so the question starts at once or no worker runs")
                 .isEmpty();
 
@@ -250,7 +253,7 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
                 conversations.openThread(workspace.getId(), first.question().getId());
         MentorTurnService.Submission inThread = ask(thread, "About this");
 
-        assertThat(turns.waitingFor(stored(inThread.turn()))).isEqualTo(MentorTurn.WaitingFor.FREE_HEPH);
+        assertThat(waits.waitingFor(stored(inThread.turn()))).isEqualTo(MentorTurn.WaitingFor.FREE_HEPH);
     }
 
     @Test
@@ -258,12 +261,12 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
         MentorTurnService.Submission first = ask(main, "First");
         MentorTurnService.Submission followUp = ask(main, "Follow-up");
 
-        assertThat(turns.waits(workspace.getId(), List.of(stored(first.turn()), stored(followUp.turn()))))
+        assertThat(waits.waits(workspace.getId(), List.of(stored(first.turn()), stored(followUp.turn()))))
                 .containsExactly(entry(followUp.turn().getId(), MentorTurn.WaitingFor.EARLIER_QUESTION));
 
         MentorTurn running = turns.claimNext(WORKER, LEASE).orElseThrow();
 
-        assertThat(turns.waits(workspace.getId(), List.of(stored(running), stored(followUp.turn()))))
+        assertThat(waits.waits(workspace.getId(), List.of(stored(running), stored(followUp.turn()))))
                 .as("a running turn does not wait")
                 .containsExactly(entry(followUp.turn().getId(), MentorTurn.WaitingFor.EARLIER_QUESTION));
     }
@@ -279,9 +282,9 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
         MentorTurn alsoRunning = turns.claimNext("worker-two", LEASE).orElseThrow();
         turns.end(alsoRunning.getId(), alsoRunning.getAttempt(), "worker-two", MentorTurn.Status.DONE, List.of(), null);
 
-        assertThat(turns.waits(workspace.getId(), List.of(stored(running), stored(alsoRunning))))
+        assertThat(waits.waits(workspace.getId(), List.of(stored(running), stored(alsoRunning))))
                 .isEmpty();
-        assertThat(turns.waitingFor(stored(alsoRunning))).isNull();
+        assertThat(waits.waitingFor(stored(alsoRunning))).isNull();
     }
 
     @Test
@@ -309,7 +312,7 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
         assertThat(published.stream(MentorLedgerEvents.TurnChanged.class))
                 .extracting(MentorLedgerEvents.TurnChanged::turnId, MentorLedgerEvents.TurnChanged::status)
                 .contains(tuple(followUp.turn().getId(), MentorTurn.Status.QUEUED));
-        assertThat(turns.waitingFor(stored(followUp.turn()))).isNull();
+        assertThat(waits.waitingFor(stored(followUp.turn()))).isNull();
     }
 
     @Test

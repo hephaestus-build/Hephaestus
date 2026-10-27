@@ -81,6 +81,9 @@ public class MentorTurn implements Persistable<UUID> {
     }
 
     /** Why a queued turn has not started ({@link MentorTurnService#waits}). */
+    }
+
+    /** Why a queued turn has not started ({@link MentorTurnWaits}). */
     public enum WaitingFor {
         /** A worker may start it, and Heph answers other questions. */
         FREE_HEPH,

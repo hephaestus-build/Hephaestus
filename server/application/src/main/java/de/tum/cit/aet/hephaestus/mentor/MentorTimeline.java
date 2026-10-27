@@ -50,7 +50,7 @@ public class MentorTimeline {
     private final MentorConversationRepository conversations;
     private final MentorEntryRepository entries;
     private final MentorTurnRepository turns;
-    private final MentorTurnService turnService;
+    private final MentorTurnWaits waits;
     private final WeeklyDigestFacts weeklyDigests;
     private final ResultHistoryQuery results;
     private final FeedbackHistoryQuery feedback;
@@ -67,9 +67,9 @@ public class MentorTimeline {
         }
         MentorConversation main = found.get();
         List<MentorTurn> activeTurns = turns.findActiveInTree(workspaceId, main.getId());
-        Map<UUID, MentorTurn.WaitingFor> waits = turnService.waits(workspaceId, activeTurns);
+        Map<UUID, MentorTurn.WaitingFor> waiting = waits.waits(workspaceId, activeTurns);
         List<MentorTurnDTO> active = activeTurns.stream()
-                .map(turn -> turn(turn, parentEntryId(main, turn.getConversationId()), waits.get(turn.getId())))
+                .map(turn -> turn(turn, parentEntryId(main, turn.getConversationId()), waiting.get(turn.getId())))
                 .toList();
         List<MentorThreadSummaryDTO> threads =
                 entries.findThreadSummariesOfMain(workspaceId, main.getId(), MAX_THREADS).stream()
@@ -117,7 +117,7 @@ public class MentorTimeline {
     public MentorTurnDTO turn(long workspaceId, long accountId, UUID turnId) {
         MentorTurn turn = ownedTurn(workspaceId, accountId, turnId);
         MentorConversation conversation = conversation(workspaceId, turn.getConversationId());
-        return turn(turn, conversation.getParentEntryId(), turnService.waitingFor(turn));
+        return turn(turn, conversation.getParentEntryId(), waits.waitingFor(turn));
     }
 
     @Transactional(readOnly = true)
@@ -155,7 +155,7 @@ public class MentorTimeline {
                         .findByIdAndWorkspaceId(turn.getConversationId(), workspaceId)
                         .map(conversation -> new Owned<>(
                                 conversation.getAccountId(),
-                                turn(turn, conversation.getParentEntryId(), turnService.waitingFor(turn)))));
+                                turn(turn, conversation.getParentEntryId(), waits.waitingFor(turn)))));
     }
 
     /**

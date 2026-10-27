@@ -43,6 +43,7 @@ import de.tum.cit.aet.hephaestus.mentor.MentorLedgerNotifications;
 import de.tum.cit.aet.hephaestus.mentor.MentorSlackDelivery;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnService;
+import de.tum.cit.aet.hephaestus.mentor.MentorTurnWaits;
 import de.tum.cit.aet.hephaestus.practices.feedback.ConversationFeedbackRows;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackState;
 import de.tum.cit.aet.hephaestus.testconfig.ConversationReceipts;
@@ -115,6 +116,9 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
     private MentorTurnService turns;
 
     @Autowired
+    private MentorTurnWaits waits;
+
+    @Autowired
     private MentorSlackDelivery delivery;
 
     @Autowired
@@ -169,6 +173,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
                 notifications,
                 delivery,
                 turns,
+                waits,
                 completion,
                 slack,
                 new SlackMentorPoster(slack, delivery),

@@ -15,6 +15,7 @@ import de.tum.cit.aet.hephaestus.mentor.MentorSlackDelivery;
 import de.tum.cit.aet.hephaestus.mentor.MentorSlackDelivery.SlackTurn;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnService;
+import de.tum.cit.aet.hephaestus.mentor.MentorTurnWaits;
 import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.annotation.PreDestroy;
 import java.time.Clock;
@@ -129,6 +130,7 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
     private final MentorLedgerNotifications notifications;
     private final MentorSlackDelivery delivery;
     private final MentorTurnService turns;
+    private final MentorTurnWaits waits;
     private final MentorTurnCompletion completion;
     private final SlackMessageService slack;
     private final SlackMentorPoster poster;
@@ -148,6 +150,7 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
             MentorLedgerNotifications notifications,
             MentorSlackDelivery delivery,
             MentorTurnService turns,
+            MentorTurnWaits waits,
             MentorTurnCompletion completion,
             SlackMessageService slack,
             SlackMentorPoster poster,
@@ -157,6 +160,7 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
                 notifications,
                 delivery,
                 turns,
+                waits,
                 completion,
                 slack,
                 poster,
@@ -177,6 +181,7 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
             MentorLedgerNotifications notifications,
             MentorSlackDelivery delivery,
             MentorTurnService turns,
+            MentorTurnWaits waits,
             MentorTurnCompletion completion,
             SlackMessageService slack,
             SlackMentorPoster poster,
@@ -187,6 +192,7 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
         this.notifications = notifications;
         this.delivery = delivery;
         this.turns = turns;
+        this.waits = waits;
         this.completion = completion;
         this.slack = slack;
         this.poster = poster;
@@ -323,7 +329,7 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
      * Tells the developer once that their question waits, when its turn has not run {@link #WAITING_NOTICE_AFTER} after
      * it was asked. Without it, Slack shows nothing while earlier turns hold the worker's turn slots. The notice says
      * that Heph answers other questions only when the ledger says the question waits for a free Heph
-     * ({@link MentorTurnService#waitingFor}). It goes once the turn runs or ends. A turn that already ran and waits
+     * ({@link MentorTurnWaits}). It goes once the turn runs or ends. A turn that already ran and waits
      * again gets none: it did start. The notice does not claim the reply: a claim before the turn runs would leave the
      * reply with this server, and a restart during the wait would lose the answer. So it relies on the one server that
      * the chart runs, which also keeps the "once" in memory: after a restart, a question that still waits can get it
@@ -343,7 +349,7 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
         }
         projection.waitingNoticed = true;
         String notice =
-                turns.waitingFor(turn) == MentorTurn.WaitingFor.FREE_HEPH ? WAITING_FOR_HEPH_NOTICE : WAITING_NOTICE;
+                waits.waitingFor(turn) == MentorTurn.WaitingFor.FREE_HEPH ? WAITING_FOR_HEPH_NOTICE : WAITING_NOTICE;
         delivery.slackTurn(projection.workspaceId, projection.turnId).ifPresent(asked -> {
             try {
                 projection.notice = slack.postMessage(
