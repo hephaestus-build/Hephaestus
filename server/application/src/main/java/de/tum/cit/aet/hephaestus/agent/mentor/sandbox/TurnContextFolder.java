@@ -420,7 +420,7 @@ public class TurnContextFolder {
     /** One command's run in the sandbox; none when no time was left. */
     private record Ran(ExecSandboxes.@Nullable Execution run) {}
 
-    /** The attempt's sandbox, staged with {@code INDEX.md} and the context documents on first use. */
+    /** The attempt's sandbox, staged with {@code INDEX.md}, {@code FIELDS.md} and the context documents on first use. */
     private TurnSandboxes.Sandbox folder(TurnJwt turn, Instant deadline, TurnDocuments documents) throws IOException {
         long started = System.nanoTime();
         TurnSandboxes.Sandbox sandbox = sandboxes.acquire(attempt(turn), turn.workspaceId());
@@ -434,6 +434,7 @@ public class TurnContextFolder {
                 Map<String, byte[]> files = new LinkedHashMap<>(documents.built());
                 List<String> sections = new ArrayList<>();
                 loaders.orderedStream().forEach(loader -> sections.add(section(loader, turn)));
+                files.put(ContextFolderIndex.FIELDS_PATH, ContextFolderIndex.FIELDS);
                 files.put(
                         ContextFolderIndex.PATH,
                         ContextFolderIndex.render(files.keySet(), documents.builtAt(), sections)

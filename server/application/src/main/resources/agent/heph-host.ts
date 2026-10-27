@@ -661,23 +661,23 @@ const LINK_TOOL_WORDS = [
 		label: "Link Result",
 		noun: "result",
 		purpose:
-			"one Hephaestus practice result: a practice's verdict on one piece of their work. Use it when you discuss " +
-			"the verdict.",
+			"one observation: what a practice review recorded about one piece of their work. Use it when you " +
+			"discuss that observation.",
 	},
 	{
 		name: "link_problem",
 		label: "Link Problem",
 		noun: "problem",
 		purpose:
-			"one problem: one located problem of a NOT_MET practice result. Use it when you discuss that one problem.",
+			"one problem: one located problem of a Not met observation. Use it when you discuss that one problem.",
 	},
 	{
 		name: "show_feedback",
 		label: "Show Feedback",
 		noun: "prepared feedback",
 		purpose:
-			"one prepared piece of feedback listed for this mentor thread. Use its feedbackId when you raise " +
-			"the prepared point; the server claims its copy before any words are shown.",
+			"one prepared piece of feedback listed for this conversation. Use its feedbackId when you raise the " +
+			"prepared point.",
 	},
 ] as const satisfies readonly {
 	name: LinkToolName;
@@ -837,8 +837,7 @@ function turnTools(api: TurnApi, turnSignal: AbortSignal, contextFolder: boolean
 			label: link.label,
 			description:
 				`Give the developer your feedback about ${link.purpose} \`text\` is shown to them as part of your reply, ` +
-				"exactly where you call this, so write it to them in your own words and do not repeat it in your answer. " +
-				"The server confirms delivery only from the completed turn's actual transport receipt.",
+				"exactly where you call this, so write it to them in your own words and do not repeat it in your answer.",
 			parameters: {
 				type: "object",
 				additionalProperties: false,

@@ -7,10 +7,6 @@ import de.tum.cit.aet.hephaestus.evidence.capture.MentorContextPaths;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
 import de.tum.cit.aet.hephaestus.integration.scm.context.IssueDetailSource;
 import de.tum.cit.aet.hephaestus.integration.scm.context.MergeReadinessContentSource;
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.Locale;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
@@ -19,12 +15,10 @@ import org.junit.jupiter.api.Test;
 
 /**
  * The context paths a Heph turn reads: the fixed documents, and the item paths that their owning sources parse and a
- * {@code read} of the context folder stages on demand. The system prompt names every fixed document.
+ * {@code read} of the context folder stages on demand.
  */
 @Tag("unit")
 class MentorContextKeysTest {
-
-    private static final Path SYSTEM_PROMPT = Path.of("src", "main", "resources", "agent", "mentor", "system.md");
 
     @Test
     @DisplayName("a result detail key is one canonical lowercase id")
@@ -98,18 +92,5 @@ class MentorContextKeysTest {
                 .hasSize(14)
                 .noneMatch(key ->
                         key.substring(ContentSource.OUTPUT_PREFIX.length()).contains("/"));
-    }
-
-    @Test
-    @DisplayName("system prompt lists every mentor context file path")
-    void systemPromptListsContextBasenames() throws IOException {
-        String prompt = Files.readString(SYSTEM_PROMPT, StandardCharsets.UTF_8);
-        String perTurnInputSection =
-                prompt.substring(prompt.indexOf("## Per-turn input"), prompt.indexOf("## When to use tools"));
-
-        assertThat(MentorContextKeys.ALLOWED_OUTPUT_KEYS)
-                .allSatisfy(key -> assertThat(perTurnInputSection)
-                        .as("system prompt should document context file %s in the per-turn input list", key)
-                        .contains("`" + key + "`"));
     }
 }

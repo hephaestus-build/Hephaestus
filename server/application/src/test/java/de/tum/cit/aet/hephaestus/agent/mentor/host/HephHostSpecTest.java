@@ -41,6 +41,19 @@ class HephHostSpecTest {
                 .anyMatch(HephHostSpecTest::linked);
     }
 
+    /**
+     * Every model call of a turn sends the system prompt again. Detail that only some answers need belongs in the
+     * context folder's {@code FIELDS.md}, which Heph reads on demand. The tool descriptions are sent with every call
+     * too, and this budget does not count them.
+     */
+    @Test
+    void shouldKeepTheSystemPromptWithinItsBudgetWhenItStagesIt() {
+        byte[] prompt = HephHostSpec.stagedFiles().get(SandboxLayout.MENTOR_SYSTEM_PROMPT_PATH);
+
+        assertThat(prompt).isNotNull();
+        assertThat(prompt.length).as("system prompt bytes").isLessThanOrEqualTo(15 * 1024);
+    }
+
     @Test
     void shouldLinkThePracticeScriptToolkitAndGrantItsReadBeforeTheHostStarts() {
         String command = String.join(" ", HephHostSpec.spec().command());
