@@ -25,24 +25,27 @@ No further configuration is necessary for these tools to read everything below.
 ```mermaid
 flowchart TD
     accTitle: AI-assisted contribution workflow
-    accDescr: An agent implements and self-validates, you review the diff, land-pr opens the PR, and fix-ci and resolve-review loop back into CI and review.
+    accDescr: An agent implements and self-validates, you review the diff, land-pr opens the PR, and watch-pr hands CI failures to fix-ci and review comments to resolve-review until the PR is ready.
     B[Agent implements] --> C{format && check}
     C -->|Fails| B
     C -->|Passes| D[You read the diff]
     D -->|Not right yet| B
     D -->|Good| F([/land-pr])
-    F --> H{CI green?}
+    F --> W([/watch-pr])
+    W --> H{CI green?}
     H -->|No| I([/fix-ci])
     I -->|Fixes and pushes| H
     H -->|Yes| J{Review approved?}
     J -->|Changes requested| K([/resolve-review])
     K -->|Fixes, pushes, resolves| J
-    J -->|Approved| L[Merge]
+    J -->|Approved, threads resolved| L[Ready: a maintainer merges]
 ```
 
 `AGENTS.md` § Pull requests owns authorization.
 `/land-pr` is the normal publication workflow.
-After publication, `/fix-ci` and `/resolve-review` push fixes to the same pull request under that authorization.
+After publication, `/watch-pr` waits for CI and review.
+It hands failures to `/fix-ci` and comments to `/resolve-review`, which push fixes to the same pull request under that authorization.
+It stops when the pull request is ready, and a maintainer merges it.
 
 Read the diff yourself.
 This is the review that matters.
@@ -108,6 +111,7 @@ Do not leave the predictable conflict for later.
 | `/land-pr`        | Validate, regenerate, branch, commit, push, and open the PR              |
 | `/fix-ci`         | Read every failing check in one pass, fix in dependency order, push once |
 | `/resolve-review` | Fetch review threads, decide each, reply and resolve                     |
+| `/watch-pr`       | Watch CI and review after a push, and stop when the PR is ready          |
 
 Each lives in `.claude/skills/<name>/SKILL.md`.
 opencode [reads `.claude/skills/` alongside its own](https://opencode.ai/docs/skills/).
@@ -116,7 +120,7 @@ Thus, no skill needs a second copy for opencode.
 
 A *typed* `/name` is the exception.
 opencode resolves it only from `.opencode/commands/`.
-Each of these three commands has a file there whose entire body is `@.claude/skills/<name>/SKILL.md`.
+Each of these four commands has a file there whose entire body is `@.claude/skills/<name>/SKILL.md`.
 opencode [inlines a referenced file into the prompt](https://opencode.ai/docs/commands/).
 Thus, a pointer is sufficient.
 
@@ -126,8 +130,8 @@ It has no repository-level slash commands.
 [`~/.codex/prompts/` is personal and uncommitted](https://developers.openai.com/codex/custom-prompts).
 OpenAI's guidance is to make a shared command a skill.
 
-Thus, the four contribution skills have copies in `.agents/skills/<name>/`.
-These are the three above and `/gh-stack`.
+Thus, the five contribution skills have copies in `.agents/skills/<name>/`.
+These are the four above and `/gh-stack`.
 `gate:instructions` fails if a copy is missing or differs.
 `CODEX_SKILLS` in that script lists them.
 If Codex should have another skill, add its name and copy.
@@ -139,7 +143,8 @@ A Codex session that needs them works in `webapp/`, whose `AGENTS.md` names them
 A mirror also causes one `duplicate skill name` warning per skill in opencode's log.
 opencode reads both directories and sees the same name twice.
 
-`disable-model-invocation` makes these three typed-only in Claude Code. opencode and Codex both
+`disable-model-invocation` makes `/land-pr`, `/fix-ci`, and `/resolve-review` typed-only in Claude Code.
+`/watch-pr` is not typed-only, so the model starts it when you ask it to watch a pull request. opencode and Codex both
 ignore the field, so there they are ordinary skills the model can reach on its own.
 
 ## Instructions live in `AGENTS.md`, once

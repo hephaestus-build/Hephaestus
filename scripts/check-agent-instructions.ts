@@ -71,7 +71,7 @@ const isContributorDoc = (path: string): boolean =>
 const CODEX_SKILLS_ROOT = ".agents/skills";
 
 /**
- * The skills Codex is meant to have: the four that drive a contribution. Codex has no repo-level
+ * The skills Codex is meant to have: the five that drive a contribution. Codex has no repo-level
  * slash commands — `~/.codex/prompts/` is personal and uncommitted — so a shared workflow reaches it
  * as a skill or not at all (https://developers.openai.com/codex/custom-prompts).
  *
@@ -82,7 +82,7 @@ const CODEX_SKILLS_ROOT = ".agents/skills";
  * becoming one, which is how `/gh-stack` was lost from Codex once already. Naming a skill
  * `.claude/skills/` does not have fails too, so a rename cannot leave a dead entry behind.
  */
-export const CODEX_SKILLS = ["fix-ci", "gh-stack", "land-pr", "resolve-review"];
+export const CODEX_SKILLS = ["fix-ci", "gh-stack", "land-pr", "resolve-review", "watch-pr"];
 
 const mirrorOf = (path: string): string | undefined =>
 	path.startsWith(`${CODEX_SKILLS_ROOT}/`)

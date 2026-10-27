@@ -184,3 +184,7 @@ PAGER=cat gh pr view --json url,title -q '"PR: \(.title)\nURL: \(.url)"'
 
 Open the URL and check that every attachment renders, describes the intended state, and contains no
 sensitive or unrelated content.
+
+## 12. Hand off
+
+Hand off to `/watch-pr`, which watches the PR until it is ready to merge.

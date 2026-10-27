@@ -123,7 +123,7 @@ The SPA talks to the server only through the generated client.
   Task naming, lint configuration, and cross-platform commands: `docs/contributor/local-verification.mdx` § Repository tooling.
 
 Skills live in `.claude/skills/<name>/`.
-Codex reads only `.agents/skills/`, so the four contribution skills have byte-identical mirrors there.
+Codex reads only `.agents/skills/`, so the five contribution skills have byte-identical mirrors there.
 `docs/contributor/ai-agent-workflow.mdx` § Slash commands has the rules.
 
 | Skill | When |
@@ -133,6 +133,7 @@ Codex reads only `.agents/skills/`, so the four contribution skills have byte-id
 | `/web-design-guidelines` | UI accessibility and UX review |
 | `/react-best-practices` | Frontend performance. Read its applicability table first. |
 | `/fix-ci`, `/land-pr`, `/resolve-review`, `/gh-stack` | CI triage, opening a PR, review comments, stacked PRs |
+| `/watch-pr` | Watching a PR until it is ready to merge |
 
 ## Dev servers
 
@@ -179,12 +180,7 @@ Suites: `vp run test:webapp`, `test:agents`, and `test:server:unit`.
   `.changeset/README.md` is the contract.
 - Stacked PRs follow `CONTRIBUTING.md` § Stacked Pull Requests through `/gh-stack`. A layer that
   cannot satisfy the normal PR, release and quality requirements on its own is not a layer.
-- When you monitor a PR, poll checks and comments newer than the last push.
-  Verify each bot comment against the source.
-  Fix the real ones.
-  Dismiss the rest with a written reason.
-  If nothing is new, stay quiet.
-  When the bots are green on the latest commit, stop.
+- After you push, `/watch-pr` watches the PR until it is ready to merge.
 
 ## Plans and work artifacts
 

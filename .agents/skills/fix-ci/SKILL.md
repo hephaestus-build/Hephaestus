@@ -105,7 +105,8 @@ Server tiers: `vp run test:server:unit`, `vp run test:server:architecture`,
 git add -A
 git commit -m "fix(<scope>): resolve ci failures"
 git push
-PAGER=cat gh pr checks --watch
 ```
+
+Then hand off to `/watch-pr`, which waits for the new run.
 
 If the same check fails twice with the same diagnosis, re-read the log rather than retrying the fix.
