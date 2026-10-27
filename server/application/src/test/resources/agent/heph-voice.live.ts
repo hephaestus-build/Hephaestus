@@ -8,13 +8,18 @@ import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 
 import {
 	isRecord,
+	type LinkToolName,
 	type SandboxExecAnswer,
 	type SandboxExecRequest,
 	type SandboxReadAnswer,
 	type SandboxReadRequest,
 	type TurnContext,
 } from "../../../main/resources/agent/heph-host-protocol.ts";
-import { type ModelFactory, proxyModels } from "../../../main/resources/agent/heph-host.ts";
+import {
+	type LinkAnswer,
+	type ModelFactory,
+	proxyModels,
+} from "../../../main/resources/agent/heph-host.ts";
 import { AGENT_DIR, contextOf, fakeWorker, ran, runTurn } from "./heph-host-worker.ts";
 
 const { env } = process;
@@ -408,13 +413,20 @@ const NO_FOLDER =
 const LINK_TOOLS: ReadonlySet<string> = new Set(["link_result", "link_problem", "show_feedback"]);
 
 interface Reply {
-	/** What the developer reads: the turn's text and the `text` of each feedback it showed. */
+	/** What the developer reads: the turn's text and the `text` of each feedback the worker admitted. */
 	text: string;
 	outputTokens: number;
 	words: number;
 }
 
 function replyOf(entries: readonly SessionEntry[]): Reply {
+	const refused = new Set(
+		entries.flatMap((entry) =>
+			entry.type === "message" && entry.message.role === "toolResult" && entry.message.isError
+				? [entry.message.toolCallId]
+				: [],
+		),
+	);
 	const shown: string[] = [];
 	let outputTokens = 0;
 	for (const entry of entries) {
@@ -432,6 +444,7 @@ function replyOf(entries: readonly SessionEntry[]): Reply {
 			} else if (
 				block.type === "toolCall" &&
 				LINK_TOOLS.has(block.name) &&
+				!refused.has(block.id) &&
 				typeof block.arguments.text === "string"
 			) {
 				shown.push(block.arguments.text);
@@ -449,8 +462,9 @@ async function ask(
 	name: string,
 	context: TurnContext,
 	folder = RUNNING,
-): Promise<Reply & { looked: string[] }> {
-	const worker = fakeWorker(context, reader(folder));
+	link?: (tool: LinkToolName, id: string) => Promise<LinkAnswer>,
+): Promise<Reply & { looked: string[]; linked: [LinkToolName, string][] }> {
+	const worker = fakeWorker(context, reader(folder), undefined, link);
 	const api = worker.api();
 	const end = await runTurn(
 		{ ...worker, api: () => ({ ...api, exec: executor(folder) }) },
@@ -469,7 +483,7 @@ async function ask(
 		`eval ${name} outputTokens=${reply.outputTokens} words=${reply.words} fieldsRead=${fieldsRead}`,
 	);
 	assert.notEqual(reply.text, "", "the turn answered");
-	return { ...reply, looked };
+	return { ...reply, looked, linked: worker.linked };
 }
 
 function turn(prompt: string, contextFolder: boolean, extra = ""): TurnContext {
@@ -744,6 +758,72 @@ void test(
 				`states a check result it did not look up: ${reply.text}`,
 			);
 		}
+		assertNoInternalTerm(TERMS, reply.text);
+	},
+);
+
+const FEEDBACK_ID = "c7e19a42-5d80-4b3f-9a16-2e4f8b0d7c35";
+const PREPARED_PATH = "inputs/context/prepared_conversation_feedback.json";
+const RESULTS_LINE =
+	"- `inputs/context/results_history.json`: the observations of those practice reviews: what each recorded about " +
+	"one piece of their work";
+
+/**
+ * The completed review of #46 and one piece of conversation feedback on it, as
+ * PreparedConversationFeedbackContentSource lists it.
+ */
+const PREPARED: Folder = {
+	...folderOf([{ row: OBSERVATION, detail: OBSERVATION_DETAIL }], COMPLETE_ATTEMPT),
+	"INDEX.md": INDEX.replace(
+		RESULTS_LINE,
+		`${RESULTS_LINE}\n- \`${PREPARED_PATH}\`: practice feedback queued to raise in this conversation`,
+	),
+	[PREPARED_PATH]: json({
+		readAt: "Tue 2026-10-27 09:12 +01:00",
+		_meta: META,
+		preparedConversationFeedback: [
+			{
+				feedbackId: FEEDBACK_ID,
+				body:
+					"The description of pull request #46 says *Closes #3*, but #3 asks for paging the audit log. " +
+					"Merging would close the wrong issue: link the issue this change resolves.",
+				practiceSlugs: ["links-the-change-to-its-issue"],
+				resultIds: ["0a9d3e61-c4b7-4f28-8e05-b6f1d2a7c943"],
+				problemIds: ["f3b6c812-7e4a-4d19-a0c5-9d2e81b4f076"],
+			},
+		],
+		waiting: 1,
+	}),
+};
+
+const WAITING =
+	`Prepared feedback waiting for them in this conversation: 1, among them ${FEEDBACK_ID} ` +
+	`(links-the-change-to-its-issue). Read ${PREPARED_PATH} before you raise one.\n` +
+	"Start with `read INDEX.md`: it lists what this turn can read.\n";
+
+void test(
+	"E15: Heph tries feedback it may not show once and says nothing about why",
+	{ skip, timeout: TURN_MS },
+	async () => {
+		const reply = await ask(
+			"e15-refused-feedback",
+			turn("Anything new for me?", true, WAITING),
+			PREPARED,
+			async (tool) =>
+				tool === "show_feedback"
+					? {
+							admitted: false,
+							reason: "it is not conversation feedback that is ready for the developer now",
+						}
+					: { admitted: true },
+		);
+		const shows = reply.linked.filter(([tool]) => tool === "show_feedback");
+		assert.ok(shows.length <= 1, `called show_feedback ${shows.length} times: ${reply.text}`);
+		assert.doesNotMatch(
+			reply.text,
+			/\b(?:queued|release[ds]?|held back|withheld|refused)\b|can(?:'|’)?t (?:release|show)/iu,
+			`tells them about feedback it could not show: ${reply.text}`,
+		);
 		assertNoInternalTerm(TERMS, reply.text);
 	},
 );
