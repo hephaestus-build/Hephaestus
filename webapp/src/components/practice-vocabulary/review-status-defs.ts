@@ -13,7 +13,7 @@ import {
 
 import type { ReviewJob, ReviewPractice, ReviewRef, ReviewSummary } from "@/api/types.gen";
 
-import type { StatusDefs } from "@/components/common/status-def";
+import type { StatusDef, StatusDefs } from "@/components/common/status-def";
 
 export type ReviewStatus = ReviewRef["status"];
 export type ReviewStopReason = NonNullable<ReviewSummary["stopReason"]>;
@@ -114,6 +114,28 @@ export const PARTIAL_REVIEW_SCOPE: Record<ReviewRef["kind"], string> = {
 	ITEM: "Its observations and feedback cover only the practices it reviewed.",
 	SCAN: "Its observations cover only the work it reached.",
 };
+
+/**
+ * Beside a running review whose every active job waits in the queue. A review counts as running from the moment its
+ * job is queued; its job's own word, "Queued", says that no attempt runs yet.
+ */
+export const REVIEW_JOB_QUEUED_DEF: StatusDef = {
+	label: "Job queued",
+	icon: ClockIcon,
+	badgeVariant: "outline",
+	description:
+		"No attempt runs now. Its job waits for a free worker, for room for its sandbox, or for its next retry.",
+};
+
+export function reviewJobQueued(
+	review: Pick<ReviewSummary, "status" | "activeJobCount" | "queuedJobCount">,
+): boolean {
+	return (
+		review.status === "RUNNING" &&
+		review.activeJobCount > 0 &&
+		review.queuedJobCount === review.activeJobCount
+	);
+}
 
 export function isActiveReview(status: ReviewStatus): boolean {
 	return status === "QUEUED" || status === "RUNNING";

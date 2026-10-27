@@ -161,6 +161,9 @@ class ReviewSummaryControllerIntegrationTest extends BaseIntegrationTest {
             assertThat(summary.results().met()).isEqualTo(met ? 1 : 0);
             assertThat(summary.results().notMet()).isEqualTo(met ? 0 : 1);
             assertThat(summary.jobCount()).isEqualTo(1);
+            assertThat(summary.queuedJobCount())
+                    .as("its job ran, so it waits for nothing")
+                    .isZero();
             assertThat(summary.feedback().delivered()).isOne();
             var event = eventOfReview.get(result.getReviewId());
             if (event == null) {
@@ -297,6 +300,32 @@ class ReviewSummaryControllerIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldCountTheQueuedJobsOfAReviewThatWaitsForAWorker() {
+        var result = data.result(scenario, ResultOutcome.MET, Instant.now());
+        data.job(result);
+        jdbc.sql("UPDATE review SET status='RUNNING',completed_at=NULL WHERE workspace_id=:ws AND id=:id")
+                .param("ws", result.getWorkspaceId())
+                .param("id", result.getReviewId())
+                .update();
+        jdbc.sql("UPDATE review_job SET status='QUEUED',processing_status='NONE',completed_at=NULL"
+                        + " WHERE workspace_id=:ws AND review_id=:review")
+                .param("ws", result.getWorkspaceId())
+                .param("review", result.getReviewId())
+                .update();
+
+        get("/practices/reviews/" + result.getReviewId())
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.status")
+                .isEqualTo("RUNNING")
+                .jsonPath("$.activeJobCount")
+                .isEqualTo(1)
+                .jsonPath("$.queuedJobCount")
+                .isEqualTo(1);
+    }
+
+    @Test
     void foreignReviewIsNotFound() {
         var r = data.result(data.scenario(), ResultOutcome.MET, Instant.now());
         get("/practices/reviews/" + r.getReviewId()).expectStatus().isNotFound().expectBody(Void.class);
@@ -321,6 +350,8 @@ class ReviewSummaryControllerIntegrationTest extends BaseIntegrationTest {
                 .jsonPath("$.content[0].practices[0].results.notMet")
                 .isEqualTo(1)
                 .jsonPath("$.content[0].jobCount")
+                .isEqualTo(0)
+                .jsonPath("$.content[0].queuedJobCount")
                 .isEqualTo(0);
     }
 

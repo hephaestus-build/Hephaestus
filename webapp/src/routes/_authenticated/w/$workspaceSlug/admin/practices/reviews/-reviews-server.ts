@@ -544,6 +544,7 @@ function reviewDetailHandlers() {
 					status: active ? "CANCELLED" : review.status,
 					stopReason: active ? "CANCELLED_BY_ADMIN" : review.stopReason,
 					activeJobCount: 0,
+					queuedJobCount: 0,
 				},
 				{ status: active ? 202 : 200 },
 			);

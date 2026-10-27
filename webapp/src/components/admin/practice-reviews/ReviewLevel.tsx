@@ -30,12 +30,14 @@ import { REVIEW_ORIGIN_DEFS } from "@/components/practice-vocabulary/review-orig
 import {
 	isActiveReview,
 	PARTIAL_REVIEW_SCOPE,
-	reviewReasonSentence,
 	REVIEW_JOB_PROCESSING_DEFS,
 	REVIEW_JOB_STATUS_DEFS,
 	REVIEW_PRACTICE_STATUS_DEFS,
 	REVIEW_STATUS_DEFS,
 	REVIEW_STOP_REASON_SENTENCES,
+	reviewReasonSentence,
+	REVIEW_JOB_QUEUED_DEF,
+	reviewJobQueued,
 } from "@/components/practice-vocabulary/review-status-defs";
 import { buttonVariants } from "@/components/ui/button";
 import { DrawerBody, DrawerFooter } from "@/components/ui/drawer";
@@ -258,6 +260,7 @@ function ReviewStatusLine({ review }: { review: ReviewDetail }) {
 	return (
 		<SheetStatusLine
 			status={<ReviewStatusMark def={REVIEW_STATUS_DEFS[review.status]} />}
+			flag={reviewJobQueued(review) ? <StatusBadge def={REVIEW_JOB_QUEUED_DEF} /> : undefined}
 			figure={elapsed === undefined ? undefined : `${elapsed} from request`}
 			at={at}
 		/>

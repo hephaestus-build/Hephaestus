@@ -144,6 +144,15 @@ export const StillRunning: Story = {
 	},
 };
 
+/** A running review whose job waits in the queue carries the job's state, so the list does not read as running. */
+export const JobQueued: Story = {
+	args: { review: { ...running, activeJobCount: 1, queuedJobCount: 1 } },
+	play: async ({ canvas }) => {
+		canvas.getByText("Running");
+		canvas.getByText("Job queued");
+	},
+};
+
 export const Failed: Story = {
 	args: { review: failed },
 	play: async ({ canvas }) => {

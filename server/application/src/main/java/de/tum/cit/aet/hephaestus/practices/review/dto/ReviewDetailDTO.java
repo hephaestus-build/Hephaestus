@@ -50,6 +50,12 @@ public record ReviewDetailDTO(
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) int jobCount,
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) int activeJobCount,
 
+        @Schema(
+                requiredMode = Schema.RequiredMode.REQUIRED,
+                description =
+                        "Active jobs that wait in the queue: for a worker, for sandbox room or for their next retry")
+        int queuedJobCount,
+
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) @Nullable
         String model,
 

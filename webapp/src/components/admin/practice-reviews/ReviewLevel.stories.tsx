@@ -384,6 +384,30 @@ export const Queued: Story = {
 	},
 };
 
+/** A running review whose job waits for a worker or for sandbox room says so beside its status. */
+export const JobQueued: Story = {
+	args: {
+		review: ready({
+			...reviewDetailRunning,
+			activeJobCount: 1,
+			queuedJobCount: 1,
+			runtime: {
+				jobs: (reviewDetailRunning.runtime?.jobs ?? []).map((job) => ({
+					...job,
+					status: "QUEUED" as const,
+					startedAt: null,
+				})),
+			},
+		}),
+	},
+	play: async () => {
+		const panelElement = await settledDrawerPanel();
+		await expect(panelElement.querySelector("[data-sheet-status]")).toHaveTextContent(
+			/Running.*Job queued/u,
+		);
+	},
+};
+
 export const BackingOff: Story = {
 	args: { review: ready(reviewDetailBackingOff) },
 	play: async () => {
@@ -429,6 +453,7 @@ function continuedReview(status: ReviewDetail["status"], job: Partial<ReviewJob>
 		orderedAt: REQUESTED,
 		completedAt: done ? afterRequest(1117) : null,
 		activeJobCount: done ? 0 : 1,
+		queuedJobCount: 0,
 		runtime: { jobs: [latest] },
 		stageTiming: [
 			{

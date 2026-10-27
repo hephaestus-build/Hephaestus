@@ -4225,6 +4225,7 @@ export const zReviewSummary = z.object({
         'BACKFILL'
     ]),
     practices: z.array(zReviewPractice),
+    queuedJobCount: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
     requestedBy: zAccountRef.nullable(),
     results: zReviewResultCounts,
     startedBy: zItemEvent.nullable(),
@@ -4346,6 +4347,7 @@ export const zReviewDetail = z.object({
         'BACKFILL'
     ]),
     practices: z.array(zReviewPractice),
+    queuedJobCount: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
     requestedBy: zAccountRef.nullable(),
     results: zReviewResultCounts,
     runtime: zReviewRuntime.nullable(),

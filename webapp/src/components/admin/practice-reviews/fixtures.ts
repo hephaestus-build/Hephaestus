@@ -2422,6 +2422,7 @@ function toReview(review: ReviewSpec): ReviewSummary {
 		feedback: feedbackCounts(review.feedback.map((item) => item.state)),
 		jobCount: review.jobs ?? 1,
 		activeJobCount: review.status === "RUNNING" || review.status === "QUEUED" ? 1 : 0,
+		queuedJobCount: 0,
 		model: MODEL,
 	};
 }
@@ -2587,6 +2588,7 @@ export const reviewDetailQueued: ReviewDetail = standaloneReview(
 		orderedAt: minutesBefore(2),
 		completedAt: null,
 		activeJobCount: 1,
+		queuedJobCount: 0,
 	},
 	(summary) => jobsOf(summary, 1),
 );
@@ -2599,6 +2601,7 @@ export const reviewDetailBackingOff: ReviewDetail = standaloneReview(
 		orderedAt: minutesBefore(20),
 		completedAt: null,
 		activeJobCount: 1,
+		queuedJobCount: 0,
 	},
 	(summary) => {
 		const [first] = jobsOf({ ...summary, status: "FAILED" }, 1);

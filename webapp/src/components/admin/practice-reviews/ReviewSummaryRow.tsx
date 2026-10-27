@@ -10,6 +10,8 @@ import { REVIEW_ORIGIN_DEFS } from "@/components/practice-vocabulary/review-orig
 import {
 	REVIEW_STATUS_DEFS,
 	REVIEW_STOP_REASON_SENTENCES,
+	REVIEW_JOB_QUEUED_DEF,
+	reviewJobQueued,
 } from "@/components/practice-vocabulary/review-status-defs";
 import { ReviewStatusBadge } from "@/components/practice-vocabulary/ReviewStatusBadge";
 import { TableCell } from "@/components/ui/table";
@@ -71,10 +73,13 @@ export function ReviewSummaryRow({ review, open = false, request }: ReviewSummar
 	);
 }
 
-export function reviewMarkers(review: Pick<ReviewSummary, "status">): StatusDef[] {
-	return review.status === "FAILED" || review.status === "PARTIAL"
-		? [REVIEW_STATUS_DEFS[review.status]]
-		: [];
+export function reviewMarkers(
+	review: Pick<ReviewSummary, "status" | "activeJobCount" | "queuedJobCount">,
+): StatusDef[] {
+	if (review.status === "FAILED" || review.status === "PARTIAL") {
+		return [REVIEW_STATUS_DEFS[review.status]];
+	}
+	return reviewJobQueued(review) ? [REVIEW_JOB_QUEUED_DEF] : [];
 }
 
 function ReviewMarkers({ review }: { review: ReviewSummary }) {

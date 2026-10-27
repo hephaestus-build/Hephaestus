@@ -4688,6 +4688,10 @@ export type ReviewDetail = {
     orderedAt: string;
     origin: 'EVENT' | 'REQUEST' | 'SCHEDULE' | 'BACKFILL';
     practices: Array<ReviewPractice>;
+    /**
+     * Active jobs that wait in the queue: for a worker, for sandbox room or for their next retry
+     */
+    queuedJobCount: number;
     requestedBy: AccountRef | null;
     results: ReviewResultCounts;
     runtime: ReviewRuntime | null;
@@ -5087,6 +5091,10 @@ export type ReviewSummary = {
     orderedAt: string;
     origin: 'EVENT' | 'REQUEST' | 'SCHEDULE' | 'BACKFILL';
     practices: Array<ReviewPractice>;
+    /**
+     * Active jobs that wait in the queue: for a worker, for sandbox room or for their next retry
+     */
+    queuedJobCount: number;
     requestedBy: AccountRef | null;
     results: ReviewResultCounts;
     startedBy: ItemEvent | null;
