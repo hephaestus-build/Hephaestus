@@ -271,7 +271,7 @@ A clean restart keeps them, and `SELECT pg_stat_statements_reset()` clears them.
 | ------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
 | `@timestamp`                                      | UTC event time, in ISO-8601 format                                                               |
 | `log.level`, `log.logger`, `message`              | Severity, originating logger, and human-readable event description                               |
-| `service.name`, `service.version`                 | `Hephaestus` and the running version, the same values that traces carry                          |
+| `service.name`, `service.version`                 | `Hephaestus` and the release that the deployment names in `APP_VERSION`, the same values that traces carry |
 | `service.environment`                             | `DEPLOYMENT_ENVIRONMENT`                                                                         |
 | `service.node.name`                               | The container ID, the same value as the `X-Hephaestus-Replica` response header                   |
 | `runtime.role`                                    | `server`, `worker` or `webhook`, or `all` for a local process that runs every role               |
@@ -285,6 +285,7 @@ A clean restart keeps them, and `SELECT pg_stat_statements_reset()` clears them.
 
 Spring Boot writes a dotted name such as `log.level` as nested JSON objects.
 Event fields and thread-scoped values sit in the `context` object, so they cannot replace a field of the record.
+When an event names a field that the thread-scoped context also holds, for example `job.id`, the record carries the event's value once.
 This document names them without the `context.` prefix below.
 Read records with a JSON tool, not by text position.
 Event-specific numbers and booleans remain JSON numbers and booleans.
@@ -367,20 +368,21 @@ Lifecycle records contain `event.name`, `job.id`, `workspace.id`, `job.type`, `j
 | -------------------- | ----------------------------- | ----------- | ----------------------------------------------- | ----------------------------- |
 | `agent.job.queued`   | A new job transaction commits | `queue`     | `queued`                                        | `0`                           |
 | `agent.job.started`  | A worker starts a claimed job | `queue`     | `started`                                       | Creation to start             |
-| `agent.job.delivery` | A delivery attempt finishes   | `delivery`  | `delivered`, `failed`                           | Delivery attempt              |
 | `agent.job.terminal` | A terminal transition commits | `total`     | `completed`, `failed`, `timed_out`, `cancelled` | Creation to terminal emission |
 
-Delivery is optional. Jobs that do not complete successfully may have no delivery event.
+An attempt that fails before its sandbox starts logs `agent.job.preparation_failed` at `WARN`.
+It has no phase, outcome or duration.
+It names the failed stage (`job.preparation.stage`), the kind and reason of the failure (`job.preparation.kind`, `job.preparation.reason`), the exception classes (`exception.type`, `exception.cause.types`) and what the job does next (`job.result`).
 
 ## Agent-job metrics
 
 | Prometheus name               | Type      | Labels    | Meaning                                                         |
 | ----------------------------- | --------- | --------- | --------------------------------------------------------------- |
 | `agent_job_total`             | Counter   | `outcome` | Committed terminal transitions                                  |
-| `agent_job_duration_seconds`  | Histogram | `phase`   | Queue, execution-attempt, delivery-attempt, and total durations |
+| `agent_job_duration_seconds`  | Histogram | `phase`   | Queue, execution-attempt, and total durations                   |
 
 `outcome` is one of `completed`, `failed`, `timed_out`, or `cancelled`. `phase` is one of `queue`,
-`execution`, `delivery`, or `total`. Identifiers, model and provider names, worker IDs, and exception text are not
+`execution`, or `total`. Identifiers, model and provider names, worker IDs, and exception text are not
 labels. See [Practice Review Operations](./practice-review-operations.mdx) for queue health and the
 existing execution metric.
 
@@ -547,7 +549,7 @@ A trace ID proves that correlation context was present, not that a collector rec
 ## HTTP route metrics
 
 `http.server.requests` uses route templates, not individual workspace slugs, message IDs, or query
-strings. Its URI-tag budget is 256: enough for the supported route inventory and the framework's
+strings. Its URI-tag budget is 320: enough for the supported route inventory and the framework's
 bounded unmatched-request and management tags. A new URI beyond the budget is refused rather than
 creating unbounded time series. A limit warning therefore means metrics are incomplete and needs
 investigation, not a logging-level change.

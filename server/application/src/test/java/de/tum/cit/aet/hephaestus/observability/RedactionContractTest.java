@@ -16,7 +16,6 @@ import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.sql.SQLException;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
@@ -30,12 +29,9 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.slf4j.LoggerFactory;
 import org.slf4j.event.KeyValuePair;
 import org.springframework.beans.factory.BeanCreationException;
-import org.springframework.boot.env.YamlPropertySourceLoader;
-import org.springframework.boot.logging.logback.StructuredLogEncoder;
 import org.springframework.core.env.Environment;
-import org.springframework.core.env.PropertySource;
+import org.springframework.core.env.MapPropertySource;
 import org.springframework.core.env.StandardEnvironment;
-import org.springframework.core.io.ClassPathResource;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -240,6 +236,64 @@ class RedactionContractTest {
         assertEquals("review", text(json, "context.job.type"));
     }
 
+    /** Boot's own context pairs refused a name that the MDC and the event both carry, and the event was lost. */
+    @Test
+    void shouldKeepAnEventThatNamesAnMdcKeyAgainWithTheEventsValue() throws IOException {
+        String line = encode(event -> {
+            event.setMDCPropertyMap(Map.of("job.id", "from-mdc", "workspace.id", "42", "agent", "scope"));
+            event.addKeyValuePair(new KeyValuePair("event.name", "agent.job.started"));
+            event.addKeyValuePair(new KeyValuePair("job.id", "from-event"));
+            event.addKeyValuePair(new KeyValuePair("workspace.id", 42L));
+            event.addKeyValuePair(new KeyValuePair("agent.jobType", "scm.pull_request"));
+            event.addKeyValuePair(new KeyValuePair("review.id", null));
+        });
+        JsonNode json = new ObjectMapper().readTree(line);
+        assertEquals("agent.job.started", text(json, "context.event.name"));
+        assertEquals("from-event", text(json, "context.job.id"));
+        JsonNode workspace = node(json, "context.workspace.id");
+        assertTrue(workspace != null && workspace.isNumber(), line);
+        assertEquals("scm.pull_request", text(json, "context.agent.jobType"));
+        assertNull(node(json, "context.review"), line);
+    }
+
+    @Test
+    void shouldOmitTheContextObjectOfAnEventWithoutContext() throws IOException {
+        assertNull(node(new ObjectMapper().readTree(encode(event -> event.setMessage("ready"))), "context"));
+    }
+
+    /**
+     * Logging starts while SpringApplication ranks its {@code applicationInfo} source, the JAR manifest's version, above
+     * application.yml; it moves that source to the end only after the environment-prepared listeners ran.
+     */
+    @Test
+    void shouldNameTheDeployedReleaseNotTheBuildVersion() throws IOException {
+        StandardEnvironment environment = shippedEnvironment("application.yml", -1);
+        environment
+                .getPropertySources()
+                .addFirst(new MapPropertySource(
+                        "applicationInfo", Map.of("spring.application.version", "0.0.0-development")));
+        environment.getPropertySources().addLast(new MapPropertySource("deployment", Map.of("APP_VERSION", "1.2.3")));
+
+        JsonNode json = new ObjectMapper().readTree(encode(environment, event -> event.setMessage("ready")));
+
+        assertEquals("1.2.3", text(json, "service.version"));
+    }
+
+    /** A local or specs run has no APP_VERSION: the record names the build version, as before. */
+    @Test
+    void shouldNameTheBuildVersionWithoutADeployedRelease() throws IOException {
+        StandardEnvironment environment = shippedEnvironment("application.yml", -1);
+        environment.getPropertySources().remove(StandardEnvironment.SYSTEM_ENVIRONMENT_PROPERTY_SOURCE_NAME);
+        environment
+                .getPropertySources()
+                .addFirst(
+                        new MapPropertySource("applicationInfo", Map.of("spring.application.version", "9.9.9-build")));
+
+        JsonNode json = new ObjectMapper().readTree(encode(environment, event -> event.setMessage("ready")));
+
+        assertEquals("9.9.9-build", text(json, "service.version"));
+    }
+
     @ParameterizedTest
     @CsvSource({
         "application.yml, -1, server",
@@ -402,43 +456,17 @@ class RedactionContractTest {
     }
 
     private static String encode(Environment environment, Consumer<LoggingEvent> configure) {
-        LoggerContext context = new LoggerContext();
-        context.setMDCAdapter(((LoggerContext) LoggerFactory.getILoggerFactory()).getMDCAdapter());
-        context.putObject(Environment.class.getName(), environment);
-        StructuredLogEncoder encoder = new StructuredLogEncoder();
-        encoder.setContext(context);
-        encoder.setFormat("ecs");
-        encoder.start();
-        try {
-            LoggingEvent event = new LoggingEvent();
-            event.setLoggerName(RedactionContractTest.class.getName());
-            event.setLoggerContext(context);
-            event.setInstant(Instant.parse("2026-09-10T10:11:12.123Z"));
-            configure.accept(event);
-            if (event.getLevel() == null) event.setLevel(Level.INFO);
-            return new String(encoder.encode(event), StandardCharsets.UTF_8);
-        } finally {
-            encoder.stop();
-            context.stop();
-        }
+        LoggingEvent event = new LoggingEvent();
+        event.setLoggerName(RedactionContractTest.class.getName());
+        event.setLoggerContext((LoggerContext) LoggerFactory.getILoggerFactory());
+        event.setInstant(Instant.parse("2026-09-10T10:11:12.123Z"));
+        configure.accept(event);
+        if (event.getLevel() == null) event.setLevel(Level.INFO);
+        return ShippedLogEncoder.encode(environment, event);
     }
 
-    /**
-     * The base document of application.yml, with one more document on top: {@code -1} adds none, any other index adds
-     * that document of {@code file}, as its profile would.
-     */
-    private static Environment shippedEnvironment(String file, int document) throws IOException {
-        YamlPropertySourceLoader loader = new YamlPropertySourceLoader();
-        List<PropertySource<?>> sources =
-                new ArrayList<>(loader.load("application.yml", new ClassPathResource("application.yml")));
-        StandardEnvironment environment = new StandardEnvironment();
-        environment.getPropertySources().addFirst(sources.getFirst());
-        if (document >= 0) {
-            environment
-                    .getPropertySources()
-                    .addFirst(loader.load(file, new ClassPathResource(file)).get(document));
-        }
-        return environment;
+    private static StandardEnvironment shippedEnvironment(String file, int document) {
+        return ShippedLogEncoder.environment(file, document);
     }
 
     /** Boot's ECS writer nests dotted names; read either shape. */
