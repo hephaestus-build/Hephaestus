@@ -27,6 +27,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -151,6 +152,14 @@ class MentorTurnCompletionIntegrationTest extends AbstractWorkspaceIntegrationTe
 
     private void databaseBack(UUID feedbackId) {
         jdbc.update("DELETE FROM test_receipt_outage WHERE feedback_id=?", feedbackId);
+    }
+
+    /** The outage is schema; schema left behind leaks into every later class that reads the catalog. */
+    @AfterEach
+    void removeOutage() {
+        jdbc.execute("DROP TRIGGER IF EXISTS test_receipt_outage ON feedback_copy");
+        jdbc.execute("DROP FUNCTION IF EXISTS test_receipt_outage()");
+        jdbc.execute("DROP TABLE IF EXISTS test_receipt_outage");
     }
 
     @Test
