@@ -4,12 +4,10 @@ description: See what needs you, what you did over a time range, and what your w
 page_type: feature
 ---
 
-Use Activity to find work that needs you or prepare a record of your recent work.
 Activity counts and lists your team’s work in GitHub or GitLab.
+Use it to find work that needs you, or to prepare a record of your recent work.
 
-1. Under **Dashboards**, select **Activity**.
-2. For work that needs you now, read **Needs you**.
-3. For a standup or work record, choose a time range and use [Copy as Markdown](#copy-as-markdown).
+## The two activity pages
 
 The sidebar has two pages under **Dashboards**:
 
@@ -23,7 +21,7 @@ On GitLab, the pages say *merge request* where this guide says *pull request*.
 They use GitLab’s own icons and colors.
 
 Pull requests and issues open on GitHub or GitLab, where you act on them.
-Activity never changes that work.
+Activity only reads that work.
 The only thing you can start here is a practice review of your own work, with [Request review](#request-a-review).
 
 ## Needs you
@@ -40,8 +38,7 @@ Each pull request shows its reviewers as faces.
 A mark on each face shows the review state: approved, changes requested, commented, or still requested.
 When no work waits for you, the section says **Nothing needs you**.
 
-Below that, **Waiting on others** starts collapsed.
-It holds pull requests where someone else must act next:
+**Waiting on others** holds pull requests where someone else must act next:
 
 - **Waiting for review**: your pull requests that reviewers have not reviewed yet.
 - **Drafts**: your draft pull requests.
@@ -49,57 +46,44 @@ It holds pull requests where someone else must act next:
 - **Requested from your team**: requests for review from one of your teams, but not you.
 - **Reviewed by you**: merge requests that still list you after you approved them or requested changes.
 
-A request is **Covered by other reviewers** in two cases.
+**Assigned issues** lists open issues assigned to you.
+Each list includes only the most recently updated work.
+When more work exists, a line below the list states how many it shows.
+
+### Covered by other reviewers
+
+A request is covered in two cases.
 Another reviewer requested changes, so the author acts first.
 Or another reviewer approved it, and GitHub or GitLab counts the pull request as approved.
 Your own review never covers your request.
 If the author asks you again, it stays under **Review requested** until another reviewer settles it.
-
-On GitHub, and GitLab before 16.11, your earlier approval still counts toward the pull request’s decision.
-On GitLab 16.11 and later, a new request for your review removes that approval.
-Without a decision, only a request for changes covers a pull request.
-GitHub gives no decision where a branch needs no review.
-GitLab gives none until Hephaestus reads the merge request’s approvals.
 The request returns to **Review requested** when the covering approval or request for changes no longer stands.
 
-**Requested from your team** names the team, such as a request through the payments team.
+### Requested from your team
+
+The group names the team, such as a request through the payments team.
 Someone on the team handles it, so it never counts as your request.
 A request that also asks you appears under **Review requested**.
 The group excludes work you opened, drafts, and work you already approved or requested changes on.
 A review with comments only keeps it listed.
 Only GitHub has team reviewers, so GitLab workspaces never show this group.
 
-GitLab keeps a reviewer listed after their decision. That is why **Reviewed by you** exists.
-A review with comments only leaves the request under **Review requested**.
-A new request from the author moves it back to **Review requested** automatically.
-On GitLab before 18.6, this may wait until Hephaestus next reads the merge request.
+### GitHub and GitLab rules
 
-To see these requests, open **Waiting on others**.
-It closes again when you leave the page.
+These rules decide whether a request is **Covered by other reviewers**:
 
-**Assigned issues** lists open issues assigned to you.
-Each list includes only the most recently updated work.
-When more work exists, a line below the list states how many it shows.
+- On GitHub, and GitLab before 16.11, your earlier approval still counts toward the pull request’s decision.
+- On GitLab 16.11 and later, a new request for your review removes that approval.
+- Without a decision, only a request for changes covers a pull request.
+- GitHub gives no decision where a branch needs no review. GitLab gives none until Hephaestus reads the merge request’s approvals.
 
-Requests for changes on merge requests require GitLab Premium.
-Without it, GitLab work never shows changes requested, and requests for changes do not count.
+These rules apply to GitLab reviews:
 
-### Request a review
-
-In a workspace with practice reviews, your open pull requests and assigned issues have **Request review**, in any group.
-It requests an immediate review against the workspace’s practices.
-A pull request that only asks for your review has no button, because it is someone else’s work.
-While Hephaestus receives the request, the button reads **Requesting review…**.
-A message then states that the review started or explains why it did not.
-
-After the review records an observation about your work, it appears under [Reviews of your work](./practice-profile.mdx#reviews-of-your-work).
-[Ask for a review](./ai-code-review#request-another-review) explains who may ask and how often.
+- GitLab keeps a reviewer listed after their decision. That is why **Reviewed by you** exists. A review with comments only leaves the request under **Review requested**.
+- A new request from the author moves a merge request from **Reviewed by you** back to **Review requested** automatically. On GitLab before 18.6, this may wait until Hephaestus next reads the merge request.
+- Requests for changes on merge requests require GitLab Premium. Without it, GitLab work never shows changes requested, and requests for changes do not count.
 
 ## Your work over a time range
-
-1. Choose the last 30 days, 90 days, or 12 months, or **All time**.
-   For other days, select **Custom range**, select the first and the last day, and then select **Apply**.
-2. Open a tile to see its work in detail.
 
 The page shows one tile for each kind of work:
 
@@ -115,7 +99,7 @@ For example, *4 more than the previous 30 days*.
 **All time** has no previous period, so it shows no comparison.
 Bars then show the number for each week of the range.
 A week starts on Monday in UTC.
-Your custom range still counts only work within the local days you selected.
+A custom range still counts only work within the local days you selected.
 
 Every week has a faint track, so a week without work reads as zero.
 The busiest bar shows its number.
@@ -123,28 +107,21 @@ Each tile has its own scale, so you can compare bars within one tile but not acr
 The first and last week can cover only part of a week.
 A tile with no work in the range does not open.
 
-Hover over a bar to see the days it covers.
-
-The detail shows the total, the average per week, the busiest week, and the comparison with the previous period.
+The detail of a tile shows the total, the average per week, the busiest week, and the comparison with the previous period.
 It then shows a row of bars for each kind of work.
 For reviews, these are approved, changes requested, and commented.
 Rows share one scale, so their heights are comparable.
 The number above each row is the maximum value on its scale.
-**Show as table** lists the same numbers for each week.
 
 When your work is in more than one repository, **Repositories** shows your counts in each one.
 
-When you change the range, the previous figures stay visible without their colors until the new figures arrive.
-If this takes more than a moment, **Updating…** appears beside the range.
+### Who receives a count
 
-These criteria determine who receives a count:
+- A merge counts for the pull request’s author, regardless of who selected the button. A close without a merge also counts for the author. A pull request with an unknown author counts for nobody.
+- A closed issue counts for the issue’s author, regardless of who closed it.
+- A review of your own pull request does not count. A review concerns another person’s work. Your comments on your own pull request do count as comments.
+- Bots do not count.
 
-- **A merge counts for the pull request’s author**, regardless of who selected the button. A close without a merge also counts for the author. A pull request with an unknown author counts for nobody.
-- **A closed issue counts for the issue’s author**, regardless of who closed it.
-- **A review of your own pull request does not count.** A review concerns another person’s work. Your comments on your own pull request do count as comments.
-- **Bots do not count.**
-
-A count states how much happened, not how good the work was.
 Planning, pairing, and help in chat do not appear here.
 
 ## Timeline
@@ -154,21 +131,8 @@ Each pull request or issue has one row.
 The row shows its events, such as *Merged*, *Approved*, *Commented*, or your number of comments.
 Forty comments on one pull request produce one row with *40*, not forty rows.
 Older work loads as you scroll down.
-You can also select **Show earlier activity**.
 
 Timeline counts and tile counts follow the same criteria, so the rows for a range add up to its tiles.
-If GitHub or GitLab removes a pull request or issue, its row stays without a link.
-This keeps the counts accurate.
-
-### Copy as Markdown
-
-**Copy as Markdown** copies the whole timeline for the range, not only visible rows.
-It includes a heading with the range and one line per pull request or issue, with its link and events.
-A rich editor pastes a formatted list.
-A plain text field pastes Markdown.
-
-1. Select **Copy as Markdown**.
-2. Paste the result into a standup note, a 1:1 document, or a work record.
 
 ## Workspace activity
 
@@ -176,20 +140,12 @@ Workspace activity lists everyone with work in the range, one row for each perso
 Work includes comments, so a person with only comments has a row with 0 contributions.
 The list includes people without a workspace role who worked in the workspace’s repositories.
 
-1. In the team list, select **Everyone** or one team. Type to find a team.
-2. Choose the range, as on your own page.
-3. To count only some repositories, select them under **Repository**.
-4. In **People**, select a column heading to sort the table. Select it again to change the direction.
-5. Open a person to see their tiles, repositories, and timeline.
-6. Select **Timeline** to see everyone’s work in the same range and scope.
-
 A team includes its sub-teams and counts activity in the repositories its settings include.
 If a team filters reviews by label, it counts only reviews of pull requests with one of those labels.
 
 Below the page title, the page says how far back the counts are complete.
 For example, *History since 3 March 2024 for 12 of 14 repositories*.
 Counts for an earlier range can be lower than the real work.
-Before any history is complete, the page says how many repositories are still incomplete, because all counts can be low.
 
 ### People
 
@@ -209,8 +165,8 @@ No kind of work counts more than another.
 | **Weeks**         | Active weeks: weeks with any work this page counts, comments included     |
 | **Weekly**        | A small chart of contributions in each week                               |
 
-Each figure uses the icon and colour that GitHub or GitLab gives it, such as the merge icon for merged pull requests.
-Hover over a figure to read what it counts.
+Each figure uses the icon and color that GitHub or GitLab gives it, such as the merge icon for merged pull requests.
+Point to a figure to read what it counts.
 A dash means none.
 
 A **New** badge beside a name marks a first contribution to the workspace in the range.
@@ -226,21 +182,17 @@ More rows appear as you scroll down.
 The address of the page keeps the range, the team, the repositories, the sort, and the selected tab.
 Share it, and others see the same view.
 
+### Workspace timeline
+
+The **Timeline** tab lists the work of everyone in the view and who did it, with **Copy as Markdown**.
+
 ### Automation
 
 Bot accounts never count as people.
 They appear under **Automation** with a **Bot** badge, in name order and without positions.
-A workspace admin can count a machine user account as automation too:
-
-1. Open the account from the table.
-2. Select **Treat as automation**.
-
-To undo this, open the account under **Automation** and select **Count as a person**.
 A bot account from GitHub or GitLab always stays automation.
-
-### Workspace timeline
-
-The **Timeline** tab lists the work of everyone in the view and who did it, with **Copy as Markdown**.
+An account that a workspace admin counts as automation shows **Treated as automation** instead.
+A workspace admin can count a machine user account as automation too, as [Count an account as automation](#count-an-account-as-automation) describes.
 
 ### Hidden people
 
@@ -251,11 +203,98 @@ This changes only Workspace activity.
 The member’s own Activity page stays unchanged.
 Requests to a hidden team still appear under **Requested from your team** for its members.
 
-A workspace admin hides a member under **Members**.
-A person who has no membership has no setting of their own.
-An admin can hide them for someone who asks to be left out.
-Open the person on Workspace activity and select **Hide from activity**.
-The person then leaves Workspace activity and the [public activity page](./public-activity.mdx).
-Select **Undo** in the message that follows to bring them back.
+## Find work that needs you
 
+1. Under **Dashboards**, select **Activity**.
+2. Read **Needs you** for the work that waits for you now.
+3. To see work where someone else acts next, open **Waiting on others**.
+
+**Waiting on others** starts collapsed, and it closes again when you leave the page.
+
+## Request a review
+
+In a workspace with practice reviews, your own open pull requests and your assigned issues have **Request review**.
+It requests an immediate review against the workspace’s practices.
+A pull request that only asks for your review has no button, because it is someone else’s work.
+Select **Request review** on your pull request or issue.
+
+While Hephaestus receives the request, the button reads **Requesting review…**.
+A message then states that the review started or explains why it did not.
+After the review records an observation about your work, it appears under [Reviews of your work](./practice-profile.mdx#reviews-of-your-work).
+[Request another review](./ai-code-review.mdx#request-another-review) explains the other places to ask.
+
+## See your work over a time range
+
+1. Choose the last 30 days, 90 days, or 12 months, or **All time**. For other days, select **Custom range**.
+2. For a custom range, select the first and the last day. Then select **Apply**.
+3. Open a tile to see its work in detail.
+4. Optional: Select **Show as table** to list the same numbers for each week.
+
+Point to a bar to see the days it covers.
+When you change the range, the previous figures stay visible without their colors until the new figures arrive.
+If this takes more than a moment, **Updating…** appears beside the range.
+
+## Copy your timeline as Markdown
+
+**Copy as Markdown** copies the whole timeline for the range, not only visible rows.
+
+1. Choose the range.
+2. Select **Copy as Markdown**.
+3. Paste the result into a standup note, a 1:1 document, or a work record.
+
+The result has a heading with the range and one line per pull request or issue, with its link and events.
+A rich editor pastes a formatted list.
+A plain text field pastes Markdown.
+
+## Compare work across the workspace
+
+1. Under **Dashboards**, select **Workspace activity**.
+2. In the team list, select **Everyone** or one team. Type to find a team.
+3. Choose the range, as on your own page.
+4. Optional: To count only some repositories, select them under **Repository**.
+5. In **People**, select a column heading to sort the table. Select it again to change the direction.
+6. Open a person to see their tiles, repositories, and timeline.
+7. Optional: Select **Timeline** to see everyone’s work in the same range and scope.
+
+The table shows each person’s counts for the range, the team, and the repositories you chose.
+
+## Count an account as automation
+
+Workspace admins can count a machine user account as automation.
+
+1. On **Workspace activity**, open the account from the table.
+2. Select **Treat as automation**.
+
+The account moves under **Automation**.
+To undo this, open the account under **Automation**, and select **Count as a person**.
+
+## Hide a person from workspace activity
+
+Workspace admins can hide a member under **Members**.
+A person who has no membership has no setting of their own.
+When such a person asks to be left out, a workspace admin can hide them:
+
+1. On **Workspace activity**, open the person.
+2. Select **Hide from activity**.
+3. Select **Hide** to confirm.
+
+A message says that the person is hidden from activity.
+The person leaves Workspace activity and the [public activity page](./public-activity.mdx).
+To bring them back at once, select **Undo** in that message.
 Later, select **Show again** under **Hidden by an admin** in Workspace settings.
+
+## Troubleshooting
+
+### Workspace activity counts look lower than the real work
+
+The counts are complete only as far back as the line below the Workspace activity title says.
+Before any history is complete, the page says how many repositories are still incomplete, because all counts can be low.
+
+### A row has no link
+
+GitHub or GitLab removed the pull request or issue.
+Its row stays without a link, so the counts stay accurate.
+
+### Older timeline work does not appear
+
+Scroll down to load older work, or select **Show earlier activity**.
