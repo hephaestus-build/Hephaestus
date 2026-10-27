@@ -86,6 +86,16 @@ jobs:
         if: ${{ !cancelled() }}
         run: vp run --last-details | node scripts/report-task-run.ts
 
+      # The log names a file that PMD could not analyze, not why; its XML report keeps the stack trace.
+      - name: Retain the PMD report
+        if: inputs.leg == 'server' && failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: server-pmd-report-${{ github.run_attempt }}
+          path: server/application/build/reports/pmd
+          retention-days: 14
+          if-no-files-found: ignore
+
       - name: PMD canary
         if: inputs.leg == 'server' && inputs.pmd_canary == 'true'
         run: vp run gate:pmd-canary
