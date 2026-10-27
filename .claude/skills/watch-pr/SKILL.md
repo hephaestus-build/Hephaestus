@@ -72,7 +72,7 @@ Never post or say "still waiting".
 |---|---|
 | A check failed | `/fix-ci` |
 | A review comment or thread | `/resolve-review` |
-| `DIRTY`, or a check fails because of a newer base | Rebase on the pull request's base branch, run `vp run check`, and push with `--force-with-lease` |
+| `DIRTY`, or a check fails because of a newer base | Record the head SHA, rebase on the pull request's base branch, and run `vp run check`. Push with `--force-with-lease=<branch>:<recorded-sha>`. |
 | Another pull request makes this one obsolete | Stop watching and report it. Ask before you close it. |
 
 Before you call the pull request ready, check its state on the latest head:
