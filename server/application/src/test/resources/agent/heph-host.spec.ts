@@ -7,7 +7,7 @@ import type { Socket } from "node:net";
 import { tmpdir } from "node:os";
 import nodePath from "node:path";
 import test from "node:test";
-import { setTimeout as sleep } from "node:timers/promises";
+import timers, { setTimeout as sleep } from "node:timers/promises";
 
 import {
 	ModelRuntime,
@@ -581,35 +581,40 @@ void test("a slow partial answer write holds back only the newest snapshot, and 
 	assert.equal(mostInFlight, 1);
 });
 
-void test("partial answers keep their interval when a write returns before the next window", async () => {
+void test("partial answers keep their interval when a write returns before the next window", async (t) => {
+	t.mock.timers.enable({ apis: ["setTimeout", "Date"] });
 	const intervalMs = 50;
 	const started: number[] = [];
 	const api: TurnApi = {
 		...fakeWorker(contextOf([], "question")).api(),
 		partial: async () => {
 			started.push(Date.now());
-			await sleep(5);
+			// Through the module object, which the mock patches; the named import keeps the real timer.
+			await timers.setTimeout(5);
 		},
 	};
 	const partials = partialStream(api, intervalMs);
-	const until = Date.now() + intervalMs * 8;
-	for (let update = 0; Date.now() < until; update += 1) {
+	for (let update = 0; update < (intervalMs * 8) / 2; update += 1) {
 		partials.observe({
 			type: "tool_execution_start",
 			toolCallId: `tool-${update}`,
 			toolName: "read",
 			args: {},
 		});
-		await sleep(2);
+		t.mock.timers.tick(2);
+		// The promise chains that a fired timer started run before time moves on.
+		await timers.setImmediate();
 	}
 	partials.stop();
+	t.mock.timers.tick(intervalMs);
+	await timers.setImmediate();
 	await partials.settled();
 
 	assert.ok(started.length >= 3, `only ${started.length} writes`);
 	const gaps = started.slice(1).map((at, index) => at - (started[index] ?? at));
-	// Timers may fire a millisecond early; a write right after the previous one returned would be about 5 ms later.
+	// A write right after the previous one returned would start 5 ms later.
 	assert.ok(
-		gaps.every((gap) => gap >= intervalMs - 2),
+		gaps.every((gap) => gap >= intervalMs),
 		`writes ${gaps.join(", ")} ms apart`,
 	);
 });
