@@ -493,7 +493,7 @@ Each release publishes the files of the one-host install as signed assets.
 | `k3s-platform.yaml` | The pins and the platform add-ons. It goes to the k3s manifests directory. |
 | `k3s-certificates.yaml` | The `Let's Encrypt` issuer, the Gateway certificate, and the PostgreSQL CA and server certificate. The installer writes your host name and address into it. |
 | `k3s-config.yaml` | The k3s configuration: the kubelet configuration file, and no bundled Traefik. |
-| `k3s-kubelet.yaml` | A limit of 4096 processes for each Pod, and the shutdown grace period. |
+| `k3s-kubelet.yaml` | A limit of 4096 processes for each Pod, the shutdown grace period, the memory and CPU reserved for k3s and the host, and the eviction thresholds. |
 | `k3s-logind.conf` | How long logind lets the kubelet hold a shutdown. |
 | `k3s-values.yaml` | The chart values of every one-host install: the Gateway, the Traefik Pods, the Secret names, the sandbox namespace, and reviews with repository checkouts. |
 
@@ -520,6 +520,13 @@ The configured budget is 5 minutes: 4 minutes for the application Pods, then 1 m
 PostgreSQL stops within its termination grace period of 120 seconds, inside the first 4 minutes.
 Ubuntu sets the logind limit to 30 seconds, so `k3s-logind.conf` raises it to 5 minutes.
 At the end of the budget, a worker stops the reviews that it runs. They run again after the start.
+
+Pods cannot request all of the host's memory.
+`k3s-kubelet.yaml` reserves 1 GiB and 250m CPU for k3s, which runs the API server, the kubelet and containerd in one process of about 1 GB.
+It reserves 512 MiB and 250m CPU for the host's own services.
+The kubelet evicts Pods when less than 256 MiB of memory is available, before the kernel's out-of-memory killer stops a process on the host.
+Thus, a host of 16 GiB and 4 vCPU gives Pods about 13.9 GiB and 3.5 CPUs.
+The installer restarts k3s when this file changes, so the next run of the installer applies the reservations to an existing host.
 
 ### Requirements
 

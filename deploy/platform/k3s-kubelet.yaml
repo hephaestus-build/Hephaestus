@@ -10,3 +10,20 @@ podPidsLimit: 4096
 # long.
 shutdownGracePeriod: 5m
 shutdownGracePeriodCriticalPods: 1m
+# Memory and CPU that Pods cannot request: k3s itself (the API server, the kubelet and containerd
+# in one process, about 1 GB resident) and the host's own services. The node's allocatable is its
+# capacity less both and less the memory eviction threshold.
+kubeReserved:
+  cpu: 250m
+  memory: 1Gi
+systemReserved:
+  cpu: 250m
+  memory: 512Mi
+# The kubelet evicts Pods before the kernel's OOM killer acts on the host. Every signal is stated:
+# a map that sets one signal sets the others to zero (upstream § Node-pressure eviction).
+evictionHard:
+  memory.available: 256Mi
+  nodefs.available: 10%
+  nodefs.inodesFree: 5%
+  imagefs.available: 15%
+  imagefs.inodesFree: 5%

@@ -32,7 +32,7 @@ import { connect } from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
-import { parseArgs } from "node:util";
+import { isDeepStrictEqual, parseArgs } from "node:util";
 
 import { readInventory } from "./commit-image-lock.ts";
 import type { ChartImage } from "./kubernetes-chart.ts";
@@ -1175,9 +1175,9 @@ export function durationSeconds(duration: string): number {
 }
 
 /**
- * The shutdown budget that the kubelet and logind run with, against the assets: the kubelet's live
- * configuration has the asset's grace periods, and logind lets a shutdown wait at least that long.
- * No reboot happens here.
+ * The shutdown budget and the reservations that the kubelet and logind run with, against the assets:
+ * the kubelet's live configuration has the asset's grace periods, reservations and eviction
+ * thresholds, and logind lets a shutdown wait at least that long. No reboot happens here.
  */
 async function shutdownBudget(node: string, assets: string): Promise<void> {
 	const { parse } = await import("yaml");
@@ -1203,6 +1203,11 @@ async function shutdownBudget(node: string, assets: string): Promise<void> {
 	}
 	if (live.podPidsLimit !== wanted.podPidsLimit) {
 		throw new Error(`the kubelet runs with podPidsLimit ${String(live.podPidsLimit)}`);
+	}
+	for (const key of ["kubeReserved", "systemReserved", "evictionHard"]) {
+		if (!isDeepStrictEqual(live[key], wanted[key])) {
+			throw new Error(`the kubelet runs with ${key} ${JSON.stringify(live[key])}`);
+		}
 	}
 	const delay = await output("busctl", [
 		"get-property",

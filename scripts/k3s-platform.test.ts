@@ -24,6 +24,26 @@ const named = (resources: Record<string, unknown>[], kind: string, name: string)
 			resource.kind === kind && isRecord(resource.metadata) && resource.metadata.name === name,
 	);
 
+await test("the kubelet reserves memory for k3s and the host, and states every hard eviction signal", () => {
+	const [kubelet] = documents(read("k3s-kubelet.yaml"));
+	assert.ok(kubelet);
+	for (const key of ["kubeReserved", "systemReserved"]) {
+		const reserved = kubelet[key];
+		assert.ok(isRecord(reserved) && typeof reserved.memory === "string", `${key} reserves memory`);
+	}
+	// A partial map sets the signals that it leaves out to zero, so each Linux signal is stated.
+	assert.deepEqual(
+		Object.keys(isRecord(kubelet.evictionHard) ? kubelet.evictionHard : {}).toSorted(),
+		[
+			"imagefs.available",
+			"imagefs.inodesFree",
+			"memory.available",
+			"nodefs.available",
+			"nodefs.inodesFree",
+		],
+	);
+});
+
 await test("a Go duration reads in seconds, and anything else is refused", () => {
 	assert.equal(durationSeconds("5m0s"), durationSeconds("5m"));
 	assert.equal(durationSeconds("1h2m3s"), 3723);
