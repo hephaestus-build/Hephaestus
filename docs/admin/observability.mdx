@@ -372,7 +372,10 @@ Lifecycle records contain `event.name`, `job.id`, `workspace.id`, `job.type`, `j
 
 An attempt that fails before its sandbox starts logs `agent.job.preparation_failed` at `WARN`.
 It has no phase, outcome or duration.
-It names the failed stage (`job.preparation.stage`), the kind and reason of the failure (`job.preparation.kind`, `job.preparation.reason`), the exception classes (`exception.type`, `exception.cause.types`) and what the job does next (`job.result`).
+`job.preparation.stage` names the stage that failed.
+`job.preparation.kind` and `job.preparation.reason` name the kind and the reason of the failure.
+`exception.type` and `exception.cause.types` name the exception classes.
+`job.result` names what the job does next.
 
 ## Agent-job metrics
 
