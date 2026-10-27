@@ -31,8 +31,18 @@ public class KubernetesSandboxCache implements AutoCloseable {
     public KubernetesSandboxCache(KubernetesClient client, String namespace) {
         this.namespace = namespace;
         // A resync of 0: the cache only changes on the API server's events, and no handler needs a periodic replay.
-        this.pods = start(client.pods().inNamespace(namespace).runnableInformer(0));
-        this.jobs = start(client.batch().v1().jobs().inNamespace(namespace).runnableInformer(0));
+        // Only sandbox objects: a foreign object in the namespace cannot grow the caches. Quotas are not selected,
+        // because an operator's own quota counts as the chart's does.
+        this.pods = start(client.pods()
+                .inNamespace(namespace)
+                .withLabel(KubernetesWorker.PART_OF, "hephaestus")
+                .runnableInformer(0));
+        this.jobs = start(client.batch()
+                .v1()
+                .jobs()
+                .inNamespace(namespace)
+                .withLabel(KubernetesWorker.PART_OF, "hephaestus")
+                .runnableInformer(0));
         this.quotas = start(client.resourceQuotas().inNamespace(namespace).runnableInformer(0));
     }
 
@@ -80,11 +90,12 @@ public class KubernetesSandboxCache implements AutoCloseable {
     }
 
     /**
-     * Before its first list a cache knows nothing, and after it stopped it no longer follows the namespace; the caller
-     * then fails as on an API error. A watch that reconnects keeps the cache running.
+     * A cache that does not watch the namespace now does not know it: before its first list, while its watch
+     * reconnects, and after it stopped. The caller then fails as on an API error, as readiness does, so no admission
+     * acts on what may have changed.
      */
     private <T extends HasMetadata> SharedIndexInformer<T> synced(SharedIndexInformer<T> informer) {
-        if (!informer.hasSynced() || !informer.isRunning()) {
+        if (!informer.hasSynced() || !informer.isWatching()) {
             throw new KubernetesClientException("The sandbox namespace cache has not listed the namespace yet");
         }
         return informer;

@@ -88,7 +88,7 @@ rules:
   # and Jobs, so a claim poll sends the API server nothing.
   - apiGroups: [""]
     resources: ["resourcequotas"]
-    verbs: ["get", "list", "watch"]
+    verbs: ["list", "watch"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding

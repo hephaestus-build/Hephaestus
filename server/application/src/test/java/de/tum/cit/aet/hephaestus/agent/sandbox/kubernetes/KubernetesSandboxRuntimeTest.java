@@ -774,6 +774,7 @@ class KubernetesSandboxRuntimeTest {
                 .resource(new PodBuilder()
                         .withNewMetadata()
                         .withName("turn-with-overhead")
+                        .withLabels(worker.labels(KubernetesWorker.KIND_TURN))
                         .endMetadata()
                         .withNewSpec()
                         .withRuntimeClassName("gvisor")
@@ -845,6 +846,43 @@ class KubernetesSandboxRuntimeTest {
                 .create();
 
         assertThat(backend().reviewsRunning()).isFalse();
+    }
+
+    @Test
+    void shouldBecomeCurrentWhenTheFirstQuotaListIsRefusedAndThenAllowed() throws InterruptedException {
+        String list = "/api/v1/namespaces/" + SANDBOXES + "/resourcequotas?resourceVersion=0";
+        Objects.requireNonNull(server)
+                .expect()
+                .get()
+                .withPath(list)
+                .andReturn(403, "{}")
+                .once();
+
+        var cache = new KubernetesSandboxCache(api(), SANDBOXES);
+        caches.add(cache);
+
+        await().atMost(Duration.ofSeconds(30)).until(cache::current);
+        int lists = 0;
+        RecordedRequest request;
+        while ((request = server.takeRequest(100, TimeUnit.MILLISECONDS)) != null) {
+            if (list.equals(request.getPath())) lists++;
+        }
+        assertThat(lists).as("the refused list, then the one that recovered").isGreaterThanOrEqualTo(2);
+    }
+
+    @Test
+    void shouldAdmitAsWithoutAQuotaWhenTheCacheNoLongerWatches() {
+        quotaWithRoomForTwoReviews();
+        var cache = cache();
+        var quota = new KubernetesSandboxQuota(cache, SANDBOXES, "");
+        assertThat(quota.roomFor(LIMITS)).isEqualTo(2);
+
+        cache.close();
+
+        assertThat(quota.roomFor(LIMITS))
+                .as("a cache that stopped does not decide; the start does, as before")
+                .isEqualTo(Integer.MAX_VALUE);
+        assertThat(quota.neverFits(LIMITS)).isFalse();
     }
 
     @Test

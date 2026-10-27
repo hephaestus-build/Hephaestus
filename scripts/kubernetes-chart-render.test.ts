@@ -1058,7 +1058,7 @@ await test("an enabled worker receives its runtime settings, its sandbox namespa
 				// A quota refusal of a review Pod: the Job controller's event.
 				...["get", "list"].map((verb) => `/events:${verb}`),
 				// How many reviews fit, watched as Pods and Jobs are, so a claim poll reads a cache.
-				...["get", "list", "watch"].map((verb) => `/resourcequotas:${verb}`),
+				...["list", "watch"].map((verb) => `/resourcequotas:${verb}`),
 			],
 		],
 	]);

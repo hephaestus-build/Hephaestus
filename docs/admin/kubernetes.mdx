@@ -893,8 +893,9 @@ The metric `sandbox_start_failures_total{kind="review",reason}` counts these ref
 The gauge `sandbox_review_starved_seconds` shows how long no review could start while none ran. Alert on it well before an hour: the quota is too small for the sandboxes beside the reviews.
 
 The worker learns of the refusal from the events of the sandbox namespace, and reads its quotas to tell whether a sandbox can fit at all.
-It needs `get` and `list` on `events`, and `get`, `list` and `watch` on `resourcequotas` there. The chart's Role grants them.
-Without them, the worker logs one warning, and a refused review waits 2 minutes and spends a retry.
+It needs `get` and `list` on `events`, and `list` and `watch` on `resourcequotas` there. The chart's Role grants them.
+Without the verbs on `events`, the worker logs one warning, and a refused review waits 2 minutes and spends a retry.
+Without `list` and `watch` on `resourcequotas`, `pods` or `jobs`, the worker stays not ready ([Troubleshooting](#troubleshooting)).
 The worker watches the Pods, Jobs and quotas of the sandbox namespace.
 Thus, a claim poll and a readiness probe send no request to the API server.
 A sandbox's credential, not the network, binds it to the worker that started it.
@@ -911,7 +912,7 @@ The worker's service account has these permissions in the sandbox namespace, and
 - `pods/exec`: `get` and `create`. The client opens an exec as a WebSocket `GET`, and the API server also authorizes it as `create`.
 - Jobs: `get`, `list`, `watch`, `create`, and `delete`.
 - Events: `get` and `list`. A review Pod that the sandbox quota refuses waits for room: the Job controller reports the refusal as an event.
-- ResourceQuotas: `get`, `list` and `watch`. The quota tells how many reviews fit and whether a review can ever fit.
+- ResourceQuotas: `list` and `watch`. The quota tells how many reviews fit and whether a review can ever fit.
 
 A practice review attempt runs as one Job.
 The Job ends at the attempt's upload deadline plus two minutes, also when its worker is gone, and Kubernetes removes it 15 minutes after it ends.
