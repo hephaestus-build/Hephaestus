@@ -59,6 +59,13 @@ class MetricOwnershipArchTest {
 
     private static final Path PRODUCTION_SOURCES = Path.of("src/main/java/de/tum/cit/aet/hephaestus");
     private static final Set<String> FIXTURE_CATALOGS = Set.of("de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics");
+
+    @Test
+    void shouldNameOnlyExistingClassesInFixtureCatalogs() {
+        AllowlistEntries.assertEachNamesAClass(
+                "FIXTURE_CATALOGS", FIXTURE_CATALOGS, HephaestusArchitectureTest.classes);
+    }
+
     private static final Set<String> BUILDERS = Set.of(
             "Counter",
             "Timer",

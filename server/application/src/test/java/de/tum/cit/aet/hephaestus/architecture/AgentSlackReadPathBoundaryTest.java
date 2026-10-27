@@ -1,10 +1,8 @@
 package de.tum.cit.aet.hephaestus.architecture;
 
-import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.fail;
 
-import com.tngtech.archunit.lang.ArchRule;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
@@ -22,11 +20,10 @@ import org.junit.jupiter.api.Test;
  *
  * <p>The {@code agent} module consumes settled Slack conversation threads only through the agent-owned
  * {@code agent.conversation} SPIs ({@code ConversationThreadProjection} / {@code ConversationSourceLiveness} /
- * {@code ConversationCandidateSource}), which {@code integration.slack} implements. The agent must therefore:
+ * {@code ConversationCandidateSource}), which {@code integration.slack} implements. The agent never imports an {@code integration.slack} type
+ * ({@link PracticeReviewModuleBoundaryTest} forbids it for the agent module). The agent must also:
  *
  * <ul>
- *   <li>never import an {@code integration.slack} type (the Modulith import-check already forbids this for named
- *       interfaces, but this rule pins it explicitly for the whole bounded context), and</li>
  *   <li>never open a raw-SQL tunnel back into Slack's private schema through a raw SQL string naming a
  *       {@code slack_*} table — the Modulith import check sees Java imports, not SQL strings. The other tunnel,
  *       {@code JdbcTemplate}, is closed for every module by {@link CodeQualityTest}.</li>
@@ -36,8 +33,6 @@ import org.junit.jupiter.api.Test;
  * runtime break in the agent.
  */
 class AgentSlackReadPathBoundaryTest extends HephaestusArchitectureTest {
-
-    private static final String AGENT = "de.tum.cit.aet.hephaestus.agent..";
 
     /** SQL keyword immediately preceding a Slack table — precise enough to ignore job-metadata JSON keys
      * ({@code "slack_thread_ts"}) and javadoc mentions ({@code {@code slack_thread}}). {@code \\s+} spans newlines
@@ -75,21 +70,6 @@ class AgentSlackReadPathBoundaryTest extends HephaestusArchitectureTest {
                         .matcher(" * reads the {@code slack_thread} aggregate.")
                         .find())
                 .isFalse();
-    }
-
-    @Test
-    @DisplayName("agent must not import any integration.slack type")
-    void agentDoesNotImportSlack() {
-        ArchRule rule = noClasses()
-                .that()
-                .resideInAPackage(AGENT)
-                .should()
-                .dependOnClassesThat()
-                .resideInAPackage("de.tum.cit.aet.hephaestus.integration.slack..")
-                .because(
-                        "The agent conversation read path is inverted through the agent-owned agent.conversation SPIs "
-                                + "(implemented by integration.slack); the agent must never depend on the Slack module directly");
-        rule.check(classes);
     }
 
     @Test

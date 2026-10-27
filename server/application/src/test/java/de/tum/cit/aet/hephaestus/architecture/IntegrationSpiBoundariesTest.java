@@ -11,6 +11,7 @@ import com.tngtech.archunit.lang.ArchCondition;
 import com.tngtech.archunit.lang.ArchRule;
 import com.tngtech.archunit.lang.ConditionEvents;
 import com.tngtech.archunit.lang.SimpleConditionEvent;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -57,27 +58,22 @@ class IntegrationSpiBoundariesTest extends HephaestusArchitectureTest {
 
     @Test
     void kindModulesDoNotImportEachOther() {
-        check(noClasses()
-                .that()
-                .resideInAPackage("..integration.scm.github..")
-                .should()
-                .dependOnClassesThat()
-                .resideInAnyPackage("..integration.scm.gitlab..", "..integration.slack..")
-                .because("Cross-kind coupling defeats the SPI. Use the shared integration/spi surface."));
-        check(noClasses()
-                .that()
-                .resideInAPackage("..integration.scm.gitlab..")
-                .should()
-                .dependOnClassesThat()
-                .resideInAnyPackage("..integration.scm.github..", "..integration.slack..")
-                .because("Cross-kind coupling defeats the SPI."));
-        check(noClasses()
-                .that()
-                .resideInAPackage("..integration.slack..")
-                .should()
-                .dependOnClassesThat()
-                .resideInAnyPackage("..integration.scm.github..", "..integration.scm.gitlab..")
-                .because("Cross-kind coupling defeats the SPI."));
+        List<String> adapters = List.of(
+                "..integration.scm.github..",
+                "..integration.scm.gitlab..",
+                "..integration.slack..",
+                "..integration.outline..");
+        for (String adapter : adapters) {
+            check(noClasses()
+                    .that()
+                    .resideInAPackage(adapter)
+                    .should()
+                    .dependOnClassesThat()
+                    .resideInAnyPackage(adapters.stream()
+                            .filter(other -> !other.equals(adapter))
+                            .toArray(String[]::new))
+                    .because("Cross-kind coupling defeats the SPI. Use the shared integration/spi surface."));
+        }
     }
 
     /**
@@ -110,9 +106,6 @@ class IntegrationSpiBoundariesTest extends HephaestusArchitectureTest {
                 .should(notReadEnumConstantsOf(INTEGRATION_KIND_FQN)
                         .and(notReadEnumConstantsOf(GIT_PROVIDER_TYPE_FQN))
                         .and(notDependOnClass(GIT_PROVIDER_TYPE_FQN)))
-                // Strict: if no agent/** classes are loaded the rule must fail rather than pass
-                // vacuously — the population is the whole agent module and is never legitimately empty.
-                .allowEmptyShould(false)
                 .because("agent/** dispatches on the provider via the SPI registry "
                         + "(Map<IntegrationKind, …Channel> keyed by channel.kind()). Reading a concrete "
                         + "IntegrationKind constant (GITHUB/GITLAB/SLACK) — or touching the legacy "

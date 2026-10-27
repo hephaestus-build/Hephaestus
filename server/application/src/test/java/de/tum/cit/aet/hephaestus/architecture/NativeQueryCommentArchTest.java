@@ -58,8 +58,7 @@ class NativeQueryCommentArchTest extends HephaestusArchitectureTest {
                             }
                         });
                     }
-                })
-                .allowEmptyShould(true);
+                });
 
         rule.check(classes);
     }

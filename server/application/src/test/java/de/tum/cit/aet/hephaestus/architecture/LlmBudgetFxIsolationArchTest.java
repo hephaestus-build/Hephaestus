@@ -39,6 +39,11 @@ class LlmBudgetFxIsolationArchTest extends HephaestusArchitectureTest {
             "de.tum.cit.aet.hephaestus.agent.job.ReviewJobExecutor",
             "de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder");
 
+    @Test
+    void shouldNameOnlyExistingClassesInEnforcementClasses() {
+        AllowlistEntries.assertEachNamesAClass("ENFORCEMENT_CLASSES", ENFORCEMENT_CLASSES, classes);
+    }
+
     private static final DescribedPredicate<JavaClass> ENFORCEMENT = DescribedPredicate.describe(
             "budget-enforcement classes", javaClass -> ENFORCEMENT_CLASSES.contains(javaClass.getFullName()));
 

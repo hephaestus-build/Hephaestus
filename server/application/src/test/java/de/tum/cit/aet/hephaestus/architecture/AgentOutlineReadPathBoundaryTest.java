@@ -1,10 +1,8 @@
 package de.tum.cit.aet.hephaestus.architecture;
 
-import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.fail;
 
-import com.tngtech.archunit.lang.ArchRule;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
@@ -21,11 +19,10 @@ import org.junit.jupiter.api.Test;
  *
  * <p>The {@code agent} module consumes a workspace's mirrored Outline documents only through the agent-owned
  * {@code agent.documentation} SPI ({@code DocumentProjection}), which {@code integration.outline} implements. The
- * agent must therefore:
+ * agent never imports an {@code integration.outline} type ({@link PracticeReviewModuleBoundaryTest} forbids it
+ * for the agent module). The agent must also:
  *
  * <ul>
- *   <li>never import an {@code integration.outline} type (the Modulith import-check already forbids this for named
- *       interfaces, but this rule pins it explicitly for the whole bounded context), and</li>
  *   <li>never open a raw-SQL tunnel back into Outline's private schema through a raw SQL string naming the
  *       {@code outline_document} table — the Modulith import check sees Java imports, not SQL strings. The other
  *       tunnel, {@code JdbcTemplate}, is closed for every module by {@link CodeQualityTest}.</li>
@@ -35,8 +32,6 @@ import org.junit.jupiter.api.Test;
  * runtime break in the agent.
  */
 class AgentOutlineReadPathBoundaryTest extends HephaestusArchitectureTest {
-
-    private static final String AGENT = "de.tum.cit.aet.hephaestus.agent..";
 
     /** SQL keyword immediately preceding the Outline table — precise enough to ignore JSON keys and javadoc
      * mentions ({@code {@code outline_document}}). {@code \\s+} spans newlines so it also catches multi-line
@@ -77,21 +72,6 @@ class AgentOutlineReadPathBoundaryTest extends HephaestusArchitectureTest {
                         .matcher(" * reads the {@code outline_document} mirror.")
                         .find())
                 .isFalse();
-    }
-
-    @Test
-    @DisplayName("agent must not import any integration.outline type")
-    void agentDoesNotImportOutline() {
-        ArchRule rule = noClasses()
-                .that()
-                .resideInAPackage(AGENT)
-                .should()
-                .dependOnClassesThat()
-                .resideInAPackage("de.tum.cit.aet.hephaestus.integration.outline..")
-                .because(
-                        "The agent documentation read path is inverted through the agent-owned agent.documentation SPI "
-                                + "(implemented by integration.outline); the agent must never depend on the Outline module directly");
-        rule.check(classes);
     }
 
     @Test

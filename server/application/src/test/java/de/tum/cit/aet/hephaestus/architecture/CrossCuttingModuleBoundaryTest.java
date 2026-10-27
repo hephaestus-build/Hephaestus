@@ -27,17 +27,17 @@ class CrossCuttingModuleBoundaryTest extends HephaestusArchitectureTest {
     class ContributorsModuleTests {
 
         /**
-         * Contributors module should not depend on activity internals.
+         * Contributors module should not depend on practices.
          */
         @Test
-        void contributorsDoesNotDependOnActivityInternals() {
+        void contributorsDoesNotDependOnPractices() {
             ArchRule rule = noClasses()
                     .that()
                     .resideInAPackage("..contributors..")
                     .should()
                     .dependOnClassesThat()
-                    .resideInAnyPackage("..activity..service..", "..activity..repository..", "..practices..")
-                    .because("Contributors module should not depend on activity internals");
+                    .resideInAPackage("..practices..")
+                    .because("Contributors module should not depend on practices");
             rule.check(classes);
         }
 
@@ -117,66 +117,6 @@ class CrossCuttingModuleBoundaryTest extends HephaestusArchitectureTest {
                     .resideInAnyPackage(
                             "..activity..", "..mentor..", "..notification..", "..contributors..", "..workspace..")
                     .because("Core is a foundation layer - should not depend on feature modules");
-            rule.check(classes);
-        }
-
-        /**
-         * Core package should not depend on integration.scm.
-         *
-         * <p>Core utilities should be git-provider agnostic.
-         */
-        @Test
-        void coreDoesNotDependOnGitprovider() {
-            // Anchor to the FQN root to exclude `integration.core.*` (which is the integration core
-            // and is allowed to know the scm aggregate during the migration).
-            ArchRule rule = noClasses()
-                    .that()
-                    .resideInAPackage("de.tum.cit.aet.hephaestus.core..")
-                    .should()
-                    .dependOnClassesThat()
-                    .resideInAPackage("..integration.scm..")
-                    .because("Core should be infrastructure-agnostic");
-            rule.check(classes);
-        }
-
-        /**
-         * Shared package should have minimal dependencies.
-         *
-         * <p>Shared code should only depend on core and external libraries.
-         */
-        @Test
-        void sharedHasMinimalDependencies() {
-            ArchRule rule = noClasses()
-                    .that()
-                    .resideInAPackage("..shared..")
-                    .should()
-                    .dependOnClassesThat()
-                    .resideInAnyPackage(
-                            "..activity..", "..mentor..", "..notification..", "..contributors..", "..integration.scm..")
-                    .because("Shared code should not depend on feature modules");
-            rule.check(classes);
-        }
-    }
-
-    @Nested
-    class ConfigModuleTests {
-
-        /**
-         * Config package should not depend on feature module internals.
-         *
-         * <p>Configuration wires up beans but should not contain feature logic.
-         */
-        @Test
-        void configDoesNotDependOnFeatureServiceImplementations() {
-            ArchRule rule = noClasses()
-                    .that()
-                    .resideInAPackage("..config..")
-                    .and()
-                    .haveSimpleNameEndingWith("Config")
-                    .should()
-                    .dependOnClassesThat()
-                    .resideInAnyPackage("..activity..repository..", "..mentor..repository..")
-                    .because("Config should wire up services, not access repositories directly");
             rule.check(classes);
         }
     }

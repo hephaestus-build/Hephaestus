@@ -19,6 +19,11 @@ class TeamOrganizationLookupArchitectureTest extends HephaestusArchitectureTest 
             "de.tum.cit.aet.hephaestus.integration.scm.gitlab.team.GitLabTeamSyncService");
 
     @Test
+    void shouldNameOnlyExistingClassesInAllowedCallers() {
+        AllowlistEntries.assertEachNamesAClass("ALLOWED_CALLERS", ALLOWED_CALLERS, classes);
+    }
+
+    @Test
     @DisplayName("no new caller of TeamRepository.findAllByOrganizationIgnoreCase outside the sync engines")
     void noNewBareOrganizationEnumerationCallers() {
         ArchRule rule = noClasses()

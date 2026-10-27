@@ -34,19 +34,6 @@ class HandlerArchitectureTest extends HephaestusArchitectureTest {
         }
 
         @Test
-        void spiShouldNotDependOnGitProvider() {
-            noClasses()
-                    .that()
-                    .resideInAPackage("..agent.handler.spi..")
-                    .should()
-                    .dependOnClassesThat()
-                    .resideInAPackage("..integration.scm..")
-                    .because(
-                            "SPI types must remain domain-agnostic — handler implementations bridge to integration.scm")
-                    .check(classes);
-        }
-
-        @Test
         void spiShouldNotDependOnHandlerImpl() {
             noClasses()
                     .that()

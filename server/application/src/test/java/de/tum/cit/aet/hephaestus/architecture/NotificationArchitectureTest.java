@@ -1,12 +1,12 @@
 package de.tum.cit.aet.hephaestus.architecture;
 
-import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.methods;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noMethods;
 
-import de.tum.cit.aet.hephaestus.notification.ProductFeedbackEmailPreparation;
+import com.tngtech.archunit.base.DescribedPredicate;
+import com.tngtech.archunit.core.domain.JavaEnumConstant;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.event.EventListener;
-import org.springframework.modulith.events.ApplicationModuleListener;
 import org.springframework.transaction.event.TransactionalEventListener;
 
 /**
@@ -19,34 +19,37 @@ class NotificationArchitectureTest extends HephaestusArchitectureTest {
             + "only @ApplicationModuleListener records the attempt in event_publication and is redelivered";
 
     @Test
-    void shouldHandleEveryNotificationEventThroughTheRegistry() {
+    void shouldNotUsePlainEventListeners() {
         // ArchUnit matches direct annotations, so a method carrying @ApplicationModuleListener (which is
-        // meta-annotated with @TransactionalEventListener) is not caught by either rule below.
-        methods()
+        // meta-annotated with @TransactionalEventListener) passes this rule and the next.
+        noMethods()
                 .that()
                 .areDeclaredInClassesThat()
                 .resideInAPackage("..notification..")
-                .and()
-                .areAnnotatedWith(EventListener.class)
                 .should()
-                .beAnnotatedWith(ApplicationModuleListener.class)
+                .beAnnotatedWith(EventListener.class)
                 .because(DURABLE_LISTENERS_ONLY)
                 .check(classes);
+    }
 
-        methods()
+    @Test
+    void shouldRunPlainTransactionalListenersOnlyBeforeCommit() {
+        // A BEFORE_COMMIT listener runs inside the publishing transaction, so what it publishes commits with the
+        // event or not at all.
+        noMethods()
                 .that()
                 .areDeclaredInClassesThat()
                 .resideInAPackage("..notification..")
-                .and()
-                .areAnnotatedWith(TransactionalEventListener.class)
-                .and()
-                .areDeclaredInClassesThat()
-                .doNotHaveFullyQualifiedName(ProductFeedbackEmailPreparation.class.getName())
-                .and()
-                .areDeclaredInClassesThat()
-                .doNotHaveFullyQualifiedName("de.tum.cit.aet.hephaestus.notification.WorkspaceAlertEmailPreparation")
                 .should()
-                .beAnnotatedWith(ApplicationModuleListener.class)
+                .beAnnotatedWith(DescribedPredicate.describe(
+                        "@TransactionalEventListener outside BEFORE_COMMIT",
+                        annotation -> annotation.getRawType().isEquivalentTo(TransactionalEventListener.class)
+                                && annotation
+                                        .get("phase")
+                                        .map(phase -> !((JavaEnumConstant) phase)
+                                                .name()
+                                                .equals("BEFORE_COMMIT"))
+                                        .orElse(true)))
                 .because(DURABLE_LISTENERS_ONLY)
                 .check(classes);
     }

@@ -276,6 +276,11 @@ class RuntimeRoleBoundaryTest extends HephaestusArchitectureTest {
             "de.tum.cit.aet.hephaestus.mentor.MentorTurnService");
 
     @Test
+    void shouldNameOnlyExistingClassesInUnconditionalMentorBeans() {
+        AllowlistEntries.assertEachNamesAClass("UNCONDITIONAL_MENTOR_BEANS", UNCONDITIONAL_MENTOR_BEANS, classes);
+    }
+
+    @Test
     void runtimeGatesAreMatchIfMissingTrue() {
         List<String> violations = classes.stream()
                 .flatMap(clazz -> conditionalOnPropertyAnnotations(clazz).map(ann -> new ConditionalRef(clazz, ann)))
@@ -415,9 +420,12 @@ class RuntimeRoleBoundaryTest extends HephaestusArchitectureTest {
             // Worker capture reads account choices and status through this neutral data-access port.
             "de.tum.cit.aet.hephaestus.core.auth.AccountDirectoryService",
             "de.tum.cit.aet.hephaestus.core.auth.AccountRoleQueryService",
-            "de.tum.cit.aet.hephaestus.core.auth.AccountSummaryQueryService",
-            // The worker reads a developer's time zone for the situation of a Heph turn.
-            "de.tum.cit.aet.hephaestus.core.auth.AccountTimeZoneService");
+            "de.tum.cit.aet.hephaestus.core.auth.AccountSummaryQueryService");
+
+    @Test
+    void shouldNameOnlyExistingClassesInCrossRoleAuthSpiImpls() {
+        AllowlistEntries.assertEachNamesAClass("CROSS_ROLE_AUTH_SPI_IMPLS", CROSS_ROLE_AUTH_SPI_IMPLS, classes);
+    }
 
     @Test
     void allAuthStereotypeBeansAreServerGated() {

@@ -39,8 +39,7 @@ class OutlineApiDtoIsolationTest extends HephaestusArchitectureTest {
                 .because(
                         "Outline wire models are an implementation detail of the client and its sync, collection-admin, "
                                 + "lifecycle-registrar, and webhook consumers on the extract seam; they must not leak into the "
-                                + "agent read path or any other module")
-                .allowEmptyShould(false);
+                                + "agent read path or any other module");
         rule.check(OUTLINE_CLASSES);
     }
 }

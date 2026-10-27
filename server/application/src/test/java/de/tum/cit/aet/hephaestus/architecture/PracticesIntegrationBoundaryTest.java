@@ -6,20 +6,13 @@ import org.junit.jupiter.api.Test;
 
 class PracticesIntegrationBoundaryTest extends HephaestusArchitectureTest {
     @Test
-    void shouldReachIntegrationOnlyThroughNeutralPorts() {
+    void shouldReachIntegrationItemsOnlyThroughNeutralPorts() {
         noClasses()
                 .that()
                 .resideInAPackage("..practices..")
                 .should()
                 .dependOnClassesThat()
-                .resideInAnyPackage(
-                        "..integration.scm..",
-                        "..integration.chat..",
-                        "..integration.docs..",
-                        "..integration.slack..",
-                        "..integration.outline..",
-                        "..integration.core.item..",
-                        "..integration.core.itemevent..")
+                .resideInAnyPackage("..integration.core.item..", "..integration.core.itemevent..")
                 .check(classes);
     }
 }
