@@ -274,6 +274,43 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldWithholdTheResultWithoutWritingItWhenItSaysTheRepositoryLacksSomethingWithoutACheckoutToSearch() {
+        try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
+            // The work's checkout could not be captured, so no search can show what the repository lacks.
+            var job = jobs.findById(review.identity().jobId()).orElseThrow();
+            var capture = (ObjectNode) Objects.requireNonNull(job.getCapture());
+            EvidenceSnapshotFixtures.unavailable(
+                    capture, EvidenceSnapshotFixtures.availableSource(capture, "scm.repository.tree", null));
+            job.setCapture(capture);
+            jobs.saveAndFlush(job);
+
+            var response = admission.admit(
+                    review.identity(),
+                    request(
+                            review,
+                            "The export handler drops the failure cause, and nothing else in the code base"
+                                    + " handles it"));
+
+            assertThat(response.admitted()).isEmpty();
+            assertThat(response.withheld()).singleElement().satisfies(withheld -> {
+                assertThat(withheld.practiceSlug()).isEqualTo(review.practiceSlug());
+                assertThat(withheld.reason()).isEqualTo("consulted_source_unread");
+            });
+            assertThat(resultIds(review)).isEmpty();
+            assertThat(reviewItems.findByWorkspaceIdAndReviewIdAndPracticeIdAndItemId(
+                            review.workspaceId(),
+                            review.reviewId(),
+                            review.practiceId(),
+                            review.item().itemId()))
+                    .hasValueSatisfying(member -> {
+                        assertThat(member.getState()).isEqualTo(ReviewItemState.WITHHELD);
+                        assertThat(member.getReason()).isEqualTo("consulted_source_unread");
+                        assertThat(member.getResultId()).isNull();
+                    });
+        }
+    }
+
+    @Test
     void shouldPostTheAdmittedObservationOnThePullRequestWhenTheReviewedVersionIsStillCurrent() {
         try (var review = claimedReview(FeedbackMode.AUTOMATIC)) {
             var response = admission.admit(review.identity(), request(review));

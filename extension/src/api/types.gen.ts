@@ -4257,6 +4257,10 @@ export type ReadReceipt = {
     contentDigest?: string;
     endLine?: number;
     path?: string;
+    /**
+     * what a {@link ReadReceiptStatus#SEARCHED ReadReceiptStatus#SEARCHED} search looked for; null on every other receipt
+     */
+    pattern?: string;
     sourceKind?: string;
     sourcePath?: string;
     startLine?: number;

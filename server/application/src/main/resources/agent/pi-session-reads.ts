@@ -32,6 +32,8 @@ export interface SessionTree {
 }
 // Bounds each refusal: sources named, and ranges named per source.
 export const REPAIR_LIMIT = 5;
+// Bounds the search receipts, so they leave room under the receipt bound for the files a session read.
+const SEARCHED_PATTERNS = 20;
 
 /** A relative path that stays inside the root it is read from. */
 export function insideRoot(target: string): boolean {
@@ -67,8 +69,8 @@ export class SessionReads {
 	readonly #root: string;
 	readonly #lineCount: (target: string) => number;
 	readonly #tree: SessionTree | undefined;
-	/** Whether a grep without a file filter searched the whole checkout to the end. */
-	#searchedTree = false;
+	/** What each grep without a file filter that searched the whole checkout to the end looked for. */
+	readonly #searchedPatterns = new Set<string>();
 
 	constructor(
 		root: string,
@@ -196,13 +198,26 @@ export class SessionReads {
 			this.cutSearches.push(named);
 			return;
 		}
-		// A file filter or a narrower path searched part of the checkout, and a file listing searched no contents.
+		if (event.toolName === "grep") {
+			this.#searched(args, target);
+		}
+	}
+
+	/**
+	 * Records the pattern of a grep that ran to the end over the whole checkout. A file filter or a narrower path
+	 * searched part of the checkout, and a file listing searched no contents.
+	 */
+	#searched(args: unknown, target: string | undefined): void {
 		if (
-			event.toolName === "grep" &&
-			!(isRecord(args) && typeof args.glob === "string" && args.glob !== "") &&
+			isRecord(args) &&
+			typeof args.pattern === "string" &&
+			args.pattern !== "" &&
+			args.pattern.length <= CANDIDATE_LIMITS.warrantFieldChars &&
+			this.#searchedPatterns.size < SEARCHED_PATTERNS &&
+			!(typeof args.glob === "string" && args.glob !== "") &&
 			this.#containsTree(target ?? "")
 		) {
-			this.#searchedTree = true;
+			this.#searchedPatterns.add(args.pattern);
 		}
 	}
 
@@ -218,9 +233,10 @@ export class SessionReads {
 	}
 
 	/**
-	 * The checkout's own proof of what this session read: each file read to its last line, with the digest of the
-	 * pinned bytes, and a search of the whole checkout's contents that ran to the end. A search that was cut, failed,
-	 * filtered by file, narrower than the checkout or run through the shell proves no such search.
+	 * The checkout's own proof of what this session read: each search of the whole checkout's contents that ran to
+	 * the end, with its pattern, and then each file read to its last line, with the digest of the pinned bytes. A
+	 * search that was cut, failed, filtered by file, narrower than the checkout or run through the shell proves no
+	 * such search. The searches come first, so the receipt bound never drops them. The `.git` folder holds no work.
 	 */
 	treeReceipts(): ReadReceipt[] {
 		const tree = this.#tree;
@@ -228,10 +244,22 @@ export class SessionReads {
 			return [];
 		}
 		const root = this.#key(tree.root);
-		const receipts: ReadReceipt[] = [];
+		const receipts: ReadReceipt[] = [...this.#searchedPatterns].map((pattern) => ({
+			sourceKind: TREE_SOURCE,
+			sourcePath: tree.sourcePath,
+			path: ".",
+			version: tree.version,
+			status: "SEARCHED",
+			pattern,
+		}));
 		for (const key of this.#opened) {
-			const inside = path.relative(root, key);
-			if (inside === "" || inside.split(path.sep)[0] === ".." || !this.ranges.complete(key)) {
+			const inside = path.relative(root, key).split(path.sep);
+			if (
+				inside[0] === "" ||
+				inside[0] === ".." ||
+				inside[0] === ".git" ||
+				!this.ranges.complete(key)
+			) {
 				continue;
 			}
 			try {
@@ -239,7 +267,7 @@ export class SessionReads {
 				receipts.push({
 					sourceKind: TREE_SOURCE,
 					sourcePath: tree.sourcePath,
-					path: inside.split(path.sep).join("/"),
+					path: inside.join("/"),
 					version: tree.version,
 					status: "COMPLETE",
 					contentDigest: createHash("sha256").update(bytes).digest("hex"),
@@ -249,15 +277,6 @@ export class SessionReads {
 			} catch {
 				// A file that cannot be read again proves no read.
 			}
-		}
-		if (this.#searchedTree) {
-			receipts.push({
-				sourceKind: TREE_SOURCE,
-				sourcePath: tree.sourcePath,
-				path: ".",
-				version: tree.version,
-				status: "SEARCHED",
-			});
 		}
 		return receipts.slice(0, CANDIDATE_LIMITS.receipts);
 	}
@@ -462,13 +481,15 @@ export class SessionReads {
 }
 
 /**
- * Words that say the checkout outside the cited lines lacks something. A list of markers, not a reading of the prose:
- * it sends such a claim back once when the session holds no search of the checkout.
+ * Words that say the repository, beyond the cited lines, lacks something. `AbsenceClaims.java` holds the same markers
+ * and admission withholds such a result without a search of the whole checkout, so the session is asked first, once.
  */
-const ABSENCE_BEYOND_CITATIONS = [
-	/\b(?:no|none of|nothing|not any|lacks?|without any)\b[^.]{0,80}\b(?:repository|repo|codebase|checkout|other files?|any files?|elsewhere)\b/iu,
-	/\b(?:repository|repo|codebase|checkout)\b[^.]{0,40}\b(?:contains no|has no|holds no|lacks?|none)\b/iu,
+export const ABSENCE_MARKERS = [
+	String.raw`\b(?:no|none|nothing|not any|nowhere|never|lacks?|without|missing|absent)\b[^.]{0,80}(?:\b(?:in|across|throughout) the (?:whole |entire |reviewed |rest of the )?(?:repository|repo|codebase|code base|checkout|project|application)\b|\b(?:elsewhere|anywhere|other files?)\b)`,
+	String.raw`\b(?:the|this) (?:whole |entire |reviewed )?(?:repository|repo|codebase|code base|checkout)\b(?! (?:method|call|class|interface|layer|bean|query|lookup|result|field|object|instance)s?\b)[^.]{0,40}\b(?:contains no|has no|holds no|defines no|declares no|registers no|lacks?)\b|\b(?:the|this) (?:project|application)\b[^.]{0,40}\b(?:defines no|declares no|registers no)\b`,
+	String.raw`\b(?:nothing else|nothing in the (?:project|application|code ?base|repository|repo|checkout)|no (?:other )?(?:code|callers?)|none of (?:the|its) callers)\b[^.]{0,60}\b(?:catch(?:es)?|handles?)\b`,
 ];
+const ABSENCE_PATTERNS = ABSENCE_MARKERS.map((marker) => new RegExp(marker, "iu"));
 
 /** Why a submission that rests on the checkout cannot be recorded yet, and whether only its words say so. */
 export interface UnreadCheckoutClaim {
@@ -479,47 +500,66 @@ export interface UnreadCheckoutClaim {
 /**
  * A submission whose search for something missing, or whose ruling-out of a prerequisite, names the repository tree
  * needs a search of the whole checkout in this session: a complete read of one file is a complete source of that file,
- * not of the tree (ADR 0064 § Absence). With a checkout and `askAboutWords`, a problem whose words say the checkout
- * lacks something needs the same.
+ * not of the tree (ADR 0064 § Absence). With `askAboutWords`, a submission whose words say the repository lacks
+ * something needs the same. Without a checkout, such words have no basis at all.
  */
 export function unreadCheckoutClaim(
 	submission: {
+		outcome: string;
+		summary: string;
+		explanation: string;
 		search?: { consulted: readonly string[] };
-		inapplicability?: { consulted: readonly string[] };
-		problems?: readonly { summary: string; explanation: string }[];
+		inapplicability?: { consulted: readonly string[]; ruledOutBy: string };
+		problems?: readonly { summary: string; explanation: string; nextStep?: string }[];
+		example?: { note: string };
 	},
 	coverage: Coverage,
-	{ checkout, askAboutWords }: { checkout: boolean; askAboutWords: boolean },
+	{ repositoryRoot, askAboutWords }: { repositoryRoot?: string; askAboutWords: boolean },
 ): UnreadCheckoutClaim | undefined {
 	const searched = (coverage.source === "host" ? coverage.receipts : []).some(
 		(receipt) =>
 			receipt.sourceKind === TREE_SOURCE && receipt.status === "SEARCHED" && receipt.path === ".",
 	);
-	if (searched) {
+	// A could-not-determine result says nothing about the work.
+	if (searched || submission.outcome === "COULD_NOT_DETERMINE") {
 		return undefined;
 	}
 	const consulted = [
 		...(submission.search?.consulted ?? []),
 		...(submission.inapplicability?.consulted ?? []),
 	].includes(TREE_SOURCE);
+	const texts = [
+		submission.summary,
+		submission.explanation,
+		...(submission.problems ?? []).flatMap((problem) => [
+			problem.summary,
+			problem.explanation,
+			problem.nextStep ?? "",
+		]),
+		submission.example?.note ?? "",
+		submission.inapplicability?.ruledOutBy ?? "",
+	];
 	const byWords =
 		!consulted &&
-		checkout &&
 		askAboutWords &&
-		(submission.problems ?? []).some((problem) =>
-			ABSENCE_BEYOND_CITATIONS.some((marker) =>
-				marker.test(`${problem.summary} ${problem.explanation}`),
-			),
-		);
+		texts.some((text) => ABSENCE_PATTERNS.some((pattern) => pattern.test(text)));
 	if (!consulted && !byWords) {
 		return undefined;
 	}
+	const claim = consulted
+		? `this result names ${TREE_SOURCE} as searched`
+		: "this result says the repository lacks something beyond the cited lines";
+	if (repositoryRoot === undefined) {
+		return {
+			byWords,
+			text: `${claim}, but this work has no checkout to search. Remove that claim and keep only what the cited lines show, then submit again.`,
+		};
+	}
+	const exit = consulted
+		? `If your search covered only the selected or cited lines, name the source that holds them, such as scm.pull-request.diff, in place of ${TREE_SOURCE}.`
+		: "If you cannot, remove the claim about the rest of the repository and keep only what the cited lines show.";
 	return {
 		byWords,
-		text:
-			`${consulted ? `this result names ${TREE_SOURCE} as searched` : "a problem says the checkout lacks something"}, ` +
-			"but this session ran no search of the whole checkout. " +
-			"Call grep with a pattern for what is missing, without a glob and without a narrower path, and read on until the search is not cut, then submit again. " +
-			"If you cannot, remove the claim about the rest of the checkout and keep only what the cited lines show.",
+		text: `${claim}, but this session ran no search of the whole checkout. Call grep with a pattern for what is missing and path "${repositoryRoot}", without a glob, and narrow the pattern until the search is not cut, then submit again. ${exit}`,
 	};
 }

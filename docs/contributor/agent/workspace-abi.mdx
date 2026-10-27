@@ -71,8 +71,6 @@ No authored-person history or blame is inferred from repository file content.
 Read receipts identify source, path, version, read extent and completion state.
 The host supplies trusted receipts separately from the returned candidate.
 A search, listing or isolated quotation cannot establish a full assigned-file read.
-A search receipt (`SEARCHED`, path `.`) records that a grep without a file filter ran over the whole checkout to the end.
-It has no digest or line range, and it proves no file read.
 A failed read is unavailable, not proved absence.
 
 For SCAN, `repos/reviewed/` contains the pinned files without Git metadata.
@@ -89,6 +87,38 @@ Core checks quotes, ambiguity and criteria warrants.
 Domain citation verifiers own side, version and change-basis checks.
 The source contract defines which sources support those coordinates.
 Archived or redacted proof keeps null text and coordinates instead of fabricated line 1.
+
+### Claims that the repository lacks something
+
+A search receipt (`SEARCHED`, path `.`) records a grep for its `pattern` over the whole checkout.
+The grep had no file filter and ran to the end.
+The receipt has no digest or line range, and it proves no file read.
+
+A grep that the runner sees produces a search receipt, also inside a codemode script.
+A cut, failed, filtered or narrower grep produces none.
+A file listing, a search through the shell and a pattern over 500 characters produce none.
+A session keeps at most 20 search receipts.
+
+In an item review, a result says that the repository lacks something in one of two ways:
+
+- Its search warrant or inapplicability warrant names the tree as consulted.
+- The review reads a checkout, captured or not, and a text that the result shows matches an absence marker.
+  `AbsenceClaims.java` and `pi-session-reads.ts` hold the same short list of markers.
+  The list reads words, not the meaning of the text, so a claim in other words can pass.
+
+Such a result needs a search receipt of the tree.
+Admission records the pattern for audit, but it does not compare the pattern with the claim.
+The capture must hold the tree `COMPLETE` at the version of the receipt.
+A partial capture leaves files out, so a search of it shows no absence.
+A could-not-determine result says nothing about the work, so it needs no receipt.
+
+A result keeps only the search receipts of the decision that it keeps.
+A review session's unchanged result keeps the searches of that session.
+A result that code decided keeps the searches of the script's reader.
+
+The runner returns such a submission to the model before it submits.
+It returns a match of a marker once per practice.
+Admission then withholds a result without the receipt as `consulted_source_unread`.
 
 ## Admission and composition
 

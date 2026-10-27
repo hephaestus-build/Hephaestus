@@ -21576,6 +21576,10 @@ components:
           format: int32
         path:
           type: string
+        pattern:
+          type: string
+          description: "what a {@link ReadReceiptStatus#SEARCHED ReadReceiptStatus#SEARCHED}\
+            \ search looked for; null on every other receipt"
         sourceKind:
           type: string
         sourcePath:

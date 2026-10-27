@@ -4,7 +4,9 @@ import de.tum.cit.aet.hephaestus.agent.context.JobFolderIndex;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobDeliveryException;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.evidence.CitationSide;
+import de.tum.cit.aet.hephaestus.evidence.SourceCapture;
 import de.tum.cit.aet.hephaestus.evidence.SourceCaptureState;
+import de.tum.cit.aet.hephaestus.evidence.SourceCompleteness;
 import de.tum.cit.aet.hephaestus.evidence.SourceContractVersion;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.evidence.capture.CitableText;
@@ -14,6 +16,7 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 import org.jspecify.annotations.Nullable;
 import tools.jackson.databind.ObjectMapper;
 
@@ -62,6 +65,26 @@ final class CapturedEvidence {
 
     Set<SourceKind> availableSources() {
         return available;
+    }
+
+    /** Every source this attempt captured or tried to capture, whatever came of it. */
+    Set<SourceKind> listedSources() {
+        return manifest.sources().stream().map(SourceCapture::kind).collect(Collectors.toSet());
+    }
+
+    /**
+     * Whether {@code kind} was captured whole at {@code version}. An identity names the version, or begins with it and
+     * a colon: the repository tree's identity is {@code <commit>:<tree>}. A partial capture leaves files out, so no
+     * search of it can show that the source lacks something.
+     */
+    boolean completeAt(SourceKind kind, String version) {
+        return manifest.sources().stream().anyMatch(source -> {
+            if (!source.kind().equals(kind)
+                    || !(source.state() instanceof SourceCaptureState.Available available)
+                    || available.completeness() != SourceCompleteness.COMPLETE) return false;
+            String identity = available.facts().immutableIdentity();
+            return identity != null && (identity.equals(version) || identity.startsWith(version + ":"));
+        });
     }
 
     Map<String, FileProof> files() {

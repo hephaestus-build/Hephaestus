@@ -171,6 +171,7 @@ void describe("listings and searches", () => {
 				path: ".",
 				version: HEAD,
 				status: "SEARCHED",
+				pattern: "ControllerAdvice",
 			},
 		]);
 	});

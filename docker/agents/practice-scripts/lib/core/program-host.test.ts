@@ -243,6 +243,19 @@ const decidesFromTheChange = (read: boolean) =>
 			} }`,
 	);
 
+/** A search of the whole checkout for `pattern` that ran to the end. */
+const searched = (pattern: string) => ({
+	sourceKind: "scm.repository.tree",
+	sourcePath: "repos/reviewed/.git/HEAD",
+	path: ".",
+	version: HEAD,
+	status: "SEARCHED" as const,
+	pattern,
+});
+
+const searchesOf = (outcome: ProgramOutcome) =>
+	(outcome.readReceipts ?? []).filter((receipt) => receipt.status === "SEARCHED");
+
 void describe("a practice's result", () => {
 	void test("a custom program that decides in code returns its own result and asks for no review", async () => {
 		const ws = await workspace({ direct: await fixture("direct") });
@@ -445,6 +458,44 @@ void describe("a practice's result", () => {
 			outcome: "MET",
 			coverage: { source: "host", complete: true },
 		});
+	});
+
+	void test("a search proves an absence only for the decision that ran it", async () => {
+		const session = searched("ControllerAdvice");
+		const lead = searched("needle");
+		const ws = await workspace({
+			kept: program(
+				"definePracticeScript",
+				`{ meta: {}, run: async (ctx) => {
+						await scm(ctx).files?.head.grep("needle");
+						return ctx.review({});
+					} }`,
+			),
+			decided: program(
+				"definePracticeScript",
+				`{ meta: {}, run: async (ctx) => {
+						await scm(ctx).files?.head.grep("needle");
+						await ctx.review({});
+						await ctx.evidence.record("metadata.json");
+						const found = await scm(ctx).files?.change?.cite("src/cart.ts", "NEW", 2);
+						return { outcome: "MET", summary: "Met", explanation: "The change shows the practice.",
+							citations: [found], evidence: {} };
+					} }`,
+			),
+		});
+		const review = async () => ({
+			...REVIEWED,
+			coverage: { ...REVIEWED.coverage, receipts: [session] },
+		});
+		// The review's unchanged result keeps its own search, never the script's lead search.
+		const kept = await run(ws, "kept", { review });
+		assert.equal(kept.outcome.status, "ok", kept.outcome.error);
+		assert.deepEqual(searchesOf(kept.outcome), [session]);
+
+		// A result that code decided keeps the code's search, never a review's.
+		const decided = await run(ws, "decided", { review });
+		assert.equal(decided.outcome.status, "ok", decided.outcome.error);
+		assert.deepEqual(searchesOf(decided.outcome), [lead]);
 	});
 
 	void test("code that ignored a failed read keeps its Not met, with incomplete coverage", async () => {

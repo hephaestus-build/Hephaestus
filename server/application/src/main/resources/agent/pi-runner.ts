@@ -1052,7 +1052,9 @@ export async function runReviewJob(): Promise<void> {
 		const unread = scan
 			? undefined
 			: unreadCheckoutClaim(submission, coverage, {
-					checkout: existsSync(`${INPUT_PATHS.repositoryRoot}/.git`),
+					repositoryRoot: existsSync(`${INPUT_PATHS.repositoryRoot}/.git`)
+						? INPUT_PATHS.repositoryRoot
+						: undefined,
 					askAboutWords: !askedAboutCheckoutWords.has(slug),
 				});
 		if (unread !== undefined) {

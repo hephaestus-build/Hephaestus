@@ -24,7 +24,10 @@ import de.tum.cit.aet.hephaestus.evidence.AppliesWhenCheck;
 import de.tum.cit.aet.hephaestus.evidence.ClasspathSourceCatalogRegistry;
 import de.tum.cit.aet.hephaestus.evidence.SourceAbsenceReason;
 import de.tum.cit.aet.hephaestus.evidence.SourceCapture;
+import de.tum.cit.aet.hephaestus.evidence.SourceCaptureFacts;
 import de.tum.cit.aet.hephaestus.evidence.SourceCaptureState;
+import de.tum.cit.aet.hephaestus.evidence.SourceCompleteness;
+import de.tum.cit.aet.hephaestus.evidence.SourceContentState;
 import de.tum.cit.aet.hephaestus.evidence.SourceContractVersion;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CandidateRefusal;
@@ -47,6 +50,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
+import java.util.function.UnaryOperator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -182,11 +186,56 @@ class ReviewOutputServiceTest extends BaseUnitTest {
                         "Host coverage differs from the submitted read receipts");
     }
 
+    private static final String PR50_HEAD = "4154fb8c8ed570d8fb117a89a894ddedca72d818";
+    private static final SourceKind DIFF = new SourceKind("scm.pull-request.diff");
+    private static final SourceKind TREE = new SourceKind("scm.repository.tree");
+
+    /** #50's capture: its diff, and its checkout at the head commit, captured as {@code completeness} says. */
+    private void pr50Capture(SourceCompleteness completeness) {
+        var whole = new SourceCaptureFacts(Instant.EPOCH, null, null, null);
+        var tree = new SourceCaptureFacts(Instant.EPOCH, null, null, PR50_HEAD + ":" + "b".repeat(40));
+        var manifest = new JobFolderIndex(
+                new SourceContractVersion("2.0.0"),
+                "a".repeat(64),
+                "scm.pull_request",
+                Instant.EPOCH,
+                List.of(
+                        new SourceCapture(
+                                DIFF,
+                                new SourceCaptureState.Available(
+                                        SourceContentState.EMPTY, SourceCompleteness.COMPLETE, whole),
+                                EvidenceSnapshotFixtures.citation(DIFF),
+                                List.of()),
+                        new SourceCapture(
+                                TREE,
+                                new SourceCaptureState.Available(
+                                        SourceContentState.EMPTY,
+                                        completeness,
+                                        tree,
+                                        completeness == SourceCompleteness.COMPLETE
+                                                ? List.of()
+                                                : List.of("submodule_excluded")),
+                                EvidenceSnapshotFixtures.citation(TREE),
+                                List.of())),
+                List.of(),
+                List.of(),
+                List.of());
+        var capture = mapper.createObjectNode();
+        capture.set("manifest", mapper.valueToTree(manifest));
+        job.setCapture(capture);
+        var real = new ClasspathSourceCatalogRegistry(mapper, Clock.systemUTC());
+        when(catalogs.requireSource(any())).thenAnswer(invocation -> real.requireSource(invocation.getArgument(0)));
+        when(files.registerReadReceipts(eq(job), any(), any(), eq(catalogs)))
+                .thenAnswer(invocation -> invocation.getArgument(1));
+        when(verifier.verifyCandidate(eq(job), any(), eq(ReviewKind.ITEM), any(), any()))
+                .thenAnswer(invocation -> invocation.getArgument(3));
+    }
+
     /**
-     * The error-handling result that #50's review recorded (review 2435ae89): a Not met that claims the checkout has
-     * no exception handler, with {@code receipts} as its session proved them.
+     * The error-handling result that #50's review recorded (review 2435ae89): a Not met that says the checkout has no
+     * exception handler, with {@code receipts} as its session proved them. {@code edit} changes the stored text.
      */
-    private AdmissionRequestDTO pr50ErrorHandling(List<ReadReceipt> receipts) {
+    private AdmissionRequestDTO pr50ErrorHandling(List<ReadReceipt> receipts, UnaryOperator<ObjectNode> edit) {
         var candidate = (ObjectNode) mapper.readTree("""
             {"outcome":"NOT_MET",
              "summary":"New page parameter is unvalidated; invalid input yields an unhandled exception and a raw 500",
@@ -205,6 +254,7 @@ class ReviewOutputServiceTest extends BaseUnitTest {
                "lookedFor":"an error handler for the new page parameter",
                "boundary":"the changed file plus a repo-wide grep of all 8 Java sources"}}}
             """);
+        candidate = edit.apply(candidate);
         candidate.set("coverage", mapper.valueToTree(new HostCoverage(true, null, 3, 0, 0, receipts)));
         return new AdmissionRequestDTO(
                 3,
@@ -215,77 +265,168 @@ class ReviewOutputServiceTest extends BaseUnitTest {
                 List.of());
     }
 
-    private void realCatalog() {
-        var real = new ClasspathSourceCatalogRegistry(mapper, Clock.systemUTC());
-        when(catalogs.requireSource(any())).thenAnswer(invocation -> real.requireSource(invocation.getArgument(0)));
+    private static ReadReceipt searched(String version) {
+        return new ReadReceipt(
+                TREE,
+                "repos/reviewed/.git/HEAD",
+                ".",
+                version,
+                ReadReceiptStatus.SEARCHED,
+                null,
+                null,
+                null,
+                "ControllerAdvice|ExceptionHandler");
     }
 
-    @Test
-    void shouldWithholdAClaimAboutTheCheckoutWhenItsSessionNeitherReadNorSearchedIt() {
-        realCatalog();
-        when(results.admit(1, job.getReviewId(), job.getId(), 0, List.of()))
-                .thenReturn(new AdmissionReceipt(List.of(), List.of()));
+    /** The diff alone named as searched: the claim now rests on its words. */
+    private ObjectNode diffOnly(ObjectNode candidate) {
+        ((ObjectNode) candidate.path("evidence").path("search"))
+                .set("consulted", mapper.valueToTree(List.of(DIFF.value())));
+        return candidate;
+    }
 
-        service.prepare(job, pr50ErrorHandling(List.of())).record(job);
+    /** The stored #50 texts, each replaced by {@code text}. */
+    private UnaryOperator<ObjectNode> worded(String text) {
+        return candidate -> {
+            candidate.put("summary", "The page parameter is not validated");
+            candidate.put("explanation", text);
+            var problem = (ObjectNode) candidate.path("problems").get(0);
+            problem.put("summary", "Negative page reaches subList");
+            problem.put("explanation", "A negative page makes from negative, so List.subList throws.");
+            return diffOnly(candidate);
+        };
+    }
 
-        verifyNoInteractions(verifier);
+    private void assertWithheld(String message) {
         verify(membership)
                 .withhold(
                         1,
                         RuntimeReviewTestData.assignment(5L, null).id(),
                         CandidateRefusal.CONSULTED_SOURCE_UNREAD,
-                        "The result names scm.repository.tree as searched, but its session ran no search of the whole"
-                                + " checkout to the end");
+                        message);
+    }
+
+    private static final String NAMED_UNSEARCHED = "The result names scm.repository.tree as searched, but its receipts"
+            + " hold no search of the whole, complete checkout to the end";
+    private static final String WORDED_UNSEARCHED = "The result says the repository lacks something beyond its"
+            + " citations, but its receipts hold no search of the whole, complete checkout to the end";
+
+    @Test
+    void shouldWithholdAClaimAboutTheCheckoutWhenItsSessionNeitherReadNorSearchedIt() {
+        pr50Capture(SourceCompleteness.COMPLETE);
+        when(results.admit(1, job.getReviewId(), job.getId(), 0, List.of()))
+                .thenReturn(new AdmissionReceipt(List.of(), List.of()));
+
+        service.prepare(job, pr50ErrorHandling(List.of(), UnaryOperator.identity()))
+                .record(job);
+
+        assertWithheld(NAMED_UNSEARCHED);
     }
 
     @Test
     void shouldWithholdAClaimAboutTheCheckoutWhenItsSessionReadOnlyTheChangedFile() {
-        realCatalog();
+        pr50Capture(SourceCompleteness.COMPLETE);
         // The stored #50 result read UserController to its end; that is a complete source of one file, not of the tree.
         var oneFile = List.of(new ReadReceipt(
-                new SourceKind("scm.repository.tree"),
+                TREE,
                 "repos/reviewed/.git/HEAD",
                 "src/main/java/com/example/userapi/controller/UserController.java",
-                "4154fb8c8ed570d8fb117a89a894ddedca72d818",
+                PR50_HEAD,
                 ReadReceiptStatus.COMPLETE,
                 "f77392a044225e8fdda78f2e6da1b952472a1e70f854696c413a88c8ec8aeb67",
                 1,
-                41));
+                41,
+                null));
         when(results.admit(1, job.getReviewId(), job.getId(), 0, List.of()))
                 .thenReturn(new AdmissionReceipt(List.of(), List.of()));
 
-        service.prepare(job, pr50ErrorHandling(oneFile)).record(job);
+        service.prepare(job, pr50ErrorHandling(oneFile, UnaryOperator.identity()))
+                .record(job);
 
-        verifyNoInteractions(verifier);
-        verify(membership)
-                .withhold(
-                        eq(1L),
-                        eq(RuntimeReviewTestData.assignment(5L, null).id()),
-                        eq(CandidateRefusal.CONSULTED_SOURCE_UNREAD),
-                        any());
+        assertWithheld(NAMED_UNSEARCHED);
     }
 
     @Test
-    void shouldPassAClaimAboutTheCheckoutOnToVerificationWhenItsSessionSearchedItToTheEnd() {
-        realCatalog();
-        var searched = List.of(new ReadReceipt(
-                new SourceKind("scm.repository.tree"),
-                "repos/reviewed/.git/HEAD",
-                ".",
-                "4154fb8c8ed570d8fb117a89a894ddedca72d818",
-                ReadReceiptStatus.SEARCHED,
-                null,
-                null,
-                null));
-        when(files.registerReadReceipts(eq(job), any(), eq(searched), eq(catalogs)))
-                .thenAnswer(invocation -> invocation.getArgument(1));
-        when(verifier.verifyCandidate(eq(job), any(), eq(ReviewKind.ITEM), any(), any()))
-                .thenAnswer(invocation -> invocation.getArgument(3));
+    void shouldAdmitAClaimAboutTheCheckoutWhenItsSessionSearchedTheWholeCompleteCheckoutToTheEnd() {
+        pr50Capture(SourceCompleteness.COMPLETE);
 
-        service.prepare(job, pr50ErrorHandling(searched));
+        service.prepare(job, pr50ErrorHandling(List.of(searched(PR50_HEAD)), UnaryOperator.identity()));
 
-        verify(verifier).verifyCandidate(eq(job), any(), eq(ReviewKind.ITEM), any(), any());
         verify(membership, never()).withhold(anyLong(), any(), any(), any());
+    }
+
+    @Test
+    void shouldWithholdAClaimAboutTheCheckoutWhenTheCaptureLeftFilesOutOfIt() {
+        pr50Capture(SourceCompleteness.PARTIAL);
+        when(results.admit(1, job.getReviewId(), job.getId(), 0, List.of()))
+                .thenReturn(new AdmissionReceipt(List.of(), List.of()));
+
+        service.prepare(job, pr50ErrorHandling(List.of(searched(PR50_HEAD)), UnaryOperator.identity()))
+                .record(job);
+
+        assertWithheld(NAMED_UNSEARCHED);
+    }
+
+    @Test
+    void shouldWithholdAClaimAboutTheCheckoutWhenTheSearchRanOverAnotherCommit() {
+        pr50Capture(SourceCompleteness.COMPLETE);
+        when(results.admit(1, job.getReviewId(), job.getId(), 0, List.of()))
+                .thenReturn(new AdmissionReceipt(List.of(), List.of()));
+
+        service.prepare(job, pr50ErrorHandling(List.of(searched("c".repeat(40))), UnaryOperator.identity()))
+                .record(job);
+
+        assertWithheld(NAMED_UNSEARCHED);
+    }
+
+    @Test
+    void shouldWithholdWordsThatSayTheRepositoryLacksSomethingWhenTheResultLeavesTheTreeUnnamed() {
+        pr50Capture(SourceCompleteness.COMPLETE);
+        when(results.admit(1, job.getReviewId(), job.getId(), 0, List.of()))
+                .thenReturn(new AdmissionReceipt(List.of(), List.of()));
+
+        service.prepare(
+                        job,
+                        pr50ErrorHandling(List.of(), worded("The application defines no global exception handler.")))
+                .record(job);
+
+        assertWithheld(WORDED_UNSEARCHED);
+    }
+
+    @Test
+    void shouldAdmitWordsAboutTheCitedLinesWithoutASearch() {
+        pr50Capture(SourceCompleteness.COMPLETE);
+
+        service.prepare(
+                job,
+                pr50ErrorHandling(List.of(), worded("The pinned file has no @Min, clamp or other check on the path.")));
+        verify(membership, never()).withhold(anyLong(), any(), any(), any());
+    }
+
+    @Test
+    void shouldLeaveASourceTheCatalogDoesNotKnowToTheVerifierSoItWithholdsOnlyThatPractice() {
+        pr50Capture(SourceCompleteness.COMPLETE);
+        var unknown = new SourceKind("scm.repository.files");
+        doThrow(new CandidateEvidenceVerifier.Unverified(
+                        CandidateRefusal.SOURCE_UNAVAILABLE, "A warrant names a source that was not captured", null))
+                .when(verifier)
+                .verifyCandidate(eq(job), any(), eq(ReviewKind.ITEM), any(), any());
+        when(results.admit(1, job.getReviewId(), job.getId(), 0, List.of()))
+                .thenReturn(new AdmissionReceipt(List.of(), List.of()));
+
+        service.prepare(job, pr50ErrorHandling(List.of(), candidate -> {
+                    ((ObjectNode) candidate.path("evidence").path("search"))
+                            .set("consulted", mapper.valueToTree(List.of(unknown.value())));
+                    return candidate;
+                }))
+                .record(job);
+
+        verify(membership)
+                .withhold(
+                        1,
+                        RuntimeReviewTestData.assignment(5L, null).id(),
+                        CandidateRefusal.SOURCE_UNAVAILABLE,
+                        "A warrant names a source that was not captured");
     }
 
     @Test

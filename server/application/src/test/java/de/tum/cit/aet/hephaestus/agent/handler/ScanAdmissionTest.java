@@ -156,7 +156,7 @@ class ScanAdmissionTest extends BaseUnitTest {
     }
 
     private ReadReceipt receipt(String path, String version, ReadReceiptStatus status, @Nullable String contentDigest) {
-        return new ReadReceipt(SOURCE, WITNESS, path, version, status, contentDigest, null, null);
+        return new ReadReceipt(SOURCE, WITNESS, path, version, status, contentDigest, null, null, null);
     }
 
     private ObjectNode candidate(List<ReadReceipt> receipts) {

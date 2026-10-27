@@ -911,27 +911,32 @@ function treeTool(
 function checkout(): string {
 	const root = mkdtempSync(path.join(tmpdir(), "session-tree-"));
 	mkdirSync(path.join(root, "repos/reviewed/src"), { recursive: true });
+	mkdirSync(path.join(root, "repos/reviewed/.git"), { recursive: true });
 	writeFileSync(path.join(root, "repos/reviewed/src/UserController.java"), "class A {\n}\n");
+	writeFileSync(path.join(root, "repos/reviewed/.git/config"), "[core]\n");
 	return root;
 }
 
-void test("codemode's whole-checkout search and complete read leave receipts that prove them", () => {
+void test("codemode's whole-checkout searches and complete reads leave receipts that prove them, searches first", () => {
 	const root = checkout();
 	try {
 		const reads = new SessionReads(root, {}, undefined, [], TREE);
 		treeTool(reads, "find", "find", { pattern: "*.java", path: "repos/reviewed" });
-		treeTool(reads, "grep", "grep", { pattern: "ControllerAdvice" });
 		treeTool(reads, "read", "read", { path: "repos/reviewed/src/UserController.java" });
+		treeTool(reads, "git", "read", { path: "repos/reviewed/.git/config" });
+		treeTool(reads, "grep", "grep", { pattern: "ControllerAdvice" });
+		treeTool(reads, "rooted", "grep", { pattern: "ExceptionHandler", path: "repos/reviewed" });
 
 		const { receipts } = reads.coverage();
 		assert.deepEqual(
-			receipts.map((receipt) => [receipt.status, receipt.path]),
+			receipts.map((receipt) => [receipt.status, receipt.path, receipt.pattern]),
 			[
-				["COMPLETE", "src/UserController.java"],
-				["SEARCHED", "."],
+				["SEARCHED", ".", "ControllerAdvice"],
+				["SEARCHED", ".", "ExceptionHandler"],
+				["COMPLETE", "src/UserController.java", undefined],
 			],
 		);
-		const [fileRead] = receipts;
+		const fileRead = receipts[2];
 		assert.ok(fileRead !== undefined);
 		assert.equal(fileRead.sourcePath, TREE.sourcePath);
 		assert.match(fileRead.contentDigest ?? "", /^[0-9a-f]{64}$/u);
@@ -975,7 +980,9 @@ const PR50_VALIDATES_INPUTS = {
 		'The added handler\'s only guard on `page` is `@RequestParam(defaultValue = "0")`. The pinned file has no @Min, clamp or other check on the path.',
 };
 
-function hostCoverage(receipts: { status: "COMPLETE" | "SEARCHED"; path: string }[] = []) {
+function hostCoverage(
+	receipts: { status: "COMPLETE" | "SEARCHED"; path: string; pattern?: string }[] = [],
+) {
 	return {
 		source: "host" as const,
 		reads: 3,
@@ -991,14 +998,23 @@ function hostCoverage(receipts: { status: "COMPLETE" | "SEARCHED"; path: string 
 	};
 }
 
-const ASK = { checkout: true, askAboutWords: true };
+const ASK = { repositoryRoot: "repos/reviewed", askAboutWords: true };
+
+function notMet(problem: { summary: string; explanation: string }, consulted: string[]) {
+	return {
+		outcome: "NOT_MET",
+		summary: "The new page parameter is not validated",
+		explanation: "A negative page reaches subList.",
+		search: { consulted },
+		problems: [problem],
+	};
+}
 
 void test("#50: a claim that the checkout lacks something goes back to the model until the checkout was searched", () => {
-	const consulted = ["scm.pull-request.diff", "scm.repository.tree"];
-	const stored = { search: { consulted }, problems: [PR50_ERROR_HANDLING] };
+	const stored = notMet(PR50_ERROR_HANDLING, ["scm.pull-request.diff", "scm.repository.tree"]);
 	assert.match(
 		unreadCheckoutClaim(stored, hostCoverage(), ASK)?.text ?? "",
-		/names scm\.repository\.tree as searched/u,
+		/names scm\.repository\.tree as searched.*path "repos\/reviewed"/u,
 	);
 	// Reading UserController to its end, as the stored result says it did, is no search of the checkout.
 	assert.notEqual(
@@ -1010,29 +1026,79 @@ void test("#50: a claim that the checkout lacks something goes back to the model
 		undefined,
 	);
 	assert.equal(
-		unreadCheckoutClaim(stored, hostCoverage([{ status: "SEARCHED", path: "." }]), ASK),
+		unreadCheckoutClaim(
+			stored,
+			hostCoverage([{ status: "SEARCHED", path: ".", pattern: "ControllerAdvice" }]),
+			ASK,
+		),
 		undefined,
 	);
 });
 
-void test("#50: leaving the tree out of the search does not hide words that say the checkout lacks something, once", () => {
-	const hidden = {
-		search: { consulted: ["scm.pull-request.diff"] },
-		problems: [PR50_ERROR_HANDLING],
-	};
+void test("#50: leaving the tree out of the search does not hide words that say the repository lacks something, once", () => {
+	const hidden = notMet(PR50_ERROR_HANDLING, ["scm.pull-request.diff"]);
 	assert.equal(unreadCheckoutClaim(hidden, hostCoverage(), ASK)?.byWords, true);
 	assert.equal(
-		unreadCheckoutClaim(hidden, hostCoverage(), { checkout: true, askAboutWords: false }),
+		unreadCheckoutClaim(hidden, hostCoverage(), { ...ASK, askAboutWords: false }),
 		undefined,
 	);
-	assert.equal(
-		unreadCheckoutClaim(hidden, hostCoverage(), { checkout: false, askAboutWords: true }),
-		undefined,
+	assert.match(
+		unreadCheckoutClaim(hidden, hostCoverage(), { askAboutWords: true })?.text ?? "",
+		/no checkout to search\. Remove that claim/u,
 	);
 	// What the cited file itself lacks is not a claim about the rest of the checkout.
 	assert.equal(
 		unreadCheckoutClaim(
-			{ search: { consulted: ["scm.pull-request.diff"] }, problems: [PR50_VALIDATES_INPUTS] },
+			notMet(PR50_VALIDATES_INPUTS, ["scm.pull-request.diff"]),
+			hostCoverage(),
+			ASK,
+		),
+		undefined,
+	);
+	// A could-not-determine result says nothing about the work.
+	assert.equal(
+		unreadCheckoutClaim({ ...hidden, outcome: "COULD_NOT_DETERMINE" }, hostCoverage(), ASK),
+		undefined,
+	);
+});
+
+void test("#50: other wordings of the same claim, in any text the result shows, go back to the model", () => {
+	for (const claim of [
+		"No @ControllerAdvice or @ExceptionHandler exists in the repository.",
+		"The reviewed checkout contains no @ControllerAdvice.",
+		"Nothing in the project catches IndexOutOfBoundsException.",
+		"The application defines no global exception handler.",
+		"There is no exception handler anywhere in the code.",
+		"None of the callers handle the null.",
+		"Nothing else in the code base validates page.",
+	]) {
+		const bounded = notMet(PR50_VALIDATES_INPUTS, ["scm.pull-request.diff"]);
+		for (const submission of [
+			{ ...bounded, summary: claim },
+			{ ...bounded, explanation: claim },
+			{ ...bounded, problems: [{ ...PR50_VALIDATES_INPUTS, nextStep: claim }] },
+		]) {
+			assert.equal(unreadCheckoutClaim(submission, hostCoverage(), ASK)?.byWords, true, claim);
+		}
+	}
+});
+
+void test("a bounded Met that names the tree for its selected lines is told how to name the diff instead", () => {
+	// handles-errors-instead-of-swallowing-them asks a Met to record evidence.search over the selected pinned source.
+	const met = {
+		outcome: "MET",
+		summary: "The added failure paths keep their error signal",
+		explanation:
+			"Both added catch blocks rethrow with context; the judgement covers the operators the diff adds.",
+		search: { consulted: ["scm.repository.tree"] },
+	};
+	assert.match(
+		unreadCheckoutClaim(met, hostCoverage(), ASK)?.text ?? "",
+		/name the source that holds them, such as scm\.pull-request\.diff, in place of scm\.repository\.tree/u,
+	);
+	assert.equal(
+		unreadCheckoutClaim(
+			{ ...met, search: { consulted: ["scm.pull-request.diff"] } },
 			hostCoverage(),
 			ASK,
 		),

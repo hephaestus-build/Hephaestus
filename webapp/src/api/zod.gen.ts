@@ -3110,6 +3110,7 @@ export const zReadReceipt = z.object({
     contentDigest: z.string().optional(),
     endLine: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }).optional(),
     path: z.string().optional(),
+    pattern: z.string().optional(),
     sourceKind: z.string().optional(),
     sourcePath: z.string().optional(),
     startLine: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }).optional(),

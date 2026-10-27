@@ -314,7 +314,8 @@ public class ReviewAdmissionData {
                                 ReadReceiptStatus.COMPLETE,
                                 digest,
                                 1,
-                                1))),
+                                1,
+                                null))),
                 outcome == ResultOutcome.NOT_MET ? List.of(problem) : List.of());
     }
 }

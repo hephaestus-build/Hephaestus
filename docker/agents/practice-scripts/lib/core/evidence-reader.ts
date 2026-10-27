@@ -247,11 +247,22 @@ export class EvidenceReader {
 	}
 
 	/**
-	 * A search of the whole checkout's contents that ran to the end, without a file filter. A scan reads only its
-	 * assigned file and context, so its searches prove nothing about the rest of the tree and get no receipt.
+	 * A search of the whole checkout's contents for `pattern` that ran to the end, without a file filter. A scan
+	 * reads only its assigned file and context, so its searches prove nothing about the rest of the tree and get no
+	 * receipt. A pattern longer than a receipt holds gets none either.
 	 */
-	#searchReceipt(record: boolean, truncated: boolean, glob: string | undefined): void {
-		if (!record || truncated || glob !== undefined || this.#sources.permittedPaths !== undefined) {
+	#searchReceipt(
+		record: boolean,
+		truncated: boolean,
+		{ pattern, glob }: { pattern: string; glob?: string },
+	): void {
+		if (
+			!record ||
+			truncated ||
+			glob !== undefined ||
+			this.#sources.permittedPaths !== undefined ||
+			pattern.length > CANDIDATE_LIMITS.warrantFieldChars
+		) {
 			return;
 		}
 		this.#receipt({
@@ -260,6 +271,7 @@ export class EvidenceReader {
 			path: ".",
 			version: this.#sources.headRevision ?? "unavailable",
 			status: "SEARCHED",
+			pattern,
 		});
 	}
 
@@ -394,7 +406,7 @@ export class EvidenceReader {
 					signal,
 				);
 				const truncated = matches.length > maxResults;
-				this.#searchReceipt(recordReceipt, truncated, request.glob);
+				this.#searchReceipt(recordReceipt, truncated, request);
 				return { matches: matches.slice(0, maxResults), truncated };
 			}
 			case "record": {

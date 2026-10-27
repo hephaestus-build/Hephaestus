@@ -157,16 +157,6 @@ public class ReviewOutputService {
                         "Host coverage differs from the submitted read receipts"));
                 continue;
             }
-            // A scan's search covers its assigned file, whose complete read the scan check below requires.
-            var unread = review.kind() == ReviewKind.ITEM ? unreadConsultedSource(candidate) : null;
-            if (unread != null) {
-                refusals.add(new WithheldAssignment(
-                        assignment,
-                        CandidateRefusal.CONSULTED_SOURCE_UNREAD,
-                        "The result names " + unread.value()
-                                + " as searched, but its session ran no search of the whole checkout to the end"));
-                continue;
-            }
             try {
                 resolvedManifest = files.registerReadReceipts(job, resolvedManifest, entry.readReceipts(), catalogs);
             } catch (IllegalArgumentException | IllegalStateException refusal) {
@@ -188,6 +178,13 @@ public class ReviewOutputService {
             }
             try {
                 var verified = verifier.verifyCandidate(job, assignment, review.kind(), candidate, captured);
+                // A scan's search covers its assigned file, whose complete read the scan check above requires.
+                var unsearched = review.kind() == ReviewKind.ITEM ? unsearchedAbsence(candidate, captured) : null;
+                if (unsearched != null) {
+                    refusals.add(
+                            new WithheldAssignment(assignment, CandidateRefusal.CONSULTED_SOURCE_UNREAD, unsearched));
+                    continue;
+                }
                 admitted.add(result(assignment, verified));
             } catch (CandidateEvidenceVerifier.Unverified refusal) {
                 refusals.add(new WithheldAssignment(
@@ -240,27 +237,40 @@ public class ReviewOutputService {
     }
 
     /**
-     * A source that a search for something missing, or a ruling-out of a prerequisite, names as consulted, which a
-     * session reads on demand from a checkout (an upstream snapshot), without a search of the whole checkout that ran
-     * to the end in the host's receipts. Every other source is staged whole in the job folder. A complete read of one
-     * file is a complete source of that file, not of the checkout (ADR 0064 § Absence).
+     * Why a result cannot say that a checkout lacks something: it names the checkout as searched, or its words say the
+     * repository beyond its citations lacks something ({@link AbsenceClaims}), and its receipts hold no search of the
+     * whole checkout that ran to the end, captured complete at the searched commit. A complete read of one file is a
+     * complete source of that file, not of the checkout (ADR 0064 § Absence). Every other source is staged whole in
+     * the job folder. A could-not-determine result says nothing about the work.
      */
-    private @Nullable SourceKind unreadConsultedSource(Candidate candidate) {
-        if (!(candidate.coverage() instanceof HostCoverage host)) return null;
+    private @Nullable String unsearchedAbsence(Candidate candidate, CapturedEvidence captured) {
+        if (candidate.outcome() == ResultOutcome.COULD_NOT_DETERMINE
+                || !(candidate.coverage() instanceof HostCoverage host)) return null;
         var consulted = new ArrayList<SourceKind>();
         var search = candidate.search();
         if (search != null) consulted.addAll(search.consulted());
         var inapplicability = candidate.inapplicability();
         if (inapplicability != null) consulted.addAll(inapplicability.consulted());
-        for (var source : consulted) {
-            if (catalogs.requireSource(source).authority() != SourceAuthority.UPSTREAM_SNAPSHOT) continue;
-            boolean searched = host.receipts().stream()
-                    .anyMatch(receipt -> receipt.sourceKind().equals(source)
-                            && receipt.status() == ReadReceiptStatus.SEARCHED
-                            && ".".equals(receipt.path()));
-            if (!searched) return source;
-        }
-        return null;
+        boolean claimed = AbsenceClaims.claimed(candidate);
+        if (consulted.isEmpty() && !claimed) return null;
+        var checkouts = captured.listedSources().stream()
+                .filter(kind -> catalogs.requireSource(kind).authority() == SourceAuthority.UPSTREAM_SNAPSHOT)
+                .toList();
+        var named = consulted.stream().filter(checkouts::contains).findFirst().orElse(null);
+        if (named == null && (checkouts.isEmpty() || !claimed)) return null;
+        boolean searched = host.receipts().stream()
+                .anyMatch(receipt -> receipt.status() == ReadReceiptStatus.SEARCHED
+                        && ".".equals(receipt.path())
+                        && (named == null
+                                ? checkouts.contains(receipt.sourceKind())
+                                : named.equals(receipt.sourceKind()))
+                        && captured.completeAt(receipt.sourceKind(), receipt.version()));
+        if (searched) return null;
+        return named != null
+                ? "The result names " + named.value()
+                        + " as searched, but its receipts hold no search of the whole, complete checkout to the end"
+                : "The result says the repository lacks something beyond its citations, but its receipts hold no"
+                        + " search of the whole, complete checkout to the end";
     }
 
     private static boolean hasCompleteAssignedRead(
