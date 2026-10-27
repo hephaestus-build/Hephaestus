@@ -391,8 +391,10 @@ also leave every total on the page.
 
 With workspace addresses on, each workspace has its own host, such as `team.example.org`.
 Sign-in and its cookies stay on the instance host.
-Each workspace host keeps its own cookie choice in the browser.
-The theme is one cookie for all workspace hosts.
+The web app asks for no cookie choice, because it sets no optional cookie.
+The theme is one cookie, `hephaestus-theme`, on the workspace base domain (`Domain=`, `SameSite=Lax`, and `Secure` on HTTPS).
+Thus, all workspace hosts share the light or dark mode.
+It is a strictly necessary preference cookie that the reader sets, and it expires after one year.
 
 A wildcard certificate through the DNS-01 challenge needs no proxy, and the DNS provider receives no request data.
 If a proxy or CDN serves the hosts, it is a recipient.
@@ -400,10 +402,9 @@ Name it in the notice.
 
 ```md
 A workspace can have its own address, such as [team.example.org]. Sign-in and its cookies stay on
-[example.org]. Each workspace address stores its own cookie choice in your browser, so it asks for
-your cookie choice once. One theme cookie for all addresses remembers your light or dark mode.
-[If a proxy or CDN serves these addresses: its provider, role and
-transfer basis.]
+[example.org]. All these addresses share one strictly necessary cookie, hephaestus-theme, that
+remembers your light or dark mode for one year. [If a proxy or CDN serves these addresses: its
+provider, role and transfer basis.]
 ```
 
 ## Verifying the configuration
