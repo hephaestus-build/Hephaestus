@@ -28,7 +28,7 @@ const SCOPES = [
 	"deps",
 	"security",
 	"db",
-	// Dockerfiles and Compose files.
+	// Compose files and shared tooling under docker/. A service's own Dockerfile uses its service scope.
 	"docker",
 
 	// Tooling and process.
