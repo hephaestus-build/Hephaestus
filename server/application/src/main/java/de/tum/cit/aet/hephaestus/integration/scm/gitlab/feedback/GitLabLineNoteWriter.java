@@ -581,9 +581,7 @@ public class GitLabLineNoteWriter implements LineNoteWriter {
         // Only a position the response answered with null proves an ordinary comment; a missing one
         // proves nothing.
         boolean unpositioned = note.containsKey("position") && note.get("position") == null;
-        if (unpositioned
-                && ((revision != null && body.equals(locationBody(projectUrl, revision, diff, item)))
-                        || (diff.endLine() != null && body.equals(fallbackBody(diff, item))))) {
+        if (unpositioned && revision != null && body.equals(locationBody(projectUrl, revision, diff, item))) {
             return CopyForm.FILE_NOTE;
         }
         boolean lineCopy = diff.endLine() != null
@@ -704,10 +702,6 @@ public class GitLabLineNoteWriter implements LineNoteWriter {
                 .map(segment ->
                         URLEncoder.encode(segment, StandardCharsets.UTF_8).replace("+", "%20"))
                 .collect(Collectors.joining("/"));
-    }
-
-    private static String fallbackBody(FeedbackAnchor diff, LineNote item) {
-        return "**`" + diff.path() + ":" + diff.endLine() + "`**\n\n" + postedBody(item);
     }
 
     private record Copy(

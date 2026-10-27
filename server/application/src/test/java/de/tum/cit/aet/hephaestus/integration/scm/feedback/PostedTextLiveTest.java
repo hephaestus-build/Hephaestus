@@ -34,8 +34,8 @@ class PostedTextLiveTest {
         assumeThat(github).as("GITHUB_TOKEN").isNotBlank();
         assumeThat(gitlabUrl).as("GITLAB_URL").isNotBlank();
         assumeThat(gitlab).as("GITLAB_TOKEN").isNotBlank();
-        String repository =
-                Objects.requireNonNullElse(System.getenv("POSTED_TEXT_GITHUB_REPOSITORY"), "HephaestusTest/sandbox");
+        String repository = Objects.requireNonNullElse(
+                System.getenv("POSTED_TEXT_GITHUB_REPOSITORY"), "HephaestusTest/practice-validation");
         String project =
                 Objects.requireNonNullElse(System.getenv("POSTED_TEXT_GITLAB_PROJECT"), "hephaestus-test/sandbox");
         RestClient githubClient =

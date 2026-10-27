@@ -9,10 +9,10 @@ import java.util.regex.Pattern;
  * It keeps no Markdown structure, because GitHub and GitLab read Markdown in dialects that no parser here matches.
  * Every ASCII punctuation mark is escaped with a backslash (CommonMark lets any of them be escaped, and both
  * providers follow it), {@code &}, {@code <} and {@code >} become character references, and every name a provider
- * links becomes {@code <code>@name</code>}. The character reference and a backslash before the at sign are no escape:
- * both providers link them. The result renders as the literal text on both providers; nothing in it opens a fence, a
- * quote, a list, a footnote, a link, a table or a GitLab quick action. Only the bot's own template and markers hold
- * structure.
+ * links and every issue or merge request reference becomes code: {@code <code>@name</code>}. A character reference
+ * or a backslash before the at sign or the number sign is no escape: the providers link through them. The result
+ * renders as the literal text on both providers; nothing in it opens a fence, a quote, a list, a footnote, a link, a
+ * table or a GitLab quick action. Only the bot's own template and markers hold structure.
  *
  * <p>It runs once on each untrusted text; every write and every readback comparison calls it with the same input.
  */
@@ -25,11 +25,18 @@ public final class PostedText {
     // to the end of the chain.
     private static final Pattern MENTION = Pattern.compile("@[A-Za-z0-9_][A-Za-z0-9_-]*(?:[./@][A-Za-z0-9_-]+)*");
 
+    // A reference makes the referenced item list the comment, and GitHub reads it through a backslash. Issue, pull
+    // request, merge request, epic and snippet numbers, `GH-` numbers, cross-repository forms, labels and milestones
+    // become code like names.
+    private static final Pattern REFERENCE = Pattern.compile(
+            "(?:[A-Za-z0-9_.-]+/[A-Za-z0-9_./-]+)?[#!&$]\\d+|GH-\\d+|[~%](?:\"[^\"\\n]*\"|[A-Za-z0-9_][A-Za-z0-9_.:-]*)");
+
     // GitLab's quick action reader drops a lone carriage return, so every line end is one before anything else.
     private static final Pattern LINE_END = Pattern.compile("\\r\\n?|[\\u2028\\u2029\\u0085]");
 
-    // Direction controls can make the text read differently from the bytes a reader is shown.
-    private static final Pattern DIRECTION_CONTROL = Pattern.compile("[\\u202A-\\u202E\\u2066-\\u2069]");
+    // Direction controls, zero-width characters and tag characters make the text read differently from its bytes.
+    private static final Pattern INVISIBLE =
+            Pattern.compile("[\\u200B-\\u200F\\u202A-\\u202E\\u2060-\\u2064\\u2066-\\u2069\\x{E0000}-\\x{E007F}]");
 
     /** One line of untrusted text, as literal text: its line ends become spaces. */
     public static String plain(String untrusted) {
@@ -63,9 +70,7 @@ public final class PostedText {
     }
 
     private static String normalized(String text) {
-        return DIRECTION_CONTROL
-                .matcher(LINE_END.matcher(text).replaceAll("\n"))
-                .replaceAll("");
+        return INVISIBLE.matcher(LINE_END.matcher(text).replaceAll("\n")).replaceAll("");
     }
 
     private static String escaped(String text) {
@@ -79,6 +84,17 @@ public final class PostedText {
                             .append(punctuationEscaped(name.group()))
                             .append("</code>");
                     i = name.end() - 1;
+                    continue;
+                }
+            }
+            if (i == 0 || !isAsciiAlphanumeric(text.charAt(i - 1))) {
+                Matcher reference = REFERENCE.matcher(text).region(i, text.length());
+                if (reference.lookingAt()
+                        && (reference.end() == text.length() || !isAsciiAlphanumeric(text.charAt(reference.end())))) {
+                    out.append("<code>")
+                            .append(punctuationEscaped(reference.group()))
+                            .append("</code>");
+                    i = reference.end() - 1;
                     continue;
                 }
             }

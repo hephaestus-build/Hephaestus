@@ -65,7 +65,8 @@ class PostedTextTest extends BaseUnitTest {
         assertThat(visible)
                 .doesNotContain("user-mention")
                 .doesNotContain("team-mention")
-                .doesNotContain("data-reference-type=\"user\"")
+                .doesNotContain("data-reference-type=")
+                .doesNotContain("issue-link")
                 .doesNotContain("<img")
                 .doesNotContain("<script")
                 .doesNotContainPattern("<[a-z][^>]*\\son[a-z]+=")
@@ -119,5 +120,12 @@ class PostedTextTest extends BaseUnitTest {
                 "<!-- hephaestus-feedback-copy:1 -->");
         assertThat(PostedText.summary(content))
                 .isEqualTo("Ask <code>\\@alice</code> &lt;b&gt;now&lt;\\/b&gt;\n\n<!-- hephaestus-feedback-copy:1 -->");
+    }
+
+    @Test
+    void shouldWriteOneLineOfLiteralTextAndCodeThatNoBacktickEnds() {
+        assertThat(PostedText.plain("Use *x*\nthen @alice, #1"))
+                .isEqualTo("Use \\*x\\* then <code>\\@alice</code>\\, <code>\\#1</code>");
+        assertThat(PostedText.inlineCode("a`b <c>")).isEqualTo("<code>a\\`b &lt;c&gt;</code>");
     }
 }

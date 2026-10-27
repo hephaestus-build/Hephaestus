@@ -774,22 +774,6 @@ class GitLabLineNoteWriterTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldReadAnEarlierFallbackCommentBackAsALocationComment() {
-        when(gitLabProvider.forScope(1L)).thenReturn(client);
-        LineNote kept = item("fix", "result:a:0");
-        stubDiscussions(
-                List.of(discussion(
-                        "gid://Disc/F",
-                        List.of(note("gid://Note/F", "**`src/Foo.java:10`**\n\n" + posted(kept), BOT)))),
-                BOT);
-
-        assertThat(channel.findPosted(target(), List.of(kept))).singleElement().satisfies(receipt -> {
-            assertThat(receipt.externalRef()).isEqualTo("gid://Note/F");
-            assertThat(receipt.actualKind()).isEqualTo(CopyForm.FILE_NOTE);
-        });
-    }
-
-    @Test
     void shouldNeitherAcknowledgeNorCreateNextToACopyThatIsNotExactlyItsOwn() {
         stubResolvedMr();
         LineNote a = item("fix-a", "result:a:0");
