@@ -676,7 +676,7 @@ export const AdvancedDisclosure: Story = {
 		const mentor = row(await openPurpose(canvas, "Heph"), "In-house");
 		await openAdvanced(mentor);
 		await expect(mentor.queryByLabelText(/^Max concurrent runs/u)).toBeNull();
-		await expect(mentor.getByLabelText(/^Timeout \(seconds\)/u)).toHaveValue(10_800);
+		await expect(mentor.getByLabelText(/^Timeout \(seconds\)/u)).toHaveValue(300);
 		await expect(
 			row(await openPurpose(canvas, "Embedding model"), "In-house").queryByRole("button", {
 				name: /^Advanced/u,
