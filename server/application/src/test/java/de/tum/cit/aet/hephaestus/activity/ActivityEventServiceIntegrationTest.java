@@ -1,12 +1,17 @@
 package de.tum.cit.aet.hephaestus.activity;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.DataSource;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReview;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewthread.PullRequestReviewThread;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewthread.PullRequestReviewThreadRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
@@ -21,13 +26,15 @@ import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
 import java.time.Instant;
 import java.util.List;
-import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 class ActivityEventServiceIntegrationTest extends BaseIntegrationTest {
 
@@ -36,6 +43,9 @@ class ActivityEventServiceIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private ActivityEventRepository activityEventRepository;
+
+    @Autowired
+    private PlatformTransactionManager transactionManager;
 
     @Autowired
     private WorkspaceRepository workspaceRepository;
@@ -259,18 +269,43 @@ class ActivityEventServiceIntegrationTest extends BaseIntegrationTest {
 
         @Test
         void shouldRecordARedeliveredCommentEditOnceAndTwoEditsInOneSecondTwice() {
+            var listener = listener(mock(PullRequestReviewThreadRepository.class));
             var edit = commentEdit(closedAt, "First words");
             var secondEditInTheSameSecond = commentEdit(closedAt, "Second words");
 
             for (var event : List.of(edit, edit, secondEditInTheSameSecond, secondEditInTheSameSecond)) {
-                recordEdit(ActivityEventType.COMMENT_UPDATED, ActivityTargetType.ISSUE_COMMENT, 303L, event);
+                inTransaction(() -> listener.onCommentUpdated(event));
             }
 
             assertThat(rows(ActivityEventType.COMMENT_UPDATED, 303L)).isEqualTo(2);
         }
 
         @Test
+        void shouldRecordARedeliveredReviewCommentEditOnce() {
+            var listener = listener(mock(PullRequestReviewThreadRepository.class));
+            var comment = new ScmEventPayload.ReviewCommentData(
+                    306L,
+                    "Edited note",
+                    "src/Main.java",
+                    3,
+                    null,
+                    null,
+                    testUser.getId(),
+                    closedAt.minusSeconds(600),
+                    closedAt,
+                    53L,
+                    testRepository.getId());
+            var edit = new ScmDomainEvent.ReviewCommentEdited(comment, 53L, Set.of("body"), webhook());
+
+            inTransaction(() -> listener.onReviewCommentEdited(edit));
+            inTransaction(() -> listener.onReviewCommentEdited(edit));
+
+            assertThat(rows(ActivityEventType.REVIEW_COMMENT_EDITED, 306L)).isEqualTo(1);
+        }
+
+        @Test
         void shouldRecordARedeliveredDiscussionCommentEditOnce() {
+            var listener = listener(mock(PullRequestReviewThreadRepository.class));
             var comment = new ScmEventPayload.DiscussionCommentData(
                     304L,
                     "Edited answer",
@@ -283,53 +318,65 @@ class ActivityEventServiceIntegrationTest extends BaseIntegrationTest {
                     testRepository.getId());
             var edit = new ScmDomainEvent.DiscussionCommentEdited(comment, 50L, Set.of("body"), webhook());
 
-            recordEdit(ActivityEventType.DISCUSSION_COMMENT_EDITED, ActivityTargetType.DISCUSSION_COMMENT, 304L, edit);
-            recordEdit(ActivityEventType.DISCUSSION_COMMENT_EDITED, ActivityTargetType.DISCUSSION_COMMENT, 304L, edit);
+            inTransaction(() -> listener.onDiscussionCommentEdited(edit));
+            inTransaction(() -> listener.onDiscussionCommentEdited(edit));
 
             assertThat(rows(ActivityEventType.DISCUSSION_COMMENT_EDITED, 304L)).isEqualTo(1);
         }
 
         @Test
-        void shouldRecordARedeliveredDismissalOnceAfterTheReviewChanged() {
-            var review = new ScmEventPayload.ReviewData(
-                    305L,
-                    "Looks good",
-                    PullRequestReview.State.APPROVED,
-                    true,
-                    null,
-                    testUser.getId(),
-                    true,
-                    51L,
-                    closedAt,
-                    closedAt,
-                    testRepository.getId());
-            var later = new ScmEventPayload.ReviewData(
-                    305L,
-                    "Looks good",
-                    PullRequestReview.State.APPROVED,
-                    true,
-                    null,
-                    testUser.getId(),
-                    true,
-                    51L,
-                    closedAt,
-                    closedAt.plusSeconds(3600),
-                    testRepository.getId());
+        void shouldRecordEachDismissalOfOneReviewOnceEvenWhenGitLabDismissesItAgain() {
+            var listener = listener(mock(PullRequestReviewThreadRepository.class));
+            var dismissed = new ScmDomainEvent.ReviewDismissed(dismissedReview(closedAt), webhook());
+            // GitLab reuses the review of an approver: a renewed approval, withdrawn again, is a second dismissal.
+            var dismissedAgain =
+                    new ScmDomainEvent.ReviewDismissed(dismissedReview(closedAt.plusSeconds(3600)), webhook());
 
-            for (var data : List.of(review, later)) {
-                var dismissal = new ScmDomainEvent.ReviewDismissed(data, webhook());
-                activityEventService.record(
-                        testWorkspace.getId(),
-                        ActivityEventType.REVIEW_DISMISSED,
-                        Objects.requireNonNull(data.updatedAt()),
-                        testUser,
-                        testRepository,
-                        ActivityTargetType.REVIEW,
-                        305L,
-                        ScmEventIdentity.of(dismissal));
+            for (var event : List.of(dismissed, dismissed, dismissedAgain, dismissedAgain)) {
+                inTransaction(() -> listener.onReviewDismissed(event));
             }
 
-            assertThat(rows(ActivityEventType.REVIEW_DISMISSED, 305L)).isEqualTo(1);
+            assertThat(rows(ActivityEventType.REVIEW_DISMISSED, 305L)).isEqualTo(2);
+        }
+
+        @Test
+        void shouldRecordARedeliveredResolutionOnceAndAResolutionAfterAReopenAgain() {
+            var threads = mock(PullRequestReviewThreadRepository.class);
+            var listener = listener(threads);
+            var pullRequest = new PullRequest();
+            pullRequest.setId(54L);
+            pullRequest.setAuthor(testUser);
+            pullRequest.setRepository(testRepository);
+            var thread = new PullRequestReviewThread();
+            thread.setId(307L);
+            thread.setState(PullRequestReviewThread.State.RESOLVED);
+            thread.setResolvedBy(testUser);
+            thread.setPullRequest(pullRequest);
+            when(threads.findById(307L)).thenReturn(Optional.of(thread));
+
+            for (var resolvedAt : List.of(closedAt, closedAt, closedAt.plusSeconds(600))) {
+                thread.setResolvedAt(resolvedAt);
+                var resolved = new ScmDomainEvent.ReviewThreadResolved(
+                        ScmEventPayload.ReviewThreadData.from(thread).orElseThrow(), webhook());
+                inTransaction(() -> listener.onReviewThreadResolved(resolved));
+            }
+
+            assertThat(rows(ActivityEventType.REVIEW_THREAD_RESOLVED, 307L)).isEqualTo(2);
+        }
+
+        private ScmEventPayload.ReviewData dismissedReview(Instant dismissedAt) {
+            return new ScmEventPayload.ReviewData(
+                    305L,
+                    "Looks good",
+                    PullRequestReview.State.APPROVED,
+                    true,
+                    null,
+                    testUser.getId(),
+                    true,
+                    51L,
+                    closedAt.minusSeconds(3600),
+                    dismissedAt,
+                    testRepository.getId());
         }
 
         private ScmDomainEvent.CommentUpdated commentEdit(Instant at, String body) {
@@ -338,20 +385,14 @@ class ActivityEventServiceIntegrationTest extends BaseIntegrationTest {
             return new ScmDomainEvent.CommentUpdated(comment, 52L, Set.of("body"), webhook());
         }
 
-        private void recordEdit(
-                ActivityEventType type,
-                ActivityTargetType target,
-                long targetId,
-                ScmDomainEvent.ContextualEvent event) {
-            activityEventService.record(
-                    testWorkspace.getId(),
-                    type,
-                    closedAt,
-                    testUser,
-                    testRepository,
-                    target,
-                    targetId,
-                    ScmEventIdentity.of(event));
+        /** Runs a listener call in its own transaction, as the listener runs in production. */
+        private void inTransaction(Runnable call) {
+            new TransactionTemplate(transactionManager).executeWithoutResult(ignored -> call.run());
+        }
+
+        /** The real listener, called in this thread: what it records is what an event records in production. */
+        private ActivityEventListener listener(PullRequestReviewThreadRepository threads) {
+            return new ActivityEventListener(activityEventService, threads, userRepository, repositoryRepository);
         }
 
         private EventContext webhook() {

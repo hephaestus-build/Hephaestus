@@ -173,7 +173,7 @@ For these, the compare and the write are one step, also when a sync writes the s
   This rule applies to pull and merge requests, issues, comments, reviews, review comments, notes, diff notes and Outline documents.
 - A Slack edit applies only if its `edited.ts` is later than the stored edit.
 - A Slack change without `edited.ts` is a new reply or an unfurl. It changes nothing.
-- A dismissal is final.
+- A GitHub dismissal is final.
   A second dismissal publishes nothing.
 
 **An event records its item event once.**
@@ -185,7 +185,8 @@ A lifecycle event has one identity, its source key.
 - A ready, draft or reopen is the change and the moment that the provider dates.
 - A close or a merge is the stored `closedAt` or `mergedAt`, which the webhook and the sync store alike.
 - An edit of a comment is its `updated_at` and its text, so two edits in one second are two edits.
-- A dismissal is once per review, because a dismissal is final.
+- A dismissal is the `updated_at` that the review stores for it.
+  GitLab can dismiss a renewed approval of one review again.
 - A thread resolution is its `resolvedAt`.
 
 The unique key on item, name and source key absorbs a second report of the same event, whatever version the work has by then.
