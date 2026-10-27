@@ -14,6 +14,8 @@ class GitHubCommitCheckRunsTest extends BaseUnitTest {
 
     private static final String SHA = "d".repeat(40);
     private static final Instant READ_AT = Instant.parse("2026-10-26T12:00:00Z");
+    private static final long NO_APP = 0;
+    private static final long OWN_APP = 4242;
 
     private static final String LINT_RUNNING = "\"status\": \"IN_PROGRESS\", \"conclusion\": null";
     private static final String LINT_PASSED = "\"status\": \"COMPLETED\", \"conclusion\": \"SUCCESS\"";
@@ -21,7 +23,7 @@ class GitHubCommitCheckRunsTest extends BaseUnitTest {
     @Test
     void shouldReadCheckRunsAndCommitStatusesAsTheCommitsRuns() {
         HeadCheckRuns runs = GitHubCommitCheckRuns.toRuns(
-                        SHA, rollup(false, "FAILURE", LINT_RUNNING), suites("COMPLETED", 3), READ_AT)
+                        SHA, rollup(false, "FAILURE", LINT_RUNNING), suites("COMPLETED", 3), NO_APP, READ_AT)
                 .orElseThrow();
 
         assertThat(runs.sha()).isEqualTo(SHA);
@@ -53,31 +55,89 @@ class GitHubCommitCheckRunsTest extends BaseUnitTest {
     @Test
     void shouldCallAListCompleteOnlyWhenNothingGitHubKnowsOfIsStillToCome() {
         assertThat(GitHubCommitCheckRuns.toRuns(
-                        SHA, rollup(false, "FAILURE", LINT_PASSED), suites("COMPLETED", 3), READ_AT))
+                        SHA, rollup(false, "FAILURE", LINT_PASSED), suites("COMPLETED", 3), NO_APP, READ_AT))
                 .hasValueSatisfying(runs -> assertThat(runs.finished()).isTrue());
         // Every listed run ended, but a suite with runs is still under way and can add a run that waits for another.
         assertThat(GitHubCommitCheckRuns.toRuns(
-                        SHA, rollup(false, "FAILURE", LINT_PASSED), suites("IN_PROGRESS", 2), READ_AT))
+                        SHA, rollup(false, "FAILURE", LINT_PASSED), suites("IN_PROGRESS", 2), NO_APP, READ_AT))
                 .hasValueSatisfying(runs -> assertThat(runs.complete()).isFalse());
         // An app that never posts a run leaves its empty suite queued for ever.
         assertThat(GitHubCommitCheckRuns.toRuns(
-                        SHA, rollup(false, "SUCCESS", LINT_PASSED), suites("QUEUED", 0), READ_AT))
+                        SHA, rollup(false, "SUCCESS", LINT_PASSED), suites("QUEUED", 0), NO_APP, READ_AT))
                 .hasValueSatisfying(runs -> assertThat(runs.complete()).isTrue());
         assertThat(GitHubCommitCheckRuns.toRuns(
-                        SHA, rollup(true, "FAILURE", LINT_PASSED), suites("COMPLETED", 3), READ_AT))
+                        SHA, rollup(true, "FAILURE", LINT_PASSED), suites("COMPLETED", 3), NO_APP, READ_AT))
                 .hasValueSatisfying(runs -> assertThat(runs.complete()).isFalse());
-        for (String waiting : new String[] {"EXPECTED", "PENDING"})
-            assertThat(GitHubCommitCheckRuns.toRuns(
-                            SHA, rollup(false, waiting, LINT_PASSED), suites("COMPLETED", 3), READ_AT))
-                    .hasValueSatisfying(runs -> assertThat(runs.complete()).isFalse());
-        assertThat(GitHubCommitCheckRuns.toRuns(SHA, rollup(false, "SUCCESS", LINT_PASSED), null, READ_AT))
+        assertThat(GitHubCommitCheckRuns.toRuns(
+                        SHA, rollup(false, "EXPECTED", LINT_PASSED), suites("COMPLETED", 3), NO_APP, READ_AT))
+                .hasValueSatisfying(runs -> assertThat(runs.complete()).isFalse());
+        assertThat(GitHubCommitCheckRuns.toRuns(SHA, rollup(false, "SUCCESS", LINT_PASSED), null, NO_APP, READ_AT))
                 .hasValueSatisfying(runs -> assertThat(runs.complete()).isFalse());
     }
 
     @Test
+    void shouldLeaveHephaestusOwnSuiteAndRunOutOfTheCommitsRuns() {
+        // Hephaestus's own check run is still under way, and GitHub's rollup is pending because of it.
+        HeadCheckRuns runs = GitHubCommitCheckRuns.toRuns(
+                        SHA, rollupWithOwnRun("PENDING"), suitesWithOwn("IN_PROGRESS"), OWN_APP, READ_AT)
+                .orElseThrow();
+
+        assertThat(runs.runs()).extracting(HeadCheckRuns.Run::name).containsExactly("server tests");
+        assertThat(runs.finished()).isTrue();
+        // Without the app id configured, the same run keeps the list unfinished.
+        assertThat(GitHubCommitCheckRuns.toRuns(
+                        SHA, rollupWithOwnRun("PENDING"), suitesWithOwn("IN_PROGRESS"), NO_APP, READ_AT))
+                .hasValueSatisfying(unknown -> assertThat(unknown.finished()).isFalse());
+    }
+
+    @Test
     void shouldReadNothingWhenGitHubReturnsNoRollupForTheCommit() {
-        assertThat(GitHubCommitCheckRuns.toRuns(SHA, null, suites("COMPLETED", 3), READ_AT))
+        assertThat(GitHubCommitCheckRuns.toRuns(SHA, null, suites("COMPLETED", 3), NO_APP, READ_AT))
                 .isEmpty();
+    }
+
+    private static GHCheckSuiteConnection suitesWithOwn(String ownStatus) {
+        String json = """
+                {"pageInfo": {"hasNextPage": false},
+                 "nodes": [
+                   {"status": "COMPLETED", "app": {"databaseId": 15368}, "checkRuns": {"totalCount": 1}},
+                   {"status": "%s", "app": {"databaseId": 4242}, "checkRuns": {"totalCount": 1}}]}
+                """.formatted(ownStatus);
+        return GitHubGraphQlTestMapper.create().readValue(json, GHCheckSuiteConnection.class);
+    }
+
+    private static GHStatusCheckRollup rollupWithOwnRun(String state) {
+        String json = """
+                {
+                  "state": "%s",
+                  "contexts": {
+                    "pageInfo": {"hasNextPage": false},
+                    "nodes": [
+                      {
+                        "__typename": "CheckRun",
+                        "name": "server tests",
+                        "status": "COMPLETED",
+                        "conclusion": "SUCCESS",
+                        "detailsUrl": null,
+                        "startedAt": null,
+                        "completedAt": null,
+                        "checkSuite": {"app": {"name": "GitHub Actions", "databaseId": 15368}}
+                      },
+                      {
+                        "__typename": "CheckRun",
+                        "name": "Hephaestus",
+                        "status": "IN_PROGRESS",
+                        "conclusion": null,
+                        "detailsUrl": null,
+                        "startedAt": null,
+                        "completedAt": null,
+                        "checkSuite": {"app": {"name": "Hephaestus", "databaseId": 4242}}
+                      }
+                    ]
+                  }
+                }
+                """.formatted(state);
+        return GitHubGraphQlTestMapper.create().readValue(json, GHStatusCheckRollup.class);
     }
 
     private static GHCheckSuiteConnection suites(String status, int runs) {

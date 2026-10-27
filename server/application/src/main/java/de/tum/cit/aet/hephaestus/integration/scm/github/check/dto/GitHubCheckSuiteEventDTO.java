@@ -28,5 +28,10 @@ public record GitHubCheckSuiteEventDTO(
     public record CheckSuite(
             @JsonProperty("head_sha") @Nullable String headSha,
             @JsonProperty("status") @Nullable String status,
-            @JsonProperty("conclusion") @Nullable String conclusion) {}
+            @JsonProperty("conclusion") @Nullable String conclusion,
+            @JsonProperty("app") @Nullable App app) {}
+
+    /** The GitHub App that owns the suite. */
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record App(@JsonProperty("id") @Nullable Long id) {}
 }

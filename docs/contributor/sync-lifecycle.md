@@ -427,12 +427,15 @@ A pull request also stores the single runs behind its check state (`head_check_r
   A suite without runs is left aside, because an app that never posts a run leaves it queued.
   A CI that has posted nothing yet cannot be seen, so a later workflow or status can still add runs.
   An incomplete list never records that the checks finished.
+  The suite and runs of Hephaestus's own GitHub App (`hephaestus.github.app.id`) are left out of the list.
+  The server also ignores a check suite event of its own app, so that suite never sets the check state.
 - **GitLab.** Not captured yet.
   A trigger job reports success when it creates its child pipeline, not when that pipeline ends.
   Each pipeline hook of a commit lists only its own pipeline.
   Thus, no hook shows which runs of the commit finished.
 
-Scheduled sync does not read runs.
+Scheduled sync reads the runs again for each open pull request whose stored list of its head has not finished.
+It does so only for a list that the server first read in the last 24 hours.
 A failed read records nothing, and the stored runs stay.
 A read that is older than the stored read of the same commit changes nothing.
 A read that shows the same runs keeps the stored read and its time.
@@ -447,9 +450,9 @@ Its runs still replace the stored runs, so a later review of that version reads 
 Keying the occasion on the run set needs a change of the occasion's unique key, which waits for an expand and contract window.
 
 Each read that records no completion logs why: the list is incomplete, a run has not finished, or the head has no rollup.
-The server reads again only when another suite or status of the head ends.
-Thus, a read that lags the last hook records no completion.
-Checks that never finish, and a head without checks, record none either.
+Between scheduled syncs, the server reads again only when another suite or status of the head ends.
+Thus, a read that lags the last hook records a completion at the latest with the next scheduled sync.
+Checks that never finish, and a head without checks, record none.
 A practice that must review every push also selects **Opened**, **Ready** or **Synchronized**.
 
 ## Documented asymmetries and residuals

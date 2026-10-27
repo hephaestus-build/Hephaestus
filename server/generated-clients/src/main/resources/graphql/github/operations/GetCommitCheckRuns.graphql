@@ -1,7 +1,7 @@
 # The single check runs and commit statuses of one commit, read when a check suite or a status of it ends.
 # A commit with more contexts than one page is read as incomplete, not paged: a pull request's evidence
 # then says the list is partial. It asks only for what the Checks and Commit statuses permissions grant;
-# a workflow name would need the Actions permission.
+# a workflow name would need the Actions permission. Hephaestus's own app is told apart by its database id.
 
 query GetCommitCheckRuns($owner: String!, $name: String!, $oid: GitObjectID!) {
     rateLimit {
@@ -22,6 +22,9 @@ query GetCommitCheckRuns($owner: String!, $name: String!, $oid: GitObjectID!) {
                     }
                     nodes {
                         status
+                        app {
+                            databaseId
+                        }
                         checkRuns(first: 1) {
                             totalCount
                         }
@@ -45,6 +48,7 @@ query GetCommitCheckRuns($owner: String!, $name: String!, $oid: GitObjectID!) {
                                 checkSuite {
                                     app {
                                         name
+                                        databaseId
                                     }
                                 }
                             }

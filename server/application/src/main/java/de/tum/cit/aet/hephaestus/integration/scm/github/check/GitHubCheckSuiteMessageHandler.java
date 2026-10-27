@@ -9,6 +9,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.HeadCheckRun
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
+import de.tum.cit.aet.hephaestus.integration.scm.github.GitHubProperties;
 import de.tum.cit.aet.hephaestus.integration.scm.github.check.dto.GitHubCheckSuiteEventDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubEventAction;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubEventType;
@@ -34,6 +35,7 @@ public class GitHubCheckSuiteMessageHandler extends AbstractIntegrationMessageHa
     private final GitHubCommitCheckRuns checkRuns;
     private final HeadCheckRunsRecorder checkRunsRecorder;
     private final TransactionTemplate transactionTemplate;
+    private final GitHubProperties gitHubProperties;
 
     GitHubCheckSuiteMessageHandler(
             ProcessingContextFactory contextFactory,
@@ -42,6 +44,7 @@ public class GitHubCheckSuiteMessageHandler extends AbstractIntegrationMessageHa
             PullRequestRepository pullRequestRepository,
             GitHubCommitCheckRuns checkRuns,
             HeadCheckRunsRecorder checkRunsRecorder,
+            GitHubProperties gitHubProperties,
             NatsMessageDeserializer deserializer,
             TransactionTemplate transactionTemplate) {
         super(
@@ -57,6 +60,7 @@ public class GitHubCheckSuiteMessageHandler extends AbstractIntegrationMessageHa
         this.checkRuns = checkRuns;
         this.checkRunsRecorder = checkRunsRecorder;
         this.transactionTemplate = transactionTemplate;
+        this.gitHubProperties = gitHubProperties;
     }
 
     /**
@@ -95,6 +99,13 @@ public class GitHubCheckSuiteMessageHandler extends AbstractIntegrationMessageHa
         var suite = event.checkSuite();
         if (suite == null || suite.headSha() == null) {
             log.warn("Received check_suite event with missing data: action={}", event.action());
+            return null;
+        }
+        // Hephaestus's own check run follows the review; it says nothing about the work.
+        var app = suite.app();
+        Long appId = app == null ? null : app.id();
+        if (appId != null && appId == gitHubProperties.app().id()) {
+            log.debug("Skipped check_suite event: reason=ownApp, action={}", event.action());
             return null;
         }
         ProcessingContext context = contextFactory.forWebhookEvent(event).orElse(null);

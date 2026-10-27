@@ -3,9 +3,11 @@ package de.tum.cit.aet.hephaestus.integration.scm.github.check;
 import static de.tum.cit.aet.hephaestus.core.LoggingUtils.sanitizeForLog;
 
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.HeadCheckRuns;
+import de.tum.cit.aet.hephaestus.integration.scm.github.GitHubProperties;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubGraphQlClientProvider;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubRepositoryNameParser;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubSyncProperties;
+import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHApp;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHCheckRun;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHCheckStatusState;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHCheckSuite;
@@ -42,6 +44,7 @@ public class GitHubCommitCheckRuns {
 
     private final GitHubGraphQlClientProvider clients;
     private final GitHubSyncProperties syncProperties;
+    private final GitHubProperties gitHubProperties;
 
     public Optional<HeadCheckRuns> read(long scopeId, String nameWithOwner, String sha) {
         var name = GitHubRepositoryNameParser.parse(nameWithOwner).orElse(null);
@@ -64,7 +67,7 @@ public class GitHubCommitCheckRuns {
                     response.field("repository.object.statusCheckRollup").toEntity(GHStatusCheckRollup.class);
             GHCheckSuiteConnection suites =
                     response.field("repository.object.checkSuites").toEntity(GHCheckSuiteConnection.class);
-            var runs = toRuns(sha, rollup, suites, observedAt);
+            var runs = toRuns(sha, rollup, suites, gitHubProperties.app().id(), observedAt);
             if (runs.isEmpty())
                 log.info(
                         "Check runs not stored: repoName={}, sha={}, reason=noRollup",
@@ -88,26 +91,31 @@ public class GitHubCommitCheckRuns {
      * <p>The list is complete only when nothing GitHub knows of is still to come: it fits one page, the rollup waits
      * for no expected status, every listed run has ended, and every check suite with runs has completed. A failed
      * rollup is no such sign: GitHub reports a failure while other runs still go, and a suite still under way can add
-     * a run that waits for another. A CI that has posted nothing yet cannot be seen at all.
+     * a run that waits for another. A CI that has posted nothing yet cannot be seen at all. A pending rollup shows in
+     * the listed runs and suites, so they decide, without the runs and suite of Hephaestus's own app
+     * ({@code ownAppId}): its run follows the review and is no evidence about the work.
      */
     static Optional<HeadCheckRuns> toRuns(
             String sha,
             @Nullable GHStatusCheckRollup rollup,
             @Nullable GHCheckSuiteConnection suites,
+            long ownAppId,
             Instant observedAt) {
         var contexts = rollup == null ? null : rollup.getContexts();
         if (rollup == null || contexts == null) return Optional.empty();
         List<HeadCheckRuns.Run> runs = new ArrayList<>();
         for (GHStatusCheckRollupContext context :
                 Objects.requireNonNullElse(contexts.getNodes(), List.<GHStatusCheckRollupContext>of())) {
-            if (context instanceof GHCheckRun run) runs.add(checkRun(run));
-            else if (context instanceof GHStatusContext status) runs.add(commitStatus(status));
+            if (context instanceof GHCheckRun run) {
+                if (!ownApp(
+                        run.getCheckSuite() == null ? null : run.getCheckSuite().getApp(), ownAppId))
+                    runs.add(checkRun(run));
+            } else if (context instanceof GHStatusContext status) runs.add(commitStatus(status));
         }
         boolean complete = whole(contexts.getPageInfo())
                 && rollup.getState() != GHStatusState.EXPECTED
-                && rollup.getState() != GHStatusState.PENDING
                 && runs.stream().allMatch(HeadCheckRuns.Run::finished)
-                && suitesSettled(suites);
+                && suitesSettled(suites, ownAppId);
         return Optional.of(new HeadCheckRuns(sha, runs, complete, observedAt));
     }
 
@@ -115,13 +123,18 @@ public class GitHubCommitCheckRuns {
      * Whether every check suite of the commit that has runs has completed. A suite without runs is left aside: an app
      * that never posts a run leaves its suite queued for ever.
      */
-    private static boolean suitesSettled(@Nullable GHCheckSuiteConnection suites) {
+    private static boolean suitesSettled(@Nullable GHCheckSuiteConnection suites, long ownAppId) {
         if (suites == null || !whole(suites.getPageInfo())) return false;
         return Objects.requireNonNullElse(suites.getNodes(), List.<GHCheckSuite>of()).stream()
-                .filter(Objects::nonNull)
+                .filter(suite -> suite != null && !ownApp(suite.getApp(), ownAppId))
                 .allMatch(suite -> suite.getStatus() == GHCheckStatusState.COMPLETED
                         || suite.getCheckRuns() == null
                         || suite.getCheckRuns().getTotalCount() == 0);
+    }
+
+    /** Whether {@code app} is Hephaestus's own GitHub App; without a configured app id, none is. */
+    private static boolean ownApp(@Nullable GHApp app, long ownAppId) {
+        return ownAppId > 0 && app != null && app.getDatabaseId() != null && app.getDatabaseId() == ownAppId;
     }
 
     private static boolean whole(@Nullable GHPageInfo page) {

@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
@@ -20,6 +21,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestR
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.Repository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.events.ScmDomainEvent;
+import de.tum.cit.aet.hephaestus.integration.scm.github.GitHubProperties;
 import de.tum.cit.aet.hephaestus.integration.scm.github.check.dto.GitHubCheckSuiteEventDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.github.check.dto.GitHubStatusEventDTO;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.ProcessingContextFactory;
@@ -90,6 +92,9 @@ class GitHubCheckEventsIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private ApplicationEvents events;
+
+    @Autowired
+    private GitHubProperties gitHubProperties;
 
     private IdentityProvider gitProvider;
     private Repository repository;
@@ -212,6 +217,7 @@ class GitHubCheckEventsIntegrationTest extends BaseIntegrationTest {
                 pullRequestRepository,
                 checkRuns,
                 checkRunsRecorder,
+                gitHubProperties,
                 deserializer,
                 transactionTemplate);
         var skipped = (ObjectNode) objectMapper.readTree(
@@ -228,6 +234,32 @@ class GitHubCheckEventsIntegrationTest extends BaseIntegrationTest {
         assertThat(events.stream(ScmDomainEvent.PullRequestChecksCompleted.class))
                 .singleElement()
                 .satisfies(completed -> assertThat(completed.pullRequest().id()).isEqualTo(onHead.getId()));
+    }
+
+    @Test
+    void shouldLeaveTheHeadAsItIsWhenHephaestusOwnSuiteEnds() throws Exception {
+        PullRequest onHead = persistPullRequest(9, CHECKED_SHA);
+        GitHubCommitCheckRuns checkRuns = mock(GitHubCommitCheckRuns.class);
+        var handler = new GitHubCheckSuiteMessageHandler(
+                contextFactory,
+                headCheckProcessor,
+                mock(GitHubPullRequestSyncService.class),
+                pullRequestRepository,
+                checkRuns,
+                checkRunsRecorder,
+                new GitHubProperties(
+                        new GitHubProperties.App(4242, null, null, null, null, null), new GitHubProperties.Meta(null)),
+                deserializer,
+                transactionTemplate);
+        var own = (ObjectNode) objectMapper.readTree(
+                new ClassPathResource("github/check_suite.completed.json").getContentAsString(StandardCharsets.UTF_8));
+        ((ObjectNode) own.path("check_suite")).putObject("app").put("id", 4242);
+
+        handler.dispatchEvent(objectMapper.treeToValue(own, GitHubCheckSuiteEventDTO.class));
+
+        PullRequest stored = pullRequestRepository.findById(onHead.getId()).orElseThrow();
+        assertThat(stored.getHeadCheckState()).isNull();
+        verifyNoInteractions(checkRuns);
     }
 
     private PullRequest persistPullRequest(int number, String headSha) {
