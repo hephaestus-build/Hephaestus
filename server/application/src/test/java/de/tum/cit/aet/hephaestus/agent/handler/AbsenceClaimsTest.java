@@ -29,6 +29,28 @@ class AbsenceClaimsTest extends BaseUnitTest {
                 .toList();
 
         assertThat(markers).containsExactlyElementsOf(AbsenceClaims.MARKERS);
+        var disclaimer = Pattern.compile("export const ABSENCE_DISCLAIMER = String\\.raw`([^`]*)`;")
+                .matcher(runner);
+        assertThat(disclaimer.find())
+                .as("pi-session-reads.ts declares ABSENCE_DISCLAIMER")
+                .isTrue();
+        assertThat(disclaimer.group(1)).isEqualTo(AbsenceClaims.DISCLAIMER);
+        var clauseEnd = Pattern.compile("export const ABSENCE_CLAUSE_END = String\\.raw`([^`]*)`;")
+                .matcher(runner);
+        assertThat(clauseEnd.find())
+                .as("pi-session-reads.ts declares ABSENCE_CLAUSE_END")
+                .isTrue();
+        assertThat(clauseEnd.group(1)).isEqualTo(AbsenceClaims.CLAUSE_END);
+    }
+
+    @Test
+    void shouldFindTheClaimWhenALimitOfTheReviewStandsBesideIt() {
+        assertThat(List.of(
+                        "The reviewed change was inspected, and there is no handler elsewhere in the repository.",
+                        "I did not search beyond the diff, but no handler exists anywhere in the repository.",
+                        "page flows into subList without any check, and no exception handler exists in the repository.",
+                        "page is not checked, and the checkout contains no @ControllerAdvice."))
+                .allMatch(AbsenceClaims::claimed);
     }
 
     @Test
@@ -45,7 +67,13 @@ class AbsenceClaimsTest extends BaseUnitTest {
                         "Nothing else in the code base validates page.",
                         "The repository has no tests for the parser.",
                         "No other file calls this function.",
-                        "The value is never validated elsewhere."))
+                        "The value is never validated elsewhere in the code.",
+                        "The codebase never validates page.",
+                        // Claims about the repository that real results made in their search boundary.
+                        "no generation source for it exists in the repository",
+                        "no outer route auth wrapper, dev profile, or server registration exists in the checkout",
+                        "Invoice.swift is referenced by no other file",
+                        "no template exists in the checkout"))
                 .allMatch(AbsenceClaims::claimed);
     }
 
@@ -73,7 +101,29 @@ class AbsenceClaimsTest extends BaseUnitTest {
                         "The expect() call crashes the process on a missing env var with no message.",
                         "Without any validation, a negative page reaches subList and throws.",
                         "None of the added bodies sprawls or nests deeply.",
-                        "The diff adds no test for the new branch."))
+                        "The diff adds no test for the new branch.",
+                        // Real results bounded to the change, the record or the review's own reach.
+                        "no test file or test hunk appears anywhere in the change",
+                        "no print-style or logger call is added anywhere in the diff",
+                        "the body contains no appeal to context made elsewhere and no links",
+                        "Substantive bulk-deactivation change has no traceable issue reference anywhere in the handoff",
+                        "the change adds no other files, and no repository ignore rules were consulted",
+                        "no other files are in the change",
+                        "The change adds no diagnostic call in application code.",
+                        "One cohesive user-story deliverable; no duplicate or overlapping sibling in the project"
+                                + " inventory",
+                        "The checkout step in the workflow has no pinned version.",
+                        "No code path in handle() returns 404.",
+                        "This does not establish that unchanged settings elsewhere in the repository are sound.",
+                        "I did not inspect files outside the diff or establish that no other generated artifacts"
+                                + " exist elsewhere in the repository.",
+                        "no generated file in the rest of the checkout was examined because no changed path suggested"
+                                + " machine output",
+                        "No test is added anywhere.",
+                        "The diff contains no tests anywhere.",
+                        "The catch block never logs the error anywhere.",
+                        "No code in the handler catches the error.",
+                        "There is no auth setting in application.properties."))
                 .noneMatch(AbsenceClaims::claimed);
     }
 

@@ -297,19 +297,14 @@ class ReviewOutputServiceTest extends BaseUnitTest {
         };
     }
 
-    private void assertWithheld(String message) {
+    private void assertWithheld(CandidateRefusal refusal, String message) {
         verify(membership)
-                .withhold(
-                        1,
-                        RuntimeReviewTestData.assignment(5L, null).id(),
-                        CandidateRefusal.CONSULTED_SOURCE_UNREAD,
-                        message);
+                .withhold(1, RuntimeReviewTestData.assignment(5L, null).id(), refusal, message);
     }
 
-    private static final String NAMED_UNSEARCHED = "The result names scm.repository.tree as searched, but its receipts"
-            + " hold no search of the whole, complete checkout to the end";
-    private static final String WORDED_UNSEARCHED = "The result says the repository lacks something beyond its"
-            + " citations, but its receipts hold no search of the whole, complete checkout to the end";
+    private static final String NAMED = "The result names scm.repository.tree as searched";
+    private static final String WORDED = "The result says the repository lacks something beyond its citations";
+    private static final String UNSEARCHED = ", but its receipts hold no search of the whole checkout to the end";
 
     @Test
     void shouldWithholdAClaimAboutTheCheckoutWhenItsSessionNeitherReadNorSearchedIt() {
@@ -320,7 +315,7 @@ class ReviewOutputServiceTest extends BaseUnitTest {
         service.prepare(job, pr50ErrorHandling(List.of(), UnaryOperator.identity()))
                 .record(job);
 
-        assertWithheld(NAMED_UNSEARCHED);
+        assertWithheld(CandidateRefusal.CONSULTED_SOURCE_UNREAD, NAMED + UNSEARCHED);
     }
 
     @Test
@@ -343,7 +338,7 @@ class ReviewOutputServiceTest extends BaseUnitTest {
         service.prepare(job, pr50ErrorHandling(oneFile, UnaryOperator.identity()))
                 .record(job);
 
-        assertWithheld(NAMED_UNSEARCHED);
+        assertWithheld(CandidateRefusal.CONSULTED_SOURCE_UNREAD, NAMED + UNSEARCHED);
     }
 
     @Test
@@ -364,7 +359,9 @@ class ReviewOutputServiceTest extends BaseUnitTest {
         service.prepare(job, pr50ErrorHandling(List.of(searched(PR50_HEAD)), UnaryOperator.identity()))
                 .record(job);
 
-        assertWithheld(NAMED_UNSEARCHED);
+        assertWithheld(
+                CandidateRefusal.SOURCE_UNAVAILABLE,
+                NAMED + ", but the capture does not hold the whole checkout, so no search can show that");
     }
 
     @Test
@@ -376,7 +373,7 @@ class ReviewOutputServiceTest extends BaseUnitTest {
         service.prepare(job, pr50ErrorHandling(List.of(searched("c".repeat(40))), UnaryOperator.identity()))
                 .record(job);
 
-        assertWithheld(NAMED_UNSEARCHED);
+        assertWithheld(CandidateRefusal.CONSULTED_SOURCE_UNREAD, NAMED + UNSEARCHED);
     }
 
     @Test
@@ -390,7 +387,45 @@ class ReviewOutputServiceTest extends BaseUnitTest {
                         pr50ErrorHandling(List.of(), worded("The application defines no global exception handler.")))
                 .record(job);
 
-        assertWithheld(WORDED_UNSEARCHED);
+        assertWithheld(CandidateRefusal.CONSULTED_SOURCE_UNREAD, WORDED + UNSEARCHED);
+    }
+
+    @Test
+    void shouldWithholdWordsThatSayTheRepositoryLacksSomethingWhenOnlyAProblemBasisSaysIt() {
+        pr50Capture(SourceCompleteness.COMPLETE);
+        when(results.admit(1, job.getReviewId(), job.getId(), 0, List.of()))
+                .thenReturn(new AdmissionReceipt(List.of(), List.of()));
+
+        service.prepare(job, pr50ErrorHandling(List.of(), candidate -> {
+                    var bounded = worded("The pinned file has no @Min, clamp or other check on the path.")
+                            .apply(candidate);
+                    ((ObjectNode) bounded.path("problems").get(0).path("basis"))
+                            .put(
+                                    "explanation",
+                                    "The diff adds the parameter, and no error mapping exists in the checkout.");
+                    return bounded;
+                }))
+                .record(job);
+
+        assertWithheld(CandidateRefusal.CONSULTED_SOURCE_UNREAD, WORDED + UNSEARCHED);
+    }
+
+    @Test
+    void shouldWithholdWordsThatSayTheRepositoryLacksSomethingWhenOnlyTheSearchBoundarySaysIt() {
+        pr50Capture(SourceCompleteness.COMPLETE);
+        when(results.admit(1, job.getReviewId(), job.getId(), 0, List.of()))
+                .thenReturn(new AdmissionReceipt(List.of(), List.of()));
+
+        service.prepare(job, pr50ErrorHandling(List.of(), candidate -> {
+                    var bounded = worded("The pinned file has no @Min, clamp or other check on the path.")
+                            .apply(candidate);
+                    ((ObjectNode) bounded.path("evidence").path("search"))
+                            .put("boundary", "the changed file; no exception handler exists in the repository");
+                    return bounded;
+                }))
+                .record(job);
+
+        assertWithheld(CandidateRefusal.CONSULTED_SOURCE_UNREAD, WORDED + UNSEARCHED);
     }
 
     @Test

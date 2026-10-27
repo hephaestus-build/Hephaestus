@@ -24,7 +24,8 @@ export function resultToolSchemas(availableSourceKindValues: readonly string[]) 
 				type: "array",
 				minItems: 1,
 				items: { type: "string", enum: availableSourceKindValues },
-				description: "Evidence source kinds you actually searched, e.g. scm.review-threads.",
+				description:
+					"Evidence source kinds you actually searched, e.g. scm.review-threads. Name scm.repository.tree only after a grep of the whole checkout that was not cut.",
 			},
 			lookedFor: {
 				type: "string",

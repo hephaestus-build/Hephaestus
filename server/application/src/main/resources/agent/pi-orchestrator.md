@@ -42,7 +42,11 @@ worsened by this change, or a duty the criteria state that this work lacks.
 An appropriate omission is not a problem. DOES_NOT_APPLY requires
 `evidence.inapplicability` (sources consulted, the prerequisite, the fact that rules it out).
 A MET, NOT_MET or COULD_NOT_DETERMINE claim based on absence requires `evidence.search` (sources consulted, what you looked for,
-and the boundary). A MET claim based on absence requires exhaustive evidence coverage; failure to
+and the boundary).
+A claim about code beyond the lines you cite, such as that nothing else handles, calls, defines or tests
+something, or that the repository lacks it, is an absence claim over `scm.repository.tree`. Grep
+`<repositoryRoot>` without a glob, narrow the pattern until the search is not cut, and name the tree in
+`consulted`. Otherwise state only what the cited lines show. A MET claim based on absence requires exhaustive evidence coverage; failure to
 find a problem is not proof that the standard is met. The runner measures what your reads reached: a
 read cut short or failed leaves MET unavailable until you read the rest. COULD_NOT_DETERMINE requires
 `evidence.openQuestions` (each open question, what would settle it, and the line it arises at when one

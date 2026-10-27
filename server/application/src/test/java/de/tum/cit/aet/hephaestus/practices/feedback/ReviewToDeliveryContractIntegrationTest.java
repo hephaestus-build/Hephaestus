@@ -294,7 +294,7 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
             assertThat(response.admitted()).isEmpty();
             assertThat(response.withheld()).singleElement().satisfies(withheld -> {
                 assertThat(withheld.practiceSlug()).isEqualTo(review.practiceSlug());
-                assertThat(withheld.reason()).isEqualTo("consulted_source_unread");
+                assertThat(withheld.reason()).isEqualTo("source_unavailable");
             });
             assertThat(resultIds(review)).isEmpty();
             assertThat(reviewItems.findByWorkspaceIdAndReviewIdAndPracticeIdAndItemId(
@@ -304,7 +304,7 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                             review.item().itemId()))
                     .hasValueSatisfying(member -> {
                         assertThat(member.getState()).isEqualTo(ReviewItemState.WITHHELD);
-                        assertThat(member.getReason()).isEqualTo("consulted_source_unread");
+                        assertThat(member.getReason()).isEqualTo("source_unavailable");
                         assertThat(member.getResultId()).isNull();
                     });
         }

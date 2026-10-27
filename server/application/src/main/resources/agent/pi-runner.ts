@@ -305,10 +305,15 @@ function readState(reads: SessionReads, target: string): RequiredSourceTrace["re
 }
 
 /** The checkout that a review session reads on demand, when the work has one at a known commit. */
-function sessionTree(sources: EvidenceSources): SessionTree | undefined {
+function sessionTree(sources: EvidenceSources, complete: boolean): SessionTree | undefined {
 	return sources.repo === null || sources.headRevision === null
 		? undefined
-		: { root: sources.repo, sourcePath: sources.treeSourceFile, version: sources.headRevision };
+		: {
+				root: sources.repo,
+				sourcePath: sources.treeSourceFile,
+				version: sources.headRevision,
+				complete,
+			};
 }
 
 function incompleteCoverageText(coverage: Coverage, reads: SessionReads, scan: boolean): string {
@@ -719,7 +724,7 @@ export async function runReviewJob(): Promise<void> {
 	}
 
 	const folderIndex: unknown = JSON.parse(readFileSync(INPUT_PATHS.manifest, "utf8"));
-	const { availableSourceKinds, sourceFileSources, citationCapabilities } =
+	const { availableSourceKinds, completeSourceKinds, sourceFileSources, citationCapabilities } =
 		folderCitationIndex(folderIndex);
 	const capturedTexts = citableTextIndex(folderIndex);
 	const availableSourceKindValues = [...availableSourceKinds].toSorted();
@@ -1052,8 +1057,13 @@ export async function runReviewJob(): Promise<void> {
 		const unread = scan
 			? undefined
 			: unreadCheckoutClaim(submission, coverage, {
-					repositoryRoot: existsSync(`${INPUT_PATHS.repositoryRoot}/.git`)
-						? INPUT_PATHS.repositoryRoot
+					checkout: citationCapabilities.has(TREE_SOURCE)
+						? {
+								root: existsSync(`${INPUT_PATHS.repositoryRoot}/.git`)
+									? INPUT_PATHS.repositoryRoot
+									: undefined,
+								complete: completeSourceKinds.has(TREE_SOURCE),
+							}
 						: undefined,
 					askAboutWords: !askedAboutCheckoutWords.has(slug),
 				});
@@ -2731,7 +2741,7 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 						},
 						undefined,
 						capturedTexts,
-						sessionTree(sources),
+						sessionTree(sources, completeSourceKinds.has(TREE_SOURCE)),
 					),
 					reader,
 					domainReads,

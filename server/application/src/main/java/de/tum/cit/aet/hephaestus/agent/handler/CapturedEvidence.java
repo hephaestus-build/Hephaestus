@@ -72,19 +72,28 @@ final class CapturedEvidence {
         return manifest.sources().stream().map(SourceCapture::kind).collect(Collectors.toSet());
     }
 
+    /** Whether {@code kind} was captured whole: a partial capture leaves files out of it. */
+    boolean capturedWhole(SourceKind kind) {
+        return whole(kind) != null;
+    }
+
     /**
      * Whether {@code kind} was captured whole at {@code version}. An identity names the version, or begins with it and
      * a colon: the repository tree's identity is {@code <commit>:<tree>}. A partial capture leaves files out, so no
      * search of it can show that the source lacks something.
      */
     boolean completeAt(SourceKind kind, String version) {
-        return manifest.sources().stream().anyMatch(source -> {
-            if (!source.kind().equals(kind)
-                    || !(source.state() instanceof SourceCaptureState.Available available)
-                    || available.completeness() != SourceCompleteness.COMPLETE) return false;
-            String identity = available.facts().immutableIdentity();
-            return identity != null && (identity.equals(version) || identity.startsWith(version + ":"));
-        });
+        var whole = whole(kind);
+        String identity = whole == null ? null : whole.facts().immutableIdentity();
+        return identity != null && (identity.equals(version) || identity.startsWith(version + ":"));
+    }
+
+    private SourceCaptureState.@Nullable Available whole(SourceKind kind) {
+        for (var source : manifest.sources())
+            if (source.kind().equals(kind)
+                    && source.state() instanceof SourceCaptureState.Available available
+                    && available.completeness() == SourceCompleteness.COMPLETE) return available;
+        return null;
     }
 
     Map<String, FileProof> files() {

@@ -97,28 +97,37 @@ The receipt has no digest or line range, and it proves no file read.
 A grep that the runner sees produces a search receipt, also inside a codemode script.
 A cut, failed, filtered or narrower grep produces none.
 A file listing, a search through the shell and a pattern over 500 characters produce none.
+A checkout that the capture holds only in part produces none.
 A session keeps at most 20 search receipts.
 
 In an item review, a result says that the repository lacks something in one of two ways:
 
 - Its search warrant or inapplicability warrant names the tree as consulted.
 - The review reads a checkout, captured or not, and a text that the result shows matches an absence marker.
+  The texts are the summary, the explanation, the example note and every warrant field.
+  They also include each problem's summary, explanation, basis and next step, and each open question.
   `AbsenceClaims.java` and `pi-session-reads.ts` hold the same short list of markers.
   The list reads words, not the meaning of the text, so a claim in other words can pass.
+  A clause bounded to the change or the record, such as "anywhere in the diff", is no claim.
+  A clause that says what the review did not establish is no claim.
 
 Such a result needs a search receipt of the tree.
 Admission records the pattern for audit, but it does not compare the pattern with the claim.
 The capture must hold the tree `COMPLETE` at the version of the receipt.
-A partial capture leaves files out, so a search of it shows no absence.
 A could-not-determine result says nothing about the work, so it needs no receipt.
 
 A result keeps only the search receipts of the decision that it keeps.
 A review session's unchanged result keeps the searches of that session.
 A result that code decided keeps the searches of the script's reader.
 
-The runner returns such a submission to the model before it submits.
+The orchestrator prompt tells the model to grep the checkout and name the tree for such a claim.
+The runner returns a submission without the receipt to the model before it submits.
 It returns a match of a marker once per practice.
-Admission then withholds a result without the receipt as `consulted_source_unread`.
+When the capture does not hold the whole checkout, the runner asks the model to remove the claim.
+
+Then admission withholds a result without the receipt.
+The reason is `source_unavailable` when the capture does not hold the whole checkout.
+Otherwise the reason is `consulted_source_unread`.
 
 ## Admission and composition
 
