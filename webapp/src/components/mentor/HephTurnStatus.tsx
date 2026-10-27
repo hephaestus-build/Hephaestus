@@ -68,9 +68,9 @@ function formatWaited(seconds: number): string {
 
 /**
  * The status line's words. A turn still queued after a second says that it waits. It says why only
- * when the server says the turn waits for a free Heph. Otherwise the server cannot tell whether the
- * turn starts at once or no worker runs. Most turns start well within that second, so the line does
- * not flicker.
+ * when the server says that every Heph slot is taken. Otherwise the turn starts at once, or the
+ * server cannot tell why it waits, for example when no worker runs. Most turns start well within
+ * that second, so the line does not flicker.
  */
 export function useTurnStatusLabel(turn: ShownTurn | undefined): string {
 	const waiting = useSpinDelay(turn?.status === "QUEUED", {

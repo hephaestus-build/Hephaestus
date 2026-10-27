@@ -153,7 +153,7 @@ export const WaitingToStart: Story = {
 };
 
 /**
- * Heph answers other people's questions, and this one is next in its conversation. The line says
+ * Every Heph slot answers another question, and this one is next in its conversation. The line says
  * so, because a wait of minutes with no reason reads as broken. It blames nobody and promises no
  * time, since nothing can estimate when Heph is free.
  */

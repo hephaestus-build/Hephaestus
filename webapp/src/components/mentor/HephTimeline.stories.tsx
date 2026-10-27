@@ -375,7 +375,7 @@ export const FollowUpsQueued: Story = {
 const WAITING_FOR_HEPH = "Heph is answering other questions. Yours starts when Heph is free.";
 
 /**
- * Heph answers other people's questions, so the developer's question waits for a free Heph. Its
+ * Every Heph slot answers another question, so the developer's question waits for a free Heph. Its
  * place in the conversation says so, for sighted readers and screen readers alike.
  */
 export const WaitingForAFreeHeph: Story = {
@@ -390,10 +390,10 @@ export const WaitingForAFreeHeph: Story = {
 		await expect(
 			await within(log).findByText(WAITING_FOR_HEPH, {}, { timeout: 3000 }),
 		).toBeVisible();
-		await expect(canvas.getByText(WAITING_FOR_HEPH, { selector: "p" })).toHaveAttribute(
-			"role",
-			"status",
-		);
+		// The live region outside the log runs its own one-second delay, so it can change a moment later.
+		await expect(
+			await canvas.findByText(WAITING_FOR_HEPH, { selector: "p" }, { timeout: 3000 }),
+		).toHaveAttribute("role", "status");
 		await expect(canvas.queryByText(/^Queued\./u)).toBeNull();
 	},
 };
