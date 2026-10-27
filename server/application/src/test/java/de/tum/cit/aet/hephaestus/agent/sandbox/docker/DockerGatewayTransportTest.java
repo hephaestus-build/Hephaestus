@@ -175,7 +175,14 @@ class DockerGatewayTransportTest extends BaseUnitTest {
                 .filteredOn(mount -> !mount.target().equals("/workspace"))
                 .allMatch(mount -> !mount.readOnly());
         assertThat(runtime.command())
-                .containsExactly("node", "--disable-sigusr1", "/opt/pi-sdk/gateway-run.ts", "sh", "-c", "run-review");
+                .containsExactly(
+                        "node",
+                        "--disable-sigusr1",
+                        "--enable-source-maps",
+                        "/opt/pi-sdk/gateway-run.js",
+                        "sh",
+                        "-c",
+                        "run-review");
         for (var mount : runtime.hostConfig().volumeMounts()) {
             verify(volumes).removeVolume(mount.name());
         }

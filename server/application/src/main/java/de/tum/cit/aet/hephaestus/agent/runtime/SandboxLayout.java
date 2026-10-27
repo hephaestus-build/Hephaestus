@@ -154,14 +154,15 @@ public final class SandboxLayout {
     public static final int EXIT_KILLED = 137;
 
     /** The sandbox's first process: it fills {@code /workspace} from the attempt's gateway session. */
-    public static final List<String> INITIALIZER_COMMAND = List.of("node", "/opt/pi-sdk/gateway-init.ts");
+    public static final List<String> INITIALIZER_COMMAND =
+            List.of("node", "--enable-source-maps", "/opt/pi-sdk/gateway-init.js");
 
     /**
      * The wrapper of a practice review's own command: it holds the gateway credential and uploads the result. A process
      * of the sandbox must not open its inspector with SIGUSR1.
      */
     public static final List<String> RUNTIME_COMMAND =
-            List.of("node", "--disable-sigusr1", "/opt/pi-sdk/gateway-run.ts");
+            List.of("node", "--disable-sigusr1", "--enable-source-maps", "/opt/pi-sdk/gateway-run.js");
 
     public static final Duration RESULT_UPLOAD_GRACE = Duration.ofMinutes(10);
 
@@ -185,7 +186,7 @@ public final class SandboxLayout {
     public static final String RUNTIME_CONTRACT_LABEL = "hephaestus.agent.runtime-contract";
 
     /** Runtime contract required by the staged runners. */
-    public static final int RUNTIME_CONTRACT_VERSION = 8;
+    public static final int RUNTIME_CONTRACT_VERSION = 9;
 
     /** Node major required by the staged runners. */
     public static final int NODE_MAJOR = 24;
