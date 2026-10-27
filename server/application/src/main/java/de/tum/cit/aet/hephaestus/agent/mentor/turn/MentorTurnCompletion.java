@@ -108,7 +108,7 @@ public class MentorTurnCompletion {
                 turns.end(turnId, attempt, workerId, ending.outcome(), ending.entries(), ending.error());
         MentorTurn turn = ended.turn();
         if (turn.getStatus() == MentorTurn.Status.FAILED) {
-            turns.recordFailure(turnId, attempt, ending.cause(), ending.lastFailedCall());
+            turns.recordFailure(turn, ending.cause(), ending.lastFailedCall());
             // After commit: a rolled-back end is repeated by its host and would log the failure twice.
             String cause = ending.cause() == null ? ending.error() : ending.cause();
             MentorTurn.FailedCall lastFailedCall = ending.lastFailedCall();

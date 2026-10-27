@@ -6,6 +6,7 @@ import static org.hamcrest.Matchers.matchesPattern;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -69,6 +70,7 @@ import java.util.regex.Pattern;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.AdditionalAnswers;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
@@ -540,6 +542,36 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
         assertThat(callsInFlight.lastFailed(turn.getId(), turn.getAttempt()))
                 .as("the committed end forgot it")
                 .isNull();
+    }
+
+    @Test
+    void shouldStillRecordTheFailedModelCallWhenTheEndRollsBackAndTheHostRepeatsIt() throws Exception {
+        var attempt = new ProxyRouting.BilledAttempt(
+                UsageSourceType.MENTOR_TURN, turn.getId(), turn.getAttempt(), BigDecimal.ZERO, WORKER);
+        try (var call = callsInFlight.begin(attempt)) {
+            call.failed(new MentorTurn.FailedCall("upstream_status", 503));
+        }
+        MentorTurnCompletion failingOnce = mock(MentorTurnCompletion.class);
+        doThrow(new IllegalStateException("the database went away"))
+                .doAnswer(AdditionalAnswers.delegatesTo(completion))
+                .when(failingOnce)
+                .end(any(), anyInt(), any(), any());
+        gateway = gateway(new HephTurnController(
+                HephTurnFixtures.contexts(beans),
+                failingOnce,
+                dispatcher,
+                callsInFlight,
+                WorkerPropertiesFixtures.minimal("1", "4")));
+        String end = """
+                {"outcome":"FAILED","entries":[],"reason":"ERROR","detail":"provider_unavailable"}""";
+
+        call("POST", "end", turn.getAttempt(), end).andExpect(status().is5xxServerError());
+        call("POST", "end", turn.getAttempt(), end).andExpect(status().isNoContent());
+
+        MentorTurn ended = reloaded();
+        assertThat(ended.getStatus()).isEqualTo(MentorTurn.Status.FAILED);
+        assertThat(ended.getFailedCall()).isEqualTo("upstream_status");
+        assertThat(ended.getFailedCallStatus()).isEqualTo(503);
     }
 
     @Test

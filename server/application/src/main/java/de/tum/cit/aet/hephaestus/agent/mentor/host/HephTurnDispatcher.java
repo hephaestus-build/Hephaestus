@@ -540,11 +540,11 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
                     workerId,
                     new MentorTurnCompletion.Ending(
                             outcome, List.of(), error, cause, callsInFlight.lastFailed(turn.turnId, turn.attempt)));
+            callsInFlight.forgetFailed(turn.turnId, turn.attempt);
         } catch (MentorLeaseLostException alreadyEnded) {
             log.debug("Heph turn {} ended before this worker ended it", turn.turnId);
-        } finally {
-            // Nothing repeats this end: a failed one leaves the turn to its lease.
             callsInFlight.forgetFailed(turn.turnId, turn.attempt);
+        } finally {
             forget(turn);
         }
     }

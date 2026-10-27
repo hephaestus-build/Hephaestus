@@ -21,6 +21,7 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.JsonNode;
 
@@ -258,20 +259,16 @@ public class MentorTurnService {
     }
 
     /**
-     * Records on a {@code FAILED} attempt why it failed, for the operator, so the cause outlives the worker's log. An
-     * attempt that did not fail, or that the row no longer holds, records nothing.
+     * Records on a turn that the caller's transaction just ended {@code FAILED} why it failed, for the operator, so
+     * the cause outlives the worker's log. A turn in any other state records nothing.
      *
      * @param cause why it failed, in closed kinds only, never a host's, a provider's or an exception's text
      * @param lastFailedCall the attempt's last model call that failed; {@code null} when none did
      */
-    @Transactional
+    @Transactional(propagation = Propagation.MANDATORY)
     public void recordFailure(
-            UUID turnId, int attempt, @Nullable String cause, MentorTurn.@Nullable FailedCall lastFailedCall) {
-        MentorTurn turn =
-                turns.lockById(turnId).orElseThrow(() -> new EntityNotFoundException("MentorTurn", turnId.toString()));
-        if (turn.getAttempt() == attempt) {
-            turn.recordFailure(cause, lastFailedCall);
-        }
+            MentorTurn ended, @Nullable String cause, MentorTurn.@Nullable FailedCall lastFailedCall) {
+        ended.recordFailure(cause, lastFailedCall);
     }
 
     /** Stops a turn. Stopping a turn that already ended changes nothing. */

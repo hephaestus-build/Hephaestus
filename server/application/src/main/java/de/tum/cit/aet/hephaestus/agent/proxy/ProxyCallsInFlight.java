@@ -46,6 +46,9 @@ public class ProxyCallsInFlight {
     private static final Duration FAILURE_KEPT_FOR =
             Duration.ofSeconds(AgentBindingLimits.MAX_TIMEOUT_SECONDS).plus(SEALED_FOR);
 
+    /** Far above the Heph turns that one worker runs at once; a bound, not a capacity. */
+    private static final int MAX_REMEMBERED_FAILURES = 10_000;
+
     private record Attempt(UUID sourceId, int number) {}
 
     /** One call in flight; closing it records that the call's usage is written. */
@@ -56,7 +59,10 @@ public class ProxyCallsInFlight {
         /** Whether the attempt's end cancelled the call, or had sealed the attempt before the call began. */
         boolean isCancelled();
 
-        /** Records that the call failed; a Heph turn's attempt remembers it as its last failed call. */
+        /**
+         * Records that the call failed, unless the attempt's end cancelled it or it already failed. A Heph turn's
+         * attempt remembers it as its last failed call.
+         */
         void failed(MentorTurn.FailedCall failure);
 
         /** How the call failed; {@code null} when it did not. */
@@ -85,8 +91,10 @@ public class ProxyCallsInFlight {
             Caffeine.newBuilder().expireAfterWrite(SEALED_FOR).build();
 
     /** The last failed call of each Heph turn attempt that had one. */
-    private final Cache<Attempt, MentorTurn.FailedCall> lastFailed =
-            Caffeine.newBuilder().expireAfterWrite(FAILURE_KEPT_FOR).build();
+    private final Cache<Attempt, MentorTurn.FailedCall> lastFailed = Caffeine.newBuilder()
+            .expireAfterWrite(FAILURE_KEPT_FOR)
+            .maximumSize(MAX_REMEMBERED_FAILURES)
+            .build();
 
     public Call begin(ProxyRouting.BilledAttempt billed) {
         Attempt attempt = new Attempt(billed.sourceId(), billed.number());
@@ -118,6 +126,9 @@ public class ProxyCallsInFlight {
 
             @Override
             public void failed(MentorTurn.FailedCall failed) {
+                // A call that the attempt's end cancelled failed because of the end, not the provider. A call's
+                // first failure is its cause; what follows from it, such as the stream's outcome, is not.
+                if (cancel.sent || failure != null) return;
                 failure = failed;
                 if (hephTurn) lastFailed.put(attempt, failed);
             }

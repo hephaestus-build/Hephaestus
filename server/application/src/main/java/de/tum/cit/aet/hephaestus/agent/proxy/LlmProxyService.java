@@ -79,6 +79,9 @@ class LlmProxyService {
     /** The provider answered with a status other than 2xx. */
     static final String UPSTREAM_STATUS = "upstream_status";
 
+    /** The proxy answered the call with an error of its own, before or without the provider. */
+    static final String GATEWAY_ERROR = "gateway_error";
+
     private final WebClient webClient;
     private final LlmModelResolver resolver;
     private final ObjectMapper objectMapper;
@@ -219,7 +222,6 @@ class LlmProxyService {
      * denotes a review or Heph call. A null response serves a worker step in-process: the call must not stream, and a
      * provider that answers with a stream anyway is refused.
      */
-    @SuppressWarnings("try") // The scope installs the current span and restores it on close.
     @Nullable
     ResponseEntity<?> serve(
             ProxyRouting routing,
@@ -229,8 +231,20 @@ class LlmProxyService {
             HttpHeaders incomingHeaders,
             byte[] body) {
         accounting.recordGatewayRequest(body.length);
-        ProxyCallsInFlight.Call inFlight = callsInFlight.begin(routing.attempt());
+        try (ProxyCallsInFlight.Call inFlight = callsInFlight.begin(routing.attempt())) {
+            return serve(routing, protocol, practiceScript, response, incomingHeaders, body, inFlight);
+        }
+    }
 
+    @SuppressWarnings("try") // The scope installs the current span and restores it on close.
+    private @Nullable ResponseEntity<?> serve(
+            ProxyRouting routing,
+            LlmApiProtocol protocol,
+            @Nullable PracticeScriptCall practiceScript,
+            @Nullable HttpServletResponse response,
+            HttpHeaders incomingHeaders,
+            byte[] body,
+            ProxyCallsInFlight.Call inFlight) {
         MDC.put("proxy.principal", routing.principalDescription());
         MDC.put("proxy.apiProtocol", routing.apiProtocol());
         Timer.Sample timer = accounting.startTimer();
@@ -246,12 +260,17 @@ class LlmProxyService {
         if (routing.workspaceId() != null) span.tag("hephaestus.workspace.id", routing.workspaceId());
         long started = System.nanoTime();
         String ended = "error";
-        try (inFlight;
-                var ignored = tracer.withSpan(span)) {
+        try (var ignored = tracer.withSpan(span)) {
             var result = forward(routing, protocol, practiceScript, response, incomingHeaders, body, span, inFlight);
             int status = result == null
                     ? Objects.requireNonNull(response).getStatus()
                     : result.getStatusCode().value();
+            if (status >= 400 && inFlight.failure() == null) {
+                // The proxy answered itself: a refusal names its rule, any other answer is the gateway's own.
+                String refused = result == null ? null : result.getHeaders().getFirst(REFUSAL_HEADER);
+                inFlight.failed(new MentorTurn.FailedCall(
+                        refused == null ? GATEWAY_ERROR : "refused_" + refused.toLowerCase(Locale.ROOT), status));
+            }
             ended = Integer.toString(status);
             span.tag("http.response.status_code", status);
             if (status >= 400) recordSpanError(span, Integer.toString(status));
@@ -438,7 +457,7 @@ class LlmProxyService {
                 accounting.recordUpstreamStalled(routing.apiProtocol());
                 String stall = "the model provider sent no first byte within "
                         + bounds.firstByte().toSeconds() + " seconds";
-                log.warn("LLM upstream stalled for principal {}: {}", routing.principalDescription(), stall);
+                warnCall(routing, "LLM upstream stalled for principal {}: {}", routing.principalDescription(), stall);
                 call.failed(new MentorTurn.FailedCall(UPSTREAM_STALLED, null));
                 return errors.providerError(HttpStatus.GATEWAY_TIMEOUT, UPSTREAM_STALLED, stall);
             }
@@ -447,14 +466,16 @@ class LlmProxyService {
             call.failed(
                     new MentorTurn.FailedCall(failure.isEmpty() ? e.getClass().getName() : failure, null));
             if (e instanceof WebClientRequestException) {
-                log.warn(
+                warnCall(
+                        routing,
                         "LLM upstream unreachable for principal {}: reason={}",
                         routing.principalDescription(),
                         e.getClass().getSimpleName());
                 accounting.recordError(routing.apiProtocol());
                 return ResponseEntity.status(502).body("Upstream provider unreachable");
             }
-            log.warn(
+            warnCall(
+                    routing,
                     "LLM upstream request failed for principal {}: reason={}",
                     routing.principalDescription(),
                     e.getClass().getSimpleName());
@@ -483,7 +504,7 @@ class LlmProxyService {
             accounting.recordUpstreamStalled(routing.apiProtocol());
             String stall = "the model provider's stream sent nothing for "
                     + bounds.idle().toSeconds() + " seconds";
-            log.warn("LLM upstream stalled for principal {}: {}", routing.principalDescription(), stall);
+            warnCall(routing, "LLM upstream stalled for principal {}: {}", routing.principalDescription(), stall);
             if (response != null) errors.writeStallFrame(response, stall);
         }
         var outcome = upstream.streamOutcome();
@@ -528,7 +549,11 @@ class LlmProxyService {
             accounting.recordError(routing.apiProtocol());
             // Names the caller beside the outcome; the shared stream code knows neither.
             if (outcome != ProxyStreamingUtils.StreamOutcome.CLIENT_DISCONNECTED) {
-                log.warn("LLM stream for principal {} ended with outcome={}", routing.principalDescription(), outcome);
+                warnCall(
+                        routing,
+                        "LLM stream for principal {} ended with outcome={}",
+                        routing.principalDescription(),
+                        outcome);
                 call.failed(new MentorTurn.FailedCall(outcome.name().toLowerCase(Locale.ROOT), status));
             }
         }
@@ -547,8 +572,16 @@ class LlmProxyService {
         // The sandbox only sees "error" from its model client; the trace carries the status on the
         // span and this is its log-side counterpart, for an operator reading logs rather than
         // traces. Status and principal only: the body can quote the request.
-        log.warn(
-                "LLM upstream answered a call for principal {} with status={}", routing.principalDescription(), status);
+        warnCall(
+                routing,
+                "LLM upstream answered a call for principal {} with status={}",
+                routing.principalDescription(),
+                status);
+    }
+
+    /** Warns about a failed call. A Heph turn's call logs one line with its turn instead, at its end in serve(). */
+    private static void warnCall(ProxyRouting routing, String format, Object... arguments) {
+        if (routing.attempt().sourceType() != UsageSourceType.MENTOR_TURN) log.warn(format, arguments);
     }
 
     /**
