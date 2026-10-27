@@ -267,8 +267,8 @@ tasks.withType<Test>().configureEach {
     timeout.set(Duration.ofMinutes(20))
     systemProperty("spring.profiles.active", "test")
     systemProperty("file.encoding", "UTF-8")
-    // Application.main sets this zone for the whole process. Starting the JVM in it keeps a test that
-    // runs main from changing the zone for later classes.
+    // Application.main sets this zone for the whole process. Starting the JVM in it keeps a
+    // test that runs main from changing the zone for later classes.
     systemProperty("user.timezone", "Europe/Berlin")
     systemProperty("hephaestus.test.postgres-image", testPostgresImage.get())
     // The launcher selects Node through PATH. Track it when the test configuration is cached.
