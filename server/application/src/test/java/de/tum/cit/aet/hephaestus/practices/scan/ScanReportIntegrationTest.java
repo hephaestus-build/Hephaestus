@@ -257,6 +257,8 @@ class ScanReportIntegrationTest extends BaseIntegrationTest {
                 jobs, mock(ReviewAssignmentQuery.class), runtimeRows, mock(ReviewTimingFactsQuery.class));
         when(runtime.jobCounts(anyLong(), anyCollection()))
                 .thenAnswer(call -> adapter.jobCounts(call.getArgument(0), call.getArgument(1)));
+        when(runtime.usage(scan.getWorkspaceId(), scan.getId()))
+                .thenAnswer(call -> adapter.usage(scan.getWorkspaceId(), scan.getId()));
 
         assertThat(query.list(scan.getWorkspaceId(), null, ReviewStatus.QUEUED, PageRequest.of(0, 20))
                         .getContent())

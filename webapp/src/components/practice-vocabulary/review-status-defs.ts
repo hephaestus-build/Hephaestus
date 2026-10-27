@@ -27,7 +27,8 @@ export const REVIEW_STATUS_DEFS: StatusDefs<ReviewStatus> = {
 		label: "Queued",
 		icon: ClockIcon,
 		badgeVariant: "secondary",
-		description: "Waiting to be picked up.",
+		description:
+			"Waiting for a free worker, for room for its sandbox, or for a retry after a stop.",
 	},
 	RUNNING: {
 		label: "Running",
@@ -71,7 +72,8 @@ export const OWN_REVIEW_STATUS_DEFS: StatusDefs<ReviewStatus> = {
 		label: "Waiting",
 		icon: ClockIcon,
 		badgeVariant: "secondary",
-		description: "The review is waiting to start.",
+		description:
+			"The review is waiting for a free worker, for room for its sandbox, or for a retry after a stop.",
 	},
 	RUNNING: {
 		label: "Running",
