@@ -11,6 +11,8 @@ import static org.mockito.Mockito.when;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
+import de.tum.cit.aet.hephaestus.observability.ShippedLogEncoder;
+import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import io.micrometer.tracing.Tracer;
@@ -23,11 +25,15 @@ import io.opentelemetry.sdk.trace.export.SimpleSpanProcessor;
 import io.opentelemetry.sdk.trace.export.SpanExporter;
 import io.opentelemetry.sdk.trace.samplers.Sampler;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 @Tag("unit")
 class ReviewJobTelemetryTest {
@@ -63,6 +69,57 @@ class ReviewJobTelemetryTest {
                 assertThat(event.getKeyValuePairs().toString()).doesNotContain("secret", "provider body");
             });
         } finally {
+            logger.detachAppender(appender);
+            appender.stop();
+        }
+    }
+
+    /** The executor writes lifecycle events inside the job's MDC scope; each reaches the record with all its fields. */
+    @Test
+    void shouldWriteEveryLifecycleFieldWhenTheEventRunsInsideTheJobsMdc() throws Exception {
+        var logger = (Logger) LoggerFactory.getLogger(ReviewJobTelemetry.class);
+        var appender = new ListAppender<ILoggingEvent>();
+        appender.start();
+        logger.addAppender(appender);
+        var job = new ReviewJob();
+        RuntimeJobTestData.initialize(job, workspace(42L).getId());
+        MDC.put(StructuredLogKeys.JOB_ID, job.getId().toString());
+        MDC.put(StructuredLogKeys.WORKSPACE_ID, "42");
+        try {
+            var telemetry = new ReviewJobTelemetry(new SimpleMeterRegistry(), Tracer.NOOP);
+            telemetry.transition(
+                    job,
+                    "agent.job.started",
+                    ReviewJobTelemetry.Phase.QUEUE,
+                    ReviewJobTelemetry.ResultOutcome.STARTED,
+                    Duration.ofSeconds(5));
+            telemetry.terminal(job, ReviewJobStatus.COMPLETED, Duration.ofSeconds(9));
+            telemetry.preparationFailed(
+                    job, PreparationFailure.of(PreparationFailure.Stage.INPUTS, new IllegalStateException()), "FAILED");
+
+            assertThat(appender.list).hasSize(3);
+            var records = new ArrayList<JsonNode>();
+            for (ILoggingEvent event : appender.list) {
+                records.add(new ObjectMapper()
+                        .readTree(ShippedLogEncoder.encode(event))
+                        .get("context"));
+            }
+            assertThat(records)
+                    .extracting(context -> context.at("/event/name").asString())
+                    .containsExactly("agent.job.started", "agent.job.terminal", "agent.job.preparation_failed");
+            assertThat(records).allSatisfy(context -> {
+                assertThat(context.at("/job/id").asString())
+                        .isEqualTo(job.getId().toString());
+                assertThat(context.at("/workspace/id").asLong()).isEqualTo(42L);
+                assertThat(context.at("/review/id").asString())
+                        .isEqualTo(job.getReviewId().toString());
+            });
+            assertThat(records.get(1).at("/job/outcome").asString()).isEqualTo("completed");
+            assertThat(records.get(1).at("/duration/ms").asLong()).isEqualTo(9000L);
+            assertThat(records.get(2).at("/job/preparation/stage").asString()).isEqualTo("inputs");
+        } finally {
+            MDC.remove(StructuredLogKeys.JOB_ID);
+            MDC.remove(StructuredLogKeys.WORKSPACE_ID);
             logger.detachAppender(appender);
             appender.stop();
         }

@@ -25,13 +25,19 @@ log.atWarn()
         .log("External service request failed");
 ```
 
-[Spring Boot structured logging](https://docs.spring.io/spring-boot/reference/features/logging.html#features.logging.structured)
-supports both MDC and the [SLF4J key-value API](https://www.slf4j.org/manual.html#fluent). Hephaestus
-already uses Logback with the pinned
-[Logstash encoder](https://github.com/logfellow/logstash-logback-encoder/tree/logstash-logback-encoder-9.0#loggingevent-fields),
-including its field and value masking. Boot's native JSON formats are a supported alternative, not
-a reason to replace a working encoder without proving equivalent masking and field compatibility.
-Do not claim this custom schema is ECS- or OTLP-compliant merely because it is JSON.
+Hephaestus writes [Spring Boot's ECS format](https://docs.spring.io/spring-boot/reference/features/logging.html#features.logging.structured)
+through Logback. Boot supports both MDC and the [SLF4J key-value API](https://www.slf4j.org/manual.html#fluent).
+Two customizers in `observability/` complete the format:
+
+- `LogContextCustomizer` writes the MDC and the event's key-value pairs as one nested `context` object.
+- `CredentialMaskingCustomizer` masks credential formats in every value.
+
+Put a scope identifier in MDC: `job.id`, `workspace.id`, or the trace IDs.
+Put a fact of one event in its key-value pairs: `event.name`, an outcome, a duration.
+An event can name a scope identifier again, for example because it also runs outside the scope.
+Then the record carries the event's value once.
+Boot's own context pairs refuse such a name and the appender drops the whole record, so do not turn
+`LogContextCustomizer` off.
 
 ## Keep private data out at the source
 
@@ -49,10 +55,8 @@ It does not make the underlying string public data.
 [CWE-117](https://cwe.mitre.org/data/definitions/117.html) explains why an untrusted value must not
 change the structure or apparent origin of a log record.
 
-Encoder masking is a last defense. Prefer masking known sensitive fields to scanning every value:
-the encoder's [masking documentation](https://github.com/logfellow/logstash-logback-encoder/tree/logstash-logback-encoder-9.0#masking)
-explains the performance difference and that value-mask ordering is unspecified. Patterns must work
-independently. No regex can reliably recognize every secret or personal datum in arbitrary prose.
+Masking is a last defense. It masks a known sensitive field by name and a known credential
+format in every value. Patterns must work independently of their order. No regex can reliably recognize every secret or personal datum in arbitrary prose.
 Never enable request-body debugging as a substitute for safe structured diagnostics.
 
 ## Scope and restore correlation
@@ -74,6 +78,8 @@ It does not make log text or an identifier proof of successful export.
 ## Verify the emitted record
 
 `RedactionContractTest` loads the production encoder configuration and parses its actual bytes.
+`ShippedLogEncoder` gives other tests the same encoder. Use it to prove that an event of your own reaches
+the record with its fields, as `ReviewJobTelemetryTest` does for the review lifecycle events.
 Its contract includes typed values, correlation fields, severity isolation, nested exception
 redaction, opaque sensitive fields, and exactly one JSON record despite control characters.
 

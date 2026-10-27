@@ -339,6 +339,11 @@
       "description": "Version that the application reports in its logs, traces and release card. Compose sets it from the release."
     },
     {
+      "name": "logging.structured.ecs.service.version",
+      "type": "java.lang.String",
+      "description": "Each log record names this version as its service version."
+    },
+    {
       "name": "hephaestus.sandbox.runtime",
       "type": "java.lang.String",
       "description": "Where a worker runs its sandboxes: docker or kubernetes. A worker runs one runtime and never falls back to the other.",

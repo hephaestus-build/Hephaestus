@@ -958,8 +958,11 @@ logging:
             console: ecs
         ecs:
             service:
-                # service.name stays spring.application.name, the name traces carry too.
-                version: ${spring.application.version}
+                # service.name stays spring.application.name, the name traces carry too. Logging starts in
+                # an environment-prepared listener. SpringApplication.prepareEnvironment moves its
+                # applicationInfo source, the JAR manifest's build version (0.0.0-development), behind this
+                # file only after those listeners, so spring.application.version is not APP_VERSION yet.
+                version: ${APP_VERSION:${spring.application.version}}
                 environment: ${hephaestus.release.environment}
                 # The container id under Docker, as ReplicaIdentityFilter reports it.
                 node-name: ${HOSTNAME:}
@@ -967,12 +970,14 @@ logging:
             add:
                 # The worker and webhook profiles and the all-roles local profile override this.
                 "[runtime.role]": server
-            # ECS writes dotted names as nested objects and refuses a name written twice, so MDC and
-            # key-value pairs share one object of their own. Without it `runtime.*` pairs or an
-            # `error.*` pair beside a throwable collide with these members and the event is lost.
+            # MDC and key-value pairs share one `context` object of their own, so `runtime.*` or an
+            # `error.*` pair cannot collide with these members. LogContextCustomizer writes it: Boot's
+            # own context pairs refuse a name that the MDC and the event both carry, and drop the event.
             context:
-                prefix: context
-            customizer: de.tum.cit.aet.hephaestus.observability.CredentialMaskingCustomizer
+                include: false
+            customizer:
+                - de.tum.cit.aet.hephaestus.observability.LogContextCustomizer
+                - de.tum.cit.aet.hephaestus.observability.CredentialMaskingCustomizer
             # A throwable is reported by class and frames; its message stays out of every record.
             exclude: error.message
             stacktrace:
