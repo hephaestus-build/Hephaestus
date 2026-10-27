@@ -183,12 +183,18 @@ describe("the address of a workspace", () => {
 		expect(router.state.location.search.returnTo).toBe("/w/private?range=1y");
 	});
 
-	it("shows the page to a visitor when the identity cannot be read", async () => {
+	it("shows the error page, not a visitor's page, when the server cannot answer the identity", async () => {
 		server.use(http.get("*/user", () => new HttpResponse(null, { status: 503 })));
 		publish();
-		renderRouteAtWithRouter("/w/acme");
+		const { router } = renderRouteAtWithRouter("/w/acme");
 
-		await screen.findByRole("heading", { name: "Acme activity" }, ROUTE_RENDER_WAIT);
+		await waitFor(
+			() => expect(router.state.matches.some((match) => match.status === "error")).toBe(true),
+			ROUTE_RENDER_WAIT,
+		);
+		expect(screen.queryByRole("heading", { name: "Acme activity" })).toBeNull();
+		expect(screen.queryByRole("button", { name: "Sign in" })).toBeNull();
+		expect(router.state.location.pathname).toBe("/w/acme");
 	});
 
 	it("drops a repository the workspace no longer lists, rather than treating the page as private", async () => {

@@ -20,6 +20,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { getInitials } from "@/lib/avatar";
 import { firstNonBlank, hasText } from "@/lib/text";
+import type { Session } from "@/runtime/auth/AuthContext";
 import { type EnvironmentTone, resolveHeaderBadge } from "./version";
 
 const ENV_DOT: Record<EnvironmentTone, string> = {
@@ -35,8 +36,8 @@ export interface HeaderProps {
 	isProduction: boolean;
 	/** The pull request a preview deployment is of; absent on every other environment. */
 	pullRequest?: number;
-	isAuthenticated: boolean;
-	isLoading: boolean;
+	/** Unavailable means that the server cannot say who is signed in, so the header offers no sign-in. */
+	session: Session;
 	name?: string;
 	username?: string;
 	avatarUrl?: string;
@@ -45,6 +46,8 @@ export interface HeaderProps {
 	feedbackDialog?: React.ReactNode;
 	onLogin: () => void;
 	onLogout: () => void;
+	/** Reads the session again when the server could not answer. */
+	onRetrySession: () => void;
 }
 
 export default function Header({
@@ -53,8 +56,7 @@ export default function Header({
 	environmentName,
 	isProduction,
 	pullRequest,
-	isAuthenticated,
-	isLoading,
+	session,
 	name,
 	username,
 	workspaceSlug,
@@ -63,6 +65,7 @@ export default function Header({
 	avatarUrl,
 	onLogin,
 	onLogout,
+	onRetrySession,
 }: HeaderProps) {
 	const hasWorkspace = Boolean(workspaceSlug);
 	const badge = resolveHeaderBadge(version, environmentName, isProduction, pullRequest);
@@ -75,6 +78,8 @@ export default function Header({
 			/>
 		</span>
 	);
+
+	const isAuthenticated = session === "signed-in";
 
 	return (
 		<header className="flex h-16 shrink-0 items-center justify-between gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
@@ -214,8 +219,29 @@ export default function Header({
 							</DropdownMenu>
 						</div>
 					) : (
-						<Button variant="outline" onClick={onLogin} disabled={isLoading}>
-							Sign in
+						session !== "unavailable" && (
+							<Button variant="outline" onClick={onLogin} disabled={session === "loading"}>
+								Sign in
+							</Button>
+						)
+					)}
+					{/* Mounted before its text, so that screen readers announce the change. */}
+					<p
+						aria-live="polite"
+						className="text-xs leading-tight text-muted-foreground empty:sr-only max-sm:max-w-16 sm:text-sm"
+					>
+						{session === "unavailable" ? (
+							<>
+								{/* A phone has room for the short forms; only the shown one is read out. */}
+								<span className="sm:hidden">Not reachable</span>
+								<span className="max-sm:hidden">Hephaestus is not reachable right now</span>
+							</>
+						) : null}
+					</p>
+					{session === "unavailable" && (
+						<Button variant="outline" size="sm" onClick={onRetrySession}>
+							<span className="sm:hidden">Retry</span>
+							<span className="max-sm:hidden">Try again</span>
 						</Button>
 					)}
 				</div>

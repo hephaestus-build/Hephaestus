@@ -89,6 +89,18 @@ describe("workspace-admin route gate", () => {
 		expect(routePaths).not.toContain(path);
 	});
 
+	it("keeps an administrator on the admin page when the membership read cannot be answered", async () => {
+		server.use(
+			http.get("*/workspaces/:workspaceSlug/members/me", () =>
+				HttpResponse.json({ status: 503 }, { status: 503 }),
+			),
+		);
+		const router = newRouter("/w/acme/admin/settings");
+		await router.load();
+		expect(router.state.location.pathname).toBe("/w/acme/admin/settings");
+		expect(router.state.matches.some((match) => match.status === "error")).toBe(true);
+	});
+
 	it.each(adminUrls)("redirects a MEMBER away from %s", async (url) => {
 		mockMembership("MEMBER");
 		await expect(land(url)).resolves.toBe(WORKSPACE_HOME);

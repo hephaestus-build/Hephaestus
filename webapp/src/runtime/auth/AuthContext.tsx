@@ -1,9 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
-import { createContext, type ReactNode, useContext } from "react";
+import { createContext, type ReactNode, useContext, useState } from "react";
 import { toast } from "sonner";
 
 import { authClient, toUserProfile, type UserProfile } from "./auth-client";
-import { isAppAdmin as computeIsAppAdmin, currentUserQueryOptions } from "./guard";
+import {
+	isAppAdmin as computeIsAppAdmin,
+	currentUserQueryOptions,
+	serverUnreachable,
+} from "./guard";
 
 import { hasText } from "@/lib/text";
 import {
@@ -14,10 +18,16 @@ import {
 
 export type { UserProfile } from "./auth-client";
 
+export type Session = "loading" | "signed-in" | "signed-out" | "unavailable";
+
 export interface AuthContextType {
 	isAuthenticated: boolean;
 	isLoading: boolean;
 	isError: boolean;
+	/** Who the server says is signed in. Unavailable means it could not answer; the session may still hold. */
+	session: Session;
+	/** Reads the identity again now, as when the reader asks to try again. */
+	retrySession: () => void;
 	username: string | undefined;
 	userRoles: string[];
 	isAppAdmin: boolean;
@@ -63,12 +73,31 @@ async function logout() {
 	}
 }
 
+const UNAVAILABLE_RETRY_FIRST_MS = 2000;
+const UNAVAILABLE_RETRY_CAP_MS = 30_000;
+
 interface AuthProviderProps {
 	children: ReactNode;
 }
 
 export function AuthProvider({ children }: AuthProviderProps) {
-	const userQuery = useQuery(currentUserQueryOptions());
+	const userQuery = useQuery({
+		...currentUserQueryOptions(),
+		// Ask again while the server cannot answer, doubling the wait up to 30 seconds.
+		refetchInterval: ({ state }) =>
+			state.data === undefined && state.status === "error" && serverUnreachable(state.error)
+				? Math.min(
+						UNAVAILABLE_RETRY_FIRST_MS * 2 ** (state.errorUpdateCount - 1),
+						UNAVAILABLE_RETRY_CAP_MS,
+					)
+				: false,
+	});
+	// A new request without data clears the error, so the last answer is kept until the next one.
+	// Only a page load leaves the signed-in state (sign-out reloads), so it never needs clearing.
+	const [lastError, setLastError] = useState<Error | null>(null);
+	if (userQuery.error !== null && userQuery.error !== lastError) {
+		setLastError(userQuery.error);
+	}
 
 	const user = userQuery.data ?? null;
 	// The identity fetch has already dropped a view that belongs to anyone else.
@@ -99,10 +128,23 @@ export function AuthProvider({ children }: AuthProviderProps) {
 		return "";
 	};
 
+	let session: Session = "signed-out";
+	if (user !== null) {
+		session = "signed-in";
+	} else if (lastError !== null && serverUnreachable(lastError)) {
+		session = "unavailable";
+	} else if (isLoading) {
+		session = "loading";
+	}
+
 	const value: AuthContextType = {
 		isAuthenticated: user !== null,
 		isLoading,
 		isError,
+		session,
+		retrySession: () => {
+			void userQuery.refetch();
+		},
 		username,
 		userRoles: viewed ? [] : (user?.roles ?? []),
 		isAppAdmin,

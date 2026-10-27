@@ -38,12 +38,12 @@ function Chrome() {
 				version="1.0.0"
 				environmentName="test"
 				isProduction
-				isAuthenticated
-				isLoading={false}
+				session="signed-in"
 				workspaceSlug={active.chromeWorkspaceSlug}
 				name="Test developer"
 				onLogin={vi.fn()}
 				onLogout={vi.fn()}
+				onRetrySession={vi.fn()}
 			/>
 			<AppSidebar
 				isAdmin={false}

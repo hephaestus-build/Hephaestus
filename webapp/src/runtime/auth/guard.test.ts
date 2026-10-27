@@ -9,7 +9,15 @@ import { deferred } from "@/test/async";
 import { safeReturnTo } from "@/runtime/auth/return-to";
 import { getContext } from "@/runtime/tanstack-query/root-provider";
 
-import { consentIsPending, currentUserQueryOptions, isAppAdmin, resolveCurrentUser } from "./guard";
+import {
+	consentIsPending,
+	currentUserQueryOptions,
+	isAppAdmin,
+	IDENTITY_READ_TIMEOUT_MS,
+	resolveCurrentUser,
+	resolveWorkspaceMembership,
+	serverUnreachable,
+} from "./guard";
 
 describe("safeReturnTo", () => {
 	describe("accepts same-origin absolute paths", () => {
@@ -116,7 +124,7 @@ const goStale = async (queryClient: QueryClient) =>
 	queryClient.invalidateQueries({ refetchType: "none" });
 
 /** How a resolution ended, so a test can await either outcome without a rejection escaping. */
-async function outcome(resolution: ReturnType<typeof resolveCurrentUser>) {
+async function outcome<T>(resolution: Promise<T>) {
 	try {
 		return { user: await resolution };
 	} catch (error) {
@@ -160,19 +168,42 @@ describe("resolveCurrentUser", () => {
 		queryClient.clear();
 	});
 
-	it("answers null only when the server confirms the session is unauthenticated", async () => {
-		serve(() => new HttpResponse(null, { status: 401 }));
-
-		await expect(resolveCurrentUser(client())).resolves.toBeNull();
-	});
-
-	it.each([403, 503])(
-		"surfaces HTTP %i on a cold load instead of asking for sign-in",
+	it.each([401, 403])(
+		"answers null when the server refuses the session with HTTP %i",
 		async (status) => {
 			serve(() => new HttpResponse(null, { status }));
-			await expect(resolveCurrentUser(client())).rejects.toThrow("Could not verify your session.");
+
+			await expect(resolveCurrentUser(client())).resolves.toBeNull();
 		},
 	);
+
+	it("surfaces HTTP 503 on a cold load instead of asking for sign-in", async () => {
+		serve(() => new HttpResponse(null, { status: 503 }));
+		await expect(resolveCurrentUser(client())).rejects.toThrow("Could not verify your session.");
+	});
+
+	it("surfaces a server that never answers as unreachable once the read times out", async () => {
+		vi.useFakeTimers({ shouldAdvanceTime: true });
+		// AbortSignal.timeout runs on a platform timer that fake timers do not move.
+		vi.spyOn(AbortSignal, "timeout").mockImplementation((ms) => {
+			const controller = new AbortController();
+			setTimeout(() => {
+				controller.abort(new DOMException("The read timed out.", "TimeoutError"));
+			}, ms);
+			return controller.signal;
+		});
+		try {
+			const never = deferred<Response>();
+			server.use(http.get("*/user", async () => never.promise));
+			const read = outcome(resolveCurrentUser(client()));
+			await vi.advanceTimersByTimeAsync(IDENTITY_READ_TIMEOUT_MS);
+			const { error } = await read;
+			expect(serverUnreachable(error)).toBe(true);
+		} finally {
+			vi.useRealTimers();
+			vi.restoreAllMocks();
+		}
+	});
 
 	it("surfaces a connection failure on a cold load", async () => {
 		serve(() => HttpResponse.error());
@@ -204,6 +235,49 @@ describe("resolveCurrentUser", () => {
 
 		await expect(resolveCurrentUser(queryClient)).resolves.toMatchObject({ appRole: "APP_ADMIN" });
 		await vi.waitFor(() => expect(failing.times).toBe(1));
+	});
+});
+
+describe("serverUnreachable", () => {
+	it.each([500, 502, 503])("reads HTTP %i as a server that cannot answer", async (status) => {
+		serve(() => new HttpResponse(null, { status }));
+		await expect(client().query(currentUserQueryOptions())).rejects.toSatisfy(serverUnreachable);
+	});
+
+	it("reads a lost connection as a server that cannot answer", async () => {
+		serve(() => HttpResponse.error());
+		await expect(client().query(currentUserQueryOptions())).rejects.toSatisfy(serverUnreachable);
+	});
+
+	it.each([401, 403])("reads HTTP %i as an answer about the session", async (status) => {
+		serve(() => new HttpResponse(null, { status }));
+		await expect(client().query(currentUserQueryOptions())).rejects.toSatisfy(
+			(error) => !serverUnreachable(error),
+		);
+	});
+});
+
+const membership = (answer: () => Response) =>
+	server.use(http.get("*/workspaces/:workspaceSlug/members/me", answer));
+
+describe("resolveWorkspaceMembership", () => {
+	it.each([400, 403, 404])("reads HTTP %i as no membership", async (status) => {
+		membership(() => HttpResponse.json({ status }, { status }));
+		await expect(resolveWorkspaceMembership(client(), "acme")).resolves.toBeNull();
+	});
+
+	it("passes on a server that cannot answer instead of reading it as no membership", async () => {
+		vi.useFakeTimers({ shouldAdvanceTime: true });
+		try {
+			membership(() => HttpResponse.json({ status: 503 }, { status: 503 }));
+			// The membership read asks twice more, with TanStack Query's backoff, before it gives up.
+			await Promise.all([
+				expect(resolveWorkspaceMembership(client(), "acme")).rejects.toSatisfy(serverUnreachable),
+				vi.advanceTimersByTimeAsync(5000),
+			]);
+		} finally {
+			vi.useRealTimers();
+		}
 	});
 });
 

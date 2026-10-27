@@ -66,8 +66,9 @@ export const Route = createFileRoute("/w/$workspaceSlug/")({
 		),
 	},
 	beforeLoad: async ({ context, params, location }) => {
-		// A public page needs no identity, so an identity that cannot be read is a visitor.
-		const user = await resolveCurrentUser(context.queryClient).catch(() => null);
+		// A refused session is a visitor. A server that cannot answer shows the error surface, so a
+		// signed-in member is never shown the visitor's page during an outage.
+		const user = await resolveCurrentUser(context.queryClient);
 		if (!user) {
 			return { signedIn: false };
 		}
