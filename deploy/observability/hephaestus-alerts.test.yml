@@ -851,3 +851,81 @@ tests:
               issuer_group: cert-manager.io
             exp_annotations:
               summary: A certificate that cert-manager manages expires in less than seven days, or has no issued certificate
+
+  - name: a host whose every reconcile fails for 15 minutes fires, a host that recovers does not
+    interval: 1m
+    input_series:
+      - series: 'hephaestus_deploy_reconcile_success{instance="staging:9100"}'
+        values: "0x30"
+      - series: 'hephaestus_deploy_reconcile_success{instance="production:9100"}'
+        values: "0x5 1x25"
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: HephaestusDeployReconcileFailing
+        exp_alerts: []
+      - eval_time: 16m
+        alertname: HephaestusDeployReconcileFailing
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              instance: staging:9100
+            exp_annotations:
+              summary: Every reconcile run of a host failed for 15 minutes, so the host does not follow its release channel
+
+  # One apply may take up to the unit's 30-minute start timeout, and the reconciler writes its timestamp when a run ends.
+  - name: a host with no finished run for 40 minutes fires, a host that runs each minute does not
+    interval: 1m
+    input_series:
+      - series: 'hephaestus_deploy_reconcile_timestamp_seconds{instance="staging:9100"}'
+        values: "0x60"
+      - series: 'hephaestus_deploy_reconcile_timestamp_seconds{instance="production:9100"}'
+        values: "0+60x60"
+    alert_rule_test:
+      - eval_time: 43m
+        alertname: HephaestusDeployReconcileStale
+        exp_alerts: []
+      - eval_time: 47m
+        alertname: HephaestusDeployReconcileStale
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              instance: staging:9100
+            exp_annotations:
+              summary: A host's reconciler has finished no run for 40 minutes
+
+  - name: no host that reports the reconciler's metrics fires after 15 minutes
+    interval: 1m
+    input_series:
+      - series: 'up{job="node",instance="staging:9100"}'
+        values: "1x20"
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: HephaestusDeployMetricsMissing
+        exp_alerts: []
+      - eval_time: 16m
+        alertname: HephaestusDeployMetricsMissing
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: No host reports the reconciler's metrics
+
+  - name: tooling that no apply records for an hour fires, recorded tooling does not
+    interval: 1m
+    input_series:
+      - series: 'hephaestus_deploy_tooling_pending{instance="staging:9100"}'
+        values: "1x70"
+      - series: 'hephaestus_deploy_tooling_pending{instance="production:9100"}'
+        values: "0x70"
+    alert_rule_test:
+      - eval_time: 50m
+        alertname: HephaestusDeployToolingPending
+        exp_alerts: []
+      - eval_time: 61m
+        alertname: HephaestusDeployToolingPending
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              instance: staging:9100
+            exp_annotations:
+              summary: A host runs reconciler tooling that no apply has recorded

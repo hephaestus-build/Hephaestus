@@ -262,3 +262,36 @@ groups:
           severity: warning
         annotations:
           summary: A certificate that cert-manager manages expires in less than seven days, or has no issued certificate
+  # The pull reconciler's metrics, from node-exporter's textfile collector on each host that runs
+  # hephaestus-reconcile.timer (docs/admin/pull-based-deployment.mdx § Watching it). Load this
+  # group only where such a host is scraped: HephaestusDeployMetricsMissing fires where none reports.
+  - name: hephaestus-pull-deploy
+    rules:
+      - alert: HephaestusDeployReconcileFailing
+        expr: hephaestus_deploy_reconcile_success == 0
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: Every reconcile run of a host failed for 15 minutes, so the host does not follow its release channel
+      - alert: HephaestusDeployReconcileStale
+        expr: time() - hephaestus_deploy_reconcile_timestamp_seconds > 2400
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: A host's reconciler has finished no run for 40 minutes
+      - alert: HephaestusDeployMetricsMissing
+        expr: absent(hephaestus_deploy_reconcile_timestamp_seconds)
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: No host reports the reconciler's metrics
+      - alert: HephaestusDeployToolingPending
+        expr: hephaestus_deploy_tooling_pending == 1
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: A host runs reconciler tooling that no apply has recorded
