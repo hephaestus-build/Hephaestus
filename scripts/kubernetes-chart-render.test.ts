@@ -21,6 +21,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { isDeepStrictEqual } from "node:util";
 
 import { parseAllDocuments, stringify } from "yaml";
 
@@ -2277,5 +2278,66 @@ await test("values that the chart does not accept fail the render", () => {
 		const result = render(layers);
 		assert.equal(result.ok, false, `${label} rendered`);
 		assert.match(result.stderr, message, label);
+	}
+});
+
+await test("a model endpoint on a private network reaches the server and the worker, never the metadata range", () => {
+	const endpoint = { cidr: "10.20.0.0/16", ports: [8000] };
+	const resources = rendered([
+		...layersFor("small"),
+		{
+			config: {
+				llmPrivateHosts: ["vllm.lab.example", "10.20.0.0/16"],
+				llmPrivateHostsAllowHttp: true,
+			},
+			networkPolicy: { modelEndpoints: [endpoint] },
+		},
+	]);
+	const rule = {
+		to: [{ ipBlock: { cidr: endpoint.cidr } }],
+		ports: [{ port: 8000, protocol: "TCP" }],
+	};
+	for (const component of ["server", "worker", "webhook"]) {
+		const role = workload(resources, component);
+		const calls = component !== "webhook";
+		assert.equal(
+			envValue(role, "HEPHAESTUS_LLM_EGRESS_PRIVATE_HOSTS"),
+			calls ? "vllm.lab.example,10.20.0.0/16" : undefined,
+			component,
+		);
+		assert.equal(
+			envValue(role, "HEPHAESTUS_LLM_EGRESS_PRIVATE_HOSTS_ALLOW_HTTP"),
+			calls ? "true" : undefined,
+		);
+		const policy = resources.find(
+			(resource) =>
+				kindOf(resource) === "NetworkPolicy" &&
+				get(resource, "metadata", "namespace") === undefined &&
+				isDeepStrictEqual(
+					get(resource, "spec", "podSelector", "matchLabels"),
+					get(role, "spec", "selector", "matchLabels"),
+				),
+		);
+		const egress = list(get(policy, "spec", "egress"));
+		assert.equal(
+			egress.some((candidate) => isDeepStrictEqual(candidate, rule)),
+			calls,
+			component,
+		);
+	}
+	for (const refused of [
+		{ cidr: "169.254.0.0/16", ports: [80] },
+		{ cidr: "0.0.0.0/0", ports: [443] },
+		{ cidr: "10.0.0.0/7", ports: [443] },
+		// fd::/7 is 00fd::/7, the range that holds ::1.
+		{ cidr: "fd::/7", ports: [443] },
+		{ cidr: "10.20.0.0/16", ports: [] },
+	]) {
+		const result = render([
+			...layersFor("small"),
+			{ networkPolicy: { modelEndpoints: [refused] } },
+		]);
+		assert.equal(result.ok, false, `${refused.cidr} ${JSON.stringify(refused.ports)} rendered`);
+		assert.match(result.stderr, /modelEndpoints/u, refused.cidr);
 	}
 });

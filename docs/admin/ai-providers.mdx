@@ -128,7 +128,7 @@ The HTTP 400 rejections have title `Invalid request`:
 | Message                                                                        | Cause                                                                                                                                                                                     |
 | ------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | “Provider URLs must not contain credentials or query parameters.”              | The URL has userinfo, a query string, or a fragment. Gateways with URL keys (`https://gw/v1?api-key=…`) are refused. That value would enter snapshots, DTOs, and logs.                    |
-| “Provider host must be a public HTTPS URL”                                     | Non-HTTPS, or a private, link-local, loopback, or CGNAT host address. The SSRF guard has no override. It checks again at connect time to prevent DNS rebinds between save and connection. |
+| “Provider host must be a public HTTPS URL”                                     | Non-HTTPS, or a private, link-local, loopback, or CGNAT host address that the operator did not allow ([Model endpoints on your own network](#model-endpoints-on-your-own-network)). It checks again at connect time to prevent DNS rebinds between save and connection. |
 | “Provider host `<host>` is not in the allowed list”                            | Instance settings define an egress allowlist without this host. A blank allowlist allows any public host.                                                                                 |
 | — (HTTP 403) “This server does not allow you to connect your own AI provider.” | A workspace admin tried to add a connection or model with **Let workspaces add providers and models** off.                                                                                |
 
@@ -140,6 +140,68 @@ It lets a workspace admin direct a "provider" to host-local services.
 It does not relax the private-address check.
 
 :::
+
+### Model endpoints on your own network
+
+By default, a provider base URL must resolve to a public address.
+An admin who configures a provider must not be able to send requests into your private network.
+To keep model calls inside your network, for example to vLLM or Ollama on your own GPUs, allow the endpoint explicitly.
+
+Set `HEPHAESTUS_LLM_EGRESS_PRIVATE_HOSTS` on the server and on the worker to a comma-separated list.
+On Kubernetes, set `config.llmPrivateHosts` ([A model endpoint on a private network](./kubernetes#a-model-endpoint-on-a-private-network)).
+Each entry is one of these:
+
+| Entry | Example | Allows |
+| --- | --- | --- |
+| A host name | `vllm.lab.example` | This exact name, at any private address that it resolves to. Use only a name whose DNS you control. Wildcards are not supported. A host name is not checked against the addresses of this deployment, so never list the name of a Hephaestus service. |
+| An IP address | `192.168.5.9` | Any host name that resolves to this address. |
+| A CIDR range | `10.20.0.0/16`, `fd00:1::/48` | Any host name that resolves into this range. It can be no wider than `/16` for IPv4 or `/48` for IPv6. |
+
+These rules apply:
+
+- Only private addresses qualify: `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `100.64.0.0/10`, and `fc00::/7`.
+  Loopback, link-local, and public addresses stay refused, even when a host name entry resolves to them.
+  Every cloud metadata service at a `169.254.x.x` address is link-local, so it stays refused.
+- These metadata and credential ranges inside the private ranges also stay refused:
+
+  | Range | Provider |
+  | --- | --- |
+  | `100.100.100.200` | Alibaba Cloud |
+  | `fd00:ec2::/32` | AWS: instance metadata, EKS Pod Identity, DNS, and time |
+  | `fd20:ce::/48` | Google Cloud |
+  | `fd00:a9fe::/32` | Akamai (Linode) |
+  | `fd00:42::/32` | Scaleway |
+  | `fd00:c1::/32` | Oracle Cloud |
+
+  No such list is complete, so a range must also be narrow, as the next rules say.
+
+- An entry stops startup if it is not a host name, an IP address, or a CIDR range.
+  An IPv4 address needs all four parts: `10.1` is refused.
+- A range stops startup if it is not inside one of the private ranges, for example `0.0.0.0/0` or `172.0.0.0/8`.
+- A range stops startup if it is wider than `/16` for IPv4 or `/48` for IPv6, for example `10.0.0.0/8` or `fd00::/8`.
+  List the network that the model server is in.
+- A range stops startup if it is inside a metadata range of the previous table, because it would never connect.
+- A range stops startup if it covers an address of the server or worker itself.
+  Such a range admits the services of this deployment, such as PostgreSQL, NATS, and the server.
+  On Compose, this check covers the Compose network.
+  On Kubernetes, it covers the address of the Pod, but not the whole Pod range or the Service range.
+  Thus, never list a range that covers the Pod or Service range of the cluster.
+- List single hosts or narrow ranges.
+  A range lets admins send requests to every port of every host in it.
+  These admins include the workspace admins of every workspace while **Let workspaces add providers and models** is on.
+  A typical vLLM or Ollama server needs no key.
+  Any workspace can then use it as its own provider.
+  Its use does not count against a shared model's budget.
+  Turn that setting off to keep the list to the connections of instance admins.
+- For a host on this list, a failed **Test and fetch models** shows no HTTP status and no error.
+  The server log has them.
+- For a local development setup, use `HEPHAESTUS_LLM_EGRESS_ALLOW_LOOPBACK`.
+- The check happens again at connect time, on the address that the connection uses. A host name that is not listed and that changes its DNS answer to a private address is still refused.
+- Plain `http://` stays refused. To permit it for listed hosts, set `HEPHAESTUS_LLM_EGRESS_PRIVATE_HOSTS_ALLOW_HTTP=true`.
+  A host is listed if its name is an entry, or if the list covers all its addresses.
+  The API key then crosses your network unencrypted.
+- The instance allowlist in the admin UI still applies on top of this list.
+- No admin UI shows or changes this list. Only the operator of the deployment sets it.
 
 ## 3. What "Test and fetch models" does
 
@@ -197,6 +259,7 @@ The table preserves the exact result text:
 | “Reachable. Found N models.”                                   | 2xx, with `data[].id` parsed. N can be 0. A 2xx without a `data` array is still reachable.                                                                                                                                                                                   | Nothing.                                                                                              |
 | “The provider answered with HTTP 401 / 403.”                   | The endpoint answered. Your key is wrong, expired, or lacks permission.                                                                                                                                                                                                      | Re-enter the key. On Azure, check for **API key**, not Bearer.                                        |
 | “The provider answered with HTTP 404.”                         | The host is correct but the path is not. Usually, the base URL lacks `/v1` or has an extra path segment.                                                                                                                                                                     | Correct the base URL. Because it is immutable, create the connection again.                           |
+| “Hephaestus could not reach the provider. The server log has the reason.” | The provider is on the operator's private host list ([Model endpoints on your own network](#model-endpoints-on-your-own-network)), and the test failed. The test does not show the cause for these hosts. | Ask the operator to read the server log. |
 | “The provider answered with HTTP 3xx.”                         | The probe refuses a redirect.                                                                                                                                                                                                                                                | Enter the URL the provider serves from.                                                               |
 | “Hephaestus could not reach the provider (`<ExceptionName>`).” | Nothing answered. Causes include DNS failure, refused connection, TLS failure, a 5 s timeout, or the connect-time address guard. The guard rejects the resolved address. The exception message is withheld because it can contain host details. Only the class name appears. | Check the host from the server, not your laptop. The server log has the same class name at INFO.      |
 | “The provider’s response was too large.”                       | `/models` response over 1 MiB.                                                                                                                                                                                                                                               | Almost certainly not an OpenAI-compatible `/models` endpoint.                                         |

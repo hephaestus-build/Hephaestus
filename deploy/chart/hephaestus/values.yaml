@@ -41,6 +41,13 @@ networkPolicy:
   # Optional. The container ports of the `gateway` Pods that the worker may reach, for a model
   # endpoint that this cluster's own Gateway serves. Empty allows none.
   workerGatewayPorts: []
+  # Optional. Model endpoints on a private network outside the cluster, such as a vLLM server on the
+  # LAN: each item opens `ports` on `cidr` for the server and the worker. The `cidr` must be private
+  # (10/8, 172.16/12, 192.168/16, 100.64/10 or fc00::/7). Also list the endpoint in
+  # `config.llmPrivateHosts`. An endpoint in this cluster uses `workerGatewayPorts` instead.
+  #   - cidr: 10.20.0.0/16
+  #     ports: [8000]
+  modelEndpoints: []
   # The metrics scraper that may read the management port. An empty namespace admits no scraper.
   # A namespace needs at least one pod label.
   metrics:
@@ -270,6 +277,11 @@ config:
   llmUsageRetention: P400D
   # A second currency beside USD for AI spend: empty, or EUR. docs/admin/production-setup.mdx.
   llmDisplayCurrency: ""
+  # Model endpoints on a private network: host names, IP addresses or CIDR ranges that provider base
+  # URLs may resolve to. Empty allows public HTTPS hosts only. docs/admin/ai-providers.mdx.
+  llmPrivateHosts: []
+  # Accept http:// base URLs for the hosts in llmPrivateHosts. Every other host still needs HTTPS.
+  llmPrivateHostsAllowHttp: false
   # The organization that runs research on this instance, as the privacy notice names it.
   researchOrganization: ""
   publicActivity:

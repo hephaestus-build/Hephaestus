@@ -431,13 +431,15 @@ There is no separate intelligence service to configure.
 Those are runtime catalog data entered in the admin UI.
 [Connect an AI Provider](./ai-providers) explains each field, the connection test, and a price calculation example.
 
-Three optional instance-wide LLM variables hold deployment facts rather than catalog data.
+Five optional instance-wide LLM variables hold deployment facts rather than catalog data.
 Each defaults to off or its standard value:
 
 | Variable                               | Default                  | What it does                                                                                                                                                                                                                                                                  |
 | -------------------------------------- | ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `HEPHAESTUS_LLM_DISPLAY_CURRENCY`      | *(empty)*                | Shows converted spend **alongside** USD. Empty disables the second currency. Only `EUR` is supported. Other values, even valid codes such as `GBP`, fail startup with an explanation of accepted values. An unsupported currency cannot silently appear as a missing feature. |
 | `HEPHAESTUS_LLM_EGRESS_ALLOW_LOOPBACK` | `false`                  | Permits saved and connected `http://localhost` provider base URLs. **Never set in production.** It exposes host-local services to workspace-admin "provider" requests through SSRF. Private, link-local, and CGNAT checks remain unconditional.                               |
+| `HEPHAESTUS_LLM_EGRESS_PRIVATE_HOSTS` | *(empty)* | Model endpoints on your own network, as comma-separated host names, IP addresses, or CIDR ranges. Set the same value on the server and the worker. Only private addresses qualify. Loopback, link-local, and the cloud metadata ranges listed there stay refused. A range wider than `/16` (IPv4) or `/48` (IPv6), outside the private ranges, or covering the server's own address stops startup. [Model endpoints on your own network](./ai-providers#model-endpoints-on-your-own-network). |
+| `HEPHAESTUS_LLM_EGRESS_PRIVATE_HOSTS_ALLOW_HTTP` | `false` | Permits `http://` base URLs for the hosts in `HEPHAESTUS_LLM_EGRESS_PRIVATE_HOSTS`. Every other host still needs HTTPS. |
 | `HEPHAESTUS_LLM_FX_DAILY_URL`          | ECB daily reference feed | Override only on an air-gapped instance with an internal mirror of the ECB file.                                                                                                                                                                                              |
 
 Heph turns run in the Heph host of a worker, for both the webapp and Slack DMs.

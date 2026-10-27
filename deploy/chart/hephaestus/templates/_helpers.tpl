@@ -367,6 +367,28 @@ readinessProbe:
 {{- end -}}
 {{- end -}}
 
+{{/* Model calls go out from the server (connection test) and the worker (LLM proxy); both must agree. */}}
+{{- define "hephaestus.env.modelEgress" -}}
+- name: HEPHAESTUS_LLM_EGRESS_PRIVATE_HOSTS
+  value: {{ join "," .Values.config.llmPrivateHosts | quote }}
+- name: HEPHAESTUS_LLM_EGRESS_PRIVATE_HOSTS_ALLOW_HTTP
+  value: {{ .Values.config.llmPrivateHostsAllowHttp | quote }}
+{{- end -}}
+
+{{/* Model endpoints on a private network outside the cluster, which externalEgress leaves out. */}}
+{{- define "hephaestus.policy.modelEgress" -}}
+{{- range .Values.networkPolicy.modelEndpoints }}
+- to:
+    - ipBlock:
+        cidr: {{ .cidr }}
+  ports:
+    {{- range .ports }}
+    - port: {{ . }}
+      protocol: TCP
+    {{- end }}
+{{- end }}
+{{- end -}}
+
 {{/* HTTPS to the internet: Git providers, OAuth, AI providers. Private ranges stay excluded. */}}
 {{- define "hephaestus.policy.externalEgress" -}}
 - to:

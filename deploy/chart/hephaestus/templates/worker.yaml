@@ -159,6 +159,7 @@ spec:
           protocol: TCP
     {{- include "hephaestus.policy.databaseEgress" . | nindent 4 }}
     {{- include "hephaestus.policy.externalEgress" . | nindent 4 }}
+    {{- include "hephaestus.policy.modelEgress" . | nindent 4 }}
     {{- with .Values.networkPolicy.workerGatewayPorts }}
     # A model endpoint that this cluster's own Gateway serves: its public address translates to the
     # Gateway Pods, a private address that the external egress rule leaves out.
@@ -264,6 +265,7 @@ spec:
             {{- include "hephaestus.env.release" . | nindent 12 }}
             {{- include "hephaestus.env.shared" . | nindent 12 }}
             {{- include "hephaestus.env.scm" . | nindent 12 }}
+            {{- include "hephaestus.env.modelEgress" . | nindent 12 }}
             - name: SPRING_PROFILES_ACTIVE
               value: prod,worker
             - name: JAVA_TOOL_OPTIONS

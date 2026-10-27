@@ -1,7 +1,5 @@
 package de.tum.cit.aet.hephaestus.agent.catalog;
 
-import de.tum.cit.aet.hephaestus.agent.LlmProperties;
-import de.tum.cit.aet.hephaestus.core.WebClientConnectors;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import java.time.Duration;
@@ -22,7 +20,8 @@ import tools.jackson.databind.ObjectMapper;
 /**
  * Contract: the probe never throws on an upstream failure — a 4xx, 5xx or timeout comes back as an
  * advisory {@link LlmProbeResultDTO} with {@code reachable=false}. Only the egress guard may reject the
- * request, before any network call.
+ * request, before any network call. A provider on the operator's private network gets no status and no
+ * cause back, only reachable or not: anything more would let an admin map that network.
  */
 @Service
 @WorkspaceAgnostic("Instance LLM connection probe reads the global connection catalog, not tenant data")
@@ -33,6 +32,8 @@ public class LlmConnectionProbeService {
     private static final int MAX_RESPONSE_BYTES = 1024 * 1024;
     private static final int MAX_MODELS = 1_000;
     private static final int MAX_MODEL_ID_LENGTH = 256;
+    private static final String PRIVATE_UNREACHABLE =
+            "Hephaestus could not reach the provider. The server log has the reason.";
 
     private final LlmConnectionRepository connectionRepository;
     private final EgressPolicy egressPolicy;
@@ -43,9 +44,7 @@ public class LlmConnectionProbeService {
             LlmConnectionRepository connectionRepository,
             EgressPolicy egressPolicy,
             ObjectMapper objectMapper,
-            LlmProperties llmProperties,
             RestClient.Builder restClients) {
-        boolean allowLoopback = llmProperties.egress().allowLoopback();
         this.connectionRepository = connectionRepository;
         this.egressPolicy = egressPolicy;
         this.objectMapper = objectMapper;
@@ -53,9 +52,8 @@ public class LlmConnectionProbeService {
         // otherwise survive a cross-origin redirect and hand the credential to whatever the 3xx names.
         // The guarded resolver re-runs the private-address check on the resolution actually connected
         // to, closing the DNS-rebind window that validate-time checking leaves open.
-        HttpClient httpClient = HttpClient.create()
-                .resolver(WebClientConnectors.resolverGroup(allowLoopback))
-                .followRedirect(false);
+        HttpClient httpClient =
+                HttpClient.create().resolver(egressPolicy.resolverGroup()).followRedirect(false);
         ReactorClientHttpRequestFactory factory = new ReactorClientHttpRequestFactory(httpClient);
         factory.setConnectTimeout(PROBE_TIMEOUT);
         factory.setReadTimeout(PROBE_TIMEOUT);
@@ -70,22 +68,27 @@ public class LlmConnectionProbeService {
         LlmProbeTarget target = connectionRepository
                 .findProbeTargetById(connectionId)
                 .orElseThrow(() -> new EntityNotFoundException("LlmConnection", connectionId));
-        egressPolicy.validate(target.baseUrl());
-        return probe(target.baseUrl(), target.authMode(), target.apiKey());
+        boolean privateTarget = egressPolicy.validate(target.baseUrl());
+        return probe(target.baseUrl(), target.authMode(), target.apiKey(), privateTarget);
     }
 
     public LlmProbeResultDTO probeDraft(ProbeLlmConnectionRequestDTO request) {
-        egressPolicy.validate(request.baseUrl());
+        boolean privateTarget = egressPolicy.validate(request.baseUrl());
         LlmAuthMode authMode = request.authMode() != null ? request.authMode() : LlmAuthMode.BEARER;
-        return probe(request.baseUrl(), authMode, request.apiKey());
+        return probe(request.baseUrl(), authMode, request.apiKey(), privateTarget);
     }
 
-    /** The caller (workspace BYO) must have egress-validated {@code baseUrl} itself. */
-    public LlmProbeResultDTO probeCredential(String baseUrl, LlmAuthMode authMode, @Nullable String apiKey) {
-        return probe(baseUrl, authMode, apiKey);
+    /**
+     * The caller (workspace BYO) must have egress-validated {@code baseUrl} itself and passes what
+     * {@link EgressPolicy#validate} returned.
+     */
+    public LlmProbeResultDTO probeCredential(
+            String baseUrl, LlmAuthMode authMode, @Nullable String apiKey, boolean privateTarget) {
+        return probe(baseUrl, authMode, apiKey, privateTarget);
     }
 
-    private LlmProbeResultDTO probe(String baseUrl, LlmAuthMode authMode, @Nullable String apiKey) {
+    private LlmProbeResultDTO probe(
+            String baseUrl, LlmAuthMode authMode, @Nullable String apiKey, boolean privateTarget) {
         String url = stripTrailingSlash(baseUrl) + "/models";
         try {
             return restClient
@@ -104,11 +107,19 @@ public class LlmConnectionProbeService {
                     .exchange((clientRequest, clientResponse) -> {
                         int status = clientResponse.getStatusCode().value();
                         if (!clientResponse.getStatusCode().is2xxSuccessful()) {
+                            if (privateTarget) {
+                                log.info("LLM connection probe of a private host failed: status={}", status);
+                                return LlmProbeResultDTO.unreachable(null, PRIVATE_UNREACHABLE);
+                            }
                             return LlmProbeResultDTO.unreachable(
                                     status, "The provider answered with HTTP " + status + ".");
                         }
                         byte[] response = clientResponse.getBody().readNBytes(MAX_RESPONSE_BYTES + 1);
                         if (response.length > MAX_RESPONSE_BYTES) {
+                            if (privateTarget) {
+                                log.info("LLM connection probe of a private host failed: response too large");
+                                return LlmProbeResultDTO.unreachable(null, PRIVATE_UNREACHABLE);
+                            }
                             return LlmProbeResultDTO.unreachable(status, "The provider’s response was too large.");
                         }
                         JsonNode body = objectMapper.readTree(response);
@@ -117,6 +128,9 @@ public class LlmConnectionProbeService {
         } catch (Exception e) {
             // The exception message may carry host detail, so keep it out of the response.
             log.info("LLM connection probe failed: reason={}", e.getClass().getSimpleName());
+            if (privateTarget) {
+                return LlmProbeResultDTO.unreachable(null, PRIVATE_UNREACHABLE);
+            }
             return LlmProbeResultDTO.unreachable(
                     null,
                     "Hephaestus could not reach the provider (" + e.getClass().getSimpleName() + ").");

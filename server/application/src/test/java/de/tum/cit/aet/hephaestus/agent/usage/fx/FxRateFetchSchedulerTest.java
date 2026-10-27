@@ -209,7 +209,9 @@ class FxRateFetchSchedulerTest extends BaseUnitTest {
     /** Exactly what Spring binds when {@code hephaestus.llm} is absent from the configuration. */
     private static LlmProperties defaultProperties() {
         return new LlmProperties(
-                "", new LlmProperties.Egress(false), new LlmProperties.Fx(LlmProperties.ECB_DAILY_URL));
+                "",
+                new LlmProperties.Egress(false, List.of(), false),
+                new LlmProperties.Fx(LlmProperties.ECB_DAILY_URL));
     }
 
     private ApplicationContextRunner contextRunner() {

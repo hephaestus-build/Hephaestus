@@ -91,6 +91,7 @@ spec:
               value: {{ $config.publicActivity.repositoryVisibilityMaxAge | quote }}
             - name: HEPHAESTUS_LLM_DISPLAY_CURRENCY
               value: {{ $config.llmDisplayCurrency | quote }}
+            {{- include "hephaestus.env.modelEgress" . | nindent 12 }}
             - name: MONITORING_RUN_ON_STARTUP
               value: {{ $config.monitoring.runOnStartup | quote }}
             - name: MONITORING_TIMEFRAME

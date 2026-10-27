@@ -1,16 +1,25 @@
 package de.tum.cit.aet.hephaestus.agent.catalog;
 
 import de.tum.cit.aet.hephaestus.agent.LlmProperties;
+import de.tum.cit.aet.hephaestus.core.SsrfGuardedResolverGroup;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.security.PrivateAddressGuard;
+import de.tum.cit.aet.hephaestus.core.security.PrivateHostAllowlist;
+import io.netty.resolver.AddressResolverGroup;
 import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.net.NetworkInterface;
+import java.net.SocketException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.UnknownHostException;
 import java.util.Arrays;
+import java.util.Collection;
+import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.stream.Collectors;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 /**
@@ -22,6 +31,10 @@ import org.springframework.stereotype.Component;
  * <p>Validating here is not sufficient on its own: the same {@link PrivateAddressGuard} predicate must
  * stay re-applied at connect time by the proxy's and probe's guarded resolver, or a DNS rebind reopens
  * the window between validation and connection.
+ *
+ * <p>The operator's {@code private-hosts} list is the one exemption from the public-address rule. It is
+ * deployment configuration, never editable in the UI, because the guard exists to keep admins who
+ * configure providers out of the private network.
  */
 @Component
 @WorkspaceAgnostic("Instance egress policy reads the global instance_llm_settings singleton, not tenant data")
@@ -47,12 +60,38 @@ public class EgressPolicy {
      */
     private final boolean allowLoopback;
 
+    private final PrivateHostAllowlist privateHosts;
+    private final boolean privateHostsAllowHttp;
+    private final AddressResolverGroup<InetSocketAddress> resolverGroup;
+
+    /** @throws IllegalArgumentException for a private-hosts entry that {@link PrivateHostAllowlist#parse} refuses */
+    @Autowired
     public EgressPolicy(InstanceLlmSettingsRepository settingsRepository, LlmProperties llmProperties) {
-        this.settingsRepository = settingsRepository;
-        this.allowLoopback = llmProperties.egress().allowLoopback();
+        this(settingsRepository, llmProperties, ownAddresses());
     }
 
-    public void validate(String baseUrl) {
+    EgressPolicy(
+            InstanceLlmSettingsRepository settingsRepository,
+            LlmProperties llmProperties,
+            Collection<InetAddress> ownAddresses) {
+        this.settingsRepository = settingsRepository;
+        this.allowLoopback = llmProperties.egress().allowLoopback();
+        this.privateHosts = PrivateHostAllowlist.parse(llmProperties.egress().privateHosts(), ownAddresses);
+        this.privateHostsAllowHttp = llmProperties.egress().privateHostsAllowHttp();
+        this.resolverGroup = new SsrfGuardedResolverGroup(allowLoopback, privateHosts);
+    }
+
+    /** The connect-time half of this policy, for every HTTP client that calls a provider. */
+    public AddressResolverGroup<InetSocketAddress> resolverGroup() {
+        return resolverGroup;
+    }
+
+    /**
+     * @return whether the host resolves to a private address that the operator's list admits. A caller
+     *     that reports on the connection must then not tell an admin more than reachable or not, or the
+     *     list becomes a scanner of the operator's network.
+     */
+    public boolean validate(String baseUrl) {
         URI uri = parse(baseUrl);
         if (uri.getRawUserInfo() != null || uri.getRawQuery() != null || uri.getRawFragment() != null) {
             throw new IllegalArgumentException(NO_CREDENTIALS_OR_QUERY);
@@ -67,14 +106,36 @@ public class EgressPolicy {
 
         String normalizedScheme = scheme.toLowerCase(Locale.ROOT);
         boolean https = normalizedScheme.equals("https");
-        boolean httpLocalDev = normalizedScheme.equals("http") && localDev;
-        if (!https && !httpLocalDev) {
+        boolean http = normalizedScheme.equals("http");
+        if (!https && !http) {
             throw new IllegalArgumentException(NOT_PUBLIC_HTTPS);
         }
+        if (localDev) {
+            return false;
+        }
 
-        if (!localDev) {
-            assertPublicAddress(normalizedHost);
-            assertAllowlisted(normalizedHost);
+        InetAddress[] addresses = resolve(normalizedHost);
+        for (InetAddress address : addresses) {
+            if (PrivateAddressGuard.isNonPublic(address) && !privateHosts.permits(normalizedHost, address)) {
+                throw new IllegalArgumentException(NOT_PUBLIC_HTTPS);
+            }
+        }
+        boolean listed = Arrays.stream(addresses).allMatch(address -> privateHosts.permits(normalizedHost, address));
+        if (http && !(privateHostsAllowHttp && listed)) {
+            throw new IllegalArgumentException(NOT_PUBLIC_HTTPS);
+        }
+        assertAllowlisted(normalizedHost);
+        return Arrays.stream(addresses).anyMatch(PrivateAddressGuard::isNonPublic);
+    }
+
+    /** The addresses of this process: on Compose its network, on Kubernetes its Pod's address. */
+    private static List<InetAddress> ownAddresses() {
+        try {
+            return NetworkInterface.networkInterfaces()
+                    .flatMap(NetworkInterface::inetAddresses)
+                    .toList();
+        } catch (SocketException e) {
+            throw new IllegalStateException("Cannot read this server's network addresses", e);
         }
     }
 
@@ -89,17 +150,11 @@ public class EgressPolicy {
         }
     }
 
-    private static void assertPublicAddress(String host) {
-        InetAddress[] addresses;
+    private static InetAddress[] resolve(String host) {
         try {
-            addresses = InetAddress.getAllByName(host);
+            return InetAddress.getAllByName(host);
         } catch (UnknownHostException e) {
             throw new IllegalArgumentException(NOT_PUBLIC_HTTPS, e);
-        }
-        for (InetAddress address : addresses) {
-            if (PrivateAddressGuard.isNonPublic(address)) {
-                throw new IllegalArgumentException(NOT_PUBLIC_HTTPS);
-            }
         }
     }
 

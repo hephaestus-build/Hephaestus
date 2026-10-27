@@ -715,6 +715,12 @@ hephaestus:
             # admin aim their "provider" at host-local services. The private/link-local/CGNAT address
             # check is unconditional and this flag does not relax it. On in `local` and `e2e` only.
             allow-loopback: ${HEPHAESTUS_LLM_EGRESS_ALLOW_LOOPBACK:false}
+            # Model endpoints on the operator's own network, comma-separated host names, IP addresses or
+            # CIDR ranges (vllm.lab.example,10.20.0.0/16). Only the operator sets this: the guard exists
+            # because admins who configure providers must not reach the private network. Set the same
+            # value on the server and the worker.
+            private-hosts: ${HEPHAESTUS_LLM_EGRESS_PRIVATE_HOSTS:}
+            private-hosts-allow-http: ${HEPHAESTUS_LLM_EGRESS_PRIVATE_HOSTS_ALLOW_HTTP:false}
         fx:
             # Where the daily euro reference rates come from. Override only on an air-gapped instance
             # that mirrors the ECB file internally.

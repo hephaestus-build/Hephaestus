@@ -9,7 +9,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import de.tum.cit.aet.hephaestus.agent.LlmProperties;
+import de.tum.cit.aet.hephaestus.core.SsrfGuardedResolverGroup;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.io.IOException;
@@ -37,14 +37,10 @@ class LlmConnectionProbeServiceTest extends BaseUnitTest {
         upstream.start();
         connectionRepository = mock(LlmConnectionRepository.class);
         egressPolicy = mock(EgressPolicy.class);
+        // Loopback allowed: the probe target is a MockWebServer on localhost.
+        when(egressPolicy.resolverGroup()).thenReturn(SsrfGuardedResolverGroup.LOOPBACK_EXEMPT_INSTANCE);
         service = new LlmConnectionProbeService(
-                connectionRepository,
-                egressPolicy,
-                new ObjectMapper(),
-                // Loopback allowed: the probe target is a MockWebServer on localhost.
-                new LlmProperties(
-                        "", new LlmProperties.Egress(true), new LlmProperties.Fx(LlmProperties.ECB_DAILY_URL)),
-                RestClient.builder());
+                connectionRepository, egressPolicy, new ObjectMapper(), RestClient.builder());
     }
 
     @AfterEach
