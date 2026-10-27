@@ -746,7 +746,7 @@ For one host, use [Install on one host (k3s)](#install-on-one-host-k3s).
    ```
 
 7. Follow the migration Job's log until the migrations are complete: `kubectl --namespace hephaestus logs job/hephaestus-migration-1`.
-8. Wait until the worker is ready. A worker is ready only after its [isolation probe](#sandbox-prerequisites) passed.
+8. Wait until the worker is ready. A worker is ready only after its [isolation probe](#sandbox-prerequisites) passed and it watches the sandbox namespace.
 
    ```bash
    kubectl --namespace hephaestus rollout status deployment/hephaestus-worker
@@ -893,8 +893,10 @@ The metric `sandbox_start_failures_total{kind="review",reason}` counts these ref
 The gauge `sandbox_review_starved_seconds` shows how long no review could start while none ran. Alert on it well before an hour: the quota is too small for the sandboxes beside the reviews.
 
 The worker learns of the refusal from the events of the sandbox namespace, and reads its quotas to tell whether a sandbox can fit at all.
-It needs `get` and `list` on `events` and `resourcequotas` there; the chart's Role grants them.
+It needs `get` and `list` on `events`, and `get`, `list` and `watch` on `resourcequotas` there. The chart's Role grants them.
 Without them, the worker logs one warning, and a refused review waits 2 minutes and spends a retry.
+The worker watches the Pods, Jobs and quotas of the sandbox namespace.
+Thus, a claim poll and a readiness probe send no request to the API server.
 A sandbox's credential, not the network, binds it to the worker that started it.
 
 The worker reaches the Kubernetes API only at `networkPolicy.kubernetesApi`.
@@ -908,7 +910,8 @@ The worker's service account has these permissions in the sandbox namespace, and
 - `pods/log`: `get`.
 - `pods/exec`: `get` and `create`. The client opens an exec as a WebSocket `GET`, and the API server also authorizes it as `create`.
 - Jobs: `get`, `list`, `watch`, `create`, and `delete`.
-- Events and ResourceQuotas: `get` and `list`. A review Pod that the sandbox quota refuses waits for room: the Job controller reports the refusal as an event, and the quota tells whether the Pod can ever fit.
+- Events: `get` and `list`. A review Pod that the sandbox quota refuses waits for room: the Job controller reports the refusal as an event.
+- ResourceQuotas: `get`, `list` and `watch`. The quota tells how many reviews fit and whether a review can ever fit.
 
 A practice review attempt runs as one Job.
 The Job ends at the attempt's upload deadline plus two minutes, also when its worker is gone, and Kubernetes removes it 15 minutes after it ends.
@@ -1140,6 +1143,7 @@ A change of NATS itself stops reception: while NATS is down, the receiver answer
 
 | Symptom | Cause and check |
 | --- | --- |
+| A worker stays unready, and its log says that a sandbox namespace informer failed and retries | The worker cannot watch the Pods, Jobs or ResourceQuotas of the sandbox namespace. The log gives the HTTP status. A `403` means that the worker's Role lacks `list` or `watch` on one of them ([Sandbox prerequisites](#sandbox-prerequisites)). The worker retries and becomes ready by itself once it can watch. |
 | A worker stays unready, and its log says that the cluster does not hold the sandbox boundary | The isolation probe failed. The log names each failed check. A failed egress check usually means that the network plugin does not enforce NetworkPolicy, or that `networkPolicy.kubernetesApi` names an address that the plugin does not see. |
 | A worker log says that the network policy did not filter a sandbox Pod in time | The network plugin applied the policy of a new Pod more than 60 seconds after the Pod started. The attempt is tried again. |
 | A review fails with "The sandbox quota is smaller than one review sandbox" | The quota holds less than one review sandbox requests. Raise `worker.sandbox.quota`. |

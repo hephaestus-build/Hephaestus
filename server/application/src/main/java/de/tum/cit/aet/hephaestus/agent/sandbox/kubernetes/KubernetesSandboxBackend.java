@@ -49,6 +49,7 @@ public class KubernetesSandboxBackend implements SandboxBackend, SandboxRoom {
     private final KubernetesLiveWorkers liveWorkers;
     private final SandboxExits exits;
     private final KubernetesSandboxQuota quota;
+    private final KubernetesSandboxCache cache;
     private final Map<String, Sandbox> sandboxes = new ConcurrentHashMap<>();
 
     public KubernetesSandboxBackend(
@@ -57,13 +58,15 @@ public class KubernetesSandboxBackend implements SandboxBackend, SandboxRoom {
             KubernetesWorker worker,
             KubernetesLiveWorkers liveWorkers,
             SandboxExits exits,
-            KubernetesSandboxQuota quota) {
+            KubernetesSandboxCache cache) {
         this.pods = pods;
         this.reviewJobs = reviewJobs;
         this.worker = worker;
         this.liveWorkers = liveWorkers;
         this.exits = exits;
-        this.quota = quota;
+        this.quota = new KubernetesSandboxQuota(
+                cache, worker.namespace(), worker.properties().runtimeClassName());
+        this.cache = cache;
     }
 
     /** A sandbox that this process launched: its Job or Pod, and the Pod once a review's Job has created it. */
@@ -104,7 +107,7 @@ public class KubernetesSandboxBackend implements SandboxBackend, SandboxRoom {
     @Override
     public boolean reviewsRunning() {
         try {
-            return reviewJobs.list().stream()
+            return cache.jobs(worker.selector(KubernetesWorker.KIND_REVIEW)).stream()
                     .anyMatch(job -> job.getStatus() != null
                             && job.getStatus().getActive() != null
                             && job.getStatus().getActive() > 0);

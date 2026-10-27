@@ -9,12 +9,10 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxProperties;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxRuntime;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxBackend;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
-import io.fabric8.kubernetes.api.model.ListOptionsBuilder;
 import io.fabric8.kubernetes.client.Config;
 import io.fabric8.kubernetes.client.ConfigBuilder;
 import io.fabric8.kubernetes.client.KubernetesClient;
 import io.fabric8.kubernetes.client.KubernetesClientBuilder;
-import io.fabric8.kubernetes.client.KubernetesClientException;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.binder.MeterBinder;
@@ -97,6 +95,12 @@ public class KubernetesSandboxConfiguration {
                 agentImageProperties.pullPolicy());
     }
 
+    @Bean(destroyMethod = "close")
+    public KubernetesSandboxCache kubernetesSandboxCache(
+            KubernetesClient sandboxKubernetesClient, KubernetesWorker worker) {
+        return new KubernetesSandboxCache(sandboxKubernetesClient, worker.namespace());
+    }
+
     @Bean
     public KubernetesSandboxJobs kubernetesSandboxJobs(
             KubernetesClient sandboxKubernetesClient, KubernetesWorker worker) {
@@ -115,17 +119,8 @@ public class KubernetesSandboxConfiguration {
             KubernetesWorker worker,
             KubernetesLiveWorkers liveWorkers,
             SandboxExits exits,
-            KubernetesClient sandboxKubernetesClient) {
-        return new KubernetesSandboxBackend(
-                pods,
-                reviewJobs,
-                worker,
-                liveWorkers,
-                exits,
-                new KubernetesSandboxQuota(
-                        sandboxKubernetesClient,
-                        worker.namespace(),
-                        worker.properties().runtimeClassName()));
+            KubernetesSandboxCache cache) {
+        return new KubernetesSandboxBackend(pods, reviewJobs, worker, liveWorkers, exits, cache);
     }
 
     @Bean(destroyMethod = "close")
@@ -174,23 +169,17 @@ public class KubernetesSandboxConfiguration {
     }
 
     /**
-     * Readiness, as {@code DockerHealthIndicator}: an unreachable API or a failed isolation probe stops new work, not
-     * the worker. The details give the isolation tier of the latest probe.
+     * Readiness, as {@code DockerHealthIndicator}: down while the worker does not watch the sandbox namespace or the
+     * isolation probe failed. The details give the isolation tier of the latest probe.
      */
     @Bean
-    public HealthIndicator kubernetesSandboxHealthIndicator(
-            KubernetesClient sandboxKubernetesClient, KubernetesWorker worker) {
+    public HealthIndicator kubernetesSandboxHealthIndicator(KubernetesSandboxCache cache, KubernetesWorker worker) {
         return () -> {
             KubernetesIsolationProbe.Proof proof = worker.proof();
-            try {
-                sandboxKubernetesClient
-                        .pods()
-                        .inNamespace(worker.namespace())
-                        .withLabels(worker.selector(KubernetesWorker.KIND_HOST))
-                        .list(new ListOptionsBuilder().withLimit(1L).build());
-            } catch (KubernetesClientException e) {
+            // The informers' watches stand for the API: a readiness probe then sends it nothing.
+            if (!cache.current()) {
                 return Health.down()
-                        .withDetail("error", "Kubernetes API not reachable: HTTP " + e.getCode())
+                        .withDetail("error", "Kubernetes API not watched: the sandbox namespace cache is not current")
                         .build();
             }
             if (proof == null) {

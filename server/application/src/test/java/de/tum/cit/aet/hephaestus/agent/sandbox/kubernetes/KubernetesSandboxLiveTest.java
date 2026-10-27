@@ -240,6 +240,7 @@ class KubernetesSandboxLiveTest {
     private LiveSandboxGateway gateway;
     private SimpleMeterRegistry meters;
     private SandboxExits exits;
+    private KubernetesSandboxCache cache;
     private SandboxBackend backend;
     private KubernetesLiveWorkers liveWorkers;
     private SandboxManager reviews;
@@ -316,7 +317,8 @@ class KubernetesSandboxLiveTest {
         meters = new SimpleMeterRegistry();
         reviewJobs = configuration.kubernetesSandboxJobs(client, worker);
         exits = configuration.sandboxExits(pods, meters);
-        backend = configuration.kubernetesSandboxBackend(pods, reviewJobs, worker, liveWorkers, exits, client);
+        cache = configuration.kubernetesSandboxCache(client, worker);
+        backend = configuration.kubernetesSandboxBackend(pods, reviewJobs, worker, liveWorkers, exits, cache);
         reviews = new SandboxAttemptRunner(backend, workspaces, gateway.sessions(), meters);
         hosts = new SandboxHosts(backend, workspaces, gateway.sessions(), agentImage.reference());
         turns = configuration.kubernetesExecSandboxes(client, pods, worker, agentImage, liveWorkers, exits);
@@ -345,6 +347,9 @@ class KubernetesSandboxLiveTest {
         }
         if (turns != null) {
             failure = attempt(failure, turns::close);
+        }
+        if (cache != null) {
+            failure = attempt(failure, cache::close);
         }
         if (gateway != null) {
             failure = attempt(failure, gateway::close);
@@ -531,8 +536,7 @@ class KubernetesSandboxLiveTest {
                             worker,
                             liveWorkers,
                             new SandboxExits(pods, new SimpleMeterRegistry()),
-                            new KubernetesSandboxQuota(
-                                    client, namespace(), worker.properties().runtimeClassName()))
+                            cache)
                     .kill(new SandboxBackend.Handle(name));
 
             SandboxResult result = running.get(pods.stopGraceSeconds() + 90, TimeUnit.SECONDS);

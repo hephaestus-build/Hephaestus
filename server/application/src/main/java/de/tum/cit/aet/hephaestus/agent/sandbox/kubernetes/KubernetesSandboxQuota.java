@@ -4,7 +4,6 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ResourceLimits;
 import io.fabric8.kubernetes.api.model.Pod;
 import io.fabric8.kubernetes.api.model.Quantity;
 import io.fabric8.kubernetes.api.model.ResourceQuota;
-import io.fabric8.kubernetes.client.KubernetesClient;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.List;
@@ -25,7 +24,7 @@ public class KubernetesSandboxQuota {
 
     private static final Logger log = LoggerFactory.getLogger(KubernetesSandboxQuota.class);
 
-    private final KubernetesClient client;
+    private final KubernetesSandboxCache cache;
     private final String namespace;
     private final String runtimeClassName;
     private final AtomicBoolean unreadable = new AtomicBoolean();
@@ -36,8 +35,8 @@ public class KubernetesSandboxQuota {
     private volatile @Nullable Map<String, Quantity> overhead;
 
     /** @param runtimeClassName the RuntimeClass of the sandbox Pods; blank for the cluster's default */
-    public KubernetesSandboxQuota(KubernetesClient client, String namespace, String runtimeClassName) {
-        this.client = client;
+    public KubernetesSandboxQuota(KubernetesSandboxCache cache, String namespace, String runtimeClassName) {
+        this.cache = cache;
         this.namespace = namespace;
         this.runtimeClassName = runtimeClassName;
     }
@@ -46,7 +45,7 @@ public class KubernetesSandboxQuota {
     public int roomFor(ResourceLimits limits) {
         List<ResourceQuota> quotas;
         try {
-            quotas = client.resourceQuotas().inNamespace(namespace).list().getItems();
+            quotas = cache.quotas();
         } catch (RuntimeException e) {
             if (unreadable.compareAndSet(false, true)) {
                 log.warn(
@@ -73,7 +72,7 @@ public class KubernetesSandboxQuota {
     public boolean neverFits(ResourceLimits limits) {
         List<ResourceQuota> quotas;
         try {
-            quotas = client.resourceQuotas().inNamespace(namespace).list().getItems();
+            quotas = cache.quotas();
         } catch (RuntimeException e) {
             return false;
         }
@@ -114,7 +113,7 @@ public class KubernetesSandboxQuota {
         if (known != null) return known;
         if (runtimeClassName.isBlank()) return Map.of();
         try {
-            for (Pod pod : client.pods().inNamespace(namespace).list().getItems()) {
+            for (Pod pod : cache.pods(Map.of())) {
                 var spec = pod.getSpec();
                 if (spec != null && runtimeClassName.equals(spec.getRuntimeClassName())) {
                     Map<String, Quantity> shown =

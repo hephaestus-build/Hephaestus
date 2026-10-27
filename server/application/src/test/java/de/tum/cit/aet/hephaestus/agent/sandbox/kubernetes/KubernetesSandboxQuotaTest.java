@@ -10,7 +10,6 @@ import io.fabric8.kubernetes.api.model.Quantity;
 import io.fabric8.kubernetes.api.model.ResourceQuota;
 import io.fabric8.kubernetes.api.model.ResourceQuotaBuilder;
 import io.fabric8.kubernetes.api.model.ResourceQuotaSpecBuilder;
-import io.fabric8.kubernetes.client.KubernetesClient;
 import io.fabric8.kubernetes.client.KubernetesClientException;
 import java.time.Duration;
 import java.util.List;
@@ -144,10 +143,10 @@ class KubernetesSandboxQuotaTest extends BaseUnitTest {
 
     @Test
     void shouldClaimAsBeforeWhenTheQuotasCannotBeRead() {
-        KubernetesClient client = mock(KubernetesClient.class);
-        when(client.resourceQuotas()).thenThrow(new KubernetesClientException("forbidden", 403, null));
+        KubernetesSandboxCache cache = mock(KubernetesSandboxCache.class);
+        when(cache.quotas()).thenThrow(new KubernetesClientException("not listed yet"));
 
-        assertThat(new KubernetesSandboxQuota(client, "sandboxes", "")
+        assertThat(new KubernetesSandboxQuota(cache, "sandboxes", "")
                         .roomFor(new ResourceLimits(3L * 1024 * 1024 * 1024, 1.0, 256, Duration.ofMinutes(30))))
                 .isEqualTo(Integer.MAX_VALUE);
     }
