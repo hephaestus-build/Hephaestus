@@ -138,8 +138,9 @@ export const SlackTurnRunning: Story = {
 };
 
 /**
- * Waiting to start. The line says only that it waits, true whether other questions are ahead or no
- * worker is running, and only after a second, so a turn that starts at once never shows it.
+ * Waiting to start, and the server cannot tell why: the turn may start at once, or no worker runs.
+ * The line says only that it waits, and only after a second, so a turn that starts at once never
+ * shows it.
  */
 export const WaitingToStart: Story = {
 	args: { turn: { createdAt: minutesBefore(1), status: "QUEUED", surface: "APP" } },
@@ -147,6 +148,50 @@ export const WaitingToStart: Story = {
 		await expect(canvas.getByText("Thinking…")).toBeVisible();
 		await expect(
 			await canvas.findByText("Waiting for Heph to start…", {}, { timeout: 3000 }),
+		).toBeVisible();
+	},
+};
+
+/**
+ * Heph answers other people's questions, and this one is next in its conversation. The line says
+ * so, because a wait of minutes with no reason reads as broken. It blames nobody and promises no
+ * time, since nothing can estimate when Heph is free.
+ */
+export const WaitingForAFreeHeph: Story = {
+	args: {
+		turn: {
+			createdAt: minutesBefore(1),
+			status: "QUEUED",
+			surface: "APP",
+			waitingFor: "FREE_HEPH",
+		},
+	},
+	play: async ({ canvas }) => {
+		await expect(
+			await canvas.findByText(
+				"Heph is answering other questions. Yours starts when Heph is free.",
+				{},
+				{ timeout: 3000 },
+			),
+		).toBeVisible();
+		await expect(canvas.queryByText("Waiting for Heph to start…")).toBeNull();
+	},
+};
+
+/** A long wait for a free Heph still counts the time and says the developer can leave. */
+export const LongWaitForAFreeHeph: Story = {
+	args: WaitingForAFreeHeph.args,
+	loaders: [askedSecondsAgo(75)],
+	play: async ({ canvas }) => {
+		await expect(
+			await canvas.findByText(
+				"Heph is answering other questions. Yours starts when Heph is free.",
+				{},
+				{ timeout: 3000 },
+			),
+		).toBeVisible();
+		await expect(
+			canvas.getByText(/^1 min \d+ s · You can leave\. The answer stays here\.$/u),
 		).toBeVisible();
 	},
 };

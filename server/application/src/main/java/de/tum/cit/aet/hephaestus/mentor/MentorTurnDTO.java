@@ -22,6 +22,13 @@ public record MentorTurnDTO(
         MentorTurn.@NonNull Status status,
 
         @Schema(
+                description = "Why a queued turn has not started: FREE_HEPH while Heph answers other questions and"
+                        + " this one starts when Heph is free; EARLIER_QUESTION while an earlier question of the"
+                        + " same conversation or thread waits or is answered. Absent when the turn does not wait, or"
+                        + " when the server cannot tell why it waits.")
+        MentorTurn.@Nullable WaitingFor waitingFor,
+
+        @Schema(
                 description = "Attempts started so far; 0 while the turn waits for its first start. A lost lease"
                         + " queues the turn again with the same attempt, and the next start counts up. Thus, with the"
                         + " same attempt, RUNNING comes before QUEUED or an end.",

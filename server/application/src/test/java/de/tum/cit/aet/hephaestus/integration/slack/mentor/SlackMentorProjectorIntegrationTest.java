@@ -48,6 +48,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.FeedbackState;
 import de.tum.cit.aet.hephaestus.testconfig.ConversationReceipts;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
+import de.tum.cit.aet.hephaestus.workspace.Membership;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
@@ -473,6 +474,38 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
         changed(turns.claimNext(WORKER, LEASE).orElseThrow());
 
         verify(slack).deleteMessage(workspace.getId(), CHANNEL, "500.1");
+    }
+
+    @Test
+    void shouldSayThatHephAnswersOtherQuestionsWhenTheQuestionWaitsForAFreeHeph() {
+        User colleague = persistUser("slack-projector-colleague");
+        ensureMembership(workspace, colleague, Membership.WorkspaceRole.MEMBER);
+        MentorConversation colleagues = conversations.findOrCreateMain(workspace.getId(), accountId(colleague));
+        turns.submit(
+                workspace.getId(),
+                colleagues.getId(),
+                new MentorTurnService.Question(
+                        MentorTurn.Surface.APP,
+                        "What changed?",
+                        UUID.randomUUID().toString(),
+                        null,
+                        null));
+        assertThat(turns.claimNext(WORKER, LEASE)).isPresent();
+        MentorTurn queued = ask(main, "Why is this not met?", "100.1").turn();
+
+        clock.advance(SlackMentorProjector.WAITING_NOTICE_AFTER.plusMinutes(1));
+        changed(queued);
+
+        verify(slack)
+                .postMessage(
+                        eq(workspace.getId()),
+                        eq(CHANNEL),
+                        isNull(),
+                        eq(List.of()),
+                        eq(SlackMentorProjector.WAITING_FOR_HEPH_NOTICE),
+                        any());
+        verify(slack, never())
+                .postMessage(anyLong(), anyString(), any(), anyList(), eq(SlackMentorProjector.WAITING_NOTICE), any());
     }
 
     @Test

@@ -79,6 +79,15 @@ A question for a busy conversation waits as `QUEUED`.
 A conversation holds at most `hephaestus.mentor.turn.max-follow-ups` queued turns.
 The next question gets `409` with the reason `FOLLOW_UPS_FULL`.
 
+A queued turn tells its clients why it waits (`MentorTurnDTO.waitingFor`, `MentorTurnService.waits`).
+The reason comes from the same SQL rule as the claim (`MentorTurnRepository.CLAIMABLE`), so the two cannot disagree.
+
+- `EARLIER_QUESTION`: the claim rule does not let a worker start the turn. An earlier question of its conversation is queued, or a host holds a turn of the conversation.
+- `FREE_HEPH`: a worker may start the turn, and a host holds a turn of another conversation.
+- No value: a worker may start the turn and no host holds a turn. The turn starts at once, or no worker runs.
+
+When a turn ends, the server publishes a change for each queued turn of its conversation, so that clients read the new reason.
+
 ### Leases and retries
 
 The worker renews the lease every third of `hephaestus.mentor.turn.lease`, while the turn runs on a live host.
@@ -279,6 +288,7 @@ A question whose turn has not run 10 seconds after it was asked gets one notice 
 Earlier turns hold the worker's turn slots, and without the notice Slack shows nothing while it waits.
 The server deletes the notice when the turn runs or ends.
 A turn that ran and waits again gets no notice.
+If the turn waits for a free Heph (`MentorTurnService.waitingFor`), the notice says that Heph answers other questions (`WAITING_FOR_HEPH_NOTICE`).
 
 The notice does not claim the reply.
 A claim before the turn runs would lose the answer if the server restarted during the wait.

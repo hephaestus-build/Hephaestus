@@ -8,7 +8,9 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -502,7 +504,50 @@ public class MentorTurnService {
                 turn.getLlmCalls());
     }
 
+    /**
+     * Why each queued turn among {@code shown} has not started, by the rule a claim follows
+     * ({@link MentorTurnRepository#CLAIMABLE}). A turn that a worker may start waits for a free Heph only while a host
+     * holds another turn. Otherwise it starts at once or no worker runs, and the reason is not known: such a turn, and
+     * a turn that does not wait, has no entry.
+     */
+    @Transactional(readOnly = true)
+    public Map<UUID, MentorTurn.WaitingFor> waits(long workspaceId, Collection<MentorTurn> shown) {
+        List<UUID> queued = shown.stream()
+                .filter(turn -> turn.getStatus() == MentorTurn.Status.QUEUED)
+                .map(MentorTurn::getId)
+                .toList();
+        if (queued.isEmpty()) {
+            return Map.of();
+        }
+        Set<UUID> claimable = Set.copyOf(turns.findClaimableIds(workspaceId, queued));
+        boolean hephBusy = !claimable.isEmpty() && turns.existsHeld();
+        Map<UUID, MentorTurn.WaitingFor> waits = new HashMap<>();
+        for (UUID id : queued) {
+            if (!claimable.contains(id)) {
+                waits.put(id, MentorTurn.WaitingFor.EARLIER_QUESTION);
+            } else if (hephBusy) {
+                waits.put(id, MentorTurn.WaitingFor.FREE_HEPH);
+            }
+        }
+        return waits;
+    }
+
+    /** Why one turn has not started ({@link #waits}); {@code null} when it does not wait or the reason is not known. */
+    @Transactional(readOnly = true)
+    public MentorTurn.@Nullable WaitingFor waitingFor(MentorTurn turn) {
+        return waits(turn.getWorkspaceId(), List.of(turn)).get(turn.getId());
+    }
+
+    /**
+     * Publishes the turn's change. An ended turn no longer holds back the questions queued after it in its
+     * conversation, so their changes are published too: each now waits for a free Heph or starts.
+     */
     private void changed(MentorTurn turn) {
         events.publishEvent(MentorLedgerEvents.TurnChanged.of(turn));
+        if (turn.getStatus().isTerminal()) {
+            turns.findByWorkspaceIdAndConversationIdAndStatus(
+                            turn.getWorkspaceId(), turn.getConversationId(), MentorTurn.Status.QUEUED)
+                    .forEach(next -> events.publishEvent(MentorLedgerEvents.TurnChanged.of(next)));
+        }
     }
 }

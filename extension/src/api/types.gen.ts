@@ -2727,6 +2727,10 @@ export type MentorTurn = {
     requestId: string;
     status: 'QUEUED' | 'RUNNING' | 'DONE' | 'FAILED' | 'STOPPED';
     surface: 'APP' | 'SLACK';
+    /**
+     * Why a queued turn has not started: FREE_HEPH while Heph answers other questions and this one starts when Heph is free; EARLIER_QUESTION while an earlier question of the same conversation or thread waits or is answered. Absent when the turn does not wait, or when the server cannot tell why it waits.
+     */
+    waitingFor?: 'FREE_HEPH' | 'EARLIER_QUESTION';
 };
 
 /**

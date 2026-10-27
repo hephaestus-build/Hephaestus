@@ -372,6 +372,32 @@ export const FollowUpsQueued: Story = {
 	},
 };
 
+const WAITING_FOR_HEPH = "Heph is answering other questions. Yours starts when Heph is free.";
+
+/**
+ * Heph answers other people's questions, so the developer's question waits for a free Heph. Its
+ * place in the conversation says so, for sighted readers and screen readers alike.
+ */
+export const WaitingForAFreeHeph: Story = {
+	args: {
+		state: ready({
+			entries: [...BEFORE_FOLLOW_UP, FOLLOW_UP],
+			turns: [turn({ id: FOLLOW_UP.turnId ?? "", status: "QUEUED", waitingFor: "FREE_HEPH" })],
+		}),
+	},
+	play: async ({ canvas }) => {
+		const log = canvas.getByRole("log");
+		await expect(
+			await within(log).findByText(WAITING_FOR_HEPH, {}, { timeout: 3000 }),
+		).toBeVisible();
+		await expect(canvas.getByText(WAITING_FOR_HEPH, { selector: "p" })).toHaveAttribute(
+			"role",
+			"status",
+		);
+		await expect(canvas.queryByText(/^Queued\./u)).toBeNull();
+	},
+};
+
 /**
  * Presses Next and checks that `row` took the change in place while the view stayed where the reader
  * was: the scroller sees no new row, so it has nothing to scroll to. `anchor` is the sent question

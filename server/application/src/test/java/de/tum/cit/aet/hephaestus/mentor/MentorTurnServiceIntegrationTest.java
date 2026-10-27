@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.mentor;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.entry;
+import static org.assertj.core.api.Assertions.tuple;
 
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataCopyFence;
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonDataWriteFence;
@@ -22,10 +23,13 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.test.context.event.ApplicationEvents;
+import org.springframework.test.context.event.RecordApplicationEvents;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.node.JsonNodeFactory;
 
+@RecordApplicationEvents
 class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     @Autowired
@@ -68,6 +72,9 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
 
     @Autowired
     private ApplicationEventPublisher events;
+
+    @Autowired
+    private ApplicationEvents published;
 
     private Workspace workspace;
     private MentorConversation main;
@@ -228,6 +235,67 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
                 .as("the follow-up waits for the question before it")
                 .isEmpty();
         assertThat(stored(followUp.turn()).getStatus()).isEqualTo(MentorTurn.Status.QUEUED);
+    }
+
+    @Test
+    void shouldSayAQuestionWaitsForAFreeHephOnlyWhileHephAnswersAnotherConversation() {
+        MentorTurnService.Submission first = ask(main, "First");
+
+        assertThat(turns.waits(workspace.getId(), List.of(stored(first.turn()))))
+                .as("nothing holds Heph, so the question starts at once or no worker runs")
+                .isEmpty();
+
+        assertThat(turns.claimNext(WORKER, LEASE)).isPresent();
+        MentorConversation thread =
+                conversations.openThread(workspace.getId(), first.question().getId());
+        MentorTurnService.Submission inThread = ask(thread, "About this");
+
+        assertThat(turns.waitingFor(stored(inThread.turn()))).isEqualTo(MentorTurn.WaitingFor.FREE_HEPH);
+    }
+
+    @Test
+    void shouldSayAFollowUpWaitsForTheEarlierQuestionWhileThatOneWaitsOrRuns() {
+        MentorTurnService.Submission first = ask(main, "First");
+        MentorTurnService.Submission followUp = ask(main, "Follow-up");
+
+        assertThat(turns.waits(workspace.getId(), List.of(stored(first.turn()), stored(followUp.turn()))))
+                .containsExactly(entry(followUp.turn().getId(), MentorTurn.WaitingFor.EARLIER_QUESTION));
+
+        MentorTurn running = turns.claimNext(WORKER, LEASE).orElseThrow();
+
+        assertThat(turns.waits(workspace.getId(), List.of(stored(running), stored(followUp.turn()))))
+                .as("a running turn does not wait")
+                .containsExactly(entry(followUp.turn().getId(), MentorTurn.WaitingFor.EARLIER_QUESTION));
+    }
+
+    @Test
+    void shouldSayNothingWaitsWhenTheTurnRunsOrEnded() {
+        ask(main, "First");
+        MentorTurn running = turns.claimNext(WORKER, LEASE).orElseThrow();
+        MentorConversation thread = conversations.openThread(
+                workspace.getId(),
+                turns.question(workspace.getId(), running.getId()).getId());
+        ask(thread, "About this");
+        MentorTurn alsoRunning = turns.claimNext("worker-two", LEASE).orElseThrow();
+        turns.end(alsoRunning.getId(), alsoRunning.getAttempt(), "worker-two", MentorTurn.Status.DONE, List.of(), null);
+
+        assertThat(turns.waits(workspace.getId(), List.of(stored(running), stored(alsoRunning))))
+                .isEmpty();
+        assertThat(turns.waitingFor(stored(alsoRunning))).isNull();
+    }
+
+    @Test
+    void shouldPublishTheFollowUpAgainWhenTheTurnBeforeItEnds() {
+        ask(main, "First");
+        MentorTurnService.Submission followUp = ask(main, "Follow-up");
+        MentorTurn running = turns.claimNext(WORKER, LEASE).orElseThrow();
+        published.clear();
+
+        turns.end(running.getId(), running.getAttempt(), WORKER, MentorTurn.Status.DONE, List.of(), null);
+
+        assertThat(published.stream(MentorLedgerEvents.TurnChanged.class))
+                .extracting(MentorLedgerEvents.TurnChanged::turnId, MentorLedgerEvents.TurnChanged::status)
+                .contains(tuple(followUp.turn().getId(), MentorTurn.Status.QUEUED));
     }
 
     @Test
