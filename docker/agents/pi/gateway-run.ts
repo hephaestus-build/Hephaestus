@@ -6,7 +6,7 @@ import { constants, tmpdir } from "node:os";
 import path from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 
-import { type FileEntry, parseSessionEntries } from "@earendil-works/pi-coding-agent";
+import type { FileEntry } from "@earendil-works/pi-coding-agent";
 
 import { present } from "./gateway-capabilities.ts";
 
@@ -567,6 +567,9 @@ export async function collectTraces(
 		await mkdir(tracesDirectory);
 		const secretBytes = Buffer.from(secret, "utf8");
 		const found = await sessionFiles(sessionsDirectory);
+		// The SDK is most of this process's memory. Loaded once the runner has exited, it stays out of the
+		// sandbox's memory while the review runs.
+		const { parseSessionEntries } = await import("@earendil-works/pi-coding-agent");
 		const manifest: TraceManifest = {
 			schemaVersion: 1,
 			budgetBytes,
