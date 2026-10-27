@@ -26,7 +26,7 @@
     },
     {
       "name": "hephaestus.agent.image",
-      "description": "Shared image reference for the Pi practice + mentor agent runtime"
+      "description": "Shared image reference for the Pi practice and Heph agent runtime"
     }
   ],
   "properties": [
@@ -108,7 +108,7 @@
     {
       "name": "hephaestus.agent.image.reference",
       "type": "java.lang.String",
-      "description": "Image reference used by Pi practice sandboxes and the mentor container. Production must be digest-pinned (registry/path@sha256:<64 lowercase hex>)."
+      "description": "Image reference used by Pi practice sandboxes and the Heph container. Production must be digest-pinned (registry/path@sha256:<64 lowercase hex>)."
     },
     {
       "name": "hephaestus.agent.image.pull-policy",

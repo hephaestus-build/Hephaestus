@@ -141,7 +141,7 @@ public class SlackAppHomeService {
         return List.of(
                 section(s -> s.text(markdownText(leadText(state)))),
                 section(s -> s.fields(List.of(
-                        markdownText("*Mentor*\n"
+                        markdownText("*Heph*\n"
                                 + stateIcon(state.mentorReady()
                                         && state.login().isPresent()
                                         && state.refusal().isEmpty())
@@ -157,7 +157,7 @@ public class SlackAppHomeService {
                 section(
                         s -> s.text(
                                 markdownText(
-                                        "*Context and privacy.* Hephaestus can use your linked project work and new messages you send in monitored channels. It does not read channel history from before the channel was activated. It does not mentor in channels."))));
+                                        "*Context and privacy.* Hephaestus can use your linked project work and new messages you send in monitored channels. It does not read channel history from before the channel was activated. It replies only in your direct messages."))));
     }
 
     record HomeOverviewState(
@@ -175,7 +175,7 @@ public class SlackAppHomeService {
                 section(
                         s -> s.text(
                                 markdownText(
-                                        "*Account settings.* Use this Home tab to control how Hephaestus uses your Slack messages. Open Hephaestus to manage your sign-in, your connected accounts, and your research participation."))),
+                                        "*Account settings.* Use this Home tab to control how Hephaestus uses your Slack messages. Open Hephaestus to manage your sign-in, your connected accounts, the weekly digest, and your research participation."))),
                 actions(a -> a.elements(asElements(button(b -> b.text(plainText("Open account settings"))
                         .url(url)
                         .actionId(ACTION_OPEN_HEPHAESTUS)
@@ -184,7 +184,7 @@ public class SlackAppHomeService {
 
     private static String leadText(HomeOverviewState state) {
         if (!state.mentorReady()) {
-            return "*Mentor unavailable.* Heph is turned off or not set up for this workspace. You can still manage your privacy here.";
+            return "*Heph unavailable.* Heph is turned off or not set up for this workspace. You can still manage your privacy here.";
         }
         if (state.login().isEmpty()) {
             return "*Check your account access to use Heph.* You need an active Hephaestus account that you linked to Slack. You also need a project identity in this workspace. You can still manage channel-message privacy here.";
@@ -201,7 +201,7 @@ public class SlackAppHomeService {
 
     List<LayoutBlock> channelMessageBlocks(boolean allowed) {
         String status = allowed
-                ? "*Channel-message context is allowed.* Hephaestus may use the new messages that you send in monitored channels to personalize how it mentors you in private. If you turn this off, Hephaestus stops future use and deletes the channel-message data that it collected from you."
+                ? "*Channel-message context is allowed.* Hephaestus may use the new messages that you send in monitored channels as context for your private feedback and for Heph’s answers. If you turn this off, Hephaestus stops future use and deletes the channel-message data that it collected from you."
                 : "*Channel-message context is not allowed.* Hephaestus does not use your messages in monitored channels.";
         return List.of(
                 section(s -> s.text(markdownText(status))),

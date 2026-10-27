@@ -194,7 +194,7 @@ Hephaestus never sends an open question as feedback.
 | Term | Meaning | Avoid for this concept |
 | --- | --- | --- |
 | **Feedback** | Guidance that Hephaestus writes from observations for a developer. | message, feedbacks |
-| **Practice feedback** | The full name for feedback when the surrounding text does not establish its context. | message, AI feedback, feedback item, ledger unit |
+| **Practice feedback** | The full name for feedback when the surrounding text does not establish its context. | message, AI feedback, feedback item, ledger unit, AI mentoring, AI code review |
 | **Destination** | Where feedback is intended to appear: on the work, on the practice page, or in conversation. | channel, location, surface |
 | **Delivery** | Whether feedback is awaiting approval, ready, delivered, withheld, rejected, replaced, failed or unconfirmed. | surface |
 | **Copy** | One appearance of feedback: a summary, line note, file note or Heph answer. | placement |
@@ -239,9 +239,10 @@ Removing a usefulness answer does not remove the developer's disagreement.
 | **Workspace** | One team's tenant, with its connected repositories, members, practices and feedback. |  |
 | **Instance** | One running deployment that hosts workspaces. |  |
 | **Integration** | One connected provider: GitHub, GitLab, Slack or Outline. |  |
-| **Heph** | The conversational assistant. | agent, bot |
-| **Mentor** | The product area for conversations with Heph. |  |
-| **Hephaestus** | The application. | agent |
+| **Heph** | The conversational assistant. | agent, bot, mentor |
+| **Conversations** | The product area for conversations with Heph. | Mentor |
+| **Mentor** | A person who guides a less experienced developer, such as a reviewer or an experienced colleague. Use it only for people. |  |
+| **Hephaestus** | The application. | agent, AI mentor |
 | **Practice profile** | The developer's private page for practice standing, changes and feedback. | practice dashboard, standings page |
 | **Practice page** | The page for one practice within the developer's Practice profile. |  |
 | **Standing** | Needs attention, Mixed feedback or Going well, read from the newest eligible decided work. A change to the work keeps its last decision until a newer review decides again. | score, grade, rating |
@@ -272,6 +273,25 @@ The workspace page never names developers, but small counts can disclose a perso
 It has no minimum count that prevents that disclosure.
 Hidden members and repositories do not contribute to those counts.
 The [Practice profile guide](/user/practice-profile) owns the user procedures and visibility details.
+
+### Research terms
+
+The research on Hephaestus and the product use different words for some concepts.
+Use the product word in the product, its docs and its release notes.
+Use the research word only when you quote or cite the research.
+
+| Research word | Product word |
+| --- | --- |
+| AI-generated feedback on practice application | Practice feedback |
+| Contribution | Work, or item in contributor docs. **Contributions** on Workspace activity is a separate count. |
+| Assessment | Observation and its outcome |
+| Delivery strategy: in-context, in-app, in-chat | Destination: On the work, On the practice page, In conversation |
+| Mentor approves feedback | A workspace admin approves feedback in the Approve first feedback mode |
+| Reply: agree, disagree, question, usefulness | Response (resolution and usefulness), Disagreement, or a question in the Heph conversation |
+
+The outcomes, problem, severity and next step have the same names in both.
+A destination matches a delivery strategy only by the place where feedback appears.
+[Destinations](#destinations) states that a destination does not establish a level of feedback.
 
 ### Heph
 

@@ -72,8 +72,8 @@ export function ActivateChannelDialog({
 
 				<ul className="list-disc space-y-1.5 pl-5 text-sm text-muted-foreground">
 					<li>
-						<strong>Post a visible announcement</strong> in the channel so everyone knows AI
-						mentoring is on.
+						<strong>Post a visible announcement</strong> in the channel so everyone knows Hephaestus
+						is active.
 					</li>
 					<li>
 						<strong>Begin reading new messages</strong> from now on. It never reads past history.

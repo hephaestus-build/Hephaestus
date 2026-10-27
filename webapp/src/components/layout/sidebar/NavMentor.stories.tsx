@@ -5,8 +5,7 @@ import { NavMentor } from "./NavMentor";
 import { withSidebarFrame } from "./sidebar-story-frame";
 
 /**
- * Navigation component for AI Mentor features, providing access to the AI
- * mentoring system. Shows a chevron arrow on hover to indicate expandable behavior.
+ * The Conversations group of the sidebar: one link to the Heph conversation. Shows a chevron on hover.
  */
 const meta = {
 	component: NavMentor,
@@ -15,7 +14,7 @@ const meta = {
 		docs: {
 			description: {
 				component:
-					"Mentor navigation sidebar component with links to AI mentoring features. Displays a chevron on hover to indicate it will transform the sidebar into mentor mode.",
+					"The Conversations group of the sidebar, with one link to the Heph conversation. A chevron appears on hover.",
 			},
 		},
 	},
@@ -36,7 +35,7 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 /**
- * Default view of the mentor navigation with hover chevron indicator.
+ * Default view of the Conversations group with the hover chevron.
  */
 export const Default: Story = {
 	play: async ({ canvas }) => {
@@ -48,14 +47,13 @@ export const Default: Story = {
 };
 
 /**
- * Shows the mentor navigation in hover state, revealing the chevron arrow.
+ * The Conversations group in its hover state, with the chevron shown.
  */
 export const WithHoverState: Story = {
 	parameters: {
 		docs: {
 			description: {
-				story:
-					"Hover over the mentor item to see the chevron arrow that indicates clicking will transform the sidebar into mentor mode.",
+				story: "Hover over the Heph link to see the chevron.",
 			},
 		},
 	},

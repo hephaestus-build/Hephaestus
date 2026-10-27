@@ -7,7 +7,7 @@ features:
     messages_tab_enabled: true
     messages_tab_read_only_enabled: false
   agent_view:
-    agent_description: Hephaestus mentors software project practices in private Slack DMs.
+    agent_description: Ask Heph about your practice feedback and recent work in private Slack DMs.
     suggested_prompts:
       - title: What needs attention?
         message: What software project practice should I focus on next?

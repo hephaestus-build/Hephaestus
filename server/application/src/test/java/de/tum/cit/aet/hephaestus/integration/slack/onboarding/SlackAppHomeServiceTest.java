@@ -103,11 +103,12 @@ class SlackAppHomeServiceTest extends BaseUnitTest {
         assertThat(rendered).doesNotContain("What project-practice issue should I follow up on");
         assertThat(json).doesNotContain("\\\\n");
         assertThat(rendered).contains("Enabled for you"); // mentor-status anchor
+        assertThat(rendered).contains("It replies only in your direct messages"); // channel-behavior claim
         assertThat(rendered).contains("Linked as `octocat`"); // identity anchor
         assertThat(rendered).contains("Allowed, 1 active channel"); // channel-count anchor
         assertThat(rendered).contains("Stop using my messages"); // opt-out wording
         assertThat(rendered).contains(SlackAppHomeService.ACTION_CHANNEL_MESSAGES_OPT_OUT);
-        assertThat(rendered).contains("research participation", "Open account settings");
+        assertThat(rendered).contains("research participation", "the weekly digest", "Open account settings");
         assertThat(rendered).doesNotContain("research_opt_out", "research_opt_in", "Research use is", "*Research use*");
         // The unwired quiet-hours control must not reach users until its write path exists.
         assertThat(rendered).doesNotContain("open_quiet_hours");
@@ -207,7 +208,7 @@ class SlackAppHomeServiceTest extends BaseUnitTest {
 
         View view = service.buildHomeView(7L, "T1", "U1");
 
-        assertThat(view.getBlocks().toString()).contains("Unavailable").contains("Mentor unavailable");
+        assertThat(view.getBlocks().toString()).contains("Unavailable").contains("Heph unavailable");
     }
 
     @Test

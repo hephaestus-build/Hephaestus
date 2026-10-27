@@ -257,8 +257,8 @@ export function WorkspaceRepositoriesSettings({
 				<CardHeader>
 					<IntegrationCardHeading>Manage repositories</IntegrationCardHeading>
 					<CardDescription>
-						Add or remove the repositories that Hephaestus watches for practice reviews and
-						mentoring. The sync table above shows how recently each one synced.
+						Add or remove the repositories that Hephaestus watches for practice reviews and Heph
+						conversations. The sync table above shows how recently each one synced.
 					</CardDescription>
 				</CardHeader>
 

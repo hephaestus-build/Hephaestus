@@ -17,7 +17,7 @@ export function NavMentor({ workspaceSlug }: { workspaceSlug: string }) {
 
 	return (
 		<SidebarGroup>
-			<SidebarGroupLabel>Mentor</SidebarGroupLabel>
+			<SidebarGroupLabel>Conversations</SidebarGroupLabel>
 			<SidebarMenu>
 				<SidebarMenuItem>
 					<SidebarMenuButton
@@ -35,7 +35,7 @@ export function NavMentor({ workspaceSlug }: { workspaceSlug: string }) {
 						<span className="flex items-center gap-2">
 							Heph
 							<Badge variant="muted">
-								<Sparkles className="h-3.5 w-3.5" /> AI mentor
+								<Sparkles className="h-3.5 w-3.5" /> AI assistant
 							</Badge>
 						</span>
 						<div className="flex w-full justify-end">
