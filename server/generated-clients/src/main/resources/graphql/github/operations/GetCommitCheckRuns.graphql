@@ -22,6 +22,7 @@ query GetCommitCheckRuns($owner: String!, $name: String!, $oid: GitObjectID!) {
                     }
                     nodes {
                         status
+                        conclusion
                         app {
                             databaseId
                         }

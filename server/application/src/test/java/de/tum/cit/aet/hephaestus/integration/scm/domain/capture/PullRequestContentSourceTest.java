@@ -447,9 +447,9 @@ class PullRequestContentSourceTest extends BaseUnitTest {
                     Instant.parse("2026-10-26T11:50:00Z"),
                     Instant.parse("2026-10-26T11:58:00Z"));
             PullRequest reviewed = pullRequest();
-            reviewed.observeHeadCheckRuns(new HeadCheckRuns(HEAD, List.of(run), false, readAt));
+            reviewed.observeHeadCheckRuns(new HeadCheckRuns(HEAD, List.of(run), false, readAt, null));
             PullRequest other = pullRequest();
-            other.observeHeadCheckRuns(new HeadCheckRuns("e".repeat(40), List.of(run), true, readAt));
+            other.observeHeadCheckRuns(new HeadCheckRuns("e".repeat(40), List.of(run), true, readAt, null));
             stubGit();
 
             mirroredPullRequest = reviewed;

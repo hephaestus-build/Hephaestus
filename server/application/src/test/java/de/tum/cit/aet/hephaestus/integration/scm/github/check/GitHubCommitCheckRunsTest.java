@@ -91,6 +91,26 @@ class GitHubCommitCheckRunsTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldCallTheListIncompleteWhileASuiteWaitsForApprovalOfItsWorkflows() {
+        // A fork pull request: the gated suites complete as ACTION_REQUIRED with no runs, and the rollup reads success.
+        String json = """
+                {"pageInfo": {"hasNextPage": false},
+                 "nodes": [
+                   {"status": "COMPLETED", "conclusion": "SUCCESS", "checkRuns": {"totalCount": 2}},
+                   {"status": "COMPLETED", "conclusion": "ACTION_REQUIRED", "checkRuns": {"totalCount": 0}}]}
+                """;
+        var awaiting = GitHubGraphQlTestMapper.create().readValue(json, GHCheckSuiteConnection.class);
+
+        HeadCheckRuns runs = GitHubCommitCheckRuns.toRuns(
+                        SHA, rollup(false, "SUCCESS", LINT_PASSED), awaiting, NO_APP, READ_AT)
+                .orElseThrow();
+
+        assertThat(runs.complete()).isFalse();
+        assertThat(runs.finished()).isFalse();
+        assertThat(runs.limitation()).isEqualTo(HeadCheckRuns.AWAITING_APPROVAL);
+    }
+
+    @Test
     void shouldReadNothingWhenGitHubReturnsNoRollupForTheCommit() {
         assertThat(GitHubCommitCheckRuns.toRuns(SHA, null, suites("COMPLETED", 3), NO_APP, READ_AT))
                 .isEmpty();

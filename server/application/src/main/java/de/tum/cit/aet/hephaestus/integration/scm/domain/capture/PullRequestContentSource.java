@@ -399,6 +399,7 @@ public class PullRequestContentSource {
         if (checkRuns != null && reviewedHead.equals(checkRuns.sha())) {
             ObjectNode node = result.putObject("head_check_runs");
             node.put("complete", checkRuns.complete());
+            if (checkRuns.limitation() != null) node.put("limitation", checkRuns.limitation());
             putInstant(node, "observed_at", checkRuns.observedAt());
             ArrayNode runs = node.putArray("runs");
             for (HeadCheckRuns.Run run : checkRuns.runs()) {

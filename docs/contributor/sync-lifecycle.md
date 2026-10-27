@@ -427,6 +427,10 @@ A pull request also stores the single runs behind its check state (`head_check_r
   A suite without runs is left aside, because an app that never posts a run leaves it queued.
   A CI that has posted nothing yet cannot be seen, so a later workflow or status can still add runs.
   An incomplete list never records that the checks finished.
+  A suite can wait for a maintainer to approve its workflows, as for a pull request from a fork.
+  Such a suite makes the list incomplete with the limitation `AWAITING_APPROVAL`.
+  GitHub completes such a suite as `action_required` with no runs, and its rollup can still read success.
+  Its check state is pending, not failed.
   The suite and runs of Hephaestus's own GitHub App (`hephaestus.github.app.id`) are left out of the list.
   The server also ignores a check suite event of its own app, so that suite never sets the check state.
 - **GitLab.** Not captured yet.

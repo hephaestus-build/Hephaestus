@@ -161,9 +161,10 @@ class PullRequestHeadChecksTest extends BaseUnitTest {
     void shouldCallRunsFinishedOnlyWhenTheListIsCompleteNonEmptyAndEveryRunEnded() {
         assertThat(runs(HEAD, true, READ_AT).finished()).isTrue();
         assertThat(runs(HEAD, false, READ_AT).finished()).isFalse();
-        assertThat(new HeadCheckRuns(HEAD, runs(HEAD, true, READ_AT).runs(), false, READ_AT).finished())
+        assertThat(new HeadCheckRuns(HEAD, runs(HEAD, true, READ_AT).runs(), false, READ_AT, null).finished())
                 .isFalse();
-        assertThat(new HeadCheckRuns(HEAD, List.of(), true, READ_AT).finished()).isFalse();
+        assertThat(new HeadCheckRuns(HEAD, List.of(), true, READ_AT, null).finished())
+                .isFalse();
     }
 
     private static HeadCheckRuns runs(String sha, boolean ended, Instant observedAt) {
@@ -174,7 +175,8 @@ class PullRequestHeadChecksTest extends BaseUnitTest {
                         new HeadCheckRuns.Run(
                                 "test", "CI", ended ? "failure" : "in_progress", ended, null, null, null)),
                 true,
-                observedAt);
+                observedAt,
+                null);
     }
 
     @Test
@@ -183,7 +185,7 @@ class PullRequestHeadChecksTest extends BaseUnitTest {
                 .mapToObj(n -> new HeadCheckRuns.Run("run " + n, null, "success", true, null, null, null))
                 .toList();
 
-        var bounded = new HeadCheckRuns(HEAD, runs, true, READ_AT);
+        var bounded = new HeadCheckRuns(HEAD, runs, true, READ_AT, null);
 
         assertThat(bounded.runs()).hasSize(200);
         assertThat(bounded.complete()).isFalse();

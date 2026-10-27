@@ -4,6 +4,7 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.time.Instant;
 import java.util.List;
+import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -19,8 +20,18 @@ import org.jspecify.annotations.Nullable;
  * @param complete whether the read listed every run the provider knew of with nothing still to come: the source
  *     contract's {@code head_check_runs} rule. It never proves that a run is absent.
  * @param observedAt when Hephaestus asked the provider, or received the hook
+ * @param limitation why the list cannot be complete, or null: {@link #AWAITING_APPROVAL} when a check suite waits for
+ *     a maintainer to approve its workflows, so its CI has not run at all
  */
-public record HeadCheckRuns(String sha, List<Run> runs, boolean complete, Instant observedAt) {
+public record HeadCheckRuns(
+        String sha,
+        List<Run> runs,
+        boolean complete,
+        Instant observedAt,
+        @Nullable String limitation) {
+
+    /** A suite waits for approval to run its workflows, as for a pull request from a fork. */
+    public static final String AWAITING_APPROVAL = "AWAITING_APPROVAL";
 
     static final int MAX_RUNS = 200;
     static final int MAX_TEXT = 200;
@@ -31,6 +42,7 @@ public record HeadCheckRuns(String sha, List<Run> runs, boolean complete, Instan
             complete = false;
         }
         runs = List.copyOf(runs);
+        if (limitation != null) complete = false;
     }
 
     /**
@@ -66,7 +78,11 @@ public record HeadCheckRuns(String sha, List<Run> runs, boolean complete, Instan
 
     /** Whether {@code other} shows the same runs of the same commit, whenever it was read. */
     boolean sameRunsAs(@Nullable HeadCheckRuns other) {
-        return other != null && sha.equals(other.sha) && complete == other.complete && runs.equals(other.runs);
+        return other != null
+                && sha.equals(other.sha)
+                && complete == other.complete
+                && runs.equals(other.runs)
+                && Objects.equals(limitation, other.limitation);
     }
 
     private static String clip(String text) {

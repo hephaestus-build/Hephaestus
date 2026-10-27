@@ -72,6 +72,8 @@ export const pullRequestRecordSchema = z.object({
 		.object({
 			/** The source contract's `head_check_runs` rule says what true means; it never proves a run absent. */
 			complete: z.boolean(),
+			/** Why the list cannot be complete: a check suite waits for a maintainer to approve its workflows. */
+			limitation: z.enum(["AWAITING_APPROVAL"]).optional(),
 			observed_at: z.string(),
 			runs: z.array(
 				z.object({

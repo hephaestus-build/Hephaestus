@@ -179,7 +179,7 @@ class GitHubCheckEventsIntegrationTest extends BaseIntegrationTest {
     void shouldStoreTheRunsOfTheHeadWhenACommitStatusOfItEnds() throws Exception {
         PullRequest onHead = persistPullRequest(9, CHECKED_SHA);
         var run = new HeadCheckRuns.Run("ci/jenkins", null, "success", true, null, null, null);
-        var read = new HeadCheckRuns(CHECKED_SHA, List.of(run), true, Instant.now());
+        var read = new HeadCheckRuns(CHECKED_SHA, List.of(run), true, Instant.now(), null);
         GitHubCommitCheckRuns checkRuns = mock(GitHubCommitCheckRuns.class);
         when(checkRuns.read(anyLong(), eq(repository.getNameWithOwner()), eq(CHECKED_SHA)))
                 .thenReturn(Optional.of(read));
@@ -206,7 +206,7 @@ class GitHubCheckEventsIntegrationTest extends BaseIntegrationTest {
         PullRequest onHead = persistPullRequest(9, CHECKED_SHA);
         var build = new HeadCheckRuns.Run("build", "GitHub Actions", "success", true, null, null, null);
         var docs = new HeadCheckRuns.Run("docs", "GitHub Actions", "skipped", true, null, null, null);
-        var read = new HeadCheckRuns(CHECKED_SHA, List.of(build, docs), true, Instant.now());
+        var read = new HeadCheckRuns(CHECKED_SHA, List.of(build, docs), true, Instant.now(), null);
         GitHubCommitCheckRuns checkRuns = mock(GitHubCommitCheckRuns.class);
         when(checkRuns.read(anyLong(), eq(repository.getNameWithOwner()), eq(CHECKED_SHA)))
                 .thenReturn(Optional.of(read));

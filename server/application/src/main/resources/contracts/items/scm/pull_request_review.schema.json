@@ -154,6 +154,12 @@
         "complete": {
           "type": "boolean"
         },
+        "limitation": {
+          "type": "string",
+          "enum": [
+            "AWAITING_APPROVAL"
+          ]
+        },
         "observed_at": {
           "type": "string"
         },

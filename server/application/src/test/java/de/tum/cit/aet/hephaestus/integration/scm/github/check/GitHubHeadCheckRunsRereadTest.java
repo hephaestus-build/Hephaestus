@@ -53,7 +53,7 @@ class GitHubHeadCheckRunsRereadTest extends BaseUnitTest {
         var pushedSince = pullRequest("d".repeat(40), "e".repeat(40), RUNNING, NOW.minus(Duration.ofHours(1)));
         when(pullRequests.findAllByRepository_IdAndStateAndHeadCheckRunsIsNotNull(7L, Issue.State.OPEN))
                 .thenReturn(List.of(stillRunning, finished, dayOld, pushedSince));
-        var settled = new HeadCheckRuns(lagging, List.of(PASSED), true, NOW);
+        var settled = new HeadCheckRuns(lagging, List.of(PASSED), true, NOW, null);
         when(checkRuns.read(3L, REPOSITORY, lagging)).thenReturn(Optional.of(settled));
 
         reread.reread(3L, REPOSITORY);
@@ -77,7 +77,7 @@ class GitHubHeadCheckRunsRereadTest extends BaseUnitTest {
     private static PullRequest pullRequest(String runsSha, String head, HeadCheckRuns.Run run, Instant readAt) {
         var pr = new PullRequest();
         pr.setHeadRefOid(head);
-        pr.observeHeadCheckRuns(new HeadCheckRuns(runsSha, List.of(run), true, readAt));
+        pr.observeHeadCheckRuns(new HeadCheckRuns(runsSha, List.of(run), true, readAt, null));
         return pr;
     }
 }

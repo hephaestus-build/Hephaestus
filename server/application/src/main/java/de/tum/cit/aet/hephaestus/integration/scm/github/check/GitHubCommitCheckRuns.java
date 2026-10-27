@@ -8,6 +8,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubGraphQlClie
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubRepositoryNameParser;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.GitHubSyncProperties;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHApp;
+import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHCheckConclusionState;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHCheckRun;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHCheckStatusState;
 import de.tum.cit.aet.hephaestus.integration.scm.github.graphql.model.GHCheckSuite;
@@ -91,7 +92,8 @@ public class GitHubCommitCheckRuns {
      * <p>The list is complete only when nothing GitHub knows of is still to come: it fits one page, the rollup waits
      * for no expected status, every listed run has ended, and every check suite with runs has completed. A failed
      * rollup is no such sign: GitHub reports a failure while other runs still go, and a suite still under way can add
-     * a run that waits for another. A CI that has posted nothing yet cannot be seen at all. A pending rollup shows in
+     * a run that waits for another. A suite that waits for approval of its workflows makes the list incomplete,
+     * whatever the rollup says. A CI that has posted nothing yet cannot be seen at all. A pending rollup shows in
      * the listed runs and suites, so they decide, without the runs and suite of Hephaestus's own app
      * ({@code ownAppId}): its run follows the review and is no evidence about the work.
      */
@@ -116,7 +118,8 @@ public class GitHubCommitCheckRuns {
                 && rollup.getState() != GHStatusState.EXPECTED
                 && runs.stream().allMatch(HeadCheckRuns.Run::finished)
                 && suitesSettled(suites, ownAppId);
-        return Optional.of(new HeadCheckRuns(sha, runs, complete, observedAt));
+        return Optional.of(new HeadCheckRuns(
+                sha, runs, complete, observedAt, awaitingApproval(suites) ? HeadCheckRuns.AWAITING_APPROVAL : null));
     }
 
     /**
@@ -130,6 +133,17 @@ public class GitHubCommitCheckRuns {
                 .allMatch(suite -> suite.getStatus() == GHCheckStatusState.COMPLETED
                         || suite.getCheckRuns() == null
                         || suite.getCheckRuns().getTotalCount() == 0);
+    }
+
+    /**
+     * Whether a check suite waits for a maintainer to approve its workflows. GitHub then completes the suite as
+     * {@code ACTION_REQUIRED} with no runs, and the rollup can still read success: the CI has not run at all.
+     */
+    private static boolean awaitingApproval(@Nullable GHCheckSuiteConnection suites) {
+        return suites != null
+                && Objects.requireNonNullElse(suites.getNodes(), List.<GHCheckSuite>of()).stream()
+                        .anyMatch(suite ->
+                                suite != null && suite.getConclusion() == GHCheckConclusionState.ACTION_REQUIRED);
     }
 
     /** Whether {@code app} is Hephaestus's own GitHub App; without a configured app id, none is. */

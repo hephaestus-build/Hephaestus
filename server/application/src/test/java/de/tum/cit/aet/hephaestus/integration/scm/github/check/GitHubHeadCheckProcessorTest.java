@@ -29,7 +29,7 @@ class GitHubHeadCheckProcessorTest extends BaseUnitTest {
         "completed, success, SUCCESS",
         "completed, failure, FAILURE",
         "completed, timed_out, FAILURE",
-        "completed, action_required, FAILURE",
+        "completed, action_required, PENDING",
         "completed, startup_failure, FAILURE",
         "completed, cancelled, CANCELLED",
         "in_progress, , PENDING",

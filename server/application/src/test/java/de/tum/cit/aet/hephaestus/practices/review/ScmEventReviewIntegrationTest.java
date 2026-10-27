@@ -708,27 +708,31 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
                 head,
                 List.of(checkRun("build", "in_progress", false), checkRun("test", "success", true)),
                 true,
-                readAt);
+                readAt,
+                null);
         // Every listed run ended, but the provider still waited for one it had not listed yet.
-        var partial =
-                new HeadCheckRuns(head, List.of(checkRun("build", "success", true)), false, readAt.plusSeconds(30));
+        var partial = new HeadCheckRuns(
+                head, List.of(checkRun("build", "success", true)), false, readAt.plusSeconds(30), null);
         var ended = new HeadCheckRuns(
                 head,
                 List.of(checkRun("build", "failure", true), checkRun("test", "success", true)),
                 true,
-                readAt.plusSeconds(60));
+                readAt.plusSeconds(60),
+                null);
         var rerun = new HeadCheckRuns(
                 head,
                 List.of(checkRun("build", "success", true), checkRun("test", "success", true)),
                 true,
-                readAt.plusSeconds(180));
+                readAt.plusSeconds(180),
+                null);
 
         checkRuns.observe(repositoryId, running, context);
         checkRuns.observe(repositoryId, partial, context);
         assertThat(checksCompleted(item)).isEmpty();
 
         checkRuns.observe(repositoryId, ended, context);
-        checkRuns.observe(repositoryId, new HeadCheckRuns(head, ended.runs(), true, readAt.plusSeconds(120)), context);
+        checkRuns.observe(
+                repositoryId, new HeadCheckRuns(head, ended.runs(), true, readAt.plusSeconds(120), null), context);
         assertThat(checksCompleted(item)).containsExactly(prepared.version().value());
 
         // One occasion per pushed version: a re-run that ends differently replaces the runs and records no second one.
