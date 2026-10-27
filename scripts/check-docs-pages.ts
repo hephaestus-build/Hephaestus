@@ -146,9 +146,11 @@ function lineProblems({ number, text }: Line, guide: Guide, pageType?: string): 
 	if (replacement !== undefined) {
 		problems.push(`Name the section "${replacement}".`);
 	}
-	if (guide === "user" && pageType !== "reference" && CONTRIBUTOR_LINK.test(text)) {
+	// The overview points to the other guides; a reference page cites its evidence.
+	const mayLinkContributors = pageType === "overview" || pageType === "reference";
+	if (guide === "user" && !mayLinkContributors && CONTRIBUTOR_LINK.test(text)) {
 		problems.push(
-			"Link the user or admin guide. Only a reference page cites the contributor guide.",
+			"Link the user or admin guide. Only the overview and reference pages link the contributor guide.",
 		);
 	}
 	if (guide === "user" && /!\[[^\]]*\]\(/u.test(text)) {
