@@ -63,6 +63,9 @@ public class IntegrationNatsConsumer {
 
     private static final Logger log = LoggerFactory.getLogger(IntegrationNatsConsumer.class);
 
+    /** How long a stopping server waits for the messages it is handling, after every shutdown phase. */
+    public static final Duration SHUTDOWN_WAIT = Duration.ofSeconds(10);
+
     /**
      * Kind whose stream backs the installation-wide consumer. Today only GitHub
      * publishes installation events; we go through {@link ConsumerSubjectMath#streamNameFor}
@@ -243,7 +246,7 @@ public class IntegrationNatsConsumer {
 
         virtualThreadExecutor.shutdown();
         try {
-            if (!virtualThreadExecutor.awaitTermination(10, TimeUnit.SECONDS)) {
+            if (!virtualThreadExecutor.awaitTermination(SHUTDOWN_WAIT.toMillis(), TimeUnit.MILLISECONDS)) {
                 virtualThreadExecutor.shutdownNow();
             }
         } catch (InterruptedException e) {

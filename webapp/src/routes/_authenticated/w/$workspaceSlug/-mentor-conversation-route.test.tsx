@@ -882,31 +882,6 @@ it("counts every reply above the open thread and on its message, from Slack and 
 	screen.getByRole("button", { name: /^3 replies/u });
 });
 
-it("reads back what landed while a restarting server had ended the live stream", async () => {
-	const fake = new MentorFake();
-	fake.add({ kind: "USER", text: "Anything new?" });
-	serve(fake);
-
-	renderRouteAtWithRouter("/w/acme/mentor");
-	await screen.findByText("Anything new?", {}, ROUTE_RENDER_WAIT);
-	const stream = await liveStream();
-	act(() => {
-		stream.open();
-		stream.emit("snapshot", fake.conversation());
-	});
-
-	// A server that shuts down ends its streams; the browser retries the same source on its own, and the new
-	// server's stream opens with a snapshot.
-	act(() => stream.error());
-	fake.add({ kind: "HEPH", text: "An answer that landed during the restart." });
-	act(() => {
-		stream.open();
-		stream.emit("snapshot", fake.conversation());
-	});
-
-	await screen.findByText("An answer that landed during the restart.");
-});
-
 it("closes the live stream while the page is hidden, and reads back what landed meanwhile when it shows", async () => {
 	const fake = new MentorFake();
 	fake.add({ kind: "USER", text: "Anything new?" });

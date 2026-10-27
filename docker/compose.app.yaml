@@ -449,9 +449,9 @@ services:
       # The start can wait for the schema (hephaestus.database.migration-wait). A successful
       # probe ends this grace immediately; later failures still use the normal retry limit.
       start_period: 10m
-    # Matches application.yml's SHUTDOWN_TIMEOUT default (20s) plus headroom so SIGTERM has time
-    # to drain in-flight requests before Docker SIGKILLs the launcher.
-    stop_grace_period: 30s
+    # The HTTP phase (SHUTDOWN_TIMEOUT, 20s), the NATS consumers' wait (10s) and headroom, so SIGTERM ends
+    # in-flight work before Docker SIGKILLs the launcher. ShutdownFitsGraceTest checks the sum.
+    stop_grace_period: 45s
     logging:
       driver: "json-file"
       options:
@@ -567,8 +567,9 @@ services:
       - worker-git-repos:/data/git-repos
     networks:
       - shared-network
-    # The 5m drain budget, the 45 s a shutdown phase may add to it (WorkerPropertiesConfiguration), and headroom.
-    stop_grace_period: 6m
+    # The 5m drain, the 55s the drain phase may add to it (WorkerPropertiesConfiguration), the HTTP phase and
+    # headroom. Raise it with HEPHAESTUS_WORKER_DRAIN_TIMEOUT: at least the drain plus 2m. ShutdownFitsGraceTest checks it.
+    stop_grace_period: 7m
     # thc healthcheck (see application-server). The worker fronts no Traefik router, so this is its
     # only health signal.
     healthcheck:

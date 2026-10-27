@@ -103,7 +103,8 @@ public class HephHostConfiguration {
                 worker.resolvedWorkerId(),
                 worker.capacity().resolveMentorMax(),
                 lease,
-                HephTurnDispatcher.STOP_GRACE);
+                HephTurnDispatcher.STOP_GRACE,
+                worker.drain().timeout());
     }
 
     /**

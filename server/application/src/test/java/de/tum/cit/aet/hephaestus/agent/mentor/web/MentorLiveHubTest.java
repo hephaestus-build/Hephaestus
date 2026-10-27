@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.mentor.web;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.any;
@@ -40,6 +41,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.support.GenericApplicationContext;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
@@ -194,6 +196,21 @@ class MentorLiveHubTest extends BaseUnitTest {
                 MentorLiveHub.class, hub, () -> hub.subscribe(WORKSPACE, ACCOUNT), emitter.completed::get);
 
         assertThat(ended).isTrue();
+    }
+
+    @Test
+    void shouldKeepAcceptingStreamsWhenAChildContextCloses() {
+        try (GenericApplicationContext parent = new GenericApplicationContext()) {
+            parent.registerBean(MentorLiveHub.class, () -> hub);
+            parent.refresh();
+            GenericApplicationContext child = new GenericApplicationContext();
+            child.setParent(parent);
+            child.refresh();
+
+            child.close();
+
+            assertThatCode(() -> hub.subscribe(WORKSPACE, ACCOUNT)).doesNotThrowAnyException();
+        }
     }
 
     @Test

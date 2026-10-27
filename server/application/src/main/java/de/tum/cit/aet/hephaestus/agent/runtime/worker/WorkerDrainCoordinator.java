@@ -36,7 +36,7 @@ public class WorkerDrainCoordinator implements SmartLifecycle {
 
     private static final Logger log = LoggerFactory.getLogger(WorkerDrainCoordinator.class);
 
-    static final int PHASE = WebServerApplicationContext.GRACEFUL_SHUTDOWN_PHASE + 1;
+    public static final int PHASE = WebServerApplicationContext.GRACEFUL_SHUTDOWN_PHASE + 1;
 
     private final WorkerControlClient client;
     private final WorkerCapacityState state;

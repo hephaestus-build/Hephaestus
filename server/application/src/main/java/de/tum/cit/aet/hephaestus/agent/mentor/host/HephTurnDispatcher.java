@@ -5,6 +5,7 @@ import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnCompletion;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnStarter;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.proxy.ProxyCallsInFlight;
+import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerDrainCoordinator;
 import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtIssuer;
 import de.tum.cit.aet.hephaestus.mentor.MentorLeaseLostException;
 import de.tum.cit.aet.hephaestus.mentor.MentorLedgerEvents;
@@ -28,7 +29,6 @@ import java.util.concurrent.TimeUnit;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.boot.web.server.context.WebServerApplicationContext;
 import org.springframework.context.SmartLifecycle;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -52,8 +52,11 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
     static final String MODEL_STOPPED_ANSWERING =
             "Heph's AI model stopped responding, so Heph could not finish this reply. Try again in a moment.";
 
-    /** The phase of the worker drain: turns finish before the gateway the host writes through closes. */
-    static final int PHASE = WebServerApplicationContext.GRACEFUL_SHUTDOWN_PHASE + 1;
+    /**
+     * The phase of the worker drain: turns finish before the gateway the host writes through closes, together with
+     * the review drain and under its one drain timeout.
+     */
+    static final int PHASE = WorkerDrainCoordinator.PHASE;
 
     /** How long a host has to end a turn it was told to stop. */
     static final Duration STOP_GRACE = Duration.ofSeconds(30);
@@ -62,7 +65,6 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
 
     private static final Duration BACKSTOP = Duration.ofSeconds(30);
     private static final Duration HOST_READY_TIMEOUT = Duration.ofMinutes(3);
-    private static final Duration DRAIN_TIMEOUT = Duration.ofMinutes(2);
 
     private final MentorTurnStarter starter;
     private final MentorTurnService turns;
@@ -78,6 +80,9 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
     private final int capacity;
     private final Duration lease;
     private final Duration stopGrace;
+    /** The worker's drain timeout: the review drain and this one share a shutdown phase and its timeout. */
+    private final Duration drainTimeout;
+
     private final Counter claimFailures;
 
     /** The attempt of each turn that runs here. Removals notify its monitor, which the drain waits on. */
@@ -102,7 +107,8 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
             String workerId,
             int capacity,
             Duration lease,
-            Duration stopGrace) {
+            Duration stopGrace,
+            Duration drainTimeout) {
         this.starter = starter;
         this.turns = turns;
         this.completion = completion;
@@ -117,6 +123,7 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
         this.capacity = capacity;
         this.lease = lease;
         this.stopGrace = stopGrace;
+        this.drainTimeout = drainTimeout;
         host.onLost(this::hostLost);
         Gauge.builder(AgentMetrics.MENTOR_HOST_TURNS_ACTIVE, running, Map::size)
                 .description("Heph turns this worker's host runs")
@@ -202,7 +209,7 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
     }
 
     private void drain() {
-        long until = System.nanoTime() + DRAIN_TIMEOUT.toNanos();
+        long until = System.nanoTime() + drainTimeout.toNanos();
         // A claim that passed the active check before the stop ends its start first, so the turn it started is
         // waited for below, within the same deadline.
         Thread claiming = claimer;

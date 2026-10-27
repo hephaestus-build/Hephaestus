@@ -635,10 +635,12 @@ On SIGTERM, the worker does these actions in order:
 3. It settles each remaining job under its ownership fence before it waits for any container stop.
 4. It stops the settled jobs' containers in parallel, with one 30s cleanup deadline for the batch.
 
-Every shutdown phase of the worker may take `hephaestus.worker.drain.timeout` plus 45 seconds for steps 3 and 4.
-Thus, the drain timeout is the worker's only shutdown setting: `spring.lifecycle.timeout-per-shutdown-phase` (`SHUTDOWN_TIMEOUT`) does not apply to the worker.
-Give the worker a stop grace period of at least the drain timeout plus 1 minute.
-The chart sets `drainTimeoutSeconds` plus 2 minutes, and Compose sets 6 minutes for the default 5-minute drain.
+The drain phase may take `hephaestus.worker.drain.timeout` plus 55 seconds for the poll thread, step 3 and step 4.
+Running Heph turns drain in the same phase, under the same timeout.
+Every other shutdown phase keeps `spring.lifecycle.timeout-per-shutdown-phase` (`SHUTDOWN_TIMEOUT`, 20 seconds).
+Give the worker a stop grace period of at least the drain timeout plus 2 minutes.
+The chart sets `drainTimeoutSeconds` plus 2 minutes.
+Compose sets 7 minutes for the default 5-minute drain: raise `stop_grace_period` when you raise `HEPHAESTUS_WORKER_DRAIN_TIMEOUT`.
 
 The worker's HTTP connectors, including the sandbox gateway, stay open during step 2.
 Thus, an active review can still send model requests while the worker waits for it.

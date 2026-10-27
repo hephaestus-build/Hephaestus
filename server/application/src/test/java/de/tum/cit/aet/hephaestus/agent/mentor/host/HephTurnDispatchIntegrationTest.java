@@ -226,7 +226,8 @@ class HephTurnDispatchIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 WORKER,
                 4,
                 LEASE,
-                HephTurnDispatcher.STOP_GRACE);
+                HephTurnDispatcher.STOP_GRACE,
+                Duration.ofMinutes(2));
         controller = new HephTurnController(
                 HephTurnFixtures.contexts(beans),
                 completion,

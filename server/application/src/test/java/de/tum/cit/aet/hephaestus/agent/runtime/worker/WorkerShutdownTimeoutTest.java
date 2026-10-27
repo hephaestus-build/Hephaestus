@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
+import java.time.Duration;
+import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
@@ -12,11 +14,14 @@ import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.SmartLifecycle;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.support.AbstractApplicationContext;
+import org.springframework.context.support.DefaultLifecycleProcessor;
+import org.springframework.test.util.ReflectionTestUtils;
 
 /**
- * The drain is the worker's only shutdown setting: every shutdown phase waits for it, whatever
- * {@code spring.lifecycle.timeout-per-shutdown-phase} says. A phase timeout below the drain would let Spring close
- * the database under a review that is still draining.
+ * The drain is the worker's only drain setting: the drain phase waits for it, whatever
+ * {@code spring.lifecycle.timeout-per-shutdown-phase} says, and every other phase keeps that setting. A drain phase
+ * timeout below the drain would let Spring close the database under a review that is still draining.
  */
 class WorkerShutdownTimeoutTest extends BaseUnitTest {
 
@@ -41,6 +46,28 @@ class WorkerShutdownTimeoutTest extends BaseUnitTest {
         });
 
         assertThat(drainedBeforeLaterPhases).isTrue();
+    }
+
+    @Test
+    void shouldGiveOnlyTheDrainPhaseTheDrainPlusTheMargin() {
+        Duration drain = Duration.ofHours(2);
+
+        runner.withPropertyValues("hephaestus.worker.drain.timeout=" + drain).run(context -> {
+            DefaultLifecycleProcessor processor = context.getBean(
+                    AbstractApplicationContext.LIFECYCLE_PROCESSOR_BEAN_NAME, DefaultLifecycleProcessor.class);
+
+            assertThat(shutdownTimeout(processor, WorkerDrainCoordinator.PHASE))
+                    .isEqualTo(drain.plus(WorkerPropertiesConfiguration.SHUTDOWN_MARGIN)
+                            .toMillis());
+            assertThat(shutdownTimeout(processor, WorkerDrainCoordinator.PHASE - 1))
+                    .as("every other phase keeps the configured timeout")
+                    .isEqualTo(50L);
+        });
+    }
+
+    private static long shutdownTimeout(DefaultLifecycleProcessor processor, int phase) {
+        Long timeout = ReflectionTestUtils.invokeMethod(processor, "determineShutdownTimeout", phase);
+        return Objects.requireNonNull(timeout);
     }
 
     /** A drain at the coordinator's phase that takes the whole drain timeout, and a later phase that records it. */

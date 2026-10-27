@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.core.sync.push;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
 
@@ -22,6 +23,7 @@ import java.util.function.Consumer;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.support.GenericApplicationContext;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
@@ -170,6 +172,23 @@ class SyncEventHubTest extends BaseUnitTest {
                 () -> !createdEmitters.isEmpty() && createdEmitters.stream().allMatch(RecordingEmitter::completed));
 
         assertThat(ended).isTrue();
+    }
+
+    @Test
+    void shouldKeepAcceptingStreamsWhenAChildContextCloses() {
+        SyncEventHub live = newHub(Duration.ofMillis(10));
+        hub = live;
+        try (GenericApplicationContext parent = new GenericApplicationContext()) {
+            parent.registerBean(SyncEventHub.class, () -> live);
+            parent.refresh();
+            GenericApplicationContext child = new GenericApplicationContext();
+            child.setParent(parent);
+            child.refresh();
+
+            child.close();
+
+            assertThatCode(() -> live.subscribe(WORKSPACE_ID)).doesNotThrowAnyException();
+        }
     }
 
     @Test

@@ -261,7 +261,8 @@ public class ReviewJobExecutor {
                 agentProperties.claimBatchSize());
     }
 
-    private static final Duration POLL_THREAD_JOIN_TIMEOUT = Duration.ofSeconds(10);
+    /** How long stopping waits for the poll thread, so an in-flight claim cannot register after the drain began. */
+    public static final Duration POLL_THREAD_JOIN_TIMEOUT = Duration.ofSeconds(10);
 
     /** Join the poll thread before drain so an in-flight claim cannot register after the worker appears idle. */
     public void stopAcceptingNewJobs() {

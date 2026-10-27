@@ -319,7 +319,8 @@ class HephTurnDispatcherShutdownTest extends BaseUnitTest {
                 "worker",
                 1,
                 Duration.ofMinutes(1),
-                HephTurnDispatcher.STOP_GRACE);
+                HephTurnDispatcher.STOP_GRACE,
+                Duration.ofMinutes(2));
     }
 
     /** Stands in for the web server's graceful shutdown, the phase below the drains. */

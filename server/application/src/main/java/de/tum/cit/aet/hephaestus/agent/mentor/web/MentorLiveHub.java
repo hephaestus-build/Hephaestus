@@ -10,6 +10,7 @@ import de.tum.cit.aet.hephaestus.mentor.MentorReadDTO;
 import de.tum.cit.aet.hephaestus.mentor.MentorTimeline;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
+import jakarta.annotation.PreDestroy;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayDeque;
@@ -29,8 +30,7 @@ import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.event.ContextClosedEvent;
-import org.springframework.context.event.EventListener;
+import org.springframework.context.SmartLifecycle;
 import org.springframework.http.HttpStatus;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -48,7 +48,7 @@ import tools.jackson.databind.ObjectMapper;
  */
 @Component
 @ConditionalOnServerRole
-public class MentorLiveHub implements MentorLedgerNotifications.Listener {
+public class MentorLiveHub implements MentorLedgerNotifications.Listener, SmartLifecycle {
 
     static final String SNAPSHOT = "snapshot";
     static final String TURN = "turn";
@@ -77,6 +77,8 @@ public class MentorLiveHub implements MentorLedgerNotifications.Listener {
 
     /** Set when the context closes; guarded by {@code streams}. */
     private boolean closing;
+
+    private volatile boolean running;
 
     private final ExecutorService reader = Executors.newSingleThreadExecutor(
             Thread.ofVirtual().name("mentor-live-reader").factory());
@@ -339,15 +341,45 @@ public class MentorLiveHub implements MentorLedgerNotifications.Listener {
     }
 
     /**
-     * Ends every stream when the context closes, before the lifecycle stops the web server: an open stream would hold
-     * its graceful shutdown until the timeout. The browser reconnects to the next instance, and the new stream opens with a snapshot.
+     * Ends every stream when this context stops, in the default phase, before the web server's graceful shutdown: an
+     * open stream would hold that phase until its timeout. A lifecycle phase, unlike a context event, belongs to this
+     * context alone, so a child context that closes ends no stream here. The browser reconnects to the next instance,
+     * and the new stream opens with a snapshot.
      */
-    @EventListener(ContextClosedEvent.class)
-    void shutdown() {
+    @Override
+    public void stop() {
+        endStreams();
+        running = false;
+    }
+
+    @Override
+    public void start() {
+        synchronized (streams) {
+            closing = false;
+        }
+        running = true;
+    }
+
+    @Override
+    public boolean isRunning() {
+        return running;
+    }
+
+    @Override
+    public int getPhase() {
+        return SmartLifecycle.DEFAULT_PHASE;
+    }
+
+    private void endStreams() {
         synchronized (streams) {
             closing = true;
         }
         new ArrayList<>(allStreams()).forEach(this::close);
+    }
+
+    @PreDestroy
+    void shutdown() {
+        endStreams();
         reader.shutdownNow();
         writers.shutdown();
         try {

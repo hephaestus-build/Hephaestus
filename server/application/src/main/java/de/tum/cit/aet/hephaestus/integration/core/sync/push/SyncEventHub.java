@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.integration.core.metrics.IntegrationCoreMetrics
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
+import jakarta.annotation.PreDestroy;
 import java.time.Duration;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -25,8 +26,7 @@ import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.event.ContextClosedEvent;
-import org.springframework.context.event.EventListener;
+import org.springframework.context.SmartLifecycle;
 import org.springframework.http.HttpStatus;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -37,7 +37,7 @@ import tools.jackson.databind.ObjectMapper;
 /** Manages workspace-scoped SSE subscribers and coalesced sync notifications. */
 @Component
 @ConditionalOnServerRole
-public class SyncEventHub {
+public class SyncEventHub implements SmartLifecycle {
 
     private static final Logger log = LoggerFactory.getLogger(SyncEventHub.class);
 
@@ -65,6 +65,8 @@ public class SyncEventHub {
 
     /** Set when the context closes; guarded by {@code subscribersByWorkspace}. */
     private boolean closing;
+
+    private volatile boolean running;
 
     private final Map<Long, Set<Subscriber>> subscribersByWorkspace = new ConcurrentHashMap<>();
 
@@ -322,11 +324,36 @@ public class SyncEventHub {
     }
 
     /**
-     * Ends every stream when the context closes, before the lifecycle stops the web server: an open stream would hold
-     * its graceful shutdown until the timeout. The browser reconnects to the next instance, and the client re-reads its workspace on the new stream.
+     * Ends every stream when this context stops, in the default phase, before the web server's graceful shutdown: an
+     * open stream would hold that phase until its timeout. A lifecycle phase, unlike a context event, belongs to this
+     * context alone, so a child context that closes ends no stream here. The browser reconnects to the next instance,
+     * and the client re-reads its workspace on the new stream.
      */
-    @EventListener(ContextClosedEvent.class)
-    void shutdown() {
+    @Override
+    public void stop() {
+        endStreams();
+        running = false;
+    }
+
+    @Override
+    public void start() {
+        synchronized (subscribersByWorkspace) {
+            closing = false;
+        }
+        running = true;
+    }
+
+    @Override
+    public boolean isRunning() {
+        return running;
+    }
+
+    @Override
+    public int getPhase() {
+        return SmartLifecycle.DEFAULT_PHASE;
+    }
+
+    private void endStreams() {
         synchronized (subscribersByWorkspace) {
             closing = true;
         }
@@ -336,6 +363,11 @@ public class SyncEventHub {
                 safeComplete(subscriber.emitter);
             }
         }
+    }
+
+    @PreDestroy
+    void shutdown() {
+        endStreams();
         writerExecutor.shutdown();
         try {
             if (!writerExecutor.awaitTermination(5, TimeUnit.SECONDS)) {
