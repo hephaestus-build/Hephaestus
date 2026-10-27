@@ -182,7 +182,7 @@ public class WebhookIngestPipeline {
                 decision = gate.evaluate(payload, headers);
             } catch (ProjectedKeys.UnavailableException e) {
                 // The gate cannot read what it decides on: nothing is published, and the provider retries.
-                log.warn("Publish gate for kind={} unavailable: {}", kind, e.getMessage());
+                log.warn("Publish gate for kind={} unavailable: bucket={}, cause={}", kind, e.bucket(), e.causeClass());
                 return problem(HttpStatus.SERVICE_UNAVAILABLE, "gate-unavailable");
             }
             if (!decision.publish()) {

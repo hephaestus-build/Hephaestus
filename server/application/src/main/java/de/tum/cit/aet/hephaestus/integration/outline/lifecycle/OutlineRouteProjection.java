@@ -83,7 +83,7 @@ public class OutlineRouteProjection {
         try {
             routes.replaceAll(current);
         } catch (ProjectedKeys.UnavailableException e) {
-            log.warn("Outline route projection rebuild failed: {}", e.toString());
+            log.warn("Outline route projection rebuild failed: bucket={}, cause={}", e.bucket(), e.causeClass());
         }
     }
 }

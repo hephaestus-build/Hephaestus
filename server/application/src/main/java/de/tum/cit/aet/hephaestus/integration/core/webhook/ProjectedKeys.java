@@ -125,8 +125,21 @@ public final class ProjectedKeys {
         @Serial
         private static final long serialVersionUID = 1L;
 
+        private final String bucket;
+
         UnavailableException(String bucket, Throwable cause) {
             super("NATS key-value bucket " + bucket + " is unavailable", cause);
+            this.bucket = bucket;
+        }
+
+        public String bucket() {
+            return bucket;
+        }
+
+        /** The failure's class, for a log line that quotes no broker or client text. */
+        public String causeClass() {
+            Throwable cause = getCause();
+            return cause == null ? "unknown" : cause.getClass().getSimpleName();
         }
     }
 }

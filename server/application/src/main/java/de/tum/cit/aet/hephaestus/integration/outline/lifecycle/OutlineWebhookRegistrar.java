@@ -118,7 +118,10 @@ public class OutlineWebhookRegistrar {
             try {
                 ensureSubscription(row.getWorkspaceId());
             } catch (RuntimeException e) {
-                log.warn("outline.webhook: heal failed for workspaceId={}: {}", row.getWorkspaceId(), e.toString());
+                log.warn(
+                        "outline.webhook: heal failed for workspaceId={}: {}",
+                        row.getWorkspaceId(),
+                        e.getClass().getSimpleName());
             }
             left++;
         }
@@ -208,7 +211,10 @@ public class OutlineWebhookRegistrar {
             }
             return false;
         } catch (RuntimeException e) {
-            log.warn("outline.webhook: could not verify subscription {}: {}", subscriptionId, e.toString());
+            log.warn(
+                    "outline.webhook: could not verify subscription {}: {}",
+                    subscriptionId,
+                    e.getClass().getSimpleName());
             return null;
         }
     }
@@ -258,7 +264,10 @@ public class OutlineWebhookRegistrar {
             return true;
         } catch (RuntimeException e) {
             // Best-effort: the periodic reconcile still keeps the mirror fresh without a subscription.
-            log.warn("outline.webhook: registration failed for workspaceId={}: {}", workspaceId, e.toString());
+            log.warn(
+                    "outline.webhook: registration failed for workspaceId={}: {}",
+                    workspaceId,
+                    e.getClass().getSimpleName());
             if (subscriptionId != null && !subscriptionId.isBlank()) {
                 // Created but not stored: nothing holds it, so it must not stay upstream.
                 deleteQuietly(serverUrl, token, subscriptionId);
@@ -271,7 +280,10 @@ public class OutlineWebhookRegistrar {
         try {
             routes.ifAvailable(projection -> projection.allow(route));
         } catch (ProjectedKeys.UnavailableException e) {
-            log.warn("outline.webhook: could not project route; the next rebuild adds it: {}", e.toString());
+            log.warn(
+                    "outline.webhook: could not project route; the next rebuild adds it: bucket={}, cause={}",
+                    e.bucket(),
+                    e.causeClass());
         }
     }
 
@@ -288,7 +300,10 @@ public class OutlineWebhookRegistrar {
             outlineApiClient.deleteWebhookSubscription(serverUrl, token, subscriptionId);
         } catch (RuntimeException e) {
             failedDeletions.increment();
-            log.warn("outline.webhook: could not delete subscription {}: {}", subscriptionId, e.toString());
+            log.warn(
+                    "outline.webhook: could not delete subscription {}: {}",
+                    subscriptionId,
+                    e.getClass().getSimpleName());
         }
     }
 
@@ -310,7 +325,10 @@ public class OutlineWebhookRegistrar {
             deletion.ifPresent(Runnable::run);
             hadSubscription = deletion.isPresent();
         } catch (RuntimeException e) {
-            log.warn("outline.webhook: deregistration failed for connectionId={}: {}", connectionId, e.toString());
+            log.warn(
+                    "outline.webhook: deregistration failed for connectionId={}: {}",
+                    connectionId,
+                    e.getClass().getSimpleName());
             hadSubscription = true;
         }
         if (hadSubscription) {

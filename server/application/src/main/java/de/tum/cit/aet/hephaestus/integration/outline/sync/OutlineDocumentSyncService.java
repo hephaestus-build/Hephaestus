@@ -160,6 +160,7 @@ public class OutlineDocumentSyncService {
         }
         Instant now = Instant.now();
         BooleanSupplier cancelled = cancellationOf(handle);
+        RuntimeException failure = null;
         try {
             Map<String, OutlineCollectionModel> live = refreshCatalog(ctx);
             List<OutlineCollection> collections =
@@ -213,10 +214,24 @@ public class OutlineDocumentSyncService {
                     SyncPhase.COLLECTIONS,
                     "Collection synchronization stopped at the provider rate limit.",
                     null);
+        } catch (RuntimeException e) {
+            failure = e;
+            throw e;
         } finally {
             // Self-heal the change-notification subscription each reconcile, also one that stopped early (Outline
-            // auto-disables a subscription after repeated delivery failures); best-effort, never throws.
-            webhookRegistrar.ensureSubscription(workspaceId);
+            // auto-disables a subscription after repeated delivery failures). Best-effort: a failed heal must not
+            // replace the sync's own outcome, and the registrar's heal tries again within 5 minutes.
+            try {
+                webhookRegistrar.ensureSubscription(workspaceId);
+            } catch (RuntimeException healFailure) {
+                log.warn(
+                        "outline.webhook: subscription check failed for workspaceId={}: {}",
+                        workspaceId,
+                        healFailure.getClass().getSimpleName());
+                if (failure != null) {
+                    failure.addSuppressed(healFailure);
+                }
+            }
         }
     }
 

@@ -72,7 +72,10 @@ public class SlackChannelConsentProjection {
                 consent.remove(key);
             }
         } catch (ProjectedKeys.UnavailableException e) {
-            log.warn("Slack consent projection update failed; the next rebuild repairs it: {}", e.toString());
+            log.warn(
+                    "Slack consent projection update failed; the next rebuild repairs it: bucket={}, cause={}",
+                    e.bucket(),
+                    e.causeClass());
         }
     }
 
@@ -90,7 +93,7 @@ public class SlackChannelConsentProjection {
         try {
             consent.replaceAll(active);
         } catch (ProjectedKeys.UnavailableException e) {
-            log.warn("Slack consent projection rebuild failed: {}", e.toString());
+            log.warn("Slack consent projection rebuild failed: bucket={}, cause={}", e.bucket(), e.causeClass());
         }
     }
 

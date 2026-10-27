@@ -96,7 +96,7 @@ public class OutlineWebhookController {
                 return WebhookIngestPipeline.problem(HttpStatus.GONE, "revoked");
             }
         } catch (ProjectedKeys.UnavailableException e) {
-            log.warn("Outline routes unavailable: {}", e.getMessage());
+            log.warn("Outline routes unavailable: bucket={}, cause={}", e.bucket(), e.causeClass());
             return WebhookIngestPipeline.problem(HttpStatus.SERVICE_UNAVAILABLE, "routes-unavailable");
         }
         return pipeline.publishAuthenticated(
