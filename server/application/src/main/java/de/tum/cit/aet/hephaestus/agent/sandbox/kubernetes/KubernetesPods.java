@@ -166,7 +166,13 @@ public class KubernetesPods {
      * volumeBytes}, and the Pod's main container may use them all and its logs ({@link #diskLimit}). The kubelet evicts
      * the Pod past either bound, so that no sandbox can fill the node's disk.
      */
-    record Size(long memoryRequest, long memoryLimit, long diskRequest, long volumeBytes, int diskVolumes) {
+    record Size(
+            long memoryRequest,
+            long memoryLimit,
+            long diskRequest,
+            long volumeBytes,
+            int diskVolumes,
+            long cpuRequestMillicores) {
 
         long diskLimit() {
             return diskVolumes * volumeBytes + LOG_BYTES;
@@ -182,22 +188,27 @@ public class KubernetesPods {
             1280 * MIB,
             1024 * MIB,
             SandboxLayout.SCRATCH_BYTES,
-            ATTEMPT_VOLUMES.size() + SCRATCH_PATHS.size());
+            ATTEMPT_VOLUMES.size() + SCRATCH_PATHS.size(),
+            100);
 
-    /** The Heph host: 136 MiB with one conversation, in the same volumes as a review. */
+    /**
+     * The Heph host: 136 MiB with one conversation, in the same volumes as a review. A turn uses about 0.12
+     * CPU-seconds, at a p95 of 1 to 4m, so it requests 50m of its one CPU.
+     */
     static final Size HOST = new Size(
             256 * MIB,
             SandboxLayout.HEPH_HOST_MEMORY_BYTES,
             256 * MIB,
             SandboxLayout.SCRATCH_BYTES,
-            ATTEMPT_VOLUMES.size() + SCRATCH_PATHS.size());
+            ATTEMPT_VOLUMES.size() + SCRATCH_PATHS.size(),
+            50);
 
     /**
      * A turn sandbox's command container: 3 MiB measured. Its workspace, where a repository that a turn loads lands,
      * and its scratch places each hold Docker's turn workspace size.
      */
-    static final Size TURN =
-            new Size(128 * MIB, 512 * MIB, 256 * MIB, SandboxLayout.TURN_WORKSPACE_BYTES, 1 + SCRATCH_PATHS.size());
+    static final Size TURN = new Size(
+            128 * MIB, 512 * MIB, 256 * MIB, SandboxLayout.TURN_WORKSPACE_BYTES, 1 + SCRATCH_PATHS.size(), 100);
 
     /** The stager of a turn sandbox: a shell that sleeps, 1 MiB measured. It writes the workspace to disk. */
     private static final Quantity STAGER_MEMORY = new Quantity(Long.toString(32 * MIB));
@@ -496,8 +507,8 @@ public class KubernetesPods {
     }
 
     /**
-     * A sandbox container's bounds: the memory and disk of its {@link Size}. Its CPU limit is a share of CPU time, as on
-     * Docker, not a reserved core: it requests a tenth of it ({@link #cpuRequest}).
+     * A sandbox container's bounds: the memory, disk and CPU that its kind requests from measured use. Its CPU limit is
+     * a share of CPU time, as on Docker, not a reserved core.
      */
     static ResourceRequirements resources(ResourceLimits limits, Size size) {
         long millicores = Math.max(1, Math.round(limits.cpus() * 1000));
@@ -511,7 +522,7 @@ public class KubernetesPods {
                         bytes(size.diskLimit())))
                 .withRequests(Map.of(
                         "cpu",
-                        cpuRequest(millicores),
+                        new Quantity(size.cpuRequestMillicores() + "m"),
                         "memory",
                         bytes(size.memoryRequest()),
                         "ephemeral-storage",
@@ -521,8 +532,14 @@ public class KubernetesPods {
 
     /** A probe Pod requests the memory it is given and writes nothing but its line of output. */
     private static Size probeSize(ResourceLimits limits) {
+        long millicores = Math.max(1, Math.round(limits.cpus() * 1000));
         return new Size(
-                limits.memoryBytes(), limits.memoryBytes(), SIDE_LOG_BYTES, SIDE_LOG_BYTES, SCRATCH_PATHS.size());
+                limits.memoryBytes(),
+                limits.memoryBytes(),
+                SIDE_LOG_BYTES,
+                SIDE_LOG_BYTES,
+                SCRATCH_PATHS.size(),
+                Math.max(1, millicores / 10));
     }
 
     private static Quantity bytes(long bytes) {

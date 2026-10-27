@@ -65,7 +65,10 @@ public class KubernetesSandboxBackend implements SandboxBackend, SandboxRoom {
         this.liveWorkers = liveWorkers;
         this.exits = exits;
         this.quota = new KubernetesSandboxQuota(
-                cache, worker.namespace(), worker.properties().runtimeClassName());
+                cache,
+                worker.namespace(),
+                worker.properties().runtimeClassName(),
+                worker.properties().reviewPriorityClass());
         this.cache = cache;
     }
 

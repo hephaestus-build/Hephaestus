@@ -1465,8 +1465,8 @@ public class ReviewJobExecutor {
         if (since == null) {
             starvedSince.set(now);
             log.warn(
-                    "The sandbox quota has no room for a review while no review runs: other sandboxes, such as Heph's,"
-                            + " hold it. Raise worker.sandbox.quota (docs/admin/kubernetes.mdx); queued reviews end"
+                    "The sandbox quota has no room for a review while no review runs: other sandboxes hold it. Check a"
+                            + " sandbox quota of your own (docs/admin/kubernetes.mdx); queued reviews end"
                             + " after {} without room",
                     STARVATION_BOUND);
             return;

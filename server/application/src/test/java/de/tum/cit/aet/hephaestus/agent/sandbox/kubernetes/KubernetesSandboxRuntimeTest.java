@@ -787,10 +787,10 @@ class KubernetesSandboxRuntimeTest {
                         .build())
                 .create();
 
-        assertThat(new KubernetesSandboxQuota(cache(), SANDBOXES, "gvisor").roomFor(LIMITS))
+        assertThat(new KubernetesSandboxQuota(cache(), SANDBOXES, "gvisor", "").roomFor(LIMITS))
                 .as("1280 MiB free hold one review of 640 MiB with 512 MiB of overhead")
                 .isEqualTo(1);
-        assertThat(new KubernetesSandboxQuota(cache(), SANDBOXES, "").roomFor(LIMITS))
+        assertThat(new KubernetesSandboxQuota(cache(), SANDBOXES, "", "").roomFor(LIMITS))
                 .as("the cluster's default runtime has no overhead")
                 .isEqualTo(2);
     }
@@ -798,7 +798,7 @@ class KubernetesSandboxRuntimeTest {
     @Test
     void shouldSendTheApiServerNoRequestWhenClaimPollsAskForRoom() {
         quotaWithRoomForTwoReviews();
-        var quota = new KubernetesSandboxQuota(cache(), SANDBOXES, "");
+        var quota = new KubernetesSandboxQuota(cache(), SANDBOXES, "", "");
         int before = Objects.requireNonNull(server).getRequestCount();
 
         for (int poll = 0; poll < 20; poll++) {
@@ -810,7 +810,7 @@ class KubernetesSandboxRuntimeTest {
 
     @Test
     void shouldAdmitByTheNewQuotaWhenItChangesAfterTheCacheListed() {
-        var quota = new KubernetesSandboxQuota(cache(), SANDBOXES, "");
+        var quota = new KubernetesSandboxQuota(cache(), SANDBOXES, "", "");
         assertThat(quota.roomFor(LIMITS)).as("no quota yet").isEqualTo(Integer.MAX_VALUE);
 
         quotaWithRoomForTwoReviews();
@@ -874,7 +874,7 @@ class KubernetesSandboxRuntimeTest {
     void shouldAdmitAsWithoutAQuotaWhenTheCacheNoLongerWatches() {
         quotaWithRoomForTwoReviews();
         var cache = cache();
-        var quota = new KubernetesSandboxQuota(cache, SANDBOXES, "");
+        var quota = new KubernetesSandboxQuota(cache, SANDBOXES, "", "");
         assertThat(quota.roomFor(LIMITS)).isEqualTo(2);
 
         cache.close();

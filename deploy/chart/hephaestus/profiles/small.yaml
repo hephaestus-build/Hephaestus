@@ -1,5 +1,5 @@
 # One small cluster: a single k3s node of 4 vCPU, 32 GiB and 150 GiB of disk. Bundled PostgreSQL and
-# NATS, one worker that runs one review at a time, bounded caches, and a sandbox quota for that worker.
+# NATS, one worker that runs one review at a time, and bounded caches; the chart derives the sandbox quotas.
 # docs/admin/kubernetes.mdx § Profiles gives the arithmetic; a chart test checks that the requests,
 # one upgrade beside them, and the quota fit.
 #
@@ -18,18 +18,17 @@ server:
 worker:
   enabled: true
   replicas: 1
+  # The worker stops before its replacement starts, so each upgrade is a planned outage of reviews and
+  # Heph. A surge would run a second Heph host and turn pool that the node's CPU does not hold, and they
+  # sit idle until the old worker drains.
+  rolloutStrategy: Recreate
+  # An upgrade waits for the drain, so the outage stays short.
+  drainTimeoutSeconds: 600
   reviews: 1
-  hephTurns: 1
+  # The worker's automatic number of Heph turns. A chart test checks that each single-node profile holds
+  # them beside the review, from sandbox-pod-requests.json.
+  hephTurns: 8
   gitCache:
     sizeLimit: 10Gi
   resources:
     limits: { ephemeral-storage: 12Gi }
-  sandbox:
-    # While the old worker drains beside the new one, by memory limit: one review (1280 MiB), two Heph
-    # hosts (2 x 1 GiB), two turn pools (2 x 3 x 544 MiB: 2 pooled sandboxes and the hephTurns running
-    # one), and the new worker's isolation probe (768 MiB).
-    quota:
-      enabled: true
-      pods: 12
-      cpu: "12"
-      memory: 16Gi

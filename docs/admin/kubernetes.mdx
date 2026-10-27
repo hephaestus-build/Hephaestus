@@ -426,15 +426,19 @@ Give the profile as the first `-f` file, before your own values, as [Install](#i
 | `small.yaml` | One small cluster, for example one k3s node | Bundled, Compose limits |
 | `small-16gib.yaml`, on top of `small.yaml` | One k3s node of 16 GiB | Bundled, Compose limits |
 
-`small.yaml` fits one node of 4 vCPU, 32 GiB and 150 GiB of disk, with one worker that runs one review at a time.
+`small.yaml` fits one node of 4 vCPU, 32 GiB and 150 GiB of disk, with one worker that runs one review and up to 8 Heph turns at a time.
 A chart test adds up what that node holds during an upgrade, with backups on:
 
 | Part | Memory | CPU requests | Disk |
 | --- | --- | --- | --- |
 | Server, webhook role, worker, webapp, PostgreSQL with pgBackRest, NATS | 7.9 GiB | 1.25 | The volumes of PostgreSQL and NATS, and bounded caches |
-| An upgrade: the new webhook, webapp and worker Pods beside the old ones, the migration Job, the stanza Job and one backup | 5.1 GiB | 1.0 | The new Pods' caches |
-| The sandbox quota: one review, the Heph hosts and the turn sandboxes of the old and the new worker while the old one drains, and the new worker's isolation probe | 16 GiB | 1.2 | The disk limit of each sandbox Pod ([Sandbox sizes](#sandbox-sizes)) |
-| Total, against the node less what k3s requests | 29 GiB of 31 GiB | 3.45 of 3.75 | 83 GiB of the 110 GiB left beside images and review workspaces |
+| An upgrade: the new webhook and webapp Pods beside the old ones, the migration Job, the stanza Job and one backup. The worker recreates. | 3.1 GiB | 0.75 | The new Pods' caches |
+| The sandbox quotas: in the reviews tier one review and the isolation probe, in the conversations tier the Heph host, its two pooled turn sandboxes and 8 running turns | 3.2 GiB | 1.55 | The disk requests of the sandbox Pods ([Sandbox sizes](#sandbox-sizes)) |
+| Total, against the node less what k3s requests | 14.2 GiB of 31 GiB | 3.55 of 3.75 | 75 GiB of the 110 GiB left beside images and review workspaces |
+
+The worker upgrades by `Recreate`, with a drain of at most 10 minutes.
+Each upgrade stops the worker first, so reviews and Heph turns stop for the drain and for the new worker's start and isolation probe.
+A surge would run a second Heph host and turn pool beside the old ones, which the node's CPU does not hold.
 
 The table gives the measured resident memory of each role and the chart's sizes.
 Each JVM role requests all of its memory limit, because the heap is sized from the limit, and the limit is the measurement plus headroom.
@@ -457,20 +461,19 @@ For one node of 16 GiB, apply `small-16gib.yaml` after `small.yaml`:
 --values deploy/chart/hephaestus/profiles/small-16gib.yaml
 ```
 
-It changes these items:
-
-- The worker upgrades by `Recreate`. Each upgrade stops the worker first, so reviews and Heph turns stop for the drain, at most 10 minutes, and for the new worker's start and isolation probe.
-- The webhook role keeps its rolling update: it receives provider deliveries during an upgrade.
-- The worker runs one review and one Heph turn at a time.
-- NATS requests 512 MiB and keeps its limit of 3 GiB.
+It changes one item: NATS requests 512 MiB and keeps its limit of 3 GiB.
+The worker recreates and runs one review and up to 8 Heph turns at a time, as in `small.yaml`.
+The webhook role keeps its rolling update: it receives provider deliveries during an upgrade.
 
 A chart test adds up what one node of 16 GiB holds, with backups on:
 
 | State | Memory | CPU requests |
 | --- | --- | --- |
-| Steady: every role, one backup, one review, the Heph host, two pooled turn sandboxes and one running turn | 15.1 GiB of 15.4 GiB | 1.85 of 3.75 |
-| The same, with the isolation probe | 16.6 GiB: the probe waits for room, and the worker keeps its last proof | — |
-| An upgrade: the old worker gone, the webhook and webapp surge, the migration and stanza Jobs, the new worker's probe, and the old worker's pooled turn sandboxes | 13.4 GiB of 15.4 GiB | 2.40 of 3.75 |
+| Steady: every role, one backup, one review, the Heph host, two pooled turn sandboxes and 8 running turns | 9.5 GiB of 15.4 GiB | 2.75 of 3.75 |
+| The same, with the isolation probe | 10.3 GiB | — |
+| An upgrade: the old worker gone, the webhook and webapp surge, the migration and stanza Jobs, the new worker's probe, and the old worker's pooled turn sandboxes | 10.9 GiB of 15.4 GiB | 2.40 of 3.75 |
+
+A chart test derives the Heph turns of both single-node profiles: 8, the worker's automatic number, as long as one more turn sandbox would still fit.
 
 Staging measured these values on one node of 16 GiB with k3s 1.37:
 
@@ -820,7 +823,7 @@ The chart runs the workers as one Deployment:
   A practice review usually takes 10 to 16 minutes. An attempt that outlasts the drain is tried again.
 - A worker on a lost node is replaced after 60 seconds.
 - `AGENT_ENABLED=true` on the workers and the server, so that the server submits practice reviews and the workers run them. Without a worker, the server submits none.
-- `worker.reviews` sets the reviews that one worker runs at once, and `worker.hephTurns` the Heph turns (`HEPHAESTUS_WORKER_CAPACITY_MENTOR_MAX`, `auto` by default). Each running turn holds a turn sandbox of 1 GiB beside the 2 pooled ones, so the sandbox quota must hold them ([Runtime roles § Heph capacity](./runtime-roles#heph-capacity)). `small.yaml` sets 1.
+- `worker.reviews` sets the reviews that one worker runs at once, and `worker.hephTurns` the Heph turns (`HEPHAESTUS_WORKER_CAPACITY_MENTOR_MAX`, `auto` by default). Each running turn holds a turn sandbox beside the 2 pooled ones, and the conversations quota counts them ([Runtime roles § Heph capacity](./runtime-roles#heph-capacity)). `small.yaml` sets 8.
 - The settings `HEPHAESTUS_SANDBOX_RUNTIME=kubernetes`, the sandbox namespace, and the pod name and address from the Downward API ([Runtime roles § Sandbox runtime](./runtime-roles#sandbox-runtime)).
 - The existing gateway setting `SANDBOX_API_PORT`, with the value 8081.
 
@@ -828,14 +831,21 @@ The sandbox namespace is the one that you created for this release.
 The chart creates no namespace.
 It writes these objects into it:
 
-- A quota for all sandboxes. Set `worker.sandbox.quota.enabled=false` to manage the quota yourself.
-  A worker claims a practice review only when every quota of the sandbox namespace has room for the review's Pod.
+- One ResourceQuota for each PriorityClass tier: reviews, and conversations for the Heph host and turn sandboxes.
+  The chart derives both from `sandbox-pod-requests.json` and from `worker.replicas`, `worker.reviews` and `worker.hephTurns`.
+  They count requests, not limits: sandbox Pods may use more than they request, up to their limits.
+  Thus, Heph's sandboxes never take a review's room, and reviews never take Heph's.
+  Set `worker.sandbox.quota.enabled=false` to manage the quotas yourself.
+  Do this with a RuntimeClass that adds a Pod overhead, such as gVisor's: a quota counts the overhead too, and the chart cannot know it.
+  During a rolling update, the chart's quotas hold the workers of the new and the old version. A worker that still drains during a second update can find no room: its sandbox then waits and is tried again.
+  A worker claims a practice review only when every quota that counts review Pods has room for the review's Pod.
+  An unscoped quota counts them, and so does a quota that selects the reviews' PriorityClass.
   It counts the reviews that it claimed but has not started yet.
   Otherwise the review stays queued.
   The worker's Role lets it list the quotas; its permissions are listed below.
   It reads the Pod overhead of the sandbox RuntimeClass from its own sandbox Pods.
-  A scoped quota does not hold a review back, and neither do quotas that the worker cannot read.
-  A Heph sandbox or another worker can still take the room after the claim.
+  A quota with another scope does not hold a review back, and neither do quotas that the worker cannot read.
+  Another worker can still take the room after the claim.
   The quota then refuses the review's Pod, and the review is tried again.
 - A deny-all policy for ingress and egress.
 - One more policy that lets review and host sandboxes reach port 8081 of the worker Pods, and nothing else.
@@ -881,7 +891,7 @@ Waiting behind running reviews is normal backlog, and it never ends a review.
 Two cases end queued reviews, with the stop reason `NO_SANDBOX_ROOM`:
 
 - A quota is smaller than one review sandbox. The worker cancels the queued reviews within 30 seconds, with "The sandbox quota is smaller than one review sandbox." It logs one warning.
-- Reviews have waited for an hour while the quota had no room for one and no review ran, so nothing frees room. Usually the Heph host and the turn sandboxes hold it. The worker logs a warning when this starts. After the hour, it cancels the queued reviews with "Hephaestus had no room to run this review in time."
+- Reviews have waited for an hour while the quota had no room for one and no review ran, so nothing frees room. Usually a quota of your own holds the room. The worker logs a warning when this starts. After the hour, it cancels the queued reviews with "Hephaestus had no room to run this review in time."
 
 A scan that loses a file's job this way ends with the same reason. It does not queue its next file.
 
@@ -991,7 +1001,7 @@ The disk limit of the main container holds all the volumes full and 64 MiB for i
 Each other container, such as the isolation init container and the stager, has a disk limit of 16 MiB for its logs.
 
 Each container requests a tenth of its CPU limit, and the isolation init container requests 10m.
-The sandbox quota admits a review by its memory request and limit and its disk request from this table.
+The chart's sandbox quotas count the requests of this table, not the limits.
 Four large reviews at once peaked at 632 to 657 MiB each.
 One Heph conversation used 136 MiB in the host, and a turn sandbox used 3 MiB.
 The host's Node heap stops at 768 MiB.
@@ -1000,7 +1010,7 @@ The host's Node heap stops at 768 MiB.
 The kubelet evicts a Pod whose volume passes its size limit, or whose disk use passes its disk limit.
 Thus, no sandbox can fill the node's disk and cause the eviction of other Pods.
 The worker counts the eviction as a failure of the infrastructure, and the review spends a retry: a review whose sandbox keeps filling its disk ends at `AGENT_MAX_RETRIES`.
-The sandbox quota counts the disk requests and limits, if it has entries for them.
+The chart's sandbox quotas count the disk requests.
 
 Kubernetes has no field for two Docker sandbox settings.
 `/tmp`, `/run` and a turn sandbox's `/workspace` are not `noexec`, and a sandbox Pod keeps `/dev/shm` in its private IPC namespace.
@@ -1147,9 +1157,9 @@ A change of NATS itself stops reception: while NATS is down, the receiver answer
 | A worker stays unready, and its log says that a sandbox namespace informer failed and retries | The worker cannot watch the Pods, Jobs or ResourceQuotas of the sandbox namespace. The log gives the HTTP status. A `403` means that the worker's Role lacks `list` or `watch` on one of them ([Sandbox prerequisites](#sandbox-prerequisites)). The worker retries and becomes ready by itself once it can watch. |
 | A worker stays unready, and its log says that the cluster does not hold the sandbox boundary | The isolation probe failed. The log names each failed check. A failed egress check usually means that the network plugin does not enforce NetworkPolicy, or that `networkPolicy.kubernetesApi` names an address that the plugin does not see. |
 | A worker log says that the network policy did not filter a sandbox Pod in time | The network plugin applied the policy of a new Pod more than 60 seconds after the Pod started. The attempt is tried again. |
-| A review fails with "The sandbox quota is smaller than one review sandbox" | The quota holds less than one review sandbox requests. Raise `worker.sandbox.quota`. |
-| A sandbox Pod stays `Pending` with a quota error | The sandbox namespace's quota is full. Raise `worker.sandbox.quota`, or lower the workers' capacity. |
-| Reviews stay queued, and the worker log says that reviews wait for room in the sandbox quota | The Heph host and the turn sandboxes hold the quota. The reviews start when a sandbox ends. To run them sooner, raise `worker.sandbox.quota` or lower `worker.hephTurns`. |
+| A review fails with "The sandbox quota is smaller than one review sandbox" | A quota of your own holds less than one review sandbox requests. Raise it. The chart's quotas always hold one. |
+| A sandbox Pod stays `Pending` with a quota error | Its tier's quota is full. The chart sizes each tier for its workers' capacity, so check a quota of your own, or `worker.reviews` and `worker.hephTurns`. |
+| Reviews stay queued, and the worker log says that reviews wait for room in the sandbox quota | The reviews tier holds the running reviews and the isolation probe. The reviews start when a sandbox ends. To run more at once, raise `worker.reviews`. |
 | A new Pod restarts during an upgrade, and its log names a pending change set | It waited 10 minutes for the schema. Check the migration Job's log. A longer migration needs the [database maintenance](#database-maintenance) procedure. |
 | A backup Job fails with `unable to find primary cluster` | The Job cannot reach pgBackRest's TLS server on port 8432 of the PostgreSQL Service, or its client certificate is not for `hephaestus-backup` from `ca.crt`. |
 | PostgreSQL's volume fills | A failed WAL archive keeps the WAL on the volume. Check the latest backup Job's log and the bucket's credentials. |
