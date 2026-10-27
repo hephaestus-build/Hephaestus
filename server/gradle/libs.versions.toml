@@ -37,6 +37,7 @@ bucket4j = "8.19.0"
 bcprov = "1.85.2"
 bouncycastle-lts = "2.73.12"
 bcutil = "1.85"
+guava = "33.7.2-jre"
 bcpkix = "1.85"
 commonmark = "0.30.0"
 
@@ -51,6 +52,7 @@ archunit-core = { module = "com.tngtech.archunit:archunit", version.ref = "archu
 bcprov = { module = "org.bouncycastle:bcprov-jdk18on", version.ref = "bcprov" }
 bouncycastle-lts = { module = "org.bouncycastle:bcprov-lts8on", version.ref = "bouncycastle-lts" }
 bcutil = { module = "org.bouncycastle:bcutil-jdk18on", version.ref = "bcutil" }
+guava = { module = "com.google.guava:guava", version.ref = "guava" }
 bcpkix = { module = "org.bouncycastle:bcpkix-jdk18on", version.ref = "bcpkix" }
 liquibase-core = { module = "org.liquibase:liquibase-core", version.ref = "liquibase" }
 liquibase-hibernate7 = { module = "org.liquibase.ext:liquibase-hibernate7", version.ref = "liquibase-hibernate7" }

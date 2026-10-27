@@ -116,6 +116,10 @@ dependencies {
         implementation(libs.bouncycastle.lts)
         implementation(libs.bcutil)
         implementation(libs.bcpkix)
+        // Error Prone brings its own Guava onto the annotation processor paths.
+        implementation(libs.guava) { because("CVE-2026-102554") }
+        annotationProcessor(libs.guava) { because("CVE-2026-102554") }
+        testAnnotationProcessor(libs.guava) { because("CVE-2026-102554") }
     }
 }
 
