@@ -364,7 +364,7 @@ The required checks are job names, so a display name does not change them.
 | `practice-guidance-links.yml`         | PR touching practice guidance, weekly, manual                                 | Checks the web links in bundled practice guides                                                                                                                                                                                  |
 | `scorecard.yml`                       | Push to main, branch-protection change, weekly                                | Publishes the OpenSSF Scorecard                                                                                                                                                                                                  |
 | `semgrep.yml`                         | Pull request, push to main                                                    | Tests and scans the repository's own TLS rule pack                                                                                                                                                                               |
-| `kubernetes-nightly.yml`              | Nightly, manual                                                               | Runs every Kubernetes leg on the newest main build that passed CI, with that build's chart, and reports a failure on one tracking issue                                                                                          |
+| `kubernetes-nightly.yml`              | Nightly, manual                                                               | Runs every Kubernetes leg and the sandbox footprint benchmark on the newest main build that passed CI, with its chart and agent image. Reports a failure on one tracking issue                                              |
 | `rescan-images.yml`                   | Weekly, manual                                                                | Rescans main's published images against the release vulnerability policy and keeps one tracking issue in step with the findings. A second job rescans the latest published release's images and reports drift on the vulnerability response issue|
 | `ci-diagnostics.yml`                  | Completed CI/CD runs                                                          | Reports exact-attempt job and step timings without changing the required CI verdict                                                                                                                                              |
 | `ci-profile.yml`                      | Weekly, manual                                                                | Reports advisory performance budgets and profiles server test tiers                                                                                                                                                              |
@@ -814,6 +814,13 @@ Right after a merge, that run is still building, so the pull request builds ever
   It catches a change that the `kubernetes` filter does not select.
   Such a change reaches staging, and can reach a release, up to a day before the nightly run tests it.
   A failed nightly run updates one tracking issue.
+- The same workflow's `Sandbox footprint` job measures the review sandbox's memory.
+  `ReviewFootprintStagingLiveTest` stages a review of a large repository at a pinned change: SwiftFormat, 37 practices.
+  `scripts/sandbox-footprint.ts` then runs two reviews at once on the agent image that the tested `main` build published.
+  Only the model is a stand-in, so the job needs no credential.
+  It fails when a review does not finish or when the memory samples are unreadable.
+  It uploads the report as `sandbox-footprint`.
+  It waits while merge-group jobs are queued, and it occupies one runner for about 15–20 minutes.
   arm64 runs only the lowest minor, the minor of the arm64 host.
 - A job's `timeout-minutes` is a hang detector of at least 15 minutes.
   This holds whatever the job's usual duration is.

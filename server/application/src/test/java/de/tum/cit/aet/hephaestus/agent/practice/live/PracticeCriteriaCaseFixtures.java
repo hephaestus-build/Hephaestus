@@ -67,7 +67,7 @@ final class PracticeCriteriaCaseFixtures {
 
     private PracticeCriteriaCaseFixtures() {}
 
-    private static BundledPracticeCatalog catalog() {
+    static BundledPracticeCatalog catalog() {
         var sources = new ClasspathSourceCatalogRegistry(MAPPER, Clock.systemUTC());
         var items = new PracticeItemOptions(new ItemDescriptorRegistry(List.of(
                 new PullRequestItemDescriptor(),

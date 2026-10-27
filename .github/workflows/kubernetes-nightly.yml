@@ -48,10 +48,80 @@ jobs:
       ref: ${{ needs.build.outputs.commit }}
       queue: true
 
+  # The review sandbox's memory on the newest main: two reviews of a large repository at once, from
+  # the agent image that main published. The model is a stand-in, so no credential is needed.
+  footprint:
+    name: "Sandbox footprint"
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    permissions:
+      actions: read
+      contents: read
+    env:
+      COMMIT: ${{ needs.build.outputs.commit }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.build.outputs.commit }}
+          persist-credentials: false
+      - uses: ./.github/actions/setup-toolchain
+        with:
+          install: "none"
+      - uses: ./.github/actions/setup-caches
+      # The 20 runners are shared with the merge queue, which carries accepted work.
+      - name: Wait while merge-group jobs are queued
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          for _ in $(seq 1 60); do
+            queued=0
+            for id in $(gh run list -R "$REPOSITORY" --workflow cicd.yml --event merge_group --limit 5 \
+              --json databaseId,status -q '.[] | select(.status != "completed") | .databaseId'); do
+              queued=$((queued + $(gh api "repos/$REPOSITORY/actions/runs/$id/jobs?per_page=100" \
+                --jq '[.jobs[] | select(.status == "queued")] | length')))
+            done
+            [ "$queued" -eq 0 ] && exit 0
+            echo "$queued merge-group jobs are queued; waiting a minute"
+            sleep 60
+          done
+          echo "::error::The merge queue stayed busy for an hour"
+          exit 1
+      - name: Stage a review of the large fixture
+        env:
+          FOOTPRINT_STAGE_DIR: ${{ runner.temp }}/footprint-stage
+          FOOTPRINT_REPO: ${{ runner.temp }}/swiftformat
+          FOOTPRINT_BASE: aadf4245ddfd71e1305c45104e7e0207e30e157f
+          FOOTPRINT_HEAD: abc138dd52a104716fa248344309c875911d4195
+        run: |
+          set -euo pipefail
+          git clone --quiet https://github.com/nicklockwood/SwiftFormat.git "$FOOTPRINT_REPO"
+          cd server
+          ./gradlew :application:liveTest --tests '*ReviewFootprintStagingLiveTest*' --console=plain
+      - name: Measure two reviews at once
+        env:
+          STAGE: ${{ runner.temp }}/footprint-stage
+        run: |
+          set -euo pipefail
+          image="ghcr.io/hephaestus-build/agent-pi:$COMMIT"
+          docker pull --quiet "$image"
+          node scripts/sandbox-footprint.ts --stage "$STAGE" --image "$image" --reviews 2 \
+            --label "nightly-$COMMIT" --out footprint.json
+      - name: Keep the report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: sandbox-footprint
+          path: footprint.json
+          if-no-files-found: ignore
+          retention-days: 30
+
   # A scheduled run has no pull request to fail, so a failure is reported on one tracking issue.
   report:
     name: "Report a failure"
-    needs: [build, Kubernetes]
+    needs: [build, Kubernetes, footprint]
     if: failure()
     runs-on: ubuntu-latest
     timeout-minutes: 15
