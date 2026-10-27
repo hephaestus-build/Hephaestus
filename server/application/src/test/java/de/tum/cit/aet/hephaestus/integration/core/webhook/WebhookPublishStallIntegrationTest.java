@@ -48,6 +48,8 @@ class WebhookPublishStallIntegrationTest extends BaseIntegrationTest {
     @Autowired
     private WebhookProperties properties;
 
+    private final SimpleMeterRegistry meters = new SimpleMeterRegistry();
+
     private GenericContainer<?> broker;
     private Connection connection;
 
@@ -106,7 +108,9 @@ class WebhookPublishStallIntegrationTest extends BaseIntegrationTest {
 
         // No stream listens: the broker answers every attempt at once with "no responders".
         CompletableFuture<ResponseEntity<?>> answer = CompletableFuture.supplyAsync(() -> deliver(pipeline, "returns"));
-        Thread.sleep(Duration.ofSeconds(2));
+        // The receiver is retrying: let it fail at least twice before the stream returns.
+        await().atMost(Duration.ofSeconds(5))
+                .until(() -> meters.get("webhook.publish.retry").counter().count() >= 2);
         connection.jetStreamManagement().addStream(github);
 
         await().atMost(GITHUB_RESPONSE_WINDOW).until(answer::isDone);
@@ -141,8 +145,7 @@ class WebhookPublishStallIntegrationTest extends BaseIntegrationTest {
     }
 
     private WebhookIngestPipeline pipeline() throws IOException {
-        JetStreamPublisher publisher =
-                new JetStreamPublisher(connection.jetStream(), properties, new SimpleMeterRegistry());
+        JetStreamPublisher publisher = new JetStreamPublisher(connection.jetStream(), properties, meters);
         return new WebhookIngestPipeline(
                 List.of(new AcceptingVerifier()), List.of(new FixedSubject()), publisher, new ObjectMapper());
     }

@@ -153,7 +153,7 @@ public record WebhookProperties(
      * against what a shed message costs (ADR 0008).
      *
      * @param maxAge Longest time a webhook stream keeps a message, for each stream without an entry in
-     *     max-age-by-stream. Must be positive.
+     *     max-age-by-stream. Must be at least duplicate-window.
      * @param maxBytes Storage bound of each webhook stream without an entry in max-bytes-by-stream. At the bound,
      *     JetStream deletes the oldest messages to admit new ones. Must be at least 4 times http.max-payload-bytes.
      * @param maxBytesByStream Storage bounds keyed by stream name that override max-bytes for that stream. The github

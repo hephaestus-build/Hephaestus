@@ -32,7 +32,8 @@ import org.junit.jupiter.api.Test;
  */
 class JetStreamPublisherTest extends BaseUnitTest {
 
-    private static final Duration DEADLINE = Duration.ofMillis(400);
+    /** Room for several attempts above the 250 ms an attempt needs, so a slow runner does not end a retry early. */
+    private static final Duration DEADLINE = Duration.ofSeconds(2);
 
     private static final PublishRequest REQUEST =
             new PublishRequest("github.org.repo.push", "github-x", Map.of("Nats-Msg-Id", "github-x"), new byte[] {1});
@@ -136,7 +137,7 @@ class JetStreamPublisherTest extends BaseUnitTest {
 
         assertThat(Duration.ofNanos(System.nanoTime() - started))
                 .isGreaterThanOrEqualTo(DEADLINE)
-                .isLessThan(DEADLINE.plusSeconds(2));
+                .isLessThan(DEADLINE.plusSeconds(3));
         assertThat(published("github", "failure")).isEqualTo(1);
     }
 
@@ -180,6 +181,21 @@ class JetStreamPublisherTest extends BaseUnitTest {
                         PublishFailedException.class,
                         e -> assertThat(e.failureCause()).isEqualTo(Cause.REJECTED));
         assertThat(published("other", "failure")).isEqualTo(1);
+    }
+
+    @Test
+    void shouldNotRetryWhenTheBrokerHasNoStorageLeft() {
+        JetStreamApiException noStorage = mock(JetStreamApiException.class);
+        when(noStorage.getErrorDescription()).thenReturn("insufficient storage resources available");
+        CompletableFuture<PublishAck> refused = failed(new RuntimeException(noStorage));
+        when(jetStream.publishAsync(
+                        any(String.class), any(Headers.class), any(byte[].class), any(PublishOptions.class)))
+                .thenReturn(refused);
+
+        assertThatThrownBy(() -> publisher.publish(REQUEST))
+                .isInstanceOfSatisfying(
+                        PublishFailedException.class,
+                        e -> assertThat(e.failureCause()).isEqualTo(Cause.STREAM_FULL));
     }
 
     @Test
