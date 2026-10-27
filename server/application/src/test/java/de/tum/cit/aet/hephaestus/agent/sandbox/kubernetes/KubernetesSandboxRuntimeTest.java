@@ -619,6 +619,36 @@ class KubernetesSandboxRuntimeTest {
                 .as("no quota, no bound of its own")
                 .isEqualTo(Integer.MAX_VALUE);
 
+        quotaWithTwoGibibytesFree();
+
+        assertThat(backend().roomFor(LIMITS))
+                .as("2 GiB free hold two 1 GiB reviews")
+                .isEqualTo(2);
+    }
+
+    @Test
+    void shouldCountALaunchedReviewAgainstTheRoomBeforeItsPodAppears() {
+        quotaWithTwoGibibytesFree();
+        KubernetesSandboxBackend reviews = backend();
+        UUID jobId = UUID.randomUUID();
+
+        reviews.launch(new SandboxBackend.Launch(
+                SandboxBackend.Kind.REVIEW,
+                jobId,
+                1,
+                IMAGE,
+                List.of("node", "run.ts"),
+                LIMITS,
+                Instant.now().plus(Duration.ofMinutes(7)),
+                gateway -> Map.of()));
+
+        assertThat(storedJob(KubernetesSandboxBackend.jobName(jobId, 1))).isNotNull();
+        assertThat(reviews.roomFor(LIMITS))
+                .as("the quota does not count the Job until the Job controller creates its Pod")
+                .isEqualTo(1);
+    }
+
+    private void quotaWithTwoGibibytesFree() {
         api().resourceQuotas()
                 .inNamespace(SANDBOXES)
                 .resource(new ResourceQuotaBuilder()
@@ -634,10 +664,6 @@ class KubernetesSandboxRuntimeTest {
                         .endStatus()
                         .build())
                 .create();
-
-        assertThat(backend().roomFor(LIMITS))
-                .as("2 GiB free hold two 1 GiB reviews")
-                .isEqualTo(2);
     }
 
     @Test

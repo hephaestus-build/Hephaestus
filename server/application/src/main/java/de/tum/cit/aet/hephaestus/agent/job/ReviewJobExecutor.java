@@ -174,7 +174,12 @@ public class ReviewJobExecutor {
     // The locally running jobs whose sandbox has ended, or that never start one: they compose and hold no sandbox slot.
     private final Set<UUID> composingJobs = ConcurrentHashMap.newKeySet();
 
-    /** Claimed jobs whose sandbox has not launched yet: the runtime's room does not count them. */
+    /**
+     * Claimed jobs that still prepare their sandbox, which the runtime's room does not count yet. A job leaves at its
+     * execution fence ({@link #markExecutionStarted}), before its sandbox is launched; for the time of that write and
+     * the launch, a poll can read one room too many. That window is accepted: the runtime then refuses the sandbox, and
+     * the refusal requeues the job without spending an attempt (#3355).
+     */
     private final Set<UUID> preparingJobs = ConcurrentHashMap.newKeySet();
 
     private final int sandboxSlots;
