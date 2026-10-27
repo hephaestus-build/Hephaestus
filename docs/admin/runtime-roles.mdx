@@ -453,13 +453,20 @@ The worker limits the model calls that one attempt has in flight at the same tim
 
 The review limit holds two calls for each practice session, 2 more, and the 4 calls of the practice scripts.
 The proxy notices that a client went away only at its next write to that client.
-Thus, a call that a stalled session left open counts until its provider answers or the work deadline passes.
-The 2 extra calls are for such calls.
+Thus, a call that a stalled session left open still counts for a time.
+A model call ends when its provider sends nothing for 5 minutes, the time after which a review's runner gives up on the session.
+The 2 extra calls are for calls that wait for that end.
 
 The proxy refuses a call past the limit with HTTP 429 and `Retry-After: 1`.
 It refuses the call before the call reaches the provider.
 Thus, no attempt takes more than its share of the provider's capacity.
 `sandbox.gateway.calls_in_flight.refused` counts these refusals.
+
+A refused call is not lost:
+
+- The review's sessions and Heph ask again with their own retries.
+- A practice script's direct call waits as the refusal asks, and then asks again. It stops at the review's work deadline. Thus, a full limit delays a script's call but does not leave it unrated.
+- The feedback composition of a review counts against the same limit, because it is a call of the same attempt. It starts after the review's sandbox ends. Then, only calls that a stalled session left open can fill the limit. The composition treats a refusal as a provider pause and tries again.
 
 `PRACTICE_REVIEW_PRACTICE_CONCURRENCY` sets the practice concurrency, and the limit follows it.
 

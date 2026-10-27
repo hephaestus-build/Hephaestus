@@ -320,7 +320,8 @@ class LlmProxyService {
             return refusal(HttpStatus.FORBIDDEN, ReviewModelGateway.Refusal.WORK_TIME, WORK_TIME_OVER);
         // Before the scan lock, so a call past the cap holds no thread while the attempt's previous call runs.
         if (call.isOverCap()) {
-            log.warn(
+            // A refused client asks again each second, so the counter carries the signal, not this line.
+            log.debug(
                     "Model call refused, its attempt has its most calls in flight: principal={}",
                     routing.principalDescription());
             accounting.recordCallsInFlightRefused();

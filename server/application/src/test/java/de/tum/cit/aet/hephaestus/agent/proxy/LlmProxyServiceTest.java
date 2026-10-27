@@ -1446,6 +1446,50 @@ class LlmProxyServiceTest extends BaseUnitTest {
         }
 
         @Test
+        @DisplayName("a call that the provider fails frees its place in the attempt's cap")
+        void shouldFreeThePlaceWhenTheProviderFailsTheCall() {
+            upstream.enqueue(new MockResponse.Builder().code(500).body("down").build());
+            ProxyRouting routing = streamingRouting();
+            authenticate(routing);
+            stubCredential(
+                    routing,
+                    new LlmModelResolver.ProxyCredential(
+                            upstream.url("/v1").toString(),
+                            "openai-completions",
+                            LlmAuthMode.BEARER,
+                            "catalog-model",
+                            "secret"));
+
+            controllerProxy(new MockHttpServletResponse());
+
+            assertThat(streamingCalls.awaitNone(ATTEMPT.sourceId(), ATTEMPT.number(), Duration.ZERO))
+                    .isTrue();
+            assertThat(IntStream.range(0, REVIEW_CALLS_AT_THREE)
+                            .mapToObj(index -> streamingCalls.begin(ATTEMPT))
+                            .toList())
+                    .as("the whole cap is free again")
+                    .noneMatch(ProxyCallsInFlight.Call::isOverCap);
+        }
+
+        @Test
+        @DisplayName("a call that cannot reach the provider frees its place in the attempt's cap")
+        void shouldFreeThePlaceWhenTheProviderCannotBeReached() throws IOException {
+            String closed = upstream.url("/v1").toString();
+            upstream.close();
+            ProxyRouting routing = streamingRouting();
+            authenticate(routing);
+            stubCredential(
+                    routing,
+                    new LlmModelResolver.ProxyCredential(
+                            closed, "openai-completions", LlmAuthMode.BEARER, "catalog-model", "secret"));
+
+            controllerProxy(new MockHttpServletResponse());
+
+            assertThat(streamingCalls.awaitNone(ATTEMPT.sourceId(), ATTEMPT.number(), Duration.ZERO))
+                    .isTrue();
+        }
+
+        @Test
         @DisplayName("cancelling an attempt's calls ends a call whose provider sends nothing at once")
         void cancellingTheAttemptsCallsEndsASilentCallAtOnce() throws Exception {
             upstream.enqueue(new MockResponse.Builder()

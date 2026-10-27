@@ -57,6 +57,12 @@ export const PRACTICE_SLUG = /^[a-z0-9][a-z0-9-]{0,63}$/u;
  */
 export const PRACTICE_SCRIPT_PRACTICE_HEADER = "x-hephaestus-practice";
 
+/** The header that names which of the proxy's own rules refused a call (`LlmProxyService.REFUSAL_HEADER`). */
+export const PROXY_REFUSAL_HEADER = "hephaestus-proxy-refusal";
+
+/** The proxy's refusal of a call while its attempt already has its most model calls in flight. */
+export const CALLS_IN_FLIGHT_REFUSAL = "CALLS_IN_FLIGHT";
+
 /** What a practice program may ask a model to do directly. One slot, one kind of model. */
 export const MODEL_SLOTS = ["chat", "decision", "embedding", "reranking"] as const;
 export type ModelSlot = (typeof MODEL_SLOTS)[number];

@@ -5,9 +5,13 @@ import { APICallError, InvalidResponseDataError, type RerankingModelV4 } from "@
 import { defaultSettingsMiddleware, wrapLanguageModel } from "ai";
 import { z } from "zod";
 
+import { setTimeout as sleep } from "node:timers/promises";
+
 import {
+	CALLS_IN_FLIGHT_REFUSAL,
 	MODEL_SLOT_CALLS,
 	PRACTICE_SCRIPT_PRACTICE_HEADER,
+	PROXY_REFUSAL_HEADER,
 	type BoundModels,
 	type ModelSlot,
 	type Reason,
@@ -23,8 +27,35 @@ const rerankResponseSchema = z.object({
 	results: z.array(z.object({ index: z.int().nonnegative(), relevance_score: z.number() })),
 });
 
+/**
+ * A fetch that asks again while the proxy refuses the call because its attempt already has its most
+ * model calls in flight. The wait follows `Retry-After`. The loop ends when the call is aborted, or when
+ * the proxy answers otherwise: a call past the attempt's work deadline gets its refusal. Any other
+ * answer, a provider's 429 included, goes to the caller as it is. A direct call runs once, so without
+ * this wait a full cap would leave the call unrated.
+ */
+export function waitingWhileCallsInFlight(base: typeof fetch = fetch): typeof fetch {
+	return async (input, init) => {
+		for (;;) {
+			const response = await base(input, init);
+			if (
+				response.status !== 429 ||
+				response.headers.get(PROXY_REFUSAL_HEADER) !== CALLS_IN_FLIGHT_REFUSAL
+			) {
+				return response;
+			}
+			await response.body?.cancel();
+			const seconds = Number(response.headers.get("retry-after"));
+			await sleep(Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : 1000, undefined, {
+				signal: init?.signal ?? undefined,
+			});
+		}
+	};
+}
+
 // Jina and vLLM omit Cohere's required meta field; read their shared results[].index/relevance_score shape.
 function cohereRerankModel(
+	proxyFetch: typeof fetch,
 	baseURL: string,
 	headers: Record<string, string>,
 	modelId: string,
@@ -39,7 +70,7 @@ function cohereRerankModel(
 				documents.type === "text"
 					? documents.values
 					: documents.values.map((d) => JSON.stringify(d));
-			const response = await fetch(url, {
+			const response = await proxyFetch(url, {
 				method: "POST",
 				headers: { ...headers, "content-type": "application/json" },
 				body: JSON.stringify({ model: modelId, query, documents: values, top_n: topN }),
@@ -81,12 +112,14 @@ export function hostModels(
 	proxyUrl: string,
 	token: string,
 	practice: string,
+	proxyFetch: typeof fetch = waitingWhileCallsInFlight(),
 ): Partial<SlotModels> {
 	const headers = { [PRACTICE_SCRIPT_PRACTICE_HEADER]: practice };
 	const settings = (slot: ModelSlot) => ({
 		baseURL: `${proxyUrl.replace(/\/+$/u, "")}/practice-script/${slot}`,
 		apiKey: token,
 		headers,
+		fetch: proxyFetch,
 	});
 	const compatible = (slot: ModelSlot) =>
 		createOpenAICompatible({
@@ -121,6 +154,7 @@ export function hostModels(
 	}
 	if (reranking?.protocol === "cohere-rerank") {
 		models.reranking = cohereRerankModel(
+			proxyFetch,
 			settings("reranking").baseURL,
 			{ ...headers, authorization: `Bearer ${token}` },
 			reranking.modelId,

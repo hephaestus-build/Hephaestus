@@ -5,9 +5,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.IntStream;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -113,6 +120,43 @@ class ProxyCallsInFlightTest extends BaseUnitTest {
 
         assertThat(late.isCancelled()).isTrue();
         assertThat(late.isOverCap()).isFalse();
+    }
+
+    @Test
+    @DisplayName("calls from many threads never pass the cap, and every place is free again once they end")
+    void shouldNeverAdmitPastTheCapWhenManyThreadsBeginAndEndCalls() throws Exception {
+        ProxyRouting.BilledAttempt review = attempt(UsageSourceType.REVIEW_JOB);
+        AtomicInteger open = new AtomicInteger();
+        AtomicInteger most = new AtomicInteger();
+        AtomicInteger admitted = new AtomicInteger();
+        CountDownLatch start = new CountDownLatch(1);
+        try (ExecutorService threads = Executors.newFixedThreadPool(32)) {
+            List<Future<?>> done = new ArrayList<>();
+            for (int caller = 0; caller < 32; caller++) {
+                done.add(threads.submit(() -> {
+                    start.await();
+                    for (int round = 0; round < 200; round++) {
+                        try (ProxyCallsInFlight.Call call = calls.begin(review)) {
+                            if (call.isOverCap()) continue;
+                            admitted.incrementAndGet();
+                            most.accumulateAndGet(open.incrementAndGet(), Math::max);
+                            Thread.onSpinWait();
+                            open.decrementAndGet();
+                        }
+                    }
+                    return null;
+                }));
+            }
+            start.countDown();
+            for (Future<?> each : done) each.get(30, TimeUnit.SECONDS);
+        }
+
+        assertThat(most.get()).isLessThanOrEqualTo(REVIEW_CALLS);
+        assertThat(admitted.get()).isPositive();
+        assertThat(calls.awaitNone(review.sourceId(), review.number(), Duration.ZERO))
+                .as("no place is left taken")
+                .isTrue();
+        assertThat(begin(review, REVIEW_CALLS)).noneMatch(ProxyCallsInFlight.Call::isOverCap);
     }
 
     private List<ProxyCallsInFlight.Call> begin(ProxyRouting.BilledAttempt attempt, int count) {

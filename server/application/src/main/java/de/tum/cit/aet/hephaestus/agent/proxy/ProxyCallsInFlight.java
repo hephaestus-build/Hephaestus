@@ -54,8 +54,10 @@ public class ProxyCallsInFlight {
     /** Far above the Heph turns that one worker runs at once; a bound, not a capacity. */
     private static final int MAX_REMEMBERED_FAILURES = 10_000;
 
-    /** Direct model calls that one review's practice scripts have in flight: {@code MODEL_CONCURRENCY} in
-     * {@code docker/agents/practice-scripts/lib/core/concurrency.ts}. */
+    /**
+     * Direct model calls that one review's practice scripts have in flight: {@code MODEL_CONCURRENCY} in
+     * {@code docker/agents/practice-scripts/lib/core/concurrency.ts}, which {@code ReviewRunnerConstantsTest} pins.
+     */
     static final int SCRIPT_CALLS = 4;
 
     /** A Heph turn has one session: one call, and one that a stop left closing. */
@@ -135,11 +137,11 @@ public class ProxyCallsInFlight {
                 cancel.send();
                 return call(attempt, cancel, hephTurn, false);
             }
-            List<Cancellation> open = calls.computeIfAbsent(attempt, key -> new ArrayList<>());
+            List<Cancellation> open = calls.getOrDefault(attempt, List.of());
             if (open.size() >= cap(billed.sourceType())) {
                 return call(attempt, cancel, hephTurn, true);
             }
-            open.add(cancel);
+            calls.computeIfAbsent(attempt, key -> new ArrayList<>()).add(cancel);
         }
         return call(attempt, cancel, hephTurn, false);
     }

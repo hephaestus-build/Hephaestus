@@ -11,7 +11,13 @@ import { MockEmbeddingModelV4, MockLanguageModelV4 } from "ai/test";
 
 import { boundModelsSchema, MODEL_SLOT_CAPS } from "./contract.ts";
 import { decisionOutputTokens } from "./decision-logprobs.ts";
-import { hostModels, modelCall, ModelBudget, reservationOf } from "./models-host.ts";
+import {
+	hostModels,
+	modelCall,
+	ModelBudget,
+	reservationOf,
+	waitingWhileCallsInFlight,
+} from "./models-host.ts";
 
 void test("the models file in the shape the server writes gives every slot a model", async () => {
 	const file = new URL("../../test/practice-script-models.json", import.meta.url);
@@ -21,6 +27,74 @@ void test("the models file in the shape the server writes gives every slot a mod
 });
 
 const never = new AbortController().signal;
+
+const capRefusal = () =>
+	new Response("This attempt already has its most model calls in flight.", {
+		status: 429,
+		headers: { "retry-after": "1", "hephaestus-proxy-refusal": "CALLS_IN_FLIGHT" },
+	});
+
+void describe("a direct call that meets its attempt's full cap of calls in flight", () => {
+	void test("waits as the proxy asks and still gets its result", async () => {
+		const answers = [
+			capRefusal(),
+			Response.json({ results: [{ index: 1, relevance_score: 0.9 }] }),
+		];
+		let calls = 0;
+		const proxy: typeof fetch = async () => {
+			calls += 1;
+			const answer = answers.shift();
+			assert.ok(answer);
+			return answer;
+		};
+		const file = new URL("../../test/practice-script-models.json", import.meta.url);
+		const bound = boundModelsSchema.parse(JSON.parse(await readFile(file, "utf8")));
+		const models = hostModels(
+			bound,
+			"http://proxy.test/internal/llm",
+			"token",
+			"comment-quality",
+			waitingWhileCallsInFlight(proxy),
+		);
+		assert.ok(models.reranking);
+
+		const ranked = await models.reranking.doRerank({
+			documents: { type: "text", values: ["first", "second"] },
+			query: "which",
+			topN: 1,
+			abortSignal: never,
+		});
+
+		assert.deepEqual(ranked.ranking, [{ index: 1, relevanceScore: 0.9 }]);
+		assert.equal(calls, 2);
+	});
+
+	void test("a provider's own rate limit reaches the caller at once", async () => {
+		let calls = 0;
+		const wait = waitingWhileCallsInFlight(async () => {
+			calls += 1;
+			return new Response("slow down", { status: 429, headers: { "retry-after": "30" } });
+		});
+
+		const answer = await wait("http://proxy.test/internal/llm/practice-script/chat", {});
+
+		assert.equal(answer.status, 429);
+		assert.equal(calls, 1);
+	});
+
+	void test("an aborted call stops waiting", async () => {
+		const stop = new AbortController();
+		const wait = waitingWhileCallsInFlight(async () => {
+			stop.abort();
+			return capRefusal();
+		});
+
+		await assert.rejects(
+			wait("http://proxy.test/internal/llm/practice-script/chat", { signal: stop.signal }),
+			{ name: "AbortError" },
+		);
+	});
+});
 
 void describe("the attempt's direct model account", () => {
 	void test("a call settles at the tokens it reports, and one that reports no usage keeps its whole reservation", async () => {
