@@ -280,7 +280,7 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
     void shouldGiveAFollowUpNoReasonWhileTheQuestionBeforeItWaitsOrRuns() {
         ask(main, "First");
         MentorTurnService.Submission followUp = ask(main, "Follow-up");
-        turns.claimNext(WORKER, LEASE).orElseThrow();
+        assertThat(turns.claimNext(WORKER, LEASE)).isPresent();
 
         assertThat(waits.waits(workspace.getId(), List.of(stored(followUp.turn()))))
                 .as("it waits for its own conversation, not for a free Heph")

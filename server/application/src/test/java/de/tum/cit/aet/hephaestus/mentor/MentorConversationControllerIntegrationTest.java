@@ -277,7 +277,7 @@ class MentorConversationControllerIntegrationTest extends AbstractWorkspaceInteg
     @Test
     void shouldSayThatAQuestionWaitsForAFreeHephWhileHephAnswersAnotherConversation() {
         MentorTurnService.Submission first = submit(main(), "What did the review say?");
-        turns.claimNext(WORKER, Duration.ofMinutes(5)).orElseThrow();
+        assertThat(turns.claimNext(WORKER, Duration.ofMinutes(5))).isPresent();
         MentorConversation thread =
                 conversations.openThread(workspace.getId(), first.question().getId());
         MentorTurnService.Submission inThread = submit(thread, "And this one?");
