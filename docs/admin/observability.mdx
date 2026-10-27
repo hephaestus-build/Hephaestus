@@ -153,6 +153,10 @@ Each rule needs its exporter, scraped by the same Prometheus:
 | [node-exporter](https://github.com/prometheus/node_exporter) on each node | `node_filesystem_avail_bytes`, `node_filesystem_size_bytes`, `node_filesystem_readonly` | `HephaestusNodeDiskFilling` |
 | [cert-manager](https://cert-manager.io/docs/devops-tips/prometheus-metrics/) | `certmanager_certificate_expiration_timestamp_seconds` | `HephaestusCertificateExpiring` |
 
+The group `hephaestus-pull-deploy` reads the metrics of the [pull-based deployment](./pull-based-deployment#watching-it) reconciler.
+node-exporter's textfile collector on each host that runs the reconciler exports them.
+Load this group only when Prometheus scrapes such a host: `HephaestusDeployMetricsMissing` fires when no host reports.
+
 A rule whose exporter is not scraped has no series and never fires.
 Before you rely on a rule, query its metrics in Prometheus.
 The kube-state-metrics, kubelet and cert-manager rules have no series outside Kubernetes.
@@ -199,6 +203,10 @@ For a release name longer than 34 characters, change the name patterns of these 
 | `HephaestusPostgresVolumeFilling` | Free space of the PostgreSQL volume | A failed WAL archive fills the volume. The warning gives time to repair the archive. The critical level comes shortly before PostgreSQL stops. The warning covers only the band above the critical level, so the two never fire together |
 | `HephaestusJetStreamVolumeFilling` | Free space of the JetStream volume | The volume is `max_file` plus 25 %, so a broker at its storage budget leaves 20 % free. Below the threshold, something outside the budget fills the volume. A full file system wedges the broker |
 | `HephaestusNodeDiskFilling` | Free space of a writable node file system, not the volumes that the kubelet mounts for pods | The kubelet's image garbage collection starts at 85 % use and frees space to 80 %. When the space stays low, eviction comes next. The volume rules cover pod volumes |
+| `HephaestusDeployReconcileFailing` | `hephaestus_deploy_reconcile_success` | The timer runs the reconciler each minute. A run that fails for 15 minutes does not clear itself. For example, a chart that refuses the host's values fails each run in the same way. The host then keeps its old release |
+| `HephaestusDeployReconcileStale` | `hephaestus_deploy_reconcile_timestamp_seconds` | The reconciler writes the timestamp when a run ends, and one apply may take up to the unit's 30-minute start timeout. No finished run for 40 minutes means that the timer or the unit stopped |
+| `HephaestusDeployMetricsMissing` | No `hephaestus_deploy_reconcile_timestamp_seconds` | The textfile collector, the metrics file or the reconciler is gone, which no other rule of the group shows |
+| `HephaestusDeployToolingPending` | `hephaestus_deploy_tooling_pending` | The host runs tooling that no apply recorded. The next promotion of the release that the host runs ends it. An hour leaves time for that promotion |
 | `HephaestusCertificateExpiring` | `certmanager_certificate_expiration_timestamp_seconds` | cert-manager renews a certificate when one third of its lifetime remains: 15 days of a 45-day certificate. For a certificate with a lifetime of less than 21 days, lower the threshold. cert-manager reports 0 for a certificate that it did not issue yet. Therefore, the alert also fires when a first issuance takes longer than its wait |
 
 The WAL archive rule reads the server's [WAL archive metrics](#wal-archive-metrics).

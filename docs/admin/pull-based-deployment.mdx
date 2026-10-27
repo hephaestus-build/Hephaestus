@@ -610,12 +610,10 @@ hephaestus_deploy_free_bytes …
 Every run that writes metrics, including a failed run, reports `hephaestus_deploy_free_bytes`, the least free space on the filesystems that hold Docker's data.
 Warn when it falls below twice `HEPHAESTUS_MIN_FREE_GIB`, before the reconciler refuses an apply.
 
-Alert when `time() - hephaestus_deploy_reconcile_timestamp_seconds` exceeds ten minutes, when
-`hephaestus_deploy_reconcile_success` is `0`, or when the host's reconciliation metrics are absent.
+The group `hephaestus-pull-deploy` of the shipped [alert rules](./observability#alert-rules) alerts on these metrics.
+It covers a failing reconciler, a reconciler that finishes no run, absent metrics, and tooling that no apply recorded.
 `hephaestus_deploy_last_success_timestamp_seconds` records the last successful **apply**. An
 unchanged channel does not advance it, so its age is not a reconciliation-liveness check.
-Alert as well when `hephaestus_deploy_tooling_pending` stays `1`: the host runs tooling no apply has
-recorded yet, and a promotion of the release it runs ends that.
 
 A promotion waits for the public webapp to report the requested version. This
 checks the webapp version, not the readiness of every service. Use host metrics and logs for the
