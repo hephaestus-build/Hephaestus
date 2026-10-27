@@ -112,6 +112,7 @@ Do not leave the predictable conflict for later.
 | `/fix-ci`         | Read every failing check in one pass, fix in dependency order, push once |
 | `/resolve-review` | Fetch review threads, decide each, reply and resolve                     |
 | `/watch-pr`       | Watch CI and review after a push, and stop when the PR is ready          |
+| `/modernize-pr`   | Rebase an old PR, or continue someone else's, after choosing its fate    |
 
 Each lives in `.claude/skills/<name>/SKILL.md`.
 opencode [reads `.claude/skills/` alongside its own](https://opencode.ai/docs/skills/).
@@ -120,7 +121,7 @@ Thus, no skill needs a second copy for opencode.
 
 A *typed* `/name` is the exception.
 opencode resolves it only from `.opencode/commands/`.
-Each of these four commands has a file there whose entire body is `@.claude/skills/<name>/SKILL.md`.
+Each of these five commands has a file there whose entire body is `@.claude/skills/<name>/SKILL.md`.
 opencode [inlines a referenced file into the prompt](https://opencode.ai/docs/commands/).
 Thus, a pointer is sufficient.
 
@@ -130,8 +131,8 @@ It has no repository-level slash commands.
 [`~/.codex/prompts/` is personal and uncommitted](https://developers.openai.com/codex/custom-prompts).
 OpenAI's guidance is to make a shared command a skill.
 
-Thus, the five contribution skills have copies in `.agents/skills/<name>/`.
-These are the four above and `/gh-stack`.
+Thus, the six contribution skills have copies in `.agents/skills/<name>/`.
+These are the five above and `/gh-stack`.
 `gate:instructions` fails if a copy is missing or differs.
 `CODEX_SKILLS` in that script lists them.
 If Codex should have another skill, add its name and copy.
@@ -144,7 +145,7 @@ A mirror also causes one `duplicate skill name` warning per skill in opencode's 
 opencode reads both directories and sees the same name twice.
 
 `disable-model-invocation` makes `/land-pr`, `/fix-ci`, and `/resolve-review` typed-only in Claude Code.
-`/watch-pr` is not typed-only, so the model starts it when you ask it to watch a pull request. opencode and Codex both
+`/watch-pr` and `/modernize-pr` are not typed-only, so the model starts them when you ask for that work. opencode and Codex both
 ignore the field, so there they are ordinary skills the model can reach on its own.
 
 ## Instructions live in `AGENTS.md`, once
