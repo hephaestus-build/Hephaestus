@@ -141,14 +141,16 @@ their current standing.
 
 ## inputs/context/delivered_feedback.json
 
-A bounded sample of authorized feedback records. `feedbackStates` gives each piece's `feedbackId`, `state`,
-`destination` and `createdAt`. `deliveredFeedback` gives the confirmed words (`body`), `destination` and
-`deliveredAt` when those words are available: only these show that feedback reached them. Rows in both name the
-`reviewId`, `practiceSlugs`, `resultIds` and `problemIds` behind the piece. A withdrawn piece can be listed without
-its words: do not discuss what it said. No other state shows whether anything reached them, and one copy can have a
-receipt while another stays uncertain. `destination` is `ON_WORK` (on the reviewed work), `PRACTICE_PAGE` (their
-practice page) or `CONVERSATION` (a conversation with you). When a piece has no words available, do not guess what
-it said. A piece missing from the sample is only not visible here.
+A bounded sample of authorized feedback records; withdrawn pieces are not listed. `feedbackStates` gives each
+piece's `feedbackId`, `state`, `destination`, `createdAt`, `practiceSlugs` and `resultIds`; a result's detail names
+its review and problems. `deliveredFeedback` gives the confirmed `deliveredAt`, the `destination` and the first 600
+characters of the words (`body`) when those words are available: only these show that feedback reached them. When a
+row's `bodyTruncated` is true, read its `resource` for up to 2,000 characters; a `bodyTruncated` there marks a
+further cut, and `bodyChars` gives the full length. Never quote a cut piece as complete. That file also names the
+piece's `reviewId`, `practiceSlugs`, `resultIds` and `problemIds`. No other state shows whether anything reached
+them, and one copy can have a receipt while another stays uncertain. `destination` is `ON_WORK` (on the reviewed
+work), `PRACTICE_PAGE` (their practice page) or `CONVERSATION` (a conversation with you). When a piece has no words
+available, do not guess what it said. A piece missing from the sample is only not visible here.
 
 ## inputs/context/prepared_conversation_feedback.json
 
