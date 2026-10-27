@@ -217,4 +217,4 @@ Configuration binds to
 Paketo Cloud Native Buildpacks with Application CDS. No `Dockerfile`. From `server/`:
 `./gradlew :application:bootJar`, then
 `pack build hephaestus/application-server --path application/build/libs/hephaestus-application-*.jar --descriptor application/project.toml --run-image <the run image pinned in .github/workflows/cicd.yml>`.
-Pinning and rationale: `docs/contributor/buildpacks-cds-decision.md`.
+Pinning and rationale: `docs/decisions/0067-the-server-image-builds-with-buildpacks-and-cds.md`.

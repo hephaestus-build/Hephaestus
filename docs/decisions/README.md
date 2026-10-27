@@ -104,5 +104,6 @@ Admin Guide (`docs/admin/`), and the ADR links to it.
 | [0063](0063-each-practice-is-staged-when-it-ends.md) | Each practice is staged when it ends, and the review seals once | Accepted. Builds on 0058 and 0061. |
 | [0064](0064-one-evidence-contract-for-every-producer.md) | One evidence contract for every result producer | Accepted. Builds on 0055. |
 | [0065](0065-standing-counts-the-newest-observation-of-each-item.md) | Standing counts the newest observation of each item | Accepted. Amends 0056. |
+| [0067](0067-the-server-image-builds-with-buildpacks-and-cds.md) | The server image builds with Paketo Buildpacks and Application CDS | Accepted (2026-05-19). Moved from the contributor docs. |
 
 Template: [0000-template.md](0000-template.md).
