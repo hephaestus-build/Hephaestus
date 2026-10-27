@@ -844,6 +844,7 @@ The worker's service account has these permissions in the sandbox namespace, and
 - `pods/log`: `get`.
 - `pods/exec`: `get` and `create`. The client opens an exec as a WebSocket `GET`, and the API server also authorizes it as `create`.
 - Jobs: `get`, `list`, `watch`, `create`, and `delete`.
+- Events and ResourceQuotas: `get` and `list`. A review Pod that the sandbox quota refuses waits for room: the Job controller reports the refusal as an event, and the quota tells whether the Pod can ever fit.
 
 A practice review attempt runs as one Job.
 The Job ends at the attempt's upload deadline plus two minutes, also when its worker is gone, and Kubernetes removes it 15 minutes after it ends.
