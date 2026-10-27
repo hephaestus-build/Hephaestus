@@ -167,12 +167,18 @@ public class ProxyCallsInFlight {
     }
 
     /**
-     * The attempt's last model call that failed, read once: the attempt's end reads it after {@link #settle}.
+     * The attempt's last model call that failed. The attempt's end reads it after {@link #settle}, and forgets it
+     * once the end commits: an end that rolls back is repeated and must read it again.
      *
      * @return {@code null} when no call of the attempt failed on this worker
      */
-    public MentorTurn.@Nullable FailedCall takeLastFailed(UUID sourceId, int number) {
-        return lastFailed.asMap().remove(new Attempt(sourceId, number));
+    public MentorTurn.@Nullable FailedCall lastFailed(UUID sourceId, int number) {
+        return lastFailed.getIfPresent(new Attempt(sourceId, number));
+    }
+
+    /** Forgets the attempt's last failed call once its end committed ({@link #lastFailed}). */
+    public void forgetFailed(UUID sourceId, int number) {
+        lastFailed.invalidate(new Attempt(sourceId, number));
     }
 
     /**

@@ -1203,13 +1203,13 @@ class LlmProxyServiceTest extends BaseUnitTest {
                             .asString())
                     .isEqualTo("upstream_stalled");
             assertThat(String.valueOf(result.getBody())).contains("no first byte within 1 seconds");
-            assertThat(streamingCalls.takeLastFailed(
+            assertThat(streamingCalls.lastFailed(
                             routing.sourceId(), routing.attempt().number()))
                     .isEqualTo(new MentorTurn.FailedCall(LlmProxyService.UPSTREAM_STALLED, null));
         }
 
         @Test
-        @DisplayName("a Heph turn attempt remembers its last failed model call by kind and status, once")
+        @DisplayName("a Heph turn attempt remembers its last failed model call by kind and status until its end forgets it")
         void aHephAttemptRemembersItsLastFailedModelCall() throws Exception {
             ProxyRouting routing = hephTurnRouting(upstream.url("/v1").toString());
             authenticate(routing);
@@ -1229,7 +1229,7 @@ class LlmProxyServiceTest extends BaseUnitTest {
             controllerProxy(new MockHttpServletResponse());
             UUID turnId = routing.sourceId();
             int attempt = routing.attempt().number();
-            assertThat(streamingCalls.takeLastFailed(turnId, attempt))
+            assertThat(streamingCalls.lastFailed(turnId, attempt))
                     .isEqualTo(new MentorTurn.FailedCall(LlmProxyService.UPSTREAM_STATUS, 503));
 
             upstream.enqueue(new MockResponse.Builder()
@@ -1246,11 +1246,15 @@ class LlmProxyServiceTest extends BaseUnitTest {
                     .build());
             controllerProxy(new MockHttpServletResponse());
 
-            assertThat(streamingCalls.takeLastFailed(turnId, attempt))
+            assertThat(streamingCalls.lastFailed(turnId, attempt))
                     .as("the stream that went silent is the last failed call")
                     .isEqualTo(new MentorTurn.FailedCall("upstream_idle", 200));
-            assertThat(streamingCalls.takeLastFailed(turnId, attempt))
-                    .as("the attempt's end read it")
+            assertThat(streamingCalls.lastFailed(turnId, attempt))
+                    .as("an end that rolled back reads it again")
+                    .isEqualTo(new MentorTurn.FailedCall("upstream_idle", 200));
+            streamingCalls.forgetFailed(turnId, attempt);
+            assertThat(streamingCalls.lastFailed(turnId, attempt))
+                    .as("the committed end forgot it")
                     .isNull();
         }
 
@@ -1275,7 +1279,7 @@ class LlmProxyServiceTest extends BaseUnitTest {
 
             controllerProxy(new MockHttpServletResponse());
 
-            assertThat(streamingCalls.takeLastFailed(
+            assertThat(streamingCalls.lastFailed(
                             routing.sourceId(), routing.attempt().number()))
                     .isNull();
         }

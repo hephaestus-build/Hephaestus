@@ -229,6 +229,7 @@ class LlmProxyService {
             HttpHeaders incomingHeaders,
             byte[] body) {
         accounting.recordGatewayRequest(body.length);
+        ProxyCallsInFlight.Call inFlight = callsInFlight.begin(routing.attempt());
 
         MDC.put("proxy.principal", routing.principalDescription());
         MDC.put("proxy.apiProtocol", routing.apiProtocol());
@@ -245,7 +246,6 @@ class LlmProxyService {
         if (routing.workspaceId() != null) span.tag("hephaestus.workspace.id", routing.workspaceId());
         long started = System.nanoTime();
         String ended = "error";
-        ProxyCallsInFlight.Call inFlight = callsInFlight.begin(routing.attempt());
         try (inFlight;
                 var ignored = tracer.withSpan(span)) {
             var result = forward(routing, protocol, practiceScript, response, incomingHeaders, body, span, inFlight);
@@ -442,7 +442,9 @@ class LlmProxyService {
                 call.failed(new MentorTurn.FailedCall(UPSTREAM_STALLED, null));
                 return errors.providerError(HttpStatus.GATEWAY_TIMEOUT, UPSTREAM_STALLED, stall);
             }
-            call.failed(new MentorTurn.FailedCall(e.getClass().getSimpleName(), null));
+            // An anonymous class has no simple name.
+            String failure = e.getClass().getSimpleName();
+            call.failed(new MentorTurn.FailedCall(failure.isEmpty() ? e.getClass().getName() : failure, null));
             if (e instanceof WebClientRequestException) {
                 log.warn(
                         "LLM upstream unreachable for principal {}: reason={}",

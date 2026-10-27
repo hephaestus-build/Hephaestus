@@ -421,6 +421,27 @@ class MentorTurnCompletionIntegrationTest extends AbstractWorkspaceIntegrationTe
     }
 
     @Test
+    void shouldCutACauseAndACallKindToTheirColumnsAndStillEndTheTurn() {
+        MentorTurn turn = admittedTurn(Duration.ofMinutes(5));
+
+        completion.end(
+                turn.getId(),
+                turn.getAttempt(),
+                WORKER,
+                new MentorTurnCompletion.Ending(
+                        MentorTurn.Status.FAILED,
+                        List.of(),
+                        "Heph could not finish this reply.",
+                        "c".repeat(300),
+                        new MentorTurn.FailedCall("k".repeat(100), null)));
+
+        MentorTurn row = turnRepository.findById(turn.getId()).orElseThrow();
+        assertThat(row.getStatus()).isEqualTo(MentorTurn.Status.FAILED);
+        assertThat(row.getFailureCause()).isEqualTo("c".repeat(200));
+        assertThat(row.getFailedCall()).isEqualTo("k".repeat(64));
+    }
+
+    @Test
     void shouldRecordNoFailureOnTheTurnWhenItEndsDone() {
         MentorTurn turn = admittedTurn(Duration.ofMinutes(5));
 

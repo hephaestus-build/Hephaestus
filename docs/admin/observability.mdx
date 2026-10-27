@@ -479,7 +479,7 @@ A high `failed` share with no lease expiries shows one of these causes:
 - Turns cannot start a host.
 - Turns get an error from the model.
 
-The worker logs each failed attempt at `WARN` as `Heph turn <id> attempt <n> failed: <reason>; last failed model call: <call>`.
+The worker logs each failed attempt at `WARN` as `Heph turn <id> attempt <n> failed: <reason>; last failed model call: <kind> <status>`, or `none`.
 The reason tells which of these happened, for example `its Heph host reported ERROR: model_error`.
 The Heph host reports a kind of failure from a closed set, for example `model_error`, `context_overflow` or `upstream_stalled`.
 It does not report the error text of the model provider, a tool or the worker, or the messages of the conversation.
@@ -498,7 +498,8 @@ The turn row keeps the cause, so the cause stays after the worker stops:
 | `failed_call_status` | The HTTP status that the provider sent for that call, if it sent one |
 | `llm_calls` | The model calls of the attempt that completed |
 
-The first three columns are empty for a turn that did not fail.
+The Heph host's end, the worker's own end and a lease that expires write the first three columns.
+They are empty for a turn that did not fail, and for a turn that admission declines.
 
 A turn that admission declines, for example because the budget is spent, is logged at `INFO` as `was declined at its start`.
 A turn whose second attempt loses its lease fails on the server role, which logs it at `INFO` as `Mentor turn lease expired`.

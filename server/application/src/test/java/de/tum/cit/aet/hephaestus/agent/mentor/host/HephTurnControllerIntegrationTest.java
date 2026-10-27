@@ -537,9 +537,17 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
         assertThat(ended.getFailureCause()).isEqualTo("its Heph host reported ERROR: provider_unavailable");
         assertThat(ended.getFailedCall()).isEqualTo("upstream_status");
         assertThat(ended.getFailedCallStatus()).isEqualTo(503);
-        assertThat(callsInFlight.takeLastFailed(turn.getId(), turn.getAttempt()))
-                .as("the end read it once")
+        assertThat(callsInFlight.lastFailed(turn.getId(), turn.getAttempt()))
+                .as("the committed end forgot it")
                 .isNull();
+    }
+
+    @Test
+    void shouldRecordAHostDetailOutsideTheClosedSetAsUnrecognized() throws Exception {
+        call("POST", "end", turn.getAttempt(), """
+                        {"outcome":"FAILED","entries":[],"reason":"ERROR","detail":"provider said: rate limited for alice@example.com"}""").andExpect(status().isNoContent());
+
+        assertThat(reloaded().getFailureCause()).isEqualTo("its Heph host reported ERROR: unrecognized");
     }
 
     @Test

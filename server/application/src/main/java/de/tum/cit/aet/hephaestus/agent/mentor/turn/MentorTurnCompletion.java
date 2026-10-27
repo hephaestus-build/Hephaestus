@@ -117,7 +117,7 @@ public class MentorTurnCompletion {
                     turnId,
                     attempt,
                     cause,
-                    lastFailedCall == null ? "none" : lastFailedCall));
+                    lastFailedCall == null ? "none" : lastFailedCall.describe()));
         }
         bill(turn, attempt, true);
         if (turn.getSurface() == MentorTurn.Surface.APP || turn.getStatus() != MentorTurn.Status.DONE) {

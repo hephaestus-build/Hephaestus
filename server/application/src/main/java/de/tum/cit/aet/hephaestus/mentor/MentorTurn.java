@@ -72,7 +72,13 @@ public class MentorTurn implements Persistable<UUID> {
      *     {@code upstream_stalled} or {@code upstream_status}
      * @param status the HTTP status the provider answered; {@code null} when it answered none
      */
-    public record FailedCall(String kind, @Nullable Integer status) {}
+    public record FailedCall(String kind, @Nullable Integer status) {
+
+        /** The kind, and the status when the provider answered one, for a log line. */
+        public String describe() {
+            return status == null ? kind : kind + " " + status;
+        }
+    }
 
     /** Where the developer asked. */
     public enum Surface {

@@ -281,7 +281,8 @@ public class HephTurnController {
                             entries,
                             error,
                             cause,
-                            callsInFlight.takeLastFailed(turn.turnId(), turn.attempt())));
+                            callsInFlight.lastFailed(turn.turnId(), turn.attempt())));
+            callsInFlight.forgetFailed(turn.turnId(), turn.attempt());
         } finally {
             contexts.forget(turn);
             dispatcher.ended(turn.turnId(), turn.attempt());
