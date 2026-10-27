@@ -437,7 +437,7 @@ public class KubernetesPods {
      * A sandbox container's bounds. It requests its whole memory limit, so that the node never overcommits it. Its CPU
      * limit is a share of CPU time, as on Docker, not a reserved core: it requests a tenth of it ({@link #cpuRequest}).
      */
-    private static ResourceRequirements resources(ResourceLimits limits) {
+    static ResourceRequirements resources(ResourceLimits limits) {
         long millicores = Math.max(1, Math.round(limits.cpus() * 1000));
         Quantity memory = new Quantity(Long.toString(limits.memoryBytes()));
         return new ResourceRequirementsBuilder()

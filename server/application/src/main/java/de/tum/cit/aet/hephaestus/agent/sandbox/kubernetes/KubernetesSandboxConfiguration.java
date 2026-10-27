@@ -109,8 +109,15 @@ public class KubernetesSandboxConfiguration {
             KubernetesReviewJobs reviewJobs,
             KubernetesWorker worker,
             KubernetesLiveWorkers liveWorkers,
-            SandboxExits exits) {
-        return new KubernetesSandboxBackend(pods, reviewJobs, worker, liveWorkers, exits);
+            SandboxExits exits,
+            KubernetesClient sandboxKubernetesClient) {
+        return new KubernetesSandboxBackend(
+                pods,
+                reviewJobs,
+                worker,
+                liveWorkers,
+                exits,
+                new KubernetesSandboxQuota(sandboxKubernetesClient, worker.namespace()));
     }
 
     @Bean(destroyMethod = "close")

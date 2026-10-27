@@ -796,6 +796,12 @@ The chart creates no namespace.
 It writes these objects into it:
 
 - A quota for all sandboxes. Set `worker.sandbox.quota.enabled=false` to manage the quota yourself.
+  A worker claims a practice review only when every quota of the sandbox namespace has room for the review's Pod.
+  It counts the reviews that it claimed but has not started yet.
+  Otherwise the review stays queued.
+  A scoped quota does not hold a review back, and neither do quotas that the worker cannot read.
+  A Heph sandbox or another worker can still take the room after the claim.
+  The quota then refuses the review's Pod, and the review is tried again.
 - A deny-all policy for ingress and egress.
 - One more policy that lets review and host sandboxes reach port 8081 of the worker Pods, and nothing else.
   Those sandboxes carry the label `hephaestus.build/sandbox-kind` from the runtime.
@@ -1037,6 +1043,7 @@ While `webhook.replicas` is 0, provider deliveries reach no receiver, and each p
 | A worker stays unready, and its log says that the cluster does not hold the sandbox boundary | The isolation probe failed. The log names each failed check. A failed egress check usually means that the network plugin does not enforce NetworkPolicy, or that `networkPolicy.kubernetesApi` names an address that the plugin does not see. |
 | A worker log says that the network policy did not filter a sandbox Pod in time | The network plugin applied the policy of a new Pod more than 60 seconds after the Pod started. The attempt is tried again. |
 | A sandbox Pod stays `Pending` with a quota error | The sandbox namespace's quota is full. Raise `worker.sandbox.quota`, or lower the workers' capacity. |
+| Reviews stay queued, and the worker log says that reviews wait for room in the sandbox quota | The Heph host and the turn sandboxes hold the quota. The reviews start when a sandbox ends. To run them sooner, raise `worker.sandbox.quota` or lower `worker.hephTurns`. |
 | A new Pod restarts during an upgrade, and its log names a pending change set | It waited 10 minutes for the schema. Check the migration Job's log. A longer migration needs the [database maintenance](#database-maintenance) procedure. |
 | A backup Job fails with `unable to find primary cluster` | The Job cannot reach pgBackRest's TLS server on port 8432 of the PostgreSQL Service, or its client certificate is not for `hephaestus-backup` from `ca.crt`. |
 | PostgreSQL's volume fills | A failed WAL archive keeps the WAL on the volume. Check the latest backup Job's log and the bucket's credentials. |

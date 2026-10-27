@@ -316,7 +316,7 @@ class KubernetesSandboxLiveTest {
         meters = new SimpleMeterRegistry();
         reviewJobs = configuration.kubernetesReviewJobs(client, worker);
         exits = configuration.sandboxExits(pods, meters);
-        backend = configuration.kubernetesSandboxBackend(pods, reviewJobs, worker, liveWorkers, exits);
+        backend = configuration.kubernetesSandboxBackend(pods, reviewJobs, worker, liveWorkers, exits, client);
         reviews = new SandboxAttemptRunner(backend, workspaces, gateway.sessions(), meters);
         hosts = new SandboxHosts(backend, workspaces, gateway.sessions(), agentImage.reference());
         turns = configuration.kubernetesExecSandboxes(client, pods, worker, agentImage, liveWorkers, exits);
@@ -521,7 +521,12 @@ class KubernetesSandboxLiveTest {
             Pod pod = awaitPodOf(job, candidate -> KubernetesPods.running(candidate, KubernetesPods.RUNTIME), running);
 
             new KubernetesSandboxBackend(
-                            pods, reviewJobs, worker, liveWorkers, new SandboxExits(pods, new SimpleMeterRegistry()))
+                            pods,
+                            reviewJobs,
+                            worker,
+                            liveWorkers,
+                            new SandboxExits(pods, new SimpleMeterRegistry()),
+                            new KubernetesSandboxQuota(client, namespace()))
                     .kill(new SandboxBackend.Handle(name));
 
             SandboxResult result = running.get(pods.stopGraceSeconds() + 90, TimeUnit.SECONDS);

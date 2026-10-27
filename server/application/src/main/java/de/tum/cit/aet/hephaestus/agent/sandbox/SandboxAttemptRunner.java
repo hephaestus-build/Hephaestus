@@ -3,12 +3,14 @@ package de.tum.cit.aet.hephaestus.agent.sandbox;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
+import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ResourceLimits;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxBackend;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxCancelledException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxInitializationException;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxManager;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxResult;
+import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxRoom;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxSpec;
 import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
 import io.micrometer.core.instrument.Counter;
@@ -116,6 +118,11 @@ public class SandboxAttemptRunner implements SandboxManager {
     @Override
     public boolean ready() {
         return backend.ready();
+    }
+
+    @Override
+    public int roomFor(ResourceLimits limits) {
+        return backend instanceof SandboxRoom room ? room.roomFor(limits) : Integer.MAX_VALUE;
     }
 
     @Override

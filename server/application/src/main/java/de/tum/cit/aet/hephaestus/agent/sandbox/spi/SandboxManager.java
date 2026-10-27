@@ -29,6 +29,11 @@ public interface SandboxManager {
         return true;
     }
 
+    /** How many more sandboxes of these limits the runtime admits now; see {@link SandboxRoom}. */
+    default int roomFor(ResourceLimits limits) {
+        return Integer.MAX_VALUE;
+    }
+
     /**
      * Execute a sandboxed container and return the result.
      *
