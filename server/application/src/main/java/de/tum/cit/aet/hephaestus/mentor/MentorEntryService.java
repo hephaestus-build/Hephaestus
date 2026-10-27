@@ -315,10 +315,23 @@ public class MentorEntryService {
                 draft.slackTs());
     }
 
+    /**
+     * Publishes the turn's change. An ended turn no longer holds back the questions queued after it in its
+     * conversation, so their changes are published too: each now waits for a free Heph or starts.
+     */
+    void turnChanged(MentorTurn turn) {
+        events.publishEvent(MentorLedgerEvents.TurnChanged.of(turn));
+        if (turn.getStatus().isTerminal()) {
+            turns.findByWorkspaceIdAndConversationIdAndStatus(
+                            turn.getWorkspaceId(), turn.getConversationId(), MentorTurn.Status.QUEUED)
+                    .forEach(next -> events.publishEvent(MentorLedgerEvents.TurnChanged.of(next)));
+        }
+    }
+
     /** Stops a turn the caller locked, unless it ended. */
     private void stop(MentorTurn turn) {
         if (turn.stopIfActive(clock.instant())) {
-            events.publishEvent(MentorLedgerEvents.TurnChanged.of(turn));
+            turnChanged(turn);
         }
     }
 

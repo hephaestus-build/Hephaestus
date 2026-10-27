@@ -538,16 +538,7 @@ public class MentorTurnService {
         return waits(turn.getWorkspaceId(), List.of(turn)).get(turn.getId());
     }
 
-    /**
-     * Publishes the turn's change. An ended turn no longer holds back the questions queued after it in its
-     * conversation, so their changes are published too: each now waits for a free Heph or starts.
-     */
     private void changed(MentorTurn turn) {
-        events.publishEvent(MentorLedgerEvents.TurnChanged.of(turn));
-        if (turn.getStatus().isTerminal()) {
-            turns.findByWorkspaceIdAndConversationIdAndStatus(
-                            turn.getWorkspaceId(), turn.getConversationId(), MentorTurn.Status.QUEUED)
-                    .forEach(next -> events.publishEvent(MentorLedgerEvents.TurnChanged.of(next)));
-        }
+        entryService.turnChanged(turn);
     }
 }

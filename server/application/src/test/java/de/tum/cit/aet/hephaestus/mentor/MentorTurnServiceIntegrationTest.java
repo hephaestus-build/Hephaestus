@@ -299,6 +299,20 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
     }
 
     @Test
+    void shouldPublishTheFollowUpAgainWhenTheQuestionBeforeItIsDeleted() {
+        MentorTurnService.Submission first = ask(main, "First");
+        MentorTurnService.Submission followUp = ask(main, "Follow-up");
+        published.clear();
+
+        entryService.deleteMessage(workspace.getId(), first.question().getId());
+
+        assertThat(published.stream(MentorLedgerEvents.TurnChanged.class))
+                .extracting(MentorLedgerEvents.TurnChanged::turnId, MentorLedgerEvents.TurnChanged::status)
+                .contains(tuple(followUp.turn().getId(), MentorTurn.Status.QUEUED));
+        assertThat(turns.waitingFor(stored(followUp.turn()))).isNull();
+    }
+
+    @Test
     void shouldRejectAWriteWhenTheAttemptNoLongerHoldsTheLease() {
         ask(main, "Question");
         MentorTurn running = turns.claimNext(WORKER, LEASE).orElseThrow();
