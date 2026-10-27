@@ -191,6 +191,36 @@ class GitLabIssueMessageHandlerIntegrationTest extends BaseIntegrationTest {
 
             // Re-reading a closed issue is no event: its close is reported once.
             assertThat(eventListener.ofType(ScmDomainEvent.IssueClosed.class)).hasSize(1);
+
+            // Reopened and closed again between two syncs: the new close is a new event.
+            processor.processFromSync(
+                    new GitLabIssueProcessor.SyncIssueData(
+                            closed.globalId(),
+                            closed.iid(),
+                            closed.title(),
+                            closed.description(),
+                            "closed",
+                            false,
+                            closed.webUrl(),
+                            closed.createdAt(),
+                            "2026-01-31T19:00:00Z",
+                            "2026-01-31T19:00:00Z",
+                            null,
+                            null,
+                            null,
+                            null,
+                            null,
+                            null,
+                            0,
+                            null,
+                            null,
+                            null,
+                            null,
+                            null),
+                    savedRepo,
+                    null);
+
+            assertThat(eventListener.ofType(ScmDomainEvent.IssueClosed.class)).hasSize(2);
         }
 
         @Test
