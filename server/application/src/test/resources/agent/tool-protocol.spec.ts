@@ -532,6 +532,60 @@ void test("an exec streams its output and ends with its exit code", async () => 
 	assert.equal(readFileSync(exit.fullOutputPath, "utf8"), "hello\n");
 });
 
+void test("invalid output limits use the server default without closing parallel calls", async () => {
+	for (const maxOutputBytes of [
+		1000.5,
+		Number.NaN,
+		Number.POSITIVE_INFINITY,
+		Number.MAX_SAFE_INTEGER + 1,
+	]) {
+		const tools = await ToolClient.open(socketPath, nonce);
+		let bytes = 0;
+		try {
+			const [exit, page] = await Promise.all([
+				tools.exec(
+					{ command: "head -c 4096 /dev/zero", cwd: workspace, timeoutMs: 1000, maxOutputBytes },
+					(chunk) => {
+						bytes += chunk.length;
+					},
+				),
+				tools.read(path.join(workspace, "notes.txt"), 1, 1),
+			]);
+			assert.equal(exit.code, 0);
+			assert.equal(exit.truncated, false);
+			assert.equal(bytes, 4096);
+			assert.equal(page.text, "one");
+		} finally {
+			tools.close();
+		}
+	}
+});
+
+void test("unencodable requests leave their slots free for a later valid request", async () => {
+	const tools = await ToolClient.open(socketPath, nonce);
+	const refusals: string[] = [];
+	try {
+		for (let call = 0; call < LIMITS.inFlight; call += 1) {
+			await assert.rejects(
+				tools.read(`/${"x".repeat(LIMITS.headerBytes)}`, 1, 1),
+				(error: unknown) => {
+					assert.ok(error instanceof ToolProtocolError);
+					refusals.push(error.code);
+					return true;
+				},
+			);
+		}
+		const page = await tools.read(path.join(workspace, "notes.txt"), 1, 1);
+		assert.equal(page.text, "one");
+		assert.deepEqual(
+			refusals,
+			Array.from({ length: LIMITS.inFlight }, () => "request"),
+		);
+	} finally {
+		tools.close();
+	}
+});
+
 void test("an argv runs one program with no shell", async () => {
 	const chunks: Buffer[] = [];
 	const exit = await client.exec(
@@ -1457,6 +1511,23 @@ void test("the loop holds the tools side to the call's own output bound", async 
 	await assert.rejects(
 		tools.exec(
 			{ command: "x", cwd: "/workspace", timeoutMs: 1000, maxOutputBytes: 1000 },
+			() => undefined,
+		),
+		refusal("protocol"),
+	);
+});
+
+void test("a NaN output limit still enforces the default bound against a hostile peer", async () => {
+	const frame = Buffer.alloc(LIMITS.bodyBytes);
+	const tools = await hostile((request, socket) => {
+		for (let sent = 0; sent <= LIMITS.execStreamBytes; sent += frame.length) {
+			socket.write(encode({ type: "out", id: request.id }, frame));
+		}
+		socket.write(encode({ type: "exit", id: request.id, code: 0 }));
+	});
+	await assert.rejects(
+		tools.exec(
+			{ command: "x", cwd: "/workspace", timeoutMs: 1000, maxOutputBytes: Number.NaN },
 			() => undefined,
 		),
 		refusal("protocol"),

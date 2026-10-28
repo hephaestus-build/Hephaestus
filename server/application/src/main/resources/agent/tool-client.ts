@@ -128,8 +128,9 @@ export class ToolClient {
 		signal?: AbortSignal,
 	): Promise<ExecExit> {
 		const id = randomUUID();
+		const requestHeader = { ...request, type: "exec", id };
 		const bound = Math.min(
-			request.maxOutputBytes ?? LIMITS.execStreamBytes,
+			integer(requestHeader, "maxOutputBytes") ?? LIMITS.execStreamBytes,
 			LIMITS.execStreamBytes,
 		);
 		let streamed = 0;
@@ -145,28 +146,22 @@ export class ToolClient {
 			}, LIMITS.cancelGraceMs);
 			grace.unref();
 		};
-		const { reply: exit } = this.#request(
-			id,
-			{ ...request, type: "exec", id },
-			FINAL.exec,
-			"out",
-			(frame) => {
-				streamed += frame.body.length;
-				this.#streamedBytes += frame.body.length;
-				if (streamed > bound || this.#streamedBytes > LIMITS.attemptStreamBytes) {
-					throw broken("the tools side streamed more than its bound");
-				}
-				if (outputFailed !== undefined) {
-					return;
-				}
-				try {
-					onOutput(frame.body);
-				} catch (error) {
-					outputFailed = { error };
-					cancel();
-				}
-			},
-		);
+		const { reply: exit } = this.#request(id, requestHeader, FINAL.exec, "out", (frame) => {
+			streamed += frame.body.length;
+			this.#streamedBytes += frame.body.length;
+			if (streamed > bound || this.#streamedBytes > LIMITS.attemptStreamBytes) {
+				throw broken("the tools side streamed more than its bound");
+			}
+			if (outputFailed !== undefined) {
+				return;
+			}
+			try {
+				onOutput(frame.body);
+			} catch (error) {
+				outputFailed = { error };
+				cancel();
+			}
+		});
 		signal?.addEventListener("abort", cancel, { once: true });
 		try {
 			if (signal?.aborted === true) {
@@ -300,9 +295,18 @@ export class ToolClient {
 		if (this.#pending.size >= LIMITS.inFlight) {
 			throw new ToolProtocolError("busy", "Too many tool calls at once.");
 		}
+		let frame: Buffer;
+		try {
+			frame = encode(header);
+		} catch {
+			throw new ToolProtocolError(
+				"request",
+				"The tool request cannot be encoded within its limits.",
+			);
+		}
 		const done = Promise.withResolvers<Frame>();
 		this.#pending.set(id, { final, stream, onStream, done });
-		this.#write(header);
+		this.#socket.write(frame);
 		return { reply: done.promise };
 	}
 
