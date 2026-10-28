@@ -736,11 +736,14 @@ export async function runReviewJob(): Promise<void> {
 	const availableSourceKindValues = [...availableSourceKinds].toSorted();
 	const practiceIndex = readPracticeIndex();
 
-	function declaredSourcesOf(slug: string): DeclaredSources {
+	function declaredSourcesOf(slug: string | null): DeclaredSources {
+		const practice = practiceIndex.find((entry) => entry.slug === slug);
 		return {
-			readable: readableKinds(
-				practiceIndex.find((practice) => practice.slug === slug)?.readsSources ?? [],
-			),
+			// A search that must be exhaustive over a source has to be able to read it.
+			readable: readableKinds([
+				...(practice?.readsSources ?? []),
+				...(practice?.exhaustiveSources ?? []),
+			]),
 			fileKinds: sourceFileSources,
 			contextRoot: taskEnvelope.paths.contextRoot,
 			repositoryRoot: taskEnvelope.paths.repositoryRoot,
@@ -2406,7 +2409,7 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 		const briefs = new Map<string, ReturnType<typeof buildBrief>>();
 		function briefOf(slug: string): ReturnType<typeof buildBrief> {
 			const declared = new Set(
-				practiceIndex.find((practice) => practice.slug === slug)?.readsSources ?? [],
+				practiceIndex.find((practice) => practice.slug === slug)?.readsSources,
 			);
 			const key = JSON.stringify([...declared].toSorted());
 			const known = briefs.get(key);
@@ -2470,9 +2473,7 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 					cacheExtension,
 					// The loop's own tools read only what the practice declares; codemode's calls pass here too.
 					(pi) => {
-						if (practice === null) {
-							return;
-						}
+						// A session with no practice reads only what every session reads.
 						const sources = declaredSourcesOf(practice);
 						pi.on("tool_call", (event) => {
 							if (
@@ -2481,7 +2482,7 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 								event.toolName !== "find" &&
 								event.toolName !== "ls"
 							) {
-								return undefined;
+								return;
 							}
 							const target: unknown = isRecord(event.input) ? event.input.path : undefined;
 							const reason = refusedContextRead(

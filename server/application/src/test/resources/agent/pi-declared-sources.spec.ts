@@ -34,7 +34,10 @@ void test("a diff-only practice cannot read the description, and its refusal nam
 	assert.match(refusal ?? "", /`scm\.pull-request\.core`, which this practice does not declare/u);
 	assert.match(refusal ?? "", /scm\.pull-request\.diff/u);
 	// The derived description view belongs to the description's kind, not to the change.
-	assert.ok(refusedContextRead("read", "work/change/description.authored.md", CWD, diffOnly));
+	assert.notEqual(
+		undefined,
+		refusedContextRead("read", "work/change/description.authored.md", CWD, diffOnly),
+	);
 	assert.equal(refusedContextRead("read", "work/change/diff.patch", CWD, diffOnly), undefined);
 	assert.equal(refusedContextRead("read", "repos/reviewed/src/a.ts", CWD, diffOnly), undefined);
 });
@@ -47,7 +50,7 @@ void test("a declared captured file is readable and searchable, by a relative or
 		undefined,
 	);
 	assert.equal(refusedContextRead("grep", "context/description.md", CWD, withCore), undefined);
-	assert.ok(refusedContextRead("read", "context/comments.json", CWD, withCore));
+	assert.notEqual(undefined, refusedContextRead("read", "context/comments.json", CWD, withCore));
 });
 
 void test("a search over a directory that holds captured files is refused; one over the checkout runs", () => {
@@ -57,14 +60,17 @@ void test("a search over a directory that holds captured files is refused; one o
 		assert.match(refusal ?? "", /would also search captured sources/u, String(target));
 		assert.match(refusal ?? "", /`repos\/reviewed`/u);
 	}
-	assert.ok(refusedContextRead("find", "context", CWD, withCore));
+	assert.notEqual(undefined, refusedContextRead("find", "context", CWD, withCore));
 	assert.equal(refusedContextRead("grep", "repos/reviewed", CWD, withCore), undefined);
 	// A listing shows names, never content.
 	assert.equal(refusedContextRead("ls", "context", CWD, withCore), undefined);
 });
 
 void test("a linked item's text belongs to the linked-items record", () => {
-	assert.ok(refusedContextRead("read", "context/linked_work_items/3.md", CWD, sources([DIFF])));
+	assert.notEqual(
+		undefined,
+		refusedContextRead("read", "context/linked_work_items/3.md", CWD, sources([DIFF])),
+	);
 	assert.equal(
 		refusedContextRead(
 			"read",
@@ -105,4 +111,21 @@ void test("a result that cites or consulted an undeclared kind names it", () => 
 		undeclaredCitedKinds({ citations: [{ sourceKind: "scm.repository.tree" }] }, readableKinds([])),
 		[],
 	);
+});
+
+void test("the guard reads the path the tool opens: an @ prefix does not get past it", () => {
+	const diffOnly = sources([DIFF]);
+	assert.notEqual(undefined, refusedContextRead("read", "@context/comments.json", CWD, diffOnly));
+	assert.notEqual(undefined, refusedContextRead("grep", "@context", CWD, diffOnly));
+});
+
+void test("a path that no captured source owns is read, and a captured file outside the context root is guarded", () => {
+	const withChat: DeclaredSources = {
+		...sources([DIFF]),
+		fileKinds: new Map([["context/chat/thread.json", "slack.conversation.thread"]]),
+	};
+	assert.equal(refusedContextRead("read", "context/change.json", CWD, withChat), undefined);
+	assert.notEqual(undefined, refusedContextRead("read", "context/chat/thread.json", CWD, withChat));
+	assert.notEqual(undefined, refusedContextRead("grep", "context/chat", CWD, withChat));
+	assert.equal(refusedContextRead("grep", "context/scm", CWD, withChat), undefined);
 });

@@ -23,7 +23,7 @@ export interface DeclaredSources {
 	repositoryRoot: string;
 }
 
-/** The kind that owns a workspace-relative path, or undefined for a path outside captured sources. */
+/** The kind that owns a workspace-relative path, or undefined for a path that no captured source owns. */
 function kindOf(relative: string, sources: DeclaredSources): string | undefined {
 	const known = sources.fileKinds.get(relative);
 	if (known !== undefined) {
@@ -32,7 +32,7 @@ function kindOf(relative: string, sources: DeclaredSources): string | undefined 
 	if (relative === `${CHANGE_ROOT}/description.authored.md`) {
 		return sources.fileKinds.get(`${sources.contextRoot}/description.md`);
 	}
-	if (relative === CHANGE_ROOT || relative.startsWith(`${CHANGE_ROOT}/`)) {
+	if (relative.startsWith(`${CHANGE_ROOT}/`)) {
 		return DIFF_SOURCE;
 	}
 	if (relative.startsWith(`${sources.contextRoot}/linked_work_items/`)) {
@@ -42,16 +42,32 @@ function kindOf(relative: string, sources: DeclaredSources): string | undefined 
 }
 
 function inside(relative: string, root: string): boolean {
-	return relative === root || relative.startsWith(`${root}/`);
+	return root === "" || relative === root || relative.startsWith(`${root}/`);
+}
+
+/** The captured paths, files or directories, whose kind the practice's session may not read. */
+function unreadable(sources: DeclaredSources): string[] {
+	const derived = [
+		[
+			`${CHANGE_ROOT}/description.authored.md`,
+			kindOf(`${CHANGE_ROOT}/description.authored.md`, sources),
+		],
+		[
+			`${sources.contextRoot}/linked_work_items`,
+			sources.fileKinds.get(`${sources.contextRoot}/linked_work_items.json`),
+		],
+	] as const;
+	return [...sources.fileKinds, ...derived]
+		.filter(([, kind]) => kind !== undefined && !sources.readable.has(kind))
+		.map(([owned]) => owned);
 }
 
 /**
  * Why a read or search of `target` is refused for this practice, or undefined when it may run. `target`
  * is the path the tool received, relative to `cwd`.
- * - A listing shows names only, so it always runs.
- * - A read of a captured file needs its kind declared.
- * - A search of a declared captured file runs. A search of any directory that holds captured files is
- *   refused, because it would read the undeclared ones too.
+ * - A listing shows names, not content, so it always runs.
+ * - A read of a captured file needs its kind readable. A path that no captured source owns is read.
+ * - A search is refused when its target holds a captured file that the practice may not read.
  */
 export function refusedContextRead(
 	tool: "read" | "grep" | "find" | "ls",
@@ -62,23 +78,20 @@ export function refusedContextRead(
 	if (tool === "ls") {
 		return undefined;
 	}
-	const relative = path.relative(cwd, path.resolve(cwd, target ?? "."));
-	const roots = [sources.contextRoot, CHANGE_ROOT];
+	// Pi's tools strip a leading @ from a path; the guard reads the path the tool will open.
+	const given = (target ?? ".").replace(/^@/u, "");
+	const relative = path.relative(cwd, path.resolve(cwd, given));
 	const kind = kindOf(relative, sources);
-	const declaredFile = kind !== undefined && sources.readable.has(kind) && relative !== CHANGE_ROOT;
-	if (tool === "read") {
-		if (!roots.some((root) => inside(relative, root)) || declaredFile) {
+	if (kind !== undefined) {
+		if (sources.readable.has(kind)) {
 			return undefined;
 		}
-		return `${target} is ${kind === undefined ? "not a captured source" : `\`${kind}\``}, which this practice does not declare. Read only its declared sources: ${[...sources.readable].toSorted().join(", ")}.`;
+		return `${given} is \`${kind}\`, which this practice does not declare. Read only: ${[...sources.readable].toSorted().join(", ")}.`;
 	}
-	const holdsCaptured = roots.some(
-		(root) => relative === "" || inside(root, relative) || inside(relative, root),
-	);
-	if (!holdsCaptured || declaredFile) {
+	if (tool === "read" || !unreadable(sources).some((owned) => inside(owned, relative))) {
 		return undefined;
 	}
-	return `${tool} over ${target ?? "."} would also search captured sources this practice does not declare. Search one of: ${declaredRoots(
+	return `${tool} over ${given} would also search captured sources this practice does not declare. Search one of: ${declaredRoots(
 		sources,
 	)
 		.map((root) => `\`${root}\``)
@@ -116,7 +129,7 @@ export function undeclaredCitedKinds(candidate: unknown, readable: ReadonlySet<s
 				}
 			}
 		}
-		const evidence = candidate.evidence;
+		const { evidence } = candidate;
 		if (
 			isRecord(evidence) &&
 			isRecord(evidence.search) &&

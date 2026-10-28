@@ -3,7 +3,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 
 import { CHANGE_ROOT } from "./pi-change.ts";
-import { DIFF_SOURCE } from "./work/practice-scripts/kits/scm/sources.ts";
+import { DIFF_SOURCE, TREE_SOURCE } from "./work/practice-scripts/kits/scm/sources.ts";
 
 export interface BriefLimits {
 	/** Cap both source bytes read and rendered characters per file. */
@@ -158,8 +158,9 @@ export function buildBrief(
 	const blocks: { text: string; omission: string; path: string }[] = [];
 	const withheld: string[] = [];
 	// Name declared sources the capture lacks, so the model reports a capture gap, not absent behavior.
+	// The change and the checkout are read through Git, not from the brief.
 	const absent = [...scope.declared]
-		.filter((kind) => !scope.available.has(kind))
+		.filter((kind) => !scope.available.has(kind) && kind !== DIFF_SOURCE && kind !== TREE_SOURCE)
 		.toSorted()
 		.map((kind) => `\`${kind}\``);
 	const empty: string[] = [];

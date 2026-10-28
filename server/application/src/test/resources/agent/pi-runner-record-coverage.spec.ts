@@ -339,3 +339,21 @@ for (const mode of ["supplied", "omitted", "not-in-brief"] as const) {
 		}
 	});
 }
+
+void test("a session that cites a source its practice does not declare is refused with what it may cite", async (t) => {
+	const cwd = mkdtempSync(path.join(tmpdir(), "pi-undeclared-citation-"));
+	t.after(() => rmSync(cwd, { recursive: true, force: true }));
+	stagePractices(cwd, [{ slug: "test-practice", readsSources: ["scm.pull-request.diff"] }]);
+	// The candidate cites the pull request record, which a diff-only practice does not declare.
+	const exit = await runRunner(
+		cwd,
+		{},
+		{ PI_HOST_SESSION_CANDIDATE: JSON.stringify(SESSION_CANDIDATE) },
+	);
+	assert.equal(exit.status, 1, exit.stderr);
+	assert.match(
+		exit.stderr,
+		/cites or consulted `scm\.pull-request\.core`, which test-practice does not declare\. Cite only: scm\.pull-request\.diff, scm\.repository\.tree\./u,
+	);
+	assert.equal(capturedLines(cwd, "submitted").length, 0);
+});
