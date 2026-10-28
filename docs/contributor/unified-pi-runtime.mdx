@@ -163,8 +163,15 @@ The host stores no result for it.
 In the stopped turn, Pi gives each open tool call a result when it builds a request (`transformMessages`).
 For later turns, the path builder removes the tool calls from the cut-off answer (`MentorContextPathBuilder.keepCutOffAnswer`).
 
-The deadline of a turn is the LLM timeout of the conversation model binding, at most five minutes (`AgentBindingLimits.MAX_HEPH_TURN_SECONDS`).
-A worker runs few turns at once, so a longer turn would keep every question queued behind it waiting.
+The deadline of a turn is the LLM timeout of the conversation model binding, at most 15 minutes (`AgentBindingLimits.MAX_HEPH_TURN_SECONDS`).
+The deadline is the hard ceiling of a turn that keeps making progress.
+A stall ends a turn earlier: the worker's LLM proxy cuts a silent model call (`LlmProxyService`, `upstream_stalled`), and the host ends the turn as `STALLED`.
+Set the ceiling above the time of a few of the slowest model calls, because an answer takes a few calls.
+A worker runs few turns at once, so a turn as long as a review would keep every question queued behind it waiting.
+
+The proxy puts no stream limit on a conversation call.
+The idle bounds and the turn's stop end the call, and its exchange waits at most the ceiling.
+
 At the deadline, the worker sends `stop` with the reason `deadline`.
 
 If the host does not end the turn within `HephTurnDispatcher.STOP_GRACE` after a `developer` or `deadline` stop, the worker ends it.
