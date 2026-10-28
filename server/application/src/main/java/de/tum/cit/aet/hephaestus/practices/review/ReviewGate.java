@@ -1,11 +1,14 @@
 package de.tum.cit.aet.hephaestus.practices.review;
 
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ItemDescriptor;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemEventName;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemSnapshot;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewRequestReason;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
+import de.tum.cit.aet.hephaestus.practices.PracticeItemOptions;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
+import de.tum.cit.aet.hephaestus.practices.UnofferedItemCapabilities;
 import de.tum.cit.aet.hephaestus.practices.model.Practice;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewOrigin;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewedByKind;
@@ -25,6 +28,7 @@ import tools.jackson.databind.json.JsonMapper;
 @RequiredArgsConstructor
 public class ReviewGate {
     private final PracticeRepository practices;
+    private final PracticeItemOptions items;
     private final JsonMapper json;
 
     @Transactional(readOnly = true)
@@ -38,11 +42,12 @@ public class ReviewGate {
             throw new IllegalArgumentException("The item belongs to another workspace.");
         var refusal = refusal(workspace, origin);
         if (refusal.isPresent()) return refusal.orElseThrow();
+        var descriptor = items.require(item.item().kind());
         var matched = practices
                 .findByWorkspaceIdAndKind(workspace.getId(), item.item().kind())
                 .stream()
                 .filter(p -> selected.isEmpty() || selected.contains(p.getId()))
-                .filter(p -> runnable(p, item.state(), origin, event))
+                .filter(p -> runnable(p, descriptor, item.state(), origin, event))
                 .toList();
         if (matched.isEmpty())
             return new GateDecision.Skip("No practice can review this item.", ReviewRequestReason.NO_ACTIVE_PRACTICE);
@@ -70,10 +75,20 @@ public class ReviewGate {
         return Optional.empty();
     }
 
+    /**
+     * Whether the practice runs on this occasion. A stored version is not revalidated, so a practice whose events or
+     * About role the item kind does not offer is never selected: capture would withhold it on every review and leave
+     * each review partial. Its practice page names the definition error instead.
+     */
     private boolean runnable(
-            Practice practice, Map<String, String> state, ReviewOrigin origin, @Nullable ItemEventName event) {
+            Practice practice,
+            ItemDescriptor descriptor,
+            Map<String, String> state,
+            ReviewOrigin origin,
+            @Nullable ItemEventName event) {
         var definition = json.convertValue(practice.getCurrentVersion().getDefinition(), PracticeDefinition.class);
         if (definition.reviewedBy().by() != ReviewedByKind.HEPHAESTUS) return false;
+        if (UnofferedItemCapabilities.of(descriptor, definition) != null) return false;
         if (origin != ReviewOrigin.EVENT) return true;
         return event != null
                 && definition.reviewOn().events().contains(event)

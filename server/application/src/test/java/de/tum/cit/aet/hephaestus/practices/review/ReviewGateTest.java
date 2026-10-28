@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.integration.core.framework.ItemDescriptorRegistry;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemEventName;
@@ -13,8 +14,12 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.ItemRef;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemSnapshot;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewRequestReason;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.capture.ScmCaptureFixtures;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.item.IssueItemDescriptor;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.item.PullRequestItemDescriptor;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.item.PullRequestReviewItemDescriptor;
 import de.tum.cit.aet.hephaestus.practices.DefinitionTestFixtures;
 import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
+import de.tum.cit.aet.hephaestus.practices.PracticeItemOptions;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.ReviewLimit;
 import de.tum.cit.aet.hephaestus.practices.ReviewOn;
@@ -38,7 +43,10 @@ import tools.jackson.databind.json.JsonMapper;
 @Tag("unit")
 class ReviewGateTest {
     private final PracticeRepository practices = mock(PracticeRepository.class);
-    private final ReviewGate gate = new ReviewGate(practices, new JsonMapper());
+    // The registered descriptors: selection reads the same offered events and roles as authoring and capture.
+    private final PracticeItemOptions items = new PracticeItemOptions(new ItemDescriptorRegistry(List.of(
+            new PullRequestItemDescriptor(), new PullRequestReviewItemDescriptor(), new IssueItemDescriptor())));
+    private final ReviewGate gate = new ReviewGate(practices, items, new JsonMapper());
     private final Workspace workspace = workspace();
 
     @ParameterizedTest
@@ -204,6 +212,26 @@ class ReviewGateTest {
         workspace.setId(2L);
         assertThatThrownBy(() -> gate.evaluate(workspace, snapshot(Map.of()), ReviewOrigin.REQUEST, null, List.of()))
                 .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @ParameterizedTest
+    @EnumSource(ReviewOrigin.class)
+    void shouldNotSelectAPracticeWhoseEventsTheItemKindDoesNotOffer(ReviewOrigin origin) {
+        // A migrated pull request practice bound only to an event of a submitted review: no review could run it.
+        var unrunnable = practice(
+                1,
+                DefinitionTestFixtures.withReviewOn(
+                        DefinitionTestFixtures.definition(),
+                        new ReviewOn(List.of(new ItemEventName("scm.pull_request_review.submitted")), Map.of())));
+        var runnable = practice(2, DefinitionTestFixtures.definition());
+        when(practices.findByWorkspaceIdAndKind(1L, new ItemKind("scm.pull_request")))
+                .thenReturn(List.of(unrunnable, runnable));
+
+        assertThat(gate.evaluate(
+                        workspace, snapshot(Map.of()), origin, new ItemEventName("scm.pull_request.opened"), List.of()))
+                .isInstanceOfSatisfying(
+                        GateDecision.Run.class,
+                        run -> assertThat(run.matchedPractices()).containsExactly(runnable));
     }
 
     private static Practice practice(long id, PracticeDefinition d) {

@@ -43,6 +43,7 @@ type Story = StoryObj<typeof meta>;
 export const Complete: Story = {
 	args: { kind: "scm.pull_request", definition, version: 4 },
 	play: async ({ canvas }) => {
+		await expect(canvas.queryByRole("alert")).not.toBeInTheDocument();
 		const settings = canvas.getByRole("region", { name: "Review settings" });
 		const row = (label: string) => within(settings).getByText(label).nextElementSibling;
 		await expect(row("Review on")).toHaveTextContent(/Opened.*Marked ready for review/u);
@@ -58,6 +59,23 @@ export const Complete: Story = {
 		await expect(canvas.getByText(/definePracticeScript/u)).toBeVisible();
 		const decides = canvas.getByRole("button", { name: "How it decides" });
 		await expect(precedes(settings, decides)).toBe(true);
+	},
+};
+
+/** A migrated practice bound to an event of another kind of work: Hephaestus never selects it. */
+export const NotRunnable: Story = {
+	args: {
+		kind: "scm.pull_request",
+		definition: definitionOf({
+			reviewOn: { events: ["scm.pull_request_review.submitted"], state: {} },
+		}),
+	},
+	play: async ({ canvas }) => {
+		const alert = canvas.getByRole("alert");
+		await expect(alert).toHaveTextContent("Hephaestus does not run this practice");
+		await expect(alert).toHaveTextContent(
+			/Pull request review submitted, which this kind of work does not offer/u,
+		);
 	},
 };
 

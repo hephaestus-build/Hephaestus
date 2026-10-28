@@ -120,11 +120,13 @@ A practice that pins another source contract, or reads a source that the catalog
 That practice is withheld, and its sources are not captured.
 The other practices are captured and run.
 
-An item review first compares each practice's pinned review events and About role with the reviewed item kind's descriptor.
+Selection compares each practice's review events and About role with the item kind's descriptor, for events and for requests.
 Authoring checks the same descriptor facts, but a stored version can predate them.
-A practice that declares an event or an About role that the item kind does not offer records `item_capability_unsupported`.
-It is withheld in the same way.
-The check does not require a declared event to have occurred, so a requested review still bypasses event selection.
+A practice that declares an event or an About role that the item kind does not offer is not selected.
+Its page in practice administration says that Hephaestus does not run it.
+
+Capture checks the pinned version again, for a version pinned before the check.
+Such a practice records `item_capability_unsupported` and is withheld in the same way.
 Scans review files and repositories, not the practice's item kind, so this check does not apply to them.
 
 `source_contract_unsupported` and `item_capability_unsupported` mean that the stored practice does not fit the work.

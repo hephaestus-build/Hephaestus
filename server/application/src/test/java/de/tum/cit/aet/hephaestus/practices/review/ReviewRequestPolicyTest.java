@@ -8,6 +8,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.integration.core.spi.ReviewRequestReason;
+import de.tum.cit.aet.hephaestus.practices.PracticeItemOptions;
 import de.tum.cit.aet.hephaestus.practices.PracticeRepository;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewOrigin;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStatus;
@@ -30,7 +31,8 @@ class ReviewRequestPolicyTest {
     private final ReviewRepository reviews = mock(ReviewRepository.class);
     private final PracticeReviewProperties properties = mock(PracticeReviewProperties.class);
     private final PracticeReviewCoverageService coverage = mock(PracticeReviewCoverageService.class);
-    private final ReviewGate gate = new ReviewGate(mock(PracticeRepository.class), new JsonMapper());
+    private final ReviewGate gate =
+            new ReviewGate(mock(PracticeRepository.class), mock(PracticeItemOptions.class), new JsonMapper());
     private final ReviewRequestPolicy policy = new ReviewRequestPolicy(
             workspaces,
             reviews,
