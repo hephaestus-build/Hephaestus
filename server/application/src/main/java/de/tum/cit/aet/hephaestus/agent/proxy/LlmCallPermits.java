@@ -133,8 +133,8 @@ public class LlmCallPermits {
                     .orElseThrow(() -> new IllegalStateException("Configured call pool is unavailable"));
             if (!samePool(poolId, caller))
                 throw new IllegalStateException("The configured model call pool changed before admission");
-            rows.enqueue(
-                    id, poolId, workerId, callClass.name(), caller.workspaceId(), caller.sourceId(), caller.attempt());
+            rows.enqueue(new LlmCallPermitRepository.Request(
+                    id, poolId, workerId, callClass.name(), caller.workspaceId(), caller.sourceId(), caller.attempt()));
             return admission.getSlug();
         }));
         long began = System.nanoTime();
@@ -189,7 +189,8 @@ public class LlmCallPermits {
         if (!room(poolId, pool, callClass)) return false;
         // Existing background requests have already waited. A new claim cannot bypass them.
         if (rows.next(poolId, false).isPresent()) return false;
-        rows.enqueue(id, poolId, workerId, callClass.name(), caller.workspaceId(), caller.sourceId(), caller.attempt());
+        rows.enqueue(new LlmCallPermitRepository.Request(
+                id, poolId, workerId, callClass.name(), caller.workspaceId(), caller.sourceId(), caller.attempt()));
         if (rows.grant(id, "RESERVED", tokenBound(pool)) != 1)
             throw new IllegalStateException("Claim reservation was lost");
         Permit permit = new Permit(id, poolId, pool.getSlug(), callClass);

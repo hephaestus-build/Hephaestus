@@ -27,19 +27,17 @@ public interface LlmCallPermitRepository extends JpaRepository<LlmCallPermit, UU
             nativeQuery = true)
     long countBackground(@Param("poolId") long poolId);
 
+    record Request(
+            UUID id, long poolId, String workerId, String callClass, long workspaceId, UUID sourceId, int attempt) {}
+
     @Modifying
-    @Query(
-            value =
-                    "INSERT INTO llm_call_permit (id,pool_id,worker_id,call_class,workspace_id,source_id,attempt,state,acquired_at,renewed_at,requests,tokens) VALUES (:id,:poolId,:workerId,:callClass,:workspaceId,:sourceId,:attempt,'WAITING',clock_timestamp(),clock_timestamp(),0,0)",
-            nativeQuery = true)
-    void enqueue(
-            @Param("id") UUID id,
-            @Param("poolId") long poolId,
-            @Param("workerId") String workerId,
-            @Param("callClass") String callClass,
-            @Param("workspaceId") long workspaceId,
-            @Param("sourceId") UUID sourceId,
-            @Param("attempt") int attempt);
+    @Query(value = """
+                    INSERT INTO llm_call_permit
+                      (id,pool_id,worker_id,call_class,workspace_id,source_id,attempt,state,acquired_at,renewed_at,requests,tokens)
+                    VALUES (:#{#request.id()},:#{#request.poolId()},:#{#request.workerId()},:#{#request.callClass()},
+                      :#{#request.workspaceId()},:#{#request.sourceId()},:#{#request.attempt()},'WAITING',clock_timestamp(),clock_timestamp(),0,0)
+                    """, nativeQuery = true)
+    void enqueue(@Param("request") Request request);
 
     /** Old queued requests never reached a provider. Active requests are never reclaimed by time. */
     @Modifying

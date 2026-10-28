@@ -84,6 +84,10 @@ public class LlmCallPoolService {
     /** Every model an instance admin can put into a pool, instance models first. */
     @Transactional(readOnly = true)
     public List<LlmCallPoolModelDTO> models() {
+        return modelRows();
+    }
+
+    private List<LlmCallPoolModelDTO> modelRows() {
         List<LlmCallPoolModelDTO> models = new ArrayList<>();
         for (LlmModel model : instanceModels.findAllWithConnection()) {
             models.add(new LlmCallPoolModelDTO(
@@ -114,7 +118,7 @@ public class LlmCallPoolService {
         lockMembership();
         Set<Long> affected = new TreeSet<>();
         affected.add(id);
-        for (LlmCallPoolModelDTO model : models()) {
+        for (LlmCallPoolModelDTO model : modelRows()) {
             if ((model.scope() == UsageFundingSource.INSTANCE
                             && request.instanceModelIds().contains(model.modelId()))
                     || (model.scope() == UsageFundingSource.WORKSPACE
