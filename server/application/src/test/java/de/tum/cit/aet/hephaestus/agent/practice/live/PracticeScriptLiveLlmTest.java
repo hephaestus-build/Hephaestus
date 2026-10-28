@@ -566,7 +566,6 @@ class PracticeScriptLiveLlmTest extends AbstractWorkspaceIntegrationTest {
                                 null,
                                 null,
                                 null,
-                                null,
                                 true,
                                 PricingMode.PRICED,
                                 new BigDecimal("0.10"),
@@ -582,7 +581,7 @@ class PracticeScriptLiveLlmTest extends AbstractWorkspaceIntegrationTest {
                 context,
                 purpose,
                 DataHandlingTier.UNDECLARED,
-                new AgentBindingRequestDTO(null, modelId, null, null, true));
+                new AgentBindingRequestDTO(null, modelId, null, null, true, null, null));
     }
 
     private Practice practice(Workspace workspace, String program) {

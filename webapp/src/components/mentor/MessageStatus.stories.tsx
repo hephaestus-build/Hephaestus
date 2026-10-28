@@ -82,10 +82,16 @@ const onTryAgain = fn();
  */
 export const Failed: Story = {
 	args: {
-		state: { kind: "failed", reason: "Heph took too long to answer.", onTryAgain },
+		state: {
+			kind: "failed",
+			reason: "Heph reached its time limit and stopped this reply. Try again.",
+			onTryAgain,
+		},
 	},
 	play: async ({ canvas, canvasElement, userEvent }) => {
-		await expect(canvas.getByText("Heph took too long to answer.")).toBeVisible();
+		await expect(
+			canvas.getByText("Heph reached its time limit and stopped this reply. Try again."),
+		).toBeVisible();
 		await expect(iconStandsOut(canvasElement)).toBe(true);
 		const tryAgain = canvas.getByRole("button", { name: "Try again (Ada Lovelace, 10:42)" });
 		await expectTargetSize(tryAgain);
@@ -96,7 +102,13 @@ export const Failed: Story = {
 
 /** The same line in the dark theme. */
 export const FailedDark: Story = {
-	args: { state: { kind: "failed", reason: "Heph took too long to answer.", onTryAgain: fn() } },
+	args: {
+		state: {
+			kind: "failed",
+			reason: "Heph reached its time limit and stopped this reply. Try again.",
+			onTryAgain: fn(),
+		},
+	},
 	globals: { theme: "dark" },
 };
 

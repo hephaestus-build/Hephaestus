@@ -17,6 +17,10 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import de.tum.cit.aet.hephaestus.agent.LlmProperties;
 import de.tum.cit.aet.hephaestus.agent.catalog.EgressPolicy;
 import de.tum.cit.aet.hephaestus.agent.catalog.InstanceLlmSettingsRepository;
@@ -24,6 +28,7 @@ import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmAuthMode;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnectionHealth;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
+import de.tum.cit.aet.hephaestus.agent.config.AgentBindingLimits;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
@@ -94,6 +99,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.reactivestreams.Publisher;
+import org.slf4j.LoggerFactory;
 import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.core.io.buffer.DefaultDataBufferFactory;
 import org.springframework.http.HttpHeaders;
@@ -1052,6 +1058,85 @@ class LlmProxyServiceTest extends BaseUnitTest {
                             .counter("llm.proxy.upstream.stalled", "apiProtocol", "openai-completions")
                             .count())
                     .isEqualTo(1.0);
+        }
+
+        private static final String LOW_EFFORT_REQUEST = """
+                {"stream":true,"reasoning_effort":"low","messages":[]}""";
+
+        /** The warnings about a refused effort after {@code calls} Heph calls that the provider answers with a 400. */
+        private List<String> effortWarningsAfterRefusals(String requestBody, String errorBody, int calls) {
+            Logger logger = (Logger) LoggerFactory.getLogger(ReasoningEffortRefusal.class);
+            ListAppender<ILoggingEvent> appender = new ListAppender<>();
+            appender.start();
+            logger.addAppender(appender);
+            try {
+                ProxyRouting routing = hephTurnRouting(upstream.url("/v1").toString());
+                authenticate(routing);
+                stubCredential(
+                        routing,
+                        new LlmModelResolver.ProxyCredential(
+                                upstream.url("/v1").toString(),
+                                "openai-completions",
+                                LlmAuthMode.BEARER,
+                                "catalog-model",
+                                "secret"));
+                for (int call = 0; call < calls; call++) {
+                    upstream.enqueue(new MockResponse.Builder()
+                            .code(400)
+                            .addHeader("Content-Type", "application/json")
+                            .body(errorBody)
+                            .build());
+                    streamingController.proxy(
+                            request("POST", "/internal/llm/chat/completions"),
+                            new MockHttpServletResponse(),
+                            new HttpHeaders(),
+                            requestBody.getBytes(StandardCharsets.UTF_8));
+                }
+            } finally {
+                logger.detachAppender(appender);
+                appender.stop();
+            }
+            return appender.list.stream()
+                    .filter(event -> event.getLevel() == Level.WARN)
+                    .map(ILoggingEvent::getFormattedMessage)
+                    .toList();
+        }
+
+        @ParameterizedTest(name = "{0}")
+        @CsvSource(
+                delimiter = '|',
+                value = {
+                    "Chat Completions param   | {\"error\":{\"message\":\"secret-quote\",\"type\":\"invalid_request_error\",\"param\":\"reasoning_effort\",\"code\":\"unsupported_parameter\"}}",
+                    "Responses API param      | {\"error\":{\"message\":\"secret-quote\",\"type\":\"invalid_request_error\",\"param\":\"reasoning.effort\",\"code\":null}}",
+                    "a code naming the param  | {\"object\":\"error\",\"message\":\"secret-quote\",\"type\":\"BadRequestError\",\"code\":\"unsupported_reasoning_effort\"}",
+                })
+        @DisplayName("a provider's refusal of the effort warns once for the model and effort, never with its words")
+        void aRefusedEffortWarnsOnceWithoutTheProvidersWords(String ignoredShape, String errorBody) {
+            assertThat(effortWarningsAfterRefusals(LOW_EFFORT_REQUEST, errorBody, 3))
+                    .singleElement()
+                    .satisfies(line -> assertThat(line)
+                            .contains("refused the reasoning effort LOW")
+                            .doesNotContain("secret-quote"));
+        }
+
+        @Test
+        @DisplayName("a 400 for another cause does not blame the effort the call sent")
+        void aContextOverflowWithAnEffortDoesNotBlameTheEffort() {
+            String overflow = """
+                    {"error":{"message":"reasoning_effort low: maximum context length exceeded",                    "type":"invalid_request_error","param":"messages","code":"context_length_exceeded"}}""";
+
+            assertThat(effortWarningsAfterRefusals(LOW_EFFORT_REQUEST, overflow, 1))
+                    .noneMatch(line -> line.contains("reasoning effort"));
+        }
+
+        @Test
+        @DisplayName("a call that sends no effort never gets the effort warning")
+        void aCallWithoutAnEffortGetsNoEffortWarning() {
+            String refusal = """
+                    {"error":{"type":"invalid_request_error","param":"reasoning_effort","code":"unsupported_parameter"}}""";
+
+            assertThat(effortWarningsAfterRefusals("{\"stream\":true,\"messages\":[]}", refusal, 1))
+                    .noneMatch(line -> line.contains("reasoning effort"));
         }
 
         @Test
@@ -2240,8 +2325,16 @@ class LlmProxyServiceTest extends BaseUnitTest {
                 .isLessThanOrEqualTo(Duration.ofSeconds(10));
         assertThat(LlmProxyService.exchangeWait(Instant.now().minusSeconds(1), true))
                 .isZero();
-        // A mentor turn has no work deadline and keeps the proxy's own limits.
-        assertThat(LlmProxyService.exchangeWait(null, true)).isEqualTo(ceiling);
+    }
+
+    @Test
+    @DisplayName("a Heph call may run as long as its turn, past the proxy's own ceiling")
+    void shouldBoundAHephCallByTheTurnCeilingOnly() {
+        Duration turnCeiling = Duration.ofSeconds(AgentBindingLimits.MAX_HEPH_TURN_SECONDS);
+
+        // A Heph turn has no work deadline; streaming or not, its call waits as long as the turn may run.
+        assertThat(LlmProxyService.exchangeWait(null, true)).isEqualTo(turnCeiling);
+        assertThat(LlmProxyService.exchangeWait(null, false)).isEqualTo(turnCeiling);
     }
 
     @Nested

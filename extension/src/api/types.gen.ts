@@ -353,6 +353,10 @@ export type AgentBinding = {
      */
     ready: boolean;
     /**
+     * Reasoning effort requested of the model for this purpose; null sends none, and the provider's own default applies
+     */
+    reasoningEffort?: 'NONE' | 'MINIMAL' | 'LOW' | 'MEDIUM' | 'HIGH' | 'XHIGH' | 'MAX';
+    /**
      * The members this binding serves now, named by the tier of their choice: IN_HOUSE and CLOUD for the members who chose them, UNDECLARED for the members who have not chosen. A decision, embedding or reranking binding serves no member whose review model is stricter. Empty when the binding serves no member.
      */
     servedTiers: Array<'IN_HOUSE' | 'CLOUD' | 'UNDECLARED'>;
@@ -364,6 +368,10 @@ export type AgentBinding = {
  * Bind a model and execution limits to an agent purpose
  */
 export type AgentBindingRequest = {
+    /**
+     * True clears the reasoning effort: none is sent, and the provider's own default applies
+     */
+    clearReasoningEffort?: boolean;
     /**
      * Whether this purpose is active (paused when false)
      */
@@ -377,7 +385,11 @@ export type AgentBindingRequest = {
      */
     maxConcurrentJobs?: number;
     /**
-     * Per-run timeout in seconds (30–10800; three hours is the longest a single run may take)
+     * Reasoning effort to request of the model for this purpose; null keeps the current one (see clearReasoningEffort). A new binding gets none. Embedding and reranking take none.
+     */
+    reasoningEffort?: 'NONE' | 'MINIMAL' | 'LOW' | 'MEDIUM' | 'HIGH' | 'XHIGH' | 'MAX';
+    /**
+     * Per-run timeout in seconds: 30–10800 (three hours) for a review, 30–900 (15 minutes) for a Heph answer. A new Heph binding gets 900.
      */
     timeoutSeconds?: number;
     /**
@@ -496,10 +508,6 @@ export type AvailableLlmModel = {
      * The purposes a binding may assign this model to, from its connection's protocol
      */
     purposes: Array<'PRACTICE_REVIEW' | 'MENTOR' | 'PRACTICE_DECISION' | 'PRACTICE_EMBEDDING' | 'PRACTICE_RERANKING'>;
-    /**
-     * Reasoning effort requested of the model; null sends none, the provider's default applies
-     */
-    reasoningEffort?: 'NONE' | 'MINIMAL' | 'LOW' | 'MEDIUM' | 'HIGH' | 'XHIGH' | 'MAX';
     /**
      * SHARED (instance catalog) or WORKSPACE (your own provider)
      */
@@ -1070,10 +1078,6 @@ export type CreateLlmModelRequest = {
      */
     operatedBy?: 'OWN_ORGANISATION' | 'PROVIDER';
     /**
-     * Reasoning effort to request; null sends none, so the provider's own default applies
-     */
-    reasoningEffort?: 'NONE' | 'MINIMAL' | 'LOW' | 'MEDIUM' | 'HIGH' | 'XHIGH' | 'MAX';
-    /**
      * Optional internal slug; generated from displayName when omitted
      */
     slug?: string;
@@ -1246,10 +1250,6 @@ export type CreateWorkspaceLlmModelRequest = {
      * Pricing mode (default UNPRICED)
      */
     pricingMode?: 'PRICED' | 'NO_CHARGE' | 'UNPRICED';
-    /**
-     * Reasoning effort to request; null sends none, so the provider's own default applies
-     */
-    reasoningEffort?: 'NONE' | 'MINIMAL' | 'LOW' | 'MEDIUM' | 'HIGH' | 'XHIGH' | 'MAX';
     /**
      * Optional internal slug; generated from displayName when omitted
      */
@@ -2271,10 +2271,6 @@ export type LlmModel = {
      * Who operates the systems the work is sent to; null until declared
      */
     operatedBy?: 'OWN_ORGANISATION' | 'PROVIDER';
-    /**
-     * Reasoning effort requested of the model; null sends none, the provider's default applies
-     */
-    reasoningEffort?: 'NONE' | 'MINIMAL' | 'LOW' | 'MEDIUM' | 'HIGH' | 'XHIGH' | 'MAX';
     /**
      * Unique slug within the connection
      */
@@ -6059,10 +6055,6 @@ export type UpdateLlmModelRequest = {
      */
     clearBrand?: boolean;
     /**
-     * True clears the reasoning effort, so the provider's own default applies
-     */
-    clearReasoningEffort?: boolean;
-    /**
      * Context window in tokens
      */
     contextWindow?: number;
@@ -6086,10 +6078,6 @@ export type UpdateLlmModelRequest = {
      * Who operates the systems the work is sent to; omit to leave the model undeclared
      */
     operatedBy?: 'OWN_ORGANISATION' | 'PROVIDER';
-    /**
-     * Reasoning effort to request; null keeps the current one (see clearReasoningEffort)
-     */
-    reasoningEffort?: 'NONE' | 'MINIMAL' | 'LOW' | 'MEDIUM' | 'HIGH' | 'XHIGH' | 'MAX';
 };
 
 /**
@@ -6315,10 +6303,6 @@ export type UpdateWorkspaceLlmModelRequest = {
      */
     clearBrand?: boolean;
     /**
-     * True clears the reasoning effort, so the provider's own default applies
-     */
-    clearReasoningEffort?: boolean;
-    /**
      * Context window in tokens
      */
     contextWindow?: number;
@@ -6366,10 +6350,6 @@ export type UpdateWorkspaceLlmModelRequest = {
      * Pricing mode; when given, replaces the price wholesale (see class docs)
      */
     pricingMode?: 'PRICED' | 'NO_CHARGE' | 'UNPRICED';
-    /**
-     * Reasoning effort to request; null keeps the current one (see clearReasoningEffort)
-     */
-    reasoningEffort?: 'NONE' | 'MINIMAL' | 'LOW' | 'MEDIUM' | 'HIGH' | 'XHIGH' | 'MAX';
 };
 
 export type UpdateWorkspacePasskeyPolicy = {
@@ -6965,10 +6945,6 @@ export type WorkspaceLlmModel = {
      * Pricing mode
      */
     pricingMode: 'PRICED' | 'NO_CHARGE' | 'UNPRICED';
-    /**
-     * Reasoning effort requested of the model; null sends none, the provider's default applies
-     */
-    reasoningEffort?: 'NONE' | 'MINIMAL' | 'LOW' | 'MEDIUM' | 'HIGH' | 'XHIGH' | 'MAX';
     /**
      * Unique slug within the workspace
      */

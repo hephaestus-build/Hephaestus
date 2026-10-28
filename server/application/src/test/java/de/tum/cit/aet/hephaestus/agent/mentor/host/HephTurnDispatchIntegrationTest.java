@@ -652,7 +652,7 @@ class HephTurnDispatchIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
         MentorTurn failed = row(asked);
         assertThat(failed.getStatus()).isEqualTo(MentorTurn.Status.FAILED);
-        assertThat(failed.getError()).isEqualTo(HephTurnDispatcher.TOOK_TOO_LONG);
+        assertThat(failed.getError()).isEqualTo(HephTurnDispatcher.TIME_LIMIT_REACHED);
         assertThat(failed.isLeased()).isFalse();
         assertThat(slotsTaken()).isZero();
         assertSettled(asked, turn.attempt(), silent);

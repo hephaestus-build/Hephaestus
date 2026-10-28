@@ -16,10 +16,13 @@ public final class AgentBindingLimits {
     public static final int MAX_TIMEOUT_SECONDS = 10800;
 
     /**
-     * The longest one Heph turn runs, whatever its binding says. A developer waits for the answer, and a worker runs
-     * few turns at once: a turn as long as a review would keep every other conversation waiting.
+     * The longest one Heph turn runs, whatever its binding says: the hard ceiling of a turn that keeps making progress.
+     * A turn that stops making progress ends earlier, when the worker's LLM proxy finds its model call silent.
+     *
+     * <p>An answer takes a few model calls, tools and a context load, so the ceiling must stay above a few of the
+     * slowest model calls. A worker runs few turns at once, so the ceiling stays far below a review's.
      */
-    public static final int MAX_HEPH_TURN_SECONDS = 300;
+    public static final int MAX_HEPH_TURN_SECONDS = 900;
 
     /**
      * The smallest context window Heph works in. Its fixed prompt (instructions, tools and the situation) takes about

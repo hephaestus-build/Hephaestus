@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmAuthMode;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnectionHealth;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
+import de.tum.cit.aet.hephaestus.agent.config.AgentBindingLimits;
 import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
@@ -60,6 +61,7 @@ class LlmProxyService {
 
     private static final Logger log = LoggerFactory.getLogger(LlmProxyService.class);
     private static final Duration BLOCK_TIMEOUT = Duration.ofSeconds(310);
+    private static final Duration HEPH_CALL_CEILING = Duration.ofSeconds(AgentBindingLimits.MAX_HEPH_TURN_SECONDS);
     private static final String PROXY_PATH_PREFIX = "/internal/llm";
 
     /** The refusal of a model call after its review attempt's work deadline. */
@@ -86,6 +88,7 @@ class LlmProxyService {
     private final LlmModelResolver resolver;
     private final ObjectMapper objectMapper;
     private final ProxyStallErrors errors;
+    private final ReasoningEffortRefusal effortRefusals;
     private final ProxyAccounting accounting;
     private final ScanCallGuard scanCalls;
     private final ProxyRequestPolicy requestPolicy;
@@ -113,6 +116,7 @@ class LlmProxyService {
         this.resolver = llmModelResolver;
         this.objectMapper = objectMapper;
         this.errors = new ProxyStallErrors(objectMapper);
+        this.effortRefusals = new ReasoningEffortRefusal(objectMapper);
         this.accounting = accounting;
         this.requestPolicy = requestPolicy;
         this.scanCalls = scanCalls;
@@ -453,6 +457,7 @@ class LlmProxyService {
                 upstream = callUpstream(
                         exchange, prepared.withoutUsageRequestOrBody(), span, response, tap, deadline, reviewStream);
             }
+            if (routing.hephTurn()) effortRefusals.warnIfRefused(routing, upstream, prepared.body());
         } catch (Exception e) {
             // Only a failure before a stream's head reaches here, so nothing has been written to the client.
             permit.failed(e);
@@ -607,11 +612,10 @@ class LlmProxyService {
             URI uri, HttpHeaders headers, @Nullable Bounds bounds, Mono<Void> cancelled) {}
 
     /**
-     * One upstream exchange, run on this request thread, which alone writes the servlet response. Without a work
-     * deadline (a mentor turn) it keeps the proxy's own limits: the whole exchange, and a stream's body from its start.
-     * With one, the whole exchange — waiting for the head, the body, and a stream — ends by the deadline; a review's
-     * stream may use all of the attempt's remaining time, while every other call also keeps the proxy's own ceiling.
-     * A Heph turn's call also ends on the turn's {@code bounds} and when the turn ends.
+     * One upstream exchange, run on this request thread, which alone writes the servlet response. With a work deadline,
+     * the whole exchange — waiting for the head, the body, and a stream — ends by the deadline; a review's stream may
+     * use all of the attempt's remaining time, while every other call also keeps the proxy's own ceiling. A Heph turn
+     * has no work deadline: its call ends on the turn's {@code bounds}, when the turn ends, or at the turn ceiling.
      *
      * @return {@code null} when the attempt's end cancelled the call before the provider answered
      */
@@ -624,7 +628,6 @@ class LlmProxyService {
             @Nullable Instant deadline,
             boolean reviewStream) {
         Duration limit = exchangeWait(deadline, reviewStream);
-        Duration bodyLimit = deadline == null ? ProxyStreamingUtils.DEFAULT_SSE_TIMEOUT : null;
         span.event("upstream.request");
         Bounds bounds = exchange.bounds();
         var request = webClient.method(HttpMethod.POST).uri(exchange.uri()).headers(headers -> {
@@ -646,7 +649,7 @@ class LlmProxyService {
         var parts = request.bodyValue(outgoingBody)
                 .exchangeToFlux(upstream -> {
                     answered.set(true);
-                    return ProxyStreamingUtils.parts(upstream, bodyLimit, body);
+                    return ProxyStreamingUtils.parts(upstream, body);
                 })
                 // Before the response, a cancel drops the exchange; after it, the body stops and the stream ends.
                 .takeUntilOther(exchange.cancelled().then(Mono.defer(() -> {
@@ -663,12 +666,15 @@ class LlmProxyService {
     }
 
     /**
-     * How long one exchange may wait. A mentor turn keeps the proxy's own ceiling. A review's stream gets the
-     * attempt's remaining work time, however long; every other call of the attempt the shorter of the two.
+     * How long one exchange may wait. A Heph turn's call, which has no work deadline, waits at most the turn ceiling,
+     * counted from the call's own start, not from its turn's. Its idle bounds end it when its provider goes silent, and
+     * its turn's stop cancels it while the worker holds the turn's lease. A review's stream gets the attempt's
+     * remaining work time, however long; every other call of the attempt the shorter of that and the proxy's own
+     * ceiling.
      */
     static Duration exchangeWait(@Nullable Instant deadline, boolean reviewStream) {
+        if (deadline == null) return HEPH_CALL_CEILING;
         Duration ceiling = BLOCK_TIMEOUT.plus(ProxyStreamingUtils.DEFAULT_SSE_TIMEOUT);
-        if (deadline == null) return ceiling;
         Duration remaining = ProxyStreamingUtils.remainingUntil(deadline);
         return reviewStream || remaining.compareTo(ceiling) < 0 ? remaining : ceiling;
     }

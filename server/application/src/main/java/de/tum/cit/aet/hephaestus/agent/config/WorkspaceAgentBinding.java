@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.config;
 
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModel;
 import de.tum.cit.aet.hephaestus.agent.catalog.ModelBindingSource;
+import de.tum.cit.aet.hephaestus.agent.catalog.ReasoningEffort;
 import de.tum.cit.aet.hephaestus.agent.catalog.WorkspaceLlmModel;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
@@ -33,7 +34,8 @@ import org.jspecify.annotations.Nullable;
 /**
  * What model, and with what execution limits, a workspace runs a given {@link AgentPurpose} on.
  *
- * <p>Routing and credentials live in the selected catalog model. Exactly one of
+ * <p>Routing and credentials live in the selected catalog model. The reasoning effort lives here, so one model can
+ * answer Heph quickly and review with more effort. Exactly one of
  * {@link #instanceModel} / {@link #workspaceModel} is set ({@code ck_workspace_agent_binding_single_model}
  * enforces it); no row for a purpose and tier means that slot is unconfigured (off).
  */
@@ -86,6 +88,12 @@ public class WorkspaceAgentBinding implements ModelBindingSource {
     @ColumnDefault("3")
     @Column(name = "max_concurrent_jobs", nullable = false)
     private int maxConcurrentJobs = 3;
+
+    @Nullable
+    @Enumerated(EnumType.STRING)
+    @Column(name = "reasoning_effort", length = ReasoningEffort.MAX_LENGTH)
+    @Getter(onMethod_ = @Override)
+    private ReasoningEffort reasoningEffort;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(

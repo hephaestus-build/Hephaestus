@@ -88,12 +88,6 @@ public class WorkspaceLlmModel {
     @Column(name = "max_output_tokens")
     private Integer maxOutputTokens;
 
-    /** The reasoning effort requested of the model; null sends none, and the provider's default applies. */
-    @Nullable
-    @Enumerated(EnumType.STRING)
-    @Column(name = "reasoning_effort", length = ReasoningEffort.MAX_LENGTH)
-    private ReasoningEffort reasoningEffort;
-
     @Nullable
     @Enumerated(EnumType.STRING)
     @Column(name = "brand", length = 16)

@@ -396,8 +396,8 @@ async function bindAgents(api: Api, config: Config, modelId: number): Promise<vo
 		await api("PUT", `/workspaces/${config.workspaceSlug}/agents/${purpose}`, {
 			workspaceModelId: modelId,
 			enabled: true,
-			// Heph stops an answer after 300 seconds (AgentBindingLimits.MAX_HEPH_TURN_SECONDS).
-			timeoutSeconds: purpose === "MENTOR" ? 300 : 1200,
+			// Heph stops an answer after 900 seconds (AgentBindingLimits.MAX_HEPH_TURN_SECONDS).
+			timeoutSeconds: purpose === "MENTOR" ? 900 : 1200,
 			maxConcurrentJobs: 1,
 		});
 	}

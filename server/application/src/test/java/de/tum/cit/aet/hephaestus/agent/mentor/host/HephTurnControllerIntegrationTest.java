@@ -513,7 +513,7 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
 
         MentorTurn ended = reloaded();
         assertThat(ended.getStatus()).isEqualTo(MentorTurn.Status.FAILED);
-        assertThat(ended.getError()).isEqualTo(HephTurnDispatcher.TOOK_TOO_LONG);
+        assertThat(ended.getError()).isEqualTo(HephTurnDispatcher.TIME_LIMIT_REACHED);
         assertThat(ended.getFailureCause()).isEqualTo("its Heph host reported DEADLINE: deadline");
         assertThat(ended.getFailedCall())
                 .as("no model call of the attempt failed")

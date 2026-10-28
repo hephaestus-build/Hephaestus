@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModel;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelRepository;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
+import de.tum.cit.aet.hephaestus.agent.catalog.ReasoningEffort;
 import de.tum.cit.aet.hephaestus.agent.catalog.WorkspaceLlmModel;
 import de.tum.cit.aet.hephaestus.agent.catalog.WorkspaceLlmModelRepository;
 import de.tum.cit.aet.hephaestus.core.audit.spi.ConfigAuditEntityType;
@@ -85,6 +86,7 @@ public class AgentBindingService {
                         .formatted(AgentBindingLimits.MAX_HEPH_TURN_SECONDS, AgentBindingLimits.MAX_HEPH_TURN_SECONDS));
             binding.setTimeoutSeconds(request.timeoutSeconds());
         }
+        applyReasoningEffort(binding, purpose, request);
         if (request.maxConcurrentJobs() != null) {
             binding.setMaxConcurrentJobs(request.maxConcurrentJobs());
         }
@@ -137,6 +139,23 @@ public class AgentBindingService {
                     .orElseThrow(() -> new EntityNotFoundException("WorkspaceLlmModel", workspaceModelId));
             binding.setWorkspaceModel(model);
             binding.setInstanceModel(null);
+        }
+    }
+
+    private static void applyReasoningEffort(
+            WorkspaceAgentBinding binding, AgentPurpose purpose, AgentBindingRequestDTO request) {
+        boolean clear = Boolean.TRUE.equals(request.clearReasoningEffort());
+        ReasoningEffort effort = request.reasoningEffort();
+        if (clear && effort != null) {
+            throw new IllegalArgumentException("Set a reasoning effort or clear it, not both.");
+        }
+        if (effort != null && !purpose.takesReasoningEffort()) {
+            throw new IllegalArgumentException("Embedding and reranking models take no reasoning effort.");
+        }
+        if (clear) {
+            binding.setReasoningEffort(null);
+        } else if (effort != null) {
+            binding.setReasoningEffort(effort);
         }
     }
 
@@ -219,15 +238,17 @@ public class AgentBindingService {
         binding.setWorkspace(workspace);
         binding.setPurpose(purpose);
         binding.setDataHandlingTier(tier);
+        // No effort: the catalog cannot tell whether a model reasons, and a model that does not can refuse any effort.
         if (purpose == AgentPurpose.MENTOR) binding.setTimeoutSeconds(AgentBindingLimits.MAX_HEPH_TURN_SECONDS);
         return binding;
     }
 
-    /** Audit projection of a binding's effective model + enabled state. */
+    /** Audit projection of a binding's effective model, reasoning effort and enabled state. */
     private record BindingSnapshot(
             DataHandlingTier dataHandlingTier,
             @Nullable Long instanceModelId,
             @Nullable Long workspaceModelId,
+            @Nullable ReasoningEffort reasoningEffort,
             @Nullable Boolean enabled)
             implements ConfigAuditSnapshot {
         static BindingSnapshot of(WorkspaceAgentBinding b) {
@@ -235,6 +256,7 @@ public class AgentBindingService {
                     b.getDataHandlingTier(),
                     b.getInstanceModel() == null ? null : b.getInstanceModel().getId(),
                     b.getWorkspaceModel() == null ? null : b.getWorkspaceModel().getId(),
+                    b.getReasoningEffort(),
                     b.isEnabled());
         }
     }

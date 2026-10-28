@@ -25,13 +25,6 @@ public record UpdateLlmModelRequestDTO(
         Integer maxOutputTokens,
 
         @Nullable
-        @Schema(description = "Reasoning effort to request; null keeps the current one (see clearReasoningEffort)")
-        ReasoningEffort reasoningEffort,
-
-        @Nullable @Schema(description = "True clears the reasoning effort, so the provider's own default applies")
-        Boolean clearReasoningEffort,
-
-        @Nullable
         @Schema(description = "Who operates the systems the work is sent to; omit to leave the model undeclared")
         LlmDataOperator operatedBy,
 

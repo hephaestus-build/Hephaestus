@@ -144,6 +144,23 @@ class LlmModelResolverTest extends BaseUnitTest {
     }
 
     @Test
+    void shouldResolveEachPurposeOfOneModelWithTheReasoningEffortOfItsOwnBinding() {
+        var review = binding();
+        review.setInstanceModel(model);
+        review.setReasoningEffort(ReasoningEffort.HIGH);
+        var heph = binding();
+        heph.setPurpose(AgentPurpose.MENTOR);
+        heph.setInstanceModel(model);
+        heph.setReasoningEffort(ReasoningEffort.LOW);
+        var providerDefault = binding();
+        providerDefault.setInstanceModel(model);
+
+        assertThat(resolver.resolve(review).reasoningEffort()).isEqualTo(ReasoningEffort.HIGH);
+        assertThat(resolver.resolve(heph).reasoningEffort()).isEqualTo(ReasoningEffort.LOW);
+        assertThat(resolver.resolve(providerDefault).reasoningEffort()).isNull();
+    }
+
+    @Test
     void shouldReportTheModelsDerivedTierForAConnectionRef() {
         var ref = new LlmModelResolver.ConnectionRef(UsageFundingSource.INSTANCE, 10L, 20L, 30L);
         assertThat(resolver.dataHandlingTier(ref)).contains(DataHandlingTier.UNDECLARED);

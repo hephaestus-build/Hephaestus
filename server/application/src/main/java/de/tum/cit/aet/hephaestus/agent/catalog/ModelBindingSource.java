@@ -23,4 +23,8 @@ public interface ModelBindingSource {
     boolean isEnabled();
 
     int getTimeoutSeconds();
+
+    /** The reasoning effort requested of the model; {@code null} sends none, and the provider's default applies. */
+    @Nullable
+    ReasoningEffort getReasoningEffort();
 }

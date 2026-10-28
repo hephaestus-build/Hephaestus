@@ -27,8 +27,22 @@ import {
 	FieldSet,
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
+import {
+	isReasoningEffortChoice,
+	PROVIDER_DEFAULT_EFFORT,
+	REASONING_EFFORT_CHOICES,
+	type ReasoningEffortChoice,
+	reasoningEffortUpdateOf,
+} from "@/lib/reasoning-effort";
 import { capitalise, hasText } from "@/lib/text";
 import type { BindingTarget, BindingWrite } from "./AgentBindingsPage";
 import { ModelPicker, type ModelSelection } from "./ModelPicker";
@@ -39,20 +53,35 @@ const MIN_TIMEOUT_SECONDS = 30;
 const MAX_TIMEOUT_SECONDS = 10_800;
 const MIN_CONCURRENT_JOBS = 1;
 
-const HEPH_TURN_SECONDS = 300;
+/** Mirrors the server's `AgentBindingLimits.MAX_HEPH_TURN_SECONDS`, which the API does not expose. */
+const HEPH_TURN_SECONDS = 900;
 
-/** The longest one run may last: a review up to three hours, one Heph answer five minutes. */
+/** The longest one run may last: a review up to three hours, one Heph answer 15 minutes. */
 function timeoutCeiling(purpose: BindingTarget["purpose"]) {
 	return purpose === "MENTOR"
 		? {
 				max: HEPH_TURN_SECONDS,
-				error: `Heph stops an answer after five minutes, so enter ${HEPH_TURN_SECONDS} seconds or less.`,
+				error: `Heph stops an answer after 15 minutes, so enter ${HEPH_TURN_SECONDS} seconds or less.`,
 			}
 		: {
 				max: MAX_TIMEOUT_SECONDS,
 				error: `Runs stop after three hours, so enter ${MAX_TIMEOUT_SECONDS} seconds or less.`,
 			};
 }
+
+/** Embedding and reranking calls take no reasoning effort, so their rows offer none. */
+function takesReasoningEffort(purpose: BindingTarget["purpose"]): boolean {
+	return purpose === "MENTOR" || purpose === "PRACTICE_REVIEW" || purpose === "PRACTICE_DECISION";
+}
+
+const EFFORT_DESCRIPTION =
+	"How hard a reasoning model thinks on each call. Provider default sends none, for a model that does not reason.";
+
+const HEPH_EFFORT_DESCRIPTION =
+	"Heph answers while someone waits. For a reasoning model, choose Low to keep answers fast. Provider default sends no effort, which a model that does not reason needs: it can refuse any effort, and then Heph cannot answer.";
+
+const DECISION_REASONING_HINT =
+	"This model reasons before it answers. Decisions need a model that answers at once with token probabilities.";
 
 function bindingToSelection(binding?: AgentBinding): ModelSelection | null {
 	if (binding?.instanceModelId != null) {
@@ -175,6 +204,10 @@ export function AgentBindingEditor({
 	const [maxConcurrentJobs, setMaxConcurrentJobs] = useState(() =>
 		String(binding?.maxConcurrentJobs ?? 3),
 	);
+	const [effort, setEffort] = useState<ReasoningEffortChoice>(
+		() => binding?.reasoningEffort ?? PROVIDER_DEFAULT_EFFORT,
+	);
+	const hasEffort = takesReasoningEffort(purpose);
 	const [showAdvanced, setShowAdvanced] = useState(false);
 	const hasRunLimits = purpose === "PRACTICE_REVIEW" || purpose === "MENTOR";
 	const [showErrors, setShowErrors] = useState(false);
@@ -221,6 +254,7 @@ export function AgentBindingEditor({
 			timeoutSeconds: limits.data.timeoutSeconds,
 			maxConcurrentJobs: limits.data.maxConcurrentJobs,
 			enabled,
+			...(hasEffort ? reasoningEffortUpdateOf(effort) : {}),
 		});
 	};
 
@@ -295,6 +329,17 @@ export function AgentBindingEditor({
 					/>
 				</div>
 
+				{hasEffort && (
+					<ReasoningEffortField
+						id={`${rowId}-effort`}
+						purpose={purpose}
+						value={effort}
+						onChange={setEffort}
+						disabled={pending}
+						forRow={forRow}
+					/>
+				)}
+
 				{hasRunLimits && (
 					<Collapsible open={showAdvanced} onOpenChange={setShowAdvanced}>
 						<CollapsibleTrigger
@@ -360,6 +405,68 @@ export function AgentBindingEditor({
 				)}
 			</form>
 		</div>
+	);
+}
+
+interface ReasoningEffortFieldProps {
+	id: string;
+	purpose: BindingTarget["purpose"];
+	value: ReasoningEffortChoice;
+	onChange: (value: ReasoningEffortChoice) => void;
+	disabled: boolean;
+	forRow: ReactNode;
+}
+
+function ReasoningEffortField({
+	id,
+	purpose,
+	value,
+	onChange,
+	disabled,
+	forRow,
+}: ReasoningEffortFieldProps) {
+	const labelId = `${id}-label`;
+	const descriptionId = `${id}-description`;
+	const hintId = `${id}-hint`;
+	// `NONE` asks for no reasoning, which is what a decision needs.
+	const decisionReasons =
+		purpose === "PRACTICE_DECISION" && value !== PROVIDER_DEFAULT_EFFORT && value !== "NONE";
+	return (
+		<Field className="md:max-w-[32rem]">
+			<FieldLabel id={labelId} htmlFor={id}>
+				Reasoning effort{forRow}
+			</FieldLabel>
+			<Select
+				items={REASONING_EFFORT_CHOICES}
+				value={value}
+				onValueChange={(next) => {
+					if (isReasoningEffortChoice(next)) {
+						onChange(next);
+					}
+				}}
+				disabled={disabled}
+			>
+				<SelectTrigger
+					id={id}
+					aria-describedby={decisionReasons ? `${descriptionId} ${hintId}` : descriptionId}
+				>
+					<SelectValue />
+				</SelectTrigger>
+				<SelectContent aria-labelledby={labelId}>
+					{REASONING_EFFORT_CHOICES.map((choice) => (
+						<SelectItem key={choice.value} value={choice.value}>
+							{choice.label}
+						</SelectItem>
+					))}
+				</SelectContent>
+			</Select>
+			<FieldDescription id={descriptionId}>
+				{purpose === "MENTOR" ? HEPH_EFFORT_DESCRIPTION : EFFORT_DESCRIPTION}
+			</FieldDescription>
+			{decisionReasons && (
+				<FieldDescription id={hintId}>{DECISION_REASONING_HINT}</FieldDescription>
+			)}
+		</Field>
 	);
 }
 

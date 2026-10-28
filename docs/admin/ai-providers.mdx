@@ -288,7 +288,12 @@ Any other failure of such a probe, such as HTTP 401 or no answer, shows as a fai
 
 ### Reasoning effort
 
-**Reasoning effort** sets how hard a reasoning model thinks on every review or Heph call.
+**Reasoning effort** sets how hard a reasoning model thinks on each call.
+It is a setting of the model assignment, not of the model.
+Thus, one model can answer Heph at a low effort and review at a higher one.
+A workspace admin sets it in the workspace's **AI models** page, in the assignment of **Heph**, **Practice reviews** or **Decision model**.
+Embedding and reranking calls take no effort.
+
 It uses OpenAI's scale:
 
 - **None**.
@@ -309,11 +314,27 @@ Check the provider's model documentation.
 For a non-reasoning model, use **Provider default**, because the provider may reject the parameter.
 Not every model accepts every level.
 A refused level fails the call rather than changing to a supported level.
-The same field exists on workspace-owned models.
+
+A new assignment starts at **Provider default**, because Hephaestus cannot know whether a model reasons.
+For a reasoning model, set the Heph assignment to **Low**.
+A developer waits for each Heph answer, and a higher effort makes each model call slower.
+A Heph answer takes a few calls, and they must all end within the timeout of the Heph assignment.
 
 Higher efforts use more output tokens.
 Each job's usage records the reasoning share and prices it as output, never twice.
-A model marked as supporting reasoning before this field existed keeps its previous value: **Medium**.
+
+In the API, `reasoningEffort` on `PUT /workspaces/{slug}/agents/{purpose}` sets the effort, and `clearReasoningEffort: true` sets **Provider default**.
+A request without either keeps the current effort.
+
+### Models that refuse a reasoning effort
+
+**Symptom:** every Heph answer fails with **Heph could not finish this reply. Try again.**
+The worker log has the warning `LLM provider refused the reasoning effort LOW of a Heph model call`, once for each model and effort.
+
+**Cause:** the model of the Heph assignment does not reason, and its provider refuses the reasoning effort parameter.
+
+**Remedy:** set the reasoning effort of the Heph assignment to **Provider default**.
+Then Hephaestus sends no effort.
 
 ### Models that think by default
 
@@ -506,7 +527,7 @@ The assignment stays in place and appears correct.
 This is a common cause of silently stopped workspace reviews.
 If that happens, use [the triage list](./practice-review#follow-one-review-end-to-end).
 
-A workspace admin who chooses a model sees its display name, connection name, reasoning effort, and price framing.
+A workspace admin who chooses a model sees its display name, connection name, and price framing.
 They never see an upstream model ID, base URL, or credential.
 
 ## 6. Errors you can hit
@@ -575,7 +596,7 @@ For each model, configure its declaration:
 The declaration does not verify provider retention or training terms.
 From **Operated by**, Hephaestus derives **In-house** or **Cloud**.
 It shows that tier as a badge wherever the model appears.
-Token limits and the reasoning switch are under **Advanced**.
+Token limits are under **Advanced**.
 
 In workspace **AI models**, each purpose has three rows:
 
@@ -728,7 +749,7 @@ You assign the three other kinds on **AI models**, under **Models for practice s
 The **Decision model** accepts a model on a Decisions API or a Chat Completions API connection.
 With a chat completions model, Hephaestus reads each answer from the token log probabilities.
 That model must return `top_logprobs`.
-If the model has a reasoning effort, Hephaestus sends `reasoning_effort: none` for these calls, and the model must accept it.
+If the decision assignment has a reasoning effort, Hephaestus sends `reasoning_effort: none` for these calls, and the model must accept it.
 The model must give its answer without reasoning first.
 A model that always reasons, such as gpt-oss, cannot serve this purpose, and its calls stay not rated.
 
@@ -771,9 +792,9 @@ When no model can serve the purpose, the model list tells you what to do:
   The link **Your providers** scrolls to that section.
 - If not, it tells you to ask an instance admin to share a model.
 
-The list also gives two warnings:
+The assignment also gives two warnings:
 
-- For a decision model with a reasoning effort: a decision needs a model that answers at once with token probabilities.
+- For a decision assignment with a reasoning effort: a decision needs a model that answers at once with token probabilities.
 - For a reranking model without **No metered API cost**: some providers bill search units or report no tokens.
   Their calls have no price.
   For a self-hosted reranker, set **No metered API cost** on the model.

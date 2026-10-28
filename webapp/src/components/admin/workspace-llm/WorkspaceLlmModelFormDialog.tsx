@@ -27,7 +27,6 @@ import {
 } from "@/components/ui/dialog";
 import { Spinner } from "@/components/ui/spinner";
 import type { FieldErrors, LlmModelFormField } from "@/lib/llm-form-validation";
-import { reasoningEffortOf, reasoningEffortUpdateOf } from "@/lib/reasoning-effort";
 
 export interface WorkspaceLlmModelFormDialogProps {
 	open: boolean;
@@ -118,13 +117,11 @@ function WorkspaceLlmModelFormDialogContent({
 			onUpdate(editing.id, {
 				...shared,
 				clearBrand: fields.brand === undefined,
-				...reasoningEffortUpdateOf(fields.reasoningEffort),
 			} satisfies UpdateWorkspaceLlmModelRequest);
 			return;
 		}
 		onCreate({
 			...shared,
-			reasoningEffort: reasoningEffortOf(fields.reasoningEffort),
 			upstreamModelId: fields.upstreamModelId.trim(),
 		} satisfies CreateWorkspaceLlmModelRequest);
 	};

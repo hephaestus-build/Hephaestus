@@ -123,6 +123,21 @@ describe("AgentBindingsPage", () => {
 		);
 	});
 
+	it("saves a Heph timeout at the turn ceiling", () => {
+		const { onSave } = renderPage({ bindings: [{ ...inHouseBinding, purpose: "MENTOR" }] });
+		const heph = row("Heph", "In-house");
+
+		fireEvent.click(heph.getByRole("button", { name: /^Advanced/u }));
+		const timeout = timeoutInput(heph);
+		fireEvent.change(timeout, { target: { value: "900" } });
+		fireEvent.click(saveButton(heph));
+
+		expect(onSave).toHaveBeenCalledWith(
+			{ purpose: "MENTOR", tier: "IN_HOUSE" },
+			expect.objectContaining({ timeoutSeconds: 900 }),
+		);
+	});
+
 	it("exposes the advanced settings as a disclosure", () => {
 		renderPage();
 

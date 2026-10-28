@@ -12798,6 +12798,18 @@ components:
         ready:
           type: boolean
           description: True when the bound model is available to run right now
+        reasoningEffort:
+          type: string
+          description: "Reasoning effort requested of the model for this purpose;\
+            \ null sends none, and the provider's own default applies"
+          enum:
+          - NONE
+          - MINIMAL
+          - LOW
+          - MEDIUM
+          - HIGH
+          - XHIGH
+          - MAX
         servedTiers:
           type: array
           description: "The members this binding serves now, named by the tier of\
@@ -12827,6 +12839,10 @@ components:
       type: object
       description: Bind a model and execution limits to an agent purpose
       properties:
+        clearReasoningEffort:
+          type: boolean
+          description: "True clears the reasoning effort: none is sent, and the provider's\
+            \ own default applies"
         enabled:
           type: boolean
           description: Whether this purpose is active (paused when false)
@@ -12839,11 +12855,24 @@ components:
           format: int32
           description: Maximum concurrent runs for this purpose
           minimum: 1
+        reasoningEffort:
+          type: string
+          description: Reasoning effort to request of the model for this purpose;
+            null keeps the current one (see clearReasoningEffort). A new binding gets
+            none. Embedding and reranking take none.
+          enum:
+          - NONE
+          - MINIMAL
+          - LOW
+          - MEDIUM
+          - HIGH
+          - XHIGH
+          - MAX
         timeoutSeconds:
           type: integer
           format: int32
-          description: Per-run timeout in seconds (30–10800; three hours is the longest
-            a single run may take)
+          description: "Per-run timeout in seconds: 30–10800 (three hours) for a review,\
+            \ 30–900 (15 minutes) for a Heph answer. A new Heph binding gets 900."
           maximum: 10800
           minimum: 30
         workspaceModelId:
@@ -13064,18 +13093,6 @@ components:
             - PRACTICE_DECISION
             - PRACTICE_EMBEDDING
             - PRACTICE_RERANKING
-        reasoningEffort:
-          type: string
-          description: "Reasoning effort requested of the model; null sends none,\
-            \ the provider's default applies"
-          enum:
-          - NONE
-          - MINIMAL
-          - LOW
-          - MEDIUM
-          - HIGH
-          - XHIGH
-          - MAX
         scope:
           type: string
           description: SHARED (instance catalog) or WORKSPACE (your own provider)
@@ -14392,18 +14409,6 @@ components:
           enum:
           - OWN_ORGANISATION
           - PROVIDER
-        reasoningEffort:
-          type: string
-          description: "Reasoning effort to request; null sends none, so the provider's\
-            \ own default applies"
-          enum:
-          - NONE
-          - MINIMAL
-          - LOW
-          - MEDIUM
-          - HIGH
-          - XHIGH
-          - MAX
         slug:
           type: string
           description: Optional internal slug; generated from displayName when omitted
@@ -14758,18 +14763,6 @@ components:
           - PRICED
           - NO_CHARGE
           - UNPRICED
-        reasoningEffort:
-          type: string
-          description: "Reasoning effort to request; null sends none, so the provider's\
-            \ own default applies"
-          enum:
-          - NONE
-          - MINIMAL
-          - LOW
-          - MEDIUM
-          - HIGH
-          - XHIGH
-          - MAX
         slug:
           type: string
           description: Optional internal slug; generated from displayName when omitted
@@ -17021,18 +17014,6 @@ components:
           enum:
           - OWN_ORGANISATION
           - PROVIDER
-        reasoningEffort:
-          type: string
-          description: "Reasoning effort requested of the model; null sends none,\
-            \ the provider's default applies"
-          enum:
-          - NONE
-          - MINIMAL
-          - LOW
-          - MEDIUM
-          - HIGH
-          - XHIGH
-          - MAX
         slug:
           type: string
           description: Unique slug within the connection
@@ -26795,10 +26776,6 @@ components:
         clearBrand:
           type: boolean
           description: Clear the declared model brand
-        clearReasoningEffort:
-          type: boolean
-          description: "True clears the reasoning effort, so the provider's own default\
-            \ applies"
         contextWindow:
           type: integer
           format: int32
@@ -26829,18 +26806,6 @@ components:
           enum:
           - OWN_ORGANISATION
           - PROVIDER
-        reasoningEffort:
-          type: string
-          description: Reasoning effort to request; null keeps the current one (see
-            clearReasoningEffort)
-          enum:
-          - NONE
-          - MINIMAL
-          - LOW
-          - MEDIUM
-          - HIGH
-          - XHIGH
-          - MAX
     UpdateLlmModelSharingRequest:
       type: object
       description: "Share with: all workspaces, or a selected set"
@@ -27183,10 +27148,6 @@ components:
         clearBrand:
           type: boolean
           description: Clear the declared model brand
-        clearReasoningEffort:
-          type: boolean
-          description: "True clears the reasoning effort, so the provider's own default\
-            \ applies"
         contextWindow:
           type: integer
           format: int32
@@ -27247,18 +27208,6 @@ components:
           - PRICED
           - NO_CHARGE
           - UNPRICED
-        reasoningEffort:
-          type: string
-          description: Reasoning effort to request; null keeps the current one (see
-            clearReasoningEffort)
-          enum:
-          - NONE
-          - MINIMAL
-          - LOW
-          - MEDIUM
-          - HIGH
-          - XHIGH
-          - MAX
     UpdateWorkspacePasskeyPolicy:
       type: object
       properties:
@@ -28135,18 +28084,6 @@ components:
           - PRICED
           - NO_CHARGE
           - UNPRICED
-        reasoningEffort:
-          type: string
-          description: "Reasoning effort requested of the model; null sends none,\
-            \ the provider's default applies"
-          enum:
-          - NONE
-          - MINIMAL
-          - LOW
-          - MEDIUM
-          - HIGH
-          - XHIGH
-          - MAX
         slug:
           type: string
           description: Unique slug within the workspace

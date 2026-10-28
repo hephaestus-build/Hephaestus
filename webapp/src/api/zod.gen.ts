@@ -208,6 +208,15 @@ export const zAgentBinding = z.object({
         'PRACTICE_RERANKING'
     ]),
     ready: z.boolean(),
+    reasoningEffort: z.enum([
+        'NONE',
+        'MINIMAL',
+        'LOW',
+        'MEDIUM',
+        'HIGH',
+        'XHIGH',
+        'MAX'
+    ]).optional(),
     servedTiers: z.array(z.enum([
         'IN_HOUSE',
         'CLOUD',
@@ -221,9 +230,19 @@ export const zAgentBinding = z.object({
  * Bind a model and execution limits to an agent purpose
  */
 export const zAgentBindingRequest = z.object({
+    clearReasoningEffort: z.boolean().optional(),
     enabled: z.boolean().optional(),
     instanceModelId: z.int().optional(),
     maxConcurrentJobs: z.int().gte(1).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }).optional(),
+    reasoningEffort: z.enum([
+        'NONE',
+        'MINIMAL',
+        'LOW',
+        'MEDIUM',
+        'HIGH',
+        'XHIGH',
+        'MAX'
+    ]).optional(),
     timeoutSeconds: z.int().gte(30).lte(10800).optional(),
     workspaceModelId: z.int().optional()
 });
@@ -340,15 +359,6 @@ export const zAvailableLlmModel = z.object({
         'PRACTICE_EMBEDDING',
         'PRACTICE_RERANKING'
     ])),
-    reasoningEffort: z.enum([
-        'NONE',
-        'MINIMAL',
-        'LOW',
-        'MEDIUM',
-        'HIGH',
-        'XHIGH',
-        'MAX'
-    ]).optional(),
     scope: z.enum(['SHARED', 'WORKSPACE'])
 });
 
@@ -828,15 +838,6 @@ export const zCreateLlmModelRequest = z.object({
     enabled: z.boolean().optional(),
     maxOutputTokens: z.int().gte(1).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }).optional(),
     operatedBy: z.enum(['OWN_ORGANISATION', 'PROVIDER']).optional(),
-    reasoningEffort: z.enum([
-        'NONE',
-        'MINIMAL',
-        'LOW',
-        'MEDIUM',
-        'HIGH',
-        'XHIGH',
-        'MAX'
-    ]).optional(),
     slug: z.string().min(0).max(63).optional(),
     upstreamModelId: z.string().min(0).max(256)
 });
@@ -953,15 +954,6 @@ export const zCreateWorkspaceLlmModelRequest = z.object({
         'PRICED',
         'NO_CHARGE',
         'UNPRICED'
-    ]).optional(),
-    reasoningEffort: z.enum([
-        'NONE',
-        'MINIMAL',
-        'LOW',
-        'MEDIUM',
-        'HIGH',
-        'XHIGH',
-        'MAX'
     ]).optional(),
     slug: z.string().min(0).max(63).optional(),
     upstreamModelId: z.string().min(0).max(256)
@@ -2002,15 +1994,6 @@ export const zLlmModel = z.object({
     id: z.int(),
     maxOutputTokens: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }).optional(),
     operatedBy: z.enum(['OWN_ORGANISATION', 'PROVIDER']).optional(),
-    reasoningEffort: z.enum([
-        'NONE',
-        'MINIMAL',
-        'LOW',
-        'MEDIUM',
-        'HIGH',
-        'XHIGH',
-        'MAX'
-    ]).optional(),
     slug: z.string(),
     updatedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
     upstreamModelId: z.string(),
@@ -5833,22 +5816,12 @@ export const zUpdateLlmModelRequest = z.object({
         'MOONSHOT'
     ]).optional(),
     clearBrand: z.boolean().optional(),
-    clearReasoningEffort: z.boolean().optional(),
     contextWindow: z.int().gte(1).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }).optional(),
     dataHandlingNote: z.string().min(0).max(200).optional(),
     displayName: z.string().min(0).max(128).optional(),
     enabled: z.boolean().optional(),
     maxOutputTokens: z.int().gte(1).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }).optional(),
-    operatedBy: z.enum(['OWN_ORGANISATION', 'PROVIDER']).optional(),
-    reasoningEffort: z.enum([
-        'NONE',
-        'MINIMAL',
-        'LOW',
-        'MEDIUM',
-        'HIGH',
-        'XHIGH',
-        'MAX'
-    ]).optional()
+    operatedBy: z.enum(['OWN_ORGANISATION', 'PROVIDER']).optional()
 });
 
 /**
@@ -6013,7 +5986,6 @@ export const zUpdateWorkspaceLlmModelRequest = z.object({
         'MOONSHOT'
     ]).optional(),
     clearBrand: z.boolean().optional(),
-    clearReasoningEffort: z.boolean().optional(),
     contextWindow: z.int().gte(1).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }).optional(),
     dataHandlingNote: z.string().min(0).max(200).optional(),
     displayName: z.string().min(0).max(128).optional(),
@@ -6029,15 +6001,6 @@ export const zUpdateWorkspaceLlmModelRequest = z.object({
         'PRICED',
         'NO_CHARGE',
         'UNPRICED'
-    ]).optional(),
-    reasoningEffort: z.enum([
-        'NONE',
-        'MINIMAL',
-        'LOW',
-        'MEDIUM',
-        'HIGH',
-        'XHIGH',
-        'MAX'
     ]).optional()
 });
 
@@ -6552,15 +6515,6 @@ export const zWorkspaceLlmModel = z.object({
         'NO_CHARGE',
         'UNPRICED'
     ]),
-    reasoningEffort: z.enum([
-        'NONE',
-        'MINIMAL',
-        'LOW',
-        'MEDIUM',
-        'HIGH',
-        'XHIGH',
-        'MAX'
-    ]).optional(),
     slug: z.string(),
     updatedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional(),
     upstreamModelId: z.string()

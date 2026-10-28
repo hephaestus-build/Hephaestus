@@ -40,12 +40,6 @@ public record LlmModelDTO(
         @Nullable @Schema(description = "Maximum output tokens")
         Integer maxOutputTokens,
 
-        @Nullable
-        @Schema(
-                description =
-                        "Reasoning effort requested of the model; null sends none, the provider's default applies")
-        ReasoningEffort reasoningEffort,
-
         @Nullable @Schema(description = "Who operates the systems the work is sent to; null until declared")
         LlmDataOperator operatedBy,
 
@@ -82,7 +76,6 @@ public record LlmModelDTO(
                 model.getUpstreamModelId(),
                 model.getContextWindow(),
                 model.getMaxOutputTokens(),
-                model.getReasoningEffort(),
                 model.getDataHandling().getOperatedBy(),
                 model.getDataHandling().getNote(),
                 model.getDataHandlingTier(),

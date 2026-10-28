@@ -15,8 +15,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.api.Test;
 import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.core.io.buffer.DefaultDataBufferFactory;
 import org.springframework.http.HttpHeaders;
@@ -31,10 +30,9 @@ import reactor.test.StepVerifier;
 
 class ProxyStreamingDeadlineTest extends BaseUnitTest {
 
-    @ParameterizedTest(name = "bodyLimit={0}")
-    @ValueSource(booleans = {false, true})
-    @DisplayName("frequent frames do not restart the total exchange or mentor body allowance")
-    void shouldKeepTheOriginalLimitWhenFramesKeepArriving(boolean bodyLimit) throws Exception {
+    @Test
+    @DisplayName("frequent frames do not restart the total exchange allowance")
+    void shouldKeepTheOriginalLimitWhenFramesKeepArriving() throws Exception {
         var executor = Executors.newSingleThreadExecutor();
         // Keep the blocking servlet owner off the scheduler that virtual time replaces.
         var requestScheduler = Schedulers.fromExecutorService(executor);
@@ -87,10 +85,7 @@ class ProxyStreamingDeadlineTest extends BaseUnitTest {
                                         .body(frames)
                                         .build();
                                 return ProxyStreamingUtils.forward(
-                                        ProxyStreamingUtils.parts(upstream, bodyLimit ? Duration.ofSeconds(5) : null),
-                                        Duration.ofSeconds(bodyLimit ? 30 : 5),
-                                        servlet,
-                                        null);
+                                        ProxyStreamingUtils.parts(upstream), Duration.ofSeconds(5), servlet, null);
                             })
                             .subscribeOn(requestScheduler))
                     .then(() -> {

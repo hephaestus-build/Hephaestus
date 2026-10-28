@@ -64,7 +64,7 @@ class AgentBindingTimeoutRangeTest extends BaseUnitTest {
     }
 
     private static Set<ConstraintViolation<AgentBindingRequestDTO>> violationsFor(@Nullable Integer timeoutSeconds) {
-        AgentBindingRequestDTO request = new AgentBindingRequestDTO(1L, null, timeoutSeconds, null, null);
+        AgentBindingRequestDTO request = new AgentBindingRequestDTO(1L, null, timeoutSeconds, null, null, null, null);
         return validator.validate(request).stream()
                 .filter(v -> v.getPropertyPath().toString().equals("timeoutSeconds"))
                 .collect(Collectors.toSet());

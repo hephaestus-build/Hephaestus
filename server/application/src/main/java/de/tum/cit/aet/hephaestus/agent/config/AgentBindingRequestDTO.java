@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.config;
 
+import de.tum.cit.aet.hephaestus.agent.catalog.ReasoningEffort;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -7,7 +8,7 @@ import org.jspecify.annotations.Nullable;
 
 /**
  * Set a workspace's model + execution limits for one agent purpose. Exactly one of
- * {@code instanceModelId} / {@code workspaceModelId} must be provided. Execution limits and the
+ * {@code instanceModelId} / {@code workspaceModelId} must be provided. Execution limits, the reasoning effort and the
  * enabled flag keep their current value when omitted.
  */
 @Schema(description = "Bind a model and execution limits to an agent purpose")
@@ -21,11 +22,23 @@ public record AgentBindingRequestDTO(
         @Nullable
         @Min(AgentBindingLimits.MIN_TIMEOUT_SECONDS)
         @Max(AgentBindingLimits.MAX_TIMEOUT_SECONDS)
-        @Schema(description = "Per-run timeout in seconds (30–10800; three hours is the longest a single run may take)")
+        @Schema(
+                description = "Per-run timeout in seconds: 30–10800 (three hours) for a review, 30–900 (15 minutes) for"
+                        + " a Heph answer. A new Heph binding gets 900.")
         Integer timeoutSeconds,
 
         @Nullable @Min(1) @Schema(description = "Maximum concurrent runs for this purpose")
         Integer maxConcurrentJobs,
 
         @Nullable @Schema(description = "Whether this purpose is active (paused when false)")
-        Boolean enabled) {}
+        Boolean enabled,
+
+        @Nullable
+        @Schema(
+                description = "Reasoning effort to request of the model for this purpose; null keeps the current one"
+                        + " (see clearReasoningEffort). A new binding gets none. Embedding and reranking take none.")
+        ReasoningEffort reasoningEffort,
+
+        @Nullable
+        @Schema(description = "True clears the reasoning effort: none is sent, and the provider's own default applies")
+        Boolean clearReasoningEffort) {}

@@ -251,10 +251,7 @@ class ProxyStreamingUtilsTest extends BaseUnitTest {
             var recorded = recording(new CountDownLatch(0));
 
             assertThatThrownBy(() -> ProxyStreamingUtils.forward(
-                            ProxyStreamingUtils.parts(upstream, null),
-                            Duration.ofSeconds(1),
-                            recorded.response(),
-                            null))
+                            ProxyStreamingUtils.parts(upstream), Duration.ofSeconds(1), recorded.response(), null))
                     .hasCauseInstanceOf(TimeoutException.class);
 
             assertThat(cancelled).isTrue();
@@ -599,7 +596,7 @@ class ProxyStreamingUtilsTest extends BaseUnitTest {
             var response = new MockHttpServletResponse();
 
             var result = ProxyStreamingUtils.forward(
-                    ProxyStreamingUtils.parts(sse(body), null), Duration.ofSeconds(1), response, null);
+                    ProxyStreamingUtils.parts(sse(body)), Duration.ofSeconds(1), response, null);
 
             assertThat(result.streamOutcome()).isEqualTo(ProxyStreamingUtils.StreamOutcome.TIMED_OUT);
             // The committed 200 and its bytes stay as they are; the outcome, not the status, says the stream failed.
@@ -608,23 +605,6 @@ class ProxyStreamingUtilsTest extends BaseUnitTest {
             assertThat(response.getContentAsString()).isEqualTo("data: delivered\n\n");
             assertThat(cancelled).isTrue();
             assertThat(delivered.getNativeBuffer().refCnt()).isZero();
-        }
-
-        /** The mentor's stream limit: counted from the head, and shorter than its whole-exchange limit. */
-        @Test
-        @DisplayName("a body limit ends a stalled stream as timed out within a longer exchange limit")
-        void shouldEndAStalledBodyAtItsOwnLimit() {
-            var cancelled = new AtomicBoolean();
-            Flux<DataBuffer> body = Flux.<DataBuffer>never().doOnCancel(() -> cancelled.set(true));
-
-            var result = ProxyStreamingUtils.forward(
-                    ProxyStreamingUtils.parts(sse(body), Duration.ofSeconds(1)),
-                    Duration.ofSeconds(30),
-                    new MockHttpServletResponse(),
-                    null);
-
-            assertThat(result.streamOutcome()).isEqualTo(ProxyStreamingUtils.StreamOutcome.TIMED_OUT);
-            assertThat(cancelled).isTrue();
         }
 
         /**
@@ -664,7 +644,7 @@ class ProxyStreamingUtilsTest extends BaseUnitTest {
             var tapped = new AtomicInteger();
 
             var result = ProxyStreamingUtils.forward(
-                    ProxyStreamingUtils.parts(sse(body), null),
+                    ProxyStreamingUtils.parts(sse(body)),
                     Duration.ofSeconds(1),
                     recorded.response(),
                     bytes -> tapped.incrementAndGet());
@@ -760,7 +740,7 @@ class ProxyStreamingUtilsTest extends BaseUnitTest {
 
     private static ProxyStreamingUtils.UpstreamResult forward(
             ClientResponse upstream, HttpServletResponse response, @Nullable Consumer<byte[]> tap) {
-        return ProxyStreamingUtils.forward(ProxyStreamingUtils.parts(upstream, null), LIMIT, response, tap);
+        return ProxyStreamingUtils.forward(ProxyStreamingUtils.parts(upstream), LIMIT, response, tap);
     }
 
     /** Every call on a response or its output stream, by thread; each write waits until {@code release} opens. */

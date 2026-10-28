@@ -1581,7 +1581,8 @@ type Ending = (
 
 /**
  * A stop by the developer keeps what Heph wrote; a deadline, a silent model or too many model calls fail the turn; a
- * lost lease says nothing.
+ * lost lease says nothing. The call limit is not a time limit: the turn fails as an error, so the developer does not
+ * read that Heph ran out of time.
  */
 async function endStopped(state: TurnState, end: Ending): Promise<void> {
 	if (state.stopReason === "developer") {
@@ -1591,7 +1592,7 @@ async function endStopped(state: TurnState, end: Ending): Promise<void> {
 	} else if (state.stopReason === "stalled") {
 		await end("FAILED", "STALLED", state.stallDetail ?? "provider_unavailable");
 	} else if (state.stopReason === "calls") {
-		await end("FAILED", "DEADLINE", "call_limit");
+		await end("FAILED", "ERROR", "call_limit");
 	}
 }
 

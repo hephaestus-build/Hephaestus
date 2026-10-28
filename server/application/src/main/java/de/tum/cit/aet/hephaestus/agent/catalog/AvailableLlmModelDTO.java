@@ -30,12 +30,6 @@ public record AvailableLlmModelDTO(
         @NonNull @Schema(description = "Owning connection's display name")
         String connectionDisplayName,
 
-        @Nullable
-        @Schema(
-                description =
-                        "Reasoning effort requested of the model; null sends none, the provider's default applies")
-        ReasoningEffort reasoningEffort,
-
         @NonNull @Schema(description = "Data-handling tier derived from the admin's declared facts")
         DataHandlingTier dataHandlingTier,
 
@@ -64,7 +58,6 @@ public record AvailableLlmModelDTO(
                 model.getDisplayName(),
                 model.getBrand(),
                 model.getConnection().getDisplayName(),
-                model.getReasoningEffort(),
                 model.getDataHandlingTier(),
                 AgentPurpose.servedBy(model.getConnection().getApiProtocol()),
                 pricingMode,
@@ -81,7 +74,6 @@ public record AvailableLlmModelDTO(
                 model.getDisplayName(),
                 model.getBrand(),
                 model.getConnection().getDisplayName(),
-                model.getReasoningEffort(),
                 model.getDataHandlingTier(),
                 AgentPurpose.servedBy(model.getConnection().getApiProtocol()),
                 model.getPricingMode(),
