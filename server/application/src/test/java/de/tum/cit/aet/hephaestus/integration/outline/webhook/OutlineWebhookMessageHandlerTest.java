@@ -5,7 +5,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -14,19 +13,14 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.core.security.OutlineOriginPolicy;
-import de.tum.cit.aet.hephaestus.integration.core.connection.Connection;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService;
 import de.tum.cit.aet.hephaestus.integration.core.connection.ConnectionService.OutlineSubscription;
-import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.integration.outline.client.model.OutlineDocumentModel;
-import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineDocumentEvent;
-import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineDocumentEventRepository;
 import de.tum.cit.aet.hephaestus.integration.outline.sync.OutlineDocumentSyncScheduler;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import io.nats.client.Message;
 import io.nats.client.impl.Headers;
 import java.nio.charset.StandardCharsets;
-import java.time.Instant;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Stream;
@@ -48,7 +42,6 @@ import tools.jackson.databind.json.JsonMapper;
  */
 class OutlineWebhookMessageHandlerTest extends BaseUnitTest {
 
-    private static final long CONNECTION_ID = 7L;
     private static final String ROUTE = "key/route";
 
     @Mock
@@ -57,17 +50,10 @@ class OutlineWebhookMessageHandlerTest extends BaseUnitTest {
     @Mock
     private OutlineDocumentSyncScheduler syncScheduler;
 
-    @Mock
-    private OutlineDocumentEventRepository documentEventRepository;
-
-    @Mock
-    private Connection connection;
-
     private OutlineWebhookMessageHandler handler() {
         return new OutlineWebhookMessageHandler(
                 connectionService,
                 syncScheduler,
-                documentEventRepository,
                 JsonMapper.builder().build(),
                 new OutlineOriginPolicy(Set.of("https://wiki.example.com")));
     }
@@ -110,10 +96,6 @@ class OutlineWebhookMessageHandlerTest extends BaseUnitTest {
     private void resolves(String subscriptionId, long workspaceId) {
         when(connectionService.findOutlineSubscription(subscriptionId))
                 .thenReturn(Optional.of(new OutlineSubscription(workspaceId, "https://wiki.example.com", ROUTE)));
-        lenient().when(connection.getId()).thenReturn(CONNECTION_ID);
-        lenient()
-                .when(connectionService.findActive(workspaceId, IntegrationKind.OUTLINE))
-                .thenReturn(Optional.of(connection));
     }
 
     @Test
@@ -123,7 +105,7 @@ class OutlineWebhookMessageHandlerTest extends BaseUnitTest {
 
         handler().onMessage(message("sub-1", "documents.update", "doc-9"));
 
-        verifyNoInteractions(syncScheduler, documentEventRepository);
+        verifyNoInteractions(syncScheduler);
     }
 
     @Test
@@ -133,7 +115,7 @@ class OutlineWebhookMessageHandlerTest extends BaseUnitTest {
 
         handler().onMessage(message("sub-1", "documents.update", "doc-9"));
 
-        verifyNoInteractions(syncScheduler, documentEventRepository);
+        verifyNoInteractions(syncScheduler);
     }
 
     @Test
@@ -167,7 +149,6 @@ class OutlineWebhookMessageHandlerTest extends BaseUnitTest {
         verify(syncScheduler).syncWorkspaceNow(42L);
         verify(syncScheduler, never()).refreshDocumentNow(anyLong(), anyString(), anyString(), any());
         // No document id → nothing to attribute an event row to.
-        verifyNoInteractions(documentEventRepository);
     }
 
     @Test
@@ -178,7 +159,6 @@ class OutlineWebhookMessageHandlerTest extends BaseUnitTest {
 
         verify(syncScheduler).refreshCollectionCatalogNow(42L, "collections.delete", "col-3");
         // The event log is a documents.* trail only.
-        verifyNoInteractions(documentEventRepository);
     }
 
     @Test
@@ -197,7 +177,6 @@ class OutlineWebhookMessageHandlerTest extends BaseUnitTest {
         handler().onMessage(message("sub-1", "webhookSubscriptions.update", "x"));
 
         verifyNoInteractions(syncScheduler);
-        verifyNoInteractions(documentEventRepository);
     }
 
     @Test
@@ -207,71 +186,6 @@ class OutlineWebhookMessageHandlerTest extends BaseUnitTest {
         handler().onMessage(message("gone", "documents.update", "doc-9"));
 
         verifyNoInteractions(syncScheduler);
-        verifyNoInteractions(documentEventRepository);
-    }
-
-    @Test
-    void documentEvent_appendsOneEventRowWithActorAndUpstreamClock() {
-        resolves("sub-1", 42L);
-
-        handler().onMessage(message("sub-1", "documents.update", "doc-9", "actor-uuid", "2026-07-10T12:34:56.000Z"));
-
-        ArgumentCaptor<OutlineDocumentEvent> event = ArgumentCaptor.forClass(OutlineDocumentEvent.class);
-        verify(documentEventRepository).save(event.capture());
-        assertThat(event.getValue().getWorkspaceId()).isEqualTo(42L);
-        assertThat(event.getValue().getConnectionId()).isEqualTo(CONNECTION_ID);
-        assertThat(event.getValue().getDocumentId()).isEqualTo("doc-9");
-        assertThat(event.getValue().getEventName()).isEqualTo("documents.update");
-        assertThat(event.getValue().getActorSubject()).isEqualTo("actor-uuid");
-        assertThat(event.getValue().getOccurredAt()).isEqualTo(Instant.parse("2026-07-10T12:34:56Z"));
-    }
-
-    @Test
-    void documentDeleteEvent_isLoggedToo() {
-        resolves("sub-1", 42L);
-
-        handler().onMessage(message("sub-1", "documents.delete", "doc-9", "actor-uuid", null));
-
-        ArgumentCaptor<OutlineDocumentEvent> event = ArgumentCaptor.forClass(OutlineDocumentEvent.class);
-        verify(documentEventRepository).save(event.capture());
-        assertThat(event.getValue().getEventName()).isEqualTo("documents.delete");
-        assertThat(event.getValue().getOccurredAt()).isNull();
-    }
-
-    @Test
-    void documentEventWithoutActorOrClock_persistsWithNulls() {
-        resolves("sub-1", 42L);
-
-        handler().onMessage(message("sub-1", "documents.publish", "doc-9"));
-
-        ArgumentCaptor<OutlineDocumentEvent> event = ArgumentCaptor.forClass(OutlineDocumentEvent.class);
-        verify(documentEventRepository).save(event.capture());
-        assertThat(event.getValue().getActorSubject()).isNull();
-        assertThat(event.getValue().getOccurredAt()).isNull();
-    }
-
-    @Test
-    void eventLogFailure_neverBlocksTheRefresh() {
-        resolves("sub-1", 42L);
-        doThrow(new RuntimeException("insert failed"))
-                .when(documentEventRepository)
-                .save(any());
-
-        handler().onMessage(message("sub-1", "documents.update", "doc-9"));
-
-        verify(syncScheduler).refreshDocumentNow(42L, "documents.update", "doc-9", null);
-    }
-
-    @Test
-    void missingActiveConnection_skipsTheEventRowButStillRoutes() {
-        when(connectionService.findOutlineSubscription("sub-1"))
-                .thenReturn(Optional.of(new OutlineSubscription(42L, "https://wiki.example.com", ROUTE)));
-        when(connectionService.findActive(42L, IntegrationKind.OUTLINE)).thenReturn(Optional.empty());
-
-        handler().onMessage(message("sub-1", "documents.update", "doc-9"));
-
-        verifyNoInteractions(documentEventRepository);
-        verify(syncScheduler).refreshDocumentNow(42L, "documents.update", "doc-9", null);
     }
 
     static Stream<byte[]> malformedBodies() {
@@ -287,7 +201,6 @@ class OutlineWebhookMessageHandlerTest extends BaseUnitTest {
         handler().onMessage(msg);
 
         verifyNoInteractions(syncScheduler);
-        verifyNoInteractions(documentEventRepository);
     }
 
     @Test

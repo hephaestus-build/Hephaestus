@@ -46,7 +46,6 @@ erDiagram
         VARCHAR(256) upstream_model_id UK "NOT NULL"
         INTEGER context_window
         INTEGER max_output_tokens
-        BOOLEAN supports_reasoning "NOT NULL"
         VARCHAR(16) visibility "NOT NULL"
         BOOLEAN enabled "NOT NULL"
         TIMESTAMPTZ created_at "NOT NULL"
@@ -166,7 +165,6 @@ erDiagram
         TIMESTAMPTZ available_at "NOT NULL"
         VARCHAR(32) hold_reason
         VARCHAR(255) worker_id
-        VARCHAR(255) idempotency_key
         VARCHAR(32) trace_id "NOT NULL"
         JSONB input "NOT NULL"
         JSONB config_snapshot "NOT NULL"
@@ -304,7 +302,6 @@ erDiagram
         VARCHAR(256) upstream_model_id UK "NOT NULL"
         INTEGER context_window
         INTEGER max_output_tokens
-        BOOLEAN supports_reasoning "NOT NULL"
         VARCHAR(16) pricing_mode "NOT NULL"
         NUMERIC(18,8) per_1m_input_usd
         NUMERIC(18,8) per_1m_output_usd

@@ -22,17 +22,14 @@ class ConsentLedgerMigrationIntegrationTest {
             PostgreSQLTestContainer.createMigratedDatabase("consent_ledger_migration_test");
 
     @Test
-    void shouldKeepTheArchivedNoticeForARecordedDecision() throws Exception {
+    void shouldKeepTheNoticeVersionOfARecordedDecisionWithoutTheDroppedArchive() throws Exception {
         try (Connection connection = connect()) {
-            String archived = archivedDigest(connection, "2026-08-30");
-            assertThat(archived)
-                    .as("the archived notice is not dropped by this release")
-                    .isNotNull();
+            // 1.0 drops the notice archive; the release that published a wording identifies it.
+            assertThat(tableExists(connection, "consent_notice")).isFalse();
 
             long decisionId = insertDecision(connection, insertAccount(connection), "2026-08-30");
 
             assertThat(noticeVersion(connection, decisionId)).isEqualTo("2026-08-30");
-            assertThat(archivedDigest(connection, "2026-08-30")).isEqualTo(archived);
         }
     }
 
@@ -106,12 +103,11 @@ class ConsentLedgerMigrationIntegrationTest {
         }
     }
 
-    private static @Nullable String archivedDigest(Connection connection, String version) throws Exception {
-        try (PreparedStatement statement =
-                connection.prepareStatement("SELECT sha256 FROM consent_notice WHERE version = ?")) {
-            statement.setString(1, version);
+    private static boolean tableExists(Connection connection, String table) throws Exception {
+        try (PreparedStatement statement = connection.prepareStatement("SELECT to_regclass(?) IS NOT NULL")) {
+            statement.setString(1, table);
             try (ResultSet rows = statement.executeQuery()) {
-                return rows.next() ? rows.getString(1) : null;
+                return rows.next() && rows.getBoolean(1);
             }
         }
     }

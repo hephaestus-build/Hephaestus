@@ -100,9 +100,6 @@ public class ReviewJob {
     @Column(name = "worker_id", length = 255)
     private @Nullable String workerId;
 
-    @Column(name = "idempotency_key", length = 255)
-    private @Nullable String idempotencyKey;
-
     @Column(name = "trace_id", nullable = false, length = 32)
     private String traceId;
 

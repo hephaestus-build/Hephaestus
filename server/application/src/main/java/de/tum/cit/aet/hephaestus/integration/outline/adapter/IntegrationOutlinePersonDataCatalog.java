@@ -16,7 +16,6 @@ import tools.jackson.databind.ObjectMapper;
 @RequiredArgsConstructor
 @PersonDataStores({
     "outline_document",
-    "outline_document_event",
     "outline_collection",
     "outline_document_editor",
     "outline_document_content",
@@ -39,16 +38,6 @@ public class IntegrationOutlinePersonDataCatalog implements PersonDataCatalog {
                         "id",
                         "created_by_subject=NULL,created_by_name=NULL,title=NULL,slug=NULL,body_markdown=NULL,content_hash=NULL",
                         300),
-                new JdbcPersonDataStore(
-                        jdbc,
-                        mapper,
-                        "outline_document_event",
-                        "outline_document_event",
-                        "EXISTS (SELECT 1 FROM jsonb_to_recordset(CAST(:identities AS jsonb)) AS i(\"providerId\" bigint,subject text,\"teamId\" text) JOIN identity_provider p ON p.id=i.\"providerId\" JOIN connection c ON c.config->>'serverUrl'=p.server_url WHERE p.type='OUTLINE' AND c.id=t.connection_id AND c.workspace_id=t.workspace_id AND COALESCE(i.\"teamId\",'')=COALESCE(c.instance_key,'') AND i.subject=t.actor_subject)",
-                        "id,workspace_id,connection_id,document_id,event_name,actor_subject,occurred_at,created_at",
-                        "id",
-                        "",
-                        290),
                 new JdbcPersonDataStore(
                         jdbc,
                         mapper,

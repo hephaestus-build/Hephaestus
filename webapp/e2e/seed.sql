@@ -10,12 +10,12 @@ INSERT INTO llm_connection (id, slug, display_name, base_url, api_protocol, auth
 VALUES (1, 'e2e-gateway', 'E2E LLM Gateway', 'https://llm-gateway.example/api', 'openai-completions', 'BEARER', true, now())
 ON CONFLICT (id) DO NOTHING;
 
-INSERT INTO llm_model (id, connection_id, slug, display_name, upstream_model_id, context_window, max_output_tokens, supports_reasoning, visibility, enabled, created_at)
-VALUES (1, 1, 'claude-sonnet-4-5', 'Claude Sonnet 4.5', 'claude-sonnet-4-5', 200000, 64000, false, 'PUBLIC', true, now())
+INSERT INTO llm_model (id, connection_id, slug, display_name, upstream_model_id, context_window, max_output_tokens, visibility, enabled, created_at)
+VALUES (1, 1, 'claude-sonnet-4-5', 'Claude Sonnet 4.5', 'claude-sonnet-4-5', 200000, 64000, 'PUBLIC', true, now())
 ON CONFLICT (id) DO NOTHING;
 
-INSERT INTO llm_model (id, connection_id, slug, display_name, upstream_model_id, context_window, max_output_tokens, supports_reasoning, visibility, enabled, created_at)
-VALUES (2, 1, 'gpt-oss-120b', 'GPT-OSS 120B', 'openai/gpt-oss-120b', 128000, 32000, true, 'PUBLIC', true, now())
+INSERT INTO llm_model (id, connection_id, slug, display_name, upstream_model_id, context_window, max_output_tokens, visibility, enabled, created_at)
+VALUES (2, 1, 'gpt-oss-120b', 'GPT-OSS 120B', 'openai/gpt-oss-120b', 128000, 32000, 'PUBLIC', true, now())
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO workspace_agent_binding (id, workspace_id, purpose, instance_model_id, enabled, timeout_seconds, max_concurrent_jobs, created_at, updated_at)
@@ -29,8 +29,8 @@ ON CONFLICT (id) DO NOTHING;
 -- The Heph page offers Heph once a model is ready under some AI choice, and a developer who has not chosen is
 -- answered from the undeclared slot, which holds only a model with undeclared data handling. Model 3 declares
 -- that it runs in house and fills the in-house slot.
-INSERT INTO llm_model (id, connection_id, slug, display_name, upstream_model_id, context_window, max_output_tokens, supports_reasoning, visibility, enabled, operated_by, created_at)
-VALUES (3, 1, 'in-house-model', 'In-house model', 'in-house-model', 128000, 32000, false, 'PUBLIC', true, 'OWN_ORGANISATION', now())
+INSERT INTO llm_model (id, connection_id, slug, display_name, upstream_model_id, context_window, max_output_tokens, visibility, enabled, operated_by, created_at)
+VALUES (3, 1, 'in-house-model', 'In-house model', 'in-house-model', 128000, 32000, 'PUBLIC', true, 'OWN_ORGANISATION', now())
 ON CONFLICT (id) DO NOTHING;
 INSERT INTO workspace_agent_binding (id, workspace_id, purpose, data_handling_tier, instance_model_id, enabled, timeout_seconds, max_concurrent_jobs, created_at, updated_at)
 VALUES (3, 1, 'MENTOR', 'IN_HOUSE', 3, true, 300, 1, now(), now())

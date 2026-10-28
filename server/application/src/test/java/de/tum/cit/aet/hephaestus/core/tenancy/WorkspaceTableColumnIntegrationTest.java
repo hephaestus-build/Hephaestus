@@ -23,8 +23,7 @@ class WorkspaceTableColumnIntegrationTest extends BaseIntegrationTest {
      * Tables that belong to no workspace and that no entity maps, so {@link WorkspaceScopedTables#GLOBAL_TABLES},
      * which must match the global entities, cannot list them.
      */
-    private static final Set<String> GLOBAL_WITHOUT_ENTITY =
-            Set.of("auth_rate_limit_bucket", "consent_notice", "shedlock");
+    private static final Set<String> GLOBAL_WITHOUT_ENTITY = Set.of("auth_rate_limit_bucket", "shedlock");
 
     private static final String MIRROR =
             "a provider mirror that reaches its workspace through its repository or" + " organization";
@@ -69,7 +68,6 @@ class WorkspaceTableColumnIntegrationTest extends BaseIntegrationTest {
             Map.entry("product_survey", OPTIONAL),
             Map.entry("product_survey_email_invitation", OPTIONAL),
             Map.entry("product_survey_participation", OPTIONAL),
-            Map.entry("product_survey_submission", OPTIONAL),
             Map.entry("connection_audit", "reaches its workspace through its connection"),
             Map.entry("event_publication", "the Spring Modulith event registry; a payload can name a workspace"));
 
