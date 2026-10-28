@@ -16,6 +16,9 @@ nats:
 webhook:
   stream:
     maxAge: 7d
+    maxAgeByStream:
+      slack: 7d
+      outline: 7d
     maxBytesGithub: 4294967296B
     maxBytes: 536870912B
 config:

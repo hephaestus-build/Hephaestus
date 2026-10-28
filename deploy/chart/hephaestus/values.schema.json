@@ -402,6 +402,11 @@
 					],
 					"properties": {
 						"maxAge": { "$ref": "#/definitions/duration" },
+						"maxAgeByStream": {
+							"type": "object",
+							"propertyNames": { "enum": ["github", "gitlab", "slack", "outline"] },
+							"additionalProperties": { "$ref": "#/definitions/duration" }
+						},
 						"maxBytes": { "$ref": "#/definitions/dataSize" },
 						"maxBytesGithub": { "$ref": "#/definitions/dataSize" },
 						"allowDestructiveLimitUpdates": { "type": "boolean" },

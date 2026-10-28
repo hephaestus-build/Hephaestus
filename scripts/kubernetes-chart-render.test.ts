@@ -922,9 +922,23 @@ for (const name of ["small", "small-16gib", "external"] as const) {
 	await test(`${name}: stream bounds and thirty-day durable expiry reach their runtime roles`, () => {
 		const resources = rendered(layersFor(name));
 		const receiver = workload(resources, "webhook");
-		assert.equal(envValue(receiver, "HEPHAESTUS_WEBHOOK_STREAM_MAX_AGE"), "7d");
-		assert.equal(envValue(receiver, "HEPHAESTUS_WEBHOOK_STREAM_MAX_BYTES_GITHUB"), "4294967296B");
-		assert.equal(envValue(receiver, "HEPHAESTUS_WEBHOOK_STREAM_MAX_BYTES"), "536870912B");
+		for (const [provider, ageKey, bytesKey, bytes] of [
+			["github", "MAX_AGE", "MAX_BYTES_GITHUB", "4294967296B"],
+			["gitlab", "MAX_AGE", "MAX_BYTES", "536870912B"],
+			["slack", "MAXAGEBYSTREAM_SLACK", "MAX_BYTES", "536870912B"],
+			["outline", "MAXAGEBYSTREAM_OUTLINE", "MAX_BYTES", "536870912B"],
+		] as const) {
+			assert.equal(
+				envValue(receiver, `HEPHAESTUS_WEBHOOK_STREAM_${ageKey}`),
+				"7d",
+				`${provider} age`,
+			);
+			assert.equal(
+				envValue(receiver, `HEPHAESTUS_WEBHOOK_STREAM_${bytesKey}`),
+				bytes,
+				`${provider} bytes`,
+			);
+		}
 		assert.equal(envValue(receiver, "HEPHAESTUS_WEBHOOK_STREAM_STORAGE_BUDGET"), "8589934592");
 		assert.equal(
 			envValue(receiver, "HEPHAESTUS_WEBHOOK_STREAM_ALLOW_DESTRUCTIVE_LIMIT_UPDATES"),
@@ -936,6 +950,20 @@ for (const name of ["small", "small-16gib", "external"] as const) {
 		);
 	});
 }
+
+await test("per-stream ages accept a site override and reject an unknown provider", () => {
+	const receiver = workload(
+		rendered([...layersFor("small"), { webhook: { stream: { maxAgeByStream: { slack: "9d" } } } }]),
+		"webhook",
+	);
+	assert.equal(envValue(receiver, "HEPHAESTUS_WEBHOOK_STREAM_MAXAGEBYSTREAM_SLACK"), "9d");
+	assert.equal(envValue(receiver, "HEPHAESTUS_WEBHOOK_STREAM_MAXAGEBYSTREAM_OUTLINE"), "7d");
+	assert.match(
+		render([...layersFor("small"), { webhook: { stream: { maxAgeByStream: { unknown: "7d" } } } }])
+			.stderr,
+		/invalid propertyName 'unknown'/u,
+	);
+});
 
 await test("an existing installation can keep its broker budget and volume when it adopts smaller stream bounds", () => {
 	const resources = rendered([
