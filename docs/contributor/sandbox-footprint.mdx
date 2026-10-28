@@ -43,7 +43,10 @@ The collector accepts only `hephaestus-staging`.
 It reads Pod metadata, node budgets, `/proc/meminfo`, and container cgroup counters.
 It collects no environment values, projected credentials, prompts, or answers.
 It creates no remote file or workload.
-The report retains the raw samples and each running container's resources, image, and disk or memory volume metadata.
+
+The report retains the raw samples and each observed container's resources, image, and disk or memory volume metadata.
+It refreshes Pod metadata each cycle, including initializers in Pending Pods.
+An initializer that ends between samples can remain unseen.
 
 `nodePeakBytes` is the maximum sampled `MemTotal - MemAvailable` for the whole node.
 It includes host services and system Pods.
@@ -197,6 +200,6 @@ The synchronized peak includes overlapping initialization and its file cache.
 It excludes host services and other workloads on Nuvemzinha.
 These controlled trials do not qualify live-provider latency, width six, or lower container limits.
 
-The focused harness suite passes 16 tests.
+The focused harness suites pass 18 tests.
 The existing composition golden suite passes four cases.
 The scheduled real-provider workload must still provide the three live queue distributions and the one-review/eight-turn loaded node peak.

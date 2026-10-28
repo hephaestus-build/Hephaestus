@@ -3,7 +3,8 @@ import { readFile, writeFile } from "node:fs/promises";
 import { setTimeout as sleep } from "node:timers/promises";
 import { parseArgs } from "node:util";
 
-import { asArray, asRecord, asString, parseJson } from "./lib/json.ts";
+import { asArray, asRecord, parseJson } from "./lib/json.ts";
+import { parseContainerIdentities } from "./lib/kubernetes-footprint.ts";
 import { output } from "./lib/process.ts";
 import {
 	distribution,
@@ -47,56 +48,13 @@ const snapshots: {
 	nodeAvailable: number;
 	containers: Record<string, Record<string, number | null>>;
 }[] = [];
-const identities: Record<
-	string,
-	{
-		namespace: string;
-		pod: string;
-		container: string;
-		image: unknown;
-		resources: unknown;
-		mounts: unknown;
-		volumes: unknown;
-	}
-> = {};
+const identities: ReturnType<typeof parseContainerIdentities> = {};
 for (let index = 0; index < count; index += 1) {
 	const started = Date.now();
-	const pods = asRecord(
-		parseJson(
-			await remote("sudo kubectl get pods -A --field-selector=status.phase=Running -o json"),
-		),
-		"pods",
+	Object.assign(
+		identities,
+		parseContainerIdentities(parseJson(await remote("sudo kubectl get pods -A -o json"))),
 	);
-	for (const podValue of asArray(pods.items, "pods.items")) {
-		const pod = asRecord(podValue, "pod");
-		const metadata = asRecord(pod.metadata, "metadata");
-		const spec = asRecord(pod.spec, "spec");
-		const statuses = asRecord(pod.status, "status").containerStatuses;
-		for (const statusValue of statuses === undefined
-			? []
-			: asArray(statuses, "containerStatuses")) {
-			const status = asRecord(statusValue, "containerStatus");
-			if (typeof status.containerID !== "string") {
-				continue;
-			}
-			const id = status.containerID.replace("containerd://", "");
-			const container = asArray(spec.containers, "containers")
-				.map((value) => asRecord(value, "container"))
-				.find((value) => value.name === status.name);
-			identities[id] = {
-				namespace: asString(metadata.namespace, "namespace"),
-				pod: asString(metadata.name, "pod.name"),
-				container: asString(status.name, "container.name"),
-				image: container?.image,
-				resources: container?.resources,
-				mounts: container?.volumeMounts,
-				// Keep emptyDir metadata only. Never collect projected credentials or environment values.
-				volumes: asArray(spec.volumes ?? [], "volumes")
-					.map((value) => asRecord(value, "volume"))
-					.filter((value) => value.emptyDir !== undefined),
-			};
-		}
-	}
 	const raw = await remote(counters);
 	const meminfo = raw.split("CGROUP ")[0] ?? "";
 	const mem = (name: string) => {
