@@ -16,10 +16,12 @@ import {
 	symlinkSync,
 	writeFileSync,
 } from "node:fs";
+import fs from "node:fs/promises";
+import { syncBuiltinESMExports } from "node:module";
 import { connect, createServer, type Server, type Socket } from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import test, { after, before } from "node:test";
+import test, { after, before, type TestContext } from "node:test";
 import { setTimeout as sleep } from "node:timers/promises";
 
 import { type PutArchive, ToolClient } from "../../../main/resources/agent/tool-client.ts";
@@ -123,7 +125,7 @@ function tarMember(
 	const body = Buffer.from(options.body ?? "");
 	const header = Buffer.alloc(512);
 	header.write(name, 0, 100);
-	header.write("0000644\0", 100);
+	header.write(options.type === "5" ? "0000755\0" : "0000644\0", 100);
 	header.write("0000000\0", 108);
 	header.write("0000000\0", 116);
 	header.write(`${(options.size ?? body.length).toString(8).padStart(11, "0")}\0`, 124);
@@ -459,6 +461,136 @@ void test("a reset cleans a partial upload before accepting another call", async
 	const [outcome] = await result;
 	assert.equal(outcome.status, "rejected");
 	assert.ok(refusal("reset")(outcome.reason));
+});
+
+async function resetReadOnlyTree(t: TestContext, phase: string): Promise<void> {
+	const dir = path.join(realpathSync(workspace), "repos", `reset-readonly-${phase}`);
+	const archive = archiveOf(
+		tarOf(tarMember("nested/", { type: "5" }), tarMember("nested/file", { body: "kept" })),
+	);
+	const reached = Promise.withResolvers<undefined>();
+	const aborted = Promise.withResolvers<undefined>();
+	const release = Promise.withResolvers<undefined>();
+	let held = false;
+	const { chmod } = fs;
+	const gate: typeof fs.chmod = async (file, mode) => {
+		await chmod(file, mode);
+		if (
+			phase === "permissions" &&
+			String(file) === path.join(dir, "nested") &&
+			mode === 0o555 &&
+			!held
+		) {
+			held = true;
+			reached.resolve(undefined);
+			await release.promise;
+		}
+	};
+	const chmodMock = t.mock.method(fs, "chmod", gate);
+	const { rm } = fs;
+	const rmMock = t.mock.method(fs, "rm", async (...args: Parameters<typeof fs.rm>) => {
+		if (phase === "archive cleanup" && String(args[0]).endsWith(".tar") && !held) {
+			held = true;
+			reached.resolve(undefined);
+			await release.promise;
+		}
+		return rm(...args);
+	});
+	const abort: unknown = Object.getOwnPropertyDescriptor(AbortController.prototype, "abort")?.value;
+	assert.ok(typeof abort === "function");
+	const abortMock = t.mock.method(
+		AbortController.prototype,
+		"abort",
+		function (this: AbortController, reason?: unknown) {
+			Reflect.apply(abort, this, [reason]);
+			if (held) {
+				aborted.resolve(undefined);
+			}
+		},
+	);
+	syncBuiltinESMExports();
+	try {
+		const upload = Promise.allSettled([client.put(dir, archive)]);
+		await reached.promise;
+		const reset = client.reset();
+		await aborted.promise;
+		release.resolve(undefined);
+		await reset;
+		const [outcome] = await upload;
+		assert.equal(outcome.status, "rejected");
+		assert.ok(refusal("reset")(outcome.reason));
+		assert.equal(existsSync(dir), false);
+		await client.put(dir, archiveOf(tarOf(tarMember("retried", { body: "success" }))));
+		assert.equal(readFileSync(path.join(dir, "retried"), "utf8"), "success");
+	} finally {
+		release.resolve(undefined);
+		chmodMock.mock.restore();
+		rmMock.mock.restore();
+		abortMock.mock.restore();
+		syncBuiltinESMExports();
+		if (existsSync(dir)) {
+			execFileSync("chmod", ["-R", "u+w", dir]);
+			rmSync(dir, { recursive: true, force: true });
+		}
+	}
+}
+
+for (const phase of ["permissions", "archive cleanup"]) {
+	void test(`reset during ${phase} removes the read-only tree and allows retry`, async (t) =>
+		resetReadOnlyTree(t, phase));
+}
+
+void test("reset waits for the extraction child to close before removing its archive", async (t) => {
+	const root = realpathSync(mkdtempSync(path.join(tmpdir(), "tools-extract-")));
+	const marker = path.join(root, "child.pid");
+	const previousPath = process.env.PATH;
+	writeFileSync(
+		path.join(root, "tar"),
+		`#!/bin/sh\necho $$ > ${quote(marker)}\nexec /bin/sleep 60\n`,
+		{ mode: 0o755 },
+	);
+	process.env.PATH = `${root}${path.delimiter}${previousPath ?? ""}`;
+	const dir = path.join(workspace, "repos", "reset-extract");
+	const upload = Promise.allSettled([client.put(dir, archiveOf(Buffer.alloc(1024)))]);
+	let pid: number | undefined;
+	const aliveAtRemoval: boolean[] = [];
+	const remove = fs.rm;
+	const removal: typeof fs.rm = async (file, options) => {
+		if (String(file).endsWith(".tar") && pid !== undefined) {
+			aliveAtRemoval.push(alive(pid));
+		}
+		await remove(file, options);
+	};
+	const rmMock = t.mock.method(fs, "rm", removal);
+	syncBuiltinESMExports();
+	try {
+		for (let i = 0; !existsSync(marker) && i < 200; i += 1) {
+			await sleep(10);
+		}
+		assert.ok(existsSync(marker));
+		pid = Number(readFileSync(marker, "utf8"));
+		assert.equal(alive(pid), true);
+		await client.reset();
+		assert.deepEqual(aliveAtRemoval, [false]);
+		assert.equal(alive(pid), false);
+		assert.equal(existsSync(dir), false);
+		const [outcome] = await upload;
+		assert.equal(outcome.status, "rejected");
+		assert.ok(refusal("reset")(outcome.reason));
+	} finally {
+		rmMock.mock.restore();
+		syncBuiltinESMExports();
+		if (previousPath === undefined) {
+			delete process.env.PATH;
+		} else {
+			process.env.PATH = previousPath;
+		}
+		if (pid !== undefined && alive(pid)) {
+			process.kill(pid, "SIGKILL");
+		}
+		await upload;
+		rmSync(root, { recursive: true, force: true });
+	}
 });
 
 async function* refusedPutSource() {

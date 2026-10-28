@@ -189,6 +189,26 @@ async function makeReadOnly(dir: string): Promise<void> {
 	await chmod(dir, 0o555);
 }
 
+/** A refused upload owns this tree. Restore directory access before removing it, without following symlinks. */
+async function removePutTree(file: string): Promise<void> {
+	const info = await lstat(file).catch((error: unknown) => {
+		if (error instanceof Error && "code" in error && error.code === "ENOENT") {
+			return null;
+		}
+		throw error;
+	});
+	if (info === null) {
+		return;
+	}
+	if (info.isDirectory()) {
+		await chmod(file, 0o700);
+		for (const name of await readdir(file)) {
+			await removePutTree(path.join(file, name));
+		}
+	}
+	await rm(file, { recursive: true, force: true });
+}
+
 /** Whether `byte` continues a UTF-8 character: 0x80 to 0xBF. */
 function continues(byte: number | undefined): boolean {
 	return byte !== undefined && byte >= 0x80 && byte < 0xc0;
@@ -777,10 +797,15 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 						killSignal: "SIGKILL",
 					},
 				);
-				const [code]: unknown[] = await Promise.race([
-					once(tar, "close"),
-					once(tar, "error").then(() => [-1]),
-				]);
+				const closed = Promise.withResolvers<number | null>();
+				let failed = false;
+				tar.once("error", () => {
+					failed = true;
+				});
+				tar.once("close", (exit) => {
+					closed.resolve(failed ? -1 : exit);
+				});
+				const code = await closed.promise;
 				if (code !== 0) {
 					throw new ToolProtocolError("put", "The archive could not be extracted.");
 				}
@@ -800,8 +825,8 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 				await finished(entry.sink).catch(() => undefined);
 				try {
 					await rm(entry.file, { force: true });
-					if (created && !extracted) {
-						await rm(entry.dir, { recursive: true, force: true });
+					if (created && (!extracted || entry.abort.signal.aborted)) {
+						await removePutTree(entry.dir);
 					}
 				} catch {
 					entry.refusal ??= {
