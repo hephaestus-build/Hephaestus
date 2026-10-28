@@ -6,6 +6,7 @@ import static org.hamcrest.Matchers.matchesPattern;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -24,8 +25,10 @@ import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnCompletion;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnEvidence;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnStarts;
 import de.tum.cit.aet.hephaestus.agent.proxy.ProxyCallsInFlight;
+import de.tum.cit.aet.hephaestus.agent.proxy.ProxyRouting;
 import de.tum.cit.aet.hephaestus.agent.proxy.SandboxGatewayFixtures;
 import de.tum.cit.aet.hephaestus.agent.runtime.worker.testing.WorkerPropertiesFixtures;
+import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
 import de.tum.cit.aet.hephaestus.core.exception.GlobalControllerAdvice;
 import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.TurnJwt;
 import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtIssuer;
@@ -50,6 +53,7 @@ import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.persistence.EntityManager;
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
@@ -66,12 +70,14 @@ import java.util.regex.Pattern;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.AdditionalAnswers;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.context.ApplicationContext;
 import org.springframework.core.annotation.Order;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.converter.json.JacksonJsonHttpMessageConverter;
@@ -134,6 +140,7 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
     @Autowired
     private JsonMapper mapper;
 
+    private final ProxyCallsInFlight callsInFlight = new ProxyCallsInFlight();
     private HephTurnDispatcher dispatcher;
     private HephTurnController controller;
     private MockMvc gateway;
@@ -195,7 +202,7 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
 
     private HephTurnController controller(HephTurnContexts contexts) {
         return new HephTurnController(
-                contexts, completion, dispatcher, new ProxyCallsInFlight(), WorkerPropertiesFixtures.minimal("1", "4"));
+                contexts, completion, dispatcher, callsInFlight, WorkerPropertiesFixtures.minimal("1", "4"));
     }
 
     /** The controller behind the gateway's own credential filter. */
@@ -507,6 +514,73 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
         MentorTurn ended = reloaded();
         assertThat(ended.getStatus()).isEqualTo(MentorTurn.Status.FAILED);
         assertThat(ended.getError()).isEqualTo(HephTurnDispatcher.TOOK_TOO_LONG);
+        assertThat(ended.getFailureCause()).isEqualTo("its Heph host reported DEADLINE: deadline");
+        assertThat(ended.getFailedCall())
+                .as("no model call of the attempt failed")
+                .isNull();
+        assertThat(ended.getFailedCallStatus()).isNull();
+    }
+
+    @Test
+    void shouldRecordTheLastFailedModelCallOnTheTurnWhenTheHostEndsItFailed() throws Exception {
+        var attempt = new ProxyRouting.BilledAttempt(
+                UsageSourceType.MENTOR_TURN, turn.getId(), turn.getAttempt(), BigDecimal.ZERO, WORKER);
+        try (var call = callsInFlight.begin(attempt)) {
+            call.failed(new MentorTurn.FailedCall("WebClientRequestException", null));
+        }
+        try (var call = callsInFlight.begin(attempt)) {
+            call.failed(new MentorTurn.FailedCall("upstream_status", 503));
+        }
+
+        call("POST", "end", turn.getAttempt(), """
+                        {"outcome":"FAILED","entries":[],"reason":"ERROR","detail":"provider_unavailable"}""").andExpect(status().isNoContent());
+
+        MentorTurn ended = reloaded();
+        assertThat(ended.getStatus()).isEqualTo(MentorTurn.Status.FAILED);
+        assertThat(ended.getFailureCause()).isEqualTo("its Heph host reported ERROR: provider_unavailable");
+        assertThat(ended.getFailedCall()).isEqualTo("upstream_status");
+        assertThat(ended.getFailedCallStatus()).isEqualTo(503);
+        assertThat(callsInFlight.lastFailed(turn.getId(), turn.getAttempt()))
+                .as("the committed end forgot it")
+                .isNull();
+    }
+
+    @Test
+    void shouldStillRecordTheFailedModelCallWhenTheEndRollsBackAndTheHostRepeatsIt() throws Exception {
+        var attempt = new ProxyRouting.BilledAttempt(
+                UsageSourceType.MENTOR_TURN, turn.getId(), turn.getAttempt(), BigDecimal.ZERO, WORKER);
+        try (var call = callsInFlight.begin(attempt)) {
+            call.failed(new MentorTurn.FailedCall("upstream_status", 503));
+        }
+        MentorTurnCompletion failingOnce = mock(MentorTurnCompletion.class);
+        doThrow(new DataAccessResourceFailureException("the database went away"))
+                .doAnswer(AdditionalAnswers.delegatesTo(completion))
+                .when(failingOnce)
+                .end(any(), anyInt(), any(), any());
+        gateway = gateway(new HephTurnController(
+                HephTurnFixtures.contexts(beans),
+                failingOnce,
+                dispatcher,
+                callsInFlight,
+                WorkerPropertiesFixtures.minimal("1", "4")));
+        String end = """
+                {"outcome":"FAILED","entries":[],"reason":"ERROR","detail":"provider_unavailable"}""";
+
+        call("POST", "end", turn.getAttempt(), end).andExpect(status().is5xxServerError());
+        call("POST", "end", turn.getAttempt(), end).andExpect(status().isNoContent());
+
+        MentorTurn ended = reloaded();
+        assertThat(ended.getStatus()).isEqualTo(MentorTurn.Status.FAILED);
+        assertThat(ended.getFailedCall()).isEqualTo("upstream_status");
+        assertThat(ended.getFailedCallStatus()).isEqualTo(503);
+    }
+
+    @Test
+    void shouldRecordAHostDetailOutsideTheClosedSetAsUnrecognized() throws Exception {
+        call("POST", "end", turn.getAttempt(), """
+                        {"outcome":"FAILED","entries":[],"reason":"ERROR","detail":"provider said: rate limited for alice@example.com"}""").andExpect(status().isNoContent());
+
+        assertThat(reloaded().getFailureCause()).isEqualTo("its Heph host reported ERROR: unrecognized");
     }
 
     @Test

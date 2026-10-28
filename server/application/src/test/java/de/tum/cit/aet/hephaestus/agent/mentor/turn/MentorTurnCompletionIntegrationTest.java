@@ -117,7 +117,7 @@ class MentorTurnCompletionIntegrationTest extends AbstractWorkspaceIntegrationTe
                 turn.getAttempt(),
                 WORKER,
                 new MentorTurnCompletion.Ending(
-                        outcome, entries, outcome == MentorTurn.Status.FAILED ? "x" : null, null));
+                        outcome, entries, outcome == MentorTurn.Status.FAILED ? "x" : null, null, null));
     }
 
     /** The feedback's state, its copy's state, whether a receipt settled the copy, and the answer it names. */
@@ -365,7 +365,7 @@ class MentorTurnCompletionIntegrationTest extends AbstractWorkspaceIntegrationTe
                 turn.getId(),
                 turn.getAttempt(),
                 WORKER,
-                new MentorTurnCompletion.Ending(MentorTurn.Status.DONE, List.of(), null, null));
+                new MentorTurnCompletion.Ending(MentorTurn.Status.DONE, List.of(), null, null, null));
 
         assertThat(ledger(turn)).singleElement().satisfies(row -> {
             assertThat(row.attempt()).isEqualTo(1);
@@ -389,9 +389,80 @@ class MentorTurnCompletionIntegrationTest extends AbstractWorkspaceIntegrationTe
                 turn.getId(),
                 turn.getAttempt(),
                 WORKER,
-                new MentorTurnCompletion.Ending(MentorTurn.Status.FAILED, List.of(), "broken", null));
+                new MentorTurnCompletion.Ending(MentorTurn.Status.FAILED, List.of(), "broken", null, null));
 
         assertThat(ledger(turn)).isEmpty();
+    }
+
+    @Test
+    void shouldRecordWhyTheAttemptFailedOnTheTurnWhenItEndsFailed() {
+        MentorTurn turn = admittedTurn(Duration.ofMinutes(5));
+        proxyCall(turn, 50_000);
+
+        completion.end(
+                turn.getId(),
+                turn.getAttempt(),
+                WORKER,
+                new MentorTurnCompletion.Ending(
+                        MentorTurn.Status.FAILED,
+                        List.of(),
+                        "Heph could not finish this reply.",
+                        "its Heph host reported ERROR: provider_unavailable",
+                        new MentorTurn.FailedCall("upstream_status", 503)));
+
+        MentorTurn row = turnRepository.findById(turn.getId()).orElseThrow();
+        assertThat(row.getStatus()).isEqualTo(MentorTurn.Status.FAILED);
+        assertThat(row.getFailureCause()).isEqualTo("its Heph host reported ERROR: provider_unavailable");
+        assertThat(row.getFailedCall()).isEqualTo("upstream_status");
+        assertThat(row.getFailedCallStatus()).isEqualTo(503);
+        assertThat(row.getLlmCalls())
+                .as("the model calls that completed before it failed")
+                .isEqualTo(1);
+    }
+
+    @Test
+    void shouldCutACauseAndACallKindToTheirColumnsAndStillEndTheTurn() {
+        MentorTurn turn = admittedTurn(Duration.ofMinutes(5));
+
+        completion.end(
+                turn.getId(),
+                turn.getAttempt(),
+                WORKER,
+                new MentorTurnCompletion.Ending(
+                        MentorTurn.Status.FAILED,
+                        List.of(),
+                        "Heph could not finish this reply.",
+                        "c".repeat(300),
+                        new MentorTurn.FailedCall("k".repeat(100), null)));
+
+        MentorTurn row = turnRepository.findById(turn.getId()).orElseThrow();
+        assertThat(row.getStatus()).isEqualTo(MentorTurn.Status.FAILED);
+        assertThat(row.getFailureCause()).isEqualTo("c".repeat(200));
+        assertThat(row.getFailedCall()).isEqualTo("k".repeat(64));
+    }
+
+    @Test
+    void shouldRecordNoFailureOnTheTurnWhenItEndsDone() {
+        MentorTurn turn = admittedTurn(Duration.ofMinutes(5));
+
+        completion.end(
+                turn.getId(),
+                turn.getAttempt(),
+                WORKER,
+                new MentorTurnCompletion.Ending(
+                        MentorTurn.Status.DONE,
+                        List.of(),
+                        null,
+                        null,
+                        new MentorTurn.FailedCall("upstream_idle", 200)));
+
+        MentorTurn row = turnRepository.findById(turn.getId()).orElseThrow();
+        assertThat(row.getStatus()).isEqualTo(MentorTurn.Status.DONE);
+        assertThat(row.getFailureCause()).isNull();
+        assertThat(row.getFailedCall())
+                .as("a retried call that failed does not fail the turn")
+                .isNull();
+        assertThat(row.getFailedCallStatus()).isNull();
     }
 
     @Test

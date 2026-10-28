@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.proxy;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Answers.RETURNS_DEFAULTS;
 import static org.mockito.Answers.RETURNS_SELF;
 import static org.mockito.ArgumentMatchers.any;
@@ -27,6 +28,7 @@ import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
 import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.JobJwt;
+import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
 import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
@@ -1202,6 +1204,143 @@ class LlmProxyServiceTest extends BaseUnitTest {
                             .asString())
                     .isEqualTo("upstream_stalled");
             assertThat(String.valueOf(result.getBody())).contains("no first byte within 1 seconds");
+            assertThat(streamingCalls.lastFailed(
+                            routing.sourceId(), routing.attempt().number()))
+                    .isEqualTo(new MentorTurn.FailedCall(LlmProxyService.UPSTREAM_STALLED, null));
+        }
+
+        @Test
+        @DisplayName(
+                "a Heph turn attempt remembers its last failed model call by kind and status until its end forgets it")
+        void aHephAttemptRemembersItsLastFailedModelCall() throws Exception {
+            ProxyRouting routing = hephTurnRouting(upstream.url("/v1").toString());
+            authenticate(routing);
+            stubCredential(
+                    routing,
+                    new LlmModelResolver.ProxyCredential(
+                            upstream.url("/v1").toString(),
+                            "openai-completions",
+                            LlmAuthMode.BEARER,
+                            "catalog-model",
+                            "secret"));
+            upstream.enqueue(new MockResponse.Builder()
+                    .code(503)
+                    .addHeader("Content-Type", "application/json")
+                    .body("{\"error\":{\"message\":\"overloaded\"}}")
+                    .build());
+            controllerProxy(new MockHttpServletResponse());
+            UUID turnId = routing.sourceId();
+            int attempt = routing.attempt().number();
+            assertThat(streamingCalls.lastFailed(turnId, attempt))
+                    .isEqualTo(new MentorTurn.FailedCall(LlmProxyService.UPSTREAM_STATUS, 503));
+
+            upstream.enqueue(new MockResponse.Builder()
+                    .code(503)
+                    .addHeader("Content-Type", "application/json")
+                    .body("{\"error\":{\"message\":\"overloaded\"}}")
+                    .build());
+            controllerProxy(new MockHttpServletResponse());
+            upstream.enqueue(new MockResponse.Builder()
+                    .code(200)
+                    .addHeader("Content-Type", "text/event-stream")
+                    .body("data: {\"choices\":[{\"delta\":{\"content\":\"Let me\"}}]}\n\n")
+                    .bodyDelay(3, TimeUnit.SECONDS)
+                    .build());
+            controllerProxy(new MockHttpServletResponse());
+
+            assertThat(streamingCalls.lastFailed(turnId, attempt))
+                    .as("the stream that went silent is the last failed call")
+                    .isEqualTo(new MentorTurn.FailedCall("upstream_idle", 200));
+            assertThat(streamingCalls.lastFailed(turnId, attempt))
+                    .as("an end that rolled back reads it again")
+                    .isEqualTo(new MentorTurn.FailedCall("upstream_idle", 200));
+            streamingCalls.forgetFailed(turnId, attempt);
+            assertThat(streamingCalls.lastFailed(turnId, attempt))
+                    .as("the committed end forgot it")
+                    .isNull();
+        }
+
+        @Test
+        @DisplayName("a call that fails before it reaches the provider leaves nothing in flight for the turn's end")
+        void aCallThatFailsBeforeTheProviderLeavesNothingInFlight() {
+            ProxyRouting routing = hephTurnRouting(upstream.url("/v1").toString());
+            authenticate(routing);
+            Tracer broken = mock(Tracer.class);
+            when(broken.spanBuilder()).thenThrow(new IllegalStateException("tracing is down"));
+            LlmProxyService service = controllerWith(WebClient.builder().build(), broken);
+
+            assertThatThrownBy(() -> service.proxy(
+                            request("POST", "/internal/llm/chat/completions"),
+                            new MockHttpServletResponse(),
+                            new HttpHeaders(),
+                            "{\"stream\":true,\"messages\":[]}".getBytes(StandardCharsets.UTF_8)))
+                    .isInstanceOf(IllegalStateException.class);
+
+            assertThat(streamingCalls.settle(
+                            routing.sourceId(), routing.attempt().number(), false))
+                    .as("the turn's end does not wait for a call that never ran")
+                    .isTrue();
+        }
+
+        @Test
+        @DisplayName("a call that the turn's end cancelled does not replace the failure the turn ended on")
+        void aCancelledCallDoesNotReplaceTheFailure() {
+            var attempt = new ProxyRouting.BilledAttempt(
+                    UsageSourceType.MENTOR_TURN, UUID.randomUUID(), 1, BigDecimal.ZERO, "worker");
+            try (var call = streamingCalls.begin(attempt)) {
+                call.failed(new MentorTurn.FailedCall(LlmProxyService.UPSTREAM_STATUS, 503));
+                call.failed(new MentorTurn.FailedCall("upstream_idle", 503));
+            }
+            assertThat(streamingCalls.settle(attempt.sourceId(), attempt.number(), true))
+                    .isTrue();
+            try (var late = streamingCalls.begin(attempt)) {
+                assertThat(late.isCancelled()).isTrue();
+                late.failed(new MentorTurn.FailedCall("IOException", null));
+            }
+
+            assertThat(streamingCalls.lastFailed(attempt.sourceId(), attempt.number()))
+                    .as("the call's first failure, not what followed from it or the end's cancel")
+                    .isEqualTo(new MentorTurn.FailedCall(LlmProxyService.UPSTREAM_STATUS, 503));
+        }
+
+        @Test
+        @DisplayName("a Heph turn's call that the proxy refuses is remembered by its rule and status")
+        void aRefusedHephCallIsRememberedByItsRule() {
+            ProxyRouting routing = hephTurnRouting(upstream.url("/v1").toString());
+            authenticate(routing);
+            when(requestPolicy.allows(any())).thenReturn(false);
+
+            controllerProxy(new MockHttpServletResponse());
+
+            assertThat(streamingCalls.lastFailed(
+                            routing.sourceId(), routing.attempt().number()))
+                    .isEqualTo(new MentorTurn.FailedCall("refused_ai_choice", 403));
+        }
+
+        @Test
+        @DisplayName("a review's failed model call is not remembered")
+        void aReviewsFailedModelCallIsNotRemembered() throws Exception {
+            ProxyRouting routing = streamingRouting();
+            authenticate(routing);
+            stubCredential(
+                    routing,
+                    new LlmModelResolver.ProxyCredential(
+                            upstream.url("/v1").toString(),
+                            "openai-completions",
+                            LlmAuthMode.BEARER,
+                            "catalog-model",
+                            "secret"));
+            upstream.enqueue(new MockResponse.Builder()
+                    .code(503)
+                    .addHeader("Content-Type", "application/json")
+                    .body("{\"error\":{\"message\":\"overloaded\"}}")
+                    .build());
+
+            controllerProxy(new MockHttpServletResponse());
+
+            assertThat(streamingCalls.lastFailed(
+                            routing.sourceId(), routing.attempt().number()))
+                    .isNull();
         }
 
         @Test

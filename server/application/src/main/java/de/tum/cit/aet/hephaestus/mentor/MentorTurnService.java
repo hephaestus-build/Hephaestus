@@ -21,6 +21,7 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.JsonNode;
 
@@ -37,6 +38,8 @@ public class MentorTurnService {
 
     /** Shown to the developer as the failed reply, so it is in the product voice. */
     private static final String LEASE_EXPIRED = "Heph could not finish this reply. Try again.";
+
+    private static final String LEASE_EXPIRED_CAUSE = "its lease expired on its last attempt";
 
     private final MentorConversationRepository conversations;
     private final MentorEntryRepository entries;
@@ -255,6 +258,19 @@ public class MentorTurnService {
         }
     }
 
+    /**
+     * Records on a turn that the caller's transaction just ended {@code FAILED} why it failed, for the operator, so
+     * the cause outlives the worker's log. A turn in any other state records nothing.
+     *
+     * @param cause why it failed, in closed kinds only, never a host's, a provider's or an exception's text
+     * @param lastFailedCall the attempt's last model call that failed; {@code null} when none did
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void recordFailure(
+            MentorTurn ended, @Nullable String cause, MentorTurn.@Nullable FailedCall lastFailedCall) {
+        ended.recordFailure(cause, lastFailedCall);
+    }
+
     /** Stops a turn. Stopping a turn that already ended changes nothing. */
     @Transactional
     public MentorTurn stop(long workspaceId, UUID turnId) {
@@ -364,6 +380,7 @@ public class MentorTurnService {
             turn.requeue();
         } else {
             turn.end(MentorTurn.Status.FAILED, LEASE_EXPIRED, now);
+            turn.recordFailure(LEASE_EXPIRED_CAUSE, null);
         }
         changed(turn);
         return new LostAttempt(turn, attempt, admission, proxyUsage, startedAt, lostAt);

@@ -84,20 +84,23 @@ public class MentorTurnCompletion {
      *
      * @param entries every Pi entry the attempt appended; none when the worker ends it
      * @param error what the developer reads about a failed turn
-     * @param cause what the operator reads about it in the worker log: the host's reason and kind of failure, or why the
-     *     worker ended the attempt itself. It is logged as given, so it names closed kinds and classes, never a host's,
-     *     a provider's or an exception's text.
+     * @param cause what the operator reads about it in the worker log and on the turn: the host's reason and kind of
+     *     failure, or why the worker ended the attempt itself. It is logged and stored as given, so it names closed
+     *     kinds and classes, never a host's, a provider's or an exception's text.
+     * @param lastFailedCall the attempt's last model call that failed, as the worker's LLM proxy saw it; {@code null}
+     *     when none did
      */
     public record Ending(
             MentorTurn.Status outcome,
             List<JsonNode> entries,
             @Nullable String error,
-            @Nullable String cause) {}
+            @Nullable String cause,
+            MentorTurn.@Nullable FailedCall lastFailedCall) {}
 
     /**
-     * Ends the attempt, bills it, and logs why a failed attempt failed. With the end, it records the receipts the
-     * feedback the attempt claimed is due, except for a Slack answer that ended {@code DONE}: what Slack shows settles
-     * that one.
+     * Ends the attempt, bills it, and records and logs why a failed attempt failed. With the end, it records the
+     * receipts the feedback the attempt claimed is due, except for a Slack answer that ended {@code DONE}: what Slack
+     * shows settles that one.
      */
     @Transactional
     public MentorTurn end(UUID turnId, int attempt, String workerId, Ending ending) {
@@ -105,10 +108,16 @@ public class MentorTurnCompletion {
                 turns.end(turnId, attempt, workerId, ending.outcome(), ending.entries(), ending.error());
         MentorTurn turn = ended.turn();
         if (turn.getStatus() == MentorTurn.Status.FAILED) {
+            turns.recordFailure(turn, ending.cause(), ending.lastFailedCall());
             // After commit: a rolled-back end is repeated by its host and would log the failure twice.
             String cause = ending.cause() == null ? ending.error() : ending.cause();
-            TransactionCallbacks.afterCommit(
-                    () -> log.warn("Heph turn {} attempt {} failed: {}", turnId, attempt, cause));
+            MentorTurn.FailedCall lastFailedCall = ending.lastFailedCall();
+            TransactionCallbacks.afterCommit(() -> log.warn(
+                    "Heph turn {} attempt {} failed: {}; last failed model call: {}",
+                    turnId,
+                    attempt,
+                    cause,
+                    lastFailedCall == null ? "none" : lastFailedCall.describe()));
         }
         bill(turn, attempt, true);
         if (turn.getSurface() == MentorTurn.Surface.APP || turn.getStatus() != MentorTurn.Status.DONE) {

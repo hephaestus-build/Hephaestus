@@ -479,15 +479,34 @@ A high `failed` share with no lease expiries shows one of these causes:
 - Turns cannot start a host.
 - Turns get an error from the model.
 
-The worker logs each failed attempt at `WARN` as `Heph turn <id> attempt <n> failed: <reason>`.
+The worker logs each failed attempt at `WARN` as `Heph turn <id> attempt <n> failed: <reason>; last failed model call: <kind> <status>`, or `none`.
 The reason tells which of these happened, for example `its Heph host reported ERROR: model_error`.
 The Heph host reports a kind of failure from a closed set, for example `model_error`, `context_overflow` or `upstream_stalled`.
 It does not report the error text of the model provider, a tool or the worker, or the messages of the conversation.
-For the status of a failed model call, see the worker's `LLM upstream` lines.
 A worker that ends an attempt itself names the class of the failure, for example `starting it failed: IllegalStateException`.
+
+The worker logs each failed model call of a turn at `WARN` as `Heph model call failed`.
+The line has the turn id, the attempt, the kind of failure and the status that the provider or the proxy sent.
+It does not have the request or the response.
+It is the only `WARN` line for a failed model call of a Heph turn.
+A call that the end of its turn cancelled is not a failure.
+
+The turn row keeps the cause, so the cause stays after the worker stops:
+
+| Column of `mentor_turn` | Holds |
+|---|---|
+| `failure_cause` | The reason of the log line |
+| `failed_call` | The kind of the last failed model call of the attempt. From the provider: an exception class, `upstream_status`, `upstream_stalled`, `upstream_paused` or a stream outcome such as `upstream_idle`. From the proxy: a refusal such as `refused_budget`, or `gateway_error`. |
+| `failed_call_status` | The HTTP status that the provider or the proxy sent for that call, if one was sent |
+| `llm_calls` | The model calls of the attempt that completed |
+
+The Heph host's end, the worker's own end and a lease that expires write the first three columns.
+A lease that expires writes no `failed_call`, because the server role, not the worker, ends the turn.
+The columns are empty for a turn that did not fail, and for a turn that admission declines.
 
 A turn that admission declines, for example because the budget is spent, is logged at `INFO` as `was declined at its start`.
 A turn whose second attempt loses its lease fails on the server role, which logs it at `INFO` as `Mentor turn lease expired`.
+Its `failure_cause` is `its lease expired on its last attempt`.
 
 An increase in `mentor_turn_claim_failure_total` shows a worker that claims turns but cannot start them.
 The worker fails each such turn and continues to claim.

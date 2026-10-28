@@ -276,7 +276,9 @@ public class HephTurnController {
                     turn.turnId(),
                     turn.attempt(),
                     workerId,
-                    new MentorTurnCompletion.Ending(outcome, entries, error, cause));
+                    new MentorTurnCompletion.Ending(
+                            outcome, entries, error, cause, callsInFlight.lastFailed(turn.turnId(), turn.attempt())));
+            callsInFlight.forgetFailed(turn.turnId(), turn.attempt());
         } finally {
             contexts.forget(turn);
             dispatcher.ended(turn.turnId(), turn.attempt());

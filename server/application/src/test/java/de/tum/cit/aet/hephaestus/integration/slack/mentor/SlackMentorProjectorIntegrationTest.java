@@ -244,7 +244,7 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
                 turn.getId(),
                 turn.getAttempt(),
                 WORKER,
-                new MentorTurnCompletion.Ending(outcome, entries, error.isEmpty() ? null : error, null));
+                new MentorTurnCompletion.Ending(outcome, entries, error.isEmpty() ? null : error, null, null));
     }
 
     private static ObjectNode answer(String text) {

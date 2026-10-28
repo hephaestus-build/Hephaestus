@@ -39,6 +39,11 @@ public record ProxyRouting(
             throw new IllegalArgumentException("A job route needs its attempt's work deadline");
     }
 
+    /** Whether the call belongs to a Heph turn, which logs one line per model call with its turn. */
+    boolean hephTurn() {
+        return attempt.sourceType() == UsageSourceType.MENTOR_TURN;
+    }
+
     /**
      * The one execution this credential bills to, with identity and spend read in the same instant so
      * a caller cannot pair one execution's identity with another's spend.
