@@ -733,7 +733,7 @@ async function review(index: number): Promise<ReviewRun> {
 		...RLIMITS.slice(1),
 		"sh",
 		"-c",
-		"ln -s /opt/pi-sdk/node_modules /workspace/node_modules && exec node /opt/pi-sdk/gateway-init.ts",
+		"ln -s /opt/pi-sdk/node_modules /workspace/node_modules && exec node /opt/pi-sdk/gateway-init.js",
 	]);
 	let runtime = { exit: NOT_STARTED, ms: 0 };
 	if (init.exit === 0) {
@@ -746,7 +746,7 @@ async function review(index: number): Promise<ReviewRun> {
 			...RLIMITS.slice(1),
 			"node",
 			"--disable-sigusr1",
-			"/opt/pi-sdk/gateway-run.ts",
+			"/opt/pi-sdk/gateway-run.js",
 			...specCommand,
 		]);
 	}
