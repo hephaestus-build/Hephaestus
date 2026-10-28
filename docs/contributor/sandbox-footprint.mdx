@@ -92,7 +92,8 @@ Use a stable attempt ID. Extract phases from the round's row and trace evidence.
 
 Review eligibility starts after its readiness edge.
 Composition eligibility starts when its admitted inputs are sealed and composition can run.
-Mentor eligibility starts when the preceding turn of that conversation ends, or at submission if no predecessor exists.
+Mentor eligibility is the later of submission and the preceding turn’s end.
+If no predecessor exists, eligibility is submission.
 
 The report gives count, p50, p95, and maximum for each interval:
 

@@ -459,7 +459,7 @@ async function startGateway(): Promise<void> {
 		await once(server, "listening");
 		return;
 	}
-	server.listen(path.join(benchDir, "gateway.sock"));
+	server.listen({ path: path.join(benchDir, "gateway.sock"), writableAll: true });
 	await once(server, "listening");
 	fixtureNetwork = `${runId}-network`;
 	await run("docker", ["network", "create", "--internal", fixtureNetwork], { stdout: "ignore" });
