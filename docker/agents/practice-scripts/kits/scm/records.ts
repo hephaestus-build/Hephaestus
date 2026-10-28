@@ -6,6 +6,15 @@ function notKnownWhenUnnamed<const T extends readonly [string, ...string[]]>(val
 	return z.enum(values).optional();
 }
 
+const observationBasisSchema = z.object({
+	admission_fields: z.array(z.string()).optional(),
+	admitted_at: z.string().optional(),
+	other_fields: z.string(),
+	captured_at: z.string().optional(),
+	observed_at: z.string().optional(),
+	mirror_synced_at: z.string().optional(),
+});
+
 /** `metadata.json` of a pull request: `PullRequestContentSource.workRecord`. */
 export const pullRequestRecordSchema = z.object({
 	/**
@@ -14,14 +23,7 @@ export const pullRequestRecordSchema = z.object({
 	 * Hephaestus stored the occasion, at `observed_at`, also not a provider time. Older records may contain
 	 * `admission_fields` and `admitted_at` declarations. Readers preserve these declarations as recorded.
 	 */
-	basis: z.object({
-		admission_fields: z.array(z.string()).optional(),
-		admitted_at: z.string().optional(),
-		other_fields: z.string(),
-		captured_at: z.string().optional(),
-		observed_at: z.string().optional(),
-		mirror_synced_at: z.string().optional(),
-	}),
+	basis: observationBasisSchema,
 	pr_number: z.int(),
 	pr_url: z.string(),
 	repository_full_name: z.string(),
@@ -51,10 +53,14 @@ export const pullRequestRecordSchema = z.object({
 	labels: z.array(z.string()),
 	assignees: z.array(z.string()),
 	milestone: z.string().optional(),
+});
+
+/** `checks.json` for the reviewed head: source contract 3.0.0. */
+export const pullRequestChecksRecordSchema = z.strictObject({
+	basis: observationBasisSchema,
+	commit_sha: z.string().regex(COMMIT),
 	/** Only the GraphQL sync fills it. */
 	merge_state_status: z.string().optional(),
-	/** Only the GraphQL sync fills it. */
-	review_decision: z.string().optional(),
 	head_checks: notKnownWhenUnnamed([
 		"SUCCESS",
 		"FAILURE",

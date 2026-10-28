@@ -79,4 +79,5 @@
     <include file="./changelog/1793149918875_changelog.xml" relativeToChangelogFile="true"/>
     <include file="./changelog/1793137687696_changelog.xml" relativeToChangelogFile="true"/>
     <include file="./changelog/1793046470075_changelog.xml" relativeToChangelogFile="true"/>
+    <include file="./changelog/1793196763354_changelog.xml" relativeToChangelogFile="true"/>
 </databaseChangeLog>

@@ -122,7 +122,7 @@ public final class SlackConversationTestSupport {
     public static Practice newPractice(PracticeVersionService versions, Workspace workspace, String slugPrefix) {
         PracticeDefinition definition = OM.treeToValue(OM.readTree("""
             {"name":"Test practice","reviewOn":{"events":["chat.thread.settled"],"state":{}},
-             "appliesWhen":null,"about":"AUTHOR","reads":{"contract":"2.0.0","sources":[{"source":"slack.conversation.thread","need":"REQUIRED"}]},
+             "appliesWhen":null,"about":"AUTHOR","reads":{"contract":"3.0.0","sources":[{"source":"slack.conversation.thread","need":"REQUIRED"}]},
              "reviewedBy":{"by":"HEPHAESTUS","humanReason":null,"limits":[]},"criteria":"Give a clear answer.",
              "script":null,"scan":null,"lineNotes":false,"guidance":{"whyItMatters":null,"whatGoodLooksLike":null,"goingWell":null,"visual":null,"guide":null}}
             """), PracticeDefinition.class);

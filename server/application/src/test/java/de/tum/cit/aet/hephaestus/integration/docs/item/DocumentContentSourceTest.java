@@ -159,7 +159,7 @@ class DocumentContentSourceTest extends BaseUnitTest {
             });
             Set<SourceKind> selected = reads.stream().map(read -> read.source()).collect(Collectors.toSet());
             var captured = source.capture(
-                    new CaptureRequest(UUID.randomUUID(), UUID.randomUUID(), 1, selected, "2.0.0", 3),
+                    new CaptureRequest(UUID.randomUUID(), UUID.randomUUID(), 1, selected, "3.0.0", 3),
                     new ItemVersion("body-version", null),
                     body,
                     "{}".getBytes(StandardCharsets.UTF_8),
@@ -216,7 +216,7 @@ class DocumentContentSourceTest extends BaseUnitTest {
 
     @Test
     void shouldRegisterNoCitableTextWhenTheSourceWasNotRequested() {
-        var request = new CaptureRequest(UUID.randomUUID(), UUID.randomUUID(), 1, Set.of(), "2.0.0", 3);
+        var request = new CaptureRequest(UUID.randomUUID(), UUID.randomUUID(), 1, Set.of(), "3.0.0", 3);
         var capture = source.capture(
                 request,
                 new ItemVersion("version", null),
@@ -237,6 +237,6 @@ class DocumentContentSourceTest extends BaseUnitTest {
 
     private static CaptureRequest request() {
         return new CaptureRequest(
-                UUID.randomUUID(), UUID.randomUUID(), 1, Set.of(DocumentContentSource.SOURCE), "2.0.0", 3);
+                UUID.randomUUID(), UUID.randomUUID(), 1, Set.of(DocumentContentSource.SOURCE), "3.0.0", 3);
     }
 }

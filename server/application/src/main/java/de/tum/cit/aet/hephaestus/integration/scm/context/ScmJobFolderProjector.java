@@ -6,6 +6,7 @@ import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureCode;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemCaptureException;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issuecomment.IssueCommentProvenance;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestChecksRecord;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.UserRepository;
 import java.util.List;
 import java.util.Map;
@@ -63,10 +64,27 @@ public class ScmJobFolderProjector implements WorkspaceScmProjection {
         each(rows.streamWork(workspace, repository), record -> {
             boolean pull = record.path("issue_type").asString().equals("PULL_REQUEST");
             SourceKind core = pull ? PULL_REQUEST_CORE : ISSUE_CORE;
+            String prefix = prefix(pull, record.path("number").asInt());
+            if (pull && allowed.contains(PullRequestChecksRecord.KIND)) {
+                PullRequestChecksRecord.mirrored(record, mapper)
+                        .ifPresent(checks -> consumer.accept(new ProjectedRecord(
+                                prefix + PullRequestChecksRecord.FILE_NAME,
+                                PullRequestChecksRecord.KIND,
+                                Format.JSON,
+                                checks)));
+            }
+            if (pull
+                    && allowed.contains(THREADS)
+                    && record.path("review_decision").isString()) {
+                ObjectNode status = mapper.createObjectNode();
+                status.set("review_decision", record.get("review_decision"));
+                status.set("synced_at", record.get("synced_at"));
+                consumer.accept(new ProjectedRecord(prefix + "review-status.json", THREADS, Format.JSON, status));
+            }
             if (allowed.contains(core)) {
-                String prefix = prefix(pull, record.path("number").asInt());
-                consumer.accept(new ProjectedRecord(prefix + "record.json", core, Format.JSON, record));
-                consumer.accept(new ProjectedRecord(prefix + "description.md", core, Format.MARKDOWN, record));
+                ObjectNode projected = pull ? PullRequestChecksRecord.core(record) : record;
+                consumer.accept(new ProjectedRecord(prefix + "record.json", core, Format.JSON, projected));
+                consumer.accept(new ProjectedRecord(prefix + "description.md", core, Format.MARKDOWN, projected));
             }
         });
         if (allowed.contains(ISSUE_COMMENTS)) {

@@ -19,7 +19,7 @@ class PracticeV1ScanMembershipDatabaseTest {
             INSERT INTO item(id,workspace_id,kind,source_id) VALUES(978008,978001,'scm.repository',42);
             INSERT INTO practice_version(id,workspace_id,practice_id,number,definition)
             SELECT 999831,p.workspace_id,p.id,2,jsonb_set(v.definition,'{scan}',
-                '{"itemKind":"scm.file","include":["**/*"],"exclude":[],"context":[],"reads":{"contract":"2.0.0","sources":[{"source":"scm.repository.tree","need":"COMPLETE"}]}}')
+                '{"itemKind":"scm.file","include":["**/*"],"exclude":[],"context":[],"reads":{"contract":"3.0.0","sources":[{"source":"scm.repository.tree","need":"COMPLETE"}]}}')
             FROM practice p JOIN practice_version v ON v.id=p.current_version_id WHERE p.id=978004;
             UPDATE practice SET current_version_id=999831 WHERE id=978004;
             INSERT INTO item(id,workspace_id,kind,parent_id,path)

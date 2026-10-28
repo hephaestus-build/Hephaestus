@@ -940,7 +940,7 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
             job.setAdmissionAttempt(0);
             job.setCapture(objectMapper
                     .createObjectNode()
-                    .set("manifest", objectMapper.createObjectNode().put("contractVersion", "2.0.0")));
+                    .set("manifest", objectMapper.createObjectNode().put("contractVersion", "3.0.0")));
             jobRepository.saveAndFlush(job);
             return row;
         }));
@@ -1567,7 +1567,7 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
             job.setAdmissionAttempt(job.getAttempt());
             job.setCapture(objectMapper
                     .createObjectNode()
-                    .set("manifest", objectMapper.createObjectNode().put("contractVersion", "2.0.0")));
+                    .set("manifest", objectMapper.createObjectNode().put("contractVersion", "3.0.0")));
             jobRepository.saveAndFlush(job);
             return row;
         }));

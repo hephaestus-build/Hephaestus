@@ -150,6 +150,8 @@ export const REVIEWED: Candidate = {
 export type Files = Record<string, unknown>;
 
 export interface RunInputs {
+	/** A stored practice program; absent selects the bundled resource. */
+	script?: string;
 	/**
 	 * The record of the work, which the program reads as `ctx.item`. For a pull request or an issue,
 	 * these fields go over a record that holds every required field.
@@ -203,13 +205,16 @@ function recordOf(kind: unknown, item: Record<string, unknown> | undefined): unk
 	return kind === "scm.pull_request" ? pullRequestRecord(item) : item;
 }
 
-async function load(slug: string): Promise<{
+async function load(
+	slug: string,
+	script?: string,
+): Promise<{
 	definition: PracticeScriptDefinition<ModelNeeds>;
 	labels: Record<string, string>;
 	root: string;
 }> {
 	const { root, practices } = await stagePracticeScripts(
-		{ [slug]: await readFile(path.join(SCRIPTS_DIR, `${slug}.ts`), "utf8") },
+		{ [slug]: script ?? (await readFile(path.join(SCRIPTS_DIR, `${slug}.ts`), "utf8")) },
 		{},
 	);
 	const mod: unknown = await import(path.join(practices, `${slug}.ts`));
@@ -268,7 +273,7 @@ function fixtureSource(change: DiffFile): string {
  * asked for and what it returned or threw.
  */
 export async function runBundledProgram(slug: string, inputs: RunInputs = {}): Promise<BundledRun> {
-	const { definition, root } = await load(slug);
+	const { definition, root } = await load(slug, inputs.script);
 	try {
 		const staged = inputs.inputs ?? requested();
 		if (!isJsonObject(staged)) {

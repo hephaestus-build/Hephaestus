@@ -7,6 +7,7 @@ import {
 	readLinkedWorkItemCapture,
 	readReviewComments,
 	readReviewThreads,
+	readPullRequestChecks,
 } from "./review.ts";
 
 const evidence = (value: unknown): Pick<Evidence, "record"> => ({
@@ -61,7 +62,7 @@ const readers = [
 		name: "review_threads.json",
 		read: readReviewThreads,
 		empty: { threads: [], reviewDecisions: [] },
-		result: { threads: [], decisions: [] },
+		result: { threads: [], decisions: [], reviewDecision: undefined },
 		invalid: [
 			[],
 			{},
@@ -87,6 +88,7 @@ void test("review decisions preserve the retained read time separately from prov
 		await readReviewThreads(evidence({ threads: [], reviewDecisions: [decision] })),
 		{
 			threads: [],
+			reviewDecision: undefined,
 			decisions: [{ ...decision, bot: false }],
 		},
 	);
@@ -143,4 +145,25 @@ void test("comment projection preserves captured body lines and omitted provider
 			createdAt: undefined,
 		},
 	]);
+});
+
+void test("the checks reader preserves unknown runs and does not turn an absent capture into an empty result", async () => {
+	assert.equal(await readPullRequestChecks({ record: async () => ({ status: "ABSENT" }) }), null);
+	const checks = {
+		basis: { other_fields: "CAPTURE" },
+		commit_sha: "a".repeat(40),
+		head_checks: "PENDING",
+	};
+	assert.deepEqual(await readPullRequestChecks(evidence(checks)), checks);
+	await assert.rejects(
+		readPullRequestChecks(evidence({ ...checks, head_checks: "unknown" })),
+		UnratedError,
+	);
+});
+
+void test("the discussion reader preserves the provider aggregate independently of submitted decisions", async () => {
+	const read = await readReviewThreads(
+		evidence({ threads: [], reviewDecisions: [], review_decision: "APPROVED" }),
+	);
+	assert.deepEqual(read, { threads: [], decisions: [], reviewDecision: "APPROVED" });
 });

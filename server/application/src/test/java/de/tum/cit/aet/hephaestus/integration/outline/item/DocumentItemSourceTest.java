@@ -272,6 +272,6 @@ class DocumentItemSourceTest extends BaseUnitTest {
 
     private static CaptureRequest request() {
         return new CaptureRequest(
-                UUID.randomUUID(), UUID.randomUUID(), 1, Set.of(DocumentContentSource.SOURCE), "2.0.0", 3);
+                UUID.randomUUID(), UUID.randomUUID(), 1, Set.of(DocumentContentSource.SOURCE), "3.0.0", 3);
     }
 }

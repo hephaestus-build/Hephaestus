@@ -121,7 +121,7 @@ class PracticeCatalogInjectorTest extends BaseUnitTest {
                 List.of(),
                 List.of("docs/*.md"),
                 new PracticeReads(
-                        "2.0.0",
+                        "3.0.0",
                         List.of(new PracticeReadSource(new SourceKind("docs.document.core"), ReadNeed.COMPLETE))));
         var definition = new PracticeDefinition(
                 d.name(),

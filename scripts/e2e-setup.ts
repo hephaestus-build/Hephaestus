@@ -463,7 +463,7 @@ export async function definePractices(
 			reviewOn: { events: entry.events, state: {} },
 			appliesWhen: null,
 			about: "AUTHOR",
-			reads: { contract: "2.0.0", sources: needs },
+			reads: { contract: "3.0.0", sources: needs },
 			reviewedBy: { by: "HEPHAESTUS", humanReason: null, limits: [] },
 			criteria: entry.criteria,
 			script: null,

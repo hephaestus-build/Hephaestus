@@ -45,7 +45,7 @@ class PracticeDefinitionValidatorTest extends BaseUnitTest {
         descriptor = mock(ItemDescriptor.class);
         var event = mock(ItemEventDefinition.class);
         lenient().when(sources.current()).thenReturn(catalog);
-        lenient().when(catalog.version()).thenReturn(new SourceContractVersion("2.0.0"));
+        lenient().when(catalog.version()).thenReturn(new SourceContractVersion("3.0.0"));
         lenient()
                 .when(catalog.sourcesFor("scm.pull_request"))
                 .thenReturn(Set.of(new SourceKind("scm.pull-request.core")));
@@ -168,7 +168,7 @@ class PracticeDefinitionValidatorTest extends BaseUnitTest {
     @Test
     void shouldValidateTheScanSourcesSeparatelyFromTheItemSources() {
         enableScan(true);
-        var definition = withScan(scanReads("2.0.0", ReadNeed.COMPLETE));
+        var definition = withScan(scanReads("3.0.0", ReadNeed.COMPLETE));
         validator.validate(new ItemKind("scm.pull_request"), definition);
         assertThat(definition.reads().sources())
                 .extracting(PracticeReadSource::source)
@@ -199,7 +199,7 @@ class PracticeDefinitionValidatorTest extends BaseUnitTest {
     @Test
     void shouldRejectCompleteScanReadsWhenTheSourceSupportsOnlyPartialCapture() {
         enableScan(false);
-        var definition = withScan(scanReads("2.0.0", ReadNeed.COMPLETE));
+        var definition = withScan(scanReads("3.0.0", ReadNeed.COMPLETE));
         assertThatThrownBy(() -> validator.validate(new ItemKind("scm.pull_request"), definition))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("complete capture");
@@ -208,7 +208,7 @@ class PracticeDefinitionValidatorTest extends BaseUnitTest {
     @Test
     void shouldRejectAnAutomatedScanWithOnlyOptionalContext() {
         enableScan(true);
-        var definition = withScan(scanReads("2.0.0", ReadNeed.OPTIONAL));
+        var definition = withScan(scanReads("3.0.0", ReadNeed.OPTIONAL));
         assertThatThrownBy(() -> validator.validate(new ItemKind("scm.pull_request"), definition))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("required read source");

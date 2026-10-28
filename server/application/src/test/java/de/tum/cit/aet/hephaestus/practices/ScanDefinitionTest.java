@@ -73,6 +73,6 @@ class ScanDefinitionTest extends BaseUnitTest {
 
     private static PracticeReads reads() {
         return new PracticeReads(
-                "2.0.0", List.of(new PracticeReadSource(new SourceKind("scm.repository.tree"), ReadNeed.COMPLETE)));
+                "3.0.0", List.of(new PracticeReadSource(new SourceKind("scm.repository.tree"), ReadNeed.COMPLETE)));
     }
 }

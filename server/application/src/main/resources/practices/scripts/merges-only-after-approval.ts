@@ -8,12 +8,12 @@ import {
 	reviewsMergedWork,
 } from "../kits/scm/review.ts";
 import { DIRECTION_CHARS, oneLine } from "../lib/core/bounded-text.ts";
-import { REVIEW_LEAD_LIMIT } from "../lib/core/contract.ts";
+import { REVIEW_LEAD_LIMIT, type ReviewLead } from "../lib/core/contract.ts";
 import { definePracticeScript } from "../lib/core/practice-script.ts";
 
 export const LABELS = {
-	merge:
-		"The merge of the pull request: who merged it, when, and the review decision of the provider.",
+	merge: "The merge of the pull request: who merged it and when.",
+	"aggregate-review-decision": "The aggregate review decision reported by the provider.",
 	"review-decision":
 		"A review decision that the record holds, placed against the time of the merge.",
 	"last-decision-by-reviewer":
@@ -73,7 +73,17 @@ export default definePracticeScript({
 				"Read decisionHistoryComplete in review_threads.json: the order of the leads does not establish complete historical coverage. Apply the practice criteria to that qualification.",
 			);
 		}
-		const leads = [mergeLead(domain.item, merge, LABELS.merge), ...rows, ...last];
+		const aggregate =
+			record?.reviewDecision === undefined
+				? []
+				: [
+						{
+							at: { record: "review_threads.json" },
+							label: LABELS["aggregate-review-decision"],
+							facts: { reviewDecision: record.reviewDecision },
+						} satisfies ReviewLead,
+					];
+		const leads = [mergeLead(domain.item, merge, LABELS.merge), ...aggregate, ...rows, ...last];
 		return ctx.review({
 			leads: leads.slice(0, REVIEW_LEAD_LIMIT),
 			limitations:

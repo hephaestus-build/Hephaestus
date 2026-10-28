@@ -233,7 +233,7 @@ export const CreateSends: Story = {
 				name: "Clear review context",
 				criteria: "Check whether the reviewed work explains its purpose.",
 				reads: {
-					contract: "2.0.0",
+					contract: "3.0.0",
 					sources: [{ source: "scm.pull-request.core", need: "REQUIRED" }],
 				},
 			},

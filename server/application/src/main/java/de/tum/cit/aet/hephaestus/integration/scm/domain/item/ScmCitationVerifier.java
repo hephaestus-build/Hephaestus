@@ -195,7 +195,7 @@ public class ScmCitationVerifier implements CitationVerifier {
      * supports no claim about the build or the tests. A pointer elsewhere in the record names no run.
      */
     private boolean unfinishedRun(CitationCheck check, CitationToCheck citation) {
-        if (!citation.source().equals(PullRequestContentSource.CORE.value())) return false;
+        if (!citation.source().equals(PullRequestContentSource.CHECKS.value())) return false;
         Matcher pointer = CHECK_RUN_POINTER.matcher(citation.path());
         boolean intoRun = pointer.matches();
         if (!intoRun && citation.path().contains("#")) return false;

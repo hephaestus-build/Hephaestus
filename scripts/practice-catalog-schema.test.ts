@@ -112,7 +112,7 @@ for (const [name, change] of [
 		"a retired evidence stance",
 		(d) => {
 			d.reads = {
-				contract: "2.0.0",
+				contract: "3.0.0",
 				sources: [{ source: "scm.pull-request.core", need: "EXHAUSTIVE" }],
 			};
 		},

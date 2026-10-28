@@ -111,7 +111,7 @@ export const ReviewedByPeople: Story = {
 		practice: catalogPractice({
 			...practice,
 			definition: catalogPracticeDefinition({
-				reads: { contract: "2.0.0", sources: [] },
+				reads: { contract: "3.0.0", sources: [] },
 				reviewedBy: {
 					by: "PEOPLE",
 					humanReason: {
@@ -137,7 +137,7 @@ export const CustomScriptWithScan: Story = {
 					include: ["src/**/*.ts"],
 					exclude: ["**/*.test.ts"],
 					context: [],
-					reads: { contract: "2.0.0", sources: [] },
+					reads: { contract: "3.0.0", sources: [] },
 				},
 			}),
 		}),

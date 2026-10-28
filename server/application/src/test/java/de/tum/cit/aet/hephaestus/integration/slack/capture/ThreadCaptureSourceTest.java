@@ -76,7 +76,7 @@ class ThreadCaptureSourceTest extends BaseUnitTest {
         when(projection.threadReadability(7L, "C1", THREAD_TS))
                 .thenReturn(ConversationThreadProjection.ThreadReadability.CONSENT_NOT_ACTIVE);
         var request = new CaptureRequest(
-                UUID.randomUUID(), UUID.randomUUID(), 1, Set.of(ThreadCaptureSource.SOURCE), "2.0.0", 3);
+                UUID.randomUUID(), UUID.randomUUID(), 1, Set.of(ThreadCaptureSource.SOURCE), "3.0.0", 3);
         var captured = captureSource().capture(snapshot(new ItemVersion("frozen", null)), request);
         assertThat(captured.files()).isEmpty();
         assertThat(captured.citableTexts()).isEmpty();
@@ -124,7 +124,7 @@ class ThreadCaptureSourceTest extends BaseUnitTest {
             });
             Set<SourceKind> selected = reads.stream().map(read -> read.source()).collect(Collectors.toSet());
             var captured = captureSource()
-                    .capture(pinned, new CaptureRequest(UUID.randomUUID(), UUID.randomUUID(), 1, selected, "2.0.0", 3));
+                    .capture(pinned, new CaptureRequest(UUID.randomUUID(), UUID.randomUUID(), 1, selected, "3.0.0", 3));
 
             var record = mapper.readTree(Objects.requireNonNull(captured.files().get(ThreadCaptureSource.OUTPUT_KEY)));
             assertThat(record.path("messages"))

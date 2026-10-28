@@ -330,7 +330,7 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                 d.appliesWhen(),
                 d.about(),
                 new PracticeReads(
-                        "2.0.0",
+                        "3.0.0",
                         List.of(new PracticeReadSource(new SourceKind("scm.pull-request.diff"), ReadNeed.REQUIRED))),
                 d.reviewedBy(),
                 d.criteria(),

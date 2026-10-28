@@ -1395,6 +1395,7 @@ void test("a resolution the record does not date by the merge, or a merge it doe
 void test("the merge practices read the threads and decisions as rows against the merge", async () => {
 	const record = {
 		"review_threads.json": {
+			review_decision: "APPROVED",
 			threads: [
 				{
 					id: 10,
@@ -1442,7 +1443,7 @@ void test("the merge practices read the threads and decisions as rows against th
 			],
 		},
 	};
-	const merged = { ...metadata, is_merged: true, merged_by: "ada", review_decision: "APPROVED" };
+	const merged = { ...metadata, is_merged: true, merged_by: "ada" };
 	const unresolved = await review("merged-past-unresolved-review-threads", {
 		item: merged,
 		inputs: atMerge,
@@ -1459,7 +1460,7 @@ void test("the merge practices read the threads and decisions as rows against th
 	assert.deepEqual(merge.at, { record: "metadata.json" });
 	assert.equal(merge.facts?.mergedBy, "ada");
 	assert.equal(merge.facts.mergedByIsAuthor, true);
-	assert.equal(merge.facts.reviewDecision, "APPROVED");
+	assert.equal(merge.facts.reviewDecision, undefined);
 	assert.equal(threadKey(thread.label), "unresolved-thread");
 	assert.deepEqual(thread.at, { record: "review_threads.json" });
 	assert.deepEqual(thread.facts, {
@@ -1484,6 +1485,9 @@ void test("the merge practices read the threads and decisions as rows against th
 		inputs: atMerge,
 		context: record,
 	});
+	const aggregate = decisions.leads.find((lead) => lead.facts?.reviewDecision === "APPROVED");
+	assert.ok(aggregate);
+	assert.deepEqual(aggregate.at, { record: "review_threads.json" });
 	const decisionKey = await leadKeys("merges-only-after-approval");
 	assert.equal(decisions.facts?.decisions, 5);
 	assert.equal(decisions.facts.approvalsBeforeMergeByOthers, 1);

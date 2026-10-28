@@ -46,7 +46,7 @@ describe("patternsOf", () => {
 
 describe("scan drafts", () => {
 	it("round-trips a saved scan and writes the current source contract", () => {
-		expect(scanOf(scanDraftOf(mockScan), "2.0.0")).toStrictEqual(mockScan);
+		expect(scanOf(scanDraftOf(mockScan), "3.0.0")).toStrictEqual(mockScan);
 		expect(scanOf(scanDraftOf(mockScan), "2.1.0").reads.contract).toBe("2.1.0");
 	});
 

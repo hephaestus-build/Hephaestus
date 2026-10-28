@@ -147,7 +147,7 @@ class DefaultReviewExecutionHandlerTest extends BaseUnitTest {
                         original.practice().practiceId(),
                         original.practiceSlug(),
                         new PracticeReads(
-                                "2.0.0",
+                                "3.0.0",
                                 List.of(
                                         new PracticeReadSource(primary, ReadNeed.REQUIRED),
                                         new PracticeReadSource(
@@ -157,7 +157,7 @@ class DefaultReviewExecutionHandlerTest extends BaseUnitTest {
                         original.item(),
                         original.practice().practiceId(),
                         original.practiceSlug(),
-                        new PracticeReads("2.0.0", List.of(new PracticeReadSource(primary, need))));
+                        new PracticeReads("3.0.0", List.of(new PracticeReadSource(primary, need))));
         var review = RuntimeReviewTestData.review(ReviewKind.ITEM, assignment);
         when(assignments.review(job)).thenReturn(review);
         when(assignments.load(job)).thenReturn(List.of(assignment));
@@ -188,7 +188,7 @@ class DefaultReviewExecutionHandlerTest extends BaseUnitTest {
                         EvidenceSnapshotFixtures.citation(new SourceKind("docs.document.core")),
                         List.of()));
         var manifest = new JobFolderIndex(
-                new SourceContractVersion("2.0.0"),
+                new SourceContractVersion("3.0.0"),
                 "a".repeat(64),
                 assignment.item().kind().value(),
                 NOW,
@@ -315,7 +315,7 @@ class DefaultReviewExecutionHandlerTest extends BaseUnitTest {
                         "The change touches no Swift file."),
                 d.about(),
                 new PracticeReads(
-                        "2.0.0",
+                        "3.0.0",
                         List.of(new PracticeReadSource(new SourceKind("scm.pull-request.diff"), ReadNeed.REQUIRED))),
                 d.reviewedBy(),
                 d.criteria(),
@@ -342,7 +342,7 @@ class DefaultReviewExecutionHandlerTest extends BaseUnitTest {
                         new SourceCaptureFacts(NOW, null, null, "base:head"))
                 : new SourceCaptureState.Unavailable(SourceAbsenceReason.NO_PROVIDER);
         var manifest = new JobFolderIndex(
-                new SourceContractVersion("2.0.0"),
+                new SourceContractVersion("3.0.0"),
                 "a".repeat(64),
                 assignment.item().kind().value(),
                 NOW,
@@ -446,13 +446,13 @@ class DefaultReviewExecutionHandlerTest extends BaseUnitTest {
                 PULL_REQUEST,
                 original.practice().practiceId(),
                 original.practiceSlug(),
-                new PracticeReads("2.0.0", List.of(new PracticeReadSource(core, ReadNeed.REQUIRED))));
+                new PracticeReads("3.0.0", List.of(new PracticeReadSource(core, ReadNeed.REQUIRED))));
         var withheld = practice(
                 original,
                 PULL_REQUEST,
                 41L,
                 "repository-practice",
-                new PracticeReads("2.0.0", List.of(new PracticeReadSource(tree, ReadNeed.REQUIRED))));
+                new PracticeReads("3.0.0", List.of(new PracticeReadSource(tree, ReadNeed.REQUIRED))));
         when(assignments.load(job)).thenReturn(List.of(available, withheld));
         when(assignments.review(job)).thenReturn(RuntimeReviewTestData.review(ReviewKind.ITEM, available));
         when(source.supports(available.item())).thenReturn(true);
@@ -461,7 +461,7 @@ class DefaultReviewExecutionHandlerTest extends BaseUnitTest {
         when(source.record(eq(snapshot), any()))
                 .thenReturn(mapper.createObjectNode().put("title", "Captured work"));
         var manifest = new JobFolderIndex(
-                new SourceContractVersion("2.0.0"),
+                new SourceContractVersion("3.0.0"),
                 "a".repeat(64),
                 available.item().kind().value(),
                 NOW,
@@ -609,7 +609,7 @@ class DefaultReviewExecutionHandlerTest extends BaseUnitTest {
         return new PracticeReadSource(new SourceKind(source), need);
     }
 
-    /** The retained legacy practice: one optional read is absent from the 2.0.0 catalog. */
+    /** The retained legacy practice: one optional read is absent from the 3.0.0 catalog. */
     private static ReviewAssignmentSnapshot legacyWikiPractice(ReviewAssignmentSnapshot original) {
         return practice(
                 original,
@@ -617,7 +617,7 @@ class DefaultReviewExecutionHandlerTest extends BaseUnitTest {
                 41L,
                 "keep-linked-wiki-docs-consistent",
                 new PracticeReads(
-                        "2.0.0",
+                        "3.0.0",
                         List.of(
                                 read("scm.pull-request.core", ReadNeed.COMPLETE),
                                 read("scm.pull-request.diff", ReadNeed.COMPLETE),
@@ -626,7 +626,7 @@ class DefaultReviewExecutionHandlerTest extends BaseUnitTest {
                                 read("outline.documents", ReadNeed.OPTIONAL))));
     }
 
-    /** A handler behind the real capture boundary and the real 2.0.0 source catalog. */
+    /** A handler behind the real capture boundary and the real 3.0.0 source catalog. */
     private DefaultReviewExecutionHandler strictHandler(ReviewJob job, ItemRef item) {
         when(source.supports(item)).thenReturn(true);
         var snapshot = ItemFixtures.snapshot(item, Map.of()).build();
@@ -676,7 +676,7 @@ class DefaultReviewExecutionHandlerTest extends BaseUnitTest {
                 PULL_REQUEST,
                 original.practice().practiceId(),
                 original.practiceSlug(),
-                new PracticeReads("2.0.0", List.of(read("scm.pull-request.core", ReadNeed.REQUIRED))));
+                new PracticeReads("3.0.0", List.of(read("scm.pull-request.core", ReadNeed.REQUIRED))));
         var legacy = legacyWikiPractice(original);
         when(assignments.load(job)).thenReturn(List.of(valid, legacy));
         when(assignments.review(job)).thenReturn(RuntimeReviewTestData.review(ReviewKind.ITEM, valid));
@@ -722,7 +722,7 @@ class DefaultReviewExecutionHandlerTest extends BaseUnitTest {
                 PULL_REQUEST,
                 original.practice().practiceId(),
                 original.practiceSlug(),
-                new PracticeReads("2.0.0", List.of(read("scm.pull-request.core", ReadNeed.REQUIRED))));
+                new PracticeReads("3.0.0", List.of(read("scm.pull-request.core", ReadNeed.REQUIRED))));
         var olderContract = practice(
                 original,
                 PULL_REQUEST,
@@ -734,7 +734,7 @@ class DefaultReviewExecutionHandlerTest extends BaseUnitTest {
                 PULL_REQUEST,
                 61L,
                 "issue-practice",
-                new PracticeReads("2.0.0", List.of(read("scm.issue.core", ReadNeed.REQUIRED))));
+                new PracticeReads("3.0.0", List.of(read("scm.issue.core", ReadNeed.REQUIRED))));
         when(assignments.load(job)).thenReturn(List.of(valid, olderContract, otherItemKind));
         when(assignments.review(job)).thenReturn(RuntimeReviewTestData.review(ReviewKind.ITEM, valid));
 
@@ -751,7 +751,7 @@ class DefaultReviewExecutionHandlerTest extends BaseUnitTest {
                 .orElseThrow();
         assertThat(older.reason()).isEqualTo(DefaultReviewExecutionHandler.SOURCE_CONTRACT_UNSUPPORTED);
         assertThat(older.facts().path("sourceContract").asString()).isEqualTo("1.3.0");
-        assertThat(older.facts().path("currentSourceContract").asString()).isEqualTo("2.0.0");
+        assertThat(older.facts().path("currentSourceContract").asString()).isEqualTo("3.0.0");
         var issue = decisions.stream()
                 .filter(d -> d.practiceId() == 61L)
                 .findFirst()
@@ -807,7 +807,7 @@ class DefaultReviewExecutionHandlerTest extends BaseUnitTest {
                         scan.include(),
                         scan.exclude(),
                         scan.context(),
-                        new PracticeReads("2.0.0", List.of(read("outline.documents", ReadNeed.OPTIONAL)))),
+                        new PracticeReads("3.0.0", List.of(read("outline.documents", ReadNeed.OPTIONAL)))),
                 d.lineNotes(),
                 d.guidance());
         var p = original.practice();
@@ -841,7 +841,7 @@ class DefaultReviewExecutionHandlerTest extends BaseUnitTest {
                 item,
                 practiceId,
                 slug,
-                new PracticeReads("2.0.0", List.of(read("scm.pull-request.core", ReadNeed.REQUIRED))));
+                new PracticeReads("3.0.0", List.of(read("scm.pull-request.core", ReadNeed.REQUIRED))));
         var p = original.practice();
         var definition = DefinitionTestFixtures.withAbout(
                 DefinitionTestFixtures.withReviewOn(

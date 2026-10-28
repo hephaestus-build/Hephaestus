@@ -32,6 +32,7 @@ import org.springframework.core.annotation.Order;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Component;
 import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.JsonNodeFactory;
@@ -169,8 +170,15 @@ public class ReviewThreadContentSource {
         }
         var occasion = request.occasion();
         ObjectNode root = collect(pullRequestId, metadata, occasion == null ? null : occasion.decision());
-        boolean empty =
-                root.path("threads").isEmpty() && root.path("reviewDecisions").isEmpty();
+        if (occasion != null) {
+            JsonNode decision = occasion.record().get("review_decision");
+            if (decision != null) root.set("review_decision", decision);
+        } else if (pullRequest.getReviewDecision() != null) {
+            root.put("review_decision", pullRequest.getReviewDecision().name());
+        }
+        boolean empty = root.path("threads").isEmpty()
+                && root.path("reviewDecisions").isEmpty()
+                && !root.has("review_decision");
         Map<String, byte[]> files = new LinkedHashMap<>();
         files.put(
                 OUTPUT_PREFIX + FILE_NAME,

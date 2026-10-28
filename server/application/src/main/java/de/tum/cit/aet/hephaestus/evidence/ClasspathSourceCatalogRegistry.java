@@ -26,7 +26,7 @@ import tools.jackson.databind.json.JsonMapper;
 
 @Component
 public final class ClasspathSourceCatalogRegistry {
-    public static final String CURRENT_VERSION_VALUE = "2.0.0";
+    public static final String CURRENT_VERSION_VALUE = "3.0.0";
     public static final SourceContractVersion CURRENT_VERSION = new SourceContractVersion(CURRENT_VERSION_VALUE);
     static final String CATALOG_RESOURCE = "contracts/source-use/" + CURRENT_VERSION_VALUE + "/catalog.json";
     static final String USE_DECISIONS_RESOURCE =

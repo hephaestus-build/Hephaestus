@@ -188,7 +188,7 @@ class AppliesWhenExecutionIntegrationTest extends AbstractResultAdmissionIntegra
                 d.reviewOn(),
                 new AppliesWhen(List.of(new AppliesWhenClause(List.of("**/*.swift"), null, null)), OTHERWISE),
                 d.about(),
-                new PracticeReads("2.0.0", List.of(new PracticeReadSource(DIFF, ReadNeed.REQUIRED))),
+                new PracticeReads("3.0.0", List.of(new PracticeReadSource(DIFF, ReadNeed.REQUIRED))),
                 d.reviewedBy(),
                 d.criteria(),
                 d.script(),
@@ -238,7 +238,7 @@ class AppliesWhenExecutionIntegrationTest extends AbstractResultAdmissionIntegra
                         new SourceCaptureFacts(Instant.now(), null, null, "base:head"))
                 : new SourceCaptureState.Unavailable(SourceAbsenceReason.NO_PROVIDER);
         var manifest = new JobFolderIndex(
-                new SourceContractVersion("2.0.0"),
+                new SourceContractVersion("3.0.0"),
                 "a".repeat(64),
                 assignment.item().kind().value(),
                 Instant.now(),
@@ -551,7 +551,7 @@ class AppliesWhenExecutionIntegrationTest extends AbstractResultAdmissionIntegra
                 null,
                 d.about(),
                 new PracticeReads(
-                        "2.0.0",
+                        "3.0.0",
                         List.of(
                                 new PracticeReadSource(new SourceKind("scm.pull-request.core"), ReadNeed.COMPLETE),
                                 new PracticeReadSource(new SourceKind("outline.documents"), ReadNeed.OPTIONAL))),
@@ -641,7 +641,7 @@ class AppliesWhenExecutionIntegrationTest extends AbstractResultAdmissionIntegra
                 null,
                 d.about(),
                 new PracticeReads(
-                        "2.0.0",
+                        "3.0.0",
                         List.of(
                                 new PracticeReadSource(new SourceKind("scm.pull-request.core"), ReadNeed.COMPLETE),
                                 new PracticeReadSource(new SourceKind("outline.documents"), ReadNeed.OPTIONAL))),

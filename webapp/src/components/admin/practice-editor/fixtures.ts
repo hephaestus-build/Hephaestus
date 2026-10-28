@@ -9,7 +9,7 @@ import type {
 
 import type { PracticeDefinitionValue } from "./PracticeDefinitionForm";
 
-export const MOCK_SOURCE_CONTRACT = "2.0.0";
+export const MOCK_SOURCE_CONTRACT = "3.0.0";
 
 function readSource(
 	source: string,
@@ -36,6 +36,7 @@ const repositoryTree = readSource("scm.repository.tree", "Repository files and h
 
 const pullRequestSources = [
 	readSource("scm.pull-request.core", "Pull request details"),
+	readSource("scm.pull-request.checks", "CI checks and merge status"),
 	readSource("scm.pull-request.diff", "Code changes", true, {
 		side: "REQUIRED",
 		commit: "OPTIONAL",

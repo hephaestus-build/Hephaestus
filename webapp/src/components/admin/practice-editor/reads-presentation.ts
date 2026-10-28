@@ -40,6 +40,7 @@ export const READ_SOURCE_FAMILY: Record<ReadSourceFamily, ReadSourceFamilyDef> =
  */
 const SOURCE_FAMILIES: Record<string, ReadSourceFamily> = {
 	"scm.pull-request.core": "item",
+	"scm.pull-request.checks": "item",
 	"scm.pull-request.diff": "item",
 	"scm.pull-request.comments": "item",
 	"scm.review-threads": "item",

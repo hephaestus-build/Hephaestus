@@ -12,7 +12,7 @@ INSERT INTO practice_version(id,workspace_id,practice_id,number,definition)
 VALUES(978005,978001,978004,1,
  '{"name":"Native practice","criteria":"Explain the purpose.","about":"AUTHOR",
    "reviewOn":{"events":["scm.pull_request.opened"],"state":{}},"appliesWhen":null,
-   "reads":{"contract":"2.0.0","sources":[{"source":"scm.pull-request.core","need":"COMPLETE"}]},
+   "reads":{"contract":"3.0.0","sources":[{"source":"scm.pull-request.core","need":"COMPLETE"}]},
    "reviewedBy":{"by":"HEPHAESTUS","humanReason":null,"limits":[]},"script":null,"scan":null,
    "lineNotes":false,"guidance":{"whyItMatters":null,"whatGoodLooksLike":null,"goingWell":null,"visual":null,"guide":null}}');
 INSERT INTO review(id,workspace_id,item_id,kind,item_version,origin,status,ordered_at)

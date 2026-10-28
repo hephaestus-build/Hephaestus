@@ -46,7 +46,7 @@ class PracticeDefinitionTest extends BaseUnitTest {
                 new ReviewOn(List.of(), Map.of()),
                 null,
                 null,
-                new PracticeReads("2.0.0", List.of()),
+                new PracticeReads("3.0.0", List.of()),
                 new ReviewedBy(ReviewedByKind.NOBODY, null, List.of()),
                 "Follow the team guidance.",
                 null,
@@ -73,7 +73,7 @@ class PracticeDefinitionTest extends BaseUnitTest {
     @Test
     void shouldRejectDuplicateReadSourcesWhenAuthored() {
         var required = new PracticeReadSource(new SourceKind("scm.pull-request.core"), ReadNeed.REQUIRED);
-        assertThatThrownBy(() -> new PracticeReads("2.0.0", List.of(required, required)))
+        assertThatThrownBy(() -> new PracticeReads("3.0.0", List.of(required, required)))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 

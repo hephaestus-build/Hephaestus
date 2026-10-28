@@ -257,15 +257,15 @@ class ScmCitationVerifierTest extends BaseUnitTest {
     @Test
     void shouldRefuseACitationOfACheckRunThatHadNotFinishedAndKeepOneThatHad() throws Exception {
         Files.createDirectories(root.resolve("context"));
-        Files.writeString(root.resolve("context/metadata.json"), """
+        Files.writeString(root.resolve("context/checks.json"), """
                 {"head_check_runs": {"complete": true, "observed_at": "2026-10-27T05:00:00Z", "runs": [
                   {"name": "unit tests", "state": "in_progress", "finished": false},
                   {"name": "build", "state": "failure", "finished": true}]}}
                 """);
         var running = new CitationToCheck(
                 0,
-                "scm.pull-request.core",
-                "context/metadata.json#/head_check_runs/runs/0/state",
+                "scm.pull-request.checks",
+                "context/checks.json#/head_check_runs/runs/0/state",
                 CitationSide.NEW,
                 null,
                 1,
@@ -273,8 +273,8 @@ class ScmCitationVerifierTest extends BaseUnitTest {
                 "in_progress");
         var ended = new CitationToCheck(
                 1,
-                "scm.pull-request.core",
-                "context/metadata.json#/head_check_runs/runs/1/state",
+                "scm.pull-request.checks",
+                "context/checks.json#/head_check_runs/runs/1/state",
                 CitationSide.NEW,
                 null,
                 1,
@@ -294,24 +294,24 @@ class ScmCitationVerifierTest extends BaseUnitTest {
         Files.createDirectories(root.resolve("context"));
         var mapper = new ObjectMapper();
         var record = mapper.readTree("""
-                {"title": "page users", "head_check_runs": {"complete": false, "observed_at": "2026-10-27T05:00:00Z",
+                {"merge_state_status": "CLEAN", "head_check_runs": {"complete": false, "observed_at": "2026-10-27T05:00:00Z",
                   "runs": [{"name": "unit tests", "state": "in_progress", "finished": false},
                            {"name": "build", "state": "failure", "finished": true}]}}
                 """);
         // Pretty-printed, as the capture writes the record.
         String text = mapper.writerWithDefaultPrettyPrinter().writeValueAsString(record);
-        Files.writeString(root.resolve("context/metadata.json"), text);
+        Files.writeString(root.resolve("context/checks.json"), text);
         List<String> lines = text.lines().toList();
         int running = lineOf(lines, "\"in_progress\"");
         int failed = lineOf(lines, "\"failure\"");
-        int title = lineOf(lines, "\"page users\"");
-        assertThat(List.of(running, failed, title)).doesNotContain(0);
+        int statusLine = lineOf(lines, "\"CLEAN\"");
+        assertThat(List.of(running, failed, statusLine)).doesNotContain(0);
 
         assertThat(verifier.verify(check(
                         List.of(
                                 wholeRecord(0, running, "in_progress"),
                                 wholeRecord(1, failed, "failure"),
-                                wholeRecord(2, title, "page users")),
+                                wholeRecord(2, statusLine, "CLEAN")),
                         List.of())))
                 .singleElement()
                 .satisfies(refusal -> {
@@ -327,7 +327,7 @@ class ScmCitationVerifierTest extends BaseUnitTest {
 
     private static CitationToCheck wholeRecord(int index, int line, String quote) {
         return new CitationToCheck(
-                index, "scm.pull-request.core", "context/metadata.json", CitationSide.NEW, null, line, line, quote);
+                index, "scm.pull-request.checks", "context/checks.json", CitationSide.NEW, null, line, line, quote);
     }
 
     private void range(String base, String head) throws Exception {
