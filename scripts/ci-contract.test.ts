@@ -2203,6 +2203,22 @@ void describe("CI contract", () => {
 			`\${{ always() && github.event_name == 'merge_group' && needs.all-ci-passed.outputs.verdict == 'failure' }}`,
 		);
 		assert.doesNotMatch(condition, /cancelled\(\)/u);
+		// A leg can still fail while a regroup cancels the run: the comment waits until the queue has
+		// dropped the entry, which a regroup never does.
+		const reporterJob = asRecord(
+			asRecord(asRecord(workflow.toJSON(), "cicd.yml").jobs, "cicd.yml jobs")[
+				"report-unsuccessful-merge-group"
+			],
+			"reporter",
+		);
+		const steps = asArray(reporterJob.steps, "reporter steps");
+		const lookup = asRecord(asRecord(steps[0], "reporter lookup").with, "reporter lookup with");
+		assert.match(String(lookup.script), /mergeQueueEntry \{ id \}/u);
+		assert.match(String(lookup.script), /mergeQueueEntry === null/u);
+		assert.equal(
+			asRecord(steps[1], "reporter comment").if,
+			"steps.pull-request.outputs.number != ''",
+		);
 		const gate = ["jobs", "all-ci-passed"];
 		assert.equal(
 			workflow.getIn([...gate, "outputs", "verdict"]),
@@ -5740,13 +5756,12 @@ void test("a failed leg cancels its own merge-group run, and only a merge-group 
 	const gate = workflow.getIn(["jobs", "all-ci-passed", "needs"]);
 	assert.ok(isSeq(gate));
 	// These legs never run in a merge group, so a cancel job for them could never fire.
-	const pullRequestOnly = ["Security", "Changesets"];
-	for (const leg of pullRequestOnly) {
-		assert.match(String(workflow.getIn(["jobs", leg, "if"])), /pull_request|merge_group/u, leg);
-	}
+	const pullRequestOnly = new Set(["Security", "Changesets"]);
+	assert.equal(simulateRun(workflow, "merge_group", "success").Security, "skipped");
+	assert.equal(workflow.getIn(["jobs", "Changesets", "if"]), "github.event_name == 'pull_request'");
 	const legs = gate.items
 		.map(String)
-		.filter((name) => name !== "detect-changes" && !pullRequestOnly.includes(name));
+		.filter((name) => name !== "detect-changes" && !pullRequestOnly.has(name));
 	const jobs = asRecord(asRecord(workflow.toJSON(), "cicd.yml").jobs, "cicd.yml jobs");
 	const callers = Object.entries(jobs)
 		.filter(([, definition]) => asRecord(definition, "job").uses === FAIL_FAST)
