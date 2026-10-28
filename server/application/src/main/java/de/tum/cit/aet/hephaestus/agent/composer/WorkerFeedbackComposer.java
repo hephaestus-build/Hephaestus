@@ -492,8 +492,9 @@ public class WorkerFeedbackComposer {
             }
         }
 
+        /** The cause a session recorded, or, when none ran or none recorded one, whether time or the model ended it. */
         private Stop ended() {
-            return Objects.requireNonNullElse(stop, Stop.of(CompositionStop.NO_DECISION));
+            return stop != null ? stop : Stop.of(outOfRoom());
         }
 
         /** Ends the session for a cause that left something undecided. */
