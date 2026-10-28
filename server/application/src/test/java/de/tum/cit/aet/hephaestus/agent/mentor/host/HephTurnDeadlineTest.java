@@ -106,7 +106,8 @@ class HephTurnDeadlineTest extends BaseUnitTest {
                 "worker",
                 1,
                 Duration.ofMinutes(1),
-                HephTurnDispatcher.STOP_GRACE);
+                HephTurnDispatcher.STOP_GRACE,
+                Duration.ofSeconds(1));
         dispatcher.start();
         dispatcher.resync();
         assertThat(next().path("type").asString()).isEqualTo("start");
@@ -154,7 +155,8 @@ class HephTurnDeadlineTest extends BaseUnitTest {
                                 List.of(),
                                 HephTurnDispatcher.TIME_LIMIT_REACHED,
                                 "its Heph host did not end it within " + HephTurnDispatcher.STOP_GRACE
-                                        + " after its deadline")));
+                                        + " after its deadline",
+                                null)));
         assertThat(dispatcher.runs(TURN, 1)).isFalse();
     }
 
