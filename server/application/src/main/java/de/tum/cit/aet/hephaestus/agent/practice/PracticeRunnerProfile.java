@@ -14,6 +14,7 @@ public final class PracticeRunnerProfile implements PiRunnerProfile {
     private static final List<String> SIDECARS = List.of(
             "pi-agent-sandbox.ts",
             "pi-assessment-cache.ts",
+            "pi-opening-queue.ts",
             "pi-task-paths.ts",
             "pi-tool-arguments.ts",
             "pi-tool-validation.ts",

@@ -234,6 +234,22 @@ The brief shows them in one order: the change, the core text, linked work, then 
 It ends with the practice's own index of those sources.
 Practices that declare the same sources get the same opening, so a prompt cache can share it.
 
+The server orders item-review practices without a current result first, then by the oldest last verdict.
+The runner preserves that order among practices ready to start.
+Each declared-source set starts one leader at once.
+Its followers wait for the leader's first streamed response, at most 20 seconds or until the leader ends.
+A different set can start while those followers wait.
+The review deadline still bounds the wait and the work.
+
+OpenAI Responses uses explicit cache boundaries at the system prompt and the ends of the change and core layers where the model supports them.
+The provider's implicit session cache keeps its own slot.
+OpenAI keeps its provider-default retention.
+The API does not accept a five-minute TTL.
+Anthropic's native Messages layout uses five minutes in L5 of [ADR 0069](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0069-practices-run-when-ready-and-stay-current-by-their-sources.md#update--2026-10-28).
+Completions protocols receive no explicit cache markers.
+
+Live cache gain remains unverified until staging measurement after L3 merges.
+
 The session's read, grep and find tools refuse a captured file that the practice does not declare. A listing still shows its name.
 A result may cite only its declared sources, the change and the checkout. The runner refuses other citations, and the session gets a repair turn.
 Every session can also read the change and the checkout through Git.

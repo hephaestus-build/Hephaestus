@@ -493,11 +493,26 @@ process.stdout.write(JSON.stringify(validateToolArguments(tool, { name: tool.nam
 						false,
 					);
 					capture("model-finish", { slug, at: Date.now() });
+					capture("model-events", { slug, event: "finish" });
 					return;
 				}
 				for (const sent of candidates) {
 					await submitCandidate(sent, slug, hasText(correction));
 					capture("model-finish", { slug, at: Date.now() });
+					capture("model-events", { slug, event: "finish" });
+				}
+			}
+
+			async function firstProviderEvent(slug: string): Promise<void> {
+				const streamDelays = parseJson(process.env.PI_HOST_STREAM_DELAYS ?? "{}");
+				const streamDelay = field(streamDelays, slug);
+				if (typeof streamDelay === "number") {
+					await sleep(streamDelay);
+				}
+				if (process.env.PI_HOST_COLD_LEADER !== slug) {
+					capture("model-stream", { slug, at: Date.now() });
+					capture("model-events", { slug, event: "stream" });
+					emit({ type: "message_start", message: { role: "assistant" } });
 				}
 			}
 
@@ -561,6 +576,8 @@ process.stdout.write(JSON.stringify(validateToolArguments(tool, { name: tool.nam
 						const delays = parseJson(process.env.PI_HOST_DELAYS ?? "{}");
 						const delay = field(delays, slug);
 						capture("model-start", { slug, at: Date.now() });
+						capture("model-events", { slug, event: "start" });
+						await firstProviderEvent(slug);
 						if (typeof delay === "number") {
 							await sleep(delay);
 						}

@@ -56,6 +56,7 @@ import {
 	type TechnicalFact,
 } from "./RecordSheet";
 import { RequestReviewAction } from "./RequestReviewAction";
+import { cacheReadShare } from "./review-cache-usage";
 import { feedbackSlots, type ReviewListTarget } from "./review-outcomes";
 import { ReviewActions } from "./ReviewActions";
 import { ReviewStatusMark } from "./ReviewBadges";
@@ -740,7 +741,17 @@ function ReviewJobEntry({ job, position }: { job: ReviewJob; position: string })
 
 function technicalFacts(review: ReviewDetail): TechnicalFact[] {
 	const { usage } = review;
+	const cacheShare = cacheReadShare(usage.attempts);
 	const usagePending = isActiveReview(review.status) && usage.attempts.length === 0;
+	let cacheShareText = "No input usage recorded";
+	if (usagePending) {
+		cacheShareText = "Not recorded yet";
+	} else if (cacheShare !== undefined) {
+		cacheShareText = new Intl.NumberFormat("en", {
+			style: "percent",
+			maximumFractionDigits: 1,
+		}).format(cacheShare);
+	}
 	let reasoning = 0;
 	let cacheRead = 0;
 	let cacheWrite = 0;
@@ -785,6 +796,10 @@ function technicalFacts(review: ReviewDetail): TechnicalFact[] {
 			value: usagePending
 				? "Not recorded yet"
 				: `${formatTokens(cacheRead)} read · ${formatTokens(cacheWrite)} written`,
+		},
+		{
+			label: "Cache read share",
+			value: cacheShareText,
 		},
 	];
 	if (review.batchId !== null) {

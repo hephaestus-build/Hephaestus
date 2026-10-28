@@ -27,6 +27,45 @@ import { buildBrief } from "../../../main/resources/agent/pi-review-brief.ts";
 const PREFIX = "Review this captured work.\n\nShared work description and diff.\n\n";
 const JOB = "10000000-0000-4000-8000-000000000001";
 
+void test("Responses preserves text and roles with system, change and core cache boundaries", async () => {
+	await wire(async ({ open, bodies }) => {
+		const prefix = "task\nchange\ncore\nindex\n";
+		const session = await open(
+			{ apiProtocol: "openai-responses", modelId: "gpt-6-luna" },
+			9,
+			JOB,
+			prefix,
+			[12, 17],
+		);
+		await session.prompt(`${prefix}Evaluate alpha.`);
+		const body = bodies[0];
+		assert.ok(body && Array.isArray(body.input));
+		assert.equal("prompt_cache_retention" in body, false);
+		assert.equal("prompt_cache_options" in body, false);
+		const user = firstUser(body);
+		assert.ok(Array.isArray(user.content));
+		assert.deepEqual(
+			user.content.map((entry: unknown) => {
+				assert.ok(isRecord(entry));
+				return entry.text;
+			}),
+			["task\nchange\n", "core\n", "index\nEvaluate alpha."],
+		);
+		assert.equal(JSON.stringify(body).match(/prompt_cache_breakpoint/gu)?.length, 3);
+		const system: unknown = body.input[0];
+		assert.ok(isRecord(system));
+		assert.equal(system.role, "system");
+		assert.ok(Array.isArray(system.content));
+		const instructions: unknown = system.content[0];
+		assert.ok(isRecord(instructions) && typeof instructions.text === "string");
+		assert.equal(instructions.text, session.systemPrompt);
+		assert.partialDeepStrictEqual(instructions, {
+			type: "input_text",
+			prompt_cache_breakpoint: { mode: "explicit" },
+		});
+	});
+});
+
 /** Native SDK requests stop at this local proxy; no provider response or cache hit is simulated. */
 async function wire(
 	run: (context: {
@@ -35,6 +74,7 @@ async function wire(
 			workspace?: number,
 			job?: string,
 			prefix?: string,
+			boundaries?: readonly number[],
 		) => Promise<Awaited<ReturnType<typeof createAgentSession>>["session"]>;
 		bodies: Record<string, unknown>[];
 	}) => Promise<void>,
@@ -72,7 +112,13 @@ async function wire(
 			allowModelNetwork: false,
 		});
 		const settingsManager = SettingsManager.inMemory({ retry: { enabled: false } });
-		const open = async (config: ProviderConfig, workspace = 9, job = JOB, prefix = PREFIX) => {
+		const open = async (
+			config: ProviderConfig,
+			workspace = 9,
+			job = JOB,
+			prefix = PREFIX,
+			boundaries: readonly number[] = [],
+		) => {
 			assert.ok(
 				registerHephaestusProvider(modelRuntime, config, {
 					LLM_PROXY_URL: `http://127.0.0.1:${address.port}/v1`,
@@ -81,7 +127,14 @@ async function wire(
 			);
 			const model = modelRuntime.getModel("hephaestus", config.modelId);
 			assert.ok(model);
-			const cache = assessmentCacheExtension(config, modelRuntime, prefix, workspace, job);
+			const cache = assessmentCacheExtension(
+				config,
+				modelRuntime,
+				prefix,
+				workspace,
+				job,
+				boundaries,
+			);
 			const resourceLoader = new DefaultResourceLoader({
 				cwd,
 				agentDir: cwd,

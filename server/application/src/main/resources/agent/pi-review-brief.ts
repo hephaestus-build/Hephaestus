@@ -36,6 +36,7 @@ export interface BriefScope {
 }
 
 interface Candidate {
+	layer: "change" | "core" | "linked" | "discussion";
 	/** Workspace-relative, as a citation names it. */
 	label: string;
 	absolute: string;
@@ -62,9 +63,14 @@ function candidates(
 	limits: BriefLimits,
 	scope: BriefScope,
 ): Candidate[] {
-	const context = (name: string, language = "json"): Candidate => {
+	const context = (
+		name: string,
+		language = "json",
+		layer: Candidate["layer"] = "core",
+	): Candidate => {
 		const label = `${paths.contextRoot}/${name}`;
 		return {
+			layer,
 			label,
 			absolute: path.resolve(root, paths.contextRoot, name),
 			limit: limits.filePerChars,
@@ -78,6 +84,7 @@ function candidates(
 		kind: string | undefined,
 		limit = limits.filePerChars,
 	): Candidate => ({
+		layer: name === "description.authored.md" ? "core" : "change",
 		label: `${CHANGE_ROOT}/${name}`,
 		absolute: path.resolve(root, CHANGE_ROOT, name),
 		limit,
@@ -96,12 +103,12 @@ function candidates(
 		context("commits.json"),
 		context("document.json"),
 		context("document.md", "markdown"),
-		context("linked_work_items.json"),
+		context("linked_work_items.json", "json", "linked"),
 		...linkedWorkItems(root, paths, limits, scope),
-		context("review_threads.json"),
-		context("comments.json"),
-		context("general_comments.json"),
-		context("conversation_thread.json"),
+		context("review_threads.json", "json", "discussion"),
+		context("comments.json", "json", "discussion"),
+		context("general_comments.json", "json", "discussion"),
+		context("conversation_thread.json", "json", "discussion"),
 	].filter((candidate) => candidate.kind !== undefined && scope.declared.has(candidate.kind));
 }
 
@@ -122,6 +129,7 @@ function linkedWorkItems(
 		.map((name) => {
 			const label = `${paths.contextRoot}/linked_work_items/${name}`;
 			return {
+				layer: "linked",
 				label,
 				absolute: path.resolve(directory, name),
 				limit: limits.filePerChars,
@@ -154,8 +162,12 @@ export function buildBrief(
 	limits = DEFAULT_BRIEF_LIMITS,
 ) {
 	const sources = new Map<string, BriefSource>();
-	const result = (text: string) => ({ text, sources: [...sources.values()] });
-	const blocks: { text: string; omission: string; path: string }[] = [];
+	const result = (text: string, cacheBoundaries: number[] = []) => ({
+		text,
+		cacheBoundaries,
+		sources: [...sources.values()],
+	});
+	const blocks: { text: string; omission: string; path: string; layer: Candidate["layer"] }[] = [];
 	const withheld: string[] = [];
 	// Name declared sources the capture lacks, so the model reports a capture gap, not absent behavior.
 	// The change and the checkout are read through Git, not from the brief.
@@ -206,7 +218,7 @@ export function buildBrief(
 			withheld.push(omission);
 			continue;
 		}
-		blocks.push({ text: block, omission, path: candidate.label });
+		blocks.push({ text: block, omission, path: candidate.label, layer: candidate.layer });
 		sources.set(candidate.label, {
 			path: candidate.label,
 			supplied: true,
@@ -239,10 +251,22 @@ export function buildBrief(
 			);
 		}
 		parts.push(ownIndex);
-		return parts.join("\n\n");
+		const text = parts.join("\n\n");
+		const cacheBoundaries: number[] = [];
+		let end = parts[0]?.length ?? 0;
+		for (const [index, block] of blocks.entries()) {
+			end += 2 + block.text.length;
+			if (
+				(block.layer === "change" || block.layer === "core") &&
+				blocks[index + 1]?.layer !== block.layer
+			) {
+				cacheBoundaries.push(end);
+			}
+		}
+		return { text, cacheBoundaries };
 	};
 	let brief = render();
-	while (brief.length > limits.totalChars && blocks.length > 0) {
+	while (brief.text.length > limits.totalChars && blocks.length > 0) {
 		const removed = blocks.pop();
 		if (removed) {
 			const { bytes } = sources.get(removed.path) ?? {};
@@ -256,8 +280,8 @@ export function buildBrief(
 		}
 		brief = render();
 	}
-	if (brief.length <= limits.totalChars) {
-		return result(brief);
+	if (brief.text.length <= limits.totalChars) {
+		return result(brief.text, brief.cacheBoundaries);
 	}
 	// Even the file index can exceed the bound. Keep a complete instruction, not a cut-off path.
 	const omitted =

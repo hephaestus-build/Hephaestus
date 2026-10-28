@@ -34,9 +34,23 @@ Each practice gets a fresh model session.
 
 `PRACTICE_REVIEW_PRACTICE_CONCURRENCY` sets the maximum number of practices that an item review evaluates at once.
 The default is 3. Valid values are 1 through 32.
-The runner starts practices in catalog order and fills each free slot with the next practice.
+
+The server starts item-review practices without a current observation first, then the ones with the oldest last verdict.
+The runner fills each free slot with the next practice ready to start.
+Practices with the same declared sources share a cache warm-up: followers wait for the first response, for at most 20 seconds.
+Other source sets can start during this wait.
 Slots can span practice groups.
 Results and the admission request use practice order, independent of completion order.
+
+The review's technical details show **Cache read share** for every protocol.
+It divides reported cache-read tokens by all input tokens, including cache reads and cache writes, across all attempts.
+No recorded input shows **No input usage recorded**.
+A provider that does not report cache reads can show zero even if its cache is active.
+The figure does not measure feedback quality.
+
+OpenAI Responses keeps provider-default cache retention and sends no five-minute override.
+Completions providers use their own cache policy.
+Use cache read share to compare reviews on the same provider.
 
 With concurrent evaluation, each practice reserves an equal share of its set's calls and output tokens before evaluation starts.
 The runner assigns any remainder in catalog order.

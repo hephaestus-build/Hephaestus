@@ -756,3 +756,16 @@ Fetched 2026-10-27.
 - [Google engineering practices: how to write code review comments](https://google.github.io/eng-practices/review/reviewer/comments.html).
 - [Kadavath et al. 2022](https://arxiv.org/abs/2207.05221) and [Kamath et al. 2020](https://aclanthology.org/2020.acl-main.503/): stated confidence and calibration.
 - [Zheng et al. 2023](https://arxiv.org/abs/2306.05685): a judge model's agreement with human labels.
+
+## Update — 2026-10-28
+
+OpenAI Responses keeps the provider's default cache retention.
+The runner sends no retention override for that protocol.
+The [OpenAI prompt-caching guide](https://developers.openai.com/api/docs/guides/prompt-caching) specifies a default of 30 minutes for models with explicit cache control.
+The API does not accept the five-minute value in this decision.
+Anthropic keeps the five-minute TTL in L5.
+
+L3 proves the wire shape, start stagger, deadline, queue order and cache read share calculation.
+Live cache gain is a performance property, not a correctness condition for L3.
+After L3 merges, measure the gain on staging with real providers and the admin review's cache read share.
+Until that measurement, the gain remains unverified.

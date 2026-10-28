@@ -314,6 +314,7 @@ export const ActiveUsageNotRecordedYet: Story = {
 			"Tokens read",
 			"Tokens written",
 			"Cache tokens",
+			"Cache read share",
 		]) {
 			const fact = panel.getByText(label).closest("div");
 			await expect(fact).toHaveTextContent("Not recorded yet");
@@ -673,6 +674,30 @@ export const CostPerAttempt: Story = {
 		const panel = within(await settledDrawerPanel());
 		panel.getByText(/over 2 attempts/u);
 		panel.getByRole("heading", { name: "Attempts" });
+		await expect(factValue(await settledDrawerPanel(), "Cache read share")).toHaveTextContent(
+			"7.7%",
+		);
+	},
+};
+
+export const NoInputUsage: Story = {
+	args: {
+		review: ready({
+			...reviewDetailCompleted,
+			usage: {
+				attempts: [],
+				calls: 0,
+				inputTokens: 0,
+				outputTokens: 0,
+				costUsd: "0",
+				priced: true,
+			},
+		}),
+	},
+	play: async () => {
+		await expect(factValue(await settledDrawerPanel(), "Cache read share")).toHaveTextContent(
+			"No input usage recorded",
+		);
 	},
 };
 

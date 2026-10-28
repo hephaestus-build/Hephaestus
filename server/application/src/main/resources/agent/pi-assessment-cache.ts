@@ -12,6 +12,8 @@ export function assessmentCacheExtension(
 	prefix: string,
 	workspaceId: unknown,
 	jobId: unknown,
+	/** Character offsets from the brief builder, before the practice-specific suffix. */
+	boundaries: readonly number[],
 ): ExtensionFactory {
 	const known = runtime.getModel("openai", config.modelId ?? "");
 	const compat = known?.compat;
@@ -63,17 +65,49 @@ export function assessmentCacheExtension(
 			) {
 				return;
 			}
-			// Split the constructed user text after shared work, preserving its role and exact text.
-			const content = [
-				{ ...block, text: prefix, prompt_cache_breakpoint: { mode: "explicit" } },
-				{ ...block, text: block.text.slice(prefix.length) },
-			];
+			// System, change and core leave the fourth write slot for the implicit session cache.
+			const layers = [...new Set(boundaries)]
+				.filter((end) => Number.isSafeInteger(end) && end > 0 && end <= prefix.length)
+				.toSorted((a, b) => a - b)
+				.slice(0, 2);
+			const ends = layers.length === 0 ? [prefix.length] : layers;
+			let start = 0;
+			const content = ends.map((end) => {
+				const part = {
+					...block,
+					text: prefix.slice(start, end),
+					prompt_cache_breakpoint: { mode: "explicit" },
+				};
+				start = end;
+				return part;
+			});
+			const suffix = block.text.slice(start);
 			return {
 				...payload,
 				prompt_cache_key: key,
-				input: payload.input.map((item: unknown, at: number) =>
-					at === index ? { ...message, content } : item,
-				),
+				input: payload.input.map((item: unknown, at: number) => {
+					if (at === index) {
+						return { ...message, content: [...content, { ...block, text: suffix }] };
+					}
+					if (
+						at === 0 &&
+						isRecord(item) &&
+						(item.role === "developer" || item.role === "system") &&
+						typeof item.content === "string"
+					) {
+						return {
+							...item,
+							content: [
+								{
+									type: "input_text",
+									text: item.content,
+									prompt_cache_breakpoint: { mode: "explicit" },
+								},
+							],
+						};
+					}
+					return item;
+				}),
 			};
 		});
 	};

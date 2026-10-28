@@ -24,6 +24,40 @@ function resultsOf(cwd: string) {
 	return { body, results: results.map((result: unknown) => result) };
 }
 
+void test("followers wait for their opening's first stream while another opening starts", async () => {
+	const cwd = realpathSync(mkdtempSync(nodePath.join(tmpdir(), "pi-opening-stagger-")));
+	try {
+		stagePractices(cwd, [
+			{ slug: "leader" },
+			{ slug: "follower" },
+			{ slug: "other", readsSources: ["scm.pull-request.diff"] },
+		]);
+		const exit = await runRunner(
+			cwd,
+			{},
+			{
+				PI_PRACTICE_CONCURRENCY: "3",
+				PI_HOST_STREAM_DELAYS: JSON.stringify({ leader: 500 }),
+				PI_HOST_DELAYS: JSON.stringify({ leader: 500 }),
+			},
+		);
+		assert.equal(exit.status, 0, exit.stderr);
+		const events = capturedLines(cwd, "model-events");
+		const position = (event: string, slug: string) => {
+			const index = events.findIndex(
+				(row) => field(row, "event") === event && field(row, "slug") === slug,
+			);
+			assert.ok(index !== -1, `${slug} must emit ${event}`);
+			return index;
+		};
+		assert.ok(position("start", "other") < position("stream", "leader"));
+		assert.ok(position("start", "follower") > position("stream", "leader"));
+		assert.ok(position("start", "follower") < position("finish", "leader"));
+	} finally {
+		rmSync(cwd, { recursive: true, force: true });
+	}
+});
+
 void test("three isolated model sessions overlap, retain each candidate and receipt, and submit in practice order", async () => {
 	const cwd = realpathSync(mkdtempSync(nodePath.join(tmpdir(), "pi-parallel-")));
 	try {
@@ -218,51 +252,65 @@ for (const limit of ["calls", "tokens"]) {
 	});
 }
 
-void test("the deadline admits finished practices and reports running and queued practices as not reached", async () => {
-	const cwd = realpathSync(mkdtempSync(nodePath.join(tmpdir(), "pi-parallel-deadline-")));
-	try {
-		stagePractices(
-			cwd,
-			["z-running", "a-finished", "y-running", "b-queued"].map((slug) => ({ slug })),
-		);
-		const exit = await runRunner(
-			cwd,
-			{ "z-running": "hang", "y-running": "hang" },
-			{
-				PI_PRACTICE_CONCURRENCY: "2",
-				AGENT_BUDGET_MS: "6500",
-			},
-		);
-		assert.equal(exit.status, 0, exit.stderr);
-		const { body, results } = resultsOf(cwd);
-		assert.deepEqual(
-			results.map((result: unknown) => field(result, "practiceSlug")),
-			["a-finished"],
-		);
-		assert.deepEqual(field(body, "nonResults"), [
-			{ practiceSlug: "b-queued", reason: "DEADLINE" },
-			{ practiceSlug: "y-running", reason: "DEADLINE" },
-			{ practiceSlug: "z-running", reason: "DEADLINE" },
-		]);
-		assert.deepEqual(
-			capturedLines(cwd, "prompts")
-				.map((row) => field(row, "slug"))
-				.toSorted((a, b) => String(a).localeCompare(String(b))),
-			["a-finished", "y-running", "z-running"],
-		);
-		const report = executionReportSchema.parse(readJsonFile(cwd, "out/practice-scripts.json"));
-		assert.equal(
-			report.practices.find((practice) => practice.practiceSlug === "b-queued")?.stopReason,
-			"deadline",
-		);
-		assert.partialDeepStrictEqual(readJsonFile(cwd, "out/practice-coverage.json"), {
-			evaluated: 1,
-			eligible: 4,
-		});
-	} finally {
-		rmSync(cwd, { recursive: true, force: true });
-	}
-});
+for (const cold of [false, true]) {
+	void test(`the deadline retains finished work and ends running and queued practices with a ${cold ? "cold" : "streaming"} leader`, async () => {
+		const cwd = realpathSync(mkdtempSync(nodePath.join(tmpdir(), "pi-parallel-deadline-")));
+		try {
+			stagePractices(
+				cwd,
+				["z-running", "a-finished", "y-running", "b-queued"].map((slug) => ({
+					slug,
+					...(cold && slug === "a-finished"
+						? {
+								readsSources: [
+									"scm.pull-request.core",
+									"scm.pull-request.diff",
+									"scm.repository.tree",
+								],
+							}
+						: {}),
+				})),
+			);
+			const exit = await runRunner(
+				cwd,
+				{ "z-running": "hang", "y-running": "hang" },
+				{
+					PI_PRACTICE_CONCURRENCY: "2",
+					AGENT_BUDGET_MS: "6500",
+					PI_HOST_COLD_LEADER: cold ? "z-running" : "",
+				},
+			);
+			assert.equal(exit.status, 0, exit.stderr);
+			const { body, results } = resultsOf(cwd);
+			assert.deepEqual(
+				results.map((result: unknown) => field(result, "practiceSlug")),
+				["a-finished"],
+			);
+			assert.deepEqual(field(body, "nonResults"), [
+				{ practiceSlug: "b-queued", reason: "DEADLINE" },
+				{ practiceSlug: "y-running", reason: "DEADLINE" },
+				{ practiceSlug: "z-running", reason: "DEADLINE" },
+			]);
+			assert.deepEqual(
+				capturedLines(cwd, "prompts")
+					.map((row) => field(row, "slug"))
+					.toSorted((a, b) => String(a).localeCompare(String(b))),
+				cold ? ["a-finished", "z-running"] : ["a-finished", "y-running", "z-running"],
+			);
+			const report = executionReportSchema.parse(readJsonFile(cwd, "out/practice-scripts.json"));
+			assert.equal(
+				report.practices.find((practice) => practice.practiceSlug === "b-queued")?.stopReason,
+				"deadline",
+			);
+			assert.partialDeepStrictEqual(readJsonFile(cwd, "out/practice-coverage.json"), {
+				evaluated: 1,
+				eligible: 4,
+			});
+		} finally {
+			rmSync(cwd, { recursive: true, force: true });
+		}
+	});
+}
 
 void test("group reservations sum to the original budget, including a small group's minimum and indivisible shares", () => {
 	for (const practices of [1, 2, 3, 6]) {
