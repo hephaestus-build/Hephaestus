@@ -185,6 +185,8 @@ final class ModelSession {
                         case BUDGET -> Failure.BUDGET;
                         case WORK_TIME -> Failure.WORK_TIME;
                         case ATTEMPT_ENDED -> Failure.OWNERSHIP_LOST;
+                        // Transient, as a provider's rate limit is.
+                        case CALLS_IN_FLIGHT -> Failure.PROVIDER;
                     });
         int status = answer.status();
         if (status == 408 || status == 429 || status >= 500) return new Reply(null, List.of(), Failure.PROVIDER);

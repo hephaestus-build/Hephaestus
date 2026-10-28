@@ -126,7 +126,7 @@ class HephTurnDispatchIntegrationTest extends AbstractWorkspaceIntegrationTest {
     private MentorLedgerNotifications notifications;
     private HephTurnDispatcher dispatcher;
     private HephTurnController controller;
-    private final ProxyCallsInFlight callsInFlight = new ProxyCallsInFlight();
+    private final ProxyCallsInFlight callsInFlight = new ProxyCallsInFlight(3);
     private final FakeExecSandboxes runtime = new FakeExecSandboxes();
     private final TurnSandboxes sandboxes = new TurnSandboxes(runtime, 0);
     private Workspace workspace;

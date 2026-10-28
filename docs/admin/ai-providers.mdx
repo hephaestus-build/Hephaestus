@@ -921,7 +921,9 @@ Thus, each call that is in flight when a limit is reached can pass.
 The attempt can then end above the limit by the usage of those calls.
 The same applies to the shared-model budget and the provider cap.
 The host sends at most 4 direct calls at the same time.
-A caller with a leaked job token can send more, and only the rate limit of the sandbox gateway bounds how many.
+
+The proxy also limits the model calls in flight for each attempt ([Runtime roles](./runtime-roles.mdx#model-calls-in-flight-for-each-attempt)).
+Thus, after a limit is spent, at most that many calls can still pass: 12 for a review at the default practice concurrency.
 
 Each call from a practice script names the practice whose script makes it.
 The proxy refuses a call without a practice with HTTP 400.

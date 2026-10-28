@@ -123,7 +123,11 @@ class HephTurnGatewayIntegrationTest extends AbstractWorkspaceIntegrationTest {
         HephTurnDispatcher dispatcher = runningHere();
         HephTurnContexts contexts = HephTurnFixtures.contexts(beans);
         var controller = new HephTurnController(
-                contexts, completion, dispatcher, new ProxyCallsInFlight(), WorkerPropertiesFixtures.minimal("1", "4"));
+                contexts,
+                completion,
+                dispatcher,
+                new ProxyCallsInFlight(3),
+                WorkerPropertiesFixtures.minimal("1", "4"));
         var sandboxController = new HephTurnSandboxController(
                 contexts, dispatcher, HephTurnFixtures.folder(beans, new TurnSandboxes(new FakeExecSandboxes(), 0)));
         var application = new SpringApplication(

@@ -34,6 +34,7 @@ public class ProxyAccounting {
     private final Counter gatewayRequests;
     private final DistributionSummary gatewayRequestSize;
     private final Counter gatewayThrottled;
+    private final Counter callsInFlightRefused;
     private final Counter gatewayLimiterErrors;
     private final Counter practiceScriptUnattributed;
 
@@ -59,6 +60,9 @@ public class ProxyAccounting {
                 .register(meterRegistry);
         this.gatewayThrottled = Counter.builder(AgentMetrics.SANDBOX_GATEWAY_THROTTLED)
                 .description("Sandbox gateway requests refused by the per-principal rate limit")
+                .register(meterRegistry);
+        this.callsInFlightRefused = Counter.builder(AgentMetrics.SANDBOX_GATEWAY_CALLS_IN_FLIGHT_REFUSED)
+                .description("Model calls refused because their attempt already had its most calls in flight")
                 .register(meterRegistry);
         this.gatewayLimiterErrors = Counter.builder(AgentMetrics.SANDBOX_GATEWAY_LIMITER_ERRORS)
                 .description("Sandbox gateway requests served without a rate-limit decision")
@@ -182,6 +186,10 @@ public class ProxyAccounting {
 
     public void recordGatewayThrottled() {
         gatewayThrottled.increment();
+    }
+
+    public void recordCallsInFlightRefused() {
+        callsInFlightRefused.increment();
     }
 
     /**

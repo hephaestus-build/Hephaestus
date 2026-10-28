@@ -47,6 +47,13 @@ class LlmProxyWebClientConfig {
         return LoopResources.create("llm-proxy", 2, true);
     }
 
+    /**
+     * How long a response may send nothing: the review runner's {@code STALL_MS} in {@code pi-runner.ts}, after which
+     * it gives up on a silent session. A silent stream then frees its place in the attempt's cap at the same time.
+     * {@code ReviewRunnerConstantsTest} pins the two.
+     */
+    static final Duration IDLE = Duration.ofMinutes(5);
+
     @Bean
     WebClient llmProxyWebClient(
             ConnectionProvider llmProxyConnectionProvider,
@@ -58,7 +65,7 @@ class LlmProxyWebClientConfig {
         // proxy ends each exchange at the attempt's work deadline, or, for a mentor turn, at its own fixed limits.
         HttpClient httpClient = HttpClient.create(llmProxyConnectionProvider)
                 .runOn(llmProxyLoopResources)
-                .responseTimeout(Duration.ofMinutes(5))
+                .responseTimeout(IDLE)
                 .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 10_000)
                 .resolver(egressPolicy.resolverGroup())
                 // Only the configured base URL is egress-validated: a 3xx to anywhere else is not followed.

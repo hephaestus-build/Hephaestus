@@ -44,7 +44,9 @@ public class ReviewModelGateway {
         /** The attempt's work deadline has passed. */
         WORK_TIME,
         /** The attempt was ended while the call waited. */
-        ATTEMPT_ENDED
+        ATTEMPT_ENDED,
+        /** The attempt already had its most model calls in flight. */
+        CALLS_IN_FLIGHT
     }
 
     /**
