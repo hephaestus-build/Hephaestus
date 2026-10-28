@@ -6,11 +6,11 @@ import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
-import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
 import de.tum.cit.aet.hephaestus.observability.StructuredLogKeys;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -23,7 +23,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -31,7 +30,6 @@ import tools.jackson.databind.ObjectMapper;
 
 @ConditionalOnServerRole
 @Component
-@ConditionalOnBooleanProperty(RuntimeRole.AGENT_ENABLED_PROPERTY)
 @WorkspaceAgnostic("Zombie sweeper operates across all workspaces")
 public class ReviewJobZombieSweeper {
 
@@ -59,6 +57,9 @@ public class ReviewJobZombieSweeper {
     private final Counter snapshotUnreadable;
     private final ReviewJobTelemetry jobTelemetry;
     private final Duration renewEvery;
+
+    Clock clock = Clock.systemUTC();
+    private final Instant startedAt = clock.instant();
 
     /**
      * A gap from the end of one lease check until the next one reads the database clock longer than this means that
@@ -98,7 +99,7 @@ public class ReviewJobZombieSweeper {
         this.transactionTemplate = transactionTemplate;
         this.attemptUsage = attemptUsage;
         this.zombieReaped = Counter.builder(AgentMetrics.AGENT_JOB_ZOMBIE_REAPED)
-                .description("Stale RUNNING jobs marked as TIMED_OUT")
+                .description("Stale RUNNING attempts ended by the timeout backstop")
                 .register(meterRegistry);
         this.orphanRequeued = Counter.builder(AgentMetrics.AGENT_JOB_ORPHAN_REQUEUED)
                 .description("RUNNING jobs whose owning worker was lost, requeued for another worker")
@@ -124,7 +125,7 @@ public class ReviewJobZombieSweeper {
      */
     @Scheduled(fixedDelay = 2, timeUnit = TimeUnit.MINUTES, initialDelay = 1)
     public void reapStaleRunningJobs() {
-        Instant conservativeCutoff = Instant.now().minus(RUNNING_BUFFER);
+        Instant conservativeCutoff = clock.instant().minus(RUNNING_BUFFER);
         List<ReviewJob> staleJobs = jobRepository.findStaleRunningJobs(conservativeCutoff);
 
         if (staleJobs.isEmpty()) {
@@ -141,7 +142,7 @@ public class ReviewJobZombieSweeper {
                     MDC.put(StructuredLogKeys.TRACE_ID, reaped.getTraceId());
                     MDC.put(StructuredLogKeys.SPAN_ID, ReviewJobExecutor.randomSpanId());
                     try {
-                        jobTelemetry.terminal(reaped, ReviewJobStatus.TIMED_OUT, ReviewJobTelemetry.age(reaped));
+                        jobTelemetry.terminal(reaped, reaped.getStatus(), ReviewJobTelemetry.age(reaped));
                     } finally {
                         MDC.remove(StructuredLogKeys.TRACE_ID);
                         MDC.remove(StructuredLogKeys.SPAN_ID);
@@ -159,28 +160,33 @@ public class ReviewJobZombieSweeper {
     private @Nullable ReviewJob reapIfStale(UUID jobId) {
         ReviewJob lockedJob = jobRepository.lockById(jobId).orElse(null);
         if (lockedJob == null || lockedJob.getStatus() != ReviewJobStatus.RUNNING) return null;
-        // The cutover counts an unleased claim as a drain. Lease recovery must keep its retry credit and admission
-        // before the timeout backstop can end it, including during recovery's startup grace period.
-        if (lockedJob.getLeasedUntil() == null && lockedJob.getWorkerId() != null && lockedJob.getDrainCount() > 0)
-            return null;
+        boolean cutover =
+                lockedJob.getLeasedUntil() == null && lockedJob.getWorkerId() != null && lockedJob.getDrainCount() > 0;
         int timeoutSeconds = getTimeoutFromSnapshot(lockedJob);
         Duration maxLifetime = Duration.ofSeconds(timeoutSeconds).plus(RUNNING_BUFFER);
-        Instant deadlineAnchor = lockedJob.getExecutionStartedAt() != null
-                ? lockedJob.getExecutionStartedAt()
-                : lockedJob.getStartedAt();
-        if (deadlineAnchor != null && deadlineAnchor.plus(maxLifetime).isAfter(Instant.now())) {
+        // Give lease recovery a fresh timeout after this server starts, rather than the old claim's spent timeout.
+        Instant deadlineAnchor = cutover
+                ? startedAt
+                : lockedJob.getExecutionStartedAt() != null
+                        ? lockedJob.getExecutionStartedAt()
+                        : lockedJob.getStartedAt();
+        if (deadlineAnchor != null && deadlineAnchor.plus(maxLifetime).isAfter(clock.instant())) {
             return null;
         }
 
+        ReviewJobStatus terminalStatus = cutover ? ReviewJobStatus.FAILED : ReviewJobStatus.TIMED_OUT;
         int updated = jobRepository.transitionStatus(
                 jobId,
-                ReviewJobStatus.TIMED_OUT,
-                Instant.now(),
-                "The job exceeded its timeout. The executor may have crashed.",
+                terminalStatus,
+                clock.instant(),
+                cutover
+                        ? "The server could not resume this review after the upgrade."
+                        : "The job exceeded its timeout. The executor may have crashed.",
                 Set.of(ReviewJobStatus.RUNNING));
 
         if (updated > 0) {
             recordUnverifiableUsage(lockedJob);
+            lockedJob.setStatus(terminalStatus);
             zombieReaped.increment();
             log.warn("Reaped stale RUNNING job: jobId={}, startedAt={}", jobId, lockedJob.getStartedAt());
             return lockedJob;

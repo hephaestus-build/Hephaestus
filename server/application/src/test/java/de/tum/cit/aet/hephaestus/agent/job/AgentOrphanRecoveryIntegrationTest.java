@@ -109,6 +109,7 @@ import io.micrometer.tracing.Tracer;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
@@ -325,6 +326,47 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
         assertThat(ResultAdmissionService.isContinuation(
                         jobRepository.findById(admitted).orElseThrow()))
                 .isTrue();
+        assertThat(practiceResultRepository.findById(observed.getId())).isPresent();
+    }
+
+    @Test
+    void shouldEndCutoverClaimsWithoutFaultWhenLeaseRecoveryNeverRuns() {
+        UUID unadmitted = runningJobOwnedBy("worker-0x", Instant.now().minus(Duration.ofHours(2)), 1);
+        UUID admitted = runningJobOwnedBy("worker-0x", Instant.now().minus(Duration.ofHours(2)), 1);
+        Result observed = admitWithResult(admitted);
+        jdbc.update(
+                "UPDATE review_job SET drain_count = drain_count + 1, leased_until = NULL WHERE id = ? OR id = ?",
+                unadmitted,
+                admitted);
+        var backstop = new ReviewJobZombieSweeper(
+                jobRepository,
+                workerRegistryRepository,
+                objectMapper,
+                transactionTemplate,
+                attemptUsage,
+                meterRegistry,
+                new ReviewJobTelemetry(meterRegistry, Tracer.NOOP),
+                recovery,
+                properties);
+        Instant start = Instant.now();
+        backstop.clock = Clock.fixed(start.plusSeconds(60), ZoneOffset.UTC);
+        backstop.reapStaleRunningJobs();
+        for (UUID id : List.of(unadmitted, admitted)) {
+            assertThat(jobRepository.findById(id).orElseThrow().getStatus()).isEqualTo(ReviewJobStatus.RUNNING);
+        }
+
+        backstop.clock = Clock.fixed(start.plus(Duration.ofDays(1)), ZoneOffset.UTC);
+        backstop.reapStaleRunningJobs();
+
+        for (UUID id : List.of(unadmitted, admitted)) {
+            ReviewJob ended = jobRepository.findById(id).orElseThrow();
+            assertThat(ended.getStatus()).isEqualTo(ReviewJobStatus.FAILED);
+            assertThat(ended.getErrorMessage()).isEqualTo("The server could not resume this review after the upgrade.");
+            assertThat(ended.getAttempt()).isEqualTo(1);
+            assertThat(ended.spentAttempts()).isZero();
+        }
+        ReviewJob retained = jobRepository.findById(admitted).orElseThrow();
+        assertThat(retained.getAdmissionDigest()).isNotNull();
         assertThat(practiceResultRepository.findById(observed.getId())).isPresent();
     }
 

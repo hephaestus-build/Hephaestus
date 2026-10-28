@@ -58,8 +58,8 @@ class AgentRoleGatingTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldRecoverJobsOnlyWhenAgentJobsAndTheServerRoleAreOn() {
-        assertThat(registers(ReviewJobZombieSweeper.class)).isFalse();
+    void shouldMaintainJobsWheneverTheServerRoleIsOn() {
+        assertThat(registers(ReviewJobZombieSweeper.class)).isTrue();
         assertThat(registers(ReviewJobZombieSweeper.class, AGENT_ON)).isTrue();
         assertThat(registers(ReviewJobZombieSweeper.class, AGENT_ON, RuntimeRole.SERVER_PROPERTY + "=false"))
                 .isFalse();

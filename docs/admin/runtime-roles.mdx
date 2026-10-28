@@ -313,8 +313,8 @@ file sets the env var the base default leaves off:
   with NATS **on**. The `webhook` overlay pins it `true` regardless (it needs the shared `Connection`
   bean). The `worker` overlay pins it `false` (the job queue is PostgreSQL, ADR 0025).
 
-`hephaestus.agent.enabled` (`AGENT_ENABLED`) gates three things that must agree, or a split
-deployment silently does half its job. They do **not** share a gate:
+`hephaestus.agent.enabled` (`AGENT_ENABLED`) controls submission and execution.
+Server maintenance runs independently of this flag:
 
 - **Submission** (turning pull request, issue and bot-command events into queued jobs) needs
   this flag **and** the server role. A worker-only container executes jobs. It does not submit these reviews.
@@ -328,8 +328,10 @@ deployment silently does half its job. They do **not** share a gate:
     A slow check alone does not delay recovery.
   - A job from before the upgrade to 1.0 has no lease.
     The server recovers it as an expired lease.
-  - Orphan recovery needs this flag **and** the server role.
+  - Orphan recovery needs the server role, including when `AGENT_ENABLED=false`.
     It therefore does not run twice on a dedicated worker pod.
+  - If recovery cannot finish, the timeout backstop ends the attempt.
+    [ADR 0070](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0070-1-0-is-a-cutover-release.md) defines the fresh timeout for a cutover claim.
 - **Execution** (the poll loop that claims and runs jobs) needs this flag **and** the worker role.
   Worker admission and server preparation read the same practice-page feedback support, so that read exists in every role.
   A review attempt that was cancelled, requeued or moved to another worker writes nothing more.
@@ -339,14 +341,15 @@ deployment silently does half its job. They do **not** share a gate:
 
 `AGENT_ENABLED` is `false` on all roles until you set it, regardless of how the pod starts.
 
-1. Set it to `true` on **each** pod that needs submission, orphan recovery, or execution.
+1. Set it to `true` on **each** pod that needs submission or execution.
 
 In a split-pod topology, both pods need it:
 
-- `application-server`: submission and recovery.
+- `application-server`: submission. Recovery runs independently of the flag.
 - `application-worker`: execution.
 
-A pod without this setting claims nothing and spends nothing.
+A worker with this flag set to `false` claims no practice reviews.
+Server maintenance still records the spend of attempts that already ran.
 
 ## Heph turns
 
