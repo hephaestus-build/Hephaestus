@@ -46,6 +46,17 @@ const socketPath = path.join(base, "tools.sock");
 const nonce = "pod-nonce";
 const soleUser = process.env.TOOLS_TEST_SOLE_USER === "true";
 
+function trashDirectories(): string[] {
+	return readdirSync(base).filter((name) => name.startsWith(".tools-trash-"));
+}
+
+async function awaitTrashRemoval(): Promise<void> {
+	for (let attempt = 0; trashDirectories().length > 0 && attempt < 100; attempt += 1) {
+		await sleep(10);
+	}
+	assert.equal(trashDirectories().length, 0);
+}
+
 let server: Server;
 let client: ToolClient;
 let openedAt = 0;
@@ -70,7 +81,8 @@ before(async () => {
 	openedAt = Date.now();
 });
 
-beforeEach(() => {
+beforeEach(async () => {
+	await awaitTrashRemoval();
 	mkdirSync(path.join(workspace, "repos"), { recursive: true });
 	mkdirSync(scratch, { recursive: true });
 	writeFileSync(path.join(workspace, "notes.txt"), "one\ntwo\nthree\nfour\n");
@@ -311,10 +323,126 @@ void test("reset provides a fresh writable workspace before trash deletion finis
 		const written = await run("printf fresh > writable; cat writable");
 		assert.equal(written.output, "fresh");
 		assert.equal(held, true);
+		await client.reset();
 	} finally {
 		release.resolve(undefined);
 		rmMock.mock.restore();
 		syncBuiltinESMExports();
+	}
+	await awaitTrashRemoval();
+});
+
+void test("startup retries trash left by an earlier tools server", async () => {
+	const home = mkdtempSync(path.join(tmpdir(), "tools-restart-"));
+	const mutable = path.join(home, "workspace");
+	const oldTrash = path.join(home, ".tools-trash-old");
+	mkdirSync(path.join(mutable, ".scratch"), { recursive: true });
+	mkdirSync(path.join(mutable, "repos"));
+	mkdirSync(oldTrash);
+	writeFileSync(path.join(oldTrash, "kept"), "old");
+	const restarted = startToolsServer({
+		socketPath: path.join(home, "tools.sock"),
+		nonce,
+		workspace: mutable,
+		roots: [mutable],
+		scratch: path.join(mutable, ".scratch"),
+		putRoots: [path.join(mutable, "repos")],
+		soleUser: false,
+	});
+	try {
+		await once(restarted, "listening");
+		for (let attempt = 0; existsSync(oldTrash) && attempt < 100; attempt += 1) {
+			await sleep(10);
+		}
+		assert.equal(existsSync(oldTrash), false);
+	} finally {
+		const closed = once(restarted, "close");
+		restarted.close();
+		await closed;
+		rmSync(home, { recursive: true, force: true });
+	}
+});
+
+void test("resets stop at the trash bound and recover when deletion works again", async (t) => {
+	await client.reset();
+	await awaitTrashRemoval();
+	const { chmod } = fs;
+	let blocked = true;
+	const chmodMock = t.mock.method(fs, "chmod", async (...args: Parameters<typeof fs.chmod>) => {
+		if (blocked && String(args[0]).includes(".tools-trash-")) {
+			throw Object.assign(new Error("The trash cannot be reclaimed."), { code: "EPERM" });
+		}
+		await chmod(...args);
+	});
+	syncBuiltinESMExports();
+	try {
+		for (let reset = 0; reset < 4; reset += 1) {
+			writeFileSync(path.join(workspace, "kept"), "old");
+			await client.reset();
+		}
+		assert.equal(trashDirectories().length, 4);
+		await assert.rejects(client.reset(), refusal("storage"));
+		assert.equal(trashDirectories().length, 4);
+		blocked = false;
+		let recovered = false;
+		for (let attempt = 0; !recovered && attempt < 100; attempt += 1) {
+			try {
+				await client.reset();
+				recovered = true;
+			} catch (error) {
+				if (!refusal("storage")(error)) {
+					throw error;
+				}
+				await sleep(10);
+			}
+		}
+		assert.equal(recovered, true);
+		const written = await run("printf recovered > writable; cat writable");
+		assert.equal(written.output, "recovered");
+	} finally {
+		blocked = false;
+		chmodMock.mock.restore();
+		syncBuiltinESMExports();
+	}
+});
+
+void test("parallel failed uploads reserve cleanup space before creating their directories", async (t) => {
+	await client.reset();
+	await awaitTrashRemoval();
+	const { chmod } = fs;
+	const chmodMock = t.mock.method(fs, "chmod", async (...args: Parameters<typeof fs.chmod>) => {
+		if (String(args[0]).includes(".tools-trash-")) {
+			throw Object.assign(new Error("The trash cannot be reclaimed."), { code: "EPERM" });
+		}
+		await chmod(...args);
+	});
+	syncBuiltinESMExports();
+	try {
+		const destinations = Array.from({ length: 5 }, (_unused, index) =>
+			path.join(workspace, "repos", `failed-${index}`),
+		);
+		const results = await Promise.allSettled(
+			destinations.map(async (destination) =>
+				client.put(destination, archiveOf(Buffer.from("not a tar archive"))),
+			),
+		);
+		const refusals = results.map((result) => {
+			assert.ok(result.status === "rejected" && result.reason instanceof ToolProtocolError);
+			return result.reason.code;
+		});
+		assert.equal(refusals.filter((code) => code === "storage").length, 1);
+		assert.equal(refusals.filter((code) => code === "put").length, 4);
+		assert.ok(destinations.every((destination) => !existsSync(destination)));
+		assert.equal(trashDirectories().length, 4);
+	} finally {
+		chmodMock.mock.restore();
+		syncBuiltinESMExports();
+		try {
+			await client.reset();
+		} catch (error) {
+			assert.ok(refusal("storage")(error));
+		}
+		await awaitTrashRemoval();
 	}
 });
 

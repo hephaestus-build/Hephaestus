@@ -9,7 +9,14 @@
 import { type ChildProcess, spawn } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { once } from "node:events";
-import { createWriteStream, readFileSync, realpathSync, statSync, type WriteStream } from "node:fs";
+import {
+	createWriteStream,
+	readdirSync,
+	readFileSync,
+	realpathSync,
+	statSync,
+	type WriteStream,
+} from "node:fs";
 import {
 	chmod,
 	lstat,
@@ -72,6 +79,9 @@ const ENV = {
 
 /** How long reset waits for active operations to stop before refusing to replace their workspace. */
 const RESET_WAIT_MS = 5000;
+
+/** Failed reclamation must leave room for the active workspace; the Pod's storage limit bounds bytes. */
+const MAX_TRASH_TREES = 4;
 
 /** File buffers; an upload adds at most one frame body before waiting for the file's drain. */
 const FILE_BUFFER_BYTES = 64 * 1024;
@@ -269,7 +279,11 @@ async function removeTrash(file: string, root: string): Promise<void> {
 	if (info.isDirectory()) {
 		await chmod(file, 0o700);
 		for (const name of await readdir(file)) {
-			await removeTrash(path.join(file, name), root);
+			try {
+				await removeTrash(path.join(file, name), root);
+			} catch {
+				// A protected child must not retain the other children too.
+			}
 		}
 	}
 	if (!info.isSymbolicLink() && !within(root, await realpath(file))) {
@@ -278,11 +292,15 @@ async function removeTrash(file: string, root: string): Promise<void> {
 	await rm(file, { recursive: true, force: true });
 }
 
-async function reclaimTrash(root: string): Promise<void> {
+async function reclaimTrash(root: string): Promise<boolean> {
 	try {
 		await removeTrash(root, root);
+		return await lstat(root).then(
+			() => false,
+			(error: unknown) => error instanceof Error && "code" in error && error.code === "ENOENT",
+		);
 	} catch {
-		// Job deletion reclaims any trash that best-effort deletion cannot remove.
+		return false;
 	}
 }
 
@@ -429,21 +447,83 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 	let attemptStreamed = 0;
 	/** How many resets ran: a call that arrived before a reset and would start after it does not start. */
 	let resets = 0;
+	const trash = new Set<string>();
+	const retiring = new Set<string>();
+	let reclaiming = false;
+	let sweepRequested = false;
 
-	async function retire(directory: string): Promise<void> {
-		if (directory !== workspace && !within(workspace, await realpath(path.dirname(directory)))) {
-			throw new ToolProtocolError("path", "The upload parent is outside the mutable workspace.");
+	async function reclaimBatch(): Promise<void> {
+		if (reclaiming) {
+			return;
 		}
-		const trash = path.join(workspaceParent, `.tools-trash-${randomUUID()}`);
+		reclaiming = true;
 		try {
-			await rename(directory, trash);
+			while (sweepRequested) {
+				sweepRequested = false;
+				for (const directory of [...trash]
+					.filter((entry) => !retiring.has(entry))
+					.slice(0, MAX_TRASH_TREES)) {
+					if (await reclaimTrash(directory)) {
+						trash.delete(directory);
+					} else {
+						// Rotate a failed tree so a later sweep also reaches older trees from before startup.
+						trash.delete(directory);
+						trash.add(directory);
+					}
+				}
+			}
+		} finally {
+			reclaiming = false;
+		}
+	}
+
+	function sweepTrash(): void {
+		for (const name of readdirSync(workspaceParent)) {
+			if (name.startsWith(".tools-trash-")) {
+				trash.add(path.join(workspaceParent, name));
+			}
+		}
+		sweepRequested = true;
+		void reclaimBatch();
+	}
+
+	function requireTrashRoom(): void {
+		sweepTrash();
+		if (trash.size >= MAX_TRASH_TREES) {
+			throw new ToolProtocolError(
+				"storage",
+				"Workspace trash is full. Retry after reclamation frees storage.",
+			);
+		}
+	}
+
+	sweepTrash();
+
+	function reserveTrash(): string {
+		requireTrashRoom();
+		const retired = path.join(workspaceParent, `.tools-trash-${randomUUID()}`);
+		trash.add(retired);
+		retiring.add(retired);
+		return retired;
+	}
+
+	async function retire(directory: string, reserved?: string): Promise<void> {
+		const retired = reserved ?? reserveTrash();
+		try {
+			if (directory !== workspace && !within(workspace, await realpath(path.dirname(directory)))) {
+				throw new ToolProtocolError("path", "The upload parent is outside the mutable workspace.");
+			}
+			await rename(directory, retired);
 		} catch (error) {
+			trash.delete(retired);
 			if (error instanceof Error && "code" in error && error.code === "ENOENT") {
 				return;
 			}
 			throw error;
+		} finally {
+			retiring.delete(retired);
 		}
-		void reclaimTrash(trash);
+		sweepTrash();
 	}
 
 	return createServer({ highWaterMark: LIMITS.bodyBytes }, (socket: Socket) => {
@@ -489,7 +569,11 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 					return;
 				}
 				if (inFlight.has(id)) {
-					refuse(id, "tools", "The tools side failed this call.");
+					refuse(
+						id,
+						error instanceof ToolProtocolError ? error.code : "tools",
+						error instanceof ToolProtocolError ? error.message : "The tools side failed this call.",
+					);
 				}
 			} finally {
 				operations.delete(work);
@@ -770,8 +854,9 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 
 		async function reset(id: string): Promise<void> {
 			resetting = true;
-			resets += 1;
 			try {
+				requireTrashRoom();
+				resets += 1;
 				const stoppingUploads = [...uploads].map(async (entry) => entry.stopForReset());
 				const stoppingCalls = [...calls].map(async (call) => {
 					await endCall(call.id, call.child);
@@ -793,6 +878,7 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 				for (const directory of [options.scratch, ...options.putRoots]) {
 					await mkdir(directory, { recursive: true, mode: 0o700 });
 				}
+				sweepTrash();
 				final(id, { type: "reset" });
 			} finally {
 				resetting = false;
@@ -899,6 +985,7 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 			entry.ending = true;
 			let created = false;
 			let extracted = false;
+			let retirement: string | undefined;
 			try {
 				if (aborted) {
 					throw new ToolProtocolError("put", "The archive source stopped before the put ended.");
@@ -911,6 +998,8 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 				if (entry.seen !== entry.size || entry.hash.digest("hex") !== entry.sha256) {
 					throw new ToolProtocolError("put", "The archive did not arrive whole.");
 				}
+				// Reserve cleanup capacity before creating a tree, including parallel failed extractions.
+				retirement = reserveTrash();
 				await mkdir(entry.dir);
 				created = true;
 				// GNU tar and bsdtar both strip leading slashes, skip members with `..`, and never write through a
@@ -943,7 +1032,7 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 				extracted = true;
 			} catch (error) {
 				entry.refusal ??= {
-					error: "put",
+					error: error instanceof ToolProtocolError ? error.code : "put",
 					detail:
 						error instanceof ToolProtocolError
 							? error.message
@@ -954,14 +1043,29 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 				await finished(entry.sink).catch(() => undefined);
 				try {
 					await rm(entry.file, { force: true });
-					if (created && (!extracted || entry.abort.signal.aborted)) {
-						await retire(entry.dir);
-					}
 				} catch {
 					entry.refusal ??= {
 						error: "put",
 						detail: "The tools side could not remove the archive.",
 					};
+				}
+				try {
+					if (
+						created &&
+						(!extracted || entry.abort.signal.aborted || entry.refusal !== undefined)
+					) {
+						await retire(entry.dir, retirement);
+						retirement = undefined;
+					}
+				} catch {
+					entry.refusal ??= {
+						error: "put",
+						detail: "The tools side could not retire the extraction directory.",
+					};
+				}
+				if (retirement !== undefined) {
+					trash.delete(retirement);
+					retiring.delete(retirement);
 				}
 				puts.delete(id);
 				uploads.delete(entry);
