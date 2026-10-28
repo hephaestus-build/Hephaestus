@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.agent.sandbox.kubernetes;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
+import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
@@ -115,6 +116,16 @@ class KubernetesSandboxRuntimeTest {
     private KubernetesPods pods;
     private KubernetesSandboxJobs reviewJobs;
 
+    private final List<KubernetesSandboxCache> caches = new ArrayList<>();
+
+    /** A cache that has listed the namespace as it is now. */
+    private KubernetesSandboxCache cache() {
+        var cache = new KubernetesSandboxCache(api(), SANDBOXES);
+        caches.add(cache);
+        await().atMost(Duration.ofSeconds(10)).until(cache::current);
+        return cache;
+    }
+
     private KubernetesClient api() {
         return Objects.requireNonNull(client, "setUp creates the client");
     }
@@ -168,6 +179,7 @@ class KubernetesSandboxRuntimeTest {
     @AfterEach
     void tearDown() {
         background.shutdownNow();
+        caches.forEach(KubernetesSandboxCache::close);
         try {
             if (client != null) {
                 client.close();
@@ -762,6 +774,7 @@ class KubernetesSandboxRuntimeTest {
                 .resource(new PodBuilder()
                         .withNewMetadata()
                         .withName("turn-with-overhead")
+                        .withLabels(worker.labels(KubernetesWorker.KIND_TURN))
                         .endMetadata()
                         .withNewSpec()
                         .withRuntimeClassName("gvisor")
@@ -774,12 +787,116 @@ class KubernetesSandboxRuntimeTest {
                         .build())
                 .create();
 
-        assertThat(new KubernetesSandboxQuota(api(), SANDBOXES, "gvisor").roomFor(LIMITS))
+        assertThat(new KubernetesSandboxQuota(cache(), SANDBOXES, "gvisor").roomFor(LIMITS))
                 .as("1280 MiB free hold one review of 640 MiB with 512 MiB of overhead")
                 .isEqualTo(1);
-        assertThat(new KubernetesSandboxQuota(api(), SANDBOXES, "").roomFor(LIMITS))
+        assertThat(new KubernetesSandboxQuota(cache(), SANDBOXES, "").roomFor(LIMITS))
                 .as("the cluster's default runtime has no overhead")
                 .isEqualTo(2);
+    }
+
+    @Test
+    void shouldSendTheApiServerNoRequestWhenClaimPollsAskForRoom() {
+        quotaWithRoomForTwoReviews();
+        var quota = new KubernetesSandboxQuota(cache(), SANDBOXES, "");
+        int before = Objects.requireNonNull(server).getRequestCount();
+
+        for (int poll = 0; poll < 20; poll++) {
+            assertThat(quota.roomFor(LIMITS)).isEqualTo(2);
+        }
+
+        assertThat(server.getRequestCount()).as("20 claim polls read the cache").isEqualTo(before);
+    }
+
+    @Test
+    void shouldAdmitByTheNewQuotaWhenItChangesAfterTheCacheListed() {
+        var quota = new KubernetesSandboxQuota(cache(), SANDBOXES, "");
+        assertThat(quota.roomFor(LIMITS)).as("no quota yet").isEqualTo(Integer.MAX_VALUE);
+
+        quotaWithRoomForTwoReviews();
+
+        await().atMost(Duration.ofSeconds(10)).until(() -> quota.roomFor(LIMITS) == 2);
+    }
+
+    @Test
+    void shouldSeeARunningReviewWhenItsJobHasAnActivePod() {
+        api().batch()
+                .v1()
+                .jobs()
+                .inNamespace(SANDBOXES)
+                .resource(reviewJob("review-active", 1))
+                .create();
+        api().batch()
+                .v1()
+                .jobs()
+                .inNamespace(SANDBOXES)
+                .resource(reviewJob("review-refused", 0))
+                .create();
+
+        assertThat(backend().reviewsRunning()).isTrue();
+    }
+
+    @Test
+    void shouldSeeNoRunningReviewWhenNoJobHasAnActivePod() {
+        api().batch()
+                .v1()
+                .jobs()
+                .inNamespace(SANDBOXES)
+                .resource(reviewJob("review-waiting", 0))
+                .create();
+
+        assertThat(backend().reviewsRunning()).isFalse();
+    }
+
+    @Test
+    void shouldBecomeCurrentWhenTheFirstQuotaListIsRefusedAndThenAllowed() throws InterruptedException {
+        String list = "/api/v1/namespaces/" + SANDBOXES + "/resourcequotas?resourceVersion=0";
+        Objects.requireNonNull(server)
+                .expect()
+                .get()
+                .withPath(list)
+                .andReturn(403, "{}")
+                .once();
+
+        var cache = new KubernetesSandboxCache(api(), SANDBOXES);
+        caches.add(cache);
+
+        await().atMost(Duration.ofSeconds(30)).until(cache::current);
+        int lists = 0;
+        RecordedRequest request;
+        while ((request = server.takeRequest(100, TimeUnit.MILLISECONDS)) != null) {
+            if (list.equals(request.getPath())) lists++;
+        }
+        assertThat(lists).as("the refused list, then the one that recovered").isGreaterThanOrEqualTo(2);
+    }
+
+    @Test
+    void shouldAdmitAsWithoutAQuotaWhenTheCacheNoLongerWatches() {
+        quotaWithRoomForTwoReviews();
+        var cache = cache();
+        var quota = new KubernetesSandboxQuota(cache, SANDBOXES, "");
+        assertThat(quota.roomFor(LIMITS)).isEqualTo(2);
+
+        cache.close();
+
+        assertThat(quota.roomFor(LIMITS))
+                .as("a cache that stopped does not decide; the start does, as before")
+                .isEqualTo(Integer.MAX_VALUE);
+        assertThat(quota.neverFits(LIMITS)).isFalse();
+    }
+
+    @Test
+    void shouldReportNotReadyWhenTheNamespaceCacheStopsWatching() {
+        var cache = cache();
+        HealthIndicator readiness =
+                new KubernetesSandboxConfiguration().kubernetesSandboxHealthIndicator(cache, worker);
+        assertThat(Objects.requireNonNull(readiness.health()).getStatus()).isEqualTo(Status.UP);
+
+        cache.close();
+
+        assertThat(Objects.requireNonNull(readiness.health()).getStatus())
+                .as("no claim reads a cache that no longer follows the API server")
+                .isEqualTo(Status.DOWN);
     }
 
     private void quotaWithRoomForTwoReviews() {
@@ -811,12 +928,12 @@ class KubernetesSandboxRuntimeTest {
                         unproved,
                         liveWorkers,
                         new SandboxExits(unprovedPods, new SimpleMeterRegistry()),
-                        new KubernetesSandboxQuota(api(), properties.namespace(), properties.runtimeClassName())),
+                        cache()),
                 new SandboxWorkspaceManager(),
                 sessions,
                 meters);
         HealthIndicator readiness =
-                new KubernetesSandboxConfiguration().kubernetesSandboxHealthIndicator(api(), unproved);
+                new KubernetesSandboxConfiguration().kubernetesSandboxHealthIndicator(cache(), unproved);
 
         assertThat(adapter.ready()).as("the claim loops take no work").isFalse();
         assertThat(Objects.requireNonNull(readiness.health()).getStatus())
@@ -909,7 +1026,7 @@ class KubernetesSandboxRuntimeTest {
                         worker,
                         new KubernetesLiveWorkers(unreadable),
                         new SandboxExits(pods, new SimpleMeterRegistry()),
-                        new KubernetesSandboxQuota(api(), properties.namespace(), properties.runtimeClassName()))
+                        cache())
                 .list();
 
         assertThat(listed)
@@ -1022,12 +1139,7 @@ class KubernetesSandboxRuntimeTest {
 
     private KubernetesSandboxBackend backend() {
         return new KubernetesSandboxBackend(
-                pods,
-                reviewJobs,
-                worker,
-                liveWorkers,
-                new SandboxExits(pods, new SimpleMeterRegistry()),
-                new KubernetesSandboxQuota(api(), properties.namespace(), properties.runtimeClassName()));
+                pods, reviewJobs, worker, liveWorkers, new SandboxExits(pods, new SimpleMeterRegistry()), cache());
     }
 
     private SandboxAttemptRunner adapter() {
@@ -1143,6 +1255,29 @@ class KubernetesSandboxRuntimeTest {
                 Map.of("input.txt", "input".getBytes(StandardCharsets.UTF_8)),
                 Map.of(),
                 List.of());
+    }
+
+    private Job reviewJob(String name, int active) {
+        return new JobBuilder()
+                .withNewMetadata()
+                .withName(name)
+                .withNamespace(SANDBOXES)
+                .withLabels(worker.labels(KubernetesWorker.KIND_REVIEW))
+                .endMetadata()
+                .withNewSpec()
+                .withNewTemplate()
+                .withNewSpec()
+                .addNewContainer()
+                .withName("c")
+                .withImage(IMAGE)
+                .endContainer()
+                .endSpec()
+                .endTemplate()
+                .endSpec()
+                .withNewStatus()
+                .withActive(active)
+                .endStatus()
+                .build();
     }
 
     private void createSandbox(String name, String kind, Function<Map<String, String>, Map<String, String>> labels) {

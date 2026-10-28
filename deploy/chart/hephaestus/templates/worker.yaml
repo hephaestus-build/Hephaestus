@@ -80,10 +80,15 @@ rules:
   - apiGroups: ["batch"]
     resources: ["jobs"]
     verbs: ["get", "list", "watch", "create", "delete"]
-  # The Job controller reports a quota refusal of a review Pod as an event; the quota tells whether it can ever fit.
+  # The Job controller reports a quota refusal of a review Pod as an event.
   - apiGroups: [""]
-    resources: ["events", "resourcequotas"]
+    resources: ["events"]
     verbs: ["get", "list"]
+  # The quota tells how many reviews fit and whether one can ever fit. The worker watches it, as it watches Pods
+  # and Jobs, so a claim poll sends the API server nothing.
+  - apiGroups: [""]
+    resources: ["resourcequotas"]
+    verbs: ["list", "watch"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
