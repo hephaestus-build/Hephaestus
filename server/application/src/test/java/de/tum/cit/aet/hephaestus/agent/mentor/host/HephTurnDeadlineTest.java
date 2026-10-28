@@ -97,7 +97,7 @@ class HephTurnDeadlineTest extends BaseUnitTest {
                 completion,
                 mock(MentorLedgerNotifications.class),
                 new QueueHost(),
-                new ProxyCallsInFlight(),
+                new ProxyCallsInFlight(3),
                 mock(TurnSandboxes.class),
                 mock(WorkerJwtIssuer.class),
                 MAPPER,
