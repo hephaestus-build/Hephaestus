@@ -33,9 +33,6 @@ public record SandboxProperties(
     /** The memory a review sandbox keeps for its processes when every in-memory file system it has is full. */
     public static final long MIN_PROCESS_BYTES = 512L * 1024 * 1024;
 
-    /** The default of {@code SANDBOX_MEMORY_BYTES}, 3 GiB. */
-    public static final String DEFAULT_MEMORY_BYTES = "3221225472";
-
     /**
      * Refuses a review memory limit that full in-memory file systems could exhaust: the kernel would then kill the
      * review for files the agent wrote, not for what its processes use.
@@ -62,7 +59,7 @@ public record SandboxProperties(
      * @param pidsLimit maximum process count
      */
     public record DefaultResourceLimits(
-            @DefaultValue(DEFAULT_MEMORY_BYTES) @Min(1) @Max(ResourceLimits.MAX_MEMORY_BYTES)
+            @DefaultValue("3221225472") @Min(1) @Max(ResourceLimits.MAX_MEMORY_BYTES)
             long memoryBytes,
 
             @DefaultValue("1.0") @DecimalMin("0.01") @DecimalMax(ResourceLimits.MAX_CPUS_TEXT)
