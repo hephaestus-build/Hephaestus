@@ -209,7 +209,7 @@ describe("review route", () => {
 		await screen.findByRole("heading", { name: "Review settings" }, ROUTE_RENDER_WAIT);
 		await screen.findByRole("link", { name: "Back to instance workspaces" }, ROUTE_RENDER_WAIT);
 		screen.getByText("Tutors administration");
-		expect(screen.queryByRole("link", { name: "Heph" })).toBeNull();
+		expect(screen.queryByRole("link", { name: "Hephaestus" })).toBeNull();
 		const sidebarSettings = screen.getByRole("link", { name: "Settings" });
 		expect(sidebarSettings.getAttribute("href")).toBe("/w/tutors/admin/settings");
 		const automatic = await screen.findByRole(

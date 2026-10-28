@@ -40,7 +40,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * The live streams of developers' Heph conversations on this replica ({@code docs/contributor/unified-pi-runtime.mdx}
+ * The live streams of developers' Hephaestus conversations on this replica ({@code docs/contributor/unified-pi-runtime.mdx}
  * § Live updates). Changes arrive with ids only, through the replica's one {@link MentorLedgerNotifications}
  * connection. One reader thread loads each change once and hands the same event to every stream of its developer in
  * the order it read them, so a stream never receives an older state after a newer one. A stream that falls too far
@@ -110,7 +110,7 @@ public class MentorLiveHub implements MentorLedgerNotifications.Listener, SmartL
         this.emitters = emitters;
         this.queueCapacity = queueCapacity;
         Gauge.builder(AgentMetrics.MENTOR_LIVE_STREAMS, streams, MentorLiveHub::count)
-                .description("Live Heph streams open on this server")
+                .description("Live Hephaestus streams open on this server")
                 .register(meters);
     }
 
@@ -143,7 +143,8 @@ public class MentorLiveHub implements MentorLedgerNotifications.Listener, SmartL
                     new Developer(workspaceId, accountId), key -> ConcurrentHashMap.newKeySet());
             if (own.size() >= MAX_STREAMS_PER_DEVELOPER) {
                 throw new ResponseStatusException(
-                        HttpStatus.TOO_MANY_REQUESTS, "Too many live Heph streams are open. Close one and try again.");
+                        HttpStatus.TOO_MANY_REQUESTS,
+                        "Too many live Hephaestus streams are open. Close one and try again.");
             }
             own.add(stream);
         }
@@ -214,7 +215,7 @@ public class MentorLiveHub implements MentorLedgerNotifications.Listener, SmartL
                 try {
                     read.run();
                 } catch (RuntimeException e) {
-                    log.warn("Could not read a Heph conversation change for its live streams", e);
+                    log.warn("Could not read a Hephaestus conversation change for its live streams", e);
                 }
             });
         } catch (RejectedExecutionException shuttingDown) {
@@ -305,7 +306,7 @@ public class MentorLiveHub implements MentorLedgerNotifications.Listener, SmartL
                 stream.emitter.send(event.data());
             } catch (IOException | RuntimeException gone) {
                 log.debug(
-                        "Heph live stream closed while sending: {}",
+                        "Hephaestus live stream closed while sending: {}",
                         gone.getClass().getSimpleName());
                 close(stream);
                 return;

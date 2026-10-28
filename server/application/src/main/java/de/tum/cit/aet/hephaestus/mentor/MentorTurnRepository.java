@@ -159,10 +159,10 @@ public interface MentorTurnRepository extends JpaRepository<MentorTurn, UUID> {
     List<UUID> findClaimableIds(@Param("workspaceId") Long workspaceId, @Param("ids") Collection<UUID> ids);
 
     /**
-     * The turns that hold a Heph slot now: those that run, and stopped ones whose host still commits their answer.
-     * Every workspace counts, because every workspace shares the workers' Heph slots.
+     * The turns that hold a Hephaestus slot now: those that run, and stopped ones whose host still commits their answer.
+     * Every workspace counts, because every workspace shares the workers' Hephaestus slots.
      */
-    @WorkspaceAgnostic("Every workspace shares the workers' Heph slots")
+    @WorkspaceAgnostic("Every workspace shares the workers' Hephaestus slots")
     @Query("""
             SELECT COUNT(t) FROM MentorTurn t
             WHERE t.status = de.tum.cit.aet.hephaestus.mentor.MentorTurn.Status.RUNNING
@@ -188,7 +188,7 @@ public interface MentorTurnRepository extends JpaRepository<MentorTurn, UUID> {
      * and loads no entity.
      */
     @WorkspaceAgnostic(
-            "Every workspace shares the workers' Heph slots, so a change of them changes every workspace's waits")
+            "Every workspace shares the workers' Hephaestus slots, so a change of them changes every workspace's waits")
     @Query(value = """
             SELECT t.workspace_id AS workspaceId, t.conversation_id AS conversationId, t.id AS id,
                    t.surface AS surface, t.attempt AS attempt

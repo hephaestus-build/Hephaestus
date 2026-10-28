@@ -71,7 +71,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * A worker's dispatcher against a fake Heph host: the fake takes the command frames the real host would receive, and
+ * A worker's dispatcher against a fake Hephaestus host: the fake takes the command frames the real host would receive, and
  * the test answers them through the turn endpoints the way the host does. Claims wake on ledger notifications, so a
  * question reaches the host well within the dispatcher's slow backstop. The dispatcher's clock is the test's: a test
  * moves it and runs the dispatcher's tick itself.
@@ -216,7 +216,8 @@ class HephTurnDispatchIntegrationTest extends AbstractWorkspaceIntegrationTest {
     @BeforeEach
     void startTheDispatcher() {
         User developer = persistUser("heph-dispatch");
-        workspace = createWorkspace("heph-dispatch", "Heph Dispatch", "heph-dispatch-org", AccountType.ORG, developer);
+        workspace = createWorkspace(
+                "heph-dispatch", "Hephaestus Dispatch", "heph-dispatch-org", AccountType.ORG, developer);
         conversation = conversations.findOrCreateMain(workspace.getId(), accountId(developer));
         host = new FakeHost();
         clock = new MutableClock(Instant.now(), ZoneOffset.UTC);

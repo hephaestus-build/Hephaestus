@@ -61,8 +61,8 @@ export function WorkspaceCapabilitiesSettings({
 				/>
 				<Capability
 					icon={<HephIcon />}
-					title="Heph"
-					description="Every member can use Heph once you set up a Heph model. Each member’s AI choice still applies."
+					title="Ask Hephaestus"
+					description="Every member can ask Hephaestus once you set up a conversation model. Each member’s AI choice still applies."
 					action={
 						<CapabilityLink
 							link={<Link to="/w/$workspaceSlug/admin/models" params={{ workspaceSlug }} />}

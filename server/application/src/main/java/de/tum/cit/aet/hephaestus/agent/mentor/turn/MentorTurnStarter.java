@@ -35,13 +35,13 @@ public class MentorTurnStarter {
     private static final Logger log = LoggerFactory.getLogger(MentorTurnStarter.class);
 
     static final String PROVIDER_PAUSED =
-            "Heph's AI model is not responding right now, so Heph did not start this reply. Try again in a few minutes.";
+            "Hephaestus's AI model is not responding right now, so Hephaestus did not start this reply. Try again in a few minutes.";
 
     /** The existing generic refusal, also for a turn whose account an erasure suppressed while it was admitted. */
-    static final String PERSON_DATA_HELD = "Heph cannot run now.";
+    static final String PERSON_DATA_HELD = "Hephaestus cannot run now.";
 
     static final String MODEL_TOO_SMALL =
-            "Heph's AI model in this workspace is too small to hold a conversation. Ask a workspace owner to choose a larger model for Heph.";
+            "Hephaestus's AI model in this workspace is too small to hold a conversation. Ask a workspace owner to choose a larger conversation model.";
 
     private final MentorTurnService turns;
     private final MentorAdmission admission;
@@ -84,12 +84,14 @@ public class MentorTurnStarter {
             return decline(turn, workerId, Objects.requireNonNullElse(blocked.getMessage(), PERSON_DATA_HELD));
         }
         if (connections.isOpen(llm.connectionScope(), llm.connectionId())) {
-            log.info("Heph turn {} was not started: its provider connection is paused after failures", turn.getId());
+            log.info(
+                    "conversation turn {} was not started: its provider connection is paused after failures",
+                    turn.getId());
             return decline(turn, workerId, PROVIDER_PAUSED);
         }
         Optional<String> tooSmall = AgentBindingLimits.tooSmallForHeph(llm.contextWindow(), llm.maxOutputTokens());
         if (tooSmall.isPresent()) {
-            log.warn("Heph turn {} cannot run on its model: {}", turn.getId(), tooSmall.get());
+            log.warn("conversation turn {} cannot run on its model: {}", turn.getId(), tooSmall.get());
             return decline(turn, workerId, MODEL_TOO_SMALL);
         }
         // With the admission, the attempt's usage measurement: no call of the attempt is routed before both exist. An
@@ -99,7 +101,8 @@ public class MentorTurnStarter {
                 turn.getAttempt(),
                 workerId,
                 MentorTurnAdmission.of(
-                        llm, Objects.requireNonNull(llm.priceSnapshot(), "A Heph turn needs an admitted price")));
+                        llm,
+                        Objects.requireNonNull(llm.priceSnapshot(), "A conversation turn needs an admitted price")));
         if (!admitted) {
             return decline(turn, workerId, PERSON_DATA_HELD);
         }
@@ -108,7 +111,11 @@ public class MentorTurnStarter {
 
     private Optional<StartedTurn> decline(MentorTurn turn, String workerId, String reason) {
         turns.end(turn.getId(), turn.getAttempt(), workerId, MentorTurn.Status.FAILED, List.of(), reason);
-        log.info("Heph turn {} attempt {} was declined at its start: {}", turn.getId(), turn.getAttempt(), reason);
+        log.info(
+                "conversation turn {} attempt {} was declined at its start: {}",
+                turn.getId(),
+                turn.getAttempt(),
+                reason);
         meters.counter(AgentMetrics.MENTOR_TURN_COMPLETED, "outcome", "failed").increment();
         return Optional.empty();
     }

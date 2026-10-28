@@ -65,7 +65,7 @@ class MirrorQueryPredicateGuardTest extends BaseUnitTest {
     class MentorContext {
 
         /**
-         * Heph answers about the developer's own work, so a pull request or issue deleted upstream must
+         * Hephaestus answers about the developer's own work, so a pull request or issue deleted upstream must
          * not reach it — the mentor would describe something the developer cannot open.
          *
          * <p>Scanned per range declaration rather than per method name: a whole-query substring passes a
@@ -81,7 +81,7 @@ class MirrorQueryPredicateGuardTest extends BaseUnitTest {
 
         /**
          * The monitor matches a repository by path alone, so each monitored range also needs the connected
-         * instance, or a same-path project on another instance reaches Heph. A repository a team hides from
+         * instance, or a same-path project on another instance reaches Hephaestus. A repository a team hides from
          * contributions stays out of every list, as it does in Activity and the review history.
          */
         @Test
@@ -258,7 +258,7 @@ class MirrorQueryPredicateGuardTest extends BaseUnitTest {
 
         assertThat(offenders)
                 .as(
-                        "%s: every issue or pull-request range must exclude tombstones, or Heph describes work "
+                        "%s: every issue or pull-request range must exclude tombstones, or Hephaestus describes work "
                                 + "the developer can no longer open. Offending method -> the predicate it is missing",
                         repository.getSimpleName())
                 .isEmpty();

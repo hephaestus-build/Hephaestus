@@ -33,7 +33,7 @@ const PAUSE_COPY: Record<
 		CAP_REACHED: {
 			title: "Shared-model budget reached",
 			body: ({ resetDay }) =>
-				`Paused until ${resetDay} (UTC), or until an instance admin raises the budget. Practice reviews and Heph can keep running on your own models.`,
+				`Paused until ${resetDay} (UTC), or until an instance admin raises the budget. Practice reviews and conversations can keep running on your own models.`,
 		},
 		UNVERIFIABLE: {
 			title: "Shared-model spend cannot be verified",

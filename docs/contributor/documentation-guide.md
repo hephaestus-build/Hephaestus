@@ -181,7 +181,7 @@ import Screenshot from "@site/src/components/Screenshot";
 
 - The app reads a synthetic workspace from `webapp/e2e/screenshots/workspace.ts`. No server or database runs. The user, workspace, membership, conversation, and feedback mode data come from the fixtures that the stories and tests share. A change to them can change an image.
 - The live event stream of the app stays open with no events. A new screen with another stream needs the same answer in `workspace.ts`.
-- The capture uses a 1024 by 640 viewport at twice the pixels, a fixed clock, and the UTC time zone. It blocks every request to another site, so no avatar of a real person appears. It hides the floating Heph button, which covers the content.
+- The capture uses a 1024 by 640 viewport at twice the pixels, a fixed clock, and the UTC time zone. It blocks every request to another site, so no avatar of a real person appears. It hides the floating Hephaestus button, which covers the content.
 - Chromium encodes each image as WebP. Each screen is captured in the light and the dark color scheme. The images go to `docs/static/img/user/<page>/<name>.<scheme>.webp`.
 - An image of more than 150 KB fails the capture and `gate:docs-pages`.
 - A request that `workspace.ts` does not answer fails the capture, so no image shows an error by accident.

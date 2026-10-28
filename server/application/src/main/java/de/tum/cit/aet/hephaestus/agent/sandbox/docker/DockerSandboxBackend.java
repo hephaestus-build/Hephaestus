@@ -31,7 +31,7 @@ import org.slf4j.LoggerFactory;
  * it records in its labels. {@link #list}, {@link #kill} and {@link #remove} read the labels, so they reach a sandbox
  * that an earlier process of this worker launched.
  *
- * <p>A worker outside any container joins no network. Its Heph host then reaches it through the host gateway, which
+ * <p>A worker outside any container joins no network. Its Hephaestus host then reaches it through the host gateway, which
  * only a network with a route out reaches; a review never runs on such a network. The Docker live tests are the one
  * exception: their gateway runs in the test process on the machine itself, so they construct the backend with
  * {@code reviewsOnTheMachine} and give a review that route too.
@@ -44,7 +44,7 @@ public class DockerSandboxBackend implements SandboxBackend {
 
     private static final String UNIDENTIFIED_CONTAINER =
             "This worker runs in a container that it cannot identify, so it cannot join the internal network of its"
-                    + " Heph host. Keep the worker container's default hostname.";
+                    + " Hephaestus host. Keep the worker container's default hostname.";
 
     private final SandboxNetworkManager networkManager;
     private final SandboxContainerManager containerManager;
@@ -179,7 +179,7 @@ public class DockerSandboxBackend implements SandboxBackend {
         try {
             boolean host = launch.kind() == Kind.HOST;
             Map<String, String> labels = host ? hostLabels(launch.id()) : reviewLabels(launch);
-            // A worker on the machine itself joins no network: only its Heph host gets the route out it needs.
+            // A worker on the machine itself joins no network: only its Hephaestus host gets the route out it needs.
             boolean outsideDocker = host
                     ? !labels.containsKey(SandboxLabels.CREATOR_CONTAINER)
                     : reviewsOnTheMachine && creator.outsideContainer();
@@ -393,7 +393,7 @@ public class DockerSandboxBackend implements SandboxBackend {
     }
 
     /**
-     * The sandboxes whose containers, networks or volumes this installation's labels record on this daemon. A Heph
+     * The sandboxes whose containers, networks or volumes this installation's labels record on this daemon. A Hephaestus
      * host's creator is gone when its recorded worker container is ({@link SandboxCreator#liveness}).
      */
     @Override
@@ -485,7 +485,7 @@ public class DockerSandboxBackend implements SandboxBackend {
     }
 
     /**
-     * The labels of a Heph host: its creator, so that cleanup can wait until that creator is gone. A worker in a
+     * The labels of a Hephaestus host: its creator, so that cleanup can wait until that creator is gone. A worker in a
      * container that it cannot identify starts no host rather than give the host a route out.
      */
     private Map<String, String> hostLabels(UUID id) {

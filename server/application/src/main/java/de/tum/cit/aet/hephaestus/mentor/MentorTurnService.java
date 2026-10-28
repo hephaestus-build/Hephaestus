@@ -37,7 +37,7 @@ public class MentorTurnService {
     static final int MAX_ATTEMPTS = 2;
 
     /** Shown to the developer as the failed reply, so it is in the product voice. */
-    private static final String LEASE_EXPIRED = "Heph could not finish this reply. Try again.";
+    private static final String LEASE_EXPIRED = "Hephaestus could not finish this reply. Try again.";
 
     private static final String LEASE_EXPIRED_CAUSE = "its lease expired on its last attempt";
 
@@ -101,7 +101,7 @@ public class MentorTurnService {
             Instant lostAt) {}
 
     /**
-     * Heph's answer to a turn and the feedback it showed, in the order Heph showed it.
+     * Hephaestus's answer to a turn and the feedback it showed, in the order Hephaestus showed it.
      *
      * @param shownIn each shown feedback id, with the message whose successful {@code show_feedback} call showed it
      */
@@ -207,7 +207,7 @@ public class MentorTurnService {
      * starts from the same path. The end clears the lease, so a repeated end finds none and stores nothing twice. A
      * failed attempt stores only the summaries it wrote before its question, so the path keeps its question and the
      * next turn does not shorten the conversation again. An attempt whose question was erased while it ran stores
-     * nothing: Heph does not answer words that the developer took back or that a Slack removal erased. An attempt that
+     * nothing: Hephaestus does not answer words that the developer took back or that a Slack removal erased. An attempt that
      * ends after the developer's erasure was requested stores nothing either, because the erasure would not find it.
      */
     @Transactional
@@ -405,8 +405,8 @@ public class MentorTurnService {
     }
 
     /**
-     * Heph's answer: the turn's last {@code HEPH} entry that is not erased. The feedback it showed is the
-     * {@code show_feedback} calls of the turn whose tool result succeeded, in the order Heph showed it.
+     * Hephaestus's answer: the turn's last {@code HEPH} entry that is not erased. The feedback it showed is the
+     * {@code show_feedback} calls of the turn whose tool result succeeded, in the order Hephaestus showed it.
      */
     @Transactional(readOnly = true)
     public Answer answer(long workspaceId, UUID turnId) {

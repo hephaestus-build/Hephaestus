@@ -9,6 +9,6 @@ import org.jspecify.annotations.NonNull;
 public record MentorTurnStatusRequestDTO(
         @NotNull
         @Schema(
-                description = "STOPPED stops a queued or running turn. Heph keeps what it already wrote.",
+                description = "STOPPED stops a queued or running turn. Hephaestus keeps what it already wrote.",
                 allowableValues = {"STOPPED"})
         MentorTurn.@NonNull Status status) {}

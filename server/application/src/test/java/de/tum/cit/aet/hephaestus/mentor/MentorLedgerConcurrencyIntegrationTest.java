@@ -74,7 +74,7 @@ class MentorLedgerConcurrencyIntegrationTest extends AbstractWorkspaceIntegratio
     @BeforeEach
     void setUpLedger() {
         User developer = persistUser("heph-concurrency-developer");
-        workspace = createWorkspace("heph-concurrency", "Heph", "heph-org", AccountType.ORG, developer);
+        workspace = createWorkspace("heph-concurrency", "Hephaestus", "heph-org", AccountType.ORG, developer);
         main = conversations.findOrCreateMain(workspace.getId(), accountId(developer));
     }
 

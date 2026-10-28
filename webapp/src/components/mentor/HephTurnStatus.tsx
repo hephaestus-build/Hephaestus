@@ -15,8 +15,8 @@ type ShownTurn = Pick<MentorTurn, "status" | "surface" | "partial" | "waitingFor
 function turnStatusLabel(turn: ShownTurn, waiting: boolean): string {
 	if (waiting) {
 		return turn.waitingFor === "FREE_HEPH"
-			? "Heph is answering other questions. Yours starts when Heph is free."
-			: "Waiting for Heph to start…";
+			? "Hephaestus is answering other questions. Yours starts when one finishes."
+			: "Waiting to start…";
 	}
 	if (turn.surface === "SLACK") {
 		return "Answering in Slack…";
@@ -68,7 +68,7 @@ function formatWaited(seconds: number): string {
 
 /**
  * The status line's words. A turn still queued after a second says that it waits. It says why only
- * when the server says that every Heph slot is taken. Otherwise the turn starts at once, or the
+ * when the server says that every Hephaestus slot is taken. Otherwise the turn starts at once, or the
  * server cannot tell why it waits, for example when no worker runs. Most turns start well within
  * that second, so the line does not flicker.
  */
@@ -89,7 +89,7 @@ export interface HephTurnStatusProps {
 }
 
 /**
- * Heph at work: the answer so far, as Heph writes it, over one status line. The line names what Heph
+ * Hephaestus at work: the answer so far, as Hephaestus writes it, over one status line. The line names what Hephaestus
  * does and sweeps once per change, so the motion stops while the words stay (WCAG 2.2.2).
  */
 export function HephTurnStatus({ turn, stop }: HephTurnStatusProps) {

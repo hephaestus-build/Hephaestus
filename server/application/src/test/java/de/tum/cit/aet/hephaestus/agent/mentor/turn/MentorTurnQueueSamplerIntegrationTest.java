@@ -33,7 +33,7 @@ class MentorTurnQueueSamplerIntegrationTest extends AbstractWorkspaceIntegration
     @Test
     void shouldCountTheTurnsThatWaitForAWorkerAndNotTheOneThatRuns() {
         User developer = persistUser("heph-queue-developer");
-        Workspace workspace = createWorkspace("heph-queue", "Heph", "heph-queue-org", AccountType.ORG, developer);
+        Workspace workspace = createWorkspace("heph-queue", "Hephaestus", "heph-queue-org", AccountType.ORG, developer);
         long accountId = accountId(developer);
         MentorConversation main = conversations.findOrCreateMain(workspace.getId(), accountId);
         sampler.sample();

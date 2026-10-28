@@ -2146,7 +2146,7 @@ export const zLoginProviderView = z.object({
 });
 
 /**
- * A practice result, problem or prepared feedback Heph showed in a message
+ * A practice result, problem or prepared feedback Hephaestus showed in a message
  */
 export const zMentorLink = z.object({
     id: z.uuid(),
@@ -2161,14 +2161,14 @@ export const zMentorLink = z.object({
 });
 
 /**
- * How far the developer read their Heph conversation
+ * How far the developer read their Hephaestus conversation
  */
 export const zMentorRead = z.object({
     lastReadAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional()
 });
 
 /**
- * How far the developer read their Heph conversation
+ * How far the developer read their Hephaestus conversation
  */
 export const zMentorReadRequest = z.object({
     at: z.iso.datetime({ offset: true }).pipe(z.coerce.date())
@@ -2186,7 +2186,7 @@ export const zMentorThreadSummary = z.object({
 });
 
 /**
- * What Heph is doing in a running turn
+ * What Hephaestus is doing in a running turn
  */
 export const zMentorTurnPartial = z.object({
     activity: z.enum([
@@ -2200,7 +2200,7 @@ export const zMentorTurnPartial = z.object({
 });
 
 /**
- * One question to Heph and the work to answer it
+ * One question to Hephaestus and the work to answer it
  */
 export const zMentorTurn = z.object({
     attempt: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
@@ -2224,7 +2224,7 @@ export const zMentorTurn = z.object({
 });
 
 /**
- * The developer's Heph conversation in a workspace at one moment
+ * The developer's Hephaestus conversation in a workspace at one moment
  */
 export const zMentorConversation = z.object({
     activeTurns: z.array(zMentorTurn),
@@ -2236,7 +2236,7 @@ export const zMentorConversation = z.object({
 });
 
 /**
- * A question to Heph from the app
+ * A question to Hephaestus from the app
  */
 export const zMentorTurnRequest = z.object({
     pageContext: z.string().min(0).max(500).optional(),
@@ -2253,7 +2253,7 @@ export const zMentorTurnStatusRequest = z.object({
 });
 
 /**
- * The developer's vote on one of Heph's messages
+ * The developer's vote on one of Hephaestus's messages
  */
 export const zMentorVoteRequest = z.object({
     vote: z.enum(['HELPFUL', 'NOT_HELPFUL'])
@@ -6311,7 +6311,7 @@ export const zWeeklyDigest = z.object({
 });
 
 /**
- * One message of a Heph conversation
+ * One message of a Hephaestus conversation
  */
 export const zMentorEntry = z.object({
     conversationId: z.uuid(),
@@ -6722,7 +6722,7 @@ export const zWorkspaceOnboardingLink = z.object({
 /**
  * One member's view of setup in one workspace. <code>aiChoice</code> is the account's answer, the same in
  * every workspace; <code>aiOptions</code> says what this workspace has set up under each answer, which is
- * what differs between workspaces. <code>mentorRefusal</code> is this member's own answer from Heph's admission.
+ * what differs between workspaces. <code>mentorRefusal</code> is this member's own answer from Hephaestus's admission.
  */
 export const zWorkspaceOnboarding = z.object({
     aiChoice: z.enum([

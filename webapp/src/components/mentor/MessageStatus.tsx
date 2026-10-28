@@ -17,7 +17,7 @@ export type MessageState =
 			onStop?: () => void;
 	  }
 	| { kind: "stopped" }
-	/** Heph's answer to a question asked in Slack did not fully reach Slack: Slack may show part of it or none. */
+	/** Hephaestus's answer to a question asked in Slack did not fully reach Slack: Slack may show part of it or none. */
 	| { kind: "notFullyInSlack" }
 	| { kind: "failed"; reason: string; onTryAgain?: () => void }
 	| { kind: "notSent"; reason: string; onRetry?: () => void };
@@ -98,7 +98,7 @@ export function MessageStatus({ state, subject }: MessageStatusProps) {
 						)
 					}
 				>
-					{state.next ? "Queued. Heph answers this next." : "Queued."}
+					{state.next ? "Queued. This is answered next." : "Queued."}
 				</Line>
 			);
 		}

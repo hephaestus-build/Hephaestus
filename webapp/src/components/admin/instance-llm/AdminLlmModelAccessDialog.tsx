@@ -159,8 +159,8 @@ function AdminLlmModelAccessDialogContent({
 						<AlertTriangle aria-hidden />
 						<AlertTitle>Access is reduced immediately</AlertTitle>
 						<AlertDescription>
-							Practice reviews and Heph stop in the workspaces you removed, until each of them picks
-							another model.
+							Practice reviews and conversations stop in the workspaces you removed, until each of
+							them picks another model.
 						</AlertDescription>
 					</Alert>
 				)}

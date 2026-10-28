@@ -30,7 +30,7 @@ from those pages remain in scope.
 | Workspace creation | provider selection, GitHub, GitLab, validation and errors |
 | Workspace home | dashboard, teams and user profiles |
 | Developer feedback | reviews, trace, results, feedback delivery and targets |
-| Mentor | timeline, thread panel, greeting, composer and Heph panel |
+| Mentor | timeline, thread panel, greeting, composer and Hephaestus panel |
 | Personal settings | settings, integrations and destructive actions |
 | Workspace administration | members, practices, review operations, models, usage and integrations |
 | Instance administration | users, workspaces, audit, catalogue, providers, models and usage |

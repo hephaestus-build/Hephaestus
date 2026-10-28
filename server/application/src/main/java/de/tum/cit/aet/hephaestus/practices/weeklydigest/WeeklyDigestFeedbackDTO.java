@@ -20,7 +20,7 @@ public record WeeklyDigestFeedbackDTO(
 
         @NonNull
         @Schema(
-                description = "Where it was delivered: on the work (ON_WORK) or in the conversation with Heph"
+                description = "Where it was delivered: on the work (ON_WORK) or in the conversation with Hephaestus"
                         + " (CONVERSATION). Practice page feedback is never listed; the waiting count covers it")
         FeedbackDestination destination,
 
@@ -28,12 +28,12 @@ public record WeeklyDigestFeedbackDTO(
         ItemRefDTO item,
 
         @Nullable
-        @Schema(description = "The Heph message it appeared in; only for CONVERSATION, and never when withdrawn")
+        @Schema(description = "The Hephaestus message it appeared in; only for CONVERSATION, and never when withdrawn")
         UUID mentorEntryId,
 
         @Nullable
         @Schema(
-                description = "The top-level message whose thread holds that Heph message; only for CONVERSATION,"
+                description = "The top-level message whose thread holds that Hephaestus message; only for CONVERSATION,"
                         + " and absent when the message is not in a thread")
         UUID mentorParentEntryId,
 

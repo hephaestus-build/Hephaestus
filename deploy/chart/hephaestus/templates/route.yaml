@@ -58,7 +58,7 @@ spec:
               type: ReplacePrefixMatch
               replacePrefixMatch: /
         - {{ toJson $hsts }}
-      # The Heph live stream under /api stays open far longer than one request. Zero
+      # The conversation live stream under /api stays open far longer than one request. Zero
       # asks the controller to disable each deadline; a controller that cannot may use its longest
       # value instead. Both are set because either one alone leaves the other to the implementation.
       timeouts:

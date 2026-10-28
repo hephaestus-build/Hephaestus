@@ -212,7 +212,7 @@ describe("weekly digest in User settings", () => {
 		expect(document.activeElement).toBe(toggle);
 	});
 
-	it("shows nothing about the digest when Heph answers in none of the developer's workspaces", async () => {
+	it("shows nothing about the digest when Hephaestus answers in none of the developer's workspaces", async () => {
 		server.use(
 			http.get("*/user/notification-preferences", () =>
 				HttpResponse.json({ ...preferences, weeklyDigestAvailable: false }),

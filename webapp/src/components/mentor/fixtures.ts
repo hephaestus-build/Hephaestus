@@ -128,15 +128,15 @@ export const ANSWER_WITH_FEEDBACK = entry({
 	],
 });
 
-/** The server's refusal of a message while Heph has too many waiting. */
+/** The server's refusal of a message while Hephaestus has too many waiting. */
 export const FOLLOW_UPS_FULL =
-	"Heph is still answering. Wait for an answer before you send more messages.";
+	"Hephaestus is still answering. Wait for an answer before you send more messages.";
 
 /** A follow-up whose turn failed: the question carries why. */
 export const FAILED_FOLLOW_UP: MentorEntry = {
 	...FOLLOW_UP,
 	turnStatus: "FAILED",
-	turnError: "Heph took too long to answer.",
+	turnError: "Hephaestus took too long to answer.",
 };
 
 /** Monday 5 to Sunday 11 October 2026 in Berlin: the week the digest fixtures read. */

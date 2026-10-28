@@ -16,7 +16,7 @@ import { renderRouteAtWithRouter, ROUTE_RENDER_WAIT } from "@/test/router-harnes
 
 vi.setConfig({ testTimeout: 30_000 });
 
-/** The workspaces of `fakes`, each with its own conversation, for a member whose Heph can answer. */
+/** The workspaces of `fakes`, each with its own conversation, for a member whose Hephaestus can answer. */
 function serve(...fakes: MentorFake[]) {
 	server.use(
 		http.get("*/workspaces", () =>
@@ -116,7 +116,7 @@ async function liveStream(): Promise<FakeEventSource> {
 	}, ROUTE_RENDER_WAIT);
 }
 
-/** Heph's answer while it streams: each new word is its own element, so match the whole paragraph. */
+/** Hephaestus's answer while it streams: each new word is its own element, so match the whole paragraph. */
 function streamedText(text: string) {
 	return (_content: string, element: Element | null) =>
 		element?.tagName === "P" && element.textContent === text;
@@ -139,16 +139,19 @@ it("leaves an unsent draft behind in its own workspace", async () => {
 	const beta = new MentorFake("beta");
 	serve(acme, beta);
 
-	const { router } = renderRouteAtWithRouter("/w/acme/mentor");
+	const { router } = renderRouteAtWithRouter("/w/acme/conversation");
 	await userEvent.type(
-		await screen.findByRole("textbox", { name: "Message Heph" }, ROUTE_RENDER_WAIT),
+		await screen.findByRole("textbox", { name: "Message Hephaestus" }, ROUTE_RENDER_WAIT),
 		"Private draft from acme",
 	);
 	await act(async () => {
-		await router.navigate({ to: "/w/$workspaceSlug/mentor", params: { workspaceSlug: "beta" } });
+		await router.navigate({
+			to: "/w/$workspaceSlug/conversation",
+			params: { workspaceSlug: "beta" },
+		});
 	});
-	await waitFor(() => expect(router.state.location.pathname).toBe("/w/beta/mentor"));
-	const composer = await screen.findByRole("textbox", { name: "Message Heph" });
+	await waitFor(() => expect(router.state.location.pathname).toBe("/w/beta/conversation"));
+	const composer = await screen.findByRole("textbox", { name: "Message Hephaestus" });
 	expect(composer).toHaveProperty("value", "");
 	await userEvent.type(composer, "{Enter}");
 	expect(beta.submissions).toStrictEqual([]);
@@ -162,7 +165,7 @@ it("opens at the newest messages and reads older ones above them", async () => {
 	const reads = recordPageReads("/mentor/entries");
 	serve(fake);
 
-	renderRouteAtWithRouter("/w/acme/mentor");
+	renderRouteAtWithRouter("/w/acme/conversation");
 	await screen.findByText("The newest question", {}, ROUTE_RENDER_WAIT);
 	screen.getByText("A middle answer");
 	await userEvent.click(screen.getByRole("button", { name: "Show earlier messages" }));
@@ -178,7 +181,7 @@ it("says older messages are loading once Retry reads them again after they faile
 	serve(fake);
 	const held = deferred();
 
-	renderRouteAtWithRouter("/w/acme/mentor");
+	renderRouteAtWithRouter("/w/acme/conversation");
 	try {
 		await screen.findByText("The newest question", {}, ROUTE_RENDER_WAIT);
 		server.use(
@@ -231,22 +234,22 @@ it("offers the composer only once the conversation is read, so a message sent fr
 		),
 	);
 
-	renderRouteAtWithRouter("/w/acme/mentor");
+	renderRouteAtWithRouter("/w/acme/conversation");
 	try {
 		// The first read is on the way. A message sent now has no page to land in, so nothing takes one.
 		await screen.findByText("Loading the conversation…", {}, ROUTE_RENDER_WAIT);
-		expect(screen.queryByRole("textbox", { name: "Message Heph" })).toBeNull();
+		expect(screen.queryByRole("textbox", { name: "Message Hephaestus" })).toBeNull();
 
 		held.resolve();
 		const retry = await screen.findByRole("button", { name: "Retry" });
 		screen.getByText("We could not load these messages");
-		expect(screen.queryByRole("textbox", { name: "Message Heph" })).toBeNull();
+		expect(screen.queryByRole("textbox", { name: "Message Hephaestus" })).toBeNull();
 		expect(fake.submissions).toStrictEqual([]);
 
 		await userEvent.click(retry);
 		await screen.findByText("How did my week go?");
 		await userEvent.type(
-			screen.getByRole("textbox", { name: "Message Heph" }),
+			screen.getByRole("textbox", { name: "Message Hephaestus" }),
 			"Is my description clear?{Enter}",
 		);
 		await waitFor(() =>
@@ -264,14 +267,20 @@ it("gives a draft back once Retry reads a conversation that could not be read on
 	const beta = new MentorFake("beta");
 	serve(acme, beta);
 
-	const { router, queryClient } = renderRouteAtWithRouter("/w/acme/mentor");
+	const { router, queryClient } = renderRouteAtWithRouter("/w/acme/conversation");
 	await screen.findByText("How did my week go?", {}, ROUTE_RENDER_WAIT);
-	await userEvent.type(screen.getByRole("textbox", { name: "Message Heph" }), "Half a question");
+	await userEvent.type(
+		screen.getByRole("textbox", { name: "Message Hephaestus" }),
+		"Half a question",
+	);
 	await act(async () => {
-		await router.navigate({ to: "/w/$workspaceSlug/mentor", params: { workspaceSlug: "beta" } });
+		await router.navigate({
+			to: "/w/$workspaceSlug/conversation",
+			params: { workspaceSlug: "beta" },
+		});
 	});
-	await waitFor(() => expect(router.state.location.pathname).toBe("/w/beta/mentor"));
-	await screen.findByRole("textbox", { name: "Message Heph" });
+	await waitFor(() => expect(router.state.location.pathname).toBe("/w/beta/conversation"));
+	await screen.findByRole("textbox", { name: "Message Hephaestus" });
 
 	// Nothing shows acme's messages now. Only their pages leave the cache, as unused data does after
 	// a while, so the way back reads them first. The draft is not part of the cache.
@@ -287,15 +296,18 @@ it("gives a draft back once Retry reads a conversation that could not be read on
 	);
 
 	await act(async () => {
-		await router.navigate({ to: "/w/$workspaceSlug/mentor", params: { workspaceSlug: "acme" } });
+		await router.navigate({
+			to: "/w/$workspaceSlug/conversation",
+			params: { workspaceSlug: "acme" },
+		});
 	});
 	const retry = await screen.findByRole("button", { name: "Retry" }, ROUTE_RENDER_WAIT);
 	screen.getByText("We could not load these messages");
-	expect(screen.queryByRole("textbox", { name: "Message Heph" })).toBeNull();
+	expect(screen.queryByRole("textbox", { name: "Message Hephaestus" })).toBeNull();
 
 	await userEvent.click(retry);
 	await screen.findByText("How did my week go?");
-	expect(screen.getByRole("textbox", { name: "Message Heph" })).toHaveProperty(
+	expect(screen.getByRole("textbox", { name: "Message Hephaestus" })).toHaveProperty(
 		"value",
 		"Half a question",
 	);
@@ -313,7 +325,7 @@ it("brings a linked message into view on a cold load, reading older pages until 
 	const reads = recordPageReads("/mentor/entries");
 	serve(fake);
 
-	renderRouteAtWithRouter(`/w/acme/mentor?entry=${linked.id}`);
+	renderRouteAtWithRouter(`/w/acme/conversation?entry=${linked.id}`);
 	await screen.findByText("The answer the digest links to", {}, ROUTE_RENDER_WAIT);
 	expect(reads).toStrictEqual([null, "4", "2"]);
 });
@@ -326,7 +338,7 @@ it("says when a linked message is not in the conversation, after reading every o
 	const reads = recordPageReads("/mentor/entries");
 	serve(fake);
 
-	renderRouteAtWithRouter("/w/acme/mentor?entry=e9999999-0000-4000-8000-000000000000");
+	renderRouteAtWithRouter("/w/acme/conversation?entry=e9999999-0000-4000-8000-000000000000");
 	await screen.findByText(
 		"We could not find that message. It may have been deleted.",
 		{},
@@ -349,7 +361,7 @@ it("brings a linked reply into view inside its thread, reading older replies unt
 	const reads = recordPageReads(`/entries/${parent.id}/thread`);
 	serve(fake);
 
-	renderRouteAtWithRouter(`/w/acme/mentor?thread=${parent.id}&entry=${linked.id}`);
+	renderRouteAtWithRouter(`/w/acme/conversation?thread=${parent.id}&entry=${linked.id}`);
 	const panel = await screen.findByRole("complementary", { name: "Thread" }, ROUTE_RENDER_WAIT);
 	await within(panel).findByText("Share blockers earlier next time.");
 	expect(reads).toStrictEqual([null, "3", "2"]);
@@ -370,7 +382,8 @@ it("shows a sent message at once and keeps its request id when a failed send is 
 					{
 						type: "about:blank",
 						status: 409,
-						detail: "Heph is still answering. Wait for an answer before you send more messages.",
+						detail:
+							"Hephaestus is still answering. Wait for an answer before you send more messages.",
 					},
 					{ status: 409 },
 				);
@@ -379,9 +392,9 @@ it("shows a sent message at once and keeps its request id when a failed send is 
 		),
 	);
 
-	renderRouteAtWithRouter("/w/acme/mentor");
+	renderRouteAtWithRouter("/w/acme/conversation");
 	await userEvent.type(
-		await screen.findByRole("textbox", { name: "Message Heph" }, ROUTE_RENDER_WAIT),
+		await screen.findByRole("textbox", { name: "Message Hephaestus" }, ROUTE_RENDER_WAIT),
 		"Is my description clear?{Enter}",
 	);
 	// On screen before the server answers.
@@ -389,7 +402,7 @@ it("shows a sent message at once and keeps its request id when a failed send is 
 	held.resolve();
 
 	await screen.findByText(
-		"Not sent. Heph is still answering. Wait for an answer before you send more messages.",
+		"Not sent. Hephaestus is still answering. Wait for an answer before you send more messages.",
 	);
 	await userEvent.click(screen.getByRole("button", { name: /^Retry \(/u }));
 	await waitFor(() => expect(fake.submissions).toHaveLength(1));
@@ -427,12 +440,12 @@ it("keeps a successful send visible until an in-flight read lets its stored copy
 		),
 	);
 
-	const { queryClient } = renderRouteAtWithRouter("/w/acme/mentor");
+	const { queryClient } = renderRouteAtWithRouter("/w/acme/conversation");
 	try {
 		await screen.findByText("Before the reconnect", {}, ROUTE_RENDER_WAIT);
 		const stream = await liveStream();
 		act(() => stream.open());
-		const composer = screen.getByRole("textbox", { name: "Message Heph" });
+		const composer = screen.getByRole("textbox", { name: "Message Hephaestus" });
 		await userEvent.type(composer, "A question that must stay visible{Enter}");
 		await postStarted.promise;
 
@@ -460,9 +473,9 @@ it("keeps a successful send visible until an in-flight read lets its stored copy
 		expect(screen.queryByRole("button", { name: /^Retry \(/u })).toBeNull();
 
 		pagesAnswer.resolve();
-		// No turn runs before it, so its own status line waits for Heph, as S1 words it. The line
+		// No turn runs before it, so its own status line waits for Hephaestus, as S1 words it. The line
 		// shows once the turn stays queued past a second, and both the line and its status say it.
-		await screen.findAllByText("Waiting for Heph to start…", {}, ROUTE_RENDER_WAIT);
+		await screen.findAllByText("Waiting to start…", {}, ROUTE_RENDER_WAIT);
 		await waitFor(() => expect(queryClient.isFetching()).toBe(0));
 		expect(screen.getAllByText("A question that must stay visible")).toHaveLength(1);
 		expect(fake.submissions.map(({ text }) => text)).toStrictEqual([
@@ -500,8 +513,12 @@ it("copies and discards only one failed send without deleting stored messages or
 		),
 	);
 
-	const { queryClient } = renderRouteAtWithRouter("/w/acme/mentor");
-	const composer = await screen.findByRole("textbox", { name: "Message Heph" }, ROUTE_RENDER_WAIT);
+	const { queryClient } = renderRouteAtWithRouter("/w/acme/conversation");
+	const composer = await screen.findByRole(
+		"textbox",
+		{ name: "Message Hephaestus" },
+		ROUTE_RENDER_WAIT,
+	);
 	await user.type(composer, "The failed question to copy and discard{Enter}");
 	await screen.findByText("Not sent. The server could not store this message.");
 	await user.type(composer, "Another failed question to keep{Enter}");
@@ -541,7 +558,7 @@ it("copies and discards only one failed send without deleting stored messages or
 	expect(fake.deletes).toStrictEqual([]);
 });
 
-it("sends a follow-up while Heph answers, and stops the running turn", async () => {
+it("sends a follow-up while Hephaestus answers, and stops the running turn", async () => {
 	const fake = new MentorFake();
 	const running = fake.addTurn({
 		status: "RUNNING",
@@ -550,29 +567,31 @@ it("sends a follow-up while Heph answers, and stops the running turn", async () 
 	fake.add({ kind: "USER", text: "What about my last pull request?", turnId: running.id });
 	serve(fake);
 
-	renderRouteAtWithRouter("/w/acme/mentor");
+	renderRouteAtWithRouter("/w/acme/conversation");
 	await screen.findByText(streamedText("Your last pull request"), {}, ROUTE_RENDER_WAIT);
 	await userEvent.type(
-		screen.getByRole("textbox", { name: "Message Heph" }),
+		screen.getByRole("textbox", { name: "Message Hephaestus" }),
 		"And the one before?{Enter}",
 	);
 	await waitFor(() =>
 		expect(fake.submissions.map(({ text }) => text)).toStrictEqual(["And the one before?"]),
 	);
-	await screen.findByText("Queued. Heph answers this next.");
+	await screen.findByText("Queued. This is answered next.");
 
 	// One Stop for the running answer, beside Send; the status line in the log offers none.
-	expect(within(screen.getByRole("log")).queryByRole("button", { name: /^Stop Heph/u })).toBeNull();
-	await userEvent.click(screen.getByRole("button", { name: "Stop Heph" }));
+	expect(
+		within(screen.getByRole("log")).queryByRole("button", { name: /^Stop answer/u }),
+	).toBeNull();
+	await userEvent.click(screen.getByRole("button", { name: "Stop answer" }));
 	await waitFor(() => expect(fake.stops).toStrictEqual([running.id]));
 });
 
-it("votes on Heph's message, and clears the vote when the pressed vote is pressed again", async () => {
+it("votes on Hephaestus's message, and clears the vote when the pressed vote is pressed again", async () => {
 	const fake = new MentorFake();
 	const answer = fake.add({ kind: "HEPH", text: "Link the issue in the description." });
 	serve(fake);
 
-	renderRouteAtWithRouter("/w/acme/mentor");
+	renderRouteAtWithRouter("/w/acme/conversation");
 	const helpful = await screen.findByRole("button", { name: /^Helpful/u }, ROUTE_RENDER_WAIT);
 	await userEvent.click(helpful);
 	await waitFor(() =>
@@ -605,7 +624,7 @@ it("takes an optimistic vote back when the server refuses it", async () => {
 		),
 	);
 
-	renderRouteAtWithRouter("/w/acme/mentor");
+	renderRouteAtWithRouter("/w/acme/conversation");
 	await userEvent.click(
 		await screen.findByRole("button", { name: /^Helpful/u }, ROUTE_RENDER_WAIT),
 	);
@@ -620,7 +639,7 @@ it("deletes the developer's own message once they confirm", async () => {
 	const question = fake.add({ kind: "USER", text: "Something I should not have pasted" });
 	serve(fake);
 
-	renderRouteAtWithRouter("/w/acme/mentor");
+	renderRouteAtWithRouter("/w/acme/conversation");
 	await userEvent.click(
 		await screen.findByRole("button", { name: /^Delete message/u }, ROUTE_RENDER_WAIT),
 	);
@@ -638,7 +657,7 @@ it("opens the thread named in the address and answers in it", async () => {
 	fake.add({ kind: "USER", text: "Which ones?", parentEntryId: parent.id });
 	serve(fake);
 
-	renderRouteAtWithRouter(`/w/acme/mentor?thread=${parent.id}`);
+	renderRouteAtWithRouter(`/w/acme/conversation?thread=${parent.id}`);
 	const panel = await screen.findByRole("complementary", { name: "Thread" }, ROUTE_RENDER_WAIT);
 	await within(panel).findByText("Which ones?");
 	within(panel).getByText("Three pull requests left the reason out.");
@@ -674,20 +693,20 @@ it("keeps a deleted message's thread to read and delete in, but offers no reply 
 	});
 	fake.add({
 		kind: "USER",
-		text: "A reply Heph could not answer.",
+		text: "A reply Hephaestus could not answer.",
 		parentEntryId: parent.id,
 		turnId: "a9000000-0000-4000-8000-000000000001",
 		turnStatus: "FAILED",
-		turnError: "Heph took too long to answer.",
+		turnError: "Hephaestus took too long to answer.",
 	});
 	serve(fake);
 
-	renderRouteAtWithRouter(`/w/acme/mentor?thread=${parent.id}`);
+	renderRouteAtWithRouter(`/w/acme/conversation?thread=${parent.id}`);
 	const panel = await screen.findByRole("complementary", { name: "Thread" }, ROUTE_RENDER_WAIT);
 	await within(panel).findByText("A reply I want gone too.");
 	within(panel).getByText("Here is what I would change.");
 	within(panel).getByText("This message was deleted.");
-	within(panel).getByText("Heph took too long to answer.");
+	within(panel).getByText("Hephaestus took too long to answer.");
 	// A deleted message's thread is not a thread the server does not know.
 	expect(within(panel).queryByText("We could not find this thread")).toBeNull();
 	// The server refuses every new reply to a deleted message, so nothing here asks for one.
@@ -712,7 +731,7 @@ it("says a thread is not found only when the server knows no such message", asyn
 	const fake = new MentorFake();
 	serve(fake);
 
-	renderRouteAtWithRouter("/w/acme/mentor?thread=e9999999-0000-4000-8000-000000000000");
+	renderRouteAtWithRouter("/w/acme/conversation?thread=e9999999-0000-4000-8000-000000000000");
 	const panel = await screen.findByRole("complementary", { name: "Thread" }, ROUTE_RENDER_WAIT);
 	await within(panel).findByText("We could not find this thread");
 	expect(within(panel).queryByRole("textbox")).toBeNull();
@@ -744,7 +763,7 @@ it("says the thread is loading in its panel while the conversation beside it sho
 		),
 	);
 
-	renderRouteAtWithRouter(`/w/acme/mentor?thread=${parent.id}`);
+	renderRouteAtWithRouter(`/w/acme/conversation?thread=${parent.id}`);
 	try {
 		const panel = await screen.findByRole("complementary", { name: "Thread" }, ROUTE_RENDER_WAIT);
 		await within(panel).findByText("Loading the thread…", {}, ROUTE_RENDER_WAIT);
@@ -765,7 +784,7 @@ it("shows a thread as a drawer until the page has measured room for it beside th
 	serve(fake);
 
 	// No measurement arrives, as before the browser lays the page out.
-	renderRouteAtWithRouter(`/w/acme/mentor?thread=${parent.id}`);
+	renderRouteAtWithRouter(`/w/acme/conversation?thread=${parent.id}`);
 	const drawer = await screen.findByRole("dialog", { name: "Thread" }, ROUTE_RENDER_WAIT);
 	await within(drawer).findByText("Share blockers earlier.");
 	expect(screen.queryByRole("complementary", { name: "Thread" })).toBeNull();
@@ -780,7 +799,7 @@ it("needs a wider region for the thread's column when the reader's browser shows
 	fake.add({ kind: "HEPH", text: "Share blockers earlier.", parentEntryId: parent.id });
 	serve(fake);
 
-	renderRouteAtWithRouter(`/w/acme/mentor?thread=${parent.id}`);
+	renderRouteAtWithRouter(`/w/acme/conversation?thread=${parent.id}`);
 	const drawer = await screen.findByRole("dialog", { name: "Thread" }, ROUTE_RENDER_WAIT);
 	await within(drawer).findByText("Share blockers earlier.");
 	expect(screen.queryByRole("complementary", { name: "Thread" })).toBeNull();
@@ -799,7 +818,7 @@ it("chooses the thread's column or drawer by the room the page measures, and kee
 	fake.add({ kind: "HEPH", text: "Share blockers earlier.", parentEntryId: parent.id });
 	serve(fake);
 
-	renderRouteAtWithRouter(`/w/acme/mentor?thread=${parent.id}`);
+	renderRouteAtWithRouter(`/w/acme/conversation?thread=${parent.id}`);
 	const drawer = await screen.findByRole("dialog", { name: "Thread" }, ROUTE_RENDER_WAIT);
 	await userEvent.type(
 		await within(drawer).findByRole("textbox", { name: "Reply in thread" }),
@@ -831,7 +850,7 @@ it("closes a thread drawer before the address drops the thread, and gives focus 
 	fake.add({ kind: "HEPH", text: "Share blockers earlier.", parentEntryId: parent.id });
 	serve(fake);
 
-	const { router } = renderRouteAtWithRouter("/w/acme/mentor");
+	const { router } = renderRouteAtWithRouter("/w/acme/conversation");
 	const summary = await screen.findByRole("button", { name: /^1 reply/u }, ROUTE_RENDER_WAIT);
 	await userEvent.click(summary);
 	const drawer = await screen.findByRole("dialog", { name: "Thread" });
@@ -854,7 +873,7 @@ it("counts every reply above the open thread and on its message, from Slack and 
 	fake.add({ kind: "HEPH", text: "Share blockers earlier.", parentEntryId: parent.id });
 	serve(fake);
 
-	renderRouteAtWithRouter(`/w/acme/mentor?thread=${parent.id}`);
+	renderRouteAtWithRouter(`/w/acme/conversation?thread=${parent.id}`);
 	const panel = await screen.findByRole("complementary", { name: "Thread" }, ROUTE_RENDER_WAIT);
 	await within(panel).findByText("1 reply");
 	const stream = await liveStream();
@@ -887,7 +906,7 @@ it("closes the live stream while the page is hidden, and reads back what landed 
 	fake.add({ kind: "USER", text: "Anything new?" });
 	serve(fake);
 
-	renderRouteAtWithRouter("/w/acme/mentor");
+	renderRouteAtWithRouter("/w/acme/conversation");
 	await screen.findByText("Anything new?", {}, ROUTE_RENDER_WAIT);
 	const first = await liveStream();
 	act(() => {
@@ -936,12 +955,12 @@ it("starts each thread fresh, and gives a thread back the reply the developer wa
 	fake.add({ kind: "HEPH", text: "Second answer", parentEntryId: second.id });
 	serve(fake);
 
-	const { router } = renderRouteAtWithRouter(`/w/acme/mentor?thread=${first.id}`);
+	const { router } = renderRouteAtWithRouter(`/w/acme/conversation?thread=${first.id}`);
 	await userEvent.type(await threadReplyField(), "Half a reply to the first");
 
 	await act(async () => {
 		await router.navigate({
-			to: "/w/$workspaceSlug/mentor",
+			to: "/w/$workspaceSlug/conversation",
 			params: { workspaceSlug: "acme" },
 			search: { thread: second.id },
 		});
@@ -951,7 +970,7 @@ it("starts each thread fresh, and gives a thread back the reply the developer wa
 
 	await act(async () => {
 		await router.navigate({
-			to: "/w/$workspaceSlug/mentor",
+			to: "/w/$workspaceSlug/conversation",
 			params: { workspaceSlug: "acme" },
 			search: { thread: first.id },
 		});
@@ -960,12 +979,12 @@ it("starts each thread fresh, and gives a thread back the reply the developer wa
 	await expect(threadReplyField()).resolves.toHaveProperty("value", "Half a reply to the first");
 });
 
-it("shows what the live stream reports: Heph's answer as it arrives and a message written in Slack", async () => {
+it("shows what the live stream reports: Hephaestus's answer as it arrives and a message written in Slack", async () => {
 	const fake = new MentorFake();
 	const question = fake.add({ kind: "USER", text: "How did my week go?" });
 	serve(fake);
 
-	renderRouteAtWithRouter("/w/acme/mentor");
+	renderRouteAtWithRouter("/w/acme/conversation");
 	await screen.findByText("How did my week go?", {}, ROUTE_RENDER_WAIT);
 	const stream = FakeEventSource.latest();
 	assert.isDefined(stream);
@@ -990,7 +1009,7 @@ it("shows what the live stream reports: Heph's answer as it arrives and a messag
 		});
 	});
 	await screen.findByText(streamedText("You opened two"));
-	screen.getByRole("button", { name: "Stop Heph" });
+	screen.getByRole("button", { name: "Stop answer" });
 
 	act(() => {
 		stream.emit("entry", {
@@ -1024,16 +1043,16 @@ it("shows what the live stream reports: Heph's answer as it arrives and a messag
 	assert.isNotNull(slackMessage);
 	within(slackMessage).getByText("Slack");
 	// The finished turn leaves no status line and nothing to stop.
-	expect(screen.queryByRole("button", { name: /^Stop Heph/u })).toBeNull();
+	expect(screen.queryByRole("button", { name: /^Stop answer/u })).toBeNull();
 });
 
-it("shows why a turn failed after Heph wrote part of its answer, and asks the question again", async () => {
+it("shows why a turn failed after Hephaestus wrote part of its answer, and asks the question again", async () => {
 	const fake = new MentorFake();
 	const turn = fake.addTurn({ status: "RUNNING" });
 	fake.add({ kind: "USER", text: "How did my week go?", turnId: turn.id });
 	serve(fake);
 
-	renderRouteAtWithRouter("/w/acme/mentor");
+	renderRouteAtWithRouter("/w/acme/conversation");
 	await screen.findByText("How did my week go?", {}, ROUTE_RENDER_WAIT);
 	const stream = await liveStream();
 	const partAnswer = fake.add({
@@ -1065,7 +1084,7 @@ it("reads the conversation again when a reconnect's snapshot is ahead of it", as
 	fake.add({ kind: "USER", text: "How did my week go?" });
 	serve(fake);
 
-	renderRouteAtWithRouter("/w/acme/mentor");
+	renderRouteAtWithRouter("/w/acme/conversation");
 	await screen.findByText("How did my week go?", {}, ROUTE_RENDER_WAIT);
 	const stream = await liveStream();
 	act(() => {
@@ -1088,7 +1107,7 @@ it("keeps every loaded message when a reconnect rereads the conversation after o
 	const reads = recordPageReads("/mentor/entries");
 	serve(fake);
 
-	renderRouteAtWithRouter("/w/acme/mentor");
+	renderRouteAtWithRouter("/w/acme/conversation");
 	await screen.findByText("The newest question", {}, ROUTE_RENDER_WAIT);
 	await userEvent.click(screen.getByRole("button", { name: "Show earlier messages" }));
 	await screen.findByText("The oldest question");
@@ -1123,7 +1142,7 @@ it("keeps every loaded reply when a reconnect rereads a thread after older repli
 	const reads = recordPageReads(`/entries/${parent.id}/thread`);
 	serve(fake);
 
-	renderRouteAtWithRouter(`/w/acme/mentor?thread=${parent.id}`);
+	renderRouteAtWithRouter(`/w/acme/conversation?thread=${parent.id}`);
 	const panel = await screen.findByRole("complementary", { name: "Thread" }, ROUTE_RENDER_WAIT);
 	await within(panel).findByText("They waited for review.");
 	await userEvent.click(within(panel).getByRole("button", { name: "Show earlier messages" }));
@@ -1153,7 +1172,7 @@ it("shows an edit and a deletion made while the stream was down, though no new m
 	const answer = fake.add({ kind: "HEPH", text: "The first wording of the answer" });
 	serve(fake);
 
-	renderRouteAtWithRouter("/w/acme/mentor");
+	renderRouteAtWithRouter("/w/acme/conversation");
 	await screen.findByText("The first wording of the answer", {}, ROUTE_RENDER_WAIT);
 	const stream = await liveStream();
 	act(() => {
@@ -1178,7 +1197,7 @@ it("keeps a message that arrives live while a reconnect's reread is still answer
 	fake.add({ kind: "USER", text: "Before the reconnect" });
 	serve(fake);
 
-	const { queryClient } = renderRouteAtWithRouter("/w/acme/mentor");
+	const { queryClient } = renderRouteAtWithRouter("/w/acme/conversation");
 	await screen.findByText("Before the reconnect", {}, ROUTE_RENDER_WAIT);
 	const stream = await liveStream();
 	// The reread reads the ledger as it is now, and answers only once the test lets it.
@@ -1212,7 +1231,7 @@ it("keeps a message that arrives live while a reconnect's reread is still answer
 	screen.getByText("Before the reconnect");
 });
 
-it("shows no phantom turn when a send's answer lands after Heph already answered, while a reconnect's reread is answering", async () => {
+it("shows no phantom turn when a send's answer lands after Hephaestus already answered, while a reconnect's reread is answering", async () => {
 	const fake = new MentorFake();
 	fake.add({ kind: "USER", text: "Before the reconnect" });
 	serve(fake);
@@ -1232,11 +1251,11 @@ it("shows no phantom turn when a send's answer lands after Heph already answered
 				});
 				// The answer as the server wrote it at submit time.
 				const submission = { turn: { ...turn }, question: { ...question } };
-				// Heph answers and the turn ends before the answer to the send reaches the browser.
+				// Hephaestus answers and the turn ends before the answer to the send reaches the browser.
 				turn.status = "DONE";
 				turn.attempt = 1;
 				question.turnStatus = "DONE";
-				fake.add({ kind: "HEPH", text: "Heph's answer", turnId: turn.id });
+				fake.add({ kind: "HEPH", text: "Hephaestus's answer", turnId: turn.id });
 				postStarted.resolve();
 				await postAnswer.promise;
 				return HttpResponse.json(submission);
@@ -1245,11 +1264,11 @@ it("shows no phantom turn when a send's answer lands after Heph already answered
 		),
 	);
 
-	const { queryClient } = renderRouteAtWithRouter("/w/acme/mentor");
+	const { queryClient } = renderRouteAtWithRouter("/w/acme/conversation");
 	await screen.findByText("Before the reconnect", {}, ROUTE_RENDER_WAIT);
 	const stream = await liveStream();
 	act(() => stream.open());
-	await userEvent.type(screen.getByRole("textbox", { name: "Message Heph" }), "Hello{Enter}");
+	await userEvent.type(screen.getByRole("textbox", { name: "Message Hephaestus" }), "Hello{Enter}");
 	await postStarted.promise;
 
 	// The reconnect's reread is held until the late answer to the send has landed.
@@ -1275,7 +1294,7 @@ it("shows no phantom turn when a send's answer lands after Heph already answered
 	await waitFor(() => expect(queryClient.isMutating()).toBe(0));
 	pagesAnswer.resolve();
 
-	await screen.findByText("Heph's answer");
+	await screen.findByText("Hephaestus's answer");
 	await waitFor(() => expect(queryClient.isFetching()).toBe(0));
 	expect(screen.queryByRole("button", { name: /^Stop/u })).toBeNull();
 	expect(screen.queryByText(/Queued/u)).toBeNull();
@@ -1287,7 +1306,7 @@ it("says live updates are paused while the browser's own reconnects keep failing
 	fake.add({ kind: "USER", text: "How did my week go?" });
 	serve(fake);
 
-	renderRouteAtWithRouter("/w/acme/mentor");
+	renderRouteAtWithRouter("/w/acme/conversation");
 	await screen.findByText("How did my week go?", {}, ROUTE_RENDER_WAIT);
 	const stream = await liveStream();
 	act(() => stream.open());
@@ -1306,7 +1325,7 @@ it("says in a thread drawer over the conversation that live updates are paused, 
 	serve(fake);
 
 	// No room is measured, so the thread is a drawer that covers the conversation and its notice.
-	renderRouteAtWithRouter(`/w/acme/mentor?thread=${parent.id}`);
+	renderRouteAtWithRouter(`/w/acme/conversation?thread=${parent.id}`);
 	const drawer = await screen.findByRole("dialog", { name: "Thread" }, ROUTE_RENDER_WAIT);
 	await within(drawer).findByText("Share blockers earlier.");
 	const stream = await liveStream();
@@ -1332,7 +1351,7 @@ it("offers Retry in a linked thread when the conversation's state cannot be read
 		),
 	);
 
-	renderRouteAtWithRouter(`/w/acme/mentor?thread=${parent.id}`);
+	renderRouteAtWithRouter(`/w/acme/conversation?thread=${parent.id}`);
 	const panel = await screen.findByRole("complementary", { name: "Thread" }, ROUTE_RENDER_WAIT);
 	const retry = await within(panel).findByRole("button", { name: "Retry" });
 	server.use(
@@ -1347,7 +1366,7 @@ it("reads the conversation again when a live event cannot be read", async () => 
 	fake.add({ kind: "USER", text: "How did my week go?" });
 	serve(fake);
 
-	renderRouteAtWithRouter("/w/acme/mentor");
+	renderRouteAtWithRouter("/w/acme/conversation");
 	await screen.findByText("How did my week go?", {}, ROUTE_RENDER_WAIT);
 	const stream = await liveStream();
 	fake.add({ kind: "HEPH", text: "An answer in a shape this tab does not know" });
@@ -1358,7 +1377,7 @@ it("reads the conversation again when a live event cannot be read", async () => 
 	await screen.findByText("An answer in a shape this tab does not know");
 });
 
-it("links a problem and feedback Heph showed to the developer's feedback on their work, as the server resolves it", async () => {
+it("links a problem and feedback Hephaestus showed to the developer's feedback on their work, as the server resolves it", async () => {
 	const fake = new MentorFake();
 	fake.add({ kind: "USER", text: "What should I fix in my pull request?" });
 	fake.add({
@@ -1387,7 +1406,7 @@ it("links a problem and feedback Heph showed to the developer's feedback on thei
 	});
 	serve(fake);
 
-	renderRouteAtWithRouter("/w/acme/mentor");
+	renderRouteAtWithRouter("/w/acme/conversation");
 	await screen.findByText(
 		"An earlier pull request explained its decision well.",
 		{},
@@ -1400,7 +1419,7 @@ it("links a problem and feedback Heph showed to the developer's feedback on thei
 	).toStrictEqual(["/w/acme/feedback/421", "/w/acme/feedback/433"]);
 });
 
-it("nests Heph's headings and a digest's sections under the page's headings without skipping a level", async () => {
+it("nests Hephaestus's headings and a digest's sections under the page's headings without skipping a level", async () => {
 	const fake = new MentorFake();
 	const answer = fake.add({
 		kind: "HEPH",
@@ -1433,15 +1452,15 @@ it("nests Heph's headings and a digest's sections under the page's headings with
 	});
 	serve(fake);
 
-	renderRouteAtWithRouter("/w/acme/mentor");
+	renderRouteAtWithRouter("/w/acme/conversation");
 	await screen.findByRole("heading", { name: "Feedback that reached you" }, ROUTE_RENDER_WAIT);
 
 	const levels = screen
 		.getAllByRole("heading")
 		.map((heading) => ({ name: heading.textContent, level: Number(heading.tagName.slice(1)) }));
 	expect(levels).toStrictEqual([
-		{ name: "Heph", level: 1 },
-		{ name: "Conversation with Heph", level: 2 },
+		{ name: "Ask Hephaestus", level: 1 },
+		{ name: "Your conversation", level: 2 },
 		{ name: "Why", level: 3 },
 		{ name: "Feedback that reached you", level: 3 },
 	]);
@@ -1478,10 +1497,10 @@ it("links a weekly digest's feedback to its place in the conversation, and repli
 	});
 	serve(fake);
 
-	renderRouteAtWithRouter("/w/acme/mentor");
+	renderRouteAtWithRouter("/w/acme/conversation");
 	const link = await screen.findByRole("link", { name: /In conversation/u }, ROUTE_RENDER_WAIT);
 	expect(link.getAttribute("href")).toBe(
-		"/w/acme/mentor?thread=e8000000-0000-4000-8000-000000000001&entry=e8000000-0000-4000-8000-000000000002",
+		"/w/acme/conversation?thread=e8000000-0000-4000-8000-000000000001&entry=e8000000-0000-4000-8000-000000000002",
 	);
 
 	await userEvent.click(

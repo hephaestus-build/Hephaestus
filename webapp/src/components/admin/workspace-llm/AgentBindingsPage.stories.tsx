@@ -158,7 +158,7 @@ export const Default: Story = {};
 export const Loading: Story = {
 	args: { state: { status: "loading" } },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("heading", { name: "Reviews and Heph" })).toBeVisible();
+		await expect(canvas.getByRole("heading", { name: "Reviews and conversations" })).toBeVisible();
 		await expect(
 			canvas.getByRole("heading", { name: "Models for practice scripts" }),
 		).toBeVisible();
@@ -210,7 +210,7 @@ export const Quiet: Story = {
 	play: async ({ canvas }) => {
 		for (const title of [
 			"Practice reviews",
-			"Heph",
+			"Conversations",
 			"Decision model",
 			"Embedding model",
 			"Reranking model",
@@ -423,7 +423,7 @@ export const ChoiceRequired: Story = {
 		await expect(canvas.queryByText("Not chosen")).toBeNull();
 		const reviews = await openPurpose(canvas, "Practice reviews");
 		await expect(row(reviews, UNCHOSEN_ROW).getByText(/no one uses it now/u)).toBeVisible();
-		const heph = await openPurpose(canvas, "Heph");
+		const heph = await openPurpose(canvas, "Conversations");
 		await expect(heph.queryByRole("group", { name: UNCHOSEN_ROW })).toBeNull();
 	},
 };
@@ -606,7 +606,7 @@ export const ProjectReviewsDisabled: Story = {
 		await expect(
 			row(reviews, "In-house").getByRole("button", { name: /^Save assignment/u }),
 		).toBeEnabled();
-		await expect(trigger(canvas, "Heph")).toHaveAccessibleDescription(
+		await expect(trigger(canvas, "Conversations")).toHaveAccessibleDescription(
 			`In-house: none Cloud: none Not chosen: none ${statusLabel("NOT_SET")}`,
 		);
 	},
@@ -627,7 +627,7 @@ export const Saving: Story = {
 		await expect(
 			row(reviews, "Cloud").getByRole("button", { name: /^Save assignment/u }),
 		).toBeEnabled();
-		const heph = await openPurpose(canvas, "Heph");
+		const heph = await openPurpose(canvas, "Conversations");
 		await expect(
 			row(heph, "In-house").getByRole("button", { name: /^Save assignment/u }),
 		).toBeEnabled();
@@ -673,7 +673,7 @@ export const AdvancedDisclosure: Story = {
 		const reviews = row(await openPurpose(canvas, "Practice reviews"), "In-house");
 		await openAdvanced(reviews);
 		await expect(reviews.getByLabelText(/^Max concurrent runs/u)).toHaveValue(3);
-		const mentor = row(await openPurpose(canvas, "Heph"), "In-house");
+		const mentor = row(await openPurpose(canvas, "Conversations"), "In-house");
 		await openAdvanced(mentor);
 		await expect(mentor.queryByLabelText(/^Max concurrent runs/u)).toBeNull();
 		await expect(mentor.getByLabelText(/^Timeout \(seconds\)/u)).toHaveValue(300);
@@ -734,8 +734,8 @@ export const InUse: Story = {
 			}
 			return getComputedStyle(glyph).color;
 		};
-		await expect(glyphTone("Heph")).toBe(glyphTone("Practice reviews"));
-		await expect(trigger(canvas, "Heph")).toHaveAccessibleDescription(
+		await expect(glyphTone("Conversations")).toBe(glyphTone("Practice reviews"));
+		await expect(trigger(canvas, "Conversations")).toHaveAccessibleDescription(
 			`In-house: ${inHouseModel.displayName} Cloud: ${inHouseModel.displayName} In-house Not chosen: none ${statusLabel("PARTLY_SET")}`,
 		);
 		await expect(trigger(canvas, "Embedding model")).toHaveAccessibleDescription(

@@ -134,13 +134,13 @@ function Paged(props: HephTimelineProps) {
 
 const stopRunning = fn();
 
-/** The composer as the conversation passes it while Heph answers: Stop sits beside Send. */
+/** The composer as the conversation passes it while Hephaestus answers: Stop sits beside Send. */
 const BUSY_COMPOSER = (
 	<HephComposer
-		label="Message Heph"
-		placeholder="Message Heph"
+		label="Message Hephaestus"
+		placeholder="Message Hephaestus"
 		onSend={fn()}
-		stop={{ label: "Stop Heph", onStop: stopRunning }}
+		stop={{ label: "Stop answer", onStop: stopRunning }}
 	/>
 );
 
@@ -149,7 +149,7 @@ const meta = {
 	parameters: { layout: "fullscreen" },
 	tags: ["autodocs"],
 	args: {
-		label: "Conversation with Heph",
+		label: "Your conversation",
 		workspaceSlug: WORKSPACE_SLUG,
 		state: ready(),
 		developer: DEVELOPER,
@@ -163,7 +163,9 @@ const meta = {
 		},
 		threads: { panelId: "thread-panel", onOpen: fn() },
 		empty: <Greeting />,
-		composer: <HephComposer label="Message Heph" placeholder="Message Heph" onSend={fn()} />,
+		composer: (
+			<HephComposer label="Message Hephaestus" placeholder="Message Hephaestus" onSend={fn()} />
+		),
 	},
 	decorators: [
 		(Story) => (
@@ -183,7 +185,7 @@ type Story = StoryObj<typeof meta>;
  */
 export const Default: Story = {
 	play: async ({ args, canvas, userEvent }) => {
-		await expect(canvas.getByRole("region", { name: "Conversation with Heph" })).toBeVisible();
+		await expect(canvas.getByRole("region", { name: "Your conversation" })).toBeVisible();
 		await expect(canvas.getByText("Yesterday")).toBeVisible();
 		await expect(canvas.getByText("Today")).toBeVisible();
 		await expect(canvas.getAllByText("Slack")).toHaveLength(2);
@@ -220,7 +222,7 @@ export const ReplyInThread: Story = {
 export const Empty: Story = {
 	args: { state: ready({ entries: [] }) },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("textbox", { name: "Message Heph" })).toBeVisible();
+		await expect(canvas.getByRole("textbox", { name: "Message Hephaestus" })).toBeVisible();
 	},
 };
 
@@ -235,8 +237,8 @@ export const Loading: Story = {
 		await expect(
 			await canvas.findByText("Loading the conversation…", undefined, { timeout: 3000 }),
 		).toBeVisible();
-		await expect(canvas.queryByRole("textbox", { name: "Message Heph" })).toBeNull();
-		await expect(canvas.queryByText(/^Heph can make mistakes/u)).toBeNull();
+		await expect(canvas.queryByRole("textbox", { name: "Message Hephaestus" })).toBeNull();
+		await expect(canvas.queryByText(/^Hephaestus can make mistakes/u)).toBeNull();
 	},
 };
 
@@ -251,15 +253,15 @@ export const LoadError: Story = {
 	args: { state: { status: "error", onRetry: retryLoad } },
 	play: async ({ canvas, userEvent }) => {
 		await expect(canvas.getByText("We could not load these messages")).toBeVisible();
-		await expect(canvas.queryByRole("textbox", { name: "Message Heph" })).toBeNull();
-		await expect(canvas.queryByText(/^Heph can make mistakes/u)).toBeNull();
+		await expect(canvas.queryByRole("textbox", { name: "Message Hephaestus" })).toBeNull();
+		await expect(canvas.queryByText(/^Hephaestus can make mistakes/u)).toBeNull();
 		await userEvent.click(await canvas.findByRole("button", { name: "Retry" }));
 		await expect(retryLoad).toHaveBeenCalledOnce();
 	},
 };
 
 /**
- * Before Heph shows words, its place in the conversation says what it does. One Stop ends the
+ * Before Hephaestus shows words, its place in the conversation says what it does. One Stop ends the
  * answer: the composer's, beside Send, where the developer just asked. The status line offers none
  * of its own, so two controls never do the same thing.
  */
@@ -280,7 +282,7 @@ export const Thinking: Story = {
 		);
 		await expect(within(log).queryByRole("button", { name: /^Stop/u })).toBeNull();
 		await expect(canvas.getAllByRole("button", { name: /^Stop/u })).toHaveLength(1);
-		await userEvent.click(canvas.getByRole("button", { name: "Stop Heph" }));
+		await userEvent.click(canvas.getByRole("button", { name: "Stop answer" }));
 		await expect(stopRunning).toHaveBeenCalledOnce();
 	},
 };
@@ -299,7 +301,7 @@ export const ThinkingWithoutComposer: Story = {
 	},
 	play: async ({ args, canvas, userEvent }) => {
 		const stop = within(canvas.getByRole("log")).getByRole("button", {
-			name: /^Stop Heph \(Ada Lovelace, /u,
+			name: /^Stop answer \(Ada Lovelace, /u,
 		});
 		await expectTargetSize(stop);
 		await userEvent.click(stop);
@@ -307,7 +309,7 @@ export const ThinkingWithoutComposer: Story = {
 	},
 };
 
-/** A follow-up written while Heph answers waits under its question. Its Stop is not the running answer's. */
+/** A follow-up written while Hephaestus answers waits under its question. Its Stop is not the running answer's. */
 export const QueuedFollowUp: Story = {
 	args: {
 		composer: BUSY_COMPOSER,
@@ -324,10 +326,10 @@ export const QueuedFollowUp: Story = {
 		}),
 	},
 	play: async ({ args, canvas, userEvent }) => {
-		await expect(canvas.getByText("Queued. Heph answers this next.")).toBeVisible();
+		await expect(canvas.getByText("Queued. This is answered next.")).toBeVisible();
 		await userEvent.click(canvas.getByRole("button", { name: /^Stop queued message \(/u }));
 		await expect(args.actions?.onStop).toHaveBeenCalledWith(FOLLOW_UP.turnId);
-		await userEvent.click(canvas.getByRole("button", { name: "Stop Heph" }));
+		await userEvent.click(canvas.getByRole("button", { name: "Stop answer" }));
 		await expect(stopRunning).toHaveBeenCalledOnce();
 		await expect(args.actions?.onStop).toHaveBeenCalledOnce();
 	},
@@ -351,7 +353,7 @@ const THIRD_FOLLOW_UP = entry({
 	createdAt: earlierToday(2),
 });
 
-/** Only the first follow-up in the queue says Heph answers it next. Each Stop names its own message. */
+/** Only the first follow-up in the queue says Hephaestus answers it next. Each Stop names its own message. */
 export const FollowUpsQueued: Story = {
 	args: {
 		state: ready({
@@ -364,7 +366,7 @@ export const FollowUpsQueued: Story = {
 		}),
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.getAllByText("Queued. Heph answers this next.")).toHaveLength(1);
+		await expect(canvas.getAllByText("Queued. This is answered next.")).toHaveLength(1);
 		await expect(canvas.getAllByText("Queued.")).toHaveLength(1);
 		const stops = canvas.getAllByRole("button", { name: /^Stop queued message \(/u });
 		const names = stops.map((button) => button.getAttribute("aria-label"));
@@ -372,10 +374,10 @@ export const FollowUpsQueued: Story = {
 	},
 };
 
-const WAITING_FOR_HEPH = "Heph is answering other questions. Yours starts when Heph is free.";
+const WAITING_FOR_HEPH = "Hephaestus is answering other questions. Yours starts when one finishes.";
 
 /**
- * Every Heph slot answers another question, so the developer's question waits for a free Heph. Its
+ * Every Hephaestus slot answers another question, so the developer's question waits for a free Hephaestus. Its
  * place in the conversation says so, for sighted readers and screen readers alike.
  */
 export const WaitingForAFreeHeph: Story = {
@@ -456,7 +458,7 @@ export const SentMessageStored: Story = {
 	play: async ({ canvas, userEvent }) => {
 		const row = rowOf(await canvas.findByText(NEWEST));
 		await expectViewKept(
-			canvas.getByRole("region", { name: "Conversation with Heph" }),
+			canvas.getByRole("region", { name: "Your conversation" }),
 			row,
 			async () => userEvent.click(canvas.getByRole("button", { name: "Next" })),
 			async () => expect(row).toHaveAttribute("data-message-id", STORED.id),
@@ -472,7 +474,7 @@ export const AnchoredSend: Story = {
 	render: (args) => <Transition {...args} before={ready()} after={ready({ pending: [SENDING] })} />,
 	decorators: SHORT_VIEW,
 	play: async ({ canvas, canvasElement, userEvent }) => {
-		const viewport = canvas.getByRole("region", { name: "Conversation with Heph" });
+		const viewport = canvas.getByRole("region", { name: "Your conversation" });
 		await userEvent.click(canvas.getByRole("button", { name: "Next" }));
 		const row = rowOf(await canvas.findByText(NEWEST));
 		await waitFor(async () => {
@@ -486,7 +488,7 @@ export const AnchoredSend: Story = {
 /** The steps of one send as the app's cache takes them: unsent, stored and queued, three partial answers, answered. */
 const SEND_STEPS = 6;
 
-/** Heph's words, `count` of them. */
+/** Hephaestus's words, `count` of them. */
 const wordsOf = (count: number) =>
 	Array.from({ length: count }, (_, index) => `word${index}`).join(" ");
 
@@ -583,7 +585,7 @@ export const SentQuestionAnchorsEveryTime: Story = {
 	render: (args) => <SendsInARow {...args} />,
 	decorators: SHORT_VIEW,
 	play: async ({ canvas }) => {
-		const viewport = canvas.getByRole("region", { name: "Conversation with Heph" });
+		const viewport = canvas.getByRole("region", { name: "Your conversation" });
 		await canvas.findByText("And my latest one?");
 		// A plain press: 120 steps of simulated pointer events would outlast the test's time limit.
 		const next = canvas.getByRole("button", { name: "Next" });
@@ -604,7 +606,7 @@ export const SentQuestionAnchorsEveryTime: Story = {
 	},
 };
 
-/** Heph's answer as it streams: three more words at each press of Next. */
+/** Hephaestus's answer as it streams: three more words at each press of Next. */
 function Streams(props: HephTimelineProps) {
 	const [words, setWords] = useState(1);
 	const text = Array.from({ length: words * 3 }, (_, index) => `word${index}`).join(" ");
@@ -627,14 +629,14 @@ function Streams(props: HephTimelineProps) {
 }
 
 /**
- * The view never follows the stream: a reader further up keeps their place while Heph writes, and
+ * The view never follows the stream: a reader further up keeps their place while Hephaestus writes, and
  * Jump to latest shows until they are at the end again.
  */
 export const StreamingKeepsPlace: Story = {
 	render: (args) => <Streams {...args} />,
 	decorators: SHORT_VIEW,
 	play: async ({ canvas, userEvent }) => {
-		const viewport = canvas.getByRole("region", { name: "Conversation with Heph" });
+		const viewport = canvas.getByRole("region", { name: "Your conversation" });
 		const jump = canvas.getByRole("button", { name: "Jump to latest" });
 		await canvas.findByText("Writing…", { selector: "span" });
 		// The reader scrolls up, as a wheel does, which the scroller reads as leaving the end.
@@ -681,7 +683,7 @@ export const RemoteQuestionKeepsPlace: Story = {
 	),
 	decorators: SHORT_VIEW,
 	play: async ({ canvas, userEvent }) => {
-		const viewport = canvas.getByRole("region", { name: "Conversation with Heph" });
+		const viewport = canvas.getByRole("region", { name: "Your conversation" });
 		await canvas.findByText("And my latest one?");
 		viewport.dispatchEvent(new WheelEvent("wheel", { deltaY: -2000, bubbles: true }));
 		viewport.scrollTop = 0;
@@ -708,7 +710,7 @@ export const OpensWithoutMotion: Story = {
 	},
 	decorators: SHORT_VIEW,
 	play: async ({ canvas }) => {
-		const viewport = canvas.getByRole("region", { name: "Conversation with Heph" });
+		const viewport = canvas.getByRole("region", { name: "Your conversation" });
 		await canvas.findByText("And my latest one?");
 		await nextFrame();
 		await nextFrame();
@@ -727,8 +729,8 @@ export const OpensWithoutMotion: Story = {
 export const ComposerGrowth: Story = {
 	decorators: SHORT_VIEW,
 	play: async ({ canvas, userEvent }) => {
-		const viewport = canvas.getByRole("region", { name: "Conversation with Heph" });
-		const composer = canvas.getByRole("textbox", { name: "Message Heph" });
+		const viewport = canvas.getByRole("region", { name: "Your conversation" });
+		const composer = canvas.getByRole("textbox", { name: "Message Hephaestus" });
 		const atEnd = () => viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight;
 		// The scroller keeps the view hidden until it has placed the opening view; jump only after that.
 		await waitFor(async () => {
@@ -752,7 +754,7 @@ export const ComposerGrowth: Story = {
 	},
 };
 
-/** A follow-up sent while Heph answers is stored and queued in place, and the view stays. */
+/** A follow-up sent while Hephaestus answers is stored and queued in place, and the view stays. */
 export const FollowUpQueued: Story = {
 	render: (args) => (
 		<Transition
@@ -772,16 +774,16 @@ export const FollowUpQueued: Story = {
 	play: async ({ canvas, userEvent }) => {
 		const row = rowOf(await canvas.findByText(NEWEST));
 		await expectViewKept(
-			canvas.getByRole("region", { name: "Conversation with Heph" }),
+			canvas.getByRole("region", { name: "Your conversation" }),
 			row,
 			async () => userEvent.click(canvas.getByRole("button", { name: "Next" })),
-			async () => expect(row).toHaveTextContent("Queued. Heph answers this next."),
+			async () => expect(row).toHaveTextContent("Queued. This is answered next."),
 			row,
 		);
 	},
 };
 
-/** Heph's answer in progress becomes the stored answer in place as the turn ends, and the view stays. */
+/** Hephaestus's answer in progress becomes the stored answer in place as the turn ends, and the view stays. */
 export const AnswerStored: Story = {
 	render: (args) => (
 		<Transition
@@ -795,7 +797,7 @@ export const AnswerStored: Story = {
 		// The live answer's words are separate elements while they fade in; its status line names the row.
 		const row = rowOf(await canvas.findByText("Writing…", { selector: "span" }));
 		await expectViewKept(
-			canvas.getByRole("region", { name: "Conversation with Heph" }),
+			canvas.getByRole("region", { name: "Your conversation" }),
 			row,
 			async () => userEvent.click(canvas.getByRole("button", { name: "Next" })),
 			async () => expect(row).toHaveTextContent("What made you pick the time-based cache?"),
@@ -804,7 +806,7 @@ export const AnswerStored: Story = {
 	},
 };
 
-/** Heph could not answer. The question stays, with the reason and Try again. */
+/** Hephaestus could not answer. The question stays, with the reason and Try again. */
 export const Failed: Story = {
 	args: {
 		state: ready({
@@ -812,7 +814,7 @@ export const Failed: Story = {
 		}),
 	},
 	play: async ({ args, canvas, userEvent }) => {
-		await expect(canvas.getByText("Heph took too long to answer.")).toBeVisible();
+		await expect(canvas.getByText("Hephaestus took too long to answer.")).toBeVisible();
 		const tryAgain = canvas.getByRole("button", { name: /^Try again \(/u });
 		await expectTargetSize(tryAgain);
 		await userEvent.click(tryAgain);
@@ -821,7 +823,7 @@ export const Failed: Story = {
 };
 
 /**
- * The developer cannot ask Heph now, such as when their AI choice keeps Heph from answering. They
+ * The developer cannot ask Hephaestus now, such as when their AI choice keeps Hephaestus from answering. They
  * still read, vote and delete, but no message offers Reply in thread or Try again, which would
  * only be refused, and the composer is gone.
  */
@@ -832,7 +834,7 @@ export const CannotAsk: Story = {
 		composer: undefined,
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText("Heph took too long to answer.")).toBeVisible();
+		await expect(canvas.getByText("Hephaestus took too long to answer.")).toBeVisible();
 		await expect(canvas.queryByRole("button", { name: /^Try again \(/u })).toBeNull();
 		await expect(canvas.queryByRole("button", { name: /^Reply in thread \(/u })).toBeNull();
 		await expect(
@@ -842,8 +844,8 @@ export const CannotAsk: Story = {
 };
 
 /**
- * Heph failed after it wrote part of an answer, such as when the AI model stopped responding. The
- * reason sits under what Heph wrote, and Try again asks the question again.
+ * Hephaestus failed after it wrote part of an answer, such as when the AI model stopped responding. The
+ * reason sits under what Hephaestus wrote, and Try again asks the question again.
  */
 export const FailedAfterPartOfAnAnswer: Story = {
 	args: {
@@ -865,7 +867,7 @@ export const FailedAfterPartOfAnAnswer: Story = {
 };
 
 /**
- * Heph answered a question asked in Slack, but the answer did not fully reach Slack. The full answer
+ * Hephaestus answered a question asked in Slack, but the answer did not fully reach Slack. The full answer
  * is here, and the line under it says so, so the developer does not wait for the rest in Slack.
  */
 export const NotFullyDeliveredToSlack: Story = {
@@ -928,7 +930,7 @@ export const LoadsEarlier: Story = {
 	render: (args) => <Paged {...args} />,
 	decorators: SHORT_VIEW,
 	play: async ({ canvas }) => {
-		const viewport = canvas.getByRole("region", { name: "Conversation with Heph" });
+		const viewport = canvas.getByRole("region", { name: "Your conversation" });
 		const oldest = await canvas.findByText(QUESTION.text);
 		await waitFor(async () => {
 			await expect(viewport.scrollTop).toBeGreaterThan(0);
@@ -981,7 +983,7 @@ export const LinkedMessage: Story = {
 	render: (args) => <ColdLoad {...args} />,
 	play: async ({ canvas }) => {
 		const linked = rowOf(await canvas.findByText("The message the link points to"));
-		const viewport = canvas.getByRole("region", { name: "Conversation with Heph" });
+		const viewport = canvas.getByRole("region", { name: "Your conversation" });
 		const offset = () => linked.getBoundingClientRect().top - viewport.getBoundingClientRect().top;
 		await waitFor(async () => {
 			await expect(Math.abs(offset())).toBeLessThan(2);
@@ -1035,7 +1037,7 @@ export const DeleteMessage: Story = {
 		const dialog = await screen.findByRole("alertdialog", { name: "Delete this message?" });
 		await expectSettledVisible(dialog);
 		await expect(dialog).toHaveAccessibleDescription(
-			"Heph forgets it. If Heph has not answered it yet, Heph does not answer it. The replies in its thread stay. It and Heph's answer stay in Slack. You cannot undo this.",
+			"Hephaestus forgets it. If it has not answered yet, it does not answer. The replies in its thread stay. It and Hephaestus's answer stay in Slack. You cannot undo this.",
 		);
 		await userEvent.click(within(dialog).getByRole("button", { name: "Delete message" }));
 		await expect(args.actions?.onDelete).toHaveBeenCalledWith(SLACK_QUESTION);
@@ -1060,15 +1062,15 @@ export const Digest: Story = {
 };
 
 /**
- * As the mentor page nests the conversation under its `h1` and `h2`: Heph's headings and a digest's
+ * As the mentor page nests the conversation under its `h1` and `h2`: Hephaestus's headings and a digest's
  * sections are one level below, so a screen reader's list of headings skips none.
  */
 export const UnderPageHeadings: Story = {
 	args: { state: ready({ entries: [...CONVERSATION, DIGEST] }) },
 	render: (args) => (
 		<div className="flex h-full flex-col">
-			<h1 className="sr-only">Heph</h1>
-			<h2 className="sr-only">Conversation with Heph</h2>
+			<h1 className="sr-only">Hephaestus</h1>
+			<h2 className="sr-only">Your conversation</h2>
 			<HephTimeline {...args} />
 		</div>
 	),
@@ -1077,8 +1079,8 @@ export const UnderPageHeadings: Story = {
 			.getAllByRole("heading")
 			.map((heading) => `${heading.tagName.toLowerCase()} ${heading.textContent}`);
 		await expect(headings).toStrictEqual([
-			"h1 Heph",
-			"h2 Conversation with Heph",
+			"h1 Hephaestus",
+			"h2 Your conversation",
 			"h3 Why",
 			"h3 Decision",
 			"h3 Feedback that reached you",

@@ -17,7 +17,7 @@ import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * Adds one proxied call's token usage to the Heph turn attempt that made it — the mentor's counterpart to
+ * Adds one proxied call's token usage to the conversation turn attempt that made it — the mentor's counterpart to
  * {@link ProxyUsageAccumulator}. Runs in its own {@code REQUIRES_NEW} transaction: the proxy servlet thread has no
  * ambient transaction, and the accounting write must commit independently of the passthrough.
  *
@@ -73,7 +73,7 @@ public class MentorTurnUsageAccumulator {
                 recordDropped(turnId, settled);
             }
         } catch (RuntimeException e) {
-            log.warn("Lost proxy usage accounting for Heph turn {} — this call may go unbilled", turnId, e);
+            log.warn("Lost proxy usage accounting for conversation turn {} — this call may go unbilled", turnId, e);
             meterRegistry.counter(AgentMetrics.LLM_PROXY_USAGE_MENTOR_FAILURE).increment();
         }
     }
@@ -81,7 +81,7 @@ public class MentorTurnUsageAccumulator {
     /** The call has no attempt to land on; creating one for it would bring back what an erasure removed. */
     private void recordDropped(UUID turnId, CallSettlement reason) {
         log.warn(
-                "Dropping proxy usage of Heph turn {} with no attempt measurement to settle on ({}); this call goes"
+                "Dropping proxy usage of conversation turn {} with no attempt measurement to settle on ({}); this call goes"
                         + " unbilled",
                 turnId,
                 reason);

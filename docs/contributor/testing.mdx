@@ -308,12 +308,12 @@ The annotations use `Execution(SAME_THREAD)`. Gradle also runs one test JVM at a
    Do not reuse one with a misleading name.
 2. Put the test under `server/application/src/test/java/.../live/`. The directory marker keeps live and non-live tests in different code-review buckets.
 3. Read credentials from `LiveLlmCredentials.fromEnv()` or the provider helpers. Never inline secrets or commit local credential files.
-4. Per-test wall-clock timeouts: 90s is reasonable for a single Heph turn on a warm host. The first turn also
-   starts the Heph host. 5 minutes for a full practice run.
+4. Per-test wall-clock timeouts: 90s is reasonable for a single conversation turn on a warm host. The first turn also
+   starts the conversation host. 5 minutes for a full practice run.
 
-### Heph turn live test
+### Conversation turn live test
 
-`HephTurnLiveTest` runs one Heph turn through the real path: the ask endpoint, the worker's claim, the Heph host
+`HephTurnLiveTest` runs one conversation turn through the real path: the ask endpoint, the worker's claim, the conversation host
 container, the LLM proxy and a model. It needs Docker and the agent image built from `docker/agents/pi`:
 
 ```bash
@@ -327,9 +327,9 @@ The host reaches the test's sandbox gateway at `host.docker.internal`. The gatew
 `SANDBOX_API_PORT` names one. If a host firewall admits containers to one port only, set `SANDBOX_API_PORT` to
 that port.
 
-### Heph voice eval
+### Hephaestus voice eval
 
-`server/application/src/test/resources/agent/heph-voice.live.ts` sends nine questions to a real model through the Heph host.
+`server/application/src/test/resources/agent/heph-voice.live.ts` sends nine questions to a real model through the conversation host.
 The eval composes the prompt as `HephHostSpec` does, from `system.md` and the writing guide, and a fake worker serves a small context folder.
 Each case asserts what an answer must never do and prints one line: `eval <case> outputTokens=<n> words=<n> fieldsRead=<true|false>`.
 

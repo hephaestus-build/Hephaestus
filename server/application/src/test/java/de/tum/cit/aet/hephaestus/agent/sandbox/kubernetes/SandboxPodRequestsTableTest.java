@@ -58,7 +58,7 @@ class SandboxPodRequestsTableTest extends BaseUnitTest {
     }
 
     @Test
-    @DisplayName("a Heph host counts what the table says")
+    @DisplayName("a Hephaestus host counts what the table says")
     void shouldMatchTheTableWhenTheWorkerBuildsAHephHostPod() throws IOException {
         assertCounts(
                 "hephHost",
@@ -93,7 +93,7 @@ class SandboxPodRequestsTableTest extends BaseUnitTest {
     }
 
     @Test
-    @DisplayName("the turn sandbox pool and the automatic Heph turns are the worker's")
+    @DisplayName("the turn sandbox pool and the automatic conversation turns are the worker's")
     void shouldMatchTheWorkerWhenTheTableCountsPooledSandboxesAndAutomaticTurns() throws IOException {
         JsonNode table = table();
 

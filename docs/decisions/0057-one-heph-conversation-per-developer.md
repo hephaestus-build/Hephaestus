@@ -219,7 +219,7 @@ The server role never talks to the host.
 
 The worker pings the WebSocket.
 A host that stops answering the pings is gone, and the worker replaces it.
-[Heph runtime](../contributor/unified-pi-runtime.mdx#the-heph-host) gives the lifecycle of the host.
+[Heph runtime](../contributor/unified-pi-runtime.mdx#the-conversation-host) gives the lifecycle of the host.
 
 Nothing about a conversation outlives a turn in the host.
 Any host can run the next turn, because the turn rebuilds its session from rows.

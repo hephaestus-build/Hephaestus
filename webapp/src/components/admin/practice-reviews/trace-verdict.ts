@@ -106,8 +106,8 @@ const READY_FOR: Record<
 		phrase: "ready for their practice pages",
 	},
 	CONVERSATION: {
-		end: "it is ready for the next conversation with Heph",
-		sentence: "it is ready for their next conversation with Heph",
+		end: "it is ready for the next conversation with Hephaestus",
+		sentence: "it is ready for their next conversation with Hephaestus",
 		phrase: "ready for a conversation",
 	},
 };

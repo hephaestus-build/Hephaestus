@@ -772,7 +772,9 @@ describe("checking delivery of an unconfirmed comment", () => {
 		await userEvent.click(screen.getByRole("button", { name: "Check delivery" }));
 		await screen.findByText("Checking whether the comment appeared");
 		await screen.findByText("This posts nothing.");
-		await screen.findByText(/Heph is confirming whether a comment it began writing appeared/u);
+		await screen.findByText(
+			/Hephaestus is confirming whether a comment it began writing appeared/u,
+		);
 		expect(screen.queryByRole("button", { name: "Check delivery" })).toBeNull();
 
 		// Landed only once the sheet shows the check queued: nothing else re-reads it from here, so

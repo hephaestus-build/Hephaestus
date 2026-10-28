@@ -1,8 +1,8 @@
 #### 🔴 Remove the hand-set sandbox quota values
 
-The chart now derives the sandbox quotas from `worker.replicas`, `worker.reviews` and `worker.conversationTurns`: one quota for review sandboxes and one for the Heph host and turn sandboxes. It no longer reads `worker.sandbox.quota.pods`, `worker.sandbox.quota.cpu` or `worker.sandbox.quota.memory`, and its values schema refuses them.
+The chart now derives the sandbox quotas from `worker.replicas`, `worker.reviews` and `worker.conversationTurns`: one quota for review sandboxes and one for the Hephaestus host and turn sandboxes. It no longer reads `worker.sandbox.quota.pods`, `worker.sandbox.quota.cpu` or `worker.sandbox.quota.memory`, and its values schema refuses them.
 
-Before you upgrade, delete these three keys from your values file. Keep `worker.sandbox.quota.enabled`. To run more reviews or Heph turns at once, raise `worker.reviews` or `worker.conversationTurns`: the quotas follow.
+Before you upgrade, delete these three keys from your values file. Keep `worker.sandbox.quota.enabled`. To run more reviews or Hephaestus turns at once, raise `worker.reviews` or `worker.conversationTurns`: the quotas follow.
 
 The quotas hold exactly what the sandboxes request, and a quota also counts a RuntimeClass's Pod overhead. If `worker.runtime.runtimeClassName` names a class with an `overhead.podFixed`, such as gVisor or Kata on some clusters, set `worker.runtime.podOverhead.cpuMillis` and `worker.runtime.podOverhead.memoryMi` to it. Otherwise the quota refuses the worker's isolation probe, and the worker starts no sandbox.
 

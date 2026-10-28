@@ -31,9 +31,9 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
 /**
- * Slack ingress of Heph: what the developer does in their DM with the app becomes a change to their Heph
+ * Slack ingress of Hephaestus: what the developer does in their DM with the app becomes a change to their Hephaestus
  * conversation. A top-level DM is a question in the main conversation; a reply in a Slack thread is a question in
- * the Heph thread on the thread's parent message.
+ * the Hephaestus thread on the thread's parent message.
  *
  * <p>A top-level question finds the developer's main conversation by the developer. A thread reply, an edit, a
  * deletion, a stop and a vote need the conversation that this exact Slack DM (team, member, channel) belongs to in the
@@ -47,7 +47,7 @@ public class SlackMentorService {
     private static final Logger log = LoggerFactory.getLogger(SlackMentorService.class);
 
     static final String NOT_LINKED =
-            "Heph cannot reply yet. Check that your Hephaestus account is active, linked to Slack, and a member of this workspace.";
+            "Hephaestus cannot reply yet. Check that your Hephaestus account is active, linked to Slack, and a member of this workspace.";
 
     private final SlackWorkspaceResolver workspaceResolver;
     private final SlackMessageService slackMessageService;
@@ -151,7 +151,7 @@ public class SlackMentorService {
             }
             MentorTurnService.Submission submission = accepted.get();
             log.info(
-                    "Accepted Slack Heph question: workspace={} conversation={} turn={} new={}",
+                    "Accepted Slack Hephaestus question: workspace={} conversation={} turn={} new={}",
                     workspaceId,
                     submission.turn().getConversationId(),
                     submission.turn().getId(),
@@ -168,7 +168,7 @@ public class SlackMentorService {
     }
 
     /**
-     * The Heph thread on the Slack thread's parent, which must be a message of this DM's conversation. Any other parent
+     * The Hephaestus thread on the Slack thread's parent, which must be a message of this DM's conversation. Any other parent
      * is refused with {@code NOT_A_THREAD_PARENT}.
      */
     private UUID thread(
@@ -191,7 +191,7 @@ public class SlackMentorService {
         });
     }
 
-    /** The developer deleted a DM: the ledger erases it and stops Heph's work on it. */
+    /** The developer deleted a DM: the ledger erases it and stops Hephaestus's work on it. */
     public void handleDelete(String teamId, String channelId, String slackUserId, String deletedTs) {
         ownMessage(teamId, channelId, slackUserId, deletedTs).ifPresent(found -> {
             if (found.entry().getKind() == MentorEntry.Kind.USER) {
@@ -201,8 +201,8 @@ public class SlackMentorService {
     }
 
     /**
-     * The developer pressed Stop on Heph's agent session in a Slack thread of their DM ({@code agent_session_stopped}).
-     * Stops the Slack turn that runs in the Heph thread on that Slack thread when the stop came after its running
+     * The developer pressed Stop on Hephaestus's agent session in a Slack thread of their DM ({@code agent_session_stopped}).
+     * Stops the Slack turn that runs in the Hephaestus thread on that Slack thread when the stop came after its running
      * attempt started, and, when Slack names streams, one of them is the stream that the question records. Waiting
      * follow-ups and the main conversation stay as they are, and a thread is never opened. Calls no Slack API: the
      * projector of the turn ends its stream and the session's status once the turn ends.
@@ -242,7 +242,9 @@ public class SlackMentorService {
                                         running -> stops(workspaceId, running, eventTs, streams))))
                 .flatMap(turn -> turn);
         stopped.ifPresent(turn -> log.info(
-                "Stopped Slack Heph turn from its Slack session: workspace={} turn={}", workspaceId, turn.getId()));
+                "Stopped Slack conversation turn from its Slack session: workspace={} turn={}",
+                workspaceId,
+                turn.getId()));
     }
 
     /** Whether a session stop names this running attempt of a Slack turn. */
@@ -260,7 +262,7 @@ public class SlackMentorService {
         return stream != null && streams.contains(stream);
     }
 
-    /** The developer pressed Helpful or Not helpful under one of Heph's answers. */
+    /** The developer pressed Helpful or Not helpful under one of Hephaestus's answers. */
     public void handleFeedback(String teamId, String channelId, String slackUserId, String value) {
         Optional<SlackMentorPosts.Feedback> feedback = SlackMentorPosts.feedback(value);
         Optional<Long> workspaceOpt = workspaceResolver.resolveWorkspaceId(teamId);
@@ -317,7 +319,7 @@ public class SlackMentorService {
             slackMessageService.postMessage(
                     workspaceId, channelId, threadTs, blocks, text, SlackMentorPosts.noticeMetadata());
         } catch (SlackSendException e) {
-            log.warn("Slack reply to a Heph DM failed: workspace={}, error={}", workspaceId, e.slackError());
+            log.warn("Slack reply to a Hephaestus DM failed: workspace={}, error={}", workspaceId, e.slackError());
         }
     }
 }

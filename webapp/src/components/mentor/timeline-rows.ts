@@ -178,7 +178,7 @@ export function timelineRows({ entries, pending, turns }: TimelineInput): Timeli
 			messageId: entry.id,
 			...day,
 			entry,
-			grouped: continues(previous, speaker),
+			grouped: entry.kind === "USER" && continues(previous, speaker),
 			...(entry.kind === "USER" && queuedTurn
 				? { queued: { turn: queuedTurn, next: queued === 0 } }
 				: {}),

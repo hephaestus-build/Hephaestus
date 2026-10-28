@@ -28,7 +28,7 @@ it("says a queued turn waits only once it has waited a second", () => {
 	act(() => {
 		vi.advanceTimersByTime(1);
 	});
-	expect(result.current).toBe("Waiting for Heph to start…");
+	expect(result.current).toBe("Waiting to start…");
 
 	rerender({
 		status: "RUNNING",
@@ -41,17 +41,19 @@ it("says a queued turn waits only once it has waited a second", () => {
 	expect(result.current).toBe("Writing…");
 });
 
-it("says why a queued turn waits only when the server says it waits for a free Heph", () => {
+it("says why a queued turn waits only when the server says it waits for a free Hephaestus", () => {
 	const { result, rerender } = renderHook((turn: ShownTurn) => useTurnStatusLabel(turn), {
 		initialProps: { status: "QUEUED", surface: "APP", waitingFor: "FREE_HEPH" },
 	});
 	act(() => {
 		vi.advanceTimersByTime(1000);
 	});
-	expect(result.current).toBe("Heph is answering other questions. Yours starts when Heph is free.");
+	expect(result.current).toBe(
+		"Hephaestus is answering other questions. Yours starts when one finishes.",
+	);
 
 	rerender({ status: "QUEUED", surface: "APP" });
-	expect(result.current).toBe("Waiting for Heph to start…");
+	expect(result.current).toBe("Waiting to start…");
 });
 
 it("never shows the wait for a turn that starts within the second", () => {

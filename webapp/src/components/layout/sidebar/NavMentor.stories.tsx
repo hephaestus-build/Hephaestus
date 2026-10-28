@@ -5,7 +5,7 @@ import { NavMentor } from "./NavMentor";
 import { withSidebarFrame } from "./sidebar-story-frame";
 
 /**
- * The Conversations group of the sidebar: one link to the Heph conversation. Shows a chevron on hover.
+ * The Conversations group of the sidebar: one link to the Hephaestus conversation. Shows a chevron on hover.
  */
 const meta = {
 	component: NavMentor,
@@ -14,7 +14,7 @@ const meta = {
 		docs: {
 			description: {
 				component:
-					"The Conversations group of the sidebar, with one link to the Heph conversation. A chevron appears on hover.",
+					"The Conversations group of the sidebar, with one link to the Hephaestus conversation. A chevron appears on hover.",
 			},
 		},
 	},
@@ -39,7 +39,11 @@ type Story = StoryObj<typeof meta>;
  */
 export const Default: Story = {
 	play: async ({ canvas }) => {
-		const link = canvas.getByRole("link", { name: /Heph/u });
+		const link = canvas.getByRole("link", { name: /Hephaestus/u });
+		const label = canvas.getByText("Ask Hephaestus", { exact: true });
+		const text = document.createRange();
+		text.selectNodeContents(label);
+		await expect([...text.getClientRects()]).toHaveLength(1);
 		const mark = link.querySelector("svg");
 		await expect(mark).not.toBeNull();
 		await expect(mark?.getBoundingClientRect().width).toBe(28);
@@ -53,7 +57,7 @@ export const WithHoverState: Story = {
 	parameters: {
 		docs: {
 			description: {
-				story: "Hover over the Heph link to see the chevron.",
+				story: "Hover over the Hephaestus link to see the chevron.",
 			},
 		},
 	},

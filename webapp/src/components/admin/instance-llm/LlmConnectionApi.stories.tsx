@@ -25,7 +25,9 @@ type Story = StoryObj<typeof meta>;
 export const ChatApi: Story = {
 	play: async ({ canvas, canvasElement }) => {
 		await expect(canvas.getByText("Responses API")).toBeVisible();
-		await expect(canvas.getByText(", for Practice reviews and Heph")).toHaveClass("sr-only");
+		await expect(canvas.getByText(", for Practice reviews and Conversations")).toHaveClass(
+			"sr-only",
+		);
 		await expect(canvasElement.querySelectorAll("[aria-hidden] svg")).toHaveLength(2);
 	},
 };

@@ -154,7 +154,7 @@ describe("timelineRows", () => {
 		expect(shape(rows)).toStrictEqual(["day Thu Oct 08 2026", "e1", "live t1"]);
 	});
 
-	it("keeps one key per message from sent to stored, and from Heph's live answer to the stored one", () => {
+	it("keeps one key per message from sent to stored, and from Hephaestus's live answer to the stored one", () => {
 		const sending = {
 			requestId: "r2",
 			text: "And my latest one?",
@@ -227,7 +227,7 @@ describe("timelineRows", () => {
 			"day Thu Oct 08 2026",
 			"e1",
 			"e2",
-			"e3 grouped not fully in Slack",
+			"e3 not fully in Slack",
 			"e4",
 			"e5",
 		]);

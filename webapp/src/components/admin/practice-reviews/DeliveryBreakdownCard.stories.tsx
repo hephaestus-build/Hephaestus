@@ -88,7 +88,7 @@ export const Default: Story = {
 	play: async ({ canvas, userEvent }) => {
 		await expect(rowsOf(canvas, "Delivered by where it appeared")).toEqual([
 			"On GitHub: 8",
-			"With Heph in Slack: 2",
+			"In conversation in Slack: 2",
 			"On the practice page: 4",
 		]);
 		await expect(rowsOf(canvas, "Withheld by reason")).toEqual([

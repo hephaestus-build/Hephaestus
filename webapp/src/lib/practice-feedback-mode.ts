@@ -22,7 +22,7 @@ export const FEEDBACK_MODE_LABELS: Record<FeedbackMode, string> = {
 export const FEEDBACK_MODE_DESCRIPTIONS: Record<FeedbackMode, string> = {
 	OFF: "Off keeps observations and stops feedback on the work, on practice pages, and in conversation.",
 	APPROVE_FIRST:
-		"Feedback on the work waits for an admin to approve it. Practice pages and Heph show feedback without waiting.",
+		"Feedback on the work waits for an admin to approve it. Feedback on practice pages and in conversations needs no approval.",
 	AUTOMATIC: "Feedback is sent without waiting for approval.",
 };
 

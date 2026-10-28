@@ -38,9 +38,9 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 
 /**
- * The Slack note that a weekly digest is ready: one top-level message in the developer's DM with Heph, posted through
+ * The Slack note that a weekly digest is ready: one top-level message in the developer's DM with Hephaestus, posted through
  * the intent, effect and outcome path ({@link SlackMentorPoster}). It names the week and the workspace and nothing
- * else (see the {@code agent.mentor.weeklydigest} package). A reply in its thread is an ordinary Heph thread on the
+ * else (see the {@code agent.mentor.weeklydigest} package). A reply in its thread is an ordinary Hephaestus thread on the
  * digest entry.
  */
 @Component
@@ -211,7 +211,7 @@ public class SlackWeeklyDigestPointer implements WeeklyDigestTransport {
                 section(s -> s.text(markdownText("*Your weekly digest is ready*\n" + note.weekDays() + " · "
                         + escape(workspace.displayName())))),
                 actions(a -> a.elements(buttons)),
-                context(c -> c.elements(List.of(markdownText("Reply in this thread to go through it with Heph.")))));
+                context(c -> c.elements(List.of(markdownText("Reply in this thread to go through it.")))));
     }
 
     /** Slack reads {@code &}, {@code <} and {@code >} in mrkdwn as markup. */

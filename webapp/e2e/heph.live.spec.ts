@@ -10,8 +10,8 @@ import { completeTransparencyNotice } from "../../scripts/lib/research-consent.t
 
 import { expect, loginAsDevAdmin, test } from "./fixtures";
 
-// Heph answering for real: a server with the worker role (the `e2e` profile, not `playwright`), Docker for the
-// Heph host, and an OpenAI-compatible model. The model is read and provisioned by the same code as
+// Hephaestus answering for real: a server with the worker role (the `e2e` profile, not `playwright`), Docker for the
+// Hephaestus host, and an OpenAI-compatible model. The model is read and provisioned by the same code as
 // `scripts/e2e-setup.ts`, so the variables and defaults are the same. The key goes to the server in a
 // request body and nowhere else.
 const SERVER_URL = process.env.E2E_SERVER_URL ?? "http://localhost:8080";
@@ -24,7 +24,7 @@ const configured = ["E2E_LLM_BASE_URL", "E2E_LLM_KEY", "E2E_MODEL"].every(
 
 test.skip(
 	!configured,
-	"Set E2E_LLM_BASE_URL, E2E_LLM_KEY and E2E_MODEL to run Heph against a real model",
+	"Set E2E_LLM_BASE_URL, E2E_LLM_KEY and E2E_MODEL to run Hephaestus against a real model",
 );
 test.describe.configure({ mode: "serial", timeout: 2 * ANSWER_TIMEOUT });
 
@@ -96,21 +96,21 @@ test.afterAll(async () => {
 
 test.beforeEach(async ({ page }) => {
 	await loginAsDevAdmin(page);
-	await page.goto("/w/e2e/mentor");
-	await expect(page.getByRole("textbox", { name: "Message Heph" })).toBeVisible();
+	await page.goto("/w/e2e/conversation");
+	await expect(page.getByRole("textbox", { name: "Message Hephaestus" })).toBeVisible();
 });
 
-test("Heph answers a question and then a reply in its thread", async ({ page }) => {
-	const conversation = page.getByRole("region", { name: "Conversation with Heph" });
+test("Hephaestus answers a question and then a reply in its thread", async ({ page }) => {
+	const conversation = page.getByRole("region", { name: "Your conversation" });
 	const answers = conversation.getByRole("button", { name: /^Helpful \(/u });
 	// The seeded exchange has an answer: count only once the conversation has loaded.
 	await expect(answers.first()).toBeAttached();
 	const before = await answers.count();
 	const question = `In one sentence, why do small pull requests help reviewers? ${crypto.randomUUID().slice(0, 8)}`;
-	await page.getByRole("textbox", { name: "Message Heph" }).fill(question);
+	await page.getByRole("textbox", { name: "Message Hephaestus" }).fill(question);
 	await page.getByRole("button", { name: "Send message" }).click();
 	await expect(answers).toHaveCount(before + 1, { timeout: ANSWER_TIMEOUT });
-	await expect(page.getByRole("button", { name: "Stop Heph", exact: true })).toBeHidden();
+	await expect(page.getByRole("button", { name: "Stop answer", exact: true })).toBeHidden();
 
 	const asked = conversation.locator("[data-message-id]").filter({ hasText: question });
 	await asked.hover();
@@ -123,16 +123,16 @@ test("Heph answers a question and then a reply in its thread", async ({ page }) 
 	});
 });
 
-test("a developer stops Heph while it answers", async ({ page }) => {
+test("a developer stops Hephaestus while it answers", async ({ page }) => {
 	const question = `Write a 400-word essay about code review. ${crypto.randomUUID().slice(0, 8)}`;
-	await page.getByRole("textbox", { name: "Message Heph" }).fill(question);
+	await page.getByRole("textbox", { name: "Message Hephaestus" }).fill(question);
 	await page.getByRole("button", { name: "Send message" }).click();
-	const stop = page.getByRole("button", { name: "Stop Heph", exact: true });
+	const stop = page.getByRole("button", { name: "Stop answer", exact: true });
 	await expect(stop).toBeVisible();
 	await stop.click();
 	// The conversation outlives the test, so the state is read on this question alone.
 	const asked = page
-		.getByRole("region", { name: "Conversation with Heph" })
+		.getByRole("region", { name: "Your conversation" })
 		.locator("[data-message-id]")
 		.filter({ hasText: question });
 	await expect(asked.getByText("Stopped", { exact: true })).toBeVisible({

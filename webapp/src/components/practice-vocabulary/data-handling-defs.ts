@@ -120,7 +120,7 @@ export type MemberAiChoiceDimension = (typeof MEMBER_AI_CHOICE_DIMENSIONS)[numbe
 export interface MemberAiChoiceFact {
 	tone: "pro" | "caveat" | "con" | "none";
 	text: string;
-	/** The words for one workspace that has no Heph model ready, where `text` would promise Heph. */
+	/** The words for one workspace that has no conversation model ready, where `text` would promise Hephaestus. */
 	withoutHeph?: string;
 }
 
@@ -138,7 +138,7 @@ export const MEMBER_AI_CHOICE_DEFS: Record<MemberAiChoice, MemberAiChoiceDef> = 
 		facts: {
 			"AI help": {
 				tone: "pro",
-				text: "Feedback and Heph",
+				text: "Feedback and conversations",
 				withoutHeph: "Practice feedback where set up",
 			},
 			Models: { tone: "pro", text: "Only in-house models" },
@@ -154,7 +154,7 @@ export const MEMBER_AI_CHOICE_DEFS: Record<MemberAiChoice, MemberAiChoiceDef> = 
 		facts: {
 			"AI help": {
 				tone: "pro",
-				text: "Feedback and Heph",
+				text: "Feedback and conversations",
 				withoutHeph: "Practice feedback where set up",
 			},
 			Models: { tone: "pro", text: "In-house and cloud models" },

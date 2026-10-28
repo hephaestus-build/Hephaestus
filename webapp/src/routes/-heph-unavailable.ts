@@ -12,8 +12,8 @@ function reloadPage() {
 }
 
 /**
- * Says that Heph is missing from the page and how to get it back. It stays until the panel renders
- * again, and the reader cannot close it: closed, nothing would say where Heph went.
+ * Says that Hephaestus is missing from the page and how to get it back. It stays until the panel renders
+ * again, and the reader cannot close it: closed, nothing would say where Hephaestus went.
  *
  * `retry` is for the first failure of a loaded panel. Without it, as after a retry that failed too or
  * for panel code that did not load, the way back is a page load.
@@ -21,15 +21,18 @@ function reloadPage() {
 export function showHephUnavailable({ retry, again }: { retry?: () => void; again: boolean }) {
 	toast.dismiss(idOf(failures));
 	failures += 1;
-	toast.error(again ? "Heph still could not be shown." : "We could not show Heph.", {
-		id: idOf(failures),
-		duration: Number.POSITIVE_INFINITY,
-		dismissible: false,
-		action:
-			retry === undefined
-				? { label: "Reload page", onClick: reloadPage }
-				: { label: "Retry", onClick: retry },
-	});
+	toast.error(
+		again ? "Ask Hephaestus still could not open." : "We could not open Ask Hephaestus.",
+		{
+			id: idOf(failures),
+			duration: Number.POSITIVE_INFINITY,
+			dismissible: false,
+			action:
+				retry === undefined
+					? { label: "Reload page", onClick: reloadPage }
+					: { label: "Retry", onClick: retry },
+		},
+	);
 }
 
 export function dismissHephUnavailable() {

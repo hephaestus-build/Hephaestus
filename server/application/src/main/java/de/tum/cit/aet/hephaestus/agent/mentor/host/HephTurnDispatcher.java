@@ -41,7 +41,7 @@ import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
 
 /**
- * Runs this worker's share of Heph turns on its Heph host: claims turns while fewer than its capacity run here, sends
+ * Runs this worker's share of conversation turns on its Hephaestus host: claims turns while fewer than its capacity run here, sends
  * each attempt to the host, renews its lease on the {@code tick} after a third of it passed, and ends a turn itself
  * when its host does not within {@code STOP_GRACE} of a developer or deadline stop. Every command names the attempt,
  * so a later attempt of the same turn is a different command target. A claimed turn that cannot start fails, and
@@ -52,10 +52,10 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
 
     private static final Logger log = LoggerFactory.getLogger(HephTurnDispatcher.class);
 
-    static final String TOOK_TOO_LONG = "Heph took too long to reply and stopped. Try again.";
-    static final String COULD_NOT_FINISH = "Heph could not finish this reply. Try again.";
+    static final String TOOK_TOO_LONG = "Hephaestus took too long to reply and stopped. Try again.";
+    static final String COULD_NOT_FINISH = "Hephaestus could not finish this reply. Try again.";
     static final String MODEL_STOPPED_ANSWERING =
-            "Heph's AI model stopped responding, so Heph could not finish this reply. Try again in a moment.";
+            "Hephaestus's AI model stopped responding, so Hephaestus could not finish this reply. Try again in a moment.";
 
     /**
      * The phase of the worker drain: turns finish before the gateway the host writes through closes, together with
@@ -130,13 +130,13 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
         this.drainTimeout = drainTimeout;
         host.onLost(this::hostLost);
         Gauge.builder(AgentMetrics.MENTOR_HOST_TURNS_ACTIVE, running, Map::size)
-                .description("Heph turns this worker's host runs")
+                .description("conversation turns this worker's host runs")
                 .register(meters);
         Gauge.builder(AgentMetrics.MENTOR_HOST_READY, host, h -> h.isReady() ? 1.0 : 0.0)
-                .description("1 while this worker's Heph host has its command channel open, 0 otherwise")
+                .description("1 while this worker's Hephaestus host has its command channel open, 0 otherwise")
                 .register(meters);
         this.claimFailures = Counter.builder(AgentMetrics.MENTOR_TURN_CLAIM_FAILURE)
-                .description("Heph turns this worker could not claim or start because of an error")
+                .description("conversation turns this worker could not claim or start because of an error")
                 .register(meters);
     }
 
@@ -208,7 +208,7 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
             try {
                 drain();
             } catch (RuntimeException e) {
-                log.warn("Heph drain failed: {}", e.getClass().getSimpleName());
+                log.warn("Hephaestus drain failed: {}", e.getClass().getSimpleName());
             } finally {
                 callback.run();
             }
@@ -250,7 +250,7 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
         }
         if (!running.isEmpty()) {
             log.warn(
-                    "{} Heph turns still ran when this worker stopped; when their leases expire, a first attempt is"
+                    "{} conversation turns still ran when this worker stopped; when their leases expire, a first attempt is"
                             + " queued once more and a second fails",
                     running.size());
         }
@@ -301,7 +301,7 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
                 }
             } catch (RuntimeException e) {
                 log.debug(
-                        "Could not read Heph turn {} after reconnecting: {}",
+                        "Could not read conversation turn {} after reconnecting: {}",
                         turn.turnId,
                         e.getClass().getSimpleName());
             }
@@ -381,7 +381,10 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
                     started = starter.startNext(workerId, lease);
                 } catch (RuntimeException e) {
                     claimFailures.increment();
-                    log.warn("Could not claim a Heph turn: {}", e.getClass().getSimpleName(), e);
+                    log.warn(
+                            "Could not claim a conversation turn: {}",
+                            e.getClass().getSimpleName(),
+                            e);
                     break;
                 }
                 if (started.isEmpty()) {
@@ -392,7 +395,7 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
                 } catch (RuntimeException e) {
                     claimFailures.increment();
                     log.warn(
-                            "Could not start Heph turn {}: {}",
+                            "Could not start conversation turn {}: {}",
                             started.get().turn().getId(),
                             e.getClass().getSimpleName(),
                             e);
@@ -415,7 +418,7 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
             return host.sandboxReady() && (host.isReady() || host.awaitReady(HOST_READY_TIMEOUT));
         } catch (RuntimeException failure) {
             claimFailures.increment();
-            log.warn("Could not prepare the Heph host: {}", failure.getClass().getSimpleName(), failure);
+            log.warn("Could not prepare the Hephaestus host: {}", failure.getClass().getSimpleName(), failure);
             return false;
         }
     }
@@ -442,11 +445,11 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
             boolean retry = running.get(attempt.turnId) == attempt && left.isPositive();
             if (retry)
                 log.warn(
-                        "Heph turn {} attempt {} waits for a fresh Heph host: the last one did not start",
+                        "conversation turn {} attempt {} waits for a fresh Hephaestus host: the last one did not start",
                         attempt.turnId,
                         attempt.attempt);
             if (!retry || !host.awaitReady(left)) {
-                finish(attempt, MentorTurn.Status.FAILED, COULD_NOT_START, "its Heph host did not start, twice");
+                finish(attempt, MentorTurn.Status.FAILED, COULD_NOT_START, "its Hephaestus host did not start, twice");
                 return;
             }
         }
@@ -504,7 +507,7 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
         } catch (IOException e) {
             // The host is gone; the turn's lease expires and the reaper takes the turn back.
             log.warn(
-                    "Could not reach the Heph host for turn {}: {}",
+                    "Could not reach the Hephaestus host for turn {}: {}",
                     turn.turnId,
                     e.getClass().getSimpleName());
             forget(turn);
@@ -524,7 +527,7 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
                                 turn,
                                 MentorTurn.Status.FAILED,
                                 TOOK_TOO_LONG,
-                                "its Heph host did not end it within " + stopGrace + " after its deadline");
+                                "its Hephaestus host did not end it within " + stopGrace + " after its deadline");
                     } else {
                         finish(turn, MentorTurn.Status.STOPPED, null, null);
                     }
@@ -542,7 +545,7 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
                 lost(turn);
             } catch (RuntimeException e) {
                 log.warn(
-                        "Could not keep Heph turn {} alive: {}",
+                        "Could not keep conversation turn {} alive: {}",
                         turn.turnId,
                         e.getClass().getSimpleName());
             }
@@ -555,7 +558,7 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
      */
     private void lost(Running turn) {
         if (running.remove(turn.turnId, turn)) {
-            log.info("Heph turn {} attempt {} lost its lease", turn.turnId, turn.attempt);
+            log.info("conversation turn {} attempt {} lost its lease", turn.turnId, turn.attempt);
             callsInFlight.seal(turn.turnId, turn.attempt, true);
             sandboxes.release(turn.turnId, turn.attempt);
             released();
@@ -572,7 +575,7 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
     private void finish(Running turn, MentorTurn.Status outcome, @Nullable String error, @Nullable String cause) {
         if (!callsInFlight.settle(turn.turnId, turn.attempt, true)) {
             log.warn(
-                    "Heph turn {} attempt {} ended with a model call still in flight; that call may go unbilled",
+                    "conversation turn {} attempt {} ended with a model call still in flight; that call may go unbilled",
                     turn.turnId,
                     turn.attempt);
         }
@@ -585,7 +588,7 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
                             outcome, List.of(), error, cause, callsInFlight.lastFailed(turn.turnId, turn.attempt)));
             callsInFlight.forgetFailed(turn.turnId, turn.attempt);
         } catch (MentorLeaseLostException alreadyEnded) {
-            log.debug("Heph turn {} ended before this worker ended it", turn.turnId);
+            log.debug("conversation turn {} ended before this worker ended it", turn.turnId);
             callsInFlight.forgetFailed(turn.turnId, turn.attempt);
         } finally {
             forget(turn);
@@ -597,7 +600,7 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
             finish(turn, outcome, error, cause);
         } catch (RuntimeException e) {
             log.warn(
-                    "Could not end Heph turn {}; its lease is left to expire: {}",
+                    "Could not end conversation turn {}; its lease is left to expire: {}",
                     turn.turnId,
                     e.getClass().getSimpleName());
         }

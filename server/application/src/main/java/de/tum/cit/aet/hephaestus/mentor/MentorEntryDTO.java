@@ -10,10 +10,10 @@ import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
 /**
- * One message of a Heph conversation as the app shows it. Tool results, summaries and other internal entries are
+ * One message of a Hephaestus conversation as the app shows it. Tool results, summaries and other internal entries are
  * never sent.
  */
-@Schema(description = "One message of a Heph conversation")
+@Schema(description = "One message of a Hephaestus conversation")
 public record MentorEntryDTO(
         @NonNull UUID id,
         @NonNull UUID conversationId,
@@ -32,7 +32,7 @@ public record MentorEntryDTO(
 
         @Schema(
                 description =
-                        "The developer's words or Heph's answer; for a weekly digest, the note that points Heph to it; empty when the message was deleted")
+                        "The developer's words or Hephaestus's answer; for a weekly digest, the note that points Hephaestus to it; empty when the message was deleted")
         @NonNull
         String text,
 
@@ -58,19 +58,20 @@ public record MentorEntryDTO(
         Instant editedAt,
 
         @Schema(
-                description = "Only on a question asked in Slack: whether Heph's reply reached Slack. FAILED means"
-                        + " Slack does not show the whole reply: it is not there, or a stream showed only part of it"
-                        + " before Slack or Silent Mode refused the rest; the full reply is in the app. UNCERTAIN means"
-                        + " Slack cannot tell.")
+                description =
+                        "Only on a question asked in Slack: whether Hephaestus's reply reached Slack. FAILED means"
+                                + " Slack does not show the whole reply: it is not there, or a stream showed only part of it"
+                                + " before Slack or Silent Mode refused the rest; the full reply is in the app. UNCERTAIN means"
+                                + " Slack cannot tell.")
         MentorEntry.@Nullable SlackDelivery slackDelivery,
 
         @Schema(description = "The message was deleted; its text is gone", requiredMode = RequiredMode.REQUIRED)
         boolean deleted,
 
-        @Schema(description = "The developer's vote; only on Heph's messages")
+        @Schema(description = "The developer's vote; only on Hephaestus's messages")
         MentorEntry.@Nullable Vote vote,
 
-        @Schema(description = "The results, problems and prepared feedback Heph showed in this message, in order")
+        @Schema(description = "The results, problems and prepared feedback Hephaestus showed in this message, in order")
         @NonNull
         List<MentorLinkDTO> links,
 

@@ -30,8 +30,10 @@ it.each([
 			);
 		const user = userEvent.setup();
 		const onSend = vi.fn<(text: string) => void>();
-		render(<HephComposer label="Message Heph" placeholder="Message Heph" onSend={onSend} />);
-		const field = screen.getByRole("textbox", { name: "Message Heph" });
+		render(
+			<HephComposer label="Message Hephaestus" placeholder="Message Hephaestus" onSend={onSend} />,
+		);
+		const field = screen.getByRole("textbox", { name: "Message Hephaestus" });
 		expect(field.getAttribute("enterkeyhint")).toBe(enterKeyHint);
 
 		await user.type(field, "First line{Enter}");
@@ -56,8 +58,10 @@ it.each(["Meta", "Control"])(
 			);
 		const user = userEvent.setup();
 		const onSend = vi.fn<(text: string) => void>();
-		render(<HephComposer label="Message Heph" placeholder="Message Heph" onSend={onSend} />);
-		const field = screen.getByRole("textbox", { name: "Message Heph" });
+		render(
+			<HephComposer label="Message Hephaestus" placeholder="Message Hephaestus" onSend={onSend} />,
+		);
+		const field = screen.getByRole("textbox", { name: "Message Hephaestus" });
 
 		await user.type(field, `From the keyboard{${modifier}>}{Enter}{/${modifier}}`);
 		expect(onSend).toHaveBeenCalledWith("From the keyboard");

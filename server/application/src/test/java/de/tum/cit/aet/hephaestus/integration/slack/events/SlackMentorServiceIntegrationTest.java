@@ -70,7 +70,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.ObjectNode;
 
-/** What the developer does in their Slack DM with Heph, and the ledger rows it writes. */
+/** What the developer does in their Slack DM with Hephaestus, and the ledger rows it writes. */
 class SlackMentorServiceIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     private static final String TEAM = "T1";
@@ -143,8 +143,9 @@ class SlackMentorServiceIntegrationTest extends AbstractWorkspaceIntegrationTest
     void setUpSlack() {
         User developer = persistUser("slack-heph-developer");
         developerId = accountId(developer);
-        workspace = createWorkspace("slack-heph", "Slack Heph", "slack-heph", AccountType.ORG, developer);
-        otherWorkspace = createWorkspace("slack-heph-2", "Slack Heph 2", "slack-heph-2", AccountType.ORG, developer);
+        workspace = createWorkspace("slack-heph", "Slack Hephaestus", "slack-heph", AccountType.ORG, developer);
+        otherWorkspace =
+                createWorkspace("slack-heph-2", "Slack Hephaestus 2", "slack-heph-2", AccountType.ORG, developer);
         for (Workspace each : List.of(workspace, otherWorkspace)) {
             String team = each.getId().equals(workspace.getId()) ? TEAM : OTHER_TEAM;
             Connection slackConnection = new Connection(
@@ -221,7 +222,7 @@ class SlackMentorServiceIntegrationTest extends AbstractWorkspaceIntegrationTest
     }
 
     /**
-     * The Heph thread on the question {@code 100.1}, whose turn ended with an answer at {@code 100.2}: the reply
+     * The Hephaestus thread on the question {@code 100.1}, whose turn ended with an answer at {@code 100.2}: the reply
      * {@code 100.5} runs on a lease of {@code lease}, and the follow-up {@code 100.6} waits behind it.
      *
      * @return the running turn as the ledger stores it
@@ -497,7 +498,7 @@ class SlackMentorServiceIntegrationTest extends AbstractWorkspaceIntegrationTest
     void shouldKeepTheTurnRunningWhenTheSessionStopIsNotOfItsOwnDmThread(
             String team, String user, String channel, String threadTs) {
         MentorTurn running = runningThreadTurnWithFollowUp(LEASE);
-        // The other workspace has the same DM and a question at the same ts, but no Heph thread on it.
+        // The other workspace has the same DM and a question at the same ts, but no Hephaestus thread on it.
         service.handleDm(OTHER_TEAM, CHANNEL, SLACK_USER, "Asked in the other workspace", "100.1", "100.1");
 
         deliver(sessionStopped(team, stopFields(user, channel, threadTs, afterStartOf(running), "[]")));

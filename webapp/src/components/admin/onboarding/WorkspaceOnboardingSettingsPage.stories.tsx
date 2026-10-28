@@ -148,7 +148,7 @@ function ChangedElsewhere(args: WorkspaceOnboardingSettingsPageProps) {
  * The switch is a one-way door on purpose, and its description says so: the first time it is on,
  * the server latches the AI choice as required, and turning the page off afterwards hides the only
  * place a member can answer. The info alert is that latch made visible. An owner-authored welcome
- * text was tried and dropped: Heph introduces the page, and words nobody maintains go stale.
+ * text was tried and dropped: Hephaestus introduces the page, and words nobody maintains go stale.
  *
  * "Configure AI models" sits beside the switch although it edits nothing here: what a member can
  * accept is decided by the data handling each of this workspace's models declares, and declaring
@@ -204,7 +204,9 @@ export const ChoiceStillRequired: Story = {
 	play: async ({ canvas, userEvent }) => {
 		await expect(canvas.getByText("Members still have to choose")).toBeVisible();
 		await expect(
-			canvas.getByText(/Members who have not chosen get no practice reviews and no Heph/u),
+			canvas.getByText(
+				/Members who have not chosen get no practice reviews and no conversation answers/u,
+			),
 		).toBeVisible();
 		// The alert asks for the switch; a draft that turns it on has answered it.
 		await userEvent.click(canvas.getByRole("switch", { name: SWITCH }));

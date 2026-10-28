@@ -21,7 +21,7 @@ describe("workspace URL rewrites", () => {
 	it.each([
 		["/", "/w/acme"],
 		["/activity", "/w/acme/activity"],
-		["/mentor/thread?message=one#reply", "/w/acme/mentor/thread?message=one#reply"],
+		["/conversation?entry=one#reply", "/w/acme/conversation?entry=one#reply"],
 	])("maps tenant %s to %s", (path, expected) => {
 		expect(rewrite("input", path)).toBe(`${tenant}${expected}`);
 	});

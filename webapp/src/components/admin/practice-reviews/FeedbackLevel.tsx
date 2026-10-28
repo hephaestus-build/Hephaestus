@@ -673,9 +673,9 @@ const WITHDRAWN_NOW: Record<FeedbackDestination, string> = {
 	ON_WORK:
 		"It is withdrawn. Copies it posted on the work are retracted there, and their receipts stay in this history. The observations behind it are unchanged.",
 	PRACTICE_PAGE:
-		"It is off the developer’s practice pages and out of the feedback given to later reviews and Heph. The observations behind it are unchanged.",
+		"It is off the developer’s practice pages and out of the feedback given to later reviews and conversations. The observations behind it are unchanged.",
 	CONVERSATION:
-		"It is withdrawn, so Heph does not raise it in a conversation. The observations behind it are unchanged.",
+		"It is withdrawn, so Hephaestus does not raise it in a conversation. The observations behind it are unchanged.",
 };
 
 /** Where removing withdrawn feedback from the work stands; the copy counts come from their receipts. */
@@ -689,17 +689,17 @@ function withdrawnOnWorkNow(feedback: FeedbackRecord): string {
 		return `It is withdrawn, but ${copies} may still be on the work, because a write was never confirmed. Check delivery to find out. A comment found there is then retracted. The observations behind it are unchanged.`;
 	}
 	if (check === "checking") {
-		return "It is withdrawn. Heph is confirming whether a comment it began writing appeared on the work. A comment found there is then retracted. The observations behind it are unchanged.";
+		return "It is withdrawn. Hephaestus is confirming whether a comment it began writing appeared on the work. A comment found there is then retracted. The observations behind it are unchanged.";
 	}
 	switch (withdrawalCorrection(feedback)) {
 		case "pending": {
-			return "It is withdrawn. Heph is still removing the copies it posted on the work. The observations behind it are unchanged.";
+			return "It is withdrawn. Hephaestus is still removing the copies it posted on the work. The observations behind it are unchanged.";
 		}
 		case "retryable": {
 			return `It is withdrawn, but ${copies} may still be on the work. At least one removal is unconfirmed. Check each copy above for details. The observations behind it are unchanged.`;
 		}
 		case "needsAttention": {
-			return `It is withdrawn, but ${copies} may still be on the work, and Heph cannot remove ${one ? "it" : "them"}. The observations behind it are unchanged.`;
+			return `It is withdrawn, but ${copies} may still be on the work, and Hephaestus cannot remove ${one ? "it" : "them"}. The observations behind it are unchanged.`;
 		}
 		case "complete":
 		case undefined: {
@@ -748,7 +748,7 @@ function unconfirmedLine(feedback: FeedbackRecord): string {
 			return "A comment was being written to the work, but the provider has not confirmed whether it appeared. It does not count as delivered until that is known. Until then, later reviews post no new feedback for this developer on this work.";
 		}
 		case "checking": {
-			return "Heph is confirming whether a comment it began writing appeared on the work. Until the provider confirms it, it does not count as delivered.";
+			return "Hephaestus is confirming whether a comment it began writing appeared on the work. Until the provider confirms it, it does not count as delivered.";
 		}
 		case undefined: {
 			return "A write to the work was not confirmed, so it does not count as delivered.";
@@ -762,7 +762,7 @@ function readyLine(feedback: FeedbackRecord): string {
 			return "It is ready on the developer’s practice pages. It counts as delivered when they open it.";
 		}
 		case "CONVERSATION": {
-			return "It is ready for the developer’s next conversation with Heph, which is what delivers it.";
+			return "It is ready for the developer’s next conversation with Hephaestus, which is what delivers it.";
 		}
 		case "ON_WORK": {
 			return feedback.sends.some((send) => send.state === "UNCERTAIN")
@@ -838,14 +838,14 @@ const WITHDRAW_DESCRIPTIONS: Record<FeedbackDestination, string> = {
 	ON_WORK:
 		"Copies already posted on the work are retracted there, and nothing more is posted. Their receipts stay on this sheet, and the observations behind it are unchanged.",
 	PRACTICE_PAGE:
-		"It comes off the developer’s practice pages and out of the feedback given to later reviews and Heph. The observations behind it are unchanged. A developer who already saw it sees that it was withdrawn, not your reason.",
+		"It comes off the developer’s practice pages and out of the feedback given to later reviews and conversations. The observations behind it are unchanged. A developer who already saw it sees that it was withdrawn, not your reason.",
 	CONVERSATION:
-		"Heph does not raise it in a conversation, and it leaves the feedback given to later reviews. The observations behind it are unchanged.",
+		"Hephaestus does not raise it in a conversation, and it leaves the feedback given to later reviews. The observations behind it are unchanged.",
 };
 
 // No removal can reach a comment whose write is unknown: it has no provider reference until found.
 const UNKNOWN_WRITE_WITHDRAW_DESCRIPTION =
-	"An unconfirmed comment may still be on the work. Heph can retract that comment only if a check finds it. Receipts and observations are kept.";
+	"An unconfirmed comment may still be on the work. Hephaestus can retract that comment only if a check finds it. Receipts and observations are kept.";
 
 function withdrawalCopy(feedback: FeedbackRecord): CorrectionReasonCopy {
 	if (feedback.withdrawn) {

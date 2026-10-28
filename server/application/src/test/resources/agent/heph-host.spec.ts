@@ -380,7 +380,7 @@ void test("the situation reaches every model request last and is never stored", 
 	}
 	assert.equal(JSON.stringify(worker.appended).includes("<situation>"), false);
 	assert.deepEqual(worker.reads, [{ path: "inputs/context/user.json" }]);
-	// The answer in progress keeps what Heph wrote before the tool, though nothing is stored until the end. It carries
+	// The answer in progress keeps what Hephaestus wrote before the tool, though nothing is stored until the end. It carries
 	// the text and nothing else the worker does not read.
 	const tool = worker.partials.find(
 		(partial) => partial.activity === "tool" && partial.tool === "read",
@@ -553,7 +553,7 @@ function offers(request: FauxRequest | undefined, tool: string): boolean {
 	return JSON.stringify(request ?? null).includes(`"name":"${tool}"`);
 }
 
-void test("Heph has read, bash and load_context only in a turn whose context says the worker serves them", async () => {
+void test("Hephaestus has read, bash and load_context only in a turn whose context says the worker serves them", async () => {
 	for (const contextFolder of [false, true]) {
 		const requests: FauxRequest[] = [];
 		const worker = fakeWorker({ ...contextOf([], "question"), contextFolder });
@@ -694,7 +694,7 @@ void test("a page and an output the worker cut reach the model as the worker wro
 	const host = createHephHost({
 		cwd: CWD,
 		agentDir: AGENT_DIR,
-		systemPrompt: "You are Heph.",
+		systemPrompt: "You are Hephaestus.",
 		turnApi: () => ({
 			...api,
 			exec: async (request) => {
@@ -757,7 +757,7 @@ void test("a failed, timed out or silent command reads as Pi's bash words it, an
 	const host = createHephHost({
 		cwd: CWD,
 		agentDir: AGENT_DIR,
-		systemPrompt: "You are Heph.",
+		systemPrompt: "You are Hephaestus.",
 		turnApi: () => ({
 			...api,
 			exec: async (request) => {
@@ -769,7 +769,7 @@ void test("a failed, timed out or silent command reads as Pi's bash words it, an
 				return {
 					ok: false,
 					error: "NOT_VISIBLE",
-					detail: "Heph cannot read repos/github.com/other/x.",
+					detail: "Hephaestus cannot read repos/github.com/other/x.",
 				};
 			},
 		}),
@@ -810,7 +810,7 @@ void test("a failed, timed out or silent command reads as Pi's bash words it, an
 		{ text: "This worker cannot run turn sandboxes now. Do not retry.", isError: true },
 		{ text: "Invalid timeout: must be a finite number of seconds", isError: true },
 		{ text: "File not found: inputs/context/nothing.json", isError: true },
-		{ text: "NOT_VISIBLE: Heph cannot read repos/github.com/other/x.", isError: true },
+		{ text: "NOT_VISIBLE: Hephaestus cannot read repos/github.com/other/x.", isError: true },
 	]);
 });
 
@@ -944,7 +944,7 @@ function toolResults(worker: FakeWorker): { name: string; text: string; isError:
 	);
 }
 
-void test("Heph has the tools to read its context folder, show feedback and search, and nothing else", () => {
+void test("Hephaestus has the tools to read its context folder, show feedback and search, and nothing else", () => {
 	assert.deepEqual([...CONTEXT_FOLDER_TOOL_NAMES], ["read", "bash", "load_context"]);
 	assert.deepEqual(
 		[...HEPH_TOOL_NAMES],
@@ -1209,7 +1209,7 @@ void test("a summary is written with thinking off and the answer with the config
 	);
 });
 
-void test("a conversation on the smallest window Heph takes is shortened, keeps its summary and answers every later turn", async () => {
+void test("a conversation on the smallest window Hephaestus takes is shortened, keeps its summary and answers every later turn", async () => {
 	// A 32,768-token model with a fixed prompt of about 6,000 tokens. The newest answer alone is about 17,000 tokens,
 	// so Pi keeps it whole and the shortened conversation stays past a fixed working budget; the model still has room.
 	const earlier: unknown[] = [];
@@ -1240,7 +1240,7 @@ void test("a conversation on the smallest window Heph takes is shortened, keeps 
 		const host = createHephHost({
 			cwd: CWD,
 			agentDir: AGENT_DIR,
-			systemPrompt: `You are Heph. ${"p".repeat(24_000)}`,
+			systemPrompt: `You are Hephaestus. ${"p".repeat(24_000)}`,
 			turnApi: () => worker.api(),
 			models: fauxModels([step, step, step, step], 100_000, false, limits),
 			partialIntervalMs: 10,
@@ -1435,7 +1435,7 @@ void test("a read in flight names the stage of what it reads, in the developer's
 	assert.equal(tool?.stage, "Reading your pull requests and issues…");
 });
 
-void test("a fast read's stage reaches the worker though Heph thinks again within the same window", async () => {
+void test("a fast read's stage reaches the worker though Hephaestus thinks again within the same window", async () => {
 	// The read returns at once and the model's next answer streams slowly: without holding the tool's stage, the
 	// window's snapshot would carry only "Thinking…".
 	const worker = fakeWorker(contextOf([], "what did the review say?"));
@@ -1620,7 +1620,7 @@ void test("a stop before the session exists ends the turn stopped without a mode
 	const host = createHephHost({
 		cwd: CWD,
 		agentDir: AGENT_DIR,
-		systemPrompt: "You are Heph.",
+		systemPrompt: "You are Hephaestus.",
 		turnApi: () => ({
 			...api,
 			context: async () => {
@@ -1701,7 +1701,7 @@ void test("two conversations run at once, each with its own credential on its ow
 		const host = createHephHost({
 			cwd: CWD,
 			agentDir: AGENT_DIR,
-			systemPrompt: "You are Heph.",
+			systemPrompt: "You are Hephaestus.",
 			turnApi: (turnId) => (turnId === "main" ? main : thread).api(),
 			models: proxyModels(proxy.url, AGENT_DIR),
 		});
@@ -1746,7 +1746,7 @@ void test("a summary asks for thinking off through the standard control only, wi
 		const host = createHephHost({
 			cwd: CWD,
 			agentDir: AGENT_DIR,
-			systemPrompt: "You are Heph.",
+			systemPrompt: "You are Hephaestus.",
 			turnApi: () => worker.api(),
 			models: proxyModels(proxy.url, AGENT_DIR),
 		});
@@ -1797,7 +1797,7 @@ async function turnAgainst(proxyUrl: string): Promise<TurnEnd> {
 	const host = createHephHost({
 		cwd: CWD,
 		agentDir: AGENT_DIR,
-		systemPrompt: "You are Heph.",
+		systemPrompt: "You are Hephaestus.",
 		turnApi: () => worker.api(),
 		models: proxyModels(proxyUrl, AGENT_DIR),
 	});
@@ -1918,7 +1918,7 @@ async function turnInATool(worker?: FakeWorker) {
 	const host = createHephHost({
 		cwd: CWD,
 		agentDir: AGENT_DIR,
-		systemPrompt: "You are Heph.",
+		systemPrompt: "You are Hephaestus.",
 		turnApi: () => {
 			const api = blocked.api();
 			return {
@@ -1984,7 +1984,7 @@ void test("a later attempt of a running turn stops the earlier one and then runs
 	const host = createHephHost({
 		cwd: CWD,
 		agentDir: AGENT_DIR,
-		systemPrompt: "You are Heph.",
+		systemPrompt: "You are Hephaestus.",
 		turnApi: (_turnId, token) => {
 			credentials.push(token);
 			const api = (token === "attempt-1" ? first : second).api();
@@ -2031,7 +2031,7 @@ void test("an end the worker refuses for its size is sent again with the context
 	const host = createHephHost({
 		cwd: CWD,
 		agentDir: AGENT_DIR,
-		systemPrompt: "You are Heph.",
+		systemPrompt: "You are Hephaestus.",
 		turnApi: () => {
 			const api = worker.api();
 			return {

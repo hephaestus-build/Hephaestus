@@ -45,7 +45,7 @@ function workName(row: WeeklyDigestFeedback): string | undefined {
 	return row.item && [itemName(row.item), row.item.title].filter(hasText).join(" · ");
 }
 
-/** Where a piece of feedback landed, as a link: the feedback on that work, the practice, or Heph's message. */
+/** Where a piece of feedback landed, as a link: the feedback on that work, the practice, or Hephaestus's message. */
 function linkTo(row: WeeklyDigestFeedback, workspaceSlug: string): ReactElement | undefined {
 	switch (row.destination) {
 		case "ON_WORK": {
@@ -70,7 +70,7 @@ function linkTo(row: WeeklyDigestFeedback, workspaceSlug: string): ReactElement 
 		case "CONVERSATION": {
 			return row.mentorEntryId === undefined ? undefined : (
 				<Link
-					to="/w/$workspaceSlug/mentor"
+					to="/w/$workspaceSlug/conversation"
 					params={{ workspaceSlug }}
 					search={
 						row.mentorParentEntryId === undefined
@@ -121,7 +121,7 @@ function FeedbackRow({ row, workspaceSlug }: { row: WeeklyDigestFeedback; worksp
 }
 
 /**
- * A weekly digest in the developer's Heph conversation: the feedback that reached them in one week,
+ * A weekly digest in the developer's Hephaestus conversation: the feedback that reached them in one week,
  * each piece linked to where it landed, what changed on their Practice profile, and how many cards
  * wait unread there. Facts only, read again every time the conversation is: a Practice page card
  * leaves the waiting count once it is read, feedback that no longer shows drops out, and a
@@ -211,7 +211,7 @@ export function WeeklyDigestCard({
 					{reply && (
 						<>
 							<p className="text-muted-foreground">
-								Reply in a thread to go through this week with Heph.
+								Reply in a thread to go through this week with Hephaestus.
 							</p>
 							{reply}
 						</>

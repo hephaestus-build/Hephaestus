@@ -27,7 +27,7 @@ const POINTS = [
 	"A practice is one way of working that your workspace cares about. Related practices form a practice group.",
 	"Your standing on a practice comes from your recent reviewed work. It is not a grade. Gray means there is nothing to judge yet.",
 	"A feedback card appears when reviews find the same problem in at least two pieces of your work. It resolves when several pieces of your work in a row, reviewed after it, come back clean, and the card counts how many more it needs.",
-	"Feedback about one piece of work, such as a pull request, stays on that work. If something is unclear, ask Heph.",
+	"Feedback about one piece of work, such as a pull request, stays on that work. If something is unclear, ask Hephaestus.",
 	GROUP_COLORS_NOTE,
 ] as const;
 

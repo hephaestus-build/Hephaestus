@@ -648,7 +648,7 @@ Fetched 2026-10-27.
 - [Helm custom resource definitions](https://helm.sh/docs/chart_best_practices/custom_resource_definitions/): Helm installs `crds/` once and does not upgrade or delete them.
 - [kubernetes-sigs/agent-sandbox](https://github.com/kubernetes-sigs/agent-sandbox).
 - [Kubernetes custom resources](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/): when to add a custom resource.
-- [Heph capacity](../admin/runtime-roles.mdx#heph-capacity): 90 turns in 364 MiB, and one call in 4 seconds against 8 calls in 34 seconds each.
+- [Heph capacity](../admin/runtime-roles.mdx#conversation-turn-capacity): 90 turns in 364 MiB, and one call in 4 seconds against 8 calls in 34 seconds each.
 
 ## Update — 2026-10-28: captured context stays on the loop's side
 

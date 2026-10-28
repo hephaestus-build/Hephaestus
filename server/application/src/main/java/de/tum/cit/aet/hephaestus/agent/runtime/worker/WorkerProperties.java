@@ -55,7 +55,7 @@ public record WorkerProperties(
      *
      * @param reviewMax Number of practice reviews this worker runs at once. Accepts an integer or auto, which means
      *     one less than the processor count and at least 1.
-     * @param mentorMax Number of Heph turns this worker runs at once. Accepts an integer or auto, which means 8.
+     * @param mentorMax Number of conversation turns this worker runs at once. Accepts an integer or auto, which means 8.
      */
     public record Capacity(
             @DefaultValue("auto") String reviewMax,

@@ -83,7 +83,7 @@ public class SlackUninstallService {
         // A later reconnect may install a different Slack app; the cached bot user id must not survive teardown.
         messageService.evictBot(workspaceId);
         log.info(
-                "Slack {} for team {} → workspace {} torn down (connection UNINSTALLED, content purged, Heph Slack messages redacted, {} conversation-derived practice rows erased)",
+                "Slack {} for team {} → workspace {} torn down (connection UNINSTALLED, content purged, Hephaestus Slack messages redacted, {} conversation-derived practice rows erased)",
                 eventType,
                 teamId,
                 workspaceId,

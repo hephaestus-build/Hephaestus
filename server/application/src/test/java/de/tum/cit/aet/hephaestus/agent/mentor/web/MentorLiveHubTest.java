@@ -181,7 +181,7 @@ class MentorLiveHubTest extends BaseUnitTest {
             assertThat(appender.list).singleElement().satisfies(event -> {
                 assertThat(event.getLevel()).isEqualTo(Level.DEBUG);
                 assertThat(event.getFormattedMessage())
-                        .isEqualTo("Heph live stream closed while sending: IOException")
+                        .isEqualTo("Hephaestus live stream closed while sending: IOException")
                         .doesNotContain("private-conversation-canary");
             });
         } finally {

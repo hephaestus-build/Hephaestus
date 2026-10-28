@@ -53,7 +53,7 @@ export const RegularUser: Story = {
 	},
 	play: async ({ canvas }) => {
 		await expect(canvas.queryByText("Administration")).not.toBeInTheDocument();
-		await expect(canvas.getByRole("link", { name: /AI assistant/u })).toBeVisible();
+		await expect(canvas.getByRole("link", { name: /Ask Hephaestus/u })).toBeVisible();
 		// The only landmark a screen reader can jump to for the app's navigation.
 		const navigation = canvas.getByRole("navigation", { name: "Primary" });
 		await expect(within(navigation).getByRole("link", { name: "Activity" })).toBeVisible();
@@ -142,7 +142,7 @@ export const ReadOnlyUserView: Story = {
 		context: "main",
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("link", { name: /AI assistant/u })).toBeVisible();
+		await expect(canvas.getByRole("link", { name: /^Conversation$/u })).toBeVisible();
 		await expect(canvas.queryByText("User settings")).not.toBeInTheDocument();
 	},
 };
@@ -209,7 +209,7 @@ export const HephHidden: Story = {
 		showMentor: false,
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.queryByRole("link", { name: /AI assistant/u })).not.toBeInTheDocument();
+		await expect(canvas.queryByRole("link", { name: /Ask Hephaestus/u })).not.toBeInTheDocument();
 		await expect(canvas.getByRole("link", { name: "Activity" })).toBeVisible();
 	},
 };

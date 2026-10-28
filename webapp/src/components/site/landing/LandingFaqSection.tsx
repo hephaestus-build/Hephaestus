@@ -19,12 +19,12 @@ const faqItems = [
 	{
 		key: "feedback-location",
 		q: "Where does feedback appear?",
-		a: "It can appear on the work itself, on each developer’s private practice page, or in your next conversation with Heph. Feedback on the work waits for a workspace admin’s approval by default. Admins choose which repositories are connected. You can carry on the conversation in the web app or, when Slack is connected, in a direct message.",
+		a: "It can appear on the work itself, on each developer’s private practice page, or in your next conversation with Hephaestus. Feedback on the work waits for a workspace admin’s approval by default. Admins choose which repositories are connected. You can carry on the conversation in the web app or, when Slack is connected, in a direct message.",
 	},
 	{
 		key: "heph-conversation",
-		q: "What can I ask Heph?",
-		a: "Why a suggestion matters, or for an example. You can also add context Heph missed, or disagree. Heph draws on your recent project activity, the feedback you have received, and selected Outline documents. Slack channel messages are used only when you allow it.",
+		q: "What can I ask Hephaestus?",
+		a: "Why a suggestion matters, or for an example. You can also add context Hephaestus missed, or disagree. Hephaestus draws on your recent project activity, the feedback you have received, and selected Outline documents. Slack channel messages are used only when you allow it.",
 	},
 	{
 		key: "project-data",
@@ -34,7 +34,7 @@ const faqItems = [
 	{
 		key: "ai-limitations",
 		q: "Can the feedback be wrong?",
-		a: "Yes. It is written by an AI model, so it can miss context or suggest something unhelpful. Check the work it links to, ask Heph a follow-up, or disagree and say why.",
+		a: "Yes. It is written by an AI model, so it can miss context or suggest something unhelpful. Check the work it links to, ask Hephaestus a follow-up, or disagree and say why.",
 	},
 	{
 		key: "cost",

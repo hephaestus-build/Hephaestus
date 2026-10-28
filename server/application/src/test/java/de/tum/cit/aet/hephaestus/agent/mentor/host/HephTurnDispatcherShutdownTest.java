@@ -51,7 +51,7 @@ import org.springframework.web.socket.WebSocketSession;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * The worker's review drain and Heph drain share one shutdown phase. Spring's lifecycle processor stops each bean of a
+ * The worker's review drain and Hephaestus drain share one shutdown phase. Spring's lifecycle processor stops each bean of a
  * phase in turn and then waits for all their callbacks, so the two drains overlap only when neither waits inside
  * {@code stop(Runnable)}. Every wait here is a latch the test opens.
  */
@@ -133,7 +133,7 @@ class HephTurnDispatcherShutdownTest extends BaseUnitTest {
     /** Opens every drain the test holds. */
     private final CountDownLatch release = new CountDownLatch(1);
 
-    /** Counted once the Heph drain removes the host; it then waits for {@link #release}. */
+    /** Counted once the Hephaestus drain removes the host; it then waits for {@link #release}. */
     private final CountDownLatch hephWaits = new CountDownLatch(1);
 
     private final AtomicBoolean hephEnded = new AtomicBoolean();
@@ -142,7 +142,7 @@ class HephTurnDispatcherShutdownTest extends BaseUnitTest {
     private final BlockingQueue<String> frames = new LinkedBlockingQueue<>();
 
     /**
-     * A host that is ready and takes every command, and whose removal is the end of the Heph drain, held until the test
+     * A host that is ready and takes every command, and whose removal is the end of the Hephaestus drain, held until the test
      * releases it.
      */
     private final class HeldHost extends HephHost {
@@ -217,10 +217,10 @@ class HephTurnDispatcherShutdownTest extends BaseUnitTest {
                     .as("the review drain waits for the review in flight")
                     .isTrue();
             assertThat(hephWaits.await(10, TimeUnit.SECONDS))
-                    .as("the Heph drain ends its turns while the review drain still waits")
+                    .as("the Hephaestus drain ends its turns while the review drain still waits")
                     .isTrue();
             verify(executor).stopAcceptingNewJobs();
-            assertThat(dispatcher.isRunning()).as("Heph claims no turn").isFalse();
+            assertThat(dispatcher.isRunning()).as("Hephaestus claims no turn").isFalse();
             assertThat(closing.isAlive()).as("the phase waits for both drains").isTrue();
             assertThat(webServer.isRunning())
                     .as("the web server still serves the gateway")

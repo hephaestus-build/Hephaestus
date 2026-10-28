@@ -21,7 +21,7 @@ function mockHephPanel(preference: WorkspaceOnboarding) {
 		http.get("*/workspaces", () =>
 			HttpResponse.json([workspaceListItem("acme"), workspaceListItem("other")]),
 		),
-		// The account carries no flags: the Heph panel follows the workspace and the member's AI choice.
+		// The account carries no flags: the Hephaestus panel follows the workspace and the member's AI choice.
 		http.get("*/user/features", () => HttpResponse.json({})),
 		http.get("*/workspaces/:workspaceSlug/members/me", () => HttpResponse.json(ownMembership())),
 		http.get("*/workspaces/:workspaceSlug/onboarding/me", () => HttpResponse.json(preference)),
@@ -41,7 +41,7 @@ it("withholds the floating composer for No AI and after a failed preference refe
 	mockHephPanel(preference);
 	const { queryClient } = renderRouteAtWithRouter("/w/acme/teams");
 	await screen.findByRole("heading", { name: "Teams" }, ROUTE_RENDER_WAIT);
-	expect(screen.queryByRole("button", { name: "Open Heph, AI assistant" })).toBeNull();
+	expect(screen.queryByRole("button", { name: "Ask Hephaestus" })).toBeNull();
 	const key = getMemberOnboardingQueryKey({ path: { workspaceSlug: "acme" } });
 	const optedIn: WorkspaceOnboarding = {
 		...workspaceOnboarding(),
@@ -55,7 +55,7 @@ it("withholds the floating composer for No AI and after a failed preference refe
 		queryClient.setQueryData(key, optedIn);
 	});
 	await user.click(
-		await screen.findByRole("button", { name: "Open Heph, AI assistant" }, ROUTE_RENDER_WAIT),
+		await screen.findByRole("button", { name: "Ask Hephaestus" }, ROUTE_RENDER_WAIT),
 	);
 	await screen.findByRole("textbox");
 	server.use(
@@ -64,13 +64,11 @@ it("withholds the floating composer for No AI and after a failed preference refe
 	await act(async () => {
 		await queryClient.invalidateQueries({ queryKey: key });
 	});
-	await waitFor(() =>
-		expect(screen.queryByRole("button", { name: "Open Heph, AI assistant" })).toBeNull(),
-	);
+	await waitFor(() => expect(screen.queryByRole("button", { name: "Ask Hephaestus" })).toBeNull());
 	expect(screen.queryByRole("textbox")).toBeNull();
 });
 
-/** A member who has not chosen, in a workspace whose Heph model is ready. */
+/** A member who has not chosen, in a workspace whose conversation model is ready. */
 function hephReady(): WorkspaceOnboarding {
 	return {
 		...workspaceOnboarding(),
@@ -78,7 +76,7 @@ function hephReady(): WorkspaceOnboarding {
 	};
 }
 
-it("withholds the floating composer where no Heph model is ready for any choice", async () => {
+it("withholds the floating composer where no conversation model is ready for any choice", async () => {
 	mockHephPanel({
 		...workspaceOnboarding(),
 		aiChoice: "CLOUD",
@@ -87,7 +85,7 @@ it("withholds the floating composer where no Heph model is ready for any choice"
 	});
 	renderRouteAtWithRouter("/w/acme/teams");
 	await screen.findByRole("heading", { name: "Teams" }, ROUTE_RENDER_WAIT);
-	expect(screen.queryByRole("button", { name: "Open Heph, AI assistant" })).toBeNull();
+	expect(screen.queryByRole("button", { name: "Ask Hephaestus" })).toBeNull();
 });
 
 it("keeps each workspace's conversation in its own panel", async () => {
@@ -95,10 +93,10 @@ it("keeps each workspace's conversation in its own panel", async () => {
 	const { acme, other } = mockHephPanel(hephReady());
 	const { router } = renderRouteAtWithRouter("/w/acme/teams");
 	await user.click(
-		await screen.findByRole("button", { name: "Open Heph, AI assistant" }, ROUTE_RENDER_WAIT),
+		await screen.findByRole("button", { name: "Ask Hephaestus" }, ROUTE_RENDER_WAIT),
 	);
 	await user.type(
-		await screen.findByRole("textbox", { name: "Message Heph" }),
+		await screen.findByRole("textbox", { name: "Message Hephaestus" }),
 		"Acme-only conversation{Enter}",
 	);
 	await waitFor(() => expect(acme.submissions).toHaveLength(1));
@@ -109,10 +107,10 @@ it("keeps each workspace's conversation in its own panel", async () => {
 		});
 	});
 	await user.click(
-		await screen.findByRole("button", { name: "Open Heph, AI assistant" }, ROUTE_RENDER_WAIT),
+		await screen.findByRole("button", { name: "Ask Hephaestus" }, ROUTE_RENDER_WAIT),
 	);
 	await user.type(
-		await screen.findByRole("textbox", { name: "Message Heph" }),
+		await screen.findByRole("textbox", { name: "Message Hephaestus" }),
 		"Other workspace conversation{Enter}",
 	);
 	await waitFor(() => expect(other.submissions).toHaveLength(1));
@@ -125,19 +123,23 @@ it("leaves an unsent draft behind in its own workspace", async () => {
 	const { acme, other } = mockHephPanel(hephReady());
 	const { router } = renderRouteAtWithRouter("/w/acme/teams");
 	await user.click(
-		await screen.findByRole("button", { name: "Open Heph, AI assistant" }, ROUTE_RENDER_WAIT),
+		await screen.findByRole("button", { name: "Ask Hephaestus" }, ROUTE_RENDER_WAIT),
 	);
 	await user.type(
-		await screen.findByRole("textbox", { name: "Message Heph" }),
+		await screen.findByRole("textbox", { name: "Message Hephaestus" }),
 		"Private draft from acme",
 	);
 	await act(async () => {
 		await router.navigate({ to: "/w/$workspaceSlug/teams", params: { workspaceSlug: "other" } });
 	});
 	await user.click(
-		await screen.findByRole("button", { name: "Open Heph, AI assistant" }, ROUTE_RENDER_WAIT),
+		await screen.findByRole("button", { name: "Ask Hephaestus" }, ROUTE_RENDER_WAIT),
 	);
-	const composer = await screen.findByRole("textbox", { name: "Message Heph" }, ROUTE_RENDER_WAIT);
+	const composer = await screen.findByRole(
+		"textbox",
+		{ name: "Message Hephaestus" },
+		ROUTE_RENDER_WAIT,
+	);
 	expect(composer).toHaveProperty("value", "");
 	await user.type(composer, "{Enter}");
 	expect(other.submissions).toStrictEqual([]);
@@ -155,7 +157,7 @@ it("keeps setup free of the floating composer even when AI is available", async 
 	});
 	renderRouteAtWithRouter("/w/acme/onboarding");
 	await screen.findByRole("radio", { name: /^In-house /u }, ROUTE_RENDER_WAIT);
-	expect(screen.queryByRole("button", { name: "Open Heph, AI assistant" })).toBeNull();
+	expect(screen.queryByRole("button", { name: "Ask Hephaestus" })).toBeNull();
 });
 
 it("shares the conversation with the mentor page and sends the page it was asked from", async () => {
@@ -164,12 +166,12 @@ it("shares the conversation with the mentor page and sends the page it was asked
 	acme.add({ kind: "HEPH", text: "Earlier in this conversation." });
 	const { router } = renderRouteAtWithRouter("/w/acme/teams");
 	await user.click(
-		await screen.findByRole("button", { name: "Open Heph, AI assistant" }, ROUTE_RENDER_WAIT),
+		await screen.findByRole("button", { name: "Ask Hephaestus" }, ROUTE_RENDER_WAIT),
 	);
 	await screen.findByText("Earlier in this conversation.");
 	screen.getByText("From Teams");
 	await user.type(
-		screen.getByRole("textbox", { name: "Message Heph" }),
+		screen.getByRole("textbox", { name: "Message Hephaestus" }),
 		"Who is on my team?{Enter}",
 	);
 	await waitFor(() =>
@@ -179,15 +181,18 @@ it("shares the conversation with the mentor page and sends the page it was asked
 	);
 
 	await user.click(screen.getByRole("button", { name: "Do not send this page with your message" }));
-	await user.type(screen.getByRole("textbox", { name: "Message Heph" }), "Without the page{Enter}");
+	await user.type(
+		screen.getByRole("textbox", { name: "Message Hephaestus" }),
+		"Without the page{Enter}",
+	);
 	await waitFor(() => expect(acme.submissions).toHaveLength(2));
 	expect(acme.submissions[1]?.pageContext).toBeUndefined();
 
-	await user.click(screen.getByRole("button", { name: "Open the Heph page" }));
-	await waitFor(() => expect(router.state.location.pathname).toBe("/w/acme/mentor"));
+	await user.click(screen.getByRole("button", { name: "Open full page" }));
+	await waitFor(() => expect(router.state.location.pathname).toBe("/w/acme/conversation"));
 	await screen.findByText("Who is on my team?");
 	// The page is the conversation, so the launcher stays away from it.
-	expect(screen.queryByRole("button", { name: "Open Heph, AI assistant" })).toBeNull();
+	expect(screen.queryByRole("button", { name: "Ask Hephaestus" })).toBeNull();
 });
 
 it("opens a thread as a view over the conversation, and carries it to the mentor page", async () => {
@@ -197,7 +202,7 @@ it("opens a thread as a view over the conversation, and carries it to the mentor
 	acme.add({ kind: "USER", text: "Which ones?", parentEntryId: parent.id });
 	const { router } = renderRouteAtWithRouter("/w/acme/teams");
 	await user.click(
-		await screen.findByRole("button", { name: "Open Heph, AI assistant" }, ROUTE_RENDER_WAIT),
+		await screen.findByRole("button", { name: "Ask Hephaestus" }, ROUTE_RENDER_WAIT),
 	);
 	const summary = await screen.findByRole("button", { name: /^1 reply/u });
 	await user.click(summary);
@@ -213,7 +218,7 @@ it("opens a thread as a view over the conversation, and carries it to the mentor
 
 	await user.click(await screen.findByRole("button", { name: /^1 reply/u }));
 	await screen.findByText("Which ones?");
-	await user.click(screen.getByRole("button", { name: "Open the Heph page" }));
+	await user.click(screen.getByRole("button", { name: "Open full page" }));
 	await waitFor(() => expect(router.state.location.search).toMatchObject({ thread: parent.id }));
 });
 
@@ -224,7 +229,7 @@ it("goes back from a thread to the conversation on Escape, and closes the panel 
 	acme.add({ kind: "USER", text: "Which ones?", parentEntryId: parent.id });
 	renderRouteAtWithRouter("/w/acme/teams");
 	await user.click(
-		await screen.findByRole("button", { name: "Open Heph, AI assistant" }, ROUTE_RENDER_WAIT),
+		await screen.findByRole("button", { name: "Ask Hephaestus" }, ROUTE_RENDER_WAIT),
 	);
 	const summary = await screen.findByRole("button", { name: /^1 reply/u });
 	await user.click(summary);
@@ -239,12 +244,12 @@ it("goes back from a thread to the conversation on Escape, and closes the panel 
 
 	await user.keyboard("{Escape}");
 	await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-	screen.getByRole("button", { name: "Open Heph, AI assistant" });
+	screen.getByRole("button", { name: "Ask Hephaestus" });
 });
 
 /** The live stream the closed panel's launcher keeps open, after its first snapshot. */
 async function openStream(fake: MentorFake): Promise<FakeEventSource> {
-	await screen.findByRole("button", { name: "Open Heph, AI assistant" }, ROUTE_RENDER_WAIT);
+	await screen.findByRole("button", { name: "Ask Hephaestus" }, ROUTE_RENDER_WAIT);
 	const stream = await waitFor(() => {
 		const latest = FakeEventSource.latest();
 		assert.isDefined(latest);
@@ -257,21 +262,21 @@ async function openStream(fake: MentorFake): Promise<FakeEventSource> {
 	return stream;
 }
 
-/** Heph's answer while it streams: each new word is its own element, so match the whole paragraph. */
+/** Hephaestus's answer while it streams: each new word is its own element, so match the whole paragraph. */
 function streamedText(text: string) {
 	return (_content: string, element: Element | null) =>
 		element?.tagName === "P" && element.textContent === text;
 }
 
-it("keeps Heph's answer streaming when the Heph page opens mid-turn, and never asks again", async () => {
+it("keeps Hephaestus's answer streaming when the Hephaestus page opens mid-turn, and never asks again", async () => {
 	const user = userEvent.setup();
 	const { acme } = mockHephPanel(hephReady());
 	const { router } = renderRouteAtWithRouter("/w/acme/teams");
 	const panelStream = await openStream(acme);
-	await user.click(screen.getByRole("button", { name: "Open Heph, AI assistant" }));
+	await user.click(screen.getByRole("button", { name: "Ask Hephaestus" }));
 	// The composer comes with the conversation's first page, which the panel reads as it opens.
 	await user.type(
-		await screen.findByRole("textbox", { name: "Message Heph" }),
+		await screen.findByRole("textbox", { name: "Message Hephaestus" }),
 		"How did my week go?{Enter}",
 	);
 	await waitFor(() => expect(acme.turns).toHaveLength(1));
@@ -285,8 +290,8 @@ it("keeps Heph's answer streaming when the Heph page opens mid-turn, and never a
 	act(() => panelStream.emit("turn", turn));
 	await screen.findByText(streamedText("You opened two"));
 
-	await user.click(screen.getByRole("button", { name: "Open the Heph page" }));
-	await waitFor(() => expect(router.state.location.pathname).toBe("/w/acme/mentor"));
+	await user.click(screen.getByRole("button", { name: "Open full page" }));
+	await waitFor(() => expect(router.state.location.pathname).toBe("/w/acme/conversation"));
 	// The page shows the answer where the panel left it, before its own stream says anything.
 	await screen.findByText(streamedText("You opened two"), {}, ROUTE_RENDER_WAIT);
 
@@ -313,7 +318,7 @@ it("marks the launcher when an answer lands while the panel is closed, and clear
 	const { acme } = mockHephPanel(hephReady());
 	const question = acme.add({ kind: "USER", text: "How did my week go?" });
 	renderRouteAtWithRouter("/w/acme/teams");
-	await screen.findByRole("button", { name: "Open Heph, AI assistant" }, ROUTE_RENDER_WAIT);
+	await screen.findByRole("button", { name: "Ask Hephaestus" }, ROUTE_RENDER_WAIT);
 	const stream = await waitFor(() => {
 		const latest = FakeEventSource.latest();
 		assert.isDefined(latest);
@@ -332,12 +337,10 @@ it("marks the launcher when an answer lands while the panel is closed, and clear
 	act(() => {
 		stream.emit("entry", answer);
 	});
-	await user.click(
-		await screen.findByRole("button", { name: "Open Heph, AI assistant, new answer" }),
-	);
+	await user.click(await screen.findByRole("button", { name: "Ask Hephaestus, new answer" }));
 	await screen.findByText("You opened two pull requests.");
 	await user.keyboard("{Escape}");
-	await screen.findByRole("button", { name: "Open Heph, AI assistant" });
+	await screen.findByRole("button", { name: "Ask Hephaestus" });
 	expect(screen.queryByRole("button", { name: /new answer/u })).toBeNull();
 });
 
@@ -350,10 +353,10 @@ it("leaves the launcher unmarked for a question the developer asked in Slack", a
 		stream.emit("entry", question);
 	});
 	expect(screen.queryByRole("button", { name: /new answer/u })).toBeNull();
-	screen.getByRole("button", { name: "Open Heph, AI assistant" });
+	screen.getByRole("button", { name: "Ask Hephaestus" });
 });
 
-it("marks the launcher when Heph answers in a thread", async () => {
+it("marks the launcher when Hephaestus answers in a thread", async () => {
 	const { acme } = mockHephPanel(hephReady());
 	const parent = acme.add({ kind: "USER", text: "How did my week go?" });
 	renderRouteAtWithRouter("/w/acme/teams");
@@ -366,7 +369,7 @@ it("marks the launcher when Heph answers in a thread", async () => {
 	act(() => {
 		stream.emit("entry", reply);
 	});
-	await screen.findByRole("button", { name: "Open Heph, AI assistant, new answer" });
+	await screen.findByRole("button", { name: "Ask Hephaestus, new answer" });
 });
 
 it("marks the launcher on reconnect for a whole Slack turn that ran while the stream was down, and opening clears it", async () => {
@@ -384,12 +387,10 @@ it("marks the launcher on reconnect for a whole Slack turn that ran while the st
 	act(() => {
 		stream.emit("snapshot", acme.conversation());
 	});
-	await user.click(
-		await screen.findByRole("button", { name: "Open Heph, AI assistant, new answer" }),
-	);
+	await user.click(await screen.findByRole("button", { name: "Ask Hephaestus, new answer" }));
 	await screen.findByText("Answered in Slack.");
 	await user.keyboard("{Escape}");
-	await screen.findByRole("button", { name: "Open Heph, AI assistant" });
+	await screen.findByRole("button", { name: "Ask Hephaestus" });
 });
 
 it("marks the launcher on reconnect for the first answer ever, written while the stream was down", async () => {
@@ -404,7 +405,7 @@ it("marks the launcher on reconnect for the first answer ever, written while the
 	act(() => {
 		stream.emit("snapshot", acme.conversation());
 	});
-	await screen.findByRole("button", { name: "Open Heph, AI assistant, new answer" });
+	await screen.findByRole("button", { name: "Ask Hephaestus, new answer" });
 });
 
 it("leaves the launcher unmarked on reconnect when the only new answer was deleted", async () => {
@@ -429,11 +430,7 @@ it("shares what was read between devices: opening the panel on one clears the do
 	// This device opens the panel, which tells the server how far the developer read.
 	renderRouteAtWithRouter("/w/acme/teams");
 	await user.click(
-		await screen.findByRole(
-			"button",
-			{ name: "Open Heph, AI assistant, new answer" },
-			ROUTE_RENDER_WAIT,
-		),
+		await screen.findByRole("button", { name: "Ask Hephaestus, new answer" }, ROUTE_RENDER_WAIT),
 	);
 	await screen.findByText("An answer nobody read yet.");
 	await waitFor(() => expect(acme.lastReadAt).toBe(answer.createdAt));
@@ -441,7 +438,7 @@ it("shares what was read between devices: opening the panel on one clears the do
 
 	// Another device, with its own cache, reads the same marker from the server.
 	renderRouteAtWithRouter("/w/acme/teams");
-	await screen.findByRole("button", { name: "Open Heph, AI assistant" }, ROUTE_RENDER_WAIT);
+	await screen.findByRole("button", { name: "Ask Hephaestus" }, ROUTE_RENDER_WAIT);
 	expect(screen.queryByRole("button", { name: /new answer/u })).toBeNull();
 });
 
@@ -449,11 +446,7 @@ it("clears the dot when another device reads the answer and this one reconnects"
 	const { acme } = mockHephPanel(hephReady());
 	const answer = acme.add({ kind: "HEPH", text: "An answer nobody read yet." });
 	renderRouteAtWithRouter("/w/acme/teams");
-	await screen.findByRole(
-		"button",
-		{ name: "Open Heph, AI assistant, new answer" },
-		ROUTE_RENDER_WAIT,
-	);
+	await screen.findByRole("button", { name: "Ask Hephaestus, new answer" }, ROUTE_RENDER_WAIT);
 	const stream = await waitFor(() => {
 		const latest = FakeEventSource.latest();
 		assert.isDefined(latest);
@@ -464,18 +457,14 @@ it("clears the dot when another device reads the answer and this one reconnects"
 		stream.open();
 		stream.emit("snapshot", acme.conversation());
 	});
-	await screen.findByRole("button", { name: "Open Heph, AI assistant" });
+	await screen.findByRole("button", { name: "Ask Hephaestus" });
 });
 
 it("clears the dot live when the developer reads the answer on another device", async () => {
 	const { acme } = mockHephPanel(hephReady());
 	const answer = acme.add({ kind: "HEPH", text: "An answer nobody read yet." });
 	renderRouteAtWithRouter("/w/acme/teams");
-	await screen.findByRole(
-		"button",
-		{ name: "Open Heph, AI assistant, new answer" },
-		ROUTE_RENDER_WAIT,
-	);
+	await screen.findByRole("button", { name: "Ask Hephaestus, new answer" }, ROUTE_RENDER_WAIT);
 	const stream = await waitFor(() => {
 		const latest = FakeEventSource.latest();
 		assert.isDefined(latest);
@@ -490,7 +479,7 @@ it("clears the dot live when the developer reads the answer on another device", 
 	act(() => {
 		stream.emit("read", { lastReadAt: answer.createdAt });
 	});
-	await screen.findByRole("button", { name: "Open Heph, AI assistant" });
+	await screen.findByRole("button", { name: "Ask Hephaestus" });
 });
 
 it.each([
@@ -511,9 +500,9 @@ it.each([
 		acme.lastReadAt = answer.createdAt;
 		renderRouteAtWithRouter("/w/acme/teams");
 		await user.click(
-			await screen.findByRole("button", { name: "Open Heph, AI assistant" }, ROUTE_RENDER_WAIT),
+			await screen.findByRole("button", { name: "Ask Hephaestus" }, ROUTE_RENDER_WAIT),
 		);
-		const composer = await screen.findByRole("textbox", { name: "Message Heph" });
+		const composer = await screen.findByRole("textbox", { name: "Message Hephaestus" });
 		const panel = screen.getByRole("dialog");
 		await waitFor(() => expect(panel.contains(document.activeElement)).toBe(true));
 		// On a touch screen the keyboard stays down over the answer the developer opened the panel to read.
@@ -557,7 +546,7 @@ it("closes the panel when a link in an answer opens another page, which is then 
 	acme.lastReadAt = answer.createdAt;
 	const { router } = renderRouteAtWithRouter("/w/acme/teams");
 	const stream = await openStream(acme);
-	await user.click(screen.getByRole("button", { name: "Open Heph, AI assistant" }));
+	await user.click(screen.getByRole("button", { name: "Ask Hephaestus" }));
 	await user.click(await screen.findByRole("link", { name: "Your feedback on this work" }));
 
 	await waitFor(() => expect(router.state.location.pathname).toBe("/w/acme/feedback/433"));
@@ -567,7 +556,7 @@ it("closes the panel when a link in an answer opens another page, which is then 
 	screen.getByRole("heading", { name: "Your feedback on pull request #902" });
 
 	// The panel closed but stayed this workspace's: the conversation is there again on the same stream.
-	await user.click(screen.getByRole("button", { name: "Open Heph, AI assistant" }));
+	await user.click(screen.getByRole("button", { name: "Ask Hephaestus" }));
 	await screen.findByText("One thing stands out.");
 	expect(FakeEventSource.latest()).toBe(stream);
 });
@@ -598,12 +587,10 @@ it.each([
 		closing: "closing the panel",
 		close: async (user: ReturnType<typeof userEvent.setup>) => {
 			// Close, not Escape: Escape in a thread goes back to the conversation first.
-			await user.click(screen.getByRole("button", { name: "Close Heph, AI assistant" }));
+			await user.click(screen.getByRole("button", { name: "Close Ask Hephaestus" }));
 			// Closing hands focus back to the launcher, and nothing in the closing panel takes it.
 			await waitFor(() =>
-				expect(document.activeElement).toBe(
-					screen.getByRole("button", { name: "Open Heph, AI assistant" }),
-				),
+				expect(document.activeElement).toBe(screen.getByRole("button", { name: "Ask Hephaestus" })),
 			);
 		},
 	},
@@ -643,7 +630,7 @@ it.each([
 		acme.lastReadAt = answer.createdAt;
 		renderRouteAtWithRouter("/w/acme/teams");
 		await user.click(
-			await screen.findByRole("button", { name: "Open Heph, AI assistant" }, ROUTE_RENDER_WAIT),
+			await screen.findByRole("button", { name: "Ask Hephaestus" }, ROUTE_RENDER_WAIT),
 		);
 		// Reply in thread is the developer asking to write, so it raises the keyboard once.
 		await user.click(await screen.findByRole("button", { name: /^Reply in thread \(/u }));
@@ -653,7 +640,7 @@ it.each([
 		await close(user);
 		await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
 
-		await user.click(screen.getByRole("button", { name: "Open Heph, AI assistant" }));
+		await user.click(screen.getByRole("button", { name: "Ask Hephaestus" }));
 		const panel = await screen.findByRole("dialog");
 		// The thread stays open across closes, but opening the panel again is an ordinary open.
 		const reply = await within(panel).findByRole("textbox", { name: "Reply in thread" });
@@ -672,7 +659,7 @@ it("says in an open thread that live updates are paused, where the conversation 
 	acme.add({ kind: "USER", text: "Which ones?", parentEntryId: parent.id });
 	renderRouteAtWithRouter("/w/acme/teams");
 	const stream = await openStream(acme);
-	await user.click(screen.getByRole("button", { name: "Open Heph, AI assistant" }));
+	await user.click(screen.getByRole("button", { name: "Ask Hephaestus" }));
 	await user.click(await screen.findByRole("button", { name: /^1 reply/u }));
 	const panel = screen.getByRole("dialog");
 	await within(panel).findByText("Which ones?");

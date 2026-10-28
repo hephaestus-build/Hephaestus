@@ -68,7 +68,7 @@ export function DeleteWorkspaceAlertDialog({
 							<li>memberships and access</li>
 							<li>workspace, team, and repository settings</li>
 							<li>Hephaestus copies of synced integration content</li>
-							<li>practice feedback and Heph conversations</li>
+							<li>practice feedback and Hephaestus conversations</li>
 							<li>locally stored integration and AI-provider credentials</li>
 						</ul>
 						<p>These survive:</p>

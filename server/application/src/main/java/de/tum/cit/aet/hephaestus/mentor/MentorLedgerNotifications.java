@@ -112,7 +112,7 @@ public class MentorLedgerNotifications implements DisposableBean {
                     return;
                 }
                 log.warn(
-                        "Heph ledger notifications lost their connection; reconnecting in {}: {}",
+                        "Hephaestus ledger notifications lost their connection; reconnecting in {}: {}",
                         backoff,
                         e.getClass().getSimpleName());
                 try {
@@ -133,7 +133,7 @@ public class MentorLedgerNotifications implements DisposableBean {
         } catch (JacksonException malformed) {
             // The class only: a parser message can quote the notification's payload.
             log.warn(
-                    "Ignoring a malformed Heph ledger notification: {}",
+                    "Ignoring a malformed Hephaestus ledger notification: {}",
                     malformed.getClass().getSimpleName());
             return;
         }
@@ -155,7 +155,7 @@ public class MentorLedgerNotifications implements DisposableBean {
         try {
             delivery.run();
         } catch (RuntimeException e) {
-            log.warn("A Heph ledger listener failed", e);
+            log.warn("A Hephaestus ledger listener failed", e);
         }
     }
 

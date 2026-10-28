@@ -83,7 +83,7 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
     @BeforeEach
     void setUpLedger() {
         User developer = persistUser("heph-turns-developer");
-        workspace = createWorkspace("heph-turns", "Heph", "heph-org", AccountType.ORG, developer);
+        workspace = createWorkspace("heph-turns", "Hephaestus", "heph-org", AccountType.ORG, developer);
         account = accountId(developer);
         main = conversations.findOrCreateMain(workspace.getId(), account);
     }
@@ -238,7 +238,7 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
     }
 
     /**
-     * The reasons that a deployment of {@code capacity} Heph slots gives. Turns of earlier tests can still hold slots,
+     * The reasons that a deployment of {@code capacity} Hephaestus slots gives. Turns of earlier tests can still hold slots,
      * so a test sets the capacity from the slots held before it.
      */
     private MentorTurnWaits waits(@Nullable Integer capacity) {
@@ -293,7 +293,7 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
         assertThat(turns.claimNext(WORKER, LEASE)).isPresent();
 
         assertThat(waits(1).waits(workspace.getId(), List.of(stored(followUp.turn()))))
-                .as("it waits for its own conversation, not for a free Heph")
+                .as("it waits for its own conversation, not for a free Hephaestus")
                 .isEmpty();
     }
 
@@ -315,7 +315,7 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
         assertThat(turns.claimNext(WORKER, LEASE)).isPresent();
 
         assertThat(publishedQueued())
-                .as("the start can have taken the last Heph slot")
+                .as("the start can have taken the last Hephaestus slot")
                 .contains(inThread.turn().getId());
     }
 
@@ -330,7 +330,7 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
         assertThat(turns.requeueRunning(workspace.getId(), main.getId())).isPresent();
 
         assertThat(publishedQueued())
-                .as("the requeue gave a Heph slot back")
+                .as("the requeue gave a Hephaestus slot back")
                 .contains(inThread.turn().getId(), first.turn().getId());
     }
 
@@ -345,7 +345,7 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
         turns.stop(workspace.getId(), first.turn().getId());
 
         assertThat(publishedQueued())
-                .as("a stop of a question that never started gives back no Heph slot")
+                .as("a stop of a question that never started gives back no Hephaestus slot")
                 .contains(followUp.turn().getId())
                 .doesNotContain(inThread.turn().getId());
     }
@@ -374,7 +374,7 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
         turns.end(running.getId(), running.getAttempt(), WORKER, MentorTurn.Status.DONE, List.of(), null);
 
         assertThat(publishedQueued())
-                .as("every workspace shares the Heph slot that the end gave back")
+                .as("every workspace shares the Hephaestus slot that the end gave back")
                 .contains(elsewhere.turn().getId());
     }
 
@@ -461,7 +461,7 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
                                 MentorLedgerFixtures.piIdOf(submission.question())),
                         MentorLedgerFixtures.user(MentorLedgerFixtures.piId(), "rendered prompt"),
                         MentorLedgerFixtures.answer(MentorLedgerFixtures.piId(), "PARTIAL-ANSWER-NOT-STORED")),
-                "its Heph host reported ERROR");
+                "its Hephaestus host reported ERROR");
 
         List<MentorEntry> stored = MentorLedgerFixtures.turnEntries(entityManager, workspace.getId(), running.getId());
         assertThat(stored)

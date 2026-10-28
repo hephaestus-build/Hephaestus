@@ -274,7 +274,7 @@ describe("AdminInstanceLlmUsageTable", () => {
 				.getAttribute("aria-expanded"),
 		).toBe("true");
 		const byJobType = screen.getByRole("table", { name: "AI spend by run type" });
-		within(byJobType).getByText("Heph turn");
+		within(byJobType).getByText("Conversation answer");
 		within(byJobType).getByText("$1.75");
 		const byDay = screen.getByRole("table", { name: "AI spend by day" });
 		const julyFifthRow = within(byDay).getByRole("row", { name: /^Jul 5/u });
@@ -285,7 +285,7 @@ describe("AdminInstanceLlmUsageTable", () => {
 		).toStrictEqual(["Jul 5", "$4.25", "$1.75", "1"]);
 	});
 
-	it("names the expanded workspace's practice reviews beside its Heph turns", () => {
+	it("names the expanded workspace's practice reviews beside its conversation turns", () => {
 		renderTable([workspace], {
 			expandedWorkspaceSlug: workspace.workspaceSlug,
 			detailReport: {
@@ -303,7 +303,7 @@ describe("AdminInstanceLlmUsageTable", () => {
 			.getAllByRole("cell")
 			.map((cell) => cell.textContent);
 		expect([cells[0], cells[5], cells.at(-1)]).toStrictEqual(["Practice review", "23", "46"]);
-		within(byJobType).getByRole("row", { name: /^Heph turn/u });
+		within(byJobType).getByRole("row", { name: /^Conversation answer/u });
 	});
 
 	it("projects a near-cap month in the panel, in the third person the host is reading in", () => {

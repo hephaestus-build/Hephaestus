@@ -11,13 +11,13 @@ import { AuthProvider } from "@/runtime/auth/AuthContext";
 import { ROUTE_RENDER_WAIT, testQueryClient } from "@/test/router-harness";
 
 const { importFailure } = vi.hoisted(() => ({
-	importFailure: new Error("Optional Heph panel chunk unavailable"),
+	importFailure: new Error("Optional Hephaestus panel chunk unavailable"),
 }));
 vi.mock("./-GlobalHephPanel", () => {
 	throw importFailure;
 });
 
-it("keeps the main route available and offers a reload when the Heph panel import rejects", async () => {
+it("keeps the main route available and offers a reload when the Hephaestus panel import rejects", async () => {
 	server.use(
 		http.get("*/workspaces", () => HttpResponse.json([])),
 		http.get("*/user/features", () => HttpResponse.json({})),
@@ -55,7 +55,7 @@ it("keeps the main route available and offers a reload when the Heph panel impor
 		).toBe("/workspaces/new");
 		expect(screen.queryByText("We could not load this page")).toBeNull();
 		// The browser keeps a failed import, so the message offers a page load, not a retry.
-		await screen.findByText("We could not show Heph.");
+		await screen.findByText("We could not open Ask Hephaestus.");
 		screen.getByRole("button", { name: "Reload page" });
 		expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
 	} finally {

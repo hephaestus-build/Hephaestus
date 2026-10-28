@@ -72,13 +72,13 @@ function stateOfOutcome(outcome: TurnOutcome, actions: TimelineActions | undefin
 	if (outcome.status === "STOPPED") {
 		return { kind: "stopped" };
 	}
-	// The line sits under the turn's last message, which is Heph's when it wrote part of an answer
+	// The line sits under the turn's last message, which is Hephaestus's when it wrote part of an answer
 	// before it failed; Try again asks the question again either way.
 	const { question } = outcome;
 	const ask = actions?.ask;
 	return {
 		kind: "failed",
-		reason: outcome.error ?? "Heph could not answer this message.",
+		reason: outcome.error ?? "Hephaestus could not answer this message.",
 		onTryAgain: ask && !question.deleted ? () => ask.onTryAgain(question) : undefined,
 	};
 }
@@ -139,7 +139,7 @@ function ClosesDay({
 	);
 }
 
-/** One row of a timeline: a stored message, an unsent one, or Heph's answer in progress. */
+/** One row of a timeline: a stored message, an unsent one, or Hephaestus's answer in progress. */
 export function HephTimelineRow({
 	row,
 	nextDay,

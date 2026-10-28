@@ -139,7 +139,7 @@ export function SlackPreferencesSection({
 				</div>
 				<p className="text-sm text-muted-foreground">
 					Connect your Slack account, and choose whether Hephaestus can use your new messages in
-					monitored channels as context for your feedback and Heph’s answers.
+					monitored channels as context for your feedback and Hephaestus’s answers.
 				</p>
 			</div>
 
@@ -231,7 +231,7 @@ function WorkspacePreferenceRow({
 					<FieldLabel htmlFor={switchId}>Use your new channel messages</FieldLabel>
 					<FieldDescription>
 						When this is on, new messages you send in monitored Slack channels can be used as
-						context for your private conversations with Heph. Turning it off deletes the
+						context for your private conversations with Hephaestus. Turning it off deletes the
 						channel-message data already collected from you in this workspace.
 					</FieldDescription>
 				</FieldContent>

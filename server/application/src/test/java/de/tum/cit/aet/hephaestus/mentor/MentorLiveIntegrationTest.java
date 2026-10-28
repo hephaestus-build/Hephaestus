@@ -85,7 +85,8 @@ class MentorLiveIntegrationTest extends AbstractWorkspaceIntegrationTest {
     void setUpWorkspace() {
         developer = persistUser("mentor");
         colleague = persistUser("heph-live-colleague");
-        workspace = createWorkspace("heph-live", "Heph live", "heph-live", AccountType.ORG, persistUser("live-owner"));
+        workspace = createWorkspace(
+                "heph-live", "Hephaestus live", "heph-live", AccountType.ORG, persistUser("live-owner"));
         ensureMembership(workspace, developer, WorkspaceRole.MEMBER);
         ensureMembership(workspace, colleague, WorkspaceRole.MEMBER);
     }
@@ -217,12 +218,12 @@ class MentorLiveIntegrationTest extends AbstractWorkspaceIntegrationTest {
         try {
             await().atMost(WAIT).until(() -> stream.has(SNAPSHOT, "\"activeTurns\":[]"));
             awaitListening();
-            // The suite's deployment has one Heph slot (application-test.yml), and a started turn takes it.
+            // The suite's deployment has one Hephaestus slot (application-test.yml), and a started turn takes it.
             submit(colleague, "A colleague's question");
             assertThat(turns.claimNext("worker-heph-live", Duration.ofMinutes(5)))
                     .isPresent();
 
-            MentorTurnService.Submission waiting = submit(developer, "Is Heph free?");
+            MentorTurnService.Submission waiting = submit(developer, "Is Hephaestus free?");
             MentorTurnService.Submission followUp = submit(developer, "And after that?");
 
             await().atMost(WAIT)

@@ -52,9 +52,8 @@ Hephaestus gives feedback on every piece of work it can assess, so experienced p
 - **Feedback on the Work**: A comment on the pull request, merge request, or issue.
 - **Practice Page**: Each developer's private view of feedback and progress per practice.
   Workspace admins see the observations and delivery status behind it.
-- **Conversations**: A weekly digest you can turn on arrives in the conversation.
+- **Ask Hephaestus**: A weekly digest you can turn on arrives in the conversation.
   Developers ask why, ask for an example, or disagree.
-  In the conversation, Hephaestus goes by Heph.
   Conversations run in the web app and, if Slack is connected, in a direct message.
 - **Feedback Mode**: Off, Approve first, or Automatic, per workspace, practice group, or practice.
   Approve first holds feedback on the work until a workspace admin approves it.

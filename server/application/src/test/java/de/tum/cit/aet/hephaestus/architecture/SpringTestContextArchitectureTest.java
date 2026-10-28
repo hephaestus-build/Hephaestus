@@ -138,7 +138,8 @@ class SpringTestContextArchitectureTest extends HephaestusArchitectureTest {
                     "gitlab-token-lifecycle",
                     "real credential storage, lifecycle locks and attention with only"
                             + " irreversible upstream token rotation mocked"),
-            Map.entry("heph-live", "worker role with a real Heph host container, the agent image and a live model"),
+            Map.entry(
+                    "heph-live", "worker role with a real Hephaestus host container, the agent image and a live model"),
             Map.entry("webhook-role", "the webhook role alone, with real JetStream and no database"),
             Map.entry("outline-enabled", "enabled Outline integration wiring"),
             Map.entry("outline-origin", "enabled Outline integration wiring with one allowed document origin"),

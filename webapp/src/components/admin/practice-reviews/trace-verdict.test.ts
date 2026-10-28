@@ -169,7 +169,7 @@ describe("traceVerdict on a piece of feedback", () => {
 	it.each([
 		["destination-on-work", "it is ready to be posted on the work"],
 		["destination-practice-page", "it is ready for their practice pages"],
-		["destination-conversation", "it is ready for their next conversation with Heph"],
+		["destination-conversation", "it is ready for their next conversation with Hephaestus"],
 	] as const)("names where a ready piece goes in %s", (key, sentence) => {
 		const lineage = withFeedback(lineageStateCase(key).lineage, {
 			state: "READY",

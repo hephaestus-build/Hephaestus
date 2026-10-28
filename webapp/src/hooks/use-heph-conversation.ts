@@ -50,7 +50,7 @@ const READ_RETRIES = 3;
 /** A user view has no live stream, so it reads the viewed conversation again at this pace. */
 const VIEW_POLL_MS = 15_000;
 
-const NOT_SENT = "Heph did not get this message.";
+const NOT_SENT = "Hephaestus did not get this message.";
 
 const submitKey = (workspaceSlug: string) => ["submitMentorTurn", workspaceSlug] as const;
 
@@ -76,7 +76,7 @@ function earlierOf<TData, TError>(
 
 /**
  * The messages the developer sent in this scope that the server has not stored yet, read from the
- * mutation cache, so the Heph panel and the mentor page show the same ones. A send the server stored
+ * mutation cache, so the Hephaestus panel and the mentor page show the same ones. A send the server stored
  * leaves this list as its stored message arrives in the pages, not when its request ends: the stored
  * copy is written in order and can wait behind a read, and the question must not vanish meanwhile.
  */
@@ -205,7 +205,7 @@ export function useHephThread(
 
 interface SendOptions {
 	parentEntryId?: string;
-	/** The page the developer asks from, as the Heph panel names it. */
+	/** The page the developer asks from, as the Hephaestus panel names it. */
 	pageContext?: string;
 }
 
@@ -283,7 +283,7 @@ export function useHephActions(workspaceSlug: string): HephActions {
 		onSuccess: (turn) => {
 			inOrder(queryClient, workspaceSlug, () => applyTurn(queryClient, workspaceSlug, turn));
 		},
-		onError: reportFailure("We could not stop Heph. Try again."),
+		onError: reportFailure("We could not stop the answer. Try again."),
 	});
 	const remove = useMutation({
 		...deleteMentorEntryMutation(),
@@ -358,7 +358,7 @@ function usePendingRead(workspaceSlug: string): Date | undefined {
 }
 
 /**
- * Whether Heph answered, in the conversation or a thread, since the developer last read it on any
+ * Whether Hephaestus answered, in the conversation or a thread, since the developer last read it on any
  * device, or on this one while its read is still on the way.
  */
 export function useHephUnread(workspaceSlug: string): boolean {

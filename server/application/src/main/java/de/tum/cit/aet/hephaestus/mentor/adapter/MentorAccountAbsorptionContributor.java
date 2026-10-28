@@ -15,7 +15,7 @@ import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Component;
 
 /**
- * Moves the Heph conversations of an absorbed account to the account that claimed it. A developer has one main
+ * Moves the Hephaestus conversations of an absorbed account to the account that claimed it. A developer has one main
  * conversation per workspace, so where both accounts have one, the absorbed main merges into the claiming one: its
  * entries follow the claiming main's entries in their own order, with new positions and the same ids, so threads,
  * turns and feedback copies still find them. Its summaries are erased, because they summarize a conversation that no
@@ -102,7 +102,7 @@ public class MentorAccountAbsorptionContributor implements AccountAbsorptionCont
                 Map.of("unclaimed", unclaimedAccountId),
                 Long.class);
         if (remaining == null || remaining != 0) {
-            throw new IllegalStateException("Heph conversation ownership did not move to the claimed account");
+            throw new IllegalStateException("Hephaestus conversation ownership did not move to the claimed account");
         }
     }
 }

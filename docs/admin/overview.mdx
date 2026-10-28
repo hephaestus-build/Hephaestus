@@ -38,7 +38,7 @@ The [threat model](./threat-model#system-and-data-flow) shows the trust boundari
 ```mermaid
 flowchart LR
 accTitle: Self-hosted Hephaestus architecture and network
-accDescr: Browsers and provider webhooks reach the reverse proxy on ports 80 and 443, the only published ports. The proxy routes the page to the webapp, the API and Slack interactivity to the application server, and the other webhooks to the webhook server. The webhook server publishes verified events to NATS, which the application server consumes. The application server and the worker use PostgreSQL. The webhook server has no database. The worker starts sandboxes on internal networks through the Docker socket. Review sandboxes and the Heph host reach only the sandbox gateway of the worker. Turn sandboxes have no network. The server and the worker call the providers, and the worker's LLM proxy calls the AI provider.
+accDescr: Browsers and provider webhooks reach the reverse proxy on ports 80 and 443, the only published ports. The proxy routes the page to the webapp, the API and Slack interactivity to the application server, and the other webhooks to the webhook server. The webhook server publishes verified events to NATS, which the application server consumes. The application server and the worker use PostgreSQL. The webhook server has no database. The worker starts sandboxes on internal networks through the Docker socket. Review sandboxes and the conversation host reach only the sandbox gateway of the worker. Turn sandboxes have no network. The server and the worker call the providers, and the worker's LLM proxy calls the AI provider.
 
   subgraph Internet[Internet]
     Browser[Browser]
@@ -58,7 +58,7 @@ accDescr: Browsers and provider webhooks reach the reverse proxy on ports 80 and
     end
     subgraph SandboxNetworks[Internal sandbox networks without internet]
       ReviewSandbox[Review sandboxes]
-      HephHost[Heph host]
+      HephHost[conversation host]
       TurnSandbox[Turn sandboxes, no network]
     end
   end

@@ -41,7 +41,7 @@ export const EveryKind: Story = {
 		for (const size of ["sm", "md"]) {
 			const list = canvas.getByRole("list", { name: `Size ${size}` });
 			await expect(list).toHaveTextContent(
-				"Practice reviewsHephDecision modelEmbedding modelReranking model",
+				"Practice reviewsConversationsDecision modelEmbedding modelReranking model",
 			);
 		}
 	},

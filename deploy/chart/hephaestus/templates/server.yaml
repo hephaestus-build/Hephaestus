@@ -88,7 +88,7 @@ spec:
               value: {{ .Values.worker.enabled | quote }}
             {{- $hephSlots := mul (int .Values.worker.replicas) (int (include "hephaestus.conversationTurns" .)) }}
             {{- if and .Values.worker.enabled (gt $hephSlots 0) }}
-            # Every worker's Heph turns. A question says that Heph answers other questions only while all of them run.
+            # Every worker's conversation turns. A question says that Hephaestus answers other questions only while all of them run.
             - name: HEPHAESTUS_MENTOR_TURN_CAPACITY
               value: {{ $hephSlots | quote }}
             {{- end }}

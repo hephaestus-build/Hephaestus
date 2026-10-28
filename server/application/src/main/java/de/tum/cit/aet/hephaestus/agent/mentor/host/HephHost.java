@@ -16,7 +16,7 @@ import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.handler.ConcurrentWebSocketSessionDecorator;
 
 /**
- * The worker's one Heph host and its command channel ({@code docs/contributor/unified-pi-runtime.mdx} § The Heph
+ * The worker's one Hephaestus host and its command channel ({@code docs/contributor/unified-pi-runtime.mdx} § The Hephaestus
  * host). The host's WebSocket client answers each ping without host code, so a host whose process is stuck stops
  * answering, and one that leaves {@code UNANSWERED_PINGS} pings in a row unanswered is gone, like one whose channel
  * closed.
@@ -91,11 +91,11 @@ public class HephHost {
                 launched = sandbox.launch(starting.id(), HephHostSpec.spec());
             } catch (IOException e) {
                 // The class only: the sandbox logs a cause it knows, such as a worker container it cannot identify.
-                log.warn("Could not start the Heph host: {}", e.getClass().getSimpleName());
+                log.warn("Could not start the Hephaestus host: {}", e.getClass().getSimpleName());
                 forget(starting);
                 return false;
             } catch (RuntimeException e) {
-                log.warn("Could not start the Heph host: {}", e.getClass().getSimpleName(), e);
+                log.warn("Could not start the Hephaestus host: {}", e.getClass().getSimpleName(), e);
                 forget(starting);
                 return false;
             }
@@ -139,7 +139,7 @@ public class HephHost {
                 host = null;
             }
         }
-        log.warn("The Heph host {}; removing it", failure);
+        log.warn("The Hephaestus host {}; removing it", failure);
         sandbox.remove(launched);
         return false;
     }
@@ -169,7 +169,7 @@ public class HephHost {
                 early.close();
             } catch (IOException e) {
                 log.debug(
-                        "Could not close the channel of a Heph host that did not start: {}",
+                        "Could not close the channel of a Hephaestus host that did not start: {}",
                         e.getClass().getSimpleName());
             }
         }
@@ -197,7 +197,7 @@ public class HephHost {
             unanswered.set(0);
             lock.notifyAll();
         }
-        log.info("Heph host {} is ready", hostId);
+        log.info("Hephaestus host {} is ready", hostId);
         return true;
     }
 
@@ -213,7 +213,7 @@ public class HephHost {
             socket = null;
             channel = null;
         }
-        log.warn("The Heph host closed its command channel; its running turns are left to their leases");
+        log.warn("The Hephaestus host closed its command channel; its running turns are left to their leases");
         lost.run();
         if (gone != null) {
             HostSandbox.Host removed = gone;
@@ -243,7 +243,7 @@ public class HephHost {
         if (failure == null) {
             return;
         }
-        log.warn("The Heph host {}; closing its command channel", failure);
+        log.warn("The Hephaestus host {}; closing its command channel", failure);
         WebSocketSession open;
         synchronized (lock) {
             open = socket;
@@ -255,7 +255,7 @@ public class HephHost {
             open.close(CloseStatus.SESSION_NOT_RELIABLE);
         } catch (IOException | RuntimeException e) {
             log.debug(
-                    "Could not close the Heph host command channel: {}",
+                    "Could not close the Hephaestus host command channel: {}",
                     e.getClass().getSimpleName());
         }
         // The close callback reports this too; whichever comes second finds the host gone already.
@@ -273,7 +273,7 @@ public class HephHost {
     void send(String frame) throws IOException {
         WebSocketSession sender = channel;
         if (sender == null || !sender.isOpen()) {
-            throw new IOException("No Heph host is connected");
+            throw new IOException("No Hephaestus host is connected");
         }
         sender.sendMessage(new TextMessage(frame));
     }
@@ -294,7 +294,7 @@ public class HephHost {
                 open.close(CloseStatus.GOING_AWAY);
             } catch (IOException e) {
                 log.debug(
-                        "Could not close the Heph host command channel: {}",
+                        "Could not close the Hephaestus host command channel: {}",
                         e.getClass().getSimpleName());
             }
         }
