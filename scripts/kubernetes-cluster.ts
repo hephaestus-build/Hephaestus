@@ -597,6 +597,11 @@ export async function prepare(options: PrepareOptions): Promise<{ rotated: boole
 		Object.keys(currentTls).length > 0 &&
 		Object.entries(tls).some(([key, value]) => currentTls[key] !== value);
 	await secret(tlsName, NAMESPACE, tls);
+	await secret("hephaestus-postgresql-backup-tls", NAMESPACE, {
+		"ca.crt": asString(tls["ca.crt"], "PostgreSQL CA"),
+		"tls.crt": asString(tls["backup.crt"], "backup certificate"),
+		"tls.key": asString(tls["backup.key"], "backup key"),
+	});
 	const statefulSet = `statefulset/${RELEASE}-postgresql`;
 	if (renewed && (await succeeds("kubectl", ["-n", NAMESPACE, "get", statefulSet]))) {
 		// PostgreSQL reads its certificate at start.
@@ -1000,6 +1005,7 @@ export async function backupDrill(work: string, podCidr: string): Promise<void> 
 	const backup = (restore: { enabled: boolean; time: string }) => ({
 		postgresql: {
 			backup: {
+				clientTlsSecret: "hephaestus-postgresql-backup-tls",
 				enabled: true,
 				s3: {
 					bucket: BUCKET,
@@ -1520,6 +1526,7 @@ export async function render(): Promise<string> {
 			postgresql: {
 				tls: { existingSecret: `${RELEASE}-postgresql-tls` },
 				backup: {
+					clientTlsSecret: "hephaestus-postgresql-backup-tls",
 					enabled: true,
 					s3: { bucket: "hephaestus-backups", endpoint: "s3.example.com", region: "eu-central-1" },
 				},

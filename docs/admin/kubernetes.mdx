@@ -144,10 +144,12 @@ The chart creates no certificate, no key, and no CA.
 | --- | --- | --- | --- |
 | `ca.crt` | Yes | Yes | Server, webhook, worker |
 | `tls.crt`, `tls.key` | Yes | No | Bundled PostgreSQL only |
-| `backup.crt`, `backup.key` | With backups | No | Backup Jobs only |
 
 The server, the webhook role, and the worker receive only `ca.crt`, read-only, at `/etc/hephaestus/postgresql-ca`.
 No application role receives a private key.
+Backup Jobs use a separate client Secret, `postgresql.backup.clientTlsSecret`.
+It holds `ca.crt`, `tls.crt` and `tls.key` for the common name `hephaestus-backup`.
+The PostgreSQL CA signs it. The chart mounts its certificate and key as `backup.crt` and `backup.key`.
 Do not put the private key of the CA in this Secret.
 
 For the bundled PostgreSQL, the certificate in `tls.crt` must name `<release>-postgresql.<release namespace>.svc`.
@@ -695,7 +697,7 @@ The CA of the PostgreSQL certificate is valid for ten years.
 
 - Traefik has no request body limit on this platform. Its default idle timeout is 180 seconds.
 - The k3s default Pod network is `10.42.0.0/16`. `trustedProxies` in `k3s-values.yaml` matches it. If you change the network of k3s, change `trustedProxies` too.
-- The bundled PostgreSQL backups need a client certificate in the PostgreSQL TLS Secret. `k3s-certificates.yaml` does not issue it. [Backup and restore](#backup-and-restore) describes it.
+- The platform issues a separate backup client certificate, `hephaestus-postgresql-backup-tls`. Enable backups after you configure the off-host repository ([Backup and restore](#backup-and-restore)).
 - If the model endpoint resolves to this host's own Gateway, set `networkPolicy.workerGatewayPorts: [8443, 8000]` in `site.yaml`, as [Network policy](#network-policy) describes.
 - CI's clusters run no cert-manager. Only the release workflow's install tests the cert-manager pin.
 
@@ -1049,7 +1051,9 @@ To prepare backups:
 
 1. Create the bucket for this instance alone, and an identity with read, write and delete rights in it.
 2. Add `BACKUP_S3_KEY`, `BACKUP_S3_KEY_SECRET` and `BACKUP_CIPHER_PASS` to the release Secret. Generate the passphrase and keep a copy as [Secret custody](./secret-custody#keep-the-required-keys-outside-the-cluster) describes.
-3. Add `backup.crt` and `backup.key` to the PostgreSQL TLS Secret: a client certificate for `hephaestus-backup`.
+3. Set `postgresql.backup.clientTlsSecret` to a TLS Secret for the common name `hephaestus-backup`.
+   It needs `ca.crt`, `tls.crt` and `tls.key`, signed by the PostgreSQL CA.
+   The one-host platform issues `hephaestus-postgresql-backup-tls` and sets this value.
 4. Set `postgresql.backup.enabled=true` and `postgresql.backup.s3` with the bucket, the endpoint host name and the region. Set `cidr` and `port` when the endpoint is in a private address range.
    When a private CA signs the endpoint's certificate, add it to the PostgreSQL TLS Secret as `s3-ca.crt`, and set `postgresql.backup.s3.privateCa=true`.
 5. Upgrade the release, and check that the stanza Job completed.
@@ -1079,8 +1083,22 @@ Restore the NATS JetStream data separately, as [Backup and restore](./backup-res
    ```
 
    The Job retries while PostgreSQL still shuts down.
-3. Upgrade the release again with `postgresql.backup.restore.enabled=false`.
-   PostgreSQL replays the WAL up to the target, and the other roles start.
+3. Keep the clone isolated before any application code starts. Deny provider and model egress independently of silent mode.
+4. Upgrade with `postgresql.backup.restore.enabled=false`, `migration.enabled=false`, and server, webhook and worker replica counts of zero.
+   PostgreSQL alone replays the WAL up to the target. Wait for its readiness.
+5. Apply the lockdown SQL from the verified chart, before starting migrations or application roles:
+
+   ```bash
+   kubectl -n hephaestus exec -i hephaestus-postgresql-0 -c postgresql -- \
+     sh -c 'exec psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' \
+     < "chart-$VERSION/hephaestus/files/restore-clone-lockdown.sql"
+   ```
+
+6. Read back silent mode, paused feedback and disabled conversation bindings. Keep external egress denied.
+7. Restore JetStream with a recovery point consistent with PostgreSQL. Resolve provider write receipts before consumers start.
+8. Set `migration.enabled=true` and start the server alone. Verify migrations, readiness and authenticated reads.
+9. Restore the other replica counts only after the isolated checks pass.
+   Follow [Prove silence](./production-operations-runbook#silent-deployment-checklist) before opening any external destination.
 
 The restored database has the database password that it had at the backup.
 If `DATABASE_PASSWORD` changed since then, put the old value back in the Secret before step 3.
@@ -1191,7 +1209,7 @@ The worker's `/actuator/prometheus` on its management port shows the same tier i
 - The kubelet enforces sandbox disk limits by eviction after it measures the use, not when a process writes.
   A sandbox can pass its limit until the next measurement, for some seconds.
   Only file system project quotas (`LocalStorageCapacityIsolationFSQuotaMonitoring`) refuse the write itself.
-- The chart has no migration from a Compose installation yet.
+- Move a Compose install at the same release version. Back up PostgreSQL, JetStream and the encryption keys before the move.
 
 ## What CI does not show
 

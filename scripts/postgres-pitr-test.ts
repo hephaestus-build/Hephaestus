@@ -372,7 +372,15 @@ try {
 		throw new Error("restored database has no application migration history");
 	}
 	const lockdown = readFileSync(
-		path.join(import.meta.dirname, "..", "docker", "self-host", "restore-clone-lockdown.sql"),
+		path.join(
+			import.meta.dirname,
+			"..",
+			"deploy",
+			"chart",
+			"hephaestus",
+			"files",
+			"restore-clone-lockdown.sql",
+		),
 	);
 	run(
 		"docker",

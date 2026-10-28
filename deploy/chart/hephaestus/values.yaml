@@ -13,6 +13,10 @@ images: {}
 host: ""
 # Lowercase letters, digits, ".", "_" or "-". The server refuses to start with another value.
 deploymentEnvironment: local
+
+# Workspace hosts use the public host as their base domain. Prepare wildcard DNS and TLS first.
+workspaceSubdomains:
+  enabled: false
 # Tomcat internal-proxies regular expression (not a CIDR) that matches only the addresses of the
 # Gateway data plane. The server refuses to start in production when it is blank.
 trustedProxies: ""
@@ -86,11 +90,13 @@ postgresql:
     limits: { cpu: "2", memory: 2Gi, ephemeral-storage: 1Gi }
   # Optional: pgBackRest for the bundled server. PostgreSQL archives its WAL to one S3-compatible
   # bucket, and CronJobs take a full backup each week and a differential backup on the other days.
-  # Needs, in `secret.name`: BACKUP_S3_KEY, BACKUP_S3_KEY_SECRET and BACKUP_CIPHER_PASS; and in
-  # postgresql.tls.existingSecret: backup.crt and backup.key, a client certificate for the CN
-  # hephaestus-backup that its ca.crt signed. docs/admin/kubernetes.mdx § Backup and restore.
+  # Needs BACKUP_S3_KEY, BACKUP_S3_KEY_SECRET and BACKUP_CIPHER_PASS in secret.name.
+  # clientTlsSecret holds ca.crt, tls.crt and tls.key for CN hephaestus-backup, signed by the
+  # same CA as PostgreSQL. docs/admin/kubernetes.mdx § Backup and restore.
   backup:
     enabled: false
+    # A cert-manager TLS Secret for CN hephaestus-backup, signed by the PostgreSQL CA.
+    clientTlsSecret: ""
     s3:
       bucket: ""
       # A host name, without https://.
@@ -168,6 +174,8 @@ server:
 # The release's migration Job: the server image in its migrate run mode, once per revision. Its
 # context holds the data source and Liquibase only.
 migration:
+  # Disable while a restore clone receives its pre-boot lockdown.
+  enabled: true
   resources:
     requests: { cpu: 250m, memory: 1536Mi, ephemeral-storage: 64Mi }
     limits: { cpu: "2", memory: 1536Mi, ephemeral-storage: 256Mi }

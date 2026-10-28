@@ -544,13 +544,13 @@ spec:
     # The backup client certificate. The key belongs to root and the fsGroup 999.
     - name: tls
       secret:
-        secretName: {{ include "hephaestus.postgresqlTlsSecret" $root }}
+        secretName: {{ required "postgresql.backup.clientTlsSecret is required with backups" $root.Values.postgresql.backup.clientTlsSecret }}
         items:
           - key: ca.crt
             path: ca.crt
-          - key: backup.crt
+          - key: tls.crt
             path: backup.crt
-          - key: backup.key
+          - key: tls.key
             path: backup.key
         defaultMode: 288 # 0440
     - name: tmp

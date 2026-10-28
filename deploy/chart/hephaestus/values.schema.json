@@ -141,6 +141,12 @@
 			"type": "string",
 			"pattern": "^(?:[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?\\.)+[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?$"
 		},
+		"workspaceSubdomains": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["enabled"],
+			"properties": { "enabled": { "type": "boolean" } }
+		},
 		"deploymentEnvironment": { "type": "string", "pattern": "^[a-z0-9._-]{1,64}$" },
 		"trustedProxies": { "type": "string", "minLength": 1, "maxLength": 512 },
 		"secret": {
@@ -257,9 +263,18 @@
 				"backup": {
 					"type": "object",
 					"additionalProperties": false,
-					"required": ["enabled", "s3", "restore", "retentionFull", "schedule", "resources"],
+					"required": [
+						"enabled",
+						"s3",
+						"restore",
+						"retentionFull",
+						"schedule",
+						"resources",
+						"clientTlsSecret"
+					],
 					"properties": {
 						"enabled": { "type": "boolean" },
+						"clientTlsSecret": { "$ref": "#/definitions/name" },
 						"s3": {
 							"type": "object",
 							"additionalProperties": false,
@@ -379,8 +394,9 @@
 		"migration": {
 			"type": "object",
 			"additionalProperties": false,
-			"required": ["resources"],
+			"required": ["resources", "enabled"],
 			"properties": {
+				"enabled": { "type": "boolean" },
 				"resources": { "$ref": "#/definitions/resources" }
 			}
 		},
