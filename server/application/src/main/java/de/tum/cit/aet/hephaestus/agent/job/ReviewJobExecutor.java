@@ -462,9 +462,11 @@ public class ReviewJobExecutor {
         if (local.isEmpty()) return;
         Set<UUID> running = Set.copyOf(jobRepository.findRunningIdsOwnedBy(workerId, local.keySet()));
         local.forEach((jobId, attempt) -> {
-            // A later attempt of the job that this worker claimed since the read is not the one that ended.
-            if (!running.contains(jobId) && attempt.equals(localRunningJobs.get(jobId)))
-                cancelLocalJob(jobId, "its attempt ended elsewhere");
+            // A later attempt of the job that this worker claimed since the read is not the one that ended, and an
+            // attempt that composes has no sandbox left: its own end writes the row.
+            if (!running.contains(jobId)
+                    && attempt.equals(localRunningJobs.get(jobId))
+                    && !composingJobs.contains(jobId)) cancelLocalJob(jobId, "its row no longer runs on this worker");
         });
     }
 

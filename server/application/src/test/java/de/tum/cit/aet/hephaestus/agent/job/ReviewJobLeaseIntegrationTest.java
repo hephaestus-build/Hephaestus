@@ -185,6 +185,27 @@ class ReviewJobLeaseIntegrationTest extends BaseIntegrationTest {
                 .containsExactly(mine);
     }
 
+    @Autowired
+    private ReviewJobRecovery recovery;
+
+    @Test
+    @DisplayName("an attempt that 0.x claimed and the 1.0 changelog counted as a drain is requeued with no retry spent")
+    void shouldRequeueACutoverAttemptWithoutSpendingARetry() {
+        UUID id = runningJob("worker-0x");
+        // In 0.x the attempt was number 1 with no drain: it had spent 1 retry. The changelog then counted one drain.
+        jdbc.update("UPDATE review_job SET attempt = 1, drain_count = 1, leased_until = NULL WHERE id = ?", id);
+
+        assertThat(expired()).extracting(OrphanedJobRef::getJobId).contains(id);
+        transactionTemplate.execute(s -> recovery.recover(id, "worker-0x", 1, null));
+
+        ReviewJob requeued = jobRepository.findById(id).orElseThrow();
+        assertThat(requeued.getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
+        assertThat(requeued.getAttempt()).isEqualTo(2);
+        assertThat(requeued.spentAttempts())
+                .as("the upgrade spent no retry: as many as in 0.x")
+                .isEqualTo(1);
+    }
+
     @Test
     @DisplayName("requeueOrphan is a CAS: first caller wins (1), the second is a no-op (0)")
     void requeueOrphanIsCasIdempotent() {
@@ -219,15 +240,15 @@ class ReviewJobLeaseIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    @DisplayName("worker identity binds on the worker role WITHOUT a WSS endpoint (orphan recovery always armed)")
-    void workerIdentityBoundWithoutWssEndpoint() {
+    @DisplayName("worker identity binds on the worker role with no other setting (orphan recovery always armed)")
+    void workerIdentityBindsOnTheWorkerRoleAlone() {
         assertThat(workerProperties)
-                .as("WorkerProperties must bind on the worker role independent of the WSS control endpoint")
+                .as("WorkerProperties must bind on the worker role alone")
                 .isNotNull();
         String id = workerProperties.resolvedWorkerId();
         assertThat(id).isNotBlank();
         // Stable per process (the instance suffix is computed once) — both the executor's job-ownership
-        // stamp and the WSS JWT subject rely on this being identical across calls.
+        // stamp and the lease renewal rely on this being identical across calls.
         assertThat(id).isEqualTo(workerProperties.resolvedWorkerId());
     }
 

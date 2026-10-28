@@ -779,9 +779,21 @@ for (const name of ["small", "external"] as const) {
 		] as const) {
 			const ingress = list(get(policy(component), "spec", "ingress"));
 			assert.equal(ingress.length, 1, `${component}: no scraper is configured`);
-			assert.deepEqual(get(ingress[0], "from", 0), gatewayPeer, component);
+			// Only the gateway: a worker peer, which the server once admitted for the worker hub, fails here.
+			assert.deepEqual(get(ingress[0], "from"), [gatewayPeer], component);
 			assert.deepEqual(get(ingress[0], "ports"), [{ port, protocol: "TCP" }], component);
 		}
+		// Workers and the server share only the database: no worker rule names a server Pod.
+		const workerPeers = list(get(policy("worker"), "spec", "egress")).flatMap((rule) =>
+			list(get(rule, "to")),
+		);
+		assert.ok(
+			!workerPeers.some(
+				(peer) =>
+					get(peer, "podSelector", "matchLabels", "app.kubernetes.io/component") === "server",
+			),
+			"the worker reaches no server Pod",
+		);
 		const webhookEgress = list(get(policy("webhook"), "spec", "egress"));
 		const serverEgress = list(get(policy("server"), "spec", "egress"));
 		if (name === "external") {

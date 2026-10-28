@@ -11,8 +11,8 @@ import org.junit.jupiter.api.Test;
  * Keycloak is removed (ADR 0017). No production or test code may import {@code org.keycloak.*}
  * again — authentication is Hephaestus-native ({@code core.auth}).
  *
- * <p>NB: {@code com.auth0:java-jwt} is intentionally NOT banned — it backs the worker-control-
- * channel JWT ({@code agent.attempt.*}) and the GitHub App token service, which are
+ * <p>NB: {@code com.auth0:java-jwt} is intentionally NOT banned — it backs the attempt tokens of
+ * sandboxes ({@code agent.attempt.*}) and the GitHub App token service, which are
  * unrelated to user authentication.
  */
 @Tag("architecture")

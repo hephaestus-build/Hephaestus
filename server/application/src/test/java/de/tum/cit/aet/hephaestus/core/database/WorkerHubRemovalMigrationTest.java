@@ -18,22 +18,43 @@ class WorkerHubRemovalMigrationTest {
     private static final String CHANGELOG = "1793149793934_changelog.xml";
 
     @Test
-    void shouldCountALeaselessClaimedAttemptAsADrainAndDropTheTokenDenylist() throws Exception {
+    void shouldCountOnlyALeaselessClaimedAttemptAsADrainAndDropTheTokenDenylist() throws Exception {
         var database = PracticeMigrationFixture.releasedDatabase("dev");
         PracticeMigrationFixture.upgradeBefore(database, "dev", CHANGELOG);
         new ResourceDatabasePopulator(new ClassPathResource("db/practice-native/result-parent.sql"))
                 .execute(new DriverManagerDataSource(database.jdbcUrl(), database.username(), database.password()));
+        // One review for each active job: a review has at most one queued or running job.
+        PracticeMigrationFixture.execute(database, """
+                INSERT INTO review(id,workspace_id,item_id,kind,item_version,origin,status,ordered_at)
+                SELECT ('00000000-0000-0000-0000-00000097901' || n)::uuid,workspace_id,item_id,kind,
+                       'native-v1-' || n,origin,status,now()
+                FROM review, generate_series(2,4) AS n
+                WHERE id='00000000-0000-0000-0000-000000978011'
+                """);
         PracticeMigrationFixture.execute(database, """
                 INSERT INTO review_job
                     (id,review_id,workspace_id,submitted_at,status,processing_status,trace_id,input,config_snapshot,
-                     attempt,worker_id,leased_until)
-                SELECT job.id::uuid,review.id,review.workspace_id,now(),job.status,'NONE',
-                       '00000000000000000000000000000001','{}','{}',1,job.worker_id,job.leased_until
-                FROM review,
-                    (VALUES ('00000000-0000-0000-0000-000000979001','RUNNING','worker-0x',NULL::timestamptz),
-                            ('00000000-0000-0000-0000-000000979002','FAILED','worker-0x',NULL))
-                        AS job(id,status,worker_id,leased_until)
-                WHERE review.id='00000000-0000-0000-0000-000000978011'
+                     attempt,worker_id,leased_until,admission_digest,admission_attempt)
+                SELECT job.id::uuid,job.review::uuid,978001,now(),job.status,'NONE',
+                       '00000000000000000000000000000001','{}','{}',1,job.worker_id,job.leased_until,job.digest,
+                       CASE WHEN job.digest IS NULL THEN NULL ELSE 1 END
+                FROM (VALUES
+                    -- Claimed by 0.x, which set no lease: one drain.
+                    ('00000000-0000-0000-0000-000000979001','00000000-0000-0000-0000-000000978011','RUNNING',
+                     'worker-0x',NULL::timestamptz,NULL),
+                    -- Already ended: none.
+                    ('00000000-0000-0000-0000-000000979002','00000000-0000-0000-0000-000000978011','FAILED',
+                     'worker-0x',NULL,NULL),
+                    -- Claimed by 1.0, which leases every claim: none.
+                    ('00000000-0000-0000-0000-000000979003','00000000-0000-0000-0000-000000979012','RUNNING',
+                     'worker-1',now(),NULL),
+                    -- Waiting for a claim: none.
+                    ('00000000-0000-0000-0000-000000979004','00000000-0000-0000-0000-000000979013','QUEUED',
+                     NULL,NULL,NULL),
+                    -- Admitted, then claimed by 0.x: one drain; recovery hands it on to compose.
+                    ('00000000-0000-0000-0000-000000979005','00000000-0000-0000-0000-000000979014','RUNNING',
+                     'worker-0x',NULL,repeat('a',64)))
+                    AS job(id,review,status,worker_id,leased_until,digest)
                 """);
 
         PracticeMigrationFixture.upgrade(database, "dev");
@@ -41,7 +62,12 @@ class WorkerHubRemovalMigrationTest {
         assertThat(PracticeMigrationFixture.column(
                         database,
                         "SELECT id || ':' || drain_count FROM review_job WHERE id::text LIKE '%979%' ORDER BY id"))
-                .containsExactly("00000000-0000-0000-0000-000000979001:1", "00000000-0000-0000-0000-000000979002:0");
+                .containsExactly(
+                        "00000000-0000-0000-0000-000000979001:1",
+                        "00000000-0000-0000-0000-000000979002:0",
+                        "00000000-0000-0000-0000-000000979003:0",
+                        "00000000-0000-0000-0000-000000979004:0",
+                        "00000000-0000-0000-0000-000000979005:1");
         assertThat(
                         PracticeMigrationFixture.column(
                                 database,
