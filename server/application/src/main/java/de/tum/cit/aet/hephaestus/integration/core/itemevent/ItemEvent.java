@@ -23,6 +23,9 @@ import org.hibernate.type.SqlTypes;
 import org.jspecify.annotations.Nullable;
 import tools.jackson.databind.JsonNode;
 
+// The changelog also holds one event of a name per version in the partial unique index uk_item_event_version, which
+// JPA cannot express: every name except scm.pull_request.checks_completed, which records one event per settled run set
+// and dedupes on its source key.
 @Entity
 @Table(
         name = "item_event",
@@ -30,9 +33,6 @@ import tools.jackson.databind.JsonNode;
             @UniqueConstraint(
                     name = "uk_item_event_workspace",
                     columnNames = {"id", "workspace_id"}),
-            @UniqueConstraint(
-                    name = "uk_item_event_key",
-                    columnNames = {"workspace_id", "item_id", "name", "item_version"}),
             @UniqueConstraint(
                     name = "uk_item_event_source",
                     columnNames = {"workspace_id", "item_id", "name", "source_key"})

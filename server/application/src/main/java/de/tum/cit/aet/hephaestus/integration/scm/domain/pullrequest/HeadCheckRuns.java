@@ -2,7 +2,11 @@ package de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest;
 
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Objects;
 import org.jspecify.annotations.Nullable;
@@ -74,6 +78,22 @@ public record HeadCheckRuns(
     /** Every run of the commit was read and has ended. A commit with no runs has none to finish. */
     public boolean finished() {
         return complete && !runs.isEmpty() && runs.stream().allMatch(Run::finished);
+    }
+
+    /** A digest of each run's name, group and state, in a stable order: the same settled runs give the same digest. */
+    public String runsDigest() {
+        var lines = runs.stream()
+                .map(run ->
+                        run.name() + "\u0000" + Objects.requireNonNullElse(run.group(), "") + "\u0000" + run.state())
+                .sorted()
+                .toList();
+        try {
+            var sha256 = MessageDigest.getInstance("SHA-256");
+            return HexFormat.of()
+                    .formatHex(sha256.digest(String.join("\n", lines).getBytes(StandardCharsets.UTF_8)));
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 is unavailable", e);
+        }
     }
 
     /** Whether {@code other} shows the same runs of the same commit, whenever it was read. */

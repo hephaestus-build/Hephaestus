@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.ProcessingContext;
 import de.tum.cit.aet.hephaestus.integration.scm.events.EventContext;
 import de.tum.cit.aet.hephaestus.integration.scm.events.ScmDomainEvent;
+import de.tum.cit.aet.hephaestus.integration.scm.events.ScmEventIdentity;
 import de.tum.cit.aet.hephaestus.integration.scm.events.ScmEventPayload;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -15,7 +16,8 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * Stores the check runs one provider read listed on the pull requests whose head they are about. When the stored runs
  * change to a complete list whose runs all ended, the pull request's checks completed. The occasion this records is
- * keyed by the pull request's version, so a repeated read and a re-run on the same head record no second one.
+ * keyed by the settled runs ({@link ScmEventIdentity#checks}): a repeated read records no second one, and a re-run on
+ * the same head that settles with other results records a new one.
  */
 @Service
 @RequiredArgsConstructor
@@ -57,7 +59,10 @@ public class HeadCheckRunsRecorder {
             PullRequest stored = pullRequestRepository.save(pr);
             if (runs.finished()) {
                 eventPublisher.publishEvent(new ScmDomainEvent.PullRequestChecksCompleted(
-                        ScmEventPayload.PullRequestData.from(stored), EventContext.from(context)));
+                        ScmEventPayload.PullRequestData.from(stored),
+                        EventContext.from(context)
+                                .withSourceKey(
+                                        ScmEventIdentity.checks(stored.getId(), runs.sha(), runs.runsDigest()))));
                 log.debug(
                         "Checks completed: prId={}, sha={}, runs={}",
                         stored.getId(),

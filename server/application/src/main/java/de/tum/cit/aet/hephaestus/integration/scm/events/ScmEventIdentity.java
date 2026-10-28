@@ -27,6 +27,14 @@ public final class ScmEventIdentity {
     }
 
     /**
+     * Checks of a head that settled with one set of runs. A re-run that settles with other results is a new settling; a
+     * repeated read of the same runs is the same one.
+     */
+    public static String checks(long itemId, String sha, String runsDigest) {
+        return itemId + ":checks:" + sha + ":" + runsDigest;
+    }
+
+    /**
      * An edit of a comment: the moment the provider dates it and what it says. Two edits in one second are two edits;
      * a redelivery of one is the same edit.
      */

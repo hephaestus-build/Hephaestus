@@ -695,7 +695,7 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
 
     // GitLab captures no check runs yet: a trigger job reports success when it starts its child pipeline.
     @Test
-    void shouldRecordChecksCompletedOnceAtTheHeadVersionOnlyWhenTheWholeListOfRunsEnded() {
+    void shouldRecordChecksCompletedOncePerSettledRunSetOnlyWhenTheWholeListOfRunsEnded() {
         var prepared = prepare(IdentityProviderType.GITHUB, false);
         var item = prepared.item();
         var pull = pulls.findById(Objects.requireNonNull(item.sourceId())).orElseThrow();
@@ -735,9 +735,13 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
                 repositoryId, new HeadCheckRuns(head, ended.runs(), true, readAt.plusSeconds(120), null), context);
         assertThat(checksCompleted(item)).containsExactly(prepared.version().value());
 
-        // One occasion per pushed version: a re-run that ends differently replaces the runs and records no second one.
+        // A re-run that settles with other results is a new occasion at the same version; a later read of the same
+        // runs is not.
         checkRuns.observe(repositoryId, rerun, context);
-        assertThat(checksCompleted(item)).containsExactly(prepared.version().value());
+        checkRuns.observe(
+                repositoryId, new HeadCheckRuns(head, rerun.runs(), true, readAt.plusSeconds(240), null), context);
+        assertThat(checksCompleted(item))
+                .containsExactly(prepared.version().value(), prepared.version().value());
         assertThat(pulls.findById(pull.getId()).orElseThrow().getHeadCheckRuns())
                 .isEqualTo(rerun);
     }

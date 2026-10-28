@@ -23,6 +23,9 @@ public interface ItemEventRepository extends JpaRepository<ItemEvent, UUID> {
     Optional<ItemEvent> findByWorkspaceIdAndItemIdAndNameAndItemVersion(
             long workspaceId, long itemId, String name, String itemVersion);
 
+    boolean existsByWorkspaceIdAndItemIdAndNameAndItemVersion(
+            long workspaceId, long itemId, String name, String itemVersion);
+
     Optional<ItemEvent> findByWorkspaceIdAndItemIdAndNameAndSourceKey(
             long workspaceId, long itemId, String name, String sourceKey);
 

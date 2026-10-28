@@ -98,10 +98,10 @@ public class ItemEventService {
             publisher.publishEvent(new ItemEventRecorded(input.workspaceId(), id, input.itemId()));
             return id;
         }
-        var existing = repository
-                .findByWorkspaceIdAndItemIdAndNameAndItemVersion(
-                        input.workspaceId(), input.itemId(), input.name().value(), version)
-                .or(() -> bySource(input))
+        // The checks event repeats per version, one for each settled run set, so the source key decides first.
+        var existing = bySource(input)
+                .or(() -> repository.findByWorkspaceIdAndItemIdAndNameAndItemVersion(
+                        input.workspaceId(), input.itemId(), input.name().value(), version))
                 .orElseThrow();
         observeSource(input.workspaceId(), input.itemId(), input.name());
         return existing.getId();
@@ -161,10 +161,8 @@ public class ItemEventService {
     public boolean pin(long workspaceId, long itemId, Unresolved event, String itemVersion, @Nullable String evidence) {
         if (evidence != null && !ItemEventInput.fits(evidence))
             throw new IllegalArgumentException("Invalid item event evidence");
-        if (repository
-                .findByWorkspaceIdAndItemIdAndNameAndItemVersion(
-                        workspaceId, itemId, event.name().value(), itemVersion)
-                .isPresent()) {
+        if (repository.existsByWorkspaceIdAndItemIdAndNameAndItemVersion(
+                workspaceId, itemId, event.name().value(), itemVersion)) {
             decide(workspaceId, event.id(), event.state(), ItemEventState.WITHHELD, ReviewRequestReason.COALESCED);
             observeSource(workspaceId, itemId, event.name());
             return false;

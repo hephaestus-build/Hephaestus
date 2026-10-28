@@ -448,10 +448,11 @@ The server stores at most 200 runs, cuts names to 200 characters and keeps links
 When the stored runs change and every run of the head has ended, the server records the item event `scm.pull_request.checks_completed`.
 The event pins the same item version as the push, because the runs are not part of the version.
 
-The occasion key holds one event of a name per version, so the checks complete once per pushed version.
-A re-run on the same head that ends differently starts no new review until the next push.
-Its runs still replace the stored runs, so a later review of that version reads them.
-Keying the occasion on the run set needs a change of the occasion's unique key, which waits for an expand and contract window.
+The event's source key names the settled runs: the item, the head and a digest of each run's name, group and state.
+A read of the same runs records no second event.
+A re-run on the same head that settles with other results records a new event at the same version.
+The practices that select **Checks finished** then review it again.
+Every other item event keeps one event of a name per version.
 
 Each read that records no completion logs why: the list is incomplete, a run has not finished, or the head has no rollup.
 Between scheduled syncs, the server reads again only when another suite or status of the head ends.
