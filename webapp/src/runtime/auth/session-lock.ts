@@ -143,10 +143,14 @@ export async function withSessionLock<T>(operation: () => Promise<T>): Promise<T
 	}
 	let started = false;
 	try {
-		return await navigator.locks.request("hephaestus-session", async () => {
-			started = true;
-			return operation();
-		});
+		return await navigator.locks.request(
+			"hephaestus-session",
+			{ signal: AbortSignal.timeout(LEASE_MS) },
+			async () => {
+				started = true;
+				return operation();
+			},
+		);
 	} catch (error) {
 		// oxlint-disable-next-line typescript/no-unnecessary-condition -- The awaited Web Locks callback sets this flag before running the operation.
 		if (started) {

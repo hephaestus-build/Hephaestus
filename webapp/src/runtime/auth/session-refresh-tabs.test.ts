@@ -25,6 +25,7 @@ describe("refresh across tabs", () => {
 	});
 	afterEach(() => {
 		vi.useRealTimers();
+		vi.restoreAllMocks();
 		vi.unstubAllGlobals();
 	});
 
@@ -98,6 +99,38 @@ describe("refresh across tabs", () => {
 
 		await expect(first.refreshAccessToken()).resolves.toBe("refreshed");
 		expect(refreshMock).toHaveBeenCalledOnce();
+	});
+
+	it.each([
+		["IndexedDB fallback", indexedDB],
+		["unavailable IndexedDB", undefined],
+	])("renews past a stalled Web Lock with %s", async (_name, storage) => {
+		vi.stubGlobal("navigator", { locks });
+		vi.stubGlobal("indexedDB", storage);
+		vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date", "performance"] });
+		// AbortSignal.timeout uses a platform timer; use the test clock for its deadline.
+		vi.spyOn(AbortSignal, "timeout").mockImplementation((ms) => {
+			const controller = new AbortController();
+			setTimeout(() => controller.abort(new DOMException("Lock wait expired", "TimeoutError")), ms);
+			return controller.signal;
+		});
+		const [first, second] = await tabs();
+		const stalled = deferred<typeof rotated>();
+		refreshMock.mockReturnValueOnce(stalled.promise).mockResolvedValueOnce(rotated);
+		const a = first.refreshAccessToken();
+		await vi.waitFor(() => expect(refreshMock).toHaveBeenCalledOnce());
+		const b = second.refreshAccessToken();
+		try {
+			await vi.advanceTimersByTimeAsync(6000);
+			await vi.waitFor(() => expect(refreshMock).toHaveBeenCalledTimes(2));
+			await expect(b).resolves.toBe("refreshed");
+			stalled.reject(new Error("offline"));
+			await expect(a).resolves.toBe("unavailable");
+			expect(refreshMock).toHaveBeenCalledTimes(2);
+		} finally {
+			stalled.resolve(rotated);
+			await Promise.all([a, b]);
+		}
 	});
 
 	it("lets another tab renew after a stalled IndexedDB lock reaches its deadline", async () => {
