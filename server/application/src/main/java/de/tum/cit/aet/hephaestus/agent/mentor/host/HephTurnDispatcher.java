@@ -69,7 +69,6 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
 
     private static final Duration BACKSTOP = Duration.ofSeconds(30);
     private static final Duration HOST_READY_TIMEOUT = Duration.ofMinutes(3);
-
     private final MentorTurnStarter starter;
     private final MentorTurnService turns;
     private final MentorTurnCompletion completion;
@@ -364,6 +363,7 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
     }
 
     private void claimLoop() {
+        Instant preparationDeadline = null;
         while (active) {
             try {
                 wake.tryAcquire(BACKSTOP.toMillis(), TimeUnit.MILLISECONDS);
@@ -372,12 +372,25 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
                 Thread.currentThread().interrupt();
                 return;
             }
-            while (active && running.size() < capacity && host.sandboxReady()) {
+            while (active && running.size() < capacity) {
+                boolean prepared;
                 Optional<MentorTurnStarter.StartedTurn> started;
                 try {
-                    if ((!host.isReady() && !host.awaitReady(HOST_READY_TIMEOUT)) || !active) {
+                    prepared = prepareHost();
+                    if (!active) {
                         break;
                     }
+                    if (!prepared) {
+                        Instant now = clock.instant();
+                        if (preparationDeadline == null) {
+                            // Ledger wakes can arrive together; give a transient failure time to recover.
+                            preparationDeadline = now.plus(HOST_READY_TIMEOUT);
+                        }
+                        if (now.isBefore(preparationDeadline)) {
+                            break;
+                        }
+                    }
+                    preparationDeadline = null;
                     started = starter.startNext(workerId, lease);
                 } catch (RuntimeException e) {
                     claimFailures.increment();
@@ -388,7 +401,22 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
                     break;
                 }
                 try {
-                    begin(started.get());
+                    if (prepared) {
+                        begin(started.get());
+                    } else {
+                        // Claim only to record a bounded failure through the normal attempt ledger and accounting.
+                        MentorTurn turn = started.get().turn();
+                        completion.end(
+                                turn.getId(),
+                                turn.getAttempt(),
+                                workerId,
+                                new MentorTurnCompletion.Ending(
+                                        MentorTurn.Status.FAILED,
+                                        List.of(),
+                                        COULD_NOT_START,
+                                        "host_preparation_failed",
+                                        null));
+                    }
                 } catch (RuntimeException e) {
                     claimFailures.increment();
                     log.warn(
@@ -407,6 +435,16 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
                     }
                 }
             }
+        }
+    }
+
+    private boolean prepareHost() {
+        try {
+            return host.sandboxReady() && (host.isReady() || host.awaitReady(HOST_READY_TIMEOUT));
+        } catch (RuntimeException failure) {
+            claimFailures.increment();
+            log.warn("Could not prepare the Heph host: {}", failure.getClass().getSimpleName(), failure);
+            return false;
         }
     }
 

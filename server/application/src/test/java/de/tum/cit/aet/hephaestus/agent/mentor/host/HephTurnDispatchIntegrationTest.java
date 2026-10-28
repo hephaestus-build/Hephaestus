@@ -532,6 +532,38 @@ class HephTurnDispatchIntegrationTest extends AbstractWorkspaceIntegrationTest {
     }
 
     @Test
+    void shouldFailTheTurnWithoutFaultWhenHostPreparationKeepsFailing() throws Exception {
+        host.starts = false;
+        int attempts = host.readyAttempts.get();
+        MentorTurn asked = ask("Can Heph start?");
+        await().atMost(NOTIFIED).until(() -> host.readyAttempts.get() > attempts);
+        assertThat(row(asked).getStatus()).isEqualTo(MentorTurn.Status.QUEUED);
+        assertThat(row(asked).getAttempt()).isZero();
+
+        dispatcher.resync();
+        await().atMost(NOTIFIED).until(() -> host.readyAttempts.get() >= attempts + 2);
+        assertThat(row(asked).getStatus()).isEqualTo(MentorTurn.Status.QUEUED);
+        assertThat(row(asked).getAttempt()).isZero();
+
+        clock.advance(Duration.ofMinutes(3).plusSeconds(1));
+        dispatcher.resync();
+
+        await().atMost(NOTIFIED)
+                .untilAsserted(() -> assertThat(row(asked).getStatus()).isEqualTo(MentorTurn.Status.FAILED));
+        MentorTurn failed = row(asked);
+        assertThat(failed.getError()).isEqualTo(HephTurnDispatcher.COULD_NOT_START);
+        assertThat(failed.getFailureCause()).isEqualTo("host_preparation_failed");
+        assertThat(failed.isLeased()).isFalse();
+        assertThat(host.frames).isEmpty();
+
+        host.starts = true;
+        MentorTurn next = ask("Try this question instead");
+        assertThat(host.next("start").path("turnId").asString())
+                .isEqualTo(next.getId().toString());
+        assertThat(row(next).getStatus()).isEqualTo(MentorTurn.Status.RUNNING);
+    }
+
+    @Test
     void shouldStartTheTurnOnceOnAFreshHostWhenTheFirstHostDidNotStart() throws Exception {
         host.failsFirst.set(1);
 
