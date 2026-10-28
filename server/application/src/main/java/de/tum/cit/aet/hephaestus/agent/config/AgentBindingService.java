@@ -238,11 +238,8 @@ public class AgentBindingService {
         binding.setWorkspace(workspace);
         binding.setPurpose(purpose);
         binding.setDataHandlingTier(tier);
-        // Heph answers a waiting developer: a low effort keeps a reasoning model's answer well within the turn.
-        if (purpose == AgentPurpose.MENTOR) {
-            binding.setTimeoutSeconds(AgentBindingLimits.MAX_HEPH_TURN_SECONDS);
-            binding.setReasoningEffort(ReasoningEffort.LOW);
-        }
+        // No effort: the catalog cannot tell whether a model reasons, and a model that does not can refuse any effort.
+        if (purpose == AgentPurpose.MENTOR) binding.setTimeoutSeconds(AgentBindingLimits.MAX_HEPH_TURN_SECONDS);
         return binding;
     }
 

@@ -74,22 +74,11 @@ function takesReasoningEffort(purpose: BindingTarget["purpose"]): boolean {
 	return purpose === "MENTOR" || purpose === "PRACTICE_REVIEW" || purpose === "PRACTICE_DECISION";
 }
 
-/** A new Heph assignment starts at Low, as the server sets it: Heph answers someone who waits. */
-function initialEffort(
-	purpose: BindingTarget["purpose"],
-	binding: AgentBinding | undefined,
-): ReasoningEffortChoice {
-	if (binding) {
-		return binding.reasoningEffort ?? PROVIDER_DEFAULT_EFFORT;
-	}
-	return purpose === "MENTOR" ? "LOW" : PROVIDER_DEFAULT_EFFORT;
-}
-
 const EFFORT_DESCRIPTION =
 	"How hard a reasoning model thinks on each call. Provider default sends none, for a model that does not reason.";
 
 const HEPH_EFFORT_DESCRIPTION =
-	"Heph answers while someone waits. Low keeps a reasoning model fast. A model that does not reason can refuse any effort, and then Heph cannot answer. For such a model, choose Provider default.";
+	"Heph answers while someone waits. For a reasoning model, choose Low to keep answers fast. Provider default sends no effort, which a model that does not reason needs: it can refuse any effort, and then Heph cannot answer.";
 
 const DECISION_REASONING_HINT =
 	"This model reasons before it answers. Decisions need a model that answers at once with token probabilities.";
@@ -215,7 +204,7 @@ export function AgentBindingEditor({
 	const [maxConcurrentJobs, setMaxConcurrentJobs] = useState(() =>
 		String(binding?.maxConcurrentJobs ?? 3),
 	);
-	const [effort, setEffort] = useState(() => initialEffort(purpose, binding));
+	const [effort, setEffort] = useState(() => binding?.reasoningEffort ?? PROVIDER_DEFAULT_EFFORT);
 	const hasEffort = takesReasoningEffort(purpose);
 	const [showAdvanced, setShowAdvanced] = useState(false);
 	const hasRunLimits = purpose === "PRACTICE_REVIEW" || purpose === "MENTOR";

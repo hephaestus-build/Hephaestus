@@ -315,10 +315,10 @@ For a non-reasoning model, use **Provider default**, because the provider may re
 Not every model accepts every level.
 A refused level fails the call rather than changing to a supported level.
 
-A new Heph assignment starts at **Low**.
+A new assignment starts at **Provider default**, because Hephaestus cannot know whether a model reasons.
+For a reasoning model, set the Heph assignment to **Low**.
 A developer waits for each Heph answer, and a higher effort makes each model call slower.
 A Heph answer takes a few calls, and they must all end within the timeout of the Heph assignment.
-Every other new assignment starts at **Provider default**.
 
 Higher efforts use more output tokens.
 Each job's usage records the reasoning share and prices it as output, never twice.
@@ -329,10 +329,9 @@ A request without either keeps the current effort.
 ### Models that refuse a reasoning effort
 
 **Symptom:** every Heph answer fails with **Heph could not finish this reply. Try again.**
-The worker log has the warning `LLM upstream refused a Heph model call ... while the Heph binding sets reasoning effort LOW`.
+The worker log has the warning `LLM provider refused the reasoning effort LOW of a Heph model call`, once for each model and effort.
 
 **Cause:** the model of the Heph assignment does not reason, and its provider refuses the reasoning effort parameter.
-A new Heph assignment starts at **Low**, on every model.
 
 **Remedy:** set the reasoning effort of the Heph assignment to **Provider default**.
 Then Hephaestus sends no effort.

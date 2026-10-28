@@ -693,7 +693,8 @@ export const AdvancedDisclosure: Story = {
 
 /**
  * Heph asks its model for its own reasoning effort, apart from reviews on the same model. A new Heph
- * assignment starts at Low, so a reasoning model answers within the turn.
+ * assignment sends no effort, so a model that does not reason works; an administrator sets Low for a
+ * reasoning model.
  */
 export const HephReasoningEffort: Story = {
 	args: {
@@ -712,11 +713,11 @@ export const HephReasoningEffort: Story = {
 		const effort = inHouse.getByRole("combobox", { name: "Reasoning effort for In-house" });
 		await expect(effort).toHaveTextContent("Medium");
 		await expect(effort).toHaveAccessibleDescription(
-			/^Heph answers while someone waits\. Low keeps a reasoning model fast\./u,
+			/^Heph answers while someone waits\. For a reasoning model, choose Low to keep answers fast\./u,
 		);
 		await expect(
 			row(heph, "Cloud").getByRole("combobox", { name: "Reasoning effort for Cloud" }),
-		).toHaveTextContent("Low");
+		).toHaveTextContent("Provider default");
 
 		await userEvent.click(effort);
 		await userEvent.click(await screen.findByRole("option", { name: "Provider default" }));

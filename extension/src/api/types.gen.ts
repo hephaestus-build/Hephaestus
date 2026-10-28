@@ -385,7 +385,7 @@ export type AgentBindingRequest = {
      */
     maxConcurrentJobs?: number;
     /**
-     * Reasoning effort to request of the model for this purpose; null keeps the current one (see clearReasoningEffort). A new Heph binding gets LOW, any other none. Embedding and reranking take none.
+     * Reasoning effort to request of the model for this purpose; null keeps the current one (see clearReasoningEffort). A new binding gets none. Embedding and reranking take none.
      */
     reasoningEffort?: 'NONE' | 'MINIMAL' | 'LOW' | 'MEDIUM' | 'HIGH' | 'XHIGH' | 'MAX';
     /**

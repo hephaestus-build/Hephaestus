@@ -106,7 +106,9 @@ class AgentBindingServiceTest extends BaseUnitTest {
                 DataHandlingTier.UNDECLARED,
                 new AgentBindingRequestDTO(99L, null, null, null, true, null, null));
         assertThat(saved.getTimeoutSeconds()).isEqualTo(AgentBindingLimits.MAX_HEPH_TURN_SECONDS);
-        assertThat(saved.getReasoningEffort()).isEqualTo(ReasoningEffort.LOW);
+        assertThat(saved.getReasoningEffort())
+                .as("a model that does not reason can refuse any effort, so a new Heph binding sends none")
+                .isNull();
 
         assertThatThrownBy(() -> service.upsertBinding(
                         context(),

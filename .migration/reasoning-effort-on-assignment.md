@@ -16,6 +16,7 @@ Embedding and reranking assignments get no effort, because their calls take none
 
 1. Stop every role before you upgrade.
 2. After the upgrade, open the **AI models** page of each workspace, and check the reasoning effort of each assignment.
+   A Heph assignment that keeps no effort on a reasoning model runs at the provider's default effort, which can be slow. The migration cannot find these assignments, because Hephaestus does not know which models reason. Set such an assignment to **Low**.
 3. If a script sets `reasoningEffort` or `clearReasoningEffort` on a model through `/admin/llm/...` or `/workspaces/{slug}/llm/...`, change it to set these fields on `PUT /workspaces/{slug}/agents/{purpose}`.
 
 A rollback of the migration gives each model the effort that all its practice review assignments agree on.

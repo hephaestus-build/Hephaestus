@@ -399,8 +399,6 @@ async function bindAgents(api: Api, config: Config, modelId: number): Promise<vo
 			// Heph stops an answer after 900 seconds (AgentBindingLimits.MAX_HEPH_TURN_SECONDS).
 			timeoutSeconds: purpose === "MENTOR" ? 900 : 1200,
 			maxConcurrentJobs: 1,
-			// A new Heph binding asks for a low effort; the E2E model need not reason, and may refuse the parameter.
-			clearReasoningEffort: true,
 		});
 	}
 	const agents = array(

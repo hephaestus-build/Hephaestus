@@ -36,8 +36,7 @@ public record AgentBindingRequestDTO(
         @Nullable
         @Schema(
                 description = "Reasoning effort to request of the model for this purpose; null keeps the current one"
-                        + " (see clearReasoningEffort). A new Heph binding gets LOW, any other none. Embedding and"
-                        + " reranking take none.")
+                        + " (see clearReasoningEffort). A new binding gets none. Embedding and reranking take none.")
         ReasoningEffort reasoningEffort,
 
         @Nullable

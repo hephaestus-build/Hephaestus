@@ -12857,9 +12857,9 @@ components:
           minimum: 1
         reasoningEffort:
           type: string
-          description: "Reasoning effort to request of the model for this purpose;\
-            \ null keeps the current one (see clearReasoningEffort). A new Heph binding\
-            \ gets LOW, any other none. Embedding and reranking take none."
+          description: Reasoning effort to request of the model for this purpose;
+            null keeps the current one (see clearReasoningEffort). A new binding gets
+            none. Embedding and reranking take none.
           enum:
           - NONE
           - MINIMAL

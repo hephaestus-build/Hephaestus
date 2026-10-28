@@ -136,7 +136,7 @@ class AgentBindingControllerIntegrationTest extends AbstractWorkspaceIntegration
 
     @Test
     @WithAdminUser
-    @DisplayName("one model runs Heph at a low reasoning effort and reviews at the effort each binding sets")
+    @DisplayName("a new Heph binding sends no effort, and one model runs Heph and reviews at the effort each sets")
     void shouldStoreAReasoningEffortForEachPurposeOfOneModel() {
         Workspace workspace = setupWorkspace("binding-effort");
         LlmModel model = seedInstanceModel("binding-effort");
@@ -146,9 +146,15 @@ class AgentBindingControllerIntegrationTest extends AbstractWorkspaceIntegration
                 .isOk()
                 .expectBody()
                 .jsonPath("$.reasoningEffort")
-                .isEqualTo("LOW")
+                .doesNotExist()
                 .jsonPath("$.timeoutSeconds")
                 .isEqualTo(AgentBindingLimits.MAX_HEPH_TURN_SECONDS);
+        put(workspace, "MENTOR", Map.of("instanceModelId", model.getId(), "reasoningEffort", "LOW"))
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.reasoningEffort")
+                .isEqualTo("LOW");
         put(workspace, "PRACTICE_REVIEW", Map.of("instanceModelId", model.getId(), "reasoningEffort", "HIGH"))
                 .expectStatus()
                 .isOk()

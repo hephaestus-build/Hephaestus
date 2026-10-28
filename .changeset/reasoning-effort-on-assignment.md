@@ -4,7 +4,7 @@
 
 One Heph answer can take up to 15 minutes while its model keeps writing. An answer whose model stops sending still fails after the model's silence limits.
 
-The reasoning effort is now a setting of each model assignment, not of the model. One model can answer Heph at a low effort and review at a higher one. A new Heph assignment starts at **Low**. If the model of a Heph assignment refuses a reasoning effort, set the assignment's effort to **Provider default**.
+The reasoning effort is now a setting of each model assignment, not of the model. One model can answer Heph at a low effort and review at a higher one. For a reasoning model, set the Heph assignment to **Low** to keep answers fast. A new assignment sends no effort, so a model that does not reason keeps working.
 
 At its time limit, Heph now says "Heph reached its time limit and stopped this reply." An answer that reaches the limit of model calls now says "Heph could not finish this reply."
 

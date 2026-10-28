@@ -40,8 +40,9 @@ public enum AgentPurpose {
     }
 
     /**
-     * Whether a reasoning effort reaches this purpose's model calls. A decision call reads a set effort as a reasoning
-     * model, and asks it for none. Embedding and reranking calls take no effort.
+     * Whether an administrator may set a reasoning effort for this purpose. Review and Heph calls send the effort. A
+     * decision call never asks for reasoning: if its binding sets any effort, the call sends {@code none} instead, so
+     * the model answers at once. Embedding and reranking calls take no effort.
      */
     public boolean takesReasoningEffort() {
         return kind == ModelKind.CHAT || kind == ModelKind.DECISION;
