@@ -3,6 +3,7 @@
 ---
 
 0.95.0 is the last 0.x release and the required source for 1.0.
+
 1.0 supports the Helm chart on Kubernetes, including one host with k3s.
 The following settings, values and interfaces are deprecated for removal in 1.0.
 This notice does not remove them from 0.95.
@@ -124,7 +125,8 @@ Replace `mentor.` with `conversation.` in these metric names:
 
 Also rename `llm.proxy.usage.mentor.failure` and `llm.proxy.usage.mentor.superseded` to `llm.proxy.usage.conversation.failure` and `llm.proxy.usage.conversation.superseded`. Change `surface=mentor` to `surface=conversation`. Replace `heph.turn.*` span/event names, including `heph.turn.tool_call`, with `conversation.turn.*`.
 
-`mentor.host.ready`, `mentor.host.turns.active` and `heph.host.id` leave with the old host. Use the replacement instrumentation documented for the conversation runtime. Remove queries that use the retired host instrumentation.
+`mentor.host.ready`, `mentor.host.turns.active` and `heph.host.id` leave with the old host.
+Remove queries that use them. Use the replacement instrumentation documented for the conversation runtime.
 
 ### HTTP paths
 
@@ -146,18 +148,64 @@ The 0.95 web page uses `/w/{workspaceSlug}/conversation`. The redirect from the 
 
 Slack message metadata and button action identifiers `heph_entry`, `heph_notice` and `heph_feedback` keep their names. Existing messages depend on them.
 
-### API names and values
+### Enum values removed in 1.0
 
-Update generated or handwritten API clients for these names and values at the 1.0 upgrade.
-The `Mentor` API tag becomes `Conversation`.
-Operation names that contain `Mentor` use `Conversation` instead, including `getMentorConversation` → `getConversation`.
-`MentorConversation` becomes `Conversation`. Other `Mentor*` response and request types become `Conversation*`.
+| Current type / field | Removed value | Replacement |
+| --- | --- | --- |
+| `MentorTurn.waitingFor` → `ConversationTurn.waitingFor` | `FREE_HEPH` | `CAPACITY` |
+| `MentorEntry.kind` → `ConversationEntry.kind` | `HEPH` | `ANSWER` |
+| `ReviewFeedback.location`, `ReviewFeedbackDetail.location` (`FeedbackLocation`) | `HEPH` | `APP` |
+| `AgentBinding.purpose`, `AvailableLlmModel.purposes[]`, `LlmConnection.purposes[]`, `WorkspaceLlmConnection.purposes[]`, `LlmUsageByPractice.purposes[]` (`AgentPurpose`) | `MENTOR` | `CONVERSATION` |
+| `UsageSourceType`, including `LlmUsageByJobType.jobType` string values and stored usage rows | `MENTOR_TURN` | `CONVERSATION_TURN` |
+| `Delivered.bodyRole`, `Queued.bodyRole` (`PrivateFeedbackHistory.BodyRole`) | `MENTOR_NOTES` | `CONVERSATION_NOTES` |
+| `ResultDecision.decision` (`ConversationDecision`) | `MENTOR_UNAVAILABLE` | `CONVERSATION_UNAVAILABLE` |
 
-| Removed value | Replacement and use |
+`CAPACITY` means every conversation slot of the deployment is taken.
+The field name stays `waitingFor`. This value changes only in 1.0.
+
+### DTO fields removed in 1.0
+
+| Current field | Replacement |
 | --- | --- |
-| `HEPH` as a message kind | `ANSWER` |
-| `HEPH` as a feedback location | `APP` |
-| `MENTOR` as an agent purpose or usage surface | `CONVERSATION` |
-| `MENTOR_TURN` | `CONVERSATION_TURN` |
-| `MENTOR_NOTES` | `CONVERSATION_NOTES` |
-| `MENTOR_UNAVAILABLE` | `CONVERSATION_UNAVAILABLE` |
+| `FeedbackCopy.mentorEntryId` | `FeedbackCopy.conversationEntryId` |
+| `WeeklyDigestFeedback.mentorEntryId` | `WeeklyDigestFeedback.conversationEntryId` |
+| `WeeklyDigestFeedback.mentorParentEntryId` | `WeeklyDigestFeedback.conversationParentEntryId` |
+| `WorkspaceAiOption.mentorReady` | `WorkspaceAiOption.conversationReady` |
+| `WorkspaceOnboarding.mentorRefusal` | `WorkspaceOnboarding.conversationRefusal` |
+
+### Schema names removed in 1.0
+
+| Removed schema | Replacement |
+| --- | --- |
+| `MentorConversation` | `Conversation` |
+| `MentorEntry` | `ConversationEntry` |
+| `MentorEntryPage` | `ConversationEntryPage` |
+| `MentorLink` | `ConversationLink` |
+| `MentorRead` | `ConversationRead` |
+| `MentorReadRequest` | `ConversationReadRequest` |
+| `MentorSubmission` | `ConversationSubmission` |
+| `MentorThread` | `ConversationThread` |
+| `MentorThreadSummary` | `ConversationThreadSummary` |
+| `MentorTurn` | `ConversationTurn` |
+| `MentorTurnPartial` | `ConversationTurnPartial` |
+| `MentorTurnRequest` | `ConversationTurnRequest` |
+| `MentorTurnStatusRequest` | `ConversationTurnStatusRequest` |
+| `MentorVoteRequest` | `ConversationVoteRequest` |
+
+The API tag `Mentor` becomes `Conversation`. Each operationId that contains `Mentor` uses `Conversation`, with duplicate words removed: `getMentorConversation` becomes `getConversation`, and `markMentorConversationRead` becomes `markConversationRead`.
+
+The problem-type identifiers `/problems/mentor-refused` and `/problems/mentor-rejected` become `/problems/conversation-refused` and `/problems/conversation-rejected`.
+
+### Operation IDs removed in 1.0
+
+| Removed operation ID | Replacement |
+| --- | --- |
+| `getMentorConversation` | `getConversation` |
+| `markMentorConversationRead` | `markConversationRead` |
+| `listMentorEntries` | `listConversationEntries` |
+| `deleteMentorEntry` | `deleteConversationEntry` |
+| `getMentorThread` | `getConversationThread` |
+| `clearMentorVote` | `clearConversationVote` |
+| `setMentorVote` | `setConversationVote` |
+| `submitMentorTurn` | `submitConversationTurn` |
+| `updateMentorTurnStatus` | `updateConversationTurnStatus` |
