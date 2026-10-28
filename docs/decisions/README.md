@@ -106,5 +106,6 @@ Admin Guide (`docs/admin/`), and the ADR links to it.
 | [0065](0065-standing-counts-the-newest-observation-of-each-item.md) | Standing counts the newest observation of each item | Accepted. Amends 0056. |
 | [0066](0066-the-webhook-receiver-has-no-database.md) | The webhook receiver has no database | Accepted. Amends 0008 and 0023. |
 | [0067](0067-the-server-image-builds-with-buildpacks-and-cds.md) | The server image builds with Paketo Buildpacks and Application CDS | Accepted (2026-05-19). Moved from the contributor docs. |
+| [0070](0070-1-0-is-a-cutover-release.md) | 1.0 is a cutover release | Accepted (2026-10-28). Amends 0005, 0041, 0042 and 0058. |
 
 Template: [0000-template.md](0000-template.md).
