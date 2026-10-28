@@ -31,6 +31,10 @@ await test("tenant host and redirect policies reserve every server label", () =>
 	const edgeLabels = /\$reserved := "(?<labels>[^"]+)"/u.exec(edge)?.groups?.labels;
 	assert.ok(edgeLabels !== undefined);
 	assert.deepEqual(new Set(edgeLabels.split("|")), expected);
+	assert.deepEqual(
+		new Set(read("deploy/chart/hephaestus/files/workspace-reserved-labels.txt").trim().split("|")),
+		expected,
+	);
 });
 
 await test("DNS credential values stay outside Compose and only the proxy mounts them", () => {

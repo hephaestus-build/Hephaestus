@@ -172,6 +172,39 @@ function rendered(...args: string[]) {
 	return { status: result.status, stderr: result.stderr, resources: documents(result.stdout) };
 }
 
+await test("workspace certificates use DNS-01, and backup Jobs get their own client identity", () => {
+	const result = rendered(
+		"--host",
+		"heph.example.org",
+		"--email",
+		"ops@example.org",
+		"--workspace-subdomains",
+		"--dns01-issuer",
+		"zone-dns",
+	);
+	assert.equal(result.status, 0, result.stderr);
+	const { resources } = result;
+	const gateway = named(resources, "Certificate", "hephaestus-tls");
+	assert.ok(gateway && isRecord(gateway.spec) && isRecord(gateway.spec.issuerRef));
+	assert.deepEqual(gateway.spec.dnsNames, ["heph.example.org", "*.heph.example.org"]);
+	assert.equal(gateway.spec.issuerRef.name, "zone-dns");
+	const backup = named(resources, "Certificate", "hephaestus-postgresql-backup-tls");
+	assert.ok(
+		backup &&
+			isRecord(backup.spec) &&
+			isRecord(backup.spec.issuerRef) &&
+			Array.isArray(backup.spec.usages),
+	);
+	assert.equal(backup.spec.commonName, "hephaestus-backup");
+	assert.equal(backup.spec.issuerRef.name, "hephaestus-postgresql-ca");
+	assert.ok(backup.spec.usages.includes("client auth"));
+	assert.notEqual(
+		rendered("--host", "heph.example.org", "--email", "ops@example.org", "--workspace-subdomains")
+			.status,
+		0,
+	);
+});
+
 await test(
 	"the installer writes the operator's host and address, and the staging service on request",
 	{ skip: process.platform === "win32" },

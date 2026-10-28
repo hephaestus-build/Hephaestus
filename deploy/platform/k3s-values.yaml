@@ -10,6 +10,8 @@ secret:
 postgresql:
   tls:
     existingSecret: hephaestus-postgresql-tls
+  backup:
+    clientTlsSecret: hephaestus-postgresql-backup-tls
 
 # The HTTPS listener of the Gateway that the pinned Traefik runs.
 route:

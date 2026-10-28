@@ -58,6 +58,10 @@ spec:
           image: {{ include "hephaestus.image" (dict "root" . "name" "application-server") | quote }}
           imagePullPolicy: IfNotPresent
           env:
+            - name: HEPHAESTUS_WORKSPACE_SUBDOMAINS_ENABLED
+              value: {{ .Values.workspaceSubdomains.enabled | quote }}
+            - name: HEPHAESTUS_WORKSPACE_SUBDOMAINS_BASE_DOMAIN
+              value: {{ .Values.host | quote }}
             {{- include "hephaestus.env.pod" . | nindent 12 }}
             {{- include "hephaestus.env.release" . | nindent 12 }}
             {{- include "hephaestus.env.shared" . | nindent 12 }}

@@ -89,6 +89,7 @@ const operator = {
 	networkPolicy: { gateway: { namespace: "gateway-system", podLabels: gatewayPods } },
 	postgresql: { tls: { existingSecret: "hephaestus-postgresql-tls" } },
 };
+
 const external = {
 	postgresql: { bundled: false, external: { host: "db.internal", cidr: "10.0.12.0/24" } },
 	nats: { bundled: false, external: { url: "nats://nats.internal:4222", cidr: "10.0.13.0/24" } },
@@ -1385,7 +1386,11 @@ await test("backups archive the WAL from PostgreSQL and read its data through mu
 	const s3 = { bucket: "hephaestus-backups", endpoint: "s3.example.com", region: "eu-central-1" };
 	const resources = rendered([
 		...layersFor("small"),
-		{ postgresql: { backup: { enabled: true, s3 } } },
+		{
+			postgresql: {
+				backup: { clientTlsSecret: "hephaestus-postgresql-backup-tls", enabled: true, s3 },
+			},
+		},
 	]);
 	const postgresql = workload(resources, "postgresql");
 	const [database, server] = list(get(podSpec(postgresql), "containers"));
@@ -1438,7 +1443,7 @@ await test("backups archive the WAL from PostgreSQL and read its data through mu
 			.flatMap((volume) => list(get(volume, "secret", "items")))
 			.map((item) => String(get(item, "key")))
 			.toSorted(byCodePoint);
-		assert.deepEqual(keys, ["backup.crt", "backup.key", "ca.crt"]);
+		assert.deepEqual(keys, ["ca.crt", "tls.crt", "tls.key"]);
 	}
 	const config = resources.find(
 		(resource) => kindOf(resource) === "ConfigMap" && componentOf(resource) === "postgresql-backup",
@@ -1487,14 +1492,34 @@ await test("backups archive the WAL from PostgreSQL and read its data through mu
 			"checksum/backup",
 		);
 	const bucket = {
-		postgresql: { backup: { enabled: true, s3: { ...s3, bucket: "other-backups" } } },
+		postgresql: {
+			backup: {
+				clientTlsSecret: "hephaestus-postgresql-backup-tls",
+				enabled: true,
+				s3: { ...s3, bucket: "other-backups" },
+			},
+		},
 	};
 	assert.equal(
-		typeof checksum([...layersFor("small"), { postgresql: { backup: { enabled: true, s3 } } }]),
+		typeof checksum([
+			...layersFor("small"),
+			{
+				postgresql: {
+					backup: { clientTlsSecret: "hephaestus-postgresql-backup-tls", enabled: true, s3 },
+				},
+			},
+		]),
 		"string",
 	);
 	assert.notEqual(
-		checksum([...layersFor("small"), { postgresql: { backup: { enabled: true, s3 } } }]),
+		checksum([
+			...layersFor("small"),
+			{
+				postgresql: {
+					backup: { clientTlsSecret: "hephaestus-postgresql-backup-tls", enabled: true, s3 },
+				},
+			},
+		]),
 		checksum([...layersFor("small"), bucket]),
 	);
 });
@@ -1504,7 +1529,11 @@ await test("a restore stops PostgreSQL and the database roles, suspends the back
 	const enabled = [
 		...layersFor("small"),
 		workerLayer,
-		{ postgresql: { backup: { enabled: true, s3 } } },
+		{
+			postgresql: {
+				backup: { clientTlsSecret: "hephaestus-postgresql-backup-tls", enabled: true, s3 },
+			},
+		},
 	];
 	const time = "2026-10-24 19:25:31+00";
 	const restoring = rendered([
@@ -1573,7 +1602,11 @@ await test("a private S3 CA reaches every Pod that reads the repository, and no 
 	const resources = rendered([
 		...layersFor("small"),
 		workerLayer,
-		{ postgresql: { backup: { enabled: true, s3 } } },
+		{
+			postgresql: {
+				backup: { clientTlsSecret: "hephaestus-postgresql-backup-tls", enabled: true, s3 },
+			},
+		},
 	]);
 	const config = resources.find(
 		(resource) => kindOf(resource) === "ConfigMap" && componentOf(resource) === "postgresql-backup",
@@ -1912,7 +1945,11 @@ await test("the single-node profile's requests, one upgrade beside them and its 
 	const resources = rendered([
 		...layersFor("small"),
 		workerLayer,
-		{ postgresql: { backup: { enabled: true, s3 } } },
+		{
+			postgresql: {
+				backup: { clientTlsSecret: "hephaestus-postgresql-backup-tls", enabled: true, s3 },
+			},
+		},
 	]);
 	let cpu = 0;
 	let memory = 0;
@@ -2089,7 +2126,11 @@ await test("the 16 GiB profile runs a review and a Heph turn, and an upgrade, wi
 	const s3 = { bucket: "hephaestus-backups", endpoint: "s3.example.com", region: "eu-central-1" };
 	const resources = rendered([
 		...layersFor("small-16gib"),
-		{ postgresql: { backup: { enabled: true, s3 } } },
+		{
+			postgresql: {
+				backup: { clientTlsSecret: "hephaestus-postgresql-backup-tls", enabled: true, s3 },
+			},
+		},
 	]);
 	const worker = workload(resources, "worker");
 	assert.ok(worker, "the profile runs a worker");
@@ -2331,6 +2372,7 @@ await test("every revision migrates the database once, in a Job that only reache
 		{
 			postgresql: {
 				backup: {
+					clientTlsSecret: "hephaestus-postgresql-backup-tls",
 					enabled: true,
 					s3: { bucket: "hephaestus-backups", endpoint: "s3.example.com", region: "eu-central-1" },
 					restore: { enabled: true },
@@ -2572,6 +2614,7 @@ await test("values that the chart does not accept fail the render", () => {
 				{
 					postgresql: {
 						backup: {
+							clientTlsSecret: "hephaestus-postgresql-backup-tls",
 							enabled: true,
 							s3: { bucket: "backups", endpoint: "s3.example.com", region: "eu" },
 						},
@@ -2582,7 +2625,14 @@ await test("values that the chart does not accept fail the render", () => {
 		],
 		[
 			"a backup without its bucket",
-			[...layersFor("small"), { postgresql: { backup: { enabled: true } } }],
+			[
+				...layersFor("small"),
+				{
+					postgresql: {
+						backup: { clientTlsSecret: "hephaestus-postgresql-backup-tls", enabled: true },
+					},
+				},
+			],
 			/postgresql\.backup\.s3\.bucket is required/u,
 		],
 		[
@@ -2656,5 +2706,88 @@ await test("a model endpoint on a private network reaches the server and the wor
 		]);
 		assert.equal(result.ok, false, `${refused.cidr} ${JSON.stringify(refused.ports)} rendered`);
 		assert.match(result.stderr, /modelEndpoints/u, refused.cidr);
+	}
+});
+
+await test("workspace hosts reach only the SPA and share the apex origin settings", () => {
+	const layers = [profile("small"), prepared, operator, reviews];
+	const off = rendered(layers);
+	assert.equal(off.filter((resource) => kindOf(resource) === "HTTPRoute").length, 1);
+	const resources = rendered([...layers, { workspaceSubdomains: { enabled: true } }]);
+	const routes = resources.filter((resource) => kindOf(resource) === "HTTPRoute");
+	const tenant = routes.find(
+		(resource) => get(resource, "spec", "hostnames", 0) === "*.hephaestus.example.com",
+	);
+	assert.ok(tenant);
+	assert.deepEqual(
+		list(get(tenant, "spec", "rules"))
+			.flatMap((rule) => list(get(rule, "backendRefs")))
+			.map((backend) => get(backend, "name")),
+		["heph-webapp"],
+	);
+	for (const component of ["server", "webapp"]) {
+		const deployment = resources.find(
+			(resource) => kindOf(resource) === "Deployment" && componentOf(resource) === component,
+		);
+		const variables = list(get(podSpec(deployment), "containers", 0, "env"));
+		assert.equal(
+			get(
+				variables.find((entry) => get(entry, "name") === "HEPHAESTUS_WORKSPACE_SUBDOMAINS_ENABLED"),
+				"value",
+			),
+			"true",
+		);
+		assert.equal(
+			get(
+				variables.find(
+					(entry) => get(entry, "name") === "HEPHAESTUS_WORKSPACE_SUBDOMAINS_BASE_DOMAIN",
+				),
+				"value",
+			),
+			"hephaestus.example.com",
+		);
+	}
+});
+
+await test("a restore clone starts PostgreSQL alone before lockdown and migrations", () => {
+	const resources = rendered([
+		profile("small"),
+		prepared,
+		operator,
+		reviews,
+		{
+			server: { replicas: 0 },
+			worker: { replicas: 0 },
+			webhook: { replicas: 0 },
+			migration: { enabled: false },
+		},
+	]);
+	assert.equal(
+		resources.some(
+			(resource) => kindOf(resource) === "Job" && componentOf(resource) === "migration",
+		),
+		false,
+	);
+	assert.equal(
+		get(
+			resources.find(
+				(resource) => kindOf(resource) === "StatefulSet" && componentOf(resource) === "postgresql",
+			),
+			"spec",
+			"replicas",
+		),
+		1,
+	);
+	for (const component of ["server", "worker", "webhook"]) {
+		assert.equal(
+			get(
+				resources.find(
+					(resource) => kindOf(resource) === "Deployment" && componentOf(resource) === component,
+				),
+				"spec",
+				"replicas",
+			),
+			0,
+		);
 	}
 });

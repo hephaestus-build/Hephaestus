@@ -34,6 +34,8 @@ spec:
       {{- include "hephaestus.selectorLabels" (dict "root" . "component" "webapp") | nindent 6 }}
   template:
     metadata:
+      annotations:
+        checksum/workspace-routing: {{ include (print $.Template.BasePath "/workspace-routing.yaml") . | sha256sum }}
       labels:
         {{- include "hephaestus.podLabels" (dict "root" . "component" "webapp") | nindent 8 }}
     spec:
@@ -50,6 +52,10 @@ spec:
           image: {{ include "hephaestus.image" (dict "root" . "name" "webapp") | quote }}
           imagePullPolicy: IfNotPresent
           env:
+            - name: HEPHAESTUS_WORKSPACE_SUBDOMAINS_ENABLED
+              value: {{ .Values.workspaceSubdomains.enabled | quote }}
+            - name: HEPHAESTUS_WORKSPACE_SUBDOMAINS_BASE_DOMAIN
+              value: {{ .Values.host | quote }}
             - name: APPLICATION_VERSION
               value: {{ trimPrefix "v" .Values.release.version | quote }}
             - name: APPLICATION_CLIENT_URL
@@ -87,6 +93,16 @@ spec:
           securityContext:
             {{- include "hephaestus.containerSecurityContext" . | nindent 12 }}
           volumeMounts:
+            {{- if .Values.workspaceSubdomains.enabled }}
+            - name: workspace-routing
+              mountPath: /etc/nginx/conf.d/workspace-maps.conf
+              subPath: maps.conf
+              readOnly: true
+            - name: workspace-routing
+              mountPath: /etc/nginx/workspace/server.conf
+              subPath: server.conf
+              readOnly: true
+            {{- end }}
             # The image's one writable subtree: the generated index, configuration and discovery
             # files, the nginx PID file and its temporary directories. /tmp itself and the assets
             # stay read-only.
@@ -98,6 +114,11 @@ spec:
               readOnly: true
             {{- end }}
       volumes:
+        {{- if .Values.workspaceSubdomains.enabled }}
+        - name: workspace-routing
+          configMap:
+            name: {{ include "hephaestus.name" (dict "root" . "component" "workspace-routing") }}
+        {{- end }}
         - name: runtime
           emptyDir:
             sizeLimit: 16Mi

@@ -92,3 +92,19 @@ spec:
   issuerRef:
     kind: Issuer
     name: hephaestus-postgresql-ca
+---
+# pgBackRest authenticates the backup Jobs by this common name, under the PostgreSQL CA.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: hephaestus-postgresql-backup-tls
+  namespace: hephaestus
+spec:
+  secretName: hephaestus-postgresql-backup-tls
+  commonName: hephaestus-backup
+  usages: [digital signature, key encipherment, client auth]
+  duration: 8760h
+  renewBefore: 720h
+  issuerRef:
+    kind: Issuer
+    name: hephaestus-postgresql-ca

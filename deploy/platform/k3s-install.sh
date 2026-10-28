@@ -41,6 +41,8 @@ usage: sh k3s-install.sh --version X.Y.Z --host NAME --email ADDRESS [options]
   --version X.Y.Z            the release of these files, without the leading "v"
   --host NAME                the public host name, which resolves to this host
   --email ADDRESS            the address that gets the expiry notices of Let's Encrypt
+  --workspace-subdomains     enable workspace hosts; needs --dns01-issuer
+  --dns01-issuer NAME         existing ClusterIssuer for a DNS-01 wildcard certificate
   --staging                  use the Let's Encrypt staging service: a certificate that no browser trusts
   --github-client-id ID      the client ID of the GitHub OAuth app, for a new site.yaml
   --bootstrap-admins LIST    for example github:1234567, for a new site.yaml
@@ -66,6 +68,8 @@ VERSION=
 HOST=
 EMAIL=
 STAGING=false
+WORKSPACE_SUBDOMAINS=false
+DNS01_ISSUER=
 GITHUB_CLIENT_ID=
 BOOTSTRAP_ADMINS=
 CERTIFICATES=
@@ -74,10 +78,11 @@ SKIPPED=
 RENDER=false
 while [ $# -gt 0 ]; do
 	case $1 in
-	--version | --host | --email | --github-client-id | --bootstrap-admins | --certificates | --lock | --skip-check)
+	--version | --host | --email | --dns01-issuer | --github-client-id | --bootstrap-admins | --certificates | --lock | --skip-check)
 		[ $# -ge 2 ] || usage
 		case $1 in
 		--version) VERSION=$2 ;;
+		--dns01-issuer) DNS01_ISSUER=$2 ;;
 		--host) HOST=$2 ;;
 		--email) EMAIL=$2 ;;
 		--github-client-id) GITHUB_CLIENT_ID=$2 ;;
@@ -90,6 +95,10 @@ while [ $# -gt 0 ]; do
 			;;
 		esac
 		shift 2
+		;;
+	--workspace-subdomains)
+		WORKSPACE_SUBDOMAINS=true
+		shift
 		;;
 	--staging)
 		STAGING=true
@@ -116,6 +125,12 @@ fi
 	die "--github-client-id takes letters, digits, '.', '_' and '-'"
 [ -z "$BOOTSTRAP_ADMINS" ] || matches "$BOOTSTRAP_ADMINS" '[a-z]+:@?[A-Za-z0-9._-]+(,[a-z]+:@?[A-Za-z0-9._-]+)*' ||
 	die "--bootstrap-admins takes a list such as github:1234567,gitlab:@name"
+[ "$WORKSPACE_SUBDOMAINS" = false ] || {
+	[ "${#HOST}" -le 189 ] || die "workspace subdomains need a host of at most 189 characters"
+	[ -z "$CERTIFICATES" ] || die "--workspace-subdomains uses the standard certificates asset; configure a custom certificate in --certificates yourself"
+	matches "$DNS01_ISSUER" "$LABEL" || die "workspace subdomains need --dns01-issuer with a ClusterIssuer name"
+}
+[ -z "$DNS01_ISSUER" ] || [ "$WORKSPACE_SUBDOMAINS" = true ] || die "--dns01-issuer needs --workspace-subdomains"
 [ -z "$LOCK" ] || [ -f "$LOCK" ] || die "--lock names no file: $LOCK"
 
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -132,7 +147,14 @@ render_certificates() {
 	server=acme-v02
 	[ "$STAGING" = false ] || server=acme-staging-v02
 	sed -e "s|hephaestus\\.example\\.com|$HOST|g" -e "s|acme@example\\.com|$EMAIL|g" \
-		-e "s|acme-v02|$server|g" "$HERE/k3s-certificates.yaml"
+		-e "s|acme-v02|$server|g" "$HERE/k3s-certificates.yaml" | {
+		if [ "$WORKSPACE_SUBDOMAINS" = true ]; then
+			sed -e "s|^    - $HOST\$|    - $HOST\\n    - \"*.$HOST\"|" \
+				-e "s|^    name: gateway\$|    name: $DNS01_ISSUER|"
+		else
+			cat
+		fi
+	}
 }
 if [ "$RENDER" = true ]; then
 	render_certificates
@@ -362,6 +384,12 @@ umask 022
 say "Waiting for cert-manager to issue the certificates"
 kubectl wait --for=create crd/certificates.cert-manager.io --timeout=10m >/dev/null
 kubectl wait --for=condition=Established crd/certificates.cert-manager.io --timeout=2m >/dev/null
+if [ "$WORKSPACE_SUBDOMAINS" = true ]; then
+	kubectl wait --for=create "clusterissuer/$DNS01_ISSUER" --timeout=5m >/dev/null ||
+		die "the DNS-01 ClusterIssuer $DNS01_ISSUER does not exist: install the issuer and its private credential first"
+	kubectl wait --for=condition=Ready "clusterissuer/$DNS01_ISSUER" --timeout=5m >/dev/null ||
+		die "the DNS-01 ClusterIssuer $DNS01_ISSUER is not ready: check its account and credential"
+fi
 kubectl -n "$NAMESPACE" wait --for=create certificate/hephaestus-postgresql-tls --timeout=10m >/dev/null
 kubectl -n "$NAMESPACE" wait --for=condition=Ready certificate/hephaestus-postgresql-tls --timeout=10m >/dev/null
 kubectl -n "$GATEWAY_NAMESPACE" wait --for=create certificate/hephaestus-tls --timeout=10m >/dev/null
@@ -370,8 +398,8 @@ kubectl -n "$GATEWAY_NAMESPACE" wait --for=condition=Ready certificate/hephaestu
 
 if [ -f "$HERE/site.yaml" ]; then
 	say "Keeping site.yaml"
-	if [ -n "$GITHUB_CLIENT_ID$BOOTSTRAP_ADMINS" ]; then
-		warn "site.yaml exists, so --github-client-id and --bootstrap-admins change nothing: edit site.yaml and run this again"
+	if [ -n "$GITHUB_CLIENT_ID$BOOTSTRAP_ADMINS$DNS01_ISSUER" ]; then
+		warn "site.yaml exists, so --github-client-id, --bootstrap-admins and --workspace-subdomains change nothing: edit site.yaml and run this again"
 	fi
 else
 	say "Writing site.yaml"
@@ -382,6 +410,7 @@ else
 	case $address in *:*) cidr="$address/128" ;; *) cidr="$address/32" ;; esac
 	{
 		printf 'host: %s\n' "$HOST"
+		printf 'workspaceSubdomains:\n  enabled: %s\n' "$WORKSPACE_SUBDOMAINS"
 		printf 'deploymentEnvironment: production\n'
 		printf 'networkPolicy:\n  kubernetesApi:\n    cidr: %s\n    port: %s\n' "$cidr" "$port"
 		printf 'config:\n  gitCheckoutEnabled: true\n'

@@ -183,7 +183,7 @@ Turning silent mode off is an explicit step, not part of the restore command.
    done
    [ "$recovery" = f ] || { printf 'PostgreSQL did not promote within 30 minutes\n' >&2; exit 1; }
    dr exec -T postgres psql -U root -d hephaestus -v ON_ERROR_STOP=1 \
-     < restore-clone-lockdown.sql
+     < ../../deploy/chart/hephaestus/files/restore-clone-lockdown.sql
    )
    ```
 
