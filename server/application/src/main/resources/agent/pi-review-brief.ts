@@ -164,6 +164,7 @@ export function buildBrief(
 		.toSorted()
 		.map((kind) => `\`${kind}\``);
 	const empty: string[] = [];
+	const ownIndex = sourceIndex(paths, scope);
 	let used = 0;
 	for (const candidate of candidates(root, paths, limits, scope)) {
 		if (!existsSync(candidate.absolute)) {
@@ -237,6 +238,7 @@ export function buildBrief(
 				`### Not captured — do not look for these\nNothing is known about what they would hold. Never read one as empty: a fact that depends on one is a collection gap.\n${absent.join(", ")}`,
 			);
 		}
+		parts.push(ownIndex);
 		return parts.join("\n\n");
 	};
 	let brief = render();
@@ -265,6 +267,30 @@ export function buildBrief(
 		source.omitted ??= "index-limit";
 	}
 	return result(omitted.length <= limits.totalChars ? omitted : "");
+}
+
+/**
+ * The practice's own index, last in its opening: each declared source and where it is. It replaces the
+ * workspace's INDEX.md, which lists every source of the review.
+ */
+function sourceIndex(paths: BriefPaths, scope: BriefScope): string {
+	const lines = [...scope.declared].toSorted().map((kind) => {
+		if (kind === DIFF_SOURCE) {
+			return `- \`${kind}\`: \`${CHANGE_ROOT}/\`, derived here from the checkout`;
+		}
+		if (kind === TREE_SOURCE) {
+			return `- \`${kind}\`: the checkout at \`${paths.repositoryRoot}/\`, with its Git history`;
+		}
+		if (!scope.available.has(kind)) {
+			return `- \`${kind}\`: not captured`;
+		}
+		const files = [...scope.fileKinds]
+			.filter(([, owner]) => owner === kind)
+			.map(([file]) => `\`${file}\``)
+			.toSorted();
+		return `- \`${kind}\`: ${files.length === 0 ? "captured, with no file" : files.join(", ")}`;
+	});
+	return `### The sources of this practice\nRead only these. The change and the checkout are always readable through Git.\n${lines.join("\n")}`;
 }
 
 /** A fence inside the content would end the block early; a longer fence cannot be closed by it. */

@@ -38,9 +38,10 @@ import {
 import { errorText } from "./pi-error-text.ts";
 
 import {
+	CONTEXT_IS_LOOP_ONLY,
 	type DeclaredSources,
+	declaredSourcesExtension,
 	readableKinds,
-	refusedContextRead,
 	undeclaredCitedKinds,
 } from "./pi-declared-sources.ts";
 import { type CitableText, folderCitationIndex, citableTextIndex } from "./pi-folder-index.ts";
@@ -736,14 +737,16 @@ export async function runReviewJob(): Promise<void> {
 	const availableSourceKindValues = [...availableSourceKinds].toSorted();
 	const practiceIndex = readPracticeIndex();
 
-	function declaredSourcesOf(slug: string | null): DeclaredSources {
+	/** The one declared set of a practice: its brief shows it, and its guard and citations follow it. */
+	function declaredOf(slug: string | null): Set<string> {
 		const practice = practiceIndex.find((entry) => entry.slug === slug);
+		// A search that must be exhaustive over a source has to be able to read it.
+		return new Set([...(practice?.readsSources ?? []), ...(practice?.exhaustiveSources ?? [])]);
+	}
+
+	function declaredSourcesOf(slug: string | null): DeclaredSources {
 		return {
-			// A search that must be exhaustive over a source has to be able to read it.
-			readable: readableKinds([
-				...(practice?.readsSources ?? []),
-				...(practice?.exhaustiveSources ?? []),
-			]),
+			readable: readableKinds(declaredOf(slug)),
 			fileKinds: sourceFileSources,
 			contextRoot: taskEnvelope.paths.contextRoot,
 			repositoryRoot: taskEnvelope.paths.repositoryRoot,
@@ -2408,9 +2411,7 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 		// One brief for each declared set: practices that declare the same sources share its bytes.
 		const briefs = new Map<string, ReturnType<typeof buildBrief>>();
 		function briefOf(slug: string): ReturnType<typeof buildBrief> {
-			const declared = new Set(
-				practiceIndex.find((practice) => practice.slug === slug)?.readsSources,
-			);
+			const declared = declaredOf(slug);
 			const key = JSON.stringify([...declared].toSorted());
 			const known = briefs.get(key);
 			if (known !== undefined) {
@@ -2428,7 +2429,7 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 			return built;
 		}
 		console.error(
-			`[pi-runner] Review: ${allSlugs.length} practice(s) in ${turns.length} turn(s); briefs=${[
+			`[pi-runner] Review: ${allSlugs.length} practice(s) in ${turns.length} turn(s); context loop-only=${CONTEXT_IS_LOOP_ONLY}; briefs=${[
 				...new Set(allSlugs.map((slug) => briefOf(slug).text.length)),
 			].join(",")} chars`,
 		);
@@ -2471,29 +2472,8 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 				extensionFactories: [
 					createCodemodeExtension({ mode: "on", models: false }),
 					cacheExtension,
-					// The loop's own tools read only what the practice declares; codemode's calls pass here too.
-					(pi) => {
-						// A session with no practice reads only what every session reads.
-						const sources = declaredSourcesOf(practice);
-						pi.on("tool_call", (event) => {
-							if (
-								event.toolName !== "read" &&
-								event.toolName !== "grep" &&
-								event.toolName !== "find" &&
-								event.toolName !== "ls"
-							) {
-								return;
-							}
-							const target: unknown = isRecord(event.input) ? event.input.path : undefined;
-							const reason = refusedContextRead(
-								event.toolName,
-								typeof target === "string" ? target : undefined,
-								CWD,
-								sources,
-							);
-							return reason === undefined ? undefined : { block: true, reason };
-						});
-					},
+					// A session with no practice reads only what every session reads.
+					declaredSourcesExtension(declaredSourcesOf(practice), CWD),
 					submissionExtension(
 						providerConfig ?? {},
 						() => scope.activeReview?.requireSubmission === true,

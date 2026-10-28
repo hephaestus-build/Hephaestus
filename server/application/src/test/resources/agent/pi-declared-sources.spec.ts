@@ -1,9 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import type { ToolCallEvent, ToolCallEventResult } from "@earendil-works/pi-coding-agent";
+
 import {
 	type DeclaredSources,
 	declaredRoots,
+	declaredSourcesExtension,
 	readableKinds,
 	refusedContextRead,
 	undeclaredCitedKinds,
@@ -104,6 +107,12 @@ void test("a result that cites or consulted an undeclared kind names it", () => 
 		problems: [{ citations: [{ sourceKind: CORE }] }],
 		evidence: { search: { consulted: [COMMENTS, DIFF] } },
 	};
+	const inapplicable = {
+		outcome: "DOES_NOT_APPLY",
+		citations: [{ sourceKind: DIFF }],
+		evidence: { inapplicability: { consulted: [CORE] } },
+	};
+	assert.deepEqual(undeclaredCitedKinds(inapplicable, readableKinds([])), [CORE]);
 	assert.deepEqual(undeclaredCitedKinds(candidate, readableKinds([])), [COMMENTS, CORE]);
 	assert.deepEqual(undeclaredCitedKinds(candidate, readableKinds([CORE, COMMENTS])), []);
 	// The checkout is readable from every session.
@@ -128,4 +137,55 @@ void test("a path that no captured source owns is read, and a captured file outs
 	assert.notEqual(undefined, refusedContextRead("read", "context/chat/thread.json", CWD, withChat));
 	assert.notEqual(undefined, refusedContextRead("grep", "context/chat", CWD, withChat));
 	assert.equal(refusedContextRead("grep", "context/scm", CWD, withChat), undefined);
+});
+
+void test("the guard blocks a read the session makes directly and one that codemode makes for it", () => {
+	let handler: ((event: ToolCallEvent) => ToolCallEventResult | undefined) | undefined;
+	declaredSourcesExtension(
+		sources([DIFF]),
+		CWD,
+	)({
+		on: (_event, registered) => {
+			handler = registered;
+		},
+	});
+	assert.ok(handler);
+	const direct = handler({
+		type: "tool_call",
+		toolCallId: "1",
+		toolName: "read",
+		input: { path: "context/comments.json" },
+	});
+	assert.deepEqual(direct, {
+		block: true,
+		reason:
+			"context/comments.json is `scm.pull-request.comments`, which this practice does not declare. Read only: scm.pull-request.diff, scm.repository.tree.",
+	});
+	// Pi fires the same event for a codemode script's call, with the script's call as its parent.
+	const nested = handler({
+		type: "tool_call",
+		toolCallId: "2/1",
+		parentToolCallId: "2",
+		toolName: "grep",
+		input: { pattern: "nit", path: "context" },
+	});
+	assert.equal(nested?.block, true);
+	assert.equal(
+		handler({
+			type: "tool_call",
+			toolCallId: "3",
+			toolName: "bash",
+			input: { command: "cat context/comments.json" },
+		}),
+		undefined,
+	);
+	assert.equal(
+		handler({
+			type: "tool_call",
+			toolCallId: "4",
+			toolName: "read",
+			input: { path: "work/change/diff.patch" },
+		}),
+		undefined,
+	);
 });

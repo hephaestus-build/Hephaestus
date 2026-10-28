@@ -2,9 +2,19 @@
 // Pure rules, so a test can call them; pi-runner.ts applies them to each session.
 import path from "node:path";
 
+import type { ToolCallEvent, ToolCallEventResult } from "@earendil-works/pi-coding-agent";
+
 import { CHANGE_ROOT } from "./pi-change.ts";
 import { DIFF_SOURCE, TREE_SOURCE } from "./work/practice-scripts/kits/scm/sources.ts";
 import { isJsonObject as isRecord } from "./work/practice-scripts/lib/core/json.ts";
+
+/**
+ * Whether captured context sits on a volume that only the loop mounts. While it is false, `bash` and code
+ * in the tools container can read every captured file, so only the loop's own tools hold the boundary.
+ * ADR 0068's tools layer sets it with the Pod layout that makes it true (`SandboxLayout`), and L7 of ADR 0069
+ * reads it to decide which sources a session could read.
+ */
+export const CONTEXT_IS_LOOP_ONLY = false;
 
 /** What a session of a practice that declares `declared` may read. */
 export function readableKinds(declared: Iterable<string>): Set<string> {
@@ -130,17 +140,52 @@ export function undeclaredCitedKinds(candidate: unknown, readable: ReadonlySet<s
 			}
 		}
 		const { evidence } = candidate;
-		if (
-			isRecord(evidence) &&
-			isRecord(evidence.search) &&
-			Array.isArray(evidence.search.consulted)
-		) {
-			for (const kind of evidence.search.consulted) {
-				if (typeof kind === "string") {
-					kinds.add(kind);
-				}
+		// Every warrant that names what it consulted: a search and an inapplicability.
+		for (const warrant of isRecord(evidence) ? [evidence.search, evidence.inapplicability] : []) {
+			const consulted =
+				isRecord(warrant) && Array.isArray(warrant.consulted) ? warrant.consulted : [];
+			for (const kind of consulted.filter((value): value is string => typeof value === "string")) {
+				kinds.add(kind);
 			}
 		}
 	}
 	return [...kinds].filter((kind) => !readable.has(kind)).toSorted();
+}
+
+/** The one hook the guard needs, so a test can drive it without a whole session. */
+export interface ToolCallHook {
+	on: (
+		event: "tool_call",
+		handler: (event: ToolCallEvent) => ToolCallEventResult | undefined,
+	) => unknown;
+}
+
+/**
+ * The guard on the loop's read, grep, find and ls. Pi fires `tool_call` for a call that codemode makes too,
+ * with `parentToolCallId` set, so a script's calls pass here as well.
+ */
+export function declaredSourcesExtension(
+	sources: DeclaredSources,
+	cwd: string,
+): (pi: ToolCallHook) => void {
+	return (pi) => {
+		pi.on("tool_call", (event) => {
+			if (
+				event.toolName !== "read" &&
+				event.toolName !== "grep" &&
+				event.toolName !== "find" &&
+				event.toolName !== "ls"
+			) {
+				return;
+			}
+			const target: unknown = isRecord(event.input) ? event.input.path : undefined;
+			const reason = refusedContextRead(
+				event.toolName,
+				typeof target === "string" ? target : undefined,
+				cwd,
+				sources,
+			);
+			return reason === undefined ? undefined : { block: true, reason };
+		});
+	};
 }

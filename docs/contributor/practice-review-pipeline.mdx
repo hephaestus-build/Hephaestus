@@ -228,12 +228,15 @@ A brief-only decision can be complete when the opening brief supplied all these 
 
 Each review session opens with a brief of only the sources that its practice declares.
 The brief shows them in one order: the change, the core text, linked work, then the discussion.
+It ends with the practice's own index of those sources.
 Practices that declare the same sources get the same opening, so a prompt cache can share it.
-The read, grep and find tools of the session refuse a captured file that the practice does not declare.
-A listing still shows its name.
 
+The session's read, grep and find tools refuse a captured file that the practice does not declare. A listing still shows its name.
+A result may cite only its declared sources, the change and the checkout. The runner refuses other citations, and the session gets a repair turn.
 Every session can also read the change and the checkout through Git.
-A result may cite only those and its declared sources. The runner refuses other citations, and the session gets a repair turn.
+
+Thus, a session that uses only these tools reads and cites only its declared sources.
+`bash` and code in the session can still read every captured file, until captured context moves to a volume that only the loop mounts.
 [ADR 0069](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0069-practices-run-when-ready-and-stay-current-by-their-sources.md) decides this.
 
 An omitted source requires continuous reads from line 1 through EOF.

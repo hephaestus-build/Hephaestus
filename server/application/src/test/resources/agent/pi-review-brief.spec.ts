@@ -107,6 +107,16 @@ void test("a practice is shown only the sources it declares, and one declared se
 		const change = withCore.slice(0, withCore.indexOf("### `context/metadata.json`"));
 		assert.ok(diffOnly.startsWith(change.trimEnd()), diffOnly);
 		assert.equal(buildBrief(root, paths, scope(new Set([DIFF, CORE]))).text, withCore);
+		// The practice's own index ends its opening and names only its sources.
+		assert.match(
+			diffOnly,
+			/### The sources of this practice\n[^#]*`scm\.pull-request\.diff`: `work\/change\/`/u,
+		);
+		assert.doesNotMatch(
+			diffOnly.slice(diffOnly.indexOf("### The sources of this practice")),
+			/core|comments/u,
+		);
+		assert.ok(diffOnly.trimEnd().endsWith("with its Git history"), diffOnly);
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}
@@ -178,10 +188,10 @@ void test("the brief as a whole stays under its total bound", () => {
 		const { text: brief } = buildBrief(root, paths, scope(), {
 			filePerChars: 1000,
 			diffChars: 1000,
-			totalChars: 2000,
+			totalChars: 2700,
 		});
 		assert.match(brief, /metadata\.json`\n```json\n\[L1\] x+\n```/u);
-		assert.ok(brief.length <= 2000, `Rendered ${brief.length} characters`);
+		assert.ok(brief.length <= 2700, `Rendered ${brief.length} characters`);
 		assert.doesNotMatch(brief, /comments\.json`\n```json/u);
 		assert.match(brief, /Too large[\s\S]*review_threads\.json[\s\S]*comments\.json/u);
 	} finally {

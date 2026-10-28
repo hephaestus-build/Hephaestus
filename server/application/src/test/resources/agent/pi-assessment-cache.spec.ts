@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { once } from "node:events";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -22,6 +22,7 @@ import {
 	type ProviderConfig,
 	registerHephaestusProvider,
 } from "../../../main/resources/agent/pi-provider.ts";
+import { buildBrief } from "../../../main/resources/agent/pi-review-brief.ts";
 
 const PREFIX = "Review this captured work.\n\nShared work description and diff.\n\n";
 const JOB = "10000000-0000-4000-8000-000000000001";
@@ -173,6 +174,69 @@ void test("fresh native assessments share a work prefix without sharing criteria
 		assert.ok(JSON.stringify(growing.input).includes("Correct beta's citation."));
 		assert.equal(JSON.stringify(b.input).includes("Evaluate alpha."), false);
 	});
+});
+
+void test("practices that declare the same sources send the provider the same cached opening", async () => {
+	const root = mkdtempSync(path.join(tmpdir(), "assessment-brief-"));
+	const files: Record<string, string> = {
+		"context/metadata.json": '{"title": "Add login"}',
+		"context/comments.json": '{"comments": [{"body": "nit"}]}',
+		"work/change/diff.patch": "diff --git a/a.ts b/a.ts\n",
+	};
+	for (const [file, text] of Object.entries(files)) {
+		mkdirSync(path.join(root, file, ".."), { recursive: true });
+		writeFileSync(path.join(root, file), text);
+	}
+	const fileKinds = new Map([
+		["context/metadata.json", "scm.pull-request.core"],
+		["context/comments.json", "scm.pull-request.comments"],
+	]);
+	const available = new Set([
+		"scm.pull-request.core",
+		"scm.pull-request.comments",
+		"scm.pull-request.diff",
+	]);
+	// The runner's opening: the task prompt, then the practice's brief (`assessmentOpening`).
+	const opening = (declared: string[]) =>
+		`Review this captured work.\n\n${
+			buildBrief(
+				root,
+				{ contextRoot: "context", repositoryRoot: "repos/reviewed" },
+				{
+					declared: new Set(declared),
+					fileKinds,
+					available,
+				},
+			).text
+		}\n\n`;
+	const core = opening(["scm.pull-request.diff", "scm.pull-request.core"]);
+	const sameSet = opening(["scm.pull-request.core", "scm.pull-request.diff"]);
+	const discussion = opening(["scm.pull-request.diff", "scm.pull-request.comments"]);
+	try {
+		await wire(async ({ open, bodies }) => {
+			const config = { apiProtocol: "openai-responses", modelId: "gpt-6-luna" };
+			for (const [prefix, practice] of [
+				[core, "Evaluate alpha."],
+				[sameSet, "Evaluate beta."],
+				[discussion, "Evaluate gamma."],
+			] as const) {
+				const session = await open(config, 9, JOB, prefix);
+				await session.prompt(`${prefix}${practice}`);
+			}
+			const shared = bodies.map((body) => {
+				const user = firstUser(body);
+				assert.ok(Array.isArray(user.content));
+				const block: unknown = user.content[0];
+				assert.ok(isRecord(block));
+				return block.text;
+			});
+			assert.equal(shared[0], shared[1]);
+			assert.notEqual(shared[0], shared[2]);
+			assert.doesNotMatch(String(shared[0]), /nit/u);
+		});
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
 });
 
 void test("unsupported models and unavailable exact openings retain the native request unchanged", async () => {
