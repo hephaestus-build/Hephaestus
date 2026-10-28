@@ -348,6 +348,11 @@
       "type": "java.lang.String",
       "description": "Where a worker runs its sandboxes: docker or kubernetes. A worker runs one runtime and never falls back to the other.",
       "defaultValue": "docker"
+    },
+    {
+      "name": "hephaestus.mentor.turn.capacity",
+      "type": "java.lang.Integer",
+      "description": "The Heph turns that all workers together run at once: the number of workers times the Heph turns of each. While every one of them runs a turn, a question that could start next says that Heph is answering other questions. Unset, no question says why it waits. The Helm chart sets it. Must be at least 1 when set."
     }
   ],
   "hints": [

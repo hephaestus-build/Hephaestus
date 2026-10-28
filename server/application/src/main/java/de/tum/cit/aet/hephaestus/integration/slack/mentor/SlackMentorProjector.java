@@ -15,6 +15,7 @@ import de.tum.cit.aet.hephaestus.mentor.MentorSlackDelivery;
 import de.tum.cit.aet.hephaestus.mentor.MentorSlackDelivery.SlackTurn;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnService;
+import de.tum.cit.aet.hephaestus.mentor.MentorTurnWaits;
 import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.annotation.PreDestroy;
 import java.time.Clock;
@@ -80,6 +81,10 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
 
     static final String WAITING_NOTICE = "Heph has not started on this question yet. It answers as soon as it can.";
 
+    /** The notice while the question waits for a free Heph ({@link MentorTurn.WaitingFor#FREE_HEPH}). */
+    static final String WAITING_FOR_HEPH_NOTICE =
+            "Heph is answering other questions and starts on this one when it is free.";
+
     /**
      * How far Slack's clock may differ from this server's when the stream that a refused start may have opened is
      * looked for; both keep time by NTP.
@@ -125,6 +130,7 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
     private final MentorLedgerNotifications notifications;
     private final MentorSlackDelivery delivery;
     private final MentorTurnService turns;
+    private final MentorTurnWaits waits;
     private final MentorTurnCompletion completion;
     private final SlackMessageService slack;
     private final SlackMentorPoster poster;
@@ -144,6 +150,7 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
             MentorLedgerNotifications notifications,
             MentorSlackDelivery delivery,
             MentorTurnService turns,
+            MentorTurnWaits waits,
             MentorTurnCompletion completion,
             SlackMessageService slack,
             SlackMentorPoster poster,
@@ -153,6 +160,7 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
                 notifications,
                 delivery,
                 turns,
+                waits,
                 completion,
                 slack,
                 poster,
@@ -173,6 +181,7 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
             MentorLedgerNotifications notifications,
             MentorSlackDelivery delivery,
             MentorTurnService turns,
+            MentorTurnWaits waits,
             MentorTurnCompletion completion,
             SlackMessageService slack,
             SlackMentorPoster poster,
@@ -183,6 +192,7 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
         this.notifications = notifications;
         this.delivery = delivery;
         this.turns = turns;
+        this.waits = waits;
         this.completion = completion;
         this.slack = slack;
         this.poster = poster;
@@ -317,11 +327,12 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
 
     /**
      * Tells the developer once that their question waits, when its turn has not run {@link #WAITING_NOTICE_AFTER} after
-     * it was asked. Without it, Slack shows nothing while earlier turns hold the worker's turn slots. It goes once the
-     * turn runs or ends. A turn that already ran and waits again gets none: it did start. The notice does not claim the
-     * reply: a claim before the turn runs would leave the reply with this server, and a restart during the wait would
-     * lose the answer. So it relies on the one server that the chart runs, which also keeps the "once" in memory: after
-     * a restart, a question that still waits can get it again.
+     * it was asked. Without it, Slack shows nothing while earlier turns hold the worker's turn slots. The notice says
+     * that Heph answers other questions only when the question waits for a free Heph ({@link MentorTurnWaits}). It
+     * goes once the turn runs or ends. A turn that already ran and waits again gets none: it did start. The notice
+     * does not claim the reply: a claim before the turn runs would leave the reply with this server, and a restart
+     * during the wait would lose the answer. So it relies on the one server that the chart runs, which also keeps the
+     * "once" in memory: after a restart, a question that still waits can get it again.
      */
     private void noticeWaiting(Projection projection, MentorTurn turn, Instant now) {
         if (projection.waitingNoticed || turn.getStartedAt() != null || turn.getAttempt() > 0) {
@@ -335,6 +346,9 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
         if (projection.owner == Owner.ELSEWHERE || !slack.isConnected(projection.workspaceId)) {
             return;
         }
+        String notice = waits.waits(projection.workspaceId, List.of(turn)).containsKey(turn.getId())
+                ? WAITING_FOR_HEPH_NOTICE
+                : WAITING_NOTICE;
         projection.waitingNoticed = true;
         delivery.slackTurn(projection.workspaceId, projection.turnId).ifPresent(asked -> {
             try {
@@ -343,7 +357,7 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
                         asked.channelId(),
                         asked.threadTs(),
                         List.of(),
-                        WAITING_NOTICE,
+                        notice,
                         SlackMentorPosts.noticeMetadata());
             } catch (SlackSendException e) {
                 log.warn(

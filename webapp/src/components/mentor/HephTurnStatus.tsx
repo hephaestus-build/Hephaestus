@@ -9,12 +9,14 @@ import { hasText } from "@/lib/text";
 
 import { HephMessage } from "./HephMessage";
 
-type ShownTurn = Pick<MentorTurn, "status" | "surface" | "partial">;
+type ShownTurn = Pick<MentorTurn, "status" | "surface" | "partial" | "waitingFor">;
 
 /** What the status line says while a turn runs, or while it `waiting` to start. */
 function turnStatusLabel(turn: ShownTurn, waiting: boolean): string {
 	if (waiting) {
-		return "Waiting for Heph to start…";
+		return turn.waitingFor === "FREE_HEPH"
+			? "Heph is answering other questions. Yours starts when Heph is free."
+			: "Waiting for Heph to start…";
 	}
 	if (turn.surface === "SLACK") {
 		return "Answering in Slack…";
@@ -65,8 +67,9 @@ function formatWaited(seconds: number): string {
 }
 
 /**
- * The status line's words. A turn still queued after a second says only that it waits: the app cannot
- * tell whether other questions are ahead or no worker can start it. Most turns start well within
+ * The status line's words. A turn still queued after a second says that it waits. It says why only
+ * when the server says that every Heph slot is taken. Otherwise the turn starts at once, or the
+ * server cannot tell why it waits, for example when no worker runs. Most turns start well within
  * that second, so the line does not flicker.
  */
 export function useTurnStatusLabel(turn: ShownTurn | undefined): string {
@@ -80,7 +83,7 @@ export function useTurnStatusLabel(turn: ShownTurn | undefined): string {
 }
 
 export interface HephTurnStatusProps {
-	turn: Pick<MentorTurn, "createdAt" | "status" | "surface" | "partial">;
+	turn: Pick<MentorTurn, "createdAt" | "status" | "surface" | "partial" | "waitingFor">;
 	/** Shown on a Slack turn too. `label` names the answer it ends, apart from another scope's. */
 	stop?: { label: string; onStop: () => void };
 }

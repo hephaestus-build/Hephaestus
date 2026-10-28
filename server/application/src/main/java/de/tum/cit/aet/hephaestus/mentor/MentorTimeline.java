@@ -50,6 +50,7 @@ public class MentorTimeline {
     private final MentorConversationRepository conversations;
     private final MentorEntryRepository entries;
     private final MentorTurnRepository turns;
+    private final MentorTurnWaits waits;
     private final WeeklyDigestFacts weeklyDigests;
     private final ResultHistoryQuery results;
     private final FeedbackHistoryQuery feedback;
@@ -65,8 +66,10 @@ public class MentorTimeline {
             return MentorConversationDTO.NONE;
         }
         MentorConversation main = found.get();
-        List<MentorTurnDTO> active = turns.findActiveInTree(workspaceId, main.getId()).stream()
-                .map(turn -> turn(turn, parentEntryId(main, turn.getConversationId())))
+        List<MentorTurn> activeTurns = turns.findActiveInTree(workspaceId, main.getId());
+        Map<UUID, MentorTurn.WaitingFor> waiting = waits.waits(workspaceId, activeTurns);
+        List<MentorTurnDTO> active = activeTurns.stream()
+                .map(turn -> turn(turn, parentEntryId(main, turn.getConversationId()), waiting.get(turn.getId())))
                 .toList();
         List<MentorThreadSummaryDTO> threads =
                 entries.findThreadSummariesOfMain(workspaceId, main.getId(), MAX_THREADS).stream()
@@ -114,7 +117,7 @@ public class MentorTimeline {
     public MentorTurnDTO turn(long workspaceId, long accountId, UUID turnId) {
         MentorTurn turn = ownedTurn(workspaceId, accountId, turnId);
         MentorConversation conversation = conversation(workspaceId, turn.getConversationId());
-        return turn(turn, conversation.getParentEntryId());
+        return turn(turn, conversation.getParentEntryId(), waitingFor(turn));
     }
 
     @Transactional(readOnly = true)
@@ -150,8 +153,9 @@ public class MentorTimeline {
         return turns.findByIdAndWorkspaceId(turnId, workspaceId)
                 .flatMap(turn -> conversations
                         .findByIdAndWorkspaceId(turn.getConversationId(), workspaceId)
-                        .map(conversation ->
-                                new Owned<>(conversation.getAccountId(), turn(turn, conversation.getParentEntryId()))));
+                        .map(conversation -> new Owned<>(
+                                conversation.getAccountId(),
+                                turn(turn, conversation.getParentEntryId(), waitingFor(turn)))));
     }
 
     /**
@@ -412,7 +416,12 @@ public class MentorTimeline {
         return entry.getKind() == MentorEntry.Kind.HEPH ? MentorPiEntries.links(entry.getPayload()) : List.of();
     }
 
-    private static MentorTurnDTO turn(MentorTurn turn, @Nullable UUID parentEntryId) {
+    private MentorTurn.@Nullable WaitingFor waitingFor(MentorTurn turn) {
+        return waits.waits(turn.getWorkspaceId(), List.of(turn)).get(turn.getId());
+    }
+
+    private static MentorTurnDTO turn(
+            MentorTurn turn, @Nullable UUID parentEntryId, MentorTurn.@Nullable WaitingFor waitingFor) {
         JsonNode partial = turn.getPartial();
         return new MentorTurnDTO(
                 turn.getId(),
@@ -420,6 +429,7 @@ public class MentorTimeline {
                 parentEntryId,
                 turn.getRequestId(),
                 turn.getStatus(),
+                waitingFor,
                 turn.getAttempt(),
                 turn.getSurface(),
                 partial == null || turn.getStatus() != MentorTurn.Status.RUNNING

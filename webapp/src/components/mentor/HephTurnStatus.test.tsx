@@ -5,7 +5,7 @@ import type { MentorTurn } from "@/api/types.gen";
 
 import { HephTurnStatus, useTurnStatusLabel } from "./HephTurnStatus";
 
-type ShownTurn = Pick<MentorTurn, "status" | "surface" | "partial">;
+type ShownTurn = Pick<MentorTurn, "status" | "surface" | "partial" | "waitingFor">;
 
 beforeEach(() => {
 	vi.useFakeTimers();
@@ -15,7 +15,7 @@ afterEach(() => {
 	vi.useRealTimers();
 });
 
-it("says Heph is busy with other questions only once a queued turn has waited a second", () => {
+it("says a queued turn waits only once it has waited a second", () => {
 	const { result, rerender } = renderHook((turn: ShownTurn) => useTurnStatusLabel(turn), {
 		initialProps: { status: "QUEUED", surface: "APP" },
 	});
@@ -39,6 +39,19 @@ it("says Heph is busy with other questions only once a queued turn has waited a 
 		vi.advanceTimersByTime(500);
 	});
 	expect(result.current).toBe("Writing…");
+});
+
+it("says why a queued turn waits only when the server says it waits for a free Heph", () => {
+	const { result, rerender } = renderHook((turn: ShownTurn) => useTurnStatusLabel(turn), {
+		initialProps: { status: "QUEUED", surface: "APP", waitingFor: "FREE_HEPH" },
+	});
+	act(() => {
+		vi.advanceTimersByTime(1000);
+	});
+	expect(result.current).toBe("Heph is answering other questions. Yours starts when Heph is free.");
+
+	rerender({ status: "QUEUED", surface: "APP" });
+	expect(result.current).toBe("Waiting for Heph to start…");
 });
 
 it("never shows the wait for a turn that starts within the second", () => {

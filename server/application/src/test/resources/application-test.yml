@@ -83,6 +83,10 @@ hephaestus:
     mentor:
         turn:
             lease-reaper-delay: P1D
+            # One Heph slot, as a deployment with one worker that runs one turn: a question that a worker may start
+            # says that Heph answers other questions once any turn runs. Tests leave turns running, so a test that
+            # needs a free slot builds its own MentorTurnWaits.
+            capacity: 1
         # Slack is on suite-wide; the Heph Slack projector would take Slack turns before the tests that build their
         # own projector.
         slack:

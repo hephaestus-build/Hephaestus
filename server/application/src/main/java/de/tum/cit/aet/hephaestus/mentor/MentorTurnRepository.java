@@ -110,15 +110,12 @@ public interface MentorTurnRepository extends JpaRepository<MentorTurn, UUID> {
             @Param("workspaceId") Long workspaceId, @Param("conversationId") UUID conversationId);
 
     /**
-     * The oldest turn a worker may start, locked: the head of its conversation's queue, in a conversation where no
-     * host holds a turn. Skips rows another claim has locked, so concurrent workers never start the same turn, and the
-     * head rule keeps them from starting two turns of one conversation. The queue of a conversation is in the order of
-     * its questions' {@code seq}, which a submission takes under the conversation's lock. The creation time comes from
-     * the clock of the server that took the question, so it orders only the turns of different conversations.
+     * The queued turns {@code t} that a worker may start: the head of its conversation's queue, in a conversation
+     * where no host holds a turn. The queue of a conversation is in the order of its questions' {@code seq}, which a
+     * submission takes under the conversation's lock. A claim and the reason a turn waits read this one rule.
      */
-    @WorkspaceAgnostic("Workers claim queued turns across tenants")
-    @Query(value = """
-            SELECT t.* FROM mentor_turn t
+    String CLAIMABLE = """
+            FROM mentor_turn t
             JOIN mentor_entry question ON question.turn_id = t.id AND question.kind = 'USER'
             WHERE t.status = 'QUEUED'
               AND NOT EXISTS (
@@ -130,11 +127,67 @@ public interface MentorTurnRepository extends JpaRepository<MentorTurn, UUID> {
                   SELECT 1 FROM mentor_turn held
                   WHERE held.conversation_id = t.conversation_id
                     AND (held.status = 'RUNNING' OR (held.status = 'STOPPED' AND held.leased_until IS NOT NULL)))
+            """;
+
+    /**
+     * The oldest turn a worker may start ({@link #CLAIMABLE}), locked. Skips rows another claim has locked, so
+     * concurrent workers never start the same turn, and the head rule keeps them from starting two turns of one
+     * conversation. The creation time comes from the clock of the server that took the question, so it orders only
+     * the turns of different conversations.
+     */
+    @WorkspaceAgnostic("Workers claim queued turns across tenants")
+    @Query(value = "SELECT t.* " + CLAIMABLE + """
             ORDER BY t.created_at, t.id
             LIMIT 1
             FOR UPDATE OF t SKIP LOCKED
             """, nativeQuery = true)
     Optional<MentorTurn> lockClaimable();
+
+    /** Of {@code ids}, the turns of the workspace that a worker may start now ({@link #CLAIMABLE}). Locks nothing. */
+    @Query(
+            value = "SELECT t.id " + CLAIMABLE + " AND t.workspace_id = :workspaceId AND t.id IN (:ids)",
+            nativeQuery = true)
+    List<UUID> findClaimableIds(@Param("workspaceId") Long workspaceId, @Param("ids") Collection<UUID> ids);
+
+    /**
+     * The turns that hold a Heph slot now: those that run, and stopped ones whose host still commits their answer.
+     * Every workspace counts, because every workspace shares the workers' Heph slots.
+     */
+    @WorkspaceAgnostic("Every workspace shares the workers' Heph slots")
+    @Query("""
+            SELECT COUNT(t) FROM MentorTurn t
+            WHERE t.status = de.tum.cit.aet.hephaestus.mentor.MentorTurn.Status.RUNNING
+               OR (t.status = de.tum.cit.aet.hephaestus.mentor.MentorTurn.Status.STOPPED AND t.leasedUntil IS NOT NULL)
+            """)
+    long countHeld();
+
+    /** A queued turn, with what {@link MentorLedgerEvents.TurnChanged} names. */
+    interface QueuedTurn {
+        Long getWorkspaceId();
+
+        UUID getConversationId();
+
+        UUID getId();
+
+        String getSurface();
+
+        int getAttempt();
+    }
+
+    /**
+     * The newest {@code limit} turns that a worker may start ({@link #CLAIMABLE}), in every workspace. Locks nothing
+     * and loads no entity.
+     */
+    @WorkspaceAgnostic(
+            "Every workspace shares the workers' Heph slots, so a change of them changes every workspace's waits")
+    @Query(value = """
+            SELECT t.workspace_id AS workspaceId, t.conversation_id AS conversationId, t.id AS id,
+                   t.surface AS surface, t.attempt AS attempt
+            """ + CLAIMABLE + """
+            ORDER BY t.created_at DESC, t.id DESC
+            LIMIT :limit
+            """, nativeQuery = true)
+    List<QueuedTurn> findClaimable(@Param("limit") int limit);
 
     /**
      * The database clock at the start of the transaction. A turn's start takes it, because redactions and person

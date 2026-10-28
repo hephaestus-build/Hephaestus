@@ -18,14 +18,18 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.test.context.event.ApplicationEvents;
+import org.springframework.test.context.event.RecordApplicationEvents;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.node.JsonNodeFactory;
 
+@RecordApplicationEvents
 class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     @Autowired
@@ -68,6 +72,9 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
 
     @Autowired
     private ApplicationEventPublisher events;
+
+    @Autowired
+    private ApplicationEvents published;
 
     private Workspace workspace;
     private MentorConversation main;
@@ -228,6 +235,168 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
                 .as("the follow-up waits for the question before it")
                 .isEmpty();
         assertThat(stored(followUp.turn()).getStatus()).isEqualTo(MentorTurn.Status.QUEUED);
+    }
+
+    /**
+     * The reasons that a deployment of {@code capacity} Heph slots gives. Turns of earlier tests can still hold slots,
+     * so a test sets the capacity from the slots held before it.
+     */
+    private MentorTurnWaits waits(@Nullable Integer capacity) {
+        return new MentorTurnWaits(turnRepository, events, capacity);
+    }
+
+    /** A question in a workspace of its own, asked by a developer of its own. */
+    private MentorTurnService.Submission askElsewhere(String slug, String text) {
+        User other = persistUser(slug + "-developer");
+        Workspace elsewhere = createWorkspace(slug, "Other", slug + "-org", AccountType.ORG, other);
+        MentorConversation otherMain = conversations.findOrCreateMain(elsewhere.getId(), accountId(other));
+        return turns.submit(
+                elsewhere.getId(),
+                otherMain.getId(),
+                new MentorTurnService.Question(
+                        MentorTurn.Surface.APP, text, UUID.randomUUID().toString(), null, null));
+    }
+
+    @Test
+    void shouldSayAQuestionWaitsForAFreeHephOnlyWhenEveryHephSlotIsTaken() {
+        long held = turnRepository.countHeld();
+        MentorTurnService.Submission first = ask(main, "First");
+        ask(conversations.openThread(workspace.getId(), first.question().getId()), "Second");
+        // Asked last, so the two claims below start older turns.
+        MentorTurnService.Submission waiting = askElsewhere("heph-slots", "Elsewhere");
+        MentorTurn shown = stored(waiting.turn());
+        int twoSlots = Math.toIntExact(held + 2);
+
+        assertThat(turns.claimNext(WORKER, LEASE)).isPresent();
+        assertThat(waits(twoSlots).waits(shown.getWorkspaceId(), List.of(shown)))
+                .as("one of two slots is free, so the question may start at once")
+                .isEmpty();
+
+        assertThat(turns.claimNext(WORKER, LEASE)).isPresent();
+        assertThat(waits(twoSlots).waits(shown.getWorkspaceId(), List.of(stored(waiting.turn()))))
+                .as("every workspace shares the slots, and both are taken")
+                .containsExactly(entry(waiting.turn().getId(), MentorTurn.WaitingFor.FREE_HEPH));
+        assertThat(waits(null).waits(shown.getWorkspaceId(), List.of(stored(waiting.turn()))))
+                .as("without a capacity, the server does not know that every slot is taken")
+                .isEmpty();
+    }
+
+    @Test
+    void shouldRefuseACapacityOfNoHephSlot() {
+        assertThatThrownBy(() -> waits(0)).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void shouldGiveAFollowUpNoReasonWhileTheQuestionBeforeItWaitsOrRuns() {
+        ask(main, "First");
+        MentorTurnService.Submission followUp = ask(main, "Follow-up");
+        assertThat(turns.claimNext(WORKER, LEASE)).isPresent();
+
+        assertThat(waits(1).waits(workspace.getId(), List.of(stored(followUp.turn()))))
+                .as("it waits for its own conversation, not for a free Heph")
+                .isEmpty();
+    }
+
+    /** The queued turns published since the last {@code published.clear()}. */
+    private List<UUID> publishedQueued() {
+        return published.stream(MentorLedgerEvents.TurnChanged.class)
+                .filter(change -> change.status() == MentorTurn.Status.QUEUED)
+                .map(MentorLedgerEvents.TurnChanged::turnId)
+                .toList();
+    }
+
+    @Test
+    void shouldPublishTheQuestionsOfOtherConversationsAgainWhenATurnStarts() {
+        MentorTurnService.Submission first = ask(main, "First");
+        MentorTurnService.Submission inThread =
+                ask(conversations.openThread(workspace.getId(), first.question().getId()), "About this");
+        published.clear();
+
+        assertThat(turns.claimNext(WORKER, LEASE)).isPresent();
+
+        assertThat(publishedQueued())
+                .as("the start can have taken the last Heph slot")
+                .contains(inThread.turn().getId());
+    }
+
+    @Test
+    void shouldPublishTheQuestionsOfOtherConversationsAgainWhenALostAttemptIsQueuedAgain() {
+        MentorTurnService.Submission first = ask(main, "First");
+        MentorTurnService.Submission inThread =
+                ask(conversations.openThread(workspace.getId(), first.question().getId()), "About this");
+        startedTurn(first);
+        published.clear();
+
+        assertThat(turns.requeueRunning(workspace.getId(), main.getId())).isPresent();
+
+        assertThat(publishedQueued())
+                .as("the requeue gave a Heph slot back")
+                .contains(inThread.turn().getId(), first.turn().getId());
+    }
+
+    @Test
+    void shouldPublishOnlyTheFollowUpsOfItsConversationWhenAQueuedQuestionIsStopped() {
+        MentorTurnService.Submission first = ask(main, "First");
+        MentorTurnService.Submission followUp = ask(main, "Follow-up");
+        MentorTurnService.Submission inThread =
+                ask(conversations.openThread(workspace.getId(), first.question().getId()), "About this");
+        published.clear();
+
+        turns.stop(workspace.getId(), first.turn().getId());
+
+        assertThat(publishedQueued())
+                .as("a stop of a question that never started gives back no Heph slot")
+                .contains(followUp.turn().getId())
+                .doesNotContain(inThread.turn().getId());
+    }
+
+    @Test
+    void shouldPublishTheFollowUpAgainWhenTheTurnBeforeItEnds() {
+        MentorTurnService.Submission first = ask(main, "First");
+        MentorTurnService.Submission followUp = ask(main, "Follow-up");
+        MentorTurn running = startedTurn(first);
+        published.clear();
+
+        turns.end(running.getId(), running.getAttempt(), WORKER, MentorTurn.Status.DONE, List.of(), null);
+
+        assertThat(publishedQueued())
+                .as("the follow-up is now the one its conversation starts next")
+                .contains(followUp.turn().getId());
+    }
+
+    @Test
+    void shouldPublishTheQuestionsOfOtherWorkspacesAgainWhenATurnEnds() {
+        MentorTurnService.Submission first = ask(main, "First");
+        MentorTurn running = startedTurn(first);
+        MentorTurnService.Submission elsewhere = askElsewhere("heph-slots-end", "Elsewhere");
+        published.clear();
+
+        turns.end(running.getId(), running.getAttempt(), WORKER, MentorTurn.Status.DONE, List.of(), null);
+
+        assertThat(publishedQueued())
+                .as("every workspace shares the Heph slot that the end gave back")
+                .contains(elsewhere.turn().getId());
+    }
+
+    @Test
+    void shouldPublishTheFollowUpAgainWhenTheQuestionBeforeItIsDeleted() {
+        MentorTurnService.Submission first = ask(main, "First");
+        MentorTurnService.Submission followUp = ask(main, "Follow-up");
+        published.clear();
+
+        entryService.deleteMessage(workspace.getId(), first.question().getId());
+
+        assertThat(publishedQueued()).contains(followUp.turn().getId());
+    }
+
+    /** Claims turns until the submitted one starts; a turn of another test that starts first is left running. */
+    private MentorTurn startedTurn(MentorTurnService.Submission submitted) {
+        while (true) {
+            MentorTurn claimed = turns.claimNext(WORKER, LEASE).orElseThrow();
+            if (claimed.getId().equals(submitted.turn().getId())) {
+                return claimed;
+            }
+        }
     }
 
     @Test

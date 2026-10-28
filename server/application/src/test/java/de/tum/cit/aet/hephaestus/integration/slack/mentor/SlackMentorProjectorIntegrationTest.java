@@ -42,12 +42,15 @@ import de.tum.cit.aet.hephaestus.mentor.MentorLedgerFixtures;
 import de.tum.cit.aet.hephaestus.mentor.MentorLedgerNotifications;
 import de.tum.cit.aet.hephaestus.mentor.MentorSlackDelivery;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
+import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnService;
+import de.tum.cit.aet.hephaestus.mentor.MentorTurnWaits;
 import de.tum.cit.aet.hephaestus.practices.feedback.ConversationFeedbackRows;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackState;
 import de.tum.cit.aet.hephaestus.testconfig.ConversationReceipts;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
+import de.tum.cit.aet.hephaestus.workspace.Membership;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
@@ -81,6 +84,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.util.AopTestUtils;
@@ -112,6 +116,12 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
 
     @Autowired
     private MentorTurnService turns;
+
+    @Autowired
+    private MentorTurnRepository turnRepository;
+
+    @Autowired
+    private ApplicationEventPublisher events;
 
     @Autowired
     private MentorSlackDelivery delivery;
@@ -164,10 +174,16 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
                     wakeUps.add(call.getArgument(0));
                     return pendingWakeUp;
                 });
-        projector = new SlackMentorProjector(
+        // No Heph capacity: turns of earlier tests can hold Heph slots, and no question here says that all are taken.
+        projector = projector(new MentorTurnWaits(turnRepository, events, null));
+    }
+
+    private SlackMentorProjector projector(MentorTurnWaits waits) {
+        return new SlackMentorProjector(
                 notifications,
                 delivery,
                 turns,
+                waits,
                 completion,
                 slack,
                 new SlackMentorPoster(slack, delivery),
@@ -473,6 +489,41 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
         changed(turns.claimNext(WORKER, LEASE).orElseThrow());
 
         verify(slack).deleteMessage(workspace.getId(), CHANNEL, "500.1");
+    }
+
+    @Test
+    void shouldSayThatHephAnswersOtherQuestionsWhenTheQuestionWaitsForAFreeHeph() {
+        User colleague = persistUser("slack-projector-colleague");
+        ensureMembership(workspace, colleague, Membership.WorkspaceRole.MEMBER);
+        MentorConversation colleagues = conversations.findOrCreateMain(workspace.getId(), accountId(colleague));
+        MentorTurn colleaguesTurn = turns.submit(
+                        workspace.getId(),
+                        colleagues.getId(),
+                        new MentorTurnService.Question(
+                                MentorTurn.Surface.APP,
+                                "What changed?",
+                                UUID.randomUUID().toString(),
+                                null,
+                                null))
+                .turn();
+        assertThat(turns.claimNext(WORKER, LEASE).map(MentorTurn::getId)).contains(colleaguesTurn.getId());
+        MentorTurn queued = ask(main, "Why is this not met?", "100.1").turn();
+        // Every Heph slot is taken: the deployment has as many as turns hold now.
+        projector = projector(new MentorTurnWaits(turnRepository, events, Math.toIntExact(turnRepository.countHeld())));
+
+        clock.advance(SlackMentorProjector.WAITING_NOTICE_AFTER.plusMinutes(1));
+        changed(queued);
+
+        verify(slack)
+                .postMessage(
+                        eq(workspace.getId()),
+                        eq(CHANNEL),
+                        isNull(),
+                        eq(List.of()),
+                        eq(SlackMentorProjector.WAITING_FOR_HEPH_NOTICE),
+                        any());
+        verify(slack, never())
+                .postMessage(anyLong(), anyString(), any(), anyList(), eq(SlackMentorProjector.WAITING_NOTICE), any());
     }
 
     @Test

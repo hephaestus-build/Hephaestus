@@ -390,6 +390,16 @@ Concurrent turns are about the questions each second multiplied by the seconds f
 For example, 1.8 questions each second with 4.5-second answers need 8 concurrent turns.
 `mentor_turn_queue_wait_seconds` and `mentor_turn_queued` show how long and how many questions wait ([Observability](./observability.mdx#heph-turn-metrics)).
 
+The server must also know the capacity of all workers together: `hephaestus.mentor.turn.capacity` (`HEPHAESTUS_MENTOR_TURN_CAPACITY`).
+While that many turns run, a question that a worker can start next says that Heph is answering other questions.
+The Helm chart sets the value to `worker.replicas` multiplied by `worker.hephTurns`.
+If you run workers without the chart, set it on the server to the sum of their `mentor-max` values.
+If it is not set, no question says why it waits.
+
+During a rollout, the old workers finish their turns beside the new workers, and those turns count too.
+Thus, for a short time, a question can say that Heph is busy while a new worker has a free slot.
+The question starts at the next claim.
+
 ### Lease, retry, and deadline
 
 The worker renews the lease of each running turn at one third of `hephaestus.mentor.turn.lease`.
@@ -562,6 +572,7 @@ A load test that asks more questions as one account must raise the capacity.
 | `hephaestus.mentor.turn.model-idle-timeout` | `PT2M`        | How long the stream of one model call of a turn may send nothing |
 | `hephaestus.mentor.turn.lease-reaper-delay` | `PT15S`       | The interval at which the server looks for expired leases               |
 | `hephaestus.mentor.turn.max-follow-ups`     | `3`           | The number of questions that can wait in one conversation or Heph thread |
+| `hephaestus.mentor.turn.capacity`           | Not set       | The Heph turns that all workers together run at once. Only the server reads it ([Heph capacity](#heph-capacity)) |
 | `hephaestus.mentor.agent.max-prompt-chars`  | `100000`      | The maximum length of a question sent in the webapp, in characters      |
 
 Give all roles the same values.

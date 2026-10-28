@@ -276,7 +276,7 @@ spec:
             - name: AGENT_ENABLED
               value: "true"
             - name: HEPHAESTUS_WORKER_CAPACITY_MENTOR_MAX
-              value: {{ .Values.worker.hephTurns | quote }}
+              value: {{ include "hephaestus.hephTurns" . | quote }}
             # Also the review capacity: a worker claims no more reviews than it may run sandboxes. A review that
             # writes its feedback after its sandbox ends holds no slot; AGENT_MAX_CONCURRENT_COMPOSITIONS bounds those.
             - name: SANDBOX_MAX_CONCURRENT
