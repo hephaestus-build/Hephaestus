@@ -1,6 +1,6 @@
-#### 🔴 Stop every role for the 1.0 upgrade, which drops unused stores
+#### 🔴 Stop every role for this upgrade, which drops unused stores
 
-1.0 drops stores that the application no longer reads or writes:
+This release drops stores that the application no longer reads or writes:
 
 - the `outline_document_event` table, the Outline document event log, which holds Outline editor ids;
 - the `consent_notice` table (each consent decision keeps its notice version, and the wording of every version is in the release that published it);
@@ -12,7 +12,7 @@
 - the `research_opted_out` and `source` columns of `slack_participant_consent`, after the upgrade copies each research opt-out of a linked Slack user into the consent decisions of the account.
 
 A runtime role of the previous release fails when it uses these objects.
-Stop every runtime role of the previous release before you start 1.0.
+Stop every runtime role of the previous release before you start this release.
 Back up the database first.
 The upgrade deletes the rows of these stores.
 A rollback of the migration stops and asks for the backup.
