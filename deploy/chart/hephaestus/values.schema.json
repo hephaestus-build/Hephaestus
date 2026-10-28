@@ -88,12 +88,9 @@
 		"sandboxQuota": {
 			"type": "object",
 			"additionalProperties": false,
-			"required": ["enabled", "pods", "cpu", "memory"],
+			"required": ["enabled"],
 			"properties": {
-				"enabled": { "type": "boolean" },
-				"pods": { "type": "integer", "minimum": 1, "maximum": 256 },
-				"cpu": { "$ref": "#/definitions/quantity" },
-				"memory": { "$ref": "#/definitions/quantity" }
+				"enabled": { "type": "boolean" }
 			}
 		},
 		"cache": {
@@ -486,6 +483,7 @@
 					"additionalProperties": false,
 					"required": [
 						"runtimeClassName",
+						"podOverhead",
 						"seccompProfile",
 						"nodeSelector",
 						"tolerations",
@@ -495,6 +493,15 @@
 						"runtimeClassName": {
 							"type": "string",
 							"pattern": "^(?:[a-z0-9](?:[-a-z0-9.]{0,251}[a-z0-9])?)?$"
+						},
+						"podOverhead": {
+							"type": "object",
+							"additionalProperties": false,
+							"required": ["cpuMillis", "memoryMi"],
+							"properties": {
+								"cpuMillis": { "type": "integer", "minimum": 0 },
+								"memoryMi": { "type": "integer", "minimum": 0 }
+							}
 						},
 						"seccompProfile": {
 							"type": "string",

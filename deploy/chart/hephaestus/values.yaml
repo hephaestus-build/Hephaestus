@@ -224,12 +224,11 @@ worker:
   # drains. 0 stops every worker and keeps its objects.
   replicas: 2
   # The reviews that one worker runs at once. Each review sandbox requests 640 MiB and is limited to
-  # 1280 MiB (docs/admin/kubernetes.mdx § Sandbox sizes), so the sandbox quota must hold every
-  # worker's reviews.
+  # 1280 MiB (docs/admin/kubernetes.mdx § Sandbox sizes). The reviews tier's quota follows it.
   reviews: 5
   # The Heph turns that one worker runs at once: auto, or a number. Each running turn holds a turn
-  # sandbox (160 MiB requested, 544 MiB limit) beside the 2 pooled ones, so the sandbox quota must
-  # hold them. The server gets replicas times this as its Heph capacity: while every worker runs as
+  # sandbox (160 MiB requested, 544 MiB limit) beside the 2 pooled ones. The conversations tier's quota
+  # follows it. The server gets replicas times this as its Heph capacity: while every worker runs as
   # many turns, a question that could start next says that Heph answers other questions.
   # docs/admin/runtime-roles.mdx § Heph capacity.
   hephTurns: auto
@@ -245,6 +244,12 @@ worker:
     # Optional. The RuntimeClass of every sandbox pod, for example gVisor's. Empty uses the
     # cluster's default runtime.
     runtimeClassName: ""
+    # The RuntimeClass's overhead.podFixed, which the quotas count with each sandbox Pod's requests.
+    # Set it for a class with an overhead, such as gVisor or Kata on some clusters.
+    # Only the chart reads it: the worker reads the overhead from its Pods.
+    podOverhead:
+      cpuMillis: 0
+      memoryMi: 0
     # Optional. The shipped seccomp profile as a Localhost profile, relative to the kubelet's
     # seccomp directory. Empty uses RuntimeDefault.
     seccompProfile: ""
@@ -262,12 +267,10 @@ worker:
     # Required. The namespace that the operator created for this release's sandboxes alone, with the
     # Restricted Pod Security level. Not the release namespace, and no other release's.
     namespace: ""
-    # Bounds every sandbox of the namespace: review sandboxes, Heph hosts and turn sandboxes.
+    # One quota for each tier of sandboxes, reviews and conversations, derived from the workers' replicas,
+    # reviews and hephTurns and from sandbox-pod-requests.json. Heph's sandboxes can never take a review's room.
     quota:
       enabled: true
-      pods: 20
-      cpu: "28"
-      memory: 46Gi
 
 # Application settings. Each key maps to one setting of docs/admin/production-setup.mdx.
 config:

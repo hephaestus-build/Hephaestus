@@ -16,7 +16,7 @@ import java.util.Map;
  * What the Heph host runs: the host script, the modules it imports and Heph's system prompt, all from this JAR and
  * never from the image. The host runs no tool that executes anything.
  */
-final class HephHostSpec {
+public final class HephHostSpec {
 
     static final String HOST_SCRIPT = "heph-host.ts";
 
@@ -35,7 +35,8 @@ final class HephHostSpec {
      * Many sessions share one process: a larger heap than a practice runner's, and no review workspace. The runtime
      * bounds only the workspace's initialization; the host runs until the worker removes it.
      */
-    static final ResourceLimits LIMITS = new ResourceLimits(2L * 1024 * 1024 * 1024, 2.0, 256, Duration.ofMinutes(5));
+    public static final ResourceLimits LIMITS =
+            new ResourceLimits(2L * 1024 * 1024 * 1024, 1.0, 256, Duration.ofMinutes(5));
 
     private static final String WRITABLE = SandboxLayout.PI_AGENT_DIR + " " + PiRunnerProfile.AGENT_TMPDIR;
 

@@ -21,8 +21,74 @@ on a schedule, that the cluster enforces them (the isolation probe, docs/admin/k
 {{- fail "worker.runtime.seccompProfile must stay inside the kubelet's seccomp directory" }}
 {{- end }}
 {{- $drain := int .Values.worker.drainTimeoutSeconds }}
-{{- $quota := .Values.worker.sandbox.quota }}
-{{- if $quota.enabled }}
+{{- if .Values.worker.sandbox.quota.enabled }}
+{{- /*
+One quota for each PriorityClass tier, so that Heph's sandboxes can never take a review's room, nor reviews
+Heph's. sandbox-pod-requests.json holds what each sandbox Pod requests; SandboxPodRequestsTableTest pins it to the Pods the
+worker builds, and the chart's fit tests read it too. The reviews tier holds each worker's reviews once: during
+a rollout the new workers wait for the old ones' room. Every running worker, the old ones during a rollout
+included, has its isolation probe there, and its Heph host and turn sandboxes in the conversations tier.
+*/}}
+{{- $table := .Files.Get "sandbox-pod-requests.json" | fromJson }}
+{{- $replicas := int .Values.worker.replicas }}
+{{- $running := ternary $replicas (mul $replicas 2) (eq .Values.worker.rolloutStrategy "Recreate") }}
+{{- $turns := int (include "hephaestus.hephTurns" .) }}
+{{- $review := $table.review }}
+{{- $probe := $table.isolationProbe }}
+{{- $host := $table.hephHost }}
+{{- $turn := $table.turnSandbox }}
+{{- $turnSandboxes := add (int $table.pooledTurnSandboxes) $turns }}
+{{- $reviews := mul $replicas (int .Values.worker.reviews) }}
+{{- /* Requests, not limits: sandbox Pods are Burstable, and a quota on limits would admit about half the reviews
+that the node holds. The scheduler places Pods by their requests; a limit bounds one Pod's own peak. */}}
+{{- /* A quota counts a Pod's RuntimeClass overhead with its requests, so each Pod adds the class's overhead. */}}
+{{- $overhead := $runtime.podOverhead }}
+{{- $reviewPods := add (mul $reviews (int $review.pods)) (mul $running (int $probe.pods)) }}
+{{- $conversationPods := mul $running (add (int $host.pods) (mul $turnSandboxes (int $turn.pods))) }}
+{{- $tiers := list
+  (dict "tier" "reviews"
+    "pods" $reviewPods
+    "memoryMi" (add (mul $reviews (int $review.memoryMi)) (mul $running (int $probe.memoryMi)) (mul $reviewPods (int $overhead.memoryMi)))
+    "cpuMillis" (add (mul $reviews (int $review.cpuMillis)) (mul $running (int $probe.cpuMillis)) (mul $reviewPods (int $overhead.cpuMillis)))
+    "diskMi" (add (mul $reviews (int $review.ephemeralStorageMi)) (mul $running (int $probe.ephemeralStorageMi))))
+  (dict "tier" "conversations"
+    "pods" $conversationPods
+    "memoryMi" (add (mul $running (add (int $host.memoryMi) (mul $turnSandboxes (int $turn.memoryMi)))) (mul $conversationPods (int $overhead.memoryMi)))
+    "cpuMillis" (add (mul $running (add (int $host.cpuMillis) (mul $turnSandboxes (int $turn.cpuMillis)))) (mul $conversationPods (int $overhead.cpuMillis)))
+    "diskMi" (mul $running (add (int $host.ephemeralStorageMi) (mul $turnSandboxes (int $turn.ephemeralStorageMi))))) }}
+{{- if eq (include "hephaestus.priorityClass" (dict "root" . "tier" "reviews")) (include "hephaestus.priorityClass" (dict "root" . "tier" "conversations")) }}
+{{- fail "priorityClasses.reviews and priorityClasses.conversations must differ: each tier's quota selects its Pods by PriorityClass" }}
+{{- end }}
+{{- range $tiers }}
+{{- $class := include "hephaestus.priorityClass" (dict "root" $ "tier" .tier) }}
+{{- if not $class }}
+{{- fail (printf "priorityClasses.%s is required: the sandbox quota of each tier selects its Pods by PriorityClass" .tier) }}
+{{- end }}
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: {{ include "hephaestus.name" (dict "root" $ "component" (printf "sandbox-quota-%s" .tier)) }}
+  namespace: {{ $sandboxes }}
+  labels:
+    {{- include "hephaestus.labels" (dict "root" $ "component" "sandbox") | nindent 4 }}
+spec:
+  hard:
+    pods: {{ .pods | quote }}
+    requests.cpu: {{ printf "%dm" .cpuMillis | quote }}
+    requests.memory: {{ printf "%dMi" .memoryMi | quote }}
+  scopeSelector:
+    matchExpressions:
+      - scopeName: PriorityClass
+        operator: In
+        values: [{{ $class | quote }}]
+---
+{{- end }}
+{{- /* Objects that no sandbox may own, whatever its tier, and the disk of both tiers together: a quota scoped
+by PriorityClass cannot count ephemeral storage. */}}
+{{- $diskMi := 0 }}
+{{- range $tiers }}
+{{- $diskMi = add $diskMi .diskMi }}
+{{- end }}
 apiVersion: v1
 kind: ResourceQuota
 metadata:
@@ -32,11 +98,7 @@ metadata:
     {{- include "hephaestus.labels" (dict "root" . "component" "sandbox") | nindent 4 }}
 spec:
   hard:
-    pods: {{ $quota.pods | int | quote }}
-    requests.cpu: {{ $quota.cpu | quote }}
-    limits.cpu: {{ $quota.cpu | quote }}
-    requests.memory: {{ $quota.memory | quote }}
-    limits.memory: {{ $quota.memory | quote }}
+    requests.ephemeral-storage: {{ printf "%dMi" $diskMi | quote }}
     persistentvolumeclaims: "0"
     services: "0"
     secrets: "0"

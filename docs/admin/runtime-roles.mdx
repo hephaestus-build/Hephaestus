@@ -488,7 +488,7 @@ The host runs in a container of the agent image. Its script comes from the worke
 The host has these fixed limits:
 
 - 2 GiB of memory on Docker. On Kubernetes, 1 GiB ([Kubernetes § Sandbox sizes](./kubernetes#sandbox-sizes)).
-- 2 CPUs.
+- 1 CPU. On Kubernetes, it requests 50m.
 - 256 processes.
 
 These limits do not come from the `SANDBOX_*` variables, and the host does not count against `SANDBOX_MAX_CONCURRENT`.

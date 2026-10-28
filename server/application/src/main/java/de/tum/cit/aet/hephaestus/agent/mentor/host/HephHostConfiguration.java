@@ -45,8 +45,11 @@ public class HephHostConfiguration {
         return new HephHost(sandbox);
     }
 
-    /** Turn sandboxes that wait empty, ahead of the turns that take them. */
-    static final int SANDBOX_POOL = 2;
+    /**
+     * Turn sandboxes that wait empty, ahead of the turns that take them. The chart's {@code sandbox-pod-requests.json} sizes the
+     * conversations quota by it.
+     */
+    public static final int SANDBOX_POOL = 2;
 
     /** How often {@link TurnSandboxes#reconcile} runs; its first run is at startup. */
     static final Duration SANDBOX_RECONCILE = Duration.ofSeconds(60);
