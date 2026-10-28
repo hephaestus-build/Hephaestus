@@ -46,6 +46,8 @@ function evaluates(
 						{ result: results[name] ?? "success" },
 					]),
 				),
+				// A pull request's merge-group Security scan skips.
+				"Security-merge-group": { result: results["Security-merge-group"] ?? "skipped" },
 				"detect-changes": { result: results["detect-changes"] ?? "success", outputs },
 			},
 		}),

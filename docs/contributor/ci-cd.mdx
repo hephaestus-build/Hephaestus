@@ -106,7 +106,8 @@ an update. Unfamiliar diagnostics and archive failures also remain visible. The 
 change the image build's exit status.
 
 The five quality legs call `ci-quality-leg.yml` independently. Job-level conditions omit unchanged
-legs before a runner is allocated. Selected legs do not cancel each other on failure.
+legs before a runner is allocated. In a pull request, selected legs do not cancel each other on failure.
+In a merge group, a failed leg cancels the run: [Fail fast in the merge queue](#fail-fast-in-the-merge-queue).
 
 Each runs `vp run ci:<leg>`, then pipes `vp run --last-details` through `scripts/report-task-run.ts`.
 Each task that did not pass gets an error annotation with its reproduction command.
@@ -214,7 +215,7 @@ A failed merge group drops its pull requests from the queue without failing thei
 Thus, CI updates a comment with the run link on the pull request named by the merge group's head ref. It
 does not requeue automatically: the result does not say whether the failure was transient or
 deterministic. Regrouping the queue cancels the runs it dissolves, and a canceled run is reported
-to nobody.
+to nobody. A failed group also cancels its own run, but its gate verdict stays `failure`, so CI reports it.
 
 Review is a native ruleset requirement with stale approvals dismissed on every push. Authors listed
 in `REVIEW_POLICY_MAINTAINERS` receive an automated approval. Every other author needs a human with
@@ -267,6 +268,71 @@ Thus, validation precedes the merge that cuts a release.
 `Verify changesets`
 is the one leg it skips, and deliberately: the Version PR is the pull request that consumes
 changesets rather than adding one. [Release management](./release-management.mdx#the-flow).
+
+### Fail fast in the merge queue
+
+The queue removes an entry only when a required check fails.
+`CI Status Gate` needs every leg, so it cannot fail before the slowest leg ends.
+Two rules end a failed merge group early and free its runners.
+Neither rule applies to a pull request, which still reports the failure of every leg.
+
+**A failed leg cancels the run.**
+Each leg that `CI Status Gate` needs, except `Detect changes`, has a `fail-fast-<leg>` job in `cicd.yml`.
+That job needs only its own leg, so it starts when that leg ends.
+In a merge group, if the leg failed, the job calls `fail-fast.yml`, which runs `gh run cancel` on the run.
+
+- The condition starts with `always()`. Without a status function, GitHub adds `success()`, which is false after a failed leg.
+- Queued jobs do not start, and running jobs stop.
+- `CI Status Gate` has `if: always()`, so it still runs after the cancel. It sees the failed leg and fails, and the queue removes the entry.
+- The gate is the only verdict. The `fail-fast-<leg>` jobs are not in its `needs`.
+
+After the cancel, `cancelled()` is true for the whole run.
+Thus, `Report unsuccessful merge group` reads the gate's `verdict` output, not `cancelled()`.
+A run that cancelled itself after a failed leg has the verdict `failure`, so CI comments on the pull request.
+A run that a regroup cancelled has the verdict `cancelled`, and CI does not comment.
+The gate does not publish the `All CI Passed` status after a cancel.
+No ruleset requires that status.
+
+**The cheap legs run first.**
+In a merge group, the heavy legs start only after `Security / Dependencies, secrets, and policy` succeeded or skipped.
+The heavy legs are `App Server: Package`, `Quality`, `Compose`, `Test` and `Docker`.
+`Build`, `Supported-host boot smoke`, `Kubernetes` and `Release evidence preflight` wait through `App Server: Package` or `Docker`.
+Thus, an advisory against the whole base ends the group before a heavy leg takes a runner.
+`Actionlint`, `Zizmor`, `Image advisory database` and `Pinned upstream images` run beside `Security`.
+
+A `needs` list cannot change with the event.
+Thus, the scan has two jobs with the same name, `Security`.
+The `Security` job runs in every event except a merge group, and no leg waits for it.
+The `Security-merge-group` job runs only in a merge group, and the heavy legs need it.
+In other events it skips when `Detect changes` ends, so a pull request or a push does not wait.
+A healthy merge group pays the duration of `Security` on its critical path, about 1 to 2 minutes.
+
+**Never force-cancel a merge-group run.**
+A force-cancel skips the `always()` jobs, so `CI Status Gate` never reports.
+The queue then keeps the entry with no verdict until its check timeout.
+Use only the graceful cancel of `fail-fast.yml`.
+
+**Only the cancel jobs can write to Actions.**
+The `actions: write` permission also lets a job dispatch workflows, rerun runs and delete caches.
+Thus, in `cicd.yml` only the `fail-fast-<leg>` jobs get it, and they pass it to the job in `fail-fast.yml`.
+That job runs on `ubuntu-slim`, with no checkout and no action, so no other code holds the token.
+Each workflow keeps `permissions: {}` at the top level.
+`ACTIONS_WRITE_GRANTS` in `scripts/ci-contract.test.ts` lists each other job with this permission, and the reason.
+
+The cancel job needs a runner, so a busy runner pool adds its wait to the eviction time.
+
+**Measured eviction time: not measured yet.**
+Measure it on the first merge group that fails after this rule reached `main`.
+Record the time from the first failed leg to the removal of the entry here.
+Do not estimate it.
+
+`scripts/ci-contract.test.ts` holds each rule:
+
+- Each leg has its cancel job, with `always()` and the leg's `failure` result, for merge groups only.
+- No workflow, action or script force-cancels a run.
+- Only the cancel jobs, and the listed exceptions, have `actions: write`.
+- The heavy legs wait for `Security-merge-group` in a merge group, and for no scan in other events.
+- The reporter reads the gate's `verdict` output.
 
 ## Security and supply-chain controls
 
@@ -359,6 +425,7 @@ The required checks are job names, so a display name does not change them.
 | `submit-dependency-graph.yml`         | Successful dependency-graph workflow                                          | Submits snapshot data without executing code from the originating run                                                                                                                                                            |
 | `verify-changesets.yml`               | Called by cicd.yml                                                            | Tests changeset and version-sync policy and enforces release-note presence                                                                                                                                                       |
 | `ci-compose-validate.yml`             | Called by cicd.yml                                                            | Validates rendered reference and self-hosted Compose stacks                                                                                                                                                                      |
+| `fail-fast.yml`                       | Called by cicd.yml when a leg of a merge group fails                          | Cancels the run gracefully, so the gate still fails and the queue removes the entry. See [Fail fast in the merge queue](#fail-fast-in-the-merge-queue)                                                                           |
 | `openapi-autocommit.yml`              | `autocommit-openapi` label                                                    | Regenerates the OpenAPI spec and client and commits them to the pull request                                                                                                                                                     |
 | `security-mutation.yml`               | PR touching the suite's inputs, manual                                        | Runs the security mutation suite                                                                                                                                                                                                 |
 | `practice-guidance-links.yml`         | PR touching practice guidance, weekly, manual                                 | Checks the web links in bundled practice guides                                                                                                                                                                                  |
@@ -766,7 +833,8 @@ Right after a merge, that run is still building, so the pull request builds ever
 ## Parallelism and concurrency
 
 - `Quality` legs start from source. `Test` suites and `Build` gates start when `App Server: Package`
-  uploads its artifact.
+  uploads its artifact. In a merge group, `Quality` and `App Server: Package` start after `Security`:
+  [Fail fast in the merge queue](#fail-fast-in-the-merge-queue).
 - `App Server: Integration` has four shards.
   `providers` selects the `integration` package.
   `runtime-and-startup` selects the `core.database`, `agent.job` and `core.privacy` packages, plus `StartupBudgetIntegrationTest`.
@@ -855,7 +923,8 @@ Right after a merge, that run is still building, so the pull request builds ever
 
 - `Security` starts from `Detect changes`. Only `Pinned upstream images` reads the advisory
   snapshot, so only it waits for `Image advisory database`.
-- Quality legs run independently. The platform matrix in `reusable-docker-build.yml` uses
+- Quality legs run independently. In a merge group, a failed leg cancels the run.
+  The platform matrix in `reusable-docker-build.yml` uses
   `fail-fast: false`. One platform's refusal does not cancel the scan of the other platform.
 - All images of a run share one build job per platform and one manifest job.
   Each job pays a runner's setup.

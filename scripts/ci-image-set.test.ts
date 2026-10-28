@@ -438,6 +438,8 @@ function run(entry: Case) {
 			evaluate(condition, ["needs", "github"], dictionary({ needs, github })) === "true"
 		);
 	};
+	// A merge group's heavy legs wait for its Security scan, which passes in this model.
+	needs["Security-merge-group"] = { result: job("Security-merge-group") ? "success" : "skipped" };
 	let packageResult = "skipped";
 	if (job("server-package")) {
 		packageResult = entry.skip === "package-fails" ? "failure" : "success";
