@@ -107,6 +107,6 @@ Admin Guide (`docs/admin/`), and the ADR links to it.
 | [0066](0066-the-webhook-receiver-has-no-database.md) | The webhook receiver has no database | Accepted. Amends 0008 and 0023. |
 | [0067](0067-the-server-image-builds-with-buildpacks-and-cds.md) | The server image builds with Paketo Buildpacks and Application CDS | Accepted (2026-05-19). Moved from the contributor docs. |
 | [0069](0069-practices-run-when-ready-and-stay-current-by-their-sources.md) | Practices run when they are ready and stay current by their sources | Accepted (2026-10-28). Amends 0056, 0061, 0062 and 0063. |
-| [0070](0070-1-0-is-a-cutover-release.md) | 1.0 is a cutover release | Accepted (2026-10-28). Amends 0005, 0041, 0042 and 0058. |
+| [0070](0070-1-0-is-a-cutover-release.md) | 1.0 is a cutover release | Accepted (2026-10-28; amended 2026-10-28 — lease recovery requeues the claimed reviews). Amends 0005, 0041, 0042 and 0058. |
 
 Template: [0000-template.md](0000-template.md).

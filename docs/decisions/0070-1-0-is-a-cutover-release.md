@@ -1,6 +1,6 @@
 # ADR 0070: 1.0 is a cutover release
 
-**Status:** Accepted
+**Status:** Accepted (amended 2026-10-28 — lease recovery requeues the claimed reviews)
 **Date:** 2026-10-28
 **Authors:** Felix T.J. Dietrich
 **Amends:** ADR 0058 (§ Supported deployment, § Notice and removal, gate 10), ADR 0041, ADR 0042 and ADR 0005.
@@ -139,3 +139,14 @@ The owning layer of each item records the detail.
 ## Revisit trigger
 
 None for 1.0. The rolling rules apply again from 1.0.0. Revisit a schema re-baseline at 2.0, after the migrate run mode can synchronize.
+
+## Update — 2026-10-28: lease recovery requeues the claimed reviews
+
+This update amends § In-flight work and § Schema step for the reviews.
+
+- The 1.0 changelog counts one drain on each running `review_job` without a lease. 0.x never set a lease, so these are the reviews that 0.x claimed.
+- The server's lease recovery then requeues each of them. It clears the owner, raises the attempt fence and keeps every admitted and staged result.
+  The drain offsets the new attempt number, so no retry is spent.
+- SQL alone does not requeue them, because recovery also bills the attempt's measured spend and hands an admitted review on to compose. Both are steps of the server, which SQL cannot do.
+- Recovery needs the server role with `AGENT_ENABLED=true`, as orphan recovery always has. It requeues these reviews within a minute of the server's start.
+- `worker_registry` stays until the layer that removes the Heph tools sandboxes of a worker, its last reader. That layer drops it.
