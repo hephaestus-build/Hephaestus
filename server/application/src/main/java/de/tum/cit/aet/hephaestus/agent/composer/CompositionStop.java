@@ -14,10 +14,12 @@ public enum CompositionStop {
     /** The budget that funds the attempt is spent. */
     BUDGET(FeedbackStopReason.NOT_COMPOSED, false),
     /**
-     * The composition deadline passed. Withheld at once: a new attempt gets a fresh window, but it would spend the same
-     * calls on the same inputs again, and a provider outage that outlasts the deadline is {@link #PROVIDER} instead.
+     * The composition deadline passed. It hands the attempt on: under load the model calls wait for the shared call
+     * pool, so the window runs out on calls that never ran, and a new attempt composes only the destinations still
+     * open, in a fresh window. Withholding at once let one destination be delivered while another of the same review
+     * was withheld for a cause that a later attempt does not meet.
      */
-    DEADLINE(FeedbackStopReason.NOT_COMPOSED, false),
+    DEADLINE(FeedbackStopReason.NOT_COMPOSED, true),
     /** The review's model is no longer available to the workspace. */
     MODEL_UNAVAILABLE(FeedbackStopReason.NOT_COMPOSED, false),
     /** The provider refused the request itself, such as a revoked key. */

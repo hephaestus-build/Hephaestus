@@ -92,13 +92,15 @@ Feedback that the worker cannot write is withheld with the most specific reason:
 - **Evidence not permitted** when the captured work was erased.
 - A refusal from the server when the review on the work cannot be published.
 - **Not composed** for every other cause.
-  For example, the budget or the time ran out, or the model decided nothing.
+  For example, the budget ran out, or the model decided nothing.
 
 These causes withhold at once, because another attempt would meet them again.
 A review whose results were admitted never fails because of its feedback.
 The `agent.job.composition.stopped` metric below counts each cause.
 
-A passing cause, such as a provider outage or an unexpected failure, withholds nothing.
+A passing cause withholds nothing. Examples are a provider outage, an unexpected failure, or the composition timeout.
+Under load, the model calls wait for the shared call limit, so the time can run out on calls that never ran.
+
 A new attempt of the same job then writes only the feedback that is still open.
 It starts no sandbox and uses the job's retry limit with its usual backoff.
 The attempt at the retry limit withholds what a passing cause leaves open.
