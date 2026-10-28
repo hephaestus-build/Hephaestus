@@ -121,8 +121,9 @@ A review session's unchanged result keeps the searches of that session.
 A result that code decided keeps the searches of the script's reader.
 
 The orchestrator prompt tells the model to grep the checkout and name the tree for such a claim.
-The runner returns a submission without the receipt to the model before it submits.
-It returns a match of a marker once per practice.
+Before the runner submits a result without the receipt, it returns it to the model once for each practice.
+The runner submits the next result of that practice as it is.
+Thus, a session that cannot repair the claim does not use up the refusals of the practice.
 When the capture does not hold the whole checkout, the runner asks the model to remove the claim.
 
 Then admission withholds a result without the receipt.

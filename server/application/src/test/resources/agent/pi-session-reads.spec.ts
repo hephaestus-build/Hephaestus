@@ -1014,7 +1014,7 @@ function hostCoverage(
 	};
 }
 
-const ASK = { checkout: { root: "repos/reviewed", complete: true }, askAboutWords: true };
+const ASK = { checkout: { root: "repos/reviewed", complete: true }, ask: true };
 const BOUNDARY = "the changed file only; no other files are in the change";
 
 function notMet(
@@ -1030,14 +1030,15 @@ function notMet(
 	};
 }
 
-void test("#50: a claim that the checkout lacks something goes back to the model until the checkout was searched", () => {
+void test("#50: a claim that the checkout lacks something goes back to the model once, unless the checkout was searched", () => {
 	const stored = notMet(PR50_ERROR_HANDLING, ["scm.pull-request.diff", "scm.repository.tree"]);
 	const asked = unreadCheckoutClaim(stored, hostCoverage(), ASK);
 	assert.match(
 		asked?.text ?? "",
 		/names scm\.repository\.tree as searched.*path "repos\/reviewed"/u,
 	);
-	assert.equal(asked?.byWords, false);
+	// Asked once already: the resubmission goes to admission, which withholds it, and spends no more refusals.
+	assert.equal(unreadCheckoutClaim(stored, hostCoverage(), { ...ASK, ask: false }), undefined);
 	// Reading UserController to its end, as the stored result says it did, is no search of the checkout.
 	assert.notEqual(
 		unreadCheckoutClaim(
@@ -1059,11 +1060,11 @@ void test("#50: a claim that the checkout lacks something goes back to the model
 
 void test("#50: leaving the tree out of the search does not hide words that say the repository lacks something, once", () => {
 	const hidden = notMet(PR50_ERROR_HANDLING, ["scm.pull-request.diff"]);
-	assert.equal(unreadCheckoutClaim(hidden, hostCoverage(), ASK)?.byWords, true);
-	assert.equal(
-		unreadCheckoutClaim(hidden, hostCoverage(), { ...ASK, askAboutWords: false }),
-		undefined,
+	assert.match(
+		unreadCheckoutClaim(hidden, hostCoverage(), ASK)?.text ?? "",
+		/says the repository lacks something/u,
 	);
+	assert.equal(unreadCheckoutClaim(hidden, hostCoverage(), { ...ASK, ask: false }), undefined);
 	// What the cited file itself lacks is not a claim about the rest of the checkout.
 	assert.equal(
 		unreadCheckoutClaim(
@@ -1085,14 +1086,14 @@ void test("without a checkout captured whole, the model is told to remove the cl
 	assert.match(
 		unreadCheckoutClaim(hidden, hostCoverage(), {
 			checkout: { complete: false },
-			askAboutWords: true,
+			ask: true,
 		})?.text ?? "",
 		/no checkout to search\. Remove that claim/u,
 	);
 	assert.match(
 		unreadCheckoutClaim(hidden, hostCoverage(), {
 			checkout: { root: "repos/reviewed", complete: false },
-			askAboutWords: true,
+			ask: true,
 		})?.text ?? "",
 		/captured only in part, so no search of it can show what the repository lacks\. Remove that claim/u,
 	);
@@ -1111,7 +1112,7 @@ void test("an issue whose review reads no checkout keeps the words its Does not 
 			},
 		},
 	};
-	assert.equal(unreadCheckoutClaim(issue, hostCoverage(), { askAboutWords: true }), undefined);
+	assert.equal(unreadCheckoutClaim(issue, hostCoverage(), { ask: true }), undefined);
 });
 
 void test("#50: other wordings of the same claim, in any text the result shows, go back to the model", () => {
@@ -1136,7 +1137,11 @@ void test("#50: other wordings of the same claim, in any text the result shows, 
 			{ ...bounded, evidence: { search: { ...search, boundary: claim } } },
 			{ ...bounded, evidence: { search: { ...search, lookedFor: claim } } },
 		]) {
-			assert.equal(unreadCheckoutClaim(submission, hostCoverage(), ASK)?.byWords, true, claim);
+			assert.match(
+				unreadCheckoutClaim(submission, hostCoverage(), ASK)?.text ?? "",
+				/says the repository lacks something/u,
+				claim,
+			);
 		}
 	}
 });

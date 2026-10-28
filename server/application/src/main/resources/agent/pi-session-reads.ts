@@ -544,29 +544,30 @@ export interface CheckoutState {
 	complete: boolean;
 }
 
-/** Why a submission that rests on the checkout cannot be recorded yet, and whether only its words say so. */
+/** Why a submission that rests on the checkout cannot be recorded yet. */
 export interface UnreadCheckoutClaim {
 	text: string;
-	byWords: boolean;
 }
 
 /**
  * A submission whose search for something missing, or whose ruling-out of a prerequisite, names the repository tree
  * needs a search of the whole checkout in this session: a complete read of one file is a complete source of that file,
- * not of the tree (ADR 0064 § Absence). With `askAboutWords`, a submission of a review that reads a checkout, whose
- * words say the repository lacks something, needs the same. Without a checkout captured whole, no search can show it.
+ * not of the tree (ADR 0064 § Absence). A submission of a review that reads a checkout, whose words say the repository
+ * lacks something, needs the same. Without a checkout captured whole, no search can show it. The session is asked once
+ * per practice (`ask`); a resubmission goes to admission, which withholds such a result, so a session that cannot
+ * repair it does not spend the practice's refusals.
  */
 export function unreadCheckoutClaim(
 	submission: AbsenceCheckInput,
 	coverage: Coverage,
-	{ checkout, askAboutWords }: { checkout?: CheckoutState; askAboutWords: boolean },
+	{ checkout, ask }: { checkout?: CheckoutState; ask: boolean },
 ): UnreadCheckoutClaim | undefined {
 	const searched = (coverage.source === "host" ? coverage.receipts : []).some(
 		(receipt) =>
 			receipt.sourceKind === TREE_SOURCE && receipt.status === "SEARCHED" && receipt.path === ".",
 	);
 	// A could-not-determine result says nothing about the work.
-	if (searched || submission.outcome === "COULD_NOT_DETERMINE") {
+	if (!ask || searched || submission.outcome === "COULD_NOT_DETERMINE") {
 		return undefined;
 	}
 	const { search, inapplicability, openQuestions = [] } = submission.evidence;
@@ -589,8 +590,7 @@ export function unreadCheckoutClaim(
 		inapplicability?.ruledOutBy ?? "",
 		...openQuestions.flatMap((question) => [question.openQuestion, question.wouldSettleIt]),
 	];
-	const byWords =
-		!consulted && checkout !== undefined && askAboutWords && texts.some(claimsAbsence);
+	const byWords = !consulted && checkout !== undefined && texts.some(claimsAbsence);
 	if (!consulted && !byWords) {
 		return undefined;
 	}
@@ -599,11 +599,10 @@ export function unreadCheckoutClaim(
 		: "this result says the repository lacks something beyond the cited lines";
 	const remove = "Remove that claim and keep only what the cited lines show, then submit again.";
 	if (checkout?.root === undefined) {
-		return { byWords, text: `${claim}, but this work has no checkout to search. ${remove}` };
+		return { text: `${claim}, but this work has no checkout to search. ${remove}` };
 	}
 	if (!checkout.complete) {
 		return {
-			byWords,
 			text: `${claim}, but this checkout was captured only in part, so no search of it can show what the repository lacks. ${remove}`,
 		};
 	}
@@ -611,7 +610,6 @@ export function unreadCheckoutClaim(
 		? `If your search covered only the selected or cited lines, name the source that holds them, such as scm.pull-request.diff, in place of ${TREE_SOURCE}.`
 		: "If you cannot, remove the claim about the rest of the repository and keep only what the cited lines show.";
 	return {
-		byWords,
 		text: `${claim}, but this session ran no search of the whole checkout. Call grep with a pattern for what is missing and path "${checkout.root}", without a glob, and narrow the pattern until the search is not cut, then submit again. ${exit}`,
 	};
 }
