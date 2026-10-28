@@ -491,7 +491,7 @@ public class ReviewJobExecutor {
                     continue;
                 }
 
-                List<UUID> candidates = jobRepository.findQueuedIdsOldestFirst(capacity);
+                List<UUID> candidates = jobRepository.findQueuedIdsStartedFirst(capacity);
                 if (candidates.isEmpty()) {
                     sleepPollInterval();
                     continue;
