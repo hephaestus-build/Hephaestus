@@ -277,7 +277,7 @@ Two rules end a failed merge group early and free its runners.
 Neither rule applies to a pull request, which still reports the failure of every leg.
 
 **A failed leg cancels the run.**
-Each leg that `CI Status Gate` needs, except `Detect changes`, has a `fail-fast-<leg>` job in `cicd.yml`.
+Each leg of `CI Status Gate` that runs in a merge group has a `fail-fast-<leg>` job in `cicd.yml`.
 That job needs only its own leg, so it starts when that leg ends.
 In a merge group, if the leg failed, the job calls `fail-fast.yml`, which runs `gh run cancel` on the run.
 
@@ -289,6 +289,7 @@ In a merge group, if the leg failed, the job calls `fail-fast.yml`, which runs `
 
 After the cancel, `cancelled()` is true for the whole run.
 Thus, `Report unsuccessful merge group` reads the gate's `verdict` output, not `cancelled()`.
+A leg can also fail while a regroup cancels the run. Thus, the reporter comments only after the queue dropped the entry, and it waits up to two minutes for that.
 A run that cancelled itself after a failed leg has the verdict `failure`, so the reporter is meant to comment on the pull request.
 A run that a regroup cancelled has the verdict `cancelled`, and CI does not comment.
 

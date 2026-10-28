@@ -1314,7 +1314,8 @@ jobs:
     needs: [all-ci-passed]
     # A merge queue regroups whenever the entries ahead change and cancels the runs it dissolves, so
     # only a failure says anything about this pull request. A fail-fast cancel makes `cancelled()`
-    # true for the whole run, so the gate's verdict tells that failure from a regroup.
+    # true for the whole run, so the gate's verdict tells that failure from a regroup. A leg can still
+    # fail while a regroup cancels the run, so the comment also waits for the queue to drop the entry.
     if: ${{ always() && github.event_name == 'merge_group' && needs.all-ci-passed.outputs.verdict == 'failure' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -1331,9 +1332,23 @@ jobs:
               core.setFailed(`Cannot identify the pull request from merge queue ref ${ref}`);
               return;
             }
-            core.setOutput('number', match[1]);
+            // A regroup keeps the entry queued; the queue drops a failed entry within seconds of the gate.
+            const number = Number(match[1]);
+            const query = `query($owner: String!, $name: String!, $number: Int!) {
+              repository(owner: $owner, name: $name) { pullRequest(number: $number) { mergeQueueEntry { id } } }
+            }`;
+            for (let check = 0; check < 12; check += 1) {
+              const { repository } = await github.graphql(query, { ...context.repo, name: context.repo.repo, number });
+              if (repository.pullRequest.mergeQueueEntry === null) {
+                core.setOutput('number', String(number));
+                return;
+              }
+              await new Promise((resolve) => setTimeout(resolve, 10_000));
+            }
+            core.notice(`#${number} is still queued, so a regroup ended this run; no comment.`);
 
-      - uses: marocchino/sticky-pull-request-comment@5770ad5eb8f42dd2c4f34da00c94c5381e49af88 # v3.0.5
+      - if: steps.pull-request.outputs.number != ''
+        uses: marocchino/sticky-pull-request-comment@5770ad5eb8f42dd2c4f34da00c94c5381e49af88 # v3.0.5
         with:
           header: merge-queue-failure
           number_force: ${{ steps.pull-request.outputs.number }}
