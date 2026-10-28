@@ -18,7 +18,9 @@ A successful verdict requires samples and a result upload for every review.
 The writable attempt folders, `/tmp`, and `~/.local` use disk volumes.
 Only `/run` uses a memory volume, limited to 16 MiB.
 These mounts match `KubernetesPods`.
+The fixture uses the image’s compiled gateway entrypoints.
 A Docker fixture does not prove Kubernetes placement or provider service capacity.
+On Linux, its fixture gateway uses a private container network and a Unix socket to the harness.
 
 The report includes each container's `anon`, `file`, `shmem`, and `kernel` counters.
 The `file` counter includes `shmem`. Do not add them together.

@@ -435,40 +435,65 @@ const server = createServer((request, response) => {
 	void serve(request, response);
 });
 
-function gatewayPort(): number {
+let fixtureGateway: string | undefined;
+let fixtureNetwork: string | undefined;
+
+function gatewayUrl(): string {
+	if (fixtureGateway !== undefined) {
+		return fixtureGateway;
+	}
 	const address = server.address();
 	if (address === null || typeof address === "string") {
 		throw new Error("The stand-in gateway has no TCP port");
 	}
-	return address.port;
+	return `http://host.docker.internal:${address.port}`;
 }
 
 /**
- * Where the gateway listens: on Linux, the default bridge's gateway, which `host-gateway` resolves
- * to; Docker Desktop forwards that name to the host's loopback. Never every interface.
+ * The fixture stays on a private container network. A Unix socket joins its gateway to this process
+ * without exposing repository archives on a host interface or depending on host firewall policy.
  */
-async function gatewayHost(): Promise<string> {
+async function startGateway(): Promise<void> {
 	if (process.platform !== "linux") {
-		return "127.0.0.1";
+		server.listen(0, "127.0.0.1");
+		await once(server, "listening");
+		return;
 	}
-	const gateways = await output("docker", [
-		"network",
+	server.listen(path.join(benchDir, "gateway.sock"));
+	await once(server, "listening");
+	fixtureNetwork = `${runId}-network`;
+	await run("docker", ["network", "create", "--internal", fixtureNetwork], { stdout: "ignore" });
+	const created = await output("docker", [
+		"run",
+		"-d",
+		"--name",
+		`${runId}-gateway`,
+		"--network",
+		fixtureNetwork,
+		"--read-only",
+		"--cap-drop",
+		"ALL",
+		"--security-opt",
+		"no-new-privileges",
+		"-v",
+		`${benchDir}:/bench:ro`,
+		"alpine/socat@sha256:c5a091e1e735a90aa941a5828529dbe6c6157407a8047a9aa473faa133361b82",
+		"TCP-LISTEN:8080,fork,reuseaddr",
+		"UNIX-CONNECT:/bench/gateway.sock",
+	]);
+	const id = created.trim();
+	containers.add(id);
+	const inspected = await output("docker", [
 		"inspect",
-		"bridge",
 		"--format",
-		"{{range .IPAM.Config}}{{.Gateway}} {{end}}",
-	]).catch((error: unknown) => {
-		throw new Error(`docker network inspect bridge failed: ${errorMessage(error)}`, {
-			cause: error,
-		});
-	});
-	const gateway = gateways.split(/\s+/u).find((candidate) => isIPv4(candidate));
-	if (gateway === undefined) {
-		throw new Error(
-			`The Docker bridge network has no IPv4 gateway address ("${gateways.trim()}"); the stand-in gateway has nowhere the sandbox can reach it`,
-		);
+		"{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}",
+		id,
+	]);
+	const address = inspected.trim();
+	if (!isIPv4(address)) {
+		throw new Error("The fixture gateway has no IPv4 address");
 	}
-	return gateway;
+	fixtureGateway = `http://${address}:8080`;
 }
 
 function errorMessage(error: unknown): string {
@@ -618,7 +643,7 @@ function environment(sessionId: string): string[] {
 	env.GIT_CONFIG_COUNT = String(GIT_SECURITY.length);
 	env.GIT_TERMINAL_PROMPT = "0";
 	env.GIT_ATTR_NOSYSTEM = "1";
-	const gateway = `http://host.docker.internal:${String(gatewayPort())}`;
+	const gateway = gatewayUrl();
 	env.LLM_PROXY_URL = `${gateway}/internal/llm`;
 	env.LLM_PROXY_TOKEN = "footprint-token";
 	env.SANDBOX_RUNTIME_URL = `${gateway}/internal/llm/runtime/${sessionId}`;
@@ -662,6 +687,9 @@ function podFlags(name: string, volumes: string[], workspaceReadOnly: boolean): 
 		"-w",
 		"/workspace",
 	];
+	if (fixtureNetwork !== undefined) {
+		flags.push("--network", fixtureNetwork);
+	}
 	for (const [target, size] of Object.entries(MEMORY_VOLUMES)) {
 		flags.push("--mount", `type=tmpfs,dst=${target},tmpfs-size=${size},tmpfs-mode=1777`);
 	}
@@ -885,6 +913,9 @@ async function cleanUp() {
 	for (const volume of volumesCreated) {
 		await succeeds("docker", ["volume", "rm", "-f", volume]);
 	}
+	if (fixtureNetwork !== undefined) {
+		await succeeds("docker", ["network", "rm", fixtureNetwork]);
+	}
 	server.close();
 	await rm(archive, { force: true });
 	await rm(benchDir, { recursive: true, force: true });
@@ -901,8 +932,7 @@ try {
 	await mkdir(benchDir);
 	await writeFile(idsFile, "");
 	const archiveBytes = await packWorkspace();
-	server.listen(0, await gatewayHost());
-	await once(server, "listening");
+	await startGateway();
 	sampler = startSampler();
 	await sleep(1500);
 	const settled = await Promise.allSettled(
