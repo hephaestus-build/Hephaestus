@@ -684,10 +684,10 @@ function podFlags(name: string, volumes: string[], workspaceReadOnly: boolean): 
 		"-w",
 		"/workspace",
 	];
-	if (fixtureNetwork !== undefined) {
-		flags.push("--network", fixtureNetwork);
-	} else {
+	if (fixtureNetwork === undefined) {
 		flags.push("--add-host", "host.docker.internal:host-gateway");
+	} else {
+		flags.push("--network", fixtureNetwork);
 	}
 	for (const [target, size] of Object.entries(MEMORY_VOLUMES)) {
 		flags.push("--mount", `type=tmpfs,dst=${target},tmpfs-size=${size},tmpfs-mode=1777`);
