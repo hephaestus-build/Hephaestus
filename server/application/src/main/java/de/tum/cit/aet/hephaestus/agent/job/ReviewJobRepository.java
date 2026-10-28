@@ -388,6 +388,11 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
      * window with jobs nobody can claim, and a younger runnable job elsewhere never reaches the batch. A
      * candidate whose slot has no binding row is still fetched — the claim's admission re-check is the
      * authoritative gate.
+     *
+     * <p>Work already started comes first: a job on a later attempt, such as one a drain or a handed-on composition
+     * put back, and a job whose results were admitted. A requeue sets a fresh {@code available_at}, so oldest-first
+     * alone left an admitted review's composition behind every fresh review queued before it. Within each group the
+     * oldest available job comes first.
      */
     @WorkspaceAgnostic("Cross-workspace poll candidates; caller is the @WorkspaceAgnostic job poller")
     @Query(
@@ -398,10 +403,10 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
                     + " COALESCE(j.config_snapshot -> 'model' ->> 'dataHandlingTier', 'UNDECLARED'))   < COALESCE((SELECT"
                     + " b.max_concurrent_jobs FROM workspace_agent_binding b      WHERE b.workspace_id = j.workspace_id"
                     + " AND b.purpose = 'PRACTICE_REVIEW'        AND b.data_handling_tier = COALESCE(j.config_snapshot ->"
-                    + " 'model' ->> 'dataHandlingTier', 'UNDECLARED')),      2147483647)) ORDER BY j.available_at ASC,"
-                    + " j.id ASC LIMIT :limit",
+                    + " 'model' ->> 'dataHandlingTier', 'UNDECLARED')),      2147483647)) ORDER BY (j.attempt > 0 OR"
+                    + " j.capture -> 'admission' IS NOT NULL) DESC, j.available_at ASC, j.id ASC LIMIT :limit",
             nativeQuery = true)
-    List<UUID> findQueuedIdsOldestFirst(@Param("limit") int limit);
+    List<UUID> findQueuedIdsStartedFirst(@Param("limit") int limit);
 
     @WorkspaceAgnostic("Cross-workspace stale job reaper; caller is @WorkspaceAgnostic sweeper")
     @Query("SELECT j FROM ReviewJob j WHERE j.status = 'RUNNING' AND j.startedAt < :cutoff")

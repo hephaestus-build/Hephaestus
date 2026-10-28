@@ -401,7 +401,7 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
         assertThat(requeued.getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
         assertThat(requeued.getAvailableAt()).isAfter(Instant.now());
 
-        assertThat(jobRepository.findQueuedIdsOldestFirst(10))
+        assertThat(jobRepository.findQueuedIdsStartedFirst(10))
                 .as("a not-yet-eligible QUEUED job must not be offered as a poll candidate")
                 .doesNotContain(jobId);
     }
@@ -417,7 +417,7 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
         ReviewJob failed = jobRepository.findById(jobId).orElseThrow();
         assertThat(failed.getStatus()).isEqualTo(ReviewJobStatus.FAILED);
         assertThat(failed.getErrorMessage()).contains("retry limit is reached");
-        assertThat(jobRepository.findQueuedIdsOldestFirst(10)).doesNotContain(jobId);
+        assertThat(jobRepository.findQueuedIdsStartedFirst(10)).doesNotContain(jobId);
     }
 
     @Test

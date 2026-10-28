@@ -188,6 +188,11 @@ For workspace model readiness, coverage, feedback mode, spend, and review activi
 
 ### Queue health
 
+A worker claims work that already started before fresh reviews.
+One kind is a review on a later attempt, such as one that a drain put back.
+The other is a review whose results were admitted and whose feedback is still open.
+Within each group, the oldest job comes first.
+
 The job queue exposes its own metrics.
 Use them for alerts instead of application logs.
 
