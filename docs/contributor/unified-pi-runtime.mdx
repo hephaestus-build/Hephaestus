@@ -496,8 +496,9 @@ Thus, a question that arrives during a disconnect is either not stored or erased
 ## The Heph host
 
 Each worker runs one Heph host container (`HephHost`, `HephHostSpec`).
-The worker starts it when it claims its first turn.
+A worker with Heph capacity starts its host before it claims a turn, also when no turn is queued.
 The host is ready when it opens its command channel.
+The worker's readiness includes `hephTurnDispatcher`, so a rolling update keeps the old worker until the replacement host is ready.
 A channel that does not open is tried again after 1, 2, 4 and 8 seconds (`runCommands`), then the host exits.
 The worker then tries one fresh host for the waiting turn before the turn fails.
 

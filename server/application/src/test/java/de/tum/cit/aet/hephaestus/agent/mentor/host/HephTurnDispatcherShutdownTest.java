@@ -32,6 +32,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
@@ -39,12 +40,14 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BooleanSupplier;
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.health.contributor.Status;
 import org.springframework.boot.web.server.context.WebServerApplicationContext;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.SmartLifecycle;
 import org.springframework.context.support.AbstractApplicationContext;
 import org.springframework.context.support.DefaultLifecycleProcessor;
 import org.springframework.context.support.GenericApplicationContext;
+import org.springframework.web.socket.WebSocketSession;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
@@ -53,6 +56,79 @@ import tools.jackson.databind.json.JsonMapper;
  * {@code stop(Runnable)}. Every wait here is a latch the test opens.
  */
 class HephTurnDispatcherShutdownTest extends BaseUnitTest {
+
+    private static final class IdleSandbox implements HostSandbox {
+        final BlockingQueue<Host> launched = new LinkedBlockingQueue<>();
+        final BlockingQueue<Host> removed = new LinkedBlockingQueue<>();
+
+        @Override
+        public Host launch(UUID id, HostSpec spec) {
+            Host host = new Host(id);
+            launched.add(host);
+            return host;
+        }
+
+        @Override
+        public boolean isRunning(Host host) {
+            return !removed.contains(host);
+        }
+
+        @Override
+        public void remove(Host host) {
+            removed.add(host);
+        }
+    }
+
+    @Test
+    void shouldStartAnIdleReplacementBeforeTheOldHostDrains() throws Exception {
+        IdleSandbox oldSandbox = new IdleSandbox();
+        IdleSandbox replacementSandbox = new IdleSandbox();
+        HephHost oldHost = new HephHost(oldSandbox);
+        HephHost replacement = new HephHost(replacementSandbox);
+        HephTurnDispatcher oldWorker = dispatcher(
+                mock(MentorTurnStarter.class),
+                mock(MentorTurnService.class),
+                mock(MentorTurnCompletion.class),
+                oldHost);
+        HephTurnDispatcher newWorker = dispatcher(
+                mock(MentorTurnStarter.class),
+                mock(MentorTurnService.class),
+                mock(MentorTurnCompletion.class),
+                replacement);
+        try {
+            CompletableFuture<Boolean> started =
+                    CompletableFuture.supplyAsync(() -> oldHost.awaitReady(Duration.ofSeconds(10)));
+            HostSandbox.Host oldLaunch = Objects.requireNonNull(oldSandbox.launched.poll(10, TimeUnit.SECONDS));
+            assertThat(oldHost.connected(oldLaunch.id(), mock(WebSocketSession.class)))
+                    .isTrue();
+            assertThat(started.get(10, TimeUnit.SECONDS)).isTrue();
+            oldWorker.start();
+
+            newWorker.start();
+            HostSandbox.Host next = Objects.requireNonNull(
+                    replacementSandbox.launched.poll(10, TimeUnit.SECONDS),
+                    "an idle replacement starts its host without a queued turn");
+            assertThat(replacement.isReady()).isFalse();
+            assertThat(newWorker.health().getStatus()).isEqualTo(Status.DOWN);
+            assertThat(oldWorker.health().getStatus()).isEqualTo(Status.UP);
+            assertThat(oldHost.isReady()).isTrue();
+            assertThat(oldSandbox.removed).isEmpty();
+
+            assertThat(replacement.connected(next.id(), mock(WebSocketSession.class)))
+                    .isTrue();
+            await().atMost(Duration.ofSeconds(10)).until(replacement::isReady);
+            assertThat(newWorker.health().getStatus()).isEqualTo(Status.UP);
+            oldWorker.stop();
+
+            assertThat(oldSandbox.removed).containsExactly(oldLaunch);
+            assertThat(oldHost.isReady()).isFalse();
+            assertThat(replacement.isReady()).isTrue();
+            assertThat(newWorker.health().getStatus()).isEqualTo(Status.UP);
+        } finally {
+            oldWorker.stop();
+            newWorker.stop();
+        }
+    }
 
     /** Opens every drain the test holds. */
     private final CountDownLatch release = new CountDownLatch(1);

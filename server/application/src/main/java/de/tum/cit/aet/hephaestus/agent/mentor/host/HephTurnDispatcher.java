@@ -31,6 +31,8 @@ import java.util.concurrent.TimeUnit;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.health.contributor.Health;
+import org.springframework.boot.health.contributor.HealthIndicator;
 import org.springframework.context.SmartLifecycle;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -44,7 +46,7 @@ import tools.jackson.databind.node.ObjectNode;
  * claiming goes on.
  * {@code docs/contributor/unified-pi-runtime.mdx} § Turn lifecycle and § Dispatch have the protocol.
  */
-public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, SmartLifecycle {
+public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, SmartLifecycle, HealthIndicator {
 
     private static final Logger log = LoggerFactory.getLogger(HephTurnDispatcher.class);
 
@@ -172,6 +174,15 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
         active = true;
         notifications.subscribe(this);
         claimer = Thread.ofPlatform().name("heph-turn-claimer").daemon(true).start(this::claimLoop);
+        wake.release();
+    }
+
+    /** A rolling replacement must have its own command channel before it can replace the old worker. */
+    @Override
+    public Health health() {
+        return (capacity == 0 || host.isReady())
+                ? Health.up().build()
+                : Health.down().build();
     }
 
     /** Stops claiming, lets running turns finish for a while, then removes the host. */
@@ -362,6 +373,9 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
                 return;
             }
             while (active && running.size() < capacity && host.sandboxReady()) {
+                if (!host.awaitReady(HOST_READY_TIMEOUT) || !active) {
+                    break;
+                }
                 Optional<MentorTurnStarter.StartedTurn> started;
                 try {
                     started = starter.startNext(workerId, lease);

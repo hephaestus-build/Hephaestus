@@ -73,7 +73,9 @@ class WebhookIngestionCannotFailSilentlyTest extends BaseUnitTest {
             "practiceReviewHealthIndicator",
             "practiceReview",
             "kubernetesSandboxHealthIndicator",
-            "kubernetesSandbox");
+            "kubernetesSandbox",
+            "hephTurnDispatcher",
+            "hephTurnDispatcher");
 
     /** What a webhook-only container has: the server role is off, so most of the group is absent. */
     private static final Set<String> WEBHOOK_ROLE_ONLY =
@@ -145,6 +147,18 @@ class WebhookIngestionCannotFailSilentlyTest extends BaseUnitTest {
                     assertThat(readiness.getStatus()).isEqualTo(Status.UP);
                     // ADR 0008's webhook-server-down alert reads the whole health endpoint, which still knows.
                     assertThat(endpoint.health().getStatus()).isEqualTo(Status.DOWN);
+                });
+    }
+
+    @Test
+    void aWorkerWithoutAReadyHephHostKeepsReadinessDown() {
+        healthContext(
+                        CONTRIBUTOR_BEANS.keySet(),
+                        Map.of("hephTurnDispatcher", Health.down().build()))
+                .run(context -> {
+                    var readiness = context.getBean(HealthEndpoint.class).healthForPath("readiness");
+                    assertNotNull(readiness);
+                    assertThat(readiness.getStatus()).isEqualTo(Status.DOWN);
                 });
     }
 
