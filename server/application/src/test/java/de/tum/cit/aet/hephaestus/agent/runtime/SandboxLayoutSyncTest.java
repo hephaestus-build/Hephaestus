@@ -8,7 +8,9 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Objects;
+import java.util.Set;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -49,6 +51,19 @@ class SandboxLayoutSyncTest extends BaseUnitTest {
         assertThat(constant(gateway, "EXIT_WORK_TIMEOUT")).isEqualTo(Integer.toString(SandboxLayout.EXIT_WORK_TIMEOUT));
         assertThat(constant(gateway, "UPLOAD_GRACE_MS"))
                 .isEqualTo(SandboxLayout.RESULT_UPLOAD_GRACE.toMinutes() + " * 60_000");
+    }
+
+    @Test
+    void shouldLetEverySessionCiteTheSourcesTheRunnerReadsThroughGit() throws IOException {
+        String sources = Files.readString(
+                repoFile("docker/agents/practice-scripts/kits/scm/sources.ts"), StandardCharsets.UTF_8);
+        String readable = resource("agent/pi-declared-sources.ts");
+
+        assertThat(readable).contains("return new Set([...declared, DIFF_SOURCE, TREE_SOURCE]);");
+        assertThat(Set.of(constant(sources, "DIFF_SOURCE"), constant(sources, "TREE_SOURCE")))
+                .isEqualTo(SandboxLayout.READ_THROUGH_GIT.stream()
+                        .map(kind -> "\"" + kind.value() + "\"")
+                        .collect(Collectors.toSet()));
     }
 
     /** The initializer of a {@code const} declaration, as written. */

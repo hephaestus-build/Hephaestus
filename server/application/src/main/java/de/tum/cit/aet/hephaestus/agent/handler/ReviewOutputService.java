@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobAssignments;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.AdmissionRequestDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.AdmissionResponseDTO;
+import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.evidence.AppliesWhenCheck;
 import de.tum.cit.aet.hephaestus.evidence.CitationSide;
 import de.tum.cit.aet.hephaestus.evidence.ClasspathSourceCatalogRegistry;
@@ -177,6 +178,9 @@ public class ReviewOutputService {
             }
             try {
                 var verified = verifier.verifyCandidate(job, assignment, review.kind(), candidate, captured);
+                // After the verifier, so every cited source is one the catalog knows.
+                requireDeclaredSources(
+                        assignment, review.kind(), verified, applicability.path(assignment.practiceSlug()));
                 // A scan's search covers its assigned file, whose complete read the scan check above requires.
                 if (review.kind() == ReviewKind.ITEM) requireSearchedAbsence(candidate, captured);
                 admitted.add(result(assignment, verified));
@@ -271,6 +275,44 @@ public class ReviewOutputService {
         throw new CandidateEvidenceVerifier.Unverified(
                 CandidateRefusal.CONSULTED_SOURCE_UNREAD,
                 claim + ", but its receipts hold no search of the whole checkout to the end",
+                null);
+    }
+
+    /**
+     * Refuses a result that cites, or says it consulted, a source its practice does not declare (ADR 0069). The
+     * session's opening and its read tools hold only declared sources, so such a result rests on evidence the practice
+     * never asked for, and its freshness would not follow that source. Every session reads the sources of
+     * {@link SandboxLayout#READ_THROUGH_GIT} in its checkout. The sources that the capture read to decide Applies when
+     * count as declared, because a Does not apply warrant names them.
+     */
+    private void requireDeclaredSources(
+            ReviewAssignmentSnapshot assignment, ReviewKind kind, Candidate candidate, JsonNode applicability) {
+        var definition = assignment.practice().definition();
+        var reads = kind == ReviewKind.SCAN
+                ? Objects.requireNonNull(definition.scan()).reads()
+                : definition.reads();
+        var declared = new HashSet<SourceKind>(SandboxLayout.READ_THROUGH_GIT);
+        reads.sources().forEach(read -> declared.add(read.source()));
+        applicability.path("clauses").forEach(clause -> {
+            var readFrom = clause.path("readFrom").asString("");
+            if (!readFrom.isEmpty()) declared.add(new SourceKind(readFrom));
+        });
+        var cited = new ArrayList<SourceKind>();
+        candidate.allCitations().forEach(citation -> cited.add(citation.sourceKind()));
+        var search = candidate.search();
+        if (search != null) cited.addAll(search.consulted());
+        var inapplicability = candidate.inapplicability();
+        if (inapplicability != null) cited.addAll(inapplicability.consulted());
+        var undeclared = cited.stream()
+                .filter(source -> !declared.contains(source))
+                .map(SourceKind::value)
+                .distinct()
+                .sorted()
+                .toList();
+        if (undeclared.isEmpty()) return;
+        throw new CandidateEvidenceVerifier.Unverified(
+                CandidateRefusal.UNDECLARED_SOURCE_CITED,
+                "The result cites " + String.join(", ", undeclared) + ", which the practice does not declare",
                 null);
     }
 

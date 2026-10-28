@@ -307,6 +307,55 @@ class ReviewOutputServiceTest extends BaseUnitTest {
     private static final String UNSEARCHED = ", but its receipts hold no search of the whole checkout to the end";
 
     @Test
+    void shouldWithholdAResultThatConsultedASourceItsPracticeDoesNotDeclare() {
+        pr50Capture(SourceCompleteness.COMPLETE);
+        when(results.admit(1, job.getReviewId(), job.getId(), 0, List.of()))
+                .thenReturn(new AdmissionReceipt(List.of(), List.of()));
+        // The practice declares the document only; the review discussion was never its source.
+        UnaryOperator<ObjectNode> discussion = candidate -> {
+            ((ObjectNode) candidate.path("evidence").path("search"))
+                    .set(
+                            "consulted",
+                            mapper.valueToTree(List.of(DIFF.value(), TREE.value(), "scm.pull-request.comments")));
+            return candidate;
+        };
+
+        service.prepare(job, pr50ErrorHandling(List.of(searched(PR50_HEAD)), discussion))
+                .record(job);
+
+        assertWithheld(
+                CandidateRefusal.UNDECLARED_SOURCE_CITED,
+                "The result cites scm.pull-request.comments, which the practice does not declare");
+    }
+
+    @Test
+    void shouldAdmitAResultThatConsultedASourceItsAppliesWhenRead() {
+        pr50Capture(SourceCompleteness.COMPLETE);
+        // The capture read the review discussion to decide Applies when, so a warrant may name it.
+        ((ObjectNode) Objects.requireNonNull(job.getCapture()))
+                .putObject("readiness")
+                .putObject("applicability")
+                .putObject("clear-names")
+                .putArray("clauses")
+                .addObject()
+                .put("readFrom", "scm.pull-request.comments");
+        when(results.admit(eq(1L), eq(job.getReviewId()), eq(job.getId()), eq(0), any()))
+                .thenReturn(new AdmissionReceipt(List.of(), List.of()));
+        UnaryOperator<ObjectNode> discussion = candidate -> {
+            ((ObjectNode) candidate.path("evidence").path("search"))
+                    .set(
+                            "consulted",
+                            mapper.valueToTree(List.of(DIFF.value(), TREE.value(), "scm.pull-request.comments")));
+            return candidate;
+        };
+
+        service.prepare(job, pr50ErrorHandling(List.of(searched(PR50_HEAD)), discussion))
+                .record(job);
+
+        verify(membership, never()).withhold(anyLong(), any(), eq(CandidateRefusal.UNDECLARED_SOURCE_CITED), any());
+    }
+
+    @Test
     void shouldWithholdAClaimAboutTheCheckoutWhenItsSessionNeitherReadNorSearchedIt() {
         pr50Capture(SourceCompleteness.COMPLETE);
         when(results.admit(1, job.getReviewId(), job.getId(), 0, List.of()))

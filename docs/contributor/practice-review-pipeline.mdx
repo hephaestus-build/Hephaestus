@@ -255,6 +255,12 @@ In an item review that reads a checkout, a result that says the repository lacks
 Otherwise admission withholds it as `consulted_source_unread`.
 [Workspace ABI § Claims that the repository lacks something](./agent/workspace-abi.mdx#claims-that-the-repository-lacks-something) has the rules.
 
+A result may cite, or name as consulted, only the sources that its practice declares, and the change and the checkout.
+Every session reads the change and the checkout through Git.
+Otherwise admission withholds the result as `undeclared_source_cited`.
+The runner refuses such a result first and gives the session a repair turn, so this reason guards against a runner defect.
+[ADR 0069](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0069-practices-run-when-ready-and-stay-current-by-their-sources.md) decides it.
+
 The server verifies shape, outcome requirements, quotations, source permission and claim basis.
 One invalid problem, example or citation withholds the complete candidate.
 Other valid practice candidates can continue.
