@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmAuthMode;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnectionHealth;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
+import de.tum.cit.aet.hephaestus.agent.catalog.ReasoningEffort;
 import de.tum.cit.aet.hephaestus.agent.config.AgentBindingLimits;
 import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
@@ -455,6 +456,7 @@ class LlmProxyService {
                 upstream = callUpstream(
                         exchange, prepared.withoutUsageRequestOrBody(), span, response, tap, deadline, reviewStream);
             }
+            if (exchange.bounds() != null) warnOfRefusedEffort(routing, upstream, prepared.body());
         } catch (Exception e) {
             // Only a failure before a stream's head reaches here, so nothing has been written to the client.
             permit.failed(e);
@@ -675,6 +677,34 @@ class LlmProxyService {
         Duration ceiling = BLOCK_TIMEOUT.plus(ProxyStreamingUtils.DEFAULT_SSE_TIMEOUT);
         Duration remaining = ProxyStreamingUtils.remainingUntil(deadline);
         return reviewStream || remaining.compareTo(ceiling) < 0 ? remaining : ceiling;
+    }
+
+    /**
+     * A provider that takes no reasoning effort refuses every call of a Heph binding that sets one, so each Heph
+     * answer fails. Names the effort the call sent, never the provider's words, which can quote the request.
+     */
+    private void warnOfRefusedEffort(ProxyRouting routing, @Nullable UpstreamResult upstream, byte[] body) {
+        if (upstream == null || upstream.status() != 400) return;
+        ReasoningEffort effort = requestedEffort(body);
+        if (effort != null)
+            log.warn(
+                    "LLM upstream refused a Heph model call for principal {} with status=400 while the Heph binding "
+                            + "sets reasoning effort {}; if its model does not reason, set the effort to Provider default",
+                    routing.principalDescription(),
+                    effort);
+    }
+
+    /** The effort a call sends: {@code reasoning_effort} on chat completions, {@code reasoning.effort} on responses. */
+    private @Nullable ReasoningEffort requestedEffort(byte[] body) {
+        try {
+            JsonNode request = objectMapper.readTree(body);
+            JsonNode effort = request.has("reasoning_effort")
+                    ? request.path("reasoning_effort")
+                    : request.path("reasoning").path("effort");
+            return effort.isString() ? ReasoningEffort.valueOf(effort.asString().toUpperCase(Locale.ROOT)) : null;
+        } catch (RuntimeException unreadable) {
+            return null;
+        }
     }
 
     private boolean requestsStream(byte[] body) {

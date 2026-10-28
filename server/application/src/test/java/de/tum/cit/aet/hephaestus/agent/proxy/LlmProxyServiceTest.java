@@ -17,6 +17,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import de.tum.cit.aet.hephaestus.agent.LlmProperties;
 import de.tum.cit.aet.hephaestus.agent.catalog.EgressPolicy;
 import de.tum.cit.aet.hephaestus.agent.catalog.InstanceLlmSettingsRepository;
@@ -95,6 +98,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.reactivestreams.Publisher;
+import org.slf4j.LoggerFactory;
 import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.core.io.buffer.DefaultDataBufferFactory;
 import org.springframework.http.HttpHeaders;
@@ -1053,6 +1057,60 @@ class LlmProxyServiceTest extends BaseUnitTest {
                             .counter("llm.proxy.upstream.stalled", "apiProtocol", "openai-completions")
                             .count())
                     .isEqualTo(1.0);
+        }
+
+        @ParameterizedTest(name = "{0}")
+        @CsvSource(
+                delimiter = '|',
+                value = {
+                    "sends an effort        | {\"stream\":true,\"reasoning_effort\":\"low\",\"messages\":[]} | LOW",
+                    "sends no effort        | {\"stream\":true,\"messages\":[]}                             | ",
+                })
+        @DisplayName("a refused Heph call warns the operator of the effort it sent, never of the provider's words")
+        void aRefusedHephCallNamesTheEffortItSent(String ignoredCase, String requestBody, @Nullable String effort) {
+            Logger logger = (Logger) LoggerFactory.getLogger(LlmProxyService.class);
+            ListAppender<ILoggingEvent> appender = new ListAppender<>();
+            appender.start();
+            logger.addAppender(appender);
+            try {
+                upstream.enqueue(new MockResponse.Builder()
+                        .code(400)
+                        .addHeader("Content-Type", "application/json")
+                        .body("{\"error\":{\"message\":\"Unsupported parameter: secret-quote\"}}")
+                        .build());
+                ProxyRouting routing = hephTurnRouting(upstream.url("/v1").toString());
+                authenticate(routing);
+                stubCredential(
+                        routing,
+                        new LlmModelResolver.ProxyCredential(
+                                upstream.url("/v1").toString(),
+                                "openai-completions",
+                                LlmAuthMode.BEARER,
+                                "catalog-model",
+                                "secret"));
+                streamingController.proxy(
+                        request("POST", "/internal/llm/chat/completions"),
+                        new MockHttpServletResponse(),
+                        new HttpHeaders(),
+                        requestBody.getBytes(StandardCharsets.UTF_8));
+            } finally {
+                logger.detachAppender(appender);
+                appender.stop();
+            }
+
+            List<String> effortWarnings = appender.list.stream()
+                    .map(ILoggingEvent::getFormattedMessage)
+                    .filter(line -> line.contains("reasoning effort"))
+                    .toList();
+            if (effort == null) {
+                assertThat(effortWarnings).isEmpty();
+            } else {
+                assertThat(effortWarnings)
+                        .singleElement()
+                        .satisfies(line -> assertThat(line)
+                                .contains("sets reasoning effort " + effort)
+                                .doesNotContain("secret-quote"));
+            }
         }
 
         @Test

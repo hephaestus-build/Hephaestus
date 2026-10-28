@@ -53,6 +53,7 @@ const MIN_TIMEOUT_SECONDS = 30;
 const MAX_TIMEOUT_SECONDS = 10_800;
 const MIN_CONCURRENT_JOBS = 1;
 
+/** Mirrors the server's `AgentBindingLimits.MAX_HEPH_TURN_SECONDS`, which the API does not expose. */
 const HEPH_TURN_SECONDS = 900;
 
 /** The longest one run may last: a review up to three hours, one Heph answer 15 minutes. */
@@ -88,7 +89,7 @@ const EFFORT_DESCRIPTION =
 	"How hard a reasoning model thinks on each call. Provider default sends none, for a model that does not reason.";
 
 const HEPH_EFFORT_DESCRIPTION =
-	"Heph answers while someone waits. Low keeps a reasoning model fast. Provider default sends none, for a model that does not reason.";
+	"Heph answers while someone waits. Low keeps a reasoning model fast. A model that does not reason can refuse any effort, and then Heph cannot answer. For such a model, choose Provider default.";
 
 const DECISION_REASONING_HINT =
 	"This model reasons before it answers. Decisions need a model that answers at once with token probabilities.";

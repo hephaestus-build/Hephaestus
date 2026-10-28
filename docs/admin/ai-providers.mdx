@@ -316,10 +316,8 @@ Not every model accepts every level.
 A refused level fails the call rather than changing to a supported level.
 
 A new Heph assignment starts at **Low**.
-A developer waits for each Heph answer.
-At **Medium**, one call of a reasoning model that writes about 35 tokens a second took up to 152 seconds.
-A Heph answer takes a few calls.
-For a model that does not reason, change the Heph assignment to **Provider default**.
+A developer waits for each Heph answer, and a higher effort makes each model call slower.
+A Heph answer takes a few calls, and they must all end within the timeout of the Heph assignment.
 Every other new assignment starts at **Provider default**.
 
 Higher efforts use more output tokens.
@@ -327,6 +325,17 @@ Each job's usage records the reasoning share and prices it as output, never twic
 
 In the API, `reasoningEffort` on `PUT /workspaces/{slug}/agents/{purpose}` sets the effort, and `clearReasoningEffort: true` sets **Provider default**.
 A request without either keeps the current effort.
+
+### Models that refuse a reasoning effort
+
+**Symptom:** every Heph answer fails with **Heph could not finish this reply. Try again.**
+The worker log has the warning `LLM upstream refused a Heph model call ... while the Heph binding sets reasoning effort LOW`.
+
+**Cause:** the model of the Heph assignment does not reason, and its provider refuses the reasoning effort parameter.
+A new Heph assignment starts at **Low**, on every model.
+
+**Remedy:** set the reasoning effort of the Heph assignment to **Provider default**.
+Then Hephaestus sends no effort.
 
 ### Models that think by default
 
