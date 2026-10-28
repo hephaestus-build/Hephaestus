@@ -92,3 +92,10 @@ A requeued job that an earlier attempt admitted continues with composition and d
 Thus, a retry that has no open practice cannot occur yet.
 When per-practice staging ships, a retry can find every practice staged.
 That retry must seal and compose, not record a readiness refusal.
+
+## Update — 2026-10-28 (#3403): freshness at the seal
+
+[ADR 0069](0069-practices-run-when-ready-and-stay-current-by-their-sources.md) amends § Decision, items Seal and Retry.
+The seal checks each staged result by the fingerprints of the sources that its session could read.
+A staged result that is stale at the seal is admitted and ended at once as `WORK_CHANGED`. It is never delivered.
+A retry at a moved item version seals the staged results, and the other practices end with `REPLACED`.

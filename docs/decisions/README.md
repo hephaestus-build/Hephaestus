@@ -94,18 +94,19 @@ Admin Guide (`docs/admin/`), and the ADR links to it.
 | [0053](0053-workspace-addresses-are-a-presentation-origin.md) | A workspace address is a presentation origin, and sign-in stays on the apex | Accepted. Builds on [0017](0017-replace-keycloak-with-spring-native-auth.md) and [0048](0048-installed-clients-sign-in-with-a-pkce-handoff.md). |
 | [0054](0054-practice-visuals-and-guides.md) | Practice visuals and guides are themeable inline SVG and Markdown | Accepted |
 | [0055](0055-practice-scripts-use-one-result-contract.md) | Practice scripts use one result contract | Accepted |
-| [0056](0056-one-practice-model-for-items-and-scans.md) | One practice model for items and scans | Accepted (amended 2026-10-26 — [0062](0062-the-item-is-the-review-scope.md), [0063](0063-each-practice-is-staged-when-it-ends.md)) |
+| [0056](0056-one-practice-model-for-items-and-scans.md) | One practice model for items and scans | Accepted (amended 2026-10-26 — [0062](0062-the-item-is-the-review-scope.md), [0063](0063-each-practice-is-staged-when-it-ends.md); 2026-10-28 — currentness by source fingerprints, [0069](0069-practices-run-when-ready-and-stay-current-by-their-sources.md)) |
 | [0057](0057-one-heph-conversation-per-developer.md) | One Heph conversation per developer, on a stateless shared Heph host | Accepted. Amends 0005, 0006, 0007, 0008, 0009, 0026, 0036 and 0041. |
 | [0058](0058-the-helm-chart-is-the-only-supported-deployment-from-1-0.md) | The Helm chart is the only supported deployment from 1.0 | Accepted (amended 2026-10-25 — previews, [0059](0059-previews-run-on-the-staging-cluster.md)). Supersedes 0041 § Releases and support. Amends 0034, 0035 and 0042. |
 | [0059](0059-previews-run-on-the-staging-cluster.md) | Previews run on the staging cluster | Accepted. Supersedes the mechanism of 0035 and keeps its label policy. Amends 0058. |
 | [0060](0060-the-kubernetes-floor-follows-upstream-support.md) | The Kubernetes floor follows upstream support | Accepted. Amends 0041 § Deployment (the floor). |
-| [0061](0061-review-seals-then-feedback-composes.md) | A practice review seals its results, then feedback is composed | Accepted. Amends 0029. |
-| [0062](0062-the-item-is-the-review-scope.md) | The item is the review scope | Accepted. Builds on 0056. |
-| [0063](0063-each-practice-is-staged-when-it-ends.md) | Each practice is staged when it ends, and the review seals once | Accepted. Builds on 0058 and 0061. |
+| [0061](0061-review-seals-then-feedback-composes.md) | A practice review seals its results, then feedback is composed | Accepted. Amends 0029. Amended 2026-10-28 by [0069](0069-practices-run-when-ready-and-stay-current-by-their-sources.md): the feedback composer works with tools. |
+| [0062](0062-the-item-is-the-review-scope.md) | The item is the review scope | Accepted. Builds on 0056. Amended 2026-10-28 by [0069](0069-practices-run-when-ready-and-stay-current-by-their-sources.md): readiness per practice and freshness by source. |
+| [0063](0063-each-practice-is-staged-when-it-ends.md) | Each practice is staged when it ends, and the review seals once | Accepted. Builds on 0058 and 0061. Amended 2026-10-28 by [0069](0069-practices-run-when-ready-and-stay-current-by-their-sources.md): freshness at the seal. |
 | [0064](0064-one-evidence-contract-for-every-producer.md) | One evidence contract for every result producer | Accepted. Builds on 0055. |
 | [0065](0065-standing-counts-the-newest-observation-of-each-item.md) | Standing counts the newest observation of each item | Accepted. Amends 0056. |
 | [0066](0066-the-webhook-receiver-has-no-database.md) | The webhook receiver has no database | Accepted. Amends 0008 and 0023. |
 | [0067](0067-the-server-image-builds-with-buildpacks-and-cds.md) | The server image builds with Paketo Buildpacks and Application CDS | Accepted (2026-05-19). Moved from the contributor docs. |
+| [0069](0069-practices-run-when-ready-and-stay-current-by-their-sources.md) | Practices run when they are ready and stay current by their sources | Accepted (2026-10-28). Amends 0056, 0061, 0062 and 0063. |
 | [0070](0070-1-0-is-a-cutover-release.md) | 1.0 is a cutover release | Accepted (2026-10-28). Amends 0005, 0041, 0042 and 0058. |
 
 Template: [0000-template.md](0000-template.md).

@@ -125,3 +125,9 @@ The composed item version remains the identity for reports and comparison.
 [ADR 0062](0062-the-item-is-the-review-scope.md) adds the quiet window, supersede and problem lineage on top of this model.
 [ADR 0063](0063-each-practice-is-staged-when-it-ends.md) adds per-practice staging to review membership.
 The item, version and current-claim model of this ADR stands.
+
+## Update — 2026-10-28 (#3403): currentness by source fingerprints
+
+[ADR 0069](0069-practices-run-when-ready-and-stay-current-by-their-sources.md) supersedes § Decision on when a result is current: no longer while the item version is unchanged.
+A result is current while each source kind that its session could read keeps its fingerprint.
+The item version stays the capture pin and the delivery fence. The item, version and current-claim model of this ADR stands.

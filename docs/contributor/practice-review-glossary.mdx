@@ -38,8 +38,11 @@ A term has one definition in one of these pages.
 | **Report**              | A scan's summary and supported observations for workspace admins and exports.                                                                                 | review.report                                       |
 | **Quiet window**        | The wait before an item event starts a review, so that newer events of the same item can join it.                                                         | planned: item_event.retry_at                        |
 | **Problem lineage**     | How a problem compares with the previous comparable result of the same practice on the same item.              | planned: problem.lineage_id                         |
+| **Readiness edge**      | The moment the server decides which selected practices of an item run. It comes when the quiet window closes, or at once for an occasion that never joins a window. | planned                                             |
+| **Source fingerprint**  | A value for one source kind of an item, computed by its source contract. Equal fingerprints mean equal captured bytes. A result stays current while the fingerprints of every source its session could read do not change. | planned: result.read_fingerprints                   |
 
 Quiet window and Problem lineage are decided for 1.0 and not shipped yet ([ADR 0062](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0062-the-item-is-the-review-scope.md)).
+Readiness edge, Source fingerprint and Feedback composer are decided for 1.0 and not shipped yet ([ADR 0069](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0069-practices-run-when-ready-and-stay-current-by-their-sources.md)).
 
 Use Review as the short product name where the page establishes the practice context.
 Use practice review in prose that does not establish that context.
@@ -132,6 +135,7 @@ The same name is the source capture code that causes it.
 | **No-fault attempt**           | An attempt that ended for a reason that is not the review's: a worker's drain or no sandbox room. It gets a new number but spends no retry. | drain_count, room_refusals, ReviewJob.spentAttempts |
 | **No sandbox room**            | The stop reason of a review that no sandbox room can ever hold. It also ends reviews that waited an hour while no review ran and no room came. It describes capacity, never the work. "Hephaestus had no room to run this review in time." | NO_SANDBOX_ROOM |
 | **Composition**                | The preparation of feedback from admitted and eligible observations, by the worker after the sandbox ends. | feedback composition           |
+| **Feedback composer**          | The model with tools that composes, posts and corrects the feedback of one review at one destination. It holds no provider token. | planned                        |
 | **Not composed**               | A withholding for a destination that no composed decision reached, when no more specific reason applies.  | NOT_COMPOSED                   |
 | **Composition stop**           | The cause that left a destination without composed feedback. A passing cause hands the attempt on.        | CompositionStop                |
 | **Stage**                      | The admission of one practice's candidate when the practice ends. The candidate waits on its membership row until the seal. | planned: review_item.state = STAGED |

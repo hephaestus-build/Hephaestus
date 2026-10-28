@@ -106,3 +106,12 @@ Revisit when an item needs more than one active review at a time.
 Revisit when the measured delay of the quiet window harms the feedback loop.
 Revisit the workflow engine option when a review step needs durable state that one row for each practice cannot hold.
 A review of a whole project, not of one item, is out of scope for 1.0. It needs its own ADR after 1.0.
+
+## Update — 2026-10-28 (#3403): readiness per practice and freshness by source
+
+[ADR 0069](0069-practices-run-when-ready-and-stay-current-by-their-sources.md) amends this ADR. The sections above stay as the record.
+
+- § Quiet window: when the window closes, the server derives the pending and ready practices, and one review runs those.
+- § Supersede: the gateway compares the fingerprints of the sources that the practice's session could read, not the item version. Supersede also runs at claim.
+- § Input digest (after 1.0): its minimum form ships in 1.0. A result records the fingerprints of every source that its session could read.
+  The full digest stays out, because no reuse of results across reviews is proposed.
