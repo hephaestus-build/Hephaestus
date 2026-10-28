@@ -1001,18 +1001,19 @@ Each sandbox Pod therefore starts with an init container that waits, at most 60 
 The worker sizes each sandbox Pod from the measured use of that kind of sandbox.
 `SANDBOX_MEMORY_BYTES` applies to Docker only.
 
-| Sandbox Pod | Memory request | Memory limit | Disk request | Size limit of each disk volume | Disk limit |
-| --- | --- | --- | --- | --- | --- |
-| Review | 640 MiB | 1,280 MiB | 1 GiB | 1 GiB, 7 volumes | 7 GiB and 64 MiB |
-| Heph host | 256 MiB | 1 GiB | 256 MiB | 1 GiB, 7 volumes | 7 GiB and 64 MiB |
-| Turn sandbox | 128 MiB, and 32 MiB for its stager | 512 MiB, and 32 MiB | 256 MiB, and 16 MiB | 512 MiB, 3 volumes | 1.5 GiB and 64 MiB, and 16 MiB |
+| Sandbox Pod | CPU request | Memory request | Memory limit | Disk request | Size limit of each disk volume | Disk limit |
+| --- | --- | --- | --- | --- | --- | --- |
+| Review | 100m | 640 MiB | 1,280 MiB | 1 GiB | 1 GiB, 7 volumes | 7 GiB and 64 MiB |
+| Heph host | 50m | 256 MiB | 1 GiB | 256 MiB | 1 GiB, 7 volumes | 7 GiB and 64 MiB |
+| Turn sandbox | 100m, and 25m for its stager | 128 MiB, and 32 MiB for its stager | 512 MiB, and 32 MiB | 256 MiB, and 16 MiB | 512 MiB, 3 volumes | 1.5 GiB and 64 MiB, and 16 MiB |
 
 A review and the Heph host have seven volumes on the node's disk: the workspace, `work`, `out`, `.pi`, `.sessions`, `/tmp` and `~/.local`.
 A turn sandbox has three: its workspace, `/tmp` and `~/.local`.
 The disk limit of the main container holds all the volumes full and 64 MiB for its logs.
 Each other container, such as the isolation init container and the stager, has a disk limit of 16 MiB for its logs.
 
-Each container requests a tenth of its CPU limit, and the isolation init container requests 10m.
+The stager and each probe Pod request a tenth of their CPU limit.
+The isolation init container requests 10m.
 The chart's sandbox quotas count the requests of this table, not the limits.
 Four large reviews at once peaked at 632 to 657 MiB each.
 One Heph conversation used 136 MiB in the host, and a turn sandbox used 3 MiB.
