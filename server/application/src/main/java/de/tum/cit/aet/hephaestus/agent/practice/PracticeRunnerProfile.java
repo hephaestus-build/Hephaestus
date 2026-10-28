@@ -18,6 +18,7 @@ public final class PracticeRunnerProfile implements PiRunnerProfile {
             "pi-tool-arguments.ts",
             "pi-tool-validation.ts",
             "pi-change.ts",
+            "pi-declared-sources.ts",
             "pi-practice-scripts-report.ts",
             "pi-error-text.ts",
             "pi-model-failure.ts",

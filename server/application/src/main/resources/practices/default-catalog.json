@@ -179,6 +179,10 @@
 								{
 									"source": "scm.pull-request.diff",
 									"need": "REQUIRED"
+								},
+								{
+									"source": "scm.linked-work-items",
+									"need": "OPTIONAL"
 								}
 							]
 						},
