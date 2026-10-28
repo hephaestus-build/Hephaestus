@@ -392,13 +392,18 @@ class KubernetesSandboxRuntimeTest {
                         .longValueExact())
                 .as("the stager writes the workspace to disk, not into its memory")
                 .isEqualTo(32L * 1024 * 1024);
-        for (Container each : pod.getSpec().getContainers()) {
-            var limits = each.getResources().getLimits();
-            var requests = each.getResources().getRequests();
-            assertThat(Quantity.getAmountInBytes(requests.get("cpu")).multiply(BigDecimal.TEN))
-                    .as(each.getName())
-                    .isEqualByComparingTo(Quantity.getAmountInBytes(limits.get("cpu")));
-        }
+        // An idle turn Pod requests 25m of CPU, so that a rolling update fits a second worker's pool on one node; a
+        // turn's short bursts run on the limits.
+        assertThat(Quantity.getAmountInBytes(
+                        sandbox.getResources().getRequests().get("cpu")))
+                .isEqualByComparingTo(new BigDecimal("0.020"));
+        assertThat(Quantity.getAmountInBytes(container(pod, KubernetesPods.STAGER)
+                        .getResources()
+                        .getRequests()
+                        .get("cpu")))
+                .isEqualByComparingTo(new BigDecimal("0.005"));
+        assertThat(Quantity.getAmountInBytes(sandbox.getResources().getLimits().get("cpu")))
+                .isEqualByComparingTo(BigDecimal.ONE);
         assertThat(pod.getSpec().getVolumes())
                 .filteredOn(volume -> volume.getName().equals("workspace"))
                 .singleElement()

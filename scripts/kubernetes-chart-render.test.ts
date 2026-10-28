@@ -1086,14 +1086,17 @@ await test("an enabled worker receives its runtime settings, its sandbox namespa
 	assert.equal(envValue(worker, "HEPHAESTUS_AGENT_IMAGE_REFERENCE"), prepared.images["agent-pi"]);
 	assert.equal(get(container(worker), "image"), prepared.images["application-server"]);
 
-	// The single-node profile's one worker: the old one drains and stops before the new one starts, and a
-	// stopping worker has its drain and the shutdown phases.
+	// The single-node profile's one worker: the new one starts beside the draining one, and a stopping
+	// worker has its drain and the shutdown phases.
 	assert.equal(kindOf(worker), "Deployment");
 	assert.equal(get(worker, "spec", "replicas"), 1);
-	assert.deepEqual(get(worker, "spec", "strategy"), { type: "Recreate" });
+	assert.deepEqual(get(worker, "spec", "strategy"), {
+		type: "RollingUpdate",
+		rollingUpdate: { maxSurge: "100%", maxUnavailable: 0 },
+	});
 	const spec = podSpec(worker);
-	assert.equal(envValue(worker, "HEPHAESTUS_WORKER_DRAIN_TIMEOUT"), "600s");
-	assert.equal(get(spec, "terminationGracePeriodSeconds"), 600 + 120);
+	assert.equal(envValue(worker, "HEPHAESTUS_WORKER_DRAIN_TIMEOUT"), "3600s");
+	assert.equal(get(spec, "terminationGracePeriodSeconds"), 3600 + 120);
 	assert.equal(get(spec, "topologySpreadConstraints", 0, "whenUnsatisfiable"), "ScheduleAnyway");
 	assert.deepEqual(
 		list(get(spec, "tolerations")).map((toleration) => [
@@ -1168,10 +1171,10 @@ await test("an enabled worker receives its runtime settings, its sandbox namespa
 		String(get(sandboxQuota(resources), "spec", "hard", "requests.ephemeral-storage")),
 		/^[1-9][0-9]*Mi$/u,
 	);
-	// small.yaml: one worker that recreates, one review with one probe run, and the Heph host with its pool
-	// of 2 and 8 running turns.
-	assert.equal(get(tierQuota(resources, "reviews"), "spec", "hard", "pods"), "4");
-	assert.equal(get(tierQuota(resources, "conversations"), "spec", "hard", "pods"), "11");
+	// small.yaml: one worker that rolls by a surge of one, so the quotas hold two workers' probe runs, Heph hosts and
+	// turn sandboxes, but only the one worker's review: the new worker waits for the old one's room.
+	assert.equal(get(tierQuota(resources, "reviews"), "spec", "hard", "pods"), "7");
+	assert.equal(get(tierQuota(resources, "conversations"), "spec", "hard", "pods"), "22");
 
 	// Exactly the calls that the runtime makes, each in one namespace, and no cluster-wide authority.
 	for (const kind of ["ClusterRole", "ClusterRoleBinding"]) {
@@ -2070,8 +2073,11 @@ await test("workers roll by surge unless the profile asks for Recreate, and the 
 		type: "RollingUpdate",
 		rollingUpdate: { maxSurge: "100%", maxUnavailable: 0 },
 	});
-	// The single-node profiles hold one worker's sandboxes: a surge would run a second idle Heph pool.
-	assert.deepEqual(strategy("small", "worker"), { type: "Recreate" });
+	// small holds a second worker beside the draining one; 16 GiB does not hold its second Heph pool.
+	assert.deepEqual(strategy("small", "worker"), {
+		type: "RollingUpdate",
+		rollingUpdate: { maxSurge: "100%", maxUnavailable: 0 },
+	});
 	assert.deepEqual(strategy("small-16gib", "worker"), { type: "Recreate" });
 	// Push events are not redeliverable: the new receiver starts before the old one stops.
 	for (const name of ["small", "small-16gib"] as const) {
