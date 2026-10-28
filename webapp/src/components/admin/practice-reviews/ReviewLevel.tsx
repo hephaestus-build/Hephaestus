@@ -56,7 +56,7 @@ import {
 	type TechnicalFact,
 } from "./RecordSheet";
 import { RequestReviewAction } from "./RequestReviewAction";
-import { cacheReadShare } from "./review-cache-usage";
+import { reviewCacheUsage } from "./review-cache-usage";
 import { feedbackSlots, type ReviewListTarget } from "./review-outcomes";
 import { ReviewActions } from "./ReviewActions";
 import { ReviewStatusMark } from "./ReviewBadges";
@@ -739,26 +739,35 @@ function ReviewJobEntry({ job, position }: { job: ReviewJob; position: string })
 	);
 }
 
+const cachePercent = new Intl.NumberFormat("en-GB", {
+	style: "percent",
+	maximumFractionDigits: 1,
+});
+
+function inputFromCacheText({
+	read,
+	written,
+	input,
+	readShare,
+}: ReturnType<typeof reviewCacheUsage>): string {
+	if (readShare === undefined) {
+		return "No usage recorded";
+	}
+	if (read === 0 && written === 0) {
+		return "None reported";
+	}
+	const percentage =
+		readShare > 0 && readShare < 0.001 ? "Under 0.1%" : cachePercent.format(readShare);
+	return `${percentage} of ${formatTokens(input)} tokens`;
+}
+
 function technicalFacts(review: ReviewDetail): TechnicalFact[] {
 	const { usage } = review;
-	const cacheShare = cacheReadShare(usage.attempts);
+	const cache = reviewCacheUsage(usage.attempts);
 	const usagePending = isActiveReview(review.status) && usage.attempts.length === 0;
-	let cacheShareText = "No input usage recorded";
-	if (usagePending) {
-		cacheShareText = "Not recorded yet";
-	} else if (cacheShare !== undefined) {
-		cacheShareText = new Intl.NumberFormat("en", {
-			style: "percent",
-			maximumFractionDigits: 1,
-		}).format(cacheShare);
-	}
 	let reasoning = 0;
-	let cacheRead = 0;
-	let cacheWrite = 0;
 	for (const attempt of usage.attempts) {
 		reasoning += attempt.reasoningTokens;
-		cacheRead += attempt.cacheReadTokens;
-		cacheWrite += attempt.cacheWriteTokens;
 	}
 	const writtenTokens =
 		reasoning > 0
@@ -795,11 +804,11 @@ function technicalFacts(review: ReviewDetail): TechnicalFact[] {
 			label: "Cache tokens",
 			value: usagePending
 				? "Not recorded yet"
-				: `${formatTokens(cacheRead)} read · ${formatTokens(cacheWrite)} written`,
+				: `${formatTokens(cache.read)} read · ${formatTokens(cache.written)} written`,
 		},
 		{
-			label: "Cache read share",
-			value: cacheShareText,
+			label: "Input from cache",
+			value: usagePending ? "Not recorded yet" : inputFromCacheText(cache),
 		},
 	];
 	if (review.batchId !== null) {

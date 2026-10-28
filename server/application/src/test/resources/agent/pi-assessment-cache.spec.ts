@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { once } from "node:events";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { createServer } from "node:http";
+import { createServer, type ServerResponse } from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -66,7 +66,76 @@ void test("Responses preserves text and roles with system, change and core cache
 	});
 });
 
-/** Native SDK requests stop at this local proxy; no provider response or cache hit is simulated. */
+void test("native Responses emits message_start at headers and message_update only after SSE body data", async () => {
+	const bodyReady = Promise.withResolvers<undefined>();
+	try {
+		await wire(
+			async ({ open }) => {
+				const session = await open({ apiProtocol: "openai-responses", modelId: "gpt-6-luna" });
+				const headers = Promise.withResolvers<undefined>();
+				let receivedContent = false;
+				const unsubscribe = session.subscribe((event) => {
+					if (event.type === "message_start" && event.message.role === "assistant") {
+						headers.resolve(undefined);
+					}
+					if (event.type === "message_update") {
+						receivedContent = true;
+					}
+				});
+				try {
+					const reply = session.prompt(`${PREFIX}Evaluate alpha.`);
+					await headers.promise;
+					assert.equal(
+						receivedContent,
+						false,
+						"headers do not prove that provider body data arrived",
+					);
+					bodyReady.resolve(undefined);
+					await reply;
+					assert.equal(receivedContent, true, "the native SSE response produces a content update");
+				} finally {
+					unsubscribe();
+				}
+			},
+			(response) => {
+				response.writeHead(200, { "content-type": "text/event-stream" });
+				response.flushHeaders();
+				void bodyReady.promise.then(() => {
+					const part = { type: "output_text", text: "ok", annotations: [] };
+					const item = { id: "m", type: "message", role: "assistant", content: [part] };
+					for (const event of [
+						{ type: "response.created", response: { id: "r", status: "in_progress", output: [] } },
+						{ type: "response.output_item.added", output_index: 0, item: { ...item, content: [] } },
+						{
+							type: "response.content_part.added",
+							output_index: 0,
+							content_index: 0,
+							part: { ...part, text: "" },
+						},
+						{ type: "response.output_text.delta", output_index: 0, content_index: 0, delta: "ok" },
+						{ type: "response.output_item.done", output_index: 0, item },
+						{
+							type: "response.completed",
+							response: {
+								id: "r",
+								status: "completed",
+								output: [item],
+								usage: { input_tokens: 100, output_tokens: 1 },
+							},
+						},
+					]) {
+						response.write(`data: ${JSON.stringify(event)}\n\n`);
+					}
+					response.end("data: [DONE]\n\n");
+				});
+			},
+		);
+	} finally {
+		bodyReady.resolve(undefined);
+	}
+});
+
+/** Native SDK calls stop at this local server; no external provider is contacted. */
 async function wire(
 	run: (context: {
 		open: (
@@ -78,6 +147,7 @@ async function wire(
 		) => Promise<Awaited<ReturnType<typeof createAgentSession>>["session"]>;
 		bodies: Record<string, unknown>[];
 	}) => Promise<void>,
+	respond?: (response: ServerResponse) => void,
 ) {
 	const bodies: Record<string, unknown>[] = [];
 	const server = createServer((request, response) => {
@@ -89,6 +159,10 @@ async function wire(
 			const body: unknown = JSON.parse(Buffer.concat(chunks).toString("utf8"));
 			assert.ok(isRecord(body));
 			bodies.push(body);
+			if (respond !== undefined) {
+				respond(response);
+				return;
+			}
 			response.writeHead(400, { "content-type": "application/json" });
 			response.end(
 				JSON.stringify({

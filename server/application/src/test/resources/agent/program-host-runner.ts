@@ -504,6 +504,9 @@ process.stdout.write(JSON.stringify(validateToolArguments(tool, { name: tool.nam
 			}
 
 			async function firstProviderEvent(slug: string): Promise<void> {
+				capture("model-events", { slug, event: "headers" });
+				// Responses starts the SDK message when headers arrive, before it consumes SSE data.
+				emit({ type: "message_start", message: { role: "assistant" } });
 				const streamDelays = parseJson(process.env.PI_HOST_STREAM_DELAYS ?? "{}");
 				const streamDelay = field(streamDelays, slug);
 				if (typeof streamDelay === "number") {
@@ -512,7 +515,17 @@ process.stdout.write(JSON.stringify(validateToolArguments(tool, { name: tool.nam
 				if (process.env.PI_HOST_COLD_LEADER !== slug) {
 					capture("model-stream", { slug, at: Date.now() });
 					capture("model-events", { slug, event: "stream" });
-					emit({ type: "message_start", message: { role: "assistant" } });
+					const message = { role: "assistant", content: [{ type: "text", text: "Reading." }] };
+					emit({
+						type: "message_update",
+						message,
+						assistantMessageEvent: {
+							type: "text_delta",
+							contentIndex: 0,
+							delta: "Reading.",
+							partial: message,
+						},
+					});
 				}
 			}
 

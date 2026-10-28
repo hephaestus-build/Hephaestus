@@ -2292,7 +2292,14 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 			const scope = sessionState();
 			return trackedSession.subscribe((event: AgentSessionEvent) =>
 				sessionScopes.run(scope, () => {
-					if (event.type === "message_start" && event.message.role === "assistant") {
+					// Responses can start the SDK message at headers. Wait for content or a successful reply.
+					if (
+						event.type === "message_update" ||
+						(event.type === "message_end" &&
+							event.message.role === "assistant" &&
+							event.message.stopReason !== "error" &&
+							event.message.stopReason !== "aborted")
+					) {
 						releaseOpening?.(JSON.stringify([...declaredOf(scope.activePractice)].toSorted()));
 					}
 					chargeWork(event);

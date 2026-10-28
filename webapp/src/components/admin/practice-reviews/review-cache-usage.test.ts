@@ -1,21 +1,25 @@
 import { expect, it } from "vitest";
 
-import { cacheReadShare } from "./review-cache-usage";
+import { reviewCacheUsage } from "./review-cache-usage";
 
 it("weights attempts by all input tokens, including cache writes", () => {
 	expect(
-		cacheReadShare([
+		reviewCacheUsage([
 			{ inputTokens: 100, cacheReadTokens: 900, cacheWriteTokens: 0 },
 			{ inputTokens: 1000, cacheReadTokens: 0, cacheWriteTokens: 1000 },
 		]),
-	).toBe(0.3);
+	).toStrictEqual({ read: 900, written: 1000, input: 3000, readShare: 0.3 });
 });
 
 it("separates no recorded input from recorded input with no reported cache reads", () => {
-	expect(cacheReadShare([])).toBeUndefined();
+	expect(reviewCacheUsage([]).readShare).toBeUndefined();
 	expect(
-		cacheReadShare([{ inputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 }]),
+		reviewCacheUsage([{ inputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 }]).readShare,
 	).toBeUndefined();
-	expect(cacheReadShare([{ inputTokens: 100, cacheReadTokens: 0, cacheWriteTokens: 0 }])).toBe(0);
-	expect(cacheReadShare([{ inputTokens: 0, cacheReadTokens: 100, cacheWriteTokens: 0 }])).toBe(1);
+	expect(
+		reviewCacheUsage([{ inputTokens: 100, cacheReadTokens: 0, cacheWriteTokens: 0 }]).readShare,
+	).toBe(0);
+	expect(
+		reviewCacheUsage([{ inputTokens: 0, cacheReadTokens: 100, cacheWriteTokens: 0 }]).readShare,
+	).toBe(1);
 });

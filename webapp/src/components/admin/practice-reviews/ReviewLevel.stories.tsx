@@ -314,7 +314,7 @@ export const ActiveUsageNotRecordedYet: Story = {
 			"Tokens read",
 			"Tokens written",
 			"Cache tokens",
-			"Cache read share",
+			"Input from cache",
 		]) {
 			const fact = panel.getByText(label).closest("div");
 			await expect(fact).toHaveTextContent("Not recorded yet");
@@ -674,9 +674,57 @@ export const CostPerAttempt: Story = {
 		const panel = within(await settledDrawerPanel());
 		panel.getByText(/over 2 attempts/u);
 		panel.getByRole("heading", { name: "Attempts" });
-		await expect(factValue(await settledDrawerPanel(), "Cache read share")).toHaveTextContent(
-			"7.7%",
+	},
+};
+
+export const CacheAcrossAttempts: Story = {
+	args: { review: ready({ ...reviewDetailCompleted, usage: reviewUsageTwoAttempts }) },
+	play: async () => {
+		await expect(factValue(await settledDrawerPanel(), "Input from cache")).toHaveTextContent(
+			"7.7% of 26,000 tokens",
 		);
+	},
+};
+
+export const CacheNotReported: Story = {
+	args: {
+		review: ready({
+			...reviewDetailCompleted,
+			usage: {
+				...reviewUsageTwoAttempts,
+				attempts: reviewUsageTwoAttempts.attempts.map((attempt) => ({
+					...attempt,
+					cacheReadTokens: 0,
+					cacheWriteTokens: 0,
+				})),
+			},
+		}),
+	},
+	play: async () => {
+		const fact = factValue(await settledDrawerPanel(), "Input from cache");
+		await expect(fact).toHaveTextContent("None reported");
+		await expect(fact).not.toHaveTextContent("0%");
+	},
+};
+
+export const TinyCacheRead: Story = {
+	args: {
+		review: ready({
+			...reviewDetailCompleted,
+			usage: {
+				...reviewUsageTwoAttempts,
+				attempts: reviewUsageTwoAttempts.attempts.map((attempt) => ({
+					...attempt,
+					cacheReadTokens: attempt.attempt === 0 ? 1 : 0,
+					cacheWriteTokens: 0,
+				})),
+			},
+		}),
+	},
+	play: async () => {
+		const fact = factValue(await settledDrawerPanel(), "Input from cache");
+		await expect(fact).toHaveTextContent("Under 0.1% of 24,001 tokens");
+		await expect(fact).not.toHaveTextContent("0%");
 	},
 };
 
@@ -695,9 +743,9 @@ export const NoInputUsage: Story = {
 		}),
 	},
 	play: async () => {
-		await expect(factValue(await settledDrawerPanel(), "Cache read share")).toHaveTextContent(
-			"No input usage recorded",
-		);
+		const panel = await settledDrawerPanel();
+		await expect(factValue(panel, "Input from cache")).toHaveTextContent("No usage recorded");
+		await expect(factValue(panel, "Cost")).toHaveTextContent("No usage recorded");
 	},
 };
 

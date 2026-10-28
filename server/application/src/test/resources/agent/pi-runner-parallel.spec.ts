@@ -24,7 +24,7 @@ function resultsOf(cwd: string) {
 	return { body, results: results.map((result: unknown) => result) };
 }
 
-void test("followers wait for their opening's first stream while another opening starts", async () => {
+void test("followers ignore early response headers and wait for content while another opening starts", async () => {
 	const cwd = realpathSync(mkdtempSync(nodePath.join(tmpdir(), "pi-opening-stagger-")));
 	try {
 		stagePractices(cwd, [
@@ -50,6 +50,7 @@ void test("followers wait for their opening's first stream while another opening
 			assert.ok(index !== -1, `${slug} must emit ${event}`);
 			return index;
 		};
+		assert.ok(position("headers", "leader") < position("stream", "leader"));
 		assert.ok(position("start", "other") < position("stream", "leader"));
 		assert.ok(position("start", "follower") > position("stream", "leader"));
 		assert.ok(position("start", "follower") < position("finish", "leader"));

@@ -42,15 +42,20 @@ Other source sets can start during this wait.
 Slots can span practice groups.
 Results and the admission request use practice order, independent of completion order.
 
-The review's technical details show **Cache read share** for every protocol.
-It divides reported cache-read tokens by all input tokens, including cache reads and cache writes, across all attempts.
-No recorded input shows **No input usage recorded**.
-A provider that does not report cache reads can show zero even if its cache is active.
+The review's technical details show **Input from cache** for every protocol.
+The fact shows the percentage of all input tokens read from cache and the total input count, across all attempts.
+Total input includes ordinary input, cache reads and cache writes.
+For example, **7.7% of 26,000 tokens** includes 24,000 ordinary input tokens and 2,000 cache reads.
+
+No recorded input shows **No usage recorded**.
+When both cache counts are zero, the fact shows **None reported**.
+This can mean no cache use or that the provider does not report it.
+A positive percentage below 0.1% shows **Under 0.1%**.
 The figure does not measure feedback quality.
 
 OpenAI Responses keeps provider-default cache retention and sends no five-minute override.
 Completions providers use their own cache policy.
-Use cache read share to compare reviews on the same provider.
+Use the percentage of input read from cache to compare reviews on the same provider.
 
 With concurrent evaluation, each practice reserves an equal share of its set's calls and output tokens before evaluation starts.
 The runner assigns any remainder in catalog order.
@@ -321,15 +326,15 @@ It opens [Calls that were not rated](#calls-that-were-not-rated), which tells wh
 The section **Practice scripts** is on the review's sheet, after **Every practice** and the review's delivery checks.
 It has one row for each practice of the review:
 
-| Column            | What it shows                                                                                                                                                                                                                                                                                                                                                                                                 |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Practice**      | The practice. It links to the practice. A practice that the workspace no longer has shows its identifier and **Not a current practice**.                                                                                                                                                                                                                                                                      |
+| Column            | What it shows                                                                                                                                                                                                                                                                                                                                                                                  |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Practice**      | The practice. It links to the practice. A practice that the workspace no longer has shows its identifier and **Not a current practice**.                                                                                                                                                                                                                                                       |
 | **Run**           | How the script ended. Examples are **Returned a candidate observation**, **Withheld**, **Failed: ran out of time**, **Not reached** and **Did not finish**. Below it is the same fix link as in the trace line. A practice that the workspace no longer has, or that runs the built-in script, shows no **Edit the script**. For a script that failed, the first line of the error comes last. |
-| **Review calls**  | The model calls of the practice's review sessions, as the review runner counted them. It is not the billed count: the proxy bills these calls for the whole review. A dash means no calls. **Not recorded** means that the review is from an earlier release, or that the runner did not report the practice.                                                                                                 |
-| **Script models** | Each decision, embedding or reranking model that the script declared or called. An icon shows the tier of the model that the review had for it. A declared model that the review did not have and that made no calls shows **No model**. The review's own chat model never shows here.                                                                                                                        |
-| **Not rated**     | The model calls that were not rated, with one line below for each reason, such as `5 too slow` and `1 wrong format`. [Calls that were not rated](#calls-that-were-not-rated) gives what to do for each reason.                                                                                                                                                                                                |
-| **Script calls**  | The decision, embedding and reranking calls that the proxy recorded for the script. A script that did not run, or that uses no such model, shows a dash.                                                                                                                                                                                                                                                      |
-| **Time**          | How long the script ran, such as `4.2 s` or `2 min 5 s`. A run shorter than 0.1 seconds shows `< 0.1 s`. A script that did not run, was not reached, or did not finish shows a dash.                                                                                                                                                                                                                          |
+| **Review calls**  | The model calls of the practice's review sessions, as the review runner counted them. It is not the billed count: the proxy bills these calls for the whole review. A dash means no calls. **Not recorded** means that the review is from an earlier release, or that the runner did not report the practice.                                                                                  |
+| **Script models** | Each decision, embedding or reranking model that the script declared or called. An icon shows the tier of the model that the review had for it. A declared model that the review did not have and that made no calls shows **No model**. The review's own chat model never shows here.                                                                                                         |
+| **Not rated**     | The model calls that were not rated, with one line below for each reason, such as `5 too slow` and `1 wrong format`. [Calls that were not rated](#calls-that-were-not-rated) gives what to do for each reason.                                                                                                                                                                                 |
+| **Script calls**  | The decision, embedding and reranking calls that the proxy recorded for the script. A script that did not run, or that uses no such model, shows a dash.                                                                                                                                                                                                                                       |
+| **Time**          | How long the script ran, such as `4.2 s` or `2 min 5 s`. A run shorter than 0.1 seconds shows `< 0.1 s`. A script that did not run, was not reached, or did not finish shows a dash.                                                                                                                                                                                                           |
 
 The section shows no cost.
 Its note says `Spend is on AI usage.`
