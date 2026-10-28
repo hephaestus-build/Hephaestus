@@ -496,16 +496,17 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
         User colleague = persistUser("slack-projector-colleague");
         ensureMembership(workspace, colleague, Membership.WorkspaceRole.MEMBER);
         MentorConversation colleagues = conversations.findOrCreateMain(workspace.getId(), accountId(colleague));
-        turns.submit(
-                workspace.getId(),
-                colleagues.getId(),
-                new MentorTurnService.Question(
-                        MentorTurn.Surface.APP,
-                        "What changed?",
-                        UUID.randomUUID().toString(),
-                        null,
-                        null));
-        assertThat(turns.claimNext(WORKER, LEASE)).isPresent();
+        MentorTurn colleaguesTurn = turns.submit(
+                        workspace.getId(),
+                        colleagues.getId(),
+                        new MentorTurnService.Question(
+                                MentorTurn.Surface.APP,
+                                "What changed?",
+                                UUID.randomUUID().toString(),
+                                null,
+                                null))
+                .turn();
+        assertThat(turns.claimNext(WORKER, LEASE).map(MentorTurn::getId)).contains(colleaguesTurn.getId());
         MentorTurn queued = ask(main, "Why is this not met?", "100.1").turn();
         // Every Heph slot is taken: the deployment has as many as turns hold now.
         projector = projector(new MentorTurnWaits(turnRepository, events, Math.toIntExact(turnRepository.countHeld())));
