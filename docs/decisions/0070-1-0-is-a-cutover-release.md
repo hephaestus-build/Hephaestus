@@ -65,8 +65,9 @@ It is the [Database maintenance](../admin/kubernetes.mdx#database-maintenance) p
 
 - **0.95.0** is itself a stop-every-role release. It drops the contractions that v0.94.7 lists (`consent_notice` and its trigger function, `product_survey_submission`, and `supports_reasoning`), together with `review_job.idempotency_key` and `outline_document_event`.
   Before it drops `product_survey_submission`, it copies every answer that `product_survey_participation` does not hold yet, so no answer is lost.
-  It stops reading and lists as pending: `workspace_slug_history.redirect_expires_at`, `issue.review_snapshot_id` and `review_snapshot_digest`, and the Slack research columns (decision F-12).
-- **1.0** drops those objects, and the objects that the ADR 0068 layers retire (`worker_registry`, `worker_token_denylist`). It also converts in-flight jobs and turns as described above.
+  It also drops `workspace_slug_history.redirect_expires_at`, `issue.review_snapshot_id` and `review_snapshot_digest`, and the Slack research columns.
+  Before it drops the Slack research columns, it copies the true research opt-outs into `consent_decision` (decision F-12).
+- **1.0** drops the objects that the ADR 0068 layers retire (`worker_registry`, `worker_token_denylist`). It also converts in-flight jobs and turns as described above.
   Each layer keeps its own changelog (one per branch). No released change set changes. `master.xml` stays append-only.
   The only head edit is the cut-point precondition. It follows the v0.77.4 precedent.
 - **No re-baseline at 1.0.** The policy requires a major boundary *and* automated synchronization. Synchronization does not exist, and a manual `docker run … changeLogSyncToTag` does not fit a Helm-only product.
