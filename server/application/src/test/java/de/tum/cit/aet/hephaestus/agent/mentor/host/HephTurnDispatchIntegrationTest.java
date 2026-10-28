@@ -59,6 +59,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.health.contributor.Status;
 import org.springframework.boot.jdbc.autoconfigure.DataSourceProperties;
 import org.springframework.context.ApplicationContext;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -143,6 +144,8 @@ class HephTurnDispatchIntegrationTest extends AbstractWorkspaceIntegrationTest {
         /** How many of the next starts fail, as a host that exits before its channel opens. */
         final AtomicInteger failsFirst = new AtomicInteger();
 
+        final AtomicInteger readyAttempts = new AtomicInteger();
+
         volatile @Nullable RuntimeException breaksOnce;
         volatile Runnable beforeStart = () -> {};
         volatile Runnable lost = () -> {};
@@ -168,6 +171,7 @@ class HephTurnDispatchIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
         @Override
         boolean awaitReady(Duration timeout) {
+            readyAttempts.incrementAndGet();
             RuntimeException failure = breaksOnce;
             if (failure != null) {
                 breaksOnce = null;
@@ -488,14 +492,43 @@ class HephTurnDispatchIntegrationTest extends AbstractWorkspaceIntegrationTest {
     }
 
     @Test
-    void shouldFailTheTurnWithoutContactingTheHostWhenNoHostCanStart() {
+    void shouldKeepTheTurnQueuedUntilAHostCanStart() throws Exception {
         host.starts = false;
+        int attempts = host.readyAttempts.get();
 
         MentorTurn asked = ask("Anything new?");
 
-        await().atMost(NOTIFIED).until(() -> row(asked).getStatus() == MentorTurn.Status.FAILED);
-        assertThat(row(asked).getError()).isEqualTo(HephTurnDispatcher.COULD_NOT_START);
+        await().atMost(NOTIFIED).until(() -> host.readyAttempts.get() > attempts);
+        assertThat(row(asked).getStatus()).isEqualTo(MentorTurn.Status.QUEUED);
+        assertThat(row(asked).getAttempt()).isZero();
+        assertThat(dispatcher.health().getStatus()).isEqualTo(Status.DOWN);
         assertThat(host.frames).isEmpty();
+
+        host.starts = true;
+        dispatcher.resync();
+        assertThat(host.next("start").path("turnId").asString())
+                .isEqualTo(asked.getId().toString());
+        assertThat(row(asked).getStatus()).isEqualTo(MentorTurn.Status.RUNNING);
+        assertThat(row(asked).getAttempt()).isOne();
+    }
+
+    @Test
+    void shouldKeepClaimingAfterHostPreparationThrowsWithoutFailingAQueuedTurn() throws Exception {
+        host.starts = false;
+        host.breaksOnce = new IllegalStateException("the sandbox API went away");
+        int attempts = host.readyAttempts.get();
+        MentorTurn asked = ask("Wait for the replacement host");
+        await().atMost(NOTIFIED).until(() -> host.readyAttempts.get() > attempts);
+        assertThat(row(asked).getStatus()).isEqualTo(MentorTurn.Status.QUEUED);
+        assertThat(row(asked).getAttempt()).isZero();
+
+        host.starts = true;
+        dispatcher.resync();
+
+        assertThat(host.next("start").path("turnId").asString())
+                .isEqualTo(asked.getId().toString());
+        assertThat(row(asked).getStatus()).isEqualTo(MentorTurn.Status.RUNNING);
+        assertThat(row(asked).getAttempt()).isOne();
     }
 
     @Test

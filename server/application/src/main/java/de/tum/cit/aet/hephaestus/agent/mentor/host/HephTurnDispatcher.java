@@ -373,11 +373,11 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
                 return;
             }
             while (active && running.size() < capacity && host.sandboxReady()) {
-                if (!host.awaitReady(HOST_READY_TIMEOUT) || !active) {
-                    break;
-                }
                 Optional<MentorTurnStarter.StartedTurn> started;
                 try {
+                    if ((!host.isReady() && !host.awaitReady(HOST_READY_TIMEOUT)) || !active) {
+                        break;
+                    }
                     started = starter.startNext(workerId, lease);
                 } catch (RuntimeException e) {
                     claimFailures.increment();
