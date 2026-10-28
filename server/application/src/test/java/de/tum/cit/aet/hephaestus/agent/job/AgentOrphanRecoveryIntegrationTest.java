@@ -134,7 +134,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.env.Environment;
 import org.springframework.core.task.AsyncTaskExecutor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -147,6 +149,12 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
     private PracticeVersionService runtimePracticeVersions;
 
     private ReviewJobZombieSweeper sweeper;
+
+    @Autowired
+    private ObjectProvider<ReviewJobCompletionService> completion;
+
+    @Autowired
+    private Environment environment;
 
     @Autowired
     private ReviewAttemptUsageService attemptUsage;
@@ -330,10 +338,27 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    void shouldEndCutoverClaimsWithoutFaultWhenLeaseRecoveryNeverRuns() {
-        UUID unadmitted = runningJobOwnedBy("worker-0x", Instant.now().minus(Duration.ofHours(2)), 1);
+    void shouldEndCutoverClaimsAndReviewsWhenExecutionIsDisabledAndLeaseRecoveryNeverRuns() {
+        assertThat(environment.getProperty("hephaestus.agent.enabled", Boolean.class))
+                .isFalse();
+        UUID unadmitted =
+                runningJobOwnedBy("worker-0x", Instant.now().minus(Duration.ofHours(2)), 1, privateRecoveryWork());
+        pinScriptAssignments(unadmitted);
+        ReviewJob unadmittedJob = jobRepository.findById(unadmitted).orElseThrow();
+        members.bind(
+                workspace.getId(),
+                unadmittedJob.getReviewId(),
+                unadmitted,
+                unadmittedJob.getInput().assignments());
         UUID admitted = runningJobOwnedBy("worker-0x", Instant.now().minus(Duration.ofHours(2)), 1);
         Result observed = admitWithResult(admitted);
+        for (UUID id : List.of(unadmitted, admitted)) {
+            assertThat(reviews.start(
+                            workspace.getId(),
+                            jobRepository.findById(id).orElseThrow().getReviewId()))
+                    .isTrue();
+        }
+        jdbc.update("UPDATE review_job SET execution_started_at = started_at WHERE id = ?", admitted);
         jdbc.update(
                 "UPDATE review_job SET drain_count = drain_count + 1, leased_until = NULL WHERE id = ? OR id = ?",
                 unadmitted,
@@ -364,6 +389,16 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
             assertThat(ended.getErrorMessage()).isEqualTo("The server could not resume this review after the upgrade.");
             assertThat(ended.getAttempt()).isEqualTo(1);
             assertThat(ended.spentAttempts()).isZero();
+        }
+        completion.ifAvailable(ReviewJobCompletionService::tick);
+        for (UUID id : List.of(unadmitted, admitted)) {
+            ReviewJob ended = jobRepository.findById(id).orElseThrow();
+            assertThat(jdbc.queryForMap(
+                            "SELECT status, stop_reason, completed_at FROM review WHERE id = ?", ended.getReviewId()))
+                    .containsEntry("status", id.equals(admitted) ? "PARTIAL" : "FAILED")
+                    .containsEntry("stop_reason", id.equals(admitted) ? "EXECUTION_FAILED" : "PREPARATION_FAILED")
+                    .hasEntrySatisfying(
+                            "completed_at", value -> assertThat(value).isNotNull());
         }
         ReviewJob retained = jobRepository.findById(admitted).orElseThrow();
         assertThat(retained.getAdmissionDigest()).isNotNull();

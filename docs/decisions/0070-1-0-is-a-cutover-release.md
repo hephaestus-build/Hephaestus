@@ -150,7 +150,7 @@ This update amends § In-flight work and § Schema step for the reviews.
 - SQL alone does not requeue them, because recovery also bills the attempt's measured spend and hands an admitted review on to compose. Both are steps of the server, which SQL cannot do.
 - Recovery needs the server role and runs after its startup grace period, including when `AGENT_ENABLED=false`.
   The timeout backstop gives each cutover claim its normal timeout plus the upload grace and safety buffer, counted from the server's start.
-  If recovery does not finish by that deadline, the claim fails with a recorded upgrade failure. Its admitted results stay.
+  If recovery does not finish by that deadline, the claim fails with a recorded upgrade failure. Server maintenance closes its parent review, even with execution disabled. Its admitted results stay.
 - `worker_registry` stays until the layer that removes the Heph tools sandboxes of a worker, its last reader. That layer drops it.
 
 ## Update — 2026-10-28: one product name and conversation turns

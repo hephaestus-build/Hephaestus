@@ -7,6 +7,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import de.tum.cit.aet.hephaestus.Application;
 import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceDeliveryAuthorization;
 import de.tum.cit.aet.hephaestus.agent.context.CitedSourceAccess;
+import de.tum.cit.aet.hephaestus.agent.job.ReviewJobCompletionService;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobExecutor;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobZombieSweeper;
 import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerDrainCoordinator;
@@ -159,6 +160,7 @@ class RuntimeRoleContextIntegrationTest {
                             .hasSize(role == RuntimeRole.SERVER ? 1 : 0);
                     if (role == RuntimeRole.SERVER) {
                         assertThat(application).hasSingleBean(ReviewJobZombieSweeper.class);
+                        assertThat(application).hasSingleBean(ReviewJobCompletionService.class);
                         assertThat(application.getBeansWithAnnotation(WorkspaceScopedController.class))
                                 .isNotEmpty();
                         assertThat(application).hasSingleBean(AccountReferenceService.class);
@@ -174,6 +176,7 @@ class RuntimeRoleContextIntegrationTest {
                         assertThat(application).hasSingleBean(SlackWorkspacePurgeAdapter.class);
                     } else {
                         assertThat(application).doesNotHaveBean(ReviewJobZombieSweeper.class);
+                        assertThat(application).doesNotHaveBean(ReviewJobCompletionService.class);
                         assertThat(application.getBeansWithAnnotation(WorkspaceScopedController.class))
                                 .isEmpty();
                         assertThat(application).doesNotHaveBean(AccountReferenceService.class);

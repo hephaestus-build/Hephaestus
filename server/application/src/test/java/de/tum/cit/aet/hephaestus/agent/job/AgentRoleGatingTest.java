@@ -51,17 +51,18 @@ class AgentRoleGatingTest extends BaseUnitTest {
     }
 
     @ParameterizedTest
-    @ValueSource(classes = {ReviewJobEventListener.class, ReviewJobCompletionService.class, ScanDriver.class})
+    @ValueSource(classes = {ReviewJobEventListener.class, ScanDriver.class})
     void shouldSubmitJobsOnlyWhenAgentJobsAreOn(Class<?> submitter) {
         assertThat(registers(submitter)).isFalse();
         assertThat(registers(submitter, AGENT_ON)).isTrue();
     }
 
-    @Test
-    void shouldMaintainJobsWheneverTheServerRoleIsOn() {
-        assertThat(registers(ReviewJobZombieSweeper.class)).isTrue();
-        assertThat(registers(ReviewJobZombieSweeper.class, AGENT_ON)).isTrue();
-        assertThat(registers(ReviewJobZombieSweeper.class, AGENT_ON, RuntimeRole.SERVER_PROPERTY + "=false"))
+    @ParameterizedTest
+    @ValueSource(classes = {ReviewJobZombieSweeper.class, ReviewJobCompletionService.class})
+    void shouldMaintainJobsWheneverTheServerRoleIsOn(Class<?> maintenance) {
+        assertThat(registers(maintenance)).isTrue();
+        assertThat(registers(maintenance, AGENT_ON)).isTrue();
+        assertThat(registers(maintenance, AGENT_ON, RuntimeRole.SERVER_PROPERTY + "=false"))
                 .isFalse();
     }
 

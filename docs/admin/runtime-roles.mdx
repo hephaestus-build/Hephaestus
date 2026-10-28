@@ -332,6 +332,8 @@ Server maintenance runs independently of this flag:
     It therefore does not run twice on a dedicated worker pod.
   - If recovery cannot finish, the timeout backstop ends the attempt.
     [ADR 0070](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0070-1-0-is-a-cutover-release.md) defines the fresh timeout for a cutover claim.
+- **Completion** closes the parent review of a terminal job and records its stop reason.
+  This server maintenance also runs when `AGENT_ENABLED=false`.
 - **Execution** (the poll loop that claims and runs jobs) needs this flag **and** the worker role.
   Worker admission and server preparation read the same practice-page feedback support, so that read exists in every role.
   A review attempt that was cancelled, requeued or moved to another worker writes nothing more.
