@@ -154,7 +154,7 @@ public class HephaestusJwtIssuer {
                 principal(accountId),
                 constraints,
                 successor.getJti(),
-                Objects.requireNonNull(successor.getIssuedAt()),
+                successor.getIssuedAt(),
                 successor.getExpiresAt());
     }
 
@@ -225,8 +225,7 @@ public class HephaestusJwtIssuer {
         UUID jti = UUID.randomUUID();
         Token token = sign(principal, constraints, jti, now, expiresAt);
 
-        IssuedJwt row = new IssuedJwt(jti, principal.accountId(), expiresAt);
-        row.setIssuedAt(now);
+        IssuedJwt row = new IssuedJwt(jti, principal.accountId(), now, expiresAt);
         row.setSessionId(constraints.sessionId());
         row.setRefreshTokenHash(refreshTokenHash);
         row.setPredecessorJti(predecessorJti);

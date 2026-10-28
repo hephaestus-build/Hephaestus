@@ -10,6 +10,7 @@ import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import java.time.Instant;
 import java.util.UUID;
+import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -48,7 +49,7 @@ import org.jspecify.annotations.Nullable;
                 @UniqueConstraint(name = "uq_issued_jwt_refresh_token_hash", columnNames = "refresh_token_hash"))
 @Getter
 @Setter
-@NoArgsConstructor
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class IssuedJwt {
 
     @Id
@@ -59,7 +60,7 @@ public class IssuedJwt {
     private Long accountId;
 
     @Column(name = "issued_at", nullable = false, updatable = false)
-    private @Nullable Instant issuedAt;
+    private Instant issuedAt;
 
     @Column(name = "expires_at", nullable = false)
     private Instant expiresAt;
@@ -105,9 +106,10 @@ public class IssuedJwt {
     @Nullable
     private Instant usedAt;
 
-    public IssuedJwt(UUID jti, Long accountId, Instant expiresAt) {
+    public IssuedJwt(UUID jti, Long accountId, Instant issuedAt, Instant expiresAt) {
         this.jti = jti;
         this.accountId = accountId;
+        this.issuedAt = issuedAt;
         this.expiresAt = expiresAt;
     }
 

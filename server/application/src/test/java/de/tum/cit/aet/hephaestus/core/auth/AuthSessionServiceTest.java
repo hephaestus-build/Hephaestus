@@ -136,7 +136,7 @@ class AuthSessionServiceTest extends BaseUnitTest {
 
     private void presentingTokenIsActive(UUID jti) {
         when(issuedJwtRepository.findActive(eq(jti), any()))
-                .thenReturn(Optional.of(new IssuedJwt(jti, ACCOUNT_ID, SESSION_CEILING)));
+                .thenReturn(Optional.of(new IssuedJwt(jti, ACCOUNT_ID, NOW, SESSION_CEILING)));
     }
 
     private static HephaestusJwtIssuer.Token freshToken() {
@@ -200,10 +200,10 @@ class AuthSessionServiceTest extends BaseUnitTest {
     @Test
     void activeSessions_showsABrowserOnceWhileItsSuccessorIsUnused() {
         UUID held = UUID.randomUUID();
-        IssuedJwt unused = new IssuedJwt(UUID.randomUUID(), ACCOUNT_ID, SESSION_CEILING);
+        IssuedJwt unused = new IssuedJwt(UUID.randomUUID(), ACCOUNT_ID, NOW, SESSION_CEILING);
         unused.setPredecessorJti(held);
         when(issuedJwtRepository.findActiveByAccountId(eq(ACCOUNT_ID), any()))
-                .thenReturn(List.of(new IssuedJwt(held, ACCOUNT_ID, SESSION_CEILING), unused));
+                .thenReturn(List.of(new IssuedJwt(held, ACCOUNT_ID, NOW, SESSION_CEILING), unused));
 
         assertThat(service.activeSessions(ACCOUNT_ID))
                 .extracting(AuthSessionService.SessionEntry::jti)
@@ -307,9 +307,8 @@ class AuthSessionServiceTest extends BaseUnitTest {
         UUID jti = UUID.randomUUID();
         when(accountRepository.lockForIssuance(ACCOUNT_ID)).thenReturn(true);
         presentingTokenIsActive(jti);
-        IssuedJwt successor = new IssuedJwt(UUID.randomUUID(), ACCOUNT_ID, SESSION_CEILING);
+        IssuedJwt successor = new IssuedJwt(UUID.randomUUID(), ACCOUNT_ID, NOW, SESSION_CEILING);
         successor.setPredecessorJti(jti);
-        successor.setIssuedAt(NOW);
         when(issuedJwtRepository.findUnusedSuccessor(eq(ACCOUNT_ID), eq(jti))).thenReturn(Optional.of(successor));
         when(jwtIssuer.resignSuccessor(eq(ACCOUNT_ID), eq(successor), any())).thenReturn(freshToken());
 
@@ -331,9 +330,8 @@ class AuthSessionServiceTest extends BaseUnitTest {
         UUID jti = UUID.randomUUID();
         when(accountRepository.lockForIssuance(ACCOUNT_ID)).thenReturn(true);
         presentingTokenIsActive(jti);
-        var unused = new IssuedJwt(UUID.randomUUID(), ACCOUNT_ID, NOW.plusSeconds(validForSeconds));
+        var unused = new IssuedJwt(UUID.randomUUID(), ACCOUNT_ID, NOW, NOW.plusSeconds(validForSeconds));
         unused.setPredecessorJti(jti);
-        unused.setIssuedAt(NOW.minusSeconds(ageSeconds));
         when(issuedJwtRepository.findUnusedSuccessor(ACCOUNT_ID, jti)).thenReturn(Optional.of(unused));
         when(issuedJwtRepository.findFirstSuccessorIssuedAt(ACCOUNT_ID, jti))
                 .thenReturn(Optional.of(NOW.minusSeconds(ageSeconds)));

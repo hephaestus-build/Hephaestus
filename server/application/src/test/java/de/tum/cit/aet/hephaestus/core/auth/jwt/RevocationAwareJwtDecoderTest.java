@@ -222,7 +222,7 @@ class RevocationAwareJwtDecoderTest extends BaseUnitTest {
     void acceptsValidNonRevokedToken() {
         UUID jti = UUID.randomUUID();
         IssuedJwtRepository repo = mock(IssuedJwtRepository.class);
-        IssuedJwt row = new IssuedJwt(jti, 42L, NOW.plus(Duration.ofMinutes(15)));
+        IssuedJwt row = new IssuedJwt(jti, 42L, NOW, NOW.plus(Duration.ofMinutes(15)));
         when(repo.findActive(eq(jti), any())).thenReturn(Optional.of(row));
 
         Jwt decoded = decoder(repo, cacheManager()).decode(validToken(jti));
@@ -253,7 +253,7 @@ class RevocationAwareJwtDecoderTest extends BaseUnitTest {
         IssuedJwtRepository repo = mock(IssuedJwtRepository.class);
         lenient()
                 .when(repo.findActive(eq(jti), any()))
-                .thenReturn(Optional.of(new IssuedJwt(jti, 42L, NOW.plus(Duration.ofMinutes(15)))));
+                .thenReturn(Optional.of(new IssuedJwt(jti, 42L, NOW, NOW.plus(Duration.ofMinutes(15)))));
 
         String token = validToken(jti);
         // Flip the FIRST character of the signature segment. (Flipping the LAST char is flaky: the
@@ -367,7 +367,7 @@ class RevocationAwareJwtDecoderTest extends BaseUnitTest {
     void activeTokenIsNeverCached_alwaysHitsDb() {
         UUID jti = UUID.randomUUID();
         IssuedJwtRepository repo = mock(IssuedJwtRepository.class);
-        IssuedJwt row = new IssuedJwt(jti, 42L, NOW.plus(Duration.ofMinutes(15)));
+        IssuedJwt row = new IssuedJwt(jti, 42L, NOW, NOW.plus(Duration.ofMinutes(15)));
         when(repo.findActive(eq(jti), any())).thenReturn(Optional.of(row));
         CacheManager cm = cacheManager();
 
@@ -386,7 +386,7 @@ class RevocationAwareJwtDecoderTest extends BaseUnitTest {
     void revokeAfterActiveDecodeTakesEffectImmediately() {
         UUID jti = UUID.randomUUID();
         IssuedJwtRepository repo = mock(IssuedJwtRepository.class);
-        IssuedJwt row = new IssuedJwt(jti, 42L, NOW.plus(Duration.ofMinutes(15)));
+        IssuedJwt row = new IssuedJwt(jti, 42L, NOW, NOW.plus(Duration.ofMinutes(15)));
         // First request: active. Second request (after a revoke between requests): gone.
         when(repo.findActive(eq(jti), any())).thenReturn(Optional.of(row)).thenReturn(Optional.empty());
         RevocationAwareJwtDecoder decoder = decoder(repo, cacheManager());
@@ -399,7 +399,7 @@ class RevocationAwareJwtDecoderTest extends BaseUnitTest {
     }
 
     private static IssuedJwt revokedRow(UUID jti, IssuedJwt.RevokedReason reason) {
-        IssuedJwt row = new IssuedJwt(jti, 42L, NOW.plus(Duration.ofMinutes(15)));
+        IssuedJwt row = new IssuedJwt(jti, 42L, NOW, NOW.plus(Duration.ofMinutes(15)));
         row.setRevokedAt(NOW.minusSeconds(5));
         row.setRevokedReason(reason);
         return row;
@@ -416,7 +416,7 @@ class RevocationAwareJwtDecoderTest extends BaseUnitTest {
         UUID successor = UUID.randomUUID();
         UUID predecessor = UUID.randomUUID();
         IssuedJwtRepository repo = mock(IssuedJwtRepository.class);
-        IssuedJwt row = new IssuedJwt(successor, 42L, NOW.plus(Duration.ofMinutes(15)));
+        IssuedJwt row = new IssuedJwt(successor, 42L, NOW, NOW.plus(Duration.ofMinutes(15)));
         row.setPredecessorJti(predecessor);
         when(repo.findActive(eq(successor), any())).thenReturn(Optional.of(row));
         when(repo.markUsed(eq(successor), any())).thenReturn(1);
@@ -431,7 +431,7 @@ class RevocationAwareJwtDecoderTest extends BaseUnitTest {
         UUID successor = UUID.randomUUID();
         UUID predecessor = UUID.randomUUID();
         IssuedJwtRepository repo = mock(IssuedJwtRepository.class);
-        IssuedJwt row = new IssuedJwt(successor, 42L, NOW.plus(Duration.ofMinutes(15)));
+        IssuedJwt row = new IssuedJwt(successor, 42L, NOW, NOW.plus(Duration.ofMinutes(15)));
         row.setPredecessorJti(predecessor);
         when(repo.findActive(eq(successor), any())).thenReturn(Optional.of(row));
         when(repo.markUsed(eq(successor), any())).thenReturn(0);

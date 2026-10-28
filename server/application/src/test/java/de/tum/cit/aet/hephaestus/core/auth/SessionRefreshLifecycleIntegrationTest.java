@@ -226,6 +226,8 @@ class SessionRefreshLifecycleIntegrationTest extends RealAuthIntegrationTest {
                 .isEqualTo(IssuedJwt.RevokedReason.SUPERSEDED);
         assertThat(issuedJwtRepository.findById(secondJti).orElseThrow().getRevokedReason())
                 .isEqualTo(IssuedJwt.RevokedReason.SUPERSEDED);
+        assertThat(issuedJwtRepository.findById(held.jti()).orElseThrow().getRevokedAt())
+                .isNull();
     }
 
     @Test

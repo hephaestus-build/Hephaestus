@@ -276,16 +276,15 @@ class ClientSessionMigratedSchemaTest {
     }
 
     private static IssuedJwt browserSuccessor(Long account, UUID predecessor) {
-        var token = new IssuedJwt(UUID.randomUUID(), account, Instant.now().plusSeconds(3600));
-        token.setIssuedAt(Instant.now());
+        var token = new IssuedJwt(
+                UUID.randomUUID(), account, Instant.now(), Instant.now().plusSeconds(3600));
         token.setPredecessorJti(predecessor);
         return token;
     }
 
     private static IssuedJwt row(Long accountId, @Nullable UUID sessionId, @Nullable String refreshTokenHash) {
-        IssuedJwt row =
-                new IssuedJwt(UUID.randomUUID(), accountId, Instant.now().plus(Duration.ofHours(1)));
-        row.setIssuedAt(Instant.now());
+        IssuedJwt row = new IssuedJwt(
+                UUID.randomUUID(), accountId, Instant.now(), Instant.now().plus(Duration.ofHours(1)));
         row.setSessionId(sessionId);
         row.setRefreshTokenHash(refreshTokenHash);
         return row;
