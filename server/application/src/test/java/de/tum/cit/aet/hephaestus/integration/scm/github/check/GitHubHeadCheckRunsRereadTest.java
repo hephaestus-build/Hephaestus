@@ -3,11 +3,16 @@ package de.tum.cit.aet.hephaestus.integration.scm.github.check;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonSourceNamespace;
+import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
+import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
+import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.HeadCheckRuns;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.HeadCheckRunsRecorder;
@@ -22,6 +27,7 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 class GitHubHeadCheckRunsRereadTest extends BaseUnitTest {
@@ -33,19 +39,30 @@ class GitHubHeadCheckRunsRereadTest extends BaseUnitTest {
     private static final HeadCheckRuns.Run PASSED =
             new HeadCheckRuns.Run("build", "GitHub Actions", "success", true, null, null, null);
 
+    private static final long GITHUB = 1L;
+
+    private final IdentityProviderRepository providers = mock(IdentityProviderRepository.class);
     private final RepositoryRepository repositories = mock(RepositoryRepository.class);
     private final PullRequestRepository pullRequests = mock(PullRequestRepository.class);
     private final GitHubCommitCheckRuns checkRuns = mock(GitHubCommitCheckRuns.class);
     private final HeadCheckRunsRecorder recorder = mock(HeadCheckRunsRecorder.class);
     private final GitHubHeadCheckRunsReread reread = new GitHubHeadCheckRunsReread(
-            repositories, pullRequests, checkRuns, recorder, Clock.fixed(NOW, ZoneOffset.UTC));
+            providers, repositories, pullRequests, checkRuns, recorder, Clock.fixed(NOW, ZoneOffset.UTC));
+
+    @BeforeEach
+    void githubProvider() {
+        var github = new IdentityProvider();
+        github.setId(GITHUB);
+        when(providers.findByTypeAndServerUrl(IdentityProviderType.GITHUB, PersonSourceNamespace.GITHUB_DEFAULT_URL))
+                .thenReturn(Optional.of(github));
+    }
 
     @Test
     void shouldReadAgainOnlyTheHeadsWhoseRunsHaveNotFinishedSinceARecentRead() {
         var repository = new Repository();
         repository.setId(7L);
         repository.setNameWithOwner(REPOSITORY);
-        when(repositories.findByNameWithOwner(REPOSITORY)).thenReturn(Optional.of(repository));
+        when(repositories.findByNameWithOwnerAndProviderId(REPOSITORY, GITHUB)).thenReturn(Optional.of(repository));
         String lagging = "a".repeat(40);
         var stillRunning = pullRequest(lagging, lagging, RUNNING, NOW.minus(Duration.ofHours(1)));
         var finished = pullRequest("b".repeat(40), "b".repeat(40), PASSED, NOW.minus(Duration.ofHours(1)));
@@ -66,11 +83,16 @@ class GitHubHeadCheckRunsRereadTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldReadNothingForARepositoryThatIsNotStored() {
-        when(repositories.findByNameWithOwner(REPOSITORY)).thenReturn(Optional.empty());
+    void shouldReadNothingForARepositoryOfTheSameNameThatOnlyAnotherProviderHolds() {
+        var enterprise = new Repository();
+        enterprise.setId(8L);
+        enterprise.setNameWithOwner(REPOSITORY);
+        lenient().when(repositories.findByNameWithOwner(REPOSITORY)).thenReturn(Optional.of(enterprise));
+        when(repositories.findByNameWithOwnerAndProviderId(REPOSITORY, GITHUB)).thenReturn(Optional.empty());
 
         reread.reread(3L, REPOSITORY);
 
+        verify(pullRequests, never()).findAllByRepository_IdAndStateAndHeadCheckRunsIsNotNull(any(), any());
         verify(checkRuns, never()).read(any(Long.class), anyString(), anyString());
     }
 

@@ -142,6 +142,7 @@ The constraints with direct authoring consequences are:
   A run list never proves that a run is absent, because a provider can add runs after the read.
   `complete: true` says only that the read listed every run the provider knew at `observed_at`.
   `limitation: AWAITING_APPROVAL` says that the CI waits for a maintainer to approve it, so it has not run.
+  Then `head_checks` is `PENDING`, whatever the provider's rollup says.
   A result can cite only the listed runs, with the state that they show at `observed_at`.
   GitHub supplies check runs and commit statuses.
   GitLab supplies none yet, because its pipeline hooks cannot show which runs finished.

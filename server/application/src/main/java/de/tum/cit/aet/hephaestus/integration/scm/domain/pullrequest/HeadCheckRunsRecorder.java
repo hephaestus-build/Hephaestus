@@ -17,7 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
  * Stores the check runs one provider read listed on the pull requests whose head they are about. When the stored runs
  * change to a complete list whose runs all ended, the pull request's checks completed. The occasion this records is
  * keyed by the settled runs ({@link ScmEventIdentity#checks}): a repeated read records no second one, and a re-run on
- * the same head that settles with other results records a new one.
+ * the same head records a new one, also when its results match an earlier settling.
  */
 @Service
 @RequiredArgsConstructor

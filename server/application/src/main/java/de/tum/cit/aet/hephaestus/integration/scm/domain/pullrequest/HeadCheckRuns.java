@@ -80,11 +80,18 @@ public record HeadCheckRuns(
         return complete && !runs.isEmpty() && runs.stream().allMatch(Run::finished);
     }
 
-    /** A digest of each run's name, group and state, in a stable order: the same settled runs give the same digest. */
+    /**
+     * A digest of each run's name, group, state and end time, in a stable order: the same settled runs give the same
+     * digest, and a re-run, which ends at another time, gives another.
+     */
     public String runsDigest() {
         var lines = runs.stream()
-                .map(run ->
-                        run.name() + "\u0000" + Objects.requireNonNullElse(run.group(), "") + "\u0000" + run.state())
+                .map(run -> String.join(
+                        "\u0000",
+                        run.name(),
+                        Objects.requireNonNullElse(run.group(), ""),
+                        run.state(),
+                        String.valueOf(run.finishedAt())))
                 .sorted()
                 .toList();
         try {

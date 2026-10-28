@@ -98,7 +98,9 @@ public class ItemEventService {
             publisher.publishEvent(new ItemEventRecorded(input.workspaceId(), id, input.itemId()));
             return id;
         }
-        // The checks event repeats per version, one for each settled run set, so the source key decides first.
+        // A conflict is a redelivery of one provider event, found by its source key, or a second occasion at a version
+        // that keeps one occasion of the name. The checks event repeats per version and always has a source key, so
+        // it never reaches the version lookup, which could match more than one of its rows.
         var existing = bySource(input)
                 .or(() -> repository.findByWorkspaceIdAndItemIdAndNameAndItemVersion(
                         input.workspaceId(), input.itemId(), input.name().value(), version))

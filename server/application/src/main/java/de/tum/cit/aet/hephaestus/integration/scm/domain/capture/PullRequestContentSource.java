@@ -17,6 +17,7 @@ import de.tum.cit.aet.hephaestus.integration.scm.context.WorkspaceScmProjection;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitDetails;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmItemEvents;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.label.Label;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.CheckState;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.HeadCheckRuns;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
@@ -390,8 +391,9 @@ public class PullRequestContentSource {
         // What the checks said about the reviewed head, as last observed. A state observed for any
         // other commit, the current mirror head included, is not about the reviewed change and is
         // left out, as is a head no sync or event has reported on.
-        if (pullRequest.getHeadCheckState() != null && reviewedHead.equals(pullRequest.getHeadCheckSha())) {
-            result.put("head_checks", pullRequest.getHeadCheckState().name());
+        CheckState checkState = pullRequest.getHeadCheckState();
+        if (checkState != null && reviewedHead.equals(pullRequest.getHeadCheckSha())) {
+            result.put("head_checks", checkState.name());
         }
         // The single runs behind that state, under the same rule. An absent key says no read listed them for the
         // reviewed head, which is not the same as a head without runs.

@@ -2,6 +2,10 @@ package de.tum.cit.aet.hephaestus.integration.scm.github.check;
 
 import static de.tum.cit.aet.hephaestus.core.LoggingUtils.sanitizeForLog;
 
+import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonSourceNamespace;
+import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
+import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
+import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.ProcessingContext;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.issue.Issue;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.HeadCheckRuns;
@@ -28,6 +32,7 @@ public class GitHubHeadCheckRunsReread {
 
     static final Duration RECENT = Duration.ofHours(24);
 
+    private final IdentityProviderRepository providers;
     private final RepositoryRepository repositories;
     private final PullRequestRepository pullRequests;
     private final GitHubCommitCheckRuns checkRuns;
@@ -47,7 +52,12 @@ public class GitHubHeadCheckRunsReread {
     }
 
     private void rereadHeads(long scopeId, String nameWithOwner) {
-        var repository = repositories.findByNameWithOwner(nameWithOwner).orElse(null);
+        // The same name can belong to a repository of another provider, a GitLab project or a GitHub Enterprise one.
+        var repository = providers
+                .findByTypeAndServerUrl(IdentityProviderType.GITHUB, PersonSourceNamespace.GITHUB_DEFAULT_URL)
+                .map(IdentityProvider::getId)
+                .flatMap(providerId -> repositories.findByNameWithOwnerAndProviderId(nameWithOwner, providerId))
+                .orElse(null);
         if (repository == null) return;
         var since = clock.instant().minus(RECENT);
         var heads = new LinkedHashSet<String>();

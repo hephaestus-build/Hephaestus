@@ -474,6 +474,25 @@ class PullRequestContentSourceTest extends BaseUnitTest {
         }
 
         @Test
+        void shouldReadTheChecksAsPendingWhileASuiteOfTheReviewedHeadWaitsForApproval() throws Exception {
+            PullRequest fork = pullRequest();
+            // GitHub's rollup can read success while a fork's CI waits for a maintainer and has not run.
+            fork.observeHeadChecks(HEAD, CheckState.SUCCESS, true);
+            fork.observeHeadCheckRuns(new HeadCheckRuns(
+                    HEAD, List.of(), false, Instant.parse("2026-10-26T12:00:00Z"), HeadCheckRuns.AWAITING_APPROVAL));
+            stubGit();
+
+            mirroredPullRequest = fork;
+            JsonNode metadataJson = objectMapper.readTree(provider.capture(request(sampleMetadata()), Set.of(CORE))
+                    .files()
+                    .get("context/metadata.json"));
+
+            assertThat(metadataJson.get("head_checks").asString()).isEqualTo("PENDING");
+            assertThat(metadataJson.get("head_check_runs").get("limitation").asString())
+                    .isEqualTo(HeadCheckRuns.AWAITING_APPROVAL);
+        }
+
+        @Test
         void shouldWriteEmptyListsAndNoKeysWhenThePullRequestCarriesNoneOfThem() throws Exception {
             stubGit();
 

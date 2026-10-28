@@ -20,6 +20,7 @@ CREATE UNIQUE INDEX uk_item_event_version ON item_event (workspace_id, item_id, 
     <!-- 1.0 is a stopped upgrade (cutover ADR), so no earlier release writes beside this schema. -->
     <changeSet id="1793046470075-3" author="hephaestus">
         <dropUniqueConstraint tableName="item_event" constraintName="uk_item_event_key"/>
+        <!-- Holds only until an item records a second checks event at one version. -->
         <rollback>
             <addUniqueConstraint tableName="item_event" constraintName="uk_item_event_key"
                 columnNames="workspace_id, item_id, name, item_version"/>

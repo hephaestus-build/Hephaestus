@@ -431,7 +431,7 @@ A pull request also stores the single runs behind its check state (`head_check_r
   Such a suite makes the list incomplete with the limitation `AWAITING_APPROVAL`.
   GitHub completes such a suite as `action_required` with no runs, and its rollup can still read success.
   Its check state is pending, not failed.
-  The suite and runs of Hephaestus's own GitHub App (`hephaestus.github.app.id`) are left out of the list.
+  The suite and runs of Hephaestus's own GitHub App (`hephaestus.integration.github.app.id`) are left out of the list.
   The server also ignores a check suite event of its own app, so that suite never sets the check state.
 - **GitLab.** Not captured yet.
   A trigger job reports success when it creates its child pipeline, not when that pipeline ends.
@@ -448,9 +448,13 @@ The server stores at most 200 runs, cuts names to 200 characters and keeps links
 When the stored runs change and every run of the head has ended, the server records the item event `scm.pull_request.checks_completed`.
 The event pins the same item version as the push, because the runs are not part of the version.
 
-The event's source key names the settled runs: the item, the head and a digest of each run's name, group and state.
-A read of the same runs records no second event.
-A re-run on the same head that settles with other results records a new event at the same version.
+The event's source key names the settled runs: the item, the head and a digest of the runs.
+The digest covers each run's name, group, state and end time.
+A repeated read of the same runs records no second event.
+A read that shows them in another order, or that lags and shows earlier runs again, records none either.
+
+A re-run on the same head ends at another time, so it records a new event at the same version.
+This is also true when the results match an earlier settling, as for a build that fails, passes and fails again.
 The practices that select **Checks finished** then review it again.
 Every other item event keeps one event of a name per version.
 

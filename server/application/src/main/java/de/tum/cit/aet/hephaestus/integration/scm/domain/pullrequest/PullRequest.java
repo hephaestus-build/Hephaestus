@@ -492,6 +492,22 @@ public class PullRequest extends Issue {
         return true;
     }
 
+    /**
+     * What the checks said about {@link #headCheckSha}. A head whose CI waits for a maintainer's approval has not run
+     * it, so it is pending even when GitHub's rollup reads success: the rollup leaves such a suite out.
+     */
+    public @Nullable CheckState getHeadCheckState() {
+        HeadCheckRuns runs = headCheckRuns;
+        if (headCheckState != null
+                && rank(headCheckState) < rank(CheckState.PENDING)
+                && runs != null
+                && runs.sha().equals(headCheckSha)
+                && HeadCheckRuns.AWAITING_APPROVAL.equals(runs.limitation())) {
+            return CheckState.PENDING;
+        }
+        return headCheckState;
+    }
+
     private boolean recordHeadChecks(String sha, CheckState state, boolean rollup) {
         CheckState next = state;
         if (!rollup && sha.equals(this.headCheckSha) && this.headCheckState != null) {
