@@ -1,6 +1,6 @@
 # ADR 0007: Sandbox SPI shape — sealed VolumeMount + typed NetworkPolicy
 
-**Status:** Accepted (amended 2026-09-03 #1719 — mount portability superseded by [ADR 0041](0041-compose-1x-kubernetes-2.md); 2026-10-09 — interactive SPI replaced by `HostSandbox`, [ADR 0057](0057-one-heph-conversation-per-developer.md); 2026-10-24 — [one attempt runner over a narrow backend](#update--2026-10-24-one-attempt-runner-over-a-narrow-backend))
+**Status:** Accepted (amended 2026-09-03 #1719 — mount portability superseded by [ADR 0041](0041-compose-1x-kubernetes-2.md); 2026-10-09 — interactive SPI replaced by `HostSandbox`, [ADR 0057](0057-one-heph-conversation-per-developer.md); 2026-10-24 — [one attempt runner over a narrow backend](#update--2026-10-24-one-attempt-runner-over-a-narrow-backend); 2026-10-28 — Jobs only, `HostSandbox` goes, [ADR 0068](0068-reviews-and-heph-run-on-one-agent-runtime.md))
 **Date:** 2026-05-20
 **Authors:** Server foundations epic (#1097)
 
@@ -108,3 +108,8 @@ The review spec no longer carries runtime details:
 - `SandboxManager.isHealthy` is deleted. It had no caller.
 
 The backend contract states what every backend guarantees for both sandbox processes: the sandbox user, a read-only root, no capability, the launch's limits and environment, and the gateway as the only network destination.
+
+## Update — 2026-10-28: Jobs only ([ADR 0068](0068-reviews-and-heph-run-on-one-agent-runtime.md))
+
+The sandbox backend starts Jobs only. `HostSandbox` and the exec sandboxes go: Heph's tools run in tools Pods, which are Jobs too.
+Every sandbox Pod sets `hostUsers: false`. The attempt runner over a narrow backend of the 2026-10-24 update stays.

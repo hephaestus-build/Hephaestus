@@ -1,6 +1,6 @@
 # ADR 0009: Worker runtime substrate + WSS-over-443 control channel
 
-**Status:** Accepted (amended 2026-07-21 #1368 — drain requeues in-flight jobs; 2026-09-03 #1719 — remote-worker premise superseded by [ADR 0041](0041-compose-1x-kubernetes-2.md); 2026-09-05 — frame type names corrected; 2026-10-09 — mentor frames removed, correction of the 2026-09-05 note, [ADR 0057](0057-one-heph-conversation-per-developer.md))
+**Status:** Accepted (amended 2026-07-21 #1368 — drain requeues in-flight jobs; 2026-09-03 #1719 — remote-worker premise superseded by [ADR 0041](0041-compose-1x-kubernetes-2.md); 2026-09-05 — frame type names corrected; 2026-10-09 — mentor frames removed, correction of the 2026-09-05 note, [ADR 0057](0057-one-heph-conversation-per-developer.md); 2026-10-28 — WSS control channel superseded, [ADR 0068](0068-reviews-and-heph-run-on-one-agent-runtime.md))
 **Date:** 2026-05-21
 
 ## Context
@@ -100,3 +100,10 @@ Corrects the 2026-09-05 update. The mentor session frames did ship: `MentorSessi
 `CapacityReport` counts review slots only. The drain sequence of § Decision no longer closes mentor
 sessions. It stops Heph turn claims and removes the worker's Heph host. The Protocol row and the
 § Consequences paragraph about the mentor session bridge are superseded.
+
+## Update — 2026-10-28: the WSS control channel goes ([ADR 0068](0068-reviews-and-heph-run-on-one-agent-runtime.md))
+
+ADR 0068 supersedes the WSS control channel of § Decision, and the hub and `WorkerControlClient` go.
+Drain and cancellation move to PostgreSQL. A cancel, a requeue or a reap ends an attempt on its row, the proxy refuses the attempt's next call, and the worker's heartbeat stops its sandbox. A drain is local to the worker.
+Every attempt holds a lease on its row and is fenced on the lease, not on the worker.
+The worker runtime role of this decision stays.

@@ -1,6 +1,6 @@
 # ADR 0058: The Helm chart is the only supported deployment from 1.0
 
-**Status:** Accepted (amended 2026-10-25 — previews, [ADR 0059](0059-previews-run-on-the-staging-cluster.md))
+**Status:** Accepted (amended 2026-10-25 — previews, [ADR 0059](0059-previews-run-on-the-staging-cluster.md)) (amended 2026-10-28 — the Docker driver, [ADR 0068](0068-reviews-and-heph-run-on-one-agent-runtime.md))
 **Date:** 2026-10-25
 **Authors:** Felix T.J. Dietrich
 
@@ -237,3 +237,11 @@ Fetched 2026-10-25.
 ## Update — 2026-10-25: previews ([ADR 0059](0059-previews-run-on-the-staging-cluster.md))
 
 ADR 0059 owns the mechanism that § Previews leaves open.
+
+## Update — 2026-10-28: the Docker driver goes ([ADR 0068](0068-reviews-and-heph-run-on-one-agent-runtime.md))
+
+§ Supported deployment kept the Docker sandbox driver until a decision after the 1.0 release.
+ADR 0068 decision D removes it before that release.
+Local development runs sandboxes on a local Kubernetes cluster.
+The sentence "Hephaestus does not build an appliance or an operator" is now a decision.
+ADR 0068 § An operator (rejected) gives its reasons and revisit triggers.

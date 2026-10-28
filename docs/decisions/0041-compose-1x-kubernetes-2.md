@@ -1,6 +1,6 @@
 # ADR 0041: Compose for 1.x; Kubernetes only for 2.0
 
-**Status:** Accepted (amended 2026-10-09 — debug transcripts; 2026-10-09 — Heph host, [ADR 0057](0057-one-heph-conversation-per-developer.md); 2026-10-24 — [the Kubernetes runtime](#update--2026-10-24-the-kubernetes-runtime); 2026-10-25 — Helm chart support and 1.x security fixes; 2026-10-25 — § Releases and support superseded by [ADR 0058](0058-the-helm-chart-is-the-only-supported-deployment-from-1-0.md))
+**Status:** Accepted (amended 2026-10-09 — debug transcripts; 2026-10-09 — Heph host, [ADR 0057](0057-one-heph-conversation-per-developer.md); 2026-10-24 — [the Kubernetes runtime](#update--2026-10-24-the-kubernetes-runtime); 2026-10-25 — Helm chart support and 1.x security fixes; 2026-10-25 — § Releases and support superseded by [ADR 0058](0058-the-helm-chart-is-the-only-supported-deployment-from-1-0.md); 2026-10-28 — one sandbox runtime for reviews and Heph, [ADR 0068](0068-reviews-and-heph-run-on-one-agent-runtime.md))
 **Date:** 2026-09-03
 **Authors:** Hephaestus maintainers
 **Amends:** [ADR 0005](0005-two-role-runtime-via-conditional-on-property.md),
@@ -539,3 +539,8 @@ Source, model context and temporary files of a sandbox now sit on the node's dis
 The admin guide therefore requires encrypted node storage for sandbox nodes ([`docs/admin/kubernetes.mdx`](../admin/kubernetes.mdx#sandbox-prerequisites)).
 A sandbox that passes a volume's size limit is evicted, where on Docker its writes fail.
 The Docker driver keeps its tmpfs mounts.
+
+## Update — 2026-10-28: one sandbox runtime ([ADR 0068](0068-reviews-and-heph-run-on-one-agent-runtime.md))
+
+Reviews and Heph run on one agent runtime, on Kubernetes only. The Docker sandbox backend goes before 1.0.
+The Sandbox Gateway, the job folder, evidence admission and the sandbox boundary of this decision stay.

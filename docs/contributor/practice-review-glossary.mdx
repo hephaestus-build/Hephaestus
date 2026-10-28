@@ -151,8 +151,14 @@ The same name is the source capture code that causes it.
 | **Sandbox namespace**          | The Kubernetes namespace that an operator creates for the sandboxes of one release alone.   | worker.sandbox.namespace       |
 | **Isolation probe**            | A worker's check, with real Pods, that the cluster holds the sandbox boundary. No sandbox starts while it fails. | KubernetesIsolationProbe |
 | **Isolation tier**             | What the isolation probe records without gating: the runtime class, user namespaces and the process limit. | sandbox.isolation.*     |
+| **Runtime attempt**            | One attempt of a review job or of a Heph turn, with one lease, one attempt token and writes fenced on the lease. | planned: AttemptJwt |
+| **Review agent Pod**           | The Pod of one review attempt: a trusted loop container with the token, and a tools container without one. | planned                |
+| **Tools Pod**                  | A Pod that runs only the tools program of a review agent Pod, bound to one Heph turn attempt, with no token and no egress. | planned             |
+| **Heph loop**                  | The one long-lived trusted process that runs the Heph turns of an install and calls tools Pods for their tools. | planned            |
+| **Tool protocol v1**           | The messages from a loop to its tools, each with a request id. It has hello, put, read, streamed exec, cancel and reset, and script runs for reviews. | planned |
 
 Stage and Seal are decided for 1.0 and not shipped yet ([ADR 0063](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0063-each-practice-is-staged-when-it-ends.md)).
+Runtime attempt, review agent Pod, tools Pod, Heph loop and tool protocol v1 are decided for 1.0 and not shipped yet ([ADR 0068](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0068-reviews-and-heph-run-on-one-agent-runtime.md)).
 
 The job folder of a review is the context folder of that review.
 The [Heph runtime](./unified-pi-runtime.mdx) owns turns, the Heph host, context documents, context loaders and turn sandboxes.
