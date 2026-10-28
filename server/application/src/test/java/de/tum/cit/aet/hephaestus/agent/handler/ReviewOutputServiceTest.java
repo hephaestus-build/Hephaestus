@@ -31,9 +31,17 @@ import de.tum.cit.aet.hephaestus.evidence.SourceContentState;
 import de.tum.cit.aet.hephaestus.evidence.SourceContractVersion;
 import de.tum.cit.aet.hephaestus.evidence.SourceKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.CandidateRefusal;
+import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
+import de.tum.cit.aet.hephaestus.practices.AppliesWhen;
+import de.tum.cit.aet.hephaestus.practices.AppliesWhenClause;
+import de.tum.cit.aet.hephaestus.practices.PracticeDefinition;
+import de.tum.cit.aet.hephaestus.practices.PracticeReadSource;
+import de.tum.cit.aet.hephaestus.practices.PracticeReads;
+import de.tum.cit.aet.hephaestus.practices.ScanDefinition;
 import de.tum.cit.aet.hephaestus.practices.spi.AdmissionReceipt;
 import de.tum.cit.aet.hephaestus.practices.spi.HostCoverage;
 import de.tum.cit.aet.hephaestus.practices.spi.PinnedPractice;
+import de.tum.cit.aet.hephaestus.practices.spi.ReadNeed;
 import de.tum.cit.aet.hephaestus.practices.spi.ReadReceipt;
 import de.tum.cit.aet.hephaestus.practices.spi.ReadReceiptStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultCandidate;
@@ -53,6 +61,8 @@ import java.util.Objects;
 import java.util.function.UnaryOperator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.ArgumentCaptor;
 import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.ObjectNode;
@@ -227,7 +237,7 @@ class ReviewOutputServiceTest extends BaseUnitTest {
         when(catalogs.requireSource(any())).thenAnswer(invocation -> real.requireSource(invocation.getArgument(0)));
         when(files.registerReadReceipts(eq(job), any(), any(), eq(catalogs)))
                 .thenAnswer(invocation -> invocation.getArgument(1));
-        when(verifier.verifyCandidate(eq(job), any(), eq(ReviewKind.ITEM), any(), any()))
+        when(verifier.verifyCandidate(eq(job), any(), any(), any(), any()))
                 .thenAnswer(invocation -> invocation.getArgument(3));
     }
 
@@ -305,6 +315,136 @@ class ReviewOutputServiceTest extends BaseUnitTest {
     private static final String NAMED = "The result names scm.repository.tree as searched";
     private static final String WORDED = "The result says the repository lacks something beyond its citations";
     private static final String UNSEARCHED = ", but its receipts hold no search of the whole checkout to the end";
+
+    @Test
+    void shouldWithholdAResultThatConsultedASourceItsPracticeDoesNotDeclare() {
+        pr50Capture(SourceCompleteness.COMPLETE);
+        when(results.admit(1, job.getReviewId(), job.getId(), 0, List.of()))
+                .thenReturn(new AdmissionReceipt(List.of(), List.of()));
+        // The practice declares the document only; the review discussion was never its source.
+        UnaryOperator<ObjectNode> discussion = candidate -> {
+            ((ObjectNode) candidate.path("evidence").path("search"))
+                    .set(
+                            "consulted",
+                            mapper.valueToTree(List.of(DIFF.value(), TREE.value(), "scm.pull-request.comments")));
+            return candidate;
+        };
+
+        service.prepare(job, pr50ErrorHandling(List.of(searched(PR50_HEAD)), discussion))
+                .record(job);
+
+        assertWithheld(
+                CandidateRefusal.UNDECLARED_SOURCE_CITED,
+                "The result cites scm.pull-request.comments, which the practice does not declare");
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        "ITEM,search",
+        "ITEM,top",
+        "ITEM,problem",
+        "ITEM,inapplicability",
+        "SCAN,search",
+        "SCAN,top",
+        "SCAN,problem",
+        "SCAN,inapplicability"
+    })
+    void shouldWithholdAResultThatConsultedOnlyAnAppliesWhenSource(ReviewKind kind, String shape) {
+        pr50Capture(SourceCompleteness.COMPLETE);
+        var original = RuntimeReviewTestData.assignment(5L, null);
+        var pinned = original.practice();
+        var d = pinned.definition();
+        var definition = new PracticeDefinition(
+                d.name(),
+                d.reviewOn(),
+                new AppliesWhen(
+                        List.of(new AppliesWhenClause(null, null, "scm.inline-review-comments")),
+                        "No inline review comments were captured."),
+                d.about(),
+                new PracticeReads(
+                        "2.0.0",
+                        List.of(new PracticeReadSource(
+                                kind == ReviewKind.SCAN ? new SourceKind("scm.pull-request.comments") : DIFF,
+                                ReadNeed.REQUIRED))),
+                d.reviewedBy(),
+                d.criteria(),
+                d.script(),
+                new ScanDefinition(
+                        new ItemKind("scm.file"),
+                        List.of("**/*.java"),
+                        List.of(),
+                        List.of(),
+                        new PracticeReads("2.0.0", List.of(new PracticeReadSource(DIFF, ReadNeed.REQUIRED)))),
+                d.lineNotes(),
+                d.guidance());
+        var assignment = new ReviewAssignmentSnapshot(
+                original.id(),
+                original.item(),
+                original.version(),
+                original.developerId(),
+                original.practiceSlug(),
+                new PinnedPractice(
+                        pinned.practiceId(),
+                        pinned.practiceVersionId(),
+                        definition,
+                        pinned.reviewDigest(),
+                        pinned.method()));
+        when(assignments.admissible(job)).thenReturn(List.of(assignment));
+        when(assignments.review(job)).thenReturn(RuntimeReviewTestData.review(kind, assignment));
+        // FOUND permits the session to run; it does not add this source to the session's Reads.
+        ((ObjectNode) Objects.requireNonNull(job.getCapture()))
+                .putObject("readiness")
+                .putObject("applicability")
+                .putObject("clear-names")
+                .put("absent", false)
+                .putArray("clauses")
+                .addObject()
+                .put("readFrom", "scm.pull-request.comments")
+                .put("result", "FOUND");
+        when(results.admit(eq(1L), eq(job.getReviewId()), eq(job.getId()), eq(0), any()))
+                .thenReturn(new AdmissionReceipt(List.of(), List.of()));
+        UnaryOperator<ObjectNode> discussion = candidate -> {
+            var citation = ((ObjectNode)
+                            candidate.path("problems").get(0).path("citations").get(0))
+                    .deepCopy();
+            citation.put("sourceKind", "scm.pull-request.comments");
+            citation.put("sourcePath", "context/comments.json");
+            switch (shape) {
+                case "search" ->
+                    ((ObjectNode) candidate.path("evidence").path("search"))
+                            .set(
+                                    "consulted",
+                                    mapper.valueToTree(
+                                            List.of(DIFF.value(), TREE.value(), "scm.pull-request.comments")));
+                case "top" -> candidate.putArray("citations").add(citation);
+                case "problem" ->
+                    ((ObjectNode) candidate.path("problems").get(0))
+                            .putArray("citations")
+                            .add(citation);
+                case "inapplicability" -> {
+                    candidate.put("outcome", "DOES_NOT_APPLY");
+                    candidate.remove("problems");
+                    candidate.putArray("citations").add(citation.deepCopy().put("sourceKind", DIFF.value()));
+                    candidate
+                            .putObject("evidence")
+                            .putObject("inapplicability")
+                            .put("prerequisite", "Inline comments")
+                            .put("ruledOutBy", "The captured discussion rules it out")
+                            .putArray("consulted")
+                            .add("scm.pull-request.comments");
+                }
+                default -> throw new IllegalArgumentException(shape);
+            }
+            return candidate;
+        };
+
+        service.prepare(job, pr50ErrorHandling(List.of(searched(PR50_HEAD)), discussion))
+                .record(job);
+
+        assertWithheld(
+                CandidateRefusal.UNDECLARED_SOURCE_CITED,
+                "The result cites scm.pull-request.comments, which the practice does not declare");
+    }
 
     @Test
     void shouldWithholdAClaimAboutTheCheckoutWhenItsSessionNeitherReadNorSearchedIt() {
