@@ -159,3 +159,44 @@ The node kernel exposes no aggregate kernel counter or lifetime peak.
 | Mentor capacity and intentional wait | 0            | unavailable | unavailable |
 
 The coordinator must schedule the mixed workload before these queue measurements can be published.
+
+## Controlled large-repository trials
+
+The Nuvemzinha trials use the current runner and a pinned SwiftFormat change.
+The base is `aadf4245ddfd71e1305c45104e7e0207e30e157f`.
+The head is `abc138dd52a104716fa248344309c875911d4195`.
+Each review runs 37 bundled pull-request practices at width three.
+The controlled model delays each response by 1.5 seconds and exercises twelve tool calls per session.
+
+The agent image is `ghcr.io/hephaestus-build/agent-pi@sha256:5a75c960bd78a1e7d1d2035677b6b5e1839c572eabeed53d0457ae2c7d38f5f0`.
+Every review keeps the current 1,280 MiB limit and one CPU.
+No shipped profile changes.
+
+| Concurrent reviews | Result submissions | Synchronized benchmark-container peak MiB |
+| ------------------ | ------------------ | ----------------------------------------- |
+| 2                  | 74/74              | 2089.7                                    |
+| 4                  | 148/148            | 3925.3                                    |
+
+| Trial / container          | Cgroup lifetime peak MiB | Anon peak | File peak | Shmem peak | Kernel peak |
+| -------------------------- | ------------------------ | --------- | --------- | ---------- | ----------- |
+| 2 reviews / 0 / initialize | 1125.2                   | 107.2     | 985.3     | 0          | 32.7        |
+| 2 reviews / 0 / runtime    | 483.7                    | 449.7     | 21.9      | 0          | 17.9        |
+| 2 reviews / 1 / initialize | 1122.7                   | 107.4     | 982.5     | 0          | 32.6        |
+| 2 reviews / 1 / runtime    | 512.6                    | 481.3     | 21.6      | 0          | 18.2        |
+| 4 reviews / 0 / initialize | 1119.9                   | 105.3     | 981.9     | 0          | 32.6        |
+| 4 reviews / 0 / runtime    | 544.4                    | 493       | 35.6      | 0          | 18.5        |
+| 4 reviews / 1 / initialize | 1123.4                   | 101.3     | 988.7     | 0          | 32.9        |
+| 4 reviews / 1 / runtime    | 511.9                    | 476       | 36.9      | 0          | 18.1        |
+| 4 reviews / 2 / initialize | 1123.9                   | 105.9     | 984.9     | 0          | 32.7        |
+| 4 reviews / 2 / runtime    | 498.2                    | 449.5     | 36        | 0          | 18          |
+| 4 reviews / 3 / initialize | 1124.8                   | 106.2     | 985.4     | 0          | 32.7        |
+| 4 reviews / 3 / runtime    | 482.6                    | 443.3     | 30.9      | 0          | 17.9        |
+
+Each column has its own maximum. Do not add these maxima to claim a simultaneous peak.
+The synchronized peak includes overlapping initialization and its file cache.
+It excludes host services and other workloads on Nuvemzinha.
+These controlled trials do not qualify live-provider latency, width six, or lower container limits.
+
+The focused harness suite passes 16 tests.
+The existing composition golden suite passes four cases.
+The scheduled real-provider workload must still provide the three live queue distributions and the one-review/eight-turn loaded node peak.

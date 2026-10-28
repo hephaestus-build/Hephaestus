@@ -482,7 +482,6 @@ async function startGateway(): Promise<void> {
 		"UNIX-CONNECT:/bench/gateway.sock",
 	]);
 	const id = created.trim();
-	containers.add(id);
 	const inspected = await output("docker", [
 		"inspect",
 		"--format",
@@ -682,13 +681,13 @@ function podFlags(name: string, volumes: string[], workspaceReadOnly: boolean): 
 		options.cpus,
 		"--pids-limit",
 		"256",
-		"--add-host",
-		"host.docker.internal:host-gateway",
 		"-w",
 		"/workspace",
 	];
 	if (fixtureNetwork !== undefined) {
 		flags.push("--network", fixtureNetwork);
+	} else {
+		flags.push("--add-host", "host.docker.internal:host-gateway");
 	}
 	for (const [target, size] of Object.entries(MEMORY_VOLUMES)) {
 		flags.push("--mount", `type=tmpfs,dst=${target},tmpfs-size=${size},tmpfs-mode=1777`);
