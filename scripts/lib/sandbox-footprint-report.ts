@@ -3,6 +3,7 @@
  * line must hold, how the report bounds its maps, and when a run counts as a measurement.
  */
 import { isRecord, parseJson } from "./json.ts";
+import { percentile } from "./statistics.ts";
 
 /** How often the sampler reads each sandbox's cgroup. */
 export const SAMPLE_MS = 250;
@@ -61,17 +62,106 @@ export function isSample(value: unknown): value is Sample {
 	return (
 		isRecord(value) &&
 		typeof value.label === "string" &&
-		SAMPLE_NUMBERS.every((key) => typeof value[key] === "number") &&
+		SAMPLE_NUMBERS.every((key) => nonnegative(value[key])) &&
 		Array.isArray(value.procs) &&
 		value.procs.every(
 			(proc) =>
 				isRecord(proc) &&
 				typeof proc.cmd === "string" &&
-				PROCESS_NUMBERS.every((key) => typeof proc[key] === "number"),
+				PROCESS_NUMBERS.every((key) => nonnegative(proc[key])),
 		) &&
 		(value.tmpfs === undefined ||
-			(isRecord(value.tmpfs) &&
-				Object.values(value.tmpfs).every((bytes) => typeof bytes === "number")))
+			(isRecord(value.tmpfs) && Object.values(value.tmpfs).every(nonnegative)))
+	);
+}
+
+function nonnegative(value: unknown): value is number {
+	return typeof value === "number" && Number.isFinite(value) && value >= 0;
+}
+
+/** An attempt's monotonic phase timestamps, in milliseconds from one clock. No message or prompt text. */
+export interface QueueObservation {
+	id: string;
+	kind: "review" | "composition" | "mentor";
+	submitted: number;
+	eligible: number;
+	granted: number;
+	podReady?: number;
+	firstEvent?: number;
+}
+
+export function parseQueueObservation(value: unknown): QueueObservation {
+	if (
+		!isRecord(value) ||
+		typeof value.id !== "string" ||
+		(value.kind !== "review" && value.kind !== "composition" && value.kind !== "mentor") ||
+		!nonnegative(value.submitted) ||
+		!nonnegative(value.eligible) ||
+		!nonnegative(value.granted) ||
+		value.submitted > value.eligible ||
+		value.eligible > value.granted ||
+		(value.podReady !== undefined &&
+			(!nonnegative(value.podReady) ||
+				value.podReady < value.eligible ||
+				value.podReady > value.granted)) ||
+		(value.firstEvent !== undefined &&
+			(!nonnegative(value.firstEvent) || value.firstEvent < value.granted)) ||
+		(value.kind === "review" && value.podReady === undefined)
+	)
+		throw new Error("Invalid queue observation: require ordered phases and review Pod readiness");
+	return {
+		id: value.id,
+		kind: value.kind,
+		submitted: value.submitted,
+		eligible: value.eligible,
+		granted: value.granted,
+		...(value.podReady === undefined ? {} : { podReady: value.podReady }),
+		...(value.firstEvent === undefined ? {} : { firstEvent: value.firstEvent }),
+	};
+}
+
+/** Missing data stays null. The sample count is part of every percentile claim. */
+export function distribution(values: readonly number[]) {
+	return {
+		count: values.length,
+		p50Ms: percentile(values, 0.5),
+		p95Ms: percentile(values, 0.95),
+		maxMs: values.length ? Math.max(...values) : null,
+	};
+}
+
+export function queueReport(observations: readonly QueueObservation[]) {
+	return Object.fromEntries(
+		(["review", "composition", "mentor"] as const).map((kind) => {
+			const rows = observations.filter((row) => row.kind === kind);
+			return [
+				kind,
+				{
+					capacity: distribution(rows.map((row) => row.granted - row.eligible)),
+					intentionalConversationWait: distribution(
+						rows.filter((row) => row.kind === "mentor").map((row) => row.eligible - row.submitted),
+					),
+					readinessWait: distribution(
+						rows.filter((row) => row.kind !== "mentor").map((row) => row.eligible - row.submitted),
+					),
+					podReady: distribution(
+						rows.flatMap((row) =>
+							row.podReady === undefined ? [] : [row.podReady - row.eligible],
+						),
+					),
+					modelAfterPodReady: distribution(
+						rows.flatMap((row) => (row.podReady === undefined ? [] : [row.granted - row.podReady])),
+					),
+					upstreamFirstEvent: distribution(
+						rows.flatMap((row) =>
+							row.firstEvent === undefined ? [] : [row.firstEvent - row.granted],
+						),
+					),
+					endToEnd: distribution(rows.map((row) => row.granted - row.submitted)),
+					sufficientForObjectives: rows.length >= 200,
+				},
+			];
+		}),
 	);
 }
 

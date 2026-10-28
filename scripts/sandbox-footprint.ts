@@ -2,7 +2,7 @@
  * The sandbox footprint benchmark: what a practice review sandbox uses, measured, not assumed.
  *
  * It runs the review Pod's two containers from the agent image with the Pod's file systems (disk
- * volumes for the attempt folders, memory for /tmp, /run and ~/.local, a read-only root) and its
+ * volumes for the attempt folders, /tmp and ~/.local, memory for /run, a read-only root) and its
  * limits, against a stand-in gateway in this process. The gateway serves a workspace that
  * `ReviewFootprintStagingLiveTest` staged with the real adapter, the bundled practices and a real
  * repository change. Only the model is a stand-in: it answers each turn with reads, searches and
@@ -10,7 +10,7 @@
  *
  * A privileged sampler container reads each sandbox's cgroup (memory.current, memory.peak,
  * memory.stat, cpu.stat, pids.current) and the RSS of each of its processes, every 250 ms. cgroup v2
- * charges a Pod's memory the same way on Docker and on Kubernetes, so the numbers carry over.
+ * uses the same counters on Docker and Kubernetes. Placement and node overhead require a cluster run.
  *
  *   node scripts/sandbox-footprint.ts --stage <dir> [--image <ref>] [--reviews <n>] [--memory 3g]
  *     [--tool-calls 12] [--latency-ms 1500] [--node-options "--max-old-space-size=256"]
@@ -82,9 +82,7 @@ const runId = `fp-${randomUUID().slice(0, 8)}`;
 
 /** The memory volumes of a review Pod (KubernetesPods.MEMORY_VOLUMES) and its disk volumes (attemptVolumes). */
 const MEMORY_VOLUMES = {
-	"/tmp": "1073741824",
-	"/run": "67108864",
-	"/home/agent/.local": "1073741824",
+	"/run": "16777216",
 };
 const DISK_VOLUMES = [
 	"/workspace",
@@ -92,6 +90,8 @@ const DISK_VOLUMES = [
 	"/workspace/out",
 	"/workspace/.pi",
 	"/workspace/.sessions",
+	"/tmp",
+	"/home/agent/.local",
 ];
 const GIT_SECURITY = [
 	["core.hooksPath", "/nonexistent"],
@@ -498,6 +498,7 @@ function du(dir) {
 let tick = 0;
 setInterval(() => {
   tick++;
+  const t = Date.now();
   const ids = (read("/bench/ids") ?? "").split("\n").filter(Boolean);
   for (const line of ids) {
     const [label, id] = line.split(" ");
@@ -516,11 +517,9 @@ setInterval(() => {
     let tmpfs;
     if (tick % 8 === 0 && procs.length) {
       const root = "/proc/" + procs[0].pid + "/root";
-      tmpfs = {}; for (const d of ["/tmp", "/run", "/home/agent/.local"]) { tmpfs[d] = du(root + d); }
-      for (const sub of (() => { try { return fs.readdirSync(root + "/tmp"); } catch { return []; } })()) tmpfs["/tmp/" + sub] = du(root + "/tmp/" + sub);
-      for (const sub of (() => { try { return fs.readdirSync(root + "/home/agent/.local"); } catch { return []; } })()) tmpfs["/home/agent/.local/" + sub] = du(root + "/home/agent/.local/" + sub);
+      tmpfs = {"/run": du(root + "/run")};
     }
-    process.stdout.write(JSON.stringify({ t: Date.now(), label, current: Number(current), peak: Number(read(cg + "/memory.peak") ?? 0),
+    process.stdout.write(JSON.stringify({ t, label, current: Number(current), peak: Number(read(cg + "/memory.peak") ?? 0),
       anon: stat.anon, file: stat.file, shmem: stat.shmem, kernel: stat.kernel, sock: stat.sock, activeFile: stat.active_file, inactiveFile: stat.inactive_file,
       cpuUsec: cpu.usage_usec, throttledUsec: cpu.throttled_usec, pids: Number(read(cg + "/pids.current") ?? 0), procs, tmpfs }) + "\n");
   }
@@ -837,6 +836,7 @@ function summarize(label: string) {
 		memoryPeak: MiB(Math.max(...pick((s) => s.peak))),
 		current: stats(pick((s) => s.current)),
 		anon: stats(pick((s) => s.anon)),
+		file: stats(pick((s) => s.file)),
 		fileCache: stats(pick((s) => s.file - s.shmem)),
 		shmem: stats(pick((s) => s.shmem)),
 		kernel: stats(pick((s) => s.kernel)),
@@ -917,10 +917,10 @@ try {
 	}
 	await stopSampler();
 
-	// The node-wide sum of every sandbox's memory.current per tick: what concurrent reviews hold together.
+	// These are only the benchmark containers. Host services and other Pods require the cluster sampler.
 	const ticks = new Map<number, number>();
 	for (const s of samples) {
-		const bucket = Math.round(s.t / SAMPLE_MS);
+		const bucket = s.t;
 		ticks.set(bucket, (ticks.get(bucket) ?? 0) + s.current);
 	}
 	report = {
@@ -932,6 +932,7 @@ try {
 			platform: process.platform,
 		},
 		image,
+		volumes: { memory: MEMORY_VOLUMES, disk: DISK_VOLUMES },
 		stage,
 		practices,
 		workspaceArchiveMiB: MiB(archiveBytes),

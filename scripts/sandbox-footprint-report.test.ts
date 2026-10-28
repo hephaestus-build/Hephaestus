@@ -7,6 +7,8 @@ import {
 	NOT_STARTED,
 	parseSample,
 	positiveInteger,
+	parseQueueObservation,
+	queueReport,
 	RUNTIME_SAMPLE_FLOOR,
 	verdict,
 	type ReviewOutcome,
@@ -152,4 +154,73 @@ await test("positiveInteger rejects zero, fractions and typos", () => {
 			message: `--reviews must be a whole number above 0, but is "${value}"`,
 		});
 	}
+});
+
+await test("queues separate conversation order from capacity and provider time", () => {
+	const report = queueReport([
+		parseQueueObservation({
+			id: "turn-1",
+			kind: "mentor",
+			submitted: 0,
+			eligible: 220000,
+			granted: 221000,
+			firstEvent: 224000,
+		}),
+		parseQueueObservation({
+			id: "turn-2",
+			kind: "mentor",
+			submitted: 0,
+			eligible: 0,
+			granted: 5000,
+		}),
+		parseQueueObservation({
+			id: "review-1",
+			kind: "review",
+			submitted: 0,
+			eligible: 120000,
+			podReady: 125000,
+			granted: 127000,
+		}),
+		parseQueueObservation({
+			id: "composition-1",
+			kind: "composition",
+			submitted: 0,
+			eligible: 2000,
+			granted: 12000,
+		}),
+	]);
+	assert.deepEqual(report.mentor?.capacity, { count: 2, p50Ms: 1000, p95Ms: 5000, maxMs: 5000 });
+	assert.equal(report.mentor?.intentionalConversationWait.p95Ms, 220000);
+	assert.equal(report.mentor?.endToEnd.p95Ms, 221000);
+	assert.equal(report.mentor?.upstreamFirstEvent.p95Ms, 3000);
+	assert.equal(report.review?.podReady.p95Ms, 5000);
+	assert.equal(report.review?.modelAfterPodReady.p95Ms, 2000);
+	assert.equal(report.composition?.capacity.p95Ms, 10000);
+	assert.equal(report.mentor?.sufficientForObjectives, false);
+});
+
+await test("absent observations never become zero-latency evidence", () => {
+	assert.deepEqual(queueReport([]).mentor?.capacity, {
+		count: 0,
+		p50Ms: null,
+		p95Ms: null,
+		maxMs: null,
+	});
+});
+
+await test("queue input rejects impossible, missing, non-finite and negative phases", () => {
+	const valid = { id: "r", kind: "review", submitted: 1, eligible: 2, podReady: 3, granted: 4 };
+	for (const value of [
+		null,
+		{ ...valid, eligible: 0 },
+		{ ...valid, granted: NaN },
+		{ ...valid, podReady: undefined },
+		{ ...valid, podReady: 5 },
+		{ ...valid, firstEvent: 3 },
+		{ ...valid, submitted: -1 },
+	]) {
+		assert.throws(() => parseQueueObservation(value));
+	}
+	assert.equal(isSample({ ...sample, current: Infinity }), false);
+	assert.equal(isSample({ ...sample, procs: [{ ...sample.procs[0], rss: -1 }] }), false);
 });

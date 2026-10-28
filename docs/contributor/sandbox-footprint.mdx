@@ -1,0 +1,157 @@
+---
+title: Sandbox footprint measurements
+description: Memory counters, queue phases, and acceptance evidence for the sandbox benchmark.
+page_type: reference
+---
+
+The footprint tools report measured use separately from scheduler requests.
+They do not change the shipped limits or concurrency.
+The [runtime decision](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0068-reviews-and-heph-run-on-one-agent-runtime.md) owns the capacity design.
+
+## Repeatable review fixture
+
+`scripts/sandbox-footprint.ts` runs the staged review through the real runner with a controlled model.
+The staged repository retains Git history and the bundled practice scripts.
+The model fixture exercises reads, searches, Git commands, and result submission.
+A successful verdict requires samples and a result upload for every review.
+
+The writable attempt folders, `/tmp`, and `/home/agent/.local` use disk volumes.
+Only `/run` uses a memory volume, limited to 16 MiB.
+These mounts match `KubernetesPods`.
+A Docker fixture does not prove Kubernetes placement or provider service capacity.
+
+The report includes each container's `anon`, `file`, `shmem`, and `kernel` counters.
+The `file` counter includes `shmem`. Do not add them together.
+`fileCache` subtracts `shmem` for a separate view of file cache.
+All containers in a sample cycle use the same timestamp.
+`concurrentPeakMiB` covers only benchmark containers. It is not the node peak.
+
+## Kubernetes counters
+
+Run the read-only collector from a checkout with the `remote-exec` wrapper:
+
+```bash
+node scripts/kubernetes-footprint.ts --samples 900 --interval-ms 1000 \
+  --timeline tmp/phase-export.json --provider-budget '<quota and source>' \
+  --out tmp/kubernetes-footprint.json
+```
+
+The collector accepts only `hephaestus-staging`.
+It reads Pod metadata, node budgets, `/proc/meminfo`, and container cgroup counters.
+It collects no environment values, projected credentials, prompts, or answers.
+It creates no remote file or workload.
+The report retains the raw samples and each running container's resources, image, and disk or memory volume metadata.
+
+`nodePeakBytes` is the maximum sampled `MemTotal - MemAvailable` for the whole node.
+It includes host services and system Pods.
+It describes memory pressure after reclaimable memory, not summed process RSS or container charges.
+A sample cycle records node and container counters together. Reads within a cycle are sequential.
+Short peaks between samples can remain unseen.
+
+Some kernels expose neither `memory.peak` nor the aggregate `kernel` counter.
+The report then keeps those values absent.
+`kernelAccounted` sums the available kernel stack, page table, per-CPU, socket, and slab counters.
+It is a partial kernel account, not a replacement for a missing aggregate.
+Use sampled `current.maxBytes` for the observed container peak.
+
+## Queue phases
+
+The timeline input is a JSON array of metadata-only observations:
+
+```text
+[
+  {
+    "id": "review-1",
+    "kind": "review",
+    "submitted": 0,
+    "eligible": 120000,
+    "podReady": 125000,
+    "granted": 127000,
+    "firstEvent": 128000
+  },
+  {
+    "id": "composition-1",
+    "kind": "composition",
+    "submitted": 127000,
+    "eligible": 128000,
+    "granted": 129000
+  },
+  { "id": "turn-1", "kind": "mentor", "submitted": 0, "eligible": 220000, "granted": 221000 }
+]
+```
+
+Use milliseconds from one clock for all phases of an observation.
+Use a stable attempt ID. Extract phases from the round's row and trace evidence.
+`granted` is the first provider dispatch, not the first provider event.
+Review eligibility starts after its readiness edge.
+Composition eligibility starts when its admitted inputs are sealed and composition can run.
+Mentor eligibility starts when the preceding turn of that conversation ends, or at submission if no predecessor exists.
+
+The report gives count, p50, p95, and maximum for each interval:
+
+- Capacity wait: eligibility to the first model grant.
+- Intentional conversation wait: submission to eligibility, only for mentor turns.
+- Readiness wait: submission to eligibility for background work.
+- Review Pod wait: eligibility to Pod readiness.
+- Review model wait: Pod readiness to the first model grant.
+- Provider wait: grant to the first upstream event, when available.
+- Total wait: submission to the first model grant, including intentional waits.
+
+Missing observations remain `null`, not zero.
+An objective claim needs at least 200 eligible observations per class.
+A burst alone does not prove a percentile objective.
+
+## Staging round
+
+The coordinator schedules workload creation. The collector never generates load.
+Use the connected `HephaestusTest` repository with the existing golden review fixture.
+Record its workspace ID, repository ID, base and head commits, and golden case ID before the round.
+Use the current one-review and eight-turn profile with the real provider.
+
+1. Push the exact golden fixture once.
+2. Submit one repository question in each of eight independent conversations while the review runs.
+3. Submit a second question in one active conversation to measure intentional order wait.
+4. Export the phase timestamps for the review, its composition, and every turn.
+5. Compare admitted results, problems, and coverage with the golden fixture.
+
+Repeat the same workload to collect 200 eligible observations per class.
+Record the provider service times, quota source, cache share, and offered load.
+Exercise two and four review items in an isolated test profile.
+Do not change shipped defaults for those trials.
+Run the same small and large fixtures with the controlled model for repeatable comparisons.
+
+## Current baseline
+
+The 2026-10-28 read-only staging capture is an idle baseline.
+It does not contain the scheduled mixed workload or prove the queue objectives.
+The provider quota was not available in the permitted metadata.
+The reference 32-call budget and eight-call reserve remain test inputs, not a measured provider quota.
+
+The node reports 16,765,964,864 bytes of capacity and the same allocatable memory.
+Its kernel is 5.15.0-187-generic, and k3s is v1.37.1+k3s1.
+Thus, the assumed kubelet reservations cannot be deducted from this node's reported allocatable memory.
+The loaded round must establish physical headroom separately.
+
+Capture: 2026-10-28T17:34:15.245Z, 30 samples at a requested 1000 ms interval.
+Whole-node sampled peak: 6398.2 MiB.
+Minimum available memory: 9590.1 MiB.
+
+| Container  | Current peak MiB | Anon peak | File peak, including shmem | Shmem peak | Partial kernel peak |
+| ---------- | ---------------- | --------- | -------------------------- | ---------- | ------------------- |
+| nats       | 269.1            | 40.6      | 221.8                      | 0.0        | 6.7                 |
+| postgresql | 1173.3           | 141.0     | 1003.7                     | 554.2      | 28.0                |
+| server     | 2452.5           | 1445.2    | 962.3                      | 0.0        | 48.6                |
+| webapp     | 8.8              | 4.0       | 3.9                        | 0.0        | 0.7                 |
+| webhook    | 612.3            | 607.1     | 1.6                        | 0.0        | 3.6                 |
+| worker     | 1337.2           | 1327.4    | 3.2                        | 0.0        | 6.5                 |
+
+Each column has its own maximum. Their sum is not a simultaneous peak.
+The node kernel exposes no aggregate kernel counter or lifetime peak.
+
+| Queue                                | Observations | p50         | p95         |
+| ------------------------------------ | ------------ | ----------- | ----------- |
+| Review claim and Pod readiness       | 0            | unavailable | unavailable |
+| Composition                          | 0            | unavailable | unavailable |
+| Mentor capacity and intentional wait | 0            | unavailable | unavailable |
+
+The coordinator must schedule the mixed workload before these queue measurements can be published.
