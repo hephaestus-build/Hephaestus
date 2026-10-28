@@ -166,8 +166,11 @@ For later turns, the path builder removes the tool calls from the cut-off answer
 The deadline of a turn is the LLM timeout of the Heph model binding, at most 15 minutes (`AgentBindingLimits.MAX_HEPH_TURN_SECONDS`).
 The deadline is the hard ceiling of a turn that keeps making progress.
 A stall ends a turn earlier: the worker's LLM proxy cuts a silent model call (`LlmProxyService`, `upstream_stalled`), and the host ends the turn as `STALLED`.
-The ceiling holds about 5 calls of a reasoning model that writes about 35 tokens a second, each as long as the longest measured call.
+Set the ceiling above the time of a few of the slowest model calls, because an answer takes a few calls.
 A worker runs few turns at once, so a turn as long as a review would keep every question queued behind it waiting.
+
+The proxy puts no stream limit on a Heph call.
+The idle bounds and the turn's stop end the call, and its exchange waits at most the ceiling.
 
 At the deadline, the worker sends `stop` with the reason `deadline`.
 The host script enforces no time limit of its own.

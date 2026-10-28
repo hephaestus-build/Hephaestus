@@ -423,8 +423,8 @@ The timeout of the workspace's Heph model binding is the deadline of each attemp
 A new Heph binding gets 900 seconds, and a binding accepts no longer Heph timeout.
 The deadline is a ceiling for a turn that keeps making progress.
 A turn whose model stops sending fails earlier, at the bounds of the LLM proxy below.
-A reasoning model that writes about 35 tokens a second took up to 152 seconds for one call.
-900 seconds hold about 5 such calls.
+A Heph answer takes a few model calls, so set the timeout above the time of a few of your model's slowest calls.
+The LLM proxy cuts a Heph model call only when its provider stays silent, as described below.
 
 At the deadline, the worker stops the turn.
 The turn fails with **Heph reached its time limit and stopped this reply. Try again.**

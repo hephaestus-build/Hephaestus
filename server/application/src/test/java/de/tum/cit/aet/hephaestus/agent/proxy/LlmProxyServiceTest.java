@@ -24,6 +24,7 @@ import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmAuthMode;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnectionHealth;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
+import de.tum.cit.aet.hephaestus.agent.config.AgentBindingLimits;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
@@ -2240,8 +2241,16 @@ class LlmProxyServiceTest extends BaseUnitTest {
                 .isLessThanOrEqualTo(Duration.ofSeconds(10));
         assertThat(LlmProxyService.exchangeWait(Instant.now().minusSeconds(1), true))
                 .isZero();
-        // A mentor turn has no work deadline and keeps the proxy's own limits.
-        assertThat(LlmProxyService.exchangeWait(null, true)).isEqualTo(ceiling);
+    }
+
+    @Test
+    @DisplayName("a Heph call may run as long as its turn, past the proxy's own ceiling")
+    void shouldBoundAHephCallByTheTurnCeilingOnly() {
+        Duration turnCeiling = Duration.ofSeconds(AgentBindingLimits.MAX_HEPH_TURN_SECONDS);
+
+        // A Heph turn has no work deadline; streaming or not, its call waits as long as the turn may run.
+        assertThat(LlmProxyService.exchangeWait(null, true)).isEqualTo(turnCeiling);
+        assertThat(LlmProxyService.exchangeWait(null, false)).isEqualTo(turnCeiling);
     }
 
     @Nested
