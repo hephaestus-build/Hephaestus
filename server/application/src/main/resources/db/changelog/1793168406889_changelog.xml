@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1793168406889-1" author="hephaestus">
+        <addColumn tableName="issued_jwt">
+            <column name="predecessor_jti" type="UUID"/>
+        </addColumn>
+        <!-- Dropping the link ends no session. A predecessor that waited for its successor's first use stays valid until its own expiry. -->
+        <rollback>
+            <dropColumn tableName="issued_jwt" columnName="predecessor_jti"/>
+        </rollback>
+    </changeSet>
+    <changeSet id="1793168406889-2" author="hephaestus">
+        <createIndex indexName="ix_issued_jwt_predecessor_jti" tableName="issued_jwt">
+            <column name="predecessor_jti"/>
+        </createIndex>
+        <rollback>
+            <dropIndex tableName="issued_jwt" indexName="ix_issued_jwt_predecessor_jti"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

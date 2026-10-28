@@ -34,11 +34,17 @@ import org.jspecify.annotations.Nullable;
  * refresh secret issued with it. Those rows outlive their access-token expiry for as long as the session
  * row exists, so any refresh secret or JTI the session ever handed out still resolves its family: a
  * replayed old secret revokes the live session, and revoking a stale session-list entry ends it.
+ *
+ * <p>A refreshed browser token keeps a link to the token it replaced until its first use. The rotation
+ * contract is in {@code docs/auth-architecture.md} § Browser session coordination.
  */
 @Entity
 @Table(
         name = "issued_jwt",
-        indexes = @Index(name = "ix_issued_jwt_session_id", columnList = "session_id"),
+        indexes = {
+            @Index(name = "ix_issued_jwt_session_id", columnList = "session_id"),
+            @Index(name = "ix_issued_jwt_predecessor_jti", columnList = "predecessor_jti")
+        },
         uniqueConstraints =
                 @UniqueConstraint(name = "uq_issued_jwt_refresh_token_hash", columnNames = "refresh_token_hash"))
 @Getter
@@ -90,6 +96,14 @@ public class IssuedJwt {
     @Column(name = "refresh_token_hash", length = 64)
     @Nullable
     private String refreshTokenHash;
+
+    /**
+     * The browser token this one replaced. A refresh sets it, and this token's first admitted use
+     * revokes the predecessor and clears it, so a non-null value means this token was never used.
+     */
+    @Column(name = "predecessor_jti", columnDefinition = "uuid")
+    @Nullable
+    private UUID predecessorJti;
 
     public IssuedJwt(UUID jti, Long accountId, Instant expiresAt) {
         this.jti = jti;

@@ -161,6 +161,7 @@ erDiagram
         INET ip_inet
         VARCHAR(64) refresh_token_hash UK
         UUID session_id FK
+        UUID predecessor_jti
     }
 
     JwtSigningKey {
