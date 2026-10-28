@@ -304,9 +304,14 @@ public class HephTurnController {
                 || !token.id().equals(turnId)) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         }
-        return dispatcher
+        TurnAttempt attempt = dispatcher
                 .running(turnId, token.attempt())
                 .orElseThrow(() -> new MentorLeaseLostException(turnId, token.attempt()));
+        // The token binds its workspace: a token of another workspace reaches no turn, whatever its id.
+        if (!attempt.workspaceId().equals(token.workspaceId())) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND);
+        }
+        return attempt;
     }
 
     private static List<JsonNode> validated(List<JsonNode> entries) {

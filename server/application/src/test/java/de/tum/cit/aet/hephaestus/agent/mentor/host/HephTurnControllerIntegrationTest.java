@@ -482,6 +482,32 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
     }
 
     @Test
+    void shouldRefuseATokenOfAnotherWorkspaceAndReadOrWriteNothingOfTheTurn() throws Exception {
+        String foreign = issuer.issueForAttempt(
+                AttemptJwt.Kind.TURN,
+                turn.getId(),
+                workspace.getId() + 1,
+                turn.getAttempt(),
+                null,
+                Instant.now().plus(Duration.ofMinutes(5)));
+        int entries = MentorLedgerFixtures.turnEntries(entityManager, workspace.getId(), turn.getId())
+                .size();
+
+        gateway.perform(get(TURN_PATH + "context", turn.getId()).header(HttpHeaders.AUTHORIZATION, "Bearer " + foreign))
+                .andExpect(status().isNotFound());
+        gateway.perform(post(TURN_PATH + "end", turn.getId())
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + foreign)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(contract("end.request.json")))
+                .andExpect(status().isNotFound());
+
+        assertThat(reloaded().getStatus()).isEqualTo(MentorTurn.Status.RUNNING);
+        assertThat(MentorLedgerFixtures.turnEntries(entityManager, workspace.getId(), turn.getId()))
+                .as("the foreign end stored nothing")
+                .hasSize(entries);
+    }
+
+    @Test
     void shouldRefuseTheEndAndStoreNothingWhenAnEntryHasNoTypeOrId() throws Exception {
         String withoutType = piId();
         String withoutId = piId();

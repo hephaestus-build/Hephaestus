@@ -111,7 +111,47 @@ class WorkerJwtTest extends BaseUnitTest {
                 Arguments.of(
                         "an id that is no UUID",
                         AttemptJwt.Kind.REVIEW,
-                        Map.<String, Object>of(WorkerJwtIssuer.ID_CLAIM, "job-1")));
+                        Map.<String, Object>of(WorkerJwtIssuer.ID_CLAIM, "job-1")),
+                Arguments.of("no id", AttemptJwt.Kind.REVIEW, Map.<String, Object>of(WorkerJwtIssuer.ID_CLAIM, ABSENT)),
+                Arguments.of("no workspace", AttemptJwt.Kind.REVIEW, Map.<String, Object>of("workspace_id", ABSENT)),
+                Arguments.of(
+                        "a workspace that is no number",
+                        AttemptJwt.Kind.REVIEW,
+                        Map.<String, Object>of("workspace_id", "acme")),
+                Arguments.of("no attempt", AttemptJwt.Kind.REVIEW, Map.<String, Object>of("attempt", ABSENT)),
+                Arguments.of(
+                        "an attempt that is no number",
+                        AttemptJwt.Kind.REVIEW,
+                        Map.<String, Object>of("attempt", "first")),
+                Arguments.of("another issuer", AttemptJwt.Kind.REVIEW, Map.<String, Object>of("iss", "elsewhere")),
+                Arguments.of("another audience", AttemptJwt.Kind.REVIEW, Map.<String, Object>of("aud", "elsewhere")));
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("otherAlgorithms")
+    void shouldRefuseAnAttemptTokenThatIsNotSignedWithTheWorkersKey(String label, Algorithm algorithm) {
+        Instant issued = Instant.now().minusSeconds(60);
+        String token = JWT.create()
+                .withHeader(Map.of("kid", keyRing.active().kid(), "typ", WorkerJwtIssuer.ATTEMPT_TOKEN_TYPE))
+                .withIssuer("hephaestus-test")
+                .withAudience("hephaestus-worker")
+                .withClaim(WorkerJwtIssuer.KIND_CLAIM, AttemptJwt.Kind.REVIEW.name())
+                .withClaim(WorkerJwtIssuer.ID_CLAIM, UUID.randomUUID().toString())
+                .withClaim("workspace_id", 42L)
+                .withClaim("attempt", 0)
+                .withClaim(WorkerJwtIssuer.WORK_DEADLINE_CLAIM, issued.plusSeconds(300))
+                .withJWTId(UUID.randomUUID().toString())
+                .withIssuedAt(issued)
+                .withExpiresAt(issued.plusSeconds(900))
+                .sign(algorithm);
+
+        assertThatThrownBy(() -> verifier.verify(token)).isInstanceOf(WorkerJwtInvalidException.class);
+    }
+
+    static Stream<Arguments> otherAlgorithms() {
+        return Stream.of(
+                Arguments.of("alg none", Algorithm.none()),
+                Arguments.of("HS256", Algorithm.HMAC256("a shared secret of thirty-two bytes!")));
     }
 
     @Test
@@ -261,6 +301,13 @@ class WorkerJwtTest extends BaseUnitTest {
     }
 
     // An attempt token signed with the active key, carrying exactly the given extra claims.
+    /** A claim value that the token carries as JSON null, so the claim has no value. */
+    private enum Absent {
+        CLAIM
+    }
+
+    private static final Absent ABSENT = Absent.CLAIM;
+
     private String jobToken(Instant issued, Instant expires, Map<String, Object> claims) {
         return attemptToken(AttemptJwt.Kind.REVIEW, issued, expires, claims);
     }
@@ -280,7 +327,8 @@ class WorkerJwtTest extends BaseUnitTest {
                 .withIssuedAt(issued)
                 .withExpiresAt(expires);
         claims.forEach((name, value) -> {
-            if (value instanceof Instant instant) builder.withClaim(name, instant);
+            if (value instanceof Absent) builder.withNullClaim(name);
+            else if (value instanceof Instant instant) builder.withClaim(name, instant);
             else builder.withClaim(name, value.toString());
         });
         return builder.sign(Algorithm.RSA256(active.publicKey(), active.privateKey()));
