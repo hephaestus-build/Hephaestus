@@ -233,7 +233,7 @@ worker:
   # follows it. The server gets replicas times this as its Heph capacity: while every worker runs as
   # many turns, a question that could start next says that Heph answers other questions.
   # docs/admin/runtime-roles.mdx § Heph capacity.
-  hephTurns: auto
+  conversationTurns: auto
   # How long a stopping worker serves its running attempts and claims nothing new. A practice
   # review's median run is 10 to 16 minutes, and its bound is 3 hours. When the drain ends, a review
   # that is still running stops: it is tried again on another worker and spends one of its attempts.
@@ -270,7 +270,7 @@ worker:
     # Restricted Pod Security level. Not the release namespace, and no other release's.
     namespace: ""
     # One quota for each tier of sandboxes, reviews and conversations, derived from the workers' replicas,
-    # reviews and hephTurns and from sandbox-pod-requests.json. Heph's sandboxes can never take a review's room.
+    # reviews and conversationTurns and from sandbox-pod-requests.json. Heph's sandboxes can never take a review's room.
     quota:
       enabled: true
 

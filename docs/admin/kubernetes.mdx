@@ -847,7 +847,7 @@ The chart runs the workers as one Deployment:
   A practice review usually takes 10 to 16 minutes. An attempt that outlasts the drain is tried again.
 - A worker on a lost node is replaced after 60 seconds.
 - `AGENT_ENABLED=true` on the workers and the server, so that the server submits practice reviews and the workers run them. Without a worker, the server submits none.
-- `worker.reviews` sets the reviews that one worker runs at once, and `worker.hephTurns` the Heph turns (`HEPHAESTUS_WORKER_CAPACITY_MENTOR_MAX`, `auto` by default). Each running turn holds a turn sandbox beside the 2 pooled ones, and the conversations quota counts them ([Runtime roles § Heph capacity](./runtime-roles#heph-capacity)). `small.yaml` sets 8.
+- `worker.reviews` sets the reviews that one worker runs at once, and `worker.conversationTurns` the Heph turns (`HEPHAESTUS_WORKER_CAPACITY_MENTOR_MAX`, `auto` by default). Each running turn holds a turn sandbox beside the 2 pooled ones, and the conversations quota counts them ([Runtime roles § Heph capacity](./runtime-roles#heph-capacity)). `small.yaml` sets 8.
 - The settings `HEPHAESTUS_SANDBOX_RUNTIME=kubernetes`, the sandbox namespace, and the pod name and address from the Downward API ([Runtime roles § Sandbox runtime](./runtime-roles#sandbox-runtime)).
 - The existing gateway setting `SANDBOX_API_PORT`, with the value 8081.
 
@@ -856,7 +856,7 @@ The chart creates no namespace.
 It writes these objects into it:
 
 - One ResourceQuota for each PriorityClass tier: reviews, and conversations for the Heph host and turn sandboxes.
-  The chart derives both from `sandbox-pod-requests.json` and from `worker.replicas`, `worker.reviews` and `worker.hephTurns`.
+  The chart derives both from `sandbox-pod-requests.json` and from `worker.replicas`, `worker.reviews` and `worker.conversationTurns`.
   They count requests, not limits: sandbox Pods may use more than they request, up to their limits.
   Thus, Heph's sandboxes never take a review's room, and reviews never take Heph's.
   Each tier's quota counts Pods, CPU and memory. Kubernetes does not let a quota that selects a PriorityClass count disk.
@@ -1189,7 +1189,7 @@ A change of NATS itself stops reception: while NATS is down, the receiver answer
 | A worker stays unready, and its log says that the cluster does not hold the sandbox boundary | The isolation probe failed. The log names each failed check. A failed egress check usually means that the network plugin does not enforce NetworkPolicy, or that `networkPolicy.kubernetesApi` names an address that the plugin does not see. |
 | A worker log says that the network policy did not filter a sandbox Pod in time | The network plugin applied the policy of a new Pod more than 60 seconds after the Pod started. The attempt is tried again. |
 | A review fails with "The sandbox quota is smaller than one review sandbox" | A quota of your own holds less than one review sandbox requests. Raise it. The chart's quotas always hold one. |
-| A sandbox Pod stays `Pending` with a quota error | Its tier's quota is full. The chart sizes each tier for its workers' capacity, so check a quota of your own, or `worker.reviews` and `worker.hephTurns`. |
+| A sandbox Pod stays `Pending` with a quota error | Its tier's quota is full. The chart sizes each tier for its workers' capacity, so check a quota of your own, or `worker.reviews` and `worker.conversationTurns`. |
 | Reviews stay queued, and the worker log says that reviews wait for room in the sandbox quota | The reviews tier holds the running reviews and the isolation probe. The reviews start when a sandbox ends. To run more at once, raise `worker.reviews`. |
 | A new Pod restarts during an upgrade, and its log names a pending change set | It waited 10 minutes for the schema. Check the migration Job's log. A longer migration needs the [database maintenance](#database-maintenance) procedure. |
 | A backup Job fails with `unable to find primary cluster` | The Job cannot reach pgBackRest's TLS server on port 8432 of the PostgreSQL Service, or its client certificate is not for `hephaestus-backup` from `ca.crt`. |

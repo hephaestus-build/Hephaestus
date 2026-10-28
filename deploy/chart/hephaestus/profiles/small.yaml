@@ -40,7 +40,7 @@ worker:
   reviews: 1
   # The worker's automatic number of Heph turns. A chart test checks that each single-node profile holds
   # them beside the review, from sandbox-pod-requests.json.
-  hephTurns: 8
+  conversationTurns: 8
   gitCache:
     sizeLimit: 10Gi
   resources:

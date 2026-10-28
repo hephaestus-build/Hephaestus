@@ -101,6 +101,7 @@ You scale the work of the worker, not the number of containers:
   Raise `SANDBOX_MAX_CONCURRENT` only with sufficient RAM.
   [Worker pod env vars](./runtime-roles#worker-pod-env-vars) explains how it caps the review capacity of the worker.
 - **Heph turns.** `HEPHAESTUS_WORKER_MENTOR_MAX` sets how many Heph turns the worker runs at once.
+  In the Helm chart, set `worker.conversationTurns`.
   The model provider usually sets the real limit.
   [Heph capacity](./runtime-roles#heph-capacity) explains how to size it.
 

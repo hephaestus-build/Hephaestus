@@ -83,7 +83,7 @@ spec:
             # The server submits practice review jobs only when a worker can run them.
             - name: AGENT_ENABLED
               value: {{ .Values.worker.enabled | quote }}
-            {{- $hephSlots := mul (int .Values.worker.replicas) (int (include "hephaestus.hephTurns" .)) }}
+            {{- $hephSlots := mul (int .Values.worker.replicas) (int (include "hephaestus.conversationTurns" .)) }}
             {{- if and .Values.worker.enabled (gt $hephSlots 0) }}
             # Every worker's Heph turns. A question says that Heph answers other questions only while all of them run.
             - name: HEPHAESTUS_MENTOR_TURN_CAPACITY
