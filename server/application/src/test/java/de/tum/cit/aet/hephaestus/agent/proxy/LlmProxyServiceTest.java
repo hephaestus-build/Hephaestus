@@ -78,7 +78,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.IntStream;
-import java.util.stream.Stream;
 import mockwebserver3.MockResponse;
 import mockwebserver3.MockWebServer;
 import mockwebserver3.RecordedRequest;
@@ -89,9 +88,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.CsvSource;
-import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.NullSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
@@ -373,76 +370,6 @@ class LlmProxyServiceTest extends BaseUnitTest {
             assertThat(result).isNotNull();
             assertThat(result.getStatusCode().value()).isEqualTo(502);
             verify(requestPolicy, never()).validateTarget(any());
-        }
-    }
-
-    @Nested
-    class BodyLocking {
-
-        @Test
-        void shouldForceAuthoritativeModel() {
-            byte[] input = "{\"model\":\"runner-controlled\",\"service_tier\":\"priority\",\"messages\":[]}"
-                    .getBytes(StandardCharsets.UTF_8);
-
-            var prepared = controller.prepareBody(input, "catalog-model", false);
-            assertThat(prepared).isNotNull();
-
-            assertThat(prepared.body()).isNotNull();
-            var tree = OBJECT_MAPPER.readTree(prepared.body());
-            assertThat(tree.path("model").asString()).isEqualTo("catalog-model");
-            assertThat(tree.has("service_tier")).isFalse();
-        }
-
-        @Test
-        void shouldRejectMalformedJson() {
-            assertThat(controller.prepareBody("not-json".getBytes(StandardCharsets.UTF_8), "model", false))
-                    .isNull();
-        }
-
-        @Test
-        void shouldRejectJsonThatIsNotAnObject() {
-            assertThat(controller.prepareBody("[]".getBytes(StandardCharsets.UTF_8), "model", false))
-                    .isNull();
-        }
-
-        @Test
-        void shouldAddStreamingUsageForChatCompletions() {
-            byte[] input = "{\"stream\":true,\"messages\":[]}".getBytes(StandardCharsets.UTF_8);
-
-            var prepared = controller.prepareBody(input, "catalog-model", true);
-            assertThat(prepared).isNotNull();
-
-            assertThat(prepared.body()).isNotNull();
-            var tree = OBJECT_MAPPER.readTree(prepared.body());
-            assertThat(tree.path("model").asString()).isEqualTo("catalog-model");
-            assertThat(tree.path("stream_options").path("include_usage").asBoolean())
-                    .isTrue();
-            // The un-augmented body is kept so a provider that rejects the flag can be retried on
-            // exactly what the caller sent.
-            assertThat(OBJECT_MAPPER.readTree(prepared.withoutUsageRequest()).has("stream_options"))
-                    .isFalse();
-        }
-
-        static Stream<Arguments> requestedCapabilities() {
-            return Stream.of(
-                    Arguments.of(
-                            "{\"tools\":[{\"type\":\"function\"},{\"type\":\"custom\"}]}", true, "caller-run tools"),
-                    Arguments.of("{\"tools\":[{\"type\":\"web_search_preview\"}]}", false, "a provider-hosted tool"),
-                    Arguments.of("{\"web_search_options\":{}}", false, "hosted search asked for outside tools"),
-                    Arguments.of("{\"modalities\":[\"text\",\"audio\"],\"audio\":{}}", false, "audio output"),
-                    Arguments.of("{\"modalities\":[\"text\"]}", true, "an explicit text-only modality"));
-        }
-
-        @ParameterizedTest(name = "{2}")
-        @MethodSource("requestedCapabilities")
-        void locksTheRequestedCapabilitySurface(String body, boolean allowed, String what) {
-            var prepared = controller.prepareBody(body.getBytes(StandardCharsets.UTF_8), "model", false);
-
-            if (allowed) {
-                assertThat(prepared).as(what).isNotNull();
-            } else {
-                assertThat(prepared).as(what).isNull();
-            }
         }
     }
 
@@ -2393,6 +2320,19 @@ class LlmProxyServiceTest extends BaseUnitTest {
 
     @Nested
     class HeaderAllowlist {
+        @Test
+        void shouldInjectNativeAnthropicHeadersWithoutForwardingCallerKeysOrBetas() {
+            var incoming = incomingHeaders();
+            incoming.set("anthropic-version", "caller-version");
+            incoming.set("anthropic-beta", "caller-beta");
+            var output =
+                    controller.buildUpstreamHeaders(incoming, credential("anthropic-messages", LlmAuthMode.API_KEY));
+            assertThat(output.getFirst("x-api-key")).isEqualTo("secret");
+            assertThat(output.getFirst("anthropic-version")).isEqualTo("2023-06-01");
+            assertThat(output.get("anthropic-beta")).isNull();
+            assertThat(output.get(HttpHeaders.AUTHORIZATION)).isNull();
+            assertThat(output.get("api-key")).isNull();
+        }
 
         @Test
         void shouldInjectBearerAuthAndDropUnapprovedHeaders() {

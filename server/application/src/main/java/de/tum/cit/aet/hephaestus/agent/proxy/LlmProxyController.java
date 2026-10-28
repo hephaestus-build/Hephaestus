@@ -25,7 +25,7 @@ class LlmProxyController {
         this.proxyService = proxyService;
     }
 
-    @PostMapping({"/chat/completions", "/responses"})
+    @PostMapping({"/chat/completions", "/responses", "/v1/messages"})
     @WorkspaceAgnostic("Authenticated sandbox token carries and constrains the workspace route")
     public @Nullable ResponseEntity<?> proxy(
             HttpServletRequest request,

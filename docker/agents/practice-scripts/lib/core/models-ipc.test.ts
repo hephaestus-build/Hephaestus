@@ -3,6 +3,7 @@ import { test } from "node:test";
 
 import type { ModelSlot, SlotAnswer } from "./contract.ts";
 import { ipcModels } from "./models-ipc.ts";
+import { agent, z } from "./practice-script.ts";
 
 const embedded: SlotAnswer = { slot: "embedding", result: { embeddings: [[1, 0]], warnings: [] } };
 
@@ -35,3 +36,45 @@ void test("an answer for another slot is refused", async () => {
 		message: "the host answered a decision call with another slot's result",
 	});
 });
+
+for (const [supported, expected] of [
+	[true, "required"],
+	[false, "auto"],
+] as const) {
+	void test(`a custom script uses ${expected} tool choice from the host capability for an opaque alias`, async () => {
+		const asked: unknown[] = [];
+		const { chat } = ipcModels(
+			{ chat: "review-alias" },
+			async (_slot, options) => {
+				asked.push(options);
+				return {
+					slot: "chat",
+					result: {
+						content: [
+							{ type: "tool-call", toolCallId: "call-1", toolName: "submit", input: '{"ok":true}' },
+						],
+						finishReason: { unified: "tool-calls", raw: "tool_use" },
+						usage: {
+							inputTokens: { total: 1, noCache: 1, cacheRead: undefined, cacheWrite: undefined },
+							outputTokens: { total: 1, text: 1, reasoning: undefined },
+						},
+						warnings: [],
+					},
+				};
+			},
+			supported,
+		);
+		const answer = await agent({
+			model: chat,
+			tools: {},
+			instructions: "Check the work.",
+			prompt: "Check.",
+			schema: z.object({ ok: z.boolean() }),
+		});
+		assert.deepEqual(answer.output, { ok: true });
+		assert.equal(
+			z.object({ toolChoice: z.object({ type: z.string() }) }).parse(asked[0]).toolChoice.type,
+			expected,
+		);
+	});
+}

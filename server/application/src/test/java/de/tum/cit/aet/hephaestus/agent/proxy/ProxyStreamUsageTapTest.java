@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.proxy;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.DisplayName;
@@ -23,6 +24,21 @@ class ProxyStreamUsageTapTest extends BaseUnitTest {
 
     private static void feed(ProxyStreamUsageTap tap, String text) {
         tap.accept(text.getBytes(StandardCharsets.UTF_8));
+    }
+
+    @Test
+    void shouldMergeNativeAnthropicCumulativeUsageAcrossFragmentedEvents() {
+        var tap = new ProxyStreamUsageTap(MAPPER, LlmApiProtocol.ANTHROPIC_MESSAGES);
+        String start =
+                "data: {\"type\":\"message_start\",\"message\":{\"usage\":{\"input_tokens\":13,\"output_tokens\":0,\"cache_read_input_tokens\":1200,\"cache_creation_input_tokens\":300}}}\n\n";
+        for (byte value : start.getBytes(StandardCharsets.UTF_8)) tap.accept(new byte[] {value});
+        assertThat(tap.observed()).isEqualTo(new ProxyTokenUsage(13, 0, 0, 1200, 300));
+        feed(tap, "data: {\"type\":\"message_delta\",\"usage\":{\"output_tokens\":5}}\n\n");
+        feed(tap, "data: {\"type\":\"message_delta\",\"usage\":{\"output_tokens\":7}}\n\n");
+        assertThat(tap.observed()).isEqualTo(new ProxyTokenUsage(13, 7, 0, 1200, 300));
+        feed(tap, "data: {\"type\":\"message_delta\",\"usage\":{\"output_tokens\":-1}}\n\n");
+        assertThat(tap.observed()).isEqualTo(new ProxyTokenUsage(13, 7, 0, 1200, 300));
+        assertThat(tap.hasMalformedUsage()).isTrue();
     }
 
     @Nested

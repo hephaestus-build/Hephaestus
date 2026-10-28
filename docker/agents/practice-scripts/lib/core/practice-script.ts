@@ -315,8 +315,7 @@ export async function agent<T>(options: {
 		description: "Submit the final answer. This ends the task.",
 		inputSchema: options.schema,
 	});
-	const modelId = typeof options.model === "string" ? options.model : options.model.modelId;
-	const forced = supportsForcedToolChoice(modelId);
+	const forced = supportsForcedToolChoice(options.model);
 	const messages: ModelMessage[] = [{ role: "user", content: options.prompt }];
 	let steps = 0;
 	for (let continuation = 0; continuation <= 2 && steps < maxSteps; continuation += 1) {

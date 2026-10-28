@@ -1,4 +1,5 @@
 // The host controls credentials, attribution, allowed model options, and budget reservations.
+import { createAnthropic } from "@ai-sdk/anthropic";
 import { createOpenAI } from "@ai-sdk/openai";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { APICallError, InvalidResponseDataError, type RerankingModelV4 } from "@ai-sdk/provider";
@@ -20,6 +21,7 @@ import {
 	type SlotModels,
 } from "./contract.ts";
 import { decisionOutputTokens, logprobDecisionModel } from "./decision-logprobs.ts";
+import { registerForcedToolChoice } from "./model-capabilities.ts";
 import { MAX_OUTPUT_TOKENS } from "./model-options.ts";
 import { reasonOf } from "./practice-script.ts";
 
@@ -141,6 +143,19 @@ export function hostModels(
 		});
 	} else if (chat?.protocol === "openai-completions") {
 		models.chat = compatible("chat").chatModel(chat.modelId);
+	}
+	if (chat?.protocol === "anthropic-messages") {
+		models.chat = createAnthropic({
+			...settings("chat"),
+			baseURL: `${settings("chat").baseURL}/v1`,
+			headers: { ...headers, authorization: `Bearer ${token}` },
+		})(chat.modelId);
+	}
+	if (models.chat !== undefined) {
+		registerForcedToolChoice(
+			models.chat,
+			chat?.forcedToolChoice === true && chat.protocol !== "anthropic-messages",
+		);
 	}
 	if (decision?.protocol === "openai-decisions") {
 		models.decision = createOpenAI(settings("decision")).decisionModel(decision.modelId);

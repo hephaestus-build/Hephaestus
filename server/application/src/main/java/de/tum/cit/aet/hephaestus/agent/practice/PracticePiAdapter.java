@@ -69,7 +69,8 @@ public class PracticePiAdapter {
                 request.jobToken(),
                 request.timeoutSeconds(),
                 PROFILE,
-                extraInputs));
+                extraInputs,
+                request.forcedToolChoice()));
         Map<String, String> environment = new LinkedHashMap<>(plan.environment());
         environment.put(PRACTICE_MODEL_CALLS_ENV, Integer.toString(reviewProperties.practiceModelCalls()));
         environment.put(PRACTICE_OUTPUT_TOKENS_ENV, Integer.toString(reviewProperties.practiceOutputTokens()));
@@ -95,13 +96,17 @@ public class PracticePiAdapter {
     /** One entry of {@link SandboxLayout#PRACTICE_SCRIPT_MODELS_FILE}: the toolkit's {@code boundModelSchema}. */
     @JsonInclude(JsonInclude.Include.NON_NULL)
     record BoundModel(
-            String protocol, String modelId, @Nullable ReasoningEffort reasoningEffort) {}
+            String protocol, String modelId, @Nullable ReasoningEffort reasoningEffort, boolean forcedToolChoice) {}
 
     private static Map<String, BoundModel> boundModels(Map<ModelKind, FrozenModel> models) {
         Map<String, BoundModel> bound = new LinkedHashMap<>();
         models.forEach((kind, model) -> bound.put(
                 kind.name().toLowerCase(Locale.ROOT),
-                new BoundModel(model.apiProtocol().wire(), model.upstreamModelId(), model.reasoningEffort())));
+                new BoundModel(
+                        model.apiProtocol().wire(),
+                        model.upstreamModelId(),
+                        model.reasoningEffort(),
+                        model.forcedToolChoice())));
         return Map.copyOf(bound);
     }
 

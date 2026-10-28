@@ -13,7 +13,10 @@ describe("LLM API protocol labels", () => {
 		expect(
 			LLM_API_PROTOCOL_GROUPS.map(({ label, protocols }) => ({ label, protocols })),
 		).toStrictEqual([
-			{ label: "Chat models", protocols: ["openai-responses", "openai-completions"] },
+			{
+				label: "Chat models",
+				protocols: ["openai-responses", "openai-completions", "anthropic-messages"],
+			},
 			{
 				label: "For practice scripts",
 				protocols: ["openai-decisions", "openai-embeddings", "cohere-rerank"],
@@ -25,6 +28,7 @@ describe("LLM API protocol labels", () => {
 		expect(LLM_API_PROTOCOL_SELECT_ITEMS).toStrictEqual([
 			{ value: "openai-responses", label: "Responses API" },
 			{ value: "openai-completions", label: "Chat Completions API" },
+			{ value: "anthropic-messages", label: "Messages API (Anthropic)" },
 			{ value: "openai-decisions", label: "Decisions API" },
 			{ value: "openai-embeddings", label: "Embeddings API" },
 			{ value: "cohere-rerank", label: "Rerank API (Cohere-compatible)" },

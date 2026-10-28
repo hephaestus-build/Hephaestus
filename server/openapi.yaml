@@ -881,6 +881,26 @@ paths:
       summary: Update a model's metadata
       tags:
       - Admin LLM
+  /admin/llm/models/{id}/capabilities:
+    put:
+      operationId: adminProbeLlmModelCapabilities
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: integer
+          format: int64
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LlmModelCapabilities"
+          description: OK
+      summary: Probe the model's forced tool-choice capability
+      tags:
+      - Admin LLM
   /admin/llm/models/{id}/price:
     put:
       operationId: adminUpdateLlmModelPrice
@@ -5489,6 +5509,35 @@ paths:
           description: Another model on the connection already uses this upstream
             model id
       summary: Update a model on your AI provider
+      tags:
+      - Workspace LLM
+  /workspaces/{workspaceSlug}/llm/models/{id}/capabilities:
+    put:
+      operationId: workspaceProbeLlmModelCapabilities
+      parameters:
+      - description: Workspace slug
+        in: path
+        name: workspaceSlug
+        required: true
+        schema:
+          type: string
+          maxLength: 51
+          minLength: 3
+          pattern: "^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$"
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: integer
+          format: int64
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LlmModelCapabilities"
+          description: OK
+      summary: Probe the model's forced tool-choice capability
       tags:
       - Workspace LLM
   /workspaces/{workspaceSlug}/llm/settings:
@@ -14420,6 +14469,7 @@ components:
           type: string
           description: Wire protocol
           enum:
+          - anthropic-messages
           - openai-completions
           - openai-responses
           - openai-decisions
@@ -14755,6 +14805,7 @@ components:
           type: string
           description: Wire protocol
           enum:
+          - anthropic-messages
           - openai-completions
           - openai-responses
           - openai-decisions
@@ -17094,6 +17145,7 @@ components:
           type: string
           description: Wire protocol
           enum:
+          - anthropic-messages
           - openai-completions
           - openai-responses
           - openai-decisions
@@ -17237,6 +17289,9 @@ components:
         enabled:
           type: boolean
           description: Active toggle
+        forcedToolChoice:
+          type: boolean
+          description: Probed forced_tool_choice capability; null until established
         grantedWorkspaceIds:
           type: array
           description: Workspace ids shared with; only meaningful when visibility
@@ -17298,6 +17353,15 @@ components:
       - slug
       - upstreamModelId
       - visibility
+    LlmModelCapabilities:
+      type: object
+      description: "A synthetic probe result, not a claim about the quality of the\
+        \ model's answers."
+      properties:
+        forcedToolChoice:
+          type: boolean
+          description: forced_tool_choice; null when the probe could not establish
+            support
     LlmModelPrice:
       type: object
       description: "A model's price, per 1M tokens"
@@ -20917,6 +20981,7 @@ components:
           type: string
           description: Wire protocol
           enum:
+          - anthropic-messages
           - openai-completions
           - openai-responses
           - openai-decisions
@@ -28256,6 +28321,7 @@ components:
           type: string
           description: Wire protocol
           enum:
+          - anthropic-messages
           - openai-completions
           - openai-responses
           - openai-decisions
@@ -28399,6 +28465,9 @@ components:
         enabled:
           type: boolean
           description: Active toggle
+        forcedToolChoice:
+          type: boolean
+          description: Probed forced_tool_choice capability; null until established
         id:
           type: integer
           format: int64

@@ -1,6 +1,11 @@
 package de.tum.cit.aet.hephaestus.agent.catalog;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
@@ -18,6 +23,8 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.ParameterizedTypeReference;
@@ -25,9 +32,17 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
 class WorkspaceLlmModelControllerIntegrationTest extends AbstractWorkspaceIntegrationTest {
+    @BeforeEach
+    @AfterEach
+    void resetCapabilityProbe() {
+        reset(capabilityProbe);
+    }
 
     @Autowired
     private WebTestClient webTestClient;
+
+    @Autowired
+    private LlmModelCapabilityProbe capabilityProbe;
 
     @Autowired
     private LlmConnectionRepository llmConnectionRepository;
@@ -49,11 +64,16 @@ class WorkspaceLlmModelControllerIntegrationTest extends AbstractWorkspaceIntegr
     }
 
     private WorkspaceLlmConnectionDTO createWorkspaceConnection(Workspace workspace, String slug) {
+        return createWorkspaceConnection(workspace, slug, LlmApiProtocol.OPENAI_COMPLETIONS);
+    }
+
+    private WorkspaceLlmConnectionDTO createWorkspaceConnection(
+            Workspace workspace, String slug, LlmApiProtocol protocol) {
         var request = new CreateWorkspaceLlmConnectionRequestDTO(
                 slug,
                 "My Provider",
                 LlmCatalogTestFixtures.PUBLIC_BASE_URL,
-                LlmApiProtocol.OPENAI_COMPLETIONS,
+                protocol,
                 LlmAuthMode.BEARER,
                 "sk-workspace-secret",
                 true,
@@ -118,6 +138,60 @@ class WorkspaceLlmModelControllerIntegrationTest extends AbstractWorkspaceIntegr
                 llmConnectionRepository.save(LlmCatalogTestFixtures.connection("instance-conn-" + System.nanoTime()));
         return llmModelRepository.save(LlmCatalogTestFixtures.model(
                 connection, "instance-model-" + System.nanoTime(), upstreamId, visibility, enabled));
+    }
+
+    @Test
+    @WithAdminUser
+    void shouldPersistOwnModelCapabilityAndRefuseAnotherWorkspacesModel() {
+        Workspace owner = setupWorkspace("cap-owner");
+        var connection = createWorkspaceConnection(owner, "cap-connection", LlmApiProtocol.ANTHROPIC_MESSAGES);
+        var model = createWorkspaceModel(owner, connection.id(), "cap-model");
+        when(capabilityProbe.probe(any(), anyString())).thenReturn(new LlmModelCapabilitiesDTO(true));
+        webTestClient
+                .put()
+                .uri("/workspaces/{slug}/llm/models/{id}/capabilities", owner.getWorkspaceSlug(), model.id())
+                .headers(TestAuthUtils.withCurrentUser())
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.forcedToolChoice")
+                .isEqualTo(true);
+        assertThat(workspaceLlmModelRepository
+                        .findByIdAndWorkspaceId(model.id(), owner.getId())
+                        .orElseThrow()
+                        .getForcedToolChoice())
+                .isTrue();
+        Workspace other = setupWorkspace("cap-other");
+        webTestClient
+                .put()
+                .uri("/workspaces/{slug}/llm/models/{id}/capabilities", other.getWorkspaceSlug(), model.id())
+                .headers(TestAuthUtils.withCurrentUser())
+                .exchange()
+                .expectStatus()
+                .isNotFound()
+                .expectBody(Void.class);
+        assertThat(workspaceLlmModelRepository
+                        .findByIdAndWorkspaceId(model.id(), owner.getId())
+                        .orElseThrow()
+                        .getForcedToolChoice())
+                .isTrue();
+    }
+
+    @Test
+    @WithMentorUser
+    void shouldRefuseCapabilityProbeWhenTheCallerIsNotAWorkspaceAdmin() {
+        Workspace owner = setupWorkspace("cap-member");
+        ensureMembership(owner, persistUser("mentor"), WorkspaceRole.MEMBER);
+        webTestClient
+                .put()
+                .uri("/workspaces/{slug}/llm/models/1/capabilities", owner.getWorkspaceSlug())
+                .headers(TestAuthUtils.withCurrentUser())
+                .exchange()
+                .expectStatus()
+                .isForbidden()
+                .expectBody(Void.class);
+        verifyNoInteractions(capabilityProbe);
     }
 
     @Test

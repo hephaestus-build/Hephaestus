@@ -4,19 +4,21 @@ import type { LlmConnection } from "@/api/types.gen";
  * Create-time presets, presentation only: a persisted connection keeps its endpoint, protocol and
  * credential shape but not the preset it was seeded from.
  */
-export type ProviderPreset = "OPENAI" | "AZURE_OPENAI_V1" | "OTHER";
+export type ProviderPreset = "OPENAI" | "AZURE_OPENAI_V1" | "ANTHROPIC" | "OTHER";
 export type LlmAuthMode = "BEARER" | "API_KEY";
 
 export const PROVIDER_PRESET_ORDER: readonly ProviderPreset[] = [
 	"OPENAI",
 	"AZURE_OPENAI_V1",
+	"ANTHROPIC",
 	"OTHER",
 ];
 
 export const PROVIDER_PRESET_LABELS: Record<ProviderPreset, string> = {
 	OPENAI: "OpenAI",
 	AZURE_OPENAI_V1: "Azure OpenAI v1",
-	OTHER: "Other OpenAI-compatible endpoint",
+	ANTHROPIC: "Anthropic",
+	OTHER: "Other endpoint",
 };
 
 export const PROVIDER_PRESET_SELECT_ITEMS = PROVIDER_PRESET_ORDER.map((preset) => ({
@@ -27,7 +29,7 @@ export const PROVIDER_PRESET_SELECT_ITEMS = PROVIDER_PRESET_ORDER.map((preset) =
 export type LlmApiProtocol = LlmConnection["apiProtocol"];
 
 export function authModeDefaultFor(preset: ProviderPreset): LlmAuthMode {
-	return preset === "AZURE_OPENAI_V1" ? "API_KEY" : "BEARER";
+	return preset === "AZURE_OPENAI_V1" || preset === "ANTHROPIC" ? "API_KEY" : "BEARER";
 }
 
 export function baseUrlDefaultFor(preset: ProviderPreset): string {
@@ -37,6 +39,9 @@ export function baseUrlDefaultFor(preset: ProviderPreset): string {
 		}
 		case "AZURE_OPENAI_V1": {
 			return "https://RESOURCE.openai.azure.com/openai/v1";
+		}
+		case "ANTHROPIC": {
+			return "https://api.anthropic.com";
 		}
 		case "OTHER": {
 			return "";
@@ -51,6 +56,9 @@ export interface OpenAiConnectionIdentity {
 
 /** Azure is not inferred back from a stored connection; the preset only seeds the create form. */
 export function presetForConnection(connection: OpenAiConnectionIdentity): ProviderPreset {
+	if (connection.apiProtocol === "anthropic-messages") {
+		return "ANTHROPIC";
+	}
 	try {
 		if (new URL(connection.baseUrl).hostname.toLowerCase() === "api.openai.com") {
 			return "OPENAI";

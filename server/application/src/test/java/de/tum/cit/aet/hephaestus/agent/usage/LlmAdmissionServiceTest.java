@@ -98,7 +98,7 @@ class LlmAdmissionServiceTest extends BaseUnitTest {
                 .thenReturn(Optional.of(binding));
         when(modelRepository.findByIdForUpdate(20L)).thenReturn(Optional.of(instanceModel(binding)));
         ResolvedLlmModel resolved = new ResolvedLlmModel(
-                "https://api.example/v1", "openai-responses", "gpt-authoritative", null, null, null);
+                "https://api.example/v1", "openai-responses", "gpt-authoritative", null, null, null, false);
         when(resolver.resolve(binding)).thenReturn(resolved);
         when(resolver.connectionRef(binding))
                 .thenReturn(new LlmModelResolver.ConnectionRef(UsageFundingSource.INSTANCE, 10L, 20L, 30L));
@@ -134,7 +134,7 @@ class LlmAdmissionServiceTest extends BaseUnitTest {
                 .thenReturn(Optional.of(workspaceModel(binding)));
         when(resolver.resolve(binding))
                 .thenReturn(new ResolvedLlmModel(
-                        "https://byo.example/v1", "openai-responses", "byo-model", null, null, null));
+                        "https://byo.example/v1", "openai-responses", "byo-model", null, null, null, false));
         when(resolver.connectionRef(binding))
                 .thenReturn(new LlmModelResolver.ConnectionRef(UsageFundingSource.WORKSPACE, 11L, 21L, 30L));
         when(workspaceModelRepository.findByIdAndWorkspaceId(21L, 30L))
@@ -166,7 +166,7 @@ class LlmAdmissionServiceTest extends BaseUnitTest {
                 .thenReturn(Optional.of(workspaceModel(binding)));
         when(resolver.resolve(binding))
                 .thenReturn(new ResolvedLlmModel(
-                        "https://byo.example/v1", "openai-responses", "byo-model", null, null, null));
+                        "https://byo.example/v1", "openai-responses", "byo-model", null, null, null, false));
         when(resolver.connectionRef(binding))
                 .thenReturn(new LlmModelResolver.ConnectionRef(UsageFundingSource.WORKSPACE, 11L, 21L, 30L));
         when(workspaceModelRepository.findByIdAndWorkspaceId(21L, 30L))
@@ -209,7 +209,13 @@ class LlmAdmissionServiceTest extends BaseUnitTest {
         when(modelRepository.findByIdForUpdate(20L)).thenReturn(Optional.of(instanceModel(binding)));
         when(resolver.resolve(binding))
                 .thenReturn(new ResolvedLlmModel(
-                        "https://api.example/v1", "openai-embeddings", "text-embedding-3-small", null, null, null));
+                        "https://api.example/v1",
+                        "openai-embeddings",
+                        "text-embedding-3-small",
+                        null,
+                        null,
+                        null,
+                        false));
         when(resolver.connectionRef(binding))
                 .thenReturn(new LlmModelResolver.ConnectionRef(UsageFundingSource.INSTANCE, 10L, 20L, 30L));
         LlmModelPrice price = new LlmModelPrice();
@@ -237,7 +243,7 @@ class LlmAdmissionServiceTest extends BaseUnitTest {
                 .thenReturn(Optional.of(workspaceModel(binding)));
         when(resolver.resolve(binding))
                 .thenReturn(new ResolvedLlmModel(
-                        "https://byo.example/v1", "cohere-rerank", "rerank-v3.5", null, null, null));
+                        "https://byo.example/v1", "cohere-rerank", "rerank-v3.5", null, null, null, false));
         when(resolver.connectionRef(binding))
                 .thenReturn(new LlmModelResolver.ConnectionRef(UsageFundingSource.WORKSPACE, 11L, 21L, 30L));
         when(workspaceModelRepository.findByIdAndWorkspaceId(21L, 30L))

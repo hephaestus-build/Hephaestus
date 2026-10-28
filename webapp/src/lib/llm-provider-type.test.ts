@@ -2,7 +2,17 @@ import { describe, expect, it } from "vitest";
 
 import { authModeDefaultFor, baseUrlDefaultFor, presetForConnection } from "./llm-provider-type";
 
-describe("OpenAI-compatible endpoint presets", () => {
+describe("AI endpoint presets", () => {
+	it("seeds the native Anthropic endpoint and recognizes its protocol when editing", () => {
+		expect(baseUrlDefaultFor("ANTHROPIC")).toBe("https://api.anthropic.com");
+		expect(authModeDefaultFor("ANTHROPIC")).toBe("API_KEY");
+		expect(
+			presetForConnection({
+				apiProtocol: "anthropic-messages",
+				baseUrl: "https://gateway.example/v1",
+			}),
+		).toBe("ANTHROPIC");
+	});
 	it("gives Azure its own auth mode and base-URL template", () => {
 		expect(authModeDefaultFor("OPENAI")).toBe("BEARER");
 		expect(authModeDefaultFor("AZURE_OPENAI_V1")).toBe("API_KEY");

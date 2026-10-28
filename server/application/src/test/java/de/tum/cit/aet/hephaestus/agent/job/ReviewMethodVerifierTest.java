@@ -30,7 +30,7 @@ class ReviewMethodVerifierTest extends BaseUnitTest {
     private ReviewMethod persisted() {
         when(models.resolve(binding))
                 .thenReturn(new ResolvedLlmModel(
-                        "https://models.example", "openai-completions", "model", 32000, 16000, null));
+                        "https://models.example", "openai-completions", "model", 32000, 16000, null, false));
         when(models.connectionRef(binding))
                 .thenReturn(new LlmModelResolver.ConnectionRef(UsageFundingSource.INSTANCE, 1L, 2L, 3L));
         var method = new ReviewMethod(
@@ -49,7 +49,7 @@ class ReviewMethodVerifierTest extends BaseUnitTest {
         var method = persisted();
         when(models.resolve(binding))
                 .thenReturn(new ResolvedLlmModel(
-                        "https://models.example", "openai-completions", "model", 32000, 16001, null));
+                        "https://models.example", "openai-completions", "model", 32000, 16001, null, false));
         assertThatThrownBy(() -> verifier.require(method, "review", binding))
                 .isInstanceOf(ReviewJobStateConflictException.class);
     }

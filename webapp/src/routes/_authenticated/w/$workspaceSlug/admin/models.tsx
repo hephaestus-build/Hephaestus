@@ -4,6 +4,8 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 import { QueryErrorAlert, queryErrorIsRetryable } from "@/components/common/QueryErrorAlert";
+import { isPracticeScriptApi } from "@/lib/llm-api-protocol-labels";
+import { toolChoiceTestState } from "@/lib/llm-tool-choice-test";
 import type { RefreshFailure } from "@/runtime/tanstack-query/infinite-list";
 import { useQueryReadRefusal } from "@/runtime/tanstack-query/use-query-read-refusal";
 
@@ -29,6 +31,7 @@ import {
 	workspaceListLlmModelsOptions,
 	workspaceListLlmModelsQueryKey,
 	workspaceProbeLlmConnectionMutation,
+	workspaceProbeLlmModelCapabilitiesMutation,
 	workspaceUpdateLlmConnectionMutation,
 	workspaceUpdateLlmModelMutation,
 } from "@/api/@tanstack/react-query.gen";
@@ -120,6 +123,7 @@ function ModelsContainer() {
 	const { purpose: focusPurpose } = Route.useSearch();
 	const setSearch = useSearchState();
 	const queryClient = useQueryClient();
+
 	const saveKey = [...AGENT_WRITE_MUTATION_KEY, workspaceSlug, "save"];
 	const clearKey = [...AGENT_WRITE_MUTATION_KEY, workspaceSlug, "clear"];
 
@@ -363,6 +367,14 @@ function WorkspaceProviders({
 	onWrite,
 }: WorkspaceProvidersProps) {
 	const queryClient = useQueryClient();
+	const capabilityProbe = useMutation({
+		...workspaceProbeLlmModelCapabilitiesMutation(),
+		onSuccess: async () =>
+			queryClient.invalidateQueries({
+				queryKey: workspaceListLlmModelsQueryKey({ path: { workspaceSlug } }),
+			}),
+	});
+
 	const path = { workspaceSlug };
 	const modelWriteKey = [...MODEL_WRITE_MUTATION_KEY, workspaceSlug];
 	const connectionWriteKey = [...CONNECTION_WRITE_MUTATION_KEY, workspaceSlug];
@@ -608,10 +620,28 @@ function WorkspaceProviders({
 				notice={refreshNotice}
 				onOpenChange={(open) => {
 					if (!open) {
+						capabilityProbe.reset();
 						setModelForm(null);
 					}
 				}}
 				editing={modelForm?.kind === "edit" ? modelForm.model : null}
+				capabilities={
+					modelForm?.kind === "edit" &&
+					connections.some(
+						(connection) =>
+							connection.id === modelForm.model.connectionId &&
+							!isPracticeScriptApi(connection.apiProtocol) &&
+							connection.apiProtocol !== "anthropic-messages",
+					)
+						? {
+								supported: modelsQuery.data?.find((model) => model.id === modelForm.model.id)
+									?.forcedToolChoice,
+								test: toolChoiceTestState(modelForm.model.id, capabilityProbe),
+								onProbe: () =>
+									capabilityProbe.mutate({ path: { workspaceSlug, id: modelForm.model.id } }),
+							}
+						: undefined
+				}
 				isSubmitting={modelFormSubmitting}
 				onCreate={(body) => {
 					if (modelForm?.kind !== "create") {

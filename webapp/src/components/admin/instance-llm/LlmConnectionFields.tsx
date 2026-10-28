@@ -166,16 +166,34 @@ export function LlmConnectionFields({
 
 	const baseUrlWasTypedByHand =
 		hasText(value.baseUrl) && value.baseUrl !== baseUrlDefaultFor(value.preset);
-	const presetChange = (next: ProviderPreset): Partial<LlmConnectionFieldsValue> => ({
-		preset: next,
-		authMode: authModeDefaultFor(next),
-		...(baseUrlWasTypedByHand ? {} : { baseUrl: baseUrlDefaultFor(next) }),
-	});
+	const presetChange = (next: ProviderPreset): Partial<LlmConnectionFieldsValue> => {
+		let { apiProtocol } = value;
+		if (next === "ANTHROPIC") {
+			apiProtocol = "anthropic-messages";
+		} else if (apiProtocol === "anthropic-messages") {
+			apiProtocol = "openai-responses";
+		}
+		return {
+			preset: next,
+			authMode: authModeDefaultFor(next),
+			apiProtocol,
+			...(baseUrlWasTypedByHand ? {} : { baseUrl: baseUrlDefaultFor(next) }),
+		};
+	};
 
 	const applyApiProtocol = (next: LlmApiProtocol) => {
 		// Neither OpenAI nor Azure OpenAI serves a rerank API, so their address would be wrong here.
-		const presetServesIt = next !== "cohere-rerank" || value.preset === "OTHER";
-		update({ apiProtocol: next, ...(presetServesIt ? {} : presetChange("OTHER")) });
+		const presetServesIt =
+			value.preset === "OTHER" ||
+			(value.preset === "ANTHROPIC"
+				? next === "anthropic-messages"
+				: next !== "cohere-rerank" && next !== "anthropic-messages");
+		update({
+			...(presetServesIt
+				? {}
+				: presetChange(next === "anthropic-messages" ? "ANTHROPIC" : "OTHER")),
+			apiProtocol: next,
+		});
 	};
 
 	return (
@@ -300,6 +318,11 @@ export function LlmConnectionFields({
 					aria-invalid={Boolean(errors.baseUrl)}
 					aria-describedby={hasText(errors.baseUrl) ? baseUrlErrorId : undefined}
 				/>
+				{value.apiProtocol === "anthropic-messages" && (
+					<FieldDescription>
+						Use the API root without /v1. Hephaestus adds /v1/messages.
+					</FieldDescription>
+				)}
 				{isEdit && (
 					<FieldDescription>
 						Endpoint, API and authentication cannot change. Add a connection instead.

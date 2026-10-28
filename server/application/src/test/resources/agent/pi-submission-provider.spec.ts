@@ -36,8 +36,12 @@ for (const [apiProtocol, reasoningEffort, modelId = "test-model"] of [
 	const manualThinking = reasoningEffort !== undefined;
 	void test(`${apiProtocol} ${modelId} ${manualThinking ? "preserves manual thinking without an unsupported forced tool" : "requires submit_result after exploration and preserves the other tools"}`, async () => {
 		const bodies: Record<string, unknown>[] = [];
+		const nativeRequests: unknown[] = [];
 		const server = createServer((request, response) => {
 			const chunks: Buffer[] = [];
+			if (apiProtocol === "anthropic-messages") {
+				nativeRequests.push({ authorization: request.headers.authorization, path: request.url });
+			}
 			request.on("data", (chunk: Buffer) => {
 				chunks.push(chunk);
 			});
@@ -65,10 +69,15 @@ for (const [apiProtocol, reasoningEffort, modelId = "test-model"] of [
 				modelsPath: path.join(cwd, "models.json"),
 				allowModelNetwork: false,
 			});
-			const config = { apiProtocol, modelId, reasoningEffort };
+			const config = {
+				apiProtocol,
+				modelId,
+				reasoningEffort,
+				forcedToolChoice: modelId === "test-model",
+			};
 			assert.ok(
 				registerHephaestusProvider(modelRuntime, config, {
-					LLM_PROXY_URL: `http://127.0.0.1:${address.port}/v1`,
+					LLM_PROXY_URL: `http://127.0.0.1:${address.port}${apiProtocol === "anthropic-messages" ? "" : "/v1"}`,
 					LLM_PROXY_TOKEN: "test-only",
 				}),
 			);
@@ -110,10 +119,16 @@ for (const [apiProtocol, reasoningEffort, modelId = "test-model"] of [
 			required = true;
 			await session.prompt("Submit this practice's result with submit_result.");
 			assert.equal(bodies.length, 2);
+			if (apiProtocol === "anthropic-messages") {
+				assert.deepEqual(nativeRequests, [
+					{ authorization: "Bearer test-only", path: "/v1/messages?beta=true" },
+					{ authorization: "Bearer test-only", path: "/v1/messages?beta=true" },
+				]);
+			}
 			const [exploring, recording] = bodies;
 			assert.ok(exploring && recording);
 			assert.equal("tool_choice" in exploring, false);
-			if (modelId !== "test-model") {
+			if (modelId !== "test-model" || apiProtocol === "anthropic-messages") {
 				assert.equal(recording.tool_choice, undefined);
 			} else if (manualThinking) {
 				assert.equal(recording.tool_choice, undefined);
@@ -130,10 +145,32 @@ for (const [apiProtocol, reasoningEffort, modelId = "test-model"] of [
 					apiProtocol === "openai-completions"
 						? { type: "function", function: { name: "submit_result" } }
 						: {
-								type: apiProtocol === "openai-responses" ? "function" : "tool",
+								type: "function",
 								name: "submit_result",
 							},
 				);
+			}
+			if (apiProtocol === "anthropic-messages") {
+				for (const body of bodies) {
+					assert.ok(Array.isArray(body.tools));
+					assert.ok(
+						body.tools.every(
+							(tool: unknown) =>
+								isRecord(tool) &&
+								(tool.type === undefined || tool.type === "custom") &&
+								isRecord(tool.input_schema),
+						),
+						"the gateway only permits custom client tools",
+					);
+					assert.ok(Array.isArray(body.messages));
+					assert.ok(
+						body.messages.every(
+							(message: unknown) =>
+								isRecord(message) && (message.role === "user" || message.role === "assistant"),
+						),
+						"the gateway uses a top-level system prompt",
+					);
+				}
 			}
 			assert.deepEqual(recording.tools, exploring.tools);
 		} finally {

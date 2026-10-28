@@ -18,7 +18,7 @@ class PiPlanSpecValidationTest extends BaseUnitTest {
 
     private static PiPlanSpec specWith(Map<String, byte[]> extraInputs) {
         return new PiPlanSpec(
-                "openai-completions", "gpt-5.4-mini", null, null, null, "job-token", 600, PROFILE, extraInputs);
+                "openai-completions", "gpt-5.4-mini", null, null, null, "job-token", 600, PROFILE, extraInputs, false);
     }
 
     @Test
@@ -43,7 +43,7 @@ class PiPlanSpecValidationTest extends BaseUnitTest {
     @Test
     void jobTokenIsAlwaysRequired() {
         assertThatThrownBy(() -> new PiPlanSpec(
-                        "openai-completions", "gpt-5.4-mini", null, null, null, null, 600, PROFILE, Map.of()))
+                        "openai-completions", "gpt-5.4-mini", null, null, null, null, 600, PROFILE, Map.of(), false))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("jobToken");
     }
@@ -51,15 +51,15 @@ class PiPlanSpecValidationTest extends BaseUnitTest {
     @Test
     void blankJobTokenRejected() {
         assertThatThrownBy(() -> new PiPlanSpec(
-                        "openai-completions", "gpt-5.4-mini", null, null, null, "  ", 600, PROFILE, Map.of()))
+                        "openai-completions", "gpt-5.4-mini", null, null, null, "  ", 600, PROFILE, Map.of(), false))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("jobToken");
     }
 
     @Test
     void blankApiProtocolRejected() {
-        assertThatThrownBy(
-                        () -> new PiPlanSpec("", "gpt-5.4-mini", null, null, null, "job-token", 600, PROFILE, Map.of()))
+        assertThatThrownBy(() -> new PiPlanSpec(
+                        "", "gpt-5.4-mini", null, null, null, "job-token", 600, PROFILE, Map.of(), false))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("apiProtocol");
     }
@@ -67,7 +67,7 @@ class PiPlanSpecValidationTest extends BaseUnitTest {
     @Test
     void blankUpstreamModelIdRejected() {
         assertThatThrownBy(() -> new PiPlanSpec(
-                        "openai-completions", "  ", null, null, null, "job-token", 600, PROFILE, Map.of()))
+                        "openai-completions", "  ", null, null, null, "job-token", 600, PROFILE, Map.of(), false))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("upstreamModelId");
     }
@@ -83,7 +83,8 @@ class PiPlanSpecValidationTest extends BaseUnitTest {
                         "job-token",
                         PiRuntimeFactory.TIMEOUT_BUFFER_SECONDS,
                         PROFILE,
-                        Map.of()))
+                        Map.of(),
+                        false))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("TIMEOUT_BUFFER_SECONDS");
     }
@@ -117,7 +118,8 @@ class PiPlanSpecValidationTest extends BaseUnitTest {
                         "job-token",
                         600,
                         BLANK_SCRIPT_PROFILE,
-                        Map.of()))
+                        Map.of(),
+                        false))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("runnerScript");
     }
@@ -134,7 +136,8 @@ class PiPlanSpecValidationTest extends BaseUnitTest {
                         "job-token",
                         600,
                         PROFILE,
-                        Map.of()));
+                        Map.of(),
+                        false));
     }
 
     @Test

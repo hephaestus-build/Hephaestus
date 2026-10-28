@@ -55,7 +55,7 @@ class PracticePiAdapterTest extends BaseUnitTest {
 
     private PracticeAgentRequest proxyRequest() {
         return new PracticeAgentRequest(
-                "azure-openai-responses", "gpt-5.4-mini", null, null, null, "job-token-123", 600, Map.of());
+                "azure-openai-responses", "gpt-5.4-mini", null, null, null, "job-token-123", 600, Map.of(), false);
     }
 
     @Test
@@ -113,7 +113,8 @@ class PracticePiAdapterTest extends BaseUnitTest {
                 null,
                 "job-token-123",
                 PracticePiAdapter.MIN_TIMEOUT_SECONDS,
-                Map.of());
+                Map.of(),
+                false);
 
         assertThat(Long.parseLong(
                         adapter.buildSandboxSpec(request).environment().get("AGENT_BUDGET_MS")))
@@ -125,7 +126,7 @@ class PracticePiAdapterTest extends BaseUnitTest {
     void shouldGiveTheRunnerTheWholeTimeoutLessTheShutdownBufferWhenBuildingTheSpec(
             int timeoutSeconds, long expectedBudgetMs) {
         PracticeAgentRequest request = new PracticeAgentRequest(
-                "openai-completions", "m", null, null, null, "job-token-123", timeoutSeconds, Map.of());
+                "openai-completions", "m", null, null, null, "job-token-123", timeoutSeconds, Map.of(), false);
 
         long budgetMs =
                 Long.parseLong(adapter.buildSandboxSpec(request).environment().get("AGENT_BUDGET_MS"));
@@ -150,7 +151,8 @@ class PracticePiAdapterTest extends BaseUnitTest {
                 null,
                 "job-token-123",
                 600,
-                Map.of(ModelKind.CHAT, model("openai-completions", "qwen-chat")));
+                Map.of(ModelKind.CHAT, model("openai-completions", "qwen-chat")),
+                false);
 
         var spec = adapter.buildSandboxSpec(request);
 
@@ -171,7 +173,8 @@ class PracticePiAdapterTest extends BaseUnitTest {
                 null,
                 null,
                 null,
-                null);
+                null,
+                false);
     }
 
     @Test
@@ -195,7 +198,8 @@ class PracticePiAdapterTest extends BaseUnitTest {
                 ReasoningEffort.MEDIUM,
                 "job-token-123",
                 600,
-                Map.of());
+                Map.of(),
+                false);
 
         var spec = adapter.buildSandboxSpec(request);
 

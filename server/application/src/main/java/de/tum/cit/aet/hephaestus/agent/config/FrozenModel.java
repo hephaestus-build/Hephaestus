@@ -31,7 +31,8 @@ public record FrozenModel(
         @Nullable Long workspaceId,
         @Nullable DataHandlingTier dataHandlingTier,
         @Nullable ReasoningEffort reasoningEffort,
-        @Nullable LlmPriceSnapshot priceSnapshot) {
+        @Nullable LlmPriceSnapshot priceSnapshot,
+        boolean forcedToolChoice) {
     public FrozenModel {
         Objects.requireNonNull(apiProtocol, "apiProtocol must not be null");
         Objects.requireNonNull(baseUrl, "baseUrl must not be null");
@@ -56,7 +57,8 @@ public record FrozenModel(
                 ref.workspaceId(),
                 source.getDataHandlingTier(),
                 resolved.reasoningEffort(),
-                null);
+                null,
+                resolved.forcedToolChoice());
     }
 
     public LlmModelResolver.ConnectionRef connectionRef() {
@@ -82,6 +84,7 @@ public record FrozenModel(
                 workspaceId,
                 dataHandlingTier,
                 reasoningEffort,
-                price);
+                price,
+                forcedToolChoice);
     }
 }

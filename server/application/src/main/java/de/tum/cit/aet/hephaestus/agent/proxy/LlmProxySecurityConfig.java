@@ -83,7 +83,8 @@ class LlmProxySecurityConfig {
         RequestMatcher practiceScriptCalls = paths.matcher(HttpMethod.POST, "/internal/llm/practice-script/{slot}/**");
         RequestMatcher models = new OrRequestMatcher(
                 paths.matcher(HttpMethod.POST, "/internal/llm/chat/completions"),
-                paths.matcher(HttpMethod.POST, "/internal/llm/responses"));
+                paths.matcher(HttpMethod.POST, "/internal/llm/responses"),
+                paths.matcher(HttpMethod.POST, "/internal/llm/v1/messages"));
         RequestMatcher reviewCalls = new OrRequestMatcher(
                 practiceScriptCalls, paths.matcher(HttpMethod.POST, "/internal/llm/admit-results"));
         RequestMatcher modelCalls = new OrRequestMatcher(models, reviewCalls);

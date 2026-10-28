@@ -12,7 +12,7 @@ class LlmApiProtocolTest extends BaseUnitTest {
 
     @ParameterizedTest(name = "\"{0}\" is not a protocol")
     @NullAndEmptySource
-    @ValueSource(strings = {"anthropic-messages", "azure-openai-responses", "OPENAI_COMPLETIONS", "rerank"})
+    @ValueSource(strings = {"azure-openai-responses", "OPENAI_COMPLETIONS", "rerank"})
     void shouldParseToNothingWhenTheValueNamesNoProtocol(@Nullable String wire) {
         assertThat(LlmApiProtocol.parse(wire)).isEmpty();
     }

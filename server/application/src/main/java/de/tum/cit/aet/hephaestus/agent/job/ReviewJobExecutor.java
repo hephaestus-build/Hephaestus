@@ -1095,7 +1095,8 @@ public class ReviewJobExecutor {
                     snapshot.model().reasoningEffort(),
                     jobToken,
                     snapshot.timeoutSeconds(),
-                    snapshot.practiceScriptModels());
+                    snapshot.practiceScriptModels(),
+                    snapshot.model().forcedToolChoice());
 
             PracticeSandboxSpec agentSpec = practiceAgent.buildSandboxSpec(adapterRequest);
             SandboxSpec sandboxSpec = buildSandboxSpec(

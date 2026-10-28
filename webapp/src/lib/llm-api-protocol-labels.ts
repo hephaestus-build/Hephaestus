@@ -21,6 +21,11 @@ export const LLM_API_PROTOCOL_LABELS = {
 		description:
 			"Use only if the endpoint does not serve the Responses API. It can also serve the decision model if it returns token probabilities and answers without reasoning.",
 	},
+	"anthropic-messages": {
+		label: "Messages API (Anthropic)",
+		group: "CHAT",
+		description: "Anthropic’s native API. Reviews always let the model decide when to call tools.",
+	},
 	"openai-decisions": {
 		label: "Decisions API",
 		group: "PRACTICE_SCRIPT",

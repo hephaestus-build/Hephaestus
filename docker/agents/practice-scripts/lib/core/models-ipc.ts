@@ -1,6 +1,8 @@
 // Credentials stay with the host; the child runs the SDK loop, output parsing, and tools.
 import { customProvider } from "ai";
 
+import { registerForcedToolChoice } from "./model-capabilities.ts";
+
 import { MODEL_SLOT_CAPS, type ModelSlot, type SlotAnswer, type SlotModels } from "./contract.ts";
 
 type ModelCall = (
@@ -32,6 +34,7 @@ function isAnswerOf<S extends ModelSlot>(
 export function ipcModels(
 	available: Partial<Record<ModelSlot, string>>,
 	call: ModelCall,
+	forcedToolChoice = false,
 ): Partial<SlotModels> {
 	globalThis.AI_SDK_DEFAULT_PROVIDER = customProvider({});
 	// The reply crosses the process boundary untyped, so its slot is what proves its result's type.
@@ -58,6 +61,9 @@ export function ipcModels(
 				throw new Error("a practice script calls models with generateText, never streamText");
 			},
 		};
+	}
+	if (models.chat !== undefined) {
+		registerForcedToolChoice(models.chat, forcedToolChoice);
 	}
 	if (available.decision !== undefined) {
 		models.decision = {

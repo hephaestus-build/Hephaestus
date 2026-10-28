@@ -264,7 +264,8 @@ class ProxyRoutingServiceTest extends BaseUnitTest {
                 7L,
                 DataHandlingTier.IN_HOUSE,
                 null,
-                price);
+                price,
+                false);
     }
 
     private static MockHttpServletRequest request(String path) {

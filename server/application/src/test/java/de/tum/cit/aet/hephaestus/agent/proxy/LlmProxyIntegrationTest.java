@@ -564,6 +564,67 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
         }
     }
 
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void shouldRouteAndBillNativeAnthropicCallsWithTheAttemptsOwnCredential(boolean stream) throws Exception {
+        try (MockWebServer upstream = new MockWebServer()) {
+            upstream.start();
+            String usage =
+                    "{\"input_tokens\":13,\"output_tokens\":7,\"cache_read_input_tokens\":1200,\"cache_creation_input_tokens\":300}";
+            upstream.enqueue(
+                    stream
+                            ? new MockResponse.Builder()
+                                    .code(200)
+                                    .addHeader("Content-Type", "text/event-stream")
+                                    .body(
+                                            "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"usage\":"
+                                                    + usage + "}}\n\n"
+                                                    + "event: message_delta\ndata: {\"type\":\"message_delta\",\"usage\":{\"output_tokens\":9}}\n\n"
+                                                    + "event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n")
+                                    .build()
+                            : json("{\"content\":[],\"usage\":" + usage + "}"));
+            ReviewJob job = practiceScriptJob(upstream.url("/").toString(), LlmApiProtocol.ANTHROPIC_MESSAGES);
+            var request = new MockHttpServletRequest("POST", "/internal/llm/v1/messages");
+            request.setQueryString("beta=true");
+            request.setRemoteAddr("127.0.0.1");
+            request.addHeader("Authorization", "Bearer " + tokenFor(job));
+            var response = new MockHttpServletResponse();
+            var service = proxyService(200_000);
+            var body = objectMapper
+                    .createObjectNode()
+                    .put("model", "caller-model")
+                    .put("stream", stream)
+                    .put("max_tokens", 64);
+            body.putArray("messages").addObject().put("role", "user").put("content", "Review.");
+            AtomicReference<@Nullable ResponseEntity<?>> served = new AtomicReference<>();
+            filter.doFilter(
+                    request,
+                    response,
+                    (ignoredRequest, ignoredResponse) -> served.set(
+                            service.proxy(request, response, new HttpHeaders(), objectMapper.writeValueAsBytes(body))));
+            var answer = served.get();
+            assertThat(
+                            answer == null
+                                    ? response.getStatus()
+                                    : answer.getStatusCode().value())
+                    .isEqualTo(200);
+            var sent = Objects.requireNonNull(upstream.takeRequest(5, TimeUnit.SECONDS));
+            assertThat(sent.getUrl().encodedPath()).isEqualTo("/v1/messages");
+            assertThat(sent.getUrl().query()).isNull();
+            assertThat(sent.getHeaders().get("x-api-key")).isEqualTo("upstream-secret");
+            assertThat(sent.getHeaders().get("Authorization")).isNull();
+            var forwarded =
+                    objectMapper.readTree(Objects.requireNonNull(sent.getBody()).utf8());
+            assertThat(forwarded.path("model").asString()).isEqualTo("chat-upstream");
+            assertThat(forwarded.has("stream_options")).isFalse();
+            var recorded = jobRepository.findById(job.getId()).orElseThrow();
+            assertThat(recorded.getLlmInputTokens()).isEqualTo(13);
+            assertThat(recorded.getLlmCacheReadTokens()).isEqualTo(1200);
+            assertThat(recorded.getLlmCacheWriteTokens()).isEqualTo(300);
+            assertThat(recorded.getLlmOutputTokens()).isEqualTo(stream ? 9 : 7);
+        }
+    }
+
     @Test
     void shouldServeAWorkerCallOnlyForTheRunningAttemptOnThisWorkerAndBillIt() throws Exception {
         try (MockWebServer upstream = new MockWebServer()) {
@@ -1012,10 +1073,14 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
     }
 
     private ReviewJob practiceScriptJob(String baseUrl) {
+        return practiceScriptJob(baseUrl, LlmApiProtocol.OPENAI_COMPLETIONS);
+    }
+
+    private ReviewJob practiceScriptJob(String baseUrl, LlmApiProtocol chatProtocol) {
         Map<ModelKind, CatalogModel> catalog = new EnumMap<>(ModelKind.class);
         for (ModelKind kind : ModelKind.values()) {
             LlmApiProtocol protocol = switch (kind) {
-                case CHAT -> LlmApiProtocol.OPENAI_COMPLETIONS;
+                case CHAT -> chatProtocol;
                 case DECISION -> LlmApiProtocol.OPENAI_DECISIONS;
                 case EMBEDDING -> LlmApiProtocol.OPENAI_EMBEDDINGS;
                 case RERANKING -> LlmApiProtocol.COHERE_RERANK;
@@ -1055,7 +1120,8 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                             workspace.getId(),
                             DataHandlingTier.CLOUD,
                             null,
-                            price));
+                            price,
+                            false));
         }
         CatalogModel chat = Objects.requireNonNull(catalog.get(ModelKind.CHAT));
         ConfigSnapshot snapshot = new ConfigSnapshot(
@@ -1070,7 +1136,8 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                                 workspace.getId(),
                                 DataHandlingTier.UNDECLARED,
                                 null,
-                                price),
+                                price,
+                                false),
                         null,
                         null,
                         600,
@@ -1163,7 +1230,8 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                                 workspace.getId(),
                                 DataHandlingTier.UNDECLARED,
                                 null,
-                                null),
+                                null,
+                                false),
                         null,
                         null,
                         600,

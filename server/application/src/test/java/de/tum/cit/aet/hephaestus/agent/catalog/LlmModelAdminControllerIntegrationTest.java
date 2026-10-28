@@ -1,6 +1,11 @@
 package de.tum.cit.aet.hephaestus.agent.catalog;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
@@ -16,6 +21,7 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -29,11 +35,20 @@ class LlmModelAdminControllerIntegrationTest extends AbstractWorkspaceIntegratio
         persistUser("admin");
     }
 
+    @BeforeEach
+    @AfterEach
+    void resetCapabilityProbe() {
+        reset(capabilityProbe);
+    }
+
     private static final String ADMIN_TOKEN = "mock-jwt-token-for-admin-user";
     private static final String MENTOR_TOKEN = "mock-jwt-token-for-mentor-user";
 
     @Autowired
     private WebTestClient webTestClient;
+
+    @Autowired
+    private LlmModelCapabilityProbe capabilityProbe;
 
     @Autowired
     private LlmConnectionRepository llmConnectionRepository;
@@ -64,6 +79,38 @@ class LlmModelAdminControllerIntegrationTest extends AbstractWorkspaceIntegratio
                 .expectBody(LlmModelDTO.class)
                 .returnResult()
                 .getResponseBody());
+    }
+
+    @Test
+    void shouldPersistAProbedCapabilityOnlyForAnInstanceAdmin() {
+        var connection = seedConnection();
+        var model = createModel(connection.getId(), "cap-model");
+        when(capabilityProbe.probe(any(), anyString())).thenReturn(new LlmModelCapabilitiesDTO(false));
+        webTestClient
+                .put()
+                .uri("/admin/llm/models/{id}/capabilities", model.id())
+                .headers(h -> h.setBearerAuth(ADMIN_TOKEN))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.forcedToolChoice")
+                .isEqualTo(false);
+        assertThat(llmModelRepository.findById(model.id()).orElseThrow().getForcedToolChoice())
+                .isFalse();
+    }
+
+    @Test
+    void shouldRefuseCapabilityProbeWhenTheCallerIsNotAnInstanceAdmin() {
+        webTestClient
+                .put()
+                .uri("/admin/llm/models/1/capabilities")
+                .headers(h -> h.setBearerAuth(MENTOR_TOKEN))
+                .exchange()
+                .expectStatus()
+                .isForbidden()
+                .expectBody(Void.class);
+        verifyNoInteractions(capabilityProbe);
     }
 
     @Test

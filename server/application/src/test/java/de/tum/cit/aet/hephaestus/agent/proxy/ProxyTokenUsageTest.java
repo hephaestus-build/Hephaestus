@@ -28,6 +28,15 @@ class ProxyTokenUsageTest extends BaseUnitTest {
 
     /** Two identical gpt-oss requests to a vLLM endpoint with prefix caching: the first fills the cache. */
     @Test
+    void shouldCountNativeAnthropicCacheBucketsApartFromUncachedInput() {
+        var body = MAPPER.readTree(
+                "{\"usage\":{\"input_tokens\":13,\"output_tokens\":7,\"cache_read_input_tokens\":1200,\"cache_creation_input_tokens\":300}}");
+        var usage = ProxyTokenUsage.from(body, LlmApiProtocol.ANTHROPIC_MESSAGES);
+        assertThat(usage).isNotNull().isEqualTo(new ProxyTokenUsage(13, 7, 0, 1200, 300));
+        assertThat(usage.promptTokens()).isEqualTo(1513);
+    }
+
+    @Test
     void keepsOnlyTheUncachedPromptAsInputWhenAPrefixCacheHoldsTheRest() throws Exception {
         var first = MAPPER.readTree("""
                 {"usage":{"prompt_tokens":1277,"completion_tokens":40,
