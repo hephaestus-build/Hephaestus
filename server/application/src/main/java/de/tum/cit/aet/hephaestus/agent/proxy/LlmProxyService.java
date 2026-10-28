@@ -554,7 +554,7 @@ class LlmProxyService {
             // Report revocation in the stream; buffered responses still settle health and usage below.
             if (poolPermit != null && poolPermit.isRevoked() && upstream.streamOutcome() != null && response != null) {
                 call.failed(new MentorTurn.FailedCall(UPSTREAM_PAUSED, null));
-                errors.writeErrorFrame(response, UPSTREAM_PAUSED, "The model capacity lease ended.");
+                errors.writeErrorFrame(response, protocol, UPSTREAM_PAUSED, "The model capacity lease ended.");
             }
             if (call.isCancelled()) {
                 // The turn ended without this call; the provider's state is unknown.
@@ -569,7 +569,7 @@ class LlmProxyService {
                         + bounds.idle().toSeconds() + " seconds";
                 if (!routing.hephTurn())
                     log.warn("LLM upstream stalled for principal {}: {}", routing.principalDescription(), stall);
-                if (response != null) errors.writeStallFrame(response, stall);
+                if (response != null) errors.writeStallFrame(response, protocol, stall);
             }
             var outcome = upstream.streamOutcome();
             if (outcome != null)

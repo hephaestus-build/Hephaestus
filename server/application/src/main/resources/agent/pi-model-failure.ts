@@ -1,10 +1,9 @@
 import { isJsonObject as isRecord } from "./work/practice-scripts/lib/core/json.ts";
 
 /**
- * The diagnostics the patched OpenAI chat-completions and Responses adapters attach to an assistant message
- * (docker/agents/pi/patches/@earendil-works__pi-ai@1.0.0.patch): `openai_completions_failure` or
- * `openai_responses_failure` on a failed call, and `openai_completions_call` or `openai_responses_call` on every call
- * whose SDK request began. docker/agents/pi/gateway-run.ts reads the same contract from session files.
+ * The patched OpenAI Chat Completions, Responses and Anthropic Messages adapters attach these diagnostics
+ * (docker/agents/pi/patches/@earendil-works__pi-ai@1.0.0.patch). Each protocol writes `*_failure` on a failed call
+ * and `*_call` on every call whose SDK request began. The image's gateway-run.ts reads the same session contract.
  */
 export const MODEL_FAILURE_KINDS = [
 	"HTTP_ERROR",
@@ -20,8 +19,16 @@ export const MODEL_FAILURE_KINDS = [
 	"UNKNOWN",
 ] as const;
 
-const FAILURE_DIAGNOSTICS = ["openai_completions_failure", "openai_responses_failure"];
-const CALL_DIAGNOSTICS = ["openai_completions_call", "openai_responses_call"];
+const FAILURE_DIAGNOSTICS = [
+	"openai_completions_failure",
+	"openai_responses_failure",
+	"anthropic_messages_failure",
+];
+const CALL_DIAGNOSTICS = [
+	"openai_completions_call",
+	"openai_responses_call",
+	"anthropic_messages_call",
+];
 
 export type ModelFailureKind = (typeof MODEL_FAILURE_KINDS)[number];
 

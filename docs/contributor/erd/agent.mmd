@@ -86,6 +86,7 @@ erDiagram
         VARCHAR(24) operated_by
         VARCHAR(16) brand
         BIGINT call_pool_id FK
+        BOOLEAN forced_tool_choice
     }
 
     LlmModelPrice {
@@ -350,6 +351,7 @@ erDiagram
         VARCHAR(24) operated_by
         VARCHAR(16) brand
         BIGINT call_pool_id FK
+        BOOLEAN forced_tool_choice
     }
 
     Account["Account · Core"]

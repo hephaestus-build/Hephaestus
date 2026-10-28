@@ -112,7 +112,7 @@ final class ProxyStreamUsageTap implements Consumer<byte[]> {
                     for (String field : new String[] {
                         "input_tokens", "output_tokens", "cache_read_input_tokens", "cache_creation_input_tokens"
                     }) {
-                        if (usage.has(field)) merged.set(field, usage.get(field));
+                        if (usage.hasNonNull(field)) merged.set(field, usage.get(field));
                     }
                     ProxyTokenUsage parsed =
                             ProxyTokenUsage.from(objectMapper.createObjectNode().set("usage", merged), protocol);

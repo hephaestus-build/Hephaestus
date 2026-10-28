@@ -763,7 +763,9 @@ Set each token price in the model's price fields.
 The cache buckets are not subtracted from the uncached input.
 The server retains cumulative usage if a stream stops before its final event.
 
-The runner's layered Anthropic cache layout follows in ADR 0069 layer L5.
+The runner caches the stable system, change, and core layers for five minutes.
+The session marker moves as the review continues.
+[ADR 0069](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0069-practices-run-when-ready-and-stay-current-by-their-sources.md) owns this layout.
 
 Native feedback composition uses the provider's defaults for thinking and sampling.
 It does not apply the review runner's effort or temperature overrides.

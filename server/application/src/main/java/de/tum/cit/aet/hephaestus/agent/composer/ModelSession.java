@@ -233,6 +233,8 @@ final class ModelSession {
     }
 
     private Reply anthropic(JsonNode response) {
+        if (response.path("stop_reason").asString("").equals("refusal"))
+            return new Reply(null, List.of(), Failure.REFUSED);
         JsonNode content = response.path("content");
         if (!content.isArray()) return new Reply(null, List.of(), Failure.PROVIDER);
         var text = new StringBuilder();

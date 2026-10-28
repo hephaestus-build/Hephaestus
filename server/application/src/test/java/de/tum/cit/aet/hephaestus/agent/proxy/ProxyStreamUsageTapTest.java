@@ -41,6 +41,28 @@ class ProxyStreamUsageTapTest extends BaseUnitTest {
         assertThat(tap.hasMalformedUsage()).isTrue();
     }
 
+    @Test
+    void shouldKeepKnownNativeBucketsWhenCumulativeDeltasContainNulls() {
+        var tap = new ProxyStreamUsageTap(MAPPER, LlmApiProtocol.ANTHROPIC_MESSAGES);
+        feed(tap, """
+                data: {"type":"message_start","message":{"usage":{"input_tokens":13,"output_tokens":2,"cache_read_input_tokens":1200,"cache_creation_input_tokens":300}}}
+
+                """);
+        feed(tap, """
+                data: {"type":"message_delta","usage":{"output_tokens":5,"cache_read_input_tokens":null,"cache_creation_input_tokens":null}}
+
+                """);
+        assertThat(tap.observed()).isEqualTo(new ProxyTokenUsage(13, 5, 0, 1200, 300));
+        feed(tap, """
+                data: {"type":"message_delta","usage":{"input_tokens":null,"output_tokens":7,"cache_read_input_tokens":null,"cache_creation_input_tokens":null}}
+
+                data: {"type":"message_delta","usage":{"input_tokens":null,"output_tokens":null,"cache_read_input_tokens":null,"cache_creation_input_tokens":null}}
+
+                """);
+        assertThat(tap.observed()).isEqualTo(new ProxyTokenUsage(13, 7, 0, 1200, 300));
+        assertThat(tap.hasMalformedUsage()).isFalse();
+    }
+
     @Nested
     class ChatCompletions {
 

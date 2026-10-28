@@ -1,49 +1,123 @@
-diff --git adist/api/openai-call-diagnostics.js b/dist/api/openai-call-diagnostics.js
-new file mode 100644
-index 0000000000000000000000000000000000000000..9e6396bf842a2f24acd7519ea825a51f01b3f429
---- /dev/null
-+++ b/dist/api/openai-call-diagnostics.js
-@@ -0,0 +1,38 @@
-+import OpenAI from "openai";
-+/**
-+ * Closed facts about why an OpenAI call failed, for a caller's diagnostics: the SDK's own error classes and numeric
-+ * status, and the adapter's own named terminal branch. Never the error's text, body, headers or request.
-+ */
-+export function failureDetails(error, signal, adapterFailure, phase) {
-+    let kind = "UNKNOWN";
-+    let status;
-+    if (signal?.aborted || error instanceof OpenAI.APIUserAbortError) {
-+        kind = "ABORTED";
+diff --git a/dist/api/anthropic-messages.js b/dist/api/anthropic-messages.js
+index 106f2b9617fa3b810261e067a3c965f209907af3..7bf2bc10e909cf109bd137c0c518459746da48bc 100644
+--- a/dist/api/anthropic-messages.js
++++ b/dist/api/anthropic-messages.js
+@@ -1,4 +1,5 @@
+ import Anthropic, {} from "@anthropic-ai/sdk";
++import { callDetails, failureDetails } from "./provider-call-diagnostics.js";
+ import { ANTHROPIC_FEDERATION_RULE_ID_ENV, ANTHROPIC_IDENTITY_TOKEN_FILE_ENV, ANTHROPIC_ORGANIZATION_ID_ENV, ANTHROPIC_SERVICE_ACCOUNT_ID_ENV, ANTHROPIC_WORKSPACE_ID_ENV, } from "../env-api-keys.js";
+ import { calculateCost } from "../models.js";
+ import { appendAssistantMessageDiagnostic } from "../utils/diagnostics.js";
+@@ -341,15 +342,21 @@ async function* iterateSseMessages(body, signal) {
+         reader.releaseLock();
+     }
+ }
++class AnthropicStreamFailure extends Error {
++    constructor(kind, message) {
++        super(message);
++        this.kind = kind;
 +    }
-+    else if (adapterFailure) {
-+        kind = adapterFailure;
-+    }
-+    else if (error instanceof OpenAI.APIConnectionTimeoutError) {
-+        kind = "CONNECTION_TIMEOUT";
-+    }
-+    else if (error instanceof OpenAI.APIConnectionError) {
-+        kind = "CONNECTION_ERROR";
-+    }
-+    else if (error instanceof OpenAI.APIError && Number.isInteger(error.status) && error.status >= 400 && error.status <= 599) {
-+        kind = "HTTP_ERROR";
-+        status = error.status;
-+    }
-+    return status === undefined ? { kind, phase } : { kind, phase, status };
 +}
-+/**
-+ * When one call reached its boundaries, in whole milliseconds of the monotonic clock from just before the SDK request:
-+ * the SDK response (its headers, not a first token) and the end of this message. The span includes request retries
-+ * and their waits within the adapter. A boundary the call never reached is left out.
-+ */
-+export function callDetails(requestStartedAt, responseAt) {
-+    const details = { elapsedMs: Math.round(performance.now() - requestStartedAt) };
-+    if (responseAt !== undefined) {
-+        details.responseMs = Math.round(responseAt - requestStartedAt);
-+    }
-+    return details;
-+}
+ async function* iterateAnthropicEvents(response, signal) {
+     if (!response.body) {
+-        throw new Error("Attempted to iterate over an Anthropic response with no body");
++        throw new AnthropicStreamFailure("STREAM_INCOMPLETE", "Attempted to iterate over an Anthropic response with no body");
+     }
+     let sawMessageStart = false;
+     let sawMessageEnd = false;
+     for await (const sse of iterateSseMessages(response.body, signal)) {
+         if (sse.event === "error") {
+-            throw new Error(sse.data);
++            throw new AnthropicStreamFailure("STREAM_ERROR_EVENT", sse.data);
+         }
+         if (!ANTHROPIC_MESSAGE_EVENTS.has(sse.event ?? "")) {
+             continue;
+@@ -366,11 +373,11 @@ async function* iterateAnthropicEvents(response, signal) {
+         }
+         catch (error) {
+             const message = error instanceof Error ? error.message : String(error);
+-            throw new Error(`Could not parse Anthropic SSE event ${sse.event}: ${message}; data=${sse.data}; raw=${sse.raw.join("\\n")}`);
++            throw new AnthropicStreamFailure("STREAM_ERROR_EVENT", `Could not parse Anthropic SSE event ${sse.event}: ${message}; data=${sse.data}; raw=${sse.raw.join("\\n")}`);
+         }
+     }
+     if (sawMessageStart && !sawMessageEnd) {
+-        throw new Error("Anthropic stream ended before message_stop");
++        throw new AnthropicStreamFailure("STREAM_INCOMPLETE", "Anthropic stream ended before message_stop");
+     }
+ }
+ export const stream = (model, context, options) => {
+@@ -397,6 +404,10 @@ export const stream = (model, context, options) => {
+             stopReason: "pending",
+             timestamp: Date.now(),
+         };
++        let failurePhase = "request";
++        let adapterFailure;
++        let requestStartedAt;
++        let responseAt;
+         try {
+             let client;
+             let isOAuth;
+@@ -435,11 +446,14 @@ export const stream = (model, context, options) => {
+                 ...(options?.timeoutMs !== undefined ? { timeout: options.timeoutMs } : {}),
+                 maxRetries: 0,
+             };
++            requestStartedAt = performance.now();
+             const response = await retryProviderRequest(() => client.beta.messages.create(params, requestOptions).asResponse(), {
+                 maxRetries: options?.maxRetries,
+                 maxRetryDelayMs: options?.maxRetryDelayMs,
+                 signal: options?.signal,
+             });
++            responseAt = performance.now();
++            failurePhase = "response_body";
+             await options?.onResponse?.({ status: response.status, headers: headersToRecord(response.headers) }, model);
+             stream.push({ type: "start", partial: output });
+             const blocks = output.content;
+@@ -654,9 +668,11 @@ export const stream = (model, context, options) => {
+                 throw new Error("Request was aborted");
+             }
+             if (output.stopReason === "pending") {
++                adapterFailure = "STREAM_INCOMPLETE";
+                 throw new Error("Anthropic stream ended without a stop reason");
+             }
+             if (output.stopReason === "aborted" || output.stopReason === "error") {
++                adapterFailure = output.stopReason === "aborted" ? "ABORTED" : "FINISH_REASON_ERROR";
+                 throw new Error(output.errorMessage || "An unknown error occurred");
+             }
+             if (inputTransformations && inputTransformations.length > 0) {
+@@ -672,6 +688,11 @@ export const stream = (model, context, options) => {
+                     },
+                 });
+             }
++            appendAssistantMessageDiagnostic(output, {
++                type: "anthropic_messages_call",
++                timestamp: Date.now(),
++                details: callDetails(requestStartedAt, responseAt),
++            });
+             stream.push({ type: "done", reason: output.stopReason, message: output });
+             stream.end();
+         }
+@@ -683,6 +704,19 @@ export const stream = (model, context, options) => {
+             }
+             output.stopReason = options?.signal?.aborted ? "aborted" : "error";
+             output.errorMessage = error instanceof Error ? error.message : JSON.stringify(error);
++            appendAssistantMessageDiagnostic(output, {
++                type: "anthropic_messages_failure",
++                timestamp: Date.now(),
++                details: failureDetails(error, options?.signal,
++                    error instanceof AnthropicStreamFailure ? error.kind : adapterFailure, failurePhase, Anthropic),
++            });
++            if (requestStartedAt !== undefined) {
++                appendAssistantMessageDiagnostic(output, {
++                    type: "anthropic_messages_call",
++                    timestamp: Date.now(),
++                    details: callDetails(requestStartedAt, responseAt),
++                });
++            }
+             stream.push({ type: "error", reason: output.stopReason, error: output });
+             stream.end();
+         }
 diff --git a/dist/api/openai-completions.js b/dist/api/openai-completions.js
-index eecd83c753e3b758b8e44628f560b862f8252839..2cea55d1d05bfdad201f2af282ba222f092dff5b 100644
+index eecd83c753e3b758b8e44628f560b862f8252839..f8582ebd5cb34fe61beee861b49ae97bc128c818 100644
 --- a/dist/api/openai-completions.js
 +++ b/dist/api/openai-completions.js
 @@ -14,6 +14,9 @@ import { getDeclaredTools, resolveTranscript, resolveTranscriptTools, } from "..
@@ -51,7 +125,7 @@ index eecd83c753e3b758b8e44628f560b862f8252839..2cea55d1d05bfdad201f2af282ba222f
  import { buildCopilotDynamicHeaders, hasCopilotVisionInput } from "./github-copilot-headers.js";
  import { clampOpenAIPromptCacheKey } from "./openai-prompt-cache.js";
 +import { openAITokenUsage } from "./openai-token-usage.js";
-+import { callDetails, failureDetails } from "./openai-call-diagnostics.js";
++import { callDetails, failureDetails } from "./provider-call-diagnostics.js";
 +import { appendAssistantMessageDiagnostic } from "../utils/diagnostics.js";
  import { buildBaseOptions, clampThinkingBudgetToAnswerRoom, thinkingBudgetForLevel } from "./simple-options.js";
  import { transformMessages } from "./transform-messages.js";
@@ -135,7 +209,7 @@ index eecd83c753e3b758b8e44628f560b862f8252839..2cea55d1d05bfdad201f2af282ba222f
 +            appendAssistantMessageDiagnostic(output, {
 +                type: "openai_completions_failure",
 +                timestamp: Date.now(),
-+                details: failureDetails(error, options?.signal, adapterFailure, failurePhase),
++                details: failureDetails(error, options?.signal, adapterFailure, failurePhase, OpenAI),
 +            });
 +            if (requestStartedAt !== undefined) {
 +                appendAssistantMessageDiagnostic(output, {
@@ -269,14 +343,14 @@ index f413fe5f2a1abcac39c38bbd4a77b38c349a5918..10e0f52831e31ed547e8554aaa71836c
              }
          }
 diff --git a/dist/api/openai-responses.js b/dist/api/openai-responses.js
-index 4d58c9772b49f0d40e31d42c251a6d993a4a673f..2f533b1fcda160e8ca5c83cbe13b6b6229433d54 100644
+index 4d58c9772b49f0d40e31d42c251a6d993a4a673f..8e430d438d2df307e3fd79867fa87727e5f22645 100644
 --- a/dist/api/openai-responses.js
 +++ b/dist/api/openai-responses.js
 @@ -10,6 +10,8 @@ import { getDeclaredTools, resolveTranscript, resolveTranscriptTools } from "../
  import { createGrammarToolInputProperties } from "./constrained-sampling.js";
  import { buildCopilotDynamicHeaders, hasCopilotVisionInput } from "./github-copilot-headers.js";
  import { clampOpenAIPromptCacheKey } from "./openai-prompt-cache.js";
-+import { callDetails, failureDetails } from "./openai-call-diagnostics.js";
++import { callDetails, failureDetails } from "./provider-call-diagnostics.js";
 +import { appendAssistantMessageDiagnostic } from "../utils/diagnostics.js";
  import { convertResponsesMessages, convertResponsesTools, processResponsesStream } from "./openai-responses-shared.js";
  import { buildBaseOptions } from "./simple-options.js";
@@ -345,7 +419,7 @@ index 4d58c9772b49f0d40e31d42c251a6d993a4a673f..2f533b1fcda160e8ca5c83cbe13b6b62
 +            appendAssistantMessageDiagnostic(output, {
 +                type: "openai_responses_failure",
 +                timestamp: Date.now(),
-+                details: failureDetails(error, options?.signal, adapterFailure, failurePhase),
++                details: failureDetails(error, options?.signal, adapterFailure, failurePhase, OpenAI),
 +            });
 +            if (requestStartedAt !== undefined) {
 +                appendAssistantMessageDiagnostic(output, {
@@ -406,4 +480,47 @@ index 0000000000000000000000000000000000000000..677aeb64a3af465c10abbf6069c01512
 +        totalTokens: prompt + out,
 +        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
 +    };
++}
+diff --git adist/api/provider-call-diagnostics.js b/dist/api/provider-call-diagnostics.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..3b83fca7d2143f41e0f34a514acd719f9ef608d7
+--- /dev/null
++++ b/dist/api/provider-call-diagnostics.js
+@@ -0,0 +1,37 @@
++/**
++ * Closed facts about why a provider call failed, for a caller's diagnostics: the SDK's own error classes and numeric
++ * status, and the adapter's own named terminal branch. Never the error's text, body, headers or request.
++ */
++export function failureDetails(error, signal, adapterFailure, phase, sdk) {
++    let kind = "UNKNOWN";
++    let status;
++    if (signal?.aborted || error instanceof sdk.APIUserAbortError) {
++        kind = "ABORTED";
++    }
++    else if (adapterFailure) {
++        kind = adapterFailure;
++    }
++    else if (error instanceof sdk.APIConnectionTimeoutError) {
++        kind = "CONNECTION_TIMEOUT";
++    }
++    else if (error instanceof sdk.APIConnectionError) {
++        kind = "CONNECTION_ERROR";
++    }
++    else if (error instanceof sdk.APIError && Number.isInteger(error.status) && error.status >= 400 && error.status <= 599) {
++        kind = "HTTP_ERROR";
++        status = error.status;
++    }
++    return status === undefined ? { kind, phase } : { kind, phase, status };
++}
++/**
++ * When one call reached its boundaries, in whole milliseconds of the monotonic clock from just before the SDK request:
++ * the SDK response (its headers, not a first token) and the end of this message. The span includes request retries
++ * and their waits within the adapter. A boundary the call never reached is left out.
++ */
++export function callDetails(requestStartedAt, responseAt) {
++    const details = { elapsedMs: Math.round(performance.now() - requestStartedAt) };
++    if (responseAt !== undefined) {
++        details.responseMs = Math.round(responseAt - requestStartedAt);
++    }
++    return details;
 +}
