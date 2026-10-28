@@ -162,9 +162,9 @@ await test("queues separate conversation order from capacity and provider time",
 			id: "turn-1",
 			kind: "mentor",
 			submitted: 0,
-			eligible: 220000,
-			granted: 221000,
-			firstEvent: 224000,
+			eligible: 220_000,
+			granted: 221_000,
+			firstEvent: 224_000,
 		}),
 		parseQueueObservation({
 			id: "turn-2",
@@ -177,30 +177,30 @@ await test("queues separate conversation order from capacity and provider time",
 			id: "review-1",
 			kind: "review",
 			submitted: 0,
-			eligible: 120000,
-			podReady: 125000,
-			granted: 127000,
+			eligible: 120_000,
+			podReady: 125_000,
+			granted: 127_000,
 		}),
 		parseQueueObservation({
 			id: "composition-1",
 			kind: "composition",
 			submitted: 0,
 			eligible: 2000,
-			granted: 12000,
+			granted: 12_000,
 		}),
 	]);
-	assert.deepEqual(report.mentor?.capacity, { count: 2, p50Ms: 1000, p95Ms: 5000, maxMs: 5000 });
-	assert.equal(report.mentor?.intentionalConversationWait.p95Ms, 220000);
-	assert.equal(report.mentor?.endToEnd.p95Ms, 221000);
-	assert.equal(report.mentor?.upstreamFirstEvent.p95Ms, 3000);
-	assert.equal(report.review?.podReady.p95Ms, 5000);
-	assert.equal(report.review?.modelAfterPodReady.p95Ms, 2000);
-	assert.equal(report.composition?.capacity.p95Ms, 10000);
-	assert.equal(report.mentor?.sufficientForObjectives, false);
+	assert.deepEqual(report.mentor.capacity, { count: 2, p50Ms: 1000, p95Ms: 5000, maxMs: 5000 });
+	assert.equal(report.mentor.intentionalConversationWait.p95Ms, 220_000);
+	assert.equal(report.mentor.endToEnd.p95Ms, 221_000);
+	assert.equal(report.mentor.upstreamFirstEvent.p95Ms, 3000);
+	assert.equal(report.review.podReady.p95Ms, 5000);
+	assert.equal(report.review.modelAfterPodReady.p95Ms, 2000);
+	assert.equal(report.composition.capacity.p95Ms, 10_000);
+	assert.equal(report.mentor.sufficientForObjectives, false);
 });
 
 await test("absent observations never become zero-latency evidence", () => {
-	assert.deepEqual(queueReport([]).mentor?.capacity, {
+	assert.deepEqual(queueReport([]).mentor.capacity, {
 		count: 0,
 		p50Ms: null,
 		p95Ms: null,
@@ -213,7 +213,7 @@ await test("queue input rejects impossible, missing, non-finite and negative pha
 	for (const value of [
 		null,
 		{ ...valid, eligible: 0 },
-		{ ...valid, granted: NaN },
+		{ ...valid, granted: Number.NaN },
 		{ ...valid, podReady: undefined },
 		{ ...valid, podReady: 5 },
 		{ ...valid, firstEvent: 3 },

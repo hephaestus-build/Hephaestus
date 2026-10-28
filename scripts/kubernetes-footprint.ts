@@ -22,11 +22,12 @@ const { values } = parseArgs({
 		"provider-budget": { type: "string" },
 	},
 });
-if (values.host !== "hephaestus-staging")
+if (values.host !== "hephaestus-staging") {
 	throw new Error("This sampler is restricted to hephaestus-staging");
+}
 const count = positiveInteger(values.samples, "--samples");
 const interval = positiveInteger(values["interval-ms"], "--interval-ms");
-const remote = (command: string) => output("remote-exec", [values.host, command]);
+const remote = async (command: string) => output("remote-exec", [values.host, command]);
 const nodes = asRecord(parseJson(await remote("sudo kubectl get nodes -o json")), "nodes");
 const nodeBudgets = asArray(nodes.items, "nodes.items").map((value) => {
 	const node = asRecord(value, "node");
@@ -58,7 +59,7 @@ const identities: Record<
 		volumes: unknown;
 	}
 > = {};
-for (let index = 0; index < count; index++) {
+for (let index = 0; index < count; index += 1) {
 	const started = Date.now();
 	const pods = asRecord(
 		parseJson(
@@ -66,14 +67,18 @@ for (let index = 0; index < count; index++) {
 		),
 		"pods",
 	);
-	for (const value of asArray(pods.items, "pods.items")) {
-		const pod = asRecord(value, "pod");
+	for (const podValue of asArray(pods.items, "pods.items")) {
+		const pod = asRecord(podValue, "pod");
 		const metadata = asRecord(pod.metadata, "metadata");
 		const spec = asRecord(pod.spec, "spec");
 		const statuses = asRecord(pod.status, "status").containerStatuses;
-		for (const value of statuses === undefined ? [] : asArray(statuses, "containerStatuses")) {
-			const status = asRecord(value, "containerStatus");
-			if (typeof status.containerID !== "string") continue;
+		for (const statusValue of statuses === undefined
+			? []
+			: asArray(statuses, "containerStatuses")) {
+			const status = asRecord(statusValue, "containerStatus");
+			if (typeof status.containerID !== "string") {
+				continue;
+			}
 			const id = status.containerID.replace("containerd://", "");
 			const container = asArray(spec.containers, "containers")
 				.map((value) => asRecord(value, "container"))
@@ -95,18 +100,34 @@ for (let index = 0; index < count; index++) {
 	const raw = await remote(counters);
 	const meminfo = raw.split("CGROUP ")[0] ?? "";
 	const mem = (name: string) => {
-		const match = new RegExp(`^${name}:\\s+(\\d+) kB$`, "m").exec(meminfo);
-		if (!match) throw new Error(`Missing node counter ${name}`);
+		const match = new RegExp(`^${name}:\\s+(\\d+) kB$`, "mu").exec(meminfo);
+		if (!match) {
+			throw new Error(`Missing node counter ${name}`);
+		}
 		return Number(match[1]) * 1024;
 	};
 	const containers: Record<string, Record<string, number | null>> = {};
 	for (const block of raw.split("CGROUP ").slice(1)) {
-		const id = /cri-containerd-([a-f0-9]{64})\.scope/u.exec(block)?.[1];
-		if (!id) continue;
+		const id = /cri-containerd-(?<id>[a-f0-9]{64})\.scope/u.exec(block)?.groups?.id;
+		if (id === undefined) {
+			continue;
+		}
 		const counter = (key: string) => {
-			const match = new RegExp(`^${key}(?:\\n| )(\\d+)$`, "m").exec(block);
+			const match = new RegExp(
+				`^${key.replaceAll(".", String.raw`\.`)}(?:\\n| )(\\d+)$`,
+				"mu",
+			).exec(block);
 			return match ? Number(match[1]) : null;
 		};
+		let kernelAccounted: number | null = 0;
+		for (const key of ["kernel_stack", "pagetables", "percpu", "sock", "slab"]) {
+			const value = counter(key);
+			if (value === null) {
+				kernelAccounted = null;
+				break;
+			}
+			kernelAccounted += value;
+		}
 		containers[id] = {
 			current: counter("memory.current"),
 			lifetimePeak: counter("memory.peak"),
@@ -114,12 +135,7 @@ for (let index = 0; index < count; index++) {
 			file: counter("file"),
 			shmem: counter("shmem"),
 			kernel: counter("kernel"),
-			kernelAccounted: ["kernel_stack", "pagetables", "percpu", "sock", "slab"].reduce<
-				number | null
-			>((sum, key) => {
-				const value = counter(key);
-				return sum === null || value === null ? null : sum + value;
-			}, 0),
+			kernelAccounted,
 		};
 	}
 	snapshots.push({
@@ -128,7 +144,9 @@ for (let index = 0; index < count; index++) {
 		nodeAvailable: mem("MemAvailable"),
 		containers,
 	});
-	if (index + 1 < count) await sleep(Math.max(0, interval - (Date.now() - started)));
+	if (index + 1 < count) {
+		await sleep(Math.max(0, interval - (Date.now() - started)));
+	}
 }
 const observations =
 	values.timeline === undefined
@@ -136,13 +154,13 @@ const observations =
 		: asArray(parseJson(await readFile(values.timeline, "utf8")), "timeline").map(
 				parseQueueObservation,
 			);
-const bytes = (values: readonly number[]) => {
-	const result = distribution(values);
+const bytes = (measurements: readonly number[]) => {
+	const result = distribution(measurements);
 	return {
 		count: result.count,
-		p50Bytes: result.p50Ms,
-		p95Bytes: result.p95Ms,
-		maxBytes: result.maxMs,
+		p50Bytes: result.p50,
+		p95Bytes: result.p95,
+		maxBytes: result.max,
 	};
 };
 const report = {

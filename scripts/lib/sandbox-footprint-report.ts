@@ -90,6 +90,14 @@ export interface QueueObservation {
 	firstEvent?: number;
 }
 
+function optionalPhase(
+	value: unknown,
+	floor: number,
+	ceiling = Number.POSITIVE_INFINITY,
+): value is number | undefined {
+	return value === undefined || (nonnegative(value) && value >= floor && value <= ceiling);
+}
+
 export function parseQueueObservation(value: unknown): QueueObservation {
 	if (
 		!isRecord(value) ||
@@ -100,15 +108,12 @@ export function parseQueueObservation(value: unknown): QueueObservation {
 		!nonnegative(value.granted) ||
 		value.submitted > value.eligible ||
 		value.eligible > value.granted ||
-		(value.podReady !== undefined &&
-			(!nonnegative(value.podReady) ||
-				value.podReady < value.eligible ||
-				value.podReady > value.granted)) ||
-		(value.firstEvent !== undefined &&
-			(!nonnegative(value.firstEvent) || value.firstEvent < value.granted)) ||
+		!optionalPhase(value.podReady, value.eligible, value.granted) ||
+		!optionalPhase(value.firstEvent, value.granted) ||
 		(value.kind === "review" && value.podReady === undefined)
-	)
+	) {
 		throw new Error("Invalid queue observation: require ordered phases and review Pod readiness");
+	}
 	return {
 		id: value.id,
 		kind: value.kind,
@@ -124,45 +129,46 @@ export function parseQueueObservation(value: unknown): QueueObservation {
 export function distribution(values: readonly number[]) {
 	return {
 		count: values.length,
-		p50Ms: percentile(values, 0.5),
-		p95Ms: percentile(values, 0.95),
-		maxMs: values.length ? Math.max(...values) : null,
+		p50: percentile(values, 0.5),
+		p95: percentile(values, 0.95),
+		max: values.length > 0 ? Math.max(...values) : null,
 	};
 }
 
+function milliseconds(values: readonly number[]) {
+	const result = distribution(values);
+	return { count: result.count, p50Ms: result.p50, p95Ms: result.p95, maxMs: result.max };
+}
+
 export function queueReport(observations: readonly QueueObservation[]) {
-	return Object.fromEntries(
-		(["review", "composition", "mentor"] as const).map((kind) => {
-			const rows = observations.filter((row) => row.kind === kind);
-			return [
-				kind,
-				{
-					capacity: distribution(rows.map((row) => row.granted - row.eligible)),
-					intentionalConversationWait: distribution(
-						rows.filter((row) => row.kind === "mentor").map((row) => row.eligible - row.submitted),
-					),
-					readinessWait: distribution(
-						rows.filter((row) => row.kind !== "mentor").map((row) => row.eligible - row.submitted),
-					),
-					podReady: distribution(
-						rows.flatMap((row) =>
-							row.podReady === undefined ? [] : [row.podReady - row.eligible],
-						),
-					),
-					modelAfterPodReady: distribution(
-						rows.flatMap((row) => (row.podReady === undefined ? [] : [row.granted - row.podReady])),
-					),
-					upstreamFirstEvent: distribution(
-						rows.flatMap((row) =>
-							row.firstEvent === undefined ? [] : [row.firstEvent - row.granted],
-						),
-					),
-					endToEnd: distribution(rows.map((row) => row.granted - row.submitted)),
-					sufficientForObjectives: rows.length >= 200,
-				},
-			];
-		}),
-	);
+	const summarize = (kind: QueueObservation["kind"]) => {
+		const rows = observations.filter((row) => row.kind === kind);
+		return {
+			capacity: milliseconds(rows.map((row) => row.granted - row.eligible)),
+			intentionalConversationWait: milliseconds(
+				(kind === "mentor" ? rows : []).map((row) => row.eligible - row.submitted),
+			),
+			readinessWait: milliseconds(
+				(kind === "mentor" ? [] : rows).map((row) => row.eligible - row.submitted),
+			),
+			podReady: milliseconds(
+				rows.flatMap((row) => (row.podReady === undefined ? [] : [row.podReady - row.eligible])),
+			),
+			modelAfterPodReady: milliseconds(
+				rows.flatMap((row) => (row.podReady === undefined ? [] : [row.granted - row.podReady])),
+			),
+			upstreamFirstEvent: milliseconds(
+				rows.flatMap((row) => (row.firstEvent === undefined ? [] : [row.firstEvent - row.granted])),
+			),
+			endToEnd: milliseconds(rows.map((row) => row.granted - row.submitted)),
+			sufficientForObjectives: rows.length >= 200,
+		};
+	};
+	return {
+		review: summarize("review"),
+		composition: summarize("composition"),
+		mentor: summarize("mentor"),
+	};
 }
 
 /** One sampler line as a sample, or `null` for a line that is not JSON or not a sample. */

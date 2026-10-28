@@ -23,6 +23,7 @@ A Docker fixture does not prove Kubernetes placement or provider service capacit
 The report includes each container's `anon`, `file`, `shmem`, and `kernel` counters.
 The `file` counter includes `shmem`. Do not add them together.
 `fileCache` subtracts `shmem` for a separate view of file cache.
+
 All containers in a sample cycle use the same timestamp.
 `concurrentPeakMiB` covers only benchmark containers. It is not the node peak.
 
@@ -83,6 +84,7 @@ The timeline input is a JSON array of metadata-only observations:
 Use milliseconds from one clock for all phases of an observation.
 Use a stable attempt ID. Extract phases from the round's row and trace evidence.
 `granted` is the first provider dispatch, not the first provider event.
+
 Review eligibility starts after its readiness edge.
 Composition eligibility starts when its admitted inputs are sealed and composition can run.
 Mentor eligibility starts when the preceding turn of that conversation ends, or at submission if no predecessor exists.
@@ -104,7 +106,7 @@ A burst alone does not prove a percentile objective.
 ## Staging round
 
 The coordinator schedules workload creation. The collector never generates load.
-Use the connected `HephaestusTest` repository with the existing golden review fixture.
+Use `HephaestusTest/practice-validation`, the repository from the existing golden review rounds.
 Record its workspace ID, repository ID, base and head commits, and golden case ID before the round.
 Use the current one-review and eight-turn profile with the real provider.
 
