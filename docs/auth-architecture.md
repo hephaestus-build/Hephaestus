@@ -147,13 +147,14 @@ IndexedDB record grants a five-second lease. Waiting tabs retry every 100 ms for
 they hold no database transaction across the network request. Lease expiry lets another tab continue
 when a tab closes or its request stalls. A holder releases only its own lease. If storage fails or the
 wait expires, the request runs without a lock. A browser with neither API still renews.
-Client coordination reduces duplicate requests; the server's bounded reissue rule handles concurrent
-responses from different origins. These origins cannot share a browser lock.
+Client coordination reduces duplicate requests. The rotation contract below defines when responses
+from different origins can share a successor. These origins cannot share a browser lock.
 
 ### Rotation contract
 
 A renewal (`POST /auth/refresh`) issues a successor token. It does not revoke the presented token.
-The successor row records the presented token in `issued_jwt.predecessor_jti`.
+The successor row records the presented token in `issued_jwt.predecessor_jti`. The issuer records
+`issued_at` and the JWT `iat` from the same injected clock read.
 A reload or a navigation can cut the renewal response before the browser stores the new cookie.
 The browser then still holds a valid token, so the session continues.
 [Auth.js issue 8897](https://github.com/nextauthjs/next-auth/issues/8897) shows this cookie-response hazard.
@@ -164,20 +165,25 @@ The browser then still holds a valid token, so the session continues.
   logout that was admitted before first use can still revoke the chain.
   Refresh and first use lock the account, then the predecessor, then the successor.
   Concurrent refreshes therefore leave one unused successor.
-- **The predecessor returns within 30 seconds of its unused successor's issuance.** The renewal
+- **The predecessor returns within 30 seconds of its first renewal.** The renewal
   re-signs that same successor. Its JTI, expiry, and `issued_jwt` row stay the same. `auth_event` records
-  `TOKEN_REFRESH` with the details `{"reason":"SUCCESSOR_REISSUED"}`. Reissue is idempotent within this
-  window: concurrent refreshes from any origin set equivalent cookies, in any response order.
-- **The unused successor is at least 30 seconds old, or has expired.** The renewal revokes it with
+  `TOKEN_REFRESH` with the details `{"reason":"SUCCESSOR_REISSUED"}`. The earliest `issued_at` of all
+  its successors anchors the window, including revoked successors. Reissue is idempotent within this
+  first window: concurrent refreshes from any origin set equivalent cookies, in any response order.
+- **The first renewal window has closed, or the unused successor has expired.** The renewal revokes it with
   reason `SUPERSEDED`, issues a new successor, and records `TOKEN_REFRESH` with the details
   `{"reason":"SUCCESSOR_UNUSED_REPLACED"}`. A later renewal thus removes a successor that another
-  holder pre-fetched. The window covers concurrent responses and does not extend either token's expiry.
-  A partial unique index permits one unrevoked successor for each predecessor.
+  holder pre-fetched. Replacement does not restart the window: every later renewal replaces the
+  current unused successor. The first window covers concurrent responses and does not extend either
+  token's expiry. A partial unique index permits one unrevoked successor per account and predecessor.
 - **The predecessor returns after its successor was used.** The server answers 401.
   A renewal attempt records `JWT_REVOKED` `FAILURE` with the reason `browser_token_reuse` and logs
   a warning without the token. Other requests record `rotated_token_presented`, without a reuse warning.
+- **A superseded successor returns.** A renewal attempt records `JWT_REVOKED` `FAILURE` with the
+  reason `browser_token_reuse` and logs a warning. Other requests record `superseded_token_presented`,
+  without a reuse warning. These refusal reasons use separate audit keys.
 - **Any other revoked browser token** records `revoked_token_presented`, with the revocation reason
-  in the details. The revoked-verdict cache dedupes both events: each server instance records one
+  in the details. The revoked-verdict cache dedupes these events: each server instance records one
   event for each token and refusal reason for each cache entry (up to 15 minutes). Eviction or a restart permits a new
   event. Expired and unknown tokens add no event. Installed-client tokens record their reuse
   through their refresh secret, so the decoder records none for them. A late request and a later renewal

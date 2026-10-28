@@ -143,8 +143,13 @@ public class RevocationAwareJwtDecoder implements JwtDecoder {
             return;
         }
         boolean rotated = token.getRevokedReason() == IssuedJwt.RevokedReason.ROTATE;
-        boolean reuse = rotated && isRefreshRequest();
-        String reason = reuse ? "browser_token_reuse" : rotated ? "rotated_token_presented" : "revoked_token_presented";
+        boolean superseded = token.getRevokedReason() == IssuedJwt.RevokedReason.SUPERSEDED;
+        boolean reuse = (rotated || superseded) && isRefreshRequest();
+        String reason = reuse
+                ? "browser_token_reuse"
+                : rotated
+                        ? "rotated_token_presented"
+                        : superseded ? "superseded_token_presented" : "revoked_token_presented";
         if (cache.putIfAbsent(new AuditKey(jti, reason), true) != null) {
             return;
         }

@@ -13,7 +13,6 @@ import java.util.UUID;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 import org.jspecify.annotations.Nullable;
@@ -43,7 +42,7 @@ import org.jspecify.annotations.Nullable;
         name = "issued_jwt",
         indexes = {
             @Index(name = "ix_issued_jwt_session_id", columnList = "session_id"),
-            @Index(name = "ix_issued_jwt_predecessor_jti", columnList = "account_id,predecessor_jti")
+            @Index(name = "ix_issued_jwt_predecessor_jti", columnList = "account_id,predecessor_jti,issued_at")
         },
         uniqueConstraints =
                 @UniqueConstraint(name = "uq_issued_jwt_refresh_token_hash", columnNames = "refresh_token_hash"))
@@ -59,7 +58,6 @@ public class IssuedJwt {
     @Column(name = "account_id", nullable = false)
     private Long accountId;
 
-    @CreationTimestamp
     @Column(name = "issued_at", nullable = false, updatable = false)
     private @Nullable Instant issuedAt;
 

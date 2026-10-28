@@ -226,6 +226,7 @@ public class HephaestusJwtIssuer {
         Token token = sign(principal, constraints, jti, now, expiresAt);
 
         IssuedJwt row = new IssuedJwt(jti, principal.accountId(), expiresAt);
+        row.setIssuedAt(now);
         row.setSessionId(constraints.sessionId());
         row.setRefreshTokenHash(refreshTokenHash);
         row.setPredecessorJti(predecessorJti);

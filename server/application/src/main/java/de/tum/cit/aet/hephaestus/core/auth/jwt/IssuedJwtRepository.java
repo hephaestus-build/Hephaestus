@@ -40,6 +40,13 @@ public interface IssuedJwtRepository extends JpaRepository<IssuedJwt, UUID> {
         """)
     Optional<IssuedJwt> findUnusedSuccessor(@Param("accountId") Long accountId, @Param("jti") UUID jti);
 
+    /** Includes revoked successors so replacement does not restart the first-refresh window. */
+    @Query("""
+        SELECT MIN(j.issuedAt) FROM IssuedJwt j
+         WHERE j.accountId = :accountId AND j.predecessorJti = :jti
+        """)
+    Optional<Instant> findFirstSuccessorIssuedAt(@Param("accountId") Long accountId, @Param("jti") UUID jti);
+
     /** Locks a browser predecessor before reading or changing its unused successor. */
     @Query(value = "SELECT jti FROM issued_jwt WHERE jti = :jti FOR UPDATE", nativeQuery = true)
     Optional<UUID> lockForRotation(@Param("jti") UUID jti);

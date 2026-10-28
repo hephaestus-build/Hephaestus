@@ -13,6 +13,7 @@
         <createIndex indexName="ix_issued_jwt_predecessor_jti" tableName="issued_jwt">
             <column name="account_id"/>
             <column name="predecessor_jti"/>
+            <column name="issued_at"/>
         </createIndex>
         <rollback>
             <dropIndex tableName="issued_jwt" indexName="ix_issued_jwt_predecessor_jti"/>
@@ -23,7 +24,7 @@
         <rollback><dropColumn tableName="issued_jwt" columnName="used_at"/></rollback>
     </changeSet>
     <changeSet id="1793168406889-4" author="hephaestus">
-        <sql>CREATE UNIQUE INDEX uq_issued_jwt_live_successor ON issued_jwt (predecessor_jti) WHERE predecessor_jti IS NOT NULL AND revoked_at IS NULL</sql>
+        <sql>CREATE UNIQUE INDEX uq_issued_jwt_live_successor ON issued_jwt (account_id, predecessor_jti) WHERE predecessor_jti IS NOT NULL AND revoked_at IS NULL</sql>
         <rollback><sql>DROP INDEX uq_issued_jwt_live_successor</sql></rollback>
     </changeSet>
 </databaseChangeLog>

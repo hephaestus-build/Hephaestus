@@ -138,9 +138,12 @@ public class AuthSessionService {
                     new TokenConstraints(sessionExpiresAt, context.authTime(), null, context.passkeyTime());
             IssuedJwt unused =
                     issuedJwtRepository.findUnusedSuccessor(accountId, jti).orElse(null);
+            Instant firstRefreshAt = issuedJwtRepository
+                    .findFirstSuccessorIssuedAt(accountId, jti)
+                    .orElse(now);
             boolean reissue = unused != null
                     && unused.getExpiresAt().isAfter(now)
-                    && now.isBefore(Objects.requireNonNull(unused.getIssuedAt()).plus(SUCCESSOR_REISSUE_WINDOW));
+                    && now.isBefore(firstRefreshAt.plus(SUCCESSOR_REISSUE_WINDOW));
             if (unused != null && !reissue) {
                 issuedJwtRepository.revokeUnusedSuccessors(accountId, jti, now, RevokedReason.SUPERSEDED);
             }

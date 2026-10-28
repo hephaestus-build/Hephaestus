@@ -232,8 +232,7 @@ class ClientSessionMigratedSchemaTest {
     void shouldPermitReplacementOnlyAfterThePreviousSuccessorIsRevoked() {
         Long account = Objects.requireNonNull(
                 accountRepository.saveAndFlush(new Account("Unique successor")).getId());
-        var predecessor = issuedJwtRepository.saveAndFlush(
-                new IssuedJwt(UUID.randomUUID(), account, Instant.now().plusSeconds(3600)));
+        var predecessor = issuedJwtRepository.saveAndFlush(row(account, null, null));
         var first = browserSuccessor(account, predecessor.getJti());
         issuedJwtRepository.saveAndFlush(first);
 
@@ -278,6 +277,7 @@ class ClientSessionMigratedSchemaTest {
 
     private static IssuedJwt browserSuccessor(Long account, UUID predecessor) {
         var token = new IssuedJwt(UUID.randomUUID(), account, Instant.now().plusSeconds(3600));
+        token.setIssuedAt(Instant.now());
         token.setPredecessorJti(predecessor);
         return token;
     }
@@ -285,6 +285,7 @@ class ClientSessionMigratedSchemaTest {
     private static IssuedJwt row(Long accountId, @Nullable UUID sessionId, @Nullable String refreshTokenHash) {
         IssuedJwt row =
                 new IssuedJwt(UUID.randomUUID(), accountId, Instant.now().plus(Duration.ofHours(1)));
+        row.setIssuedAt(Instant.now());
         row.setSessionId(sessionId);
         row.setRefreshTokenHash(refreshTokenHash);
         return row;

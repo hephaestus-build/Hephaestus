@@ -11,12 +11,18 @@ import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.HephaestusJwtIssuer;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwt;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwtRepository;
+import de.tum.cit.aet.hephaestus.core.auth.jwt.JwtPrincipalFactory;
+import de.tum.cit.aet.hephaestus.core.auth.jwt.JwtSigningKeyService;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.TokenConstraints;
 import de.tum.cit.aet.hephaestus.testconfig.RealAuthIntegrationTest;
 import java.sql.Timestamp;
 import java.text.ParseException;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.temporal.ChronoUnit;
+import java.util.Date;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
@@ -28,6 +34,7 @@ import org.springframework.http.ResponseCookie;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.test.web.reactive.server.WebTestClient;
+import org.springframework.transaction.support.TransactionTemplate;
 
 class SessionRefreshLifecycleIntegrationTest extends RealAuthIntegrationTest {
 
@@ -54,6 +61,18 @@ class SessionRefreshLifecycleIntegrationTest extends RealAuthIntegrationTest {
 
     @Autowired
     private JdbcTemplate jdbc;
+
+    @Autowired
+    private JwtSigningKeyService signingKeys;
+
+    @Autowired
+    private JwtPrincipalFactory principalFactory;
+
+    @Autowired
+    private AuthProperties authProperties;
+
+    @Autowired
+    private TransactionTemplate tx;
 
     @Value("${hephaestus.auth.cookie-name:__Host-HEPHAESTUS_AT}")
     private String cookieName;
@@ -179,6 +198,81 @@ class SessionRefreshLifecycleIntegrationTest extends RealAuthIntegrationTest {
             assertThat(event.getEventType()).isEqualTo(AuthEvent.EventType.JWT_REVOKED);
             assertThat(event.getDetails()).contains("SUPERSEDED");
         });
+    }
+
+    @Test
+    void shouldNeverRestartTheWindowAfterReplacingAnUnusedSuccessor() throws ParseException {
+        Long accountId = Objects.requireNonNull(
+                accountRepository.save(new Account("Fixed refresh window")).getId());
+        var held = jwtIssuer.issue(
+                accountId, TokenConstraints.session(Instant.now().plusSeconds(3600), null), null);
+        String csrf = fetchCsrfToken();
+        UUID first = UUID.fromString(SignedJWT.parse(refreshAndReadNewCookie(held.value(), csrf))
+                .getJWTClaimsSet()
+                .getJWTID());
+        jdbc.update(
+                "UPDATE issued_jwt SET issued_at = ? WHERE jti = ?",
+                Timestamp.from(Instant.now().minusSeconds(31)),
+                first);
+
+        String second = refreshAndReadNewCookie(held.value(), csrf);
+        UUID secondJti =
+                UUID.fromString(SignedJWT.parse(second).getJWTClaimsSet().getJWTID());
+        String third = refreshAndReadNewCookie(held.value(), csrf);
+
+        assertThat(secondJti).isNotEqualTo(first);
+        assertThat(SignedJWT.parse(third).getJWTClaimsSet().getJWTID()).isNotEqualTo(secondJti.toString());
+        assertThat(issuedJwtRepository.findById(first).orElseThrow().getRevokedReason())
+                .isEqualTo(IssuedJwt.RevokedReason.SUPERSEDED);
+        assertThat(issuedJwtRepository.findById(secondJti).orElseThrow().getRevokedReason())
+                .isEqualTo(IssuedJwt.RevokedReason.SUPERSEDED);
+    }
+
+    @Test
+    void shouldUseTheInjectedClockForTheRecordedAndSignedIssuanceTime() throws ParseException {
+        Long account = Objects.requireNonNull(
+                accountRepository.save(new Account("One issuance clock")).getId());
+        Instant issuedAt = Instant.now().minusSeconds(3600).truncatedTo(ChronoUnit.SECONDS);
+        var issuer = new HephaestusJwtIssuer(
+                signingKeys,
+                issuedJwtRepository,
+                accountRepository,
+                principalFactory,
+                authProperties,
+                Clock.fixed(issuedAt, ZoneOffset.UTC));
+
+        var token = Objects.requireNonNull(
+                tx.execute(status -> issuer.issue(account, TokenConstraints.session(null, null), null)));
+
+        assertThat(issuedJwtRepository.findById(token.jti()).orElseThrow().getIssuedAt())
+                .isEqualTo(issuedAt);
+        assertThat(SignedJWT.parse(token.value()).getJWTClaimsSet().getIssueTime())
+                .isEqualTo(Date.from(issuedAt));
+    }
+
+    @Test
+    void shouldKeepItsOwnWindowWhenAnotherAccountHasACorruptPredecessorLink() throws ParseException {
+        Long account = Objects.requireNonNull(
+                accountRepository.save(new Account("Owner renewal")).getId());
+        Long other = Objects.requireNonNull(
+                accountRepository.save(new Account("Other renewal")).getId());
+        var constraints = TokenConstraints.session(Instant.now().plusSeconds(3600), null);
+        var held = jwtIssuer.issue(account, constraints, null);
+        var foreign = jwtIssuer.issueSuccessor(other, constraints, held.jti(), null);
+        jdbc.update(
+                "UPDATE issued_jwt SET issued_at = ? WHERE jti = ?",
+                Timestamp.from(Instant.now().minusSeconds(31)),
+                foreign.jti());
+        String csrf = fetchCsrfToken();
+
+        var first = SignedJWT.parse(refreshAndReadNewCookie(held.value(), csrf)).getJWTClaimsSet();
+        var second =
+                SignedJWT.parse(refreshAndReadNewCookie(held.value(), csrf)).getJWTClaimsSet();
+
+        assertThat(first.getSubject()).isEqualTo(account.toString());
+        assertThat(second.getJWTID()).isEqualTo(first.getJWTID());
+        assertThat(issuedJwtRepository.findById(foreign.jti()).orElseThrow().getRevokedAt())
+                .isNull();
     }
 
     @Test

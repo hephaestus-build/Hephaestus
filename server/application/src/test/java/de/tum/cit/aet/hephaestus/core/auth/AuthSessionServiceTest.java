@@ -335,6 +335,8 @@ class AuthSessionServiceTest extends BaseUnitTest {
         unused.setPredecessorJti(jti);
         unused.setIssuedAt(NOW.minusSeconds(ageSeconds));
         when(issuedJwtRepository.findUnusedSuccessor(ACCOUNT_ID, jti)).thenReturn(Optional.of(unused));
+        when(issuedJwtRepository.findFirstSuccessorIssuedAt(ACCOUNT_ID, jti))
+                .thenReturn(Optional.of(NOW.minusSeconds(ageSeconds)));
         when(jwtIssuer.issueSuccessor(any(), any(), eq(jti), any())).thenReturn(freshToken());
         var response = new MockHttpServletResponse();
 

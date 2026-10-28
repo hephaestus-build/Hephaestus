@@ -59,7 +59,12 @@ import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentCaptor;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
 import org.springframework.cache.caffeine.CaffeineCache;
@@ -464,20 +469,27 @@ class RevocationAwareJwtDecoderTest extends BaseUnitTest {
         RequestContextHolder.resetRequestAttributes();
     }
 
-    @Test
-    void shouldAuditARefreshReplayEvenAfterALateRequestFilledTheRevocationCache() {
+    @ParameterizedTest
+    @EnumSource(
+            value = IssuedJwt.RevokedReason.class,
+            names = {"ROTATE", "SUPERSEDED"})
+    @ExtendWith(OutputCaptureExtension.class)
+    void shouldAuditARefreshReplayEvenAfterALateRequestFilledTheRevocationCache(
+            IssuedJwt.RevokedReason revokedReason, CapturedOutput output) {
         UUID jti = UUID.randomUUID();
         IssuedJwtRepository repo = mock(IssuedJwtRepository.class);
         when(repo.findActive(eq(jti), any())).thenReturn(Optional.empty());
-        when(repo.findById(jti)).thenReturn(Optional.of(revokedRow(jti, IssuedJwt.RevokedReason.ROTATE)));
+        when(repo.findById(jti)).thenReturn(Optional.of(revokedRow(jti, revokedReason)));
         RevocationAwareJwtDecoder decoder = decoder(repo, cacheManager());
         String token = validToken(jti);
+        String lateReason = revokedReason == IssuedJwt.RevokedReason.ROTATE
+                ? "rotated_token_presented"
+                : "superseded_token_presented";
         var late = new MockHttpServletRequest("GET", "/user");
         RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(late));
         assertThatThrownBy(() -> decoder.decode(token)).isInstanceOf(BadJwtException.class);
-        assertThat(recordedEvents())
-                .extracting(AuthEventData::failureReason)
-                .containsExactly("rotated_token_presented");
+        assertThat(recordedEvents()).extracting(AuthEventData::failureReason).containsExactly(lateReason);
+        assertThat(output.getAll()).doesNotContain("a retired browser token was presented for refresh");
 
         var replay = new MockHttpServletRequest("POST", "/auth/refresh");
         RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(replay));
@@ -486,7 +498,8 @@ class RevocationAwareJwtDecoderTest extends BaseUnitTest {
 
         assertThat(recordedEvents())
                 .extracting(AuthEventData::failureReason)
-                .containsExactly("rotated_token_presented", "browser_token_reuse");
+                .containsExactly(lateReason, "browser_token_reuse");
+        assertThat(output.getAll()).containsOnlyOnce("a retired browser token was presented for refresh; accountId=42");
         verify(repo, times(1)).findActive(any(), any());
     }
 
