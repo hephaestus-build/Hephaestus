@@ -179,6 +179,8 @@ webhook:
     # Consumers acknowledge within seconds, so the age holds the stream in steady state. Keep the age
     # times the daily GitHub volume below half of maxBytesGithub (webhook ingestion operations).
     maxAge: 7d
+    # Empty keeps application defaults, including the shorter Slack and Outline retention.
+    maxAgeByStream: {}
     maxBytes: 1GB
     maxBytesGithub: 10GB
     # Set true for one release to apply a limit that deletes stored messages, such as a shorter

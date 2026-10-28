@@ -4,6 +4,7 @@ import static de.tum.cit.aet.hephaestus.core.webhook.WebhookPropertiesFixture.GI
 import static de.tum.cit.aet.hephaestus.core.webhook.WebhookPropertiesFixture.gibibytes;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
@@ -28,19 +29,82 @@ import java.io.IOException;
 import java.time.Duration;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
+import java.util.List;
 import java.util.Map;
 import java.util.function.UnaryOperator;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.springframework.boot.context.properties.bind.Binder;
+import org.springframework.boot.env.YamlPropertySourceLoader;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
+import org.springframework.core.env.StandardEnvironment;
+import org.springframework.core.env.SystemEnvironmentPropertySource;
+import org.springframework.core.io.ClassPathResource;
 
 @ExtendWith(OutputCaptureExtension.class)
 class WebhookJetStreamBootstrapTest extends BaseUnitTest {
 
     private final WebhookProperties properties = WebhookPropertiesFixture.properties();
+
+    @Test
+    void shouldCreateFourSevenDayStreamsWhenSmallProfileOverridesTheApplicationDefaults() throws Exception {
+        var configurations = createdConfigurations(Map.of(
+                "HEPHAESTUS_WEBHOOK_STREAM_MAX_AGE", "7d",
+                "HEPHAESTUS_WEBHOOK_STREAM_MAXAGEBYSTREAM_SLACK", "7d",
+                "HEPHAESTUS_WEBHOOK_STREAM_MAXAGEBYSTREAM_OUTLINE", "7d",
+                "HEPHAESTUS_WEBHOOK_STREAM_MAX_BYTES_GITHUB", "4294967296B",
+                "HEPHAESTUS_WEBHOOK_STREAM_MAX_BYTES", "536870912B",
+                "HEPHAESTUS_WEBHOOK_STREAM_STORAGE_BUDGET", "8589934592"));
+
+        assertThat(configurations)
+                .extracting(
+                        StreamConfiguration::getName, StreamConfiguration::getMaxAge, StreamConfiguration::getMaxBytes)
+                .containsExactlyInAnyOrder(
+                        tuple("github", Duration.ofDays(7), 4 * GIBIBYTE),
+                        tuple("gitlab", Duration.ofDays(7), GIBIBYTE / 2),
+                        tuple("slack", Duration.ofDays(7), GIBIBYTE / 2),
+                        tuple("outline", Duration.ofDays(7), GIBIBYTE / 2));
+    }
+
+    @Test
+    void shouldKeepGeneralPersonalContentLimitsWhenNoProfileOverridesThem() throws Exception {
+        assertThat(createdConfigurations(Map.of()))
+                .extracting(
+                        StreamConfiguration::getName, StreamConfiguration::getMaxAge, StreamConfiguration::getMaxBytes)
+                .containsExactlyInAnyOrder(
+                        tuple("github", Duration.ofDays(7), 10 * GIBIBYTE),
+                        tuple("gitlab", Duration.ofDays(7), GIBIBYTE),
+                        tuple("slack", Duration.ofDays(3), GIBIBYTE),
+                        tuple("outline", Duration.ofDays(3), GIBIBYTE));
+    }
+
+    private static List<StreamConfiguration> createdConfigurations(Map<String, Object> environmentVariables)
+            throws Exception {
+        var environment = new StandardEnvironment();
+        environment.getPropertySources().remove(StandardEnvironment.SYSTEM_PROPERTIES_PROPERTY_SOURCE_NAME);
+        environment
+                .getPropertySources()
+                .replace(
+                        StandardEnvironment.SYSTEM_ENVIRONMENT_PROPERTY_SOURCE_NAME,
+                        new SystemEnvironmentPropertySource(
+                                StandardEnvironment.SYSTEM_ENVIRONMENT_PROPERTY_SOURCE_NAME, environmentVariables));
+        new YamlPropertySourceLoader()
+                .load("application.yml", new ClassPathResource("application.yml"))
+                .forEach(source -> environment.getPropertySources().addLast(source));
+        var stream = Binder.get(environment)
+                .bind("hephaestus.webhook.stream", WebhookProperties.Stream.class)
+                .orElseThrow(() -> new AssertionError("application.yml must define webhook stream settings"));
+        var management = mock(JetStreamManagement.class);
+        var notFound = apiException(404);
+        when(management.getStreamInfo(anyString())).thenThrow(notFound);
+        new WebhookJetStreamBootstrap(management, WebhookPropertiesFixture.with(stream)).bootstrap();
+        var captured = ArgumentCaptor.forClass(StreamConfiguration.class);
+        verify(management, times(4)).addStream(captured.capture());
+        return captured.getAllValues();
+    }
 
     @Test
     void createsStreamWhenMissing() throws Exception {

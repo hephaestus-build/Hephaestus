@@ -82,6 +82,10 @@ spec:
             # Stream bounds belong on this role: the beans that read them are gated on it.
             - name: HEPHAESTUS_WEBHOOK_STREAM_MAX_AGE
               value: {{ $stream.maxAge | quote }}
+            {{- range $provider, $maxAge := $stream.maxAgeByStream }}
+            - name: HEPHAESTUS_WEBHOOK_STREAM_MAXAGEBYSTREAM_{{ $provider | upper }}
+              value: {{ $maxAge | quote }}
+            {{- end }}
             - name: HEPHAESTUS_WEBHOOK_STREAM_MAX_BYTES
               value: {{ $stream.maxBytes | quote }}
             - name: HEPHAESTUS_WEBHOOK_STREAM_MAX_BYTES_GITHUB

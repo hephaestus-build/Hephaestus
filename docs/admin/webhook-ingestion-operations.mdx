@@ -249,9 +249,11 @@ Nothing can recover one removed outside it.
 2. The byte bound only protects the disk.
    Keep it above twice your daily GitHub volume times the age, so the age binds first.
 
-Streams carrying personal message content — `slack` and `outline` — are capped at 72 hours regardless
-of volume. PostgreSQL is the system of record. An erasure request cannot reach inside a broker
-stream, so those are transport buffers and nothing more.
+By default, streams with personal message content, `slack` and `outline`, have a 72-hour age bound.
+Their `hephaestus.webhook.stream.max-age-by-stream` entries take precedence over the shared age.
+PostgreSQL is the system of record. An erasure request cannot reach inside a broker stream.
+These streams are transport buffers.
+The `small` chart profile selects its own [stream limits](./kubernetes#storage-and-retention), including both per-stream age overrides.
 
 ## The storage budget, and why it is not just a number
 

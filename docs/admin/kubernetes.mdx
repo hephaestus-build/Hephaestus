@@ -356,6 +356,24 @@ One value sets both the broker `max_file` and the webhook role's stream storage 
 The webhook role refuses to start when the stream bounds add up to more than that budget.
 [Webhook ingestion operations](./webhook-ingestion-operations) gives the durability guarantee.
 
+The `small.yaml` profile sets GitHub to 4 GiB and each GitLab, Slack and Outline stream to 512 MiB.
+All four streams keep deliveries for at most seven days. Their byte bounds total 5.5 GiB.
+The broker file budget is 8 GiB. A fresh bundled broker claims 10 GiB, including the 25 % storage allowance.
+
+The profile overrides the shorter Slack and Outline ages through `webhook.stream.maxAgeByStream`.
+It retains 30-day durable expiry through `config.consumerInactiveThreshold`.
+
+A byte bound can remove messages before seven days. Measure peak traffic before you select these bounds.
+
+For an existing installation, keep its current `nats.jetstream.maxFileBytes` in your site values before you apply this profile.
+Do not shrink an existing PVC or change the StatefulSet claim template to adopt the smaller broker budget.
+Do not lower the broker budget below its stored data.
+
+Before you shorten stream limits, verify an off-host backup and test its restore.
+Then use the [guarded stream-limit procedure](./webhook-ingestion-operations#changing-a-bound-on-a-stream-that-already-exists).
+A higher limit cannot recover deleted messages.
+The server updates expiry only on durables it uses. Review orphan durables separately before you change or delete them.
+
 The Git mirrors are caches.
 A restarted server or worker clones them again, so they use node storage and no volume claim.
 The node needs that much free ephemeral storage, and the container limits include it.
@@ -423,8 +441,8 @@ Give the profile as the first `-f` file, before your own values, as [Install](#i
 | --- | --- | --- |
 | `dev.yaml` | One workstation cluster | Bundled, small volumes |
 | `preview.yaml` | One pull request preview | Bundled, small volumes |
-| `small.yaml` | One small cluster, for example one k3s node | Bundled, Compose limits |
-| `small-16gib.yaml`, on top of `small.yaml` | One k3s node of 16 GiB | Bundled, Compose limits |
+| `small.yaml` | One small cluster, for example one k3s node | Bundled, bounded streams |
+| `small-16gib.yaml`, on top of `small.yaml` | One k3s node of 16 GiB | Bundled, bounded streams |
 
 `small.yaml` fits one node of 4 vCPU, 32 GiB and 150 GiB of disk, with one worker that runs one review and up to 8 Heph turns at a time.
 A chart test adds up what that node holds during an upgrade, with backups on:
@@ -434,7 +452,7 @@ A chart test adds up what that node holds during an upgrade, with backups on:
 | Server, webhook role, worker, webapp, PostgreSQL with pgBackRest, NATS | 7.9 GiB | 1.25 | The volumes of PostgreSQL and NATS, and bounded caches |
 | An upgrade: the new webhook and webapp Pods beside the old ones, the migration Job, the stanza Job and one backup. The worker recreates. | 3.1 GiB | 0.75 | The new Pods' caches |
 | The sandbox quotas: in the reviews tier one review and the isolation probe, in the conversations tier the Heph host, its two pooled turn sandboxes and 8 running turns | 3.2 GiB | 1.55 | The disk requests of the sandbox Pods ([Sandbox sizes](#sandbox-sizes)) |
-| Total, against the node less what k3s requests | 14.2 GiB of 31 GiB | 3.55 of 3.75 | 75 GiB of the 110 GiB left beside images and review workspaces |
+| Total, against the node less what k3s requests | 14.2 GiB of 31 GiB | 3.55 of 3.75 | 65 GiB of the 110 GiB left beside images and review workspaces |
 
 The worker upgrades by `Recreate`, with a drain of at most 10 minutes.
 Each upgrade stops the worker first, so reviews and Heph turns stop for the drain and for the new worker's start and isolation probe.

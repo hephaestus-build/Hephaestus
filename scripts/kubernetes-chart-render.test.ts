@@ -339,9 +339,9 @@ const profiles = ["dev", "preview", "small", "small-16gib", "external"] as const
 const maxFileBytes = {
 	dev: 4_294_967_296,
 	preview: 2_147_483_648,
-	small: 17_179_869_184,
-	"small-16gib": 17_179_869_184,
-	external: 17_179_869_184,
+	small: 8_589_934_592,
+	"small-16gib": 8_589_934_592,
+	external: 8_589_934_592,
 };
 const layersFor = (name: (typeof profiles)[number]) => {
 	switch (name) {
@@ -917,6 +917,83 @@ const grants = (role: unknown) =>
 			);
 		})
 		.toSorted(byCodePoint);
+
+for (const name of ["small", "small-16gib", "external"] as const) {
+	await test(`${name}: stream bounds and thirty-day durable expiry reach their runtime roles`, () => {
+		const resources = rendered(layersFor(name));
+		const receiver = workload(resources, "webhook");
+		for (const [provider, ageKey, bytesKey, bytes] of [
+			["github", "MAX_AGE", "MAX_BYTES_GITHUB", "4294967296B"],
+			["gitlab", "MAX_AGE", "MAX_BYTES", "536870912B"],
+			["slack", "MAXAGEBYSTREAM_SLACK", "MAX_BYTES", "536870912B"],
+			["outline", "MAXAGEBYSTREAM_OUTLINE", "MAX_BYTES", "536870912B"],
+		] as const) {
+			assert.equal(
+				envValue(receiver, `HEPHAESTUS_WEBHOOK_STREAM_${ageKey}`),
+				"7d",
+				`${provider} age`,
+			);
+			assert.equal(
+				envValue(receiver, `HEPHAESTUS_WEBHOOK_STREAM_${bytesKey}`),
+				bytes,
+				`${provider} bytes`,
+			);
+		}
+		assert.equal(envValue(receiver, "HEPHAESTUS_WEBHOOK_STREAM_STORAGE_BUDGET"), "8589934592");
+		assert.equal(
+			envValue(receiver, "HEPHAESTUS_WEBHOOK_STREAM_ALLOW_DESTRUCTIVE_LIMIT_UPDATES"),
+			"false",
+		);
+		assert.equal(
+			envValue(workload(resources, "server"), "HEPHAESTUS_INTEGRATION_CONSUMER_INACTIVE_THRESHOLD"),
+			"30d",
+		);
+	});
+}
+
+await test("per-stream ages accept a site override and reject an unknown provider", () => {
+	const receiver = workload(
+		rendered([...layersFor("small"), { webhook: { stream: { maxAgeByStream: { slack: "9d" } } } }]),
+		"webhook",
+	);
+	assert.equal(envValue(receiver, "HEPHAESTUS_WEBHOOK_STREAM_MAXAGEBYSTREAM_SLACK"), "9d");
+	assert.equal(envValue(receiver, "HEPHAESTUS_WEBHOOK_STREAM_MAXAGEBYSTREAM_OUTLINE"), "7d");
+	assert.match(
+		render([...layersFor("small"), { webhook: { stream: { maxAgeByStream: { unknown: "7d" } } } }])
+			.stderr,
+		/invalid propertyName 'unknown'/u,
+	);
+});
+
+await test("an existing installation can keep its broker budget and volume when it adopts smaller stream bounds", () => {
+	const resources = rendered([
+		...layersFor("small"),
+		{ nats: { jetstream: { maxFileBytes: 17_179_869_184 } } },
+	]);
+	assert.equal(
+		envValue(workload(resources, "webhook"), "HEPHAESTUS_WEBHOOK_STREAM_STORAGE_BUDGET"),
+		"17179869184",
+	);
+	assert.equal(
+		envValue(workload(resources, "webhook"), "HEPHAESTUS_WEBHOOK_STREAM_MAX_BYTES_GITHUB"),
+		"4294967296B",
+	);
+	assert.equal(
+		String(
+			get(
+				workload(resources, "nats"),
+				"spec",
+				"volumeClaimTemplates",
+				0,
+				"spec",
+				"resources",
+				"requests",
+				"storage",
+			),
+		),
+		"21474836480",
+	);
+});
 
 await test("a release can apply a stream limit that deletes stored messages only when its operator turns it on", () => {
 	// The migration that shortens an existing stream's age needs one start with this flag.
