@@ -133,6 +133,21 @@ The constraints with direct authoring consequences are:
   permitted mirrored document and can report `COMPLETE` for that mirror scope, not upstream currentness.
 - Three sources cannot be logically empty — the pull-request, issue, and document core records.
   Every other source may be validly empty.
+- The pull-request core record can carry the check runs of the reviewed head (`head_check_runs`).
+  It carries them only when a read listed them for that head.
+  An absent field means that the runs are unknown, not that the head has no runs.
+  A practice that needs the runs and cannot read them returns Could not determine, never Not met.
+  A run with `finished: false` has no result.
+  A claim that depends on its outcome is Could not determine, and admission refuses a citation of it (`unfinished_run_cited`).
+  A run list never proves that a run is absent, because a provider can add runs after the read.
+  `complete: true` says only that the read listed every run the provider knew at `observed_at`.
+  `limitation: AWAITING_APPROVAL` says that the CI waits for a maintainer to approve it, so it has not run.
+  Then `head_checks` is `PENDING`, whatever the provider's rollup says.
+  A result can cite only the listed runs, with the state that they show at `observed_at`.
+  GitHub supplies check runs and commit statuses.
+  GitLab supplies none yet, because its pipeline hooks cannot show which runs finished.
+  Slack threads and Outline documents have no check runs.
+  The [sync lifecycle](./sync-lifecycle.md#check-runs-of-the-head) owns how the runs are read.
 - Two cannot be partial: the pull-request diff and the document core record. An available diff is
   also pinned. Its `requiredQuality` is `COMPLETE`: a verified empty range is available evidence.
   Each practice still needs its own review selection and supported result. Capture readiness assigns neither
@@ -297,7 +312,8 @@ Historical records keep their original contract and practice version.
 Currentness is derived:
 
 - source resources are immutable within a published contract version. Any semantic change creates a new
-  version.
+  version. The item record schemas under `contracts/items/` are not source resources.
+  An optional field added to a record keeps the contract version.
 - an [explicit practice upgrade](#cut-a-contract-version) controls when a practice moves to another source-contract version.
 - changing a practice's review configuration or automated-review policy stales that practice's claims.
 - adding a source cannot silently alter existing requirements because each practice names its sources explicitly.

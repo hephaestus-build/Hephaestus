@@ -17,6 +17,8 @@ import de.tum.cit.aet.hephaestus.integration.scm.context.WorkspaceScmProjection;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.commit.CommitDetails;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmItemEvents;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.label.Label;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.CheckState;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.HeadCheckRuns;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreviewcomment.PullRequestReviewComment;
@@ -389,8 +391,29 @@ public class PullRequestContentSource {
         // What the checks said about the reviewed head, as last observed. A state observed for any
         // other commit, the current mirror head included, is not about the reviewed change and is
         // left out, as is a head no sync or event has reported on.
-        if (pullRequest.getHeadCheckState() != null && reviewedHead.equals(pullRequest.getHeadCheckSha())) {
-            result.put("head_checks", pullRequest.getHeadCheckState().name());
+        CheckState checkState = pullRequest.getHeadCheckState();
+        if (checkState != null && reviewedHead.equals(pullRequest.getHeadCheckSha())) {
+            result.put("head_checks", checkState.name());
+        }
+        // The single runs behind that state, under the same rule. An absent key says no read listed them for the
+        // reviewed head, which is not the same as a head without runs.
+        HeadCheckRuns checkRuns = pullRequest.getHeadCheckRuns();
+        if (checkRuns != null && reviewedHead.equals(checkRuns.sha())) {
+            ObjectNode node = result.putObject("head_check_runs");
+            node.put("complete", checkRuns.complete());
+            if (checkRuns.limitation() != null) node.put("limitation", checkRuns.limitation());
+            putInstant(node, "observed_at", checkRuns.observedAt());
+            ArrayNode runs = node.putArray("runs");
+            for (HeadCheckRuns.Run run : checkRuns.runs()) {
+                ObjectNode entry = runs.addObject();
+                entry.put("name", run.name());
+                if (run.group() != null) entry.put("group", run.group());
+                entry.put("state", run.state());
+                entry.put("finished", run.finished());
+                if (run.url() != null) entry.put("url", run.url());
+                putInstant(entry, "started_at", run.startedAt());
+                putInstant(entry, "finished_at", run.finishedAt());
+            }
         }
 
         return result;

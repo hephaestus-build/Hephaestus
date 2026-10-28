@@ -413,6 +413,57 @@ A later observation replaces the state outright, including a pipeline that passe
 A record of unknown age accepts any dated observation.
 GitHub's check paths remain undated and unchanged.
 
+### Check runs of the head
+
+A pull request also stores the single runs behind its check state (`head_check_runs`), with the commit that they are about.
+
+- **GitHub.** A check suite of the head completes, whatever it concluded, or a commit status of the head ends.
+  Then the server reads the check runs, commit statuses and check suites of that commit (`GetCommitCheckRuns`).
+  It reads one page of 100 runs and asks only for what the Checks and Commit statuses permissions grant.
+  The list is complete only when nothing GitHub knows of is still to come.
+  It fits one page, and the rollup is neither pending nor expected.
+  Every listed run has ended, and every check suite with runs has completed.
+  A failed rollup is no such sign, because GitHub reports a failure while other runs still go.
+  A suite without runs is left aside, because an app that never posts a run leaves it queued.
+  A CI that has posted nothing yet cannot be seen, so a later workflow or status can still add runs.
+  An incomplete list never records that the checks finished.
+  A suite can wait for a maintainer to approve its workflows, as for a pull request from a fork.
+  Such a suite makes the list incomplete with the limitation `AWAITING_APPROVAL`.
+  GitHub completes such a suite as `action_required` with no runs, and its rollup can still read success.
+  Its check state is pending, not failed.
+  The suite and runs of Hephaestus's own GitHub App (`hephaestus.integration.github.app.id`) are left out of the list.
+  The server also ignores a check suite event of its own app, so that suite never sets the check state.
+- **GitLab.** Not captured yet.
+  A trigger job reports success when it creates its child pipeline, not when that pipeline ends.
+  Each pipeline hook of a commit lists only its own pipeline.
+  Thus, no hook shows which runs of the commit finished.
+
+Scheduled sync reads the runs again for each open pull request whose stored list of its head has not finished.
+It does so only for a list whose runs last changed in the last 24 hours.
+A failed read records nothing, and the stored runs stay.
+A read that is older than the stored read of the same commit changes nothing.
+A read that shows the same runs keeps the stored read and its time.
+The server stores at most 200 runs, cuts names to 200 characters and keeps links without user information or a query.
+
+When the stored runs change and every run of the head has ended, the server records the item event `scm.pull_request.checks_completed`.
+The event pins the same item version as the push, because the runs are not part of the version.
+
+The event's source key names the settled runs: the item, the head and a digest of the runs.
+The digest covers each run's name, group, state and end time.
+A repeated read of the same runs records no second event.
+A read that shows them in another order, or that lags and shows earlier runs again, records none either.
+
+A re-run on the same head ends at another time, so it records a new event at the same version.
+This is also true when the results match an earlier settling, as for a build that fails, passes and fails again.
+The practices that select **Checks finished** then review it again.
+Every other item event keeps one event of a name per version.
+
+Each read that records no completion logs why: the list is incomplete, a run has not finished, or the head has no rollup.
+Between scheduled syncs, the server reads again only when another suite or status of the head ends.
+Thus, a read that lags the last hook records a completion at the latest with the next scheduled sync.
+Checks that never finish, and a head without checks, record none.
+A practice that must review every push also selects **Opened**, **Ready** or **Synchronized**.
+
 ## Documented asymmetries and residuals
 
 - **Slack has no deletion *sweep* at all.** Its content model is append-plus-watermark.

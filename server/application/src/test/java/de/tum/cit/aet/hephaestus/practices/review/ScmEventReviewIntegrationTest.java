@@ -53,6 +53,8 @@ import de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmItemEvents;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmItemService;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmVersion;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.item.ScmWorkCapture;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.HeadCheckRuns;
+import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.HeadCheckRunsRecorder;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequest;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequest.PullRequestRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.pullrequestreview.PullRequestReview;
@@ -179,6 +181,9 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
 
     @Autowired
     PullRequestRepository pulls;
+
+    @Autowired
+    HeadCheckRunsRecorder checkRuns;
 
     @Autowired
     PullRequestReviewRepository providerReviews;
@@ -686,6 +691,76 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
             executor.shutdownNow();
             assertThat(executor.awaitTermination(20, TimeUnit.SECONDS)).isTrue();
         }
+    }
+
+    // GitLab captures no check runs yet: a trigger job reports success when it starts its child pipeline.
+    @Test
+    void shouldRecordChecksCompletedOncePerSettledRunSetOnlyWhenTheWholeListOfRunsEnded() {
+        var prepared = prepare(IdentityProviderType.GITHUB, false);
+        var item = prepared.item();
+        var pull = pulls.findById(Objects.requireNonNull(item.sourceId())).orElseThrow();
+        long repositoryId = Objects.requireNonNull(pull.getRepository()).getId();
+        var context = Objects.requireNonNull(transactions.execute(status -> ProcessingContext.forWebhook(
+                item.workspaceId(), repositories.findById(repositoryId).orElseThrow(), "completed")));
+        String head = Objects.requireNonNull(pull.getHeadRefOid());
+        Instant readAt = Instant.now().truncatedTo(ChronoUnit.MICROS);
+        var running = new HeadCheckRuns(
+                head,
+                List.of(checkRun("build", "in_progress", null), checkRun("test", "success", readAt)),
+                true,
+                readAt,
+                null);
+        // Every listed run ended, but the provider still waited for one it had not listed yet.
+        var partial = new HeadCheckRuns(
+                head, List.of(checkRun("build", "success", readAt)), false, readAt.plusSeconds(30), null);
+        var red = List.of(checkRun("build", "failure", readAt.plusSeconds(50)), checkRun("test", "success", readAt));
+        var green = List.of(checkRun("build", "success", readAt.plusSeconds(170)), checkRun("test", "success", readAt));
+        var redAgain =
+                List.of(checkRun("build", "failure", readAt.plusSeconds(290)), checkRun("test", "success", readAt));
+
+        checkRuns.observe(repositoryId, running, context);
+        checkRuns.observe(repositoryId, partial, context);
+        assertThat(checksCompleted(item)).isEmpty();
+
+        checkRuns.observe(repositoryId, settled(head, red, readAt.plusSeconds(60)), context);
+        checkRuns.observe(repositoryId, settled(head, red, readAt.plusSeconds(120)), context);
+        assertThat(checksCompleted(item)).containsExactly(prepared.version().value());
+
+        // A re-run that settles with other results is a new occasion at the same version. A later read of the same
+        // runs,
+        // a lagging read that still shows the earlier runs, and a read that lists them in another order are not.
+        checkRuns.observe(repositoryId, settled(head, green, readAt.plusSeconds(180)), context);
+        checkRuns.observe(repositoryId, settled(head, red, readAt.plusSeconds(200)), context);
+        checkRuns.observe(repositoryId, settled(head, green.reversed(), readAt.plusSeconds(240)), context);
+        assertThat(checksCompleted(item))
+                .containsExactly(prepared.version().value(), prepared.version().value());
+
+        // A third run that settles as the first did is a new occasion too: red, green, red.
+        checkRuns.observe(repositoryId, settled(head, redAgain, readAt.plusSeconds(300)), context);
+        assertThat(checksCompleted(item))
+                .containsExactly(
+                        prepared.version().value(),
+                        prepared.version().value(),
+                        prepared.version().value());
+        assertThat(pulls.findById(pull.getId()).orElseThrow().getHeadCheckRuns())
+                .isEqualTo(settled(head, redAgain, readAt.plusSeconds(300)));
+    }
+
+    private List<@Nullable String> checksCompleted(ItemRef item) {
+        return jdbc.queryForList(
+                "SELECT item_version FROM item_event WHERE workspace_id=? AND item_id=? AND name=?",
+                String.class,
+                item.workspaceId(),
+                item.itemId(),
+                ScmItemEvents.PULL_REQUEST_CHECKS_COMPLETED.value());
+    }
+
+    private static HeadCheckRuns.Run checkRun(String name, String state, @Nullable Instant finishedAt) {
+        return new HeadCheckRuns.Run(name, "ci", state, finishedAt != null, null, null, finishedAt);
+    }
+
+    private static HeadCheckRuns settled(String head, List<HeadCheckRuns.Run> runs, Instant readAt) {
+        return new HeadCheckRuns(head, runs, true, readAt, null);
     }
 
     @ParameterizedTest

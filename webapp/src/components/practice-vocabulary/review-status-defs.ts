@@ -171,6 +171,7 @@ const CANDIDATE_REFUSALS = [
 	"duty_quote_unverified",
 	"consulted_source_unread",
 	"undeclared_source_cited",
+	"unfinished_run_cited",
 ] as const;
 
 const CANDIDATE_REFUSAL_SENTENCE =

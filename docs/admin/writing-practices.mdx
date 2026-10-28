@@ -44,6 +44,19 @@ Reads retains the source contract and required, complete or optional sources.
 Required capture failure never becomes a semantic outcome.
 Do not list optional evidence as sufficient proof of exhaustive coverage.
 
+The pull request details include the check runs of the reviewed commit when Hephaestus has read them.
+Only GitHub supplies them.
+Write the practice so that missing check runs give Could not determine, never Not met.
+The [source contract](/contributor/item-source-contract#source-catalog) owns this rule.
+
+To review a pull request again when its checks finish, select **Checks finished** under Review on.
+It means that every check GitHub had listed at that time had ended.
+A workflow or a status that starts later can add checks.
+A re-run of the checks on the same push starts a new review only when its results differ from the last ones.
+
+If the checks never finish, or the push has none, no review starts for **Checks finished**.
+Add **Opened**, **Ready** or **Synchronized** to the practice if it must always run.
+
 ## Choose who reviews
 
 Reviewed by has three choices:

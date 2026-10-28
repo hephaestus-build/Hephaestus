@@ -27,6 +27,7 @@ import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobService;
 import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobStatus;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationRepository;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.repository.RepositoryRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.github.check.GitHubHeadCheckRunsReread;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.RateLimitTracker;
 import de.tum.cit.aet.hephaestus.integration.scm.github.issuedependency.GitHubIssueDependencySyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.issuetype.GitHubIssueTypeSyncService;
@@ -449,7 +450,8 @@ class ScheduledScmSyncShutdownIntegrationTest extends AbstractWorkspaceIntegrati
                 mock(RateLimitTracker.class),
                 executor,
                 connectionRepository,
-                jobs);
+                jobs,
+                mock(GitHubHeadCheckRunsReread.class));
     }
 
     private GitLabDataSyncScheduler gitLabScheduler(List<SyncSession> sessions, Executor executor) {

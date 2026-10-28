@@ -34,6 +34,7 @@ import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobService;
 import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobTrigger;
 import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobType;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.github.check.GitHubHeadCheckRunsReread;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.RateLimitTracker;
 import de.tum.cit.aet.hephaestus.integration.scm.github.issuedependency.GitHubIssueDependencySyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.issuetype.GitHubIssueTypeSyncService;
@@ -100,6 +101,9 @@ class GitHubDataSyncSchedulerTest extends BaseUnitTest {
     @Mock
     private SyncJobService syncJobService;
 
+    @Mock
+    private GitHubHeadCheckRunsReread headCheckRunsReread;
+
     private GitHubDataSyncScheduler scheduler;
 
     @BeforeEach
@@ -132,7 +136,8 @@ class GitHubDataSyncSchedulerTest extends BaseUnitTest {
                 rateLimitTracker,
                 Runnable::run, // synchronous executor — deterministic assertions, no timing flakiness
                 connectionRepository,
-                syncJobService);
+                syncJobService,
+                headCheckRunsReread);
 
         lenient().when(syncTargetProvider.getSyncStatistics()).thenReturn(new SyncStatistics(1, 0, 0, 1, false));
         // Skip the sub-issue/dependency gate — irrelevant to job-recording behavior, avoids stubbing

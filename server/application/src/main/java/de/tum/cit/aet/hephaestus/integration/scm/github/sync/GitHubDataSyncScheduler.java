@@ -26,6 +26,7 @@ import de.tum.cit.aet.hephaestus.integration.core.sync.SyncJobType;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.common.exception.InstallationNotFoundException;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.Organization;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.organization.OrganizationRepository;
+import de.tum.cit.aet.hephaestus.integration.scm.github.check.GitHubHeadCheckRunsReread;
 import de.tum.cit.aet.hephaestus.integration.scm.github.common.RateLimitTracker;
 import de.tum.cit.aet.hephaestus.integration.scm.github.issuedependency.GitHubIssueDependencySyncService;
 import de.tum.cit.aet.hephaestus.integration.scm.github.issuetype.GitHubIssueTypeSyncService;
@@ -111,6 +112,7 @@ public class GitHubDataSyncScheduler {
     private final Executor monitoringExecutor;
     private final ConnectionRepository connectionRepository;
     private final SyncJobService syncJobService;
+    private final GitHubHeadCheckRunsReread headCheckRunsReread;
 
     public GitHubDataSyncScheduler(
             SyncTargetProvider syncTargetProvider,
@@ -128,7 +130,9 @@ public class GitHubDataSyncScheduler {
             RateLimitTracker rateLimitTracker,
             @Qualifier("monitoringExecutor") Executor monitoringExecutor,
             ConnectionRepository connectionRepository,
-            SyncJobService syncJobService) {
+            SyncJobService syncJobService,
+            GitHubHeadCheckRunsReread headCheckRunsReread) {
+        this.headCheckRunsReread = headCheckRunsReread;
         this.syncTargetProvider = syncTargetProvider;
         this.syncContextProvider = syncContextProvider;
         this.dataSyncService = dataSyncService;
@@ -383,6 +387,14 @@ public class GitHubDataSyncScheduler {
                 // cooperative best-effort, consistent with stopping between repositories above.
                 if (handle != null && handle.isCancellationRequested()) {
                     return;
+                }
+
+                // A read of check runs that lagged its hook is made up here: only a later suite or status of the
+                // head would read them again.
+                if (!rateLimitTracker.isCritical(session.scopeId())) {
+                    for (SyncTarget target : session.syncTargets()) {
+                        headCheckRunsReread.reread(session.scopeId(), target.repositoryNameWithOwner());
+                    }
                 }
 
                 // Relink orphaned project items now that issues/PRs have been synced.

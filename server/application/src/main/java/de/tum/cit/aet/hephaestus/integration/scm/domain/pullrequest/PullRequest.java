@@ -33,6 +33,8 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
 import org.hibernate.annotations.BatchSize;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -222,6 +224,16 @@ public class PullRequest extends Issue {
     @Nullable
     @Column(name = "head_check_observed_at")
     private Instant headCheckObservedAt;
+
+    /**
+     * The single runs behind {@link #headCheckState}, as the last read that listed them showed them. Their own SHA
+     * says which commit they are about; it can differ from {@link #headCheckSha}, because not every check event lists
+     * the runs. Null until a read listed them.
+     */
+    @Nullable
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "head_check_runs", columnDefinition = "jsonb")
+    private HeadCheckRuns headCheckRuns;
 
     /**
      * When the provider was last asked for the discussions whose resolution is stored on this pull request's threads: a
@@ -461,6 +473,39 @@ public class PullRequest extends Issue {
         boolean changed = recordHeadChecks(sha, state, rollup) || !stored.equals(headCheckObservedAt);
         this.headCheckObservedAt = stored;
         return changed;
+    }
+
+    /**
+     * Stores the runs one read listed. A read of the same commit that is older than the stored one changes nothing,
+     * and neither does one that shows the same runs, so a redelivered hook or a repeated read keeps the stored time.
+     *
+     * @return whether the stored runs changed
+     */
+    public boolean observeHeadCheckRuns(HeadCheckRuns observed) {
+        HeadCheckRuns stored = headCheckRuns;
+        if (stored != null
+                && stored.sha().equals(observed.sha())
+                && (observed.observedAt().isBefore(stored.observedAt()) || observed.sameRunsAs(stored))) {
+            return false;
+        }
+        this.headCheckRuns = observed;
+        return true;
+    }
+
+    /**
+     * What the checks said about {@link #headCheckSha}. A head whose CI waits for a maintainer's approval has not run
+     * it, so it is pending even when GitHub's rollup reads success: the rollup leaves such a suite out.
+     */
+    public @Nullable CheckState getHeadCheckState() {
+        HeadCheckRuns runs = headCheckRuns;
+        if (headCheckState != null
+                && rank(headCheckState) < rank(CheckState.PENDING)
+                && runs != null
+                && runs.sha().equals(headCheckSha)
+                && HeadCheckRuns.AWAITING_APPROVAL.equals(runs.limitation())) {
+            return CheckState.PENDING;
+        }
+        return headCheckState;
     }
 
     private boolean recordHeadChecks(String sha, CheckState state, boolean rollup) {

@@ -80,7 +80,8 @@ public final class ScmDomainEvent {
                     PullRequestUnlabeled,
                     PullRequestReady,
                     PullRequestDrafted,
-                    PullRequestSynchronized {
+                    PullRequestSynchronized,
+                    PullRequestChecksCompleted {
         ScmEventPayload.PullRequestData pullRequest();
     }
 
@@ -116,6 +117,10 @@ public final class ScmDomainEvent {
             implements PullRequestEvent {}
 
     public record PullRequestSynchronized(ScmEventPayload.PullRequestData pullRequest, EventContext context)
+            implements PullRequestEvent {}
+
+    /** Every check run of the pull request's head has ended, as a read of the provider listed them. */
+    public record PullRequestChecksCompleted(ScmEventPayload.PullRequestData pullRequest, EventContext context)
             implements PullRequestEvent {}
 
     public sealed interface LabelEvent extends Event, ContextualEvent
