@@ -9,8 +9,19 @@
 import { type ChildProcess, spawn } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { once } from "node:events";
-import { createWriteStream, type WriteStream } from "node:fs";
-import { chmod, lstat, mkdir, open, readdir, readFile, realpath, rm, stat } from "node:fs/promises";
+import { constants, createWriteStream, type WriteStream } from "node:fs";
+import {
+	chmod,
+	lstat,
+	mkdir,
+	open,
+	readdir,
+	readFile,
+	realpath,
+	rm,
+	rmdir,
+	stat,
+} from "node:fs/promises";
 import { createServer, type Server, type Socket } from "node:net";
 import path from "node:path";
 import { finished } from "node:stream/promises";
@@ -189,24 +200,113 @@ async function makeReadOnly(dir: string): Promise<void> {
 	await chmod(dir, 0o555);
 }
 
+// Linux runs the tools: an open directory pins every child lookup even if an exec replaces its old path.
+// macOS runs the protocol specs and has no traversable /dev/fd directory aliases.
+function directoryPath(fd: number, original: string): string {
+	return process.platform === "linux" ? `/proc/self/fd/${fd}` : original;
+}
+
 /** A refused upload owns this tree. Restore directory access before removing it, without following symlinks. */
 async function removePutTree(file: string): Promise<void> {
-	const info = await lstat(file).catch((error: unknown) => {
-		if (error instanceof Error && "code" in error && error.code === "ENOENT") {
-			return null;
+	const root = path.dirname(file);
+	// Node omits Linux O_PATH (asm-generic/fcntl.h): pin even a directory whose read permission was removed.
+	const flags =
+		(process.platform === "linux" ? 2 ** 21 : constants.O_RDONLY) +
+		constants.O_DIRECTORY +
+		constants.O_NOFOLLOW;
+	const parent = await open(root, flags);
+	const check = async (candidate: string) => {
+		if (!within(root, await realpath(candidate))) {
+			throw new ToolProtocolError("path", "The upload cleanup left its workspace.");
 		}
-		throw error;
-	});
-	if (info === null) {
-		return;
-	}
-	if (info.isDirectory()) {
-		await chmod(file, 0o700);
-		for (const name of await readdir(file)) {
-			await removePutTree(path.join(file, name));
+	};
+	const unlink = async (entry: string) => {
+		// A link's parent must be contained; resolving its final component would follow the link we remove.
+		await check(path.dirname(entry));
+		await rm(entry, { force: true });
+	};
+	async function remove(entry: string): Promise<void> {
+		const info = await lstat(entry).catch((error: unknown) => {
+			if (error instanceof Error && "code" in error && error.code === "ENOENT") {
+				return null;
+			}
+			throw error;
+		});
+		if (info === null) {
+			return;
+		}
+		if (!info.isDirectory()) {
+			await unlink(entry);
+			return;
+		}
+		const handle = await open(entry, flags).catch(async (error: unknown) => {
+			if (
+				error instanceof Error &&
+				"code" in error &&
+				(error.code === "ELOOP" || error.code === "ENOTDIR")
+			) {
+				const replacement = await lstat(entry);
+				if (replacement.isSymbolicLink()) {
+					await unlink(entry);
+					return null;
+				}
+			}
+			throw error;
+		});
+		if (handle === null) {
+			return;
+		}
+		try {
+			const opened = directoryPath(handle.fd, entry);
+			await check(opened);
+			if (process.platform === "linux") {
+				// O_PATH cannot fchmod; the live descriptor's proc alias names that same inode, never a replacement.
+				await chmod(opened, 0o700);
+			} else {
+				await handle.chmod(0o700);
+			}
+			try {
+				await check(opened);
+			} catch (error) {
+				const replacement = await lstat(entry);
+				if (replacement.isSymbolicLink()) {
+					await unlink(entry);
+					return;
+				}
+				throw error;
+			}
+			// A concurrent rename may add a name after readdir. Retry once without following a replacement.
+			for (let pass = 0; pass < 2; pass += 1) {
+				for (const name of await readdir(opened)) {
+					await remove(path.join(opened, name));
+				}
+				await check(path.dirname(entry));
+				try {
+					await rmdir(entry);
+					return;
+				} catch (error) {
+					const code = error instanceof Error && "code" in error ? error.code : undefined;
+					if (code === "ENOTDIR") {
+						await unlink(entry);
+						return;
+					}
+					if (code === "ENOTEMPTY" && pass === 0) {
+						continue;
+					}
+					throw error;
+				}
+			}
+		} finally {
+			await handle.close();
 		}
 	}
-	await rm(file, { recursive: true, force: true });
+	try {
+		const anchored = directoryPath(parent.fd, root);
+		await check(anchored);
+		await remove(path.join(anchored, path.basename(file)));
+	} finally {
+		await parent.close();
+	}
 }
 
 /** Whether `byte` continues a UTF-8 character: 0x80 to 0xBF. */

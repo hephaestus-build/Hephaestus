@@ -8,6 +8,7 @@ import { once } from "node:events";
 import {
 	existsSync,
 	mkdtempSync,
+	type PathLike,
 	readdirSync,
 	readFileSync,
 	realpathSync,
@@ -463,8 +464,17 @@ void test("a reset cleans a partial upload before accepting another call", async
 	assert.ok(refusal("reset")(outcome.reason));
 });
 
-async function resetReadOnlyTree(t: TestContext, phase: string): Promise<void> {
+async function resetReadOnlyTree(
+	t: TestContext,
+	phase: string,
+	replaceAt?: "checked" | "opened" | "removal",
+): Promise<void> {
 	const dir = path.join(realpathSync(workspace), "repos", `reset-readonly-${phase}`);
+	const victim = replaceAt === undefined ? undefined : mkdtempSync(path.join(outside, "cleanup-"));
+	if (victim !== undefined) {
+		await fs.chmod(victim, 0o755);
+		await fs.writeFile(path.join(victim, "file"), "outside");
+	}
 	const archive = archiveOf(
 		tarOf(tarMember("nested/", { type: "5" }), tarMember("nested/file", { body: "kept" })),
 	);
@@ -472,8 +482,12 @@ async function resetReadOnlyTree(t: TestContext, phase: string): Promise<void> {
 	const aborted = Promise.withResolvers<undefined>();
 	const release = Promise.withResolvers<undefined>();
 	let held = false;
+	let swapped = false;
 	const { chmod } = fs;
 	const gate: typeof fs.chmod = async (file, mode) => {
+		if (mode === 0o700 && process.platform === "linux") {
+			await replaceNested(file, "opened");
+		}
 		await chmod(file, mode);
 		if (
 			phase === "permissions" &&
@@ -487,8 +501,46 @@ async function resetReadOnlyTree(t: TestContext, phase: string): Promise<void> {
 		}
 	};
 	const chmodMock = t.mock.method(fs, "chmod", gate);
+	const replaceNested = async (entry: PathLike, point: typeof replaceAt) => {
+		if (
+			victim !== undefined &&
+			held &&
+			point === replaceAt &&
+			!swapped &&
+			(await fs.realpath(entry)) === path.join(dir, "nested")
+		) {
+			swapped = true;
+			await chmod(dir, 0o700);
+			await fs.rename(path.join(dir, "nested"), path.join(dir, "saved"));
+			await fs.symlink(victim, path.join(dir, "nested"));
+		}
+	};
+	const { lstat } = fs;
+	const lstatMock = t.mock.method(fs, "lstat", async (...args: Parameters<typeof fs.lstat>) => {
+		const info = await lstat(...args);
+		await replaceNested(args[0], "checked");
+		return info;
+	});
+	const { open } = fs;
+	const openMock = t.mock.method(fs, "open", async (...args: Parameters<typeof fs.open>) => {
+		const handle = await open(...args);
+		if (
+			victim !== undefined &&
+			held &&
+			replaceAt === "opened" &&
+			(await fs.realpath(args[0])) === path.join(dir, "nested")
+		) {
+			const chmodOpened = handle.chmod.bind(handle);
+			t.mock.method(handle, "chmod", async (...chmodArgs: Parameters<typeof handle.chmod>) => {
+				await replaceNested(args[0], "opened");
+				await chmodOpened(...chmodArgs);
+			});
+		}
+		return handle;
+	});
 	const { rm } = fs;
 	const rmMock = t.mock.method(fs, "rm", async (...args: Parameters<typeof fs.rm>) => {
+		await replaceNested(path.dirname(String(args[0])), "removal");
 		if (phase === "archive cleanup" && String(args[0]).endsWith(".tar") && !held) {
 			held = true;
 			reached.resolve(undefined);
@@ -517,6 +569,12 @@ async function resetReadOnlyTree(t: TestContext, phase: string): Promise<void> {
 		release.resolve(undefined);
 		await reset;
 		const [outcome] = await upload;
+		if (victim !== undefined) {
+			assert.equal(swapped, true);
+			const victimInfo = await fs.stat(victim);
+			assert.equal(victimInfo.mode % 0o1000, 0o755);
+			assert.equal(await fs.readFile(path.join(victim, "file"), "utf8"), "outside");
+		}
 		assert.equal(outcome.status, "rejected");
 		assert.ok(refusal("reset")(outcome.reason));
 		assert.equal(existsSync(dir), false);
@@ -525,6 +583,8 @@ async function resetReadOnlyTree(t: TestContext, phase: string): Promise<void> {
 	} finally {
 		release.resolve(undefined);
 		chmodMock.mock.restore();
+		lstatMock.mock.restore();
+		openMock.mock.restore();
 		rmMock.mock.restore();
 		abortMock.mock.restore();
 		syncBuiltinESMExports();
@@ -532,7 +592,23 @@ async function resetReadOnlyTree(t: TestContext, phase: string): Promise<void> {
 			execFileSync("chmod", ["-R", "u+w", dir]);
 			rmSync(dir, { recursive: true, force: true });
 		}
+		if (victim !== undefined) {
+			await fs.rm(victim, { recursive: true, force: true });
+		}
 	}
+}
+
+for (const point of ["checked", "opened", "removal"] as const) {
+	void test(
+		`reset cleanup preserves an outside target when a directory is replaced at ${point}`,
+		{
+			skip:
+				point === "removal" && process.platform !== "linux"
+					? "The tools runtime pins directory lookups through Linux /proc."
+					: false,
+		},
+		async (t) => resetReadOnlyTree(t, "permissions", point),
+	);
 }
 
 for (const phase of ["permissions", "archive cleanup"]) {
