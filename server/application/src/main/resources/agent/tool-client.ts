@@ -1,6 +1,6 @@
 // tool-client.ts — the loop's end of tool protocol v1 (tool-protocol.ts).
 
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { once } from "node:events";
 import { connect, type Socket } from "node:net";
 
@@ -29,6 +29,13 @@ interface Pending {
 	done: PromiseWithResolvers<Frame>;
 }
 
+/** A `put` archive: the bytes of a tar file, with the size and SHA-256 that the tools side checks before it extracts. */
+export interface PutArchive {
+	bytes: AsyncIterable<Buffer>;
+	size: number;
+	sha256: string;
+}
+
 function broken(message: string): ToolProtocolError {
 	return new ToolProtocolError("protocol", message);
 }
@@ -46,6 +53,8 @@ export class ToolClient {
 	readonly #pending = new Map<string, Pending>();
 	readonly #reader = frameReader();
 	readonly #keepalive: NodeJS.Timeout;
+	/** Aborted when the connection ends, so that nothing waits on it any more. */
+	readonly #ending = new AbortController();
 	#lastFrameAt = Date.now();
 	#streamedBytes = 0;
 	#closed: Error | undefined;
@@ -71,133 +80,212 @@ export class ToolClient {
 		this.#keepalive.unref();
 	}
 
-	/** Connects and says hello, within {@link LIMITS.silenceMs}. */
-	static async open(socketPath: string): Promise<ToolClient> {
-		const signal = AbortSignal.timeout(LIMITS.silenceMs);
-		const socket = connect(socketPath);
-		await once(socket, "connect", { signal });
-		const client = new ToolClient(socket);
-		const nonce = randomUUID();
-		signal.addEventListener("abort", () => {
+	/**
+	 * Connects and says hello, within {@link LIMITS.silenceMs}. `nonce` is the one that the worker wrote into the tools
+	 * Pod's spec: the loop never sends it, so only that Pod's tools side can answer with it.
+	 */
+	static async open(socketPath: string, nonce: string): Promise<ToolClient> {
+		const client = new ToolClient(connect(socketPath));
+		const timer = setTimeout(() => {
 			client.#close(broken("the tools side did not answer hello"));
-		});
-		const reply = await client.#request(
-			"hello",
-			{ type: "hello", nonce, protocol: PROTOCOL },
-			FINAL.hello,
-		);
-		const bootId = text(reply.header, "bootId");
-		if (
-			text(reply.header, "nonce") !== nonce ||
-			integer(reply.header, "protocol") !== PROTOCOL ||
-			bootId === undefined ||
-			bootId === ""
-		) {
+		}, LIMITS.silenceMs);
+		try {
+			const reply = await client.#request(
+				"hello",
+				{ type: "hello", protocol: PROTOCOL },
+				FINAL.hello,
+			).reply;
+			if (integer(reply.header, "protocol") !== PROTOCOL) {
+				throw new ToolProtocolError("version", "the tools side speaks another protocol version");
+			}
+			if (text(reply.header, "nonce") !== nonce) {
+				throw new ToolProtocolError(
+					"nonce",
+					"the tools side is not the Pod that the worker started",
+				);
+			}
+			const bootId = text(reply.header, "bootId");
+			if (bootId === undefined || bootId === "") {
+				throw broken("the tools side answered hello without a boot id");
+			}
+			client.bootId = bootId;
+			return client;
+		} catch (error) {
 			client.close();
-			throw broken("the tools side answered hello with another nonce or protocol");
+			throw error;
+		} finally {
+			clearTimeout(timer);
 		}
-		client.bootId = bootId;
-		return client;
 	}
 
-	/** Runs one program; `onOutput` receives its output until the stream bounds stop it. */
+	/**
+	 * Runs one program; `onOutput` receives its output until the stream bounds stop it. If `onOutput` throws, the call
+	 * is cancelled and rejects with that error, and the connection's other calls go on.
+	 */
 	async exec(
 		request: ExecRequest,
 		onOutput: (chunk: Buffer) => void,
 		signal?: AbortSignal,
 	): Promise<ExecExit> {
 		const id = randomUUID();
+		const bound = Math.min(
+			request.maxOutputBytes ?? LIMITS.execStreamBytes,
+			LIMITS.execStreamBytes,
+		);
 		let streamed = 0;
+		let outputFailed: { error: unknown } | undefined;
+		let grace: NodeJS.Timeout | undefined;
 		const cancel = () => {
+			if (grace !== undefined || !this.#pending.has(id)) {
+				return;
+			}
 			this.#write({ type: "cancel", id });
+			grace = setTimeout(() => {
+				this.#close(broken("the tools side did not end a cancelled call"));
+			}, LIMITS.cancelGraceMs);
+			grace.unref();
 		};
+		const { reply: exit } = this.#request(
+			id,
+			{ ...request, type: "exec", id },
+			FINAL.exec,
+			"out",
+			(frame) => {
+				streamed += frame.body.length;
+				this.#streamedBytes += frame.body.length;
+				if (streamed > bound || this.#streamedBytes > LIMITS.attemptStreamBytes) {
+					throw broken("the tools side streamed more than its bound");
+				}
+				if (outputFailed !== undefined) {
+					return;
+				}
+				try {
+					onOutput(frame.body);
+				} catch (error) {
+					outputFailed = { error };
+					cancel();
+				}
+			},
+		);
 		signal?.addEventListener("abort", cancel, { once: true });
 		try {
-			const exit = this.#request(
-				id,
-				{ ...request, type: "exec", id },
-				FINAL.exec,
-				"out",
-				(frame) => {
-					streamed += frame.body.length;
-					this.#streamedBytes += frame.body.length;
-					if (
-						streamed > LIMITS.execStreamBytes ||
-						this.#streamedBytes > LIMITS.attemptStreamBytes
-					) {
-						throw broken("the tools side streamed more than its bound");
-					}
-					onOutput(frame.body);
-				},
-			);
 			if (signal?.aborted === true) {
 				cancel();
 			}
 			const { header } = await exit;
+			if (outputFailed !== undefined) {
+				throw outputFailed.error;
+			}
 			return {
 				code: integer(header, "code") ?? null,
 				signal: text(header, "signal") ?? null,
 				timedOut: header.timedOut === true,
 				truncated: header.truncated === true,
 				fullOutputPath: text(header, "fullOutputPath") ?? "",
+				outputLost: header.outputLost === true,
 			};
 		} finally {
+			clearTimeout(grace);
 			signal?.removeEventListener("abort", cancel);
 		}
 	}
 
 	async read(path: string, offset: number, limit: number): Promise<ReadPage> {
 		const id = randomUUID();
-		const reply = await this.#request(id, { type: "read", id, path, offset, limit }, FINAL.read);
+		const reply = await this.#request(id, { type: "read", id, path, offset, limit }, FINAL.read)
+			.reply;
 		const first = integer(reply.header, "offset");
 		const totalLines = integer(reply.header, "totalLines");
-		if (first === undefined || totalLines === undefined) {
+		const nextOffset = integer(reply.header, "nextOffset");
+		if (first === undefined || totalLines === undefined || nextOffset === undefined) {
 			throw broken("malformed read reply");
 		}
-		return { text: reply.body.toString("utf8"), offset: first, totalLines };
+		return {
+			text: reply.body.toString("utf8"),
+			offset: first,
+			totalLines,
+			truncated: reply.header.truncated === true,
+			nextOffset,
+		};
 	}
 
-	/** Writes a tar archive into a new directory `dir` on the tools side, which extracts it read-only. */
-	async put(dir: string, archive: Buffer): Promise<void> {
-		if (archive.length > LIMITS.putBytes) {
+	/**
+	 * Streams a tar archive into a new directory `dir` on the tools side, which extracts it read-only once its size and
+	 * SHA-256 match. It waits while the socket is full, so the loop holds at most one frame of the archive at a time, and
+	 * it stops as soon as the tools side refuses the put.
+	 */
+	async put(dir: string, archive: PutArchive): Promise<void> {
+		if (archive.size > LIMITS.putBytes) {
 			throw new ToolProtocolError("request", "The archive is larger than a checkout may be.");
 		}
 		const id = randomUUID();
-		const sha256 = createHash("sha256").update(archive).digest("hex");
-		// Settled at once, so that a refusal that arrives while the archive streams is never unhandled.
+		// #request reserves the call's slot before it returns, or throws at once; settled at once, so that a refusal
+		// that arrives while the archive streams is never unhandled.
 		const reply = Promise.allSettled([
-			this.#request(id, { type: "put", id, dir, size: archive.length, sha256 }, FINAL.put),
+			this.#request(
+				id,
+				{ type: "put", id, dir, size: archive.size, sha256: archive.sha256 },
+				FINAL.put,
+			).reply,
 		]);
-		for (let at = 0; at < archive.length && !this.#closed; at += LIMITS.bodyBytes) {
-			if (!this.#write({ type: "put-data", id }, archive.subarray(at, at + LIMITS.bodyBytes))) {
-				await once(this.#socket, "drain");
+		let room = archive.size;
+		for await (const chunk of archive.bytes) {
+			room = await this.#putChunk(id, chunk, room);
+			if (room <= 0) {
+				break;
 			}
 		}
-		this.#write({ type: "put-end", id });
+		if (this.#pending.has(id)) {
+			this.#write({ type: "put-end", id });
+		}
 		const [outcome] = await reply;
 		if (outcome.status === "rejected") {
 			throw outcome.reason;
 		}
 	}
 
+	/** Sends one chunk of a put's archive and returns the bytes that the put still takes: 0 once it stops. */
+	async #putChunk(id: string, chunk: Buffer, room: number): Promise<number> {
+		let left = room;
+		for (let at = 0; at < chunk.length && left > 0; at += LIMITS.bodyBytes) {
+			// The put is no longer pending once the tools side refused it or the connection ended.
+			if (!this.#pending.has(id)) {
+				return 0;
+			}
+			const part = chunk.subarray(at, at + Math.min(LIMITS.bodyBytes, left));
+			left -= part.length;
+			if (!this.#write({ type: "put-data", id }, part)) {
+				try {
+					await once(this.#socket, "drain", { signal: this.#ending.signal });
+				} catch {
+					return 0;
+				}
+			}
+		}
+		return left;
+	}
+
 	/** Ends every process of the tools user and clears its scratch. */
 	async reset(): Promise<void> {
 		const id = randomUUID();
-		await this.#request(id, { type: "reset", id }, FINAL.reset);
+		await this.#request(id, { type: "reset", id }, FINAL.reset).reply;
 	}
 
 	close(): void {
 		this.#close(broken("the connection is closed"));
 	}
 
-	/** Sends one request and resolves with its final frame, handing its stream frames to `onStream`. */
-	async #request(
+	/**
+	 * Sends one request, whose `reply` resolves with its final frame; its stream frames go to `onStream`. It holds the
+	 * request's slot before it returns, and throws at once when the connection ended or every slot is taken.
+	 */
+	#request(
 		id: string,
 		header: Header,
 		final: string,
 		stream?: string,
 		onStream: (frame: Frame) => void = () => undefined,
-	): Promise<Frame> {
+	): { reply: Promise<Frame> } {
 		if (this.#closed) {
 			throw this.#closed;
 		}
@@ -207,11 +295,7 @@ export class ToolClient {
 		const done = Promise.withResolvers<Frame>();
 		this.#pending.set(id, { final, stream, onStream, done });
 		this.#write(header);
-		try {
-			return await done.promise;
-		} finally {
-			this.#pending.delete(id);
-		}
+		return { reply: done.promise };
 	}
 
 	#receive(chunk: Buffer): void {
@@ -232,13 +316,13 @@ export class ToolClient {
 		}
 		const id = type === "hello" ? "hello" : text(frame.header, "id");
 		const pending = id === undefined ? undefined : this.#pending.get(id);
-		if (pending === undefined) {
+		if (id === undefined || pending === undefined) {
 			throw broken(`a frame for no request in flight: ${type}`);
 		}
 		if (type === pending.stream) {
 			pending.onStream(frame);
 		} else if (type === "error") {
-			this.#pending.delete(id ?? "");
+			this.#pending.delete(id);
 			pending.done.reject(
 				new ToolProtocolError(
 					text(frame.header, "error") ?? "error",
@@ -246,7 +330,7 @@ export class ToolClient {
 				),
 			);
 		} else if (type === pending.final) {
-			this.#pending.delete(id ?? "");
+			this.#pending.delete(id);
 			pending.done.resolve(frame);
 		} else {
 			throw broken(`a ${type} frame answers a request that ends with ${pending.final}`);
@@ -267,6 +351,7 @@ export class ToolClient {
 		}
 		this.#closed = error;
 		clearInterval(this.#keepalive);
+		this.#ending.abort();
 		this.#socket.destroy();
 		for (const pending of this.#pending.values()) {
 			pending.done.reject(error);

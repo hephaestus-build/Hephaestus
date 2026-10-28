@@ -3,16 +3,18 @@
 // It runs as its own user, with no credential, and serves one loop over a Unix socket. It never starts a request: it
 // answers `hello`, runs `exec` calls in their own process groups, pages `read`s inside its roots, extracts `put`
 // archives read-only, and ends calls on `cancel` and `reset`. Every call is bounded: its time, its streamed and spilled
-// output, and the paths it may name, which it resolves through symlinks before it compares them.
+// output, and the paths it may name, which it resolves through symlinks before it compares them. A failure of one call
+// ends that call with a named refusal; only a broken frame ends the connection.
 
 import { type ChildProcess, spawn } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { once } from "node:events";
-import { createWriteStream, mkdirSync, type WriteStream } from "node:fs";
-import { chmod, lstat, mkdir, readdir, readFile, realpath, rm, stat } from "node:fs/promises";
+import { createWriteStream, type WriteStream } from "node:fs";
+import { chmod, lstat, mkdir, open, readdir, readFile, realpath, rm, stat } from "node:fs/promises";
 import { createServer, type Server, type Socket } from "node:net";
 import path from "node:path";
 import { finished } from "node:stream/promises";
+import { setTimeout as sleep } from "node:timers/promises";
 
 import {
 	encode,
@@ -30,6 +32,8 @@ import {
 
 export interface ToolsServerOptions {
 	socketPath: string;
+	/** The nonce that the worker wrote into this Pod's spec: `hello` returns it, and the loop compares it. */
+	nonce: string;
 	/** The roots that `read` and an `exec`'s working directory may name. */
 	roots: string[];
 	/** The scratch root that `reset` clears; spill files and incoming archives live under it. */
@@ -53,6 +57,19 @@ const ENV = {
 	GIT_TERMINAL_PROMPT: "0",
 };
 
+/** How long a reset waits for the calls that it ended to send their `exit`, before it clears the scratch anyway. */
+const RESET_WAIT_MS = 5000;
+
+/** How many bytes one `read` takes from its file at a time. */
+const READ_CHUNK_BYTES = 64 * 1024;
+
+interface Call {
+	id: string;
+	child: ChildProcess;
+	/** Settles once the call sent its final frame. */
+	ended: Promise<undefined>;
+}
+
 interface Put {
 	dir: string;
 	file: string;
@@ -61,6 +78,8 @@ interface Put {
 	size: number;
 	seen: number;
 	sha256: string;
+	/** Whether the archive file could not be written. */
+	failed: boolean;
 }
 
 function within(root: string, absolute: string): boolean {
@@ -70,7 +89,7 @@ function within(root: string, absolute: string): boolean {
 
 /** `candidate` with every symlink resolved, when it exists and lies inside one of `roots`. */
 async function contained(candidate: string, roots: string[]): Promise<string | undefined> {
-	if (!path.isAbsolute(candidate)) {
+	if (!path.isAbsolute(candidate) || candidate.includes("\0")) {
 		return undefined;
 	}
 	try {
@@ -114,7 +133,11 @@ async function markedProcesses(marker: string): Promise<number[]> {
 	return pids;
 }
 
-/** Ends every process of one call: its group, and every process that carries its marker. */
+/**
+ * Ends every process of one call: its group, and every process that carries its marker. A process that both left the
+ * group and cleared its environment escapes both; the end of the tools Pod ends it, and a `reset` of the sidecar's
+ * own user does too.
+ */
 async function endCall(id: string, child: ChildProcess): Promise<void> {
 	killGroup(child);
 	for (const pid of await markedProcesses(`${CALL_MARKER}=${id}`)) {
@@ -166,36 +189,123 @@ function continues(byte: number | undefined): boolean {
 	return byte !== undefined && byte >= 0x80 && byte < 0xc0;
 }
 
-/** The first `bytes` of `text` encoded, cut at a character boundary. */
-function utf8Prefix(value: string, bytes: number): { body: Buffer; cut: boolean } {
-	const whole = Buffer.from(value, "utf8");
-	if (whole.length <= bytes) {
-		return { body: whole, cut: false };
+/** A call's spill file, opened new, or `undefined` when it cannot be: the call then runs without one. */
+async function openSpill(scratch: string, id: string): Promise<WriteStream | undefined> {
+	const dir = path.join(scratch, ".tool-output");
+	try {
+		await mkdir(dir, { recursive: true });
+		// "wx": never through a planted symlink, and never over an earlier call's file.
+		const spill = createWriteStream(path.join(dir, `${id}.log`), { flags: "wx" });
+		await once(spill, "open");
+		return spill;
+	} catch {
+		return undefined;
 	}
-	let end = bytes;
-	// Step back to the start of the character that the cut falls in.
-	while (end > 0 && continues(whole[end])) {
-		end -= 1;
+}
+
+/**
+ * The lines `offset` to `offset + limit - 1` of a file, at most one frame body of them. It reads the file in chunks,
+ * so a read holds one page and one chunk, whatever the file's size. A page that the body bound ends early holds the
+ * whole lines that fit; a first line past the bound alone gives its start, cut at a character boundary.
+ */
+async function readPage(file: string, offset: number, limit: number) {
+	const last = offset + limit - 1;
+	const kept: Buffer[] = [];
+	let keptBytes = 0;
+	/** Where the current line starts in `kept`: a line that does not fit is taken off the page again. */
+	let lineStart = { parts: 0, bytes: 0 };
+	let line = 1;
+	/** Whether bytes follow the last newline: they are a last line without one. */
+	let lastLineOpen = false;
+	/** Where the body bound ended the page, if it did, and whether it cut the page's only line. */
+	const stop: { nextOffset?: number; cutLine: boolean } = { cutLine: false };
+	/** Adds a piece of the current line to the page, or ends the page where the body bound falls. */
+	const take = (piece: Buffer) => {
+		if (keptBytes + piece.length <= LIMITS.bodyBytes) {
+			kept.push(Buffer.from(piece));
+			keptBytes += piece.length;
+		} else if (line === offset) {
+			let cut = LIMITS.bodyBytes - keptBytes;
+			while (cut > 0 && continues(piece[cut])) {
+				cut -= 1;
+			}
+			kept.push(Buffer.from(piece.subarray(0, cut)));
+			keptBytes += cut;
+			stop.cutLine = true;
+			stop.nextOffset = line + 1;
+		} else {
+			kept.length = lineStart.parts;
+			keptBytes = lineStart.bytes;
+			stop.nextOffset = line;
+		}
+	};
+	const handle = await open(file, "r");
+	try {
+		const buffer = Buffer.alloc(READ_CHUNK_BYTES);
+		for (;;) {
+			const { bytesRead } = await handle.read(buffer, 0, buffer.length);
+			if (bytesRead === 0) {
+				break;
+			}
+			const chunk = buffer.subarray(0, bytesRead);
+			let start = 0;
+			while (start < chunk.length) {
+				const newline = chunk.indexOf(0x0a, start);
+				const end = newline === -1 ? chunk.length : newline + 1;
+				if (line >= offset && line <= last && stop.nextOffset === undefined) {
+					take(chunk.subarray(start, end));
+				}
+				if (newline === -1) {
+					lastLineOpen = true;
+					start = chunk.length;
+				} else {
+					line += 1;
+					lastLineOpen = false;
+					start = end;
+					lineStart = { parts: kept.length, bytes: keptBytes };
+				}
+			}
+		}
+	} finally {
+		await handle.close();
 	}
-	return { body: whole.subarray(0, end), cut: true };
+	const totalLines = lastLineOpen ? line : line - 1;
+	let body = Buffer.concat(kept);
+	if (!stop.cutLine && body.at(-1) === 0x0a) {
+		body = body.subarray(0, -1);
+	}
+	return {
+		body,
+		totalLines,
+		truncated: stop.nextOffset !== undefined,
+		nextOffset: stop.nextOffset ?? Math.max(offset, Math.min(last, totalLines) + 1),
+	};
 }
 
 export function startToolsServer(options: ToolsServerOptions): Server {
 	const bootId = randomUUID();
-	const running = new Map<string, ChildProcess>();
+	/** The running calls of every connection: a reset ends them all. */
+	const calls = new Set<Call>();
 	/** Bytes streamed to the loop by every call of this attempt; the tools program serves one attempt. */
 	let attemptStreamed = 0;
+	/** How many resets ran: a call that arrived before a reset and would start after it does not start. */
+	let resets = 0;
 
 	return createServer((socket: Socket) => {
 		const reader = frameReader();
+		/** The ids of this connection's requests that have not sent their final frame. */
+		const inFlight = new Set<string>();
+		const running = new Map<string, Call>();
 		const puts = new Map<string, Put>();
-		/** Puts that were refused: the loop streams their archive before it reads the refusal. */
+		/** Puts that were refused: the loop may have streamed some of their archive before it read the refusal. */
 		const refusedPuts = new Set<string>();
 		/** Put frames run in order: a put's directory checks finish before its data arrives at the archive. */
 		const putFrames: Frame[] = [];
 		let puttingFrames = false;
-		/** Calls cancelled before they started. */
+		/** In-flight calls that were cancelled before they started. */
 		const cancelled = new Set<string>();
+		/** Aborted when the connection ends: it ends the connection's extractions. */
+		const closing = new AbortController();
 		let helloDone = false;
 
 		/** Writes one frame; `false` when the socket's buffer is full and the writer should wait for `drain`. */
@@ -205,15 +315,27 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 			}
 			return socket.write(encode(header, body));
 		};
-		const refuse = (id: string, error: string, detail: string) => {
-			send({ type: "error", id, error, detail });
+		/** Sends a request's final frame: its id is free again. */
+		const final = (id: string, header: Header, body?: Buffer) => {
+			inFlight.delete(id);
+			cancelled.delete(id);
+			send({ ...header, id }, body);
 		};
-
-		async function exec(id: string, header: Header): Promise<void> {
-			if (running.size >= LIMITS.inFlight) {
-				refuse(id, "busy", "Too many tool calls at once.");
-				return;
+		const refuse = (id: string, error: string, detail: string) => {
+			final(id, { type: "error", error, detail });
+		};
+		/** Runs one request's handler; a handler that fails ends its request with a refusal, never the program. */
+		async function settle(id: string, work: Promise<void>): Promise<void> {
+			try {
+				await work;
+			} catch {
+				if (inFlight.has(id)) {
+					refuse(id, "tools", "The tools side failed this call.");
+				}
 			}
+		}
+
+		async function exec(id: string, header: Header, arrivedAfter: number): Promise<void> {
 			const cwd = await contained(text(header, "cwd") ?? "", options.roots);
 			if (cwd === undefined) {
 				refuse(id, "path", "The working directory is outside the workspace.");
@@ -232,6 +354,10 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 				refuse(id, "request", "An exec names exactly one of a command or an argv.");
 				return;
 			}
+			if ([file, ...args].some((part) => part.includes("\0"))) {
+				refuse(id, "request", "A command or an argument contains a NUL byte.");
+				return;
+			}
 			const requested = integer(header, "timeoutMs");
 			if (requested === undefined || requested <= 0) {
 				refuse(id, "request", "An exec needs a positive timeoutMs.");
@@ -242,91 +368,170 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 				integer(header, "maxOutputBytes") ?? LIMITS.execStreamBytes,
 				LIMITS.execStreamBytes,
 			);
+			const spill = await openSpill(options.scratch, id);
 
-			if (cancelled.delete(id)) {
-				send({
+			// The connection ended while the call was checked: nothing would end what it starts.
+			if (socket.destroyed) {
+				spill?.destroy();
+				return;
+			}
+			if (resets !== arrivedAfter) {
+				spill?.destroy();
+				refuse(id, "reset", "A reset ended this call before it started.");
+				return;
+			}
+			if (cancelled.has(id)) {
+				spill?.destroy();
+				final(id, {
 					type: "exit",
-					id,
 					code: null,
 					signal: "SIGKILL",
 					timedOut: false,
 					truncated: false,
 					fullOutputPath: "",
+					outputLost: false,
 				});
 				return;
 			}
-			const spillDir = path.join(options.scratch, ".tool-output");
-			mkdirSync(spillDir, { recursive: true });
-			const fullOutputPath = path.join(spillDir, `${id}.log`);
-			const spill = createWriteStream(fullOutputPath);
-			const child = spawn(file, args, {
-				cwd,
-				env: { ...ENV, HOME: options.scratch, [CALL_MARKER]: id },
-				detached: true,
-				stdio: ["ignore", "pipe", "pipe"],
-			});
-			running.set(id, child);
+			let child: ChildProcess;
+			try {
+				child = spawn(file, args, {
+					cwd,
+					env: { ...ENV, HOME: options.scratch, [CALL_MARKER]: id },
+					detached: true,
+					stdio: ["ignore", "pipe", "pipe"],
+				});
+			} catch {
+				spill?.destroy();
+				refuse(id, "spawn", "The program could not start.");
+				return;
+			}
+			const ended = Promise.withResolvers<undefined>();
+			const call: Call = { id, child, ended: ended.promise };
+			running.set(id, call);
+			calls.add(call);
 			let streamed = 0;
 			let spilled = 0;
+			let spillFailed = spill === undefined;
 			let truncated = false;
+			let outputLost = false;
+			let spawnFailed = false;
 			/** Output waits while the spill file or the socket is full, so a fast program cannot grow either buffer. */
-			let waiting = 0;
-			const wait = (target: NodeJS.EventEmitter) => {
-				waiting += 1;
-				child.stdout.pause();
-				child.stderr.pause();
-				target.once("drain", () => {
-					waiting -= 1;
-					if (waiting === 0) {
-						child.stdout.resume();
-						child.stderr.resume();
-					}
+			let spillWaits = false;
+			let socketWaits = false;
+			const pause = () => {
+				child.stdout?.pause();
+				child.stderr?.pause();
+			};
+			const resume = () => {
+				if (!spillWaits && !socketWaits) {
+					child.stdout?.resume();
+					child.stderr?.resume();
+				}
+			};
+			const waitForSpill = () => {
+				if (spillWaits || spill === undefined) {
+					return;
+				}
+				spillWaits = true;
+				pause();
+				spill.once("drain", () => {
+					spillWaits = false;
+					resume();
 				});
 			};
-			const onData = (data: Buffer) => {
-				const spillRoom = LIMITS.spillBytes - spilled;
-				if (data.length > spillRoom) {
-					truncated = true;
+			const waitForSocket = () => {
+				if (socketWaits) {
+					return;
 				}
-				const kept = data.subarray(0, Math.max(0, spillRoom));
-				spilled += kept.length;
-				if (kept.length > 0 && !spill.write(kept)) {
-					wait(spill);
+				socketWaits = true;
+				pause();
+				socket.once("drain", () => {
+					socketWaits = false;
+					resume();
+				});
+			};
+			spill?.on("error", () => {
+				spillFailed = true;
+				spillWaits = false;
+				resume();
+			});
+			const onData = (data: Buffer) => {
+				let kept = 0;
+				if (!spillFailed && spill !== undefined) {
+					kept = Math.min(data.length, LIMITS.spillBytes - spilled);
+					spilled += kept;
+					if (kept > 0 && !spill.write(data.subarray(0, kept))) {
+						waitForSpill();
+					}
 				}
 				const room = Math.min(maxStream - streamed, LIMITS.attemptStreamBytes - attemptStreamed);
 				const part = data.subarray(0, Math.max(0, room));
 				if (part.length < data.length) {
 					truncated = true;
 				}
+				if (Math.max(kept, part.length) < data.length) {
+					outputLost = true;
+				}
 				streamed += part.length;
 				attemptStreamed += part.length;
 				for (let at = 0; at < part.length; at += LIMITS.bodyBytes) {
 					if (!send({ type: "out", id }, part.subarray(at, at + LIMITS.bodyBytes))) {
-						wait(socket);
+						waitForSocket();
 					}
 				}
 			};
-			child.stdout.on("data", onData);
-			child.stderr.on("data", onData);
+			child.stdout?.on("data", onData);
+			child.stderr?.on("data", onData);
 			let timedOut = false;
 			const timer = setTimeout(() => {
 				timedOut = true;
 				void endCall(id, child);
 			}, timeoutMs);
+			// A program that cannot start emits `error` and then `close`: the call then ends with one refusal.
 			child.once("error", () => {
-				clearTimeout(timer);
-				running.delete(id);
-				spill.end();
-				refuse(id, "spawn", "The program could not start.");
+				if (child.pid === undefined) {
+					spawnFailed = true;
+				}
 			});
+			/** Whether the spill file holds the whole output once it is closed. */
+			const closeSpill = async (): Promise<boolean> => {
+				if (spill === undefined || spillFailed) {
+					spill?.destroy();
+					return false;
+				}
+				spill.end();
+				try {
+					await finished(spill);
+					return !spillFailed;
+				} catch {
+					return false;
+				}
+			};
 			const finish = async (code: number | null, signal: NodeJS.Signals | null) => {
 				clearTimeout(timer);
-				running.delete(id);
-				// No call leaves a process behind, also one that left the group with setsid.
-				await endCall(id, child);
-				spill.end();
-				await finished(spill);
-				send({ type: "exit", id, code, signal, timedOut, truncated, fullOutputPath });
+				try {
+					// A process that left the group with setsid ends here too, by its marker.
+					await endCall(id, child);
+					const whole = await closeSpill();
+					if (spawnFailed) {
+						refuse(id, "spawn", "The program could not start.");
+					} else {
+						final(id, {
+							type: "exit",
+							code,
+							signal,
+							timedOut,
+							truncated,
+							fullOutputPath: whole && spill !== undefined ? String(spill.path) : "",
+							outputLost: outputLost || (truncated && !whole),
+						});
+					}
+				} finally {
+					running.delete(id);
+					calls.delete(call);
+					ended.resolve(undefined);
+				}
 			};
 			// A process that outlived the call holds its pipes open, so the call ends it as soon as its program exits.
 			child.once("exit", () => {
@@ -355,23 +560,51 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 					refuse(id, "large", "The file is too large to read; search it with grep instead.");
 					return;
 				}
-				const content = await readFile(file, "utf8");
-				const lines = content.split("\n");
-				if (content.endsWith("\n")) {
-					lines.pop();
-				}
-				const page = lines.slice(offset - 1, offset - 1 + limit).join("\n");
-				const { body, cut } = utf8Prefix(page, LIMITS.bodyBytes);
-				send({ type: "read", id, offset, totalLines: lines.length, truncated: cut }, body);
+				const page = await readPage(file, offset, limit);
+				final(
+					id,
+					{
+						type: "read",
+						offset,
+						totalLines: page.totalLines,
+						truncated: page.truncated,
+						nextOffset: page.nextOffset,
+					},
+					page.body,
+				);
 			} catch {
 				refuse(id, "path", "The file cannot be read.");
 			}
 		}
 
-		async function reset(id: string): Promise<void> {
-			for (const child of running.values()) {
-				killGroup(child);
+		/** Ends a put that has not extracted yet; its archive file goes with the scratch. */
+		function dropPut(id: string, error: string, detail: string): void {
+			const entry = puts.get(id);
+			if (entry !== undefined) {
+				puts.delete(id);
+				entry.sink.destroy();
+				// The socket may wait for this sink's drain.
+				socket.resume();
 			}
+			refusedPuts.add(id);
+			refuse(id, error, detail);
+		}
+
+		async function reset(id: string): Promise<void> {
+			resets += 1;
+			for (const putId of puts.keys()) {
+				dropPut(putId, "reset", "A reset ended this put.");
+			}
+			// Each call ends with its marker sweep, and the scratch is cleared only after it sent its `exit`.
+			await Promise.race([
+				Promise.all(
+					[...calls].map(async (call) => {
+						await endCall(call.id, call.child);
+						await call.ended;
+					}),
+				),
+				sleep(RESET_WAIT_MS, undefined, { ref: false }),
+			]);
 			for (const pid of options.soleUser ? await ownProcesses() : []) {
 				try {
 					process.kill(pid, "SIGKILL");
@@ -382,7 +615,7 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 			for (const name of await readdir(options.scratch).catch(() => [])) {
 				await rm(path.join(options.scratch, name), { recursive: true, force: true });
 			}
-			send({ type: "reset", id });
+			final(id, { type: "reset" });
 		}
 
 		async function startPut(id: string, header: Header): Promise<void> {
@@ -403,26 +636,37 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 				size > LIMITS.putBytes ||
 				sha256 === undefined
 			) {
-				refusedPuts.add(id);
-				refuse(
+				dropPut(
 					id,
 					"request",
 					"A put names a new directory inside the put roots, a bounded size and a sha256.",
 				);
 				return;
 			}
-			const incoming = path.join(options.scratch, ".puts");
-			await mkdir(incoming, { recursive: true });
-			const file = path.join(incoming, `${id}.tar`);
-			puts.set(id, {
-				dir: path.join(parent, path.basename(requested)),
-				file,
-				sink: createWriteStream(file),
-				hash: createHash("sha256"),
-				size,
-				seen: 0,
-				sha256,
-			});
+			try {
+				const incoming = path.join(options.scratch, ".puts");
+				await mkdir(incoming, { recursive: true });
+				const file = path.join(incoming, `${id}.tar`);
+				const sink = createWriteStream(file, { flags: "wx" });
+				await once(sink, "open");
+				const entry: Put = {
+					dir: path.join(parent, path.basename(requested)),
+					file,
+					sink,
+					hash: createHash("sha256"),
+					size,
+					seen: 0,
+					sha256,
+					failed: false,
+				};
+				sink.on("error", () => {
+					entry.failed = true;
+					socket.resume();
+				});
+				puts.set(id, entry);
+			} catch {
+				dropPut(id, "put", "The tools side cannot store the archive.");
+			}
 		}
 
 		function putData(id: string, body: Buffer): void {
@@ -434,7 +678,7 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 				throw new ToolProtocolError("protocol", "put data for no put in flight");
 			}
 			entry.seen += body.length;
-			if (entry.seen > entry.size) {
+			if (entry.failed || entry.seen > entry.size) {
 				return;
 			}
 			entry.hash.update(body);
@@ -456,19 +700,34 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 				throw new ToolProtocolError("protocol", "put end for no put in flight");
 			}
 			puts.delete(id);
+			let created = false;
+			let extracted = false;
 			try {
 				entry.sink.end();
 				await finished(entry.sink);
+				if (entry.failed) {
+					refuse(id, "put", "The tools side cannot store the archive.");
+					return;
+				}
 				if (entry.seen !== entry.size || entry.hash.digest("hex") !== entry.sha256) {
 					refuse(id, "put", "The archive did not arrive whole.");
 					return;
 				}
 				await mkdir(entry.dir);
-				// tar strips leading slashes, skips members with `..`, and never writes through a symlink that the
-				// archive itself made.
-				const tar = spawn("tar", ["-x", "--no-same-owner", "-f", entry.file, "-C", entry.dir], {
-					stdio: "ignore",
-				});
+				created = true;
+				// GNU tar and bsdtar both strip leading slashes, skip members with `..`, and never write through a
+				// symlink that the archive made: GNU tar creates such a symlink last, and bsdtar refuses. The spec
+				// proves it with hostile archives on the tar of the machine that runs it.
+				const tar = spawn(
+					"tar",
+					["-x", "--no-same-owner", "--no-same-permissions", "-f", entry.file, "-C", entry.dir],
+					{
+						stdio: "ignore",
+						signal: closing.signal,
+						timeout: LIMITS.extractMs,
+						killSignal: "SIGKILL",
+					},
+				);
 				const [code]: unknown[] = await Promise.race([
 					once(tar, "close"),
 					once(tar, "error").then(() => [-1]),
@@ -478,11 +737,16 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 					return;
 				}
 				await makeReadOnly(entry.dir);
-				send({ type: "put", id });
+				extracted = true;
+				final(id, { type: "put" });
 			} catch {
 				refuse(id, "put", "The archive could not be extracted.");
 			} finally {
 				await rm(entry.file, { force: true });
+				// A refused put leaves no half-extracted directory, so the loop can put it again.
+				if (created && !extracted) {
+					await rm(entry.dir, { recursive: true, force: true });
+				}
 			}
 		}
 
@@ -509,59 +773,77 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 			}
 		}
 
+		function hello(header: Header): void {
+			if (helloDone) {
+				throw new ToolProtocolError("protocol", "a second hello");
+			}
+			if (integer(header, "protocol") !== PROTOCOL) {
+				send({
+					type: "error",
+					id: "hello",
+					error: "version",
+					detail: `The tools side speaks tool protocol ${PROTOCOL}.`,
+				});
+				socket.end();
+				return;
+			}
+			helloDone = true;
+			send({ type: "hello", nonce: options.nonce, protocol: PROTOCOL, bootId, limits: LIMITS });
+		}
+
 		function handle(frame: Frame): void {
 			const { header } = frame;
-			const id = text(header, "id");
 			if (header.type === "hello") {
-				send({
-					type: "hello",
-					nonce: text(header, "nonce") ?? "",
-					protocol: PROTOCOL,
-					bootId,
-					limits: LIMITS,
-				});
-				helloDone = true;
+				hello(header);
 				return;
 			}
 			if (header.type === "ping") {
 				send({ type: "pong" });
 				return;
 			}
+			const id = text(header, "id");
 			if (!helloDone || id === undefined || !ID_PATTERN.test(id)) {
 				throw new ToolProtocolError("protocol", "a request before hello or without a valid id");
 			}
-			switch (header.type) {
-				case "exec": {
-					void exec(id, header);
-					break;
+			if (header.type === "cancel") {
+				const call = running.get(id);
+				if (call !== undefined) {
+					void endCall(id, call.child);
+				} else if (inFlight.has(id)) {
+					cancelled.add(id);
 				}
-				case "read": {
-					void read(id, header);
-					break;
+				return;
+			}
+			if (header.type === "put-data" || header.type === "put-end") {
+				putFrames.push(frame);
+				void handlePutFrames();
+				return;
+			}
+			// Counted when the frame arrives, before any handler awaits: a burst of frames in one chunk cannot pass.
+			if (inFlight.has(id)) {
+				throw new ToolProtocolError("protocol", "a request id that is already in flight");
+			}
+			if (!["exec", "read", "put", "reset"].includes(header.type)) {
+				refuse(id, "unknown", `The tools side has no operation ${header.type}.`);
+				return;
+			}
+			if (inFlight.size >= LIMITS.inFlight) {
+				if (header.type === "put") {
+					refusedPuts.add(id);
 				}
-				case "cancel": {
-					const child = running.get(id);
-					if (child) {
-						void endCall(id, child);
-					} else {
-						cancelled.add(id);
-					}
-					break;
-				}
-				case "reset": {
-					void reset(id);
-					break;
-				}
-				case "put":
-				case "put-data":
-				case "put-end": {
-					putFrames.push(frame);
-					void handlePutFrames();
-					break;
-				}
-				default: {
-					refuse(id, "unknown", `The tools side has no operation ${header.type}.`);
-				}
+				refuse(id, "busy", "Too many tool calls at once.");
+				return;
+			}
+			inFlight.add(id);
+			if (header.type === "exec") {
+				void settle(id, exec(id, header, resets));
+			} else if (header.type === "read") {
+				void settle(id, read(id, header));
+			} else if (header.type === "reset") {
+				void settle(id, reset(id));
+			} else {
+				putFrames.push(frame);
+				void handlePutFrames();
 			}
 		}
 
@@ -575,8 +857,9 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 			}
 		});
 		socket.on("close", () => {
-			for (const child of running.values()) {
-				killGroup(child);
+			closing.abort();
+			for (const call of running.values()) {
+				void endCall(call.id, call.child);
 			}
 			for (const put of puts.values()) {
 				put.sink.destroy();
@@ -589,8 +872,13 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 }
 
 if (import.meta.main) {
+	const nonce = process.env.TOOLS_NONCE;
+	if (nonce === undefined || nonce === "") {
+		throw new Error("TOOLS_NONCE is required: the worker writes the Pod's nonce into its spec");
+	}
 	startToolsServer({
 		socketPath: process.env.TOOLS_SOCKET ?? "/run/tools/tools.sock",
+		nonce,
 		roots: ["/workspace", "/tmp"],
 		scratch: "/tmp",
 		putRoots: ["/workspace/repos"],

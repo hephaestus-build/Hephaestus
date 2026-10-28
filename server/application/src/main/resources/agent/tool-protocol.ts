@@ -22,7 +22,7 @@ export const LIMITS = {
 	keepaliveMs: 10_000,
 	/** How long the loop waits for any frame before it ends the connection. */
 	silenceMs: 30_000,
-	/** The most bytes of one call's spill file; output past it is lost, and the call says so. */
+	/** The most bytes of one call's spill file; output past it is lost, and the call's `outputLost` says so. */
 	spillBytes: 256 * 1024 * 1024,
 	/** The most bytes of one `put` archive: the checkout bound. */
 	putBytes: 2 * 1024 * 1024 * 1024,
@@ -30,9 +30,17 @@ export const LIMITS = {
 	readFileBytes: 64 * 1024 * 1024,
 	/** The longest time that one `exec` may run. */
 	execTimeoutMs: 2 * 60 * 60 * 1000,
+	/** How long the loop waits for the `exit` of a cancelled call before it ends the connection. */
+	cancelGraceMs: 10_000,
+	/** The longest time that the tools side extracts one `put` archive. */
+	extractMs: 10 * 60 * 1000,
 } as const;
 
-/** The final frame type of each request; any other frame under its id is a stream frame or a protocol error. */
+/**
+ * The final frame type of each request; any other frame under its id is a stream frame or a protocol error. `error`
+ * ends any request too. The loop's `put-data` and `put-end` frames carry a put's archive and get no reply of their own,
+ * and `cancel` gets none: the call it ends still sends its `exit`.
+ */
 export const FINAL = {
 	hello: "hello",
 	exec: "exit",
@@ -103,25 +111,40 @@ function parseHeader(bytes: Buffer): Header {
 	return { ...value, type };
 }
 
-/** Splits a byte stream into frames, refusing any frame past the limits before it buffers its body. */
+/**
+ * Splits a byte stream into frames, refusing any frame past the limits before it buffers its body. It keeps the
+ * chunks as they arrive and joins them once a frame is whole, so a large body is not copied on every chunk.
+ */
 export function frameReader(): { push: (chunk: Buffer) => Frame[] } {
-	let buffered = Buffer.alloc(0);
+	const chunks: Buffer[] = [];
+	let size = 0;
+	/** The first `bytes` buffered bytes, which must be buffered, as one buffer. */
+	const head = (bytes: number): Buffer => {
+		if (chunks[0] === undefined || chunks[0].length < bytes) {
+			const joined = Buffer.concat(chunks);
+			chunks.length = 0;
+			chunks.push(joined);
+			return joined.subarray(0, bytes);
+		}
+		return chunks[0].subarray(0, bytes);
+	};
 	return {
 		push(chunk) {
-			buffered = Buffer.concat([buffered, chunk]);
+			chunks.push(chunk);
+			size += chunk.length;
 			const frames: Frame[] = [];
 			for (;;) {
-				if (buffered.length < 4) {
+				if (size < 4) {
 					return frames;
 				}
-				const headerLength = buffered.readUInt32BE(0);
+				const headerLength = head(4).readUInt32BE(0);
 				if (headerLength > LIMITS.headerBytes) {
 					throw broken("frame header too large");
 				}
-				if (buffered.length < 4 + headerLength) {
+				if (size < 4 + headerLength) {
 					return frames;
 				}
-				const header = parseHeader(buffered.subarray(4, 4 + headerLength));
+				const header = parseHeader(head(4 + headerLength).subarray(4));
 				const { bodyLength } = header;
 				if (typeof bodyLength !== "number" || !Number.isInteger(bodyLength) || bodyLength < 0) {
 					throw broken("frame without a body length");
@@ -130,11 +153,19 @@ export function frameReader(): { push: (chunk: Buffer) => Frame[] } {
 					throw broken("frame body too large");
 				}
 				const end = 4 + headerLength + bodyLength;
-				if (buffered.length < end) {
+				if (size < end) {
 					return frames;
 				}
-				frames.push({ header, body: Buffer.from(buffered.subarray(4 + headerLength, end)) });
-				buffered = buffered.subarray(end);
+				const frame = head(end);
+				frames.push({ header, body: frame.subarray(4 + headerLength) });
+				// head(end) left the whole frame in the first chunk.
+				const [first = Buffer.alloc(0)] = chunks;
+				if (first.length === end) {
+					chunks.shift();
+				} else {
+					chunks[0] = first.subarray(end);
+				}
+				size -= end;
 			}
 		},
 	};
@@ -173,8 +204,10 @@ export interface ExecExit {
 	timedOut: boolean;
 	/** Whether output past the stream bounds went only to the spill file. */
 	truncated: boolean;
-	/** The spill file that holds the whole output. */
+	/** The spill file of the output, or "" when the tools side could not write one. */
 	fullOutputPath: string;
+	/** Whether some output is in neither the stream nor the spill file: past the spill bound, or with no spill file. */
+	outputLost: boolean;
 }
 
 export type ExecRequest = ({ command: string } | { argv: string[] }) & {
@@ -189,4 +222,11 @@ export interface ReadPage {
 	/** The first line of the page, counted from 1. */
 	offset: number;
 	totalLines: number;
+	/**
+	 * Whether the body bound ended the page before the lines that were asked for: the page then holds the whole lines
+	 * that fit, or only the start of its first line when that line alone is past the bound.
+	 */
+	truncated: boolean;
+	/** The first line after the page, where the next page starts. */
+	nextOffset: number;
 }

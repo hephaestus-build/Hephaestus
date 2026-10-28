@@ -3,15 +3,24 @@
 
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { once } from "node:events";
-import { mkdtempSync, readFileSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import {
+	existsSync,
+	mkdtempSync,
+	readFileSync,
+	rmSync,
+	statSync,
+	symlinkSync,
+	writeFileSync,
+} from "node:fs";
 import { connect, createServer, type Server, type Socket } from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test, { after, before } from "node:test";
 import { setTimeout as sleep } from "node:timers/promises";
 
-import { ToolClient } from "../../../main/resources/agent/tool-client.ts";
+import { type PutArchive, ToolClient } from "../../../main/resources/agent/tool-client.ts";
 import {
 	encode,
 	frameReader,
@@ -24,25 +33,31 @@ import { startToolsServer } from "../../../main/resources/agent/tools-server.ts"
 const base = mkdtempSync(path.join(tmpdir(), "tools-"));
 const workspace = path.join(base, "workspace");
 const scratch = path.join(base, "tmp");
-execFileSync("mkdir", ["-p", path.join(workspace, "repos"), scratch]);
+const outside = path.join(base, "outside");
+execFileSync("mkdir", ["-p", path.join(workspace, "repos"), scratch, outside]);
 writeFileSync(path.join(workspace, "notes.txt"), "one\ntwo\nthree\nfour\n");
+writeFileSync(path.join(outside, "kept.txt"), "kept\n");
 symlinkSync("/etc", path.join(workspace, "escape"));
 const socketPath = path.join(base, "tools.sock");
+const nonce = "pod-nonce";
 
 let server: Server;
 let client: ToolClient;
+let openedAt = 0;
 
 before(async () => {
 	process.env.HEPHAESTUS_SECRET = "must-not-leak";
 	server = startToolsServer({
 		socketPath,
+		nonce,
 		roots: [workspace, scratch],
 		scratch,
 		putRoots: [path.join(workspace, "repos")],
 		soleUser: false,
 	});
 	await once(server, "listening");
-	client = await ToolClient.open(socketPath);
+	client = await ToolClient.open(socketPath, nonce);
+	openedAt = Date.now();
 });
 
 after(() => {
@@ -84,6 +99,52 @@ function refusal(code: string) {
 	return (error: unknown) => error instanceof ToolProtocolError && error.code === code;
 }
 
+/** A put archive of `bytes`, streamed in chunks smaller than a frame body. */
+function archiveOf(bytes: Buffer): PutArchive {
+	async function* chunks() {
+		for (let at = 0; at < bytes.length; at += 300_000) {
+			yield bytes.subarray(at, at + 300_000);
+		}
+	}
+	return {
+		bytes: chunks(),
+		size: bytes.length,
+		sha256: createHash("sha256").update(bytes).digest("hex"),
+	};
+}
+
+/** One ustar member: the tar archives that a hostile checkout could carry, written byte by byte. */
+function tarMember(
+	name: string,
+	options: { body?: string; type?: string; link?: string } = {},
+): Buffer {
+	const body = Buffer.from(options.body ?? "");
+	const header = Buffer.alloc(512);
+	header.write(name, 0, 100);
+	header.write("0000644\0", 100);
+	header.write("0000000\0", 108);
+	header.write("0000000\0", 116);
+	header.write(`${body.length.toString(8).padStart(11, "0")}\0`, 124);
+	header.write("00000000000\0", 136);
+	header.write("        ", 148);
+	header.write(options.type ?? "0", 156);
+	header.write(options.link ?? "", 157, 100);
+	header.write("ustar\0", 257);
+	header.write("00", 263);
+	let sum = 0;
+	for (const byte of header) {
+		sum += byte;
+	}
+	header.write(`${sum.toString(8).padStart(6, "0")}\0 `, 148);
+	const data = Buffer.alloc(Math.ceil(body.length / 512) * 512);
+	body.copy(data);
+	return Buffer.concat([header, data]);
+}
+
+function tarOf(...members: Buffer[]): Buffer {
+	return Buffer.concat([...members, Buffer.alloc(1024)]);
+}
+
 void test("hello names the protocol and a boot id", () => {
 	assert.match(client.bootId, /^[0-9a-f-]{36}$/u);
 });
@@ -93,6 +154,7 @@ void test("an exec streams its output and ends with its exit code", async () => 
 	assert.equal(output, "hello\n");
 	assert.equal(exit.code, 3);
 	assert.equal(exit.timedOut, false);
+	assert.equal(exit.outputLost, false);
 	assert.equal(readFileSync(exit.fullOutputPath, "utf8"), "hello\n");
 });
 
@@ -139,7 +201,49 @@ void test("output past the stream bound goes only to the spill file", async () =
 	const { exit, output } = await run("printf 0123456789abcdef", { maxOutputBytes: 10 });
 	assert.equal(output, "0123456789");
 	assert.equal(exit.truncated, true);
+	assert.equal(exit.outputLost, false);
 	assert.equal(readFileSync(exit.fullOutputPath, "utf8"), "0123456789abcdef");
+});
+
+void test("a call whose spill file cannot be written still runs, and says that it has none", async () => {
+	const spillDir = path.join(scratch, ".tool-output");
+	rmSync(spillDir, { recursive: true, force: true });
+	writeFileSync(spillDir, "a file where the spill directory goes");
+	try {
+		const { exit, output } = await run("echo still here");
+		assert.equal(output, "still here\n");
+		assert.equal(exit.code, 0);
+		assert.equal(exit.fullOutputPath, "");
+		const cut = await run("printf 0123456789", { maxOutputBytes: 4 });
+		assert.equal(cut.exit.truncated, true);
+		assert.equal(cut.exit.outputLost, true);
+	} finally {
+		rmSync(spillDir, { force: true });
+	}
+});
+
+void test("a NUL byte in a command is refused, and the tools side keeps serving", async () => {
+	await assert.rejects(run("echo a\u0000b"), refusal("request"));
+	await assert.rejects(
+		client.exec({ argv: ["echo", "a\u0000b"], cwd: workspace, timeoutMs: 1000 }, () => undefined),
+		refusal("request"),
+	);
+	const next = await run("echo alive");
+	assert.equal(next.output, "alive\n");
+});
+
+void test("a program that cannot start is refused alone, and a parallel call goes on", async () => {
+	const running = run("sleep 0.5; echo done");
+	await assert.rejects(
+		client.exec(
+			{ argv: ["no-such-program-xyz"], cwd: workspace, timeoutMs: 1000 },
+			() => undefined,
+		),
+		refusal("spawn"),
+	);
+	const { exit, output } = await running;
+	assert.equal(exit.code, 0);
+	assert.equal(output, "done\n");
 });
 
 void test("a call past its time is killed with its whole process group", async () => {
@@ -155,9 +259,7 @@ void test("a call past its time is killed with its whole process group", async (
 // A process that leaves its call's group with setsid is found by its call's marker, which only /proc shows.
 void test(
 	"a call leaves no process behind, also one that left its group with setsid",
-	{
-		skip: process.platform !== "linux",
-	},
+	{ skip: process.platform !== "linux" },
 	async () => {
 		const pidFile = path.join(scratch, "detached.pid");
 		const { exit } = await run(`setsid sh -c 'echo $$ > ${pidFile}; exec sleep 30' & sleep 0.3`);
@@ -169,13 +271,31 @@ void test(
 	},
 );
 
-void test("an aborted call is cancelled on the tools side", async () => {
+void test("an aborted call ends with its process, and a parallel call goes on", async () => {
+	const pidFile = path.join(scratch, "cancelled.pid");
 	const controller = new AbortController();
-	setTimeout(() => {
-		controller.abort();
-	}, 100);
-	const { exit } = await run("sleep 30", {}, controller.signal);
+	const cancelled = run(`echo $$ > ${pidFile}; exec sleep 30`, {}, controller.signal);
+	const parallel = run("sleep 0.5; echo done");
+	await sleep(150);
+	controller.abort();
+	const { exit } = await cancelled;
 	assert.equal(exit.signal, "SIGKILL");
+	assert.equal(alive(Number(readFileSync(pidFile, "utf8"))), false);
+	const other = await parallel;
+	assert.equal(other.exit.code, 0);
+	assert.equal(other.output, "done\n");
+});
+
+void test("a throwing output handler cancels its own call only", async () => {
+	const failure = new Error("the loop's handler failed");
+	await assert.rejects(
+		client.exec({ command: "echo a; sleep 30", cwd: workspace, timeoutMs: 10_000 }, () => {
+			throw failure;
+		}),
+		(error) => error === failure,
+	);
+	const next = await run("echo next");
+	assert.equal(next.output, "next\n");
 });
 
 void test("calls on one connection run at once", async () => {
@@ -190,15 +310,55 @@ void test("calls on one connection run at once", async () => {
 	assert.equal(second.exit.code, 0);
 });
 
-void test("the loop refuses a call past the in-flight bound", async () => {
+void test("the loop refuses a call past the in-flight bound as busy", async () => {
 	const calls = Array.from({ length: LIMITS.inFlight + 1 }, async () => run("sleep 0.3"));
 	const outcomes = await Promise.allSettled(calls);
-	assert.equal(outcomes.filter((outcome) => outcome.status === "rejected").length, 1);
+	const refused = outcomes.filter(
+		(outcome): outcome is PromiseRejectedResult => outcome.status === "rejected",
+	);
+	assert.equal(refused.length, 1);
+	assert.ok(refusal("busy")(refused[0]?.reason));
+});
+
+void test("a put refused as busy sends no archive, and the calls in flight go on", async () => {
+	const calls = Array.from({ length: LIMITS.inFlight }, async () => run("sleep 0.5"));
+	await assert.rejects(
+		client.put(path.join(workspace, "repos", "busy"), archiveOf(Buffer.alloc(4 * 1024 * 1024))),
+		refusal("busy"),
+	);
+	for (const { exit } of await Promise.all(calls)) {
+		assert.equal(exit.code, 0);
+	}
 });
 
 void test("a read pages the lines of a file", async () => {
 	const page = await client.read(path.join(workspace, "notes.txt"), 2, 2);
-	assert.deepEqual(page, { text: "two\nthree", offset: 2, totalLines: 4 });
+	assert.deepEqual(page, {
+		text: "two\nthree",
+		offset: 2,
+		totalLines: 4,
+		truncated: false,
+		nextOffset: 4,
+	});
+});
+
+void test("a page past the body bound says so and names where the next page starts", async () => {
+	const file = path.join(workspace, "long-line.txt");
+	writeFileSync(file, `a\n${"é".repeat(LIMITS.bodyBytes)}\nc\n`);
+	const first = await client.read(file, 1, 3);
+	assert.equal(first.text, "a");
+	assert.equal(first.truncated, true);
+	assert.equal(first.nextOffset, 2);
+	const long = await client.read(file, 2, 1);
+	assert.equal(long.truncated, true);
+	assert.equal(long.nextOffset, 3);
+	assert.ok(Buffer.byteLength(long.text) <= LIMITS.bodyBytes);
+	assert.match(long.text, /^é+$/u, "the cut falls at a character boundary");
+	const last = await client.read(file, 3, 10);
+	assert.deepEqual(
+		{ text: last.text, truncated: last.truncated, totalLines: last.totalLines },
+		{ text: "c", truncated: false, totalLines: 3 },
+	);
 });
 
 void test("a put extracts a whole archive read-only, into a new directory only", async () => {
@@ -208,13 +368,42 @@ void test("a put extracts a whole archive read-only, into a new directory only",
 	const archive = execFileSync("tar", ["-c", "-C", source, "README.md", "run.sh"]);
 	const dir = path.join(workspace, "repos", "acme");
 
-	await client.put(dir, archive);
+	await client.put(dir, archiveOf(archive));
 
 	assert.equal(readFileSync(path.join(dir, "README.md"), "utf8"), "pinned\n");
 	assert.equal(statSync(path.join(dir, "README.md")).mode.toString(8).slice(-3), "444");
 	assert.equal(statSync(path.join(dir, "run.sh")).mode.toString(8).slice(-3), "555");
-	await assert.rejects(client.put(dir, archive), refusal("request"));
-	await assert.rejects(client.put(path.join(workspace, "notes"), archive), refusal("request"));
+	await assert.rejects(client.put(dir, archiveOf(archive)), refusal("request"));
+	await assert.rejects(
+		client.put(path.join(workspace, "notes"), archiveOf(archive)),
+		refusal("request"),
+	);
+});
+
+void test("a hostile archive writes nothing outside its directory", async () => {
+	const absolute = path.join(outside, "absolute.txt");
+	const cases = {
+		"dot-dot": tarOf(tarMember("../dot-dot.txt", { body: "x" })),
+		absolute: tarOf(tarMember(absolute, { body: "x" })),
+		symlink: tarOf(
+			tarMember("link", { type: "2", link: outside }),
+			tarMember("link/through-symlink.txt", { body: "x" }),
+		),
+		hardlink: tarOf(
+			tarMember("hard", { type: "1", link: path.join(outside, "kept.txt") }),
+			tarMember("hard", { body: "overwritten" }),
+		),
+	};
+	for (const [name, archive] of Object.entries(cases)) {
+		const dir = path.join(workspace, "repos", `hostile-${name}`);
+		await client.put(dir, archiveOf(archive)).catch((error: unknown) => {
+			assert.ok(refusal("put")(error), `${name}: ${String(error)}`);
+		});
+	}
+	assert.equal(existsSync(path.join(workspace, "repos", "dot-dot.txt")), false);
+	assert.equal(existsSync(absolute), false);
+	assert.equal(existsSync(path.join(outside, "through-symlink.txt")), false);
+	assert.equal(readFileSync(path.join(outside, "kept.txt"), "utf8"), "kept\n");
 });
 
 void test("a reset ends every call and clears the scratch", async () => {
@@ -227,48 +416,186 @@ void test("a reset ends every call and clears the scratch", async () => {
 	assert.throws(() => statSync(path.join(scratch, "left-over")));
 });
 
-/** Talks to the real tools side over a raw socket, as a loop that breaks the rules would. */
-async function raw(frames: Header[], bodies: Buffer[] = []): Promise<Header[]> {
+void test(
+	"a reset ends a process that left its call's group with setsid",
+	{ skip: process.platform !== "linux" },
+	async () => {
+		const pidFile = path.join(workspace, "reset-detached.pid");
+		const sleeping = run(`setsid sh -c 'echo $$ > ${pidFile}; exec sleep 30' & sleep 30`);
+		await sleep(300);
+		await client.reset();
+		await sleeping;
+		const detached = Number(readFileSync(pidFile, "utf8"));
+		rmSync(pidFile);
+		await sleep(100);
+		assert.equal(alive(detached), false);
+	},
+);
+
+/**
+ * Talks to the real tools side over a raw socket, as a loop that breaks the rules would. It writes all frames in one
+ * chunk and collects the replies until `done` holds for them, or the tools side closed the connection.
+ */
+async function raw(
+	frames: Buffer[],
+	done: (replies: Header[]) => boolean = () => false,
+): Promise<{ replies: Header[]; closed: boolean }> {
 	const socket = connect(socketPath);
 	await once(socket, "connect");
 	const reader = frameReader();
 	const replies: Header[] = [];
+	const settled = Promise.withResolvers<boolean>();
 	socket.on("data", (chunk: Buffer) => {
 		replies.push(...reader.push(chunk).map((frame) => frame.header));
+		if (done(replies)) {
+			settled.resolve(false);
+		}
 	});
-	for (const [index, header] of frames.entries()) {
-		socket.write(encode(header, bodies[index]));
-	}
-	await sleep(300);
+	socket.on("close", () => {
+		settled.resolve(true);
+	});
+	socket.write(Buffer.concat(frames));
+	const timer = setTimeout(() => {
+		settled.resolve(false);
+	}, 5000);
+	const closed = await settled.promise;
+	clearTimeout(timer);
 	socket.destroy();
-	return replies;
+	return { replies, closed };
 }
+
+const hello = encode({ type: "hello", protocol: 1 });
+
+void test("the tools side answers hello with its own nonce, never the loop's", async () => {
+	const { replies } = await raw(
+		[encode({ type: "hello", protocol: 1, nonce: "echo-me" })],
+		(seen) => seen.length > 0,
+	);
+	assert.equal(replies[0]?.nonce, nonce);
+	await assert.rejects(ToolClient.open(socketPath, "another-pod"), refusal("nonce"));
+});
+
+void test("the tools side refuses another protocol version by name, and the loop does too", async () => {
+	const { replies, closed } = await raw([encode({ type: "hello", protocol: 2 })]);
+	assert.deepEqual(
+		replies.map((reply) => [reply.type, reply.error]),
+		[["error", "version"]],
+	);
+	assert.equal(closed, true);
+	const tools = hostile(() => undefined, { protocol: 2 });
+	await assert.rejects(tools, refusal("version"));
+});
 
 void test("the tools side refuses an archive whose hash does not match, and extracts nothing", async () => {
 	const archive = Buffer.from("not the archive that was announced");
 	const dir = path.join(workspace, "repos", "forged");
-	const replies = await raw(
+	const { replies } = await raw(
 		[
-			{ type: "hello", nonce: "n", protocol: 1 },
-			{ type: "put", id: "p1", dir, size: archive.length, sha256: "0".repeat(64) },
-			{ type: "put-data", id: "p1" },
-			{ type: "put-end", id: "p1" },
+			hello,
+			encode({ type: "put", id: "p1", dir, size: archive.length, sha256: "0".repeat(64) }),
+			encode({ type: "put-data", id: "p1" }, archive),
+			encode({ type: "put-end", id: "p1" }),
 		],
-		[Buffer.alloc(0), Buffer.alloc(0), archive],
+		(seen) => seen.some((reply) => reply.id === "p1"),
 	);
 	assert.ok(replies.some((reply) => reply.type === "error" && reply.error === "put"));
 	assert.throws(() => statSync(dir));
 });
 
-/** A tools side that says hello and then sends `next` for the loop's first request. */
-async function hostile(next: (request: Header, socket: Socket) => void): Promise<ToolClient> {
+void test("the tools side counts a burst of requests in one chunk against its in-flight bound", async () => {
+	const execs = Array.from({ length: 20 }, (_unused, index) =>
+		encode({
+			type: "exec",
+			id: `burst-${index}`,
+			command: "sleep 0.3",
+			cwd: workspace,
+			timeoutMs: 5000,
+		}),
+	);
+	const { replies } = await raw(
+		[hello, ...execs],
+		(seen) => seen.filter((reply) => reply.type !== "hello").length === 20,
+	);
+	const busy = replies.filter((reply) => reply.type === "error" && reply.error === "busy");
+	assert.equal(busy.length, 20 - LIMITS.inFlight);
+	assert.equal(replies.filter((reply) => reply.type === "exit").length, LIMITS.inFlight);
+});
+
+void test("the tools side ends the connection on a request id that is already in flight", async () => {
+	const pidFile = path.join(scratch, "duplicate.pid");
+	const request = encode({
+		type: "exec",
+		id: "dup",
+		command: `echo $$ >> ${pidFile}; exec sleep 30`,
+		cwd: workspace,
+		timeoutMs: 60_000,
+	});
+	const { closed } = await raw([hello, request, request]);
+	assert.equal(closed, true);
+	await sleep(200);
+	const pids = existsSync(pidFile) ? readFileSync(pidFile, "utf8").trim().split("\n") : [];
+	for (const pid of pids) {
+		assert.equal(alive(Number(pid)), false, "the call ended with its connection");
+	}
+});
+
+void test("a reset ends a call that arrived before it and had not started yet", async () => {
+	const { replies } = await raw(
+		[
+			hello,
+			encode({ type: "exec", id: "early", command: "sleep 30", cwd: workspace, timeoutMs: 60_000 }),
+			encode({ type: "reset", id: "r1" }),
+		],
+		(seen) => seen.some((reply) => reply.id === "early") && seen.some((reply) => reply.id === "r1"),
+	);
+	const early = replies.find((reply) => reply.id === "early");
+	assert.deepEqual([early?.type, early?.error], ["error", "reset"]);
+});
+
+/** A header with its length prefix and no body length of its own. */
+function framed(header: Buffer): Buffer {
+	const prefix = Buffer.alloc(4);
+	prefix.writeUInt32BE(header.length);
+	return Buffer.concat([prefix, header]);
+}
+
+void test("the tools side ends the connection on a malformed frame", async () => {
+	const malformed = {
+		"not JSON": framed(Buffer.from("{not json")),
+		"an array": framed(Buffer.from("[1]")),
+		"no type": framed(Buffer.from('{"bodyLength":0}')),
+		"a negative body length": framed(Buffer.from('{"type":"ping","bodyLength":-1}')),
+		"a fractional body length": framed(Buffer.from('{"type":"ping","bodyLength":1.5}')),
+		"a body past its bound": framed(
+			Buffer.from(`{"type":"ping","bodyLength":${LIMITS.bodyBytes + 1}}`),
+		),
+		"a request before hello": encode({ type: "read", id: "r", path: workspace }),
+		"an id with path characters": Buffer.concat([hello, encode({ type: "read", id: "../x" })]),
+	};
+	for (const [name, frame] of Object.entries(malformed)) {
+		const { closed } = await raw([frame]);
+		assert.equal(closed, true, name);
+	}
+});
+
+/** A tools side that says hello and then answers each of the loop's requests with `next`. */
+async function hostile(
+	next: (request: Header, socket: Socket) => void,
+	helloReply?: Partial<Header>,
+	onSocket: (socket: Socket) => void = () => undefined,
+): Promise<ToolClient> {
 	const hostilePath = path.join(base, `hostile-${Math.random().toString(36).slice(2)}.sock`);
 	const fake = createServer((socket) => {
+		onSocket(socket);
+		// The loop hangs up on a broken tools side while it still writes.
+		socket.on("error", () => {
+			socket.destroy();
+		});
 		const reader = frameReader();
 		socket.on("data", (chunk: Buffer) => {
 			for (const { header } of reader.push(chunk)) {
 				if (header.type === "hello") {
-					socket.write(encode({ type: "hello", nonce: header.nonce, protocol: 1, bootId: "b" }));
+					socket.write(encode({ type: "hello", nonce, protocol: 1, bootId: "b", ...helloReply }));
 				} else if (header.type !== "ping") {
 					next(header, socket);
 				}
@@ -277,7 +604,7 @@ async function hostile(next: (request: Header, socket: Socket) => void): Promise
 	}).listen(hostilePath);
 	await once(fake, "listening");
 	after(() => fake.close());
-	return ToolClient.open(hostilePath);
+	return ToolClient.open(hostilePath, nonce);
 }
 
 void test("the loop ends the connection on a frame for no request in flight", async () => {
@@ -303,6 +630,61 @@ void test("the loop ends the connection on a header past its bound", async () =>
 	await assert.rejects(tools.read("/workspace/x", 1, 1), refusal("protocol"));
 });
 
+void test("the loop holds the tools side to the call's own output bound", async () => {
+	const tools = await hostile((request, socket) => {
+		socket.write(encode({ type: "out", id: request.id }, Buffer.alloc(2000)));
+		socket.write(encode({ type: "exit", id: request.id, code: 0 }));
+	});
+	await assert.rejects(
+		tools.exec(
+			{ command: "x", cwd: "/workspace", timeoutMs: 1000, maxOutputBytes: 1000 },
+			() => undefined,
+		),
+		refusal("protocol"),
+	);
+});
+
+void test("the loop holds the tools side to the attempt's output bound", async () => {
+	const frame = Buffer.alloc(LIMITS.bodyBytes);
+	const tools = await hostile((request, socket) => {
+		for (let sent = 0; sent < LIMITS.execStreamBytes; sent += frame.length) {
+			socket.write(encode({ type: "out", id: request.id }, frame));
+		}
+		socket.write(encode({ type: "exit", id: request.id, code: 0 }));
+	});
+	const calls = LIMITS.attemptStreamBytes / LIMITS.execStreamBytes;
+	for (let call = 0; call < calls; call += 1) {
+		await tools.exec({ command: "x", cwd: "/workspace", timeoutMs: 1000 }, () => undefined);
+	}
+	await assert.rejects(
+		tools.exec({ command: "x", cwd: "/workspace", timeoutMs: 1000 }, () => undefined),
+		refusal("protocol"),
+	);
+});
+
+void test("a put to a tools side that stopped reading ends when the connection does", async () => {
+	const tools = await hostile(
+		() => undefined,
+		undefined,
+		(socket) => {
+			socket.on("data", () => {
+				socket.pause();
+			});
+		},
+	);
+	const put = tools.put("/workspace/repos/stuck", archiveOf(Buffer.alloc(64 * 1024 * 1024)));
+	await sleep(300);
+	tools.close();
+	await assert.rejects(put, refusal("protocol"));
+});
+
+// Last: by now the connection has been open past the silence bound, kept alive by its pings alone.
+void test("a connection outlives the silence bound while the tools side answers its pings", async () => {
+	await sleep(Math.max(0, openedAt + LIMITS.silenceMs + 1000 - Date.now()));
+	const { output } = await run("echo still open");
+	assert.equal(output, "still open\n");
+});
+
 void test("the frame reader refuses a frame past its bounds and joins a frame split across chunks", () => {
 	const length = Buffer.alloc(4);
 	length.writeUInt32BE(LIMITS.headerBytes + 1);
@@ -317,4 +699,8 @@ void test("the frame reader refuses a frame past its bounds and joins a frame sp
 	const [whole] = reader.push(frame.subarray(7));
 	assert.equal(whole?.header.id, "a");
 	assert.equal(whole.body.toString("utf8"), "body");
+	const twice = Buffer.concat([frame, frame]);
+	const bytes = [...twice].map((byte) => Buffer.from([byte]));
+	const split = frameReader();
+	assert.equal(bytes.flatMap((byte) => split.push(byte)).length, 2, "byte by byte, both frames");
 });
