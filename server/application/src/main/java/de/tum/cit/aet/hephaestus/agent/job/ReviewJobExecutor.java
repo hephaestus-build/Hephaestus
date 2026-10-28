@@ -59,6 +59,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -499,30 +500,7 @@ public class ReviewJobExecutor {
                     continue;
                 }
 
-                List<UUID> candidates = jobRepository.findQueuedIdsStartedFirst(capacity);
-                if (candidates.isEmpty()) {
-                    sleepPollInterval();
-                    continue;
-                }
-
-                boolean anyStarted = false;
-                boolean poolRejected = false;
-                for (UUID jobId : candidates) {
-                    if (!running.get()) {
-                        break;
-                    }
-                    if (poolRejected) {
-                        break;
-                    }
-                    StartOutcome outcome = processJob(jobId);
-                    poolRejected = outcome == StartOutcome.POOL_REJECTED;
-                    anyStarted |= outcome == StartOutcome.STARTED;
-                }
-                // Busy-spin protection: without this backoff, an all-skipped batch re-queries immediately
-                // and a saturated pool claims-then-requeues in a tight loop, hammering the DB.
-                if (!anyStarted || poolRejected) {
-                    sleepPollInterval();
-                }
+                if (!pollEndpoints(capacity)) sleepPollInterval();
             } catch (Exception e) {
                 log.warn(
                         "Poll loop error, retrying in {}: {}",
@@ -532,6 +510,33 @@ public class ReviewJobExecutor {
             }
         }
         log.info("Agent job executor poll loop stopped");
+    }
+
+    /** Each unavailable endpoint is tried once before sleeping; rejected jobs retain no local slot. */
+    private boolean pollEndpoints(int capacity) {
+        int remaining = capacity;
+        Set<Long> blockedPools = new HashSet<>();
+        Set<UUID> seen = new HashSet<>();
+        boolean anyStarted = false;
+        while (remaining > 0 && running.get()) {
+            List<UUID> candidates = jobRepository.findQueuedIdsStartedFirst(remaining, blockedPools, seen);
+            if (candidates.isEmpty()) break;
+            int blockedBefore = blockedPools.size();
+            for (UUID jobId : candidates) {
+                if (!running.get()) break;
+                seen.add(jobId);
+                StartOutcome outcome = processJob(jobId, blockedPools);
+                if (outcome == StartOutcome.POOL_REJECTED) return false;
+                if (outcome == StartOutcome.STARTED) {
+                    anyStarted = true;
+                    remaining--;
+                }
+                if (blockedPools.size() > blockedBefore) break;
+            }
+            // A non-pool refusal keeps the normal poll backoff. Pool refusals scan the other endpoints now.
+            if (blockedPools.size() == blockedBefore) break;
+        }
+        return anyStarted;
     }
 
     // The sandbox slots bound the jobs that hold a sandbox; a job that composes holds none. Every local job composes
@@ -575,6 +580,10 @@ public class ReviewJobExecutor {
     }
 
     StartOutcome processJob(UUID jobId) {
+        return processJob(jobId, new HashSet<>());
+    }
+
+    private StartOutcome processJob(UUID jobId, Set<Long> blockedPools) {
         // The poll offers only queued jobs, so a local attempt of this job was requeued: stop it and claim the job
         // once it has ended. One job never has two sandboxes on one worker.
         if (localRunningJobs.containsKey(jobId)) {
@@ -592,6 +601,10 @@ public class ReviewJobExecutor {
                     "Claim failed for job {}, will retry on next poll: {}",
                     jobId,
                     e.getClass().getName());
+            return StartOutcome.SKIPPED;
+        }
+        if (attempt instanceof ReviewJobClaimService.PoolWait waiting) {
+            blockedPools.add(waiting.poolId());
             return StartOutcome.SKIPPED;
         }
         if (attempt instanceof ReviewJobClaimService.TerminalClaim terminal) {

@@ -1,6 +1,5 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
-import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallPermitRepository;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.practices.spi.ProcessingStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
@@ -10,6 +9,7 @@ import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.Limit;
@@ -397,11 +397,11 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
      */
     @WorkspaceAgnostic("Cross-workspace poll candidates; caller is the workspace-agnostic job poller")
     default List<UUID> findQueuedIdsStartedFirst(int limit) {
-        return findQueuedIdsStartedFirst(limit, LlmCallPermitRepository.CLAIM_RETRY.toMillis() / 1000.0);
+        return findQueuedIdsStartedFirst(limit, Set.of(), Set.of());
     }
 
-    /** A rejected claim defers its endpoint briefly, so another endpoint can enter even a one-row window. */
-    @WorkspaceAgnostic("Cross-workspace candidate scan with live catalog membership and endpoint retry deferral")
+    /** Skip endpoints already refused during this poll, so another endpoint can enter even a one-row window. */
+    @WorkspaceAgnostic("Cross-workspace candidate scan with live catalog membership and per-poll endpoint exclusions")
     @Query(value = """
             SELECT j.id FROM review_job j JOIN workspace w ON w.id=j.workspace_id
             LEFT JOIN llm_model im ON j.config_snapshot->'model'->>'connectionScope'='INSTANCE'
@@ -418,15 +418,18 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
                 < COALESCE((SELECT b.max_concurrent_jobs FROM workspace_agent_binding b
                     WHERE b.workspace_id=j.workspace_id AND b.purpose='PRACTICE_REVIEW'
                       AND b.data_handling_tier=COALESCE(j.config_snapshot->'model'->>'dataHandlingTier','UNDECLARED')),2147483647)
-              AND (j.capture->'admission' IS NOT NULL OR NOT EXISTS (
-                SELECT 1 FROM llm_call_permit pending WHERE pending.pool_id=COALESCE(im.call_pool_id,wm.call_pool_id)
-                  AND pending.state='CLAIM_WAITING' AND pending.renewed_at>now()-make_interval(secs => :claimPollSeconds)))
+              AND (:#{#excludedJobs.isEmpty()} OR j.id NOT IN (:excludedJobs))
+              AND (j.capture->'admission' IS NOT NULL OR :#{#excludedPools.isEmpty()}
+                OR COALESCE(im.call_pool_id,wm.call_pool_id,0) NOT IN (:excludedPools))
             ORDER BY (j.attempt>0 OR j.capture->'admission' IS NOT NULL) DESC,
               (SELECT max(pending.renewed_at) FROM llm_call_permit pending WHERE pending.source_id=j.id
                  AND pending.workspace_id=j.workspace_id AND pending.attempt=j.attempt AND pending.state='CLAIM_WAITING') ASC NULLS FIRST,
               j.available_at ASC,j.id ASC LIMIT :limit
             """, nativeQuery = true)
-    List<UUID> findQueuedIdsStartedFirst(@Param("limit") int limit, @Param("claimPollSeconds") double claimPollSeconds);
+    List<UUID> findQueuedIdsStartedFirst(
+            @Param("limit") int limit,
+            @Param("excludedPools") Set<Long> excludedPools,
+            @Param("excludedJobs") Set<UUID> excludedJobs);
 
     @WorkspaceAgnostic("Cross-workspace stale job reaper; caller is @WorkspaceAgnostic sweeper")
     @Query("SELECT j FROM ReviewJob j WHERE j.status = 'RUNNING' AND j.startedAt < :cutoff")

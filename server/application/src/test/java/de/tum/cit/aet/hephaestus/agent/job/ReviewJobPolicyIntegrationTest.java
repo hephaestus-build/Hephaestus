@@ -191,6 +191,112 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
     private ApplicationContext context;
 
     @Test
+    void shouldScanAnotherEndpointBeforeSleepingWhenTheFirstEndpointCannotClaim() {
+        var blockedBinding = binding(DataHandlingTier.IN_HOUSE);
+        long blockedPool = endpointPool(blockedBinding, true);
+        var openBinding = binding(DataHandlingTier.CLOUD);
+        long openPool = endpointPool(openBinding, false);
+        var blockedJob = queued(blockedBinding);
+        var runnable = queued(openBinding);
+        jdbc.update("UPDATE review_job SET available_at=now()-interval '2 minutes' WHERE id=?", blockedJob.getId());
+        jdbc.update("UPDATE review_job SET available_at=now()-interval '1 minute' WHERE id=?", runnable.getId());
+        var slowPoll = new AgentProperties(
+                true,
+                Duration.ofSeconds(30),
+                1,
+                properties.maxRetries(),
+                properties.heartbeatInterval(),
+                properties.payloadRetention(),
+                properties.rowRetention(),
+                properties.maxConcurrentCompositions());
+        var sandboxes = mock(SandboxManager.class);
+        when(sandboxes.ready()).thenReturn(true);
+        when(sandboxes.roomFor(any())).thenReturn(1);
+        var capacity = LlmCallPermitsTestFixtures.worker(context, "test-worker");
+        var polling = pooledExecutor(slowPoll, capacity, sandboxes);
+        try {
+            polling.start();
+            // This must happen within one poll; an idle poll sleeps at least 24 seconds with jitter.
+            Awaitility.await()
+                    .atMost(Duration.ofSeconds(10))
+                    .untilAsserted(() -> assertThat(jobs.findById(runnable.getId())
+                                    .orElseThrow()
+                                    .getStatus())
+                            .isEqualTo(ReviewJobStatus.RUNNING));
+            var stillQueued = jobs.findById(blockedJob.getId()).orElseThrow();
+            assertThat(stillQueued.getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
+            assertThat(stillQueued.getWorkerId()).isNull();
+            assertThat(stillQueued.getExecutionStartedAt()).isNull();
+            assertThat(blockedPool).isNotEqualTo(openPool);
+        } finally {
+            polling.stopAcceptingNewJobs();
+            var unused = capacity.acquire(
+                    openPool,
+                    LlmCallClass.REQUEST,
+                    new LlmCallPermits.Caller(workspace.getId(), runnable.getId(), runnable.getAttempt(), null),
+                    () -> false,
+                    Instant.now().plusMillis(100));
+            if (unused != null) unused.close();
+        }
+    }
+
+    private long endpointPool(WorkspaceAgentBinding binding, boolean cooling) {
+        var pool = new LlmCallPool();
+        pool.setSlug("endpoint-" + UUID.randomUUID());
+        pool.setDisplayName("Endpoint scan fixture");
+        pool.setMaxConcurrentCalls(2);
+        if (cooling) pool.setNoCallBefore(Instant.now().plusSeconds(60));
+        pool = context.getBean(LlmCallPoolRepository.class).saveAndFlush(pool);
+        var model = Objects.requireNonNull(binding.getInstanceModel());
+        model.setCallPoolId(pool.getId());
+        models.saveAndFlush(model);
+        return pool.getId();
+    }
+
+    private ReviewJobExecutor pooledExecutor(
+            AgentProperties settings, LlmCallPermits capacity, SandboxManager sandboxes) {
+        var budgets = mock(LlmBudgetService.class);
+        when(budgets.decide(anyLong())).thenReturn(LlmBudgetDecision.ALLOWED);
+        var metrics = new SimpleMeterRegistry();
+        var assignments = mock(ReviewJobAssignments.class);
+        when(assignments.load(any())).thenReturn(List.of(RuntimeReviewTestData.assignment(null, null)));
+        var worker = WorkerPropertiesFixtures.minimal("1", "1");
+        var usage = new ReviewAttemptUsageService(jobs, attemptUsageRows, mock(LlmUsageRecorder.class));
+        return new ReviewJobExecutor(
+                settings,
+                jobs,
+                mock(DefaultReviewExecutionHandler.class),
+                mock(PracticePiAdapter.class),
+                mock(WorkerJwtIssuer.class),
+                sandboxes,
+                SandboxTestLimits.PROPERTIES,
+                mock(AsyncTaskExecutor.class),
+                transactions,
+                mapper,
+                metrics,
+                new ReviewJobTelemetry(metrics, Tracer.NOOP),
+                usage,
+                mock(PracticeScriptRunRecorder.class),
+                admission,
+                Optional.empty(),
+                worker,
+                new ReviewJobClaimService(
+                        jobs,
+                        policy,
+                        methods,
+                        assignments,
+                        transactions,
+                        mapper,
+                        metrics,
+                        budgets,
+                        admission,
+                        new ReviewJobTelemetry(metrics, Tracer.NOOP),
+                        Optional.of(worker),
+                        capacity),
+                new ReviewJobRecovery(jobs, settings, mapper, usage, Optional.empty()));
+    }
+
+    @Test
     void shouldGiveAQueuedReviewAFairWorkspaceGrantBeforeBusyProxyCallsRepeat() throws Exception {
         var selected = binding(DataHandlingTier.IN_HOUSE);
         var pool = new LlmCallPool();
@@ -253,7 +359,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                                     poolId))
                             .isEqualTo(1L));
             try {
-                assertThat(claims.claimJob(job.getId())).isEqualTo(ReviewJobClaimService.ClaimOutcome.CONCURRENCY_FULL);
+                assertThat(claims.claimJob(job.getId())).isNotInstanceOf(ReviewJobClaimService.ClaimResult.class);
                 assertThat(jobs.findById(job.getId()).orElseThrow().getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
                 assertThat(jobs.findById(job.getId()).orElseThrow().getWorkerId())
                         .isNull();
@@ -366,7 +472,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
 
         var claim = claims.claimJob(job.getId());
 
-        assertThat(claim).isEqualTo(ReviewJobClaimService.ClaimOutcome.CONCURRENCY_FULL);
+        assertThat(claim).hasFieldOrPropertyWithValue("poolId", 42L);
         var queued = jobs.findById(job.getId()).orElseThrow();
         assertThat(queued.getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
         assertThat(queued.getAttempt()).isEqualTo(job.getAttempt());

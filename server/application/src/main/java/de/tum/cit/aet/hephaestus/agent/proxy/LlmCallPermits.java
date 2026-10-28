@@ -45,7 +45,7 @@ import reactor.core.publisher.Sinks;
 @WorkspaceAgnostic("Instance-owned endpoint capacity, shared across all workers and workspaces.")
 public class LlmCallPermits {
     private static final Logger log = LoggerFactory.getLogger(LlmCallPermits.class);
-    static final Duration POLL = LlmCallPermitRepository.CLAIM_RETRY;
+    static final Duration POLL = Duration.ofMillis(250);
     static final Duration DEFAULT_COOLDOWN = Duration.ofSeconds(5);
     private final LlmCallPoolRepository pools;
     private final LlmCallPermitRepository rows;

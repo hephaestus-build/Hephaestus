@@ -102,6 +102,8 @@ public class ReviewJobClaimService {
 
     sealed interface ClaimAttempt {}
 
+    record PoolWait(long poolId) implements ClaimAttempt {}
+
     enum ClaimOutcome implements ClaimAttempt {
         ALREADY_CLAIMED,
         CONCURRENCY_FULL,
@@ -256,7 +258,7 @@ public class ReviewJobClaimService {
                                 job.getId(),
                                 job.getAttempt(),
                                 snapshot.model().connectionRef()))) {
-            return ClaimOutcome.CONCURRENCY_FULL;
+            return new PoolWait(poolId);
         }
 
         Instant claimedAt = Instant.now();

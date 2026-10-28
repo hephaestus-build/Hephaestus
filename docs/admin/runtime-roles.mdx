@@ -520,7 +520,7 @@ Active grants never use that expiry path.
 
 A review that cannot claim records its demand in the same fair queue as background calls.
 It stays queued and creates no Pod.
-A rejected claim briefly defers its endpoint in candidate selection so a different endpoint can run.
+After a refused claim, the same poll scans other endpoint pools before it sleeps.
 The job retains its original readiness time.
 Conversation and background grants have separate fairness history, so conversations do not defer their workspace's composition.
 

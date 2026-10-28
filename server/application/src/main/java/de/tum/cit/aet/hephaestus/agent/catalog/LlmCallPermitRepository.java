@@ -1,7 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.catalog;
 
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
-import java.time.Duration;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -16,7 +15,6 @@ import org.springframework.stereotype.Repository;
 @Repository
 @WorkspaceAgnostic("Fleet-wide endpoint admission and rate accounting, shared across workspaces.")
 public interface LlmCallPermitRepository extends JpaRepository<LlmCallPermit, UUID> {
-    Duration CLAIM_RETRY = Duration.ofMillis(250);
 
     @Query(
             value = "SELECT count(*) FROM llm_call_permit WHERE pool_id = :poolId AND state IN ('RESERVED','ACTIVE')",

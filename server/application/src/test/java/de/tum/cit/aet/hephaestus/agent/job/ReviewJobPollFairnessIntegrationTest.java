@@ -26,6 +26,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
@@ -83,7 +84,7 @@ class ReviewJobPollFairnessIntegrationTest extends BaseIntegrationTest {
     private ApplicationContext context;
 
     @Test
-    void shouldPollAnotherEndpointAfterOneOlderReviewRecordsItsPoolWait() {
+    void shouldPollAnotherEndpointWhenTheCurrentPollExcludesAnUnavailablePool() {
         var blockedWorkspace = activeWorkspace("endpoint-blocked");
         var openWorkspace = activeWorkspace("endpoint-open");
         binding(blockedWorkspace, 10);
@@ -142,7 +143,7 @@ class ReviewJobPollFairnessIntegrationTest extends BaseIntegrationTest {
                             LlmCallClass.REQUEST,
                             new LlmCallPermits.Caller(blockedWorkspace.getId(), oldest, 0, null)))
                     .isFalse();
-            return jobRepository.findQueuedIdsStartedFirst(1);
+            return jobRepository.findQueuedIdsStartedFirst(1, Set.of(blockedId), Set.of());
         });
         assertThat(candidates).containsExactly(runnable);
         assertThat(jobRepository.findById(oldest).orElseThrow().getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
