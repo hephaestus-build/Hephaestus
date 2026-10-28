@@ -38,8 +38,9 @@ export const LIMITS = {
 
 /**
  * The final frame type of each request; any other frame under its id is a stream frame or a protocol error. `error`
- * ends any request too. The loop's `put-data` and `put-end` frames carry a put's archive and get no reply of their own,
- * and `cancel` gets none: the call it ends still sends its `exit`.
+ * ends any request too. The loop ends every upload with `put-end`, also after a refusal. `put-end` with `abort: true`
+ * discards the archive without extraction. A put's final reply follows cleanup. `put-data` and `put-end` get no
+ * reply of their own, and `cancel` gets none: the call it ends still sends its `exit`.
  */
 export const FINAL = {
 	hello: "hello",

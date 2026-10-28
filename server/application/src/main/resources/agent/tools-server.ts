@@ -60,8 +60,8 @@ const ENV = {
 /** How long a reset waits for the calls that it ended to send their `exit`, before it clears the scratch anyway. */
 const RESET_WAIT_MS = 5000;
 
-/** How many bytes one `read` takes from its file at a time. */
-const READ_CHUNK_BYTES = 64 * 1024;
+/** File buffers; an upload adds at most one frame body before waiting for the file's drain. */
+const FILE_BUFFER_BYTES = 64 * 1024;
 
 interface Call {
 	id: string;
@@ -80,6 +80,11 @@ interface Put {
 	sha256: string;
 	/** Whether the archive file could not be written. */
 	failed: boolean;
+	abort: AbortController;
+	/** Cleanup completes before the final reply and before a reset clears scratch. */
+	ended: PromiseWithResolvers<undefined>;
+	ending: boolean;
+	refusal?: { error: string; detail: string };
 }
 
 function within(root: string, absolute: string): boolean {
@@ -225,10 +230,7 @@ async function readPage(file: string, offset: number, limit: number) {
 			kept.push(Buffer.from(piece));
 			keptBytes += piece.length;
 		} else if (line === offset) {
-			let cut = LIMITS.bodyBytes - keptBytes;
-			while (cut > 0 && continues(piece[cut])) {
-				cut -= 1;
-			}
+			const cut = LIMITS.bodyBytes - keptBytes;
 			kept.push(Buffer.from(piece.subarray(0, cut)));
 			keptBytes += cut;
 			stop.cutLine = true;
@@ -241,7 +243,7 @@ async function readPage(file: string, offset: number, limit: number) {
 	};
 	const handle = await open(file, "r");
 	try {
-		const buffer = Buffer.alloc(READ_CHUNK_BYTES);
+		const buffer = Buffer.alloc(FILE_BUFFER_BYTES);
 		for (;;) {
 			const { bytesRead } = await handle.read(buffer, 0, buffer.length);
 			if (bytesRead === 0) {
@@ -271,6 +273,25 @@ async function readPage(file: string, offset: number, limit: number) {
 	}
 	const totalLines = lastLineOpen ? line : line - 1;
 	let body = Buffer.concat(kept);
+	if (stop.cutLine && body.length > 0) {
+		// A character may start in an earlier read chunk. Trim the joined prefix rather than only the last chunk.
+		let start = body.length - 1;
+		while (start > 0 && continues(body[start])) {
+			start -= 1;
+		}
+		const lead = body[start] ?? 0;
+		let width = 1;
+		if (lead >= 0xf0) {
+			width = 4;
+		} else if (lead >= 0xe0) {
+			width = 3;
+		} else if (lead >= 0xc0) {
+			width = 2;
+		}
+		if (body.length - start < width) {
+			body = body.subarray(0, start);
+		}
+	}
 	if (!stop.cutLine && body.at(-1) === 0x0a) {
 		body = body.subarray(0, -1);
 	}
@@ -291,7 +312,7 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 	/** How many resets ran: a call that arrived before a reset and would start after it does not start. */
 	let resets = 0;
 
-	return createServer((socket: Socket) => {
+	return createServer({ highWaterMark: LIMITS.bodyBytes }, (socket: Socket) => {
 		const reader = frameReader();
 		/** The ids of this connection's requests that have not sent their final frame. */
 		const inFlight = new Set<string>();
@@ -299,9 +320,6 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 		const puts = new Map<string, Put>();
 		/** Puts that were refused: the loop may have streamed some of their archive before it read the refusal. */
 		const refusedPuts = new Set<string>();
-		/** Put frames run in order: a put's directory checks finish before its data arrives at the archive. */
-		const putFrames: Frame[] = [];
-		let puttingFrames = false;
 		/** In-flight calls that were cancelled before they started. */
 		const cancelled = new Set<string>();
 		/** Aborted when the connection ends: it ends the connection's extractions. */
@@ -577,23 +595,40 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 			}
 		}
 
-		/** Ends a put that has not extracted yet; its archive file goes with the scratch. */
-		function dropPut(id: string, error: string, detail: string): void {
-			const entry = puts.get(id);
-			if (entry !== undefined) {
-				puts.delete(id);
-				entry.sink.destroy();
-				// The socket may wait for this sink's drain.
-				socket.resume();
+		function rememberRefusedPut(id: string): void {
+			if (closing.signal.aborted) {
+				return;
+			}
+			if (refusedPuts.size >= LIMITS.inFlight && !refusedPuts.has(id)) {
+				throw new ToolProtocolError("protocol", "too many refused puts without their put-end");
 			}
 			refusedPuts.add(id);
-			refuse(id, error, detail);
+		}
+
+		/** Stops an upload or extraction and waits for its cleanup before its final refusal. */
+		async function dropPut(id: string, error: string, detail: string): Promise<void> {
+			const entry = puts.get(id);
+			if (entry === undefined || !entry.ending) {
+				rememberRefusedPut(id);
+			}
+			if (entry === undefined) {
+				refuse(id, error, detail);
+				return;
+			}
+			entry.refusal = { error, detail };
+			entry.abort.abort();
+			entry.sink.destroy();
+			if (entry.ending) {
+				await entry.ended.promise;
+			} else {
+				await finishPut(id, true);
+			}
 		}
 
 		async function reset(id: string): Promise<void> {
 			resets += 1;
 			for (const putId of puts.keys()) {
-				dropPut(putId, "reset", "A reset ended this put.");
+				await dropPut(putId, "reset", "A reset ended this put.");
 			}
 			// Each call ends with its marker sweep, and the scratch is cleared only after it sent its `exit`.
 			await Promise.race([
@@ -636,7 +671,7 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 				size > LIMITS.putBytes ||
 				sha256 === undefined
 			) {
-				dropPut(
+				await dropPut(
 					id,
 					"request",
 					"A put names a new directory inside the put roots, a bounded size and a sha256.",
@@ -647,8 +682,14 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 				const incoming = path.join(options.scratch, ".puts");
 				await mkdir(incoming, { recursive: true });
 				const file = path.join(incoming, `${id}.tar`);
-				const sink = createWriteStream(file, { flags: "wx" });
+				const sink = createWriteStream(file, { flags: "wx", highWaterMark: FILE_BUFFER_BYTES });
 				await once(sink, "open");
+				if (closing.signal.aborted) {
+					sink.destroy();
+					await finished(sink).catch(() => undefined);
+					await rm(file, { force: true });
+					return;
+				}
 				const entry: Put = {
 					dir: path.join(parent, path.basename(requested)),
 					file,
@@ -658,60 +699,68 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 					seen: 0,
 					sha256,
 					failed: false,
+					abort: new AbortController(),
+					ended: Promise.withResolvers<undefined>(),
+					ending: false,
 				};
 				sink.on("error", () => {
 					entry.failed = true;
-					socket.resume();
 				});
 				puts.set(id, entry);
 			} catch {
-				dropPut(id, "put", "The tools side cannot store the archive.");
+				await dropPut(id, "put", "The tools side cannot store the archive.");
 			}
 		}
 
-		function putData(id: string, body: Buffer): void {
+		async function putData(id: string, body: Buffer): Promise<void> {
 			if (refusedPuts.has(id)) {
 				return;
 			}
 			const entry = puts.get(id);
-			if (entry === undefined) {
+			if (entry === undefined || entry.ending) {
 				throw new ToolProtocolError("protocol", "put data for no put in flight");
 			}
 			entry.seen += body.length;
 			if (entry.failed || entry.seen > entry.size) {
+				await dropPut(id, "put", "The archive cannot be stored within its announced size.");
 				return;
 			}
 			entry.hash.update(body);
 			if (!entry.sink.write(body)) {
-				socket.pause();
-				entry.sink.once("drain", () => {
-					socket.resume();
-				});
+				try {
+					await once(entry.sink, "drain", { signal: entry.abort.signal });
+				} catch {
+					await dropPut(id, "put", "The tools side cannot store the archive.");
+				}
 			}
 		}
 
 		/** Extracts the archive only once it arrived whole: its size and hash match what the loop announced. */
-		async function finishPut(id: string): Promise<void> {
-			if (refusedPuts.delete(id)) {
-				return;
-			}
+		async function finishPut(id: string, aborted = false): Promise<void> {
 			const entry = puts.get(id);
 			if (entry === undefined) {
+				if (refusedPuts.delete(id)) {
+					return;
+				}
 				throw new ToolProtocolError("protocol", "put end for no put in flight");
 			}
-			puts.delete(id);
+			if (entry.ending) {
+				throw new ToolProtocolError("protocol", "a second put end");
+			}
+			entry.ending = true;
 			let created = false;
 			let extracted = false;
 			try {
+				if (aborted) {
+					throw new ToolProtocolError("put", "The archive source stopped before the put ended.");
+				}
 				entry.sink.end();
 				await finished(entry.sink);
 				if (entry.failed) {
-					refuse(id, "put", "The tools side cannot store the archive.");
-					return;
+					throw new ToolProtocolError("put", "The tools side cannot store the archive.");
 				}
 				if (entry.seen !== entry.size || entry.hash.digest("hex") !== entry.sha256) {
-					refuse(id, "put", "The archive did not arrive whole.");
-					return;
+					throw new ToolProtocolError("put", "The archive did not arrive whole.");
 				}
 				await mkdir(entry.dir);
 				created = true;
@@ -723,7 +772,7 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 					["-x", "--no-same-owner", "--no-same-permissions", "-f", entry.file, "-C", entry.dir],
 					{
 						stdio: "ignore",
-						signal: closing.signal,
+						signal: entry.abort.signal,
 						timeout: LIMITS.extractMs,
 						killSignal: "SIGKILL",
 					},
@@ -733,43 +782,40 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 					once(tar, "error").then(() => [-1]),
 				]);
 				if (code !== 0) {
-					refuse(id, "put", "The archive could not be extracted.");
-					return;
+					throw new ToolProtocolError("put", "The archive could not be extracted.");
 				}
 				await makeReadOnly(entry.dir);
+				entry.abort.signal.throwIfAborted();
 				extracted = true;
-				final(id, { type: "put" });
-			} catch {
-				refuse(id, "put", "The archive could not be extracted.");
+			} catch (error) {
+				entry.refusal ??= {
+					error: "put",
+					detail:
+						error instanceof ToolProtocolError
+							? error.message
+							: "The archive could not be extracted.",
+				};
 			} finally {
-				await rm(entry.file, { force: true });
-				// A refused put leaves no half-extracted directory, so the loop can put it again.
-				if (created && !extracted) {
-					await rm(entry.dir, { recursive: true, force: true });
-				}
-			}
-		}
-
-		async function handlePutFrames(): Promise<void> {
-			if (puttingFrames) {
-				return;
-			}
-			puttingFrames = true;
-			try {
-				for (let frame = putFrames.shift(); frame !== undefined; frame = putFrames.shift()) {
-					const id = text(frame.header, "id") ?? "";
-					if (frame.header.type === "put") {
-						await startPut(id, frame.header);
-					} else if (frame.header.type === "put-data") {
-						putData(id, frame.body);
-					} else {
-						await finishPut(id);
+				entry.sink.destroy();
+				await finished(entry.sink).catch(() => undefined);
+				try {
+					await rm(entry.file, { force: true });
+					if (created && !extracted) {
+						await rm(entry.dir, { recursive: true, force: true });
 					}
+				} catch {
+					entry.refusal ??= {
+						error: "put",
+						detail: "The tools side could not remove the archive.",
+					};
 				}
-			} catch {
-				socket.destroy();
-			} finally {
-				puttingFrames = false;
+				puts.delete(id);
+				if (entry.refusal) {
+					refuse(id, entry.refusal.error, entry.refusal.detail);
+				} else {
+					final(id, { type: "put" });
+				}
+				entry.ended.resolve(undefined);
 			}
 		}
 
@@ -791,7 +837,7 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 			send({ type: "hello", nonce: options.nonce, protocol: PROTOCOL, bootId, limits: LIMITS });
 		}
 
-		function handle(frame: Frame): void {
+		async function handle(frame: Frame): Promise<void> {
 			const { header } = frame;
 			if (header.type === "hello") {
 				hello(header);
@@ -814,9 +860,17 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 				}
 				return;
 			}
-			if (header.type === "put-data" || header.type === "put-end") {
-				putFrames.push(frame);
-				void handlePutFrames();
+			if (header.type === "put-data") {
+				await putData(id, frame.body);
+				return;
+			}
+			if (header.type === "put-end") {
+				const entry = puts.get(id);
+				if (entry?.ending === true || (entry === undefined && !refusedPuts.has(id))) {
+					throw new ToolProtocolError("protocol", "put end for no receiving put");
+				}
+				// Extraction keeps its request slot, but does not hold up another upload or the connection's pings.
+				void settle(id, finishPut(id, header.abort === true));
 				return;
 			}
 			// Counted when the frame arrives, before any handler awaits: a burst of frames in one chunk cannot pass.
@@ -829,7 +883,7 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 			}
 			if (inFlight.size >= LIMITS.inFlight) {
 				if (header.type === "put") {
-					refusedPuts.add(id);
+					rememberRefusedPut(id);
 				}
 				refuse(id, "busy", "Too many tool calls at once.");
 				return;
@@ -840,29 +894,38 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 			} else if (header.type === "read") {
 				void settle(id, read(id, header));
 			} else if (header.type === "reset") {
-				void settle(id, reset(id));
+				await settle(id, reset(id));
 			} else {
-				putFrames.push(frame);
-				void handlePutFrames();
+				await startPut(id, header);
 			}
 		}
 
-		socket.on("data", (chunk: Buffer) => {
+		/**
+		 * One bounded socket chunk is processed at a time. Waiting for a file's drain stops reading the
+		 * socket, so neither this call nor all concurrent puts can queue an archive in memory.
+		 */
+		async function receive(input: AsyncIterable<unknown>): Promise<void> {
 			try {
-				for (const frame of reader.push(chunk)) {
-					handle(frame);
+				for await (const chunk of input) {
+					if (!Buffer.isBuffer(chunk)) {
+						throw new ToolProtocolError("protocol", "non-byte input");
+					}
+					for (const frame of reader.push(chunk)) {
+						await handle(frame);
+					}
 				}
 			} catch {
 				socket.destroy();
 			}
-		});
+		}
+		void receive(socket);
 		socket.on("close", () => {
 			closing.abort();
 			for (const call of running.values()) {
 				void endCall(call.id, call.child);
 			}
-			for (const put of puts.values()) {
-				put.sink.destroy();
+			for (const id of puts.keys()) {
+				void settle(id, dropPut(id, "connection", "The connection ended this put."));
 			}
 		});
 		socket.on("error", () => {

@@ -229,16 +229,24 @@ export class ToolClient {
 			).reply,
 		]);
 		let room = archive.size;
-		for await (const chunk of archive.bytes) {
-			room = await this.#putChunk(id, chunk, room);
-			if (room <= 0) {
-				break;
+		let sourceFailure: { error: unknown } | undefined;
+		try {
+			for await (const chunk of archive.bytes) {
+				room = await this.#putChunk(id, chunk, room);
+				if (room <= 0) {
+					break;
+				}
 			}
+		} catch (error) {
+			sourceFailure = { error };
 		}
-		if (this.#pending.has(id)) {
-			this.#write({ type: "put-end", id });
-		}
+		// Also acknowledges a remote refusal: its already-sent data may still be arriving. An aborted source never
+		// extracts, even when it failed after supplying all the announced bytes. The final reply proves cleanup.
+		this.#write({ type: "put-end", id, abort: sourceFailure !== undefined });
 		const [outcome] = await reply;
+		if (sourceFailure !== undefined) {
+			throw sourceFailure.error;
+		}
 		if (outcome.status === "rejected") {
 			throw outcome.reason;
 		}
