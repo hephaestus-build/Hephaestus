@@ -145,10 +145,52 @@ and responses that replace the shared session cookie. Generated SDK operations o
 TanStack Query mutation options retain their lifecycle and error handling. Without Web Locks, only
 renewal within a single tab is coordinated.
 
-Rotation atomically revokes the presented token before issuing its replacement. A losing rotation
-neither issues nor clears a cookie: its delayed response must not overwrite the winner's credential.
-A lost response after committed rotation can require another sign-in. This is the cookie-response
-ordering hazard illustrated by [Auth.js issue 8897](https://github.com/nextauthjs/next-auth/issues/8897).
+### Rotation contract
+
+A renewal (`POST /auth/refresh`) issues a successor token. It does not revoke the presented token.
+The successor row records the presented token in `issued_jwt.predecessor_jti`.
+A reload or a navigation can cut the renewal response before the browser stores the new cookie.
+The browser then still holds a valid token, so the session continues.
+[Auth.js issue 8897](https://github.com/nextauthjs/next-auth/issues/8897) shows this cookie-response hazard.
+
+- **The predecessor ends first at its own expiry or at the successor's first use.**
+  `AccessTokenAdmission` admits the successor. In the same transaction, it revokes the predecessor
+  with reason `ROTATE` and clears the link. A link that is not empty thus marks an unused successor.
+  Refresh and first use lock the account, then the predecessor, then the successor.
+  Concurrent refreshes therefore leave one unused successor.
+- **The predecessor returns while its successor is unused.** The renewal revokes that successor and
+  issues a new one. `auth_event` records `TOKEN_REFRESH` with the details
+  `{"reason":"SUCCESSOR_UNUSED_REPLACED"}`.
+- **The predecessor returns after its successor was used.** The server answers 401.
+  `RevocationAwareJwtDecoder` records `JWT_REVOKED` `FAILURE` with the reason `browser_token_reuse`
+  and logs a warning without the token.
+- **Any other revoked browser token** records `revoked_token_presented`, with the revocation reason
+  in the details. The revoked-verdict cache dedupes both events: each server instance records one
+  event for each token for each cache entry (up to 15 minutes). Eviction or a restart permits a new
+  event. Expired and unknown tokens add no event. Installed-client tokens record their reuse
+  through their refresh secret, so the decoder records none for them.
+- **Logout and the revocation of one session** also revoke the unused successors of the token.
+  The session list shows one browser once while its successor is unused.
+- **A renewal that loses the race to the successor's first use** neither issues nor clears a cookie.
+  The browser already holds the successor.
+
+Web Locks serialize cookie changes across tabs. A queued renewal reads the shared cooldown after it
+takes the lock, so it uses the preceding renewal's result instead of rotating again.
+The server cannot distinguish two holders of a valid bearer cookie. The predecessor remains usable
+only until its own expiry or its successor's first use; this does not add a grace period after either
+boundary. Installed-client refresh-secret rotation keeps its separate reuse contract.
+
+### Late refusals
+
+A request that left with the predecessor can arrive after the successor's first use and get a 401.
+The web app does not renew for such a late refusal:
+
+1. A successful renewal or identity read starts a cooldown of 10 seconds. All tabs share it through
+   `localStorage`, because all tabs share the cookie. A keep-alive renewal and a recovery start the
+   same cooldown. A 401 during the cooldown changes nothing.
+2. After the cooldown, a 401 first reads `GET /user`. If the identity holds, the web app refetches
+   its queries and does not renew.
+3. Only a refused identity read leads to a renewal. A refused renewal leads to sign-in.
 
 Only an authentication refusal triggers sign-in. Network and server failures preserve the page;
 revocation-store failures deny access as server errors. Failed mutations are not automatically
