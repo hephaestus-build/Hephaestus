@@ -81,6 +81,29 @@ class SessionRefreshLifecycleIntegrationTest extends RealAuthIntegrationTest {
         }
     }
 
+    /**
+     * A reload or navigation can cut the refresh response after the rotation committed, so the browser
+     * never stores the new cookie and still sends the one it had. Staging E25.
+     */
+    @Test
+    void aSessionSurvivesARefreshWhoseResponseNeverArrived() {
+        Account account = accountRepository.save(new Account("Cut-off Carla"));
+        String held = jwtIssuer
+                .issue(
+                        Objects.requireNonNull(account.getId()),
+                        TokenConstraints.session(Instant.now().plus(Duration.ofHours(12)), null),
+                        null)
+                .value();
+        String csrf = fetchCsrfToken();
+
+        // The rotation commits, but its Set-Cookie never reaches the browser.
+        refreshAndReadNewCookie(held, csrf);
+
+        getUser(held).expectStatus().isOk().expectBody(Void.class);
+        String recovered = refreshAndReadNewCookie(held, csrf);
+        getUser(recovered).expectStatus().isOk().expectBody(Void.class);
+    }
+
     @Test
     void theAbsoluteSessionCeilingCapsTheTokenAndSurvivesRefresh() {
         Account account = accountRepository.save(new Account("Capped Cathy"));
