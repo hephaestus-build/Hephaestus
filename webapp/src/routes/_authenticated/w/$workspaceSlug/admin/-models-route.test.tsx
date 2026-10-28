@@ -188,8 +188,8 @@ const advancedButton = (scope: HTMLElement) =>
 	within(scope).getByRole("button", { name: /^Advanced/u });
 const timeoutInput = (scope: HTMLElement) =>
 	within(scope).getByLabelText<HTMLInputElement>(/^Timeout \(seconds\)/u);
-/** One picker per row, so the row is the disambiguation. */
-const pickerOf = (scope: HTMLElement) => within(scope).getByRole("combobox");
+/** One model picker per row, so the row is the disambiguation; the effort is the row's other combobox. */
+const pickerOf = (scope: HTMLElement) => within(scope).getByRole("combobox", { name: /^Model/u });
 
 describe("workspace AI models route", () => {
 	it("offers a concurrency limit only for queued practice reviews, not Heph turns", async () => {
@@ -288,6 +288,35 @@ describe("workspace AI models route", () => {
 		const saved = row("Practice reviews");
 		fireEvent.click(advancedButton(saved));
 		expect(timeoutInput(saved).value).toBe("900");
+	});
+
+	it("sends each purpose's reasoning effort, and clears the one set back to the provider default", async () => {
+		const user = userEvent.setup();
+		const saved = new Map<string, AgentBindingRequest>();
+		server.use(
+			http.put<{ purpose: string }, AgentBindingRequest>(
+				"*/workspaces/acme/agents/:purpose",
+				async ({ params, request }) => {
+					saved.set(params.purpose, await request.json());
+					return HttpResponse.json(binding("PRACTICE_REVIEW", 20));
+				},
+			),
+		);
+		await renderModelsRoute(() => [
+			{ ...binding("PRACTICE_REVIEW", 20), reasoningEffort: "HIGH" },
+			{ ...binding("MENTOR", 20), reasoningEffort: "LOW" },
+		]);
+
+		await user.click(saveButton("Practice reviews"));
+		await user.click(within(row("Heph")).getByRole("combobox", { name: /^Reasoning effort/u }));
+		await user.click(await screen.findByRole("option", { name: "Provider default" }));
+		await user.click(saveButton("Heph"));
+
+		await waitFor(() => expect(saved.size).toBe(2));
+		expect(saved.get("PRACTICE_REVIEW")).toMatchObject({ reasoningEffort: "HIGH" });
+		expect(saved.get("PRACTICE_REVIEW")).not.toHaveProperty("clearReasoningEffort");
+		expect(saved.get("MENTOR")).toMatchObject({ clearReasoningEffort: true });
+		expect(saved.get("MENTOR")).not.toHaveProperty("reasoningEffort");
 	});
 
 	it("reseeds the row to its defaults when the assignment is cleared", async () => {
@@ -639,7 +668,7 @@ it("saves and clears only the selected tier and lists only that tier's models", 
 	await screen.findByRole("button", { name: "Practice reviews" }, ROUTE_RENDER_WAIT);
 	const reviews = within(purposeRegion("Practice reviews"));
 
-	await user.click(reviews.getByRole("combobox", { name: /Cloud/u }));
+	await user.click(reviews.getByRole("combobox", { name: /^Model.*Cloud/u }));
 	const compatible = await screen.findByRole("option", { name: /GPT Other/u });
 	expect(screen.queryByRole("option", { name: /GPT Test/u })).toBeNull();
 	await user.click(compatible);

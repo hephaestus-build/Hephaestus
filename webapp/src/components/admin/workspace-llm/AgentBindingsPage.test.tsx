@@ -123,31 +123,6 @@ describe("AgentBindingsPage", () => {
 		);
 	});
 
-	it("saves each purpose's own reasoning effort, and clears it for one left at the provider default", () => {
-		const { onSave } = renderPage({
-			bindings: [
-				{ ...inHouseBinding, reasoningEffort: "HIGH" },
-				{ ...inHouseBinding, purpose: "MENTOR" },
-			],
-		});
-
-		fireEvent.click(saveButton(reviewsInHouse()));
-		fireEvent.click(saveButton(row("Heph", "In-house")));
-
-		expect(onSave).toHaveBeenNthCalledWith(
-			1,
-			{ purpose: "PRACTICE_REVIEW", tier: "IN_HOUSE" },
-			expect.objectContaining({ reasoningEffort: "HIGH" }),
-		);
-		expect(onSave.mock.calls[0]?.[1]).not.toHaveProperty("clearReasoningEffort");
-		expect(onSave).toHaveBeenNthCalledWith(
-			2,
-			{ purpose: "MENTOR", tier: "IN_HOUSE" },
-			expect.objectContaining({ clearReasoningEffort: true }),
-		);
-		expect(onSave.mock.calls[1]?.[1]).not.toHaveProperty("reasoningEffort");
-	});
-
 	it("saves a Heph timeout at the turn ceiling", () => {
 		const { onSave } = renderPage({ bindings: [{ ...inHouseBinding, purpose: "MENTOR" }] });
 		const heph = row("Heph", "In-house");
