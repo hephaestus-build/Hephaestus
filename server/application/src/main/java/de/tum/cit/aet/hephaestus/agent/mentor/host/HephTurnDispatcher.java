@@ -1,11 +1,13 @@
 package de.tum.cit.aet.hephaestus.agent.mentor.host;
 
+import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnAttempt;
 import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnSandboxes;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnCompletion;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnStarter;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.proxy.ProxyCallsInFlight;
 import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerDrainCoordinator;
+import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.AttemptJwt;
 import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtIssuer;
 import de.tum.cit.aet.hephaestus.mentor.MentorLeaseLostException;
 import de.tum.cit.aet.hephaestus.mentor.MentorLedgerEvents;
@@ -140,6 +142,9 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
         final UUID turnId;
         final long workspaceId;
         final int attempt;
+        /** The attempt as its tools act: the claimed turn's conversation, and the conversation's account. */
+        final TurnAttempt identity;
+
         final Instant deadline;
         final Instant claimed;
         volatile Instant renewed;
@@ -151,10 +156,11 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
         volatile @Nullable Instant stopSent;
         volatile boolean overDeadline;
 
-        Running(MentorTurn turn, Instant now, Instant deadline) {
+        Running(MentorTurn turn, long accountId, Instant now, Instant deadline) {
             this.turnId = turn.getId();
             this.workspaceId = turn.getWorkspaceId();
             this.attempt = turn.getAttempt();
+            this.identity = new TurnAttempt(turnId, workspaceId, accountId, turn.getConversationId(), attempt);
             this.deadline = deadline;
             this.claimed = now;
             this.renewed = now;
@@ -296,8 +302,13 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
      * remove it.
      */
     boolean runs(UUID turnId, int attempt) {
+        return running(turnId, attempt).isPresent();
+    }
+
+    /** The attempt, while it {@linkplain #runs runs} here. */
+    Optional<TurnAttempt> running(UUID turnId, int attempt) {
         Running turn = running.get(turnId);
-        return turn != null && turn.attempt == attempt;
+        return turn != null && turn.attempt == attempt ? Optional.of(turn.identity) : Optional.empty();
     }
 
     /**
@@ -388,7 +399,8 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
     private void begin(MentorTurnStarter.StartedTurn started) {
         MentorTurn turn = started.turn();
         Instant now = clock.instant();
-        Running attempt = new Running(turn, now, now.plusSeconds(started.llm().timeoutSeconds()));
+        Running attempt = new Running(
+                turn, started.accountId(), now, now.plusSeconds(started.llm().timeoutSeconds()));
         Running earlier = running.put(attempt.turnId, attempt);
         if (earlier != null) {
             // This worker claimed the retry before it heard that the earlier attempt lost its lease: as for a lost
@@ -419,12 +431,12 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
             finish(attempt, MentorTurn.Status.STOPPED, null, null);
             return;
         }
-        String token = issuer.issueForTurn(
+        String token = issuer.issueForAttempt(
+                AttemptJwt.Kind.TURN,
                 attempt.turnId,
                 attempt.workspaceId,
-                started.accountId(),
-                turn.getConversationId(),
                 attempt.attempt,
+                null,
                 attempt.deadline.plus(stopGrace).plus(stopGrace));
         send(
                 attempt,

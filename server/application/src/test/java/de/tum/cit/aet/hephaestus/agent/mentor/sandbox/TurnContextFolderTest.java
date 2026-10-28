@@ -5,7 +5,6 @@ import static org.awaitility.Awaitility.await;
 
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ExecSandboxes;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxException;
-import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.TurnJwt;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ContextLoadException;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ContextLoader;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -24,7 +23,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
@@ -40,6 +38,7 @@ import tools.jackson.databind.node.ObjectNode;
 class TurnContextFolderTest extends BaseUnitTest {
 
     private static final Instant NOW = Instant.parse("2026-10-20T10:00:00Z");
+    private static final Instant DEADLINE = NOW.plus(Duration.ofMinutes(5));
 
     @TempDir
     Path temp;
@@ -57,8 +56,8 @@ class TurnContextFolderTest extends BaseUnitTest {
         sandboxes.close();
     }
 
-    private static TurnJwt turn(Duration left) {
-        return new TurnJwt(UUID.randomUUID(), 1L, 2L, UUID.randomUUID(), 1, Set.of(), "jti", NOW, NOW.plus(left));
+    private static TurnAttempt turn() {
+        return new TurnAttempt(UUID.randomUUID(), 1L, 2L, UUID.randomUUID(), 1);
     }
 
     private static TurnDocuments documents() {
@@ -126,11 +125,10 @@ class TurnContextFolderTest extends BaseUnitTest {
     @Test
     void shouldStageTheIndexTheFieldGuideAndTheDocumentsOnceWhenTheAttemptFirstReads() {
         sandboxAnswers("");
-        TurnJwt turn = turn(Duration.ofMinutes(5));
+        TurnAttempt turn = turn();
 
-        ObjectNode first = folder.read(turn, turn.expiresAt(), documents(), "INDEX.md", null, null);
-        ObjectNode second =
-                folder.read(turn, turn.expiresAt(), documents(), "/workspace/inputs/context/user.json", null, null);
+        ObjectNode first = folder.read(turn, DEADLINE, documents(), "INDEX.md", null, null);
+        ObjectNode second = folder.read(turn, DEADLINE, documents(), "/workspace/inputs/context/user.json", null, null);
 
         assertThat(first.path("ok").asBoolean()).as(first.toString()).isTrue();
         assertThat(second.path("text").asString()).isEqualTo("{\n");
@@ -147,11 +145,10 @@ class TurnContextFolderTest extends BaseUnitTest {
     @Test
     void shouldStageAnItemDocumentFromItsSourceWhenTheModelReadsItsPath() {
         sandboxAnswers("");
-        TurnJwt turn = turn(Duration.ofMinutes(5));
+        TurnAttempt turn = turn();
 
-        ObjectNode item = folder.read(turn, turn.expiresAt(), documents(), "inputs/context/issue/7.json", null, null);
-        ObjectNode unknown =
-                folder.read(turn, turn.expiresAt(), documents(), "inputs/context/issue/8.json", null, null);
+        ObjectNode item = folder.read(turn, DEADLINE, documents(), "inputs/context/issue/7.json", null, null);
+        ObjectNode unknown = folder.read(turn, DEADLINE, documents(), "inputs/context/issue/8.json", null, null);
 
         assertThat(item.path("ok").asBoolean()).as(item.toString()).isTrue();
         assertThat(staged.getLast()).containsExactly("inputs/context/issue/7.json");
@@ -164,7 +161,7 @@ class TurnContextFolderTest extends BaseUnitTest {
 
     @Test
     void shouldRefuseAPathOutsideTheFolderWithoutStartingASandbox() {
-        ObjectNode refused = folder.read(turn(Duration.ofMinutes(5)), NOW, documents(), "../etc/passwd", null, null);
+        ObjectNode refused = folder.read(turn(), NOW, documents(), "../etc/passwd", null, null);
 
         assertThat(refused.path("error").asString()).isEqualTo("NOT_FOUND");
         assertThat(refused.path("detail").asString()).isEqualTo("File not found: ../etc/passwd");
@@ -175,7 +172,7 @@ class TurnContextFolderTest extends BaseUnitTest {
     void shouldBoundTheCommandByTheTurnDeadlineWhenLessThanAMinuteIsLeft() {
         sandboxAnswers("0 1 3 3\nok\n");
 
-        ObjectNode ran = folder.exec(turn(Duration.ofMinutes(5)), NOW.plusSeconds(20), documents(), "git log", 120_000);
+        ObjectNode ran = folder.exec(turn(), NOW.plusSeconds(20), documents(), "git log", 120_000);
 
         assertThat(ran.path("exitCode").asInt()).isZero();
         assertThat(ran.path("output").asString()).isEqualTo("ok\n");
@@ -188,7 +185,7 @@ class TurnContextFolderTest extends BaseUnitTest {
     void shouldBoundTheCommandByOneMinuteWhenTheModelAsksForMore() {
         sandboxAnswers("0 0 0 0\n");
 
-        folder.exec(turn(Duration.ofMinutes(5)), NOW.plusSeconds(300), documents(), "sleep 100", 600_000);
+        folder.exec(turn(), NOW.plusSeconds(300), documents(), "sleep 100", 600_000);
 
         assertThat(runtime.commands.getLast().argv()).contains("60.000");
     }
@@ -196,13 +193,13 @@ class TurnContextFolderTest extends BaseUnitTest {
     @Test
     void shouldKillTheCommandsWhenTheSandboxDoesNotAnswerByTheTimeoutAndItsMargin() {
         sandboxAnswers("");
-        TurnJwt turn = turn(Duration.ofMinutes(5));
-        folder.read(turn, turn.expiresAt(), documents(), "INDEX.md", null, null);
+        TurnAttempt turn = turn();
+        folder.read(turn, DEADLINE, documents(), "INDEX.md", null, null);
         runtime.answer = command -> command.argv().get(2).equals(TurnContextFolder.EXEC_SCRIPT)
                 ? new ExecSandboxes.Execution(null, new byte[0], new byte[0], false)
                 : execution(0, "");
 
-        ObjectNode ran = folder.exec(turn, turn.expiresAt(), documents(), "sleep 100", 1000);
+        ObjectNode ran = folder.exec(turn, DEADLINE, documents(), "sleep 100", 1000);
 
         assertThat(ran.path("timedOut").asBoolean()).isTrue();
         assertThat(ran.path("exitCode").isNull()).isTrue();
@@ -216,8 +213,7 @@ class TurnContextFolderTest extends BaseUnitTest {
         int bytes = tail.length();
         sandboxAnswers("0 3000 " + bytes + " 5\n" + tail);
 
-        ObjectNode ran =
-                folder.exec(turn(Duration.ofMinutes(5)), NOW.plusSeconds(300), documents(), "seq 1 3000", null);
+        ObjectNode ran = folder.exec(turn(), NOW.plusSeconds(300), documents(), "seq 1 3000", null);
 
         assertThat(ran.path("truncated").asBoolean()).isTrue();
         assertThat(ran.path("fullOutputPath").asString()).isEqualTo("/tmp/heph-out/1.log");
@@ -231,9 +227,9 @@ class TurnContextFolderTest extends BaseUnitTest {
         Path checkout = Files.createDirectories(temp.resolve("checkout"));
         Files.writeString(checkout.resolve("README.md"), "# API\n");
         beans.registerSingleton("loader", new Loader(checkout));
-        TurnJwt turn = turn(Duration.ofMinutes(5));
+        TurnAttempt turn = turn();
 
-        ObjectNode loaded = folder.load(turn, turn.expiresAt(), documents(), "repos/github.com/acme/api@main");
+        ObjectNode loaded = folder.load(turn, DEADLINE, documents(), "repos/github.com/acme/api@main");
 
         assertThat(loaded.path("ok").asBoolean()).as(loaded.toString()).isTrue();
         assertThat(loaded.path("path").asString()).isEqualTo("repos/github.com/acme/api");
@@ -244,11 +240,11 @@ class TurnContextFolderTest extends BaseUnitTest {
                 .isInstanceOfSatisfying(
                         ExecSandboxes.Replace.class,
                         replace -> assertThat(replace.directory()).isEqualTo("repos/github.com/acme/api"));
-        assertThat(folder.load(turn, turn.expiresAt(), documents(), "repos/github.com/acme/hidden")
+        assertThat(folder.load(turn, DEADLINE, documents(), "repos/github.com/acme/hidden")
                         .path("error")
                         .asString())
                 .isEqualTo("NOT_VISIBLE");
-        assertThat(folder.load(turn, turn.expiresAt(), documents(), "elsewhere/x")
+        assertThat(folder.load(turn, DEADLINE, documents(), "elsewhere/x")
                         .path("error")
                         .asString())
                 .isEqualTo("INVALID_PATH");
@@ -300,9 +296,9 @@ class TurnContextFolderTest extends BaseUnitTest {
                 };
             }
         });
-        TurnJwt turn = turn(Duration.ofMinutes(5));
+        TurnAttempt turn = turn();
 
-        ObjectNode loaded = folder.load(turn, turn.expiresAt(), documents(), "repos/github.com/acme/api@pull/1");
+        ObjectNode loaded = folder.load(turn, DEADLINE, documents(), "repos/github.com/acme/api@pull/1");
 
         assertThat(loaded.path("note").asString()).isEqualTo("Loaded.\nMerge base with main: abcdef123456");
         ExecSandboxes.Command summary = runtime.commands.getLast();
@@ -314,16 +310,16 @@ class TurnContextFolderTest extends BaseUnitTest {
         sandboxAnswers("");
         Path checkout = Files.createDirectories(temp.resolve("checkout"));
         beans.registerSingleton("loader", new Loader(checkout));
-        TurnJwt turn = turn(Duration.ofMinutes(5));
+        TurnAttempt turn = turn();
 
         for (int load = 0; load < TurnContextFolder.MAX_LOADS_PER_ATTEMPT; load++) {
-            assertThat(folder.load(turn, turn.expiresAt(), documents(), "repos/github.com/acme/api")
+            assertThat(folder.load(turn, DEADLINE, documents(), "repos/github.com/acme/api")
                             .path("ok")
                             .asBoolean())
                     .isTrue();
         }
 
-        assertThat(folder.load(turn, turn.expiresAt(), documents(), "repos/github.com/acme/api")
+        assertThat(folder.load(turn, DEADLINE, documents(), "repos/github.com/acme/api")
                         .path("error")
                         .asString())
                 .isEqualTo("BUDGET_EXHAUSTED");
@@ -332,16 +328,16 @@ class TurnContextFolderTest extends BaseUnitTest {
     @Test
     void shouldSayThatTheContextChangedWhenTheWorkspaceDataChangedDuringTheAttempt() {
         sandboxAnswers("0 0 0 0\n");
-        TurnJwt turn = turn(Duration.ofMinutes(5));
-        folder.exec(turn, turn.expiresAt(), documents(), "true", null);
+        TurnAttempt turn = turn();
+        folder.exec(turn, DEADLINE, documents(), "true", null);
 
         sandboxes.releaseWorkspace(turn.workspaceId());
 
-        assertThat(folder.exec(turn, turn.expiresAt(), documents(), "true", null)
+        assertThat(folder.exec(turn, DEADLINE, documents(), "true", null)
                         .path("error")
                         .asString())
                 .isEqualTo("CONTEXT_CHANGED");
-        assertThat(folder.exec(turn, turn.expiresAt(), documents(), "true", null)
+        assertThat(folder.exec(turn, DEADLINE, documents(), "true", null)
                         .path("ok")
                         .asBoolean())
                 .isTrue();
@@ -352,7 +348,7 @@ class TurnContextFolderTest extends BaseUnitTest {
     void shouldKillEveryProcessOfTheSandboxUserWhenTheCommandTimedOut() {
         sandboxAnswers("124 0 0 0\n");
 
-        ObjectNode ran = folder.exec(turn(Duration.ofMinutes(5)), NOW.plusSeconds(300), documents(), "sleep 100", 1000);
+        ObjectNode ran = folder.exec(turn(), NOW.plusSeconds(300), documents(), "sleep 100", 1000);
 
         assertThat(ran.path("timedOut").asBoolean()).isTrue();
         assertThat(runtime.cancelled)
@@ -365,8 +361,8 @@ class TurnContextFolderTest extends BaseUnitTest {
         sandboxAnswers("");
         Path checkout = Files.createDirectories(temp.resolve("checkout"));
         beans.registerSingleton("loader", new Loader(checkout));
-        TurnJwt turn = turn(Duration.ofMinutes(5));
-        folder.read(turn, turn.expiresAt(), documents(), "INDEX.md", null, null);
+        TurnAttempt turn = turn();
+        folder.read(turn, DEADLINE, documents(), "INDEX.md", null, null);
         var stage = runtime.onStage;
         runtime.onStage = staging -> {
             if (staging instanceof ExecSandboxes.Replace) {
@@ -375,12 +371,12 @@ class TurnContextFolderTest extends BaseUnitTest {
             stage.accept(staging);
         };
 
-        ObjectNode failed = folder.load(turn, turn.expiresAt(), documents(), "repos/github.com/acme/api");
+        ObjectNode failed = folder.load(turn, DEADLINE, documents(), "repos/github.com/acme/api");
 
         assertThat(failed.path("error").asString()).isEqualTo("UNAVAILABLE");
         await().atMost(Duration.ofSeconds(5)).until(() -> runtime.removed.contains("container-1"));
         staged.clear();
-        assertThat(folder.read(turn, turn.expiresAt(), documents(), "INDEX.md", null, null)
+        assertThat(folder.read(turn, DEADLINE, documents(), "INDEX.md", null, null)
                         .path("ok")
                         .asBoolean())
                 .isTrue();
@@ -393,8 +389,8 @@ class TurnContextFolderTest extends BaseUnitTest {
     @Test
     void shouldRemoveTheSandboxAndStageANewOneWhenACommandsRunFails() {
         sandboxAnswers("0 0 0 0\n");
-        TurnJwt turn = turn(Duration.ofMinutes(5));
-        folder.read(turn, turn.expiresAt(), documents(), "INDEX.md", null, null);
+        TurnAttempt turn = turn();
+        folder.read(turn, DEADLINE, documents(), "INDEX.md", null, null);
         var answers = runtime.answer;
         runtime.answer = command -> {
             if (command.argv().get(2).equals(TurnContextFolder.EXEC_SCRIPT)) {
@@ -405,13 +401,13 @@ class TurnContextFolderTest extends BaseUnitTest {
             return answers.apply(command);
         };
 
-        ObjectNode failed = folder.exec(turn, turn.expiresAt(), documents(), "true", null);
+        ObjectNode failed = folder.exec(turn, DEADLINE, documents(), "true", null);
 
         assertThat(failed.path("error").asString()).isEqualTo("UNAVAILABLE");
         await().atMost(Duration.ofSeconds(5)).until(() -> runtime.removed.contains("container-1"));
         runtime.answer = answers;
         staged.clear();
-        assertThat(folder.exec(turn, turn.expiresAt(), documents(), "true", null)
+        assertThat(folder.exec(turn, DEADLINE, documents(), "true", null)
                         .path("ok")
                         .asBoolean())
                 .isTrue();
@@ -424,8 +420,8 @@ class TurnContextFolderTest extends BaseUnitTest {
     @Test
     void shouldRemoveTheSandboxWhenTheCancellationOfATimedOutCommandFails() {
         sandboxAnswers("0 0 0 0\n");
-        TurnJwt turn = turn(Duration.ofMinutes(5));
-        folder.read(turn, turn.expiresAt(), documents(), "INDEX.md", null, null);
+        TurnAttempt turn = turn();
+        folder.read(turn, DEADLINE, documents(), "INDEX.md", null, null);
         var answers = runtime.answer;
         runtime.answer = command -> {
             if (command.argv().get(2).equals(TurnContextFolder.EXEC_SCRIPT)) {
@@ -436,14 +432,14 @@ class TurnContextFolderTest extends BaseUnitTest {
             return answers.apply(command);
         };
 
-        ObjectNode failed = folder.exec(turn, turn.expiresAt(), documents(), "sleep 100", 1000);
+        ObjectNode failed = folder.exec(turn, DEADLINE, documents(), "sleep 100", 1000);
 
         assertThat(failed.path("error").asString()).isEqualTo("UNAVAILABLE");
         assertThat(runtime.cancelled).as("no cancellation was confirmed").isEmpty();
         await().atMost(Duration.ofSeconds(5)).until(() -> runtime.removed.contains("container-1"));
         runtime.answer = answers;
         staged.clear();
-        assertThat(folder.exec(turn, turn.expiresAt(), documents(), "true", null)
+        assertThat(folder.exec(turn, DEADLINE, documents(), "true", null)
                         .path("ok")
                         .asBoolean())
                 .isTrue();
@@ -458,8 +454,8 @@ class TurnContextFolderTest extends BaseUnitTest {
         sandboxAnswers("0 0 0 0\n");
         Path checkout = Files.createDirectories(temp.resolve("checkout"));
         beans.registerSingleton("loader", new Loader(checkout));
-        TurnJwt turn = turn(Duration.ofMinutes(5));
-        folder.read(turn, turn.expiresAt(), documents(), "INDEX.md", null, null);
+        TurnAttempt turn = turn();
+        folder.read(turn, DEADLINE, documents(), "INDEX.md", null, null);
         CountDownLatch commandRuns = new CountDownLatch(1);
         CountDownLatch commandEnds = new CountDownLatch(1);
         var answers = runtime.answer;
@@ -471,11 +467,11 @@ class TurnContextFolderTest extends BaseUnitTest {
             return answers.apply(command);
         };
         CompletableFuture<ObjectNode> running =
-                CompletableFuture.supplyAsync(() -> folder.exec(turn, turn.expiresAt(), documents(), "git log", null));
+                CompletableFuture.supplyAsync(() -> folder.exec(turn, DEADLINE, documents(), "git log", null));
         commandRuns.await();
 
         CompletableFuture<ObjectNode> loading = CompletableFuture.supplyAsync(
-                () -> folder.load(turn, turn.expiresAt(), documents(), "repos/github.com/acme/api"));
+                () -> folder.load(turn, DEADLINE, documents(), "repos/github.com/acme/api"));
         Thread.sleep(300);
         assertThat(runtime.stagings)
                 .as("the load waits for the command")
@@ -497,8 +493,8 @@ class TurnContextFolderTest extends BaseUnitTest {
                 return super.load(workspaceId, accountId, path, abandoned);
             }
         });
-        TurnJwt turn = turn(Duration.ofMinutes(5));
-        folder.read(turn, turn.expiresAt(), documents(), "INDEX.md", null, null);
+        TurnAttempt turn = turn();
+        folder.read(turn, DEADLINE, documents(), "INDEX.md", null, null);
 
         ObjectNode ended = folder.load(turn, NOW.plusMillis(300), documents(), "repos/github.com/acme/api");
 
@@ -528,7 +524,7 @@ class TurnContextFolderTest extends BaseUnitTest {
                 return summarised(super.load(workspaceId, accountId, path, abandoned));
             }
         });
-        TurnJwt turn = turn(Duration.ofMinutes(5));
+        TurnAttempt turn = turn();
         TurnSandboxes.Sandbox sandbox = sandboxes.acquire(new TurnSandboxes.Attempt(turn.turnId(), turn.attempt()), 1L);
         var answers = runtime.answer;
         List<Boolean> lockedDuringSummary = new ArrayList<>();
@@ -540,7 +536,7 @@ class TurnContextFolderTest extends BaseUnitTest {
             return answers.apply(command);
         };
 
-        ObjectNode loaded = folder.load(turn, turn.expiresAt(), documents(), "repos/github.com/acme/api@pull/1");
+        ObjectNode loaded = folder.load(turn, DEADLINE, documents(), "repos/github.com/acme/api@pull/1");
 
         assertThat(lockedDuringSummary)
                 .as("no other load stages between the staging and its summary")
@@ -550,7 +546,7 @@ class TurnContextFolderTest extends BaseUnitTest {
                 .as("a summary that timed out is left out")
                 .isEqualTo("Loaded.");
         assertThat(runtime.cancelled).as("its processes end").containsExactly(sandbox.containerId());
-        assertThat(folder.exec(turn, turn.expiresAt(), documents(), "true", null)
+        assertThat(folder.exec(turn, DEADLINE, documents(), "true", null)
                         .path("ok")
                         .asBoolean())
                 .as("the sandbox stays in use")
@@ -561,8 +557,8 @@ class TurnContextFolderTest extends BaseUnitTest {
     @Test
     void shouldStopWaitingForTheFolderAtTheTurnsDeadline() throws Exception {
         sandboxAnswers("0 0 0 0\n");
-        TurnJwt turn = turn(Duration.ofMinutes(5));
-        folder.exec(turn, turn.expiresAt(), documents(), "true", null);
+        TurnAttempt turn = turn();
+        folder.exec(turn, DEADLINE, documents(), "true", null);
         TurnSandboxes.Sandbox sandbox = sandboxes.acquire(new TurnSandboxes.Attempt(turn.turnId(), turn.attempt()), 1L);
         CountDownLatch held = new CountDownLatch(1);
         CountDownLatch done = new CountDownLatch(1);

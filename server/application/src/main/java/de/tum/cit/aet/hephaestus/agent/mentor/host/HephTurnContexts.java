@@ -4,6 +4,7 @@ import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.Scheduler;
 import de.tum.cit.aet.hephaestus.agent.context.WorkspaceContextBuilder;
+import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnAttempt;
 import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnContextFolder;
 import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnContextGenerations;
 import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnDocuments;
@@ -11,7 +12,6 @@ import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnAdmission;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnEvidence;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountDirectory;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
-import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.TurnJwt;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.evidence.capture.MentorContextRequest;
 import de.tum.cit.aet.hephaestus.mentor.MentorContextPathBuilder;
@@ -120,7 +120,7 @@ public class HephTurnContexts {
     }
 
     private record Attempt(UUID turnId, int attempt) {
-        static Attempt of(TurnJwt turn) {
+        static Attempt of(TurnAttempt turn) {
             return new Attempt(turn.turnId(), turn.attempt());
         }
     }
@@ -150,7 +150,7 @@ public class HephTurnContexts {
             String situation,
             boolean contextFolder) {}
 
-    public Context context(TurnJwt turn) {
+    public Context context(TurnAttempt turn) {
         ZoneId zone = zone(turn);
         MentorContextPathBuilder.TurnContext path = paths.forTurn(turn.workspaceId(), turn.turnId(), zone);
         MentorTurnAdmission admitted = MentorTurnAdmission.read(
@@ -178,7 +178,7 @@ public class HephTurnContexts {
     }
 
     /** The turn attempt's context documents, built once per attempt; the turn sandbox stages them. */
-    public Map<String, byte[]> documents(TurnJwt turn) {
+    public Map<String, byte[]> documents(TurnAttempt turn) {
         Build cached = inputs.getIfPresent(Attempt.of(turn));
         if (cached != null && cached.generation() == generations.current(turn.workspaceId())) {
             return cached.documents();
@@ -190,7 +190,7 @@ public class HephTurnContexts {
      * A build of the attempt's documents under the workspace's current context generation. A build that a change
      * overtook is dropped and made again: it may hold data that is no longer allowed.
      */
-    private Map<String, byte[]> current(TurnJwt turn, UUID questionEntryId, ZoneId zone) {
+    private Map<String, byte[]> current(TurnAttempt turn, UUID questionEntryId, ZoneId zone) {
         for (int tries = 0; tries < MAX_BUILDS; tries++) {
             long generation = generations.current(turn.workspaceId());
             Map<String, byte[]> built = build(turn, questionEntryId, zone);
@@ -206,7 +206,7 @@ public class HephTurnContexts {
      * The attempt's documents as its context folder stages them: pretty-printed, so that {@code read} pages them by
      * line, with item documents read on demand from their owning source.
      */
-    public TurnDocuments folderDocuments(TurnJwt turn) {
+    public TurnDocuments folderDocuments(TurnAttempt turn) {
         return new TurnDocuments() {
             @Override
             public Map<String, byte[]> built() {
@@ -239,14 +239,14 @@ public class HephTurnContexts {
     }
 
     /** Whether the turn may link this result: one of the developer's own, readable for conversational mentoring. */
-    public boolean admitsResult(TurnJwt turn, UUID resultId) {
+    public boolean admitsResult(TurnAttempt turn, UUID resultId) {
         return results.find(turn.workspaceId(), resultId, turn.accountId(), SourceUsePurpose.CONVERSATIONAL_MENTORING)
                 .filter(entry -> Long.valueOf(turn.accountId()).equals(entry.developerAccountId()))
                 .isPresent();
     }
 
     /** Whether the turn may link this problem. A problem is shown under its result, which decides for both. */
-    public boolean admitsProblem(TurnJwt turn, UUID problemId) {
+    public boolean admitsProblem(TurnAttempt turn, UUID problemId) {
         return results
                 .forDeveloper(
                         turn.workspaceId(), turn.accountId(), clock.instant().minus(PROBLEM_LOOKBACK), PROBLEM_RESULTS)
@@ -265,7 +265,7 @@ public class HephTurnContexts {
      *
      * @return whether the attempt holds the claim
      */
-    public boolean showFeedback(TurnJwt turn, UUID feedbackId) {
+    public boolean showFeedback(TurnAttempt turn, UUID feedbackId) {
         return feedback.claimConversationCopy(turn.workspaceId(), feedbackId, turn.turnId(), turn.attempt())
                 .isPresent();
     }
@@ -278,7 +278,7 @@ public class HephTurnContexts {
     public record SearchHit(
             UUID entryId, String branch, String createdAt, String surface, String kind, String excerpt) {}
 
-    public List<SearchHit> search(TurnJwt turn, MentorEntryService.SearchQuery query) {
+    public List<SearchHit> search(TurnAttempt turn, MentorEntryService.SearchQuery query) {
         UUID main =
                 conversations.require(turn.workspaceId(), turn.conversationId()).rootId();
         ZoneId zone = zone(turn);
@@ -296,16 +296,16 @@ public class HephTurnContexts {
     }
 
     /** Drops what the turn attempt read. */
-    public void forget(TurnJwt turn) {
+    public void forget(TurnAttempt turn) {
         inputs.invalidate(Attempt.of(turn));
     }
 
-    private ZoneId zone(TurnJwt turn) {
+    private ZoneId zone(TurnAttempt turn) {
         return accounts.timeZone(turn.accountId()).orElse(AccountDirectory.DEFAULT_TIME_ZONE);
     }
 
     /** The turn's context documents, each time in them in the developer's zone ({@link ContextTimes}). */
-    private Map<String, byte[]> build(TurnJwt turn, UUID questionEntryId, ZoneId zone) {
+    private Map<String, byte[]> build(TurnAttempt turn, UUID questionEntryId, ZoneId zone) {
         Map<String, byte[]> built = contextBuilder.build(
                 new MentorContextRequest(turn.workspaceId(), turn.accountId(), turn.conversationId(), questionEntryId));
         Map<String, byte[]> local = new LinkedHashMap<>();

@@ -133,6 +133,7 @@ The same name is the source capture code that causes it.
 | **Job**                        | Execution of a review in a sandbox, with attempts and costs.                                              | review_job                     |
 | **Agent**                      | The sandboxed runtime that executes a review, or the Heph host.                                           | agent runtime                  |
 | **Attempt**                    | One claimed execution of a job, protected by its execution fence.                                         | attempt                        |
+| **Attempt token**              | The signed credential of one attempt, of a review or of a Heph turn. It names the attempt and its workspace, and nothing else. | AttemptJwt |
 | **Lease**                      | A running attempt's claim to its worker, until a time on the database clock. The claim sets it, and the worker's heartbeat renews it. When it expires, the server recovers the attempt. | review_job.leased_until |
 | **Model assignment**           | A workspace's choice of a model for an execution purpose and AI tier.                                     | workspace model configuration  |
 | **Model for practice scripts** | A decision, embedding or reranking model that a script can call through its host.                         | script model purposes          |

@@ -5,6 +5,7 @@ import static org.awaitility.Awaitility.await;
 import static org.mockito.Mockito.mock;
 
 import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.FakeExecSandboxes;
+import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnAttempt;
 import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnSandboxes;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnCompletion;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnStarts;
@@ -14,7 +15,7 @@ import de.tum.cit.aet.hephaestus.agent.proxy.ProxyRouting;
 import de.tum.cit.aet.hephaestus.agent.runtime.worker.testing.WorkerPropertiesFixtures;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.HostSandbox;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
-import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.TurnJwt;
+import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.AttemptJwt;
 import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtIssuer;
 import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtVerifier;
 import de.tum.cit.aet.hephaestus.integration.core.sync.MutableClock;
@@ -257,8 +258,14 @@ class HephTurnDispatchIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 .turn();
     }
 
-    private TurnJwt credential(JsonNode start) {
-        return (TurnJwt) verifier.verify(start.path("token").asString());
+    /** The started turn's attempt: what its token names, with the conversation and account of the turn's row. */
+    private TurnAttempt credential(JsonNode start) {
+        var token = (AttemptJwt) verifier.verify(start.path("token").asString());
+        assertThat(token.kind()).isEqualTo(AttemptJwt.Kind.TURN);
+        assertThat(token.id().toString()).isEqualTo(start.path("turnId").asString());
+        assertThat(token.workDeadline()).isNull();
+        return new TurnAttempt(
+                token.id(), token.workspaceId(), conversation.getAccountId(), conversation.getId(), token.attempt());
     }
 
     private MentorTurn row(MentorTurn turn) {
@@ -298,10 +305,9 @@ class HephTurnDispatchIntegrationTest extends AbstractWorkspaceIntegrationTest {
         MentorTurn asked = ask("Is the deployment ready?");
 
         JsonNode start = host.next("start");
-        TurnJwt turn = credential(start);
+        TurnAttempt turn = credential(start);
         holdASandbox(asked, 1);
         assertThat(start.path("turnId").asString()).isEqualTo(asked.getId().toString());
-        assertThat(turn.conversationId()).isEqualTo(conversation.getId());
         assertThat(controller
                         .context(asked.getId(), HephTurnFixtures.authenticated(turn))
                         .prompt())
@@ -367,7 +373,7 @@ class HephTurnDispatchIntegrationTest extends AbstractWorkspaceIntegrationTest {
     @Test
     void shouldStoreAChangedPartialAnswerInThreeStatementsWithoutAFlushWaitAndAnUnchangedOneInNone() throws Exception {
         MentorTurn asked = ask("How do I pin the image?");
-        TurnJwt turn = credential(host.next("start"));
+        TurnAttempt turn = credential(host.next("start"));
         JsonNode writing = mapper.readTree("""
                 {"activity":"writing","tool":null,"messages":[{"content":[{"type":"text","text":"Pin it"}]}]}""");
         JsonNode longer = mapper.readTree("""
@@ -394,7 +400,7 @@ class HephTurnDispatchIntegrationTest extends AbstractWorkspaceIntegrationTest {
     @Test
     void shouldBillTheLastModelCallWhenTheHostEndsTheTurnBeforeTheProxyRecordedIt() throws Exception {
         MentorTurn asked = ask("Is the deployment ready?");
-        TurnJwt turn = credential(host.next("start"));
+        TurnAttempt turn = credential(host.next("start"));
         ProxyCallsInFlight.Call lastCall = callsInFlight.begin(new ProxyRouting.BilledAttempt(
                 UsageSourceType.MENTOR_TURN, asked.getId(), turn.attempt(), BigDecimal.ZERO, WORKER));
 
@@ -420,7 +426,7 @@ class HephTurnDispatchIntegrationTest extends AbstractWorkspaceIntegrationTest {
     @Test
     void shouldEndAStoppedTurnAtOnceWhenItsModelCallStillWaitsForTheProvider() throws Exception {
         MentorTurn asked = ask("Walk me through the release.");
-        TurnJwt turn = credential(host.next("start"));
+        TurnAttempt turn = credential(host.next("start"));
         // A call to a provider that sends nothing: it ends only when the attempt's end cancels it.
         ProxyCallsInFlight.Call silent = callsInFlight.begin(new ProxyRouting.BilledAttempt(
                 UsageSourceType.MENTOR_TURN, asked.getId(), turn.attempt(), BigDecimal.ZERO, WORKER));
@@ -458,7 +464,7 @@ class HephTurnDispatchIntegrationTest extends AbstractWorkspaceIntegrationTest {
     @Test
     void shouldTellTheHostToStopAndKeepTheCutOffAnswerWhenTheDeveloperStopsTheTurn() throws Exception {
         MentorTurn asked = ask("Walk me through the release.");
-        TurnJwt turn = credential(host.next("start"));
+        TurnAttempt turn = credential(host.next("start"));
 
         turns.stop(workspace.getId(), asked.getId());
 
@@ -637,7 +643,7 @@ class HephTurnDispatchIntegrationTest extends AbstractWorkspaceIntegrationTest {
     @Test
     void shouldStopTheTurnAtItsDeadlineAndFailItWhenTheHostDoesNotEndItWithinTheGrace() throws Exception {
         MentorTurn asked = ask("Summarise every pull request.");
-        TurnJwt turn = credential(host.next("start"));
+        TurnAttempt turn = credential(host.next("start"));
         ProxyCallsInFlight.Call silent = silentCall(asked, turn.attempt());
         Duration timeout =
                 Duration.ofSeconds(LlmCatalogTestFixtures.admittedMentorConfig().timeoutSeconds());
@@ -661,7 +667,7 @@ class HephTurnDispatchIntegrationTest extends AbstractWorkspaceIntegrationTest {
     @Test
     void shouldEndTheTurnStoppedWhenTheHostDoesNotEndItWithinTheGraceAfterTheDeveloperStoppedIt() throws Exception {
         MentorTurn asked = ask("Walk me through the release.");
-        TurnJwt turn = credential(host.next("start"));
+        TurnAttempt turn = credential(host.next("start"));
         ProxyCallsInFlight.Call silent = silentCall(asked, turn.attempt());
         turns.stop(workspace.getId(), asked.getId());
         assertThat(target(host.next("stop"))).isEqualTo(asked.getId() + "#1 developer");

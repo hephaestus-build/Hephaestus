@@ -62,6 +62,6 @@ public class ResultAdmissionController {
         var workerId = identity.workerId();
         if (workerId == null)
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Review worker credential required");
-        return new ResultAdmissionService.AdmissionIdentity(job.jobId(), job.workspaceId(), job.attempt(), workerId);
+        return new ResultAdmissionService.AdmissionIdentity(job.id(), job.workspaceId(), job.attempt(), workerId);
     }
 }

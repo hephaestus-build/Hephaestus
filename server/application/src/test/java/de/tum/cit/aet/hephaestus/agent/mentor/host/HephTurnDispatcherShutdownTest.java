@@ -247,7 +247,6 @@ class HephTurnDispatcherShutdownTest extends BaseUnitTest {
         when(turn.getId()).thenReturn(turnId);
         when(turn.getWorkspaceId()).thenReturn(7L);
         when(turn.getAttempt()).thenReturn(1);
-        when(turn.getConversationId()).thenReturn(UUID.randomUUID());
         when(turn.getStatus()).thenReturn(MentorTurn.Status.RUNNING);
         MentorTurnService turns = mock(MentorTurnService.class);
         when(turns.require(7L, turnId)).thenReturn(turn);
@@ -285,7 +284,7 @@ class HephTurnDispatcherShutdownTest extends BaseUnitTest {
             String start =
                     Objects.requireNonNull(frames.poll(10, TimeUnit.SECONDS), "the claimed turn starts on the host");
             assertThat(new JsonMapper().readTree(start).path("type").asString()).isEqualTo("start");
-            assertThat(dispatcher.runs(turnId, 1)).isTrue();
+            assertThat(dispatcher.running(turnId, 1)).isPresent();
             assertThat(hephWaits.getCount()).as("the drain waits for the turn").isEqualTo(1);
 
             dispatcher.ended(turnId, 1);

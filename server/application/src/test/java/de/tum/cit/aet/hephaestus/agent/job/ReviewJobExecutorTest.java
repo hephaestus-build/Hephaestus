@@ -55,6 +55,7 @@ import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetBlockReason;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetDecision;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetService;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder;
+import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.AttemptJwt;
 import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtIssuer;
 import de.tum.cit.aet.hephaestus.evidence.AppliesWhenCheck;
 import de.tum.cit.aet.hephaestus.evidence.AutomatedReviewReadinessDecision;
@@ -354,7 +355,8 @@ class ReviewJobExecutorTest extends BaseUnitTest {
         when(budgets.decide(job.getWorkspaceId())).thenReturn(LlmBudgetDecision.ALLOWED);
         when(assignments.load(job)).thenReturn(List.of(RuntimeReviewTestData.assignment(null, null)));
         when(handler.prepareInputs(job)).thenReturn(new PreparedJobInputs(Map.of(), List.of(), List.of(), null, null));
-        when(jwtIssuer.issueForJobUntil(eq(job.getId()), eq(job.getWorkspaceId()), anyInt(), any(), any()))
+        when(jwtIssuer.issueForAttempt(
+                        eq(AttemptJwt.Kind.REVIEW), eq(job.getId()), eq(job.getWorkspaceId()), anyInt(), any(), any()))
                 .thenReturn("issued-job-token");
         when(practiceAgent.buildSandboxSpec(any()))
                 .thenReturn(new PracticeSandboxSpec(
@@ -634,7 +636,8 @@ class ReviewJobExecutorTest extends BaseUnitTest {
         when(budgets.decide(job.getWorkspaceId())).thenReturn(LlmBudgetDecision.ALLOWED);
         when(assignments.load(job)).thenReturn(List.of(RuntimeReviewTestData.assignment(null, null)));
         when(handler.prepareInputs(job)).thenReturn(new PreparedJobInputs(Map.of(), List.of(), List.of(), null, null));
-        when(jwtIssuer.issueForJobUntil(eq(job.getId()), eq(job.getWorkspaceId()), eq(2), any(), any()))
+        when(jwtIssuer.issueForAttempt(
+                        eq(AttemptJwt.Kind.REVIEW), eq(job.getId()), eq(job.getWorkspaceId()), eq(2), any(), any()))
                 .thenReturn("issued-job-token");
         when(practiceAgent.buildSandboxSpec(any()))
                 .thenReturn(new PracticeSandboxSpec(
@@ -659,7 +662,8 @@ class ReviewJobExecutorTest extends BaseUnitTest {
         var issuedDeadline = ArgumentCaptor.forClass(Instant.class);
         var issuedExpiry = ArgumentCaptor.forClass(Instant.class);
         verify(jwtIssuer)
-                .issueForJobUntil(
+                .issueForAttempt(
+                        eq(AttemptJwt.Kind.REVIEW),
                         eq(job.getId()),
                         eq(job.getWorkspaceId()),
                         eq(2),

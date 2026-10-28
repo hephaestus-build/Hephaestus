@@ -1,9 +1,9 @@
 package de.tum.cit.aet.hephaestus.agent.mentor.host;
 
+import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnAttempt;
 import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnContextFolder;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
-import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.TurnJwt;
 import io.swagger.v3.oas.annotations.Hidden;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -54,7 +54,7 @@ public class HephTurnSandboxController {
     @PostMapping("/read")
     public ObjectNode read(
             @PathVariable UUID turnId, @Valid @RequestBody ReadRequest request, Authentication authentication) {
-        TurnJwt turn = HephTurnController.turn(dispatcher, turnId, authentication);
+        TurnAttempt turn = HephTurnController.turn(dispatcher, turnId, authentication);
         return HephToolCalls.logged(
                 turn,
                 "read",
@@ -75,7 +75,7 @@ public class HephTurnSandboxController {
     @PostMapping("/exec")
     public ObjectNode exec(
             @PathVariable UUID turnId, @Valid @RequestBody ExecRequest request, Authentication authentication) {
-        TurnJwt turn = HephTurnController.turn(dispatcher, turnId, authentication);
+        TurnAttempt turn = HephTurnController.turn(dispatcher, turnId, authentication);
         return HephToolCalls.logged(
                 turn,
                 "exec",
@@ -93,7 +93,7 @@ public class HephTurnSandboxController {
     @PostMapping("/load")
     public ObjectNode load(
             @PathVariable UUID turnId, @Valid @RequestBody LoadRequest request, Authentication authentication) {
-        TurnJwt turn = HephTurnController.turn(dispatcher, turnId, authentication);
+        TurnAttempt turn = HephTurnController.turn(dispatcher, turnId, authentication);
         return HephToolCalls.logged(
                 turn,
                 "load",

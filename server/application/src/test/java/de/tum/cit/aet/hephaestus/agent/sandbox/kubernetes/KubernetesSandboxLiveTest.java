@@ -11,6 +11,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayProperties;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
+import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnAttempt;
 import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnContextFolder;
 import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnDocuments;
 import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnSandboxes;
@@ -34,7 +35,6 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxInfrastructureExceptio
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxManager;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxResult;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxSpec;
-import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.TurnJwt;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ContextLoader;
 import io.fabric8.kubernetes.api.model.Container;
 import io.fabric8.kubernetes.api.model.ContainerStatus;
@@ -856,22 +856,14 @@ class KubernetesSandboxLiveTest {
                     sandboxes,
                     new DefaultListableBeanFactory().getBeanProvider(ContextLoader.class),
                     Clock.systemUTC());
-            TurnJwt jwt = new TurnJwt(
-                    UUID.randomUUID(),
-                    1L,
-                    2L,
-                    UUID.randomUUID(),
-                    1,
-                    Set.of(),
-                    "jti",
-                    Instant.now(),
-                    Instant.now().plus(Duration.ofMinutes(10)));
-            var attempt = new TurnSandboxes.Attempt(jwt.turnId(), jwt.attempt());
+            TurnAttempt turn = new TurnAttempt(UUID.randomUUID(), 1L, 2L, UUID.randomUUID(), 1);
+            Instant deadline = Instant.now().plus(Duration.ofMinutes(5));
+            var attempt = new TurnSandboxes.Attempt(turn.turnId(), turn.attempt());
 
-            ObjectNode ready = folder.exec(jwt, jwt.expiresAt(), documents(), "echo ready", null);
+            ObjectNode ready = folder.exec(turn, deadline, documents(), "echo ready", null);
             assertThat(ready.path("exitCode").asInt()).as(ready.toString()).isZero();
             assertThat(ready.path("output").asString()).isEqualTo("ready\n");
-            String first = sandboxes.acquire(attempt, jwt.workspaceId()).containerId();
+            String first = sandboxes.acquire(attempt, turn.workspaceId()).containerId();
             track(first);
             Pod lost = present(first);
             assertThat(worker.createdBySelf(lost.getMetadata().getLabels()))
@@ -885,16 +877,16 @@ class KubernetesSandboxLiveTest {
                     .delete();
             awaitGone(first, lostUid);
 
-            ObjectNode failed = folder.exec(jwt, jwt.expiresAt(), documents(), "echo lost", null);
+            ObjectNode failed = folder.exec(turn, deadline, documents(), "echo lost", null);
             assertThat(failed.path("ok").asBoolean()).as(failed.toString()).isFalse();
             assertThat(failed.path("error").asString()).isEqualTo("UNAVAILABLE");
 
             long replaced = System.nanoTime();
-            ObjectNode again = folder.exec(jwt, jwt.expiresAt(), documents(), "echo again", null);
+            ObjectNode again = folder.exec(turn, deadline, documents(), "echo again", null);
             log.info("TIMING context folder call on a new sandbox (create + stage + exec): {} ms", millis(replaced));
             assertThat(again.path("exitCode").asInt()).as(again.toString()).isZero();
             assertThat(again.path("output").asString()).isEqualTo("again\n");
-            String second = sandboxes.acquire(attempt, jwt.workspaceId()).containerId();
+            String second = sandboxes.acquire(attempt, turn.workspaceId()).containerId();
             track(second);
             assertThat(second).as("the next call has a sandbox of its own").isNotEqualTo(first);
             Pod replacement = present(second);
@@ -907,7 +899,7 @@ class KubernetesSandboxLiveTest {
                     .as("the new sandbox has the documents staged again")
                     .isEqualTo(USER_DOCUMENT);
 
-            sandboxes.release(jwt.turnId(), jwt.attempt());
+            sandboxes.release(turn.turnId(), turn.attempt());
             awaitGone(second, replacement.getMetadata().getUid());
         } finally {
             sandboxes.close();

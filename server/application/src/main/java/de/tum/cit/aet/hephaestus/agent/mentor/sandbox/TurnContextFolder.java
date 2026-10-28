@@ -4,7 +4,6 @@ import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.ExecSandboxes;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxException;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
-import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.TurnJwt;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ContextLoadException;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ContextLoader;
 import java.io.ByteArrayInputStream;
@@ -125,7 +124,7 @@ public class TurnContextFolder {
     }
 
     /** Each loader's line for the turn's situation, so the model can load in its first round; empty when none. */
-    public String situation(TurnJwt turn) {
+    public String situation(TurnAttempt turn) {
         if (!available()) {
             return "";
         }
@@ -157,7 +156,7 @@ public class TurnContextFolder {
      * @param deadline when the attempt's turn ends, as the dispatcher holds it
      */
     public ObjectNode read(
-            TurnJwt turn,
+            TurnAttempt turn,
             Instant deadline,
             TurnDocuments documents,
             String path,
@@ -195,7 +194,7 @@ public class TurnContextFolder {
 
     /** Pi's {@code bash}: one command in the sandbox, bounded by a minute and by the turn's deadline. */
     public ObjectNode exec(
-            TurnJwt turn, Instant deadline, TurnDocuments documents, String command, @Nullable Integer timeoutMs) {
+            TurnAttempt turn, Instant deadline, TurnDocuments documents, String command, @Nullable Integer timeoutMs) {
         return inFolder(turn, deadline, documents, sandbox -> {
             Duration bound = timeoutMs == null ? MAX_COMMAND_TIME : Duration.ofMillis(Math.max(1, timeoutMs));
             int number = sandbox.commands.incrementAndGet();
@@ -261,7 +260,7 @@ public class TurnContextFolder {
     }
 
     /** {@code load_context}: stages one item through the loader that owns its path. */
-    public ObjectNode load(TurnJwt turn, Instant deadline, TurnDocuments documents, String path) {
+    public ObjectNode load(TurnAttempt turn, Instant deadline, TurnDocuments documents, String path) {
         String requested = path.strip();
         Optional<ContextLoader> owner = loaders.orderedStream()
                 .filter(loader -> requested.startsWith(loader.prefix()))
@@ -323,7 +322,7 @@ public class TurnContextFolder {
         void run() throws IOException;
     }
 
-    private ObjectNode inFolder(TurnJwt turn, Instant deadline, TurnDocuments documents, InFolder call) {
+    private ObjectNode inFolder(TurnAttempt turn, Instant deadline, TurnDocuments documents, InFolder call) {
         TurnSandboxes.Sandbox sandbox;
         try {
             sandbox = folder(turn, deadline, documents);
@@ -390,7 +389,7 @@ public class TurnContextFolder {
      * A step that changes the folder: it runs alone. When it fails, the folder may hold part of a change, so the
      * sandbox is removed; the attempt's next call gets a new one and stages again.
      */
-    private void changing(TurnJwt turn, TurnSandboxes.Sandbox sandbox, Instant deadline, Change step)
+    private void changing(TurnAttempt turn, TurnSandboxes.Sandbox sandbox, Instant deadline, Change step)
             throws IOException {
         lock(sandbox.lock.writeLock(), deadline);
         try {
@@ -421,7 +420,8 @@ public class TurnContextFolder {
     private record Ran(ExecSandboxes.@Nullable Execution run) {}
 
     /** The attempt's sandbox, staged with {@code INDEX.md}, {@code FIELDS.md} and the context documents on first use. */
-    private TurnSandboxes.Sandbox folder(TurnJwt turn, Instant deadline, TurnDocuments documents) throws IOException {
+    private TurnSandboxes.Sandbox folder(TurnAttempt turn, Instant deadline, TurnDocuments documents)
+            throws IOException {
         long started = System.nanoTime();
         TurnSandboxes.Sandbox sandbox = sandboxes.acquire(attempt(turn), turn.workspaceId());
         if (sandbox.staged) {
@@ -460,7 +460,7 @@ public class TurnContextFolder {
         return sandbox;
     }
 
-    private static String section(ContextLoader loader, TurnJwt turn) {
+    private static String section(ContextLoader loader, TurnAttempt turn) {
         try {
             return loader.index(turn.workspaceId(), turn.accountId());
         } catch (RuntimeException e) {
@@ -585,7 +585,7 @@ public class TurnContextFolder {
      * interruption of its own, so its permit is what keeps abandoned fetches from piling up.
      */
     private ContextLoader.Loaded prepare(
-            TurnJwt turn, Instant deadline, ContextLoader loader, String path, BooleanSupplier abandoned) {
+            TurnAttempt turn, Instant deadline, ContextLoader loader, String path, BooleanSupplier abandoned) {
         try {
             if (!loading.tryAcquire(Math.max(0, left(deadline).toMillis()), TimeUnit.MILLISECONDS)) {
                 throw new Abandoned(new TimeoutException("No load permit before the deadline"));
@@ -626,7 +626,7 @@ public class TurnContextFolder {
         return LOADS_AT_ONCE - loading.availablePermits();
     }
 
-    private static TurnSandboxes.Attempt attempt(TurnJwt turn) {
+    private static TurnSandboxes.Attempt attempt(TurnAttempt turn) {
         return new TurnSandboxes.Attempt(turn.turnId(), turn.attempt());
     }
 

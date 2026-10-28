@@ -11,7 +11,6 @@ import de.tum.cit.aet.hephaestus.agent.sandbox.docker.DockerClientOperations;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.DockerExecSandboxes;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.DockerSandboxProperties;
 import de.tum.cit.aet.hephaestus.agent.sandbox.docker.SandboxCreator;
-import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.TurnJwt;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ContextLoader;
 import de.tum.cit.aet.hephaestus.testconfig.LiveDockerTest;
 import java.io.IOException;
@@ -32,7 +31,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.BooleanSupplier;
@@ -71,7 +69,8 @@ class TurnSandboxLiveTest {
     private DockerExecSandboxes runtime;
     private TurnSandboxes sandboxes;
     private TurnContextFolder folder;
-    private TurnJwt turn;
+    private TurnAttempt turn;
+    private Instant deadline;
     private Path repository;
 
     @BeforeAll
@@ -103,16 +102,8 @@ class TurnSandboxLiveTest {
         var beans = new DefaultListableBeanFactory();
         beans.registerSingleton("loader", new FixedLoader(repository));
         folder = new TurnContextFolder(sandboxes, beans.getBeanProvider(ContextLoader.class), Clock.systemUTC());
-        turn = new TurnJwt(
-                UUID.randomUUID(),
-                1L,
-                2L,
-                UUID.randomUUID(),
-                1,
-                Set.of(),
-                "jti",
-                Instant.now(),
-                Instant.now().plus(Duration.ofMinutes(5)));
+        turn = new TurnAttempt(UUID.randomUUID(), 1L, 2L, UUID.randomUUID(), 1);
+        deadline = Instant.now().plus(Duration.ofMinutes(5));
     }
 
     @AfterEach
@@ -133,7 +124,7 @@ class TurnSandboxLiveTest {
         assertThat(sandboxes.pooled()).isOne();
 
         long first = System.nanoTime();
-        ObjectNode index = folder.read(turn, turn.expiresAt(), documents(), "INDEX.md", null, null);
+        ObjectNode index = folder.read(turn, deadline, documents(), "INDEX.md", null, null);
         log.info("TIMING first call (acquire + stage + read): {} ms", millis(first));
         assertThat(index.path("ok").asBoolean()).as(index.toString()).isTrue();
         assertThat(index.path("text").asString()).contains("# Context folder", "inputs/context/activity.json");
@@ -141,25 +132,25 @@ class TurnSandboxLiveTest {
         List<Long> reads = new ArrayList<>();
         for (int run = 0; run < 10; run++) {
             long started = System.nanoTime();
-            ObjectNode page = folder.read(turn, turn.expiresAt(), documents(), "inputs/context/activity.json", 10, 5);
+            ObjectNode page = folder.read(turn, deadline, documents(), "inputs/context/activity.json", 10, 5);
             reads.add(millis(started));
             assertThat(page.path("text").asString()).contains("[3988 more lines in file. Use offset=15 to continue.]");
         }
         log.info("TIMING read p50={} ms p95={} ms", percentile(reads, 50), percentile(reads, 95));
 
-        ObjectNode item = folder.read(turn, turn.expiresAt(), documents(), "inputs/context/issue/7.json", null, null);
+        ObjectNode item = folder.read(turn, deadline, documents(), "inputs/context/issue/7.json", null, null);
         assertThat(item.path("text").asString()).contains("\"issue\" : 7");
-        assertThat(folder.read(turn, turn.expiresAt(), documents(), "../etc/passwd", null, null)
+        assertThat(folder.read(turn, deadline, documents(), "../etc/passwd", null, null)
                         .path("error")
                         .asString())
                 .isEqualTo("NOT_FOUND");
-        assertThat(folder.read(turn, turn.expiresAt(), documents(), "inputs", null, null)
+        assertThat(folder.read(turn, deadline, documents(), "inputs", null, null)
                         .path("error")
                         .asString())
                 .isEqualTo("IS_DIRECTORY");
 
         long loadStarted = System.nanoTime();
-        ObjectNode loaded = folder.load(turn, turn.expiresAt(), documents(), "repos/github.com/acme/api");
+        ObjectNode loaded = folder.load(turn, deadline, documents(), "repos/github.com/acme/api");
         log.info("TIMING load (stage of a repository with its history): {} ms", millis(loadStarted));
         assertThat(loaded.path("ok").asBoolean()).as(loaded.toString()).isTrue();
         assertThat(loaded.path("resolved").path("cite").asString()).startsWith("@");
@@ -168,8 +159,8 @@ class TurnSandboxLiveTest {
         ObjectNode history = null;
         for (int run = 0; run < 10; run++) {
             long started = System.nanoTime();
-            history = folder.exec(
-                    turn, turn.expiresAt(), documents(), "git -C repos/github.com/acme/api log --format=%s", null);
+            history =
+                    folder.exec(turn, deadline, documents(), "git -C repos/github.com/acme/api log --format=%s", null);
             execs.add(millis(started));
         }
         log.info("TIMING exec git log p50={} ms p95={} ms", percentile(execs, 50), percentile(execs, 95));
@@ -177,56 +168,43 @@ class TurnSandboxLiveTest {
         assertThat(history.path("exitCode").asInt()).as(history.toString()).isZero();
         assertThat(history.path("output").asString()).contains("Second commit", "First commit");
 
-        assertThat(folder.exec(turn, turn.expiresAt(), documents(), "sha256sum inputs/context/user.json", null)
+        assertThat(folder.exec(turn, deadline, documents(), "sha256sum inputs/context/user.json", null)
                         .path("output")
                         .asString())
                 .as("the added document has its exact bytes")
                 .startsWith(sha256("{\n  \"counts\" : 3\n}"));
-        assertThat(folder.exec(
-                                turn,
-                                turn.expiresAt(),
-                                documents(),
-                                "sha256sum repos/github.com/acme/api/README.md",
-                                null)
+        assertThat(folder.exec(turn, deadline, documents(), "sha256sum repos/github.com/acme/api/README.md", null)
                         .path("output")
                         .asString())
                 .as("the loaded file has its exact bytes")
                 .startsWith(sha256("# API\n\nSecond line.\n"));
 
-        ObjectNode write = folder.exec(turn, turn.expiresAt(), documents(), "touch INDEX.md.new || echo refused", null);
+        ObjectNode write = folder.exec(turn, deadline, documents(), "touch INDEX.md.new || echo refused", null);
         assertThat(write.path("output").asString()).contains("refused");
         ObjectNode append = folder.exec(
-                turn,
-                turn.expiresAt(),
-                documents(),
-                "(echo x >> inputs/context/user.json) 2>/dev/null || echo refused",
-                null);
+                turn, deadline, documents(), "(echo x >> inputs/context/user.json) 2>/dev/null || echo refused", null);
         assertThat(append.path("output").asString()).contains("refused");
         ObjectNode addition = folder.exec(
-                turn,
-                turn.expiresAt(),
-                documents(),
-                "touch repos/github.com/acme/api/new 2>/dev/null || echo refused",
-                null);
+                turn, deadline, documents(), "touch repos/github.com/acme/api/new 2>/dev/null || echo refused", null);
         assertThat(addition.path("output").asString()).contains("refused");
-        ObjectNode environment = folder.exec(turn, turn.expiresAt(), documents(), "env | grep -c TOKEN || true", null);
+        ObjectNode environment = folder.exec(turn, deadline, documents(), "env | grep -c TOKEN || true", null);
         assertThat(environment.path("output").asString().strip()).isEqualTo("0");
 
-        ObjectNode many = folder.exec(turn, turn.expiresAt(), documents(), "seq 1 5000", null);
+        ObjectNode many = folder.exec(turn, deadline, documents(), "seq 1 5000", null);
         assertThat(many.path("truncated").asBoolean()).isTrue();
         String fullOutput = many.path("fullOutputPath").asString();
         assertThat(many.path("output").asString())
                 .endsWith("[Showing lines 3001-5000 of 5000. Full output: " + fullOutput + "]");
-        assertThat(folder.read(turn, turn.expiresAt(), documents(), fullOutput, 1, 2)
+        assertThat(folder.read(turn, deadline, documents(), fullOutput, 1, 2)
                         .path("text")
                         .asString())
                 .startsWith("1\n2\n");
 
         Files.delete(repository.resolve("README.md"));
         Files.writeString(repository.resolve("NOTES.md"), "notes\n");
-        ObjectNode reloaded = folder.load(turn, turn.expiresAt(), documents(), "repos/github.com/acme/api");
+        ObjectNode reloaded = folder.load(turn, deadline, documents(), "repos/github.com/acme/api");
         assertThat(reloaded.path("ok").asBoolean()).as(reloaded.toString()).isTrue();
-        assertThat(folder.exec(turn, turn.expiresAt(), documents(), "ls repos/github.com/acme/api", null)
+        assertThat(folder.exec(turn, deadline, documents(), "ls repos/github.com/acme/api", null)
                         .path("output")
                         .asString())
                 .as("a second load replaces the directory")
@@ -235,7 +213,7 @@ class TurnSandboxLiveTest {
         long timeoutStarted = System.nanoTime();
         ObjectNode slow = folder.exec(
                 turn,
-                turn.expiresAt(),
+                deadline,
                 documents(),
                 "setsid sh -c 'echo $$ > /tmp/detached.pid; exec sleep 300' & sleep 30",
                 1000);
@@ -244,7 +222,7 @@ class TurnSandboxLiveTest {
         assertThat(millis(timeoutStarted)).isLessThan(10_000);
         ObjectNode detached = folder.exec(
                 turn,
-                turn.expiresAt(),
+                deadline,
                 documents(),
                 "[ -s /tmp/detached.pid ] || { echo missing; exit 0; }; p=$(cat /tmp/detached.pid);"
                         + " for i in 1 2 3 4 5 6 7 8 9 10; do"
@@ -253,7 +231,7 @@ class TurnSandboxLiveTest {
         assertThat(detached.path("output").asString())
                 .as("the cancellation ends a child that left the command's process group")
                 .isEqualTo("gone\n");
-        ObjectNode after = folder.exec(turn, turn.expiresAt(), documents(), "echo still here", null);
+        ObjectNode after = folder.exec(turn, deadline, documents(), "echo still here", null);
         assertThat(after.path("output").asString())
                 .as("the kill of the sandbox user's processes leaves the sandbox running")
                 .isEqualTo("still here\n");
@@ -265,11 +243,11 @@ class TurnSandboxLiveTest {
 
     @Test
     void shouldRemoveTheSandboxAndEndItsCommandWhenTheAttemptStopsWhileTheCommandRuns() throws Exception {
-        ObjectNode first = folder.exec(turn, turn.expiresAt(), documents(), "true", null);
+        ObjectNode first = folder.exec(turn, deadline, documents(), "true", null);
         assertThat(first.path("exitCode").isInt()).as(first.toString()).isTrue();
         assertThat(first.path("exitCode").asInt()).isZero();
         CompletableFuture<ObjectNode> running =
-                CompletableFuture.supplyAsync(() -> folder.exec(turn, turn.expiresAt(), documents(), "sleep 50", null));
+                CompletableFuture.supplyAsync(() -> folder.exec(turn, deadline, documents(), "sleep 50", null));
         Thread.sleep(1000);
         String container = held();
 

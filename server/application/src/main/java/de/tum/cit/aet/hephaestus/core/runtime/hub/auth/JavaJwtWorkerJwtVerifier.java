@@ -8,6 +8,7 @@ import com.auth0.jwt.interfaces.JWTVerifier;
 import de.tum.cit.aet.hephaestus.core.metrics.CoreMetrics;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -89,8 +90,7 @@ public class JavaJwtWorkerJwtVerifier implements WorkerJwtVerifier {
         }
         String tokenType = verified.getType();
         if (!WorkerJwtIssuer.WORKER_TOKEN_TYPE.equals(tokenType)
-                && !WorkerJwtIssuer.JOB_TOKEN_TYPE.equals(tokenType)
-                && !WorkerJwtIssuer.TURN_TOKEN_TYPE.equals(tokenType)) {
+                && !WorkerJwtIssuer.ATTEMPT_TOKEN_TYPE.equals(tokenType)) {
             throw new WorkerJwtInvalidException("token type not allowed", "typ");
         }
         String workerId = verified.getSubject();
@@ -109,44 +109,52 @@ public class JavaJwtWorkerJwtVerifier implements WorkerJwtVerifier {
         if (denylist.isRevoked(jti)) {
             throw new WorkerJwtInvalidException("token revoked", "revoked");
         }
-        if (WorkerJwtIssuer.TURN_TOKEN_TYPE.equals(tokenType)) {
-            return turnJwt(verified, workerId, jti, issuedAt, expiresAt);
+        if (WorkerJwtIssuer.ATTEMPT_TOKEN_TYPE.equals(tokenType)) {
+            return attemptJwt(verified, workerId, jti, issuedAt, expiresAt);
         }
-        UUID jobId = uuidClaim(verified, "job_id");
-        if (WorkerJwtIssuer.WORKER_TOKEN_TYPE.equals(tokenType)) {
-            if (workerId == null || workerId.isBlank()) {
-                throw new WorkerJwtInvalidException("missing sub claim", "claim");
-            }
-            if (jobId != null
-                    || !scopeClaim(verified).isEmpty()
-                    || longClaim(verified, "workspace_id") != null
-                    || !verified.getClaim(WorkerJwtIssuer.WORK_DEADLINE_CLAIM).isMissing()) {
-                throw new WorkerJwtInvalidException("worker token contains job claims", "claim");
-            }
-            return new WorkerSessionJwt(workerId, jti, issuedAt, expiresAt);
+        if (workerId == null || workerId.isBlank()) {
+            throw new WorkerJwtInvalidException("missing sub claim", "claim");
         }
-        if (jobId == null) {
-            throw new WorkerJwtInvalidException("missing job_id claim", "claim");
+        if (verified.getClaim(WorkerJwtIssuer.ID_CLAIM).asString() != null
+                || !scopeClaim(verified).isEmpty()
+                || longClaim(verified, "workspace_id") != null
+                || !verified.getClaim(WorkerJwtIssuer.WORK_DEADLINE_CLAIM).isMissing()) {
+            throw new WorkerJwtInvalidException("worker token contains attempt claims", "claim");
         }
+        return new WorkerSessionJwt(workerId, jti, issuedAt, expiresAt);
+    }
+
+    private static AttemptJwt attemptJwt(
+            DecodedJWT verified, @Nullable String workerId, String jti, Instant issuedAt, Instant expiresAt) {
         if (workerId != null) {
-            throw new WorkerJwtInvalidException("job token contains sub claim", "claim");
+            throw new WorkerJwtInvalidException("attempt token contains sub claim", "claim");
         }
+        String kindName = verified.getClaim(WorkerJwtIssuer.KIND_CLAIM).asString();
+        AttemptJwt.Kind kind = Arrays.stream(AttemptJwt.Kind.values())
+                .filter(candidate -> candidate.name().equals(kindName))
+                .findFirst()
+                .orElseThrow(() -> new WorkerJwtInvalidException("missing or invalid attempt_kind claim", "claim"));
+        UUID id = uuidClaim(verified, WorkerJwtIssuer.ID_CLAIM);
         Long workspaceId = longClaim(verified, "workspace_id");
         Integer attempt = intClaim(verified, "attempt");
-        if (workspaceId == null || attempt == null || attempt < 0) {
-            throw new WorkerJwtInvalidException("missing or invalid job binding claim", "claim");
+        if (id == null || workspaceId == null || attempt == null) {
+            throw new WorkerJwtInvalidException("missing or invalid attempt binding claim", "claim");
         }
-        // Required: a job credential without its signed work deadline has no defined work time. The JWT leeway
-        // applies to the credential's own times, never to this claim.
+        // A review credential without its signed work deadline has no defined work time. The JWT leeway applies to
+        // the credential's own times, never to this claim.
         Instant workDeadline = numericDateClaim(verified, WorkerJwtIssuer.WORK_DEADLINE_CLAIM);
-        if (workDeadline == null) {
-            throw new WorkerJwtInvalidException("missing or invalid work_deadline claim", "claim");
+        if ((kind == AttemptJwt.Kind.REVIEW) != (workDeadline != null)
+                || (workDeadline == null
+                        && !verified.getClaim(WorkerJwtIssuer.WORK_DEADLINE_CLAIM)
+                                .isMissing())) {
+            throw new WorkerJwtInvalidException(
+                    "a review token, and only a review token, has a work_deadline", "claim");
         }
         try {
-            return new JobJwt(
-                    jobId, workspaceId, attempt, scopeClaim(verified), jti, issuedAt, expiresAt, workDeadline);
-        } catch (IllegalArgumentException misordered) {
-            throw new WorkerJwtInvalidException("work_deadline out of order", "claim", misordered);
+            return new AttemptJwt(
+                    kind, id, workspaceId, attempt, scopeClaim(verified), jti, issuedAt, expiresAt, workDeadline);
+        } catch (IllegalArgumentException invalid) {
+            throw new WorkerJwtInvalidException("invalid attempt claims: " + invalid.getMessage(), "claim", invalid);
         }
     }
 
@@ -157,36 +165,6 @@ public class JavaJwtWorkerJwtVerifier implements WorkerJwtVerifier {
         } catch (RuntimeException e) {
             throw new WorkerJwtInvalidException("invalid " + name + " claim", "claim", e);
         }
-    }
-
-    private static TurnJwt turnJwt(
-            DecodedJWT verified, @Nullable String workerId, String jti, Instant issuedAt, Instant expiresAt) {
-        if (workerId != null || verified.getClaim("job_id").asString() != null) {
-            throw new WorkerJwtInvalidException("turn token contains worker or job claims", "claim");
-        }
-        UUID turnId = uuidClaim(verified, "turn_id");
-        UUID conversationId = uuidClaim(verified, "conversation_id");
-        Long workspaceId = longClaim(verified, "workspace_id");
-        Long accountId = longClaim(verified, "account_id");
-        Integer attempt = intClaim(verified, "attempt");
-        if (turnId == null
-                || conversationId == null
-                || workspaceId == null
-                || accountId == null
-                || attempt == null
-                || attempt < 1) {
-            throw new WorkerJwtInvalidException("missing or invalid turn binding claim", "claim");
-        }
-        return new TurnJwt(
-                turnId,
-                workspaceId,
-                accountId,
-                conversationId,
-                attempt,
-                scopeClaim(verified),
-                jti,
-                issuedAt,
-                expiresAt);
     }
 
     private static @Nullable UUID uuidClaim(DecodedJWT jwt, String name) {

@@ -27,7 +27,7 @@ import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
-import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.JobJwt;
+import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.AttemptJwt;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
 import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -2394,8 +2394,16 @@ class LlmProxyServiceTest extends BaseUnitTest {
 
     private void authenticate(ProxyRouting routing) {
         Instant now = Instant.now();
-        var job =
-                new JobJwt(routing.sourceId(), 9L, 0, Set.of(), "test", now, now.plusSeconds(60), now.plusSeconds(60));
+        var job = new AttemptJwt(
+                AttemptJwt.Kind.REVIEW,
+                routing.sourceId(),
+                9L,
+                0,
+                Set.of(),
+                "test",
+                now,
+                now.plusSeconds(60),
+                now.plusSeconds(60));
         var identity = ProxyIdentity.of(job, "worker-1");
         lenient().when(routingService.resolve(eq(identity), any())).thenReturn(routing);
         SecurityContextHolder.getContext().setAuthentication(new JobTokenAuthentication(identity, Set.of(), null));

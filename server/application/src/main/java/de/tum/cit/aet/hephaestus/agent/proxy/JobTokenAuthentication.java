@@ -1,6 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.proxy;
 
-import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.TurnJwt;
+import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.AttemptJwt;
 import java.io.Serial;
 import java.util.Set;
 import org.jspecify.annotations.Nullable;
@@ -9,8 +9,7 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 
 /**
  * A verified sandbox credential. Token scopes become {@code SCOPE_} authorities, as Spring's {@code hasScope}
- * requires. A turn credential's claims are also the details, which the turn endpoints read the turn's account and
- * conversation from.
+ * requires. A turn's token is also the details, which the turn endpoints read the attempt from.
  */
 class JobTokenAuthentication extends AbstractAuthenticationToken {
 
@@ -21,7 +20,7 @@ class JobTokenAuthentication extends AbstractAuthenticationToken {
     @SuppressWarnings("serial")
     private final ProxyIdentity identity;
 
-    JobTokenAuthentication(ProxyIdentity identity, Set<String> scopes, @Nullable TurnJwt turn) {
+    JobTokenAuthentication(ProxyIdentity identity, Set<String> scopes, @Nullable AttemptJwt turn) {
         super(scopes.stream()
                 .map(scope -> new SimpleGrantedAuthority("SCOPE_" + scope))
                 .toList());
