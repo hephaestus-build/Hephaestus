@@ -21,6 +21,7 @@ import {
 	AccordionItem,
 	AccordionTrigger,
 } from "@/components/ui/accordion";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Separator } from "@/components/ui/separator";
 
 export interface PracticeDefinitionPreviewProps {
@@ -77,6 +78,18 @@ export function PracticeDefinitionPreview({
 			dimension?.values.find((candidate) => candidate.value === value)?.label ?? value;
 		return `${dimension?.label ?? name}: ${values.map(valueLabel).join(", ")}`;
 	});
+	// A stored practice is not checked again, so one can name what its kind does not offer. Hephaestus
+	// never selects it; say so here, where an admin can change it.
+	const unofferedEvents = definition.reviewOn.events.filter(
+		(name) => itemType !== undefined && !itemType.events.some((event) => event.name === name),
+	);
+	const unofferedAbout =
+		itemType !== undefined &&
+		definition.about !== null &&
+		!itemType.aboutRoles.includes(definition.about);
+	const anyEventLabel = (name: string) =>
+		options.itemTypes.flatMap((type) => type.events).find((event) => event.name === name)?.label ??
+		name;
 	const { guidance, script, scan } = definition;
 	const scanSupported = itemType?.scanSupported === true;
 
@@ -105,6 +118,19 @@ export function PracticeDefinitionPreview({
 			)}
 
 			<Separator />
+
+			{(unofferedEvents.length > 0 || unofferedAbout) && (
+				<Alert variant="warning">
+					<AlertTitle>Hephaestus does not run this practice</AlertTitle>
+					<AlertDescription>
+						{unofferedEvents.length > 0 &&
+							`It reviews on ${unofferedEvents.map(anyEventLabel).join(", ")}, which this kind of work does not offer. `}
+						{unofferedAbout &&
+							`It is about the ${aboutLabel(definition.about).toLowerCase()}, a role this kind of work does not have. `}
+						Change its review settings to ones that this kind of work offers.
+					</AlertDescription>
+				</Alert>
+			)}
 
 			<section aria-label="Review settings">
 				<dl className="divide-y">
