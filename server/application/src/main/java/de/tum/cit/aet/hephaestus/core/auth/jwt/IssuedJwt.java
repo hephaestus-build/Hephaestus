@@ -114,6 +114,8 @@ public class IssuedJwt {
     public enum RevokedReason {
         LOGOUT,
         ROTATE,
+        ACCOUNT_INACTIVE,
+        PASSKEY_STEP_UP,
         SIGN_OUT_EVERYWHERE,
         /** A user revoked one of their OWN sessions ("sign out this device"). */
         SELF_REVOKE,

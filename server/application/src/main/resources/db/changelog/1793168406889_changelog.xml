@@ -4,7 +4,7 @@
         <addColumn tableName="issued_jwt">
             <column name="predecessor_jti" type="UUID"/>
         </addColumn>
-        <!-- Dropping the link ends no session. A predecessor that waited for its successor's first use stays valid until its own expiry. -->
+        <!-- A rollback drops successor tracking and ends no session. Stale tokens can stay live for up to accessTtl (24h by default) after a rollback. -->
         <rollback>
             <dropColumn tableName="issued_jwt" columnName="predecessor_jti"/>
         </rollback>

@@ -6,7 +6,7 @@ import { deferred } from "@/test/async";
 import {
 	SESSION_COOLDOWN_MS,
 	refreshAccessToken,
-	sessionConfirmedRecently,
+	sessionRefreshedRecently,
 } from "./session-refresh";
 
 vi.mock("@/api/sdk.gen", () => ({ refresh: vi.fn() }));
@@ -37,12 +37,12 @@ describe("refreshAccessToken", () => {
 			response: new Response(null, { status: 401 }),
 		});
 		await refreshAccessToken();
-		expect(sessionConfirmedRecently()).toBe(false);
+		expect(sessionRefreshedRecently()).toBe(false);
 
 		refreshMock.mockResolvedValueOnce(rotated);
 		await refreshAccessToken();
-		expect(sessionConfirmedRecently()).toBe(true);
-		expect(window.localStorage.getItem("hephaestus:session-confirmed-at")).not.toBeNull();
+		expect(sessionRefreshedRecently()).toBe(true);
+		expect(window.localStorage.getItem("hephaestus:session-refreshed")).not.toBeNull();
 	});
 
 	it("collapses callers that overlap a rotation onto one POST /auth/refresh", async () => {
@@ -60,25 +60,17 @@ describe("refreshAccessToken", () => {
 		expect(refreshMock).toHaveBeenCalledOnce();
 	});
 
-	it("shares the cooldown after a rotation has settled", async () => {
+	it("can renew again after the previous caller completed", async () => {
 		refreshMock.mockResolvedValue(rotated);
 
 		await refreshAccessToken();
 		await refreshAccessToken();
 
-		expect(refreshMock).toHaveBeenCalledOnce();
+		expect(refreshMock).toHaveBeenCalledTimes(2);
 
 		vi.setSystemTime(NOW + SESSION_COOLDOWN_MS);
 		await refreshAccessToken();
-		expect(refreshMock).toHaveBeenCalledTimes(2);
-	});
-
-	it("uses the renewal confirmed by another tab without rotating its cookie again", async () => {
-		window.localStorage.setItem("hephaestus:session-confirmed-at", String(NOW));
-
-		await expect(refreshAccessToken()).resolves.toBe("refreshed");
-
-		expect(refreshMock).not.toHaveBeenCalled();
+		expect(refreshMock).toHaveBeenCalledTimes(3);
 	});
 
 	it("reports unavailable rather than throwing when the rotation fails", async () => {

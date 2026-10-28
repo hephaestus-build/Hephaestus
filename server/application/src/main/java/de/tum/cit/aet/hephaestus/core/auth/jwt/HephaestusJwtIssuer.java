@@ -140,29 +140,33 @@ public class HephaestusJwtIssuer {
         return mint(accountId, constraints, refreshTokenHash, null, request);
     }
 
-    private Token mint(
-            Long accountId,
-            TokenConstraints constraints,
-            @Nullable String refreshTokenHash,
-            @Nullable UUID predecessorJti,
-            @Nullable HttpServletRequest request) {
-        JwtPrincipal principal = principalFactory.forAuthority(
+    /** Re-signs an already recorded unused browser successor without extending its lifetime or changing its row. */
+    @Transactional
+    public Token resignSuccessor(IssuedJwt successor, TokenConstraints constraints) {
+        if (successor.getPredecessorJti() == null
+                || successor.getSessionId() != null
+                || constraints.sessionId() != null) {
+            throw new IllegalArgumentException("an unused browser successor is required");
+        }
+        return sign(
+                principal(successor.getAccountId()),
+                constraints,
+                successor.getJti(),
+                Objects.requireNonNull(successor.getIssuedAt()),
+                successor.getExpiresAt());
+    }
+
+    private JwtPrincipal principal(Long accountId) {
+        return principalFactory.forAuthority(
                 accountId,
                 accountRepository
                         .lockAuthorityForShare(accountId)
                         .orElseThrow(
                                 () -> new ResponseStatusException(HttpStatus.FORBIDDEN, "The account is not active.")));
+    }
+
+    private Token sign(JwtPrincipal principal, TokenConstraints constraints, UUID jti, Instant now, Instant expiresAt) {
         Instant sessionExpiresAt = constraints.sessionExpiresAt();
-        Instant now = clock.instant();
-        Instant expiresAt = now.plus(properties.accessTtl());
-        if (sessionExpiresAt != null && sessionExpiresAt.isBefore(expiresAt)) {
-            expiresAt = sessionExpiresAt;
-        }
-        // JWT deadlines are serialized as whole seconds, so the wire token expires at the truncated
-        // instant. issued_jwt keeps the untruncated one, and its active-token check would then answer
-        // "still valid" for the fraction of a second the presented token is already expired.
-        expiresAt = expiresAt.truncatedTo(ChronoUnit.SECONDS);
-        UUID jti = UUID.randomUUID();
         JWK signingKey = keyService.currentSigningKey();
         JwtClaimsSet.Builder claims = JwtClaimsSet.builder()
                 .issuer(properties.issuer().toString())
@@ -196,6 +200,29 @@ public class HephaestusJwtIssuer {
                 .build();
         Jwt jwt = encoder.encode(JwtEncoderParameters.from(header, claims.build()));
 
+        return new Token(jwt.getTokenValue(), jti, expiresAt);
+    }
+
+    private Token mint(
+            Long accountId,
+            TokenConstraints constraints,
+            @Nullable String refreshTokenHash,
+            @Nullable UUID predecessorJti,
+            @Nullable HttpServletRequest request) {
+        JwtPrincipal principal = principal(accountId);
+        Instant sessionExpiresAt = constraints.sessionExpiresAt();
+        Instant now = clock.instant();
+        Instant expiresAt = now.plus(properties.accessTtl());
+        if (sessionExpiresAt != null && sessionExpiresAt.isBefore(expiresAt)) {
+            expiresAt = sessionExpiresAt;
+        }
+        // JWT deadlines are serialized as whole seconds, so the wire token expires at the truncated
+        // instant. issued_jwt keeps the untruncated one, and its active-token check would then answer
+        // "still valid" for the fraction of a second the presented token is already expired.
+        expiresAt = expiresAt.truncatedTo(ChronoUnit.SECONDS);
+        UUID jti = UUID.randomUUID();
+        Token token = sign(principal, constraints, jti, now, expiresAt);
+
         IssuedJwt row = new IssuedJwt(jti, principal.accountId(), expiresAt);
         row.setSessionId(constraints.sessionId());
         row.setRefreshTokenHash(refreshTokenHash);
@@ -214,7 +241,7 @@ public class HephaestusJwtIssuer {
         }
         issuedJwtRepository.save(row);
 
-        return new Token(jwt.getTokenValue(), jti, expiresAt);
+        return token;
     }
 
     /**

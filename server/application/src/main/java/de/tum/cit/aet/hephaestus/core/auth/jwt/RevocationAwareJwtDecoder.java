@@ -32,6 +32,8 @@ import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtException;
 import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
 /**
  * Validates JWTs and checks revocation on every request. Only revoked verdicts are cached: revocation
@@ -40,8 +42,8 @@ import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
  * <p>Invalid credentials use {@link BadJwtException} (401). Revocation-store failures deny access with
  * {@link JwtException}, which Spring maps to an authentication service failure rather than logout.
  *
- * <p>A revoked browser token is recorded as a {@code JWT_REVOKED} failure once per cache entry, so a burst
- * of tabs that present it adds one row, not one per request.
+ * <p>A revoked browser token is recorded as a {@code JWT_REVOKED} failure once per refusal reason and cache entry.
+ * A late request cannot suppress the audit of a later refresh replay.
  */
 public class RevocationAwareJwtDecoder implements JwtDecoder {
 
@@ -109,17 +111,14 @@ public class RevocationAwareJwtDecoder implements JwtDecoder {
         } catch (IllegalArgumentException ex) {
             throw new BadJwtException("malformed jti", ex);
         }
-        Boolean revoked = cache.get(jti, Boolean.class);
-        if (Boolean.TRUE.equals(revoked)) {
-            throw revokedException();
-        }
         try {
-            AccessTokenAdmission.Refusal refusal = admission.admit(jti, clock.instant());
+            AccessTokenAdmission.Refusal refusal = cache.get(jti, AccessTokenAdmission.Refusal.class);
+            if (refusal == null) {
+                refusal = admission.admit(jti, clock.instant());
+            }
             if (refusal != null) {
-                // The cached verdict also dedupes the audit row: one per token and pod per cache entry.
-                if (cache.putIfAbsent(jti, true) == null) {
-                    recordRefusal(refusal.token());
-                }
+                cache.putIfAbsent(jti, refusal);
+                recordRefusal(jti, refusal.token());
                 throw revokedException();
             }
             return jwt;
@@ -136,23 +135,41 @@ public class RevocationAwareJwtDecoder implements JwtDecoder {
      * Records a revoked browser token. An expired or unknown token records nothing, and an installed-client
      * session records its own reuse when its refresh secret returns.
      */
-    private void recordRefusal(@Nullable IssuedJwt token) {
+    private void recordRefusal(UUID jti, @Nullable IssuedJwt token) {
         if (token == null
                 || token.getSessionId() != null
                 || token.getRevokedAt() == null
                 || !token.getExpiresAt().isAfter(clock.instant())) {
             return;
         }
-        boolean reuse = token.getRevokedReason() == IssuedJwt.RevokedReason.ROTATE;
+        boolean rotated = token.getRevokedReason() == IssuedJwt.RevokedReason.ROTATE;
+        boolean reuse = rotated && isRefreshRequest();
+        String reason = reuse ? "browser_token_reuse" : rotated ? "rotated_token_presented" : "revoked_token_presented";
+        if (cache.putIfAbsent(new AuditKey(jti, reason), true) != null) {
+            return;
+        }
         authEventLogger
                 .event(AuthEvent.EventType.JWT_REVOKED, AuthEvent.Result.FAILURE)
                 .account(token.getAccountId())
-                .failureReason(reuse ? "browser_token_reuse" : "revoked_token_presented")
+                .failureReason(reason)
                 .details("{\"revokedReason\":\"" + token.getRevokedReason() + "\"}")
                 .record();
         if (reuse) {
-            log.warn("auth.jwt: a rotated-away browser token was presented again; accountId={}", token.getAccountId());
+            log.warn("auth.jwt: a retired browser token was presented for refresh; accountId={}", token.getAccountId());
         }
+    }
+
+    private record AuditKey(UUID jti, String reason) {}
+
+    private static boolean isRefreshRequest() {
+        if (RequestContextHolder.getRequestAttributes() instanceof ServletRequestAttributes attributes) {
+            var request = attributes.getRequest();
+            return "POST".equals(request.getMethod())
+                    && "/auth/refresh"
+                            .equals(request.getRequestURI()
+                                    .substring(request.getContextPath().length()));
+        }
+        return false;
     }
 
     private static JwtException revokedException() {

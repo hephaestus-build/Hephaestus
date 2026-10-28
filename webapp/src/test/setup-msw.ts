@@ -1,3 +1,5 @@
+import "fake-indexeddb/auto";
+
 // Global Vitest setup: stand up the MSW Node server so RTL tests of the query-driven auth
 // components hit deterministic mocked endpoints (the same handlers Storybook uses).
 //

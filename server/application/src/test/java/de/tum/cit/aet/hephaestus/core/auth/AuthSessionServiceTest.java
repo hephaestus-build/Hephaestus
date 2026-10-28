@@ -143,11 +143,13 @@ class AuthSessionServiceTest extends BaseUnitTest {
     @Test
     void logout_revokesPresentingTokenAndAuditsLogout() {
         UUID jti = UUID.randomUUID();
+        when(issuedJwtRepository.revokeOwned(eq(jti), eq(ACCOUNT_ID), any(), eq(IssuedJwt.RevokedReason.LOGOUT)))
+                .thenReturn(1);
 
         MockHttpServletResponse response = new MockHttpServletResponse();
         service.logout(ACCOUNT_ID, jti, null, response);
 
-        verify(issuedJwtRepository).revoke(eq(jti), any(), eq(IssuedJwt.RevokedReason.LOGOUT));
+        verify(issuedJwtRepository).revokeOwned(eq(jti), eq(ACCOUNT_ID), any(), eq(IssuedJwt.RevokedReason.LOGOUT));
         verify(issuedJwtRepository).revokeUnusedSuccessors(eq(jti), any(), eq(IssuedJwt.RevokedReason.LOGOUT));
         assertCookieCleared(response);
         AuthEventData event = capturedEvent();
@@ -234,7 +236,7 @@ class AuthSessionServiceTest extends BaseUnitTest {
 
         assertThat(refreshResult("noop")).isEqualTo(1.0);
         assertCookieCleared(response);
-        verify(issuedJwtRepository).revoke(eq(jti), any(), eq(IssuedJwt.RevokedReason.LOGOUT));
+        verify(issuedJwtRepository).revokeOwned(eq(jti), eq(ACCOUNT_ID), any(), eq(IssuedJwt.RevokedReason.LOGOUT));
         verify(jwtIssuer, never()).issueSuccessor(any(), any(), any(), any());
     }
 
@@ -258,6 +260,9 @@ class AuthSessionServiceTest extends BaseUnitTest {
     void refresh_whenAccountNotActive_recordsSuspendedAndDoesNotReMint() {
         UUID jti = UUID.randomUUID();
         when(accountRepository.lockForIssuance(ACCOUNT_ID)).thenReturn(false);
+        when(issuedJwtRepository.revokeOwned(
+                        eq(jti), eq(ACCOUNT_ID), any(), eq(IssuedJwt.RevokedReason.ACCOUNT_INACTIVE)))
+                .thenReturn(1);
 
         MockHttpServletResponse response = new MockHttpServletResponse();
         assertThat(service.refresh(ACCOUNT_ID, jti, ctx(SESSION_CEILING), mock(HttpServletRequest.class), response))
@@ -265,8 +270,10 @@ class AuthSessionServiceTest extends BaseUnitTest {
 
         assertThat(refreshResult("suspended")).isEqualTo(1.0);
         assertCookieCleared(response);
-        verify(issuedJwtRepository).revoke(eq(jti), any(), eq(IssuedJwt.RevokedReason.ROTATE));
-        verify(issuedJwtRepository).revokeUnusedSuccessors(eq(jti), any(), eq(IssuedJwt.RevokedReason.ROTATE));
+        verify(issuedJwtRepository)
+                .revokeOwned(eq(jti), eq(ACCOUNT_ID), any(), eq(IssuedJwt.RevokedReason.ACCOUNT_INACTIVE));
+        verify(issuedJwtRepository)
+                .revokeUnusedSuccessors(eq(jti), any(), eq(IssuedJwt.RevokedReason.ACCOUNT_INACTIVE));
         verify(jwtIssuer, never()).issueSuccessor(any(), any(), any(), any());
     }
 
@@ -293,23 +300,26 @@ class AuthSessionServiceTest extends BaseUnitTest {
     }
 
     @Test
-    void refresh_whenTheSuccessorWasNeverUsed_replacesIt() {
+    void refresh_whenTheSuccessorWasNeverUsed_reissuesIt() {
         UUID jti = UUID.randomUUID();
         when(accountRepository.lockForIssuance(ACCOUNT_ID)).thenReturn(true);
         presentingTokenIsActive(jti);
-        when(issuedJwtRepository.revokeUnusedSuccessors(eq(jti), any(), eq(IssuedJwt.RevokedReason.ROTATE)))
-                .thenReturn(1);
-        when(jwtIssuer.issueSuccessor(any(), any(), eq(jti), any())).thenReturn(freshToken());
+        IssuedJwt successor = new IssuedJwt(UUID.randomUUID(), ACCOUNT_ID, SESSION_CEILING);
+        successor.setPredecessorJti(jti);
+        successor.setIssuedAt(NOW);
+        when(issuedJwtRepository.findUnusedSuccessor(eq(jti), any())).thenReturn(Optional.of(successor));
+        when(jwtIssuer.resignSuccessor(eq(successor), any())).thenReturn(freshToken());
 
         MockHttpServletResponse response = new MockHttpServletResponse();
         assertThat(service.refresh(ACCOUNT_ID, jti, ctx(SESSION_CEILING), mock(HttpServletRequest.class), response))
                 .isTrue();
 
         assertThat(response.getCookie("__Host-HEPHAESTUS_AT")).isNotNull();
+        verify(jwtIssuer, never()).issueSuccessor(any(), any(), any(), any());
         AuthEventData event = capturedEvent();
         assertThat(event.type()).isEqualTo(AuthEvent.EventType.TOKEN_REFRESH);
         assertThat(event.result()).isEqualTo(AuthEvent.Result.SUCCESS);
-        assertThat(event.details()).isEqualTo("{\"reason\":\"SUCCESSOR_UNUSED_REPLACED\"}");
+        assertThat(event.details()).isEqualTo("{\"reason\":\"SUCCESSOR_REISSUED\"}");
     }
 
     @Test

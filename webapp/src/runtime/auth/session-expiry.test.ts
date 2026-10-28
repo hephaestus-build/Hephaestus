@@ -101,6 +101,18 @@ describe("handlePossibleSessionExpiry", () => {
 		expect(invalidate).toHaveBeenCalledWith();
 	});
 
+	it("still renews after recovery reads a valid identity", async () => {
+		const calls = serveSession();
+		stubLocation("/w/acme/activity");
+		handlePossibleSessionExpiry(res(401, PRACTICES), makeQueryClient());
+		await settled();
+		expect(calls).toStrictEqual({ user: 1, refresh: 0 });
+
+		await expect(refreshAccessToken()).resolves.toBe("refreshed");
+
+		expect(calls.refresh).toBe(1);
+	});
+
 	it("does not rotate twice when a late 401 follows a keep-alive renewal", async () => {
 		const calls = serveSession();
 		stubLocation("/w/acme/activity");
@@ -121,7 +133,10 @@ describe("handlePossibleSessionExpiry", () => {
 		const calls = serveSession();
 		stubLocation("/w/acme/activity");
 		// What another tab's renewal leaves in the storage that all tabs share.
-		window.localStorage.setItem("hephaestus:session-confirmed-at", String(NOW));
+		window.localStorage.setItem(
+			"hephaestus:session-refreshed",
+			JSON.stringify({ id: crypto.randomUUID(), completedAt: NOW }),
+		);
 
 		handlePossibleSessionExpiry(res(401, PRACTICES), makeQueryClient());
 		await settled();

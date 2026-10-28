@@ -25,6 +25,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.transaction.support.TransactionTemplate;
 
 class SessionRefreshConcurrencyIntegrationTest extends RealAuthIntegrationTest {
@@ -49,6 +50,9 @@ class SessionRefreshConcurrencyIntegrationTest extends RealAuthIntegrationTest {
 
     @Autowired
     private JdbcTemplate jdbc;
+
+    @Autowired
+    private JwtDecoder decoder;
 
     private static final TokenConstraints CONSTRAINTS =
             TokenConstraints.session(Instant.now().plusSeconds(3600), null);
@@ -84,6 +88,27 @@ class SessionRefreshConcurrencyIntegrationTest extends RealAuthIntegrationTest {
     }
 
     @Test
+    void shouldKeepTheSessionWhenConcurrentRefreshResponsesArriveInReverseOrder() throws Exception {
+        var held = issue();
+        Long accountId = tokens.findById(held.jti()).orElseThrow().getAccountId();
+        var firstResponse = new MockHttpServletResponse();
+        var secondResponse = new MockHttpServletResponse();
+
+        inOrder(
+                () -> sessions.refresh(accountId, held.jti(), CONSTRAINTS, new MockHttpServletRequest(), firstResponse),
+                () -> sessions.refresh(
+                        accountId, held.jti(), CONSTRAINTS, new MockHttpServletRequest(), secondResponse));
+
+        // The second response arrives first; the late first response overwrites that cookie.
+        String second = Objects.requireNonNull(secondResponse.getCookie("__Host-HEPHAESTUS_AT"))
+                .getValue();
+        String first = Objects.requireNonNull(firstResponse.getCookie("__Host-HEPHAESTUS_AT"))
+                .getValue();
+        assertThat(decoder.decode(second).getSubject()).isEqualTo(accountId.toString());
+        assertThat(decoder.decode(first).getSubject()).isEqualTo(accountId.toString());
+    }
+
+    @Test
     void shouldWriteNoCookieWhenARefreshWaitsBehindTheSuccessorsFirstUse() throws Exception {
         var held = issue();
         Long accountId = tokens.findById(held.jti()).orElseThrow().getAccountId();
@@ -100,18 +125,18 @@ class SessionRefreshConcurrencyIntegrationTest extends RealAuthIntegrationTest {
     }
 
     @Test
-    void shouldRefuseFirstUseWhenAnotherRefreshHasReplacedTheUnusedSuccessor() throws Exception {
+    void shouldAdmitTheSameSuccessorWhenAnotherRefreshHasReissuedIt() throws Exception {
         var held = issue();
         Long accountId = tokens.findById(held.jti()).orElseThrow().getAccountId();
         UUID successor = unusedSuccessor(accountId, held.jti());
 
-        inOrder(() -> refresh(accountId, held.jti()), () -> admission.admit(successor, Instant.now()) != null);
+        inOrder(() -> refresh(accountId, held.jti()), () -> admission.admit(successor, Instant.now()) == null);
 
-        assertThat(admission.admit(successor, Instant.now())).isNotNull();
-        assertThat(admission.admit(held.jti(), Instant.now())).isNull();
+        assertThat(admission.admit(successor, Instant.now())).isNull();
+        assertThat(admission.admit(held.jti(), Instant.now())).isNotNull();
         assertThat(tokens.findActiveByAccountId(accountId, Instant.now()))
-                .filteredOn(row -> held.jti().equals(row.getPredecessorJti()))
-                .hasSize(1);
+                .extracting(IssuedJwt::getJti)
+                .containsExactly(successor);
     }
 
     @Test

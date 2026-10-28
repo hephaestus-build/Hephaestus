@@ -32,6 +32,13 @@ public interface IssuedJwtRepository extends JpaRepository<IssuedJwt, UUID> {
         """)
     Optional<IssuedJwt> findActive(@Param("jti") UUID jti, @Param("now") Instant now);
 
+    /** The live successor that has not authenticated a request yet; callers hold the predecessor lock. */
+    @Query("""
+        SELECT j FROM IssuedJwt j
+        WHERE j.predecessorJti = :jti AND j.revokedAt IS NULL AND j.expiresAt > :now
+        """)
+    Optional<IssuedJwt> findUnusedSuccessor(@Param("jti") UUID jti, @Param("now") Instant now);
+
     /** Locks a browser predecessor before reading or changing its unused successor. */
     @Query(value = "SELECT jti FROM issued_jwt WHERE jti = :jti FOR UPDATE", nativeQuery = true)
     Optional<UUID> lockForRotation(@Param("jti") UUID jti);
@@ -48,7 +55,7 @@ public interface IssuedJwtRepository extends JpaRepository<IssuedJwt, UUID> {
 
     /**
      * Marks a successor as used. The update re-checks that the token is still active under its row lock,
-     * so a refresh that replaces this unused successor concurrently wins or loses as a whole: 1 when
+     * so a concurrent revocation wins or loses as a whole: 1 when
      * the token stays admitted, 0 when it was revoked or expired meanwhile. It clears the persistence
      * context, so a later read sees that outcome.
      */

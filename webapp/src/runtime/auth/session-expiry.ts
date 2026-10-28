@@ -4,9 +4,9 @@ import { apiBasePath } from "@/runtime/api-base-path";
 import { currentUserQueryOptions, serverUnreachable } from "@/runtime/auth/guard";
 import { safeReturnTo } from "@/runtime/auth/return-to";
 import {
-	confirmSession,
 	refreshAccessToken,
-	sessionConfirmedRecently,
+	sessionRefreshedRecently,
+	SESSION_COOLDOWN_MS,
 } from "@/runtime/auth/session-refresh";
 import { workspaceAddressConfig, workspaceReturnTo } from "@/runtime/workspace-address";
 
@@ -48,6 +48,7 @@ export function handlePossibleSessionExpiry(response: Response, queryClient: Que
 }
 
 let recovery: Promise<void> | null = null;
+let identityCheckedAt = 0;
 
 async function recoverOrLogout(queryClient: QueryClient, currentPath: string): Promise<void> {
 	recovery ??= doRecoverOrLogout(queryClient, currentPath).finally(() => {
@@ -70,7 +71,9 @@ async function readSession(
 
 // Every renewal rotates the cookie, so recovery renews only when the current cookie is refused.
 async function doRecoverOrLogout(queryClient: QueryClient, currentPath: string): Promise<void> {
-	if (sessionConfirmedRecently()) {
+	// Identity probes are throttled within this tab; they never suppress a keep-alive renewal.
+	// oxlint-disable-next-line no-restricted-properties -- Recovery throttling uses wall-clock time.
+	if (sessionRefreshedRecently() || Date.now() - identityCheckedAt < SESSION_COOLDOWN_MS) {
 		return;
 	}
 	const session = await readSession(queryClient);
@@ -87,7 +90,8 @@ async function doRecoverOrLogout(queryClient: QueryClient, currentPath: string):
 			return;
 		}
 	} else {
-		confirmSession();
+		// oxlint-disable-next-line no-restricted-properties -- Recovery throttling uses wall-clock time.
+		identityCheckedAt = Date.now();
 	}
 	// Refetch queries, but never replay mutations after an ambiguous failure.
 	void queryClient.invalidateQueries();
@@ -106,4 +110,5 @@ export function redirectToLogin(
 
 export function __resetSessionRecoveryForTests(): void {
 	recovery = null;
+	identityCheckedAt = 0;
 }

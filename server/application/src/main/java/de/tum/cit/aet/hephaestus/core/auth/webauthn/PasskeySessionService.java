@@ -60,7 +60,9 @@ public class PasskeySessionService {
         }
         if (all) {
             revocation.revokeAccount(accountId, IssuedJwt.RevokedReason.SELF_REVOKE, null, null);
-        } else if (tokens.revoke(CurrentAccount.requireJti(), clock.instant(), IssuedJwt.RevokedReason.ROTATE) != 1) {
+        } else if (sessions.revokeBrowserSession(
+                        accountId, CurrentAccount.requireJti(), IssuedJwt.RevokedReason.PASSKEY_STEP_UP)
+                != 1) {
             throw new PasskeyRequiredException();
         }
         sessions.setCookie(

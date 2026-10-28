@@ -44,7 +44,7 @@ public class AccessTokenAdmission {
             // Account, predecessor, successor: the same order as refresh and revocation.
             accountRepository.lockForIssuance(token.getAccountId());
             repository.lockForRotation(predecessor);
-            // A refresh may have replaced this unused successor while it was being read.
+            // Logout or passkey step-up may have revoked this successor while it was being read.
             if (repository.markUsed(jti, now) == 0) {
                 return new Refusal(repository.findById(jti).orElse(null));
             }

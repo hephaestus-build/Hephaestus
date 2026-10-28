@@ -1,59 +1,65 @@
+import { z } from "zod";
+
 import { refresh } from "@/api/sdk.gen";
 
 import { withSessionLock } from "./session-lock";
 
 export type SessionRefreshResult = "refreshed" | "expired" | "unavailable";
 
-/** A 401 this soon after a renewal or a confirmed identity answers a request that left before it. */
+/** Late refusals after a real renewal do not need another renewal. */
 export const SESSION_COOLDOWN_MS = 10_000;
 
-// Tabs share the cookie, so they share the cooldown through storage.
-const CONFIRMED_AT_KEY = "hephaestus:session-confirmed-at";
-let confirmedAtWithoutStorage = 0;
+const REFRESHED_KEY = "hephaestus:session-refreshed";
+const refreshStamp = z.object({ id: z.string().uuid(), completedAt: z.number().finite() });
+let withoutStorage: z.infer<typeof refreshStamp> | undefined;
 
-/** Storage can be unavailable or full. The cooldown then covers this tab only. */
-export function confirmSession(): void {
-	// oxlint-disable-next-line no-restricted-properties -- Tabs compare the cooldown in wall-clock time.
-	const now = Date.now();
+function lastRefresh() {
 	try {
-		window.localStorage.setItem(CONFIRMED_AT_KEY, String(now));
+		const stored = window.localStorage.getItem(REFRESHED_KEY);
+		return stored === null ? undefined : refreshStamp.safeParse(JSON.parse(stored)).data;
 	} catch {
-		confirmedAtWithoutStorage = now;
+		return withoutStorage;
 	}
 }
 
-export function sessionConfirmedRecently(): boolean {
-	let confirmedAt = confirmedAtWithoutStorage;
+function recordRefresh(): void {
+	// oxlint-disable-next-line no-restricted-properties -- Tabs compare a renewal in wall-clock time.
+	const stamp = { id: crypto.randomUUID(), completedAt: Date.now() };
+	withoutStorage = stamp;
 	try {
-		confirmedAt = Math.max(confirmedAt, Number(window.localStorage.getItem(CONFIRMED_AT_KEY)) || 0);
+		window.localStorage.setItem(REFRESHED_KEY, JSON.stringify(stamp));
 	} catch {
-		// This tab still keeps its own cooldown.
+		// Web Locks still serialize cookie changes when storage is unavailable.
 	}
-	// oxlint-disable-next-line no-restricted-properties -- Tabs compare the cooldown in wall-clock time.
-	return Date.now() - confirmedAt < SESSION_COOLDOWN_MS;
+}
+
+export function sessionRefreshedRecently(): boolean {
+	const stamp = lastRefresh();
+	// oxlint-disable-next-line no-restricted-properties -- Tabs compare a renewal in wall-clock time.
+	return stamp !== undefined && Date.now() - stamp.completedAt < SESSION_COOLDOWN_MS;
 }
 
 let inFlight: Promise<SessionRefreshResult> | null = null;
 
 async function rotate(): Promise<SessionRefreshResult> {
-	// Recheck after taking the session lock: another tab may have renewed while this one waited.
-	if (sessionConfirmedRecently()) {
-		return "refreshed";
-	}
 	const { response } = await refresh();
-	if (!response) {
-		return "unavailable";
-	}
+	if (!response) return "unavailable";
 	if (response.ok) {
-		confirmSession();
+		recordRefresh();
 		return "refreshed";
 	}
 	return response.status === 401 ? "expired" : "unavailable";
 }
 
-/** Share overlapping renewals within this tab; the session lock coordinates other tabs. */
+/** Calls queued behind the same renewal share its result; a later caller can renew again. */
 export async function refreshAccessToken(): Promise<SessionRefreshResult> {
-	inFlight ??= withSessionLock(rotate)
+	const observed = lastRefresh()?.id;
+	inFlight ??= withSessionLock(() => {
+		const completed = lastRefresh();
+		return completed !== undefined && completed.id !== observed
+			? Promise.resolve<SessionRefreshResult>("refreshed")
+			: rotate();
+	})
 		.catch((): SessionRefreshResult => "unavailable")
 		.finally(() => {
 			inFlight = null;

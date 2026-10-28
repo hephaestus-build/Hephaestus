@@ -3,6 +3,7 @@ package de.tum.cit.aet.hephaestus.core.auth;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
+import com.nimbusds.jwt.SignedJWT;
 import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEvent;
 import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEventRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
@@ -12,10 +13,12 @@ import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwt;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwtRepository;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.TokenConstraints;
 import de.tum.cit.aet.hephaestus.testconfig.RealAuthIntegrationTest;
+import java.text.ParseException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -119,7 +122,27 @@ class SessionRefreshLifecycleIntegrationTest extends RealAuthIntegrationTest {
     }
 
     @Test
-    void aRefreshWithTheHeldTokenReplacesTheSuccessorThatNeverArrived() {
+    void shouldReturnTheSameUnusedSuccessorOnRepeatedRefresh() throws ParseException {
+        Long accountId = Objects.requireNonNull(
+                accountRepository.save(new Account("Idempotent refresh")).getId());
+        var held = jwtIssuer.issue(
+                accountId, TokenConstraints.session(Instant.now().plusSeconds(3600), null), null);
+        String csrf = fetchCsrfToken();
+        var first = SignedJWT.parse(refreshAndReadNewCookie(held.value(), csrf)).getJWTClaimsSet();
+        var second =
+                SignedJWT.parse(refreshAndReadNewCookie(held.value(), csrf)).getJWTClaimsSet();
+
+        assertThat(second.getJWTID()).isEqualTo(first.getJWTID());
+        assertThat(second.getExpirationTime()).isEqualTo(first.getExpirationTime());
+        assertThat(issuedJwtRepository
+                        .findById(UUID.fromString(first.getJWTID()))
+                        .orElseThrow()
+                        .getRevokedAt())
+                .isNull();
+    }
+
+    @Test
+    void aRefreshWithTheHeldTokenReissuesTheSuccessorThatNeverArrived() {
         Instant since = Instant.now();
         Long accountId = Objects.requireNonNull(
                 accountRepository.save(new Account("Replaced Rita")).getId());
@@ -130,16 +153,16 @@ class SessionRefreshLifecycleIntegrationTest extends RealAuthIntegrationTest {
         String lost = refreshAndReadNewCookie(held.value(), csrf);
         String replacement = refreshAndReadNewCookie(held.value(), csrf);
 
-        getUser(lost).expectStatus().isUnauthorized().expectBody(Void.class);
+        getUser(lost).expectStatus().isOk().expectBody(Void.class);
         getUser(replacement).expectStatus().isOk().expectBody(Void.class);
         assertThat(authEventRepository.findByAccountSince(accountId, since))
                 .filteredOn(event -> event.getEventType() == AuthEvent.EventType.TOKEN_REFRESH)
                 .extracting(AuthEvent::getDetails)
-                .containsExactlyInAnyOrder(null, "{\"reason\":\"SUCCESSOR_UNUSED_REPLACED\"}");
+                .containsExactlyInAnyOrder(null, "{\"reason\":\"SUCCESSOR_REISSUED\"}");
     }
 
     @Test
-    void aSuccessorsFirstUseRetiresItsPredecessorAndARetiredTokenIsRecordedOnceAsReuse() {
+    void aSuccessorsFirstUseRetiresItsPredecessorAndALateRequestIsRecordedOnce() {
         Instant since = Instant.now();
         Long accountId = Objects.requireNonNull(
                 accountRepository.save(new Account("Reused Rudi")).getId());
@@ -163,7 +186,7 @@ class SessionRefreshLifecycleIntegrationTest extends RealAuthIntegrationTest {
                 .singleElement()
                 .satisfies(event -> {
                     assertThat(event.getResult()).isEqualTo(AuthEvent.Result.FAILURE);
-                    assertThat(event.getFailureReason()).isEqualTo("browser_token_reuse");
+                    assertThat(event.getFailureReason()).isEqualTo("rotated_token_presented");
                 });
     }
 
@@ -185,24 +208,6 @@ class SessionRefreshLifecycleIntegrationTest extends RealAuthIntegrationTest {
     }
 
     @Test
-    void shouldRefuseAStolenUnusedSuccessorWhenTheBrowserRecoversWithItsPredecessor() {
-        Long accountId = Objects.requireNonNull(
-                accountRepository.save(new Account("Recovery")).getId());
-        var held = jwtIssuer.issue(
-                accountId, TokenConstraints.session(Instant.now().plusSeconds(3600), null), null);
-        String csrf = fetchCsrfToken();
-        String stolen = refreshAndReadNewCookie(held.value(), csrf);
-
-        String recovered = refreshAndReadNewCookie(held.value(), csrf);
-
-        getUser(stolen).expectStatus().isUnauthorized().expectBody(Void.class);
-        getUser(recovered).expectStatus().isOk().expectBody(Void.class);
-        getUser(held.value()).expectStatus().isUnauthorized().expectBody(Void.class);
-        // Reuse must not end the browser that already proved receipt of the replacement.
-        getUser(recovered).expectStatus().isOk().expectBody(Void.class);
-    }
-
-    @Test
     void shouldRefuseRefreshWithAStolenPredecessorAfterTheBrowserUsesItsSuccessor() {
         Long accountId = Objects.requireNonNull(
                 accountRepository.save(new Account("Replay")).getId());
@@ -212,6 +217,7 @@ class SessionRefreshLifecycleIntegrationTest extends RealAuthIntegrationTest {
         String current = refreshAndReadNewCookie(held.value(), csrf);
         getUser(current).expectStatus().isOk().expectBody(Void.class);
 
+        getUser(held.value()).expectStatus().isUnauthorized().expectBody(Void.class);
         webTestClient
                 .post()
                 .uri("/auth/refresh")
@@ -225,6 +231,10 @@ class SessionRefreshLifecycleIntegrationTest extends RealAuthIntegrationTest {
                 .expectBody(Void.class);
 
         getUser(current).expectStatus().isOk().expectBody(Void.class);
+        assertThat(authEventRepository.findByAccountSince(accountId, Instant.EPOCH))
+                .filteredOn(event -> event.getEventType() == AuthEvent.EventType.JWT_REVOKED)
+                .extracting(AuthEvent::getFailureReason)
+                .containsExactlyInAnyOrder("rotated_token_presented", "browser_token_reuse");
     }
 
     @Test

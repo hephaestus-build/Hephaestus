@@ -142,8 +142,11 @@ sequenceDiagram
 Renewal and logout use the browser's
 [Web Locks API](https://developer.mozilla.org/en-US/docs/Web/API/Web_Locks_API) to serialize requests
 and responses that replace the shared session cookie. Generated SDK operations own HTTP requests;
-TanStack Query mutation options retain their lifecycle and error handling. Without Web Locks, only
-renewal within a single tab is coordinated.
+TanStack Query mutation options retain their lifecycle and error handling. Without Web Locks, an
+IndexedDB write transaction serializes cookie changes across tabs. A queued read keeps that transaction
+open during the operation; the browser releases it when the tab closes. Failure to acquire either lock
+preserves the page and sends no unlocked renewal. Both locks coordinate tabs within one origin.
+Server-side idempotence also protects concurrent responses from different workspace origins.
 
 ### Rotation contract
 
@@ -158,24 +161,29 @@ The browser then still holds a valid token, so the session continues.
   with reason `ROTATE` and clears the link. A link that is not empty thus marks an unused successor.
   Refresh and first use lock the account, then the predecessor, then the successor.
   Concurrent refreshes therefore leave one unused successor.
-- **The predecessor returns while its successor is unused.** The renewal revokes that successor and
-  issues a new one. `auth_event` records `TOKEN_REFRESH` with the details
-  `{"reason":"SUCCESSOR_UNUSED_REPLACED"}`.
+- **The predecessor returns while its live successor is unused.** The renewal re-signs that same
+  successor. Its JTI, expiry, and `issued_jwt` row stay the same. `auth_event` records `TOKEN_REFRESH`
+  with the details `{"reason":"SUCCESSOR_REISSUED"}`. This is idempotent for the predecessor:
+  concurrent refreshes from any origin set equivalent cookies, in any response order.
 - **The predecessor returns after its successor was used.** The server answers 401.
-  `RevocationAwareJwtDecoder` records `JWT_REVOKED` `FAILURE` with the reason `browser_token_reuse`
-  and logs a warning without the token.
+  A renewal attempt records `JWT_REVOKED` `FAILURE` with the reason `browser_token_reuse` and logs
+  a warning without the token. Other requests record `rotated_token_presented`, without a reuse warning.
 - **Any other revoked browser token** records `revoked_token_presented`, with the revocation reason
   in the details. The revoked-verdict cache dedupes both events: each server instance records one
-  event for each token for each cache entry (up to 15 minutes). Eviction or a restart permits a new
+  event for each token and refusal reason for each cache entry (up to 15 minutes). Eviction or a restart permits a new
   event. Expired and unknown tokens add no event. Installed-client tokens record their reuse
-  through their refresh secret, so the decoder records none for them.
-- **Logout and the revocation of one session** also revoke the unused successors of the token.
-  The session list shows one browser once while its successor is unused.
+  through their refresh secret, so the decoder records none for them. A late request and a later renewal
+  replay use separate deduplication keys, so the first cannot hide the second.
+- **Logout, single-session revocation, and passkey step-up** revoke the token and its unused
+  successors through `revokeBrowserSession`. Step-up records `PASSKEY_STEP_UP`; an inactive account
+  records `ACCOUNT_INACTIVE`. They do not raise a rotation-reuse warning. The session list shows one
+  browser once while its successor is unused.
 - **A renewal that loses the race to the successor's first use** neither issues nor clears a cookie.
   The browser already holds the successor.
 
-Web Locks serialize cookie changes across tabs. A queued renewal reads the shared cooldown after it
-takes the lock, so it uses the preceding renewal's result instead of rotating again.
+A queued renewal reads the last completed renewal's identifier after it takes the lock. If another
+renewal completed while this caller waited, it shares that result. An identity read never counts as a
+renewal. A later caller can renew again without waiting for an arbitrary renewal window.
 The server cannot distinguish two holders of a valid bearer cookie. The predecessor remains usable
 only until its own expiry or its successor's first use; this does not add a grace period after either
 boundary. Installed-client refresh-secret rotation keeps its separate reuse contract.
@@ -185,9 +193,9 @@ boundary. Installed-client refresh-secret rotation keeps its separate reuse cont
 A request that left with the predecessor can arrive after the successor's first use and get a 401.
 The web app does not renew for such a late refusal:
 
-1. A successful renewal or identity read starts a cooldown of 10 seconds. All tabs share it through
-   `localStorage`, because all tabs share the cookie. A keep-alive renewal and a recovery start the
-   same cooldown. A 401 during the cooldown changes nothing.
+1. Only a successful renewal starts the shared recovery cooldown of 10 seconds. All tabs of one
+   origin share it through `localStorage`. Identity checks are throttled within each tab separately;
+   they never suppress keep-alive renewal. A 401 during the recovery cooldown changes nothing.
 2. After the cooldown, a 401 first reads `GET /user`. If the identity holds, the web app refetches
    its queries and does not renew.
 3. Only a refused identity read leads to a renewal. A refused renewal leads to sign-in.
