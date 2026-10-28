@@ -1068,7 +1068,7 @@ class LlmProxyServiceTest extends BaseUnitTest {
                 })
         @DisplayName("a refused Heph call warns the operator of the effort it sent, never of the provider's words")
         void aRefusedHephCallNamesTheEffortItSent(String ignoredCase, String requestBody, @Nullable String effort) {
-            Logger logger = (Logger) LoggerFactory.getLogger(LlmProxyService.class);
+            Logger logger = (Logger) LoggerFactory.getLogger(ReasoningEffortRefusal.class);
             ListAppender<ILoggingEvent> appender = new ListAppender<>();
             appender.start();
             logger.addAppender(appender);
