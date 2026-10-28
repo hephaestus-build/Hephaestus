@@ -122,6 +122,20 @@ void test("a result that cites or consulted an undeclared kind names it", () => 
 	);
 });
 
+void test("a source used by Applies when remains outside a diff-only session's reads", () => {
+	// Capture can use comments to decide whether a practice runs. The runtime still receives only Reads.
+	const declared = readableKinds([DIFF]);
+	for (const candidate of [
+		{ citations: [{ sourceKind: COMMENTS }] },
+		{ problems: [{ citations: [{ sourceKind: COMMENTS }] }] },
+		{ evidence: { search: { consulted: [COMMENTS] } } },
+		{ evidence: { inapplicability: { consulted: [COMMENTS] } } },
+	]) {
+		assert.deepEqual(undeclaredCitedKinds(candidate, declared), [COMMENTS]);
+		assert.deepEqual(undeclaredCitedKinds(candidate, readableKinds([DIFF, COMMENTS])), []);
+	}
+});
+
 void test("the guard reads the path the tool opens: an @ prefix does not get past it", () => {
 	const diffOnly = sources([DIFF]);
 	assert.notEqual(undefined, refusedContextRead("read", "@context/comments.json", CWD, diffOnly));

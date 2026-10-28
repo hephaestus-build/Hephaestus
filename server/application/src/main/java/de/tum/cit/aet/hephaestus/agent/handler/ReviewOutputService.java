@@ -179,8 +179,7 @@ public class ReviewOutputService {
             try {
                 var verified = verifier.verifyCandidate(job, assignment, review.kind(), candidate, captured);
                 // After the verifier, so every cited source is one the catalog knows.
-                requireDeclaredSources(
-                        assignment, review.kind(), verified, applicability.path(assignment.practiceSlug()));
+                requireDeclaredSources(assignment, review.kind(), verified);
                 // A scan's search covers its assigned file, whose complete read the scan check above requires.
                 if (review.kind() == ReviewKind.ITEM) requireSearchedAbsence(candidate, captured);
                 admitted.add(result(assignment, verified));
@@ -282,21 +281,16 @@ public class ReviewOutputService {
      * Refuses a result that cites, or says it consulted, a source its practice does not declare (ADR 0069). The
      * session's opening and its read tools hold only declared sources, so such a result rests on evidence the practice
      * never asked for, and its freshness would not follow that source. Every session reads the sources of
-     * {@link SandboxLayout#READ_THROUGH_GIT} in its checkout. The sources that the capture read to decide Applies when
-     * count as declared, because a Does not apply warrant names them.
+     * {@link SandboxLayout#READ_THROUGH_GIT} in its checkout. Capture-only Applies when sources do not grant runtime
+     * reads. The server creates a proven Does not apply result separately, without a runtime candidate.
      */
-    private void requireDeclaredSources(
-            ReviewAssignmentSnapshot assignment, ReviewKind kind, Candidate candidate, JsonNode applicability) {
+    private void requireDeclaredSources(ReviewAssignmentSnapshot assignment, ReviewKind kind, Candidate candidate) {
         var definition = assignment.practice().definition();
         var reads = kind == ReviewKind.SCAN
                 ? Objects.requireNonNull(definition.scan()).reads()
                 : definition.reads();
         var declared = new HashSet<SourceKind>(SandboxLayout.READ_THROUGH_GIT);
         reads.sources().forEach(read -> declared.add(read.source()));
-        applicability.path("clauses").forEach(clause -> {
-            var readFrom = clause.path("readFrom").asString("");
-            if (!readFrom.isEmpty()) declared.add(new SourceKind(readFrom));
-        });
         var cited = new ArrayList<SourceKind>();
         candidate.allCitations().forEach(citation -> cited.add(citation.sourceKind()));
         var search = candidate.search();
