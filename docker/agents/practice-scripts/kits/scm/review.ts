@@ -443,7 +443,8 @@ export function mergeFacts(record: MergeRecord): MergeFacts {
 	};
 }
 
-export function mergeLead(merge: MergeFacts, label: string): ReviewLead {
+/** Stored practice programs call this API with the work record before the merge facts. */
+export function mergeLead(_record: MergeRecord, merge: MergeFacts, label: string): ReviewLead {
 	return {
 		at: { record: "metadata.json" },
 		label,

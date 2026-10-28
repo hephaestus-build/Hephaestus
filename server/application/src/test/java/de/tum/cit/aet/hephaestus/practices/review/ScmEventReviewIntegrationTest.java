@@ -107,6 +107,8 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReadNeed;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultEndReason;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultStore;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentId;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewAssignmentQuery;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobSnapshot;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewKind;
@@ -217,6 +219,9 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
 
     @Autowired
     ItemEventRepository events;
+
+    @Autowired
+    ReviewAssignmentQuery assignmentQuery;
 
     @Autowired
     ReviewRepository reviews;
@@ -871,7 +876,7 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
     }
 
     @Test
-    void shouldStartAndCaptureAReviewWithACustomizedPracticeAfterItsSourceContractMigrates() throws Exception {
+    void shouldResumeAndCaptureAQueuedReviewWithACustomizedPracticeAfterItsSourceContractMigrates() throws Exception {
         var mirror = new JsonMapper();
         var prepared = prepare(IdentityProviderType.GITHUB, false);
         long workspace = prepared.item().workspaceId();
@@ -897,6 +902,15 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
                     "UPDATE practice SET current_version_id=? WHERE id=? AND workspace_id=?", id, practice, workspace);
             return id;
         }));
+        publish(prepared);
+        var review = itemReviews(prepared).getFirst();
+        assertThat(jdbc.queryForObject(
+                        "SELECT practice_version_id FROM review_practice WHERE review_id=? AND practice_id=? AND workspace_id=?",
+                        Long.class,
+                        review.getId(),
+                        practice,
+                        workspace))
+                .isEqualTo(recorded);
         try (var input =
                 Objects.requireNonNull(getClass().getResourceAsStream("/db/changelog/source-contract-3.sql"))) {
             String migration = new String(input.readAllBytes(), StandardCharsets.UTF_8);
@@ -923,8 +937,7 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
                 "SELECT definition::text FROM practice_version WHERE id=?", String.class, recorded)));
         assertThat(historical).isEqualTo(original);
 
-        publish(prepared);
-        var review = itemReviews(prepared).getFirst();
+        assertThat(itemReviews(prepared)).extracting(Review::getId).containsExactly(review.getId());
         assertThat(onlyEvent(prepared).getState()).isEqualTo(ItemEventState.STARTED);
         assertThat(jdbc.queryForObject(
                         "SELECT v.definition#>>'{reads,contract}' FROM review_practice r JOIN practice_version v ON v.id=r.practice_version_id WHERE r.review_id=? AND r.practice_id=?",
@@ -932,6 +945,14 @@ class ScmEventReviewIntegrationTest extends AbstractResultAdmissionIntegrationTe
                         review.getId(),
                         practice))
                 .isEqualTo("3.0.0");
+        var assignment = assignmentQuery
+                .find(
+                        workspace,
+                        new ReviewAssignmentId(
+                                review.getId(), practice, prepared.item().itemId()))
+                .orElseThrow();
+        assertThat(assignment.practice().definition().reads().contract()).isEqualTo("3.0.0");
+        assertThat(assignment.practice().definition().criteria()).isEqualTo(criteria);
         var core = PullRequestContentSource.CORE;
         var checks = PullRequestContentSource.CHECKS;
         var pinned = source.pin(prepared.item(), prepared.version());

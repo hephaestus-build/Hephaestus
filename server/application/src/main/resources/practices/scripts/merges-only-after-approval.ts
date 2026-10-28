@@ -83,7 +83,7 @@ export default definePracticeScript({
 							facts: { reviewDecision: record.reviewDecision },
 						} satisfies ReviewLead,
 					];
-		const leads = [mergeLead(merge, LABELS.merge), ...aggregate, ...rows, ...last];
+		const leads = [mergeLead(domain.item, merge, LABELS.merge), ...aggregate, ...rows, ...last];
 		return ctx.review({
 			leads: leads.slice(0, REVIEW_LEAD_LIMIT),
 			limitations:

@@ -106,7 +106,7 @@ const EVIDENCE_SOURCE_DEFS: Record<string, EvidenceSourceDef> = {
 		label: "Review threads on the code",
 		icon: MessageSquareCodeIcon,
 		badgeVariant: "outline",
-		description: "Review conversations, submitted decisions and the provider’s aggregate decision.",
+		description: "Review conversations, submitted decisions and the overall review decision.",
 		locator: "object",
 	},
 	"scm.general-review-comments": {
