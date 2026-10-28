@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { getCurrentUserQueryKey } from "@/api/@tanstack/react-query.gen";
 import { server } from "@/mocks/server";
+import { SESSION_COOLDOWN_MS } from "./session-refresh";
 import { useSessionKeepAlive } from "./use-session-keep-alive";
 
 function userPayload(expiresInSec: number) {
@@ -22,6 +23,7 @@ function userPayload(expiresInSec: number) {
 }
 
 beforeEach(() => {
+	window.localStorage.clear();
 	vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] });
 	vi.setSystemTime(new Date("2026-09-07T12:00:00Z"));
 });
@@ -71,7 +73,7 @@ describe("useSessionKeepAlive", () => {
 		const session = mountSession();
 		await advance(1000);
 		await act(async () => vi.waitFor(() => expect(session.userCalls()).toBe(1)));
-		await advance(5000);
+		await advance(SESSION_COOLDOWN_MS + 1);
 		expect(session.refreshCalls()).toBe(1);
 		act(() => {
 			window.dispatchEvent(new Event("pointerdown"));

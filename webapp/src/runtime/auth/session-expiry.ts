@@ -1,8 +1,13 @@
 import type { QueryClient } from "@tanstack/react-query";
 
 import { apiBasePath } from "@/runtime/api-base-path";
+import { currentUserQueryOptions, serverUnreachable } from "@/runtime/auth/guard";
 import { safeReturnTo } from "@/runtime/auth/return-to";
-import { refreshAccessToken } from "@/runtime/auth/session-refresh";
+import {
+	confirmSession,
+	refreshAccessToken,
+	sessionConfirmedRecently,
+} from "@/runtime/auth/session-refresh";
 import { workspaceAddressConfig, workspaceReturnTo } from "@/runtime/workspace-address";
 
 // Identity probes can return 401 anonymously; auth requests must not trigger recursive recovery.
@@ -42,11 +47,7 @@ export function handlePossibleSessionExpiry(response: Response, queryClient: Que
 	return true;
 }
 
-// Late responses may still reject the cookie that a successful renewal replaced.
-const REFRESH_RECOVERY_COOLDOWN_MS = 10_000;
-
 let recovery: Promise<void> | null = null;
-let lastRefreshRecoveryAt = 0;
 
 async function recoverOrLogout(queryClient: QueryClient, currentPath: string): Promise<void> {
 	recovery ??= doRecoverOrLogout(queryClient, currentPath).finally(() => {
@@ -55,24 +56,41 @@ async function recoverOrLogout(queryClient: QueryClient, currentPath: string): P
 	return recovery;
 }
 
+/** Reads the identity now: a 401 from a request that left before the last renewal is late. */
+async function readSession(
+	queryClient: QueryClient,
+): Promise<"signed-in" | "refused" | "unavailable"> {
+	try {
+		await queryClient.query({ ...currentUserQueryOptions(), staleTime: 0 });
+		return "signed-in";
+	} catch (error) {
+		return serverUnreachable(error) ? "unavailable" : "refused";
+	}
+}
+
+// Every renewal rotates the cookie, so recovery renews only when the current cookie is refused.
 async function doRecoverOrLogout(queryClient: QueryClient, currentPath: string): Promise<void> {
-	// oxlint-disable-next-line no-restricted-properties -- Recovery cooldown uses wall-clock time outside React.
-	const recentlyRecovered = Date.now() - lastRefreshRecoveryAt < REFRESH_RECOVERY_COOLDOWN_MS;
-	if (recentlyRecovered) {
+	if (sessionConfirmedRecently()) {
 		return;
 	}
-	const result = await refreshAccessToken();
-	if (result === "unavailable") {
+	const session = await readSession(queryClient);
+	if (session === "unavailable") {
 		return;
 	}
-	if (result === "refreshed") {
-		// oxlint-disable-next-line no-restricted-properties -- Recovery cooldown uses wall-clock time outside React.
-		lastRefreshRecoveryAt = Date.now();
-		// Refetch queries, but never replay mutations after an ambiguous failure.
-		void queryClient.invalidateQueries();
-		return;
+	if (session === "refused") {
+		const result = await refreshAccessToken();
+		if (result === "unavailable") {
+			return;
+		}
+		if (result === "expired") {
+			redirectToLogin(currentPath);
+			return;
+		}
+	} else {
+		confirmSession();
 	}
-	redirectToLogin(currentPath);
+	// Refetch queries, but never replay mutations after an ambiguous failure.
+	void queryClient.invalidateQueries();
 }
 
 export function redirectToLogin(
@@ -88,5 +106,4 @@ export function redirectToLogin(
 
 export function __resetSessionRecoveryForTests(): void {
 	recovery = null;
-	lastRefreshRecoveryAt = 0;
 }
