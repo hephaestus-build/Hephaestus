@@ -172,8 +172,7 @@ public class LlmCallPermits {
     }
 
     public @Nullable Long poolFor(LlmModelResolver.ConnectionRef ref) {
-        var credential = models.resolveProxyCredential(ref);
-        return credential == null ? null : credential.callPoolId();
+        return models.resolveCallPool(ref);
     }
 
     private boolean samePool(long poolId, Caller caller) {
@@ -203,6 +202,7 @@ public class LlmCallPermits {
         return true;
     }
 
+    // A proxy request already resolved its credential. Changed membership aborts that request; a claim can retry.
     private @Nullable Permit activateReservation(long poolId, LlmCallClass callClass, Caller caller) {
         var pool = pools.lockAdmission(poolId).orElseThrow();
         if (!samePool(poolId, caller))

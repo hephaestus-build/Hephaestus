@@ -10,6 +10,30 @@ final class ProxyTransportClosure {
     private final Set<Connection> closing = new HashSet<>();
     private @Nullable Runnable release;
 
+    Request begin() {
+        return new Request();
+    }
+
+    /** Registration and completion share a lock, so a delayed connect cannot dispatch after release. */
+    final class Request {
+        private @Nullable Connection connection;
+        private boolean finished;
+
+        synchronized void connected(Connection opened) {
+            if (finished) {
+                opened.dispose();
+                throw new IllegalStateException("The model request ended before its transport connected");
+            }
+            connection = opened;
+        }
+
+        synchronized void finish(boolean completed) {
+            if (finished) return;
+            finished = true;
+            if (!completed && connection != null) closing(connection);
+        }
+    }
+
     void closing(Connection connection) {
         synchronized (this) {
             closing.add(connection);

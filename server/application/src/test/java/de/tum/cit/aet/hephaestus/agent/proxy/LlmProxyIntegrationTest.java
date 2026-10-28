@@ -336,6 +336,36 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
     }
 
     @Test
+    void shouldReadMovedPoolMembershipWhenTheClaimAlreadyLoadedTheModel() {
+        ReviewJob job = practiceScriptJob("https://models.example.com/v1");
+        var snapshot = ConfigSnapshot.fromJson(job.getConfigSnapshot(), objectMapper);
+        var first = new LlmCallPool();
+        first.setSlug("first-" + UUID.randomUUID());
+        first.setDisplayName("First");
+        first.setMaxConcurrentCalls(4);
+        first = callPools.saveAndFlush(first);
+        var second = new LlmCallPool();
+        second.setSlug("second-" + UUID.randomUUID());
+        second.setDisplayName("Second");
+        second.setMaxConcurrentCalls(4);
+        second = callPools.saveAndFlush(second);
+        long firstId = first.getId();
+        long secondId = second.getId();
+        long modelId = Objects.requireNonNull(snapshot.model().modelId());
+        jdbc.update("UPDATE llm_model SET call_pool_id=? WHERE id=?", firstId, modelId);
+        transactionTemplate.executeWithoutResult(status -> {
+            var cached = modelRepository.findById(modelId).orElseThrow();
+            assertThat(cached.getCallPoolId()).isEqualTo(firstId);
+            jdbc.update("UPDATE llm_model SET call_pool_id=? WHERE id=?", secondId, modelId);
+            assertThat(modelResolver.resolveCallPool(snapshot.model().connectionRef()))
+                    .isEqualTo(secondId);
+            assertThat(modelResolver.resolveCallPool(
+                            new ConnectionRef(UsageFundingSource.INSTANCE, Long.MAX_VALUE, modelId, workspace.getId())))
+                    .isNull();
+        });
+    }
+
+    @Test
     void shouldShareOneRateAccountAcrossDirectScriptsAndComposition() throws Exception {
         try (MockWebServer upstream = new MockWebServer()) {
             upstream.start();

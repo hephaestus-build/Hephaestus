@@ -27,7 +27,6 @@ import java.util.Arrays;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.UnaryOperator;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -699,10 +698,10 @@ class LlmProxyService {
             headers.clear();
             headers.addAll(exchange.headers());
         });
-        AtomicReference<Connection> connection = new AtomicReference<>();
+        var transport = exchange.transports().begin();
         request = request.httpRequest(client -> {
             HttpClientRequest nativeRequest = client.getNativeRequest();
-            if (nativeRequest instanceof Connection opened) connection.set(opened);
+            if (nativeRequest instanceof Connection opened) transport.connected(opened);
             else throw new IllegalStateException("The model transport must expose its connection lifecycle");
             if (bounds != null) nativeRequest.responseTimeout(bounds.firstByte());
         });
@@ -735,8 +734,7 @@ class LlmProxyService {
             if (cancelledFirst.get()) return null;
             throw noHead;
         } finally {
-            Connection opened = connection.get();
-            if (!completed && opened != null) exchange.transports().closing(opened);
+            transport.finish(completed);
         }
     }
 

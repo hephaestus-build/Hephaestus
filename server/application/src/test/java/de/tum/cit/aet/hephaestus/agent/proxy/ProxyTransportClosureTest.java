@@ -1,8 +1,10 @@
 package de.tum.cit.aet.hephaestus.agent.proxy;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -31,8 +33,12 @@ class ProxyTransportClosureTest {
         when(secondChannel.closeFuture()).thenReturn(secondClosed);
         var transports = new ProxyTransportClosure();
         AtomicBoolean released = new AtomicBoolean();
-        transports.closing(first);
-        transports.closing(second);
+        var firstRequest = transports.begin();
+        var secondRequest = transports.begin();
+        firstRequest.connected(first);
+        secondRequest.connected(second);
+        firstRequest.finish(false);
+        secondRequest.finish(false);
         transports.releaseWhenClosed(() -> released.set(true));
         verify(first).dispose();
         verify(second).dispose();
@@ -46,7 +52,26 @@ class ProxyTransportClosureTest {
     @Test
     void shouldReleaseAnExchangeThatFinishedWithoutACancelledTransport() {
         AtomicBoolean released = new AtomicBoolean();
-        new ProxyTransportClosure().releaseWhenClosed(() -> released.set(true));
+        var transports = new ProxyTransportClosure();
+        var connection = mock(Connection.class);
+        var request = transports.begin();
+        request.connected(connection);
+        request.finish(true);
+        transports.releaseWhenClosed(() -> released.set(true));
         assertThat(released).isTrue();
+        verify(connection, never()).dispose();
+    }
+
+    @Test
+    void shouldPreventADelayedConnectionFromDispatchingAfterThePermitReleased() {
+        var transports = new ProxyTransportClosure();
+        var request = transports.begin();
+        request.finish(false);
+        AtomicBoolean released = new AtomicBoolean();
+        transports.releaseWhenClosed(() -> released.set(true));
+        assertThat(released).isTrue();
+        var late = mock(Connection.class);
+        assertThatThrownBy(() -> request.connected(late)).isInstanceOf(IllegalStateException.class);
+        verify(late).dispose();
     }
 }

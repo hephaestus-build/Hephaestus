@@ -18,6 +18,12 @@ public interface WorkspaceLlmModelRepository extends JpaRepository<WorkspaceLlmM
 
     List<WorkspaceLlmModel> findByWorkspaceId(Long workspaceId);
 
+    /** Read live membership without returning a model from the persistence context. */
+    @Query(
+            "SELECT m.callPoolId FROM WorkspaceLlmModel m WHERE m.id = :id AND m.connection.id = :connectionId AND m.workspace.id = :workspaceId")
+    Optional<Long> findCallPoolId(
+            @Param("id") Long id, @Param("connectionId") Long connectionId, @Param("workspaceId") Long workspaceId);
+
     @Query("SELECT m FROM WorkspaceLlmModel m JOIN FETCH m.connection WHERE m.workspace.id = :workspaceId ORDER BY"
             + " m.id")
     List<WorkspaceLlmModel> findByWorkspaceIdWithConnection(@Param("workspaceId") Long workspaceId);

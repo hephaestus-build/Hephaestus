@@ -27,6 +27,10 @@ public interface LlmModelRepository extends JpaRepository<LlmModel, Long> {
 
     boolean existsByConnectionId(Long connectionId);
 
+    /** Scalar selection bypasses a model already cached by a claim transaction. */
+    @Query("SELECT m.callPoolId FROM LlmModel m WHERE m.id = :id AND m.connection.id = :connectionId")
+    Optional<Long> findCallPoolId(@Param("id") Long id, @Param("connectionId") Long connectionId);
+
     @Query("SELECT m FROM LlmModel m JOIN FETCH m.connection ORDER BY m.id")
     List<LlmModel> findAllWithConnection();
 

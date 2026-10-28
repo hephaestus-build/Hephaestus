@@ -20,6 +20,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.Executors;
@@ -30,6 +31,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestReporter;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -62,7 +64,7 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    void shouldHoldTheReferenceBudgetAndEightTurnReserveAcrossTwoWorkers() throws Exception {
+    void shouldHoldTheReferenceBudgetAndEightTurnReserveAcrossTwoWorkers(TestReporter reporter) throws Exception {
         long pool = pool(32, 8);
         List<LlmCallPermits.Permit> reviews = new ArrayList<>();
         for (int i = 0; i < 24; i++) reviews.add(admit(i % 2 == 0 ? workerA : workerB, pool, LlmCallClass.REQUEST, 1));
@@ -93,6 +95,13 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
         }
         latencies.sort(Long::compare);
         assertThat(latencies).hasSize(200);
+        reporter.publishEntry(Map.of(
+                "observations",
+                Integer.toString(latencies.size()),
+                "p50Ms",
+                Double.toString(latencies.get(99) / 1_000_000.0),
+                "p95Ms",
+                Double.toString(latencies.get(189) / 1_000_000.0)));
         assertThat(latencies.get(99)).isLessThan(Duration.ofSeconds(1).toNanos());
         assertThat(latencies.get(189)).isLessThan(Duration.ofSeconds(5).toNanos());
         assertThat(rows.countActive(pool)).isZero();

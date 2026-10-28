@@ -184,6 +184,22 @@ public class LlmModelResolver {
         return ConnectionRef.NONE;
     }
 
+    /** Pool-lock rechecks must read the database even when the claim already loaded the model entity. */
+    @Transactional(readOnly = true)
+    public @Nullable Long resolveCallPool(ConnectionRef ref) {
+        Long modelId = ref.modelId();
+        Long connectionId = ref.connectionId();
+        if (modelId == null || connectionId == null) return null;
+        if (ref.scope() == UsageFundingSource.INSTANCE)
+            return llmModelRepository.findCallPoolId(modelId, connectionId).orElse(null);
+        Long workspaceId = ref.workspaceId();
+        if (ref.scope() == UsageFundingSource.WORKSPACE && workspaceId != null)
+            return workspaceLlmModelRepository
+                    .findCallPoolId(modelId, connectionId, workspaceId)
+                    .orElse(null);
+        return null;
+    }
+
     /**
      * Called by the LLM proxy at call time, NEVER at job-dispatch time: unlike the rest of a job's
      * {@code ConfigSnapshot}, key rotation, host repointing and connection disabling must reach an

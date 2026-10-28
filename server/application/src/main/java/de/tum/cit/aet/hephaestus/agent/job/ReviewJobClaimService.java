@@ -250,7 +250,7 @@ public class ReviewJobClaimService {
                 && poolId != null
                 && !callPermits.reserve(
                         poolId,
-                        composing ? LlmCallClass.COMPOSITION : LlmCallClass.REQUEST,
+                        LlmCallClass.REQUEST,
                         new LlmCallPermits.Caller(
                                 job.getWorkspaceId(),
                                 job.getId(),

@@ -45,6 +45,9 @@ class LlmCallPoolAdminControllerIntegrationTest extends AbstractWorkspaceIntegra
     private LlmModelRepository instanceModels;
 
     @Autowired
+    private LlmModelResolver resolver;
+
+    @Autowired
     private WorkspaceLlmConnectionRepository workspaceConnections;
 
     @Autowired
@@ -105,6 +108,27 @@ class LlmCallPoolAdminControllerIntegrationTest extends AbstractWorkspaceIntegra
 
         assertThat(find(models, UsageFundingSource.INSTANCE, model.getId()).callPoolId())
                 .isEqualTo(second.id());
+    }
+
+    @Test
+    @WithAdminUser
+    void shouldResolveWorkspaceMembershipOnlyForItsWorkspaceAndConnection() {
+        var owner = workspace("pool-owner");
+        var other = workspace("pool-other");
+        var model = workspaceModel(owner);
+        var pool = create(slug("scoped"), 4, 0);
+        putModels(pool.id(), List.of(), List.of(model.getId()));
+        long connectionId = model.getConnection().getId();
+        var scope = UsageFundingSource.WORKSPACE;
+        assertThat(resolver.resolveCallPool(
+                        new LlmModelResolver.ConnectionRef(scope, connectionId, model.getId(), owner.getId())))
+                .isEqualTo(pool.id());
+        assertThat(resolver.resolveCallPool(
+                        new LlmModelResolver.ConnectionRef(scope, connectionId, model.getId(), other.getId())))
+                .isNull();
+        assertThat(resolver.resolveCallPool(
+                        new LlmModelResolver.ConnectionRef(scope, Long.MAX_VALUE, model.getId(), owner.getId())))
+                .isNull();
     }
 
     @Test
@@ -289,7 +313,8 @@ class LlmCallPoolAdminControllerIntegrationTest extends AbstractWorkspaceIntegra
                 .headers(h -> h.setBearerAuth(ADMIN_TOKEN))
                 .exchange()
                 .expectStatus()
-                .isNoContent();
+                .isNoContent()
+                .expectBody(Void.class);
     }
 
     private static String slug(String name) {
