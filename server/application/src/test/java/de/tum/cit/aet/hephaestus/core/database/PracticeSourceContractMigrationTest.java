@@ -178,30 +178,77 @@ class PracticeSourceContractMigrationTest {
     }
 
     @Test
-    void shouldResumeUnfinishedScansAndRecordAContractStopWhenResultsAlreadyExist() throws Exception {
+    void shouldResumeAnUnfinishedScanWithoutSpendingARetry() throws Exception {
         var database = NativePracticeFixture.resultParent("prod");
         var jdbc = jdbc(database);
-        var scan = definition(jdbc, 978005);
-        scan.withObject("/reads").put("contract", "2.0.0");
-        scan.set("scan", JSON.readTree("""
-            {"itemKind":"scm.file","include":["**/*"],"exclude":[],"context":[],
-             "reads":{"contract":"2.0.0","sources":[{"source":"scm.repository.tree","need":"COMPLETE"}]}}
-            """));
-        append(jdbc, 978105, 2, scan);
+        oldScan(jdbc);
+        seedScan(database);
+        PracticeMigrationFixture.execute(database, """
+            INSERT INTO review_job(id,review_id,workspace_id,status,attempt,input,config_snapshot,capture,trace_id,submitted_at,worker_id)
+            VALUES('00000000-0000-0000-0000-000000999824','00000000-0000-0000-0000-000000999811',978001,'RUNNING',2,'{}','{}','{}',repeat('f',32),now(),'stopped-worker');
+            """);
+        migrate(database);
+        assertThat(
+                        text(
+                                jdbc,
+                                "SELECT status||'|'||attempt||'|'||(capture IS NULL)||'|'||(worker_id IS NULL) FROM review_job WHERE id='00000000-0000-0000-0000-000000999824' AND workspace_id=978001"))
+                .isEqualTo("QUEUED|2|true|true");
+        assertThat(
+                        text(
+                                jdbc,
+                                "SELECT v.definition#>>'{scan,reads,contract}' FROM review_practice rp JOIN practice_version v ON (v.id,v.practice_id,v.workspace_id)=(rp.practice_version_id,rp.practice_id,rp.workspace_id) WHERE rp.review_id='00000000-0000-0000-0000-000000999811' AND rp.workspace_id=978001"))
+                .isEqualTo("3.0.0");
+        assertThat(
+                        text(
+                                jdbc,
+                                "SELECT state FROM review_item WHERE review_id='00000000-0000-0000-0000-000000999811' AND workspace_id=978001 AND item_id=999842"))
+                .isEqualTo("LISTED");
+    }
+
+    @Test
+    void shouldKeepStagedOutputAndRecordAContractStop() throws Exception {
+        var database = NativePracticeFixture.resultParent("prod");
+        var jdbc = jdbc(database);
+        oldScan(jdbc);
+        seedScan(database);
+        PracticeMigrationFixture.execute(database, """
+            INSERT INTO review_job(id,review_id,workspace_id,status,processing_status,input,config_snapshot,output,trace_id,submitted_at)
+            VALUES('00000000-0000-0000-0000-000000999825','00000000-0000-0000-0000-000000999811',978001,'COMPLETED','PENDING','{}','{}','{"candidate":"Keep the staged output"}',repeat('f',32),now());
+            """);
+        String staged = text(
+                jdbc,
+                "SELECT output::text FROM review_job WHERE id='00000000-0000-0000-0000-000000999825' AND workspace_id=978001");
+        migrate(database);
+        assertThat(
+                        text(
+                                jdbc,
+                                "SELECT status||'|'||stop_reason FROM review WHERE id='00000000-0000-0000-0000-000000999811' AND workspace_id=978001"))
+                .isEqualTo("PARTIAL|CONTRACT_CHANGED");
+        assertThat(
+                        text(
+                                jdbc,
+                                "SELECT output::text FROM review_job WHERE id='00000000-0000-0000-0000-000000999825' AND workspace_id=978001"))
+                .isEqualTo(staged);
+        assertThat(
+                        text(
+                                jdbc,
+                                "SELECT status||'|'||processing_status||'|'||cancellation_reason FROM review_job WHERE id='00000000-0000-0000-0000-000000999825' AND workspace_id=978001"))
+                .isEqualTo("COMPLETED|DONE|CONTRACT_CHANGED");
+        assertThat(
+                        text(
+                                jdbc,
+                                "SELECT state||'|'||reason FROM review_item WHERE review_id='00000000-0000-0000-0000-000000999811' AND workspace_id=978001 AND item_id=999842"))
+                .isEqualTo("WITHHELD|CONTRACT_CHANGED");
+    }
+
+    @Test
+    void shouldKeepCompletedResultReferencesWhenAPartialScanStopsForTheContractUpgrade() throws Exception {
+        var database = NativePracticeFixture.resultParent("prod");
+        var jdbc = jdbc(database);
+        var scan = oldScan(jdbc);
+        seedScan(database);
         PracticeMigrationFixture.execute(database, """
             BEGIN;
-            INSERT INTO item(id,workspace_id,kind,source_id) VALUES(978008,978001,'scm.repository',42);
-            INSERT INTO item(id,workspace_id,kind,parent_id,path) VALUES(999841,978001,'scm.file',978008,'a.ts'),(999842,978001,'scm.file',978008,'b.ts');
-            INSERT INTO review(id,workspace_id,item_id,kind,item_version,origin,status,budget_usd,ordered_at)
-            VALUES('00000000-0000-0000-0000-000000999811',978001,978008,'SCAN','repository-head','REQUEST','RUNNING',0.125,now()),
-                ('00000000-0000-0000-0000-000000999812',978001,978008,'SCAN','repository-head','REQUEST','RUNNING',0.125,now());
-            INSERT INTO review_practice(review_id,workspace_id,practice_id,practice_version_id,status,items_listed,listing_complete)
-            VALUES('00000000-0000-0000-0000-000000999811',978001,978004,978105,'READY',2,true),
-                ('00000000-0000-0000-0000-000000999812',978001,978004,978105,'READY',1,true);
-            INSERT INTO review_item(review_id,workspace_id,practice_id,item_id,item_version)
-            VALUES('00000000-0000-0000-0000-000000999811',978001,978004,999841,'file-a-head'),
-                ('00000000-0000-0000-0000-000000999811',978001,978004,999842,'file-b-head'),
-                ('00000000-0000-0000-0000-000000999812',978001,978004,999842,'file-b-head');
             INSERT INTO result(id,workspace_id,review_id,practice_id,practice_version_id,item_id,item_version,outcome,coverage,recorded_at)
             VALUES('00000000-0000-0000-0000-000000999851',978001,'00000000-0000-0000-0000-000000999811',978004,978105,999841,'file-a-head','MET','{}',now());
             UPDATE review_item SET state='JUDGED',result_id='00000000-0000-0000-0000-000000999851'
@@ -212,17 +259,8 @@ class PracticeSourceContractMigrationTest {
             VALUES('00000000-0000-0000-0000-000000999813',978001,978004,978105,'DONE',1,true);
             INSERT INTO review_item(review_id,workspace_id,practice_id,item_id,item_version,state,result_id)
             VALUES('00000000-0000-0000-0000-000000999813',978001,978004,999841,'file-a-head','REUSED','00000000-0000-0000-0000-000000999851');
-            INSERT INTO review_job(id,review_id,workspace_id,status,attempt,input,config_snapshot,capture,trace_id,submitted_at,worker_id)
-            VALUES('00000000-0000-0000-0000-000000999823','00000000-0000-0000-0000-000000999811',978001,'QUEUED',2,'{}','{}','{}',repeat('f',32),now(),null),
-                ('00000000-0000-0000-0000-000000999824','00000000-0000-0000-0000-000000999812',978001,'RUNNING',2,'{}','{}','{}',repeat('f',32),now(),'stopped-worker');
-            INSERT INTO review(id,workspace_id,item_id,kind,item_version,origin,status,budget_usd,ordered_at)
-            VALUES('00000000-0000-0000-0000-000000999814',978001,978008,'SCAN','repository-head','REQUEST','RUNNING',0.125,now());
-            INSERT INTO review_practice(review_id,workspace_id,practice_id,practice_version_id,status,items_listed,listing_complete)
-            VALUES('00000000-0000-0000-0000-000000999814',978001,978004,978105,'READY',1,true);
-            INSERT INTO review_item(review_id,workspace_id,practice_id,item_id,item_version)
-            VALUES('00000000-0000-0000-0000-000000999814',978001,978004,999842,'file-b-head');
-            INSERT INTO review_job(id,review_id,workspace_id,status,processing_status,input,config_snapshot,output,trace_id,submitted_at)
-            VALUES('00000000-0000-0000-0000-000000999825','00000000-0000-0000-0000-000000999814',978001,'COMPLETED','PENDING','{}','{}','{"candidate":"Keep the staged output"}',repeat('f',32),now());
+            INSERT INTO review_job(id,review_id,workspace_id,status,attempt,input,config_snapshot,capture,trace_id,submitted_at)
+            VALUES('00000000-0000-0000-0000-000000999823','00000000-0000-0000-0000-000000999811',978001,'QUEUED',2,'{}','{}','{}',repeat('f',32),now());
             COMMIT;
             """);
         String result = text(
@@ -230,9 +268,6 @@ class PracticeSourceContractMigrationTest {
                 "SELECT to_jsonb(r)::text FROM result r WHERE id='00000000-0000-0000-0000-000000999851' AND workspace_id=978001");
         String digest =
                 text(jdbc, "SELECT review_digest FROM practice_version WHERE id=978105 AND workspace_id=978001");
-        String staged = text(
-                jdbc,
-                "SELECT output::text FROM review_job WHERE id='00000000-0000-0000-0000-000000999825' AND workspace_id=978001");
         migrate(database);
         assertThat(
                         text(
@@ -265,36 +300,38 @@ class PracticeSourceContractMigrationTest {
         assertThat(
                         text(
                                 jdbc,
-                                "SELECT status||'|'||attempt||'|'||(capture IS NULL)||'|'||(worker_id IS NULL) FROM review_job WHERE id='00000000-0000-0000-0000-000000999824' AND workspace_id=978001"))
-                .isEqualTo("QUEUED|2|true|true");
-        assertThat(
-                        text(
-                                jdbc,
-                                "SELECT v.definition#>>'{scan,reads,contract}' FROM review_practice rp JOIN practice_version v ON (v.id,v.practice_id,v.workspace_id)=(rp.practice_version_id,rp.practice_id,rp.workspace_id) WHERE rp.review_id='00000000-0000-0000-0000-000000999812' AND rp.workspace_id=978001"))
-                .isEqualTo("3.0.0");
-        assertThat(
-                        text(
-                                jdbc,
                                 "SELECT v.definition#>>'{scan,reads,contract}' FROM review_practice rp JOIN practice_version v ON (v.id,v.practice_id,v.workspace_id)=(rp.practice_version_id,rp.practice_id,rp.workspace_id) WHERE rp.review_id='00000000-0000-0000-0000-000000999813' AND rp.workspace_id=978001"))
                 .isEqualTo("2.0.0");
-        assertThat(
-                        text(
-                                jdbc,
-                                "SELECT status||'|'||stop_reason FROM review WHERE id='00000000-0000-0000-0000-000000999814' AND workspace_id=978001"))
-                .isEqualTo("PARTIAL|CONTRACT_CHANGED");
-        assertThat(
-                        text(
-                                jdbc,
-                                "SELECT output::text FROM review_job WHERE id='00000000-0000-0000-0000-000000999825' AND workspace_id=978001"))
-                .isEqualTo(staged);
-        assertThat(
-                        text(
-                                jdbc,
-                                "SELECT status||'|'||processing_status||'|'||cancellation_reason FROM review_job WHERE id='00000000-0000-0000-0000-000000999825' AND workspace_id=978001"))
-                .isEqualTo("COMPLETED|DONE|CONTRACT_CHANGED");
         // Recheck the native result/version constraint after the upgrade, not only the stored bytes.
         jdbc.update(
                 "UPDATE review_item SET detail='{}' WHERE workspace_id=978001 AND review_id IN ('00000000-0000-0000-0000-000000999811','00000000-0000-0000-0000-000000999813') AND result_id IS NOT NULL");
+    }
+
+    private static ObjectNode oldScan(JdbcTemplate jdbc) {
+        var scan = definition(jdbc, 978005);
+        scan.withObject("/reads").put("contract", "2.0.0");
+        scan.set("scan", JSON.readTree("""
+            {"itemKind":"scm.file","include":["**/*"],"exclude":[],"context":[],
+             "reads":{"contract":"2.0.0","sources":[{"source":"scm.repository.tree","need":"COMPLETE"}]}}
+            """));
+        append(jdbc, 978105, 2, scan);
+        return scan;
+    }
+
+    private static void seedScan(TestDatabase database) throws Exception {
+        PracticeMigrationFixture.execute(database, """
+            BEGIN;
+            INSERT INTO item(id,workspace_id,kind,source_id) VALUES(978008,978001,'scm.repository',42);
+            INSERT INTO item(id,workspace_id,kind,parent_id,path) VALUES(999841,978001,'scm.file',978008,'a.ts'),(999842,978001,'scm.file',978008,'b.ts');
+            INSERT INTO review(id,workspace_id,item_id,kind,item_version,origin,status,budget_usd,ordered_at)
+            VALUES('00000000-0000-0000-0000-000000999811',978001,978008,'SCAN','repository-head','REQUEST','RUNNING',0.125,now());
+            INSERT INTO review_practice(review_id,workspace_id,practice_id,practice_version_id,status,items_listed,listing_complete)
+            VALUES('00000000-0000-0000-0000-000000999811',978001,978004,978105,'READY',2,true);
+            INSERT INTO review_item(review_id,workspace_id,practice_id,item_id,item_version)
+            VALUES('00000000-0000-0000-0000-000000999811',978001,978004,999841,'file-a-head'),
+                ('00000000-0000-0000-0000-000000999811',978001,978004,999842,'file-b-head');
+            COMMIT;
+            """);
     }
 
     private void runScript(String slug, JsonNode definition) throws Exception {
