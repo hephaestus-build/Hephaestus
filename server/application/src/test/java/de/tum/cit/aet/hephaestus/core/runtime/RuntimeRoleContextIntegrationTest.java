@@ -338,7 +338,6 @@ class RuntimeRoleContextIntegrationTest {
         // No outer test transaction or polling: this read follows the completed HTTP acknowledgement.
         SlackParticipantConsent recorded = consents.findById(actorKey).orElseThrow();
         assertThat(recorded.isIngestionOptedOut()).isTrue();
-        assertThat(recorded.isResearchOptedOut()).isFalse();
         assertThat(consents.findById(otherKey)).isEmpty();
         assertThat(consents.findById(siblingKey)).isEmpty();
     }

@@ -52,14 +52,6 @@ public class SlackParticipantConsent {
     @ColumnDefault("false")
     private boolean ingestionOptedOut;
 
-    @Column(name = "research_opted_out", nullable = false, insertable = false, updatable = false)
-    @ColumnDefault("false")
-    private boolean researchOptedOut;
-
-    @Nullable
-    @Column(name = "source", length = 32, insertable = false, updatable = false)
-    private String source;
-
     /**
      * When the current decision was made. Every write goes through the repository's native {@code ON CONFLICT}
      * upserts, which restamp this on each re-decision; the creation timestamp only covers a JPA-persisted row.
