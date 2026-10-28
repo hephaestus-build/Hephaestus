@@ -407,17 +407,6 @@ erDiagram
         BIGINT version "NOT NULL"
     }
 
-    OutlineDocumentEvent {
-        BIGINT id PK
-        BIGINT workspace_id FK "NOT NULL"
-        BIGINT connection_id FK "NOT NULL"
-        VARCHAR(64) document_id "NOT NULL"
-        VARCHAR(64) event_name "NOT NULL"
-        VARCHAR(64) actor_subject
-        TIMESTAMPTZ occurred_at
-        TIMESTAMPTZ created_at "NOT NULL"
-    }
-
     Project {
         BIGINT id PK
         VARCHAR(64) node_id UK
@@ -811,8 +800,6 @@ erDiagram
     Workspace ||--o{ OutlineCollection : has
     Connection ||--o{ OutlineDocument : has
     Workspace ||--o{ OutlineDocument : has
-    Connection ||--o{ OutlineDocumentEvent : has
-    Workspace ||--o{ OutlineDocumentEvent : has
     User ||--o{ Project : created_by
     IdentityProvider ||--o{ Project : references
     Project ||--o{ ProjectField : has

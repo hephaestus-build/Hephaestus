@@ -184,11 +184,10 @@ The compatibility guard reads this table from the latest release tag.
 Thus, it permits a drop only after a release has listed the object.
 The changeset that drops the object also removes its row and its exclusion.
 
+The 1.0 cutover dropped every earlier pending contraction, so the table is empty.
+
 | Object                                                                           | Changelog that stopped writing it | Exclusion to remove               |
 | -------------------------------------------------------------------------------- | --------------------------------- | --------------------------------- |
-| `consent_notice` table                                                           | `1789067582535_changelog.xml`     | `table:consent_notice`            |
-| `product_survey_submission` table                                                | `1789117764980_changelog.xml`     | `table:product_survey_submission` |
-| `llm_model.supports_reasoning`, `workspace_llm_model.supports_reasoning` columns | `1789135709162_changelog.xml`     | `column:supports_reasoning`       |
 
 ## CI validation
 
@@ -318,7 +317,7 @@ The [operator migration guide](https://github.com/hephaestus-build/Hephaestus/bl
 | Released data | Cutover behavior |
 |---|---|
 | `workspace.practice_skip_drafts` | Reviews include draft work when a practice's `reviewOn` declaration permits it. `practice_skip_drafts` is removed. The migration preserves each pinned practice version. |
-| `consent_decision.notice_sha256` | The duplicate hash is removed. Each decision keeps its immutable `notice_version`. The referenced `consent_notice` keeps the exact notice text and hash. |
+| `consent_decision.notice_sha256` | The duplicate hash is removed. Each decision keeps its immutable `notice_version`, which names the release that published the wording. 1.0 drops the `consent_notice` archive. |
 | Legacy job diagnostics: `container_logs`, `prompt_digest`, `inputs_digest`, `model_labels`, and unmapped `metadata` | These database values are not copied into the new practice records. Retain the pre-upgrade backup when this diagnostic history is needed. |
 
 ## Heph conversation ledger

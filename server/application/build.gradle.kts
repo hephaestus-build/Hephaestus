@@ -590,7 +590,7 @@ for ((taskName, command) in
                 // event_publication is the JDBC registry.
                 // INCLUDE columns are native index metadata; database contracts verify the covering
                 // index.
-                "--exclude-objects=table:shedlock,table:event_publication,table:auth_rate_limit_bucket,table:auth_event_default,table:auth_event_p\\d+,table:consent_notice,table:product_survey_submission,column:supports_reasoning,foreignkey:sfk_.*,index:idx_activity_event_workspace_covering",
+                "--exclude-objects=table:shedlock,table:event_publication,table:auth_rate_limit_bucket,table:auth_event_default,table:auth_event_p\\d+,foreignkey:sfk_.*,index:idx_activity_event_workspace_covering",
             )
         }
     }

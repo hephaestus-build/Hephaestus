@@ -15,7 +15,6 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationRef;
 import de.tum.cit.aet.hephaestus.integration.outline.client.OutlineApiClient;
 import de.tum.cit.aet.hephaestus.integration.outline.client.OutlineApiClient.OutlineIdentity;
 import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineCollectionRepository;
-import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineDocumentEventRepository;
 import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineDocumentRepository;
 import de.tum.cit.aet.hephaestus.integration.outline.lifecycle.OutlineWebhookRegistrar;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -46,16 +45,12 @@ class OutlineConnectionStrategyTest extends BaseUnitTest {
     @Mock
     private OutlineCollectionRepository outlineCollectionRepository;
 
-    @Mock
-    private OutlineDocumentEventRepository outlineDocumentEventRepository;
-
     private OutlineConnectionStrategy strategy() {
         return new OutlineConnectionStrategy(
                 outlineApiClient,
                 webhookRegistrar,
                 outlineDocumentRepository,
                 outlineCollectionRepository,
-                outlineDocumentEventRepository,
                 new OutlineOriginPolicy(Set.of("https://app.getoutline.com")));
     }
 
@@ -103,7 +98,6 @@ class OutlineConnectionStrategyTest extends BaseUnitTest {
         verify(outlineDocumentRepository).deleteByWorkspaceId(5L);
         verify(outlineCollectionRepository).deleteByWorkspaceId(5L);
         // GDPR erase on disconnect covers the event log too — actor subjects are personal data.
-        verify(outlineDocumentEventRepository).deleteByWorkspaceId(5L);
         verifyNoInteractions(webhookRegistrar);
     }
 
@@ -114,6 +108,6 @@ class OutlineConnectionStrategyTest extends BaseUnitTest {
 
         assertThat(strategy().prepareProviderTeardown(new IntegrationRef(IntegrationKind.OUTLINE, 5L, "team-9", 7L)))
                 .containsSame(deletion);
-        verifyNoInteractions(outlineDocumentRepository, outlineCollectionRepository, outlineDocumentEventRepository);
+        verifyNoInteractions(outlineDocumentRepository, outlineCollectionRepository);
     }
 }

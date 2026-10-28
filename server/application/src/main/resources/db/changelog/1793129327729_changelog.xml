@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <!--
+        1789117764980-4 copied the survey submissions once, at the upgrade to v0.81.0. A v0.80.x role that still ran
+        during that rolling upgrade could write a submission afterwards, which only the old table holds. Before 1.0
+        drops the table, this copies each submission that has no participation for its survey and account, reshaped
+        as 1789117764980-4 reshaped them, with blank answers dropped. A submission that was copied keeps its copy.
+    -->
+    <changeSet id="1793129327729-1" author="hephaestus">
+        <sql><![CDATA[
+INSERT INTO product_survey_participation (id, survey_id, account_id, workspace_id, status, answers_json, invited_at, decided_at)
+SELECT s.id, s.survey_id, s.account_id, s.workspace_id,
+       CASE s.disposition WHEN 'DISMISSED' THEN 'DECLINED' ELSE s.disposition END,
+       CASE WHEN s.answers_json IS NULL THEN NULL ELSE COALESCE((
+           SELECT jsonb_agg(
+               CASE question.node ->> 'type'
+                   WHEN 'RATING' THEN jsonb_build_object('questionId', question.node ->> 'id', 'rating', btrim(answer.value)::int)
+                   WHEN 'SINGLE_CHOICE' THEN jsonb_build_object('questionId', question.node ->> 'id', 'choices', jsonb_build_array(answer.value))
+                   ELSE jsonb_build_object('questionId', question.node ->> 'id', 'text', btrim(answer.value))
+               END
+               ORDER BY question.position)
+           FROM jsonb_array_elements(v.questions_json) WITH ORDINALITY AS question(node, position)
+           JOIN jsonb_each_text(s.answers_json) AS answer(key, value) ON answer.key = question.node ->> 'id'
+           WHERE btrim(answer.value) <> ''
+       ), '[]'::jsonb) END,
+       s.created_at, s.created_at
+FROM product_survey_submission s
+JOIN product_survey v ON v.id = s.survey_id
+WHERE NOT EXISTS (
+    SELECT 1 FROM product_survey_participation p WHERE p.survey_id = s.survey_id AND p.account_id = s.account_id)
+ON CONFLICT DO NOTHING;
+]]></sql>
+        <rollback/>
+    </changeSet>
+    <changeSet id="1793129327729-2" author="hephaestus">
+        <comment>1.0 drops the stores that nothing reads or writes. Dropping review_job.idempotency_key also drops its partial unique index uk_review_job_active_key.</comment>
+        <dropTable tableName="consent_notice"/>
+        <dropTable tableName="product_survey_submission"/>
+        <dropTable tableName="outline_document_event"/>
+        <dropColumn columnName="idempotency_key" tableName="review_job"/>
+        <dropColumn columnName="supports_reasoning" tableName="llm_model"/>
+        <dropColumn columnName="supports_reasoning" tableName="workspace_llm_model"/>
+        <rollback>
+            <stop>Restore the verified pre-upgrade backup; 1.0 drops these stores and keeps none of their rows.</stop>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

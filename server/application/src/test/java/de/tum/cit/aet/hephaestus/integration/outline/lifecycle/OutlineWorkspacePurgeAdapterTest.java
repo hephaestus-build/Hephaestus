@@ -3,7 +3,6 @@ package de.tum.cit.aet.hephaestus.integration.outline.lifecycle;
 import static org.mockito.Mockito.verify;
 
 import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineCollectionRepository;
-import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineDocumentEventRepository;
 import de.tum.cit.aet.hephaestus.integration.outline.domain.OutlineDocumentRepository;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import org.junit.jupiter.api.Test;
@@ -17,12 +16,8 @@ class OutlineWorkspacePurgeAdapterTest extends BaseUnitTest {
     @Mock
     private OutlineCollectionRepository outlineCollectionRepository;
 
-    @Mock
-    private OutlineDocumentEventRepository outlineDocumentEventRepository;
-
     private OutlineWorkspacePurgeAdapter adapter() {
-        return new OutlineWorkspacePurgeAdapter(
-                outlineDocumentRepository, outlineCollectionRepository, outlineDocumentEventRepository);
+        return new OutlineWorkspacePurgeAdapter(outlineDocumentRepository, outlineCollectionRepository);
     }
 
     @Test
@@ -31,6 +26,5 @@ class OutlineWorkspacePurgeAdapterTest extends BaseUnitTest {
 
         verify(outlineDocumentRepository).deleteByWorkspaceId(789L);
         verify(outlineCollectionRepository).deleteByWorkspaceId(789L);
-        verify(outlineDocumentEventRepository).deleteByWorkspaceId(789L);
     }
 }
