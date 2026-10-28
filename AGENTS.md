@@ -8,7 +8,7 @@ Admin docs, contributor docs, and repository instructions use STE.
 Hephaestus is open-source software that gives software teams practice feedback: feedback on how developers apply engineering practices.
 It checks developers' existing work in GitHub, GitLab, Slack, and Outline against the engineering practices that their project values.
 A curated set of practices ships with it.
-It delivers practice feedback on the work itself, on the developer's own practice pages, or in conversation with Heph.
+It delivers practice feedback on the work itself, on the developer's own practice pages, or in a conversation with Hephaestus.
 
 ## What we will not compromise on
 
@@ -64,7 +64,7 @@ Get a decision instead of silently bypassing the rule.
 [Practice review glossary](docs/contributor/practice-review-glossary.mdx) owns review and runtime terms.
 Use their exact names in prose, code, HTTP and release notes.
 Define each term in one owning page and cite it elsewhere.
-The sandboxed runtime is an agent. Heph and the application are not agents.
+The sandboxed runtime is an agent. Hephaestus, including its answers in a conversation, is not an agent.
 
 In this file, **you** is the agent that reads it and changes Hephaestus.
 **We**, the maintainers, are the people who build Hephaestus and talk to you now.

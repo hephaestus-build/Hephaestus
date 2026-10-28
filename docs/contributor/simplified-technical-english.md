@@ -15,7 +15,7 @@ Each profile fits its reader.
 
 The product voice is for people who use Hephaestus.
 STE is for people who operate it, build it, or follow a procedure.
-What a model writes for a person, such as feedback or a Heph reply, uses the product voice.
+What a model writes for a person, such as feedback or an answer in a conversation, uses the product voice.
 Both profiles use the same product terms.
 Never add or drop a fact when you rewrite.
 
@@ -77,7 +77,7 @@ They draw on [GOV.UK](https://www.gov.uk/guidance/content-design/writing-for-gov
 Write the way a helpful colleague speaks: direct and specific.
 
 - Address the reader as **you**. Use the active voice.
-- Say **we** only when the product reports its own failure: `We could not save your changes`. Heph says **I** in a conversation.
+- Say **we** only when the product reports its own failure: `We could not save your changes`. Hephaestus says **I** in a conversation.
 - Put the point first. Put a condition before the action that depends on it.
 - Use short, common words. The Home Office [recommends](https://design.homeoffice.gov.uk/accessibility/written-content/readability) a reading age of 9, even for expert readers.
 - Write no more than 25 words per sentence. This project limit follows [GOV.UK](https://insidegovuk.blog.gov.uk/2014/08/04/sentence-length-why-25-words-is-our-limit/).
@@ -95,7 +95,7 @@ Tone changes with the situation.
 | **Information** | Neutral. Say what is true and when it changes. | `Reviews start after you connect a repository.` |
 | **Warning** | Calm. Give notice before a loss. Name the consequence and the way out. | `This repository has no webhook. New pull requests will not be reviewed until you add one.` |
 | **Error** | Plain. Say what happened, then what to do next. | `We could not reach GitHub. Check the connection, then try again.` |
-| **Empty** | Helpful. Say why it is empty and what will appear. Offer the way to get it. | `No feedback yet. It appears here after Heph reviews your next pull request.` |
+| **Empty** | Helpful. Say why it is empty and what will appear. Offer the way to get it. | `No feedback yet. It appears here after Hephaestus reviews your next pull request.` |
 | **Destructive** | Serious. Name the object and the consequence. Say if it can be undone. | `Delete practice "Code review"? This removes the practice and its results. You cannot undo this.` |
 | **Onboarding** | Encouraging, one step at a time. Lead to the first result. | `Connect a repository to get your first feedback.` |
 | **Progress** | Present participle with a single ellipsis character. | `Saving…` |
