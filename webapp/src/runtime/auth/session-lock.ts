@@ -1,63 +1,101 @@
 let database: Promise<IDBDatabase> | undefined;
 
-function lockDatabase(): Promise<IDBDatabase> {
-	database ??= new Promise((resolve, reject) => {
-		const request = indexedDB.open("hephaestus-session-lock", 1);
-		request.onupgradeneeded = () => request.result.createObjectStore("session");
-		request.onerror = () => reject(request.error);
-		request.onblocked = () => reject(new Error("Session lock database is blocked"));
-		request.onsuccess = () => {
-			request.result.onversionchange = () => {
-				request.result.close();
-				database = undefined;
-			};
-			resolve(request.result);
-		};
-	}).catch((error: unknown) => {
+async function lockDatabase(): Promise<IDBDatabase> {
+	try {
+		// oxlint-disable-next-line promise/avoid-new -- IndexedDB exposes events, not promises.
+		database ??= new Promise<IDBDatabase>((resolve, reject) => {
+			const request = indexedDB.open("hephaestus-session-lock", 1);
+			request.addEventListener("upgradeneeded", () => request.result.createObjectStore("session"), {
+				once: true,
+			});
+			request.addEventListener(
+				"error",
+				() => reject(request.error ?? new Error("Session lock database failed")),
+				{ once: true },
+			);
+			request.addEventListener(
+				"blocked",
+				() => reject(new Error("Session lock database is blocked")),
+				{ once: true },
+			);
+			request.addEventListener(
+				"success",
+				() => {
+					request.result.addEventListener(
+						"versionchange",
+						() => {
+							request.result.close();
+							database = undefined;
+						},
+						{ once: true },
+					);
+					resolve(request.result);
+				},
+				{ once: true },
+			);
+		});
+		return await database;
+	} catch (error) {
 		database = undefined;
 		throw error;
-	});
-	return database;
+	}
 }
 
 async function withDatabaseLock<T>(operation: () => Promise<T>): Promise<T> {
 	const db = await lockDatabase();
+	// oxlint-disable-next-line promise/avoid-new -- Completion and abort are IndexedDB transaction events.
 	return new Promise<T>((resolve, reject) => {
 		const transaction = db.transaction("session", "readwrite");
 		const store = transaction.objectStore("session");
 		let started = false;
 		let outcome: { value: T } | { error: unknown } | undefined;
-		transaction.onabort = () => reject(transaction.error ?? new Error("Session lock was aborted"));
-		transaction.onerror = () => reject(transaction.error);
-		transaction.oncomplete = () => {
-			if (outcome === undefined) {
-				reject(new Error("Session lock ended before the operation"));
-			} else if ("error" in outcome) {
-				reject(outcome.error);
-			} else {
-				resolve(outcome.value);
+		transaction.addEventListener(
+			"abort",
+			() => reject(transaction.error ?? new Error("Session lock was aborted")),
+			{ once: true },
+		);
+		transaction.addEventListener(
+			"error",
+			() => reject(transaction.error ?? new Error("Session lock failed")),
+			{ once: true },
+		);
+		transaction.addEventListener(
+			"complete",
+			() => {
+				if (outcome === undefined) {
+					reject(new Error("Session lock ended before the operation"));
+				} else if ("error" in outcome) {
+					reject(new Error("Session operation failed", { cause: outcome.error }));
+				} else {
+					resolve(outcome.value);
+				}
+			},
+			{ once: true },
+		);
+		const run = async () => {
+			try {
+				outcome = { value: await operation() };
+			} catch (error) {
+				outcome = { error };
 			}
 		};
 		// A queued read keeps the write transaction open across async cookie changes. The browser
 		// serializes these transactions across tabs and releases them when a tab closes.
 		const hold = () => {
 			const read = store.get(0);
-			read.onsuccess = () => {
-				if (!started) {
-					started = true;
-					void Promise.resolve()
-						.then(operation)
-						.then(
-							(value) => {
-								outcome = { value };
-							},
-							(error: unknown) => {
-								outcome = { error };
-							},
-						);
-				}
-				if (outcome === undefined) hold();
-			};
+			read.addEventListener(
+				"success",
+				() => {
+					if (!started) {
+						started = true;
+						void run();
+					}
+					if (outcome === undefined) {
+						hold();
+					}
+				},
+				{ once: true },
+			);
 		};
 		hold();
 	});

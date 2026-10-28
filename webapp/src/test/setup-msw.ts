@@ -1,3 +1,4 @@
+// oxlint-disable-next-line import/no-unassigned-import -- jsdom omits the IndexedDB API used by the session-lock fallback.
 import "fake-indexeddb/auto";
 
 // Global Vitest setup: stand up the MSW Node server so RTL tests of the query-driven auth

@@ -10,7 +10,7 @@ export type SessionRefreshResult = "refreshed" | "expired" | "unavailable";
 export const SESSION_COOLDOWN_MS = 10_000;
 
 const REFRESHED_KEY = "hephaestus:session-refreshed";
-const refreshStamp = z.object({ id: z.string().uuid(), completedAt: z.number().finite() });
+const refreshStamp = z.object({ id: z.uuid(), completedAt: z.number().nonnegative() });
 let withoutStorage: z.infer<typeof refreshStamp> | undefined;
 
 function lastRefresh() {
@@ -43,7 +43,9 @@ let inFlight: Promise<SessionRefreshResult> | null = null;
 
 async function rotate(): Promise<SessionRefreshResult> {
 	const { response } = await refresh();
-	if (!response) return "unavailable";
+	if (!response) {
+		return "unavailable";
+	}
 	if (response.ok) {
 		recordRefresh();
 		return "refreshed";
@@ -54,11 +56,9 @@ async function rotate(): Promise<SessionRefreshResult> {
 /** Calls queued behind the same renewal share its result; a later caller can renew again. */
 export async function refreshAccessToken(): Promise<SessionRefreshResult> {
 	const observed = lastRefresh()?.id;
-	inFlight ??= withSessionLock(() => {
+	inFlight ??= withSessionLock(async (): Promise<SessionRefreshResult> => {
 		const completed = lastRefresh();
-		return completed !== undefined && completed.id !== observed
-			? Promise.resolve<SessionRefreshResult>("refreshed")
-			: rotate();
+		return completed !== undefined && completed.id !== observed ? "refreshed" : rotate();
 	})
 		.catch((): SessionRefreshResult => "unavailable")
 		.finally(() => {

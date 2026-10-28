@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
-test("the session-rotation rollback warns operators about the remaining token lifetime", () => {
+await test("the session-rotation rollback warns operators about the remaining token lifetime", () => {
 	const migration = readFileSync(
 		"server/application/src/main/resources/db/changelog/1793168406889_changelog.xml",
 		"utf8",
