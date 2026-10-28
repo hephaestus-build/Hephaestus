@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1793224049100-1" author="hephaestus">
+        <addColumn tableName="mentor_turn">
+            <column defaultValueComputed="CURRENT_TIMESTAMP" name="queued_at" type="TIMESTAMP(6) WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+        <rollback>
+            <dropColumn tableName="mentor_turn" columnName="queued_at"/>
+        </rollback>
+    </changeSet>
+    <changeSet id="1793224049100-2" author="hephaestus">
+        <createIndex indexName="idx_mentor_turn_status_queued" tableName="mentor_turn">
+            <column name="status"/>
+            <column defaultValueComputed="CURRENT_TIMESTAMP" name="queued_at"/>
+        </createIndex>
+        <rollback>
+            <dropIndex indexName="idx_mentor_turn_status_queued" tableName="mentor_turn"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

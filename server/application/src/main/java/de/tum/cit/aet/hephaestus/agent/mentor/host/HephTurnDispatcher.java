@@ -1,5 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.mentor.host;
 
+import static de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnCompletion.COULD_NOT_START;
+
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptJwt;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenIssuer;
 import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnAttempt;
@@ -50,7 +52,6 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
 
     private static final Logger log = LoggerFactory.getLogger(HephTurnDispatcher.class);
 
-    static final String COULD_NOT_START = "Heph could not start. Try again in a moment.";
     static final String TOOK_TOO_LONG = "Heph took too long to reply and stopped. Try again.";
     static final String COULD_NOT_FINISH = "Heph could not finish this reply. Try again.";
     static final String MODEL_STOPPED_ANSWERING =
@@ -363,7 +364,6 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
     }
 
     private void claimLoop() {
-        Instant preparationDeadline = null;
         while (active) {
             try {
                 wake.tryAcquire(BACKSTOP.toMillis(), TimeUnit.MILLISECONDS);
@@ -373,24 +373,11 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
                 return;
             }
             while (active && running.size() < capacity) {
-                boolean prepared;
                 Optional<MentorTurnStarter.StartedTurn> started;
                 try {
-                    prepared = prepareHost();
-                    if (!active) {
+                    if (!prepareHost() || !active) {
                         break;
                     }
-                    if (!prepared) {
-                        Instant now = clock.instant();
-                        if (preparationDeadline == null) {
-                            // Ledger wakes can arrive together; give a transient failure time to recover.
-                            preparationDeadline = now.plus(HOST_READY_TIMEOUT);
-                        }
-                        if (now.isBefore(preparationDeadline)) {
-                            break;
-                        }
-                    }
-                    preparationDeadline = null;
                     started = starter.startNext(workerId, lease);
                 } catch (RuntimeException e) {
                     claimFailures.increment();
@@ -401,22 +388,7 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
                     break;
                 }
                 try {
-                    if (prepared) {
-                        begin(started.get());
-                    } else {
-                        // Claim only to record a bounded failure through the normal attempt ledger and accounting.
-                        MentorTurn turn = started.get().turn();
-                        completion.end(
-                                turn.getId(),
-                                turn.getAttempt(),
-                                workerId,
-                                new MentorTurnCompletion.Ending(
-                                        MentorTurn.Status.FAILED,
-                                        List.of(),
-                                        COULD_NOT_START,
-                                        "host_preparation_failed",
-                                        null));
-                    }
+                    begin(started.get());
                 } catch (RuntimeException e) {
                     claimFailures.increment();
                     log.warn(

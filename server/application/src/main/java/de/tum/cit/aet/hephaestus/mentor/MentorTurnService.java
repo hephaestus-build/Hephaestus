@@ -378,7 +378,7 @@ public class MentorTurnService {
         // Dates the attempt's spend in this transaction, before the requeue resets the turn.
         events.publishEvent(new MentorLedgerEvents.AttemptEnded(turn.getWorkspaceId(), turn.getId(), attempt, lostAt));
         if (retry) {
-            turn.requeue();
+            turn.requeue(now);
         } else {
             turn.end(MentorTurn.Status.FAILED, LEASE_EXPIRED, now);
             turn.recordFailure(LEASE_EXPIRED_CAUSE, null);

@@ -503,12 +503,15 @@ The worker's readiness includes `hephTurnDispatcher`, so a rolling update keeps 
 A channel that does not open is tried again after 1, 2, 4 and 8 seconds (`runCommands`), then the host exits.
 Until a host is ready, turns stay queued without spending an attempt.
 
-The first preparation failure starts a recovery window of `HephTurnDispatcher.HOST_READY_TIMEOUT`.
-If preparation still fails after that window, the worker claims the next eligible turn only to record its failure.
-Successful preparation clears the window.
+Server maintenance ends overdue queued questions without claiming an attempt.
+The [queue startup budget](/admin/runtime-roles#heph-capacity) uses the stored `mentor_turn.queued_at` time, so a restart cannot extend it.
+
+A lease retry records a new queue time. A worker restart does not.
+The reaper locks the turn and checks its eligibility again, so a question that a ready worker claimed stays with that worker.
 
 The developer gets "Heph could not start. Try again in a moment."
-The attempt records the cause `host_preparation_failed` and makes no model call.
+The turn records `start_wait_expired` and spends no new attempt or model call.
+
 If the host is lost after a claim, the worker tries one fresh host before the claimed turn fails.
 
 | Property | Value |

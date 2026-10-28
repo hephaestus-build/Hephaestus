@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnService;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnUsage;
+import de.tum.cit.aet.hephaestus.mentor.MentorTurnWaits;
 import de.tum.cit.aet.hephaestus.practices.feedback.ConversationFeedbackRows;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackStore;
 import de.tum.cit.aet.hephaestus.testconfig.ConversationReceipts;
@@ -23,6 +24,7 @@ import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.math.BigDecimal;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -54,6 +56,9 @@ class MentorTurnCompletionIntegrationTest extends AbstractWorkspaceIntegrationTe
 
     @Autowired
     private MentorTurnService turns;
+
+    @Autowired
+    private MentorTurnWaits waits;
 
     @Autowired
     private MentorTurnRepository turnRepository;
@@ -262,7 +267,7 @@ class MentorTurnCompletionIntegrationTest extends AbstractWorkspaceIntegrationTe
 
     @Test
     void shouldSettleALostAttemptsClaimUnconfirmedSoItsRetryCannotClaimItAgain() {
-        MentorTurnLeaseReaper reaper = new MentorTurnLeaseReaper(turns, completion, metrics, transactions);
+        MentorTurnLeaseReaper reaper = new MentorTurnLeaseReaper(turns, completion, metrics, transactions, waits);
         MentorTurn first = admittedTurn(Duration.ofSeconds(-1));
         UUID called = claimed(first);
 
@@ -468,8 +473,11 @@ class MentorTurnCompletionIntegrationTest extends AbstractWorkspaceIntegrationTe
     @Test
     void shouldBillEachLostAttemptFromTheProxyWhenTheReaperTakesItsLeaseBack() {
         // Built directly: the bean's scheduler lock would skip a second sweep within its minimum hold.
-        MentorTurnLeaseReaper reaper = new MentorTurnLeaseReaper(turns, completion, metrics, transactions);
+        MentorTurnLeaseReaper reaper = new MentorTurnLeaseReaper(turns, completion, metrics, transactions, waits);
         MentorTurn first = admittedTurn(Duration.ofSeconds(-1));
+        jdbc.update("UPDATE mentor_turn SET queued_at = now() - interval '10 minutes' WHERE id = ?", first.getId());
+        Instant queuedBeforeLoss =
+                turnRepository.findById(first.getId()).orElseThrow().getQueuedAt();
         proxyCall(first, 30_000);
 
         reaper.reap();
@@ -477,6 +485,7 @@ class MentorTurnCompletionIntegrationTest extends AbstractWorkspaceIntegrationTe
         MentorTurn requeued = turnRepository.findById(first.getId()).orElseThrow();
         assertThat(requeued.getStatus()).isEqualTo(MentorTurn.Status.QUEUED);
         assertThat(requeued.getInputTokens()).isZero();
+        assertThat(requeued.getQueuedAt()).isAfter(queuedBeforeLoss);
         MentorTurn second = turns.claimNext(WORKER, Duration.ofSeconds(-1)).orElseThrow();
         admit(second);
         proxyCall(second, 70_000);

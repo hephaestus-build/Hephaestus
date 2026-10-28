@@ -143,6 +143,15 @@ public interface MentorTurnRepository extends JpaRepository<MentorTurn, UUID> {
             """, nativeQuery = true)
     Optional<MentorTurn> lockClaimable();
 
+    /** Queued questions past their start budget; held conversations stay with their running turn. */
+    @WorkspaceAgnostic("Server maintenance ends overdue queued questions across tenants")
+    @Query(value = "SELECT t.id " + CLAIMABLE + """
+            AND t.queued_at <= :cutoff
+            ORDER BY t.queued_at, t.id
+            LIMIT 100
+            """, nativeQuery = true)
+    List<UUID> findOverdueQueued(@Param("cutoff") Instant cutoff);
+
     /** Of {@code ids}, the turns of the workspace that a worker may start now ({@link #CLAIMABLE}). Locks nothing. */
     @Query(
             value = "SELECT t.id " + CLAIMABLE + " AND t.workspace_id = :workspaceId AND t.id IN (:ids)",
