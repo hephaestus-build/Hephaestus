@@ -225,6 +225,17 @@ A Does not apply that script code decided needs complete coverage.
 
 ITEM coverage includes the practice's required sources and the sources that its result cites.
 A brief-only decision can be complete when the opening brief supplied all these sources.
+
+Each review session opens with a brief of only the sources that its practice declares.
+The brief shows them in one order: the change, the core text, linked work, then the discussion.
+Practices that declare the same sources get the same opening, so a prompt cache can share it.
+The read, grep and find tools of the session refuse a captured file that the practice does not declare.
+A listing still shows its name.
+
+Every session can also read the change and the checkout through Git.
+A result may cite only those and its declared sources. The runner refuses other citations, and the session gets a repair turn.
+[ADR 0069](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0069-practices-run-when-ready-and-stay-current-by-their-sources.md) decides this.
+
 An omitted source requires continuous reads from line 1 through EOF.
 A failed read or an unread range of a required or cited source prevents complete coverage.
 A later complete read can close the gap.

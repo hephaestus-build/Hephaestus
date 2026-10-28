@@ -238,7 +238,12 @@ for (const mode of ["supplied", "omitted", "not-in-brief"] as const) {
 	void test(`a cited canonical linked source outside the file inventory gets only actual brief credit: ${mode}`, async (t) => {
 		const cwd = mkdtempSync(path.join(tmpdir(), "pi-linked-brief-coverage-"));
 		t.after(() => rmSync(cwd, { recursive: true, force: true }));
-		stagePractices(cwd, [{ slug: "test-practice" }]);
+		stagePractices(cwd, [
+			{
+				slug: "test-practice",
+				readsSources: ["scm.pull-request.core", "scm.pull-request.diff", "scm.linked-work-items"],
+			},
+		]);
 		const manifestPath = path.join(cwd, "evidence/manifest.json");
 		const manifest = manifestSchema.parse(JSON.parse(readFileSync(manifestPath, "utf8")));
 		const canonical = `evidence/${mode === "not-in-brief" ? "other" : "linked_work_items/3"}.md`;
@@ -278,14 +283,23 @@ for (const mode of ["supplied", "omitted", "not-in-brief"] as const) {
 				],
 			}),
 		);
-		const brief = buildBrief(cwd, { contextRoot: "evidence", repositoryRoot: "repos/primary" });
+		const brief = buildBrief(
+			cwd,
+			{ contextRoot: "evidence", repositoryRoot: "repos/primary" },
+			{
+				declared: new Set([linkedSource]),
+				fileKinds: new Map([[witness, linkedSource]]),
+				available: new Set([linkedSource]),
+			},
+		);
 		assert.equal(
 			brief.sources.find((source) => source.path === canonical)?.supplied,
 			mode === "not-in-brief" ? undefined : mode === "supplied",
 		);
+		// A source the practice does not declare is not in its brief at all.
 		assert.equal(
-			brief.sources.find((source) => source.path === "evidence/general_comments.json")?.supplied,
-			false,
+			brief.sources.find((source) => source.path === "evidence/general_comments.json"),
+			undefined,
 		);
 		const candidate = {
 			...SESSION_CANDIDATE,

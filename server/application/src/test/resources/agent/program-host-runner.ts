@@ -111,6 +111,7 @@ export interface StagedPractice {
 	slug: string;
 	program?: string;
 	inputs?: boolean;
+	readsSources?: readonly string[];
 }
 
 export const SESSION_CANDIDATE = {
@@ -193,14 +194,16 @@ export function stagePractices(cwd: string, practices: readonly StagedPractice[]
 	write(
 		"catalog/practices/index.json",
 		JSON.stringify(
-			practices.map(({ slug }) => ({
-				slug,
-				name: "Authentication review",
-				group: "security",
-				readsSources: ["scm.pull-request.core", "scm.pull-request.diff"],
-				exhaustiveSources: ["scm.pull-request.diff"],
-				versionId: "7",
-			})),
+			practices.map(
+				({ slug, readsSources = ["scm.pull-request.core", "scm.pull-request.diff"] }) => ({
+					slug,
+					name: "Authentication review",
+					group: "security",
+					readsSources,
+					exhaustiveSources: ["scm.pull-request.diff"],
+					versionId: "7",
+				}),
+			),
 		),
 	);
 	for (const { slug, program, inputs = true } of practices) {

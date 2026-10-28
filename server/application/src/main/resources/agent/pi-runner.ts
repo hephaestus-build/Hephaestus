@@ -37,6 +37,12 @@ import {
 } from "./pi-change.ts";
 import { errorText } from "./pi-error-text.ts";
 
+import {
+	type DeclaredSources,
+	readableKinds,
+	refusedContextRead,
+	undeclaredCitedKinds,
+} from "./pi-declared-sources.ts";
 import { type CitableText, folderCitationIndex, citableTextIndex } from "./pi-folder-index.ts";
 import {
 	addModelCall,
@@ -729,6 +735,17 @@ export async function runReviewJob(): Promise<void> {
 	const capturedTexts = citableTextIndex(folderIndex);
 	const availableSourceKindValues = [...availableSourceKinds].toSorted();
 	const practiceIndex = readPracticeIndex();
+
+	function declaredSourcesOf(slug: string): DeclaredSources {
+		return {
+			readable: readableKinds(
+				practiceIndex.find((practice) => practice.slug === slug)?.readsSources ?? [],
+			),
+			fileKinds: sourceFileSources,
+			contextRoot: taskEnvelope.paths.contextRoot,
+			repositoryRoot: taskEnvelope.paths.repositoryRoot,
+		};
+	}
 
 	// ABSENT is sound only over sources the practice declares exhaustive.
 	const practiceExhaustiveSources = new Map(
@@ -1577,6 +1594,14 @@ export async function runReviewJob(): Promise<void> {
 			return { kind: "refused", slug, reason };
 		}
 		const { candidate, notes } = validated;
+		const { readable } = declaredSourcesOf(slug);
+		const undeclared = undeclaredCitedKinds(candidate, readable);
+		if (undeclared.length > 0) {
+			countRefusal(slug);
+			const reason = `the result cites or consulted ${undeclared.map((kind) => `\`${kind}\``).join(", ")}, which ${slug} does not declare. Cite only: ${[...readable].toSorted().join(", ")}.`;
+			sessionState().refusedItems.set(sent, { reason, resent: 0 });
+			return { kind: "refused", slug, reason };
+		}
 		const previous = review.draft;
 		if (previous !== null && isDeepStrictEqual(previous, candidate)) {
 			return { kind: "duplicate", slug };
@@ -2377,12 +2402,32 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 		deriveChangeView();
 		persistRecordedNotes();
 		const turns = planTurns(practiceIndex, PRACTICES_PER_TURN);
-		const { text: brief, sources: briefSources } = buildBrief(CWD, {
-			contextRoot: taskEnvelope.paths.contextRoot,
-			repositoryRoot: taskEnvelope.paths.repositoryRoot,
-		});
+		// One brief for each declared set: practices that declare the same sources share its bytes.
+		const briefs = new Map<string, ReturnType<typeof buildBrief>>();
+		function briefOf(slug: string): ReturnType<typeof buildBrief> {
+			const declared = new Set(
+				practiceIndex.find((practice) => practice.slug === slug)?.readsSources ?? [],
+			);
+			const key = JSON.stringify([...declared].toSorted());
+			const known = briefs.get(key);
+			if (known !== undefined) {
+				return known;
+			}
+			const built = buildBrief(
+				CWD,
+				{
+					contextRoot: taskEnvelope.paths.contextRoot,
+					repositoryRoot: taskEnvelope.paths.repositoryRoot,
+				},
+				{ declared, fileKinds: sourceFileSources, available: availableSourceKinds },
+			);
+			briefs.set(key, built);
+			return built;
+		}
 		console.error(
-			`[pi-runner] Review: ${allSlugs.length} practice(s) in ${turns.length} turn(s); brief=${brief.length} chars`,
+			`[pi-runner] Review: ${allSlugs.length} practice(s) in ${turns.length} turn(s); briefs=${[
+				...new Set(allSlugs.map((slug) => briefOf(slug).text.length)),
+			].join(",")} chars`,
 		);
 
 		const measureEnd = PROCESS_START_MS + AGENT_BUDGET_MS;
@@ -2400,16 +2445,17 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 			process.exit(1);
 		}
 
-		const cacheExtension = assessmentCacheExtension(
-			providerConfig,
-			modelRuntime,
-			assessmentOpening(brief),
-			taskEnvelope.workspaceId,
-			taskEnvelope.jobId,
-		);
-
+		const cacheConfig = providerConfig;
 		async function assessmentLoader() {
 			const scope = sessionState();
+			const practice = scope.activePractice;
+			const cacheExtension = assessmentCacheExtension(
+				cacheConfig,
+				modelRuntime,
+				practice === null ? "" : assessmentOpening(briefOf(practice).text),
+				taskEnvelope.workspaceId,
+				taskEnvelope.jobId,
+			);
 			// Extension bindings belong to the native session that uses them.
 			const resourceLoader = new DefaultResourceLoader({
 				cwd: CWD,
@@ -2422,6 +2468,31 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 				extensionFactories: [
 					createCodemodeExtension({ mode: "on", models: false }),
 					cacheExtension,
+					// The loop's own tools read only what the practice declares; codemode's calls pass here too.
+					(pi) => {
+						if (practice === null) {
+							return;
+						}
+						const sources = declaredSourcesOf(practice);
+						pi.on("tool_call", (event) => {
+							if (
+								event.toolName !== "read" &&
+								event.toolName !== "grep" &&
+								event.toolName !== "find" &&
+								event.toolName !== "ls"
+							) {
+								return undefined;
+							}
+							const target: unknown = isRecord(event.input) ? event.input.path : undefined;
+							const reason = refusedContextRead(
+								event.toolName,
+								typeof target === "string" ? target : undefined,
+								CWD,
+								sources,
+							);
+							return reason === undefined ? undefined : { block: true, reason };
+						});
+					},
 					submissionExtension(
 						providerConfig ?? {},
 						() => scope.activeReview?.requireSubmission === true,
@@ -2698,6 +2769,7 @@ Submit one result for ${slug} with submit_result: the outcome its criterion abov
 				const domainReads = noReceipts();
 				const assignment = assignedInputs.get(slug);
 				const isScan = assignment?.scope.kind === "SCAN";
+				const { text: brief, sources: briefSources } = briefOf(slug);
 				const reader = isScan ? new EvidenceReader(sources, domainReads) : undefined;
 				let assignedText = "";
 				if (isScan && reader !== undefined) {

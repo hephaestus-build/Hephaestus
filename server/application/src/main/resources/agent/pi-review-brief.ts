@@ -3,6 +3,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 
 import { CHANGE_ROOT } from "./pi-change.ts";
+import { DIFF_SOURCE } from "./work/practice-scripts/kits/scm/sources.ts";
 
 export interface BriefLimits {
 	/** Cap both source bytes read and rendered characters per file. */
@@ -24,6 +25,16 @@ export interface BriefPaths {
 	repositoryRoot: string;
 }
 
+/**
+ * What one practice may be shown: the source kinds it declares, the kind of each captured file as the
+ * manifest records it, and the kinds the capture made available.
+ */
+export interface BriefScope {
+	declared: ReadonlySet<string>;
+	fileKinds: ReadonlyMap<string, string>;
+	available: ReadonlySet<string>;
+}
+
 interface Candidate {
 	/** Workspace-relative, as a citation names it. */
 	label: string;
@@ -35,49 +46,72 @@ interface Candidate {
 	 * diff carries its own [L<n>] coordinates and description.authored.md the numbers of description.md.
 	 */
 	derived?: true;
+	/** The source kind whose declaration lets a practice see this file. */
+	kind: string | undefined;
 }
 
-function candidates(root: string, paths: BriefPaths, limits: BriefLimits): Candidate[] {
-	const context = (name: string, language = "json"): Candidate => ({
-		label: `${paths.contextRoot}/${name}`,
-		absolute: path.resolve(root, paths.contextRoot, name),
-		limit: limits.filePerChars,
-		language,
-	});
-	const change = (name: string, language: string, limit = limits.filePerChars): Candidate => ({
+/**
+ * The files one practice declares, in one order for every practice: the change, the core text, linked
+ * work, then the discussion. Practices that declare the same kinds get the same bytes, and a shared
+ * leading layer is a shared prompt prefix. The change leads because almost every practice reads it;
+ * the discussion changes most often at a fixed head, so it comes last.
+ */
+function candidates(
+	root: string,
+	paths: BriefPaths,
+	limits: BriefLimits,
+	scope: BriefScope,
+): Candidate[] {
+	const context = (name: string, language = "json"): Candidate => {
+		const label = `${paths.contextRoot}/${name}`;
+		return {
+			label,
+			absolute: path.resolve(root, paths.contextRoot, name),
+			limit: limits.filePerChars,
+			language,
+			kind: scope.fileKinds.get(label),
+		};
+	};
+	const change = (
+		name: string,
+		language: string,
+		kind: string | undefined,
+		limit = limits.filePerChars,
+	): Candidate => ({
 		label: `${CHANGE_ROOT}/${name}`,
 		absolute: path.resolve(root, CHANGE_ROOT, name),
 		limit,
 		language,
 		derived: true,
+		kind,
 	});
+	const description = scope.fileKinds.get(`${paths.contextRoot}/description.md`);
 	return [
-		{
-			label: "INDEX.md",
-			absolute: path.resolve(root, "INDEX.md"),
-			limit: limits.filePerChars,
-			language: "markdown",
-		},
+		change("files.json", "json", DIFF_SOURCE),
+		change("diff_stat.txt", "text", DIFF_SOURCE),
+		change("diff.patch", "diff", DIFF_SOURCE, limits.diffChars),
 		context("metadata.json"),
 		context("description.md", "markdown"),
-		change("description.authored.md", "markdown"),
-		change("files.json", "json"),
-		change("diff_stat.txt", "text"),
+		change("description.authored.md", "markdown", description),
 		context("commits.json"),
-		context("comments.json"),
-		context("review_threads.json"),
-		context("general_comments.json"),
-		context("linked_work_items.json"),
-		...linkedWorkItems(root, paths, limits),
 		context("document.json"),
 		context("document.md", "markdown"),
+		context("linked_work_items.json"),
+		...linkedWorkItems(root, paths, limits, scope),
+		context("review_threads.json"),
+		context("comments.json"),
+		context("general_comments.json"),
 		context("conversation_thread.json"),
-		change("diff.patch", "diff", limits.diffChars),
-	];
+	].filter((candidate) => candidate.kind !== undefined && scope.declared.has(candidate.kind));
 }
 
 /** The linked issues as text, one file each, in number order; the JSON beside them is for programs. */
-function linkedWorkItems(root: string, paths: BriefPaths, limits: BriefLimits): Candidate[] {
+function linkedWorkItems(
+	root: string,
+	paths: BriefPaths,
+	limits: BriefLimits,
+	scope: BriefScope,
+): Candidate[] {
 	const directory = path.resolve(root, paths.contextRoot, "linked_work_items");
 	if (!existsSync(directory)) {
 		return [];
@@ -85,22 +119,20 @@ function linkedWorkItems(root: string, paths: BriefPaths, limits: BriefLimits): 
 	return readdirSync(directory)
 		.filter((name) => name.endsWith(".md"))
 		.toSorted((a, b) => Number.parseInt(a, 10) - Number.parseInt(b, 10))
-		.map((name) => ({
-			label: `${paths.contextRoot}/linked_work_items/${name}`,
-			absolute: path.resolve(directory, name),
-			limit: limits.filePerChars,
-			language: "markdown",
-		}));
+		.map((name) => {
+			const label = `${paths.contextRoot}/linked_work_items/${name}`;
+			return {
+				label,
+				absolute: path.resolve(directory, name),
+				limit: limits.filePerChars,
+				language: "markdown",
+				// A linked item's text belongs to the linked-items record, whether or not the manifest lists it.
+				kind:
+					scope.fileKinds.get(label) ??
+					scope.fileKinds.get(`${paths.contextRoot}/linked_work_items.json`),
+			};
+		});
 }
-
-/** Explicitly name missing review sources so the model reports capture gaps, not absent behavior. */
-const NAMED_WHEN_ABSENT = new Set([
-	"description.md",
-	"comments.json",
-	"review_threads.json",
-	"general_comments.json",
-	"linked_work_items.json",
-]);
 
 export interface BriefSource {
 	path: string;
@@ -111,20 +143,29 @@ export interface BriefSource {
 	omitted?: "file-limit" | "brief-limit" | "index-limit";
 }
 
-/** Text and source coverage describe the same final brief, after all size limits. */
-export function buildBrief(root: string, paths: BriefPaths, limits = DEFAULT_BRIEF_LIMITS) {
+/**
+ * One practice's brief: only the sources it declares. Text and source coverage describe the same final
+ * brief, after all size limits.
+ */
+export function buildBrief(
+	root: string,
+	paths: BriefPaths,
+	scope: BriefScope,
+	limits = DEFAULT_BRIEF_LIMITS,
+) {
 	const sources = new Map<string, BriefSource>();
 	const result = (text: string) => ({ text, sources: [...sources.values()] });
 	const blocks: { text: string; omission: string; path: string }[] = [];
 	const withheld: string[] = [];
-	const absent: string[] = [];
+	// Name declared sources the capture lacks, so the model reports a capture gap, not absent behavior.
+	const absent = [...scope.declared]
+		.filter((kind) => !scope.available.has(kind))
+		.toSorted()
+		.map((kind) => `\`${kind}\``);
 	const empty: string[] = [];
 	let used = 0;
-	for (const candidate of candidates(root, paths, limits)) {
+	for (const candidate of candidates(root, paths, limits, scope)) {
 		if (!existsSync(candidate.absolute)) {
-			if (NAMED_WHEN_ABSENT.has(path.basename(candidate.label))) {
-				absent.push(`\`${candidate.label}\``);
-			}
 			continue;
 		}
 		const { size } = statSync(candidate.absolute);
@@ -172,7 +213,7 @@ export function buildBrief(root: string, paths: BriefPaths, limits = DEFAULT_BRI
 		});
 		used += block.length;
 	}
-	if (blocks.length === 0 && withheld.length === 0 && empty.length === 0) {
+	if (blocks.length === 0 && withheld.length === 0 && empty.length === 0 && absent.length === 0) {
 		return result("");
 	}
 
