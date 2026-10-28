@@ -8,5 +8,6 @@
     <changeSet id="1793137687696-2" author="hephaestus">
         <comment>Each heartbeat renews and each lease check reads only the running attempts.</comment>
         <sql>CREATE INDEX ix_review_job_running_lease ON review_job (worker_id, leased_until) WHERE status = 'RUNNING';</sql>
+        <rollback>DROP INDEX ix_review_job_running_lease;</rollback>
     </changeSet>
 </databaseChangeLog>
