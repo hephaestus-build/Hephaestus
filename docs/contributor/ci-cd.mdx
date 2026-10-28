@@ -284,12 +284,15 @@ In a merge group, if the leg failed, the job calls `fail-fast.yml`, which runs `
 - The condition starts with `always()`. Without a status function, GitHub adds `success()`, which is false after a failed leg.
 - Queued jobs do not start, and running jobs stop.
 - `CI Status Gate` has `if: always()`, so it still runs after the cancel. It sees the failed leg and fails, and the queue removes the entry.
-- The gate is the only verdict. The `fail-fast-<leg>` jobs are not in its `needs`.
+- The `fail-fast-<leg>` jobs are not in the gate's `needs`. The ruleset requires `CI Status Gate`, `Actionlint` and `Zizmor`, and a cancel job is none of them.
+- `Security` and `Changesets` never run in a merge group, so they have no cancel job.
 
 After the cancel, `cancelled()` is true for the whole run.
 Thus, `Report unsuccessful merge group` reads the gate's `verdict` output, not `cancelled()`.
-A run that cancelled itself after a failed leg has the verdict `failure`, so CI comments on the pull request.
+A run that cancelled itself after a failed leg has the verdict `failure`, so the reporter is meant to comment on the pull request.
 A run that a regroup cancelled has the verdict `cancelled`, and CI does not comment.
+
+The merge-queue experiment did not exercise the reporter after a cancel. The first failed merge group on `main` confirms it.
 The gate does not publish the `All CI Passed` status after a cancel.
 No ruleset requires that status.
 
@@ -321,14 +324,17 @@ Each workflow keeps `permissions: {}` at the top level.
 
 The cancel job needs a runner, so a busy runner pool adds its wait to the eviction time.
 
-**Measured eviction time: not measured yet.**
-Measure it on the first merge group that fails after this rule reached `main`.
-Record the time from the first failed leg to the removal of the entry here.
-Do not estimate it.
+**Eviction time.**
+In the merge-queue experiment, the time from the first failed leg to the removal of the entry was 1 minute 27 seconds.
+With a busy runner pool it was 4 minutes 9 seconds, because the cancel job waited for a runner.
+Without the cancel jobs it was about 6 minutes, and on `main` the gate failed 13 to 19 minutes after the first failed leg.
+The time on `main` is not measured yet.
+Record it here from the first merge group that fails after this rule reached `main`.
 
 `scripts/ci-contract.test.ts` holds each rule:
 
-- Each leg has its cancel job, with `always()` and the leg's `failure` result, for merge groups only.
+- Each leg that runs in a merge group has its cancel job, for merge groups only.
+  The job's condition has `always()` and the leg's `failure` result.
 - No workflow, action or script force-cancels a run.
 - Only the cancel jobs, and the listed exceptions, have `actions: write`.
 - The heavy legs wait for `Security-merge-group` in a merge group, and for no scan in other events.

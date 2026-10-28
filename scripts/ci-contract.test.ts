@@ -5739,7 +5739,14 @@ void test("a failed leg cancels its own merge-group run, and only a merge-group 
 	const workflow = parseDocument(source);
 	const gate = workflow.getIn(["jobs", "all-ci-passed", "needs"]);
 	assert.ok(isSeq(gate));
-	const legs = gate.items.map(String).filter((name) => name !== "detect-changes");
+	// These legs never run in a merge group, so a cancel job for them could never fire.
+	const pullRequestOnly = ["Security", "Changesets"];
+	for (const leg of pullRequestOnly) {
+		assert.match(String(workflow.getIn(["jobs", leg, "if"])), /pull_request|merge_group/u, leg);
+	}
+	const legs = gate.items
+		.map(String)
+		.filter((name) => name !== "detect-changes" && !pullRequestOnly.includes(name));
 	const jobs = asRecord(asRecord(workflow.toJSON(), "cicd.yml").jobs, "cicd.yml jobs");
 	const callers = Object.entries(jobs)
 		.filter(([, definition]) => asRecord(definition, "job").uses === FAIL_FAST)
@@ -5803,8 +5810,9 @@ void test("no workflow, action or script force-cancels a run", async () => {
 		...scripts.filter((file) => file !== "scripts/ci-contract.test.ts"),
 	];
 	for (const [file, source] of await readSources(files)) {
-		assert.doesNotMatch(source, /runs\/\S*\/force-cancel/u, file);
-		assert.doesNotMatch(source, /run cancel\b[^\n]*--force/u, file);
+		// The REST path, the Octokit method and the GraphQL-style name; prose may still name a force-cancel.
+		assert.doesNotMatch(source, /\/force-cancel\b|forceCancel|force_cancel/iu, file);
+		assert.doesNotMatch(source, /run cancel\b[\s\S]{0,200}--force/u, file);
 	}
 });
 

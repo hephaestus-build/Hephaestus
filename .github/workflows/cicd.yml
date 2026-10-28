@@ -1407,13 +1407,6 @@ jobs:
     permissions:
       actions: write # cancel this run
 
-  fail-fast-Security:
-    name: "Fail fast: Security"
-    needs: [Security]
-    if: ${{ always() && github.event_name == 'merge_group' && needs.Security.result == 'failure' }}
-    uses: ./.github/workflows/fail-fast.yml
-    permissions:
-      actions: write # cancel this run
 
   fail-fast-Security-merge-group:
     name: "Fail fast: Security-merge-group"
@@ -1431,13 +1424,6 @@ jobs:
     permissions:
       actions: write # cancel this run
 
-  fail-fast-Changesets:
-    name: "Fail fast: Changesets"
-    needs: [Changesets]
-    if: ${{ always() && github.event_name == 'merge_group' && needs.Changesets.result == 'failure' }}
-    uses: ./.github/workflows/fail-fast.yml
-    permissions:
-      actions: write # cancel this run
 
   fail-fast-Compose:
     name: "Fail fast: Compose"
