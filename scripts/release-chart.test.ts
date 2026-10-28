@@ -8,7 +8,6 @@ import { fileURLToPath } from "node:url";
 import { chartImages, type ChartValues, releaseValuesLines } from "./kubernetes-chart.ts";
 import { releaseCertificateIdentity } from "./lib/release-identities.ts";
 import {
-	chartPackageName,
 	chartRepository,
 	type Execute,
 	publishReleaseChart,
@@ -58,7 +57,7 @@ function tools({
 	chartYaml = metadata(),
 	shownValues,
 	signed = () => true,
-	pulledName = chartPackageName(release),
+	pulledName = `hephaestus@${digest("b").replace(":", "-")}.tgz`,
 }: {
 	registry?: Map<string, string>;
 	/** null: a push that reports no digest. */
@@ -368,7 +367,7 @@ await test("verification leaves nothing behind for a foreign, unlocked, unsigned
 			"another package name",
 			{ repository, version, digest: digest("b") },
 			{ pulledName: "hephaestus-0.93.1.tgz" },
-			/not hephaestus-0\.93\.0\.tgz/u,
+			/not hephaestus@sha256-b+/u,
 		],
 		[
 			"foreign metadata",
@@ -380,7 +379,7 @@ await test("verification leaves nothing behind for a foreign, unlocked, unsigned
 			"values that pin other images than the lock",
 			{ repository, version, digest: digest("b") },
 			{ registry: lockedRegistry(chartBytes(otherImages)) },
-			/hephaestus-0\.93\.0\.tgz does not pin the v0\.93\.0 images/u,
+			/hephaestus@sha256-b+\.tgz does not pin the v0\.93\.0 images/u,
 		],
 	] as const) {
 		const directory = await scratch(t);
