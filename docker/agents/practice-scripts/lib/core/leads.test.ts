@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, test, type TestContext } from "node:test";
 
+import { environmentForGitFixture } from "../../../../../scripts/lib/git-environment.ts";
 import { parseDiff } from "../../kits/scm/diff-parser.ts";
 import type { ReviewLead, ReviewOptions } from "./contract.ts";
 import { EvidenceReader, noReceipts, type EvidenceSources } from "./evidence-reader.ts";
@@ -53,6 +54,8 @@ async function sources(t: TestContext) {
 			["-C", repo, "-c", "user.name=t", "-c", "user.email=t@example.invalid", ...args],
 			{
 				encoding: "utf8",
+				// The fixture is its own repository: a caller's git configuration, such as the hooks of a push, never applies.
+				env: environmentForGitFixture(),
 			},
 		).trim();
 	git("init", "-q");
@@ -138,6 +141,27 @@ void describe("the leads of a review input", () => {
 		assert.equal(resolved.length, 200);
 		assert.ok(JSON.stringify(resolved).length < 1_000_000);
 	});
+	void test("a caller's git configuration, such as the hooks of a push, does not reach the fixture", async (t) => {
+		// A push hook exports its -c settings to every command it starts; this one would refuse any commit.
+		const hooks = await mkdtemp(path.join(tmpdir(), "refusing-hooks-"));
+		t.after(async () => rm(hooks, { recursive: true, force: true }));
+		for (const hook of ["pre-commit", "commit-msg"]) {
+			await writeFile(path.join(hooks, hook), "#!/bin/sh\nexit 1\n", { mode: 0o755 });
+		}
+		const inherited = process.env.GIT_CONFIG_PARAMETERS;
+		process.env.GIT_CONFIG_PARAMETERS = `'core.hookspath'='${hooks}'`;
+		try {
+			const { sources: captured } = await sources(t);
+			assert.ok(captured.repo !== null);
+		} finally {
+			if (inherited === undefined) {
+				delete process.env.GIT_CONFIG_PARAMETERS;
+			} else {
+				process.env.GIT_CONFIG_PARAMETERS = inherited;
+			}
+		}
+	});
+
 	void test("each lead gets the text its source holds, in the program's order", async (t) => {
 		const { sources: given, earlier } = await sources(t);
 		const leads: ReviewLead[] = [
