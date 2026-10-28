@@ -25,6 +25,7 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 
 import { isJsonObject as isRecord } from "../../../../../../docker/agents/practice-scripts/lib/core/json.ts";
+import { environmentForGitFixture } from "../../../../../../scripts/lib/git-environment.ts";
 import {
 	addModelCall,
 	newModelCallTiming,
@@ -2242,13 +2243,12 @@ if (scenario !== undefined && scenario !== "") {
 						const git = (...args: string[]) =>
 							spawnSync("git", ["-C", nodePath.join(cwd, "repos/primary"), ...args], {
 								encoding: "utf8",
-								env: {
-									...process.env,
+								env: environmentForGitFixture({
 									GIT_AUTHOR_NAME: "t",
 									GIT_AUTHOR_EMAIL: "t@t",
 									GIT_COMMITTER_NAME: "t",
 									GIT_COMMITTER_EMAIL: "t@t",
-								},
+								}),
 							});
 						writeFileSync(
 							nodePath.join(cwd, "repos/primary/src/logo.png"),
