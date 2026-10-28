@@ -17,7 +17,6 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
-import org.jspecify.annotations.Nullable;
 
 /**
  * Tracks workspace slug rename history for redirect support.
@@ -54,9 +53,4 @@ public class WorkspaceSlugHistory {
     @Column(name = "changed_at", nullable = false)
     @NotNull(message = "Changed at timestamp is required")
     private Instant changedAt;
-
-    // Older server instances map this column during rolling upgrades; redirects no longer expire.
-    @Column(name = "redirect_expires_at")
-    @Nullable
-    private Instant redirectExpiresAt;
 }

@@ -45,7 +45,7 @@ public class IntegrationSlackPersonDataCatalog implements PersonDataCatalog {
                         "slack_participant_consent",
                         "slack_participant_consent",
                         "EXISTS(SELECT 1 FROM jsonb_to_recordset(CAST(:identities AS jsonb)) AS i(\"providerId\" bigint,subject text,\"teamId\" text) JOIN identity_provider p ON p.id=i.\"providerId\" AND p.type='SLACK' AND p.server_url='https://slack.com' JOIN connection c ON c.workspace_id=t.workspace_id AND c.config->>'teamId'=i.\"teamId\" WHERE i.subject=t.slack_user_id)",
-                        "workspace_id,slack_user_id,ingestion_opted_out,research_opted_out,source,decided_at",
+                        "workspace_id,slack_user_id,ingestion_opted_out,decided_at",
                         "workspace_id,slack_user_id",
                         "",
                         -40),

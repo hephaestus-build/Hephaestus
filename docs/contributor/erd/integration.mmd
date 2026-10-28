@@ -220,8 +220,6 @@ erDiagram
         TIMESTAMPTZ deleted_at
         VARCHAR(40) head_check_sha
         VARCHAR(16) head_check_state
-        UUID review_snapshot_id
-        VARCHAR(128) review_snapshot_digest
         TIMESTAMPTZ reviewers_observed_at
         TIMESTAMPTZ head_check_observed_at
         TIMESTAMPTZ discussions_observed_at
@@ -644,8 +642,6 @@ erDiagram
         BIGINT workspace_id PK,FK
         VARCHAR(32) slack_user_id PK
         BOOLEAN ingestion_opted_out "NOT NULL"
-        BOOLEAN research_opted_out "NOT NULL"
-        VARCHAR(32) source
         TIMESTAMPTZ decided_at "NOT NULL"
     }
 
