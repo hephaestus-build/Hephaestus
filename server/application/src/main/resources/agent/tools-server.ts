@@ -43,6 +43,9 @@ export interface ToolsServerOptions {
 	soleUser: boolean;
 }
 
+/** Every process of a call carries this variable, with the call's id: it finds a process that left the call's group. */
+const CALL_MARKER = "HEPHAESTUS_TOOL_CALL";
+
 /** Only these variables reach a program: no credential ever does. */
 const ENV = {
 	PATH: "/usr/local/bin:/usr/bin:/bin",
@@ -91,6 +94,35 @@ function killGroup(child: ChildProcess): void {
 		process.kill(-child.pid, "SIGKILL");
 	} catch {
 		// The group already ended.
+	}
+}
+
+/** The processes of this user whose environment carries `marker`, on Linux, where `/proc` lists them. */
+async function markedProcesses(marker: string): Promise<number[]> {
+	const pids: number[] = [];
+	for (const name of await readdir("/proc").catch(() => [])) {
+		const pid = Number(name);
+		if (!Number.isInteger(pid) || pid === process.pid) {
+			continue;
+		}
+		// Only a process of this user lets it read the environment; any other one fails here and is skipped.
+		const environment = await readFile(`/proc/${name}/environ`, "latin1").catch(() => "");
+		if (`\0${environment}`.includes(`\0${marker}\0`)) {
+			pids.push(pid);
+		}
+	}
+	return pids;
+}
+
+/** Ends every process of one call: its group, and every process that carries its marker. */
+async function endCall(id: string, child: ChildProcess): Promise<void> {
+	killGroup(child);
+	for (const pid of await markedProcesses(`${CALL_MARKER}=${id}`)) {
+		try {
+			process.kill(pid, "SIGKILL");
+		} catch {
+			// It ended meanwhile.
+		}
 	}
 }
 
@@ -229,7 +261,7 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 			const spill = createWriteStream(fullOutputPath);
 			const child = spawn(file, args, {
 				cwd,
-				env: { ...ENV, HOME: options.scratch },
+				env: { ...ENV, HOME: options.scratch, [CALL_MARKER]: id },
 				detached: true,
 				stdio: ["ignore", "pipe", "pipe"],
 			});
@@ -279,7 +311,7 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 			let timedOut = false;
 			const timer = setTimeout(() => {
 				timedOut = true;
-				killGroup(child);
+				void endCall(id, child);
 			}, timeoutMs);
 			child.once("error", () => {
 				clearTimeout(timer);
@@ -287,12 +319,21 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 				spill.end();
 				refuse(id, "spawn", "The program could not start.");
 			});
-			child.once("close", (code: number | null, signal: NodeJS.Signals | null) => {
+			const finish = async (code: number | null, signal: NodeJS.Signals | null) => {
 				clearTimeout(timer);
 				running.delete(id);
-				spill.end(() => {
-					send({ type: "exit", id, code, signal, timedOut, truncated, fullOutputPath });
-				});
+				// No call leaves a process behind, also one that left the group with setsid.
+				await endCall(id, child);
+				spill.end();
+				await finished(spill);
+				send({ type: "exit", id, code, signal, timedOut, truncated, fullOutputPath });
+			};
+			// A process that outlived the call holds its pipes open, so the call ends it as soon as its program exits.
+			child.once("exit", () => {
+				void endCall(id, child);
+			});
+			child.once("close", (code: number | null, signal: NodeJS.Signals | null) => {
+				void finish(code, signal);
 			});
 		}
 
@@ -501,7 +542,7 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 				case "cancel": {
 					const child = running.get(id);
 					if (child) {
-						killGroup(child);
+						void endCall(id, child);
 					} else {
 						cancelled.add(id);
 					}

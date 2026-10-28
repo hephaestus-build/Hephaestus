@@ -152,6 +152,23 @@ void test("a call past its time is killed with its whole process group", async (
 	assert.equal(alive(background), false);
 });
 
+// A process that leaves its call's group with setsid is found by its call's marker, which only /proc shows.
+void test(
+	"a call leaves no process behind, also one that left its group with setsid",
+	{
+		skip: process.platform !== "linux",
+	},
+	async () => {
+		const pidFile = path.join(scratch, "detached.pid");
+		const { exit } = await run(`setsid sh -c 'echo $$ > ${pidFile}; exec sleep 30' & sleep 0.3`);
+		assert.equal(exit.code, 0);
+		assert.equal(exit.timedOut, false, "the call ended when its program did, not at its time-out");
+		const detached = Number(readFileSync(pidFile, "utf8"));
+		await sleep(100);
+		assert.equal(alive(detached), false);
+	},
+);
+
 void test("an aborted call is cancelled on the tools side", async () => {
 	const controller = new AbortController();
 	setTimeout(() => {
