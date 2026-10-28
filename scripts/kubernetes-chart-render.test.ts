@@ -564,6 +564,17 @@ const tierQuota = (resources: Resource[], tier: "reviews" | "conversations") => 
 	return quota;
 };
 
+/** The sandbox namespace's quota without a scope. */
+const sandboxQuota = (resources: Resource[]) => {
+	const quota = resources.find(
+		(resource) =>
+			kindOf(resource) === "ResourceQuota" &&
+			String(get(resource, "metadata", "name")).endsWith("sandbox-quota"),
+	);
+	assert.ok(quota, "the unscoped sandbox quota");
+	return quota;
+};
+
 await test("a release package runs the release's images with the operator's values alone", async (t) => {
 	const directory = await mkdtemp(path.join(tmpdir(), "hephaestus-release-chart-"));
 	t.after(async () => rm(directory, { recursive: true, force: true }));
@@ -1057,7 +1068,16 @@ await test("an enabled worker receives its runtime settings, its sandbox namespa
 		assert.deepEqual(get(quota, "spec", "scopeSelector", "matchExpressions"), [
 			{ scopeName: "PriorityClass", operator: "In", values: [`hephaestus-heph-${tier}`] },
 		]);
+		// The API server refuses any other resource in a quota scoped by PriorityClass.
+		assert.deepEqual(
+			Object.keys(asRecord(get(quota, "spec", "hard"), `the ${tier} quota`)).toSorted(),
+			["pods", "requests.cpu", "requests.memory"],
+		);
 	}
+	assert.match(
+		String(get(sandboxQuota(resources), "spec", "hard", "requests.ephemeral-storage")),
+		/^[1-9][0-9]*Mi$/u,
+	);
 	// small.yaml: one worker that recreates, one review with one probe run, and the Heph host with its pool
 	// of 2 and 8 running turns.
 	assert.equal(get(tierQuota(resources, "reviews"), "spec", "hard", "pods"), "4");
@@ -1837,13 +1857,13 @@ await test("the single-node profile's requests, one upgrade beside them and its 
 	const backup = resources.find((resource) => kindOf(resource) === "CronJob");
 	add(get(backup, "spec", "jobTemplate", "spec", "template", "spec"), 1);
 	// Every sandbox Pod is inside a tier quota, which counts its requests: reviews, Heph hosts, turn
-	// sandboxes and probe Pods.
+	// sandboxes and probe Pods. The namespace's unscoped quota counts the disk of both tiers.
 	for (const tier of ["reviews", "conversations"] as const) {
 		const quota = tierQuota(resources, tier);
 		cpu += amount(get(quota, "spec", "hard", "requests.cpu"));
 		memory += amount(get(quota, "spec", "hard", "requests.memory"));
-		disk += amount(get(quota, "spec", "hard", "requests.ephemeral-storage"));
 	}
+	disk += amount(get(sandboxQuota(resources), "spec", "hard", "requests.ephemeral-storage"));
 	assert.equal(get(workload(resources, "worker"), "spec", "replicas"), 1);
 	assertTurnsFill(
 		Number(envValue(workload(resources, "worker"), "HEPHAESTUS_WORKER_CAPACITY_MENTOR_MAX")),

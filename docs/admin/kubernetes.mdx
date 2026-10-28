@@ -841,6 +841,8 @@ It writes these objects into it:
   The chart derives both from `sandbox-pod-requests.json` and from `worker.replicas`, `worker.reviews` and `worker.hephTurns`.
   They count requests, not limits: sandbox Pods may use more than they request, up to their limits.
   Thus, Heph's sandboxes never take a review's room, and reviews never take Heph's.
+  Each tier's quota counts Pods, CPU and memory. Kubernetes does not let a quota that selects a PriorityClass count disk.
+  The quota without a scope counts the disk requests of both tiers together.
   A quota also counts the Pod overhead of a RuntimeClass, such as gVisor's on some clusters.
   For such a class, set `worker.runtime.podOverhead` to its `overhead.podFixed`: `cpuMillis` and `memoryMi`.
   The chart then adds the overhead to each Pod in the quotas.
@@ -1020,7 +1022,7 @@ The host's Node heap stops at 768 MiB.
 The kubelet evicts a Pod whose volume passes its size limit, or whose disk use passes its disk limit.
 Thus, no sandbox can fill the node's disk and cause the eviction of other Pods.
 The worker counts the eviction as a failure of the infrastructure, and the review spends a retry: a review whose sandbox keeps filling its disk ends at `AGENT_MAX_RETRIES`.
-The chart's sandbox quotas count the disk requests.
+The chart's sandbox quota without a scope counts the disk requests of all sandbox Pods.
 
 Kubernetes has no field for two Docker sandbox settings.
 `/tmp`, `/run` and a turn sandbox's `/workspace` are not `noexec`, and a sandbox Pod keeps `/dev/shm` in its private IPC namespace.

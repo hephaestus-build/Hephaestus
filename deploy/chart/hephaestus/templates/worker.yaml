@@ -76,7 +76,6 @@ spec:
     pods: {{ .pods | quote }}
     requests.cpu: {{ printf "%dm" .cpuMillis | quote }}
     requests.memory: {{ printf "%dMi" .memoryMi | quote }}
-    requests.ephemeral-storage: {{ printf "%dMi" .diskMi | quote }}
   scopeSelector:
     matchExpressions:
       - scopeName: PriorityClass
@@ -84,7 +83,12 @@ spec:
         values: [{{ $class | quote }}]
 ---
 {{- end }}
-{{- /* Objects that no sandbox may own, whatever its tier. */}}
+{{- /* Objects that no sandbox may own, whatever its tier, and the disk of both tiers together: a quota scoped
+by PriorityClass cannot count ephemeral storage. */}}
+{{- $diskMi := 0 }}
+{{- range $tiers }}
+{{- $diskMi = add $diskMi .diskMi }}
+{{- end }}
 apiVersion: v1
 kind: ResourceQuota
 metadata:
@@ -94,6 +98,7 @@ metadata:
     {{- include "hephaestus.labels" (dict "root" . "component" "sandbox") | nindent 4 }}
 spec:
   hard:
+    requests.ephemeral-storage: {{ printf "%dMi" $diskMi | quote }}
     persistentvolumeclaims: "0"
     services: "0"
     secrets: "0"
