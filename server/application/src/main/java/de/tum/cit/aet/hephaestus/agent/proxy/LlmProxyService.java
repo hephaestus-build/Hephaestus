@@ -88,6 +88,7 @@ class LlmProxyService {
     private final LlmModelResolver resolver;
     private final ObjectMapper objectMapper;
     private final ProxyStallErrors errors;
+    private final ReasoningEffortRefusal effortRefusals;
     private final ProxyAccounting accounting;
     private final ScanCallGuard scanCalls;
     private final ProxyRequestPolicy requestPolicy;
@@ -115,6 +116,7 @@ class LlmProxyService {
         this.resolver = llmModelResolver;
         this.objectMapper = objectMapper;
         this.errors = new ProxyStallErrors(objectMapper);
+        this.effortRefusals = new ReasoningEffortRefusal(objectMapper);
         this.accounting = accounting;
         this.requestPolicy = requestPolicy;
         this.scanCalls = scanCalls;
@@ -455,8 +457,7 @@ class LlmProxyService {
                 upstream = callUpstream(
                         exchange, prepared.withoutUsageRequestOrBody(), span, response, tap, deadline, reviewStream);
             }
-            if (routing.hephTurn())
-                ReasoningEffortRefusal.warnIfRefused(objectMapper, routing, upstream, prepared.body());
+            if (routing.hephTurn()) effortRefusals.warnIfRefused(routing, upstream, prepared.body());
         } catch (Exception e) {
             // Only a failure before a stream's head reaches here, so nothing has been written to the client.
             permit.failed(e);
@@ -648,9 +649,7 @@ class LlmProxyService {
         var parts = request.bodyValue(outgoingBody)
                 .exchangeToFlux(upstream -> {
                     answered.set(true);
-                    // No cap on a stream's body: it would cut a Heph answer that keeps writing, and the exchange's
-                    // limit bounds every call.
-                    return ProxyStreamingUtils.parts(upstream, null, body);
+                    return ProxyStreamingUtils.parts(upstream, body);
                 })
                 // Before the response, a cancel drops the exchange; after it, the body stops and the stream ends.
                 .takeUntilOther(exchange.cancelled().then(Mono.defer(() -> {
@@ -667,10 +666,11 @@ class LlmProxyService {
     }
 
     /**
-     * How long one exchange may wait. A Heph turn's call, which has no work deadline, waits up to the turn ceiling. The
-     * call starts after its turn, so the turn's own deadline stop always comes first and names the cause. A review's
-     * stream gets the attempt's remaining work time, however long; every other call of the attempt the shorter of
-     * that and the proxy's own ceiling.
+     * How long one exchange may wait. A Heph turn's call, which has no work deadline, waits at most the turn ceiling,
+     * counted from the call's own start, not from its turn's. Its idle bounds end it when its provider goes silent, and
+     * its turn's stop cancels it while the worker holds the turn's lease. A review's stream gets the attempt's
+     * remaining work time, however long; every other call of the attempt the shorter of that and the proxy's own
+     * ceiling.
      */
     static Duration exchangeWait(@Nullable Instant deadline, boolean reviewStream) {
         if (deadline == null) return HEPH_CALL_CEILING;

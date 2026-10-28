@@ -148,7 +148,7 @@ class ProxyStreamingServletIntegrationTest {
                 var exchange = WebClient.create()
                         .get()
                         .uri(Objects.requireNonNull(state.upstream))
-                        .exchangeToFlux(upstream -> ProxyStreamingUtils.parts(upstream, null));
+                        .exchangeToFlux(upstream -> ProxyStreamingUtils.parts(upstream));
                 var result = ProxyStreamingUtils.forward(
                         exchange, Duration.ofSeconds(3), guarded, state.observed::writeBytes);
                 state.outcome.set(result.streamOutcome());

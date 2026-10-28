@@ -85,10 +85,7 @@ public final class ProxyStreamingUtils {
         return filtered;
     }
 
-    /**
-     * Total wall-clock time for an SSE body that has no deadline of its own, counted from when the body starts.
-     * Must accommodate LLM thinking + output generation.
-     */
+    /** Time for a model to think and write one answer: part of the LLM proxy's own ceiling on a job's call. */
     public static final Duration DEFAULT_SSE_TIMEOUT = Duration.ofMinutes(10);
 
     /** One part of an upstream response, in order: its head, then its body. */
@@ -108,21 +105,18 @@ public final class ProxyStreamingUtils {
     /**
      * The parts of one upstream response, for {@code exchangeToFlux}: the response lives exactly as long as they are
      * read. Each SSE chunk is copied out and its buffer released at once, so a part that waits in a queue, or is
-     * dropped when the exchange is cancelled, holds no pooled memory.
-     *
-     * @param bodyLimit how long an SSE body may run once it starts; {@code null} when the caller's own limit on the
-     *     whole exchange is the only one
+     * dropped when the exchange is cancelled, holds no pooled memory. The caller's limit on the whole exchange bounds
+     * the body.
      */
-    public static Flux<Part> parts(ClientResponse clientResp, @Nullable Duration bodyLimit) {
-        return parts(clientResp, bodyLimit, UnaryOperator.identity());
+    public static Flux<Part> parts(ClientResponse clientResp) {
+        return parts(clientResp, UnaryOperator.identity());
     }
 
     /**
-     * As {@link #parts(ClientResponse, Duration)}, but reads an SSE body through {@code body}: a caller bounds or
-     * cancels the stream there, and the response ends with what it relayed.
+     * As {@link #parts(ClientResponse)}, but reads an SSE body through {@code body}: a caller bounds or cancels the
+     * stream there, and the response ends with what it relayed.
      */
-    public static Flux<Part> parts(
-            ClientResponse clientResp, @Nullable Duration bodyLimit, UnaryOperator<Flux<DataBuffer>> body) {
+    public static Flux<Part> parts(ClientResponse clientResp, UnaryOperator<Flux<DataBuffer>> body) {
         MediaType contentType = clientResp.headers().contentType().orElse(null);
         var head = new Head(
                 clientResp.statusCode().value(),
@@ -139,7 +133,7 @@ public final class ProxyStreamingUtils {
         Flux<Part> chunks = body.apply(clientResp.bodyToFlux(DataBuffer.class))
                 .doOnDiscard(DataBuffer.class, DataBufferUtils::release)
                 .map(ProxyStreamingUtils::copyAndRelease);
-        return Flux.<Part>concat(Mono.just(head), bodyLimit == null ? chunks : endingAfter(chunks, bodyLimit));
+        return Flux.<Part>concat(Mono.just(head), chunks);
     }
 
     /**

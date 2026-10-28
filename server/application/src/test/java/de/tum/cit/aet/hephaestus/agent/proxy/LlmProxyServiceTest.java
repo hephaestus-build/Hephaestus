@@ -17,6 +17,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
@@ -1059,25 +1060,16 @@ class LlmProxyServiceTest extends BaseUnitTest {
                     .isEqualTo(1.0);
         }
 
-        @ParameterizedTest(name = "{0}")
-        @CsvSource(
-                delimiter = '|',
-                value = {
-                    "sends an effort        | {\"stream\":true,\"reasoning_effort\":\"low\",\"messages\":[]} | LOW",
-                    "sends no effort        | {\"stream\":true,\"messages\":[]}                             | ",
-                })
-        @DisplayName("a refused Heph call warns the operator of the effort it sent, never of the provider's words")
-        void aRefusedHephCallNamesTheEffortItSent(String ignoredCase, String requestBody, @Nullable String effort) {
+        private static final String LOW_EFFORT_REQUEST = """
+                {"stream":true,"reasoning_effort":"low","messages":[]}""";
+
+        /** The warnings about a refused effort after {@code calls} Heph calls that the provider answers with a 400. */
+        private List<String> effortWarningsAfterRefusals(String requestBody, String errorBody, int calls) {
             Logger logger = (Logger) LoggerFactory.getLogger(ReasoningEffortRefusal.class);
             ListAppender<ILoggingEvent> appender = new ListAppender<>();
             appender.start();
             logger.addAppender(appender);
             try {
-                upstream.enqueue(new MockResponse.Builder()
-                        .code(400)
-                        .addHeader("Content-Type", "application/json")
-                        .body("{\"error\":{\"message\":\"Unsupported parameter: secret-quote\"}}")
-                        .build());
                 ProxyRouting routing = hephTurnRouting(upstream.url("/v1").toString());
                 authenticate(routing);
                 stubCredential(
@@ -1088,29 +1080,63 @@ class LlmProxyServiceTest extends BaseUnitTest {
                                 LlmAuthMode.BEARER,
                                 "catalog-model",
                                 "secret"));
-                streamingController.proxy(
-                        request("POST", "/internal/llm/chat/completions"),
-                        new MockHttpServletResponse(),
-                        new HttpHeaders(),
-                        requestBody.getBytes(StandardCharsets.UTF_8));
+                for (int call = 0; call < calls; call++) {
+                    upstream.enqueue(new MockResponse.Builder()
+                            .code(400)
+                            .addHeader("Content-Type", "application/json")
+                            .body(errorBody)
+                            .build());
+                    streamingController.proxy(
+                            request("POST", "/internal/llm/chat/completions"),
+                            new MockHttpServletResponse(),
+                            new HttpHeaders(),
+                            requestBody.getBytes(StandardCharsets.UTF_8));
+                }
             } finally {
                 logger.detachAppender(appender);
                 appender.stop();
             }
-
-            List<String> effortWarnings = appender.list.stream()
+            return appender.list.stream()
+                    .filter(event -> event.getLevel() == Level.WARN)
                     .map(ILoggingEvent::getFormattedMessage)
-                    .filter(line -> line.contains("reasoning effort"))
                     .toList();
-            if (effort == null) {
-                assertThat(effortWarnings).isEmpty();
-            } else {
-                assertThat(effortWarnings)
-                        .singleElement()
-                        .satisfies(line -> assertThat(line)
-                                .contains("sets reasoning effort " + effort)
-                                .doesNotContain("secret-quote"));
-            }
+        }
+
+        @ParameterizedTest(name = "{0}")
+        @CsvSource(
+                delimiter = '|',
+                value = {
+                    "Chat Completions param   | {\"error\":{\"message\":\"secret-quote\",\"type\":\"invalid_request_error\",\"param\":\"reasoning_effort\",\"code\":\"unsupported_parameter\"}}",
+                    "Responses API param      | {\"error\":{\"message\":\"secret-quote\",\"type\":\"invalid_request_error\",\"param\":\"reasoning.effort\",\"code\":null}}",
+                    "a code naming the param  | {\"object\":\"error\",\"message\":\"secret-quote\",\"type\":\"BadRequestError\",\"code\":\"unsupported_reasoning_effort\"}",
+                })
+        @DisplayName("a provider's refusal of the effort warns once for the model and effort, never with its words")
+        void aRefusedEffortWarnsOnceWithoutTheProvidersWords(String ignoredShape, String errorBody) {
+            assertThat(effortWarningsAfterRefusals(LOW_EFFORT_REQUEST, errorBody, 3))
+                    .singleElement()
+                    .satisfies(line -> assertThat(line)
+                            .contains("refused the reasoning effort LOW")
+                            .doesNotContain("secret-quote"));
+        }
+
+        @Test
+        @DisplayName("a 400 for another cause does not blame the effort the call sent")
+        void aContextOverflowWithAnEffortDoesNotBlameTheEffort() {
+            String overflow = """
+                    {"error":{"message":"reasoning_effort low: maximum context length exceeded",                    "type":"invalid_request_error","param":"messages","code":"context_length_exceeded"}}""";
+
+            assertThat(effortWarningsAfterRefusals(LOW_EFFORT_REQUEST, overflow, 1))
+                    .noneMatch(line -> line.contains("reasoning effort"));
+        }
+
+        @Test
+        @DisplayName("a call that sends no effort never gets the effort warning")
+        void aCallWithoutAnEffortGetsNoEffortWarning() {
+            String refusal = """
+                    {"error":{"type":"invalid_request_error","param":"reasoning_effort","code":"unsupported_parameter"}}""";
+
+            assertThat(effortWarningsAfterRefusals("{\"stream\":true,\"messages\":[]}", refusal, 1))
+                    .noneMatch(line -> line.contains("reasoning effort"));
         }
 
         @Test
