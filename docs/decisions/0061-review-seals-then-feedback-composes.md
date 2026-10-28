@@ -78,3 +78,10 @@ The [pipeline](../contributor/practice-review-pipeline.mdx#compose-feedback) own
 ## Revisit trigger
 
 Revisit when composition needs tools or untrusted input that requires isolation, or when measured composition retries starve measurement retries.
+
+## Update — 2026-10-28 (#3403): the feedback composer works with tools
+
+[ADR 0069](0069-practices-run-when-ready-and-stay-current-by-their-sources.md) amends § Decision, item Compose. Its revisit trigger fired: composition now needs tools and reads untrusted input.
+ADR 0069 D16 answers it: the composer holds no provider token, and its writes run on the server.
+The composer is a model in a bounded loop. It also sees its own earlier feedback on the work, and it checks, publishes and corrects through tools.
+Its writes run through the server's send path. Composition stays a worker step of the same review job, and the seal and the retry rules here stand.
