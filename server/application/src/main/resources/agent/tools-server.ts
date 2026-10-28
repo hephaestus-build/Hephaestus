@@ -9,7 +9,7 @@
 import { type ChildProcess, spawn } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { once } from "node:events";
-import { constants, createWriteStream, type WriteStream } from "node:fs";
+import { createWriteStream, readFileSync, realpathSync, statSync, type WriteStream } from "node:fs";
 import {
 	chmod,
 	lstat,
@@ -18,8 +18,8 @@ import {
 	readdir,
 	readFile,
 	realpath,
+	rename,
 	rm,
-	rmdir,
 	stat,
 } from "node:fs/promises";
 import { createServer, type Server, type Socket } from "node:net";
@@ -45,6 +45,8 @@ export interface ToolsServerOptions {
 	socketPath: string;
 	/** The nonce that the worker wrote into this Pod's spec: `hello` returns it, and the loop compares it. */
 	nonce: string;
+	/** The mutable directory inside a volume. Its parent belongs to the tools user; reset replaces this directory. */
+	workspace: string;
 	/** The roots that `read` and an `exec`'s working directory may name. */
 	roots: string[];
 	/** The scratch root that `reset` clears; spill files and incoming archives live under it. */
@@ -68,7 +70,7 @@ const ENV = {
 	GIT_TERMINAL_PROMPT: "0",
 };
 
-/** How long a reset waits for the calls that it ended to send their `exit`, before it clears the scratch anyway. */
+/** How long reset waits for active operations to stop before refusing to replace their workspace. */
 const RESET_WAIT_MS = 5000;
 
 /** File buffers; an upload adds at most one frame body before waiting for the file's drain. */
@@ -92,9 +94,10 @@ interface Put {
 	/** Whether the archive file could not be written. */
 	failed: boolean;
 	abort: AbortController;
-	/** Cleanup completes before the final reply and before a reset clears scratch. */
+	/** Writers stop and a failed destination is detached before the final reply. */
 	ended: PromiseWithResolvers<undefined>;
 	ending: boolean;
+	stopForReset: () => Promise<void>;
 	refusal?: { error: string; detail: string };
 }
 
@@ -174,15 +177,41 @@ async function ownProcesses(): Promise<number[]> {
 	const pids: number[] = [];
 	for (const name of await readdir("/proc").catch(() => [])) {
 		const pid = Number(name);
-		if (!Number.isInteger(pid) || pid === process.pid) {
+		if (!Number.isInteger(pid) || pid <= 1 || pid === process.pid) {
 			continue;
 		}
 		const status = await readFile(`/proc/${name}/status`, "utf8").catch(() => "");
-		if (new RegExp(String.raw`^Uid:\s+${uid}\s`, "mu").test(status)) {
+		if (
+			new RegExp(String.raw`^Uid:\s+${uid}\s`, "mu").test(status) &&
+			!/^State:\s+Z/mu.test(status)
+		) {
 			pids.push(pid);
 		}
 	}
 	return pids;
+}
+
+async function stopOwnProcesses(): Promise<void> {
+	if (process.platform !== "linux") {
+		throw new ToolProtocolError("reset", "A sole-user reset requires Linux.");
+	}
+	// Linux kill(-1) excludes the caller and PID 1. The private PID namespace and kernel UID check bound it.
+	try {
+		process.kill(-1, "SIGKILL");
+	} catch (error) {
+		if (!(error instanceof Error && "code" in error && error.code === "ESRCH")) {
+			throw error;
+		}
+	}
+	const deadline = Date.now() + RESET_WAIT_MS;
+	while (Date.now() < deadline) {
+		const remaining = await ownProcesses();
+		if (remaining.length === 0) {
+			return;
+		}
+		await sleep(10);
+	}
+	throw new ToolProtocolError("reset", "The tools user's processes could not stop.");
 }
 
 /** Takes write permission from everything under `dir`, never following a symlink; executables stay executable. */
@@ -200,112 +229,60 @@ async function makeReadOnly(dir: string): Promise<void> {
 	await chmod(dir, 0o555);
 }
 
-// Linux runs the tools: an open directory pins every child lookup even if an exec replaces its old path.
-// macOS runs the protocol specs and has no traversable /dev/fd directory aliases.
-function directoryPath(fd: number, original: string): string {
-	return process.platform === "linux" ? `/proc/self/fd/${fd}` : original;
-}
-
-/** A refused upload owns this tree. Restore directory access before removing it, without following symlinks. */
-async function removePutTree(file: string): Promise<void> {
-	const root = path.dirname(file);
-	// Node omits Linux O_PATH (asm-generic/fcntl.h): pin even a directory whose read permission was removed.
-	const flags =
-		(process.platform === "linux" ? 2 ** 21 : constants.O_RDONLY) +
-		constants.O_DIRECTORY +
-		constants.O_NOFOLLOW;
-	const parent = await open(root, flags);
-	const check = async (candidate: string) => {
-		if (!within(root, await realpath(candidate))) {
-			throw new ToolProtocolError("path", "The upload cleanup left its workspace.");
+/** The tools and every command have one authority; the trusted loop is outside it (ADR 0068, trust split). */
+export function checkAuthority(): void {
+	// 9a.2: Keep the tools-container command UID equal to the server UID; add the chart assertion for that contract.
+	if (process.getuid?.() === 0 || process.geteuid?.() === 0) {
+		throw new Error("The tools server must not run as root.");
+	}
+	if (process.platform === "linux") {
+		const status = readFileSync("/proc/self/status", "utf8");
+		const capabilities = status
+			.split("\n")
+			.filter((line) => /^Cap(?:Inh|Prm|Eff|Bnd|Amb):/u.test(line));
+		if (capabilities.length !== 5 || capabilities.some((line) => !/:\s+0+$/u.test(line))) {
+			throw new Error("The tools server must have no capabilities.");
 		}
-	};
-	const unlink = async (entry: string) => {
-		// A link's parent must be contained; resolving its final component would follow the link we remove.
-		await check(path.dirname(entry));
-		await rm(entry, { force: true });
-	};
-	async function remove(entry: string): Promise<void> {
-		const info = await lstat(entry).catch((error: unknown) => {
-			if (error instanceof Error && "code" in error && error.code === "ENOENT") {
-				return null;
-			}
-			throw error;
-		});
-		if (info === null) {
-			return;
-		}
-		if (!info.isDirectory()) {
-			await unlink(entry);
-			return;
-		}
-		const handle = await open(entry, flags).catch(async (error: unknown) => {
-			if (
-				error instanceof Error &&
-				"code" in error &&
-				(error.code === "ELOOP" || error.code === "ENOTDIR")
-			) {
-				const replacement = await lstat(entry);
-				if (replacement.isSymbolicLink()) {
-					await unlink(entry);
-					return null;
-				}
-			}
-			throw error;
-		});
-		if (handle === null) {
-			return;
-		}
-		try {
-			const opened = directoryPath(handle.fd, entry);
-			await check(opened);
-			if (process.platform === "linux") {
-				// O_PATH cannot fchmod; the live descriptor's proc alias names that same inode, never a replacement.
-				await chmod(opened, 0o700);
-			} else {
-				await handle.chmod(0o700);
-			}
-			try {
-				await check(opened);
-			} catch (error) {
-				const replacement = await lstat(entry);
-				if (replacement.isSymbolicLink()) {
-					await unlink(entry);
-					return;
-				}
-				throw error;
-			}
-			// A concurrent rename may add a name after readdir. Retry once without following a replacement.
-			for (let pass = 0; pass < 2; pass += 1) {
-				for (const name of await readdir(opened)) {
-					await remove(path.join(opened, name));
-				}
-				await check(path.dirname(entry));
-				try {
-					await rmdir(entry);
-					return;
-				} catch (error) {
-					const code = error instanceof Error && "code" in error ? error.code : undefined;
-					if (code === "ENOTDIR") {
-						await unlink(entry);
-						return;
-					}
-					if (code === "ENOTEMPTY" && pass === 0) {
-						continue;
-					}
-					throw error;
-				}
-			}
-		} finally {
-			await handle.close();
+		if (!/^NoNewPrivs:\s+1$/mu.test(status)) {
+			throw new Error("The tools server requires no_new_privs.");
 		}
 	}
+}
+
+/** Best-effort reclamation of a detached tree, under the same UID, groups and mounts as every command. */
+async function removeTrash(file: string, root: string): Promise<void> {
+	const info = await lstat(file).catch((error: unknown) => {
+		if (error instanceof Error && "code" in error && error.code === "ENOENT") {
+			return null;
+		}
+		throw error;
+	});
+	if (info === null) {
+		return;
+	}
+	const checked = info.isSymbolicLink() ? path.dirname(file) : file;
+	if (checked !== path.dirname(root) && !within(root, await realpath(checked))) {
+		return;
+	}
+	// A directory can move after a check. This is defense in depth, not a privilege boundary: ADR 0068's
+	// tools server and commands share one non-root, capability-free authority; the loop's volume is not writable.
+	if (info.isDirectory()) {
+		await chmod(file, 0o700);
+		for (const name of await readdir(file)) {
+			await removeTrash(path.join(file, name), root);
+		}
+	}
+	if (!info.isSymbolicLink() && !within(root, await realpath(file))) {
+		return;
+	}
+	await rm(file, { recursive: true, force: true });
+}
+
+async function reclaimTrash(root: string): Promise<void> {
 	try {
-		const anchored = directoryPath(parent.fd, root);
-		await check(anchored);
-		await remove(path.join(anchored, path.basename(file)));
-	} finally {
-		await parent.close();
+		await removeTrash(root, root);
+	} catch {
+		// Job deletion reclaims any trash that best-effort deletion cannot remove.
 	}
 }
 
@@ -424,13 +401,50 @@ async function readPage(file: string, offset: number, limit: number) {
 }
 
 export function startToolsServer(options: ToolsServerOptions): Server {
+	if (options.soleUser) {
+		checkAuthority();
+	}
+	const workspace = realpathSync(options.workspace);
+	const workspaceParent = path.dirname(workspace);
+	const owner = statSync(workspaceParent);
+	if (owner.uid !== process.getuid?.() || owner.mode % 0o100 !== 0) {
+		throw new Error("The workspace parent must belong only to the tools user.");
+	}
+	if (
+		!within(workspace, realpathSync(options.scratch)) ||
+		options.putRoots.some((root) => !within(workspace, realpathSync(root))) ||
+		within(workspace, path.resolve(options.socketPath))
+	) {
+		throw new Error(
+			"Scratch and upload roots belong inside the mutable workspace, and the socket outside it.",
+		);
+	}
 	const bootId = randomUUID();
 	/** The running calls of every connection: a reset ends them all. */
 	const calls = new Set<Call>();
+	const uploads = new Set<Put>();
+	const operations = new Set<Promise<void>>();
+	let resetting = false;
 	/** Bytes streamed to the loop by every call of this attempt; the tools program serves one attempt. */
 	let attemptStreamed = 0;
 	/** How many resets ran: a call that arrived before a reset and would start after it does not start. */
 	let resets = 0;
+
+	async function retire(directory: string): Promise<void> {
+		if (directory !== workspace && !within(workspace, await realpath(path.dirname(directory)))) {
+			throw new ToolProtocolError("path", "The upload parent is outside the mutable workspace.");
+		}
+		const trash = path.join(workspaceParent, `.tools-trash-${randomUUID()}`);
+		try {
+			await rename(directory, trash);
+		} catch (error) {
+			if (error instanceof Error && "code" in error && error.code === "ENOENT") {
+				return;
+			}
+			throw error;
+		}
+		void reclaimTrash(trash);
+	}
 
 	return createServer({ highWaterMark: LIMITS.bodyBytes }, (socket: Socket) => {
 		const reader = frameReader();
@@ -463,13 +477,22 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 			final(id, { type: "error", error, detail });
 		};
 		/** Runs one request's handler; a handler that fails ends its request with a refusal, never the program. */
-		async function settle(id: string, work: Promise<void>): Promise<void> {
+		async function settle(id: string, work: Promise<void>, tracked = true): Promise<void> {
+			if (tracked) {
+				operations.add(work);
+			}
 			try {
 				await work;
-			} catch {
+			} catch (error) {
+				if (error instanceof ToolProtocolError && error.code === "protocol") {
+					socket.destroy();
+					return;
+				}
 				if (inFlight.has(id)) {
 					refuse(id, "tools", "The tools side failed this call.");
 				}
+			} finally {
+				operations.delete(work);
 			}
 		}
 
@@ -746,34 +769,37 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 		}
 
 		async function reset(id: string): Promise<void> {
+			resetting = true;
 			resets += 1;
-			for (const putId of puts.keys()) {
-				await dropPut(putId, "reset", "A reset ended this put.");
-			}
-			// Each call ends with its marker sweep, and the scratch is cleared only after it sent its `exit`.
-			await Promise.race([
-				Promise.all(
-					[...calls].map(async (call) => {
-						await endCall(call.id, call.child);
-						await call.ended;
-					}),
-				),
-				sleep(RESET_WAIT_MS, undefined, { ref: false }),
-			]);
-			for (const pid of options.soleUser ? await ownProcesses() : []) {
-				try {
-					process.kill(pid, "SIGKILL");
-				} catch {
-					// It ended meanwhile.
+			try {
+				const stoppingUploads = [...uploads].map(async (entry) => entry.stopForReset());
+				const stoppingCalls = [...calls].map(async (call) => {
+					await endCall(call.id, call.child);
+					await call.ended;
+				});
+				const stoppingUser = options.soleUser ? stopOwnProcesses() : Promise.resolve();
+				const stopped = await Promise.race([
+					Promise.all([
+						Promise.allSettled([...operations, ...stoppingUploads, ...stoppingCalls]),
+						stoppingUser,
+					]).then(() => true),
+					sleep(RESET_WAIT_MS, false, { ref: false }),
+				]);
+				if (!stopped) {
+					throw new ToolProtocolError("reset", "The active tool operations could not stop.");
 				}
+				await retire(workspace);
+				await mkdir(workspace, { mode: 0o700 });
+				for (const directory of [options.scratch, ...options.putRoots]) {
+					await mkdir(directory, { recursive: true, mode: 0o700 });
+				}
+				final(id, { type: "reset" });
+			} finally {
+				resetting = false;
 			}
-			for (const name of await readdir(options.scratch).catch(() => [])) {
-				await rm(path.join(options.scratch, name), { recursive: true, force: true });
-			}
-			final(id, { type: "reset" });
 		}
 
-		async function startPut(id: string, header: Header): Promise<void> {
+		async function startPut(id: string, header: Header, arrivedAfter: number): Promise<void> {
 			const requested = text(header, "dir") ?? "";
 			const parent = await contained(path.dirname(requested), options.putRoots);
 			const size = integer(header, "size");
@@ -804,10 +830,11 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 				const file = path.join(incoming, `${id}.tar`);
 				const sink = createWriteStream(file, { flags: "wx", highWaterMark: FILE_BUFFER_BYTES });
 				await once(sink, "open");
-				if (closing.signal.aborted) {
+				if (closing.signal.aborted || resets !== arrivedAfter) {
 					sink.destroy();
 					await finished(sink).catch(() => undefined);
 					await rm(file, { force: true });
+					await dropPut(id, "reset", "A reset ended this put before it started.");
 					return;
 				}
 				const entry: Put = {
@@ -822,11 +849,13 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 					abort: new AbortController(),
 					ended: Promise.withResolvers<undefined>(),
 					ending: false,
+					stopForReset: async () => dropPut(id, "reset", "A reset ended this put."),
 				};
 				sink.on("error", () => {
 					entry.failed = true;
 				});
 				puts.set(id, entry);
+				uploads.add(entry);
 			} catch {
 				await dropPut(id, "put", "The tools side cannot store the archive.");
 			}
@@ -926,7 +955,7 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 				try {
 					await rm(entry.file, { force: true });
 					if (created && (!extracted || entry.abort.signal.aborted)) {
-						await removePutTree(entry.dir);
+						await retire(entry.dir);
 					}
 				} catch {
 					entry.refusal ??= {
@@ -935,6 +964,7 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 					};
 				}
 				puts.delete(id);
+				uploads.delete(entry);
 				if (entry.refusal) {
 					refuse(id, entry.refusal.error, entry.refusal.detail);
 				} else {
@@ -1006,6 +1036,13 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 				refuse(id, "unknown", `The tools side has no operation ${header.type}.`);
 				return;
 			}
+			if (resetting) {
+				if (header.type === "put") {
+					rememberRefusedPut(id);
+				}
+				refuse(id, "busy", "A reset is already running.");
+				return;
+			}
 			if (inFlight.size >= LIMITS.inFlight) {
 				if (header.type === "put") {
 					rememberRefusedPut(id);
@@ -1019,9 +1056,9 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 			} else if (header.type === "read") {
 				void settle(id, read(id, header));
 			} else if (header.type === "reset") {
-				await settle(id, reset(id));
+				await settle(id, reset(id), false);
 			} else {
-				await startPut(id, header);
+				await settle(id, startPut(id, header, resets));
 			}
 		}
 
@@ -1060,16 +1097,28 @@ export function startToolsServer(options: ToolsServerOptions): Server {
 }
 
 if (import.meta.main) {
+	if (process.platform !== "linux") {
+		throw new Error("The tools program requires Linux.");
+	}
+	checkAuthority();
 	const nonce = process.env.TOOLS_NONCE;
 	if (nonce === undefined || nonce === "") {
 		throw new Error("TOOLS_NONCE is required: the worker writes the Pod's nonce into its spec");
 	}
+	const workspace = "/tmp/tools/workspace";
+	const scratch = path.join(workspace, ".scratch");
+	const repos = path.join(workspace, "repos");
+	await mkdir(path.dirname(workspace), { recursive: true, mode: 0o700 });
+	for (const directory of [workspace, scratch, repos]) {
+		await mkdir(directory, { recursive: true, mode: 0o700 });
+	}
 	startToolsServer({
 		socketPath: process.env.TOOLS_SOCKET ?? "/run/tools/tools.sock",
 		nonce,
-		roots: ["/workspace", "/tmp"],
-		scratch: "/tmp",
-		putRoots: ["/workspace/repos"],
+		workspace,
+		roots: ["/workspace", workspace],
+		scratch,
+		putRoots: [repos],
 		soleUser: true,
 	});
 }

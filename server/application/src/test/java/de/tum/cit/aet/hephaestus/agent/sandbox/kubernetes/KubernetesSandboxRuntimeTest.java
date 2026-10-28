@@ -1375,6 +1375,7 @@ class KubernetesSandboxRuntimeTest {
     private static void assertRestricted(Container container, long uid) {
         var security = container.getSecurityContext();
         assertThat(security.getRunAsUser()).isEqualTo(uid);
+        assertThat(security.getRunAsGroup()).isEqualTo(uid);
         assertThat(security.getRunAsNonRoot()).isTrue();
         assertThat(security.getPrivileged()).isFalse();
         assertThat(security.getAllowPrivilegeEscalation()).isFalse();

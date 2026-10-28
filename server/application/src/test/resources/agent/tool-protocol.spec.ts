@@ -2,13 +2,13 @@
 // tools side that breaks the protocol.
 
 import assert from "node:assert/strict";
-import { execFileSync, spawn } from "node:child_process";
+import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { once } from "node:events";
 import {
 	existsSync,
 	mkdtempSync,
-	type PathLike,
+	mkdirSync,
 	readdirSync,
 	readFileSync,
 	realpathSync,
@@ -22,8 +22,9 @@ import { syncBuiltinESMExports } from "node:module";
 import { connect, createServer, type Server, type Socket } from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import test, { after, before, type TestContext } from "node:test";
+import test, { after, before, beforeEach, type TestContext } from "node:test";
 import { setTimeout as sleep } from "node:timers/promises";
+import { fileURLToPath } from "node:url";
 
 import { type PutArchive, ToolClient } from "../../../main/resources/agent/tool-client.ts";
 import {
@@ -33,36 +34,49 @@ import {
 	LIMITS,
 	ToolProtocolError,
 } from "../../../main/resources/agent/tool-protocol.ts";
-import { startToolsServer } from "../../../main/resources/agent/tools-server.ts";
+import { checkAuthority, startToolsServer } from "../../../main/resources/agent/tools-server.ts";
 
 const base = mkdtempSync(path.join(tmpdir(), "tools-"));
 const workspace = path.join(base, "workspace");
-const scratch = path.join(base, "tmp");
+const scratch = path.join(workspace, ".scratch");
 const outside = path.join(base, "outside");
 execFileSync("mkdir", ["-p", path.join(workspace, "repos"), scratch, outside]);
-writeFileSync(path.join(workspace, "notes.txt"), "one\ntwo\nthree\nfour\n");
 writeFileSync(path.join(outside, "kept.txt"), "kept\n");
-symlinkSync("/etc", path.join(workspace, "escape"));
 const socketPath = path.join(base, "tools.sock");
 const nonce = "pod-nonce";
+const soleUser = process.env.TOOLS_TEST_SOLE_USER === "true";
 
 let server: Server;
 let client: ToolClient;
 let openedAt = 0;
 
 before(async () => {
+	if (soleUser) {
+		assert.equal(process.ppid, 1, "sole-user process tests require a private container init");
+		checkAuthority();
+	}
 	process.env.HEPHAESTUS_SECRET = "must-not-leak";
 	server = startToolsServer({
 		socketPath,
 		nonce,
+		workspace,
 		roots: [workspace, scratch],
 		scratch,
 		putRoots: [path.join(workspace, "repos")],
-		soleUser: false,
+		soleUser,
 	});
 	await once(server, "listening");
 	client = await ToolClient.open(socketPath, nonce);
 	openedAt = Date.now();
+});
+
+beforeEach(() => {
+	mkdirSync(path.join(workspace, "repos"), { recursive: true });
+	mkdirSync(scratch, { recursive: true });
+	writeFileSync(path.join(workspace, "notes.txt"), "one\ntwo\nthree\nfour\n");
+	if (!existsSync(path.join(workspace, "escape"))) {
+		symlinkSync("/etc", path.join(workspace, "escape"));
+	}
 });
 
 after(() => {
@@ -155,6 +169,231 @@ function tarOf(...members: Buffer[]): Buffer {
 void test("hello names the protocol and a boot id", () => {
 	assert.match(client.bootId, /^[0-9a-f-]{36}$/u);
 });
+
+for (const [name, uid, status, message] of [
+	["root", 0, "", /must not run as root/u],
+	[
+		"capabilities",
+		1000,
+		"CapInh:\t0\nCapPrm:\t0\nCapEff:\t1\nCapBnd:\t0\nCapAmb:\t0\nNoNewPrivs:\t1\n",
+		/no capabilities/u,
+	],
+	[
+		"no_new_privs",
+		1000,
+		"CapInh:\t0\nCapPrm:\t0\nCapEff:\t0\nCapBnd:\t0\nCapAmb:\t0\nNoNewPrivs:\t0\n",
+		/requires no_new_privs/u,
+	],
+] as const) {
+	void test(
+		`the startup self-check refuses ${name}`,
+		{ skip: process.platform !== "linux" },
+		() => {
+			const preload = `import fs from 'node:fs'; import { syncBuiltinESMExports } from 'node:module';
+const read = fs.readFileSync; process.getuid = () => ${uid}; process.geteuid = () => ${uid};
+fs.readFileSync = (file, ...args) => String(file) === '/proc/self/status' ? ${JSON.stringify(status)} : read(file, ...args);
+syncBuiltinESMExports();`;
+			const address = path.join(base, `refused-${name}.sock`);
+			const program = fileURLToPath(
+				new URL("../../../main/resources/agent/tools-server.ts", import.meta.url),
+			);
+			const guarded = spawnSync(
+				process.execPath,
+				["--import", `data:text/javascript,${encodeURIComponent(preload)}`, program],
+				{
+					encoding: "utf8",
+					timeout: 3000,
+					env: { TOOLS_NONCE: nonce, TOOLS_SOCKET: address },
+				},
+			);
+			assert.notEqual(guarded.status, 0);
+			assert.match(guarded.stderr, message);
+			assert.equal(existsSync(address), false);
+		},
+	);
+}
+
+function authoritySnapshot() {
+	return {
+		uid: process.getuid?.(),
+		euid: process.geteuid?.(),
+		gid: process.getgid?.(),
+		groups: process.getgroups?.().toSorted((a, b) => a - b),
+		status: readFileSync("/proc/self/status", "utf8")
+			.split("\n")
+			.filter((line) => /^(?:Cap\w+|NoNewPrivs):/u.test(line)),
+		mountNamespace: statSync("/proc/self/ns/mnt").ino,
+	};
+}
+
+void test(
+	"the entrypoint starts under the restricted command identity",
+	{ skip: !soleUser },
+	async () => {
+		const address = path.join(base, "entrypoint.sock");
+		const program = fileURLToPath(
+			new URL("../../../main/resources/agent/tools-server.ts", import.meta.url),
+		);
+		const child = spawn(process.execPath, [program], {
+			env: { ...process.env, TOOLS_NONCE: nonce, TOOLS_SOCKET: address },
+			stdio: "ignore",
+		});
+		let tools: ToolClient | undefined;
+		try {
+			for (let i = 0; i < 100 && !existsSync(address) && child.exitCode === null; i += 1) {
+				await sleep(10);
+			}
+			assert.equal(existsSync(address), true);
+			tools = await ToolClient.open(address, nonce);
+			const chunks: Buffer[] = [];
+			const exit = await tools.exec(
+				{
+					argv: [process.execPath, "-e", "process.stdout.write(String(process.getuid()))"],
+					cwd: "/tmp/tools/workspace",
+					timeoutMs: 1000,
+				},
+				(chunk) => {
+					chunks.push(chunk);
+				},
+			);
+			assert.equal(exit.code, 0);
+			assert.equal(Buffer.concat(chunks).toString("utf8"), String(process.getuid?.()));
+		} finally {
+			tools?.close();
+			if (child.exitCode === null) {
+				child.kill();
+				await once(child, "close");
+			}
+		}
+	},
+);
+
+void test(
+	"commands inherit the server UID, groups, capabilities and mounts",
+	{ skip: process.platform !== "linux" },
+	async () => {
+		const code = `const { readFileSync, statSync } = require('node:fs'); const snapshot = ${authoritySnapshot.toString()}; console.log(JSON.stringify(snapshot()));`;
+		const chunks: Buffer[] = [];
+		const exit = await client.exec(
+			{ argv: [process.execPath, "-e", code], cwd: workspace, timeoutMs: 1000 },
+			(chunk) => {
+				chunks.push(chunk);
+			},
+		);
+		assert.equal(exit.code, 0);
+		assert.equal(
+			Buffer.concat(chunks).toString("utf8").trim(),
+			JSON.stringify(authoritySnapshot()),
+		);
+	},
+);
+
+void test("reset provides a fresh writable workspace before trash deletion finishes", async (t) => {
+	const marker = path.join(workspace, "old-workspace");
+	writeFileSync(marker, "old");
+	const reached = Promise.withResolvers<undefined>();
+	const release = Promise.withResolvers<undefined>();
+	const { rm } = fs;
+	let held = false;
+	const rmMock = t.mock.method(fs, "rm", async (...args: Parameters<typeof fs.rm>) => {
+		if (String(args[0]).includes(".tools-trash-") && !held) {
+			held = true;
+			reached.resolve(undefined);
+			await release.promise;
+		}
+		return rm(...args);
+	});
+	syncBuiltinESMExports();
+	try {
+		await client.reset();
+		assert.equal(existsSync(marker), false);
+		await reached.promise;
+		const written = await run("printf fresh > writable; cat writable");
+		assert.equal(written.output, "fresh");
+		assert.equal(held, true);
+	} finally {
+		release.resolve(undefined);
+		rmMock.mock.restore();
+		syncBuiltinESMExports();
+	}
+});
+
+void test(
+	"a sole-user reset ends a detached process that cleared its marker",
+	{ skip: !soleUser },
+	async () => {
+		const pidFile = path.join(scratch, "unmarked.pid");
+		const escaped = await run(
+			`setsid env -i /bin/sh -c 'echo $$ > ${pidFile}; exec /bin/sleep 60' </dev/null >/dev/null 2>&1 & while [ ! -s ${pidFile} ]; do sleep 0.01; done; cat ${pidFile}`,
+		);
+		const pid = Number(escaped.output.trim());
+		assert.ok(Number.isInteger(pid) && pid > 1);
+		try {
+			assert.equal(alive(pid), true);
+			await client.reset();
+			for (let i = 0; alive(pid) && i < 100; i += 1) {
+				await sleep(10);
+			}
+			assert.equal(alive(pid), false);
+		} finally {
+			if (alive(pid)) {
+				process.kill(pid, "SIGKILL");
+			}
+		}
+	},
+);
+
+void test(
+	"trash cleanup cannot change an outside target owned by another UID",
+	{
+		skip: process.platform !== "linux" || process.env.TOOLS_TEST_FOREIGN_DIR === undefined,
+		timeout: 5000,
+	},
+	async (t) => {
+		const target = process.env.TOOLS_TEST_FOREIGN_DIR;
+		assert.ok(target !== undefined);
+		checkAuthority();
+		const original = statSync(target);
+		assert.notEqual(original.uid, process.getuid?.());
+		const body = readFileSync(path.join(target, "kept"), "utf8");
+		let current = path.join(workspace, "foreign");
+		await fs.rename(target, current);
+		const checked = Promise.withResolvers<undefined>();
+		const { chmod } = fs;
+		let moved = false;
+		const chmodMock = t.mock.method(fs, "chmod", async (...args: Parameters<typeof fs.chmod>) => {
+			const [file, mode] = args;
+			if (String(file).endsWith("/foreign") && mode === 0o700 && !moved) {
+				moved = true;
+				await fs.rename(file, target);
+				current = target;
+				await fs.symlink(target, file);
+				try {
+					await chmod(file, mode);
+				} finally {
+					checked.resolve(undefined);
+				}
+				return;
+			}
+			await chmod(file, mode);
+		});
+		syncBuiltinESMExports();
+		try {
+			await client.reset();
+			await checked.promise;
+			assert.equal(statSync(target).mode, original.mode);
+			assert.equal(readFileSync(path.join(target, "kept"), "utf8"), body);
+			const denied = await run(`printf changed > ${quote(path.join(target, "kept"))}`);
+			assert.equal(denied.exit.code, 1);
+		} finally {
+			chmodMock.mock.restore();
+			syncBuiltinESMExports();
+			if (current !== target && existsSync(current)) {
+				await fs.rename(current, target);
+			}
+		}
+	},
+);
 
 void test("an exec streams its output and ends with its exit code", async () => {
 	const { exit, output } = await run("echo hello; exit 3");
@@ -467,14 +706,9 @@ void test("a reset cleans a partial upload before accepting another call", async
 async function resetReadOnlyTree(
 	t: TestContext,
 	phase: string,
-	replaceAt?: "checked" | "opened" | "removal",
+	resetClient = client,
 ): Promise<void> {
 	const dir = path.join(realpathSync(workspace), "repos", `reset-readonly-${phase}`);
-	const victim = replaceAt === undefined ? undefined : mkdtempSync(path.join(outside, "cleanup-"));
-	if (victim !== undefined) {
-		await fs.chmod(victim, 0o755);
-		await fs.writeFile(path.join(victim, "file"), "outside");
-	}
 	const archive = archiveOf(
 		tarOf(tarMember("nested/", { type: "5" }), tarMember("nested/file", { body: "kept" })),
 	);
@@ -482,12 +716,8 @@ async function resetReadOnlyTree(
 	const aborted = Promise.withResolvers<undefined>();
 	const release = Promise.withResolvers<undefined>();
 	let held = false;
-	let swapped = false;
 	const { chmod } = fs;
 	const gate: typeof fs.chmod = async (file, mode) => {
-		if (mode === 0o700 && process.platform === "linux") {
-			await replaceNested(file, "opened");
-		}
 		await chmod(file, mode);
 		if (
 			phase === "permissions" &&
@@ -501,46 +731,8 @@ async function resetReadOnlyTree(
 		}
 	};
 	const chmodMock = t.mock.method(fs, "chmod", gate);
-	const replaceNested = async (entry: PathLike, point: typeof replaceAt) => {
-		if (
-			victim !== undefined &&
-			held &&
-			point === replaceAt &&
-			!swapped &&
-			(await fs.realpath(entry)) === path.join(dir, "nested")
-		) {
-			swapped = true;
-			await chmod(dir, 0o700);
-			await fs.rename(path.join(dir, "nested"), path.join(dir, "saved"));
-			await fs.symlink(victim, path.join(dir, "nested"));
-		}
-	};
-	const { lstat } = fs;
-	const lstatMock = t.mock.method(fs, "lstat", async (...args: Parameters<typeof fs.lstat>) => {
-		const info = await lstat(...args);
-		await replaceNested(args[0], "checked");
-		return info;
-	});
-	const { open } = fs;
-	const openMock = t.mock.method(fs, "open", async (...args: Parameters<typeof fs.open>) => {
-		const handle = await open(...args);
-		if (
-			victim !== undefined &&
-			held &&
-			replaceAt === "opened" &&
-			(await fs.realpath(args[0])) === path.join(dir, "nested")
-		) {
-			const chmodOpened = handle.chmod.bind(handle);
-			t.mock.method(handle, "chmod", async (...chmodArgs: Parameters<typeof handle.chmod>) => {
-				await replaceNested(args[0], "opened");
-				await chmodOpened(...chmodArgs);
-			});
-		}
-		return handle;
-	});
 	const { rm } = fs;
 	const rmMock = t.mock.method(fs, "rm", async (...args: Parameters<typeof fs.rm>) => {
-		await replaceNested(path.dirname(String(args[0])), "removal");
 		if (phase === "archive cleanup" && String(args[0]).endsWith(".tar") && !held) {
 			held = true;
 			reached.resolve(undefined);
@@ -564,17 +756,11 @@ async function resetReadOnlyTree(
 	try {
 		const upload = Promise.allSettled([client.put(dir, archive)]);
 		await reached.promise;
-		const reset = client.reset();
+		const reset = resetClient.reset();
 		await aborted.promise;
 		release.resolve(undefined);
 		await reset;
 		const [outcome] = await upload;
-		if (victim !== undefined) {
-			assert.equal(swapped, true);
-			const victimInfo = await fs.stat(victim);
-			assert.equal(victimInfo.mode % 0o1000, 0o755);
-			assert.equal(await fs.readFile(path.join(victim, "file"), "utf8"), "outside");
-		}
 		assert.equal(outcome.status, "rejected");
 		assert.ok(refusal("reset")(outcome.reason));
 		assert.equal(existsSync(dir), false);
@@ -583,8 +769,6 @@ async function resetReadOnlyTree(
 	} finally {
 		release.resolve(undefined);
 		chmodMock.mock.restore();
-		lstatMock.mock.restore();
-		openMock.mock.restore();
 		rmMock.mock.restore();
 		abortMock.mock.restore();
 		syncBuiltinESMExports();
@@ -592,29 +776,75 @@ async function resetReadOnlyTree(
 			execFileSync("chmod", ["-R", "u+w", dir]);
 			rmSync(dir, { recursive: true, force: true });
 		}
-		if (victim !== undefined) {
-			await fs.rm(victim, { recursive: true, force: true });
-		}
 	}
-}
-
-for (const point of ["checked", "opened", "removal"] as const) {
-	void test(
-		`reset cleanup preserves an outside target when a directory is replaced at ${point}`,
-		{
-			skip:
-				point === "removal" && process.platform !== "linux"
-					? "The tools runtime pins directory lookups through Linux /proc."
-					: false,
-		},
-		async (t) => resetReadOnlyTree(t, "permissions", point),
-	);
 }
 
 for (const phase of ["permissions", "archive cleanup"]) {
 	void test(`reset during ${phase} removes the read-only tree and allows retry`, async (t) =>
 		resetReadOnlyTree(t, phase));
 }
+
+void test("reset stops an upload on another connection before replacing the workspace", async (t) => {
+	const other = await ToolClient.open(socketPath, nonce);
+	try {
+		await resetReadOnlyTree(t, "permissions", other);
+	} finally {
+		other.close();
+	}
+});
+
+void test("reset fences an upload still preparing and rejects overlapping resets", async (t) => {
+	const resetting = await ToolClient.open(socketPath, nonce);
+	const probing = await ToolClient.open(socketPath, nonce);
+	const reached = Promise.withResolvers<undefined>();
+	const release = Promise.withResolvers<undefined>();
+	const { mkdir } = fs;
+	let held = false;
+	const mkdirMock = t.mock.method(fs, "mkdir", async (...args: Parameters<typeof fs.mkdir>) => {
+		const result = await mkdir(...args);
+		if (String(args[0]) === path.join(scratch, ".puts") && !held) {
+			held = true;
+			reached.resolve(undefined);
+			await release.promise;
+		}
+		return result;
+	});
+	syncBuiltinESMExports();
+	const directory = path.join(workspace, "repos", "preparing-reset");
+	const upload = Promise.allSettled([
+		client.put(directory, archiveOf(tarOf(tarMember("old", { body: "old" })))),
+	]);
+	try {
+		await reached.promise;
+		const reset = resetting.reset();
+		let busy = false;
+		for (let i = 0; i < 100 && !busy; i += 1) {
+			try {
+				await probing.exec({ command: "true", cwd: workspace, timeoutMs: 1000 }, () => undefined);
+			} catch (error) {
+				assert.ok(refusal("busy")(error));
+				busy = true;
+			}
+		}
+		assert.equal(busy, true);
+		await assert.rejects(probing.reset(), refusal("busy"));
+		release.resolve(undefined);
+		await reset;
+		const [outcome] = await upload;
+		assert.equal(outcome.status, "rejected");
+		assert.ok(refusal("reset")(outcome.reason));
+		assert.equal(existsSync(directory), false);
+		await client.put(directory, archiveOf(tarOf(tarMember("fresh", { body: "fresh" }))));
+		assert.equal(readFileSync(path.join(directory, "fresh"), "utf8"), "fresh");
+	} finally {
+		release.resolve(undefined);
+		mkdirMock.mock.restore();
+		syncBuiltinESMExports();
+		resetting.close();
+		probing.close();
+		await upload;
+	}
+});
 
 void test("reset waits for the extraction child to close before removing its archive", async (t) => {
 	const root = realpathSync(mkdtempSync(path.join(tmpdir(), "tools-extract-")));
@@ -692,8 +922,9 @@ void test(
 	{ timeout: 30_000 },
 	async (t) => {
 		const root = realpathSync(mkdtempSync(path.join(tmpdir(), "tools-stream-")));
-		const repos = path.join(root, "repos");
-		const incoming = path.join(root, "tmp");
+		const mutable = path.join(root, "workspace");
+		const repos = path.join(mutable, "repos");
+		const incoming = path.join(mutable, ".scratch");
 		const bin = path.join(root, "bin");
 		execFileSync("mkdir", ["-p", repos, incoming, bin]);
 		const held = path.join(repos, "held");
@@ -707,7 +938,7 @@ void test(
 		const address = path.join(root, "tools.sock");
 		const module = new URL("../../../main/resources/agent/tools-server.ts", import.meta.url).href;
 		const program = `import { startToolsServer } from ${JSON.stringify(module)};
-const server = startToolsServer(${JSON.stringify({ socketPath: address, nonce, roots: [repos, incoming], scratch: incoming, putRoots: [repos], soleUser: false })});
+const server = startToolsServer(${JSON.stringify({ socketPath: address, nonce, workspace: mutable, roots: [repos, incoming], scratch: incoming, putRoots: [repos], soleUser: false })});
 let peak = 0;
 const sample = () => { global.gc(); peak = Math.max(peak, process.memoryUsage().external); };
 const timer = setInterval(sample, 20);
@@ -870,10 +1101,9 @@ void test(
 		const pidFile = path.join(workspace, "reset-detached.pid");
 		const sleeping = run(`setsid sh -c 'echo $$ > ${pidFile}; exec sleep 30' & sleep 30`);
 		await sleep(300);
+		const detached = Number(readFileSync(pidFile, "utf8"));
 		await client.reset();
 		await sleeping;
-		const detached = Number(readFileSync(pidFile, "utf8"));
-		rmSync(pidFile);
 		await sleep(100);
 		assert.equal(alive(detached), false);
 	},
