@@ -267,7 +267,7 @@ class DocumentItemSourceIntegrationTest extends BaseIntegrationTest {
 
     private static CaptureRequest request() {
         return new CaptureRequest(
-                UUID.randomUUID(), UUID.randomUUID(), 1, Set.of(DocumentContentSource.SOURCE), "2.0.0", 3);
+                UUID.randomUUID(), UUID.randomUUID(), 1, Set.of(DocumentContentSource.SOURCE), "3.0.0", 3);
     }
 
     private record ReadableDocument(ItemRef item, long collaboratorId, long providerId, String teamId) {}

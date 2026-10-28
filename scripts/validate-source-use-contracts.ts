@@ -272,7 +272,7 @@ for (const version of contractVersions) {
 	if (digest !== createHash("sha256").update(bytes).digest("hex")) {
 		throw new Error(`${version} readiness schema has a stale catalog digest`);
 	}
-	if (version === "2.0.0") {
+	if (version === "2.0.0" || version === "3.0.0") {
 		validateReviewedBySchema(version);
 	} else {
 		validatePublishedPolicySchema(version);

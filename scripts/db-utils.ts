@@ -234,11 +234,14 @@ export function appendInclude(masterXml: string, fileName: string): string {
 	return masterXml.replace(closingTag, `${include}${closingTag}`);
 }
 
-/** The changelog this branch added and main does not have, if there is exactly one. */
-async function branchChangelog(repository: string): Promise<string | undefined> {
-	const mergeBase = await output("git", ["merge-base", "HEAD", "origin/main"], {
+/** The changelog this layer added and its base does not have, if there is exactly one. */
+async function branchChangelog(repository: string, baseRef: string): Promise<string | undefined> {
+	const fallback = baseRef.startsWith("origin/")
+		? baseRef.slice("origin/".length)
+		: `origin/${baseRef}`;
+	const mergeBase = await output("git", ["merge-base", "HEAD", baseRef], {
 		cwd: repository,
-	}).catch(async () => output("git", ["merge-base", "HEAD", "main"], { cwd: repository }));
+	}).catch(async () => output("git", ["merge-base", "HEAD", fallback], { cwd: repository }));
 	const base = mergeBase.trim();
 	const added = await output(
 		"git",
@@ -269,8 +272,12 @@ async function branchChangelog(repository: string): Promise<string | undefined> 
 }
 
 /** Writes the drift into this branch's changelog and wires it; returns the file it wrote. */
-export async function promote(draftXml: string, repository = root): Promise<string> {
-	const existing = await branchChangelog(repository);
+export async function promote(
+	draftXml: string,
+	repository = root,
+	baseRef = "origin/main",
+): Promise<string> {
+	const existing = await branchChangelog(repository, baseRef);
 	if (existing !== undefined) {
 		await writeFile(
 			existing,
@@ -459,7 +466,11 @@ async function main(): Promise<void> {
 		if (!isSet(drift)) {
 			return;
 		}
-		written = await promote(drift);
+		written = await promote(
+			drift,
+			root,
+			isSet(process.env.GITHUB_BASE_REF) ? process.env.GITHUB_BASE_REF : "origin/main",
+		);
 		await migrate(value, false, signal);
 		await generateErd(value);
 	});

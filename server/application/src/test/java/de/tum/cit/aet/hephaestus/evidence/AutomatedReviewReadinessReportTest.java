@@ -20,7 +20,7 @@ class AutomatedReviewReadinessReportTest extends BaseUnitTest {
     void shouldSerializeTheSchemaProtocolFixture(AppliesWhenCheck.Result result) throws Exception {
         var at = Instant.parse("2026-01-01T00:00:00Z");
         var source = new SourceKind("scm.pull-request.diff");
-        var version = new SourceContractVersion("2.0.0");
+        var version = new SourceContractVersion("3.0.0");
         var check = new AppliesWhenCheck(
                 result == AppliesWhenCheck.Result.NOT_FOUND,
                 "No Java files changed.",

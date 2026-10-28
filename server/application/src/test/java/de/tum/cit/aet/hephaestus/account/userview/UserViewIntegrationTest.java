@@ -680,7 +680,7 @@ class UserViewIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 null,
                 AboutRole.AUTHOR,
                 new PracticeReads(
-                        "2.0.0",
+                        "3.0.0",
                         List.of(new PracticeReadSource(new SourceKind("scm.pull-request.core"), ReadNeed.REQUIRED))),
                 new ReviewedBy(ReviewedByKind.HEPHAESTUS, null, List.of()),
                 "Keep each change focused.",

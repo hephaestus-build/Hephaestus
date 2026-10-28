@@ -498,14 +498,9 @@ public class PullRequest extends Issue {
      */
     public @Nullable CheckState getHeadCheckState() {
         HeadCheckRuns runs = headCheckRuns;
-        if (headCheckState != null
-                && rank(headCheckState) < rank(CheckState.PENDING)
-                && runs != null
-                && runs.sha().equals(headCheckSha)
-                && HeadCheckRuns.AWAITING_APPROVAL.equals(runs.limitation())) {
-            return CheckState.PENDING;
-        }
-        return headCheckState;
+        return headCheckState != null && runs != null && runs.sha().equals(headCheckSha)
+                ? runs.effectiveState(headCheckState)
+                : headCheckState;
     }
 
     private boolean recordHeadChecks(String sha, CheckState state, boolean rollup) {

@@ -112,7 +112,7 @@ export const ReviewedByPeople: Story = {
 				humanReason: { code: "DESIGN_JUDGEMENT", description: "Design choices need a person." },
 				limits: [],
 			},
-			reads: { contract: "2.0.0", sources: [] },
+			reads: { contract: "3.0.0", sources: [] },
 		}),
 	},
 	play: async ({ canvas }) => {
@@ -126,7 +126,7 @@ export const ReviewedByNobody: Story = {
 		kind: "scm.pull_request",
 		definition: definitionOf({
 			reviewedBy: { by: "NOBODY", humanReason: null, limits: [] },
-			reads: { contract: "2.0.0", sources: [] },
+			reads: { contract: "3.0.0", sources: [] },
 		}),
 	},
 	play: async ({ canvas }) => {

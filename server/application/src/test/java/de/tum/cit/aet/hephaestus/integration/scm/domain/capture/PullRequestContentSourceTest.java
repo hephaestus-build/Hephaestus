@@ -102,6 +102,7 @@ class PullRequestContentSourceTest extends BaseUnitTest {
 
     private static final Long WORKSPACE_ID = 99L;
     private static final SourceKind CORE = new SourceKind("scm.pull-request.core");
+    private static final SourceKind CHECKS = PullRequestContentSource.CHECKS;
     private static final SourceKind DIFF = new SourceKind("scm.pull-request.diff");
     private static final SourceKind COMMENTS = new SourceKind("scm.pull-request.comments");
     private static final String HEAD = "b".repeat(40);
@@ -238,12 +239,61 @@ class PullRequestContentSourceTest extends BaseUnitTest {
         });
     }
 
+    @Test
+    void shouldKeepUnknownChecksPartialWithoutProducingCoreOrDiffFiles() {
+        var captured = provider.capture(request(sampleMetadata()), Set.of(CHECKS));
+        assertThat(captured.files())
+                .containsKey("context/checks.json")
+                .doesNotContainKeys("context/metadata.json", "context/change.json");
+        var checks = objectMapper.readTree(captured.files().get("context/checks.json"));
+        assertThat(checks.path("commit_sha").asString()).isEqualTo(HEAD);
+        assertThat(checks.has("head_check_runs")).isFalse();
+        assertThat(captured.completeness()).containsEntry(CHECKS, SourceCompleteness.PARTIAL);
+        assertThat(captured.captureLimitations()).containsEntry(CHECKS, List.of("CHECK_RUNS_NOT_OBSERVED"));
+        assertThat(captured.citableTexts())
+                .allSatisfy(text -> assertThat(text.source()).isEqualTo(CHECKS.value()));
+    }
+
+    @Test
+    void shouldCaptureTheChecksRetainedByTheOccasionInsteadOfTodaysMirror() {
+        var original = pullRequest();
+        original.setHeadRefOid(HEAD);
+        original.observeHeadChecks(HEAD, CheckState.FAILURE, true);
+        var at = Instant.parse("2026-10-26T12:00:00Z");
+        original.observeHeadCheckRuns(new HeadCheckRuns(
+                HEAD, List.of(new HeadCheckRuns.Run("tests", "CI", "failure", true, null, null, at)), true, at, null));
+        var context = request(sampleMetadata());
+        var record = PullRequestContentSource.occasionRecord(original, context.work(), at);
+        var today = pullRequest();
+        today.setHeadRefOid(HEAD);
+        today.observeHeadChecks(HEAD, CheckState.SUCCESS, true);
+        mirroredPullRequest = today;
+        var retained = new ScmCaptureContext(
+                context.pinned(),
+                context.request(),
+                context.work(),
+                context.preparation(),
+                context.capturedAt(),
+                new ScmCapturedOccasion(record, null, null, true));
+        var captured = provider.capture(retained, Set.of(CHECKS));
+        var checks = objectMapper.readTree(captured.files().get("context/checks.json"));
+        assertThat(checks.path("head_checks").asString()).isEqualTo("FAILURE");
+        assertThat(checks.path("head_check_runs")
+                        .path("runs")
+                        .get(0)
+                        .path("state")
+                        .asString())
+                .isEqualTo("failure");
+        assertThat(checks.path("basis").path("observed_at").asString()).isEqualTo(at.toString());
+    }
+
     @Nested
     class SourceKinds {
 
         @Test
         void shouldMapEveryStagedFileToItsSourceKind() {
             assertThat(provider.sourceKindFor("context/metadata.json")).isEqualTo(CORE);
+            assertThat(provider.sourceKindFor("context/checks.json")).isEqualTo(CHECKS);
             assertThat(provider.sourceKindFor("context/comments.json")).isEqualTo(COMMENTS);
             assertThat(provider.sourceKindFor(PullRequestContentSource.CHANGE_FILE))
                     .isEqualTo(DIFF);
@@ -331,7 +381,7 @@ class PullRequestContentSourceTest extends BaseUnitTest {
             // claims no admission or event time.
             assertThat(metadataJson.get("state").asString()).isEqualTo("CLOSED");
             assertThat(metadataJson.get("is_merged").asBoolean()).isTrue();
-            assertThat(metadataJson.get("review_decision").asString()).isEqualTo("APPROVED");
+            assertThat(metadataJson.has("review_decision")).isFalse();
             JsonNode basis = metadataJson.get("basis");
             assertThat(basis.propertyNames())
                     .containsExactlyInAnyOrder("other_fields", "captured_at", "mirror_synced_at");
@@ -353,6 +403,7 @@ class PullRequestContentSourceTest extends BaseUnitTest {
             Milestone milestone = new Milestone();
             milestone.setTitle("v1.2");
             pr.setMilestone(milestone);
+            pr.setHeadRefOid(HEAD);
             pr.setMergeStateStatus(MergeStateStatus.CLEAN);
             pr.setReviewDecision(ReviewDecision.APPROVED);
 
@@ -379,8 +430,13 @@ class PullRequestContentSourceTest extends BaseUnitTest {
             assertThat(metadataJson.get("assignees").valueStream().map(JsonNode::asString))
                     .containsExactly("adam", "zoe");
             assertThat(metadataJson.get("milestone").asString()).isEqualTo("v1.2");
-            assertThat(metadataJson.get("merge_state_status").asString()).isEqualTo("CLEAN");
-            assertThat(metadataJson.get("review_decision").asString()).isEqualTo("APPROVED");
+            assertThat(metadataJson.has("merge_state_status")).isFalse();
+            assertThat(metadataJson.has("review_decision")).isFalse();
+            JsonNode checks = objectMapper.readTree(provider.capture(request(sampleMetadata()), Set.of(CHECKS))
+                    .files()
+                    .get("context/checks.json"));
+            assertThat(checks.path("merge_state_status").asString()).isEqualTo("CLEAN");
+            assertThat(checks.has("review_decision")).isFalse();
         }
 
         @Test
@@ -415,23 +471,23 @@ class PullRequestContentSourceTest extends BaseUnitTest {
             stubGit();
 
             mirroredPullRequest = reviewed;
-            JsonNode fresh = objectMapper.readTree(provider.capture(request(sampleMetadata()), Set.of(CORE))
+            JsonNode fresh = objectMapper.readTree(provider.capture(request(sampleMetadata()), Set.of(CHECKS))
                     .files()
-                    .get("context/metadata.json"));
+                    .get("context/checks.json"));
             assertThat(fresh.get("commit_sha").asString()).isEqualTo(HEAD);
             assertThat(fresh.get("head_checks").asString()).isEqualTo("FAILURE");
 
             mirroredPullRequest = moved;
-            JsonNode newerHead = objectMapper.readTree(provider.capture(request(sampleMetadata()), Set.of(CORE))
+            JsonNode newerHead = objectMapper.readTree(provider.capture(request(sampleMetadata()), Set.of(CHECKS))
                     .files()
-                    .get("context/metadata.json"));
+                    .get("context/checks.json"));
             assertThat(newerHead.get("commit_sha").asString()).isEqualTo(HEAD);
             assertThat(newerHead.has("head_checks")).isFalse();
 
             mirroredPullRequest = stale;
-            JsonNode outdated = objectMapper.readTree(provider.capture(request(sampleMetadata()), Set.of(CORE))
+            JsonNode outdated = objectMapper.readTree(provider.capture(request(sampleMetadata()), Set.of(CHECKS))
                     .files()
-                    .get("context/metadata.json"));
+                    .get("context/checks.json"));
             assertThat(outdated.has("head_checks")).isFalse();
         }
 
@@ -453,9 +509,9 @@ class PullRequestContentSourceTest extends BaseUnitTest {
             stubGit();
 
             mirroredPullRequest = reviewed;
-            JsonNode listed = objectMapper.readTree(provider.capture(request(sampleMetadata()), Set.of(CORE))
+            JsonNode listed = objectMapper.readTree(provider.capture(request(sampleMetadata()), Set.of(CHECKS))
                     .files()
-                    .get("context/metadata.json"));
+                    .get("context/checks.json"));
             JsonNode runs = listed.get("head_check_runs");
             assertThat(runs.get("complete").asBoolean()).isFalse();
             assertThat(runs.get("observed_at").asString()).isEqualTo("2026-10-26T12:00:00Z");
@@ -467,9 +523,9 @@ class PullRequestContentSourceTest extends BaseUnitTest {
             assertThat(entry.get("finished_at").asString()).isEqualTo("2026-10-26T11:58:00Z");
 
             mirroredPullRequest = other;
-            JsonNode unlisted = objectMapper.readTree(provider.capture(request(sampleMetadata()), Set.of(CORE))
+            JsonNode unlisted = objectMapper.readTree(provider.capture(request(sampleMetadata()), Set.of(CHECKS))
                     .files()
-                    .get("context/metadata.json"));
+                    .get("context/checks.json"));
             assertThat(unlisted.has("head_check_runs")).isFalse();
         }
 
@@ -483,9 +539,9 @@ class PullRequestContentSourceTest extends BaseUnitTest {
             stubGit();
 
             mirroredPullRequest = fork;
-            JsonNode metadataJson = objectMapper.readTree(provider.capture(request(sampleMetadata()), Set.of(CORE))
+            JsonNode metadataJson = objectMapper.readTree(provider.capture(request(sampleMetadata()), Set.of(CHECKS))
                     .files()
-                    .get("context/metadata.json"));
+                    .get("context/checks.json"));
 
             assertThat(metadataJson.get("head_checks").asString()).isEqualTo("PENDING");
             assertThat(metadataJson.get("head_check_runs").get("limitation").asString())
@@ -888,7 +944,7 @@ class PullRequestContentSourceTest extends BaseUnitTest {
     private ScmCaptureContext coreWithDiffPlan() {
         var original = request(sampleMetadata());
         var plan = new CaptureRequest(
-                UUID.randomUUID(), UUID.randomUUID(), 0, Set.of(CORE), "2.0.0", 3, null, Set.of(CORE, DIFF));
+                UUID.randomUUID(), UUID.randomUUID(), 0, Set.of(CORE), "3.0.0", 3, null, Set.of(CORE, DIFF));
         return new ScmCaptureContext(
                 original.pinned(), plan, original.work(), new ScmCapturePreparation(), original.capturedAt());
     }
@@ -926,7 +982,7 @@ class PullRequestContentSourceTest extends BaseUnitTest {
                     List.of(owner),
                     registry,
                     new JobFolderIndexBuilder(registry, mapper, Clock.systemUTC()));
-            var plan = new CaptureRequest(UUID.randomUUID(), UUID.randomUUID(), 0, Set.of(CORE, DIFF), "2.0.0", 3);
+            var plan = new CaptureRequest(UUID.randomUUID(), UUID.randomUUID(), 0, Set.of(CORE, DIFF), "3.0.0", 3);
             try (var captured = builder.prepare(pinned, plan)) {
                 assertThat(captured.files()).containsKey(PullRequestContentSource.COMMITS_FILE);
                 var commits = objectMapper
@@ -1016,7 +1072,7 @@ class PullRequestContentSourceTest extends BaseUnitTest {
                     List.of(owner),
                     registry,
                     new JobFolderIndexBuilder(registry, mapper, Clock.systemUTC()));
-            var plan = new CaptureRequest(UUID.randomUUID(), UUID.randomUUID(), 0, Set.of(CORE, DIFF), "2.0.0", 3);
+            var plan = new CaptureRequest(UUID.randomUUID(), UUID.randomUUID(), 0, Set.of(CORE, DIFF), "3.0.0", 3);
             try (var captured = builder.prepare(original.pinned(), plan)) {
                 assertThat(captured.files())
                         .containsKey("context/metadata.json")

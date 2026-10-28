@@ -58,7 +58,7 @@ contract version in which that decision no longer permits it. For an immediate l
 Existing registry permission is not an operator instruction to keep processing.
 
 The runtime registry is
-[`source-use-decisions.json`](https://github.com/hephaestus-build/Hephaestus/blob/main/server/application/src/main/resources/contracts/source-use/2.0.0/source-use-decisions.json).
+[`source-use-decisions.json`](https://github.com/hephaestus-build/Hephaestus/blob/main/server/application/src/main/resources/contracts/source-use/3.0.0/source-use-decisions.json).
 It is an engineering gate and contains only releasable decision summaries. Each record governs exactly one source-use purpose. A source references separate records for automated review, feedback delivery, Heph context, and operator evidence review:
 
 - `ENGINEERING_BASELINE` with `ENGINEERING_APPROVED` records maintainer approval of the shipped, permitted product scope.
@@ -208,7 +208,7 @@ source/workspace/person erasure paths are implemented and tested.
 ## Approval renewal
 
 The shipped decisions expire on the date recorded in
-`server/application/src/main/resources/contracts/source-use/2.0.0/source-use-decisions.json`. Every governed use fails
+`server/application/src/main/resources/contracts/source-use/3.0.0/source-use-decisions.json`. Every governed use fails
 closed after expiry. Instance operators should alert when `source_governance_expiry_seconds` falls below 30 days.
 They should assign the alert to the instance privacy/governance owner. The server logs a warning at startup inside the same window.
 

@@ -11,6 +11,7 @@ import {
 	fileRecordSchema,
 	issueRecordSchema,
 	pullRequestRecordSchema,
+	pullRequestChecksRecordSchema,
 	repositoryRecordSchema,
 } from "./scm/records.ts";
 
@@ -25,6 +26,7 @@ const PAIRS = [
 	["scm/pull_request.schema.json", pullRequestRecordSchema],
 	["scm/pull_request_review.schema.json", pullRequestRecordSchema],
 	["scm/issue.schema.json", issueRecordSchema],
+	["../source-use/3.0.0/pull-request-checks.schema.json", pullRequestChecksRecordSchema],
 	["scm/repository.schema.json", repositoryRecordSchema],
 	["scm/file.schema.json", fileRecordSchema],
 ] as const;

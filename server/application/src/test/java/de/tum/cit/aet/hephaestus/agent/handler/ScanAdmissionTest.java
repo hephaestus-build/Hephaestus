@@ -122,7 +122,7 @@ class ScanAdmissionTest extends BaseUnitTest {
                         List.of("**/*"),
                         List.of(),
                         List.of("**/*"),
-                        new PracticeReads("2.0.0", List.of(new PracticeReadSource(SOURCE, ReadNeed.REQUIRED)))),
+                        new PracticeReads("3.0.0", List.of(new PracticeReadSource(SOURCE, ReadNeed.REQUIRED)))),
                 original.lineNotes(),
                 original.guidance());
     }

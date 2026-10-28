@@ -83,7 +83,7 @@ public final class ScmCaptureFixtures {
                         .integration(IntegrationKind.GITHUB)
                         .build())
                 .build();
-        var request = new CaptureRequest(UUID.randomUUID(), UUID.randomUUID(), 1, Set.of(), "2.0.0", 3);
+        var request = new CaptureRequest(UUID.randomUUID(), UUID.randomUUID(), 1, Set.of(), "3.0.0", 3);
         return new ScmCaptureContext(snapshot, request, work, new ScmCapturePreparation(), Instant.now());
     }
 

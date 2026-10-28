@@ -9,6 +9,7 @@ import {
 	Layers2Icon,
 	LibraryIcon,
 	LinkIcon,
+	ListChecksIcon,
 	MailCheckIcon,
 	MessageCircleIcon,
 	MessageSquareCodeIcon,
@@ -35,6 +36,13 @@ const EVIDENCE_SOURCE_DEFS: Record<string, EvidenceSourceDef> = {
 		icon: GitPullRequestIcon,
 		badgeVariant: "outline",
 		description: "Its title, description and state, as the author wrote them.",
+		locator: "object",
+	},
+	"scm.pull-request.checks": {
+		label: "CI checks and merge status",
+		icon: ListChecksIcon,
+		badgeVariant: "outline",
+		description: "The checks and merge status reported for the reviewed commit.",
 		locator: "object",
 	},
 	"scm.pull-request.diff": {
@@ -98,7 +106,7 @@ const EVIDENCE_SOURCE_DEFS: Record<string, EvidenceSourceDef> = {
 		label: "Review threads on the code",
 		icon: MessageSquareCodeIcon,
 		badgeVariant: "outline",
-		description: "Conversations anchored to specific lines by human reviewers.",
+		description: "Review conversations, submitted decisions and the provider’s aggregate decision.",
 		locator: "object",
 	},
 	"scm.general-review-comments": {

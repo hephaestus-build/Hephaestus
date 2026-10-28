@@ -5,12 +5,12 @@ import addFormats from "ajv-formats";
 import Ajv2020 from "ajv/dist/2020.js";
 import { asRecord, parseJson } from "./lib/json.ts";
 
-await test("serialized absent, matched and undecidable reports conform to source contract 2.0.0", async () => {
+await test("serialized absent, matched and undecidable reports conform to source contract 3.0.0", async () => {
 	const schema = asRecord(
 		parseJson(
 			await readFile(
 				new URL(
-					"../server/application/src/main/resources/contracts/source-use/2.0.0/automated-review-readiness-report.schema.json",
+					"../server/application/src/main/resources/contracts/source-use/3.0.0/automated-review-readiness-report.schema.json",
 					import.meta.url,
 				),
 				"utf8",
@@ -49,7 +49,7 @@ await test("serialized absent, matched and undecidable reports conform to source
 				sourceChecks: [
 					{
 						sourceKind: "scm.repository.tree",
-						sourceContractVersion: "2.0.0",
+						sourceContractVersion: "3.0.0",
 						checkedAt: unavailable.decidedAt,
 						temporalAnchor: unavailable.manifestCapturedAt,
 						meetsRequirements: false,

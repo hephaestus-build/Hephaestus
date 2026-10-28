@@ -105,7 +105,7 @@ class PracticeV1CutoverMigrationTest {
             """))
                 .containsExactly(
                         phrase
-                                + "|Workspace purpose|Workspace example|<svg/>|Workspace visual|Workspace guide|2.0.0|true|true");
+                                + "|Workspace purpose|Workspace example|<svg/>|Workspace visual|Workspace guide|3.0.0|true|true");
         assertThat(column(database, """
             SELECT (p.catalog_slug IS NULL)::text || '|' || (v.definition#>'{guidance,goingWell}'='null'::jsonb)
                 || '|' || (v.definition->>'criteria')
@@ -414,7 +414,7 @@ class PracticeV1CutoverMigrationTest {
                         database,
                         "SELECT v.definition->'reads'->>'contract' FROM practice p JOIN practice_version v ON"
                                 + " v.id=p.current_version_id WHERE p.id=992121"))
-                .containsExactly("2.0.0");
+                .containsExactly("3.0.0");
         assertThat(column(
                         database,
                         "SELECT count(*)::text FROM pg_index i JOIN pg_class c ON c.oid=i.indexrelid WHERE"

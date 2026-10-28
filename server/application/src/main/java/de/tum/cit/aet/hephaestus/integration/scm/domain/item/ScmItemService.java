@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.integration.scm.domain.item;
 
 import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonIdentity;
+import de.tum.cit.aet.hephaestus.evidence.ClasspathSourceCatalogRegistry;
 import de.tum.cit.aet.hephaestus.evidence.SourceAbsenceReason;
 import de.tum.cit.aet.hephaestus.evidence.SourceCompleteness;
 import de.tum.cit.aet.hephaestus.evidence.SourceContentState;
@@ -458,7 +459,8 @@ public class ScmItemService implements ItemSource {
         ItemSnapshot verified = occasion != null ? occasion.snapshot() : pinItem(pinned.item(), pinned.version());
         if (!verified.integration().equals(pinned.integration())
                 || !verified.roles().equals(pinned.roles())) throw versionUnavailable();
-        if (!request.sourceContractVersion().equals("2.0.0") || request.scriptContractVersion() != 3)
+        if (!request.sourceContractVersion().equals(ClasspathSourceCatalogRegistry.CURRENT_VERSION_VALUE)
+                || request.scriptContractVersion() != 3)
             throw new ItemCaptureException(ItemCaptureCode.CAPTURE_FAILED, "Capture contract is unavailable");
         if (pinned.item().kind().equals(ScmItemEvents.REPOSITORY)
                 || pinned.item().kind().equals(ScmItemEvents.FILE)) return captureTree(pinned, request);

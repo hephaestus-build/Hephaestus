@@ -76,7 +76,7 @@ class PracticeV1DefinitionMigrationTest {
                             database,
                             "SELECT p.catalog_slug || '|' || v.number || '|' || (v.definition#>>'{reads,contract}')"
                                     + owners))
-                    .containsExactly("synthetic-mapping-" + index + "|2|2.0.0");
+                    .containsExactly("synthetic-mapping-" + index + "|3|3.0.0");
             assertThat(PracticeMigrationFixture.column(
                             database,
                             "SELECT definition->>'script' FROM practice_version WHERE id=" + (1700000L + index)))
@@ -176,7 +176,7 @@ class PracticeV1DefinitionMigrationTest {
                                         + " v.number FROM practice p JOIN practice_version v ON v.id=p.current_version_id"
                                         + " WHERE p.id="
                                         + (1000000L + index)))
-                        .containsExactly(mapping.targetSha256() + "|2");
+                        .containsExactly(mapping.targetSha256() + "|3");
                 index++;
             }
         }
@@ -203,7 +203,7 @@ class PracticeV1DefinitionMigrationTest {
                             "SELECT encode(sha256(convert_to(v.definition->>'script','UTF8')),'hex') || '|' ||"
                                     + " v.number || '|' || (v.definition->'reads'->>'contract') FROM practice p"
                                     + " JOIN practice_version v ON v.id=p.current_version_id WHERE p.id=992121"))
-                    .containsExactly(mapping.targetSha256() + "|3|2.0.0");
+                    .containsExactly(mapping.targetSha256() + "|4|3.0.0");
             assertThat(PracticeMigrationFixture.column(
                             database,
                             "SELECT practice_version_id::text FROM result WHERE"
@@ -301,7 +301,7 @@ class PracticeV1DefinitionMigrationTest {
                         "SELECT p.catalog_slug || '|' || (p.catalog_base->'definition'->>'criteria') || '|' ||"
                                 + " (v.definition->>'criteria') || '|' || v.number FROM practice p JOIN"
                                 + " practice_version v ON v.id=p.current_version_id WHERE p.id=992121"))
-                .containsExactly("local-offer|Original standard.|Changed standard.|3");
+                .containsExactly("local-offer|Original standard.|Changed standard.|4");
         assertThat(PracticeMigrationFixture.column(
                         database, "SELECT feedback_mode FROM practice_group WHERE id=993001"))
                 .containsExactly("APPROVE_FIRST");
@@ -320,7 +320,7 @@ class PracticeV1DefinitionMigrationTest {
                         database,
                         "SELECT (review_digest=practice_review_digest(definition))::text FROM practice_version"
                                 + " WHERE practice_id=992121 ORDER BY number"))
-                .containsExactly("true", "true", "true");
+                .containsExactly("true", "true", "true", "true");
         assertThat(PracticeMigrationFixture.column(
                         database,
                         "SELECT (practice_catalog_installed_at='2026-01-01T00:00:00Z'::timestamptz)::text FROM"
@@ -362,12 +362,12 @@ class PracticeV1DefinitionMigrationTest {
                 (catalog_base->'definition'->'reads'->>'contract') FROM practice WHERE id=992121
             """))
                 .containsExactly(
-                        "keeps-functions-small-and-single-purpose|true|Explain the purpose of the change.|2.0.0");
+                        "keeps-functions-small-and-single-purpose|true|Explain the purpose of the change.|3.0.0");
         assertThat(PracticeMigrationFixture.column(database, """
             SELECT (definition->'groupSlug'='null'::jsonb)::text || '|' ||
                 (definition->'definition'->'reads'->>'contract') FROM catalog_entry
                 WHERE entry_type='PRACTICE' AND slug='keeps-functions-small-and-single-purpose'
-            """)).containsExactly("true|2.0.0");
+            """)).containsExactly("true|3.0.0");
         assertThat(PracticeMigrationFixture.column(
                         database, "SELECT definition->>'criteria' FROM practice_version WHERE id=992131"))
                 .containsExactly("Explain the purpose of the change.");
@@ -410,10 +410,10 @@ class PracticeV1DefinitionMigrationTest {
                 'bundle-validates-inputs-and-edge-cases-at-the-boundary') ORDER BY p.slug
             """))
                 .containsExactly(
-                        "bundle-keeps-functions-small-and-single-purpose|2|AUTHOR|2.0.0|scm.file",
-                        "bundle-logs-through-the-platform-logger|2|AUTHOR|2.0.0|scm.file",
-                        "bundle-scope-one-reviewable-change|2|AUTHOR|2.0.0|NO_SCAN",
-                        "bundle-validates-inputs-and-edge-cases-at-the-boundary|2|AUTHOR|2.0.0|scm.file");
+                        "bundle-keeps-functions-small-and-single-purpose|3|AUTHOR|3.0.0|scm.file",
+                        "bundle-logs-through-the-platform-logger|3|AUTHOR|3.0.0|scm.file",
+                        "bundle-scope-one-reviewable-change|3|AUTHOR|3.0.0|NO_SCAN",
+                        "bundle-validates-inputs-and-edge-cases-at-the-boundary|3|AUTHOR|3.0.0|scm.file");
         assertThat(PracticeMigrationFixture.column(database, """
             SELECT p.slug || '|' || v.number || '|' || (v.definition->'reads'->>'contract')
             FROM practice p JOIN practice_version v ON v.practice_id=p.id AND v.number=1
@@ -428,7 +428,7 @@ class PracticeV1DefinitionMigrationTest {
             SELECT v.definition->>'criteria' || '|' || (v.definition->'scan'='null'::jsonb)::text
                 || '|' || v.number FROM practice p JOIN practice_version v ON v.id=p.current_version_id WHERE p.id=1300100
             """))
-                .containsExactly("The workspace's customized standard.|true|2");
+                .containsExactly("The workspace's customized standard.|true|3");
         assertThat(PracticeMigrationFixture.column(database, """
             SELECT definition->>'criteria' FROM practice_version WHERE id=1400100
             """))

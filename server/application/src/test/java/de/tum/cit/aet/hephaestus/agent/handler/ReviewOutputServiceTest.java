@@ -85,7 +85,7 @@ class ReviewOutputServiceTest extends BaseUnitTest {
         when(assignments.admissible(job)).thenReturn(List.of(assigned));
         when(assignments.review(job)).thenReturn(RuntimeReviewTestData.review(ReviewKind.ITEM, assigned));
         var manifest = new JobFolderIndex(
-                new SourceContractVersion("2.0.0"),
+                new SourceContractVersion("3.0.0"),
                 "a".repeat(64),
                 "docs.document",
                 Instant.EPOCH,
@@ -205,7 +205,7 @@ class ReviewOutputServiceTest extends BaseUnitTest {
         var whole = new SourceCaptureFacts(Instant.EPOCH, null, null, null);
         var tree = new SourceCaptureFacts(Instant.EPOCH, null, null, PR50_HEAD + ":" + "b".repeat(40));
         var manifest = new JobFolderIndex(
-                new SourceContractVersion("2.0.0"),
+                new SourceContractVersion("3.0.0"),
                 "a".repeat(64),
                 "scm.pull_request",
                 Instant.EPOCH,
@@ -362,7 +362,7 @@ class ReviewOutputServiceTest extends BaseUnitTest {
                         "No inline review comments were captured."),
                 d.about(),
                 new PracticeReads(
-                        "2.0.0",
+                        "3.0.0",
                         List.of(new PracticeReadSource(
                                 kind == ReviewKind.SCAN ? new SourceKind("scm.pull-request.comments") : DIFF,
                                 ReadNeed.REQUIRED))),
@@ -374,7 +374,7 @@ class ReviewOutputServiceTest extends BaseUnitTest {
                         List.of("**/*.java"),
                         List.of(),
                         List.of(),
-                        new PracticeReads("2.0.0", List.of(new PracticeReadSource(DIFF, ReadNeed.REQUIRED)))),
+                        new PracticeReads("3.0.0", List.of(new PracticeReadSource(DIFF, ReadNeed.REQUIRED)))),
                 d.lineNotes(),
                 d.guidance());
         var assignment = new ReviewAssignmentSnapshot(

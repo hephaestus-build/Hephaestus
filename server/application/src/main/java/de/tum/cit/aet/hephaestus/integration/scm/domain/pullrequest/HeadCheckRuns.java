@@ -75,6 +75,15 @@ public record HeadCheckRuns(
         }
     }
 
+    /** A withheld workflow cannot establish a pass or an empty pipeline. */
+    public CheckState effectiveState(CheckState state) {
+        if (!AWAITING_APPROVAL.equals(limitation)) return state;
+        return switch (state) {
+            case SUCCESS, NONE, NO_PIPELINE, SKIPPED -> CheckState.PENDING;
+            case FAILURE, PENDING, CANCELLED -> state;
+        };
+    }
+
     /** Every run of the commit was read and has ended. A commit with no runs has none to finish. */
     public boolean finished() {
         return complete && !runs.isEmpty() && runs.stream().allMatch(Run::finished);

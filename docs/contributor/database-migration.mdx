@@ -13,6 +13,9 @@ conventions the drift gate reads are in `server/AGENTS.md` § Schema changes.
 1. Modify the JPA entities.
 2. Write the drift into this branch's changelog:
 
+   For a stacked PR, set `GITHUB_BASE_REF` to its parent branch.
+   The generator writes this layer's changelog without changing its parent's migration.
+
    ```bash
    vp run db:draft-changelog
    ```

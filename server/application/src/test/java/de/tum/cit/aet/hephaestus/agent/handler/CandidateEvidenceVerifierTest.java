@@ -118,7 +118,7 @@ class CandidateEvidenceVerifierTest extends BaseUnitTest {
                 new SourceCaptureFacts(now, null, null, "docs:one"),
                 List.of());
         return CapturedEvidence.of(new JobFolderIndex(
-                new SourceContractVersion("2.0.0"),
+                new SourceContractVersion("3.0.0"),
                 "a".repeat(64),
                 KIND.value(),
                 now,
@@ -209,7 +209,7 @@ class CandidateEvidenceVerifierTest extends BaseUnitTest {
                         DIFF.value(), CHANGE_RECORD + "#/diff", CitationSide.NEW, null, RANGE_TEXT, digest(RANGE))));
         texts.addAll(List.of(extra));
         return CapturedEvidence.of(new JobFolderIndex(
-                new SourceContractVersion("2.0.0"),
+                new SourceContractVersion("3.0.0"),
                 "a".repeat(64),
                 KIND.value(),
                 now,

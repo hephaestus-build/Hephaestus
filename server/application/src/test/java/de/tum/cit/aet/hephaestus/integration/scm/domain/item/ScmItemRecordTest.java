@@ -113,7 +113,7 @@ class ScmItemRecordTest extends BaseUnitTest {
                         staging, HEAD, "d".repeat(40), bytes.length, 1, true, Set.of()));
         var source = RepositoryTreeContentSource.KIND;
         var capture = service.capture(
-                pinned, new CaptureRequest(UUID.randomUUID(), UUID.randomUUID(), 0, Set.of(source), "2.0.0", 3));
+                pinned, new CaptureRequest(UUID.randomUUID(), UUID.randomUUID(), 0, Set.of(source), "3.0.0", 3));
         var catalogs = new ClasspathSourceCatalogRegistry(mapper, Clock.systemUTC());
         try (var prepared = new JobFolderIndexBuilder(catalogs, mapper, Clock.systemUTC())
                 .build(ScmItemEvents.FILE, Map.of(source, capture))) {
@@ -197,7 +197,7 @@ class ScmItemRecordTest extends BaseUnitTest {
         permitted.add("src/a.ts");
         var contribution = service.capture(
                 pinned,
-                new CaptureRequest(UUID.randomUUID(), UUID.randomUUID(), 0, Set.of(source), "2.0.0", 3, permitted));
+                new CaptureRequest(UUID.randomUUID(), UUID.randomUUID(), 0, Set.of(source), "3.0.0", 3, permitted));
         var catalogs = new ClasspathSourceCatalogRegistry(mapper, Clock.systemUTC());
         try (var prepared = new JobFolderIndexBuilder(catalogs, mapper, Clock.systemUTC())
                 .build(ScmItemEvents.FILE, Map.of(source, contribution))) {
@@ -252,7 +252,7 @@ class ScmItemRecordTest extends BaseUnitTest {
                         UUID.randomUUID(),
                         0,
                         Set.of(source),
-                        "2.0.0",
+                        "3.0.0",
                         3,
                         inventory.stream().map(ScmFileVersions.Entry::path).collect(Collectors.toSet())));
         assertThat(contribution.stateOverrides())

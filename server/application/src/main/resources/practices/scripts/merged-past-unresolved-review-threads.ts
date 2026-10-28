@@ -65,7 +65,7 @@ export default definePracticeScript({
 		}
 		return ctx.review({
 			leads: [
-				mergeLead(domain.item, merge, LABELS.merge),
+				mergeLead(merge, LABELS.merge),
 				...selected.map((thread) => threadLead(thread, merge, LABELS)),
 			],
 			limitations:

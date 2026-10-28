@@ -189,3 +189,37 @@ void test("appending authored SQL preserves PostgreSQL dollar quotes and replace
 	assert.ok(appended.includes(`<sql splitStatements="false">${sql}</sql>`));
 	assert.equal(appended.split("</databaseChangeLog>").length, 2);
 });
+
+void test("a stacked layer writes its own changelog and leaves its parent's migration unchanged", async () => {
+	const repository = await mkdtemp(path.join(tmpdir(), "db-stack-"));
+	const env = environmentForGitFixture();
+	const git = (...args: string[]) =>
+		execFileSync("git", args, { cwd: repository, env, stdio: ["ignore", "pipe", "pipe"] });
+	const directory = path.join(repository, "server/application/src/main/resources/db/changelog");
+	const master = path.join(repository, "server/application/src/main/resources/db/master.xml");
+	try {
+		git("init", "--quiet", "--initial-branch=main");
+		git("config", "user.name", "Test");
+		git("config", "user.email", "test@example.invalid");
+		await mkdir(directory, { recursive: true });
+		await writeFile(master, "<databaseChangeLog>\n</databaseChangeLog>\n");
+		git("add", ".");
+		git("commit", "--quiet", "-m", "base");
+		git("checkout", "--quiet", "-b", "parent");
+		const parent = await promote(native, repository);
+		const original = await readFile(parent, "utf8");
+		git("add", ".");
+		git("commit", "--quiet", "-m", "parent migration");
+		git("update-ref", "refs/remotes/origin/parent", "main");
+		git("checkout", "--quiet", "-b", "child");
+		const child = await promote(native, repository, "parent");
+		assert.notEqual(child, parent);
+		assert.equal(await readFile(parent, "utf8"), original);
+		assert.equal(await promote(native, repository, "parent"), child);
+		assert.equal(await readFile(parent, "utf8"), original);
+		const files = await readdir(directory);
+		assert.equal(files.length, 2);
+	} finally {
+		await rm(repository, { recursive: true, force: true });
+	}
+});

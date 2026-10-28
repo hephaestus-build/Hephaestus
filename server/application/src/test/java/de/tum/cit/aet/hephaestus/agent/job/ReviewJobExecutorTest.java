@@ -1154,7 +1154,7 @@ class ReviewJobExecutorTest extends BaseUnitTest {
         when(assignments.load(job)).thenReturn(List.of(RuntimeReviewTestData.assignment(null, null)));
         var now = Instant.now();
         var source = new SourceKind("scm.pull-request.diff");
-        var contract = new SourceContractVersion("2.0.0");
+        var contract = new SourceContractVersion("3.0.0");
         var readiness = new AutomatedReviewReadinessDecision(
                 "clear-names",
                 now,
