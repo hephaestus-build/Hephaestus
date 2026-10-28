@@ -18,7 +18,7 @@ export const NOT_STARTED = -1;
 export const REPORT_MAP_LIMIT = 10;
 
 export const BUDGETS =
-	"not enforced: the result is informational until the sandbox requests file lands";
+	"not enforced: controlled fixture memory and live service capacity require separate qualification";
 
 export interface Sample {
 	t: number;

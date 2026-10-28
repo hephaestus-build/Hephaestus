@@ -907,6 +907,7 @@ async function stopSampler() {
 /** Removes what the run left in Docker: a review that failed midway leaves containers and volumes. */
 async function cleanUp() {
 	await stopSampler();
+	await succeeds("docker", ["rm", "-f", `${runId}-gateway`]);
 	for (const id of containers) {
 		await succeeds("docker", ["rm", "-f", id]);
 	}
