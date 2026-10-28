@@ -2,7 +2,7 @@
  * The sandbox footprint benchmark: what a practice review sandbox uses, measured, not assumed.
  *
  * It runs the review Pod's two containers from the agent image with the Pod's file systems (disk
- * volumes for the attempt folders, memory for /tmp, /run and ~/.local, a read-only root) and its
+ * volumes for the attempt folders, /tmp and ~/.local, memory for /run, a read-only root) and its
  * limits, against a stand-in gateway in this process. The gateway serves a workspace that
  * `ReviewFootprintStagingLiveTest` staged with the real adapter, the bundled practices and a real
  * repository change. Only the model is a stand-in: it answers each turn with reads, searches and
@@ -10,7 +10,7 @@
  *
  * A privileged sampler container reads each sandbox's cgroup (memory.current, memory.peak,
  * memory.stat, cpu.stat, pids.current) and the RSS of each of its processes, every 250 ms. cgroup v2
- * charges a Pod's memory the same way on Docker and on Kubernetes, so the numbers carry over.
+ * uses the same counters on Docker and Kubernetes. Placement and node overhead require a cluster run.
  *
  *   node scripts/sandbox-footprint.ts --stage <dir> [--image <ref>] [--reviews <n>] [--memory 3g]
  *     [--tool-calls 12] [--latency-ms 1500] [--node-options "--max-old-space-size=256"]
@@ -82,9 +82,7 @@ const runId = `fp-${randomUUID().slice(0, 8)}`;
 
 /** The memory volumes of a review Pod (KubernetesPods.MEMORY_VOLUMES) and its disk volumes (attemptVolumes). */
 const MEMORY_VOLUMES = {
-	"/tmp": "1073741824",
-	"/run": "67108864",
-	"/home/agent/.local": "1073741824",
+	"/run": "16777216",
 };
 const DISK_VOLUMES = [
 	"/workspace",
@@ -92,6 +90,8 @@ const DISK_VOLUMES = [
 	"/workspace/out",
 	"/workspace/.pi",
 	"/workspace/.sessions",
+	"/tmp",
+	"/home/agent/.local",
 ];
 const GIT_SECURITY = [
 	["core.hooksPath", "/nonexistent"],
@@ -435,40 +435,64 @@ const server = createServer((request, response) => {
 	void serve(request, response);
 });
 
-function gatewayPort(): number {
+let fixtureGateway: string | undefined;
+let fixtureNetwork: string | undefined;
+
+function gatewayUrl(): string {
+	if (fixtureGateway !== undefined) {
+		return fixtureGateway;
+	}
 	const address = server.address();
 	if (address === null || typeof address === "string") {
 		throw new Error("The stand-in gateway has no TCP port");
 	}
-	return address.port;
+	return `http://host.docker.internal:${address.port}`;
 }
 
 /**
- * Where the gateway listens: on Linux, the default bridge's gateway, which `host-gateway` resolves
- * to; Docker Desktop forwards that name to the host's loopback. Never every interface.
+ * The fixture stays on a private container network. A Unix socket joins its gateway to this process
+ * without exposing repository archives on a host interface or depending on host firewall policy.
  */
-async function gatewayHost(): Promise<string> {
+async function startGateway(): Promise<void> {
 	if (process.platform !== "linux") {
-		return "127.0.0.1";
+		server.listen(0, "127.0.0.1");
+		await once(server, "listening");
+		return;
 	}
-	const gateways = await output("docker", [
-		"network",
+	server.listen({ path: path.join(benchDir, "gateway.sock"), writableAll: true });
+	await once(server, "listening");
+	fixtureNetwork = `${runId}-network`;
+	await run("docker", ["network", "create", "--internal", fixtureNetwork], { stdout: "ignore" });
+	const created = await output("docker", [
+		"run",
+		"-d",
+		"--name",
+		`${runId}-gateway`,
+		"--network",
+		fixtureNetwork,
+		"--read-only",
+		"--cap-drop",
+		"ALL",
+		"--security-opt",
+		"no-new-privileges",
+		"-v",
+		`${benchDir}:/bench:ro`,
+		"alpine/socat@sha256:c5a091e1e735a90aa941a5828529dbe6c6157407a8047a9aa473faa133361b82",
+		"TCP-LISTEN:8080,fork,reuseaddr",
+		"UNIX-CONNECT:/bench/gateway.sock",
+	]);
+	const id = created.trim();
+	const inspected = await output("docker", [
 		"inspect",
-		"bridge",
 		"--format",
-		"{{range .IPAM.Config}}{{.Gateway}} {{end}}",
-	]).catch((error: unknown) => {
-		throw new Error(`docker network inspect bridge failed: ${errorMessage(error)}`, {
-			cause: error,
-		});
-	});
-	const gateway = gateways.split(/\s+/u).find((candidate) => isIPv4(candidate));
-	if (gateway === undefined) {
-		throw new Error(
-			`The Docker bridge network has no IPv4 gateway address ("${gateways.trim()}"); the stand-in gateway has nowhere the sandbox can reach it`,
-		);
+		"{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}",
+		id,
+	]);
+	const address = inspected.trim();
+	if (!isIPv4(address)) {
+		throw new Error("The fixture gateway has no IPv4 address");
 	}
-	return gateway;
+	fixtureGateway = `http://${address}:8080`;
 }
 
 function errorMessage(error: unknown): string {
@@ -498,6 +522,7 @@ function du(dir) {
 let tick = 0;
 setInterval(() => {
   tick++;
+  const t = Date.now();
   const ids = (read("/bench/ids") ?? "").split("\n").filter(Boolean);
   for (const line of ids) {
     const [label, id] = line.split(" ");
@@ -516,11 +541,9 @@ setInterval(() => {
     let tmpfs;
     if (tick % 8 === 0 && procs.length) {
       const root = "/proc/" + procs[0].pid + "/root";
-      tmpfs = {}; for (const d of ["/tmp", "/run", "/home/agent/.local"]) { tmpfs[d] = du(root + d); }
-      for (const sub of (() => { try { return fs.readdirSync(root + "/tmp"); } catch { return []; } })()) tmpfs["/tmp/" + sub] = du(root + "/tmp/" + sub);
-      for (const sub of (() => { try { return fs.readdirSync(root + "/home/agent/.local"); } catch { return []; } })()) tmpfs["/home/agent/.local/" + sub] = du(root + "/home/agent/.local/" + sub);
+      tmpfs = {"/run": du(root + "/run")};
     }
-    process.stdout.write(JSON.stringify({ t: Date.now(), label, current: Number(current), peak: Number(read(cg + "/memory.peak") ?? 0),
+    process.stdout.write(JSON.stringify({ t, label, current: Number(current), peak: Number(read(cg + "/memory.peak") ?? 0),
       anon: stat.anon, file: stat.file, shmem: stat.shmem, kernel: stat.kernel, sock: stat.sock, activeFile: stat.active_file, inactiveFile: stat.inactive_file,
       cpuUsec: cpu.usage_usec, throttledUsec: cpu.throttled_usec, pids: Number(read(cg + "/pids.current") ?? 0), procs, tmpfs }) + "\n");
   }
@@ -619,7 +642,7 @@ function environment(sessionId: string): string[] {
 	env.GIT_CONFIG_COUNT = String(GIT_SECURITY.length);
 	env.GIT_TERMINAL_PROMPT = "0";
 	env.GIT_ATTR_NOSYSTEM = "1";
-	const gateway = `http://host.docker.internal:${String(gatewayPort())}`;
+	const gateway = gatewayUrl();
 	env.LLM_PROXY_URL = `${gateway}/internal/llm`;
 	env.LLM_PROXY_TOKEN = "footprint-token";
 	env.SANDBOX_RUNTIME_URL = `${gateway}/internal/llm/runtime/${sessionId}`;
@@ -658,11 +681,14 @@ function podFlags(name: string, volumes: string[], workspaceReadOnly: boolean): 
 		options.cpus,
 		"--pids-limit",
 		"256",
-		"--add-host",
-		"host.docker.internal:host-gateway",
 		"-w",
 		"/workspace",
 	];
+	if (fixtureNetwork === undefined) {
+		flags.push("--add-host", "host.docker.internal:host-gateway");
+	} else {
+		flags.push("--network", fixtureNetwork);
+	}
 	for (const [target, size] of Object.entries(MEMORY_VOLUMES)) {
 		flags.push("--mount", `type=tmpfs,dst=${target},tmpfs-size=${size},tmpfs-mode=1777`);
 	}
@@ -734,7 +760,7 @@ async function review(index: number): Promise<ReviewRun> {
 		...RLIMITS.slice(1),
 		"sh",
 		"-c",
-		"ln -s /opt/pi-sdk/node_modules /workspace/node_modules && exec node /opt/pi-sdk/gateway-init.ts",
+		"ln -s /opt/pi-sdk/node_modules /workspace/node_modules && exec node /opt/pi-sdk/gateway-init.js",
 	]);
 	let runtime = { exit: NOT_STARTED, ms: 0 };
 	if (init.exit === 0) {
@@ -747,7 +773,7 @@ async function review(index: number): Promise<ReviewRun> {
 			...RLIMITS.slice(1),
 			"node",
 			"--disable-sigusr1",
-			"/opt/pi-sdk/gateway-run.ts",
+			"/opt/pi-sdk/gateway-run.js",
 			...specCommand,
 		]);
 	}
@@ -837,6 +863,7 @@ function summarize(label: string) {
 		memoryPeak: MiB(Math.max(...pick((s) => s.peak))),
 		current: stats(pick((s) => s.current)),
 		anon: stats(pick((s) => s.anon)),
+		file: stats(pick((s) => s.file)),
 		fileCache: stats(pick((s) => s.file - s.shmem)),
 		shmem: stats(pick((s) => s.shmem)),
 		kernel: stats(pick((s) => s.kernel)),
@@ -879,11 +906,15 @@ async function stopSampler() {
 /** Removes what the run left in Docker: a review that failed midway leaves containers and volumes. */
 async function cleanUp() {
 	await stopSampler();
+	await succeeds("docker", ["rm", "-f", `${runId}-gateway`]);
 	for (const id of containers) {
 		await succeeds("docker", ["rm", "-f", id]);
 	}
 	for (const volume of volumesCreated) {
 		await succeeds("docker", ["volume", "rm", "-f", volume]);
+	}
+	if (fixtureNetwork !== undefined) {
+		await succeeds("docker", ["network", "rm", fixtureNetwork]);
 	}
 	server.close();
 	await rm(archive, { force: true });
@@ -901,8 +932,7 @@ try {
 	await mkdir(benchDir);
 	await writeFile(idsFile, "");
 	const archiveBytes = await packWorkspace();
-	server.listen(0, await gatewayHost());
-	await once(server, "listening");
+	await startGateway();
 	sampler = startSampler();
 	await sleep(1500);
 	const settled = await Promise.allSettled(
@@ -917,10 +947,10 @@ try {
 	}
 	await stopSampler();
 
-	// The node-wide sum of every sandbox's memory.current per tick: what concurrent reviews hold together.
+	// These are only the benchmark containers. Host services and other Pods require the cluster sampler.
 	const ticks = new Map<number, number>();
 	for (const s of samples) {
-		const bucket = Math.round(s.t / SAMPLE_MS);
+		const bucket = s.t;
 		ticks.set(bucket, (ticks.get(bucket) ?? 0) + s.current);
 	}
 	report = {
@@ -932,6 +962,7 @@ try {
 			platform: process.platform,
 		},
 		image,
+		volumes: { memory: MEMORY_VOLUMES, disk: DISK_VOLUMES },
 		stage,
 		practices,
 		workspaceArchiveMiB: MiB(archiveBytes),
