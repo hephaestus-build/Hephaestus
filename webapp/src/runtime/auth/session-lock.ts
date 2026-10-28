@@ -5,9 +5,13 @@ async function lockDatabase(): Promise<IDBDatabase> {
 		// oxlint-disable-next-line promise/avoid-new -- IndexedDB exposes events, not promises.
 		database ??= new Promise<IDBDatabase>((resolve, reject) => {
 			const request = indexedDB.open("hephaestus-session-lock", 1);
-			request.addEventListener("upgradeneeded", () => request.result.createObjectStore("session"), {
-				once: true,
-			});
+			request.addEventListener(
+				"upgradeneeded",
+				() => {
+					request.result.createObjectStore("session");
+				},
+				{ once: true },
+			);
 			request.addEventListener(
 				"error",
 				() => reject(request.error ?? new Error("Session lock database failed")),
@@ -65,7 +69,8 @@ async function withDatabaseLock<T>(operation: () => Promise<T>): Promise<T> {
 				if (outcome === undefined) {
 					reject(new Error("Session lock ended before the operation"));
 				} else if ("error" in outcome) {
-					reject(new Error("Session operation failed", { cause: outcome.error }));
+					// oxlint-disable-next-line prefer-promise-reject-errors -- Preserve SDK refusal objects and operation errors for the caller.
+					reject(outcome.error);
 				} else {
 					resolve(outcome.value);
 				}

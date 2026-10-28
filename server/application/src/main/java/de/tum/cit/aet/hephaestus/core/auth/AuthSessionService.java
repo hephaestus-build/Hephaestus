@@ -77,7 +77,7 @@ public class AuthSessionService {
         if (sessionId != null) {
             clientSessionService.endSession(accountId, sessionId, IssuedJwt.RevokedReason.LOGOUT);
         } else {
-            revokeBrowserSession(accountId, jti, RevokedReason.LOGOUT);
+            revokeBrowserTokenAndSuccessor(accountId, jti, RevokedReason.LOGOUT);
         }
         authEventLogger
                 .event(AuthEvent.EventType.LOGOUT, AuthEvent.Result.SUCCESS)
@@ -108,7 +108,7 @@ public class AuthSessionService {
             // The account lock comes before the token row, the order every issuance and revocation uses,
             // so an account-wide revocation either sees the rotated token or this refresh sees it.
             if (!accountRepository.lockForIssuance(accountId)) {
-                revokeBrowserSession(accountId, jti, RevokedReason.ACCOUNT_INACTIVE);
+                revokeBrowserTokenAndSuccessor(accountId, jti, RevokedReason.ACCOUNT_INACTIVE);
                 metrics.recordRefreshResult(AuthMetrics.RefreshResult.SUSPENDED);
                 clearCookie(response);
                 return false;
@@ -122,7 +122,7 @@ public class AuthSessionService {
                 return true;
             }
             if (sessionExpiresAt == null || !now.isBefore(sessionExpiresAt)) {
-                revokeBrowserSession(accountId, jti, RevokedReason.LOGOUT);
+                revokeBrowserTokenAndSuccessor(accountId, jti, RevokedReason.LOGOUT);
                 metrics.recordRefreshResult(AuthMetrics.RefreshResult.NOOP);
                 clearCookie(response);
                 return false;
@@ -229,7 +229,7 @@ public class AuthSessionService {
             clientSessionService.endSession(accountId, sessionId, RevokedReason.SELF_REVOKE);
             return;
         }
-        revokeBrowserSession(accountId, jti, RevokedReason.SELF_REVOKE);
+        revokeBrowserTokenAndSuccessor(accountId, jti, RevokedReason.SELF_REVOKE);
     }
 
     /**
@@ -248,6 +248,10 @@ public class AuthSessionService {
     /** Ends an owned browser token with its unused successors, including when a passkey replaces it. */
     @Transactional
     public int revokeBrowserSession(Long accountId, UUID jti, RevokedReason reason) {
+        return revokeBrowserTokenAndSuccessor(accountId, jti, reason);
+    }
+
+    private int revokeBrowserTokenAndSuccessor(Long accountId, UUID jti, RevokedReason reason) {
         accountRepository.lockForIssuance(accountId);
         Instant now = clock.instant();
         int revoked = issuedJwtRepository.revokeOwned(jti, accountId, now, reason);
