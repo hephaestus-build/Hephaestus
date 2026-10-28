@@ -45,6 +45,8 @@ public class ReviewModelGateway {
         WORK_TIME,
         /** The attempt was ended while the call waited. */
         ATTEMPT_ENDED,
+        /** The endpoint could not grant capacity before the attempt ended. */
+        CAPACITY,
         /** The attempt already had its most model calls in flight. */
         CALLS_IN_FLIGHT
     }

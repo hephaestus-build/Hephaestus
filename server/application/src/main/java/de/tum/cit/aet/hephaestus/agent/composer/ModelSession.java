@@ -57,7 +57,8 @@ final class ModelSession {
         /** The provider refused the request itself, such as a revoked key or a request over the context window. */
         REFUSED,
         /** The provider failed or answered with something unreadable; another call may succeed. */
-        PROVIDER
+        PROVIDER,
+        CAPACITY
     }
 
     /** The model settings frozen on the attempt. */
@@ -187,6 +188,7 @@ final class ModelSession {
                         case ATTEMPT_ENDED -> Failure.OWNERSHIP_LOST;
                         // Transient, as a provider's rate limit is.
                         case CALLS_IN_FLIGHT -> Failure.PROVIDER;
+                        case CAPACITY -> Failure.CAPACITY;
                     });
         int status = answer.status();
         if (status == 408 || status == 429 || status >= 500) return new Reply(null, List.of(), Failure.PROVIDER);

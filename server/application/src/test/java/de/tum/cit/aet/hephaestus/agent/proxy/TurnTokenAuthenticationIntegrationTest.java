@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.proxy;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
 
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptJwt;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptSigningKey;
@@ -18,6 +19,7 @@ import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnService;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnUsage;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewSnapshotQuery;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
@@ -145,7 +147,12 @@ class TurnTokenAuthenticationIntegrationTest extends AbstractWorkspaceIntegratio
         assertThat(result.status()).isEqualTo(200);
         Authentication authentication = Objects.requireNonNull(result.authentication());
         ProxyIdentity identity = (ProxyIdentity) Objects.requireNonNull(authentication.getPrincipal());
-        ProxyRouting routing = new ProxyRoutingService(jobRepository, turnRepository, objectMapper, reviewAttemptUsage)
+        ProxyRouting routing = new ProxyRoutingService(
+                        jobRepository,
+                        turnRepository,
+                        objectMapper,
+                        reviewAttemptUsage,
+                        mock(ReviewSnapshotQuery.class))
                 .resolve(identity, new MockHttpServletRequest("POST", "/internal/llm/responses"));
         ProxyRouting.BilledAttempt attempt = routing.attempt();
         assertThat(routing.workspaceId()).isEqualTo(workspace.getId());

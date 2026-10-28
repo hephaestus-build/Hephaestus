@@ -11,6 +11,10 @@ import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenIssuer;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenVerifier;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmAuthMode;
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallPermitRepository;
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallPool;
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallPoolProperties;
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallPoolRepository;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnection;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnectionHealth;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnectionRepository;
@@ -46,6 +50,7 @@ import de.tum.cit.aet.hephaestus.practices.PracticeVersionService;
 import de.tum.cit.aet.hephaestus.practices.review.PracticeReviewProperties;
 import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewSnapshotQuery;
 import de.tum.cit.aet.hephaestus.testconfig.LlmCatalogTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
@@ -137,7 +142,16 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
     private ReviewAttemptUsageService attemptUsage;
 
     @Autowired
+    private ReviewSnapshotQuery reviewSnapshots;
+
+    @Autowired
     private PlatformTransactionManager transactionManager;
+
+    @Autowired
+    private LlmCallPoolRepository callPools;
+
+    @Autowired
+    private LlmCallPermitRepository callRows;
 
     private JobTokenAuthenticationFilter filter;
     private Workspace workspace;
@@ -321,6 +335,92 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 .containsExactly("SCOPE_" + AttemptTokenIssuer.LLM_PROXY_SCOPE);
     }
 
+    @Test
+    void shouldShareOneRateAccountAcrossDirectScriptsAndComposition() throws Exception {
+        try (MockWebServer upstream = new MockWebServer()) {
+            upstream.start();
+            for (int i = 0; i < 3; i++)
+                upstream.enqueue(json("{\"usage\":{\"prompt_tokens\":10,\"completion_tokens\":2}}"));
+            ReviewJob job = practiceScriptJob(upstream.url("/v1").toString());
+            job.setLeasedUntil(Instant.now().plusSeconds(60));
+            job = jobRepository.saveAndFlush(job);
+            var snapshot = ConfigSnapshot.fromJson(job.getConfigSnapshot(), objectMapper);
+            var pool = new LlmCallPool();
+            pool.setSlug("scripts-" + UUID.randomUUID());
+            pool.setDisplayName("Shared script and composition capacity");
+            pool.setMaxConcurrentCalls(4);
+            pool.setRequestsPerMinute(3);
+            pool.setTokensPerMinute(300L);
+            pool.setTokensPerCall(100L);
+            pool = callPools.saveAndFlush(pool);
+            long poolId = pool.getId();
+            for (var model : List.of(
+                    snapshot.model(), Objects.requireNonNull(snapshot.practiceScriptSlot(ModelKind.EMBEDDING)))) {
+                var catalog = modelRepository
+                        .findById(Objects.requireNonNull(
+                                Objects.requireNonNull(model).modelId()))
+                        .orElseThrow();
+                catalog.setCallPoolId(poolId);
+                modelRepository.saveAndFlush(catalog);
+            }
+            var capacity = new LlmCallPermits(
+                    callPools,
+                    callRows,
+                    transactionTemplate,
+                    new LlmCallPoolProperties(Duration.ofMinutes(1), Duration.ofMinutes(5)),
+                    "worker-1",
+                    meterRegistry,
+                    modelResolver);
+            var service = proxyService(200_000, 1000, WebClient.create(), capacity);
+            assertThat(callPracticeScript(
+                                    service,
+                                    job,
+                                    "/internal/llm/practice-script/chat/chat/completions",
+                                    PRACTICE,
+                                    "{\"messages\":[]}")
+                            .status())
+                    .isEqualTo(200);
+            assertThat(callPracticeScript(
+                                    service,
+                                    job,
+                                    "/internal/llm/practice-script/embedding/embeddings",
+                                    PRACTICE,
+                                    "{\"input\":[\"a\"]}")
+                            .status())
+                    .isEqualTo(200);
+            job.setAdmissionAttempt(job.getAttempt());
+            job.setAdmissionDigest("admitted");
+            job = jobRepository.saveAndFlush(job);
+            var routes =
+                    new ProxyRoutingService(jobRepository, turnRepository, objectMapper, attemptUsage, reviewSnapshots);
+            var route = routes.workerRouting(
+                    job.getId(),
+                    workspace.getId(),
+                    job.getAttempt(),
+                    "worker-1",
+                    Instant.now().plusSeconds(5));
+            byte[] request = "{\"messages\":[]}".getBytes(StandardCharsets.UTF_8);
+            var composed = Objects.requireNonNull(
+                    service.serve(route, LlmApiProtocol.OPENAI_COMPLETIONS, null, null, new HttpHeaders(), request));
+            assertThat(composed.getStatusCode().value()).isEqualTo(200);
+            var blockedRoute = routes.workerRouting(
+                    job.getId(),
+                    workspace.getId(),
+                    job.getAttempt(),
+                    "worker-1",
+                    Instant.now().plusMillis(100));
+            var blocked = Objects.requireNonNull(service.serve(
+                    blockedRoute, LlmApiProtocol.OPENAI_COMPLETIONS, null, null, new HttpHeaders(), request));
+            assertThat(blocked.getStatusCode().value()).isEqualTo(503);
+            assertThat(blocked.getHeaders().getFirst(LlmProxyService.REFUSAL_HEADER))
+                    .isEqualTo("CAPACITY");
+            assertThat(upstream.getRequestCount()).isEqualTo(3);
+            assertThat(callRows.rates(poolId).getRequests()).isEqualTo(3);
+            assertThat(callRows.rates(poolId).getTokens()).isEqualTo(300);
+            assertThat(callRows.countActive(poolId)).isZero();
+        }
+    }
+
     @ParameterizedTest
     @CsvSource(
             delimiter = '|',
@@ -371,7 +471,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                     + "\"usage\":{\"prompt_tokens\":12,\"completion_tokens\":3}}"));
             ReviewJob job = practiceScriptJob(upstream.url("/v1").toString());
             var gateway = new ReviewModelGateway(
-                    new ProxyRoutingService(jobRepository, turnRepository, objectMapper, attemptUsage),
+                    new ProxyRoutingService(jobRepository, turnRepository, objectMapper, attemptUsage, reviewSnapshots),
                     proxyService(200_000),
                     objectMapper);
             byte[] body = "{\"model\":\"any\",\"messages\":[{\"role\":\"user\",\"content\":\"Compose.\"}]}"
@@ -725,6 +825,11 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
     }
 
     private LlmProxyService proxyService(long maxTokensPerAttempt, long maxSearchUnitsPerAttempt, WebClient client) {
+        return proxyService(maxTokensPerAttempt, maxSearchUnitsPerAttempt, client, mock(LlmCallPermits.class));
+    }
+
+    private LlmProxyService proxyService(
+            long maxTokensPerAttempt, long maxSearchUnitsPerAttempt, WebClient client, LlmCallPermits capacity) {
         ProxyRequestPolicy policy = mock(ProxyRequestPolicy.class);
         when(policy.allows(any())).thenReturn(true);
         return new LlmProxyService(
@@ -752,11 +857,11 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                         objectMapper),
                 policy,
                 mock(ScanCallGuard.class),
-                new ProxyRoutingService(jobRepository, turnRepository, objectMapper, attemptUsage),
+                new ProxyRoutingService(jobRepository, turnRepository, objectMapper, attemptUsage, reviewSnapshots),
                 new ProxyCallsInFlight(3),
                 new LlmConnectionHealth(CircuitBreakerRegistry.ofDefaults()),
-                Duration.ofMinutes(5),
-                Duration.ofMinutes(2));
+                capacity,
+                new HephCallProperties(Duration.ofMinutes(5), Duration.ofMinutes(2)));
     }
 
     // The worker role is off here, so the accumulator is built with its own transaction boundary.
@@ -917,7 +1022,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     private ProxyRouting routingOf(AuthenticationResult result) {
         Authentication authentication = Objects.requireNonNull(result.authentication(), "token did not authenticate");
-        return new ProxyRoutingService(jobRepository, turnRepository, objectMapper, attemptUsage)
+        return new ProxyRoutingService(jobRepository, turnRepository, objectMapper, attemptUsage, reviewSnapshots)
                 .resolve(
                         (ProxyIdentity) Objects.requireNonNull(authentication.getPrincipal()),
                         new MockHttpServletRequest("POST", "/internal/llm/chat/completions"));

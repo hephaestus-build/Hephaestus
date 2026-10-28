@@ -83,6 +83,10 @@ public class WorkspaceScopedTables {
             "llm_model",
             // Instance model price history; global pricing authority, not tenant-scoped
             "llm_model_price",
+            // Shared provider capacity and the calls in flight in it; the instance admin owns it, and every workspace
+            // whose models are in a pool shares it
+            "llm_call_pool",
+            "llm_call_permit",
             // llm_model_workspace_grant is deliberately absent: it carries a workspace_id,
             // so the
             // inspector watches it and its cross-tenant admin reads opt out per method

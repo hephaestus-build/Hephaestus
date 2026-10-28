@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 
+import de.tum.cit.aet.hephaestus.agent.composer.CompositionCapacity;
 import de.tum.cit.aet.hephaestus.agent.composer.WorkerFeedbackComposer;
 import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.PreparedEvidence;
@@ -623,7 +624,8 @@ class ReviewToDeliveryContractIntegrationTest extends BaseIntegrationTest {
                     reviewProperties,
                     agentProperties,
                     meters,
-                    mapper);
+                    mapper,
+                    new CompositionCapacity(4));
             composer.composeAfterMeasurement(job, WORKER, Instant.now());
 
             assertThat(feedback.findByWorkspaceIdAndReviewIdOrderByCreatedAtAscIdAsc(

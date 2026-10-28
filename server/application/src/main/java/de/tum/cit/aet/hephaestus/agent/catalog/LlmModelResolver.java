@@ -141,13 +141,27 @@ public class LlmModelResolver {
      *
      * @param apiKey {@code null} for a deliberately keyless connection (self-hosted vLLM/Ollama
      *     gateway) — the caller forwards without an auth header rather than refusing
+     * @param callPoolId the model's {@link LlmCallPool}, read live so a changed pool applies to the next call;
+     *     {@code null} for none
      */
     public record ProxyCredential(
             String baseUrl,
             String apiProtocol,
             LlmAuthMode authMode,
             String upstreamModelId,
-            @Nullable String apiKey) {}
+            @Nullable String apiKey,
+            @Nullable Long callPoolId) {
+
+        /** A credential of a model in no pool. */
+        public ProxyCredential(
+                String baseUrl,
+                String apiProtocol,
+                LlmAuthMode authMode,
+                String upstreamModelId,
+                @Nullable String apiKey) {
+            this(baseUrl, apiProtocol, authMode, upstreamModelId, apiKey, null);
+        }
+    }
 
     @Transactional(readOnly = true)
     public ConnectionRef connectionRef(ModelBindingSource config) {
@@ -193,7 +207,8 @@ public class LlmModelResolver {
                             c.getApiProtocol().wire(),
                             c.getAuthMode(),
                             model.getUpstreamModelId(),
-                            blankToNull(c.getApiKey())))
+                            blankToNull(c.getApiKey()),
+                            model.getCallPoolId()))
                     .orElse(null);
         }
         if (ref.scope() == UsageFundingSource.WORKSPACE && ref.connectionId() != null) {
@@ -215,7 +230,8 @@ public class LlmModelResolver {
                             c.getApiProtocol().wire(),
                             c.getAuthMode(),
                             model.getUpstreamModelId(),
-                            blankToNull(c.getApiKey())))
+                            blankToNull(c.getApiKey()),
+                            model.getCallPoolId()))
                     .orElse(null);
         }
         return null;

@@ -512,6 +512,27 @@ An increase in `mentor_turn_claim_failure_total` shows a worker that claims turn
 The worker fails each such turn and continues to claim.
 [Runtime roles](./runtime-roles.mdx#the-heph-host) tells when a worker replaces its Heph host, what it logs, and what happens to the turns of that host.
 
+## Call pool metrics
+
+Each worker reports the [call pools](./runtime-roles.mdx#call-pools) whose models it calls.
+A worker registers every series of a pool at start, so a rate starts from zero.
+The labels are `pool` (the pool's slug), `class` and `reason`, each from a closed set.
+`class` is `turn`, `composition`, `request`, `event`, `schedule`, or `backfill`.
+It identifies conversation, composition, or the origin of a review call.
+No series names a workspace, a model, a job or a turn.
+
+| Prometheus name                            | Type      | Labels                     | Meaning |
+| ------------------------------------------ | --------- | -------------------------- | ------- |
+| `llm_pool_permits_active`                  | Gauge     | `pool`, `class`            | Permits that this worker holds. Sum over the workers for the pool's calls in flight |
+| `llm_pool_permit_wait_seconds`             | Histogram | `pool`, `class`, `reason`  | How long a queued call waited for its permit. `reason=capacity` includes concurrency, rate, and cooldown admission |
+| `llm_pool_permit_abandoned_total`          | Counter   | `pool`, `class`, `reason`  | Calls whose attempt ended, or whose work deadline passed, while they waited |
+| `llm_pool_upstream_throttled_total`        | Counter   | `pool`                     | HTTP 429 answers from the pool's provider |
+| `llm_pool_cooldown_active`                 | Gauge     | `pool`                     | 1 while this worker knows the pool to be paused after a 429. Take the maximum over the workers |
+| `llm_pool_self_fence_cancelled_total`      | Counter   | `pool`, `reason`           | Calls that a worker cancelled because it no longer held their permit. `reason` is `no_renewal`, `lease_lost`, or `attempt_ended` |
+| `llm_pool_lease_renewal_failures_total`    | Counter   | none                       | Failed renewals of a worker's permits |
+
+Claim reservations do not add a second wait observation when the model call uses them.
+
 ## Privacy-job metrics
 
 Account erasure, export generation, export expiry and LLM usage retention each report one terminal

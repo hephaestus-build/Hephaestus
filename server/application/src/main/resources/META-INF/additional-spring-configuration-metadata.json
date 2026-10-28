@@ -31,6 +31,12 @@
   ],
   "properties": [
     {
+      "name": "hephaestus.agent.max-active-compositions",
+      "type": "java.lang.Integer",
+      "description": "Most compositions whose inputs one worker loads at once. Additional attempts wait without loading composition inputs. This does not reduce review sandbox capacity.",
+      "defaultValue": 4
+    },
+    {
       "name": "hephaestus.integration.github.sync.graphql-timeout",
       "type": "java.time.Duration",
       "description": "Timeout for standard GraphQL operations. Accepts duration format: 30s, 1m, PT30S."

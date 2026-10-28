@@ -43,6 +43,13 @@ public final class AgentMetrics {
     public static final String LLM_BUDGET_ALERT_FAILURE = "llm.budget.alert.failure";
     public static final String LLM_BUDGET_BLOCKED = "llm.budget.blocked";
     public static final String LLM_BUDGET_EXHAUSTED = "llm.budget.exhausted";
+    public static final String LLM_POOL_COOLDOWN_ACTIVE = "llm.pool.cooldown.active";
+    public static final String LLM_POOL_LEASE_RENEWAL_FAILURES = "llm.pool.lease.renewal.failures";
+    public static final String LLM_POOL_PERMIT_ABANDONED = "llm.pool.permit.abandoned";
+    public static final String LLM_POOL_PERMIT_WAIT = "llm.pool.permit.wait";
+    public static final String LLM_POOL_PERMITS_ACTIVE = "llm.pool.permits.active";
+    public static final String LLM_POOL_SELF_FENCE_CANCELLED = "llm.pool.self_fence.cancelled";
+    public static final String LLM_POOL_UPSTREAM_THROTTLED = "llm.pool.upstream.throttled";
     public static final String LLM_PROXY_BUDGET_BLOCKED = "llm.proxy.budget.blocked";
     public static final String LLM_PROXY_DURATION = "llm.proxy.duration";
     public static final String LLM_PROXY_ERRORS = "llm.proxy.errors";

@@ -78,6 +78,8 @@ class PersonalDataMapArchTest {
             "issue_type",
             "jwt_signing_key",
             "label",
+            "llm_call_permit",
+            "llm_call_pool",
             "llm_connection",
             "llm_model",
             "llm_model_price",

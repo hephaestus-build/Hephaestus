@@ -182,7 +182,8 @@ class WorkerFeedbackComposerTest {
                         16),
                 meters,
                 mapper,
-                Duration.ZERO);
+                Duration.ZERO,
+                new CompositionCapacity(4));
     }
 
     @Test

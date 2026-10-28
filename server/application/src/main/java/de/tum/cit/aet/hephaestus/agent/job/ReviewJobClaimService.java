@@ -1,5 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallClass;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelUnavailableException;
 import de.tum.cit.aet.hephaestus.agent.composer.CompositionStop;
 import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
@@ -9,6 +10,7 @@ import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobPreparationException;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
+import de.tum.cit.aet.hephaestus.agent.proxy.LlmCallPermits;
 import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerProperties;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetBlockReason;
@@ -63,6 +65,7 @@ public class ReviewJobClaimService {
     private final @Nullable String workerId;
     private final Counter concurrencyRejected;
     private final Timer claimLatency;
+    private final LlmCallPermits callPermits;
 
     public ReviewJobClaimService(
             ReviewJobRepository jobRepository,
@@ -75,8 +78,10 @@ public class ReviewJobClaimService {
             LlmBudgetService llmBudgetService,
             @Nullable LlmAdmissionService llmAdmissionService,
             ReviewJobTelemetry jobTelemetry,
-            Optional<WorkerProperties> workerProperties) {
+            Optional<WorkerProperties> workerProperties,
+            LlmCallPermits callPermits) {
         this.jobRepository = jobRepository;
+        this.callPermits = callPermits;
         this.memberAiPolicy = memberAiPolicy;
         this.methods = methods;
         this.assignments = assignments;
@@ -237,6 +242,20 @@ public class ReviewJobClaimService {
                     AgentPurpose.PRACTICE_REVIEW,
                     runningCount,
                     binding.getMaxConcurrentJobs());
+            return ClaimOutcome.CONCURRENCY_FULL;
+        }
+
+        Long poolId = callPermits.poolFor(snapshot.model().connectionRef());
+        if (!composing
+                && poolId != null
+                && !callPermits.reserve(
+                        poolId,
+                        composing ? LlmCallClass.COMPOSITION : LlmCallClass.REQUEST,
+                        new LlmCallPermits.Caller(
+                                job.getWorkspaceId(),
+                                job.getId(),
+                                job.getAttempt(),
+                                snapshot.model().connectionRef()))) {
             return ClaimOutcome.CONCURRENCY_FULL;
         }
 

@@ -27,6 +27,7 @@ import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBindingRepository;
 import de.tum.cit.aet.hephaestus.agent.handler.DefaultReviewExecutionHandler;
 import de.tum.cit.aet.hephaestus.agent.handler.RuntimeReviewTestData;
 import de.tum.cit.aet.hephaestus.agent.practice.PracticePiAdapter;
+import de.tum.cit.aet.hephaestus.agent.proxy.LlmCallPermits;
 import de.tum.cit.aet.hephaestus.agent.runtime.worker.testing.WorkerPropertiesFixtures;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxTestLimits;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxManager;
@@ -115,6 +116,12 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
     private ReviewJobExecutor executor;
     private final ReviewMethodVerifier methods = mock(ReviewMethodVerifier.class);
 
+    private static LlmCallPermits unpooledCalls() {
+        var capacity = mock(LlmCallPermits.class);
+        when(capacity.poolFor(any())).thenReturn(null);
+        return capacity;
+    }
+
     @BeforeEach
     void setUp() {
         workspace = workspaces.save(WorkspaceTestFixtures.activeWorkspace("tier-" + UUID.randomUUID()));
@@ -162,7 +169,8 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                         budgets,
                         admission,
                         new ReviewJobTelemetry(metrics, Tracer.NOOP),
-                        Optional.empty()),
+                        Optional.empty(),
+                        unpooledCalls()),
                 new ReviewJobRecovery(
                         jobs,
                         properties,
@@ -221,7 +229,8 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                 budgets,
                 admission,
                 new ReviewJobTelemetry(metrics, Tracer.NOOP),
-                Optional.empty());
+                Optional.empty(),
+                unpooledCalls());
 
         var claim = claims.claimJob(job.getId());
 
@@ -233,6 +242,40 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                 .isAfter(Instant.now().plus(AgentProperties.WORKER_LEASE_TTL).minusSeconds(60))
                 .as("the claimed entity holds the lease that the row holds")
                 .isEqualTo(((ReviewJobClaimService.ClaimResult) claim).job().getLeasedUntil());
+    }
+
+    @Test
+    void shouldLeaveTheReviewQueuedWhenItsEndpointCannotReserveACall() {
+        var job = queued(binding(DataHandlingTier.IN_HOUSE));
+        var budgets = mock(LlmBudgetService.class);
+        when(budgets.decide(anyLong())).thenReturn(LlmBudgetDecision.ALLOWED);
+        var assignmentSnapshots = mock(ReviewJobAssignments.class);
+        when(assignmentSnapshots.load(any())).thenReturn(List.of(RuntimeReviewTestData.assignment(null, null)));
+        var metrics = new SimpleMeterRegistry();
+        var capacity = mock(LlmCallPermits.class);
+        when(capacity.poolFor(any())).thenReturn(42L);
+        var claims = new ReviewJobClaimService(
+                jobs,
+                policy,
+                methods,
+                assignmentSnapshots,
+                transactions,
+                mapper,
+                metrics,
+                budgets,
+                admission,
+                new ReviewJobTelemetry(metrics, Tracer.NOOP),
+                Optional.empty(),
+                capacity);
+
+        var claim = claims.claimJob(job.getId());
+
+        assertThat(claim).isEqualTo(ReviewJobClaimService.ClaimOutcome.CONCURRENCY_FULL);
+        var queued = jobs.findById(job.getId()).orElseThrow();
+        assertThat(queued.getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
+        assertThat(queued.getAttempt()).isEqualTo(job.getAttempt());
+        assertThat(queued.getWorkerId()).isNull();
+        assertThat(queued.getExecutionStartedAt()).isNull();
     }
 
     @Test
@@ -333,7 +376,8 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                 budgets,
                 admission,
                 new ReviewJobTelemetry(metrics, Tracer.NOOP),
-                Optional.empty());
+                Optional.empty(),
+                unpooledCalls());
 
         assertThat(claims.claimJob(job.getId()))
                 .isInstanceOfSatisfying(
@@ -365,7 +409,8 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                 mock(LlmBudgetService.class),
                 admission,
                 new ReviewJobTelemetry(metrics, Tracer.NOOP),
-                Optional.empty());
+                Optional.empty(),
+                unpooledCalls());
 
         assertThat(claims.claimJob(job.getId()))
                 .isInstanceOfSatisfying(

@@ -1,8 +1,10 @@
 package de.tum.cit.aet.hephaestus.agent.proxy;
 
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptJwt;
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallClass;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.config.FrozenModel;
+import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.job.FrozenCharge;
 import de.tum.cit.aet.hephaestus.agent.job.PracticeScriptKindTotal;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewAttemptUsageService;
@@ -14,9 +16,11 @@ import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
+import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
+import de.tum.cit.aet.hephaestus.practices.spi.ReviewSnapshotQuery;
 import jakarta.servlet.http.HttpServletRequest;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -39,16 +43,55 @@ class ProxyRoutingService {
     private final MentorTurnRepository mentorTurns;
     private final ObjectMapper objectMapper;
     private final ReviewAttemptUsageService attemptUsage;
+    private final ReviewSnapshotQuery reviews;
 
     ProxyRoutingService(
             ReviewJobRepository jobs,
             MentorTurnRepository mentorTurns,
             ObjectMapper mapper,
-            ReviewAttemptUsageService attemptUsage) {
+            ReviewAttemptUsageService attemptUsage,
+            ReviewSnapshotQuery reviews) {
         this.agentJobRepository = jobs;
         this.mentorTurns = mentorTurns;
         this.objectMapper = mapper;
         this.attemptUsage = attemptUsage;
+        this.reviews = reviews;
+    }
+
+    /**
+     * Whose call this is, for its pool: a Heph turn, or the origin of the review that makes it.
+     *
+     * @throws ResponseStatusException 409 when the call's review no longer exists
+     */
+    LlmCallClass callClass(ProxyRouting routing) {
+        if (routing.hephTurn()) return LlmCallClass.TURN;
+        var job = agentJobRepository.findById(routing.sourceId()).orElseThrow(ProxyRoutingService::attemptEnded);
+        if (ResultAdmissionService.isAdmitted(job)) return LlmCallClass.COMPOSITION;
+        return reviews.find(job.getWorkspaceId(), job.getReviewId())
+                .map(review -> LlmCallClass.of(review.origin()))
+                .orElseThrow(ProxyRoutingService::attemptEnded);
+    }
+
+    boolean ownsAttempt(ProxyRouting routing) {
+        var attempt = routing.attempt();
+        if (routing.hephTurn())
+            return mentorTurns
+                    .findByIdAndWorkspaceId(attempt.sourceId(), Objects.requireNonNull(routing.workspaceId()))
+                    .filter(turn -> turn.getAttempt() == attempt.number()
+                            && turn.getStatus() == MentorTurn.Status.RUNNING
+                            && Objects.equals(turn.getWorkerId(), attempt.workerId())
+                            && turn.getLeasedUntil() != null
+                            && turn.getLeasedUntil().isAfter(Instant.now()))
+                    .isPresent();
+        return agentJobRepository
+                .findById(attempt.sourceId())
+                .filter(job -> Objects.equals(job.getWorkspaceId(), routing.workspaceId())
+                        && job.getStatus() == ReviewJobStatus.RUNNING
+                        && job.getAttempt() == attempt.number()
+                        && Objects.equals(job.getWorkerId(), attempt.workerId())
+                        && job.getLeasedUntil() != null
+                        && job.getLeasedUntil().isAfter(Instant.now()))
+                .isPresent();
     }
 
     ProxyRouting resolve(ProxyIdentity identity, HttpServletRequest request) {

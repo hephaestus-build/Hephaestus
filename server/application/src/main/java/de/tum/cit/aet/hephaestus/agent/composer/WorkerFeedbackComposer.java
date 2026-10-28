@@ -93,6 +93,7 @@ public class WorkerFeedbackComposer {
     private final Duration providerRetryPause;
     private final String reviewSystem;
     private final String privateSystem;
+    private final CompositionCapacity capacity;
 
     @Autowired
     public WorkerFeedbackComposer(
@@ -105,7 +106,8 @@ public class WorkerFeedbackComposer {
             PracticeReviewProperties properties,
             AgentProperties agentProperties,
             MeterRegistry meters,
-            ObjectMapper mapper) {
+            ObjectMapper mapper,
+            CompositionCapacity capacity) {
         this(
                 admission,
                 files,
@@ -117,7 +119,8 @@ public class WorkerFeedbackComposer {
                 agentProperties,
                 meters,
                 mapper,
-                PROVIDER_RETRY_PAUSE);
+                PROVIDER_RETRY_PAUSE,
+                capacity);
     }
 
     WorkerFeedbackComposer(
@@ -131,8 +134,10 @@ public class WorkerFeedbackComposer {
             AgentProperties agentProperties,
             MeterRegistry meters,
             ObjectMapper mapper,
-            Duration providerRetryPause) {
+            Duration providerRetryPause,
+            CompositionCapacity capacity) {
         this.admission = admission;
+        this.capacity = capacity;
         this.files = files;
         this.continuation = continuation;
         this.gateway = gateway;
@@ -168,11 +173,18 @@ public class WorkerFeedbackComposer {
      * @throws CompositionHandedOnException when a passing cause left a destination open before the retry limit
      */
     public void composeAfterMeasurement(ReviewJob job, String workerId, Instant notAfter) {
-        var identity = new ResultAdmissionService.AdmissionIdentity(
-                job.getId(), job.getWorkspaceId(), job.getAttempt(), workerId);
-        var inputs = files.originalCompositionInputs(identity).orElse(null);
-        if (inputs == null) withholdOpen(job, workerId, CompositionStop.INPUTS_GONE);
-        else compose(job, workerId, inputs, deadline(notAfter));
+        var slot = capacity.acquire(deadline(notAfter));
+        try {
+
+            var identity = new ResultAdmissionService.AdmissionIdentity(
+                    job.getId(), job.getWorkspaceId(), job.getAttempt(), workerId);
+            var inputs = files.originalCompositionInputs(identity).orElse(null);
+            if (inputs == null) withholdOpen(job, workerId, CompositionStop.INPUTS_GONE);
+            else compose(job, workerId, inputs, deadline(notAfter));
+
+        } finally {
+            slot.close();
+        }
     }
 
     /**
@@ -183,24 +195,33 @@ public class WorkerFeedbackComposer {
      * @throws CompositionHandedOnException when a passing cause left a destination open before the retry limit
      */
     public void composeResumed(ReviewJob job, String workerId, Instant notAfter) {
-        if (job.spentAttempts() > agentProperties.maxRetries()) {
-            withholdWithoutInputs(job, workerId, CompositionStop.RETRIES_EXHAUSTED);
-            return;
-        }
-        ReviewCompositionContinuation.Restored restored;
+        var slot = capacity.acquire(deadline(notAfter));
         try {
-            restored = continuation.restore(job);
-        } catch (ReviewCompositionContinuation.InputsUnavailableException unavailable) {
-            log.warn(
-                    "The retained composition inputs are unavailable: jobId={}, erased={}",
-                    job.getId(),
-                    unavailable.erased());
-            withholdWithoutInputs(
-                    job, workerId, unavailable.erased() ? CompositionStop.INPUTS_ERASED : CompositionStop.INPUTS_GONE);
-            return;
-        }
-        try (restored) {
-            compose(job, workerId, restored.files(), deadline(notAfter));
+
+            if (job.spentAttempts() > agentProperties.maxRetries()) {
+                withholdWithoutInputs(job, workerId, CompositionStop.RETRIES_EXHAUSTED);
+                return;
+            }
+            ReviewCompositionContinuation.Restored restored;
+            try {
+                restored = continuation.restore(job);
+            } catch (ReviewCompositionContinuation.InputsUnavailableException unavailable) {
+                log.warn(
+                        "The retained composition inputs are unavailable: jobId={}, erased={}",
+                        job.getId(),
+                        unavailable.erased());
+                withholdWithoutInputs(
+                        job,
+                        workerId,
+                        unavailable.erased() ? CompositionStop.INPUTS_ERASED : CompositionStop.INPUTS_GONE);
+                return;
+            }
+            try (restored) {
+                compose(job, workerId, restored.files(), deadline(notAfter));
+            }
+
+        } finally {
+            slot.close();
         }
     }
 
@@ -511,6 +532,7 @@ public class WorkerFeedbackComposer {
                 case WORK_TIME -> CompositionStop.DEADLINE;
                 case REFUSED -> CompositionStop.MODEL_REFUSED;
                 case PROVIDER -> CompositionStop.PROVIDER;
+                case CAPACITY -> CompositionStop.CAPACITY;
             };
         }
 

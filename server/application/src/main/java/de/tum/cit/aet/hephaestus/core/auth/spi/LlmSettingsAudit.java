@@ -9,4 +9,11 @@ package de.tum.cit.aet.hephaestus.core.auth.spi;
  */
 public interface LlmSettingsAudit {
     void settingsChanged(boolean allowWorkspaceConnections);
+
+    /**
+     * A pool of provider capacity was created, changed, deleted or given other models.
+     *
+     * @param change {@code CREATED}, {@code UPDATED}, {@code DELETED} or {@code MODELS_CHANGED}
+     */
+    void callPoolChanged(Long poolId, String slug, String change);
 }
