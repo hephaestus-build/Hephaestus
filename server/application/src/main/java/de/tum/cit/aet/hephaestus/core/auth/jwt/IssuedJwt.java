@@ -35,7 +35,7 @@ import org.jspecify.annotations.Nullable;
  * row exists, so any refresh secret or JTI the session ever handed out still resolves its family: a
  * replayed old secret revokes the live session, and revoking a stale session-list entry ends it.
  *
- * <p>A refreshed browser token keeps a link to the token it replaced until its first use. The rotation
+ * <p>A refreshed browser token keeps its predecessor link after first use so a racing logout can end the chain. The rotation
  * contract is in {@code docs/auth-architecture.md} § Browser session coordination.
  */
 @Entity
@@ -97,13 +97,15 @@ public class IssuedJwt {
     @Nullable
     private String refreshTokenHash;
 
-    /**
-     * The browser token this one replaced. A refresh sets it, and this token's first admitted use
-     * revokes the predecessor and clears it, so a non-null value means this token was never used.
-     */
+    /** The browser predecessor, retained after first use so revocation can follow the chain. */
     @Column(name = "predecessor_jti", columnDefinition = "uuid")
     @Nullable
     private UUID predecessorJti;
+
+    /** The first admitted use of a browser successor; null while it is unused. */
+    @Column(name = "used_at")
+    @Nullable
+    private Instant usedAt;
 
     public IssuedJwt(UUID jti, Long accountId, Instant expiresAt) {
         this.jti = jti;
@@ -114,6 +116,7 @@ public class IssuedJwt {
     public enum RevokedReason {
         LOGOUT,
         ROTATE,
+        SUPERSEDED,
         ACCOUNT_INACTIVE,
         PASSKEY_STEP_UP,
         SIGN_OUT_EVERYWHERE,

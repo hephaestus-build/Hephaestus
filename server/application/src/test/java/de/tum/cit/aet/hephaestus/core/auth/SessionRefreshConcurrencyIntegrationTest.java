@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.core.auth;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assertions.fail;
 
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
@@ -22,6 +23,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
@@ -170,6 +172,60 @@ class SessionRefreshConcurrencyIntegrationTest extends RealAuthIntegrationTest {
                 () -> admission.admit(successor, Instant.now()) != null);
 
         assertThat(admission.admit(successor, Instant.now())).isNotNull();
+    }
+
+    @Test
+    void shouldEndTheChainWhenLogoutWaitsBehindTheSuccessorsFirstUse() throws Exception {
+        var held = issue();
+        Long accountId = tokens.findById(held.jti()).orElseThrow().getAccountId();
+        UUID successor = unusedSuccessor(accountId, held.jti());
+
+        inOrder(() -> admission.admit(successor, Instant.now()) == null, () -> {
+            sessions.logout(accountId, held.jti(), null, new MockHttpServletResponse());
+            return true;
+        });
+
+        assertThat(admission.admit(successor, Instant.now())).isNotNull();
+        assertThat(tokens.findActiveByAccountId(accountId, Instant.now())).isEmpty();
+    }
+
+    @Test
+    void shouldEndLaterDescendantsWhenAnAlreadyAdmittedLogoutUsesAnOlderToken() {
+        var held = issue();
+        Long accountId = tokens.findById(held.jti()).orElseThrow().getAccountId();
+        UUID successor = unusedSuccessor(accountId, held.jti());
+        assertThat(admission.admit(successor, Instant.now())).isNull();
+        UUID next = unusedSuccessor(accountId, successor);
+        assertThat(admission.admit(next, Instant.now())).isNull();
+        UUID pending = unusedSuccessor(accountId, next);
+
+        sessions.logout(accountId, held.jti(), null, new MockHttpServletResponse());
+
+        assertThat(admission.admit(next, Instant.now())).isNotNull();
+        assertThat(admission.admit(pending, Instant.now())).isNotNull();
+    }
+
+    @Test
+    void shouldRejectASecondActiveSuccessorForTheSamePredecessor() {
+        var held = issue();
+        Long accountId = tokens.findById(held.jti()).orElseThrow().getAccountId();
+        unusedSuccessor(accountId, held.jti());
+
+        assertThatThrownBy(() -> issuer.issueSuccessor(accountId, CONSTRAINTS, held.jti(), null))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void shouldLeaveAnotherAccountsSuccessorAloneWhenItsLinkIsCorrupt() {
+        var held = issue();
+        Long owner = tokens.findById(held.jti()).orElseThrow().getAccountId();
+        Long other = Objects.requireNonNull(
+                accounts.save(new Account("Other browser owner")).getId());
+        var foreign = issuer.issueSuccessor(other, CONSTRAINTS, held.jti(), null);
+
+        sessions.logout(owner, held.jti(), null, new MockHttpServletResponse());
+
+        assertThat(admission.admit(foreign.jti(), Instant.now())).isNull();
     }
 
     private HephaestusJwtIssuer.Token issue() {

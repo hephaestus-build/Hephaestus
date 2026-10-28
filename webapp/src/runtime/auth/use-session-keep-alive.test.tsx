@@ -7,6 +7,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { getCurrentUserQueryKey } from "@/api/@tanstack/react-query.gen";
 import { server } from "@/mocks/server";
+import { deferred } from "@/test/async";
+import * as sessionRefresh from "./session-refresh";
 import { SESSION_COOLDOWN_MS } from "./session-refresh";
 import { useSessionKeepAlive } from "./use-session-keep-alive";
 
@@ -85,11 +87,20 @@ describe("useSessionKeepAlive", () => {
 	});
 
 	it("can renew after a transient failure without retrying an idle session", async () => {
+		const settled = deferred();
+		const refresh = sessionRefresh.refreshAccessToken;
+		vi.spyOn(sessionRefresh, "refreshAccessToken").mockImplementation(async () => {
+			const result = await refresh();
+			settled.resolve();
+			return result;
+		});
 		const session = mountSession();
 		server.use(
 			http.post("*/auth/refresh", () => new HttpResponse(null, { status: 503 }), { once: true }),
 		);
 		await advance(1000);
+		// Advancing timers does not drain IndexedDB events; finish the failed attempt before later activity.
+		await act(async () => settled.promise);
 		await advance(5000);
 		expect(session.userCalls()).toBe(0);
 		expect(session.refreshCalls()).toBe(0);

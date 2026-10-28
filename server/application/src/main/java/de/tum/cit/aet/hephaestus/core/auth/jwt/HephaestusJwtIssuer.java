@@ -142,14 +142,16 @@ public class HephaestusJwtIssuer {
 
     /** Re-signs an already recorded unused browser successor without extending its lifetime or changing its row. */
     @Transactional
-    public Token resignSuccessor(IssuedJwt successor, TokenConstraints constraints) {
-        if (successor.getPredecessorJti() == null
+    public Token resignSuccessor(Long accountId, IssuedJwt successor, TokenConstraints constraints) {
+        if (!accountId.equals(successor.getAccountId())
+                || successor.getUsedAt() != null
+                || successor.getPredecessorJti() == null
                 || successor.getSessionId() != null
                 || constraints.sessionId() != null) {
             throw new IllegalArgumentException("an unused browser successor is required");
         }
         return sign(
-                principal(successor.getAccountId()),
+                principal(accountId),
                 constraints,
                 successor.getJti(),
                 Objects.requireNonNull(successor.getIssuedAt()),

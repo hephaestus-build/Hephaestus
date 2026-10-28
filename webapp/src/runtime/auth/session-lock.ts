@@ -1,3 +1,5 @@
+import { z } from "zod";
+
 let database: Promise<IDBDatabase> | undefined;
 
 async function lockDatabase(): Promise<IDBDatabase> {
@@ -45,71 +47,111 @@ async function lockDatabase(): Promise<IDBDatabase> {
 	}
 }
 
-async function withDatabaseLock<T>(operation: () => Promise<T>): Promise<T> {
-	const db = await lockDatabase();
-	// oxlint-disable-next-line promise/avoid-new -- Completion and abort are IndexedDB transaction events.
-	return new Promise<T>((resolve, reject) => {
+// A closed or stalled tab must not block another tab's renewal indefinitely.
+const LEASE_MS = 5000;
+const RETRY_MS = 100;
+const leaseRecord = z.object({ id: z.uuid(), expiresAt: z.number().nonnegative() });
+
+function now(): number {
+	// oxlint-disable-next-line no-restricted-properties -- Tabs compare a persisted lease in wall-clock time.
+	return Date.now();
+}
+
+async function changeLease(
+	db: IDBDatabase,
+	id: string,
+	action: "acquire" | "release",
+): Promise<boolean> {
+	// oxlint-disable-next-line promise/avoid-new -- IndexedDB completes transactions through events.
+	return new Promise<boolean>((resolve, reject) => {
 		const transaction = db.transaction("session", "readwrite");
 		const store = transaction.objectStore("session");
-		let started = false;
-		let outcome: { value: T } | { error: unknown } | undefined;
+		let acquired = false;
+		transaction.addEventListener("complete", () => resolve(acquired), { once: true });
 		transaction.addEventListener(
 			"abort",
-			() => reject(transaction.error ?? new Error("Session lock was aborted")),
+			() => reject(transaction.error ?? new Error("Session lease aborted")),
 			{ once: true },
 		);
 		transaction.addEventListener(
 			"error",
-			() => reject(transaction.error ?? new Error("Session lock failed")),
+			() => reject(transaction.error ?? new Error("Session lease failed")),
 			{ once: true },
 		);
-		transaction.addEventListener(
-			"complete",
+		const read = store.get(0);
+		read.addEventListener(
+			"success",
 			() => {
-				if (outcome === undefined) {
-					reject(new Error("Session lock ended before the operation"));
-				} else if ("error" in outcome) {
-					// oxlint-disable-next-line prefer-promise-reject-errors -- Preserve SDK refusal objects and operation errors for the caller.
-					reject(outcome.error);
-				} else {
-					resolve(outcome.value);
+				const current = leaseRecord.safeParse(read.result).data;
+				if (action === "release") {
+					if (current?.id === id) {
+						store.delete(0);
+					}
+				} else if (current === undefined || current.expiresAt <= now()) {
+					store.put({ id, expiresAt: now() + LEASE_MS }, 0);
+					acquired = true;
 				}
 			},
 			{ once: true },
 		);
-		const run = async () => {
-			try {
-				outcome = { value: await operation() };
-			} catch (error) {
-				outcome = { error };
-			}
-		};
-		// A queued read keeps the write transaction open across async cookie changes. The browser
-		// serializes these transactions across tabs and releases them when a tab closes.
-		const hold = () => {
-			const read = store.get(0);
-			read.addEventListener(
-				"success",
-				() => {
-					if (!started) {
-						started = true;
-						void run();
-					}
-					if (outcome === undefined) {
-						hold();
-					}
-				},
-				{ once: true },
-			);
-		};
-		hold();
 	});
 }
 
-/** Serialize cookie changes across tabs so late responses cannot overwrite a newer session. */
+async function withDatabaseLock<T>(operation: () => Promise<T>): Promise<T> {
+	let db: IDBDatabase;
+	let id: string;
+	try {
+		db = await lockDatabase();
+		id = crypto.randomUUID();
+	} catch {
+		return operation();
+	}
+	const deadline = performance.now() + LEASE_MS;
+	let acquired = false;
+	while (!acquired && performance.now() < deadline) {
+		try {
+			acquired = await changeLease(db, id, "acquire");
+		} catch {
+			return operation();
+		}
+		if (!acquired) {
+			// oxlint-disable-next-line promise/avoid-new -- A timer spaces bounded lease attempts instead of holding an IndexedDB transaction open.
+			await new Promise<void>((resolve) => {
+				setTimeout(resolve, RETRY_MS);
+			});
+		}
+	}
+	if (!acquired) {
+		return operation();
+	}
+	try {
+		return await operation();
+	} finally {
+		try {
+			await changeLease(db, id, "release");
+		} catch {
+			// Lease expiry releases other tabs even when storage fails during cleanup.
+		}
+	}
+}
+
+/** Serialize cookie changes where browser locks are available; renewal still works without them. */
 export async function withSessionLock<T>(operation: () => Promise<T>): Promise<T> {
 	// oxlint-disable-next-line typescript/no-unnecessary-condition -- Web Locks requires a secure context.
-	return navigator.locks === undefined
-		? withDatabaseLock(operation)
-		: navigator.locks.request("hephaestus-session", operation);
+	if (navigator.locks === undefined) {
+		return withDatabaseLock(operation);
+	}
+	let started = false;
+	try {
+		return await navigator.locks.request("hephaestus-session", async () => {
+			started = true;
+			return operation();
+		});
+	} catch (error) {
+		// oxlint-disable-next-line typescript/no-unnecessary-condition -- The awaited Web Locks callback sets this flag before running the operation.
+		if (started) {
+			throw error;
+		}
+		return withDatabaseLock(operation);
+	}
 }

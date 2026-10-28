@@ -143,10 +143,12 @@ Renewal and logout use the browser's
 [Web Locks API](https://developer.mozilla.org/en-US/docs/Web/API/Web_Locks_API) to serialize requests
 and responses that replace the shared session cookie. Generated SDK operations own HTTP requests;
 TanStack Query mutation options retain their lifecycle and error handling. Without Web Locks, an
-IndexedDB write transaction serializes cookie changes across tabs. A queued read keeps that transaction
-open during the operation; the browser releases it when the tab closes. Failure to acquire either lock
-preserves the page and sends no unlocked renewal. Both locks coordinate tabs within one origin.
-Server-side idempotence also protects concurrent responses from different workspace origins.
+IndexedDB record grants a five-second lease. Waiting tabs retry every 100 ms for at most five seconds;
+they hold no database transaction across the network request. Lease expiry lets another tab continue
+when a tab closes or its request stalls. A holder releases only its own lease. If storage fails or the
+wait expires, the request runs without a lock. A browser with neither API still renews.
+Client coordination reduces duplicate requests; the server's bounded reissue rule handles concurrent
+responses from different origins. These origins cannot share a browser lock.
 
 ### Rotation contract
 
@@ -158,13 +160,19 @@ The browser then still holds a valid token, so the session continues.
 
 - **The predecessor ends first at its own expiry or at the successor's first use.**
   `AccessTokenAdmission` admits the successor. In the same transaction, it revokes the predecessor
-  with reason `ROTATE` and clears the link. A link that is not empty thus marks an unused successor.
+  with reason `ROTATE` and sets `issued_jwt.used_at`. The predecessor link stays in place so a
+  logout that was admitted before first use can still revoke the chain.
   Refresh and first use lock the account, then the predecessor, then the successor.
   Concurrent refreshes therefore leave one unused successor.
-- **The predecessor returns while its live successor is unused.** The renewal re-signs that same
-  successor. Its JTI, expiry, and `issued_jwt` row stay the same. `auth_event` records `TOKEN_REFRESH`
-  with the details `{"reason":"SUCCESSOR_REISSUED"}`. This is idempotent for the predecessor:
-  concurrent refreshes from any origin set equivalent cookies, in any response order.
+- **The predecessor returns within 30 seconds of its unused successor's issuance.** The renewal
+  re-signs that same successor. Its JTI, expiry, and `issued_jwt` row stay the same. `auth_event` records
+  `TOKEN_REFRESH` with the details `{"reason":"SUCCESSOR_REISSUED"}`. Reissue is idempotent within this
+  window: concurrent refreshes from any origin set equivalent cookies, in any response order.
+- **The unused successor is at least 30 seconds old, or has expired.** The renewal revokes it with
+  reason `SUPERSEDED`, issues a new successor, and records `TOKEN_REFRESH` with the details
+  `{"reason":"SUCCESSOR_UNUSED_REPLACED"}`. A later renewal thus removes a successor that another
+  holder pre-fetched. The window covers concurrent responses and does not extend either token's expiry.
+  A partial unique index permits one unrevoked successor for each predecessor.
 - **The predecessor returns after its successor was used.** The server answers 401.
   A renewal attempt records `JWT_REVOKED` `FAILURE` with the reason `browser_token_reuse` and logs
   a warning without the token. Other requests record `rotated_token_presented`, without a reuse warning.
@@ -174,8 +182,9 @@ The browser then still holds a valid token, so the session continues.
   event. Expired and unknown tokens add no event. Installed-client tokens record their reuse
   through their refresh secret, so the decoder records none for them. A late request and a later renewal
   replay use separate deduplication keys, so the first cannot hide the second.
-- **Logout, single-session revocation, and passkey step-up** revoke the token and its unused
-  successors through `revokeBrowserSession`. Step-up records `PASSKEY_STEP_UP`; an inactive account
+- **Logout, single-session revocation, and passkey step-up** revoke the browser chain through
+  `revokeBrowserSession`. The account write lock stops issuance and first use while revocation follows
+  the retained predecessor links. This also ends successors that were used before logout took the lock. Step-up records `PASSKEY_STEP_UP`; an inactive account
   records `ACCOUNT_INACTIVE`. They do not raise a rotation-reuse warning. The session list shows one
   browser once while its successor is unused.
 - **A renewal that loses the race to the successor's first use** neither issues nor clears a cookie.

@@ -23,7 +23,10 @@ describe("refresh across tabs", () => {
 		window.localStorage.clear();
 		refreshMock.mockReset();
 	});
-	afterEach(() => vi.unstubAllGlobals());
+	afterEach(() => {
+		vi.useRealTimers();
+		vi.unstubAllGlobals();
+	});
 
 	it.each([
 		["Web Locks", locks],
@@ -42,24 +45,77 @@ describe("refresh across tabs", () => {
 
 		expect(refreshMock).toHaveBeenCalledOnce();
 	});
-	it("releases the fallback lock after a failed refresh", async () => {
-		vi.stubGlobal("navigator", { locks: undefined });
-		const [first, second] = await tabs();
-		refreshMock.mockRejectedValueOnce(new Error("offline")).mockResolvedValueOnce(rotated);
+	it.each([
+		["Web Locks", locks],
+		["IndexedDB", undefined],
+	])(
+		"releases %s after a failed refresh without retrying the request",
+		async (_name, lockManager) => {
+			vi.stubGlobal("navigator", { locks: lockManager });
+			const [first, second] = await tabs();
+			refreshMock.mockRejectedValueOnce(new Error("offline")).mockResolvedValueOnce(rotated);
 
-		await expect(first.refreshAccessToken()).resolves.toBe("unavailable");
-		await expect(second.refreshAccessToken()).resolves.toBe("refreshed");
+			await expect(first.refreshAccessToken()).resolves.toBe("unavailable");
+			await expect(second.refreshAccessToken()).resolves.toBe("refreshed");
 
-		expect(refreshMock).toHaveBeenCalledTimes(2);
-	});
+			expect(refreshMock).toHaveBeenCalledTimes(2);
+		},
+	);
 
-	it("preserves the session without sending an unlocked refresh when storage locking is unavailable", async () => {
+	it("renews without a lock when neither browser locking API is available", async () => {
 		vi.stubGlobal("navigator", { locks: undefined });
 		vi.stubGlobal("indexedDB", undefined);
 		const [first] = await tabs();
+		refreshMock.mockResolvedValue(rotated);
 
-		await expect(first.refreshAccessToken()).resolves.toBe("unavailable");
+		await expect(first.refreshAccessToken()).resolves.toBe("refreshed");
 
-		expect(refreshMock).not.toHaveBeenCalled();
+		expect(refreshMock).toHaveBeenCalledOnce();
+	});
+	it("renews when IndexedDB exists but the browser refuses storage access", async () => {
+		vi.stubGlobal("navigator", { locks: undefined });
+		vi.stubGlobal("indexedDB", {
+			open: () => {
+				throw new DOMException("Storage disabled", "SecurityError");
+			},
+		});
+		const [first] = await tabs();
+		refreshMock.mockResolvedValue(rotated);
+
+		await expect(first.refreshAccessToken()).resolves.toBe("refreshed");
+		expect(refreshMock).toHaveBeenCalledOnce();
+	});
+
+	it("renews when Web Locks rejects acquisition and IndexedDB is unavailable", async () => {
+		vi.stubGlobal("navigator", {
+			locks: {
+				request: vi.fn().mockRejectedValue(new DOMException("Lock disabled", "SecurityError")),
+			},
+		});
+		vi.stubGlobal("indexedDB", undefined);
+		const [first] = await tabs();
+		refreshMock.mockResolvedValue(rotated);
+
+		await expect(first.refreshAccessToken()).resolves.toBe("refreshed");
+		expect(refreshMock).toHaveBeenCalledOnce();
+	});
+
+	it("lets another tab renew after a stalled IndexedDB lock reaches its deadline", async () => {
+		vi.stubGlobal("navigator", { locks: undefined });
+		vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date", "performance"] });
+		const [first, second] = await tabs();
+		const stalled = deferred<typeof rotated>();
+		refreshMock.mockReturnValueOnce(stalled.promise).mockResolvedValueOnce(rotated);
+		const a = first.refreshAccessToken();
+		await vi.waitFor(() => expect(refreshMock).toHaveBeenCalledOnce());
+		const b = second.refreshAccessToken();
+		try {
+			await vi.advanceTimersByTimeAsync(6000);
+			await vi.waitFor(() => expect(refreshMock).toHaveBeenCalledTimes(2));
+			await expect(b).resolves.toBe("refreshed");
+		} finally {
+			stalled.resolve(rotated);
+			await a;
+		}
 	});
 });

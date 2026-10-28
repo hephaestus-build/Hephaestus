@@ -418,7 +418,7 @@ class RevocationAwareJwtDecoderTest extends BaseUnitTest {
 
         decoder(repo, cacheManager()).decode(validToken(successor));
 
-        verify(repo).revoke(eq(predecessor), any(), eq(IssuedJwt.RevokedReason.ROTATE));
+        verify(repo).revokeOwned(eq(predecessor), eq(42L), any(), eq(IssuedJwt.RevokedReason.ROTATE));
     }
 
     @Test

@@ -162,6 +162,7 @@ erDiagram
         VARCHAR(64) refresh_token_hash UK
         UUID session_id FK
         UUID predecessor_jti
+        TIMESTAMPTZ used_at
     }
 
     JwtSigningKey {

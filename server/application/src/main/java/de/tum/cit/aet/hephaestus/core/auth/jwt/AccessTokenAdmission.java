@@ -40,7 +40,7 @@ public class AccessTokenAdmission {
             return new Refusal(repository.findById(jti).orElse(null));
         }
         UUID predecessor = token.getPredecessorJti();
-        if (predecessor != null) {
+        if (predecessor != null && token.getUsedAt() == null) {
             // Account, predecessor, successor: the same order as refresh and revocation.
             accountRepository.lockForIssuance(token.getAccountId());
             repository.lockForRotation(predecessor);
@@ -48,7 +48,7 @@ public class AccessTokenAdmission {
             if (repository.markUsed(jti, now) == 0) {
                 return new Refusal(repository.findById(jti).orElse(null));
             }
-            repository.revoke(predecessor, now, IssuedJwt.RevokedReason.ROTATE);
+            repository.revokeOwned(predecessor, token.getAccountId(), now, IssuedJwt.RevokedReason.ROTATE);
         }
         return null;
     }

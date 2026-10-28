@@ -13,6 +13,7 @@ import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwt;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwtRepository;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.TokenConstraints;
 import de.tum.cit.aet.hephaestus.testconfig.RealAuthIntegrationTest;
+import java.sql.Timestamp;
 import java.text.ParseException;
 import java.time.Duration;
 import java.time.Instant;
@@ -24,6 +25,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseCookie;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
@@ -49,6 +51,9 @@ class SessionRefreshLifecycleIntegrationTest extends RealAuthIntegrationTest {
 
     @Autowired
     private AuthSessionService sessions;
+
+    @Autowired
+    private JdbcTemplate jdbc;
 
     @Value("${hephaestus.auth.cookie-name:__Host-HEPHAESTUS_AT}")
     private String cookieName;
@@ -142,6 +147,41 @@ class SessionRefreshLifecycleIntegrationTest extends RealAuthIntegrationTest {
     }
 
     @Test
+    void shouldReplaceAndRecordAnUnusedSuccessorAfterTheConcurrentRefreshWindow() throws ParseException {
+        Long accountId = Objects.requireNonNull(
+                accountRepository.save(new Account("Bounded reissue")).getId());
+        var held = jwtIssuer.issue(
+                accountId, TokenConstraints.session(Instant.now().plusSeconds(3600), null), null);
+        String csrf = fetchCsrfToken();
+        String stale = refreshAndReadNewCookie(held.value(), csrf);
+        UUID staleJti = UUID.fromString(SignedJWT.parse(stale).getJWTClaimsSet().getJWTID());
+        // Age only this row instead of waiting for the concurrent-refresh window in real time.
+        jdbc.update(
+                "UPDATE issued_jwt SET issued_at = ? WHERE jti = ?",
+                Timestamp.from(Instant.now().minusSeconds(31)),
+                staleJti);
+        Instant since = Instant.now();
+
+        String replacement = refreshAndReadNewCookie(held.value(), csrf);
+
+        assertThat(SignedJWT.parse(replacement).getJWTClaimsSet().getJWTID()).isNotEqualTo(staleJti.toString());
+        webTestClient
+                .get()
+                .uri("/user")
+                .header(HttpHeaders.COOKIE, cookieName + "=" + stale)
+                .exchange()
+                .expectStatus()
+                .isUnauthorized()
+                .expectBody(Void.class);
+        assertThat(issuedJwtRepository.findById(staleJti).orElseThrow().getRevokedReason())
+                .hasToString("SUPERSEDED");
+        assertThat(authEventRepository.findByAccountSince(accountId, since)).anySatisfy(event -> {
+            assertThat(event.getEventType()).isEqualTo(AuthEvent.EventType.JWT_REVOKED);
+            assertThat(event.getDetails()).contains("SUPERSEDED");
+        });
+    }
+
+    @Test
     void aRefreshWithTheHeldTokenReissuesTheSuccessorThatNeverArrived() {
         Instant since = Instant.now();
         Long accountId = Objects.requireNonNull(
@@ -177,7 +217,10 @@ class SessionRefreshLifecycleIntegrationTest extends RealAuthIntegrationTest {
         assertThat(predecessorRow.getRevokedReason()).isEqualTo(IssuedJwt.RevokedReason.ROTATE);
         assertThat(issuedJwtRepository.findActiveByAccountId(accountId, Instant.now()))
                 .singleElement()
-                .satisfies(row -> assertThat(row.getPredecessorJti()).isNull());
+                .satisfies(row -> {
+                    assertThat(row.getPredecessorJti()).isEqualTo(held.jti());
+                    assertThat(row.getUsedAt()).isNotNull();
+                });
 
         getUser(held.value()).expectStatus().isUnauthorized().expectBody(Void.class);
         getUser(held.value()).expectStatus().isUnauthorized().expectBody(Void.class);

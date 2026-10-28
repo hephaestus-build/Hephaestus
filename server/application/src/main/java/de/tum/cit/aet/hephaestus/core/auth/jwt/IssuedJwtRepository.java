@@ -32,12 +32,13 @@ public interface IssuedJwtRepository extends JpaRepository<IssuedJwt, UUID> {
         """)
     Optional<IssuedJwt> findActive(@Param("jti") UUID jti, @Param("now") Instant now);
 
-    /** The live successor that has not authenticated a request yet; callers hold the predecessor lock. */
+    /** The unrevoked, unused successor; the caller checks its expiry under the predecessor lock. */
     @Query("""
         SELECT j FROM IssuedJwt j
-        WHERE j.predecessorJti = :jti AND j.revokedAt IS NULL AND j.expiresAt > :now
+        WHERE j.predecessorJti = :jti AND j.accountId = :accountId
+          AND j.usedAt IS NULL AND j.revokedAt IS NULL
         """)
-    Optional<IssuedJwt> findUnusedSuccessor(@Param("jti") UUID jti, @Param("now") Instant now);
+    Optional<IssuedJwt> findUnusedSuccessor(@Param("accountId") Long accountId, @Param("jti") UUID jti);
 
     /** Locks a browser predecessor before reading or changing its unused successor. */
     @Query(value = "SELECT jti FROM issued_jwt WHERE jti = :jti FOR UPDATE", nativeQuery = true)
@@ -56,13 +57,14 @@ public interface IssuedJwtRepository extends JpaRepository<IssuedJwt, UUID> {
     /**
      * Marks a successor as used. The update re-checks that the token is still active under its row lock,
      * so a concurrent revocation wins or loses as a whole: 1 when
-     * the token stays admitted, 0 when it was revoked or expired meanwhile. It clears the persistence
+     * the token stays admitted, 0 when it was revoked or expired meanwhile. It keeps the first timestamp
+     * and the predecessor link so a racing logout can still follow it. It clears the persistence
      * context, so a later read sees that outcome.
      */
     @Modifying(clearAutomatically = true)
     @Query("""
         UPDATE IssuedJwt j
-           SET j.predecessorJti = NULL
+           SET j.usedAt = COALESCE(j.usedAt, :now)
          WHERE j.jti = :jti
            AND j.revokedAt IS NULL
            AND j.expiresAt > :now
@@ -70,8 +72,7 @@ public interface IssuedJwtRepository extends JpaRepository<IssuedJwt, UUID> {
     int markUsed(@Param("jti") UUID jti, @Param("now") Instant now);
 
     /**
-     * Revokes the successors of {@code predecessorJti} that were never used. A used successor has
-     * already cleared its link, so it is never matched.
+     * Revokes the owned successors of {@code predecessorJti} that were never used.
      */
     @Modifying
     @Query("""
@@ -79,12 +80,35 @@ public interface IssuedJwtRepository extends JpaRepository<IssuedJwt, UUID> {
            SET j.revokedAt = :now,
                j.revokedReason = :reason
          WHERE j.predecessorJti = :predecessorJti
+           AND j.accountId = :accountId
+           AND j.usedAt IS NULL
            AND j.revokedAt IS NULL
         """)
     int revokeUnusedSuccessors(
+            @Param("accountId") Long accountId,
             @Param("predecessorJti") UUID predecessorJti,
             @Param("now") Instant now,
             @Param("reason") IssuedJwt.RevokedReason reason);
+
+    /** Revokes browser descendants even when first use already retired their predecessor. The account is write-locked. */
+    @Modifying(clearAutomatically = true)
+    @Query(value = """
+        WITH RECURSIVE chain AS (
+            SELECT jti FROM issued_jwt
+             WHERE account_id = :accountId AND session_id IS NULL
+               AND (jti = :jti OR predecessor_jti = :jti)
+            UNION
+            SELECT child.jti FROM issued_jwt child JOIN chain parent ON child.predecessor_jti = parent.jti
+             WHERE child.account_id = :accountId AND child.session_id IS NULL
+        )
+        UPDATE issued_jwt SET revoked_at = :now, revoked_reason = :reason
+         WHERE account_id = :accountId AND jti IN (SELECT jti FROM chain) AND revoked_at IS NULL
+        """, nativeQuery = true)
+    int revokeBrowserDescendants(
+            @Param("accountId") Long accountId,
+            @Param("jti") UUID jti,
+            @Param("now") Instant now,
+            @Param("reason") String reason);
 
     /**
      * Ownership-scoped single-session revoke (self/admin "revoke this session"). Atomic
