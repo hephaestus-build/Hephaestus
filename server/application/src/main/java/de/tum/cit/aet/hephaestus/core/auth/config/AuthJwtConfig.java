@@ -1,8 +1,9 @@
 package de.tum.cit.aet.hephaestus.core.auth.config;
 
 import de.tum.cit.aet.hephaestus.core.auth.AuthProperties;
+import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEventLogger;
+import de.tum.cit.aet.hephaestus.core.auth.jwt.AccessTokenAdmission;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.CookieBearerTokenResolver;
-import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwtRepository;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.JwtSigningKeyService;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.RevocationAwareJwtDecoder;
 import de.tum.cit.aet.hephaestus.core.auth.metrics.AuthMetrics;
@@ -37,13 +38,14 @@ public class AuthJwtConfig {
 
     @Bean
     public RevocationAwareJwtDecoder hephaestusJwtDecoder(
-            IssuedJwtRepository issuedJwtRepository,
+            AccessTokenAdmission admission,
+            AuthEventLogger authEventLogger,
             AuthProperties properties,
             CacheManager cacheManager,
             Clock clock,
             AuthMetrics authMetrics) {
         return new RevocationAwareJwtDecoder(
-                keyService, issuedJwtRepository, properties, cacheManager, clock, authMetrics);
+                keyService, admission, authEventLogger, properties, cacheManager, clock, authMetrics);
     }
 
     /**

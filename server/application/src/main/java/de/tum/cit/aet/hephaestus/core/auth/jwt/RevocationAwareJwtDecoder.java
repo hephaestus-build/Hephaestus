@@ -7,11 +7,14 @@ import com.nimbusds.jose.proc.SecurityContext;
 import com.nimbusds.jwt.proc.ConfigurableJWTProcessor;
 import com.nimbusds.jwt.proc.DefaultJWTProcessor;
 import de.tum.cit.aet.hephaestus.core.auth.AuthProperties;
+import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEvent;
+import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEventLogger;
 import de.tum.cit.aet.hephaestus.core.auth.metrics.AuthMetrics;
 import java.time.Clock;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.cache.Cache;
@@ -36,6 +39,9 @@ import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
  *
  * <p>Invalid credentials use {@link BadJwtException} (401). Revocation-store failures deny access with
  * {@link JwtException}, which Spring maps to an authentication service failure rather than logout.
+ *
+ * <p>A revoked browser token is recorded as a {@code JWT_REVOKED} failure once per cache entry, so a burst
+ * of tabs that present it adds one row, not one per request.
  */
 public class RevocationAwareJwtDecoder implements JwtDecoder {
 
@@ -43,20 +49,23 @@ public class RevocationAwareJwtDecoder implements JwtDecoder {
     private static final Logger log = LoggerFactory.getLogger(RevocationAwareJwtDecoder.class);
 
     private final NimbusJwtDecoder delegate;
-    private final IssuedJwtRepository repository;
+    private final AccessTokenAdmission admission;
+    private final AuthEventLogger authEventLogger;
     private final Cache cache;
     private final Clock clock;
     private final AuthMetrics metrics;
 
     public RevocationAwareJwtDecoder(
             JwtSigningKeyService keyService,
-            IssuedJwtRepository repository,
+            AccessTokenAdmission admission,
+            AuthEventLogger authEventLogger,
             AuthProperties properties,
             CacheManager cacheManager,
             Clock clock,
             AuthMetrics metrics) {
         this.delegate = localSignatureDecoder(keyService, properties);
-        this.repository = repository;
+        this.admission = admission;
+        this.authEventLogger = authEventLogger;
         this.cache = Objects.requireNonNull(cacheManager.getCache(CACHE_NAME));
         this.clock = clock;
         this.metrics = metrics;
@@ -105,9 +114,12 @@ public class RevocationAwareJwtDecoder implements JwtDecoder {
             throw revokedException();
         }
         try {
-            boolean active = repository.findActive(jti, clock.instant()).isPresent();
-            if (!active) {
-                cache.put(jti, true);
+            AccessTokenAdmission.Refusal refusal = admission.admit(jti, clock.instant());
+            if (refusal != null) {
+                // The cached verdict also dedupes the audit row: one per token and pod per cache entry.
+                if (cache.putIfAbsent(jti, true) == null) {
+                    recordRefusal(refusal.token());
+                }
                 throw revokedException();
             }
             return jwt;
@@ -117,6 +129,29 @@ public class RevocationAwareJwtDecoder implements JwtDecoder {
             metrics.recordRevocationCheckFailed();
             log.error("auth.jwt: revocation lookup failed for jti={}", jti, dbError);
             throw new JwtException("revocation check failed", dbError);
+        }
+    }
+
+    /**
+     * Records a revoked browser token. An expired or unknown token records nothing, and an installed-client
+     * session records its own reuse when its refresh secret returns.
+     */
+    private void recordRefusal(@Nullable IssuedJwt token) {
+        if (token == null
+                || token.getSessionId() != null
+                || token.getRevokedAt() == null
+                || !token.getExpiresAt().isAfter(clock.instant())) {
+            return;
+        }
+        boolean reuse = token.getRevokedReason() == IssuedJwt.RevokedReason.ROTATE;
+        authEventLogger
+                .event(AuthEvent.EventType.JWT_REVOKED, AuthEvent.Result.FAILURE)
+                .account(token.getAccountId())
+                .failureReason(reuse ? "browser_token_reuse" : "revoked_token_presented")
+                .details("{\"revokedReason\":\"" + token.getRevokedReason() + "\"}")
+                .record();
+        if (reuse) {
+            log.warn("auth.jwt: a rotated-away browser token was presented again; accountId={}", token.getAccountId());
         }
     }
 

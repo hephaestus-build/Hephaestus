@@ -3,9 +3,13 @@ package de.tum.cit.aet.hephaestus.core.auth;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
+import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEvent;
+import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEventRepository;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.HephaestusJwtIssuer;
+import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwt;
+import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwtRepository;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.TokenConstraints;
 import de.tum.cit.aet.hephaestus.testconfig.RealAuthIntegrationTest;
 import java.time.Duration;
@@ -17,6 +21,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseCookie;
+import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
 class SessionRefreshLifecycleIntegrationTest extends RealAuthIntegrationTest {
@@ -32,6 +37,15 @@ class SessionRefreshLifecycleIntegrationTest extends RealAuthIntegrationTest {
 
     @Autowired
     private HephaestusJwtIssuer jwtIssuer;
+
+    @Autowired
+    private IssuedJwtRepository issuedJwtRepository;
+
+    @Autowired
+    private AuthEventRepository authEventRepository;
+
+    @Autowired
+    private AuthSessionService sessions;
 
     @Value("${hephaestus.auth.cookie-name:__Host-HEPHAESTUS_AT}")
     private String cookieName;
@@ -83,7 +97,7 @@ class SessionRefreshLifecycleIntegrationTest extends RealAuthIntegrationTest {
 
     /**
      * A reload or navigation can cut the refresh response after the rotation committed, so the browser
-     * never stores the new cookie and still sends the one it had. Staging E25.
+     * never stores the new cookie and still sends the one it had.
      */
     @Test
     void aSessionSurvivesARefreshWhoseResponseNeverArrived() {
@@ -105,6 +119,55 @@ class SessionRefreshLifecycleIntegrationTest extends RealAuthIntegrationTest {
     }
 
     @Test
+    void aRefreshWithTheHeldTokenReplacesTheSuccessorThatNeverArrived() {
+        Instant since = Instant.now();
+        Long accountId = Objects.requireNonNull(
+                accountRepository.save(new Account("Replaced Rita")).getId());
+        HephaestusJwtIssuer.Token held = jwtIssuer.issue(
+                accountId, TokenConstraints.session(Instant.now().plus(Duration.ofHours(12)), null), null);
+        String csrf = fetchCsrfToken();
+
+        String lost = refreshAndReadNewCookie(held.value(), csrf);
+        String replacement = refreshAndReadNewCookie(held.value(), csrf);
+
+        getUser(lost).expectStatus().isUnauthorized().expectBody(Void.class);
+        getUser(replacement).expectStatus().isOk().expectBody(Void.class);
+        assertThat(authEventRepository.findByAccountSince(accountId, since))
+                .filteredOn(event -> event.getEventType() == AuthEvent.EventType.TOKEN_REFRESH)
+                .extracting(AuthEvent::getDetails)
+                .containsExactlyInAnyOrder(null, "{\"reason\":\"SUCCESSOR_UNUSED_REPLACED\"}");
+    }
+
+    @Test
+    void aSuccessorsFirstUseRetiresItsPredecessorAndARetiredTokenIsRecordedOnceAsReuse() {
+        Instant since = Instant.now();
+        Long accountId = Objects.requireNonNull(
+                accountRepository.save(new Account("Reused Rudi")).getId());
+        HephaestusJwtIssuer.Token held = jwtIssuer.issue(
+                accountId, TokenConstraints.session(Instant.now().plus(Duration.ofHours(12)), null), null);
+        String successor = refreshAndReadNewCookie(held.value(), fetchCsrfToken());
+
+        getUser(held.value()).expectStatus().isOk().expectBody(Void.class);
+        getUser(successor).expectStatus().isOk().expectBody(Void.class);
+
+        IssuedJwt predecessorRow = issuedJwtRepository.findById(held.jti()).orElseThrow();
+        assertThat(predecessorRow.getRevokedReason()).isEqualTo(IssuedJwt.RevokedReason.ROTATE);
+        assertThat(issuedJwtRepository.findActiveByAccountId(accountId, Instant.now()))
+                .singleElement()
+                .satisfies(row -> assertThat(row.getPredecessorJti()).isNull());
+
+        getUser(held.value()).expectStatus().isUnauthorized().expectBody(Void.class);
+        getUser(held.value()).expectStatus().isUnauthorized().expectBody(Void.class);
+        assertThat(authEventRepository.findByAccountSince(accountId, since))
+                .filteredOn(event -> event.getEventType() == AuthEvent.EventType.JWT_REVOKED)
+                .singleElement()
+                .satisfies(event -> {
+                    assertThat(event.getResult()).isEqualTo(AuthEvent.Result.FAILURE);
+                    assertThat(event.getFailureReason()).isEqualTo("browser_token_reuse");
+                });
+    }
+
+    @Test
     void theAbsoluteSessionCeilingCapsTheTokenAndSurvivesRefresh() {
         Account account = accountRepository.save(new Account("Capped Cathy"));
         long ceiling = Instant.now().getEpochSecond() + 120;
@@ -119,6 +182,97 @@ class SessionRefreshLifecycleIntegrationTest extends RealAuthIntegrationTest {
 
         String rotated = refreshAndReadNewCookie(token, fetchCsrfToken());
         assertUserExpiryNear(rotated, ceiling);
+    }
+
+    @Test
+    void shouldRefuseAStolenUnusedSuccessorWhenTheBrowserRecoversWithItsPredecessor() {
+        Long accountId = Objects.requireNonNull(
+                accountRepository.save(new Account("Recovery")).getId());
+        var held = jwtIssuer.issue(
+                accountId, TokenConstraints.session(Instant.now().plusSeconds(3600), null), null);
+        String csrf = fetchCsrfToken();
+        String stolen = refreshAndReadNewCookie(held.value(), csrf);
+
+        String recovered = refreshAndReadNewCookie(held.value(), csrf);
+
+        getUser(stolen).expectStatus().isUnauthorized().expectBody(Void.class);
+        getUser(recovered).expectStatus().isOk().expectBody(Void.class);
+        getUser(held.value()).expectStatus().isUnauthorized().expectBody(Void.class);
+        // Reuse must not end the browser that already proved receipt of the replacement.
+        getUser(recovered).expectStatus().isOk().expectBody(Void.class);
+    }
+
+    @Test
+    void shouldRefuseRefreshWithAStolenPredecessorAfterTheBrowserUsesItsSuccessor() {
+        Long accountId = Objects.requireNonNull(
+                accountRepository.save(new Account("Replay")).getId());
+        var held = jwtIssuer.issue(
+                accountId, TokenConstraints.session(Instant.now().plusSeconds(3600), null), null);
+        String csrf = fetchCsrfToken();
+        String current = refreshAndReadNewCookie(held.value(), csrf);
+        getUser(current).expectStatus().isOk().expectBody(Void.class);
+
+        webTestClient
+                .post()
+                .uri("/auth/refresh")
+                .header(HttpHeaders.COOKIE, cookieName + "=" + held.value() + "; " + XSRF_COOKIE + "=" + csrf)
+                .header(XSRF_HEADER, csrf)
+                .exchange()
+                .expectStatus()
+                .isUnauthorized()
+                .expectHeader()
+                .doesNotExist(HttpHeaders.SET_COOKIE)
+                .expectBody(Void.class);
+
+        getUser(current).expectStatus().isOk().expectBody(Void.class);
+    }
+
+    @Test
+    void shouldNeverExtendThePredecessorsOwnExpiryWhileItsSuccessorIsUnused() {
+        Long accountId = Objects.requireNonNull(
+                accountRepository.save(new Account("Expiry boundary")).getId());
+        var held = jwtIssuer.issue(
+                accountId, TokenConstraints.session(Instant.now().plusSeconds(3600), null), null);
+        String successor = refreshAndReadNewCookie(held.value(), fetchCsrfToken());
+        IssuedJwt row = issuedJwtRepository.findById(held.jti()).orElseThrow();
+        row.setExpiresAt(Instant.now().minusSeconds(1));
+        issuedJwtRepository.saveAndFlush(row);
+
+        getUser(held.value()).expectStatus().isUnauthorized().expectBody(Void.class);
+        issuedJwtRepository.deleteById(held.jti());
+        getUser(successor).expectStatus().isOk().expectBody(Void.class);
+    }
+
+    @Test
+    void shouldEndAnUnusedSuccessorWhenTheBrowserLogsOutWithItsPredecessor() {
+        Long accountId = Objects.requireNonNull(
+                accountRepository.save(new Account("Logout")).getId());
+        var held = jwtIssuer.issue(
+                accountId, TokenConstraints.session(Instant.now().plusSeconds(3600), null), null);
+        String successor = refreshAndReadNewCookie(held.value(), fetchCsrfToken());
+
+        sessions.logout(accountId, held.jti(), null, new MockHttpServletResponse());
+
+        getUser(held.value()).expectStatus().isUnauthorized().expectBody(Void.class);
+        getUser(successor).expectStatus().isUnauthorized().expectBody(Void.class);
+    }
+
+    @Test
+    void shouldEndOnlyTheOwnedBrowserAndItsUnusedSuccessorWhenASessionIsRevoked() {
+        Long accountId = Objects.requireNonNull(
+                accountRepository.save(new Account("Session owner")).getId());
+        Long otherId = Objects.requireNonNull(
+                accountRepository.save(new Account("Other account")).getId());
+        var held = jwtIssuer.issue(
+                accountId, TokenConstraints.session(Instant.now().plusSeconds(3600), null), null);
+        String successor = refreshAndReadNewCookie(held.value(), fetchCsrfToken());
+
+        sessions.revokeSession(otherId, held.jti());
+        getUser(held.value()).expectStatus().isOk().expectBody(Void.class);
+        sessions.revokeSession(accountId, held.jti());
+
+        getUser(held.value()).expectStatus().isUnauthorized().expectBody(Void.class);
+        getUser(successor).expectStatus().isUnauthorized().expectBody(Void.class);
     }
 
     private void assertUserExpiryNear(String token, long expectedEpochSeconds) {

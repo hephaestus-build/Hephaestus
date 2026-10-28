@@ -6,7 +6,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
-import de.tum.cit.aet.hephaestus.core.auth.jwt.IssuedJwtRepository;
+import de.tum.cit.aet.hephaestus.core.auth.audit.AuthEventLogger;
+import de.tum.cit.aet.hephaestus.core.auth.jwt.AccessTokenAdmission;
 import de.tum.cit.aet.hephaestus.core.auth.jwt.JwtSigningKeyService;
 import de.tum.cit.aet.hephaestus.core.auth.metrics.AuthMetrics;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
@@ -27,7 +28,8 @@ class AuthJwtConfigTest extends BaseUnitTest {
     private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
             .withUserConfiguration(AuthJwtConfig.class)
             .withBean(JwtSigningKeyService.class, () -> keyService)
-            .withBean(IssuedJwtRepository.class, () -> mock(IssuedJwtRepository.class))
+            .withBean(AccessTokenAdmission.class, () -> mock(AccessTokenAdmission.class))
+            .withBean(AuthEventLogger.class, () -> mock(AuthEventLogger.class))
             .withBean(AuthMetrics.class, () -> mock(AuthMetrics.class))
             .withBean(CacheManager.class, ConcurrentMapCacheManager::new)
             .withBean(Clock.class, Clock::systemUTC);

@@ -110,7 +110,20 @@ public class HephaestusJwtIssuer {
         if (constraints.sessionId() != null) {
             throw new IllegalArgumentException("installed-client tokens are issued with their refresh secret");
         }
-        return mint(accountId, constraints, null, request);
+        return mint(accountId, constraints, null, null, request);
+    }
+
+    /**
+     * Mint the successor of the browser token {@code predecessorJti}. The predecessor stays valid until
+     * the successor's first use, so the browser keeps a working token if the response is lost.
+     */
+    @Transactional
+    public Token issueSuccessor(
+            Long accountId, TokenConstraints constraints, UUID predecessorJti, @Nullable HttpServletRequest request) {
+        if (constraints.sessionId() != null) {
+            throw new IllegalArgumentException("installed-client tokens rotate through their refresh secret");
+        }
+        return mint(accountId, constraints, null, predecessorJti, request);
     }
 
     /**
@@ -124,13 +137,14 @@ public class HephaestusJwtIssuer {
             String refreshTokenHash,
             @Nullable HttpServletRequest request) {
         Objects.requireNonNull(constraints.sessionId(), "a client-session token carries its sid");
-        return mint(accountId, constraints, refreshTokenHash, request);
+        return mint(accountId, constraints, refreshTokenHash, null, request);
     }
 
     private Token mint(
             Long accountId,
             TokenConstraints constraints,
             @Nullable String refreshTokenHash,
+            @Nullable UUID predecessorJti,
             @Nullable HttpServletRequest request) {
         JwtPrincipal principal = principalFactory.forAuthority(
                 accountId,
@@ -185,6 +199,7 @@ public class HephaestusJwtIssuer {
         IssuedJwt row = new IssuedJwt(jti, principal.accountId(), expiresAt);
         row.setSessionId(constraints.sessionId());
         row.setRefreshTokenHash(refreshTokenHash);
+        row.setPredecessorJti(predecessorJti);
         if (request != null) {
             String ua = request.getHeader("User-Agent");
             if (ua != null && ua.length() > 512) {

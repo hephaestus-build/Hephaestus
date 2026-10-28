@@ -23,6 +23,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -76,7 +77,8 @@ public class AuthSessionService {
         if (sessionId != null) {
             clientSessionService.endSession(accountId, sessionId, IssuedJwt.RevokedReason.LOGOUT);
         } else {
-            issuedJwtRepository.revoke(jti, clock.instant(), IssuedJwt.RevokedReason.LOGOUT);
+            accountRepository.lockForIssuance(accountId);
+            revokeWithUnusedSuccessors(jti, IssuedJwt.RevokedReason.LOGOUT);
         }
         authEventLogger
                 .event(AuthEvent.EventType.LOGOUT, AuthEvent.Result.SUCCESS)
@@ -88,8 +90,11 @@ public class AuthSessionService {
     }
 
     /**
-     * Rotates the session, returning false when the presenting session must end. A lost rotation race
-     * leaves the response untouched because another request may already have renewed the session.
+     * Issues a successor of the presenting token and returns false when the session must end. The
+     * presenting token stays valid until the successor's first use, so a response that never reaches the
+     * browser costs nothing: the next refresh with the same token replaces the unused successor. The web
+     * app serializes cookie changes across tabs when Web Locks are available. See
+     * {@code docs/auth-architecture.md} § Browser session coordination.
      */
     @Transactional
     public boolean refresh(
@@ -104,30 +109,35 @@ public class AuthSessionService {
             // The account lock comes before the token row, the order every issuance and revocation uses,
             // so an account-wide revocation either sees the rotated token or this refresh sees it.
             if (!accountRepository.lockForIssuance(accountId)) {
-                issuedJwtRepository.revoke(jti, clock.instant(), IssuedJwt.RevokedReason.ROTATE);
+                revokeWithUnusedSuccessors(jti, IssuedJwt.RevokedReason.ROTATE);
                 metrics.recordRefreshResult(AuthMetrics.RefreshResult.SUSPENDED);
                 clearCookie(response);
                 return false;
             }
-            // Only the request that revokes this token may replace it. A losing response must not
-            // write a cookie, which could overwrite the winning request's new session.
-            int revoked = issuedJwtRepository.revoke(jti, clock.instant(), IssuedJwt.RevokedReason.ROTATE);
-            if (revoked == 0) {
+            issuedJwtRepository.lockForRotation(jti);
+            Instant now = clock.instant();
+            int replaced = issuedJwtRepository.revokeUnusedSuccessors(jti, now, IssuedJwt.RevokedReason.ROTATE);
+            // A successor's first use retired this token after its request was admitted. The browser already
+            // holds that successor, so this response must not write a cookie over it.
+            if (issuedJwtRepository.findActive(jti, now).isEmpty()) {
                 metrics.recordRefreshResult(AuthMetrics.RefreshResult.NOOP);
                 return true;
             }
-            if (sessionExpiresAt == null || !clock.instant().isBefore(sessionExpiresAt)) {
+            if (sessionExpiresAt == null || !now.isBefore(sessionExpiresAt)) {
+                issuedJwtRepository.revoke(jti, now, IssuedJwt.RevokedReason.LOGOUT);
                 metrics.recordRefreshResult(AuthMetrics.RefreshResult.NOOP);
                 clearCookie(response);
                 return false;
             }
-            HephaestusJwtIssuer.Token token = jwtIssuer.issue(
+            HephaestusJwtIssuer.Token token = jwtIssuer.issueSuccessor(
                     accountId,
                     new TokenConstraints(sessionExpiresAt, context.authTime(), null, context.passkeyTime()),
+                    jti,
                     request);
             authEventLogger
                     .event(AuthEvent.EventType.TOKEN_REFRESH, AuthEvent.Result.SUCCESS)
                     .account(accountId)
+                    .details(replaced > 0 ? "{\"reason\":\"SUCCESSOR_UNUSED_REPLACED\"}" : null)
                     .record();
             setCookie(response, token);
             metrics.recordRefreshResult(AuthMetrics.RefreshResult.SUCCESS);
@@ -172,8 +182,11 @@ public class AuthSessionService {
     @Transactional(readOnly = true)
     public List<SessionEntry> activeSessions(Long accountId) {
         List<SessionEntry> entries = new ArrayList<>();
-        for (IssuedJwt token : issuedJwtRepository.findActiveByAccountId(accountId, clock.instant())) {
-            if (token.getSessionId() == null) {
+        List<IssuedJwt> active = issuedJwtRepository.findActiveByAccountId(accountId, clock.instant());
+        Set<UUID> activeJtis = active.stream().map(IssuedJwt::getJti).collect(Collectors.toSet());
+        for (IssuedJwt token : active) {
+            // An unused successor is the same browser as its live predecessor, which the browser still holds.
+            if (token.getSessionId() == null && !activeJtis.contains(token.getPredecessorJti())) {
                 entries.add(new SessionEntry(
                         token.getJti(),
                         token.getIssuedAt(),
@@ -217,7 +230,11 @@ public class AuthSessionService {
             clientSessionService.endSession(accountId, sessionId, RevokedReason.SELF_REVOKE);
             return;
         }
-        issuedJwtRepository.revokeOwned(jti, accountId, clock.instant(), RevokedReason.SELF_REVOKE);
+        accountRepository.lockForIssuance(accountId);
+        Instant now = clock.instant();
+        if (issuedJwtRepository.revokeOwned(jti, accountId, now, RevokedReason.SELF_REVOKE) == 1) {
+            issuedJwtRepository.revokeUnusedSuccessors(jti, now, RevokedReason.SELF_REVOKE);
+        }
     }
 
     /**
@@ -231,6 +248,13 @@ public class AuthSessionService {
                 RevokedReason.SIGN_OUT_EVERYWHERE,
                 currentSessionId == null ? currentJti : null,
                 currentSessionId);
+    }
+
+    /** A token and the successors it never handed on end together: the browser may hold either. */
+    private void revokeWithUnusedSuccessors(UUID jti, RevokedReason reason) {
+        Instant now = clock.instant();
+        issuedJwtRepository.revoke(jti, now, reason);
+        issuedJwtRepository.revokeUnusedSuccessors(jti, now, reason);
     }
 
     public void clearCookie(HttpServletResponse response) {

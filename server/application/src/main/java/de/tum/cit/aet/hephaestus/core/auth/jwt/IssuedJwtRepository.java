@@ -32,6 +32,10 @@ public interface IssuedJwtRepository extends JpaRepository<IssuedJwt, UUID> {
         """)
     Optional<IssuedJwt> findActive(@Param("jti") UUID jti, @Param("now") Instant now);
 
+    /** Locks a browser predecessor before reading or changing its unused successor. */
+    @Query(value = "SELECT jti FROM issued_jwt WHERE jti = :jti FOR UPDATE", nativeQuery = true)
+    Optional<UUID> lockForRotation(@Param("jti") UUID jti);
+
     @Modifying
     @Query("""
         UPDATE IssuedJwt j
@@ -41,6 +45,39 @@ public interface IssuedJwtRepository extends JpaRepository<IssuedJwt, UUID> {
            AND j.revokedAt IS NULL
         """)
     int revoke(@Param("jti") UUID jti, @Param("now") Instant now, @Param("reason") IssuedJwt.RevokedReason reason);
+
+    /**
+     * Marks a successor as used. The update re-checks that the token is still active under its row lock,
+     * so a refresh that replaces this unused successor concurrently wins or loses as a whole: 1 when
+     * the token stays admitted, 0 when it was revoked or expired meanwhile. It clears the persistence
+     * context, so a later read sees that outcome.
+     */
+    @Modifying(clearAutomatically = true)
+    @Query("""
+        UPDATE IssuedJwt j
+           SET j.predecessorJti = NULL
+         WHERE j.jti = :jti
+           AND j.revokedAt IS NULL
+           AND j.expiresAt > :now
+        """)
+    int markUsed(@Param("jti") UUID jti, @Param("now") Instant now);
+
+    /**
+     * Revokes the successors of {@code predecessorJti} that were never used. A used successor has
+     * already cleared its link, so it is never matched.
+     */
+    @Modifying
+    @Query("""
+        UPDATE IssuedJwt j
+           SET j.revokedAt = :now,
+               j.revokedReason = :reason
+         WHERE j.predecessorJti = :predecessorJti
+           AND j.revokedAt IS NULL
+        """)
+    int revokeUnusedSuccessors(
+            @Param("predecessorJti") UUID predecessorJti,
+            @Param("now") Instant now,
+            @Param("reason") IssuedJwt.RevokedReason reason);
 
     /**
      * Ownership-scoped single-session revoke (self/admin "revoke this session"). Atomic
