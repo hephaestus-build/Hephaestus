@@ -1790,7 +1790,7 @@ export const logoutMutation = (options?: Partial<Options<LogoutData>>): UseMutat
 };
 
 /**
- * Rotate the access token (new jti, old revoked)
+ * Renew the browser session
  */
 export const refreshMutation = (options?: Partial<Options<RefreshData>>): UseMutationOptions<RefreshResponse, DefaultError, Options<RefreshData>> => {
     const mutationOptions: UseMutationOptions<RefreshResponse, DefaultError, Options<RefreshData>> = {

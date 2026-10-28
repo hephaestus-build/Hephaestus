@@ -2425,7 +2425,7 @@ paths:
           description: The token belongs to an installed-client session
         "401":
           description: Session has ended
-      summary: "Rotate the access token (new jti, old revoked)"
+      summary: Renew the browser session
       tags:
       - Auth
   /contributors:
