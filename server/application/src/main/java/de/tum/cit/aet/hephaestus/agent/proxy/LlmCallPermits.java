@@ -22,6 +22,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.BooleanSupplier;
 import org.jspecify.annotations.Nullable;
@@ -44,7 +45,7 @@ import reactor.core.publisher.Sinks;
 @WorkspaceAgnostic("Instance-owned endpoint capacity, shared across all workers and workspaces.")
 public class LlmCallPermits {
     private static final Logger log = LoggerFactory.getLogger(LlmCallPermits.class);
-    static final Duration POLL = Duration.ofMillis(250);
+    static final Duration POLL = LlmCallPermitRepository.CLAIM_RETRY;
     static final Duration DEFAULT_COOLDOWN = Duration.ofSeconds(5);
     private final LlmCallPoolRepository pools;
     private final LlmCallPermitRepository rows;
@@ -118,15 +119,20 @@ public class LlmCallPermits {
     public @Nullable Permit acquire(
             long poolId, LlmCallClass callClass, Caller caller, BooleanSupplier ended, @Nullable Instant deadline) {
         if (ended.getAsBoolean() || expired(deadline)) return null;
-        Permit reserved = transactions.execute(status -> activateReservation(poolId, callClass, caller));
-        if (reserved != null) {
-            reserved.ended = ended;
-            if (ended.getAsBoolean() || reserved.isRevoked()) {
-                reserved.close();
-                return null;
-            }
-            return reserved;
+        var activated = new AtomicReference<@Nullable Permit>();
+        Permit reserved;
+        try {
+            reserved = transactions.execute(status -> {
+                Permit candidate = activateReservation(poolId, callClass, caller);
+                activated.set(candidate);
+                return candidate;
+            });
+        } catch (RuntimeException | Error failed) {
+            Permit candidate = activated.get();
+            if (candidate != null) candidate.close();
+            throw failed;
         }
+        if (reserved != null) return handOff(reserved, ended, deadline);
         UUID id = UUID.randomUUID();
         String poolSlug = Objects.requireNonNull(transactions.execute(status -> {
             var admission = pools.lockAdmission(poolId)
@@ -134,33 +140,44 @@ public class LlmCallPermits {
             if (!samePool(poolId, caller))
                 throw new IllegalStateException("The configured model call pool changed before admission");
             rows.enqueue(new LlmCallPermitRepository.Request(
-                    id, poolId, workerId, callClass.name(), caller.workspaceId(), caller.sourceId(), caller.attempt()));
+                    id,
+                    poolId,
+                    workerId,
+                    callClass.name(),
+                    caller.workspaceId(),
+                    caller.sourceId(),
+                    caller.attempt(),
+                    "WAITING"));
             return admission.getSlug();
         }));
         long began = System.nanoTime();
-        boolean granted = false;
+        boolean handedOff = false;
+        Permit admitted = null;
         try {
             while (!ended.getAsBoolean() && !expired(deadline)) {
-                Permit permit = tryGrant(id, poolId, callClass, "ACTIVE");
-                if (permit != null) {
-                    granted = true;
-                    permit.ended = ended;
-                    meters.pool(permit.pool).waited(callClass, "capacity", System.nanoTime() - began);
-                    if (ended.getAsBoolean() || expired(deadline)) {
-                        permit.close();
-                        return null;
-                    }
-                    return permit;
+                admitted = tryGrant(id, poolId, callClass, "ACTIVE");
+                if (admitted != null) {
+                    meters.pool(admitted.pool).waited(callClass, "capacity", System.nanoTime() - began);
+                    Permit result = handOff(admitted, ended, deadline);
+                    handedOff = result != null;
+                    return result;
                 }
                 if (!pause()) return null;
             }
             return null;
         } finally {
-            if (!granted) {
+            if (!handedOff && admitted != null) admitted.close();
+            if (!handedOff && admitted == null) {
                 meters.pool(poolSlug).abandoned(callClass, "capacity");
                 meters.pool(poolSlug).waited(callClass, "capacity", System.nanoTime() - began);
                 try {
-                    transactions.executeWithoutResult(status -> rows.abandon(id, workerId));
+                    // No transport can have opened before handoff, including an uncertain grant commit.
+                    pendingRelease.add(id);
+                    transactions.executeWithoutResult(status -> {
+                        rows.release(id, workerId);
+                        rows.abandon(id, workerId);
+                    });
+                    pendingRelease.remove(id);
                 } catch (RuntimeException failed) {
                     log.warn(
                             "Queued model request awaits cleanup: poolId={}, error={}",
@@ -168,6 +185,20 @@ public class LlmCallPermits {
                             failed.getClass().getSimpleName());
                 }
             }
+        }
+    }
+
+    /** Until return succeeds, this method owns cleanup even if the final ownership read throws. */
+    private @Nullable Permit handOff(Permit permit, BooleanSupplier ended, @Nullable Instant deadline) {
+        boolean handedOff = false;
+        try {
+            register(permit);
+            permit.ended = ended;
+            if (ended.getAsBoolean() || expired(deadline) || permit.isRevoked()) return null;
+            handedOff = true;
+            return permit;
+        } finally {
+            if (!handedOff) permit.close();
         }
     }
 
@@ -182,16 +213,26 @@ public class LlmCallPermits {
 
     /** Called inside the review claim transaction, before any Pod can be created. */
     public boolean reserve(long poolId, LlmCallClass callClass, Caller caller) {
-        UUID id = UUID.randomUUID();
         LlmCallPoolRepository.Admission pool = pools.lockAdmission(poolId).orElseThrow();
         if (!samePool(poolId, caller)) return false;
         rows.prune(poolId, properties.permitLease().toSeconds());
-        if (!room(poolId, pool, callClass)) return false;
-        // Existing background requests have already waited. A new claim cannot bypass them.
-        if (rows.next(poolId, false).isPresent()) return false;
-        rows.enqueue(new LlmCallPermitRepository.Request(
-                id, poolId, workerId, callClass.name(), caller.workspaceId(), caller.sourceId(), caller.attempt()));
-        if (rows.grant(id, "RESERVED", tokenBound(pool)) != 1)
+        UUID id = rows.waitingClaim(poolId, caller.sourceId(), caller.workspaceId(), caller.attempt())
+                .orElse(null);
+        if (id == null) {
+            id = UUID.randomUUID();
+            rows.enqueue(new LlmCallPermitRepository.Request(
+                    id,
+                    poolId,
+                    workerId,
+                    callClass.name(),
+                    caller.workspaceId(),
+                    caller.sourceId(),
+                    caller.attempt(),
+                    "CLAIM_WAITING"));
+        } else rows.pollClaim(id, workerId);
+        if (!room(poolId, pool, callClass)
+                || !rows.next(poolId, false).filter(id::equals).isPresent()) return false;
+        if (rows.grant(id, "RESERVED", tokenBound(pool), workerId) != 1)
             throw new IllegalStateException("Claim reservation was lost");
         Permit permit = new Permit(id, poolId, pool.getSlug(), callClass);
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
@@ -206,6 +247,7 @@ public class LlmCallPermits {
     // A proxy request already resolved its credential. Changed membership aborts that request; a claim can retry.
     private @Nullable Permit activateReservation(long poolId, LlmCallClass callClass, Caller caller) {
         var pool = pools.lockAdmission(poolId).orElseThrow();
+        rows.prune(poolId, properties.permitLease().toSeconds());
         if (!samePool(poolId, caller))
             throw new IllegalStateException("The configured model call pool changed before admission");
         UUID id = rows.reservation(poolId, caller.sourceId(), caller.attempt(), workerId, caller.workspaceId())
@@ -215,7 +257,6 @@ public class LlmCallPermits {
         Permit permit = held.get(id);
         if (permit == null) {
             permit = new Permit(id, poolId, pool.getSlug(), callClass);
-            register(permit);
         }
         return permit;
     }
@@ -233,11 +274,10 @@ public class LlmCallPermits {
                         || !rows.next(poolId, callClass.interactive())
                                 .filter(id::equals)
                                 .isPresent()) return null;
-                if (rows.grant(id, state, tokenBound(pool)) != 1) return null;
+                if (rows.grant(id, state, tokenBound(pool), workerId) != 1) return null;
                 Permit permit = new Permit(id, poolId, pool.getSlug(), callClass);
                 return permit;
             });
-            if (granted != null) register(granted);
             return granted;
         } finally {
             local.unlock();
@@ -346,6 +386,9 @@ public class LlmCallPermits {
                 Permit permit = held.get(id);
                 if (permit == null) continue;
                 if (kept != null && kept.contains(id)) permit.confirmedAt = attempted;
+                else if (rows.findById(id)
+                        .map(row -> row.getState().equals("CLOSED"))
+                        .orElse(false)) permit.forgetClosed();
                 else permit.revoke("lease_lost");
             }
         } catch (RuntimeException failed) {
@@ -414,15 +457,13 @@ public class LlmCallPermits {
 
         private void forgetClosed() {
             if (!closed.compareAndSet(false, true)) return;
-            held.remove(id);
-            meters.pool(pool).active(callClass).decrementAndGet();
+            if (held.remove(id, this)) meters.pool(pool).active(callClass).decrementAndGet();
         }
 
         @Override
         public void close() {
             if (!closed.compareAndSet(false, true)) return;
-            held.remove(id);
-            meters.pool(pool).active(callClass).decrementAndGet();
+            if (held.remove(id, this)) meters.pool(pool).active(callClass).decrementAndGet();
             pendingRelease.add(id);
             try {
                 transactions.executeWithoutResult(status -> rows.release(id, workerId));

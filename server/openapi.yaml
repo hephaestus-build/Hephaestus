@@ -604,7 +604,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/LlmCallPoolModel"
+                type: array
+                items:
+                  $ref: "#/components/schemas/LlmCallPoolModel"
           description: OK
         "404":
           description: Pool or model not found

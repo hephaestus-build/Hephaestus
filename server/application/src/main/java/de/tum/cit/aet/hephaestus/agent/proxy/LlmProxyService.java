@@ -729,7 +729,7 @@ class LlmProxyService {
             UpstreamResult result = ProxyStreamingUtils.forward(parts, limit, response, tap);
             completed = !cancelled.get()
                     && (result.streamOutcome() == null || result.streamOutcome() == StreamOutcome.COMPLETED);
-            return result;
+            return cancelled.get() && !result.streamed() ? null : result;
         } catch (IllegalStateException noHead) {
             if (cancelledFirst.get()) return null;
             throw noHead;

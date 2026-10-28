@@ -69,11 +69,14 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import mockwebserver3.MockResponse;
 import mockwebserver3.MockWebServer;
 import mockwebserver3.RecordedRequest;
+import org.awaitility.Awaitility;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -94,7 +97,9 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.reactive.function.client.WebClient;
+import reactor.core.publisher.Mono;
 import reactor.netty.http.client.HttpClient;
+import reactor.netty.http.server.HttpServer;
 import tools.jackson.databind.ObjectMapper;
 
 class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
@@ -184,6 +189,72 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
     @AfterEach
     void clearSecurityContext() {
         SecurityContextHolder.clearContext();
+    }
+
+    @Test
+    void shouldCloseAJsonBodyAfterHeadersWhenThePoolSelfFences() throws Exception {
+        var headers = new CountDownLatch(1);
+        var closed = new CountDownLatch(1);
+        var upstream = HttpServer.create()
+                .host("127.0.0.1")
+                .port(0)
+                .handle((request, response) -> response.header("Content-Type", "application/json")
+                        .sendHeaders()
+                        .then()
+                        .then(Mono.<Void>never()))
+                .bindNow();
+        try {
+            ReviewJob job = practiceScriptJob("http://127.0.0.1:" + upstream.port() + "/v1");
+            job.setLeasedUntil(Instant.now().plusSeconds(60));
+            job = jobRepository.saveAndFlush(job);
+            var model = ConfigSnapshot.fromJson(job.getConfigSnapshot(), objectMapper)
+                    .practiceScriptSlot(ModelKind.EMBEDDING);
+            var pool = new LlmCallPool();
+            pool.setSlug("json-fence-" + UUID.randomUUID());
+            pool.setDisplayName("JSON transport closure");
+            pool.setMaxConcurrentCalls(1);
+            pool = callPools.saveAndFlush(pool);
+            long poolId = pool.getId();
+            jdbc.update(
+                    "UPDATE llm_model SET call_pool_id=? WHERE id=?",
+                    poolId,
+                    Objects.requireNonNull(model).modelId());
+            var capacity = new LlmCallPermits(
+                    callPools,
+                    callRows,
+                    transactionTemplate,
+                    new LlmCallPoolProperties(Duration.ofSeconds(20), Duration.ofSeconds(30)),
+                    "worker-1",
+                    meterRegistry,
+                    modelResolver);
+            var client = WebClient.builder()
+                    .clientConnector(new ReactorClientHttpConnector(HttpClient.create()
+                            .doOnConnected(connection ->
+                                    connection.channel().closeFuture().addListener(unused -> closed.countDown()))
+                            .doOnResponse((response, connection) -> headers.countDown())))
+                    .build();
+            var service = proxyService(200_000, 1000, client, capacity);
+            ReviewJob activeJob = job;
+            try (var requests = Executors.newVirtualThreadPerTaskExecutor()) {
+                var result = requests.submit(() -> callPracticeScript(
+                        service, activeJob, "/internal/llm/practice-script/embedding/embeddings", PRACTICE, "{}"));
+                try {
+                    assertThat(headers.await(5, TimeUnit.SECONDS)).isTrue();
+                    assertThat(callRows.countActive(poolId)).isEqualTo(1);
+                    capacity.fence(System.nanoTime() + Duration.ofMinutes(1).toNanos());
+                    assertThat(closed.await(3, TimeUnit.SECONDS)).isTrue();
+                    result.get(3, TimeUnit.SECONDS);
+                    Awaitility.await()
+                            .atMost(Duration.ofSeconds(3))
+                            .untilAsserted(() ->
+                                    assertThat(callRows.countActive(poolId)).isZero());
+                } finally {
+                    result.cancel(true);
+                }
+            }
+        } finally {
+            upstream.disposeNow();
+        }
     }
 
     @Test

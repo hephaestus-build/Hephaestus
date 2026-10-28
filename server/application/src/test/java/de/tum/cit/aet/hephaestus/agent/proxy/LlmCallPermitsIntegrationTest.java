@@ -1,6 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.proxy;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -23,6 +24,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
@@ -270,7 +272,7 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
                     .containsExactlyInAnyOrder(true, false);
         }
         assertThat(rows.countActive(pool)).isEqualTo(1);
-        assertThat(waiting(pool)).isZero();
+        assertThat(waiting(pool)).isEqualTo(1);
     }
 
     @Test
@@ -285,6 +287,106 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
         assertThat(rows.countActive(pool)).isEqualTo(1);
         call.close();
         assertThat(rows.countActive(pool)).isZero();
+    }
+
+    @Test
+    void shouldRecoverAnUnusedReservationFromADeadWorkerBeforeGrantingItsReplacement() {
+        long pool = pool(2, 1);
+        Boolean reserved = transactions.execute(status -> workerA.reserve(pool, LlmCallClass.REQUEST, caller(1)));
+        assertThat(reserved).isTrue();
+        jdbc.update(
+                "UPDATE llm_call_permit SET renewed_at=clock_timestamp()-interval '1 minute' WHERE pool_id=?", pool);
+        var replacement = workerB.acquire(
+                pool,
+                LlmCallClass.REQUEST,
+                caller(2),
+                () -> false,
+                Instant.now().plusSeconds(5));
+        assertThat(replacement)
+                .as("a dead owner's unused reservation must not retire background capacity")
+                .isNotNull();
+        assertThat(rows.countActive(pool)).isEqualTo(1);
+        Objects.requireNonNull(replacement).close();
+        assertThat(rows.countActive(pool)).isZero();
+    }
+
+    @Test
+    void shouldCloseAFreshGrantWhenTheFinalOwnershipReadThrows() {
+        long pool = pool(1, 0);
+        AtomicInteger checks = new AtomicInteger();
+        assertThatThrownBy(() -> workerA.acquire(
+                        pool,
+                        LlmCallClass.REQUEST,
+                        caller(1),
+                        () -> {
+                            if (checks.incrementAndGet() == 3) throw new IllegalStateException("ownership read failed");
+                            return false;
+                        },
+                        Instant.now().plusSeconds(5)))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("ownership read failed");
+        assertThat(rows.countActive(pool)).isZero();
+        workerA.renew();
+        admit(workerB, pool, LlmCallClass.REQUEST, 2).close();
+    }
+
+    @Test
+    void shouldCloseAnActivatedReservationWhenTheFinalOwnershipReadThrows() {
+        long pool = pool(1, 0);
+        var caller = caller(1);
+        Boolean reserved = transactions.execute(status -> workerA.reserve(pool, LlmCallClass.REQUEST, caller));
+        assertThat(reserved).isTrue();
+        AtomicInteger checks = new AtomicInteger();
+        assertThatThrownBy(() -> workerA.acquire(
+                        pool,
+                        LlmCallClass.REQUEST,
+                        caller,
+                        () -> {
+                            if (checks.incrementAndGet() == 2) throw new IllegalStateException("ownership read failed");
+                            return false;
+                        },
+                        Instant.now().plusSeconds(5)))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("ownership read failed");
+        assertThat(rows.countActive(pool)).isZero();
+        workerA.renew();
+        admit(workerB, pool, LlmCallClass.REQUEST, 2).close();
+    }
+
+    @Test
+    void shouldKeepTurnHistoryOutOfBackgroundWorkspaceFairness() throws Exception {
+        long pool = pool(3, 1);
+        var busy = admit(workerB, pool, LlmCallClass.EVENT, 2);
+        var otherBusy = admit(workerB, pool, LlmCallClass.EVENT, 2);
+        try (var calls = Executors.newVirtualThreadPerTaskExecutor()) {
+            var first = new CompletableFuture<String>();
+            var composition = calls.submit(() -> {
+                var permit = admit(workerA, pool, LlmCallClass.COMPOSITION, 1);
+                first.complete("composition");
+                return permit;
+            });
+            var repeat = calls.submit(() -> {
+                var permit = admit(workerB, pool, LlmCallClass.EVENT, 2);
+                first.complete("repeat");
+                return permit;
+            });
+            await().atMost(Duration.ofSeconds(5))
+                    .untilAsserted(() -> assertThat(waiting(pool)).isEqualTo(2));
+            for (int i = 0; i < 3; i++)
+                admit(workerA, pool, LlmCallClass.TURN, 1).close();
+            otherBusy.close();
+            try {
+                assertThat(first.get(5, TimeUnit.SECONDS)).isEqualTo("composition");
+                var served = composition.get(5, TimeUnit.SECONDS);
+                assertThat(repeat.isDone()).isFalse();
+                served.close();
+            } finally {
+                busy.close();
+                otherBusy.close();
+                repeat.get(10, TimeUnit.SECONDS).close();
+                composition.get(10, TimeUnit.SECONDS).close();
+            }
+        }
     }
 
     private LlmCallPermits worker(String id) {
@@ -318,6 +420,8 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
 
     private long waiting(long pool) {
         return Objects.requireNonNull(jdbc.queryForObject(
-                "SELECT count(*) FROM llm_call_permit WHERE pool_id=? AND state='WAITING'", Long.class, pool));
+                "SELECT count(*) FROM llm_call_permit WHERE pool_id=? AND state IN ('WAITING','CLAIM_WAITING')",
+                Long.class,
+                pool));
     }
 }

@@ -10,8 +10,8 @@ import org.springframework.validation.annotation.Validated;
 /**
  * Renewal and cancellation bounds. An expired active permit remains counted until its transport closes.
  *
- * @param permitLease Permit renewal window. The worker cancels calls after three quarters of this window without renewal.
- *                    cancellation keeps capacity counted until transport closure.
+ * @param permitLease Unused reservation renewal window. A live worker cancels calls after three quarters of this window
+ *                    without renewal. Active grants remain counted until transport closure is confirmed.
  * @param maxCooldown Longest shared provider pause accepted from an instance-funded HTTP 429 response.
  */
 @Validated

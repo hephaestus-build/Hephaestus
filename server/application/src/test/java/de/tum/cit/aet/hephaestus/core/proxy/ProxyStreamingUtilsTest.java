@@ -22,6 +22,7 @@ import java.util.Optional;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -32,14 +33,17 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.io.buffer.DataBuffer;
+import org.springframework.core.io.buffer.DataBufferLimitException;
 import org.springframework.core.io.buffer.DefaultDataBufferFactory;
 import org.springframework.core.io.buffer.NettyDataBuffer;
 import org.springframework.core.io.buffer.NettyDataBufferFactory;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.web.reactive.function.client.ClientResponse;
+import org.springframework.web.reactive.function.client.ExchangeStrategies;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.publisher.Sinks;
@@ -162,13 +166,63 @@ class ProxyStreamingUtilsTest extends BaseUnitTest {
     class BufferedResponse {
 
         @Test
+        void shouldKeepTheCodecLimitWhenTransformingABufferedBody() {
+            var strategies = ExchangeStrategies.builder()
+                    .codecs(codecs -> codecs.defaultCodecs().maxInMemorySize(16))
+                    .build();
+            var upstream = ClientResponse.create(HttpStatus.OK, strategies)
+                    .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                    .body(Flux.just(DefaultDataBufferFactory.sharedInstance.wrap(new byte[32])))
+                    .build();
+            assertThatThrownBy(() -> ProxyStreamingUtils.forward(
+                            ProxyStreamingUtils.parts(upstream, null, stream -> stream),
+                            Duration.ofSeconds(3),
+                            new MockHttpServletResponse(),
+                            null))
+                    .isInstanceOf(DataBufferLimitException.class);
+        }
+
+        @Test
+        void shouldCancelTheBufferedBodyThroughTheCallersTransform() throws Exception {
+            var cancelled = new AtomicBoolean();
+            var head = new CountDownLatch(1);
+            var bodySubscribed = new CountDownLatch(1);
+            var stop = Sinks.<Void>empty();
+            var upstream = ClientResponse.create(HttpStatus.OK)
+                    .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                    .body(Flux.<DataBuffer>never()
+                            .doOnSubscribe(unused -> bodySubscribed.countDown())
+                            .doOnCancel(() -> cancelled.set(true)))
+                    .build();
+            try (var requests = Executors.newVirtualThreadPerTaskExecutor()) {
+                var response = requests.submit(() -> ProxyStreamingUtils.forward(
+                        ProxyStreamingUtils.parts(upstream, null, body -> body.takeUntilOther(stop.asMono()))
+                                .doOnNext(part -> {
+                                    if (part instanceof ProxyStreamingUtils.Head) head.countDown();
+                                }),
+                        Duration.ofSeconds(10),
+                        new MockHttpServletResponse(),
+                        null));
+                try {
+                    assertThat(head.await(3, TimeUnit.SECONDS)).isTrue();
+                    assertThat(bodySubscribed.await(3, TimeUnit.SECONDS)).isTrue();
+                    stop.tryEmitEmpty();
+                    response.get(2, TimeUnit.SECONDS);
+                    assertThat(cancelled).isTrue();
+                } finally {
+                    response.cancel(true);
+                }
+            }
+        }
+
+        @Test
         void shouldBufferNonSseResponse() {
             byte[] expectedBody = "{\"id\":\"msg_123\"}".getBytes(StandardCharsets.UTF_8);
             HttpHeaders upstreamHeaders = new HttpHeaders();
             upstreamHeaders.setContentType(MediaType.APPLICATION_JSON);
 
             var result = forward(
-                    mockClientResponse(200, upstreamHeaders, MediaType.APPLICATION_JSON, Mono.just(expectedBody)),
+                    bufferedResponse(200, upstreamHeaders, MediaType.APPLICATION_JSON, Mono.just(expectedBody)),
                     new MockHttpServletResponse(),
                     null);
 
@@ -183,7 +237,7 @@ class ProxyStreamingUtilsTest extends BaseUnitTest {
             upstreamHeaders.setContentType(MediaType.APPLICATION_JSON);
 
             var result = forward(
-                    mockClientResponse(204, upstreamHeaders, MediaType.APPLICATION_JSON, Mono.empty()),
+                    bufferedResponse(204, upstreamHeaders, MediaType.APPLICATION_JSON, Mono.empty()),
                     new MockHttpServletResponse(),
                     null);
 
@@ -201,8 +255,7 @@ class ProxyStreamingUtilsTest extends BaseUnitTest {
             upstreamHeaders.set("X-Request-Id", "abc123");
 
             var result = forward(
-                    mockClientResponse(
-                            200, upstreamHeaders, MediaType.APPLICATION_JSON, Mono.just("{}".getBytes(UTF_8))),
+                    bufferedResponse(200, upstreamHeaders, MediaType.APPLICATION_JSON, Mono.just("{}".getBytes(UTF_8))),
                     new MockHttpServletResponse(),
                     null);
 
@@ -218,7 +271,7 @@ class ProxyStreamingUtilsTest extends BaseUnitTest {
             upstreamHeaders.setContentType(MediaType.APPLICATION_JSON);
 
             var result = forward(
-                    mockClientResponse(429, upstreamHeaders, MediaType.APPLICATION_JSON, Mono.just(errorBody)),
+                    bufferedResponse(429, upstreamHeaders, MediaType.APPLICATION_JSON, Mono.just(errorBody)),
                     new MockHttpServletResponse(),
                     null);
 
@@ -229,7 +282,7 @@ class ProxyStreamingUtilsTest extends BaseUnitTest {
         @Test
         void shouldTreatNullContentTypeAsNonSse() {
             var result = forward(
-                    mockClientResponse(200, new HttpHeaders(), null, Mono.just("plain text".getBytes(UTF_8))),
+                    bufferedResponse(200, new HttpHeaders(), null, Mono.just("plain text".getBytes(UTF_8))),
                     new MockHttpServletResponse(),
                     null);
 
@@ -243,7 +296,7 @@ class ProxyStreamingUtilsTest extends BaseUnitTest {
             var cancelled = new AtomicBoolean();
             HttpHeaders upstreamHeaders = new HttpHeaders();
             upstreamHeaders.setContentType(MediaType.APPLICATION_JSON);
-            var upstream = mockClientResponse(
+            var upstream = bufferedResponse(
                     200,
                     upstreamHeaders,
                     MediaType.APPLICATION_JSON,
@@ -799,16 +852,16 @@ class ProxyStreamingUtilsTest extends BaseUnitTest {
         return mockClientResponseWithSseFlux(200, headers, body);
     }
 
-    private static ClientResponse mockClientResponse(
+    private static ClientResponse bufferedResponse(
             int status, HttpHeaders headers, @Nullable MediaType contentType, Mono<byte[]> body) {
-        ClientResponse resp = mock(ClientResponse.class);
-        ClientResponse.Headers respHeaders = mock(ClientResponse.Headers.class);
-        when(resp.headers()).thenReturn(respHeaders);
-        when(respHeaders.asHttpHeaders()).thenReturn(headers);
-        when(respHeaders.contentType()).thenReturn(Optional.ofNullable(contentType));
-        when(resp.statusCode()).thenReturn(HttpStatusCode.valueOf(status));
-        when(resp.bodyToMono(byte[].class)).thenReturn(body);
-        return resp;
+        return ClientResponse.create(HttpStatusCode.valueOf(status))
+                .headers(copy -> {
+                    copy.addAll(headers);
+                    if (contentType != null) copy.setContentType(contentType);
+                })
+                .body(body.<DataBuffer>map(DefaultDataBufferFactory.sharedInstance::wrap)
+                        .flux())
+                .build();
     }
 
     private static ClientResponse mockClientResponseWithSseFlux(

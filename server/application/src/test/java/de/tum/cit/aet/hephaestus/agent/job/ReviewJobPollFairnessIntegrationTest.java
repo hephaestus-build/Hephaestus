@@ -2,6 +2,9 @@ package de.tum.cit.aet.hephaestus.agent.job;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallClass;
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallPool;
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallPoolRepository;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnection;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnectionRepository;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModel;
@@ -9,6 +12,8 @@ import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelRepository;
 import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBinding;
 import de.tum.cit.aet.hephaestus.agent.config.WorkspaceAgentBindingRepository;
+import de.tum.cit.aet.hephaestus.agent.proxy.LlmCallPermits;
+import de.tum.cit.aet.hephaestus.agent.proxy.LlmCallPermitsTestFixtures;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.LlmCatalogTestFixtures;
@@ -19,6 +24,7 @@ import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
@@ -28,6 +34,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationContext;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.ObjectMapper;
@@ -70,6 +77,75 @@ class ReviewJobPollFairnessIntegrationTest extends BaseIntegrationTest {
         LlmConnection connection = llmConnectionRepository.save(LlmCatalogTestFixtures.connection("poll-fairness"));
         instanceModel = llmModelRepository.save(
                 LlmCatalogTestFixtures.model(connection, "poll-fairness-model", "gpt-poll-fairness"));
+    }
+
+    @Autowired
+    private ApplicationContext context;
+
+    @Test
+    void shouldPollAnotherEndpointAfterOneOlderReviewRecordsItsPoolWait() {
+        var blockedWorkspace = activeWorkspace("endpoint-blocked");
+        var openWorkspace = activeWorkspace("endpoint-open");
+        binding(blockedWorkspace, 10);
+        binding(openWorkspace, 10);
+        var pools = context.getBean(LlmCallPoolRepository.class);
+        var blocked = new LlmCallPool();
+        blocked.setSlug("blocked-" + UUID.randomUUID());
+        blocked.setDisplayName("Unavailable endpoint");
+        blocked.setMaxConcurrentCalls(2);
+        blocked.setNoCallBefore(Instant.now().plusSeconds(60));
+        blocked = pools.saveAndFlush(blocked);
+        instanceModel.setCallPoolId(blocked.getId());
+        llmModelRepository.saveAndFlush(instanceModel);
+        Instant old = Instant.now().minusSeconds(3600);
+        UUID first = null;
+        for (int i = 0; i < 5; i++) {
+            UUID id = queuedJob(blockedWorkspace, old.plusSeconds(i));
+            if (first == null) first = id;
+            var snapshot = objectMapper.createObjectNode();
+            snapshot.putObject("model")
+                    .put("connectionScope", "INSTANCE")
+                    .put("modelId", instanceModel.getId())
+                    .put("connectionId", instanceModel.getConnection().getId());
+            jdbc.update("UPDATE review_job SET config_snapshot=CAST(? AS jsonb) WHERE id=?", snapshot.toString(), id);
+        }
+        var openPool = new LlmCallPool();
+        openPool.setSlug("open-" + UUID.randomUUID());
+        openPool.setDisplayName("Available endpoint");
+        openPool.setMaxConcurrentCalls(2);
+        openPool = pools.saveAndFlush(openPool);
+        var openConnection = llmConnectionRepository.saveAndFlush(LlmCatalogTestFixtures.connection("open-endpoint"));
+        var openModel = LlmCatalogTestFixtures.model(openConnection, "open-model", "open-upstream");
+        openModel.setCallPoolId(openPool.getId());
+        openModel = llmModelRepository.saveAndFlush(openModel);
+        var openBinding = bindingRepository
+                .findByWorkspaceIdAndPurposeAndDataHandlingTier(
+                        openWorkspace.getId(), AgentPurpose.PRACTICE_REVIEW, DataHandlingTier.UNDECLARED)
+                .orElseThrow();
+        openBinding.setInstanceModel(openModel);
+        bindingRepository.saveAndFlush(openBinding);
+        UUID runnable = queuedJob(openWorkspace, old.plusSeconds(100));
+        var openSnapshot = objectMapper.createObjectNode();
+        openSnapshot
+                .putObject("model")
+                .put("connectionScope", "INSTANCE")
+                .put("modelId", openModel.getId())
+                .put("connectionId", openConnection.getId());
+        jdbc.update(
+                "UPDATE review_job SET config_snapshot=CAST(? AS jsonb) WHERE id=?", openSnapshot.toString(), runnable);
+        var capacity = LlmCallPermitsTestFixtures.worker(context, "new-worker");
+        long blockedId = blocked.getId();
+        UUID oldest = Objects.requireNonNull(first);
+        var candidates = transactionTemplate.execute(status -> {
+            assertThat(capacity.reserve(
+                            blockedId,
+                            LlmCallClass.REQUEST,
+                            new LlmCallPermits.Caller(blockedWorkspace.getId(), oldest, 0, null)))
+                    .isFalse();
+            return jobRepository.findQueuedIdsStartedFirst(1);
+        });
+        assertThat(candidates).containsExactly(runnable);
+        assertThat(jobRepository.findById(oldest).orElseThrow().getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
     }
 
     @Test

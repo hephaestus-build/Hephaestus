@@ -514,6 +514,16 @@ A review claim reserves its first grant before capture or Pod creation.
 A saturated pool leaves the review queued.
 The first call consumes only its exact attempt and worker reservation.
 
+Unused reservations expire when their owner stops renewing them for a full permit lease.
+Any worker can reclaim these reservations under the pool lock, with an atomic state fence against activation.
+Active grants never use that expiry path.
+
+A review that cannot claim records its demand in the same fair queue as background calls.
+It stays queued and creates no Pod.
+A rejected claim briefly defers its endpoint in candidate selection so a different endpoint can run.
+The job retains its original readiness time.
+Conversation and background grants have separate fairness history, so conversations do not defer their workspace's composition.
+
 The pool also accounts for request and token rates across workers.
 Each physical request, including a protocol retry, consumes a rate debit.
 A configured per-call token bound reserves the provider's maximum input-plus-output charge.
@@ -523,6 +533,7 @@ The rate account also leaves an interactive share when the pool has an interacti
 
 An expired lease cancels the call but never frees an active grant.
 The proxy releases capacity only after the response completes or the cancelled transport closes.
+Cancellation also closes a JSON response body after its headers arrive.
 The request UUID fences renewal and release.
 A late release cannot affect another call.
 An ended attempt cannot start a provider call after a capacity wait.

@@ -10,6 +10,8 @@ import de.tum.cit.aet.hephaestus.testconfig.WithAdminUser;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
@@ -21,6 +23,8 @@ import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.reactive.server.WebTestClient;
+import org.yaml.snakeyaml.Yaml;
+import tools.jackson.databind.ObjectMapper;
 
 class LlmCallPoolAdminControllerIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
@@ -52,6 +56,29 @@ class LlmCallPoolAdminControllerIntegrationTest extends AbstractWorkspaceIntegra
 
     @Autowired
     private WorkspaceLlmModelRepository workspaceModels;
+
+    @Test
+    @WithAdminUser
+    void shouldDescribeTheMembershipArrayReturnedByHttp() throws Exception {
+        var first = instanceModel();
+        var second = instanceModel();
+        var pool = create(slug("array-contract"), 4, 0);
+        assertThat(putModels(pool.id(), List.of(first.getId(), second.getId()), List.of()))
+                .extracting(LlmCallPoolModelDTO::modelId)
+                .contains(first.getId(), second.getId());
+        Object specification = new Yaml().load(Files.readString(Path.of("..", "openapi.yaml")));
+        var document = new ObjectMapper().valueToTree(specification);
+        var schema = document.path("paths")
+                .path("/admin/llm/call-pools/{id}/models")
+                .path("put")
+                .path("responses")
+                .path("200")
+                .path("content")
+                .path("application/json")
+                .path("schema");
+        assertThat(schema.path("type").asString()).isEqualTo("array");
+        assertThat(schema.path("items").path("$ref").asString()).isEqualTo("#/components/schemas/LlmCallPoolModelDTO");
+    }
 
     @Test
     @WithAdminUser

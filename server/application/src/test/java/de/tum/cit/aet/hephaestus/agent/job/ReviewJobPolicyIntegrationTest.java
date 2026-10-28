@@ -10,6 +10,9 @@ import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenIssuer;
 import de.tum.cit.aet.hephaestus.agent.catalog.DataHandlingFacts;
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallClass;
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallPool;
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallPoolRepository;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnectionRepository;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmDataOperator;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModel;
@@ -28,6 +31,7 @@ import de.tum.cit.aet.hephaestus.agent.handler.DefaultReviewExecutionHandler;
 import de.tum.cit.aet.hephaestus.agent.handler.RuntimeReviewTestData;
 import de.tum.cit.aet.hephaestus.agent.practice.PracticePiAdapter;
 import de.tum.cit.aet.hephaestus.agent.proxy.LlmCallPermits;
+import de.tum.cit.aet.hephaestus.agent.proxy.LlmCallPermitsTestFixtures;
 import de.tum.cit.aet.hephaestus.agent.runtime.worker.testing.WorkerPropertiesFixtures;
 import de.tum.cit.aet.hephaestus.agent.sandbox.SandboxTestLimits;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxManager;
@@ -41,6 +45,7 @@ import de.tum.cit.aet.hephaestus.core.privacy.spi.PersonProcessingSuppression;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import de.tum.cit.aet.hephaestus.testconfig.BaseIntegrationTest;
 import de.tum.cit.aet.hephaestus.testconfig.LlmCatalogTestFixtures;
+import de.tum.cit.aet.hephaestus.testconfig.TestEntities;
 import de.tum.cit.aet.hephaestus.testconfig.WorkspaceTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.WorkspaceRepository;
@@ -48,6 +53,7 @@ import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
 import de.tum.cit.aet.hephaestus.workspace.spi.MemberAiPreferences;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import io.micrometer.tracing.Tracer;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
@@ -56,9 +62,11 @@ import java.util.UUID;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import org.awaitility.Awaitility;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationContext;
 import org.springframework.core.task.AsyncTaskExecutor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -177,6 +185,94 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                         mapper,
                         new ReviewAttemptUsageService(jobs, attemptUsageRows, mock(LlmUsageRecorder.class)),
                         Optional.empty()));
+    }
+
+    @Autowired
+    private ApplicationContext context;
+
+    @Test
+    void shouldGiveAQueuedReviewAFairWorkspaceGrantBeforeBusyProxyCallsRepeat() throws Exception {
+        var selected = binding(DataHandlingTier.IN_HOUSE);
+        var pool = new LlmCallPool();
+        pool.setSlug("queued-claim-" + UUID.randomUUID());
+        pool.setDisplayName("Queued claims");
+        pool.setMaxConcurrentCalls(1);
+        pool = context.getBean(LlmCallPoolRepository.class).saveAndFlush(pool);
+        var selectedModel = Objects.requireNonNull(selected.getInstanceModel());
+        selectedModel.setCallPoolId(pool.getId());
+        models.saveAndFlush(selectedModel);
+        var job = queued(selected);
+        var capacity = LlmCallPermitsTestFixtures.worker(context, "test-worker");
+        var busyWorkspace = workspaces.saveAndFlush(TestEntities.activeWorkspace("busy-pool-" + UUID.randomUUID()));
+        var runningReview = new ReviewJob();
+        RuntimeJobTestData.initialize(runningReview, busyWorkspace.getId());
+        runningReview.setStatus(ReviewJobStatus.RUNNING);
+        runningReview.setWorkerId("test-worker");
+        runningReview.setConfigSnapshot(job.getConfigSnapshot());
+        runningReview.setStartedAt(Instant.now());
+        runningReview.setLeasedUntil(Instant.now().plusSeconds(60));
+        runningReview = jobs.saveAndFlush(RuntimeJobTestData.persistParent(jdbc, runningReview));
+        var busyCaller = new LlmCallPermits.Caller(busyWorkspace.getId(), runningReview.getId(), 0, null);
+        long poolId = pool.getId();
+        var busy = Objects.requireNonNull(capacity.acquire(
+                poolId,
+                LlmCallClass.EVENT,
+                busyCaller,
+                () -> false,
+                Instant.now().plusSeconds(5)));
+        var budgets = mock(LlmBudgetService.class);
+        when(budgets.decide(anyLong())).thenReturn(LlmBudgetDecision.ALLOWED);
+        var assignments = mock(ReviewJobAssignments.class);
+        when(assignments.load(any())).thenReturn(List.of(RuntimeReviewTestData.assignment(null, null)));
+        var metrics = new SimpleMeterRegistry();
+        var claims = new ReviewJobClaimService(
+                jobs,
+                policy,
+                methods,
+                assignments,
+                transactions,
+                mapper,
+                metrics,
+                budgets,
+                admission,
+                new ReviewJobTelemetry(metrics, Tracer.NOOP),
+                Optional.of(WorkerPropertiesFixtures.minimal("2", "1")),
+                capacity);
+        try (var requests = Executors.newVirtualThreadPerTaskExecutor()) {
+            var repeated = requests.submit(() -> capacity.acquire(
+                    poolId,
+                    LlmCallClass.REQUEST,
+                    busyCaller,
+                    () -> false,
+                    Instant.now().plusSeconds(10)));
+            Awaitility.await()
+                    .atMost(Duration.ofSeconds(5))
+                    .untilAsserted(() -> assertThat(jdbc.queryForObject(
+                                    "SELECT count(*) FROM llm_call_permit WHERE pool_id=? AND state='WAITING'",
+                                    Long.class,
+                                    poolId))
+                            .isEqualTo(1L));
+            try {
+                assertThat(claims.claimJob(job.getId())).isEqualTo(ReviewJobClaimService.ClaimOutcome.CONCURRENCY_FULL);
+                assertThat(jobs.findById(job.getId()).orElseThrow().getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
+                assertThat(jobs.findById(job.getId()).orElseThrow().getWorkerId())
+                        .isNull();
+                busy.close();
+                assertThat(claims.claimJob(job.getId())).isInstanceOf(ReviewJobClaimService.ClaimResult.class);
+                assertThat(repeated.isDone()).isFalse();
+            } finally {
+                busy.close();
+                var reserved = capacity.acquire(
+                        poolId,
+                        LlmCallClass.REQUEST,
+                        new LlmCallPermits.Caller(workspace.getId(), job.getId(), job.getAttempt(), null),
+                        () -> false,
+                        Instant.now().plusMillis(100));
+                if (reserved != null) reserved.close();
+                var repeat = repeated.get(12, TimeUnit.SECONDS);
+                if (repeat != null) repeat.close();
+            }
+        }
     }
 
     @Test

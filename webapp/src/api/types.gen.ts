@@ -7678,7 +7678,7 @@ export type AdminUpdateLlmCallPoolModelsResponses = {
     /**
      * OK
      */
-    200: LlmCallPoolModel;
+    200: Array<LlmCallPoolModel>;
 };
 
 export type AdminUpdateLlmCallPoolModelsResponse = AdminUpdateLlmCallPoolModelsResponses[keyof AdminUpdateLlmCallPoolModelsResponses];
