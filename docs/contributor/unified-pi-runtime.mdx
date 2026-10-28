@@ -544,12 +544,12 @@ The worker accepts that token once, and only for the current host id.
 The worker sends WebSocket pings and two JSON frames.
 `heph-host-protocol.ts` parses them and ignores any other frame.
 
-- `{"type":"start","turnId","attempt","token"}`. The token is the attempt's `TurnJwt`.
+- `{"type":"start","turnId","attempt","token"}`. The token is the attempt's `AttemptJwt` of kind `TURN`.
 - `{"type":"stop","turnId","attempt","reason"}`. The reason is `developer`, `deadline`, or `lease`.
 
 ### Turn endpoints
 
-The host calls the worker over HTTP with the turn's `TurnJwt` (`HephTurnController`, hidden from OpenAPI).
+The host calls the worker over HTTP with the turn's attempt token (`HephTurnController`, hidden from OpenAPI).
 All paths start with `/internal/llm/turn/{turnId}/`.
 
 | Method and path | Purpose |
@@ -573,14 +573,20 @@ It stages an item document, for example the detail of one issue, when Heph reads
 The end drops the build.
 A build that no call reads for 15 minutes expires, and a later read builds it again for the same question.
 
-The proxy authentication of the worker (`JobTokenAuthenticationProvider`) knows three credentials: a review job token, a turn token (`TurnJwt`), and the gateway-session token of a Heph host.
-Each becomes a `ProxyIdentity`.
+The proxy authentication of the worker (`JobTokenAuthenticationProvider`) knows two credentials: an attempt token (`AttemptJwt`) and the gateway-session token of a Heph host.
+An attempt token names only its kind (`REVIEW` or `TURN`), the attempt's id, its workspace and its attempt number.
+A review token also carries its work deadline.
+The kind decides which row the id names: a review job or a Heph turn.
+A turn's conversation and account come from the turn that this worker claimed, never from the token.
+Each credential becomes a `ProxyIdentity`.
+
 A turn token reaches the model and its own turn paths only.
 A turn path that names another turn gets `401`.
-On a model call, the turn row must be leased by this worker with the same attempt, workspace, and conversation.
+On a model call, the turn row must be leased by this worker with the same attempt and workspace.
 Otherwise the call gets `409`.
 
-On a turn path, the provider reads no row, and the endpoint checks that the attempt runs on this worker.
+On a turn path, the provider reads no row.
+The endpoint checks that the attempt runs on this worker, and takes the turn's conversation and account from it.
 A lost lease gets `409` there too.
 A host's gateway-session token reaches only `GET /internal/llm/runtime/{hostId}/commands` of its own host.
 `ProxyRoutingService` bills each model call of a turn to that turn (`BilledAttempt` with `MENTOR_TURN`).
@@ -634,7 +640,7 @@ No setting turns the tools on or off.
 
 #### Endpoints
 
-`HephTurnSandboxController` serves three endpoints under `/internal/llm/turn/{turnId}/sandbox/`, with the turn's `TurnJwt`.
+`HephTurnSandboxController` serves three endpoints under `/internal/llm/turn/{turnId}/sandbox/`, with the turn's attempt token.
 Each endpoint checks that the attempt holds the lease, as the other turn endpoints do.
 A refusal that the model must read is `200` with `{"ok": false, "error", "detail"}`.
 The host returns `detail` as the error text of the tool.

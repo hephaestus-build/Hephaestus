@@ -2,8 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.proxy;
 
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
-import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.JobJwt;
-import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.TurnJwt;
+import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.AttemptJwt;
 import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwt;
 import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtInvalidException;
 import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtVerifier;
@@ -17,8 +16,8 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.oauth2.server.resource.authentication.BearerTokenAuthenticationToken;
 
 /**
- * Authenticates the three sandbox credentials. A review job's token reaches its own runtime and the model. A Heph turn
- * attempt's token reaches the model while this worker holds the attempt's lease, and its own turn endpoints, which
+ * Authenticates the sandbox credentials: an attempt's, of a review or of a Heph turn, and a Heph host's session token.
+ * A review attempt's token reaches its own runtime and the model. A Heph turn attempt's token reaches the model while this worker holds the attempt's lease, and its own turn endpoints, which
  * check that the attempt runs here. A Heph host's gateway session token, which no signed claim backs, reaches only its
  * own runtime: the discovery and workspace its initializer downloads, and its command channel.
  */
@@ -58,19 +57,19 @@ final class JobTokenAuthenticationProvider implements AuthenticationProvider {
             if (session.isPresent()) return unsignedSession(session.get(), request);
             throw new BadCredentialsException("Invalid or expired credential", invalid);
         }
-        return switch (verified) {
-            case JobJwt job -> job(job, request);
-            case TurnJwt turn -> turn(turn, request);
-            default -> throw invalid();
+        if (!(verified instanceof AttemptJwt attempt)) throw invalid();
+        return switch (attempt.kind()) {
+            case REVIEW -> review(attempt, request);
+            case TURN -> turn(attempt, request);
         };
     }
 
-    private Authentication job(JobJwt jwt, JobTokenAuthenticationFilter.RequestIdentity request) {
+    private Authentication review(AttemptJwt jwt, JobTokenAuthenticationFilter.RequestIdentity request) {
         if (request.turnId() != null || request.commands()) throw invalid();
-        var job = jobs.findById(jwt.jobId()).orElseThrow(JobTokenAuthenticationProvider::invalid);
+        var job = jobs.findById(jwt.id()).orElseThrow(JobTokenAuthenticationProvider::invalid);
         if (job.getWorkspaceId() != jwt.workspaceId()) throw invalid();
         if (request.runtimeJobId() != null
-                && !request.runtimeJobId().equals(jwt.jobId().toString())) throw invalid();
+                && !request.runtimeJobId().equals(jwt.id().toString())) throw invalid();
         // A valid credential of an attempt that ended, was requeued or moved to another worker: its runner stops.
         if (job.getStatus() != ReviewJobStatus.RUNNING
                 || job.getAttempt() != jwt.attempt()
@@ -83,17 +82,14 @@ final class JobTokenAuthenticationProvider implements AuthenticationProvider {
      * A turn token never reaches a sandbox runtime, and on the turn endpoints only its own turn. A model call needs the
      * attempt to hold its lease on this worker; an attempt that ended or moved on gets {@code 409}, so its host stops.
      */
-    private Authentication turn(TurnJwt jwt, JobTokenAuthenticationFilter.RequestIdentity request) {
+    private Authentication turn(AttemptJwt jwt, JobTokenAuthenticationFilter.RequestIdentity request) {
         if (request.runtimeJobId() != null) throw invalid();
         if (request.turnId() != null) {
-            if (!request.turnId().equals(jwt.turnId().toString())) throw invalid();
+            if (!request.turnId().equals(jwt.id().toString())) throw invalid();
         } else {
-            var turn = turns.findByIdAndWorkspaceId(jwt.turnId(), jwt.workspaceId())
+            var turn = turns.findByIdAndWorkspaceId(jwt.id(), jwt.workspaceId())
                     .orElseThrow(JobTokenAuthenticationProvider::invalid);
-            if (!turn.isLeased()
-                    || turn.getAttempt() != jwt.attempt()
-                    || !workerId.equals(turn.getWorkerId())
-                    || !turn.getConversationId().equals(jwt.conversationId()))
+            if (!turn.isLeased() || turn.getAttempt() != jwt.attempt() || !workerId.equals(turn.getWorkerId()))
                 throw new WorkerOwnershipConflict("This turn attempt no longer holds its lease");
         }
         return new JobTokenAuthentication(ProxyIdentity.of(jwt, workerId), jwt.scopes(), jwt);

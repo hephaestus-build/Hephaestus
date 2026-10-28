@@ -36,6 +36,7 @@ import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
+import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.AttemptJwt;
 import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtIssuer;
 import de.tum.cit.aet.hephaestus.evidence.AutomatedReviewReadinessReport;
 import de.tum.cit.aet.hephaestus.evidence.capture.EvidenceDirectory;
@@ -1046,8 +1047,8 @@ public class ReviewJobExecutor {
             Instant workDeadline =
                     Instant.now().plusSeconds(snapshot.timeoutSeconds()).truncatedTo(ChronoUnit.SECONDS);
             Instant tokenExpiry = workDeadline.plus(SandboxLayout.RESULT_UPLOAD_GRACE);
-            String jobToken = workerJwtIssuer.issueForJobUntil(
-                    jobId, job.getWorkspaceId(), job.getAttempt(), workDeadline, tokenExpiry);
+            String jobToken = workerJwtIssuer.issueForAttempt(
+                    AttemptJwt.Kind.REVIEW, jobId, job.getWorkspaceId(), job.getAttempt(), workDeadline, tokenExpiry);
             stage.set(PreparationFailure.Stage.SPEC);
             PracticeAgentRequest adapterRequest = new PracticeAgentRequest(
                     snapshot.model().apiProtocol().wire(),

@@ -13,7 +13,7 @@ import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
-import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.TurnJwt;
+import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.AttemptJwt;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
@@ -60,7 +60,7 @@ class ProxyRoutingService {
         var jwt = identity.job();
         if (jwt == null) throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Model credential required");
         var job = agentJobRepository
-                .findById(jwt.jobId())
+                .findById(jwt.id())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Review attempt unavailable"));
         if (job.getWorkspaceId() != jwt.workspaceId())
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Review attempt unavailable");
@@ -69,7 +69,7 @@ class ProxyRoutingService {
                 || !Objects.equals(job.getWorkerId(), identity.workerId())) throw attemptEnded();
         var snapshot = ConfigSnapshot.fromJson(job.getConfigSnapshot(), objectMapper);
         // The live checks above decide whether this attempt may call at all; the signed deadline decides until when.
-        Instant workDeadline = jwt.workDeadline();
+        Instant workDeadline = Objects.requireNonNull(jwt.workDeadline(), "a review attempt has a work deadline");
         if (!request.getRequestURI().startsWith(JobTokenAuthenticationFilter.PRACTICE_SCRIPT_PATH)) {
             register(job, identity.workerId(), ModelKind.CHAT, snapshot.model());
             return reviewRouting(job, snapshot, workDeadline);
@@ -128,13 +128,11 @@ class ProxyRoutingService {
      * attempt has spent so far, priced at the admitted rates. An attempt that ended or moved on gets {@code 409}, so its
      * host stops.
      */
-    private ProxyRouting turnRouting(TurnJwt jwt, String workerId) {
+    private ProxyRouting turnRouting(AttemptJwt jwt, String workerId) {
         var turn = mentorTurns
-                .findByIdAndWorkspaceId(jwt.turnId(), jwt.workspaceId())
-                .filter(found -> found.isLeased()
-                        && found.getAttempt() == jwt.attempt()
-                        && workerId.equals(found.getWorkerId())
-                        && found.getConversationId().equals(jwt.conversationId()))
+                .findByIdAndWorkspaceId(jwt.id(), jwt.workspaceId())
+                .filter(found ->
+                        found.isLeased() && found.getAttempt() == jwt.attempt() && workerId.equals(found.getWorkerId()))
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.CONFLICT, "This turn attempt no longer holds its lease"));
         var admitted = MentorTurnAdmission.read(turn.getAdmission())

@@ -130,8 +130,12 @@ The [data map](/admin/dsms/personal-data-map) owns erasure and restrictions.
 
 `WorkspaceContextExecutor.wrap` captures the workspace context and MDC for a background task. It does
 not propagate Spring authentication or `CurrentScmIdentityHolder`. Tasks that need the authenticated
-actor must carry that identity separately. A Heph turn needs no request identity. Its `TurnJwt`
-carries the account that owns the conversation, and the worker builds the turn's context for that account.
+actor must carry that identity separately.
+
+A Heph turn needs no request identity.
+Its attempt token (`AttemptJwt`) names the turn.
+The worker that claimed the turn knows its conversation and the account that owns the conversation.
+The worker builds the turn's context for that account.
 The server finds a Heph conversation by account, never by an SCM identity
 ([Heph runtime](./unified-pi-runtime.mdx#owner-and-tenancy)).
 

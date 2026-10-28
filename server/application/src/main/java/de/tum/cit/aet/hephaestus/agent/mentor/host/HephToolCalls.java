@@ -1,6 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.mentor.host;
 
-import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.TurnJwt;
+import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnAttempt;
 import java.time.Duration;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -23,7 +23,7 @@ final class HephToolCalls {
      *
      * @param outcome names how an answered call ended, for example {@code ok} or a refusal code
      */
-    static <T> T logged(TurnJwt turn, String tool, Supplier<T> call, Function<T, String> outcome) {
+    static <T> T logged(TurnAttempt turn, String tool, Supplier<T> call, Function<T, String> outcome) {
         long started = System.nanoTime();
         String ended = "error";
         try {

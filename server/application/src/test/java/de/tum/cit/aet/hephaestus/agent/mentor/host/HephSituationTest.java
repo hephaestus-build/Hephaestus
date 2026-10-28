@@ -4,11 +4,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnAttempt;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountDirectory;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountIdentityQuery;
 import de.tum.cit.aet.hephaestus.core.auth.spi.GitProviderRegistry;
-import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.TurnJwt;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProvider;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderRepository;
 import de.tum.cit.aet.hephaestus.integration.core.connection.IdentityProviderType;
@@ -24,7 +24,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
@@ -57,7 +56,7 @@ class HephSituationTest extends BaseUnitTest {
         Clock clock = Clock.fixed(Instant.parse("2026-10-07T23:30:00Z"), ZoneOffset.UTC);
         HephSituation situation =
                 new HephSituation(situations, accounts, identities, profiles, providers, manifests, clock);
-        TurnJwt turn = turn();
+        TurnAttempt turn = turn();
         when(situations.render(1L, turn.turnId(), BERLIN)).thenReturn("<situation>\nWorkspace facts.\n</situation>");
         IdentityProvider gitLab = provider(10L, IdentityProviderType.GITLAB);
         IdentityProvider slack = provider(20L, IdentityProviderType.SLACK);
@@ -91,7 +90,7 @@ class HephSituationTest extends BaseUnitTest {
         Clock clock = Clock.fixed(Instant.parse("2026-10-12T08:00:00Z"), ZoneOffset.UTC);
         HephSituation situation =
                 new HephSituation(situations, accounts, identities, profiles, providers, manifests, clock);
-        TurnJwt turn = turn();
+        TurnAttempt turn = turn();
         when(situations.render(1L, turn.turnId(), BERLIN)).thenReturn("<situation>\n</situation>");
         when(accounts.find(5L)).thenReturn(Optional.empty());
 
@@ -100,9 +99,8 @@ class HephSituationTest extends BaseUnitTest {
         assertThat(rendered).doesNotContain("You are talking to").contains("today is Mon 2026-10-12");
     }
 
-    private static TurnJwt turn() {
-        Instant now = Instant.parse("2026-10-07T23:30:00Z");
-        return new TurnJwt(UUID.randomUUID(), 1L, 5L, UUID.randomUUID(), 1, Set.of(), "jti", now, now.plusSeconds(60));
+    private static TurnAttempt turn() {
+        return new TurnAttempt(UUID.randomUUID(), 1L, 5L, UUID.randomUUID(), 1);
     }
 
     private static IdentityProvider provider(long id, IdentityProviderType type) {

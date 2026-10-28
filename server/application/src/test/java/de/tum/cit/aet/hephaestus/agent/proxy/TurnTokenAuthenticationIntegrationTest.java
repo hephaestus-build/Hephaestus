@@ -7,7 +7,7 @@ import de.tum.cit.aet.hephaestus.agent.job.ReviewAttemptUsageService;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnStarts;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
-import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.TurnJwt;
+import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.AttemptJwt;
 import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtIssuer;
 import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtVerifier;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
@@ -104,12 +104,12 @@ class TurnTokenAuthenticationIntegrationTest extends AbstractWorkspaceIntegratio
     }
 
     private String token(UUID turnId, long workspaceId, int attempt) {
-        return jwtIssuer.issueForTurn(
+        return jwtIssuer.issueForAttempt(
+                AttemptJwt.Kind.TURN,
                 turnId,
                 workspaceId,
-                developerAccount,
-                conversation.getId(),
                 attempt,
+                null,
                 Instant.now().plus(Duration.ofMinutes(5)));
     }
 
@@ -152,7 +152,7 @@ class TurnTokenAuthenticationIntegrationTest extends AbstractWorkspaceIntegratio
         assertThat(attempt.number()).isEqualTo(turn.getAttempt());
         // $10 per million input tokens, frozen at admission.
         assertThat(routing.inFlightSpendUsd()).isEqualByComparingTo("1.00");
-        assertThat(authentication.getDetails()).isInstanceOf(TurnJwt.class);
+        assertThat(authentication.getDetails()).isInstanceOf(AttemptJwt.class);
     }
 
     @Test
@@ -189,7 +189,7 @@ class TurnTokenAuthenticationIntegrationTest extends AbstractWorkspaceIntegratio
         Result result = call(WORKER, "PUT", "/internal/llm/turn/" + turn.getId() + "/partial", token());
 
         assertThat(result.status()).isEqualTo(200);
-        assertThat(Objects.requireNonNull(result.authentication()).getDetails()).isInstanceOf(TurnJwt.class);
+        assertThat(Objects.requireNonNull(result.authentication()).getDetails()).isInstanceOf(AttemptJwt.class);
     }
 
     @Test

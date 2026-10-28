@@ -7,7 +7,7 @@ import static org.mockito.Mockito.when;
 import de.tum.cit.aet.hephaestus.agent.handler.AdmissionConflictException;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.AdmissionRequestDTO;
-import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.JobJwt;
+import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.AttemptJwt;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.time.Instant;
 import java.util.List;
@@ -41,7 +41,16 @@ class ResultAdmissionControllerTest extends BaseUnitTest {
         var id = UUID.randomUUID();
         var request = new AdmissionRequestDTO(3, UUID.randomUUID(), id, 0, List.of(), List.of());
         var now = Instant.now();
-        var jwt = new JobJwt(id, 1L, 0, Set.of("llm_proxy"), "test", now, now.plusSeconds(60), now.plusSeconds(30));
+        var jwt = new AttemptJwt(
+                AttemptJwt.Kind.REVIEW,
+                id,
+                1L,
+                0,
+                Set.of("llm_proxy"),
+                "test",
+                now,
+                now.plusSeconds(60),
+                now.plusSeconds(30));
         var identity = ProxyIdentity.of(jwt, "worker");
         var authentication = new JobTokenAuthentication(identity, jwt.scopes(), null);
         when(admission.admit(new ResultAdmissionService.AdmissionIdentity(id, 1L, 0, "worker"), request))

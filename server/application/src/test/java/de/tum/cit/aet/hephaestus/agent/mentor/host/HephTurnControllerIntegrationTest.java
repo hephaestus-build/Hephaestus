@@ -19,6 +19,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import de.tum.cit.aet.hephaestus.agent.AgentControllerAdvice;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
+import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnAttempt;
 import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnContextFolder;
 import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnContextGenerations;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnCompletion;
@@ -30,7 +31,7 @@ import de.tum.cit.aet.hephaestus.agent.proxy.SandboxGatewayFixtures;
 import de.tum.cit.aet.hephaestus.agent.runtime.worker.testing.WorkerPropertiesFixtures;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
 import de.tum.cit.aet.hephaestus.core.exception.GlobalControllerAdvice;
-import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.TurnJwt;
+import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.AttemptJwt;
 import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtIssuer;
 import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtVerifier;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
@@ -151,6 +152,7 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
     private MentorConversation conversation;
     private MentorTurn turn;
     private Authentication authentication;
+    private TurnAttempt attempt;
 
     @BeforeEach
     void claimATurn() throws Exception {
@@ -160,18 +162,11 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
         developerAccount = accountId(developer);
         conversation = conversations.findOrCreateMain(workspace.getId(), developerAccount);
         turn = MentorTurnStarts.askAndStart(turns, metrics, workspace.getId(), conversation.getId(), QUESTION, WORKER);
-        authentication = HephTurnFixtures.authenticated(new TurnJwt(
-                turn.getId(),
-                workspace.getId(),
-                developerAccount,
-                conversation.getId(),
-                turn.getAttempt(),
-                Set.of("llm_proxy"),
-                UUID.randomUUID().toString(),
-                Instant.now(),
-                Instant.now().plus(Duration.ofMinutes(5))));
+        attempt = new TurnAttempt(
+                turn.getId(), workspace.getId(), developerAccount, conversation.getId(), turn.getAttempt());
+        authentication = HephTurnFixtures.authenticated(attempt);
         dispatcher = mock(HephTurnDispatcher.class);
-        when(dispatcher.runs(turn.getId(), turn.getAttempt())).thenReturn(true);
+        when(dispatcher.running(turn.getId(), turn.getAttempt())).thenReturn(Optional.of(attempt));
         controller = controller(HephTurnFixtures.contexts(beans));
         gateway = gateway(controller);
         direct = MockMvcBuilders.standaloneSetup(controller)
@@ -184,7 +179,7 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
     void shouldBuildTheDocumentsAgainWhenTheWorkspaceContextChangedAfterTheyWereCached() {
         TurnContextGenerations generations = new TurnContextGenerations();
         HephTurnContexts contexts = HephTurnFixtures.contexts(beans, generations);
-        TurnJwt credential = (TurnJwt) Objects.requireNonNull(authentication.getDetails());
+        TurnAttempt credential = attempt;
         Map<String, byte[]> first = contexts.documents(credential);
         assertThat(contexts.documents(credential)).as("cached for the attempt").isSameAs(first);
 
@@ -234,12 +229,12 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
 
     /** The signed credential the worker issues for this attempt of the turn. */
     private String credential(int attempt) {
-        return issuer.issueForTurn(
+        return issuer.issueForAttempt(
+                AttemptJwt.Kind.TURN,
                 turn.getId(),
                 workspace.getId(),
-                developerAccount,
-                conversation.getId(),
                 attempt,
+                null,
                 Instant.now().plus(Duration.ofMinutes(5)));
     }
 

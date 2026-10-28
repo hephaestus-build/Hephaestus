@@ -11,6 +11,7 @@ import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayConnector;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.FakeExecSandboxes;
+import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnAttempt;
 import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnSandboxes;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnCompletion;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnStarts;
@@ -19,6 +20,7 @@ import de.tum.cit.aet.hephaestus.agent.proxy.ProxyCallsInFlight;
 import de.tum.cit.aet.hephaestus.agent.runtime.worker.testing.WorkerPropertiesFixtures;
 import de.tum.cit.aet.hephaestus.core.exception.GlobalControllerAdvice;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
+import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.AttemptJwt;
 import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtIssuer;
 import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtVerifier;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
@@ -40,6 +42,7 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.AfterEach;
@@ -241,7 +244,9 @@ class HephTurnGatewayIntegrationTest extends AbstractWorkspaceIntegrationTest {
     /** A dispatcher that runs this test's attempt, as the worker's does once it started the turn on its host. */
     private HephTurnDispatcher runningHere() {
         HephTurnDispatcher dispatcher = mock(HephTurnDispatcher.class);
-        when(dispatcher.runs(turn.getId(), turn.getAttempt())).thenReturn(true);
+        when(dispatcher.running(turn.getId(), turn.getAttempt()))
+                .thenReturn(Optional.of(new TurnAttempt(
+                        turn.getId(), workspace.getId(), developer, conversation.getId(), turn.getAttempt())));
         when(dispatcher.deadline(turn.getId(), turn.getAttempt()))
                 .thenReturn(Instant.now().plusSeconds(300));
         return dispatcher;
@@ -255,12 +260,12 @@ class HephTurnGatewayIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     /** The signed credential the worker issues for this attempt of the turn. */
     private String credential() {
-        return issuer.issueForTurn(
+        return issuer.issueForAttempt(
+                AttemptJwt.Kind.TURN,
                 turn.getId(),
                 workspace.getId(),
-                developer,
-                conversation.getId(),
                 turn.getAttempt(),
+                null,
                 Instant.now().plus(Duration.ofMinutes(5)));
     }
 

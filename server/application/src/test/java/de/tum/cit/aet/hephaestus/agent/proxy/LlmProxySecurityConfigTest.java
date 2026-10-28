@@ -15,8 +15,7 @@ import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.RuntimeJobTestData;
 import de.tum.cit.aet.hephaestus.agent.runtime.worker.testing.WorkerPropertiesFixtures;
 import de.tum.cit.aet.hephaestus.core.auth.ratelimit.BucketResolver;
-import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.JobJwt;
-import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.TurnJwt;
+import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.AttemptJwt;
 import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtInvalidException;
 import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtVerifier;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
@@ -311,7 +310,7 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
 
     @Test
     void shouldServeATurnsModelCallAndItsOwnTurnEndpointsWhenItsTokenCallsThem() throws Exception {
-        TurnJwt turn = turnJwt(2);
+        AttemptJwt turn = turnJwt(2);
         leased(turn, turn.attempt(), "test-worker");
 
         assertThat(answerTo(withToken(request("POST", "/internal/llm/responses", GATEWAY_PORT), "turn-token")))
@@ -321,11 +320,11 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
                 .extracting(Authentication::getPrincipal)
                 .asInstanceOf(type(ProxyIdentity.class))
                 .extracting(ProxyIdentity::description)
-                .isEqualTo("mentor-turn:" + turn.turnId());
+                .isEqualTo("mentor-turn:" + turn.id());
         for (String[] endpoint : TURN_ENDPOINTS) {
             // One call a minute is this gateway's limit; each endpoint gets its own minute.
             buckets.clear();
-            String path = "/internal/llm/turn/" + turn.turnId() + "/" + endpoint[1];
+            String path = "/internal/llm/turn/" + turn.id() + "/" + endpoint[1];
             assertThat(answerTo(withToken(request(endpoint[0], path, GATEWAY_PORT), "turn-token")))
                     .as(path)
                     .isEqualTo(200);
@@ -338,7 +337,7 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
 
     @Test
     void shouldRefuseATurnTokenOnAnotherTurnAndOnEveryReviewCapability() throws Exception {
-        TurnJwt turn = turnJwt(1);
+        AttemptJwt turn = turnJwt(1);
         leased(turn, turn.attempt(), "test-worker");
 
         for (String[] endpoint : TURN_ENDPOINTS) {
@@ -356,9 +355,9 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
             assertThat(servedAs.get()).isNull();
         }
         for (String path : List.of(
-                "/internal/llm/runtime/" + turn.turnId(),
-                "/internal/llm/runtime/" + turn.turnId() + "/workspace",
-                "/internal/llm/runtime/" + turn.turnId() + "/commands")) {
+                "/internal/llm/runtime/" + turn.id(),
+                "/internal/llm/runtime/" + turn.id() + "/workspace",
+                "/internal/llm/runtime/" + turn.id() + "/commands")) {
             assertThat(answerTo(withToken(request("GET", path, GATEWAY_PORT), "turn-token")))
                     .as(path)
                     .isEqualTo(401);
@@ -369,7 +368,7 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
     @CsvSource({"3,test-worker", "2,other-worker"})
     void shouldAnswerConflictToTheModelCallOfAnAttemptThatNoLongerHoldsTheLease(int attempt, String worker)
             throws Exception {
-        TurnJwt turn = turnJwt(2);
+        AttemptJwt turn = turnJwt(2);
         leased(turn, attempt, worker);
 
         assertThat(answerTo(withToken(request("POST", "/internal/llm/responses", GATEWAY_PORT), "turn-token")))
@@ -379,13 +378,13 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
 
     @Test
     void shouldRefuseATurnTokenWithoutTheProxyScope() throws Exception {
-        TurnJwt turn = turnJwt(1, "other");
+        AttemptJwt turn = turnJwt(1, "other");
         leased(turn, turn.attempt(), "test-worker");
 
         assertThat(answerTo(withToken(request("POST", "/internal/llm/responses", GATEWAY_PORT), "turn-token")))
                 .isEqualTo(403);
         assertThat(answerTo(withToken(
-                        request("POST", "/internal/llm/turn/" + turn.turnId() + "/end", GATEWAY_PORT), "turn-token")))
+                        request("POST", "/internal/llm/turn/" + turn.id() + "/end", GATEWAY_PORT), "turn-token")))
                 .isEqualTo(403);
     }
 
@@ -478,16 +477,16 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
 
     @Test
     void shouldExemptOnlyTheTurnBookkeepingFromTheRateLimit() throws Exception {
-        TurnJwt turn = turnJwt(1);
+        AttemptJwt turn = turnJwt(1);
         leased(turn, turn.attempt(), "test-worker");
-        String partial = "/internal/llm/turn/" + turn.turnId() + "/partial";
+        String partial = "/internal/llm/turn/" + turn.id() + "/partial";
 
         for (int i = 0; i < 5; i++) {
             assertThat(answerTo(withToken(request("PUT", partial, GATEWAY_PORT), "turn-token")))
                     .as("partial %d", i)
                     .isEqualTo(200);
         }
-        String search = "/internal/llm/turn/" + turn.turnId() + "/search";
+        String search = "/internal/llm/turn/" + turn.id() + "/search";
         assertThat(answerTo(withToken(request("POST", search, GATEWAY_PORT), "turn-token")))
                 .isEqualTo(200);
         assertThat(answerTo(withToken(request("POST", search, GATEWAY_PORT), "turn-token")))
@@ -495,36 +494,35 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
                 .isEqualTo(429);
     }
 
-    private TurnJwt turnJwt(int attempt) {
+    private AttemptJwt turnJwt(int attempt) {
         return turnJwt(attempt, "llm_proxy");
     }
 
-    private TurnJwt turnJwt(int attempt, String scope) {
+    private AttemptJwt turnJwt(int attempt, String scope) {
         Instant now = Instant.now();
-        TurnJwt turn = new TurnJwt(
+        AttemptJwt turn = new AttemptJwt(
+                AttemptJwt.Kind.TURN,
                 UUID.randomUUID(),
                 7L,
-                11L,
-                UUID.randomUUID(),
                 attempt,
                 Set.of(scope),
-                UUID.randomUUID().toString(),
+                "jti",
                 now,
-                now.plusSeconds(60));
+                now.plusSeconds(60),
+                null);
         when(jwtVerifier.verify("turn-token")).thenReturn(turn);
         return turn;
     }
 
     /** The turn row: its attempt and the worker that holds the attempt's lease. */
-    private void leased(TurnJwt turn, int attempt, String worker) {
+    private void leased(AttemptJwt turn, int attempt, String worker) {
         MentorTurn row = Mockito.mock(MentorTurn.class);
         // The check stops at the first mismatch, and a turn endpoint reads no row.
         Mockito.lenient().when(row.isLeased()).thenReturn(true);
         Mockito.lenient().when(row.getAttempt()).thenReturn(attempt);
         Mockito.lenient().when(row.getWorkerId()).thenReturn(worker);
-        Mockito.lenient().when(row.getConversationId()).thenReturn(turn.conversationId());
         Mockito.lenient()
-                .when(turnRepository.findByIdAndWorkspaceId(turn.turnId(), turn.workspaceId()))
+                .when(turnRepository.findByIdAndWorkspaceId(turn.id(), turn.workspaceId()))
                 .thenReturn(Optional.of(row));
     }
 
@@ -613,13 +611,14 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
         return job;
     }
 
-    private static JobJwt jobJwt(ReviewJob job, int attempt) {
+    private static AttemptJwt jobJwt(ReviewJob job, int attempt) {
         return jobJwt(job, attempt, "llm_proxy");
     }
 
-    private static JobJwt jobJwt(ReviewJob job, int attempt, String scope) {
+    private static AttemptJwt jobJwt(ReviewJob job, int attempt, String scope) {
         Instant now = Instant.now();
-        return new JobJwt(
+        return new AttemptJwt(
+                AttemptJwt.Kind.REVIEW,
                 job.getId(),
                 job.getWorkspaceId(),
                 attempt,

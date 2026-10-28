@@ -137,7 +137,7 @@ sequenceDiagram
     S->>DB: Question entry and queued turn
     DB-->>W: NOTIFY mentor_ledger
     W->>DB: Claim turn, admit, lease
-    W->>H: start (TurnJwt)
+    W->>H: start (AttemptJwt)
     H->>W: Read context, call tools and the model
     H->>W: Partial answers, then the end with all entries
     W->>DB: Entries, usage, feedback receipts
