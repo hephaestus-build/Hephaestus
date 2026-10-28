@@ -14,6 +14,8 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import tools.jackson.databind.node.ObjectNode;
 
 /**
@@ -316,19 +318,44 @@ public class MentorEntryService {
     }
 
     /**
-     * Publishes a change of a turn that already waited: a start, an end, a stop or a requeue. Each can take or give
-     * back a Heph slot, or let the next question of the conversation start, so the reasons other turns wait for can
-     * change too ({@link MentorTurnWaits}).
+     * Publishes a change of a turn that already waited. A start, an end or a requeue takes or gives back a Heph slot,
+     * so the reason every queued turn waits for can change ({@link MentorTurnWaits}): the slots change once per
+     * transaction, however many turns it moves. A stop gives back no slot: a queued turn held none, and a running one
+     * keeps its host until the host ends it. It can only let the next question of its own conversation start.
+     *
+     * @param slotsChanged whether the turn took or gave back a Heph slot
      */
-    void turnChanged(MentorTurn turn) {
+    void turnChanged(MentorTurn turn, boolean slotsChanged) {
         events.publishEvent(MentorLedgerEvents.TurnChanged.of(turn));
-        events.publishEvent(new MentorTurnWaits.SlotsChanged(turn.getWorkspaceId()));
+        if (slotsChanged) {
+            slotsChanged(turn.getWorkspaceId());
+        } else if (turn.getStatus().isTerminal()) {
+            turns.findByWorkspaceIdAndConversationIdAndStatus(
+                            turn.getWorkspaceId(), turn.getConversationId(), MentorTurn.Status.QUEUED)
+                    .forEach(next -> events.publishEvent(MentorLedgerEvents.TurnChanged.of(next)));
+        }
+    }
+
+    private void slotsChanged(long workspaceId) {
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            if (TransactionSynchronizationManager.hasResource(MentorTurnWaits.SlotsChanged.class)) {
+                return;
+            }
+            TransactionSynchronizationManager.bindResource(MentorTurnWaits.SlotsChanged.class, true);
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCompletion(int status) {
+                    TransactionSynchronizationManager.unbindResourceIfPossible(MentorTurnWaits.SlotsChanged.class);
+                }
+            });
+        }
+        events.publishEvent(new MentorTurnWaits.SlotsChanged(workspaceId));
     }
 
     /** Stops a turn the caller locked, unless it ended. */
     private void stop(MentorTurn turn) {
         if (turn.stopIfActive(clock.instant())) {
-            turnChanged(turn);
+            turnChanged(turn, false);
         }
     }
 

@@ -165,7 +165,7 @@ public class MentorTurnService {
             // The lease ends on the database clock, the clock the server's reaper judges it by (expireLease).
             Instant now = turns.databaseNow();
             turn.start(workerId, now, now.plus(lease));
-            changed(turn);
+            changed(turn, true);
             return turn;
         });
     }
@@ -242,7 +242,7 @@ public class MentorTurnService {
         turn.end(outcome, error, endedAt);
         turns.flush();
         events.publishEvent(new MentorLedgerEvents.AttemptEnded(turn.getWorkspaceId(), turnId, attempt, endedAt));
-        changed(turn);
+        changed(turn, true);
         return new EndedTurn(turn, accountId(turn), usage(turn), feedbackCalled);
     }
 
@@ -278,7 +278,7 @@ public class MentorTurnService {
         MentorTurn turn = turns.lockByIdAndWorkspaceId(turnId, workspaceId)
                 .orElseThrow(() -> new EntityNotFoundException("MentorTurn", turnId.toString()));
         if (turn.stopIfActive(clock.instant())) {
-            changed(turn);
+            changed(turn, false);
         }
         return turn;
     }
@@ -306,7 +306,7 @@ public class MentorTurnService {
                         .filter(locked -> locked.getStatus() == MentorTurn.Status.RUNNING)
                         .findFirst()
                         .filter(locked -> meant.test(locked) && locked.stopIfActive(clock.instant()));
-        running.ifPresent(this::changed);
+        running.ifPresent(stopped -> changed(stopped, false));
         return running;
     }
 
@@ -383,7 +383,7 @@ public class MentorTurnService {
             turn.end(MentorTurn.Status.FAILED, LEASE_EXPIRED, now);
             turn.recordFailure(LEASE_EXPIRED_CAUSE, null);
         }
-        changed(turn);
+        changed(turn, true);
         return new LostAttempt(turn, attempt, admission, proxyUsage, startedAt, lostAt);
     }
 
@@ -503,7 +503,7 @@ public class MentorTurnService {
                 turn.getLlmCalls());
     }
 
-    private void changed(MentorTurn turn) {
-        entryService.turnChanged(turn);
+    private void changed(MentorTurn turn, boolean slotsChanged) {
+        entryService.turnChanged(turn, slotsChanged);
     }
 }

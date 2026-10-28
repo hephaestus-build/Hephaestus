@@ -335,6 +335,22 @@ class MentorTurnServiceIntegrationTest extends AbstractWorkspaceIntegrationTest 
     }
 
     @Test
+    void shouldPublishOnlyTheFollowUpsOfItsConversationWhenAQueuedQuestionIsStopped() {
+        MentorTurnService.Submission first = ask(main, "First");
+        MentorTurnService.Submission followUp = ask(main, "Follow-up");
+        MentorTurnService.Submission inThread =
+                ask(conversations.openThread(workspace.getId(), first.question().getId()), "About this");
+        published.clear();
+
+        turns.stop(workspace.getId(), first.turn().getId());
+
+        assertThat(publishedQueued())
+                .as("a stop of a question that never started gives back no Heph slot")
+                .contains(followUp.turn().getId())
+                .doesNotContain(inThread.turn().getId());
+    }
+
+    @Test
     void shouldPublishTheFollowUpAgainWhenTheTurnBeforeItEnds() {
         MentorTurnService.Submission first = ask(main, "First");
         MentorTurnService.Submission followUp = ask(main, "Follow-up");
