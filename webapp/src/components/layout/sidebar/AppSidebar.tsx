@@ -14,6 +14,7 @@ import {
 	SidebarMenuItem,
 	SidebarMenuSkeleton,
 	SidebarRail,
+	SidebarSeparator,
 	SidebarTrigger,
 	useSidebar,
 } from "@/components/ui/sidebar";
@@ -27,10 +28,10 @@ import {
 
 import { NavAdmin } from "./NavAdmin";
 import { NavContextHeader } from "./NavContextHeader";
-import { NavDashboards } from "./NavDashboards";
 import { NavFooter } from "./NavFooter";
-import { NavMentor } from "./NavMentor";
 import { NavSuperAdmin } from "./NavSuperAdmin";
+import { NavWorkspace } from "./NavWorkspace";
+import { NavYou } from "./NavYou";
 import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
 
 export type SidebarContext = "main" | "admin";
@@ -39,7 +40,7 @@ export interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
 	isAdmin: boolean;
 	isOwner?: boolean;
 	isAppAdmin: boolean;
-	/** Lists Heph in the main navigation of the active workspace; the container decides from membership and setup. */
+	/** Lists Ask Hephaestus in the main navigation of the active workspace; the container decides from membership and setup. */
 	showMentor: boolean;
 	readOnly?: boolean;
 	integrationKinds: readonly IntegrationCatalogEntry["kind"][];
@@ -149,21 +150,28 @@ export function AppSidebar({
 	} else if (activeWorkspace) {
 		sidebarContent = (
 			<>
-				<NavDashboards
+				<NavYou
+					workspaceSlug={activeWorkspace.workspaceSlug}
+					practicesEnabled={activeWorkspace.practicesEnabled}
+					showMentor={showMentor}
+					readOnly={readOnly}
+				/>
+				<SidebarSeparator className="hidden group-data-[collapsible=icon]:block" />
+				<NavWorkspace
 					workspaceSlug={activeWorkspace.workspaceSlug}
 					practicesEnabled={activeWorkspace.practicesEnabled}
 				/>
-				{showMentor && (
-					<NavMentor workspaceSlug={activeWorkspace.workspaceSlug} readOnly={readOnly} />
-				)}
 				{isAdmin && (
-					<NavAdmin
-						isOwner={isOwner}
-						workspaceSlug={activeWorkspace.workspaceSlug}
-						integrationKinds={integrationKinds}
-						awaitingApproval={awaitingApproval}
-						scmProviderType={activeWorkspace.providerType === "GITLAB" ? "GITLAB" : "GITHUB"}
-					/>
+					<>
+						<SidebarSeparator className="hidden group-data-[collapsible=icon]:block" />
+						<NavAdmin
+							isOwner={isOwner}
+							workspaceSlug={activeWorkspace.workspaceSlug}
+							integrationKinds={integrationKinds}
+							awaitingApproval={awaitingApproval}
+							scmProviderType={activeWorkspace.providerType === "GITLAB" ? "GITLAB" : "GITHUB"}
+						/>
+					</>
 				)}
 			</>
 		);

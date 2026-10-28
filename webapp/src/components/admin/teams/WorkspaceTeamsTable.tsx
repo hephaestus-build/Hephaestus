@@ -1,4 +1,4 @@
-import { Search, Users } from "lucide-react";
+import { Network, Search, Users } from "lucide-react";
 
 import type { LabelInfo, TeamInfo } from "@/api/types.gen";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
@@ -136,8 +136,8 @@ export function WorkspaceTeamsTable({
 
 	const header = (
 		<PageHeader
-			icon={<Users />}
-			title="Teams"
+			icon={<Network />}
+			title="Team setup"
 			description="Manage which synced teams and repositories participate in this workspace."
 		/>
 	);
