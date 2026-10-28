@@ -77,7 +77,7 @@ class LlmCallPoolAdminControllerIntegrationTest extends AbstractWorkspaceIntegra
                 .path("application/json")
                 .path("schema");
         assertThat(schema.path("type").asString()).isEqualTo("array");
-        assertThat(schema.path("items").path("$ref").asString()).isEqualTo("#/components/schemas/LlmCallPoolModelDTO");
+        assertThat(schema.path("items").path("$ref").asString()).isEqualTo("#/components/schemas/LlmCallPoolModel");
     }
 
     @Test
