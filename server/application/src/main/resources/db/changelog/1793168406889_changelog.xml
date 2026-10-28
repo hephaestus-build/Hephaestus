@@ -11,6 +11,7 @@
     </changeSet>
     <changeSet id="1793168406889-2" author="hephaestus">
         <createIndex indexName="ix_issued_jwt_predecessor_jti" tableName="issued_jwt">
+            <column name="account_id"/>
             <column name="predecessor_jti"/>
         </createIndex>
         <rollback>

@@ -43,7 +43,7 @@ import org.jspecify.annotations.Nullable;
         name = "issued_jwt",
         indexes = {
             @Index(name = "ix_issued_jwt_session_id", columnList = "session_id"),
-            @Index(name = "ix_issued_jwt_predecessor_jti", columnList = "predecessor_jti")
+            @Index(name = "ix_issued_jwt_predecessor_jti", columnList = "account_id,predecessor_jti")
         },
         uniqueConstraints =
                 @UniqueConstraint(name = "uq_issued_jwt_refresh_token_hash", columnNames = "refresh_token_hash"))
