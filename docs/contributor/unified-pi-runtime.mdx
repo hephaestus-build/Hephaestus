@@ -87,8 +87,8 @@ Two facts decide the reason, and both are rows:
   A turn holds a slot while it runs, and while it is stopped and its host still commits the answer (`MentorTurnRepository.countHeld`).
 
 The capacity is the number of turns that all workers together run at once.
-The Helm chart sets it on the server to `worker.replicas` multiplied by `worker.hephTurns`.
-The chart helper `hephaestus.hephTurns` resolves `worker.hephTurns` for the server and the workers, so the two numbers agree.
+The Helm chart sets it on the server to `worker.replicas` multiplied by `worker.conversationTurns`.
+The chart helper `hephaestus.conversationTurns` resolves `worker.conversationTurns` for the server and the workers, so the two numbers agree.
 
 - `FREE_HEPH`: a worker may start the turn, and every Heph slot of the deployment is taken.
 - No value: the server knows no reason.

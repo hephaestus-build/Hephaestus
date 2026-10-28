@@ -567,15 +567,15 @@ PostgreSQL volume.
 {{- end -}}
 
 {{/*
-The Heph turns that one worker runs at once, as a number: worker.hephTurns, where auto is the autoHephTurns of
+The Heph turns that one worker runs at once, as a number: worker.conversationTurns, where auto is the autoConversationTurns of
 sandbox-pod-requests.json, the number that the worker itself resolves auto to. The worker's capacity, the server's
 capacity and the sandbox quotas all read it here.
 */}}
-{{- define "hephaestus.hephTurns" -}}
-{{- if eq (toString .Values.worker.hephTurns) "auto" -}}
-{{- (.Files.Get "sandbox-pod-requests.json" | fromJson).autoHephTurns | int -}}
+{{- define "hephaestus.conversationTurns" -}}
+{{- if eq (toString .Values.worker.conversationTurns) "auto" -}}
+{{- (.Files.Get "sandbox-pod-requests.json" | fromJson).autoConversationTurns | int -}}
 {{- else -}}
-{{- .Values.worker.hephTurns | int -}}
+{{- .Values.worker.conversationTurns | int -}}
 {{- end -}}
 {{- end -}}
 

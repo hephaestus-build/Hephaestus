@@ -401,7 +401,7 @@ For example, 1.8 questions each second with 4.5-second answers need 8 concurrent
 
 The server must also know the capacity of all workers together: `hephaestus.mentor.turn.capacity` (`HEPHAESTUS_MENTOR_TURN_CAPACITY`).
 While that many turns run, a question that a worker can start next says that Heph is answering other questions.
-The Helm chart sets the value to `worker.replicas` multiplied by `worker.hephTurns`.
+The Helm chart sets the value to `worker.replicas` multiplied by `worker.conversationTurns`.
 If you run workers without the chart, set it on the server to the sum of their `mentor-max` values.
 If it is not set, no question says why it waits.
 

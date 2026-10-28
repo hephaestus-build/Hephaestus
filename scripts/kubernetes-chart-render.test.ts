@@ -1559,6 +1559,12 @@ await test("the server requires the worker registration token exactly when a wor
 	);
 });
 
+await test("the worker schema refuses the retired hephTurns value", () => {
+	const result = render([...layersFor("small"), { worker: { hephTurns: 8 } }]);
+	assert.equal(result.ok, false);
+	assert.match(result.stderr, /hephTurns/u);
+});
+
 await test("practice reviews run exactly when a worker runs, with its Heph turn capacity", () => {
 	// Without a worker, a submitted review job would wait for a worker that never comes.
 	assert.equal(envValue(workload(rendered(layersFor("dev")), "server"), "AGENT_ENABLED"), "false");
@@ -1573,11 +1579,11 @@ await test("practice reviews run exactly when a worker runs, with its Heph turn 
 		// A worker without git checkout reports itself out of service, so its Deployment never rolls out.
 		assert.equal(envValue(workload(resources, "worker"), "GIT_CHECKOUT_ENABLED"), "true", name);
 	}
-	// The worker's Heph turns and the server's Heph capacity come from one resolved worker.hephTurns. Its auto is
+	// The worker's Heph turns and the server's Heph capacity come from one resolved worker.conversationTurns. Its auto is
 	// the number in the chart's table, which the worker's own auto matches.
 	const table = readJsonFileSync(path.join(chart, "sandbox-pod-requests.json"));
-	assert.ok(isRecord(table) && typeof table.autoHephTurns === "number");
-	const auto = table.autoHephTurns;
+	assert.ok(isRecord(table) && typeof table.autoConversationTurns === "number");
+	const auto = table.autoConversationTurns;
 	const capacities = (layers: readonly Layer[]) => {
 		const resources = rendered(layers);
 		return {
@@ -1586,23 +1592,26 @@ await test("practice reviews run exactly when a worker runs, with its Heph turn 
 		};
 	};
 	assert.deepEqual(capacities(layersFor("small")), { worker: "8", server: "8" });
-	assert.deepEqual(capacities([...layersFor("small"), { worker: { hephTurns: "auto" } }]), {
+	assert.deepEqual(capacities([...layersFor("small"), { worker: { conversationTurns: "auto" } }]), {
 		worker: String(auto),
 		server: String(auto),
 	});
 	assert.deepEqual(
-		capacities([...layersFor("small"), { worker: { replicas: 3, hephTurns: "auto" } }]),
+		capacities([...layersFor("small"), { worker: { replicas: 3, conversationTurns: "auto" } }]),
 		{
 			worker: String(auto),
 			server: String(3 * auto),
 		},
 	);
-	assert.deepEqual(capacities([...layersFor("small"), { worker: { replicas: 2, hephTurns: 5 } }]), {
-		worker: "5",
-		server: "10",
-	});
+	assert.deepEqual(
+		capacities([...layersFor("small"), { worker: { replicas: 2, conversationTurns: 5 } }]),
+		{
+			worker: "5",
+			server: "10",
+		},
+	);
 	// No Heph slot at all: the server knows no capacity, so no question says that every slot is taken.
-	assert.deepEqual(capacities([...layersFor("small"), { worker: { hephTurns: 0 } }]), {
+	assert.deepEqual(capacities([...layersFor("small"), { worker: { conversationTurns: 0 } }]), {
 		worker: "0",
 		server: undefined,
 	});
@@ -1789,7 +1798,7 @@ const sandboxPods = (() => {
 		turn: entry("turnSandbox"),
 		probe: entry("isolationProbe"),
 		pooledTurns: count("pooledTurnSandboxes"),
-		autoHephTurns: count("autoHephTurns"),
+		autoConversationTurns: count("autoConversationTurns"),
 	};
 })();
 const sandboxGib = {
@@ -1813,7 +1822,7 @@ const assertTurnsFill = (turns: number, used: Budget, node: Budget) => {
 	);
 	assert.equal(
 		turns,
-		Math.min(sandboxPods.autoHephTurns, turns + more),
+		Math.min(sandboxPods.autoConversationTurns, turns + more),
 		`${turns} Heph turns; ${more} more would fit`,
 	);
 };

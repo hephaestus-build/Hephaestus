@@ -98,7 +98,7 @@ class SandboxPodRequestsTableTest extends BaseUnitTest {
         JsonNode table = table();
 
         assertThat(table.path("pooledTurnSandboxes").asInt()).isEqualTo(HephHostConfiguration.SANDBOX_POOL);
-        assertThat(table.path("autoHephTurns").asInt())
+        assertThat(table.path("autoConversationTurns").asInt())
                 .isEqualTo(
                         new WorkerProperties.Capacity(WorkerProperties.AUTO, WorkerProperties.AUTO).resolveMentorMax());
     }
