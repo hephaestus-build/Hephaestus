@@ -1,9 +1,19 @@
 package de.tum.cit.aet.hephaestus.core.database;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
+import liquibase.Contexts;
+import liquibase.LabelExpression;
+import liquibase.Liquibase;
+import liquibase.database.DatabaseFactory;
+import liquibase.database.jvm.JdbcConnection;
+import liquibase.resource.ClassLoaderResourceAccessor;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
@@ -21,6 +31,79 @@ class WorkerHubRemovalMigrationTest {
     void shouldCountOnlyALeaselessClaimedAttemptAsADrainAndDropTheTokenDenylist() throws Exception {
         var database = PracticeMigrationFixture.releasedDatabase("dev");
         PracticeMigrationFixture.upgradeBefore(database, "dev", CHANGELOG);
+        seedAttempts(database);
+
+        PracticeMigrationFixture.upgrade(database, "dev");
+
+        assertThat(PracticeMigrationFixture.column(
+                        database,
+                        "SELECT id || ':' || drain_count FROM review_job WHERE id::text LIKE '%979%' ORDER BY id"))
+                .containsExactly(
+                        "00000000-0000-0000-0000-000000979001:1",
+                        "00000000-0000-0000-0000-000000979002:0",
+                        "00000000-0000-0000-0000-000000979003:0",
+                        "00000000-0000-0000-0000-000000979004:0",
+                        "00000000-0000-0000-0000-000000979005:1");
+        assertThat(
+                        PracticeMigrationFixture.column(
+                                database,
+                                "SELECT count(*)::text FROM information_schema.tables WHERE table_name='worker_token_denylist'"))
+                .containsExactly("0");
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {1, 2})
+    void shouldRefuseEachCutoverRollbackWithoutChangingHistoryOrCountingAnotherDrain(int applied) throws Exception {
+        var database = PracticeMigrationFixture.releasedDatabase("dev");
+        PracticeMigrationFixture.upgradeBefore(database, "dev", CHANGELOG);
+        seedAttempts(database);
+        PracticeMigrationFixture.execute(
+                database,
+                "INSERT INTO worker_token_denylist(jti,revoked_at,expires_at) VALUES ('revoked-before-cutover',now(),now()+interval '1 hour')");
+        var source = new DriverManagerDataSource(database.jdbcUrl(), database.username(), database.password());
+        try (var connection = source.getConnection();
+                var liquibase = new Liquibase(
+                        "db/master.xml",
+                        new ClassLoaderResourceAccessor(),
+                        DatabaseFactory.getInstance()
+                                .findCorrectDatabaseImplementation(new JdbcConnection(connection)))) {
+            var contexts = new Contexts("dev");
+            var labels = new LabelExpression();
+            liquibase.update(applied, contexts, labels);
+            var history = PracticeMigrationFixture.column(
+                    database,
+                    "SELECT id FROM databasechangelog WHERE filename LIKE '%1793149793934_changelog.xml' ORDER BY orderexecuted");
+            var drains = PracticeMigrationFixture.column(
+                    database,
+                    "SELECT id || ':' || drain_count FROM review_job WHERE id::text LIKE '%979%' ORDER BY id");
+            assertThat(history).hasSize(applied);
+
+            assertThatThrownBy(() -> liquibase.rollback(1, contexts, labels))
+                    .hasStackTraceContaining("restore the database backup taken before this upgrade");
+
+            assertThat(
+                            PracticeMigrationFixture.column(
+                                    database,
+                                    "SELECT id FROM databasechangelog WHERE filename LIKE '%1793149793934_changelog.xml' ORDER BY orderexecuted"))
+                    .containsExactlyElementsOf(history);
+            assertThat(PracticeMigrationFixture.column(
+                            database,
+                            "SELECT id || ':' || drain_count FROM review_job WHERE id::text LIKE '%979%' ORDER BY id"))
+                    .containsExactlyElementsOf(drains);
+            assertThat(
+                            PracticeMigrationFixture.column(
+                                    database,
+                                    "SELECT count(*)::text FROM information_schema.tables WHERE table_name='worker_token_denylist'"))
+                    .containsExactly("0");
+            liquibase.update(contexts, labels);
+            assertThat(PracticeMigrationFixture.column(
+                            database,
+                            "SELECT drain_count::text FROM review_job WHERE id='00000000-0000-0000-0000-000000979001'"))
+                    .containsExactly("1");
+        }
+    }
+
+    private static void seedAttempts(PostgreSQLTestContainer.TestDatabase database) {
         new ResourceDatabasePopulator(new ClassPathResource("db/practice-native/result-parent.sql"))
                 .execute(new DriverManagerDataSource(database.jdbcUrl(), database.username(), database.password()));
         // One review for each active job: a review has at most one queued or running job.
@@ -56,22 +139,5 @@ class WorkerHubRemovalMigrationTest {
                      'worker-0x',NULL,repeat('a',64)))
                     AS job(id,review,status,worker_id,leased_until,digest)
                 """);
-
-        PracticeMigrationFixture.upgrade(database, "dev");
-
-        assertThat(PracticeMigrationFixture.column(
-                        database,
-                        "SELECT id || ':' || drain_count FROM review_job WHERE id::text LIKE '%979%' ORDER BY id"))
-                .containsExactly(
-                        "00000000-0000-0000-0000-000000979001:1",
-                        "00000000-0000-0000-0000-000000979002:0",
-                        "00000000-0000-0000-0000-000000979003:0",
-                        "00000000-0000-0000-0000-000000979004:0",
-                        "00000000-0000-0000-0000-000000979005:1");
-        assertThat(
-                        PracticeMigrationFixture.column(
-                                database,
-                                "SELECT count(*)::text FROM information_schema.tables WHERE table_name='worker_token_denylist'"))
-                .containsExactly("0");
     }
 }

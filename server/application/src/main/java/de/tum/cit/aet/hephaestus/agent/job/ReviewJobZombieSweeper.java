@@ -159,6 +159,10 @@ public class ReviewJobZombieSweeper {
     private @Nullable ReviewJob reapIfStale(UUID jobId) {
         ReviewJob lockedJob = jobRepository.lockById(jobId).orElse(null);
         if (lockedJob == null || lockedJob.getStatus() != ReviewJobStatus.RUNNING) return null;
+        // The cutover counts an unleased claim as a drain. Lease recovery must keep its retry credit and admission
+        // before the timeout backstop can end it, including during recovery's startup grace period.
+        if (lockedJob.getLeasedUntil() == null && lockedJob.getWorkerId() != null && lockedJob.getDrainCount() > 0)
+            return null;
         int timeoutSeconds = getTimeoutFromSnapshot(lockedJob);
         Duration maxLifetime = Duration.ofSeconds(timeoutSeconds).plus(RUNNING_BUFFER);
         Instant deadlineAnchor = lockedJob.getExecutionStartedAt() != null

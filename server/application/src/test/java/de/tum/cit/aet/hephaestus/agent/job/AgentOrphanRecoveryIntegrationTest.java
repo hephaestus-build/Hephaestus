@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.agent.job;
 
 import static java.util.Objects.requireNonNull;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.AdditionalAnswers.delegatesTo;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
@@ -121,6 +122,8 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import org.awaitility.Awaitility;
 import org.jspecify.annotations.Nullable;
@@ -270,6 +273,60 @@ class AgentOrphanRecoveryIntegrationTest extends BaseIntegrationTest {
     private LlmModel instanceModel;
     private Practice practice;
     private User developer;
+
+    @Test
+    void shouldRecoverOldCutoverClaimsBeforeTheStartupTimeoutSweepCanEndThem() {
+        UUID unadmitted = runningJobOwnedBy("worker-0x", Instant.now().minus(Duration.ofHours(2)), 1);
+        UUID admitted = runningJobOwnedBy("worker-0x", Instant.now().minus(Duration.ofHours(2)), 1);
+        Result observed = admitWithResult(admitted);
+        // The cutover's drain increment, scoped to this test's old claims.
+        jdbc.update(
+                "UPDATE review_job SET drain_count = drain_count + 1, leased_until = NULL WHERE id = ? OR id = ?",
+                unadmitted,
+                admitted);
+        when(properties.heartbeatInterval()).thenReturn(Duration.ofSeconds(25));
+        Instant start = jobRepository.databaseNow();
+        var clock = new AtomicReference<>(start.plusSeconds(30));
+        var monotonic = new AtomicLong(Duration.ofSeconds(30).toNanos());
+        ReviewJobRepository clocked = mock(ReviewJobRepository.class, delegatesTo(jobRepository));
+        doAnswer(invocation -> clock.get()).when(clocked).databaseNow();
+        var startup = new ReviewJobZombieSweeper(
+                clocked,
+                workerRegistryRepository,
+                objectMapper,
+                transactionTemplate,
+                attemptUsage,
+                meterRegistry,
+                new ReviewJobTelemetry(meterRegistry, Tracer.NOOP),
+                recovery,
+                properties);
+        startup.ticker = monotonic::get;
+
+        startup.recoverOrphanedJobs();
+        clock.set(start.plusSeconds(50));
+        monotonic.set(Duration.ofSeconds(50).toNanos());
+        startup.recoverOrphanedJobs();
+        clock.set(start.plusSeconds(60));
+        monotonic.set(Duration.ofSeconds(60).toNanos());
+        startup.reapStaleRunningJobs();
+        assertThat(jobRepository.findById(unadmitted).orElseThrow().getStatus()).isEqualTo(ReviewJobStatus.RUNNING);
+        assertThat(jobRepository.findById(admitted).orElseThrow().getStatus()).isEqualTo(ReviewJobStatus.RUNNING);
+
+        clock.set(start.plusSeconds(70));
+        monotonic.set(Duration.ofSeconds(70).toNanos());
+        startup.recoverOrphanedJobs();
+
+        for (UUID id : List.of(unadmitted, admitted)) {
+            ReviewJob continued = jobRepository.findById(id).orElseThrow();
+            assertThat(continued.getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
+            assertThat(continued.getAttempt()).isEqualTo(2);
+            assertThat(continued.spentAttempts()).isEqualTo(1);
+        }
+        assertThat(ResultAdmissionService.isContinuation(
+                        jobRepository.findById(admitted).orElseThrow()))
+                .isTrue();
+        assertThat(practiceResultRepository.findById(observed.getId())).isPresent();
+    }
 
     @BeforeEach
     void setUp() {

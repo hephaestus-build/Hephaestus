@@ -3,13 +3,14 @@
     <changeSet id="1793149793934-1" author="hephaestus">
         <dropTable tableName="worker_token_denylist"/>
         <rollback>
-            <sql>CREATE TABLE worker_token_denylist (jti VARCHAR(64) NOT NULL CONSTRAINT pk_worker_token_denylist PRIMARY KEY, revoked_at TIMESTAMP WITH TIME ZONE NOT NULL, expires_at TIMESTAMP WITH TIME ZONE NOT NULL); CREATE INDEX ix_worker_token_denylist_expires_at ON worker_token_denylist (expires_at);</sql>
+            <stop>The worker token revocations cannot be restored. To roll back, restore the database backup taken before this upgrade.</stop>
         </rollback>
     </changeSet>
     <changeSet id="1793149793934-2" author="hephaestus">
         <comment>A review attempt still running at the upgrade to 1.0 has no lease, because 0.x never set one, so lease recovery requeues it. Counting it as a drain spends no retry for an unadmitted attempt; an admitted one is handed on to compose, as after any drain.</comment>
         <sql>UPDATE review_job SET drain_count = drain_count + 1 WHERE status = 'RUNNING' AND leased_until IS NULL;</sql>
-        <!-- The rows it counted have moved on since, so there is nothing to take back. -->
-        <rollback/>
+        <rollback>
+            <stop>The cutover drain count cannot be reversed. To roll back, restore the database backup taken before this upgrade.</stop>
+        </rollback>
     </changeSet>
 </databaseChangeLog>
