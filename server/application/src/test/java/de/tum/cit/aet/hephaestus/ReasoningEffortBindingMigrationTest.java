@@ -1,4 +1,4 @@
-package de.tum.cit.aet.hephaestus.agent.config;
+package de.tum.cit.aet.hephaestus;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
