@@ -2,14 +2,15 @@ package de.tum.cit.aet.hephaestus.agent.proxy;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import de.tum.cit.aet.hephaestus.agent.attempt.AttemptJwt;
+import de.tum.cit.aet.hephaestus.agent.attempt.AttemptSigningKey;
+import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenIssuer;
+import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenVerifier;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewAttemptUsageService;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnStarts;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
-import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.AttemptJwt;
-import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtIssuer;
-import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtVerifier;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.mentor.MentorConversation;
 import de.tum.cit.aet.hephaestus.mentor.MentorConversationService;
@@ -21,6 +22,7 @@ import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -66,11 +68,12 @@ class TurnTokenAuthenticationIntegrationTest extends AbstractWorkspaceIntegratio
     @Autowired
     private MeterRegistry metrics;
 
-    @Autowired
-    private WorkerJwtVerifier jwtVerifier;
+    /** This test's worker key: the worker role, which signs attempt tokens, is off in the test context. */
+    private static final AttemptSigningKey KEY = AttemptSigningKey.generate();
 
-    @Autowired
-    private WorkerJwtIssuer jwtIssuer;
+    private final AttemptTokenVerifier jwtVerifier = new AttemptTokenVerifier(KEY, new SimpleMeterRegistry());
+
+    private final AttemptTokenIssuer jwtIssuer = new AttemptTokenIssuer(KEY);
 
     @Autowired
     private ObjectMapper objectMapper;

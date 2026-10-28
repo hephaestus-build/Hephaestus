@@ -1,5 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.mentor.host;
 
+import de.tum.cit.aet.hephaestus.agent.attempt.AttemptJwt;
+import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenIssuer;
 import de.tum.cit.aet.hephaestus.agent.context.WorkspaceContextBuilder;
 import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.FakeExecSandboxes;
 import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnAttempt;
@@ -7,8 +9,6 @@ import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnContextFolder;
 import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnContextGenerations;
 import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnSandboxes;
 import de.tum.cit.aet.hephaestus.core.auth.spi.AccountDirectory;
-import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.AttemptJwt;
-import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtIssuer;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ContextLoader;
 import de.tum.cit.aet.hephaestus.mentor.MentorContextPathBuilder;
 import de.tum.cit.aet.hephaestus.mentor.MentorConversationService;
@@ -97,7 +97,7 @@ final class HephTurnFixtures {
                 turn.turnId(),
                 turn.workspaceId(),
                 turn.attempt(),
-                Set.of(WorkerJwtIssuer.LLM_PROXY_SCOPE),
+                Set.of(AttemptTokenIssuer.LLM_PROXY_SCOPE),
                 "jti",
                 now,
                 now.plusSeconds(300),

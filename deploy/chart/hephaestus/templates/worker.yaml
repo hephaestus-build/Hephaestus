@@ -219,11 +219,6 @@ spec:
           protocol: TCP
     {{- include "hephaestus.policy.metricsIngress" . | nindent 4 }}
   egress:
-    - to:
-        {{- include "hephaestus.componentPeer" (dict "root" . "component" "server") | nindent 8 }}
-      ports:
-        - port: 8080
-          protocol: TCP
     {{- include "hephaestus.policy.databaseEgress" . | nindent 4 }}
     {{- include "hephaestus.policy.externalEgress" . | nindent 4 }}
     {{- include "hephaestus.policy.modelEgress" . | nindent 4 }}
@@ -337,9 +332,6 @@ spec:
               value: prod,worker
             - name: JAVA_TOOL_OPTIONS
               value: -XX:MaxDirectMemorySize=128M
-            - name: HEPHAESTUS_HUB_URL
-              value: {{ printf "ws://%s:8080/api/workers/connect" (include "hephaestus.name" (dict "root" . "component" "server")) | quote }}
-            {{- include "hephaestus.secretEnv" (dict "root" . "env" "HEPHAESTUS_WORKER_REGISTRATION_TOKEN") | nindent 12 }}
             - name: AGENT_ENABLED
               value: "true"
             - name: HEPHAESTUS_WORKER_CAPACITY_MENTOR_MAX

@@ -58,9 +58,6 @@ spec:
   ingress:
     - from:
         {{- include "hephaestus.peer" $gateway | nindent 8 }}
-        {{- if .Values.worker.enabled }}
-        {{- include "hephaestus.componentPeer" (dict "root" . "component" "worker") | nindent 8 }}
-        {{- end }}
       ports:
         - port: http
           protocol: TCP

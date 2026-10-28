@@ -9,8 +9,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobExecutor;
-import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerCapacityState;
-import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerControlClient;
 import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerDrainCoordinator;
 import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerProperties;
 import de.tum.cit.aet.hephaestus.agent.runtime.worker.testing.WorkerPropertiesFixtures;
@@ -60,12 +58,7 @@ class SandboxGatewayDrainIntegrationTest {
             return reviewFinished.await(20, TimeUnit.SECONDS);
         });
         var coordinator = new WorkerDrainCoordinator(
-                mock(WorkerControlClient.class),
-                new WorkerCapacityState(properties),
-                properties,
-                Optional.of(executor),
-                mock(ApplicationEventPublisher.class),
-                new SimpleMeterRegistry());
+                properties, Optional.of(executor), mock(ApplicationEventPublisher.class), new SimpleMeterRegistry());
 
         var application = new SpringApplication(GatewayApplication.class);
         application.addInitializers(

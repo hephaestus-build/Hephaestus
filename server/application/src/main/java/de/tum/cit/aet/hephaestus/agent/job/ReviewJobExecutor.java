@@ -1,6 +1,8 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import de.tum.cit.aet.hephaestus.agent.attempt.AttemptJwt;
+import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenIssuer;
 import de.tum.cit.aet.hephaestus.agent.composer.CompositionHandedOnException;
 import de.tum.cit.aet.hephaestus.agent.composer.CompositionStop;
 import de.tum.cit.aet.hephaestus.agent.composer.WorkerFeedbackComposer;
@@ -36,8 +38,6 @@ import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
-import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.AttemptJwt;
-import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtIssuer;
 import de.tum.cit.aet.hephaestus.evidence.AutomatedReviewReadinessReport;
 import de.tum.cit.aet.hephaestus.evidence.capture.EvidenceDirectory;
 import de.tum.cit.aet.hephaestus.integration.core.metrics.ReviewRefusalRecorder;
@@ -48,7 +48,6 @@ import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
-import jakarta.annotation.PreDestroy;
 import java.io.IOException;
 import java.io.Serial;
 import java.io.UncheckedIOException;
@@ -167,7 +166,7 @@ public class ReviewJobExecutor {
     private final ReviewJobRepository jobRepository;
     private final DefaultReviewExecutionHandler handler;
     private final PracticePiAdapter practiceAgent;
-    private final WorkerJwtIssuer workerJwtIssuer;
+    private final AttemptTokenIssuer attemptTokenIssuer;
 
     private final SandboxManager sandboxManager;
     private final SandboxProperties.DefaultResourceLimits reviewLimits;
@@ -242,7 +241,7 @@ public class ReviewJobExecutor {
             ReviewJobRepository jobRepository,
             DefaultReviewExecutionHandler handler,
             PracticePiAdapter practiceAgent,
-            WorkerJwtIssuer workerJwtIssuer,
+            AttemptTokenIssuer attemptTokenIssuer,
             SandboxManager sandboxManager,
             SandboxProperties sandboxProperties,
             @Qualifier("sandboxExecutor") AsyncTaskExecutor sandboxExecutor,
@@ -263,7 +262,7 @@ public class ReviewJobExecutor {
         this.jobRepository = jobRepository;
         this.handler = handler;
         this.practiceAgent = practiceAgent;
-        this.workerJwtIssuer = workerJwtIssuer;
+        this.attemptTokenIssuer = attemptTokenIssuer;
         this.sandboxManager = sandboxManager;
         this.reviewLimits = sandboxProperties.defaultResourceLimits();
         this.sandboxSlots = sandboxProperties.maxConcurrentContainers();
@@ -455,6 +454,21 @@ public class ReviewJobExecutor {
     }
 
     /**
+     * Stops each local attempt whose row this worker no longer runs: a cancel, a requeue or a reap ended it on the row
+     * alone.
+     */
+    public void stopEndedAttempts() {
+        Map<UUID, Integer> local = Map.copyOf(localRunningJobs);
+        if (local.isEmpty()) return;
+        Set<UUID> running = Set.copyOf(jobRepository.findRunningIdsOwnedBy(workerId, local.keySet()));
+        local.forEach((jobId, attempt) -> {
+            // A later attempt of the job that this worker claimed since the read is not the one that ended.
+            if (!running.contains(jobId) && attempt.equals(localRunningJobs.get(jobId)))
+                cancelLocalJob(jobId, "its attempt ended elsewhere");
+        });
+    }
+
+    /**
      * Stops the container only; whoever ended or requeued the attempt already wrote its status.
      *
      * @return true if this worker owns the job and a stop was requested
@@ -471,13 +485,6 @@ public class ReviewJobExecutor {
             log.warn("Local cancel failed for job {}: {}", jobId, e.getClass().getSimpleName());
             return false;
         }
-    }
-
-    /** Used when no {@code WorkerDrainCoordinator} owns the worker lifecycle (monolith mode). */
-    @PreDestroy
-    public void stop() {
-        stopAcceptingNewJobs();
-        awaitInFlight(Duration.ofSeconds(30));
     }
 
     private void pollLoop() {
@@ -1047,7 +1054,7 @@ public class ReviewJobExecutor {
             Instant workDeadline =
                     Instant.now().plusSeconds(snapshot.timeoutSeconds()).truncatedTo(ChronoUnit.SECONDS);
             Instant tokenExpiry = workDeadline.plus(SandboxLayout.RESULT_UPLOAD_GRACE);
-            String jobToken = workerJwtIssuer.issueForAttempt(
+            String jobToken = attemptTokenIssuer.issueForAttempt(
                     AttemptJwt.Kind.REVIEW, jobId, job.getWorkspaceId(), job.getAttempt(), workDeadline, tokenExpiry);
             stage.set(PreparationFailure.Stage.SPEC);
             PracticeAgentRequest adapterRequest = new PracticeAgentRequest(

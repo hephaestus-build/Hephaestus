@@ -8,13 +8,13 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.agent.attempt.AttemptJwt;
+import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenInvalidException;
+import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenVerifier;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.RuntimeJobTestData;
-import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.AttemptJwt;
-import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtInvalidException;
-import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtVerifier;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
@@ -39,7 +39,7 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
     private final ReviewJobRepository jobs = mock(ReviewJobRepository.class);
     private final MentorTurnRepository turns = mock(MentorTurnRepository.class);
     private final SandboxGatewaySessions sessions = mock(SandboxGatewaySessions.class);
-    private final WorkerJwtVerifier verifier = mock(WorkerJwtVerifier.class);
+    private final AttemptTokenVerifier verifier = mock(AttemptTokenVerifier.class);
     private final JobTokenAuthenticationFilter filter =
             new JobTokenAuthenticationFilter(jobs, turns, sessions, verifier, "worker-1");
 
@@ -202,7 +202,7 @@ class JobTokenAuthenticationFilterTest extends BaseUnitTest {
     @Test
     void hostSessionTokenReachesOnlyItsOwnRuntimeReadsAndCommandChannel() throws Exception {
         UUID host = UUID.randomUUID();
-        when(verifier.verify("session-token")).thenThrow(new WorkerJwtInvalidException("not signed", "malformed"));
+        when(verifier.verify("session-token")).thenThrow(new AttemptTokenInvalidException("not signed", "malformed"));
         when(sessions.unsignedSessionFor("session-token"))
                 .thenReturn(Optional.of(
                         new SandboxGatewaySessions.UnsignedSession(host, SandboxGatewaySessions.Kind.HEPH_HOST)));

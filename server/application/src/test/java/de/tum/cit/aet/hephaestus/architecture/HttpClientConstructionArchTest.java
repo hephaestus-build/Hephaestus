@@ -4,7 +4,6 @@ import static com.tngtech.archunit.base.DescribedPredicate.describe;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 
 import com.tngtech.archunit.core.domain.JavaMethodCall;
-import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerControlClient;
 import java.net.HttpURLConnection;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
@@ -47,10 +46,6 @@ class HttpClientConstructionArchTest extends HephaestusArchitectureTest {
     @Test
     void shouldReachHttpOnlyThroughSpringClients() {
         noClasses()
-                .that()
-                // The worker's hub control channel is a WebSocket, which RestClient and WebClient do not open;
-                // its registration-token exchange shares that client so the session uses one connection setup.
-                .doNotBelongToAnyOf(WorkerControlClient.class)
                 .should()
                 .dependOnClassesThat()
                 .resideInAPackage("java.net.http..")

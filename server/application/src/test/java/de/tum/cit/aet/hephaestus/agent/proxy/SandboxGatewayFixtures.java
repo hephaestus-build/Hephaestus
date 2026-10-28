@@ -1,8 +1,8 @@
 package de.tum.cit.aet.hephaestus.agent.proxy;
 
+import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenVerifier;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
-import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtVerifier;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import jakarta.servlet.Filter;
 
@@ -16,7 +16,7 @@ public final class SandboxGatewayFixtures {
 
     /** Authenticates a job or turn credential as the gateway does on a worker named {@code workerId}. */
     public static Filter credentialFilter(
-            ReviewJobRepository jobs, MentorTurnRepository turns, WorkerJwtVerifier verifier, String workerId) {
+            ReviewJobRepository jobs, MentorTurnRepository turns, AttemptTokenVerifier verifier, String workerId) {
         return new JobTokenAuthenticationFilter(jobs, turns, new SandboxGatewaySessions(), verifier, workerId);
     }
 }

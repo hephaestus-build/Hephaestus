@@ -212,7 +212,6 @@ export function applicationSecret(): Record<string, string> {
 		HEPHAESTUS_AUTH_STATE_COOKIE_KEY: randomBytes(32).toString("base64"),
 		WEBHOOK_SECRET: secretValue(32),
 		WEBHOOK_ROUTING_SECRET: secretValue(32),
-		HEPHAESTUS_WORKER_REGISTRATION_TOKEN: secretValue(32),
 	};
 }
 

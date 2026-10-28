@@ -12,7 +12,7 @@ import org.junit.jupiter.api.Test;
  * again — authentication is Hephaestus-native ({@code core.auth}).
  *
  * <p>NB: {@code com.auth0:java-jwt} is intentionally NOT banned — it backs the worker-control-
- * channel JWT ({@code core.runtime.hub.auth.*}) and the GitHub App token service, which are
+ * channel JWT ({@code agent.attempt.*}) and the GitHub App token service, which are
  * unrelated to user authentication.
  */
 @Tag("architecture")

@@ -8,7 +8,7 @@ import de.tum.cit.aet.hephaestus.Application;
 import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceDeliveryAuthorization;
 import de.tum.cit.aet.hephaestus.agent.context.CitedSourceAccess;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobExecutor;
-import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerControlClient;
+import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerDrainCoordinator;
 import de.tum.cit.aet.hephaestus.core.auth.AccountReferenceService;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
@@ -141,8 +141,6 @@ class RuntimeRoleContextIntegrationTest {
                         "spring.datasource.username=" + database.username(),
                         "spring.datasource.password=" + database.password(),
                         "hephaestus.agent.enabled=true",
-                        "hephaestus.worker.control.endpoint=wss://127.0.0.1:1/control",
-                        "hephaestus.worker.control.registration-token=role-context-test",
                         "hephaestus.worker.capacity.review-max=1",
                         "hephaestus.worker.capacity.mentor-max=1",
                         "hephaestus.sync.nats.enabled=" + (role != RuntimeRole.WORKER),
@@ -188,7 +186,7 @@ class RuntimeRoleContextIntegrationTest {
                     }
                     if (role == RuntimeRole.WORKER) {
                         assertThat(application).hasSingleBean(ReviewJobExecutor.class);
-                        assertThat(application).hasSingleBean(WorkerControlClient.class);
+                        assertThat(application).hasSingleBean(WorkerDrainCoordinator.class);
                         assertThat(application).hasSingleBean(ResultAdmissionPolicy.class);
                     } else {
                         assertThat(application).doesNotHaveBean(ReviewJobExecutor.class);

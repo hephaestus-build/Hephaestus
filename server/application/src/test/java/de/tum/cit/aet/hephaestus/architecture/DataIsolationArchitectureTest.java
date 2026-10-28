@@ -119,7 +119,6 @@ class DataIsolationArchitectureTest extends HephaestusArchitectureTest {
             // global
             "CatalogEntry",
             "FxRate", // ECB daily reference rate for display-only conversion; a world fact, not tenant data
-            "WorkerTokenDenylist", // Fleet-wide JWT revocation; worker JWTs are not workspace-scoped
             // core.auth (ADR 0017) — identity is user/system-scoped, not workspace-scoped.
             // Account ↔ Workspace association lives on Membership, not on these rows.
             "PersonDataRequest", // Instance-wide rights request, never a workspace endpoint

@@ -39,8 +39,6 @@ public class WorkspaceScopedTables {
             "organization",
             "identity_provider",
             "issue_type",
-            // Fleet-wide worker JWT revocation; worker JWTs are not workspace-scoped
-            "worker_token_denylist",
             // core.auth (ADR 0017) — identity is user/system-scoped, not workspace-scoped.
             // Account ↔ Workspace association lives on membership, not these tables.
             "account",

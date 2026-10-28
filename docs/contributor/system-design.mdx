@@ -10,14 +10,13 @@ description: Runtime roles, module boundaries, and the paths from connected work
 ```mermaid
 flowchart TB
     accTitle: Hephaestus runtime topology
-    accDescr: The webapp calls the server. The webhook role verifies provider events and publishes them to NATS. The server consumes events and writes jobs and Heph turns to PostgreSQL. Connected workers run reviews in sandboxes and Heph turns in one Heph host each.
+    accDescr: The webapp calls the server. The webhook role verifies provider events and publishes them to NATS. The server consumes events and writes jobs and Heph turns to PostgreSQL. Workers claim them from PostgreSQL and run reviews in sandboxes and Heph turns in one Heph host each.
     Providers[GitHub, GitLab, Slack, Outline] --> Webhook[Webhook role]
     Webhook --> NATS[NATS JetStream]
     NATS --> Server[Server role]
     SPA[React webapp] --> Server
     Server --> DB[(PostgreSQL)]
     Worker[Worker role] --> DB
-    Server <-->|Authenticated worker hub| Worker
     Worker --> Sandbox[Review sandboxes and the Heph host]
     Sandbox --> Proxy[Worker LLM proxy]
     Proxy --> Models[Configured model services]
@@ -26,7 +25,7 @@ flowchart TB
 ```
 
 One JAR boots in the server, worker, and webhook roles. The supported Compose deployment runs each
-in its own container. Only the worker has Docker access. Heph turns need a connected worker even
+in its own container. Only the worker has Docker access. Heph turns need a running worker even
 when server and worker roles share a JVM.
 There is no direct server-side sandbox fallback.
 

@@ -18,6 +18,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import de.tum.cit.aet.hephaestus.agent.AgentControllerAdvice;
+import de.tum.cit.aet.hephaestus.agent.attempt.AttemptJwt;
+import de.tum.cit.aet.hephaestus.agent.attempt.AttemptSigningKey;
+import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenIssuer;
+import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenVerifier;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnAttempt;
 import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnContextFolder;
@@ -31,9 +35,6 @@ import de.tum.cit.aet.hephaestus.agent.proxy.SandboxGatewayFixtures;
 import de.tum.cit.aet.hephaestus.agent.runtime.worker.testing.WorkerPropertiesFixtures;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
 import de.tum.cit.aet.hephaestus.core.exception.GlobalControllerAdvice;
-import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.AttemptJwt;
-import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtIssuer;
-import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtVerifier;
 import de.tum.cit.aet.hephaestus.evidence.SourceUsePurpose;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.mentor.MentorConversation;
@@ -52,6 +53,7 @@ import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import jakarta.persistence.EntityManager;
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -132,11 +134,12 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
     @Autowired
     private ReviewJobRepository jobRepository;
 
-    @Autowired
-    private WorkerJwtIssuer issuer;
+    /** This test's worker key: the worker role, which signs attempt tokens, is off in the test context. */
+    private static final AttemptSigningKey KEY = AttemptSigningKey.generate();
 
-    @Autowired
-    private WorkerJwtVerifier verifier;
+    private final AttemptTokenIssuer issuer = new AttemptTokenIssuer(KEY);
+
+    private final AttemptTokenVerifier verifier = new AttemptTokenVerifier(KEY, new SimpleMeterRegistry());
 
     @Autowired
     private JsonMapper mapper;

@@ -1,4 +1,4 @@
-package de.tum.cit.aet.hephaestus.core.runtime.hub.auth;
+package de.tum.cit.aet.hephaestus.agent.attempt;
 
 import java.time.Instant;
 import java.util.Set;
@@ -22,8 +22,7 @@ public record AttemptJwt(
         String jti,
         Instant issuedAt,
         Instant expiresAt,
-        @Nullable Instant workDeadline)
-        implements WorkerJwt {
+        @Nullable Instant workDeadline) {
 
     /** What the attempt runs. */
     public enum Kind {

@@ -50,7 +50,3 @@ hephaestus:
         nats:
             enabled: false
 
-    worker:
-        control:
-            endpoint: ${HEPHAESTUS_HUB_URL:}
-            registration-token: ${HEPHAESTUS_WORKER_REGISTRATION_TOKEN:}

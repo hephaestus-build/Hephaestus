@@ -1,8 +1,8 @@
 package de.tum.cit.aet.hephaestus.agent.proxy;
 
+import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenVerifier;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
-import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtVerifier;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -44,7 +44,7 @@ public final class JobTokenAuthenticationFilter extends AuthenticationFilter {
             ReviewJobRepository jobs,
             MentorTurnRepository turns,
             SandboxGatewaySessions sessions,
-            WorkerJwtVerifier verifier,
+            AttemptTokenVerifier verifier,
             String workerId) {
         super(
                 new ProviderManager(new JobTokenAuthenticationProvider(jobs, turns, sessions, verifier, workerId)),

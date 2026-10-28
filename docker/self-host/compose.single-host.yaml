@@ -97,8 +97,6 @@ services:
       # ingress address explicitly (a blank value fails the boot). Here the
       # proxy has a fixed IP, so it can simply be correct by default.
       HEPHAESTUS_TRUSTED_PROXIES: ${HEPHAESTUS_TRUSTED_PROXIES:-172\.29\.47\.2}
-      # Required here: without it the worker cannot register and no sandbox runs.
-      HEPHAESTUS_WORKER_HUB_TOKEN_REGISTRATION_TOKEN: ${HEPHAESTUS_WORKER_REGISTRATION_TOKEN:?Run setup.sh or set HEPHAESTUS_WORKER_REGISTRATION_TOKEN in .env}
     ports: !override []
 
   # Runs the AI sandboxes and is the only service given the Docker socket.
@@ -110,7 +108,6 @@ services:
       DATABASE_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
       APPLICATION_HOST_URL: https://${APP_HOSTNAME:?Set APP_HOSTNAME in .env}
       HEPHAESTUS_TRUSTED_PROXIES: ${HEPHAESTUS_TRUSTED_PROXIES:-172\.29\.47\.2}
-      HEPHAESTUS_WORKER_REGISTRATION_TOKEN: ${HEPHAESTUS_WORKER_REGISTRATION_TOKEN:?Run setup.sh or set HEPHAESTUS_WORKER_REGISTRATION_TOKEN in .env}
       # One concurrent agent sandbox (up to the 3 GiB SANDBOX_MEMORY_BYTES default); size the host from
       # the install guide. The reference defaults to 5 across dedicated machines.
       SANDBOX_MAX_CONCURRENT: ${SANDBOX_MAX_CONCURRENT:-1}

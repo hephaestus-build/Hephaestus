@@ -44,8 +44,8 @@ import org.springframework.web.reactive.function.client.WebClient;
  * Wires the OAuth login flow on a dedicated, medium-precedence
  * {@link SecurityFilterChain}.
  *
- * <p>Order: {@code HIGHEST_PRECEDENCE + 10} — runs after the worker-hub chain
- * ({@code HIGHEST_PRECEDENCE}) but before the resource-server chain (default order).
+ * <p>Order: {@code HIGHEST_PRECEDENCE + 10} — runs after the ingress chain
+ * ({@code HIGHEST_PRECEDENCE + 4}) but before the resource-server chain (default order).
  * Scope is strictly the URLs Spring's {@code oauth2Login} cares about plus the
  * {@code /auth/login} kickoff endpoint:
  *

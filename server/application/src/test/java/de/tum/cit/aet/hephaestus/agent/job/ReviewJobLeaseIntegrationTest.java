@@ -1,6 +1,9 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.timeout;
+import static org.mockito.Mockito.verify;
 
 import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerProperties;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
@@ -12,6 +15,7 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
@@ -54,8 +58,7 @@ class ReviewJobLeaseIntegrationTest extends BaseIntegrationTest {
     @Autowired
     private JdbcTemplate jdbc;
 
-    // This context has worker.enabled=true and NO hephaestus.worker.control.endpoint. required=false so a regression
-    // (identity bound only when WSS is configured) fails on the assertion, not on context load.
+    // required=false, so that a context without the worker's identity fails on the assertion, not on context load.
     @Autowired(required = false)
     private WorkerProperties workerProperties;
 
@@ -116,10 +119,12 @@ class ReviewJobLeaseIntegrationTest extends BaseIntegrationTest {
     @DisplayName("this worker's heartbeat renews the lease of an attempt that it runs")
     void shouldRenewTheLeaseWhenTheWorkerThatRunsTheAttemptBeats() {
         assertThat(workerProperties).isNotNull();
+        ReviewJobExecutor executor = mock(ReviewJobExecutor.class);
         var reporter = new WorkerLivenessReporter(
                 workerRegistryRepository,
                 jobRepository,
                 transactionTemplate,
+                Optional.of(executor),
                 agentProperties,
                 workerProperties,
                 new SimpleMeterRegistry());
@@ -129,6 +134,7 @@ class ReviewJobLeaseIntegrationTest extends BaseIntegrationTest {
         reporter.beat();
 
         assertThat(expired()).extracting(OrphanedJobRef::getJobId).doesNotContain(id);
+        verify(executor, timeout(5_000)).stopEndedAttempts();
     }
 
     @Test
@@ -165,6 +171,18 @@ class ReviewJobLeaseIntegrationTest extends BaseIntegrationTest {
         ReviewJob requeued = jobRepository.findById(id).orElseThrow();
         assertThat(requeued.getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
         assertThat(requeued.getWorkerId()).isNull();
+    }
+
+    @Test
+    @DisplayName("of the attempts a worker holds locally, it still runs only those whose row it owns and runs")
+    void shouldFindOnlyTheRunningAttemptsThatThisWorkerOwns() {
+        UUID mine = runningJob("w-me");
+        UUID theirs = runningJob("w-other");
+        UUID requeued = runningJob("w-me");
+        jdbc.update("UPDATE review_job SET status = 'QUEUED', worker_id = NULL WHERE id = ?", requeued);
+
+        assertThat(jobRepository.findRunningIdsOwnedBy("w-me", List.of(mine, theirs, requeued)))
+                .containsExactly(mine);
     }
 
     @Test

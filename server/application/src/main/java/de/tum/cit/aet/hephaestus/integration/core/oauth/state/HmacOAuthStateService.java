@@ -72,7 +72,7 @@ public class HmacOAuthStateService implements OAuthStateService {
      * {@code hephaestus.webhook.secret} (pre-existing infrastructure secret). When neither is
      * configured, production ({@code prod} profile) fails fast; outside production an ephemeral
      * random secret is generated with a WARN so local development boots without
-     * webhook/OAuth config — mirroring the {@code WorkerSigningKey} dev-vs-prod contract.
+     * webhook/OAuth config — mirroring the {@code AttemptSigningKey} dev-vs-prod contract.
      *
      * <p>{@code @Autowired} is required to disambiguate from the private core constructor (used by
      * the static test factories): with two declared constructors and no marker, Spring falls back

@@ -1614,28 +1614,6 @@ await test("a private S3 CA reaches every Pod that reads the repository, and no 
 	);
 });
 
-await test("the server requires the worker registration token exactly when a worker runs", () => {
-	const optional = (layers: readonly Layer[]) =>
-		get(
-			env(workload(rendered(layers), "server"), "HEPHAESTUS_WORKER_HUB_TOKEN_REGISTRATION_TOKEN"),
-			"valueFrom",
-			"secretKeyRef",
-			"optional",
-		);
-	assert.equal(optional(layersFor("dev")), true);
-	assert.equal(optional([...layersFor("small"), workerLayer]), undefined);
-	const worker = workload(rendered([...layersFor("small"), workerLayer]), "worker");
-	assert.equal(
-		get(
-			env(worker, "HEPHAESTUS_WORKER_REGISTRATION_TOKEN"),
-			"valueFrom",
-			"secretKeyRef",
-			"optional",
-		),
-		undefined,
-	);
-});
-
 await test("the worker schema refuses the retired hephTurns value", () => {
 	const result = render([...layersFor("small"), { worker: { hephTurns: 8 } }]);
 	assert.equal(result.ok, false);

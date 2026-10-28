@@ -4,6 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 import static org.mockito.Mockito.mock;
 
+import de.tum.cit.aet.hephaestus.agent.attempt.AttemptJwt;
+import de.tum.cit.aet.hephaestus.agent.attempt.AttemptSigningKey;
+import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenIssuer;
+import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenVerifier;
 import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.FakeExecSandboxes;
 import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnAttempt;
 import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnSandboxes;
@@ -15,9 +19,6 @@ import de.tum.cit.aet.hephaestus.agent.proxy.ProxyRouting;
 import de.tum.cit.aet.hephaestus.agent.runtime.worker.testing.WorkerPropertiesFixtures;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.HostSandbox;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
-import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.AttemptJwt;
-import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtIssuer;
-import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtVerifier;
 import de.tum.cit.aet.hephaestus.integration.core.sync.MutableClock;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
 import de.tum.cit.aet.hephaestus.mentor.MentorConversation;
@@ -103,11 +104,12 @@ class HephTurnDispatchIntegrationTest extends AbstractWorkspaceIntegrationTest {
     @Autowired
     private MeterRegistry metrics;
 
-    @Autowired
-    private WorkerJwtIssuer issuer;
+    /** This test's worker key: the worker role, which signs attempt tokens, is off in the test context. */
+    private static final AttemptSigningKey KEY = AttemptSigningKey.generate();
 
-    @Autowired
-    private WorkerJwtVerifier verifier;
+    private final AttemptTokenIssuer issuer = new AttemptTokenIssuer(KEY);
+
+    private final AttemptTokenVerifier verifier = new AttemptTokenVerifier(KEY, new SimpleMeterRegistry());
 
     @Autowired
     private DataSourceProperties dataSource;
@@ -260,7 +262,7 @@ class HephTurnDispatchIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     /** The started turn's attempt: what its token names, with the conversation and account of the turn's row. */
     private TurnAttempt credential(JsonNode start) {
-        var token = (AttemptJwt) verifier.verify(start.path("token").asString());
+        var token = verifier.verify(start.path("token").asString());
         assertThat(token.kind()).isEqualTo(AttemptJwt.Kind.TURN);
         assertThat(token.id().toString()).isEqualTo(start.path("turnId").asString());
         assertThat(token.workDeadline()).isNull();
