@@ -100,7 +100,15 @@ void test("a practice is shown only the sources it declares, and one declared se
 		const diffOnly = buildBrief(root, paths, scope(new Set([DIFF, "scm.repository.tree"]))).text;
 		assert.match(diffOnly, /work\/change\/diff\.patch/u);
 		assert.doesNotMatch(diffOnly, /### `context\/|Add login|nit/u);
-		const withCore = buildBrief(root, paths, scope(new Set([DIFF, CORE]))).text;
+		const layered = buildBrief(root, paths, scope(new Set([DIFF, CORE])));
+		const withCore = layered.text;
+		assert.equal(layered.cacheBoundaries.length, 2);
+		const [changeEnd, coreEnd] = layered.cacheBoundaries;
+		assert.ok(changeEnd !== undefined && coreEnd !== undefined);
+		assert.doesNotMatch(withCore.slice(0, changeEnd), /context\/metadata.json/u);
+		assert.match(withCore.slice(changeEnd, coreEnd), /context\/metadata.json/u);
+		assert.doesNotMatch(withCore.slice(0, coreEnd), /The sources of this practice/u);
+		assert.equal(buildBrief(root, paths, scope(new Set([DIFF]))).cacheBoundaries[0], changeEnd);
 		assert.match(withCore, /context\/description\.md/u);
 		assert.doesNotMatch(withCore, /### `context\/comments\.json`/u);
 		// The change layer comes first, so both openings share it as a prefix.
