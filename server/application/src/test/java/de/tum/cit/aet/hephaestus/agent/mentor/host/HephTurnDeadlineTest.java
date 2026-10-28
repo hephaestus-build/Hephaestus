@@ -39,8 +39,7 @@ import tools.jackson.databind.json.JsonMapper;
 
 /**
  * The turn deadline against a turn that keeps writing: the dispatcher's clock is the test's, and the test runs the
- * dispatcher's tick itself. A reasoning model at about 35 tokens a second wrote for more than five minutes in one turn,
- * and the turn must not end for that.
+ * dispatcher's tick itself. A turn whose model keeps writing runs until its binding's timeout, and only then stops.
  */
 class HephTurnDeadlineTest extends BaseUnitTest {
 
@@ -120,7 +119,7 @@ class HephTurnDeadlineTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldKeepATurnThatKeepsWritingPastFiveMinutesAndStopItOnlyAtTheCeiling() throws InterruptedException {
+    void shouldKeepATurnThatKeepsWritingAndStopItOnlyAtTheCeiling() throws InterruptedException {
         Duration ceiling = Duration.ofSeconds(AgentBindingLimits.MAX_HEPH_TURN_SECONDS);
         Duration step = Duration.ofSeconds(30);
         Duration written = Duration.ZERO;
@@ -132,7 +131,7 @@ class HephTurnDeadlineTest extends BaseUnitTest {
             dispatcher.partial(TURN, 1, MAPPER.readTree("{\"activity\":\"writing\",\"part\":" + ++part + "}"));
             dispatcher.tick();
         }
-        assertThat(written).isGreaterThan(Duration.ofMinutes(5));
+        assertThat(written).isEqualTo(ceiling);
         assertThat(frames).as("no stop while the turn is within its ceiling").isEmpty();
         assertThat(dispatcher.runs(TURN, 1)).isTrue();
         verify(completion, never()).end(any(), anyInt(), any(), any());

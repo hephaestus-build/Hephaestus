@@ -16,10 +16,10 @@ class MentorLlmConfigTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldGiveATurnTheWholeCeilingOfFifteenMinutesAndNotTheFormerFive() {
-        assertThat(AgentBindingLimits.MAX_HEPH_TURN_SECONDS).isEqualTo(900);
-        assertThat(config(900).timeoutSeconds()).isEqualTo(900);
-        assertThat(config(901).timeoutSeconds()).isEqualTo(900);
+    void shouldGiveATurnTheWholeCeilingAndNoSecondMore() {
+        int ceiling = AgentBindingLimits.MAX_HEPH_TURN_SECONDS;
+        assertThat(config(ceiling).timeoutSeconds()).isEqualTo(ceiling);
+        assertThat(config(ceiling + 1).timeoutSeconds()).isEqualTo(ceiling);
     }
 
     private static MentorLlmConfig config(int timeoutSeconds) {

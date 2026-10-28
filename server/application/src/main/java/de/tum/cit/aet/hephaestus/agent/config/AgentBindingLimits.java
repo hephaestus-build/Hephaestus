@@ -19,9 +19,8 @@ public final class AgentBindingLimits {
      * The longest one Heph turn runs, whatever its binding says: the hard ceiling of a turn that keeps making progress.
      * A turn that stops making progress ends earlier, when the worker's LLM proxy finds its model call silent.
      *
-     * <p>A reasoning model writes about 35 tokens a second. Its longest measured call took 152 seconds, and an answer
-     * takes a few calls, tools and a context load: 900 seconds hold about 5 such calls, or 31,500 output tokens. A
-     * worker runs few turns at once, so the ceiling stays far below a review's.
+     * <p>An answer takes a few model calls, tools and a context load, so the ceiling must stay above a few of the
+     * slowest model calls. A worker runs few turns at once, so the ceiling stays far below a review's.
      */
     public static final int MAX_HEPH_TURN_SECONDS = 900;
 
