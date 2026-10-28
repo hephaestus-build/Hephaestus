@@ -692,8 +692,9 @@ jobs:
 
   Quality:
     uses: ./.github/workflows/ci-quality-gates.yml
-    needs: [detect-changes]
+    needs: [detect-changes, Security-merge-group]
     if: |
+      !cancelled() && needs.detect-changes.result == 'success' && (needs.Security-merge-group.result == 'success' || needs.Security-merge-group.result == 'skipped') &&
       (github.event_name != 'push' || needs.detect-changes.outputs.version-bump == 'true') &&
       needs.detect-changes.outputs.should_skip != 'true' && (
         needs.detect-changes.outputs.any-code == 'true' ||
@@ -722,8 +723,9 @@ jobs:
   # ci-kubernetes.yml, which carries no changeset and starts the Kubernetes legs.
   server-package:
     name: "App Server: Package"
-    needs: [detect-changes]
+    needs: [detect-changes, Security-merge-group]
     if: |
+      !cancelled() && needs.detect-changes.result == 'success' && (needs.Security-merge-group.result == 'success' || needs.Security-merge-group.result == 'skipped') &&
       needs.detect-changes.outputs.should_skip != 'true' && needs.detect-changes.outputs.queue-images-complete != 'true' && (
         needs.detect-changes.outputs.unfiltered == 'true' ||
         needs.detect-changes.outputs.head-images == 'true' ||
@@ -912,10 +914,35 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
+  # The scan runs once per run, in one of two jobs. In a merge group the heavy legs wait for it, so
+  # a base-wide advisory ends the group before they take runners. `needs` cannot depend on the
+  # event, so that scan is a job of its own: elsewhere it skips with `Detect changes`, and the heavy
+  # legs start at once. Both jobs are named `Security`, so their checks keep one name.
+  # docs/contributor/ci-cd.mdx § Fail fast in the merge queue.
   Security:
     uses: ./.github/workflows/ci-security-scan.yml
     needs: [detect-changes]
     if: |
+      github.event_name != 'merge_group' &&
+      (github.event_name != 'push' || needs.detect-changes.outputs.version-bump == 'true') &&
+      needs.detect-changes.outputs.should_skip != 'true' && (
+        needs.detect-changes.outputs.any-code == 'true' ||
+        needs.detect-changes.outputs.security-config == 'true' ||
+        needs.detect-changes.outputs.release-images == 'true' ||
+        needs.detect-changes.outputs.unfiltered == 'true'
+      )
+    permissions:
+      contents: read
+      security-events: write
+    with:
+      should_skip: ${{ needs.detect-changes.outputs.should_skip }}
+
+  Security-merge-group:
+    name: "Security"
+    uses: ./.github/workflows/ci-security-scan.yml
+    needs: [detect-changes]
+    if: |
+      github.event_name == 'merge_group' &&
       (github.event_name != 'push' || needs.detect-changes.outputs.version-bump == 'true') &&
       needs.detect-changes.outputs.should_skip != 'true' && (
         needs.detect-changes.outputs.any-code == 'true' ||
@@ -932,9 +959,10 @@ jobs:
   # The suites run the packaged classes, so a package skipped while they are selected fails them.
   Test:
     uses: ./.github/workflows/ci-tests.yml
-    needs: [detect-changes, server-package]
+    needs: [detect-changes, server-package, Security-merge-group]
     if: |
       !cancelled() && needs.detect-changes.result == 'success' && needs.server-package.result != 'failure' &&
+      (needs.Security-merge-group.result == 'success' || needs.Security-merge-group.result == 'skipped') &&
       (github.event_name != 'push' || needs.detect-changes.outputs.version-bump == 'true') &&
       needs.detect-changes.outputs.should_skip != 'true' &&
       needs.detect-changes.outputs.server-tests == 'true'
@@ -956,8 +984,10 @@ jobs:
       contents: read
 
   Compose:
-    needs: [detect-changes]
-    if: github.event_name != 'push' || needs.detect-changes.outputs.version-bump == 'true'
+    needs: [detect-changes, Security-merge-group]
+    if: |
+      !cancelled() && needs.detect-changes.result == 'success' && (needs.Security-merge-group.result == 'success' || needs.Security-merge-group.result == 'skipped') &&
+      (github.event_name != 'push' || needs.detect-changes.outputs.version-bump == 'true')
     uses: ./.github/workflows/ci-compose-validate.yml
     permissions:
       contents: read
@@ -968,9 +998,10 @@ jobs:
   # are aliased here. Other runs' image builds stay path-filtered.
   Docker:
     uses: ./.github/workflows/ci-docker-build.yml
-    needs: [detect-changes, vulnerability-database, server-package]
+    needs: [detect-changes, vulnerability-database, server-package, Security-merge-group]
     if: |
-      !cancelled() && needs.detect-changes.result == 'success' && (needs.vulnerability-database.result == 'success' || needs.vulnerability-database.result == 'skipped') && (
+      !cancelled() && needs.detect-changes.result == 'success' && (needs.vulnerability-database.result == 'success' || needs.vulnerability-database.result == 'skipped') &&
+      (needs.Security-merge-group.result == 'success' || needs.Security-merge-group.result == 'skipped') && (
         (needs.detect-changes.outputs.should_skip != 'true' && needs.detect-changes.outputs.draft != 'true' && needs.detect-changes.outputs.images == 'true' && (needs.detect-changes.outputs.unfiltered == 'true' || needs.detect-changes.outputs.head-images == 'true' || needs.detect-changes.outputs.any-code == 'true' || needs.detect-changes.outputs.ci-config == 'true')) ||
         (needs.detect-changes.outputs.draft != 'true' && (needs.server-package.result == 'success' || (needs.server-package.result == 'skipped' && needs.detect-changes.outputs.queue-images-complete == 'true')) && needs.detect-changes.outputs.images == 'true' && (needs.detect-changes.outputs.application-server-image == 'true' || needs.detect-changes.outputs.supported-host-smoke == 'true' || needs.detect-changes.outputs.all-images == 'true'))
       )
@@ -1164,6 +1195,10 @@ jobs:
     runs-on: ubuntu-slim
     permissions:
       statuses: write
+    # The reporter below reads the verdict. After a fail-fast cancel, `cancelled()` is true for the
+    # whole run, so only this output tells that run's failure from a regroup's cancellation.
+    outputs:
+      verdict: ${{ steps.evaluate.outputs.status }}
     needs:
       [
         detect-changes,
@@ -1175,6 +1210,7 @@ jobs:
         Build,
         upstream-images,
         Security,
+        Security-merge-group,
         Test,
         Changesets,
         Compose,
@@ -1198,6 +1234,7 @@ jobs:
           echo "Build:          ${{ needs.Build.result }}"
           echo "Upstream:       ${{ needs.upstream-images.result }}"
           echo "Security:       ${{ needs.Security.result }}"
+          echo "Security (merge group): ${{ needs.Security-merge-group.result }}"
           echo "Test:           ${{ needs.Test.result }}"
           echo "Changesets:     ${{ needs.Changesets.result }}"
           echo "Compose:        ${{ needs.Compose.result }}"
@@ -1276,8 +1313,10 @@ jobs:
     name: "Report unsuccessful merge group"
     needs: [all-ci-passed]
     # A merge queue regroups whenever the entries ahead change and cancels the runs it dissolves, so
-    # only a failure says anything about this pull request.
-    if: ${{ !cancelled() && github.event_name == 'merge_group' && needs.all-ci-passed.result == 'failure' }}
+    # only a failure says anything about this pull request. A fail-fast cancel makes `cancelled()`
+    # true for the whole run, so the gate's verdict tells that failure from a regroup. A leg can still
+    # fail while a regroup cancels the run, so the comment also waits for the queue to drop the entry.
+    if: ${{ always() && github.event_name == 'merge_group' && needs.all-ci-passed.outputs.verdict == 'failure' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -1293,9 +1332,23 @@ jobs:
               core.setFailed(`Cannot identify the pull request from merge queue ref ${ref}`);
               return;
             }
-            core.setOutput('number', match[1]);
+            // A regroup keeps the entry queued; the queue drops a failed entry within seconds of the gate.
+            const number = Number(match[1]);
+            const query = `query($owner: String!, $name: String!, $number: Int!) {
+              repository(owner: $owner, name: $name) { pullRequest(number: $number) { mergeQueueEntry { id } } }
+            }`;
+            for (let check = 0; check < 12; check += 1) {
+              const { repository } = await github.graphql(query, { ...context.repo, name: context.repo.repo, number });
+              if (repository.pullRequest.mergeQueueEntry === null) {
+                core.setOutput('number', String(number));
+                return;
+              }
+              await new Promise((resolve) => setTimeout(resolve, 10_000));
+            }
+            core.notice(`#${number} is still queued, so a regroup ended this run; no comment.`);
 
-      - uses: marocchino/sticky-pull-request-comment@5770ad5eb8f42dd2c4f34da00c94c5381e49af88 # v3.0.5
+      - if: steps.pull-request.outputs.number != ''
+        uses: marocchino/sticky-pull-request-comment@5770ad5eb8f42dd2c4f34da00c94c5381e49af88 # v3.0.5
         with:
           header: merge-queue-failure
           number_force: ${{ steps.pull-request.outputs.number }}
@@ -1306,3 +1359,123 @@ jobs:
             failure first shows here; add the `ci:full` label to reproduce it on the pull request.
             An image build or scan failure also first shows here; add the `preview` label to build
             the images on the pull request.
+
+  # Fail fast in a merge group: when a leg fails, its job below cancels the run, so a group that has
+  # already lost frees its runners and leaves the queue early. Each job needs only its own leg, so it
+  # starts when that leg ends. `always()` is required: without a status function, GitHub adds
+  # `success()`, which is false after a failed leg. `CI Status Gate` still runs after the cancel and
+  # fails. These jobs are not in its `needs`: they only end the run early and are not part of the verdict.
+  # Pull requests keep every leg's failures. docs/contributor/ci-cd.mdx § Fail fast in the merge queue.
+  fail-fast-vulnerability-database:
+    name: "Fail fast: vulnerability-database"
+    needs: [vulnerability-database]
+    if: ${{ always() && github.event_name == 'merge_group' && needs.vulnerability-database.result == 'failure' }}
+    uses: ./.github/workflows/fail-fast.yml
+    permissions:
+      actions: write # cancel this run
+
+  fail-fast-workflow-lint:
+    name: "Fail fast: workflow-lint"
+    needs: [workflow-lint]
+    if: ${{ always() && github.event_name == 'merge_group' && needs.workflow-lint.result == 'failure' }}
+    uses: ./.github/workflows/fail-fast.yml
+    permissions:
+      actions: write # cancel this run
+
+  fail-fast-zizmor:
+    name: "Fail fast: zizmor"
+    needs: [zizmor]
+    if: ${{ always() && github.event_name == 'merge_group' && needs.zizmor.result == 'failure' }}
+    uses: ./.github/workflows/fail-fast.yml
+    permissions:
+      actions: write # cancel this run
+
+  fail-fast-Quality:
+    name: "Fail fast: Quality"
+    needs: [Quality]
+    if: ${{ always() && github.event_name == 'merge_group' && needs.Quality.result == 'failure' }}
+    uses: ./.github/workflows/fail-fast.yml
+    permissions:
+      actions: write # cancel this run
+
+  fail-fast-server-package:
+    name: "Fail fast: server-package"
+    needs: [server-package]
+    if: ${{ always() && github.event_name == 'merge_group' && needs.server-package.result == 'failure' }}
+    uses: ./.github/workflows/fail-fast.yml
+    permissions:
+      actions: write # cancel this run
+
+  fail-fast-Build:
+    name: "Fail fast: Build"
+    needs: [Build]
+    if: ${{ always() && github.event_name == 'merge_group' && needs.Build.result == 'failure' }}
+    uses: ./.github/workflows/fail-fast.yml
+    permissions:
+      actions: write # cancel this run
+
+  fail-fast-upstream-images:
+    name: "Fail fast: upstream-images"
+    needs: [upstream-images]
+    if: ${{ always() && github.event_name == 'merge_group' && needs.upstream-images.result == 'failure' }}
+    uses: ./.github/workflows/fail-fast.yml
+    permissions:
+      actions: write # cancel this run
+
+
+  fail-fast-Security-merge-group:
+    name: "Fail fast: Security-merge-group"
+    needs: [Security-merge-group]
+    if: ${{ always() && github.event_name == 'merge_group' && needs.Security-merge-group.result == 'failure' }}
+    uses: ./.github/workflows/fail-fast.yml
+    permissions:
+      actions: write # cancel this run
+
+  fail-fast-Test:
+    name: "Fail fast: Test"
+    needs: [Test]
+    if: ${{ always() && github.event_name == 'merge_group' && needs.Test.result == 'failure' }}
+    uses: ./.github/workflows/fail-fast.yml
+    permissions:
+      actions: write # cancel this run
+
+
+  fail-fast-Compose:
+    name: "Fail fast: Compose"
+    needs: [Compose]
+    if: ${{ always() && github.event_name == 'merge_group' && needs.Compose.result == 'failure' }}
+    uses: ./.github/workflows/fail-fast.yml
+    permissions:
+      actions: write # cancel this run
+
+  fail-fast-Docker:
+    name: "Fail fast: Docker"
+    needs: [Docker]
+    if: ${{ always() && github.event_name == 'merge_group' && needs.Docker.result == 'failure' }}
+    uses: ./.github/workflows/fail-fast.yml
+    permissions:
+      actions: write # cancel this run
+
+  fail-fast-Supported-host-smoke:
+    name: "Fail fast: Supported-host-smoke"
+    needs: [Supported-host-smoke]
+    if: ${{ always() && github.event_name == 'merge_group' && needs.Supported-host-smoke.result == 'failure' }}
+    uses: ./.github/workflows/fail-fast.yml
+    permissions:
+      actions: write # cancel this run
+
+  fail-fast-Kubernetes:
+    name: "Fail fast: Kubernetes"
+    needs: [Kubernetes]
+    if: ${{ always() && github.event_name == 'merge_group' && needs.Kubernetes.result == 'failure' }}
+    uses: ./.github/workflows/fail-fast.yml
+    permissions:
+      actions: write # cancel this run
+
+  fail-fast-Release-preflight:
+    name: "Fail fast: Release-preflight"
+    needs: [Release-preflight]
+    if: ${{ always() && github.event_name == 'merge_group' && needs.Release-preflight.result == 'failure' }}
+    uses: ./.github/workflows/fail-fast.yml
+    permissions:
+      actions: write # cancel this run

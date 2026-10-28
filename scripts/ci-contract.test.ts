@@ -486,6 +486,64 @@ function jobsOf(
 	);
 }
 
+interface Completion {
+	result: string;
+	outputs?: Record<string, string>;
+}
+
+/**
+ * Whether GitHub starts a job of `workflow` for `event`, given how the jobs it needs ended. A
+ * condition without a status function gets an implicit `success()`: every needed job succeeded and
+ * the run was not cancelled.
+ */
+function jobRuns(
+	workflow: Document,
+	name: string,
+	event: string,
+	completions: Record<string, Completion>,
+	cancelled = false,
+): boolean {
+	const dependencies = workflow.getIn(["jobs", name, "needs"]);
+	const needed = isSeq(dependencies) ? dependencies.items.map(String) : [String(dependencies)];
+	const needs = Object.fromEntries(
+		needed.map((need) => {
+			const completion = completions[need];
+			assert.ok(completion !== undefined, `${name} needs ${need}, which this model does not run`);
+			return [need, completion] as const;
+		}),
+	);
+	const condition = workflow.getIn(["jobs", name, "if"]);
+	const source =
+		condition === undefined
+			? "true"
+			: asString(condition, `${name} condition`)
+					.trim()
+					.replaceAll(/^\$\{\{\s*|\s*\}\}$/gu, "");
+	const implicitSuccess = !/\b(?:always|cancelled|failure|success)\(/u.test(source);
+	if (
+		implicitSuccess &&
+		(cancelled || Object.values(needs).some((need) => need.result !== "success"))
+	) {
+		return false;
+	}
+	const functions = [
+		{ name: "always", minArgs: 0, maxArgs: 0, call: () => new data.BooleanData(true) },
+		{ name: "cancelled", minArgs: 0, maxArgs: 0, call: () => new data.BooleanData(cancelled) },
+	];
+	const context: unknown = JSON.parse(
+		JSON.stringify({ needs, github: { event_name: event } }),
+		data.reviver,
+	);
+	assert.ok(context instanceof data.Dictionary);
+	const parsed = new Parser(new Lexer(source).lex().tokens, ["needs", "github"], functions).parse();
+	const evaluator = new Evaluator(
+		parsed,
+		context,
+		new Map(functions.map((entry) => [entry.name, entry])),
+	);
+	return evaluator.evaluate().coerceString() === "true";
+}
+
 function gates(names: Set<string>): string[] {
 	return [...names].filter((name) => name.startsWith("gate:")).toSorted();
 }
@@ -1831,7 +1889,10 @@ void describe("CI contract", () => {
 		}
 		// The application-server image is built from this run's packaged JAR, never recompiled.
 		const image = job(orchestrator, "Docker");
-		assert.match(image, /needs: \[detect-changes, vulnerability-database, server-package\]/u);
+		assert.match(
+			image,
+			/needs: \[detect-changes, vulnerability-database, server-package, Security-merge-group\]/u,
+		);
 		assert.match(image, /application-artifact: server-build-\$\{\{ github\.run_id \}\}/u);
 		assert.match(image, /needs\.server-package\.result == 'success'/u);
 
@@ -1852,7 +1913,10 @@ void describe("CI contract", () => {
 			assert.doesNotMatch(suite, /^ {4}needs:/mu);
 		}
 		assert.match(job(orchestrator, "Build"), /needs: \[detect-changes, server-package\]/u);
-		assert.match(job(orchestrator, "Test"), /needs: \[detect-changes, server-package\]/u);
+		assert.match(
+			job(orchestrator, "Test"),
+			/needs: \[detect-changes, server-package, Security-merge-group\]/u,
+		);
 		// A package skipped while the suites are selected must fail them, never skip them.
 		assert.match(job(orchestrator, "Test"), /needs\.server-package\.result != 'failure'/u);
 		assert.doesNotMatch(job(orchestrator, "Test"), /needs\.server-package\.result == 'success'/u);
@@ -1894,6 +1958,7 @@ void describe("CI contract", () => {
 			"detect-changes",
 			"vulnerability-database",
 			"server-package",
+			"Security-merge-group",
 		]);
 		for (const name of ["Supported-host-smoke", "Release-preflight"]) {
 			const dependencies = workflow.getIn(["jobs", name, "needs"]);
@@ -2093,7 +2158,9 @@ void describe("CI contract", () => {
 		]) {
 			const needs = {
 				"upstream-images": /needs: \[detect-changes, vulnerability-database\]/u,
-				Test: /needs: \[detect-changes, server-package\]/u,
+				Test: /needs: \[detect-changes, server-package, Security-merge-group\]/u,
+				Quality: /needs: \[detect-changes, Security-merge-group\]/u,
+				Compose: /needs: \[detect-changes, Security-merge-group\]/u,
 			}[name];
 			assert.match(job(source, name), needs ?? /needs: \[detect-changes\]/u);
 			assert.match(
@@ -2123,10 +2190,65 @@ void describe("CI contract", () => {
 		const source = await readFile(".github/workflows/cicd.yml", "utf8");
 		const reporter = job(source, "report-unsuccessful-merge-group");
 		assert.match(reporter, /needs: \[all-ci-passed\]/u);
-		assert.match(reporter, /github\.event_name == 'merge_group'/u);
-		// A merge queue cancels the runs it regroups, which says nothing about the pull request.
-		assert.match(reporter, /needs\.all-ci-passed\.result == 'failure'/u);
-		assert.doesNotMatch(reporter, /always\(\)/u);
+		// A merge queue cancels the runs it regroups, which says nothing about the pull request. A
+		// fail-fast cancel makes `cancelled()` true for the whole run, so only the gate's verdict tells
+		// the run that failed from the run that a regroup dissolved.
+		const workflow = parseDocument(source);
+		const condition = asString(
+			workflow.getIn(["jobs", "report-unsuccessful-merge-group", "if"]),
+			"reporter condition",
+		);
+		assert.equal(
+			condition,
+			`\${{ always() && github.event_name == 'merge_group' && needs.all-ci-passed.outputs.verdict == 'failure' }}`,
+		);
+		assert.doesNotMatch(condition, /cancelled\(\)/u);
+		// A leg can still fail while a regroup cancels the run: the comment waits until the queue has
+		// dropped the entry, which a regroup never does.
+		const reporterJob = asRecord(
+			asRecord(asRecord(workflow.toJSON(), "cicd.yml").jobs, "cicd.yml jobs")[
+				"report-unsuccessful-merge-group"
+			],
+			"reporter",
+		);
+		const steps = asArray(reporterJob.steps, "reporter steps");
+		const lookup = asRecord(asRecord(steps[0], "reporter lookup").with, "reporter lookup with");
+		assert.match(String(lookup.script), /mergeQueueEntry \{ id \}/u);
+		assert.match(String(lookup.script), /mergeQueueEntry === null/u);
+		assert.equal(
+			asRecord(steps[1], "reporter comment").if,
+			"steps.pull-request.outputs.number != ''",
+		);
+		const gate = ["jobs", "all-ci-passed"];
+		assert.equal(
+			workflow.getIn([...gate, "outputs", "verdict"]),
+			`\${{ steps.evaluate.outputs.status }}`,
+		);
+		assert.equal(namedStep(workflow, gate, "Evaluate CI results").get("id"), "evaluate");
+		for (const event of ["merge_group", "pull_request", "push", "workflow_dispatch"]) {
+			for (const verdict of ["failure", "cancelled", "success", ""]) {
+				for (const cancelled of [false, true]) {
+					const result = verdict === "success" ? "success" : "failure";
+					assert.equal(
+						jobRuns(
+							workflow,
+							"report-unsuccessful-merge-group",
+							event,
+							{ "all-ci-passed": { result, outputs: { verdict } } },
+							cancelled,
+						),
+						event === "merge_group" && verdict === "failure",
+						`${event}, verdict ${verdict || "unset"}, run cancelled: ${String(cancelled)}`,
+					);
+				}
+			}
+		}
+		// After a fail-fast cancel the gate publishes no `All CI Passed` status. No ruleset requires
+		// that status: the required verdict is the `CI Status Gate` check itself.
+		assert.match(
+			String(namedStep(workflow, gate, "Create commit status").get("if")),
+			/!cancelled\(\)/u,
+		);
 		assert.match(reporter, /pull-requests: write/u);
 		// A ref the job cannot read is a missing report, so it fails rather than commenting nowhere.
 		assert.match(reporter, /core\.setFailed/u);
@@ -3297,6 +3419,17 @@ void describe("CI contract", () => {
 		}
 		// The same jobs with results do pass, skipped ones included.
 		assert.deepEqual(await verdict({ ...skipped, Changesets: "success" }, false), passes);
+		// A merge group that cancelled itself after a failed leg reports that failure. A regroup that
+		// cancelled the run reports a cancellation. The merge-group reporter reads this difference.
+		const afterCancel = { Test: "cancelled", Docker: "cancelled" };
+		assert.deepEqual(
+			await verdict({ ...afterCancel, "Security-merge-group": "failure" }, false),
+			fails,
+		);
+		assert.deepEqual(await verdict(afterCancel, false), {
+			failed: true,
+			outputs: { status: "cancelled" },
+		});
 		assert.deepEqual(await verdict({}, false), passes);
 
 		// A directory cannot be opened as a summary file. Reporting loss does not change validation.
@@ -5472,4 +5605,263 @@ void test("the staging channel is signed by the release's keyless signer, over n
 	const signing = run.indexOf("node ../scripts/keyless-sign.ts sign-blob --yes --bundle");
 	assert.ok(removal !== -1 && signing > removal);
 	assert.doesNotMatch(run, /^\s*cosign /mu);
+});
+
+// docs/contributor/ci-cd.mdx § Fail fast in the merge queue owns the reasons for the tests below.
+const FAIL_FAST = "./.github/workflows/fail-fast.yml";
+
+// The legs that take most of a merge group's runner time. In a merge group they start only after
+// Security passed, so a base-wide advisory ends the group before they take runners.
+const HEAVY_LEGS = [
+	"server-package",
+	"Quality",
+	"Compose",
+	"Build",
+	"Test",
+	"Docker",
+	"Supported-host-smoke",
+	"Kubernetes",
+	"Release-preflight",
+];
+
+/** The jobs that `cicd.yml` runs before the gate, in an order where each follows what it needs. */
+const RUN_ORDER = [
+	"vulnerability-database",
+	"Security",
+	"Security-merge-group",
+	"server-package",
+	"Quality",
+	"Compose",
+	"upstream-images",
+	"Test",
+	"Build",
+	"Docker",
+	"Supported-host-smoke",
+	"Kubernetes",
+	"Release-preflight",
+];
+
+/**
+ * Which jobs of `cicd.yml` run for `event` when the diff selects every leg and a merge group's
+ * Security scan ends with `security`. Every other job that runs succeeds.
+ */
+function simulateRun(workflow: Document, event: string, security: string): Record<string, string> {
+	const declared = workflow.getIn(["jobs", "detect-changes", "outputs"]);
+	assert.ok(isMap(declared));
+	const off: Record<string, string> = {
+		should_skip: "false",
+		draft: "false",
+		"queue-images-complete": "false",
+		"queue-run": "",
+		"alias-base": "",
+	};
+	const outputs = Object.fromEntries(
+		declared.items.map((item) => [String(item.key), off[String(item.key)] ?? "true"] as const),
+	);
+	const completions: Record<string, Completion> = {
+		"detect-changes": { result: "success", outputs },
+	};
+	for (const name of RUN_ORDER) {
+		let result = "skipped";
+		if (jobRuns(workflow, name, event, completions)) {
+			result = name === "Security-merge-group" ? security : "success";
+		}
+		const digest = name === "Docker" && result === "success" ? "sha256:image" : "";
+		completions[name] = { result, outputs: { "application-server-digest": digest } };
+	}
+	return Object.fromEntries(
+		Object.entries(completions).map(([name, completion]) => [name, completion.result] as const),
+	);
+}
+
+function needsClosure(workflow: Document, name: string): Set<string> {
+	const closure = new Set<string>();
+	const expand = (from: string): void => {
+		const dependencies = workflow.getIn(["jobs", from, "needs"]);
+		const needed = isSeq(dependencies) ? dependencies.items.map(String) : [];
+		for (const need of needed) {
+			if (!closure.has(need)) {
+				closure.add(need);
+				expand(need);
+			}
+		}
+	};
+	expand(name);
+	return closure;
+}
+
+void test("in a merge group the heavy legs start after Security passed, and elsewhere they do not wait for it", async () => {
+	const workflow = parseDocument(await readFile(".github/workflows/cicd.yml", "utf8"));
+	// `needs` cannot depend on the event, so the merge group's scan is a job of its own. It needs only
+	// `Detect changes`, so outside a merge group it skips when that job ends and holds nothing back.
+	const scanNeeds = workflow.getIn(["jobs", "Security-merge-group", "needs"]);
+	assert.ok(isSeq(scanNeeds));
+	assert.deepEqual(scanNeeds.toJSON(), ["detect-changes"]);
+	for (const leg of HEAVY_LEGS) {
+		const closure = needsClosure(workflow, leg);
+		assert.ok(
+			closure.has("Security-merge-group"),
+			`${leg} does not wait for Security in a merge group`,
+		);
+		assert.ok(!closure.has("Security"), `${leg} waits for the pull request's Security scan`);
+	}
+	// One scan with one name: the two jobs differ only in the event that selects them.
+	const jobs = asRecord(asRecord(workflow.toJSON(), "cicd.yml").jobs, "cicd.yml jobs");
+	const security = asRecord(jobs.Security, "Security");
+	const merge = asRecord(jobs["Security-merge-group"], "Security-merge-group");
+	const { if: securityIf, ...securityRest } = security;
+	const { if: mergeIf, name: mergeName, ...mergeRest } = merge;
+	assert.equal(mergeName, "Security");
+	assert.deepEqual(mergeRest, securityRest);
+	assert.match(
+		asString(securityIf, "Security condition"),
+		/^github\.event_name != 'merge_group' &&/u,
+	);
+	assert.equal(
+		mergeIf,
+		asString(securityIf, "Security condition").replace(
+			"github.event_name != 'merge_group' &&",
+			"github.event_name == 'merge_group' &&",
+		),
+	);
+
+	// A merge group: Security passed, so every heavy leg runs. It failed or was cancelled, so none runs.
+	const passed = simulateRun(workflow, "merge_group", "success");
+	assert.equal(passed.Security, "skipped");
+	for (const leg of HEAVY_LEGS) {
+		assert.equal(passed[leg], "success", `${leg} after Security passed`);
+	}
+	for (const result of ["failure", "cancelled"]) {
+		const stopped = simulateRun(workflow, "merge_group", result);
+		for (const leg of HEAVY_LEGS) {
+			assert.equal(stopped[leg], "skipped", `${leg} after Security ended ${result}`);
+		}
+		// The cheap legs beside Security still run, so the gate sees each of their verdicts.
+		assert.equal(stopped["vulnerability-database"], "success");
+	}
+	// Every other event: the merge group's scan skips, and every heavy leg runs.
+	for (const event of ["pull_request", "push", "workflow_dispatch"]) {
+		const run = simulateRun(workflow, event, "failure");
+		assert.equal(run["Security-merge-group"], "skipped", event);
+		assert.equal(run.Security, "success", event);
+		for (const leg of HEAVY_LEGS) {
+			assert.equal(run[leg], "success", `${leg} in ${event}`);
+		}
+	}
+});
+
+void test("a failed leg cancels its own merge-group run, and only a merge-group run", async () => {
+	const source = await readFile(".github/workflows/cicd.yml", "utf8");
+	const workflow = parseDocument(source);
+	const gate = workflow.getIn(["jobs", "all-ci-passed", "needs"]);
+	assert.ok(isSeq(gate));
+	// These legs never run in a merge group, so a cancel job for them could never fire.
+	const pullRequestOnly = new Set(["Security", "Changesets"]);
+	assert.equal(simulateRun(workflow, "merge_group", "success").Security, "skipped");
+	assert.equal(workflow.getIn(["jobs", "Changesets", "if"]), "github.event_name == 'pull_request'");
+	const legs = gate.items
+		.map(String)
+		.filter((name) => name !== "detect-changes" && !pullRequestOnly.has(name));
+	const jobs = asRecord(asRecord(workflow.toJSON(), "cicd.yml").jobs, "cicd.yml jobs");
+	const callers = Object.entries(jobs)
+		.filter(([, definition]) => asRecord(definition, "job").uses === FAIL_FAST)
+		.map(([name]) => name);
+	// One cancel job per leg that the gate judges, and the gate does not wait for any of them.
+	assert.deepEqual(callers.toSorted(), legs.map((leg) => `fail-fast-${leg}`).toSorted());
+	for (const leg of legs) {
+		const name = `fail-fast-${leg}`;
+		const cancel = asRecord(jobs[name], name);
+		assert.deepEqual(cancel.needs, [leg], name);
+		assert.deepEqual(cancel.permissions, { actions: "write" }, name);
+		assert.equal("with" in cancel || "secrets" in cancel, false, name);
+		const condition = `\${{ always() && github.event_name == 'merge_group' && needs.${leg}.result == 'failure' }}`;
+		assert.equal(cancel.if, condition, name);
+		for (const event of ["merge_group", "pull_request", "push", "workflow_dispatch"]) {
+			for (const result of ["success", "failure", "cancelled", "skipped"]) {
+				for (const cancelled of [false, true]) {
+					assert.equal(
+						jobRuns(workflow, name, event, { [leg]: { result } }, cancelled),
+						event === "merge_group" && result === "failure",
+						`${name}: ${event}, leg ${result}, run cancelled: ${String(cancelled)}`,
+					);
+				}
+			}
+		}
+	}
+	// Without `always()` GitHub adds `success()`, which a failed leg makes false: the job never runs.
+	const withoutAlways = parseDocument(source.replaceAll(`\${{ always() && `, `\${{ `));
+	assert.equal(
+		jobRuns(withoutAlways, "fail-fast-Docker", "merge_group", { Docker: { result: "failure" } }),
+		false,
+	);
+});
+
+void test("the fail-fast job cancels its run gracefully and runs no other code with its token", async () => {
+	const source = await readFile(".github/workflows/fail-fast.yml", "utf8");
+	const workflow = asRecord(parseDocument(source).toJSON(), "fail-fast.yml");
+	assert.deepEqual(workflow.on, { workflow_call: null });
+	assert.deepEqual(workflow.permissions, {});
+	const jobs = asRecord(workflow.jobs, "fail-fast.yml jobs");
+	assert.deepEqual(Object.keys(jobs), ["cancel"]);
+	const cancel = asRecord(jobs.cancel, "cancel");
+	assert.equal(cancel["runs-on"], "ubuntu-slim");
+	assert.deepEqual(cancel.permissions, { actions: "write" });
+	const steps = asArray(cancel.steps, "cancel steps");
+	assert.equal(steps.length, 1);
+	const only = asRecord(steps[0], "cancel step");
+	assert.equal("uses" in only, false);
+	// A graceful cancel lets `CI Status Gate` run and fail, so the queue removes the entry.
+	assert.equal(only.run, `gh run cancel "$RUN_ID" --repo "$GITHUB_REPOSITORY"`);
+	assert.equal(asRecord(only.env, "cancel env").RUN_ID, `\${{ github.run_id }}`);
+});
+
+// A force-cancel skips `always()` jobs, so `CI Status Gate` never reports, and the queue keeps the
+// entry with no verdict until its check timeout.
+void test("no workflow, action or script force-cancels a run", async () => {
+	// This file names the forbidden forms in the patterns below.
+	const scripts = await posixGlob("scripts/**/*.ts");
+	const files = [
+		...(await posixGlob(".github/**/*.{yml,yaml}")),
+		...scripts.filter((file) => file !== "scripts/ci-contract.test.ts"),
+	];
+	for (const [file, source] of await readSources(files)) {
+		// The REST path, the Octokit method and the GraphQL-style name; prose may still name a force-cancel.
+		assert.doesNotMatch(source, /\/force-cancel\b|forceCancel|force_cancel/iu, file);
+		assert.doesNotMatch(source, /run cancel\b[\s\S]{0,200}--force/u, file);
+	}
+});
+
+// `actions: write` also dispatches workflows, re-runs runs, and deletes caches and artifacts.
+const ACTIONS_WRITE_GRANTS: Record<string, string> = {
+	".github/workflows/continuous-staging.yml#follow-main":
+		"It dispatches the promotion workflow for the build that passed CI on main.",
+};
+
+const writesActions = (permissions: unknown) =>
+	permissions === "write-all" || (isRecord(permissions) && permissions.actions === "write");
+
+void test("only the fail-fast jobs, and the listed exceptions, can write to Actions", async () => {
+	const grants: string[] = [];
+	for (const [file, source] of await workflowSources()) {
+		const workflow = asRecord(parseDocument(source).toJSON(), file);
+		assert.equal(writesActions(workflow.permissions), false, `${file} grants it to every job`);
+		for (const [name, definition] of Object.entries(asRecord(workflow.jobs, `${file} jobs`))) {
+			if (writesActions(asRecord(definition, name).permissions)) {
+				grants.push(`${file}#${name}`);
+			}
+		}
+	}
+	const cicd = await readFile(".github/workflows/cicd.yml", "utf8");
+	const { jobs } = asRecord(parseDocument(cicd).toJSON(), "cicd.yml");
+	const failFast = Object.entries(asRecord(jobs, "cicd.yml jobs"))
+		.filter(([, definition]) => asRecord(definition, "job").uses === FAIL_FAST)
+		.map(([name]) => `.github/workflows/cicd.yml#${name}`);
+	assert.deepEqual(
+		grants.toSorted(),
+		[
+			...failFast,
+			".github/workflows/fail-fast.yml#cancel",
+			...Object.keys(ACTIONS_WRITE_GRANTS),
+		].toSorted(),
+	);
 });
