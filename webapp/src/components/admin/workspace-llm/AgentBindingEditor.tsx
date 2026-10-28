@@ -204,7 +204,9 @@ export function AgentBindingEditor({
 	const [maxConcurrentJobs, setMaxConcurrentJobs] = useState(() =>
 		String(binding?.maxConcurrentJobs ?? 3),
 	);
-	const [effort, setEffort] = useState(() => binding?.reasoningEffort ?? PROVIDER_DEFAULT_EFFORT);
+	const [effort, setEffort] = useState<ReasoningEffortChoice>(
+		() => binding?.reasoningEffort ?? PROVIDER_DEFAULT_EFFORT,
+	);
 	const hasEffort = takesReasoningEffort(purpose);
 	const [showAdvanced, setShowAdvanced] = useState(false);
 	const hasRunLimits = purpose === "PRACTICE_REVIEW" || purpose === "MENTOR";
