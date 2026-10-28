@@ -203,6 +203,39 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldLeaseTheAttemptThatAClaimStartsOnTheDatabaseClock() {
+        var job = queued(binding(DataHandlingTier.IN_HOUSE));
+        var budgets = mock(LlmBudgetService.class);
+        when(budgets.decide(anyLong())).thenReturn(LlmBudgetDecision.ALLOWED);
+        var assignmentSnapshots = mock(ReviewJobAssignments.class);
+        when(assignmentSnapshots.load(any())).thenReturn(List.of(RuntimeReviewTestData.assignment(null, null)));
+        var metrics = new SimpleMeterRegistry();
+        var claims = new ReviewJobClaimService(
+                jobs,
+                policy,
+                methods,
+                assignmentSnapshots,
+                transactions,
+                mapper,
+                metrics,
+                budgets,
+                admission,
+                new ReviewJobTelemetry(metrics, Tracer.NOOP),
+                Optional.empty());
+
+        var claim = claims.claimJob(job.getId());
+
+        assertThat(claim).isInstanceOf(ReviewJobClaimService.ClaimResult.class);
+        var claimed = jobs.findById(job.getId()).orElseThrow();
+        assertThat(claimed.getStatus()).isEqualTo(ReviewJobStatus.RUNNING);
+        assertThat(claimed.getLeasedUntil())
+                .as("the claim leases the attempt for one lease from now")
+                .isAfter(Instant.now().plus(AgentProperties.WORKER_LEASE_TTL).minusSeconds(60))
+                .as("the claimed entity holds the lease that the row holds")
+                .isEqualTo(((ReviewJobClaimService.ClaimResult) claim).job().getLeasedUntil());
+    }
+
+    @Test
     void shouldKeepRunningOccupancyWhenTheSlotsModelIsReassigned() {
         var binding = binding(DataHandlingTier.IN_HOUSE);
         var running = queued(binding);
@@ -311,6 +344,9 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
         assertThat(claimed.getStatus()).isEqualTo(ReviewJobStatus.RUNNING);
         assertThat(claimed.getAttempt()).isEqualTo(1);
         assertThat(claimed.getExecutionStartedAt()).isNull();
+        assertThat(claimed.getLeasedUntil())
+                .as("the claim leases the attempt for one lease from now")
+                .isAfter(Instant.now().plus(AgentProperties.WORKER_LEASE_TTL).minusSeconds(60));
     }
 
     @Test

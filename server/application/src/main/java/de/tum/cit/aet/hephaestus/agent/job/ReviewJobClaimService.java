@@ -157,6 +157,17 @@ public class ReviewJobClaimService {
         });
     }
 
+    /**
+     * Leases the claimed attempt on the database clock. Within the claim's transaction, {@code now()} is its start, so
+     * the entity takes the very value that the row holds.
+     */
+    private void lease(ReviewJob job) {
+        long ttl = AgentProperties.WORKER_LEASE_TTL.toSeconds();
+        if (jobRepository.lease(job.getId(), ttl) != 1)
+            throw new IllegalStateException("The claimed attempt is no longer running");
+        job.setLeasedUntil(jobRepository.databaseNow().plusSeconds(ttl));
+    }
+
     private ClaimAttempt claimLocked(ReviewJob job) {
 
         if (memberAiPolicy.isProcessingSuppressed(job)) {
@@ -242,6 +253,7 @@ public class ReviewJobClaimService {
         job.setWorkerId(workerId);
         job.setConfigSnapshot(snapshot.toJson(objectMapper));
         jobRepository.save(job);
+        lease(job);
 
         return new ClaimResult(job, snapshot, itemKind);
     }
@@ -255,6 +267,7 @@ public class ReviewJobClaimService {
         job.setHoldReason(null);
         job.setWorkerId(workerId);
         jobRepository.save(job);
+        lease(job);
         return new ClaimResult(job, ConfigSnapshot.fromJson(job.getConfigSnapshot(), objectMapper), itemKind, cause);
     }
 
