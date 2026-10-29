@@ -26,7 +26,7 @@ public record SaveLlmCallPoolRequestDTO(
         @Nullable @Min(1) @Schema(description = "Most model calls in flight at once; null does not limit them")
         Integer maxConcurrentCalls,
 
-        @Min(0) @Schema(description = "Calls only Heph conversations may use", requiredMode = RequiredMode.REQUIRED)
+        @Min(0) @Schema(description = "Calls only conversations may use", requiredMode = RequiredMode.REQUIRED)
         int interactiveReserve,
 
         @Nullable @Min(1) Integer requestsPerMinute,

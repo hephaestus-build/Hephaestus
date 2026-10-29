@@ -16997,7 +16997,7 @@ components:
         interactiveReserve:
           type: integer
           format: int32
-          description: Calls only Heph conversations may use
+          description: Calls only conversations may use
         maxConcurrentCalls:
           type: integer
           format: int32
@@ -25313,7 +25313,7 @@ components:
         interactiveReserve:
           type: integer
           format: int32
-          description: Calls only Heph conversations may use
+          description: Calls only conversations may use
           minimum: 0
         maxConcurrentCalls:
           type: integer

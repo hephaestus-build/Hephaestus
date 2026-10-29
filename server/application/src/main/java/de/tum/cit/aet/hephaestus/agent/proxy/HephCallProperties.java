@@ -8,7 +8,7 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
 import org.springframework.validation.annotation.Validated;
 
 /**
- * How long one model call of a Heph turn may hear nothing from its provider, bound from
+ * How long one model call of a conversation turn may hear nothing from its provider, bound from
  * {@code hephaestus.mentor.turn.*}. A provider can queue a request before it sends its response headers, so the first
  * byte gets its own, longer bound.
  *

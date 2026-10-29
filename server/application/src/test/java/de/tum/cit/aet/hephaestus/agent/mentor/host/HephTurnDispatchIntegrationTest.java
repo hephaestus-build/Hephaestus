@@ -552,7 +552,7 @@ class HephTurnDispatchIntegrationTest extends AbstractWorkspaceIntegrationTest {
     void shouldFailTheTurnWithoutFaultWhenHostPreparationKeepsFailing() throws Exception {
         host.starts = false;
         int attempts = host.readyAttempts.get();
-        MentorTurn asked = ask("Can Heph start?");
+        MentorTurn asked = ask("Can Hephaestus start?");
         await().atMost(NOTIFIED).until(() -> host.readyAttempts.get() > attempts);
         assertThat(row(asked).getStatus()).isEqualTo(MentorTurn.Status.QUEUED);
         assertThat(row(asked).getAttempt()).isZero();

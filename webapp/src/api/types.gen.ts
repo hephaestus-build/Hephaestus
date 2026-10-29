@@ -2166,7 +2166,7 @@ export type LlmCallPool = {
      */
     id: number;
     /**
-     * Calls only Heph conversations may use
+     * Calls only conversations may use
      */
     interactiveReserve: number;
     /**
@@ -5327,7 +5327,7 @@ export type SaveLlmCallPoolRequest = {
      */
     displayName: string;
     /**
-     * Calls only Heph conversations may use
+     * Calls only conversations may use
      */
     interactiveReserve: number;
     /**

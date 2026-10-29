@@ -4,7 +4,7 @@ import de.tum.cit.aet.hephaestus.practices.spi.ReviewOrigin;
 import java.util.Locale;
 
 /**
- * Whose model call takes a permit of a {@link LlmCallPool}. A Heph turn may use the pool's interactive reserve; a
+ * Whose model call takes a permit of a {@link LlmCallPool}. A conversation turn may use the pool's interactive reserve; a
  * review's call, also its practice scripts' and its composition's, leaves it free. The review classes follow the
  * review's {@link ReviewOrigin}.
  */

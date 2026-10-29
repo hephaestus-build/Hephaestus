@@ -9,6 +9,7 @@ export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/mentor")(
 			to: "/w/$workspaceSlug/conversation",
 			params,
 			search,
+			hash: true,
 			replace: true,
 		});
 	},

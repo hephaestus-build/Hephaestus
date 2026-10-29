@@ -18,7 +18,7 @@ const entry = "e9999999-0000-4000-8000-000000000000";
 it.each([
 	{ origin: "https://example.com", path: "/w/acme/mentor", destination: "/w/acme/conversation" },
 	{ origin: "https://acme.example.com", path: "/mentor", destination: "/conversation" },
-])("keeps message and thread links from $path", async ({ origin, path, destination }) => {
+])("keeps query and fragment links from $path", async ({ origin, path, destination }) => {
 	server.use(
 		http.get("*/workspaces", () => HttpResponse.json([workspaceListItem("acme")])),
 		http.get("*/workspaces/acme/members/me", () => HttpResponse.json(ownMembership("MEMBER"))),
@@ -26,7 +26,7 @@ it.each([
 	);
 	const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 	const history = createMemoryHistory({
-		initialEntries: [`${path}?thread=${thread}&entry=${entry}`],
+		initialEntries: [`${path}?thread=${thread}&entry=${entry}#reply`],
 	});
 	const router = createRouter({
 		...ROUTER_SEARCH,
@@ -42,7 +42,9 @@ it.each([
 	await router.load();
 	expect(router.state.location.pathname).toBe("/w/acme/conversation");
 	expect(router.state.location.search).toMatchObject({ thread, entry });
+	expect(router.state.location.hash).toBe("reply");
 	expect(history.location.pathname).toBe(destination);
+	expect(history.location.hash).toBe("#reply");
 	expect(history).toHaveLength(1);
 	queryClient.clear();
 });

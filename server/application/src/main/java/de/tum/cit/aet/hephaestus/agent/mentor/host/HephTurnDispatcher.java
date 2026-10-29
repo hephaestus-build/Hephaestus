@@ -418,7 +418,10 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
             return host.sandboxReady() && (host.isReady() || host.awaitReady(HOST_READY_TIMEOUT));
         } catch (RuntimeException failure) {
             claimFailures.increment();
-            log.warn("Could not prepare the Hephaestus host: {}", failure.getClass().getSimpleName(), failure);
+            log.warn(
+                    "Could not prepare the Hephaestus host: {}",
+                    failure.getClass().getSimpleName(),
+                    failure);
             return false;
         }
     }

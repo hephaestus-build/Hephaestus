@@ -1171,7 +1171,7 @@ await test("an enabled worker receives its runtime settings, its sandbox namespa
 		String(get(sandboxQuota(resources), "spec", "hard", "requests.ephemeral-storage")),
 		/^[1-9][0-9]*Mi$/u,
 	);
-	// small.yaml: one worker that rolls by a surge of one, so the quotas hold two workers' probe runs, Heph hosts and
+	// small.yaml: one worker that rolls by a surge of one, so the quotas hold two workers' probe runs, conversation hosts and
 	// turn sandboxes, but only the one worker's review: the new worker waits for the old one's room.
 	assert.equal(get(tierQuota(resources, "reviews"), "spec", "hard", "pods"), "7");
 	assert.equal(get(tierQuota(resources, "conversations"), "spec", "hard", "pods"), "22");
@@ -2073,7 +2073,7 @@ await test("workers roll by surge unless the profile asks for Recreate, and the 
 		type: "RollingUpdate",
 		rollingUpdate: { maxSurge: "100%", maxUnavailable: 0 },
 	});
-	// small holds a second worker beside the draining one; 16 GiB does not hold its second Heph pool.
+	// small holds a second worker beside the draining one; 16 GiB does not hold its second conversation pool.
 	assert.deepEqual(strategy("small", "worker"), {
 		type: "RollingUpdate",
 		rollingUpdate: { maxSurge: "100%", maxUnavailable: 0 },
