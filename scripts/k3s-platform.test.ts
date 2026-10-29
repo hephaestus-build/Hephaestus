@@ -286,6 +286,8 @@ function checkKubelet(
 ) {
 	const directory = mkdtempSync(path.join(tmpdir(), "hephaestus-kubelet-"));
 	try {
+		cpSync(PLATFORM, directory, { recursive: true });
+		writeFileSync(path.join(directory, "site.yaml"), "workspaceSubdomains:\n  enabled: true\n");
 		writeFileSync(path.join(directory, "configz.json"), JSON.stringify({ kubeletconfig: live }));
 		writeFileSync(
 			path.join(directory, "nodes.json"),
@@ -327,7 +329,7 @@ esac
 		);
 		const result = spawnSync(
 			"sh",
-			[path.join(PLATFORM, "k3s-install.sh"), "--verify-kubelet", ...args],
+			[path.join(directory, "k3s-install.sh"), "--verify-kubelet", ...args],
 			{
 				encoding: "utf8",
 				timeout: 30_000,

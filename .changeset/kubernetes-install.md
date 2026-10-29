@@ -5,7 +5,8 @@
 You can install Hephaestus on Kubernetes with its Helm chart.
 Workers run practice reviews and conversation turns in sandboxes on the cluster.
 The single-node profile enables them. The install guide shows how to name the sandbox namespace and Kubernetes API endpoint.
-That profile stops the worker before its replacement starts, so reviews and conversations pause during the drain and startup.
+
+The small profile starts the new worker before the old worker drains. The server pauses while its replacement starts.
 Each worker checks isolation at startup and every 15 minutes.
 
 When `migration.enabled=true` and the release is not restoring, the chart runs the database migration once per revision in a Job.

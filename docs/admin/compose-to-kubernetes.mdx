@@ -151,6 +151,16 @@ The SQL pauses delivery and reviews and disables conversation bindings.
 Do not apply clone lockdown to the adopted source data directories.
 [Restore](./kubernetes#restore) gives the database-only phase and command.
 
+The installer accepts Ubuntu 24.04 with its 6.8 GA kernel as its declared host baseline.
+For an explicitly authorized rehearsal on another family, use `--allow-unqualified-host`.
+This includes Ubuntu 26.04 with kernel 7.
+The override retains the effective kubelet policy and allocatable checks. It does not establish host qualification.
+Complete the [host qualification](./kubernetes#install-on-one-host-k3s) before target-host rollout.
+
+The node policy uses hard emergency eviction thresholds. Soft eviction is disabled.
+Keep this policy during the move. Higher Pod priority alone does not protect PostgreSQL or NATS above their memory requests.
+[The host policy](./kubernetes#install-on-one-host-k3s) owns the limits and pressure checks.
+
 The one-host installer performs a fresh installation, including certificates and application startup.
 It refuses ports 80 and 443 while the old edge owns them.
 Do not run it unchanged against a live Compose stack.
