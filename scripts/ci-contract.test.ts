@@ -5285,7 +5285,17 @@ void test("the chart signing rehearsal runs steps 2 to 4 of Verify the release c
 	);
 	const workflow: unknown = rehearsal.toJS();
 	const top = asRecord(workflow, "chart signing rehearsal");
-	assert.deepEqual(top.on, { workflow_dispatch: null });
+	assert.deepEqual(top.on, {
+		workflow_dispatch: {
+			inputs: {
+				"candidate-sha": {
+					description: "Full source commit to rehearse (defaults to the workflow commit)",
+					type: "string",
+					required: false,
+				},
+			},
+		},
+	});
 	assert.deepEqual(top.permissions, {});
 	const rehearse = asRecord(asRecord(top.jobs, "jobs").rehearse, "rehearse");
 	assert.deepEqual(rehearse.permissions, {
@@ -5295,6 +5305,32 @@ void test("the chart signing rehearsal runs steps 2 to 4 of Verify the release c
 	});
 	// The verification names the default-branch identity, which only a run from main has.
 	assert.equal(rehearse.if, "github.ref == 'refs/heads/main'");
+	const candidate = namedStep(rehearsal, ["jobs", "rehearse"], "Select the candidate commit");
+	assert.equal(
+		candidate.getIn(["env", "CANDIDATE_SHA"]),
+		`\${{ inputs.candidate-sha || github.sha }}`,
+	);
+	const select = String(candidate.get("run"));
+	const sha = "a".repeat(40);
+	const selected = await runStep(select, { CANDIDATE_SHA: sha });
+	assert.equal(selected.failed, false, selected.diagnosis);
+	assert.deepEqual(selected.outputs, { sha });
+	for (const invalid of ["", "main", "a".repeat(39), "g".repeat(40), `${sha}\nsha=main`]) {
+		const result = await runStep(select, { CANDIDATE_SHA: invalid });
+		assert.ok(result.failed, invalid);
+		assert.deepEqual(result.outputs, {});
+	}
+	assert.equal(
+		step(rehearsal, ["jobs", "rehearse"], "actions/checkout").get("ref"),
+		`\${{ steps.candidate.outputs.sha }}`,
+	);
+	assert.equal(
+		namedStep(rehearsal, ["jobs", "rehearse"], "Publish and sign a rehearsal chart").getIn([
+			"env",
+			"SHA",
+		]),
+		`\${{ steps.candidate.outputs.sha }}`,
+	);
 	const operatorStep = String(
 		namedStep(rehearsal, ["jobs", "rehearse"], "Verify the chart as an operator").get("run"),
 	);

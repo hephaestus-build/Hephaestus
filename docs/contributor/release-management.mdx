@@ -147,6 +147,9 @@ Every release also installs its draft assets with the Helm chart on native Ubunt
 It verifies the signed `k3s-*` assets. The installer verifies the release chart as [Verify the release chart](/admin/kubernetes#verify-the-release-chart) describes.
 Then `scripts/kubernetes-cluster.ts release-smoke` runs the release's `k3s-install.sh`, the command of the docs, with a local CA and without the DNS and clock checks. A runner of 16 GiB installs with the `small-16gib.yaml` profile.
 
+The smoke disables swap on its disposable runner. It explicitly passes `--allow-unqualified-host`, because a hosted runner label does not pin its kernel.
+This qualification override retains the effective kubelet policy and allocatable checks. It does not establish loaded-host capacity.
+
 It runs the command a second time, which must keep the release Secret, and then an upgrade that rolls every role except PostgreSQL and NATS. The upgrade fails if it replaced their Pods.
 It waits for the migration Job, every role, and each worker's isolation probe, and it sends requests through the Gateway.
 It also checks that the kubelet and logind run with the configured shutdown budget. It does not reboot.
@@ -278,6 +281,16 @@ The attestation is a signed in-toto statement over the image lock and every firs
 The [release image lock](../admin/release-image-lock#independent-verification) page gives the command that checks it.
 
 ### Joint lock with the chart
+
+Before release, rehearse chart signing for the exact candidate commit:
+
+```bash
+gh workflow run chart-signing-rehearsal.yml --ref main -f candidate-sha="$SHA"
+```
+
+Set `SHA` to the full candidate commit. The workflow runs with the main identity and checks out that commit.
+It writes only to the chart rehearsal repository. It creates no release or release tag.
+The rehearsal uses its own signing identity. Verify the release workflow's signatures when the release artifacts exist.
 
 [Release assets](../admin/release-image-lock#release-assets) gives the purpose and the reader of each release asset.
 A release that ships a chart provides two signed locks.
