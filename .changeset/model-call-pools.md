@@ -9,3 +9,4 @@ The optional `AGENT_MAX_ACTIVE_COMPOSITIONS` setting bounds loaded compositions 
 Queued review claims take part in fair scheduling before a sandbox starts. Unused first-call reservations recover when a worker stops renewing them. Active calls retain their fenced permits until their transport closes, including cancellation after JSON response headers.
 
 A new review cannot hide the claim that owns the pool's next turn. A first call to another pool releases only its unused primary reservation before it waits.
+Refunds for unused reservations preserve scheduling order, so an older composition retains its turn.

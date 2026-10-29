@@ -82,14 +82,17 @@ public interface LlmCallPermitRepository extends JpaRepository<LlmCallPermit, UU
             nativeQuery = true)
     void pollClaim(@Param("id") UUID id, @Param("workerId") String workerId);
 
-    /** Workspace, service class, then attempt each receive a turn before another grant to a busy peer. */
+    /**
+     * Workspace, service class, then attempt each receive a turn before another grant to a busy peer.
+     * Grant timestamps retain that scheduling history when unused provider debits are refunded.
+     */
     @Query(value = """
             SELECT q.id FROM llm_call_permit q
             WHERE q.pool_id=:poolId AND q.state IN ('WAITING','CLAIM_WAITING') AND (q.call_class='TURN')=:interactive
             ORDER BY
-              (SELECT max(g.granted_at) FROM llm_call_permit g WHERE g.pool_id=q.pool_id AND g.workspace_id=q.workspace_id AND (g.call_class='TURN')=:interactive AND g.requests>0) NULLS FIRST,
-              (SELECT max(g.granted_at) FROM llm_call_permit g WHERE g.pool_id=q.pool_id AND g.workspace_id=q.workspace_id AND (g.call_class='TURN')=:interactive AND (g.call_class='COMPOSITION')=(q.call_class='COMPOSITION') AND g.requests>0) NULLS FIRST,
-              (SELECT max(g.granted_at) FROM llm_call_permit g WHERE g.pool_id=q.pool_id AND g.source_id=q.source_id AND (g.call_class='TURN')=:interactive AND g.requests>0) NULLS FIRST,
+              (SELECT max(g.granted_at) FROM llm_call_permit g WHERE g.pool_id=q.pool_id AND g.workspace_id=q.workspace_id AND (g.call_class='TURN')=:interactive) NULLS FIRST,
+              (SELECT max(g.granted_at) FROM llm_call_permit g WHERE g.pool_id=q.pool_id AND g.workspace_id=q.workspace_id AND (g.call_class='TURN')=:interactive AND (g.call_class='COMPOSITION')=(q.call_class='COMPOSITION')) NULLS FIRST,
+              (SELECT max(g.granted_at) FROM llm_call_permit g WHERE g.pool_id=q.pool_id AND g.source_id=q.source_id AND (g.call_class='TURN')=:interactive) NULLS FIRST,
               q.acquired_at,q.id LIMIT 1
             """, nativeQuery = true)
     Optional<UUID> next(@Param("poolId") long poolId, @Param("interactive") boolean interactive);

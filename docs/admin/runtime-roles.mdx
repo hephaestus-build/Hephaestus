@@ -522,6 +522,7 @@ Active calls retain their grants until their transports close.
 Unused reservations expire when their owner stops renewing them for a full permit lease.
 Any worker can reclaim these reservations under the pool lock, with an atomic state fence against activation.
 Active grants never use that expiry path.
+The fair queue counts grants even when unused provider debits are refunded.
 
 A review that cannot claim records its demand in the same fair queue as background calls.
 It stays queued and creates no Pod.

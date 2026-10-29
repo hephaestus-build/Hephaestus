@@ -446,6 +446,51 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
         }
     }
 
+    @Test
+    void shouldGiveAnOlderCompositionATurnAfterAnUnusedReservationIsReleased() {
+        long primary = pool(2, 0);
+        var shared = pools.findById(primary).orElseThrow();
+        shared.setRequestsPerMinute(2);
+        shared.setTokensPerMinute(14L);
+        shared.setTokensPerCall(7L);
+        pools.saveAndFlush(shared);
+        long auxiliary = pool(1, 0);
+        UUID pending = UUID.randomUUID();
+        String queuedWorker = "composition-" + UUID.randomUUID();
+        try (var ongoing = admit(workerB, primary, LlmCallClass.EVENT, 2)) {
+            transactions.executeWithoutResult(status -> rows.enqueue(new LlmCallPermitRepository.Request(
+                    pending, primary, queuedWorker, "COMPOSITION", 2, UUID.randomUUID(), 0, "WAITING")));
+            int granted = 0;
+            for (int round = 0; round < 6; round++) {
+                var caller = caller(1);
+                var reservation =
+                        transactions.execute(status -> workerA.reserve(primary, LlmCallClass.REQUEST, caller));
+                if (!Objects.requireNonNull(reservation).granted()) break;
+                granted++;
+                assertThat(rows.countActive(primary)).isEqualTo(2);
+                Objects.requireNonNull(workerA.acquire(
+                                auxiliary,
+                                LlmCallClass.REQUEST,
+                                caller,
+                                () -> false,
+                                Instant.now().plusSeconds(2)))
+                        .close();
+                assertThat(rows.countActive(primary)).isEqualTo(1);
+                var rates = rows.rates(primary);
+                assertThat(rates.getRequests()).isEqualTo(1);
+                assertThat(rates.getTokens()).isEqualTo(7);
+                assertThat(rows.next(primary, false)).contains(pending);
+            }
+            assertThat(ongoing.isRevoked()).isFalse();
+            assertThat(granted)
+                    .as("an older composition must win before another unused reservation repeats")
+                    .isEqualTo(1);
+            assertThat(rows.next(primary, false)).contains(pending);
+        } finally {
+            transactions.executeWithoutResult(status -> rows.abandon(pending, queuedWorker));
+        }
+    }
+
     private LlmCallPermits worker(String id) {
         return new LlmCallPermits(
                 pools, rows, transactions, PROPERTIES, id, new SimpleMeterRegistry(), mock(LlmModelResolver.class));
