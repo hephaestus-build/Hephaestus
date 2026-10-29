@@ -772,6 +772,7 @@ export const zCreateFeedbackDecisionRequest = z.object({
 export const zCreateLlmConnectionRequest = z.object({
     apiKey: z.string().optional(),
     apiProtocol: z.enum([
+        'anthropic-messages',
         'openai-completions',
         'openai-responses',
         'openai-decisions',
@@ -888,6 +889,7 @@ export const zCreateReviewRequest = z.object({
 export const zCreateWorkspaceLlmConnectionRequest = z.object({
     apiKey: z.string().optional(),
     apiProtocol: z.enum([
+        'anthropic-messages',
         'openai-completions',
         'openai-responses',
         'openai-decisions',
@@ -1943,6 +1945,7 @@ export const zLlmCallPoolModel = z.object({
 export const zLlmConnection = z.object({
     apiKeyLast4: z.string().optional(),
     apiProtocol: z.enum([
+        'anthropic-messages',
         'openai-completions',
         'openai-responses',
         'openai-decisions',
@@ -1984,6 +1987,13 @@ export const zLlmConnection = z.object({
     ])),
     slug: z.string(),
     updatedAt: z.iso.datetime({ offset: true }).pipe(z.coerce.date()).optional()
+});
+
+/**
+ * A synthetic probe result, not a claim about the quality of the model's answers.
+ */
+export const zLlmModelCapabilities = z.object({
+    forcedToolChoice: z.boolean().optional()
 });
 
 /**
@@ -2038,6 +2048,7 @@ export const zLlmModel = z.object({
     ]),
     displayName: z.string(),
     enabled: z.boolean(),
+    forcedToolChoice: z.boolean().optional(),
     grantedWorkspaceIds: z.array(z.int()),
     id: z.int(),
     maxOutputTokens: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }).optional(),
@@ -2759,6 +2770,7 @@ export const zPrivateProgress = z.object({
 export const zProbeLlmConnectionRequest = z.object({
     apiKey: z.string().optional(),
     apiProtocol: z.enum([
+        'anthropic-messages',
         'openai-completions',
         'openai-responses',
         'openai-decisions',
@@ -6526,6 +6538,7 @@ export const zWorkspaceListItem = z.object({
 export const zWorkspaceLlmConnection = z.object({
     apiKeyLast4: z.string().optional(),
     apiProtocol: z.enum([
+        'anthropic-messages',
         'openai-completions',
         'openai-responses',
         'openai-decisions',
@@ -6601,6 +6614,7 @@ export const zWorkspaceLlmModel = z.object({
     ]),
     displayName: z.string(),
     enabled: z.boolean(),
+    forcedToolChoice: z.boolean().optional(),
     id: z.int(),
     maxOutputTokens: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }).optional(),
     operatedBy: z.enum(['OWN_ORGANISATION', 'PROVIDER']).optional(),

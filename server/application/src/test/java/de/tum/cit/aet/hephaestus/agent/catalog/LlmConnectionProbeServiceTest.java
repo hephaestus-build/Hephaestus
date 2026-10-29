@@ -14,6 +14,7 @@ import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import java.io.IOException;
 import java.util.Optional;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import mockwebserver3.MockResponse;
@@ -46,6 +47,21 @@ class LlmConnectionProbeServiceTest extends BaseUnitTest {
     @AfterEach
     void tearDown() throws IOException {
         upstream.close();
+    }
+
+    @Test
+    void shouldListNativeAnthropicModelsWithTheConnectionsKeyAndFixedVersion() throws Exception {
+        upstream.enqueue(jsonResponse("{\"data\":[{\"id\":\"review-alias\"}]}"));
+        var result = service.probeDraft(new ProbeLlmConnectionRequestDTO(
+                upstream.url("/").toString(), LlmApiProtocol.ANTHROPIC_MESSAGES, LlmAuthMode.API_KEY, "native-key"));
+        assertThat(result.reachable()).isTrue();
+        assertThat(result.models()).containsExactly("review-alias");
+        var sent = upstream.takeRequest(1, TimeUnit.SECONDS);
+        assertThat(sent).isNotNull();
+        assertThat(sent.getUrl().encodedPath()).isEqualTo("/v1/models");
+        assertThat(sent.getHeaders().get("x-api-key")).isEqualTo("native-key");
+        assertThat(sent.getHeaders().get("anthropic-version")).isEqualTo("2023-06-01");
+        assertThat(sent.getHeaders().get("Authorization")).isNull();
     }
 
     @Test
@@ -89,8 +105,11 @@ class LlmConnectionProbeServiceTest extends BaseUnitTest {
         // The probe blocks for up to its full network timeout, so it runs with no transaction and no
         // JDBC connection held — a few admins testing one stalled provider must not starve the pool.
         when(connectionRepository.findProbeTargetById(5L))
-                .thenReturn(
-                        Optional.of(new LlmProbeTarget(upstream.url("/v1").toString(), LlmAuthMode.BEARER, "sk-abc")));
+                .thenReturn(Optional.of(new LlmProbeTarget(
+                        upstream.url("/v1").toString(),
+                        LlmAuthMode.BEARER,
+                        "sk-abc",
+                        LlmApiProtocol.OPENAI_COMPLETIONS)));
         upstream.enqueue(jsonResponse("{\"data\":[{\"id\":\"gpt-5\"}]}"));
 
         LlmProbeResultDTO result = service.probeStored(5L);
@@ -130,8 +149,11 @@ class LlmConnectionProbeServiceTest extends BaseUnitTest {
         // A connection stored before the allowlist tightened is re-checked on every probe, not trusted
         // because it once passed.
         when(connectionRepository.findProbeTargetById(5L))
-                .thenReturn(
-                        Optional.of(new LlmProbeTarget(upstream.url("/v1").toString(), LlmAuthMode.BEARER, "sk-abc")));
+                .thenReturn(Optional.of(new LlmProbeTarget(
+                        upstream.url("/v1").toString(),
+                        LlmAuthMode.BEARER,
+                        "sk-abc",
+                        LlmApiProtocol.OPENAI_COMPLETIONS)));
         doThrow(new IllegalArgumentException("Provider host must be a public HTTPS URL"))
                 .when(egressPolicy)
                 .validate(any());

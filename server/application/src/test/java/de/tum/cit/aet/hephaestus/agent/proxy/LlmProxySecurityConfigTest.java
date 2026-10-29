@@ -195,8 +195,11 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
         when(jwtVerifier.verify("current-attempt")).thenReturn(jobJwt(job, 1));
         assertThat(answerToTokenCall("current-attempt")).isEqualTo(200);
 
-        for (String path :
-                List.of("/internal/llm/responses", "/internal/llm/chat/completions", "/internal/llm/admit-results")) {
+        for (String path : List.of(
+                "/internal/llm/responses",
+                "/internal/llm/v1/messages",
+                "/internal/llm/chat/completions",
+                "/internal/llm/admit-results")) {
             MockHttpServletRequest request = request("POST", path, GATEWAY_PORT);
             request.setCookies(
                     new Cookie("__Host-HEPHAESTUS_AT", "current-attempt"), new Cookie("JSESSIONID", "current-attempt"));
@@ -256,6 +259,7 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
     @CsvSource({
         "POST,/internal/llm/chat/completions",
         "POST,/internal/llm/responses",
+        "POST,/internal/llm/v1/messages",
         "POST,/internal/llm/practice-script/chat/chat/completions",
         "POST,/internal/llm/admit-results",
         "GET,/internal/llm/runtime/{job}",
@@ -601,7 +605,8 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
                                 workspace.getId(),
                                 null,
                                 null,
-                                null),
+                                null,
+                                false),
                         null,
                         null,
                         600,

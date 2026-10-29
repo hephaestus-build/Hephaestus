@@ -11,6 +11,7 @@ import { ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
 
 import {
 	ATTEMPT_ENDED,
+	modelFailure,
 	refusesAttempt,
 	stopIfAttemptRefused,
 } from "../../../main/resources/agent/pi-model-failure.ts";
@@ -22,6 +23,7 @@ import {
 } from "../../../main/resources/agent/pi-runner-usage.ts";
 
 type Protocol = "openai-completions" | "openai-responses";
+type ChatProtocol = Protocol | "anthropic-messages";
 
 type Raw = Record<string, unknown>;
 
@@ -103,7 +105,7 @@ async function complete(protocol: Protocol, usages: Raw[], incomplete = false) {
 
 /** One completion against a local server that answers with `respond`. */
 async function completeWith(
-	protocol: Protocol,
+	protocol: ChatProtocol,
 	respond: (response: ServerResponse) => void,
 	options?: Parameters<ModelRuntime["completeSimple"]>[2],
 ) {
@@ -381,16 +383,17 @@ for (const total of [undefined, 999]) {
 const SECRET = "sk-diagnostic-secret";
 
 /** The diagnostic name prefix each patched protocol owns. */
-const DIAGNOSTIC: Record<Protocol, string> = {
+const DIAGNOSTIC: Record<ChatProtocol, string> = {
 	"openai-completions": "openai_completions",
 	"openai-responses": "openai_responses",
+	"anthropic-messages": "anthropic_messages",
 };
 
 /** The call's monotonic span: whole milliseconds only, with a response time only when the response arrived. */
 function assertCall(
 	message: Message,
 	responded: boolean,
-	protocol: Protocol = "openai-completions",
+	protocol: ChatProtocol = "openai-completions",
 ): { elapsedMs: number; responseMs?: number } {
 	const call = message.diagnostics?.find(
 		(diagnostic) => diagnostic.type === `${DIAGNOSTIC[protocol]}_call`,
@@ -415,7 +418,7 @@ function assertCall(
 function assertFailure(
 	message: Message,
 	details: Raw,
-	protocol: Protocol = "openai-completions",
+	protocol: ChatProtocol = "openai-completions",
 ): void {
 	assert.equal(message.stopReason, details.kind === "ABORTED" ? "aborted" : "error");
 	assert.deepEqual(
@@ -779,4 +782,65 @@ void test("stops the runner on the gateway's refusal of a failed call, and only 
 	assert.deepEqual(exits, []);
 	stopIfAttemptRefused("error", refusedMessage, exit);
 	assert.deepEqual(exits, [1]);
+});
+
+for (const status of [409, 529]) {
+	void test(`native HTTP ${status} retains its trusted status and stops only a fenced attempt`, async () => {
+		let calls = 0;
+		const message = await completeWith(
+			"anthropic-messages",
+			(response) => {
+				calls += 1;
+				response.writeHead(status, { "content-type": "text/plain" });
+				response.end(status === 409 ? ATTEMPT_ENDED : SECRET);
+			},
+			{ maxRetries: 0 },
+		);
+		assertFailure(message, { kind: "HTTP_ERROR", phase: "request", status }, "anthropic-messages");
+		const failure = modelFailure(message);
+		assert.deepEqual(
+			{ ...failure, at: null },
+			{
+				kind: "HTTP_ERROR",
+				source: "ADAPTER",
+				phase: "request",
+				status,
+				at: null,
+			},
+		);
+		assert.ok(typeof failure.at === "number");
+		assert.equal(refusesAttempt(message), status === 409);
+		const exits: number[] = [];
+		stopIfAttemptRefused("error", message, (code) => {
+			exits.push(code);
+		});
+		assert.deepEqual(exits, status === 409 ? [1] : []);
+		assert.equal(calls, 1);
+		assert.ok(!JSON.stringify(message.diagnostics).includes(SECRET));
+	});
+}
+
+void test("native stream errors retain their response-stage diagnostic", async () => {
+	const message = await completeWith(
+		"anthropic-messages",
+		(response) => {
+			response.writeHead(200, { "content-type": "text/event-stream" });
+			response.end(
+				`event: error\ndata: ${JSON.stringify({
+					type: "error",
+					error: {
+						type: "overloaded_error",
+						message: SECRET,
+					},
+				})}\n\n`,
+			);
+		},
+		{ maxRetries: 0 },
+	);
+	assertFailure(
+		message,
+		{ kind: "STREAM_ERROR_EVENT", phase: "response_body" },
+		"anthropic-messages",
+	);
+	assert.equal(refusesAttempt(message), false);
 });

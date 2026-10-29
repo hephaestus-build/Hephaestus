@@ -4,6 +4,7 @@ import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmAuthMode;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnectionHealth;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelResolver;
+import de.tum.cit.aet.hephaestus.agent.proxy.ProxyRequestBody.PreparedBody;
 import de.tum.cit.aet.hephaestus.agent.runtime.ProvenanceDigest;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
@@ -23,7 +24,6 @@ import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Arrays;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -51,7 +51,6 @@ import reactor.netty.Connection;
 import reactor.netty.http.client.HttpClientRequest;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
-import tools.jackson.databind.node.ObjectNode;
 
 // The authenticated token chooses the model and upstream; callers cannot supply hosts, paths, or credentials.
 @Service
@@ -209,7 +208,7 @@ class LlmProxyService {
             case OPENAI_DECISIONS -> tooManyEntries(call, "questions", MAX_DECISION_QUESTIONS);
             case OPENAI_EMBEDDINGS -> tooManyEntries(call, "input", MAX_EMBEDDING_INPUTS);
             case COHERE_RERANK -> tooManyEntries(call, "documents", MAX_RERANK_DOCUMENTS);
-            case OPENAI_COMPLETIONS, OPENAI_RESPONSES -> null;
+            case OPENAI_COMPLETIONS, OPENAI_RESPONSES, ANTHROPIC_MESSAGES -> null;
         };
     }
 
@@ -399,8 +398,7 @@ class LlmProxyService {
             return ResponseEntity.status(502).body("Upstream target not permitted");
         }
 
-        boolean responsesProtocol = protocol == LlmApiProtocol.OPENAI_RESPONSES;
-        PreparedBody prepared = prepareBody(body, credential.upstreamModelId(), !responsesProtocol);
+        PreparedBody prepared = ProxyRequestBody.prepare(objectMapper, body, credential.upstreamModelId(), protocol);
         if (prepared == null) return ResponseEntity.badRequest().body("Request body must be a JSON object");
 
         URI upstreamUri;
@@ -455,7 +453,7 @@ class LlmProxyService {
                             ? call.cancelled()
                             : Mono.firstWithSignal(call.cancelled(), poolPermit.revoked()),
                     transports);
-            ProxyStreamUsageTap tap = new ProxyStreamUsageTap(objectMapper, responsesProtocol);
+            ProxyStreamUsageTap tap = new ProxyStreamUsageTap(objectMapper, protocol);
             // Both requests below share the attempt's one deadline; the second one does not get a new window.
             Instant deadline = routing.workDeadline();
             boolean reviewStream = practiceScript == null && requestsStream(prepared.body());
@@ -556,7 +554,7 @@ class LlmProxyService {
             // Report revocation in the stream; buffered responses still settle health and usage below.
             if (poolPermit != null && poolPermit.isRevoked() && upstream.streamOutcome() != null && response != null) {
                 call.failed(new MentorTurn.FailedCall(UPSTREAM_PAUSED, null));
-                errors.writeErrorFrame(response, UPSTREAM_PAUSED, "The model capacity lease ended.");
+                errors.writeErrorFrame(response, protocol, UPSTREAM_PAUSED, "The model capacity lease ended.");
             }
             if (call.isCancelled()) {
                 // The turn ended without this call; the provider's state is unknown.
@@ -571,7 +569,7 @@ class LlmProxyService {
                         + bounds.idle().toSeconds() + " seconds";
                 if (!routing.hephTurn())
                     log.warn("LLM upstream stalled for principal {}: {}", routing.principalDescription(), stall);
-                if (response != null) errors.writeStallFrame(response, stall);
+                if (response != null) errors.writeStallFrame(response, protocol, stall);
             }
             var outcome = upstream.streamOutcome();
             if (outcome != null)
@@ -777,7 +775,10 @@ class LlmProxyService {
     private static @Nullable ResponseEntity<String> validateSafeSurface(HttpServletRequest request) {
         if (!"POST".equals(request.getMethod()))
             return ResponseEntity.status(405).body("Method not allowed");
-        if (request.getQueryString() != null)
+        // The native Anthropic SDK adds this fixed hint even to the GA Messages operation.
+        boolean nativeSdkHint = "/internal/llm/v1/messages".equals(request.getRequestURI())
+                && "beta=true".equals(request.getQueryString());
+        if (request.getQueryString() != null && !nativeSdkHint)
             return ResponseEntity.badRequest().body("Query parameters are not allowed");
         return null;
     }
@@ -793,73 +794,6 @@ class LlmProxyService {
         return null;
     }
 
-    /**
-     * @param withoutUsageRequest the body as the caller sent it; {@code null} when we added nothing, so
-     *     a rejection is the caller's own and there is nothing to retry
-     */
-    @SuppressWarnings("ArrayRecordComponent") // raw request bytes sent upstream; never compared, hashed or printed
-    record PreparedBody(byte[] body, byte @Nullable [] withoutUsageRequest) {
-        byte[] withoutUsageRequestOrBody() {
-            return withoutUsageRequest != null ? withoutUsageRequest : body;
-        }
-    }
-
-    /**
-     * Lock the model, strip what the sandbox may not ask for, and — on a streaming chat-completions
-     * request — ask the provider to report usage.
-     *
-     * @param includeStreamingUsage true for chat-completions, whose streams report no usage unless the
-     *     request carries {@code stream_options.include_usage}; the responses API reports it regardless
-     * @return {@code null} when the body is not a JSON object or asks for a capability the proxy
-     *     refuses to forward
-     */
-    @Nullable
-    PreparedBody prepareBody(byte[] body, String upstreamModelId, boolean includeStreamingUsage) {
-        if (body == null || body.length == 0) return null;
-        try {
-            JsonNode tree = objectMapper.readTree(body);
-            if (!tree.isObject()) return null;
-            ObjectNode object = (ObjectNode) tree;
-            if (usesProviderHostedTool(object.get("tools"))
-                    || object.has("web_search_options")
-                    || object.has("audio")
-                    || !isTextOnlyModality(object.get("modalities"))) return null;
-            object.put("model", upstreamModelId);
-            object.remove("service_tier");
-            if (!includeStreamingUsage || !object.path("stream").asBoolean(false)) {
-                return new PreparedBody(objectMapper.writeValueAsBytes(object), null);
-            }
-            byte[] asSent = objectMapper.writeValueAsBytes(object);
-            JsonNode existing = object.get("stream_options");
-            ObjectNode options = existing != null && existing.isObject()
-                    ? (ObjectNode) existing
-                    : object.putObject("stream_options");
-            options.put("include_usage", true);
-            byte[] withUsage = objectMapper.writeValueAsBytes(object);
-            boolean weAddedTheFlag = !Arrays.equals(asSent, withUsage);
-            return new PreparedBody(withUsage, weAddedTheFlag ? asSent : null);
-        } catch (Exception e) {
-            return null;
-        }
-    }
-
-    private static boolean usesProviderHostedTool(JsonNode tools) {
-        if (tools == null) return false;
-        if (!tools.isArray()) return true;
-        for (JsonNode tool : tools) {
-            String type = tool.path("type").asString("");
-            if (!"function".equals(type) && !"custom".equals(type)) return true;
-        }
-        return false;
-    }
-
-    private static boolean isTextOnlyModality(JsonNode modalities) {
-        return (modalities == null
-                || (modalities.isArray()
-                        && modalities.size() == 1
-                        && "text".equals(modalities.get(0).asString())));
-    }
-
     HttpHeaders buildUpstreamHeaders(HttpHeaders incomingHeaders, LlmModelResolver.ProxyCredential credential) {
         HttpHeaders outgoing = new HttpHeaders();
         outgoing.setContentType(MediaType.APPLICATION_JSON);
@@ -868,6 +802,12 @@ class LlmProxyService {
         }
         outgoing.set(HttpHeaders.ACCEPT_ENCODING, "identity");
 
+        if (LlmApiProtocol.ANTHROPIC_MESSAGES.wire().equals(credential.apiProtocol())) {
+            outgoing.set("anthropic-version", "2023-06-01");
+            if (credential.apiKey() != null && !credential.apiKey().isBlank())
+                outgoing.set("x-api-key", credential.apiKey());
+            return outgoing;
+        }
         if (credential.apiKey() != null && !credential.apiKey().isBlank()) {
             if (credential.authMode() == LlmAuthMode.API_KEY) {
                 outgoing.set("api-key", credential.apiKey());

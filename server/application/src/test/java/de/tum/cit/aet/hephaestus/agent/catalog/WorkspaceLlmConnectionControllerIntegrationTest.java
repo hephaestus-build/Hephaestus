@@ -274,8 +274,8 @@ class WorkspaceLlmConnectionControllerIntegrationTest extends AbstractWorkspaceI
 
     @Test
     @WithAdminUser
-    void shouldRejectTheConnectionWhenItsProtocolIsNotOneHephaestusSpeaks() {
-        Workspace workspace = setupWorkspace("byo-protocol-ws");
+    void shouldCreateTheConnectionWhenItsProtocolIsNativeMessages() {
+        Workspace workspace = setupWorkspace("byo-native-messages");
 
         webTestClient
                 .post()
@@ -286,6 +286,28 @@ class WorkspaceLlmConnectionControllerIntegrationTest extends AbstractWorkspaceI
                         "displayName", "Messages",
                         "baseUrl", LlmCatalogTestFixtures.PUBLIC_BASE_URL,
                         "apiProtocol", "anthropic-messages"))
+                .exchange()
+                .expectStatus()
+                .isCreated()
+                .expectBody()
+                .jsonPath("$.apiProtocol")
+                .isEqualTo("anthropic-messages");
+    }
+
+    @Test
+    @WithAdminUser
+    void shouldRejectTheConnectionWhenItsProtocolIsNotOneHephaestusSpeaks() {
+        Workspace workspace = setupWorkspace("byo-protocol-ws");
+
+        webTestClient
+                .post()
+                .uri("/workspaces/{slug}/llm/connections", workspace.getWorkspaceSlug())
+                .headers(TestAuthUtils.withCurrentUser())
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(Map.of(
+                        "displayName", "Unknown protocol",
+                        "baseUrl", LlmCatalogTestFixtures.PUBLIC_BASE_URL,
+                        "apiProtocol", "unsupported-protocol"))
                 .exchange()
                 .expectStatus()
                 .isBadRequest()

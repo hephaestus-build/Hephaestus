@@ -77,7 +77,8 @@ class ScanBudgetTest extends BaseUnitTest {
                                 "model",
                                 1000,
                                 1000,
-                                null),
+                                null,
+                                false),
                         new LlmModelResolver.ConnectionRef(UsageFundingSource.INSTANCE, 1L, 2L, 1L),
                         new LlmPriceSnapshot(
                                 UsageFundingSource.INSTANCE,

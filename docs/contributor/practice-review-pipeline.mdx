@@ -250,6 +250,37 @@ Completions protocols receive no explicit cache markers.
 
 Live cache gain remains unverified until staging measurement after L3 merges.
 
+The native Anthropic Messages protocol serves reviews, script chat calls, composition, and conversations through the gateway.
+Its upstream path is `/v1/messages` relative to the connection's root URL.
+The gateway uses the live connection's key and a fixed API version.
+It permits custom client tools and refuses provider-hosted tools.
+
+The native SDK keeps hosted tool discovery and system updates inside the conversation disabled.
+The gateway serves custom client tools and a top-level system prompt with one fixed API version.
+Known model metadata still supplies its supported thinking mode.
+
+It combines cumulative stream usage without subtracting cache buckets from uncached input.
+
+The catalog stores the nullable `forced_tool_choice` capability from a synthetic probe.
+An unknown capability uses automatic tool choice.
+The frozen review configuration carries the capability to Pi and the script host.
+The script host passes it to custom programs through IPC.
+No model-name pattern determines it.
+
+Anthropic sessions use automatic tool choice throughout, so repair turns keep the same cache prefix.
+
+The [admin guide](/admin/ai-providers#test-model-tool-choice) describes the test.
+The system, change and core layers have explicit cache breakpoints with a five-minute TTL.
+The SDK's last-tool breakpoint is removed. Its moving session breakpoint uses the fourth slot.
+A repair keeps the stable layers and the same tool choice.
+Without the original opening after compaction, system and session caching continue.
+
+Native feedback composition uses the provider's defaults for thinking and sampling.
+It does not apply the review runner's effort or temperature overrides.
+This supports opaque model aliases without a second model-capability catalog.
+Pi uses its provider metadata for native model IDs that it recognizes.
+An unknown native alias keeps provider defaults for those options.
+
 The session's read, grep and find tools refuse a captured file that the practice does not declare. A listing still shows its name.
 A result may cite only its declared sources, the change and the checkout. The runner refuses other citations, and the session gets a repair turn.
 Every session can also read the change and the checkout through Git.

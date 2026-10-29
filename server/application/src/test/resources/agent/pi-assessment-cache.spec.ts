@@ -195,7 +195,7 @@ async function wire(
 		) => {
 			assert.ok(
 				registerHephaestusProvider(modelRuntime, config, {
-					LLM_PROXY_URL: `http://127.0.0.1:${address.port}/v1`,
+					LLM_PROXY_URL: `http://127.0.0.1:${address.port}${config.apiProtocol === "anthropic-messages" ? "" : "/v1"}`,
 					LLM_PROXY_TOKEN: "test-only",
 				}),
 			);
@@ -397,5 +397,67 @@ void test("Chat Completions does not receive Responses cache fields", async () =
 		assert.ok(body && Array.isArray(body.messages));
 		assert.equal(JSON.stringify(body).includes("prompt_cache_breakpoint"), false);
 		assert.equal("prompt_cache_options" in body, false);
+	});
+});
+
+void test("Anthropic caches the system, change and core with five-minute TTL and keeps the session slot", async () => {
+	await wire(async ({ open, bodies }) => {
+		const prefix = "task\nchange\ncore\nindex\n";
+		const config = {
+			apiProtocol: "anthropic-messages",
+			modelId: "review-alias",
+			forcedToolChoice: true,
+		};
+		for (const practice of ["Evaluate alpha.", "Evaluate beta."]) {
+			const session = await open(config, 9, JOB, prefix, [12, 17]);
+			await session.prompt(`${prefix}${practice}`);
+			await session.prompt("Repair the citation.");
+		}
+		assert.equal(bodies.length, 4);
+		for (const [at, body] of bodies.entries()) {
+			assert.equal("prompt_cache_key" in body, false);
+			assert.equal("prompt_cache_breakpoint" in body, false);
+			assert.equal(JSON.stringify(body).match(/cache_control/gu)?.length, 4);
+			assert.doesNotMatch(JSON.stringify(body), /"ttl":"1h"/u);
+			assert.ok(Array.isArray(body.tools));
+			assert.ok(body.tools.every((tool: unknown) => isRecord(tool) && !("cache_control" in tool)));
+			assert.ok(Array.isArray(body.system));
+			assert.partialDeepStrictEqual(body.system.at(-1), {
+				cache_control: { type: "ephemeral", ttl: "5m" },
+			});
+			assert.ok(Array.isArray(body.messages));
+			const first: unknown = body.messages[0];
+			assert.ok(isRecord(first) && Array.isArray(first.content));
+			const texts = first.content.map((part: unknown) => {
+				assert.ok(isRecord(part));
+				return part.text;
+			});
+			assert.deepEqual(texts.slice(0, 2), ["task\nchange\n", "core\n"]);
+			assert.equal(texts.join(""), `${prefix}${at < 2 ? "Evaluate alpha." : "Evaluate beta."}`);
+			assert.partialDeepStrictEqual(first.content[0], {
+				cache_control: { type: "ephemeral", ttl: "5m" },
+			});
+			assert.partialDeepStrictEqual(first.content[1], {
+				cache_control: { type: "ephemeral", ttl: "5m" },
+			});
+			const last: unknown = body.messages.at(-1);
+			assert.ok(isRecord(last) && Array.isArray(last.content));
+			assert.partialDeepStrictEqual(last.content.at(-1), {
+				cache_control: { type: "ephemeral", ttl: "5m" },
+			});
+		}
+		assert.deepEqual(bodies[0]?.tools, bodies[2]?.tools);
+		assert.deepEqual(bodies[0]?.system, bodies[2]?.system);
+	});
+});
+
+void test("Anthropic retains system and session caching when the exact opening is unavailable", async () => {
+	await wire(async ({ open, bodies }) => {
+		const session = await open({ apiProtocol: "anthropic-messages", modelId: "review-alias" });
+		await session.prompt("Compacted context without the original opening.");
+		const body = bodies[0];
+		assert.ok(body);
+		assert.equal(JSON.stringify(body).match(/cache_control/gu)?.length, 2);
+		assert.doesNotMatch(JSON.stringify(body), /prompt_cache_/u);
 	});
 });

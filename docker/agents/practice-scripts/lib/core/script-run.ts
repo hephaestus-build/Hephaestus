@@ -3,6 +3,8 @@
  * final value. The host answers each request once, keeps one review active, and ends the process at
  * the practice's deadline.
  */
+import { supportsForcedToolChoice } from "./model-capabilities.ts";
+
 import { fork } from "node:child_process";
 import { once } from "node:events";
 import { existsSync } from "node:fs";
@@ -420,6 +422,7 @@ export async function runCustomProgram(
 		child.send({
 			kind: "meta-accepted",
 			models: accepted,
+			forcedToolChoice: supportsForcedToolChoice(services.models.chat),
 			tokens: services.budget.left,
 		} satisfies HostMessage);
 	};

@@ -128,7 +128,8 @@ class WorkerFeedbackComposerTest {
                                 null,
                                 DataHandlingTier.UNDECLARED,
                                 null,
-                                null),
+                                null,
+                                false),
                         200_000,
                         4_000,
                         600,
@@ -440,6 +441,26 @@ class WorkerFeedbackComposerTest {
                 .containsOnly(reason)
                 .hasSize(4);
         assertThat(stops(cause, "withheld")).isEqualTo(4);
+    }
+
+    @Test
+    void shouldWithholdNativeRefusalsWithoutRepairingEitherCompositionSession() {
+        var config = (ObjectNode) job.getConfigSnapshot().deepCopy();
+        ((ObjectNode) config.path("model")).put("apiProtocol", "anthropic-messages");
+        job.setConfigSnapshot(config);
+        answerEveryCall(new ReviewModelGateway.Answer(200, """
+                {"stop_reason":"refusal","content":[{"type":"text","text":"I cannot compose this feedback."},
+                  {"type":"tool_use","id":"refused","name":"report_review","input":{}}]}
+                """.getBytes(StandardCharsets.UTF_8), true, null));
+
+        composer().composeAfterMeasurement(job, "worker-1", Instant.now().plus(Duration.ofHours(1)));
+
+        assertThat(requests).hasSize(2);
+        assertThat(prepared)
+                .extracting(request -> request.composition().getFirst().withheldReason())
+                .containsOnly(FeedbackStopReason.NOT_COMPOSED)
+                .hasSize(4);
+        assertThat(stops("model_refused", "withheld")).isEqualTo(4);
     }
 
     @Test

@@ -34,6 +34,20 @@ export function assessmentCacheExtension(
 				.update(JSON.stringify([workspaceId, jobId]))
 				.digest("hex")
 		: null;
+	if (config.apiProtocol === "anthropic-messages") {
+		return (pi) => {
+			pi.on("before_provider_request", ({ payload }) => {
+				if (
+					!isRecord(payload) ||
+					payload.model !== config.modelId ||
+					!Array.isArray(payload.messages)
+				) {
+					return;
+				}
+				return anthropicCache(payload, prefix, boundaries);
+			});
+		};
+	}
 	return (pi) => {
 		if (!supported || key === null || prefix.length === 0) {
 			return;
@@ -111,4 +125,71 @@ export function assessmentCacheExtension(
 			};
 		});
 	};
+}
+
+/** The system covers tools, leaving two stable work boundaries and the SDK's moving session slot. */
+function anthropicCache(
+	payload: Record<string, unknown>,
+	prefix: string,
+	boundaries: readonly number[],
+) {
+	const cache = { type: "ephemeral", ttl: "5m" };
+	const tools = Array.isArray(payload.tools) ? payload.tools.map(withoutCache) : payload.tools;
+	const systemBlocks = payload.system;
+	const system = Array.isArray(systemBlocks)
+		? systemBlocks.map((block: unknown, at: number) => {
+				const clean = withoutCache(block);
+				return isRecord(clean) && at === systemBlocks.length - 1
+					? { ...clean, cache_control: cache }
+					: clean;
+			})
+		: payload.system;
+	const messages = Array.isArray(payload.messages)
+		? payload.messages.map((message: unknown) => {
+				if (!isRecord(message) || !Array.isArray(message.content)) {
+					return message;
+				}
+				const content = message.content.map((block: unknown) =>
+					isRecord(block) && "cache_control" in block ? { ...block, cache_control: cache } : block,
+				);
+				const block: unknown = content[0];
+				if (
+					message.role !== "user" ||
+					content.length !== 1 ||
+					!isRecord(block) ||
+					block.type !== "text" ||
+					typeof block.text !== "string" ||
+					prefix.length === 0 ||
+					!block.text.startsWith(prefix) ||
+					block.text.length <= prefix.length
+				) {
+					return { ...message, content };
+				}
+				const ends = [...new Set(boundaries)]
+					.filter((end) => Number.isSafeInteger(end) && end > 0 && end <= prefix.length)
+					.toSorted((a, b) => a - b)
+					.slice(0, 2);
+				if (ends.length === 0) {
+					ends.push(prefix.length);
+				}
+				let start = 0;
+				const { text } = block;
+				const layers = ends.map((end) => {
+					const part = { type: "text", text: text.slice(start, end), cache_control: cache };
+					start = end;
+					return part;
+				});
+				return { ...message, content: [...layers, { ...block, text: block.text.slice(start) }] };
+			})
+		: payload.messages;
+	return { ...payload, tools, system, messages };
+}
+
+function withoutCache(value: unknown) {
+	if (!isRecord(value)) {
+		return value;
+	}
+	const copy = { ...value };
+	delete copy.cache_control;
+	return copy;
 }

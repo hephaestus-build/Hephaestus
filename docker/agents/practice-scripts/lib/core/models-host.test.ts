@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { describe, test } from "node:test";
 import { setImmediate } from "node:timers/promises";
 import { z } from "zod";
+import { isJsonObject } from "./json.ts";
 import { chatOptionsSchema } from "./model-options.ts";
 
 import { InvalidResponseDataError } from "@ai-sdk/provider";
@@ -490,4 +491,49 @@ void test("chat credentials and provider features cannot be supplied through mes
 	assert.deepEqual(received.tools, [
 		{ type: "function", name: "read", inputSchema: { type: "object" } },
 	]);
+});
+
+void test("native Anthropic chat carries gateway authorization and exclusive cache usage", async () => {
+	let sent: Record<string, unknown> = {};
+	const { chat } = hostModels(
+		{ chat: { protocol: "anthropic-messages", modelId: "alias", forcedToolChoice: true } },
+		"http://proxy.test/internal/llm",
+		"job-token",
+		"practice",
+		async (url, init) => {
+			assert.equal(url, "http://proxy.test/internal/llm/practice-script/chat/v1/messages");
+			assert.equal(new Headers(init?.headers).get("authorization"), "Bearer job-token");
+			assert.equal(typeof init?.body, "string");
+			assert.ok(typeof init?.body === "string");
+			const parsed: unknown = JSON.parse(init.body);
+			assert.ok(isJsonObject(parsed));
+			sent = parsed;
+			return Response.json({
+				id: "msg-1",
+				type: "message",
+				role: "assistant",
+				model: "alias",
+				content: [{ type: "text", text: "ok" }],
+				stop_reason: "end_turn",
+				stop_sequence: null,
+				usage: {
+					input_tokens: 13,
+					output_tokens: 7,
+					cache_read_input_tokens: 1200,
+					cache_creation_input_tokens: 300,
+				},
+			});
+		},
+	);
+	assert.ok(chat);
+	const reply = await chat.doGenerate({
+		prompt: [{ role: "user", content: [{ type: "text", text: "Check" }] }],
+		maxOutputTokens: 64,
+	});
+	assert.equal(sent.max_tokens, 64);
+	assert.equal(sent.model, "alias");
+	assert.equal(reply.usage.inputTokens.noCache, 13);
+	assert.equal(reply.usage.inputTokens.cacheRead, 1200);
+	assert.equal(reply.usage.inputTokens.cacheWrite, 300);
+	assert.equal(reply.usage.inputTokens.total, 1513);
 });

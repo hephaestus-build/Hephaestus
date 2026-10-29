@@ -78,6 +78,11 @@ public class LlmModel {
     @Column(name = "max_output_tokens")
     private Integer maxOutputTokens;
 
+    /** Null until a probe establishes the model's forced tool-choice support. */
+    @Nullable
+    @Column(name = "forced_tool_choice")
+    private Boolean forcedToolChoice;
+
     /** The reasoning effort requested of the model; null sends none, and the provider's default applies. */
     @Nullable
     @Enumerated(EnumType.STRING)

@@ -418,7 +418,8 @@ class ReviewJobPersistenceIntegrationTest extends BaseIntegrationTest {
                 workspace.getId(),
                 null,
                 null,
-                price);
+                price,
+                false);
     }
 
     private LlmUsageEvent onlyUsageEvent(UUID jobId) {
@@ -462,7 +463,8 @@ class ReviewJobPersistenceIntegrationTest extends BaseIntegrationTest {
                                 workspace.getId(),
                                 null,
                                 null,
-                                null),
+                                null,
+                                false),
                         null,
                         null,
                         600,

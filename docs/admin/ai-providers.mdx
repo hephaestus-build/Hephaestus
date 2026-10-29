@@ -1,7 +1,7 @@
 ---
 id: ai-providers
 title: Connect an AI Provider
-description: Register an OpenAI-compatible provider. Test it. Price and share its models. Understand each field and failed probe.
+description: Register an AI provider. Test it. Price and share its models. Understand each field and failed probe.
 ---
 
 Hephaestus ships with **no** provider, model, or key.
@@ -68,8 +68,8 @@ Only `displayName`, `baseUrl`, and `apiProtocol` are required.
 | Field                          | Required | What it is                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | ------------------------------ | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Display name**               | yes      | Free text, ≤ 128 characters. Editable after creation. Display name, service declaration, API key, and enabled state can change. Routing identity and slug cannot.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| **Base URL**                   | yes      | The provider's OpenAI-compatible root, ≤ 2048 characters. Examples: `https://api.openai.com/v1`, or `https://<resource>.openai.azure.com/openai/v1` for Azure. Requires HTTPS. Must have no credentials, query string, or fragment. **Immutable after create.**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| **API**                        | yes      | The API that the endpoint serves. Under **Chat models**: **Responses API** (`openai-responses`), the default, and **Chat Completions API** (`openai-completions`). Under **For practice scripts**: **Decisions API**, **Embeddings API**, and **Rerank API (Cohere-compatible)**. [Models for practice scripts](#models-for-practice-scripts) describes these three. Prefer Responses API for reviews and conversations, which call tools across many turns. It can preserve reasoning between tool calls for supported models and providers. OpenAI, Vercel AI Gateway, OpenRouter, and vLLM offer it. Support depends on the model and deployment. For Chat Completions-only endpoints, choose **Chat Completions API**. **Immutable after create.** The edit form shows the API as text. |
+| **Base URL**                   | yes      | The provider's API root, ≤ 2048 characters. Examples: `https://api.openai.com/v1`, or `https://<resource>.openai.azure.com/openai/v1` for Azure. Requires HTTPS. Must have no credentials, query string, or fragment. **Immutable after create.**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| **API**                        | yes      | The API that the endpoint serves. Under **Chat models**: **Responses API** (`openai-responses`), the default, **Chat Completions API** (`openai-completions`), and **Messages API (Anthropic)** (`anthropic-messages`). Under **For practice scripts**: **Decisions API**, **Embeddings API**, and **Rerank API (Cohere-compatible)**. [Models for practice scripts](#models-for-practice-scripts) describes these three. Prefer Responses API for reviews and conversations, which call tools across many turns. It can preserve reasoning between tool calls for supported models and providers. OpenAI, Vercel AI Gateway, OpenRouter, and vLLM offer it. Support depends on the model and deployment. For Chat Completions-only endpoints, choose **Chat Completions API**. **Immutable after create.** The edit form shows the API as text. |
 | **Authentication**             | no       | `BEARER` → `Authorization: Bearer <key>`, or `API_KEY` → `api-key: <key>`. Defaults to `BEARER`. Azure needs `API_KEY`. **Immutable after create.**                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | **Service receiving requests** | no       | Search for the service that receives requests from the configured endpoint, such as Logos, Azure, or Vercel AI Gateway. If absent or uncertain, leave **Not listed or unknown**. This display declaration does not prove where inference runs or who operates the model. You can change or clear it later.                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | **API key**                    | no       | Write-only and encrypted at rest. Never returned. A saved connection reports only `hasApiKey` and the last four characters. On edit, leave blank to keep the stored key. To delete it, select **Remove stored API key**. Optional: a self-hosted vLLM or Ollama gateway may need no credential.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
@@ -103,14 +103,14 @@ The create form offers these presets:
 
 - **OpenAI** (`https://api.openai.com/v1`, Bearer).
 - **Azure OpenAI v1** (`https://RESOURCE.openai.azure.com/openai/v1`, API key).
-- **Other OpenAI-compatible endpoint**.
+- **Other endpoint**.
 
 They only prefill the two fields.
 Nothing about the preset is stored.
 For an Azure mark beside a workspace model, use the separate **Service receiving requests** declaration.
 
 Neither OpenAI nor Azure OpenAI serves a rerank API.
-Thus, when you choose **Rerank API (Cohere-compatible)** with one of these presets, the form changes the preset to **Other OpenAI-compatible endpoint**.
+Thus, when you choose **Rerank API (Cohere-compatible)** with one of these presets, the form changes the preset to **Other endpoint**.
 A base URL that you typed stays.
 
 For a gateway, name the gateway that receives the request, not an unknown downstream service.
@@ -744,6 +744,65 @@ It never silently selects another handling tier.
 Before you delete a model, remove or replace its assignments.
 The server refuses deletion of an assigned model.
 Provider unavailability does not remove recorded feedback or earlier conversations.
+
+## Connect Anthropic
+
+Choose **Anthropic** as the endpoint preset.
+The preset selects **Messages API (Anthropic)** and `https://api.anthropic.com`.
+Enter an Anthropic API key.
+The server sends the key in `x-api-key` and sets `anthropic-version` to `2023-06-01`.
+The connection test reads the native `/models` endpoint.
+
+The Messages API serves reviews, practice script chat models, feedback composition, and conversations.
+It permits custom tools that run in the sandbox.
+It refuses provider-hosted tools and remote MCP servers.
+Bedrock and Google Cloud authentication are not supported by this preset.
+
+Anthropic reports uncached input, cache reads, and cache writes as separate counts.
+Set each token price in the model's price fields.
+The cache buckets are not subtracted from the uncached input.
+The server retains cumulative usage if a stream stops before its final event.
+
+The runner caches the stable system, change, and core layers for five minutes.
+The session marker moves as the review continues.
+[ADR 0069](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0069-practices-run-when-ready-and-stay-current-by-their-sources.md) owns this layout.
+
+Native feedback composition uses the provider's defaults for thinking and sampling.
+It does not apply the review runner's effort or temperature overrides.
+This supports opaque model aliases without a second model-capability catalog.
+Pi uses its provider metadata for native model IDs that it recognizes.
+An unknown native alias keeps provider defaults for those options.
+
+This protocol alone does not prove a cache gain.
+
+## Test model tool choice
+
+Edit a saved model in either admin console.
+Select **Test tool choice**.
+The test sends two short synthetic requests to that model.
+The provider can charge for them.
+The result is saved at once, without **Save changes**.
+No reviewed work is sent.
+
+The first request uses automatic tool choice.
+The second requests one named tool.
+A returned call to that tool confirms the `forced_tool_choice` capability.
+A refusal of the second request records no support only if the first request succeeds.
+A failed or inconclusive test keeps the previous capability.
+
+Unknown capabilities use automatic tool choice.
+Model names and aliases do not determine capabilities.
+
+Anthropic review sessions always use automatic tool choice, including repair turns.
+The admin form does not offer this test for native Anthropic models.
+This keeps their tool choice stable across cache reads.
+Other chat protocols can force the submission tool after a successful test.
+Repeat the test after the provider changes the model behind an alias.
+
+The endpoints are `PUT /admin/llm/models/{id}/capabilities` and
+`PUT /workspaces/{slug}/llm/models/{id}/capabilities`.
+Each returns the observed `forcedToolChoice` value.
+An inconclusive test returns no value and changes no stored capability.
 
 ## Models for practice scripts
 

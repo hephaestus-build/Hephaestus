@@ -44,6 +44,7 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 public class LlmModelAdminController {
 
     private final LlmModelService modelService;
+    private final LlmModelCapabilityProbe capabilityProbe;
 
     @PostMapping("/connections/{connectionId}/models")
     @Operation(summary = "Create a model on an LLM connection", operationId = "adminCreateLlmModel")
@@ -114,6 +115,21 @@ public class LlmModelAdminController {
     public ResponseEntity<LlmModelDTO> update(
             @PathVariable Long id, @Valid @RequestBody UpdateLlmModelRequestDTO request) {
         return ResponseEntity.ok(toDTO(modelService.update(id, request)));
+    }
+
+    @PutMapping("/models/{id}/capabilities")
+    @Operation(
+            summary = "Probe the model's forced tool-choice capability",
+            operationId = "adminProbeLlmModelCapabilities")
+    @Audited(ledger = AuditLedger.AUTH_EVENT, type = "LLM_MODEL_UPDATED")
+    public ResponseEntity<LlmModelCapabilitiesDTO> probeCapabilities(@PathVariable Long id) {
+        var model = modelService.get(id);
+        var connection = model.getConnection();
+        var target = new LlmProbeTarget(
+                connection.getBaseUrl(), connection.getAuthMode(), connection.getApiKey(), connection.getApiProtocol());
+        var result = capabilityProbe.probe(target, model.getUpstreamModelId());
+        modelService.recordCapability(id, model.getUpstreamModelId(), target, result);
+        return ResponseEntity.ok(result);
     }
 
     @DeleteMapping("/models/{id}")

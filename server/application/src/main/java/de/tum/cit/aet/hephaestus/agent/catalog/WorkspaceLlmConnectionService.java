@@ -157,8 +157,8 @@ public class WorkspaceLlmConnectionService {
                 .findProbeTargetByIdAndWorkspaceId(id, workspaceContext.id())
                 .orElseThrow(() -> new EntityNotFoundException("WorkspaceLlmConnection", id));
         boolean privateTarget = egressPolicy.validate(target.baseUrl());
-        LlmProbeResultDTO raw =
-                probeService.probeCredential(target.baseUrl(), target.authMode(), target.apiKey(), privateTarget);
+        LlmProbeResultDTO raw = probeService.probeCredential(
+                target.baseUrl(), target.authMode(), target.apiKey(), privateTarget, target.apiProtocol());
         return WorkspaceLlmProbeResultDTO.from(raw);
     }
 

@@ -43,15 +43,15 @@ function renderDialog(overrides: Partial<AdminLlmConnectionFormDialogProps> = {}
 }
 
 describe("AdminLlmConnectionFormDialog", () => {
-	it("offers the three OpenAI-compatible create-time presets", () => {
+	it("offers the four create-time presets", () => {
 		renderDialog();
 		expect(screen.queryByRole("switch", { name: "Active" })).toBeNull();
 		screen.getByText(/new connections start inactive/iu);
 		expect(screen.queryByLabelText("Slug")).toBeNull();
 		fireEvent.click(screen.getByRole("combobox", { name: "Endpoint preset" }));
-		expect(screen.queryByRole("option", { name: "Anthropic" })).toBeNull();
+		screen.getByRole("option", { name: "Anthropic" });
 		screen.getByRole("option", { name: "OpenAI" });
-		screen.getByRole("option", { name: "Other OpenAI-compatible endpoint" });
+		screen.getByRole("option", { name: "Other endpoint" });
 		screen.getByRole("option", { name: "Azure OpenAI v1" });
 	});
 

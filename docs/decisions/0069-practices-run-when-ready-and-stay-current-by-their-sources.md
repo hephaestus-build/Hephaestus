@@ -283,6 +283,7 @@ A practice's opening holds only what it declares. This keeps its prefix shared, 
 - **A native Anthropic Messages wire shape** in the gateway. It sends `x-api-key` and `anthropic-version` upstream.
   Its body policy accepts Anthropic tools and refuses server tools.
   Its usage parser has Anthropic semantics, for streams too.
+  Native Anthropic cache entries use a five-minute TTL.
   Bedrock and Google Cloud authentication are a separate decision.
 - **Routing.** Hephaestus sends `prompt_cache_key` for each job where the wire defines it.
   Prefix-aware routing on a self-hosted pool is the operator's router.
@@ -769,3 +770,26 @@ L3 proves the wire shape, start stagger, deadline, queue order and cache read sh
 Live cache gain is a performance property, not a correctness condition for L3.
 After L3 merges, measure the gain on staging with real providers and the admin review's cache read share.
 Until that measurement, the gain remains unverified.
+
+L4 adds the native Anthropic Messages protocol to the catalog, gateway, runner, practice script toolkit, and feedback composer.
+Its connection test uses native authentication.
+Its stream parser merges cumulative usage and keeps cache reads and writes separate from uncached input.
+Each saved model has a nullable `forced_tool_choice` capability from a synthetic probe.
+An unknown capability uses automatic tool choice.
+
+Anthropic sessions keep automatic tool choice even when a probe confirms support.
+The runner caches the system, change and core layers with a five-minute TTL.
+It removes the SDK's last-tool breakpoint and keeps its moving session breakpoint.
+The four breakpoints preserve the exact text and roles, also on a repair turn.
+If compaction removes the original opening, only the system and session breakpoints remain.
+
+The native feedback composer uses provider defaults for thinking and sampling.
+It does not infer supported options from an opaque model name.
+The review runner uses the native SDK's model metadata when the SDK recognizes the model.
+An unrecognized native alias keeps provider defaults for these options.
+The probe changes no frozen review method or model identity.
+An inconclusive probe keeps the last confirmed capability.
+
+The native SDK keeps hosted tool discovery and system updates inside the conversation disabled.
+The gateway serves custom client tools and a top-level system prompt with one fixed API version.
+Known model metadata still supplies its supported thinking mode.

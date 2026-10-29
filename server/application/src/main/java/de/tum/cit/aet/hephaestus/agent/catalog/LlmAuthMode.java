@@ -1,6 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.catalog;
 
-/** The two credential shapes supported by OpenAI-compatible HTTP APIs. */
+/** Credential shapes for OpenAI-compatible APIs. Native Messages uses {@code x-api-key}. */
 public enum LlmAuthMode {
     /** {@code Authorization: Bearer <key>} */
     BEARER,

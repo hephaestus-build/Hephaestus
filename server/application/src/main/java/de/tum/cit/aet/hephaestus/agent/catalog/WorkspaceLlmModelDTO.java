@@ -34,6 +34,9 @@ public record WorkspaceLlmModelDTO(
         @NonNull @Schema(description = "Upstream provider model id")
         String upstreamModelId,
 
+        @Nullable @Schema(description = "Probed forced_tool_choice capability; null until established")
+        Boolean forcedToolChoice,
+
         @Nullable @Schema(description = "Context window in tokens")
         Integer contextWindow,
 
@@ -91,6 +94,7 @@ public record WorkspaceLlmModelDTO(
                 model.getDisplayName(),
                 model.getBrand(),
                 model.getUpstreamModelId(),
+                model.getForcedToolChoice(),
                 model.getContextWindow(),
                 model.getMaxOutputTokens(),
                 model.getReasoningEffort(),

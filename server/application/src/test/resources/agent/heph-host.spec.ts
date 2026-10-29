@@ -1792,8 +1792,10 @@ async function proxyAnswering(answer: (response: ServerResponse) => void) {
 	return { url: `http://127.0.0.1:${address.port}`, close: () => server.close() };
 }
 
-async function turnAgainst(proxyUrl: string): Promise<TurnEnd> {
-	const worker = fakeWorker(contextOf([], "Is the release ready?"));
+async function turnAgainst(proxyUrl: string, protocol = "openai-completions"): Promise<TurnEnd> {
+	const context = contextOf([], "Is the release ready?");
+	context.model.apiProtocol = protocol;
+	const worker = fakeWorker(context);
 	const host = createHephHost({
 		cwd: CWD,
 		agentDir: AGENT_DIR,
@@ -1807,13 +1809,14 @@ async function turnAgainst(proxyUrl: string): Promise<TurnEnd> {
 	return end;
 }
 
-const STALL_ERROR = JSON.stringify({
+const STALL_PAYLOAD = {
 	error: {
 		message: "upstream_stalled: the model provider sent nothing for 120 seconds",
 		type: "upstream_stalled",
 		code: "upstream_stalled",
 	},
-});
+};
+const STALL_ERROR = JSON.stringify(STALL_PAYLOAD);
 
 void test("a turn fails as stalled at once when the proxy ends its stream with a stall error", async () => {
 	let calls = 0;
@@ -1835,6 +1838,38 @@ void test("a turn fails as stalled at once when the proxy ends its stream with a
 			"upstream_stalled",
 			"the proxy's code, not its words, reaches the worker log",
 		);
+	} finally {
+		proxy.close();
+	}
+});
+
+void test("a native turn records a named proxy stall and makes no repair call", async () => {
+	let calls = 0;
+	const proxy = await proxyAnswering((response) => {
+		calls += 1;
+		response.writeHead(200, { "content-type": "text/event-stream" });
+		response.write(
+			`event: message_start\ndata: ${JSON.stringify({
+				type: "message_start",
+				message: {
+					id: "m",
+					role: "assistant",
+					model: "model",
+					content: [],
+					stop_reason: null,
+					usage: { input_tokens: 13, output_tokens: 0 },
+				},
+			})}\n\n`,
+		);
+		response.end(`event: error\ndata: ${JSON.stringify({ type: "error", ...STALL_PAYLOAD })}\n\n`);
+	});
+	try {
+		const end = await turnAgainst(proxy.url, "anthropic-messages");
+		assert.equal(end.outcome, "FAILED");
+		assert.equal(end.reason, "STALLED");
+		assert.equal(end.detail, "upstream_stalled");
+		assert.equal(calls, 1);
+		assert.deepEqual(end.entries, []);
 	} finally {
 		proxy.close();
 	}

@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1793208610071-1" author="hephaestus">
+        <addColumn tableName="llm_model">
+            <column name="forced_tool_choice" type="BOOLEAN"/>
+        </addColumn>
+        <rollback><dropColumn tableName="llm_model" columnName="forced_tool_choice"/></rollback>
+    </changeSet>
+    <changeSet id="1793208610071-2" author="hephaestus">
+        <addColumn tableName="workspace_llm_model">
+            <column name="forced_tool_choice" type="BOOLEAN"/>
+        </addColumn>
+        <rollback><dropColumn tableName="workspace_llm_model" columnName="forced_tool_choice"/></rollback>
+    </changeSet>
+    <changeSet id="1793208610071-3" author="hephaestus">
+        <sql>
+            ALTER TABLE llm_connection DROP CONSTRAINT ck_llm_connection_api_protocol;
+            ALTER TABLE llm_connection ADD CONSTRAINT ck_llm_connection_api_protocol CHECK (api_protocol IN ('openai-completions','openai-responses','openai-decisions','openai-embeddings','cohere-rerank','anthropic-messages'));
+            ALTER TABLE workspace_llm_connection DROP CONSTRAINT ck_ws_llm_connection_api_protocol;
+            ALTER TABLE workspace_llm_connection ADD CONSTRAINT ck_ws_llm_connection_api_protocol CHECK (api_protocol IN ('openai-completions','openai-responses','anthropic-messages'));
+        </sql>
+        <rollback>
+            <sql>
+                ALTER TABLE llm_connection DROP CONSTRAINT ck_llm_connection_api_protocol;
+                ALTER TABLE llm_connection ADD CONSTRAINT ck_llm_connection_api_protocol CHECK (api_protocol IN ('openai-completions','openai-responses','openai-decisions','openai-embeddings','cohere-rerank'));
+                ALTER TABLE workspace_llm_connection DROP CONSTRAINT ck_ws_llm_connection_api_protocol;
+                ALTER TABLE workspace_llm_connection ADD CONSTRAINT ck_ws_llm_connection_api_protocol CHECK (api_protocol IN ('openai-completions','openai-responses'));
+            </sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

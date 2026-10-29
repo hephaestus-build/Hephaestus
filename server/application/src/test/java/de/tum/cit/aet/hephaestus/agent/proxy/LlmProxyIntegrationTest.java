@@ -36,6 +36,7 @@ import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.RuntimeJobTestData;
 import de.tum.cit.aet.hephaestus.agent.job.TerminalUsageTestFixtures;
+import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetHeadroom;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetService;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder;
@@ -233,7 +234,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                                     connection.channel().closeFuture().addListener(unused -> closed.countDown()))
                             .doOnResponse((response, connection) -> headers.countDown())))
                     .build();
-            var service = proxyService(200_000, 1000, client, capacity);
+            var service = proxyService(200_000, 1000, client, mock(LlmBudgetService.class), capacity);
             ReviewJob activeJob = job;
             try (var requests = Executors.newVirtualThreadPerTaskExecutor()) {
                 var result = requests.submit(() -> callPracticeScript(
@@ -472,7 +473,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                     "worker-1",
                     meterRegistry,
                     modelResolver);
-            var service = proxyService(200_000, 1000, WebClient.create(), capacity);
+            var service = proxyService(200_000, 1000, WebClient.create(), mock(LlmBudgetService.class), capacity);
             assertThat(callPracticeScript(
                                     service,
                                     job,
@@ -561,6 +562,91 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
             ReviewJob reloaded = jobRepository.findById(job.getId()).orElseThrow();
             // The review's ledger row bills the chat model, so only chat calls reach the job's counters.
             assertThat(Objects.requireNonNullElse(reloaded.getLlmCalls(), 0)).isEqualTo(slot == ModelKind.CHAT ? 1 : 0);
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void shouldRouteAndBillNativeAnthropicCallsWithTheAttemptsOwnCredential(boolean stream) throws Exception {
+        try (MockWebServer upstream = new MockWebServer()) {
+            upstream.start();
+            String usage =
+                    "{\"input_tokens\":13,\"output_tokens\":7,\"cache_read_input_tokens\":1200,\"cache_creation_input_tokens\":300}";
+            upstream.enqueue(
+                    stream
+                            ? new MockResponse.Builder()
+                                    .code(200)
+                                    .addHeader("Content-Type", "text/event-stream")
+                                    .body(
+                                            "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"usage\":"
+                                                    + usage + "}}\n\n"
+                                                    + "event: message_delta\ndata: {\"type\":\"message_delta\",\"usage\":{\"input_tokens\":null,\"output_tokens\":9,\"cache_read_input_tokens\":null,\"cache_creation_input_tokens\":null}}\n\n"
+                                                    + "event: message_delta\ndata: {\"type\":\"message_delta\",\"usage\":{\"input_tokens\":null,\"output_tokens\":null,\"cache_read_input_tokens\":null,\"cache_creation_input_tokens\":null}}\n\n"
+                                                    + "event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n")
+                                    .build()
+                            : json("{\"content\":[],\"usage\":" + usage + "}"));
+            ReviewJob job = practiceScriptJob(upstream.url("/").toString(), LlmApiProtocol.ANTHROPIC_MESSAGES);
+            var price = new LlmPriceSnapshot(
+                    UsageFundingSource.INSTANCE,
+                    UsagePricingState.PRICED,
+                    null,
+                    null,
+                    new BigDecimal("2"),
+                    new BigDecimal("3"),
+                    new BigDecimal("4"),
+                    new BigDecimal("5"));
+            job.setConfigSnapshot(ConfigSnapshot.fromJson(job.getConfigSnapshot(), objectMapper)
+                    .withPriceSnapshot(price)
+                    .toJson(objectMapper));
+            jobRepository.saveAndFlush(job);
+            var budget = mock(LlmBudgetService.class);
+            when(budget.headroom(workspace.getId()))
+                    .thenReturn(
+                            new LlmBudgetHeadroom(BigDecimal.ZERO, new BigDecimal("0.006"), false, null, null, false));
+            var request = new MockHttpServletRequest("POST", "/internal/llm/v1/messages");
+            request.setQueryString("beta=true");
+            request.setRemoteAddr("127.0.0.1");
+            request.addHeader("Authorization", "Bearer " + tokenFor(job));
+            var response = new MockHttpServletResponse();
+            var service = proxyService(200_000, 1000, WebClient.create(), budget, mock(LlmCallPermits.class));
+            var body = objectMapper
+                    .createObjectNode()
+                    .put("model", "caller-model")
+                    .put("stream", stream)
+                    .put("max_tokens", 64);
+            body.putArray("messages").addObject().put("role", "user").put("content", "Review.");
+            AtomicReference<@Nullable ResponseEntity<?>> served = new AtomicReference<>();
+            filter.doFilter(
+                    request,
+                    response,
+                    (ignoredRequest, ignoredResponse) -> served.set(
+                            service.proxy(request, response, new HttpHeaders(), objectMapper.writeValueAsBytes(body))));
+            var answer = served.get();
+            assertThat(
+                            answer == null
+                                    ? response.getStatus()
+                                    : answer.getStatusCode().value())
+                    .isEqualTo(200);
+            var sent = Objects.requireNonNull(upstream.takeRequest(5, TimeUnit.SECONDS));
+            assertThat(sent.getUrl().encodedPath()).isEqualTo("/v1/messages");
+            assertThat(sent.getUrl().query()).isNull();
+            assertThat(sent.getHeaders().get("x-api-key")).isEqualTo("upstream-secret");
+            assertThat(sent.getHeaders().get("Authorization")).isNull();
+            var forwarded =
+                    objectMapper.readTree(Objects.requireNonNull(sent.getBody()).utf8());
+            assertThat(forwarded.path("model").asString()).isEqualTo("chat-upstream");
+            assertThat(forwarded.has("stream_options")).isFalse();
+            var recorded = jobRepository.findById(job.getId()).orElseThrow();
+            assertThat(recorded.getLlmInputTokens()).isEqualTo(13);
+            assertThat(recorded.getLlmCacheReadTokens()).isEqualTo(1200);
+            assertThat(recorded.getLlmCacheWriteTokens()).isEqualTo(300);
+            assertThat(recorded.getLlmOutputTokens()).isEqualTo(stream ? 9 : 7);
+            assertThat(routingOf(authenticate(tokenFor(job))).inFlightSpendUsd())
+                    .isEqualByComparingTo(stream ? "0.006353" : "0.006347");
+            var refused = callPracticeScript(
+                    service, job, "/internal/llm/practice-script/decision/decisions", PRACTICE, "{}");
+            assertThat(refused.status()).isEqualTo(402);
+            assertThat(upstream.getRequestCount()).isEqualTo(1);
         }
     }
 
@@ -926,11 +1012,20 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
     }
 
     private LlmProxyService proxyService(long maxTokensPerAttempt, long maxSearchUnitsPerAttempt, WebClient client) {
-        return proxyService(maxTokensPerAttempt, maxSearchUnitsPerAttempt, client, mock(LlmCallPermits.class));
+        return proxyService(
+                maxTokensPerAttempt,
+                maxSearchUnitsPerAttempt,
+                client,
+                mock(LlmBudgetService.class),
+                mock(LlmCallPermits.class));
     }
 
     private LlmProxyService proxyService(
-            long maxTokensPerAttempt, long maxSearchUnitsPerAttempt, WebClient client, LlmCallPermits capacity) {
+            long maxTokensPerAttempt,
+            long maxSearchUnitsPerAttempt,
+            WebClient client,
+            LlmBudgetService budgetService,
+            LlmCallPermits capacity) {
         ProxyRequestPolicy policy = mock(ProxyRequestPolicy.class);
         when(policy.allows(any())).thenReturn(true);
         return new LlmProxyService(
@@ -940,7 +1035,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 objectMapper,
                 new ProxyAccounting(
                         new ProxyBudgetGate(
-                                mock(LlmBudgetService.class),
+                                budgetService,
                                 new PracticeReviewProperties(
                                         false,
                                         15,
@@ -1012,10 +1107,14 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
     }
 
     private ReviewJob practiceScriptJob(String baseUrl) {
+        return practiceScriptJob(baseUrl, LlmApiProtocol.OPENAI_COMPLETIONS);
+    }
+
+    private ReviewJob practiceScriptJob(String baseUrl, LlmApiProtocol chatProtocol) {
         Map<ModelKind, CatalogModel> catalog = new EnumMap<>(ModelKind.class);
         for (ModelKind kind : ModelKind.values()) {
             LlmApiProtocol protocol = switch (kind) {
-                case CHAT -> LlmApiProtocol.OPENAI_COMPLETIONS;
+                case CHAT -> chatProtocol;
                 case DECISION -> LlmApiProtocol.OPENAI_DECISIONS;
                 case EMBEDDING -> LlmApiProtocol.OPENAI_EMBEDDINGS;
                 case RERANKING -> LlmApiProtocol.COHERE_RERANK;
@@ -1055,7 +1154,8 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                             workspace.getId(),
                             DataHandlingTier.CLOUD,
                             null,
-                            price));
+                            price,
+                            false));
         }
         CatalogModel chat = Objects.requireNonNull(catalog.get(ModelKind.CHAT));
         ConfigSnapshot snapshot = new ConfigSnapshot(
@@ -1070,7 +1170,8 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                                 workspace.getId(),
                                 DataHandlingTier.UNDECLARED,
                                 null,
-                                price),
+                                price,
+                                false),
                         null,
                         null,
                         600,
@@ -1163,7 +1264,8 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                                 workspace.getId(),
                                 DataHandlingTier.UNDECLARED,
                                 null,
-                                null),
+                                null,
+                                false),
                         null,
                         null,
                         600,

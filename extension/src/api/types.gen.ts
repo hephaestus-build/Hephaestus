@@ -1010,7 +1010,7 @@ export type CreateLlmConnectionRequest = {
     /**
      * Wire protocol
      */
-    apiProtocol: 'openai-completions' | 'openai-responses' | 'openai-decisions' | 'openai-embeddings' | 'cohere-rerank';
+    apiProtocol: 'anthropic-messages' | 'openai-completions' | 'openai-responses' | 'openai-decisions' | 'openai-embeddings' | 'cohere-rerank';
     /**
      * Credential shape (default BEARER)
      */
@@ -1163,7 +1163,7 @@ export type CreateWorkspaceLlmConnectionRequest = {
     /**
      * Wire protocol
      */
-    apiProtocol: 'openai-completions' | 'openai-responses' | 'openai-decisions' | 'openai-embeddings' | 'cohere-rerank';
+    apiProtocol: 'anthropic-messages' | 'openai-completions' | 'openai-responses' | 'openai-decisions' | 'openai-embeddings' | 'cohere-rerank';
     /**
      * Credential shape (default BEARER)
      */
@@ -2242,7 +2242,7 @@ export type LlmConnection = {
     /**
      * Wire protocol
      */
-    apiProtocol: 'openai-completions' | 'openai-responses' | 'openai-decisions' | 'openai-embeddings' | 'cohere-rerank';
+    apiProtocol: 'anthropic-messages' | 'openai-completions' | 'openai-responses' | 'openai-decisions' | 'openai-embeddings' | 'cohere-rerank';
     /**
      * Credential shape
      */
@@ -2338,6 +2338,10 @@ export type LlmModel = {
      */
     enabled: boolean;
     /**
+     * Probed forced_tool_choice capability; null until established
+     */
+    forcedToolChoice?: boolean;
+    /**
      * Workspace ids shared with; only meaningful when visibility is GRANTED
      */
     grantedWorkspaceIds: Array<number>;
@@ -2373,6 +2377,16 @@ export type LlmModel = {
      * Share with all workspaces (PUBLIC) or only selected ones (GRANTED)
      */
     visibility: 'PUBLIC' | 'GRANTED';
+};
+
+/**
+ * A synthetic probe result, not a claim about the quality of the model's answers.
+ */
+export type LlmModelCapabilities = {
+    /**
+     * forced_tool_choice; null when the probe could not establish support
+     */
+    forcedToolChoice?: boolean;
 };
 
 /**
@@ -4016,7 +4030,7 @@ export type ProbeLlmConnectionRequest = {
     /**
      * Wire protocol
      */
-    apiProtocol: 'openai-completions' | 'openai-responses' | 'openai-decisions' | 'openai-embeddings' | 'cohere-rerank';
+    apiProtocol: 'anthropic-messages' | 'openai-completions' | 'openai-responses' | 'openai-decisions' | 'openai-embeddings' | 'cohere-rerank';
     /**
      * Credential shape (default BEARER)
      */
@@ -6959,7 +6973,7 @@ export type WorkspaceLlmConnection = {
     /**
      * Wire protocol
      */
-    apiProtocol: 'openai-completions' | 'openai-responses' | 'openai-decisions' | 'openai-embeddings' | 'cohere-rerank';
+    apiProtocol: 'anthropic-messages' | 'openai-completions' | 'openai-responses' | 'openai-decisions' | 'openai-embeddings' | 'cohere-rerank';
     /**
      * Credential shape
      */
@@ -7054,6 +7068,10 @@ export type WorkspaceLlmModel = {
      * Active toggle
      */
     enabled: boolean;
+    /**
+     * Probed forced_tool_choice capability; null until established
+     */
+    forcedToolChoice?: boolean;
     /**
      * Model id
      */
@@ -7978,6 +7996,24 @@ export type AdminUpdateLlmModelResponses = {
 };
 
 export type AdminUpdateLlmModelResponse = AdminUpdateLlmModelResponses[keyof AdminUpdateLlmModelResponses];
+
+export type AdminProbeLlmModelCapabilitiesData = {
+    body?: never;
+    path: {
+        id: number;
+    };
+    query?: never;
+    url: '/admin/llm/models/{id}/capabilities';
+};
+
+export type AdminProbeLlmModelCapabilitiesResponses = {
+    /**
+     * OK
+     */
+    200: LlmModelCapabilities;
+};
+
+export type AdminProbeLlmModelCapabilitiesResponse = AdminProbeLlmModelCapabilitiesResponses[keyof AdminProbeLlmModelCapabilitiesResponses];
 
 export type AdminUpdateLlmModelPriceData = {
     body: UpdateLlmModelPriceRequest;
@@ -11623,6 +11659,28 @@ export type WorkspaceUpdateLlmModelResponses = {
 };
 
 export type WorkspaceUpdateLlmModelResponse = WorkspaceUpdateLlmModelResponses[keyof WorkspaceUpdateLlmModelResponses];
+
+export type WorkspaceProbeLlmModelCapabilitiesData = {
+    body?: never;
+    path: {
+        /**
+         * Workspace slug
+         */
+        workspaceSlug: string;
+        id: number;
+    };
+    query?: never;
+    url: '/workspaces/{workspaceSlug}/llm/models/{id}/capabilities';
+};
+
+export type WorkspaceProbeLlmModelCapabilitiesResponses = {
+    /**
+     * OK
+     */
+    200: LlmModelCapabilities;
+};
+
+export type WorkspaceProbeLlmModelCapabilitiesResponse = WorkspaceProbeLlmModelCapabilitiesResponses[keyof WorkspaceProbeLlmModelCapabilitiesResponses];
 
 export type WorkspaceGetLlmSettingsData = {
     body?: never;

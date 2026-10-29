@@ -59,3 +59,13 @@ in API GET /workspaces/{workspaceSlug}/practices/scans/{scanId} added the new `N
 in API GET /workspaces/{workspaceSlug}/practices/scans/{scanId}/report added the new `NO_SANDBOX_ROOM` enum value to the `scan/stopReason` response property for the response status `200`
 in API PATCH /workspaces/{workspaceSlug}/practices/scans/{scanId}/status added the new `NO_SANDBOX_ROOM` enum value to the `stopReason` response property for the response status `200`
 in API PATCH /workspaces/{workspaceSlug}/practices/scans/{scanId}/status added the new `NO_SANDBOX_ROOM` enum value to the `stopReason` response property for the response status `202`
+
+# #3437: native Anthropic connections report their protocol to instance and workspace API clients.
+in API GET /admin/llm/connections added the new `anthropic-messages` enum value to the `items/apiProtocol` response property for the response status `200`
+in API POST /admin/llm/connections added the new `anthropic-messages` enum value to the `apiProtocol` response property for the response status `201`
+in API GET /admin/llm/connections/{id} added the new `anthropic-messages` enum value to the `apiProtocol` response property for the response status `200`
+in API PATCH /admin/llm/connections/{id} added the new `anthropic-messages` enum value to the `apiProtocol` response property for the response status `200`
+in API GET /workspaces/{workspaceSlug}/llm/connections added the new `anthropic-messages` enum value to the `items/apiProtocol` response property for the response status `200`
+in API POST /workspaces/{workspaceSlug}/llm/connections added the new `anthropic-messages` enum value to the `apiProtocol` response property for the response status `201`
+in API GET /workspaces/{workspaceSlug}/llm/connections/{id} added the new `anthropic-messages` enum value to the `apiProtocol` response property for the response status `200`
+in API PATCH /workspaces/{workspaceSlug}/llm/connections/{id} added the new `anthropic-messages` enum value to the `apiProtocol` response property for the response status `200`

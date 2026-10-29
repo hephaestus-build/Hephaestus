@@ -309,9 +309,17 @@ class WorkspaceLlmConnectionServiceTest extends BaseUnitTest {
             // A projection, not the entity: the probe runs outside any transaction, so it must not
             // depend on a managed entity still being attached.
             when(connectionRepository.findProbeTargetByIdAndWorkspaceId(5L, 1L))
-                    .thenReturn(
-                            Optional.of(new LlmProbeTarget("https://api.openai.com", LlmAuthMode.BEARER, "sk-abc")));
-            when(probeService.probeCredential("https://api.openai.com", LlmAuthMode.BEARER, "sk-abc", false))
+                    .thenReturn(Optional.of(new LlmProbeTarget(
+                            "https://api.openai.com",
+                            LlmAuthMode.BEARER,
+                            "sk-abc",
+                            LlmApiProtocol.OPENAI_COMPLETIONS)));
+            when(probeService.probeCredential(
+                            "https://api.openai.com",
+                            LlmAuthMode.BEARER,
+                            "sk-abc",
+                            false,
+                            LlmApiProtocol.OPENAI_COMPLETIONS))
                     .thenReturn(LlmProbeResultDTO.reachable(List.of("gpt-5", "gpt-5-mini"), 200));
 
             WorkspaceLlmProbeResultDTO result = connectionService.probe(workspaceContext, 5L);
@@ -324,8 +332,9 @@ class WorkspaceLlmConnectionServiceTest extends BaseUnitTest {
         void unreachableProbeCarriesTheAdvisoryMessage() {
             byoEnabled(true);
             when(connectionRepository.findProbeTargetByIdAndWorkspaceId(5L, 1L))
-                    .thenReturn(Optional.of(new LlmProbeTarget("https://api.openai.com", LlmAuthMode.BEARER, null)));
-            when(probeService.probeCredential(any(), any(), any(), anyBoolean()))
+                    .thenReturn(Optional.of(new LlmProbeTarget(
+                            "https://api.openai.com", LlmAuthMode.BEARER, null, LlmApiProtocol.OPENAI_COMPLETIONS)));
+            when(probeService.probeCredential(any(), any(), any(), anyBoolean(), any()))
                     .thenReturn(LlmProbeResultDTO.unreachable(503, "The provider answered with HTTP 503."));
 
             WorkspaceLlmProbeResultDTO result = connectionService.probe(workspaceContext, 5L);
@@ -368,7 +377,8 @@ class WorkspaceLlmConnectionServiceTest extends BaseUnitTest {
             upstream.enqueue(new MockResponse.Builder().code(404).build());
             String baseUrl = upstream.url("/v1").toString();
             when(connectionRepository.findProbeTargetByIdAndWorkspaceId(5L, 1L))
-                    .thenReturn(Optional.of(new LlmProbeTarget(baseUrl, LlmAuthMode.BEARER, null)));
+                    .thenReturn(Optional.of(
+                            new LlmProbeTarget(baseUrl, LlmAuthMode.BEARER, null, LlmApiProtocol.OPENAI_COMPLETIONS)));
             when(egressPolicy.validate(baseUrl)).thenReturn(privateTarget);
             when(egressPolicy.resolverGroup()).thenReturn(SsrfGuardedResolverGroup.LOOPBACK_EXEMPT_INSTANCE);
             var probing = new WorkspaceLlmConnectionService(
@@ -394,8 +404,11 @@ class WorkspaceLlmConnectionServiceTest extends BaseUnitTest {
         void doesNotProbeAStoredConnectionWhoseBaseUrlTheEgressPolicyNowRejects() {
             byoEnabled(true);
             when(connectionRepository.findProbeTargetByIdAndWorkspaceId(5L, 1L))
-                    .thenReturn(
-                            Optional.of(new LlmProbeTarget("https://api.openai.com", LlmAuthMode.BEARER, "sk-abc")));
+                    .thenReturn(Optional.of(new LlmProbeTarget(
+                            "https://api.openai.com",
+                            LlmAuthMode.BEARER,
+                            "sk-abc",
+                            LlmApiProtocol.OPENAI_COMPLETIONS)));
             doThrow(new IllegalArgumentException("Base URL must be a public https:// address"))
                     .when(egressPolicy)
                     .validate("https://api.openai.com");

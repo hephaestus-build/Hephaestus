@@ -4,6 +4,7 @@
 	"private": true,
 	"type": "module",
 	"dependencies": {
+		"@ai-sdk/anthropic": "4.0.85",
 		"@ai-sdk/openai": "4.0.85",
 		"@ai-sdk/openai-compatible": "3.0.63",
 		"@ai-sdk/provider": "4.0.22",

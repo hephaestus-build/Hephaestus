@@ -2,6 +2,7 @@ package de.tum.cit.aet.hephaestus.testconfig;
 
 import static org.mockito.Mockito.mock;
 
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelCapabilityProbe;
 import de.tum.cit.aet.hephaestus.integration.core.webhook.JetStreamPublisher;
 import de.tum.cit.aet.hephaestus.integration.outline.client.OutlineContentClient;
 import de.tum.cit.aet.hephaestus.integration.outline.client.OutlineTokenClient;
@@ -18,6 +19,12 @@ import org.springframework.transaction.PlatformTransactionManager;
 
 @TestConfiguration(proxyBeanMethods = false)
 public class SharedTestDoubles {
+    @Bean
+    @Primary
+    LlmModelCapabilityProbe modelCapabilityProbe() {
+        return mock(LlmModelCapabilityProbe.class);
+    }
+
     @Bean
     static SqlStatementCounter sqlStatementCounter() {
         return new SqlStatementCounter();

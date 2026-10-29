@@ -289,7 +289,8 @@ class TerminalUsageTest extends BaseUnitTest {
                         7L,
                         null,
                         null,
-                        null),
+                        null,
+                        false),
                 null,
                 null,
                 600,
@@ -328,7 +329,8 @@ class TerminalUsageTest extends BaseUnitTest {
                             7L,
                             null,
                             null,
-                            price)));
+                            price,
+                            false)));
             when(jobs.sumPracticeScriptUsageByKind(7L, jobId, 1))
                     .thenReturn(List.of(
                             new PracticeScriptKindTotal(ModelKind.EMBEDDING, 2, tokens, 0, 0, 0, 0, reportedCalls)));

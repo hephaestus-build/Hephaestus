@@ -2358,7 +2358,11 @@ if (scenario !== undefined && scenario !== "") {
 					);
 					writeFileSync(
 						nodePath.join(cwd, "pi-provider.json"),
-						JSON.stringify({ apiProtocol: "openai-completions", modelId: "test-model" }),
+						JSON.stringify({
+							apiProtocol: "openai-completions",
+							modelId: "test-model",
+							forcedToolChoice: true,
+						}),
 					);
 					writeFileSync(
 						nodePath.join(cwd, "task.json"),

@@ -3,6 +3,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { BrainCircuit, Plus } from "lucide-react";
 import { type ReactNode, useState } from "react";
 import { toast } from "sonner";
+import { isPracticeScriptApi } from "@/lib/llm-api-protocol-labels";
+import { toolChoiceTestState } from "@/lib/llm-tool-choice-test";
 
 import {
 	adminCreateLlmConnectionMutation,
@@ -18,6 +20,7 @@ import {
 	adminListWorkspacesOptions,
 	adminProbeLlmConnectionDraftMutation,
 	adminProbeLlmConnectionMutation,
+	adminProbeLlmModelCapabilitiesMutation,
 	adminUpdateLlmConnectionMutation,
 	adminUpdateLlmModelMutation,
 	adminUpdateLlmModelPriceMutation,
@@ -145,6 +148,11 @@ function AdminLlmPage() {
 	const selectedConnection =
 		connections.find((c) => c.id === selectedConnectionId) ?? connections[0];
 
+	const capabilityProbe = useMutation({
+		...adminProbeLlmModelCapabilitiesMutation(),
+		onSuccess: async () =>
+			queryClient.invalidateQueries({ queryKey: adminListLlmModelsQueryKey() }),
+	});
 	const modelsQuery = useQuery(adminListLlmModelsOptions());
 	const allModels = modelsQuery.data ?? [];
 	const modelCounts: Record<number, number> = {};
@@ -495,10 +503,27 @@ function AdminLlmPage() {
 				open={modelDialog !== null}
 				onOpenChange={(open) => {
 					if (!open) {
+						capabilityProbe.reset();
 						setDialog(closedIf(modelDialog));
 					}
 				}}
 				editing={modelDialog?.kind === "editModel" ? modelDialog.model : null}
+				capabilities={
+					modelDialog?.kind === "editModel" &&
+					connections.some(
+						(connection) =>
+							connection.id === modelDialog.model.connectionId &&
+							!isPracticeScriptApi(connection.apiProtocol) &&
+							connection.apiProtocol !== "anthropic-messages",
+					)
+						? {
+								supported: allModels.find((model) => model.id === modelDialog.model.id)
+									?.forcedToolChoice,
+								test: toolChoiceTestState(modelDialog.model.id, capabilityProbe),
+								onProbe: () => capabilityProbe.mutate({ path: { id: modelDialog.model.id } }),
+							}
+						: undefined
+				}
 				workspaceOptions={workspaceOptions}
 				probedModelIds={
 					probedModels && selectedConnection && probedModels.connectionId === selectedConnection.id

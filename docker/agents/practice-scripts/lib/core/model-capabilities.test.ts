@@ -1,17 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { supportsForcedToolChoice } from "./model-capabilities.ts";
+import { registerForcedToolChoice, supportsForcedToolChoice } from "./model-capabilities.ts";
 
-void test("forced tool choice follows model capability across gateway model names", () => {
-	for (const model of [
-		"claude-opus-5-5",
-		"anthropic/claude-sonnet-5.5",
-		"claude-opus-5-5-20261001",
-		"claude-sonnet-6-0",
-	]) {
-		assert.equal(supportsForcedToolChoice(model), false, model);
-	}
-	for (const model of ["claude-opus-4-6", "claude-sonnet-5-4", "gpt-6", undefined]) {
-		assert.equal(supportsForcedToolChoice(model), true, model);
-	}
+void test("a successful probe permits forcing through an opaque alias and an unknown probe clears it", () => {
+	const model = { modelId: "review-model" };
+	assert.equal(supportsForcedToolChoice(model), false);
+	registerForcedToolChoice(model, true);
+	assert.equal(supportsForcedToolChoice(model), true);
+	registerForcedToolChoice(model, false);
+	assert.equal(supportsForcedToolChoice(model), false);
+	assert.equal(supportsForcedToolChoice("claude-opus-4-6"), false);
+	assert.equal(supportsForcedToolChoice(undefined), false);
 });

@@ -185,6 +185,20 @@ public class LlmModelService {
     }
 
     @Transactional
+    public void recordCapability(Long id, String upstream, LlmProbeTarget target, LlmModelCapabilitiesDTO capability) {
+        if (capability.forcedToolChoice() == null) return;
+        var model =
+                modelRepository.findByIdForUpdate(id).orElseThrow(() -> new EntityNotFoundException("LlmModel", id));
+        var connection = model.getConnection();
+        var current = new LlmProbeTarget(
+                connection.getBaseUrl(), connection.getAuthMode(), connection.getApiKey(), connection.getApiProtocol());
+        if (!upstream.equals(model.getUpstreamModelId()) || !target.equals(current))
+            throw new IllegalArgumentException("The model connection changed. Test it again.");
+        model.setForcedToolChoice(capability.forcedToolChoice());
+        llmModelAudit.modelUpdated(model.getId(), connection.getId(), model.getSlug());
+    }
+
+    @Transactional
     public void delete(Long id) {
         LlmModel model = modelRepository.findById(id).orElseThrow(() -> new EntityNotFoundException("LlmModel", id));
         if (agentBindingRepository.existsByInstanceModelId(id)) {

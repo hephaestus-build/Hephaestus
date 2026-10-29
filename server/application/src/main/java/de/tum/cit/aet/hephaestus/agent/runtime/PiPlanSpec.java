@@ -25,7 +25,8 @@ public record PiPlanSpec(
         @Nullable String jobToken,
         int timeoutSeconds,
         PiRunnerProfile runnerProfile,
-        Map<String, byte[]> extraInputs) {
+        Map<String, byte[]> extraInputs,
+        boolean forcedToolChoice) {
     public PiPlanSpec {
         if (apiProtocol == null || apiProtocol.isBlank()) {
             throw new IllegalArgumentException("apiProtocol must not be blank");

@@ -126,8 +126,7 @@ function WorkspaceLlmConnectionFormDialogContent({
 				<DialogHeader>
 					<DialogTitle>{isEdit ? "Edit connection" : "Add connection"}</DialogTitle>
 					<DialogDescription>
-						Connect an OpenAI-compatible or Cohere-compatible endpoint. Add and price its models
-						next.
+						Connect an AI endpoint. Add and price its models next.
 					</DialogDescription>
 				</DialogHeader>
 

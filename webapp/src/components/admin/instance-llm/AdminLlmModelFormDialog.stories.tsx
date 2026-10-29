@@ -264,3 +264,7 @@ export const Dark: Story = {
 		await expectSettledVisible(within(dialog).getByText("Not declared"));
 	},
 };
+
+export const ToolChoiceTest: Story = {
+	args: { editing: mockModel, capabilities: { test: { status: "idle" }, onProbe: fn() } },
+};

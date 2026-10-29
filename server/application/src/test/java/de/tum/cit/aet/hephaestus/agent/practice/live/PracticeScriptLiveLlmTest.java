@@ -400,7 +400,8 @@ class PracticeScriptLiveLlmTest extends AbstractWorkspaceIntegrationTest {
                 snapshot.model().reasoningEffort(),
                 jobToken,
                 LiveRunnerWorkspace.TIMEOUT_SECONDS,
-                frozen));
+                frozen,
+                false));
         assertThat(spec.environment())
                 .as("one job token, no second credential")
                 .doesNotContainKey("PRACTICE_SCRIPT_PROXY_TOKEN");

@@ -23,7 +23,8 @@ public record PracticeAgentRequest(
         @Nullable ReasoningEffort reasoningEffort,
         String jobToken,
         int timeoutSeconds,
-        Map<ModelKind, FrozenModel> practiceScriptModels) {
+        Map<ModelKind, FrozenModel> practiceScriptModels,
+        boolean forcedToolChoice) {
     public PracticeAgentRequest {
         Objects.requireNonNull(apiProtocol, "apiProtocol must not be null");
         Objects.requireNonNull(upstreamModelId, "upstreamModelId must not be null");
