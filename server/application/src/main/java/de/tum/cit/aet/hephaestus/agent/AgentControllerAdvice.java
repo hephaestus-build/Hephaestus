@@ -1,5 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent;
 
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallPoolInUseException;
+import de.tum.cit.aet.hephaestus.agent.catalog.LlmCallPoolSlugConflictException;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnectionInUseException;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnectionSlugConflictException;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmModelInUseException;
@@ -80,6 +82,16 @@ public class AgentControllerAdvice {
     @ExceptionHandler(LlmModelSlugConflictException.class)
     ProblemDetail handleModelSlugConflict(LlmModelSlugConflictException exception) {
         return problem(HttpStatus.CONFLICT, "llm-model-slug-conflict", "LLM model slug conflict", exception);
+    }
+
+    @ExceptionHandler(LlmCallPoolInUseException.class)
+    ProblemDetail handleCallPoolInUse(LlmCallPoolInUseException exception) {
+        return problem(HttpStatus.CONFLICT, "llm-call-pool-in-use", "Call pool is in use", exception);
+    }
+
+    @ExceptionHandler(LlmCallPoolSlugConflictException.class)
+    ProblemDetail handleCallPoolSlugConflict(LlmCallPoolSlugConflictException exception) {
+        return problem(HttpStatus.CONFLICT, "llm-call-pool-slug-conflict", "LLM call pool slug conflict", exception);
     }
 
     @ExceptionHandler(LlmModelUpstreamIdConflictException.class)

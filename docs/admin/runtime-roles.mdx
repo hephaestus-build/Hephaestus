@@ -494,6 +494,76 @@ A refused call is not lost:
 
 `PRACTICE_REVIEW_PRACTICE_CONCURRENCY` sets the practice concurrency, and the limit follows it.
 
+### Call pools
+
+A call pool represents one provider quota boundary across workers, models, and workspaces.
+The instance admin assigns model membership explicitly.
+A shared host name alone does not establish a shared quota.
+[AI providers](./ai-providers.mdx#6-sharing-provider-capacity) owns the setup procedure.
+
+Every call takes a database grant before it reaches the provider.
+Review calls, composition, and direct script calls share the background capacity.
+Conversation calls can also use the interactive reserve.
+The reserve is never lent to background work.
+Both the total limit and the background limit apply independently.
+A finite pool must leave background capacity above zero.
+
+A fair queue gives workspaces, composition, and individual attempts turns before repeated grants to a busy peer.
+Retry and backfill origins receive no extra priority.
+A review claim reserves its first grant before capture or Pod creation.
+A saturated pool leaves the review queued.
+The first call consumes only its exact attempt and worker reservation.
+
+A script can call another pool before its primary model.
+The worker first releases its unused reservation.
+That release commits before another pool lock or capacity wait.
+Active calls retain their grants until their transports close.
+
+Unused reservations expire when their owner stops renewing them for a full permit lease.
+Any worker can reclaim these reservations under the pool lock, with an atomic state fence against activation.
+Active grants never use that expiry path.
+The fair queue counts grants even when unused provider debits are refunded.
+
+A review that cannot claim records its demand in the same fair queue as background calls.
+It stays queued and creates no Pod.
+After a capacity refusal, the same poll scans other endpoint pools before it sleeps.
+The job retains its original readiness time.
+
+If another claim owns the next turn, the poll dispatches that claim.
+A budget hold or workspace limit withdraws ineligible claim demand.
+A paused workspace or future readiness time also withdraws that demand.
+Conversation and background grants have separate fairness history, so conversations do not defer their workspace's composition.
+
+The pool also accounts for request and token rates across workers.
+Each physical request, including a protocol retry, consumes a rate debit.
+A configured per-call token bound reserves the provider's maximum input-plus-output charge.
+The reservation remains conservative when usage is absent or the call is cancelled.
+Closed calls retain their debit for a full minute after closure.
+The rate account also leaves an interactive share when the pool has an interactive reserve.
+
+An expired lease cancels the call but never frees an active grant.
+The proxy releases capacity only after the response completes or the cancelled transport closes.
+Cancellation also closes a JSON response body after its headers arrive.
+The request UUID fences renewal and release.
+A late release cannot affect another call.
+An ended attempt cannot start a provider call after a capacity wait.
+
+A worker crash can leave capacity held when transport closure cannot be confirmed.
+This state fails closed. Time alone does not prove that the provider stopped serving the call.
+Before an operator removes such a record, they must verify closure of the old worker's transports at the provider.
+Do not reset a pool merely because its worker heartbeat expired.
+Pool edits, deletion, and membership changes wait for open requests to close.
+
+An instance-controlled connection can impose a shared cooldown after HTTP 429.
+A workspace-controlled connection cannot impose that cooldown on other tenants.
+The response still reaches its caller.
+The cooldown follows the retry headers and never shortens an existing pause.
+
+The worker loads at most four compositions at once by default.
+It acquires this local capacity before it loads or restores composition inputs.
+This bound is separate from the existing sixteen-local-attempt ceiling.
+It does not reduce the resident review limit to four.
+
 ### The Heph host
 
 Each worker starts its Heph host when it claims its first turn.

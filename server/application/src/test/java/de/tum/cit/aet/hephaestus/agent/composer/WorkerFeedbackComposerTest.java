@@ -163,6 +163,10 @@ class WorkerFeedbackComposerTest {
     }
 
     private WorkerFeedbackComposer composer() {
+        return composer(new CompositionCapacity(4));
+    }
+
+    private WorkerFeedbackComposer composer(CompositionCapacity capacity) {
         return new WorkerFeedbackComposer(
                 admission,
                 evidence,
@@ -182,7 +186,8 @@ class WorkerFeedbackComposerTest {
                         16),
                 meters,
                 mapper,
-                Duration.ZERO);
+                Duration.ZERO,
+                capacity);
     }
 
     @Test
@@ -520,6 +525,26 @@ class WorkerFeedbackComposerTest {
                 .extracting(request -> request.composition().getFirst().withheldReason())
                 .containsOnly(FeedbackStopReason.NO_AI)
                 .hasSize(4);
+    }
+
+    @Test
+    void shouldWithholdExhaustedRetriesWhenAllCompositionSlotsAreOccupied() {
+        job.setAttempt(MAX_RETRIES + 1);
+        when(continuation.stageWithoutInputs(job)).thenReturn(emptyFolder());
+        var capacity = new CompositionCapacity(1);
+        var occupied = capacity.acquire(Instant.now().plusSeconds(5));
+        try {
+            composer(capacity).composeResumed(job, "worker-1", Instant.now());
+        } finally {
+            occupied.close();
+        }
+        assertThat(prepared)
+                .extracting(request -> request.composition().getFirst().withheldReason())
+                .containsOnly(FeedbackStopReason.NOT_COMPOSED)
+                .hasSize(4);
+        assertThat(stops("retries_exhausted", "withheld")).isEqualTo(4);
+        verify(continuation, never()).restore(any());
+        verify(gateway, never()).call(any(), any());
     }
 
     @Test

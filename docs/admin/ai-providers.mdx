@@ -509,7 +509,44 @@ If that happens, use [the triage list](./practice-review#follow-one-review-end-t
 A workspace admin who chooses a model sees its display name, connection name, reasoning effort, and price framing.
 They never see an upstream model ID, base URL, or credential.
 
-## 6. Errors you can hit
+## 6. Sharing provider capacity
+
+Put models in a call pool when they share one provider quota boundary.
+The pool enforces capacity and rate accounting across all workers and workspaces.
+A shared host name does not prove that credentials or deployments share a quota.
+A model without a pool has no endpoint-wide limit.
+
+Use the instance admin API under `/api/admin/llm/call-pools`:
+
+1. Create a pool with its slug, display name, maximum concurrent calls, and interactive reserve.
+2. Set `requestsPerMinute` and `tokensPerMinute` when the provider imposes these rates.
+3. Set `tokensPerCall` to a conservative maximum input-plus-output charge when you configure a token rate.
+4. List models with `GET /api/admin/llm/call-pools/models`.
+5. Assign models with `PUT /api/admin/llm/call-pools/{id}/models`.
+
+Use provider documentation to establish the token bound for every assigned model.
+Include reasoning and server-side tool tokens when the provider bills them.
+An understated bound cannot protect the provider's token quota.
+The pool reserves the full bound for each physical call, including cancelled calls and retries.
+This conservative policy can admit fewer requests than an exact tokenizer would permit.
+
+Use 32 concurrent calls and an eight-call reserve only when the provider supports that capacity.
+The reserve must leave nonzero background capacity.
+Reviews, composition, and direct script calls never borrow the reserve.
+The rate limits also keep a proportional interactive share.
+The [runtime guide](./runtime-roles.mdx#call-pools) explains fairness and call closure.
+
+Configure membership while the affected models are idle.
+Pool settings and membership cannot change while their pool has open requests, recent rate debits, or a shared cooldown.
+Wait at least one minute after the last call closes.
+The slug cannot change.
+A workspace admin can read their model's membership but cannot change it.
+Deleting an idle pool leaves its models without endpoint-wide limits.
+
+Only an instance-controlled credential can pause a shared pool after a provider rate limit.
+A workspace-controlled credential's rate limit reaches that caller without pausing other tenants.
+
+## 7. Errors you can hit
 
 In addition to the HTTP 400 responses above, the catalog returns these RFC 7807 problem types.
 The `type` slug is an API contract.
@@ -520,6 +557,8 @@ The UI shows the title.
 | 409    | `llm-connection-in-use`          | A connection still has models. Delete the models before the connection.                                                                                                                                          |
 | 409    | `llm-model-in-use`               | A model still has an assignment. Assign another model in that workspace before deletion.                                                                                                                         |
 | 409    | `llm-connection-slug-conflict`   | Your supplied slug is taken.                                                                                                                                                                                     |
+| 409    | `llm-call-pool-in-use`                    | The call pool still has open requests, recent rate debits, or a shared cooldown. Wait for these to end before changing settings or membership, or deleting the pool. |
+| 409    | `llm-call-pool-slug-conflict`    | The pool slug is taken.                                                                                                                                                                                          |
 | 409    | `llm-model-slug-conflict`        | The model slug is taken on this connection.                                                                                                                                                                      |
 | 409    | `llm-model-upstream-id-conflict` | Two catalog entries would use the same upstream id on one connection. This is refused because price selection would be nondeterministic. A `NO_CHARGE` copy could silently replace a `PRICED` model for billing. |
 | 409    | `agent-binding-slot-mismatch`    | A model's declared tier does not match the assignment row. The body's `declaredTier` names the model tier, which the UI uses to explain the refusal. An undeclared model has no `declaredTier`, only the detail. |

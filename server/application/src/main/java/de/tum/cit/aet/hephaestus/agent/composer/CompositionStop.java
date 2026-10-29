@@ -38,6 +38,8 @@ public enum CompositionStop {
     RETRIES_EXHAUSTED(FeedbackStopReason.NOT_COMPOSED, false),
     /** The provider failed past the session's calls or deadline. */
     PROVIDER(FeedbackStopReason.NOT_COMPOSED, true),
+    /** The shared endpoint could not grant model capacity before the attempt ended. */
+    CAPACITY(FeedbackStopReason.NOT_COMPOSED, true),
     /** The server could not read where the destination routes. */
     ROUTING_UNAVAILABLE(FeedbackStopReason.NOT_COMPOSED, true),
     /** Composition failed for a reason it did not expect. */

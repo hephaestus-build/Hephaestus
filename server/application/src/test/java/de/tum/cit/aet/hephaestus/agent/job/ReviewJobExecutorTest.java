@@ -41,6 +41,7 @@ import de.tum.cit.aet.hephaestus.agent.handler.spi.ReviewSourceNotReadyException
 import de.tum.cit.aet.hephaestus.agent.practice.PracticeAgentRequest;
 import de.tum.cit.aet.hephaestus.agent.practice.PracticePiAdapter;
 import de.tum.cit.aet.hephaestus.agent.practice.PracticeSandboxSpec;
+import de.tum.cit.aet.hephaestus.agent.proxy.LlmCallPermits;
 import de.tum.cit.aet.hephaestus.agent.runtime.AgentResult;
 import de.tum.cit.aet.hephaestus.agent.runtime.PiResultParser;
 import de.tum.cit.aet.hephaestus.agent.runtime.SandboxLayout;
@@ -157,6 +158,8 @@ class ReviewJobExecutorTest extends BaseUnitTest {
             return callback.doInTransaction(mock(TransactionStatus.class));
         });
         var telemetry = new ReviewJobTelemetry(meters, Tracer.NOOP);
+        var callPermits = mock(LlmCallPermits.class);
+        lenient().when(callPermits.poolFor(any())).thenReturn(null);
         return new ReviewJobExecutor(
                 properties(),
                 jobs,
@@ -186,7 +189,8 @@ class ReviewJobExecutorTest extends BaseUnitTest {
                         budgets,
                         null,
                         telemetry,
-                        Optional.empty()),
+                        Optional.empty(),
+                        callPermits),
                 recovery);
     }
 

@@ -69,7 +69,10 @@ public record LlmModelDTO(
         @NonNull @Schema(description = "Creation timestamp") Instant createdAt,
 
         @Nullable @Schema(description = "Last update timestamp")
-        Instant updatedAt) {
+        Instant updatedAt,
+
+        @Nullable @Schema(description = "The pool whose capacity the model's calls share; null for none")
+        Long callPoolId) {
     public static LlmModelDTO from(
             LlmModel model, @Nullable LlmModelPrice currentPrice, List<Long> grantedWorkspaceIds) {
         return new LlmModelDTO(
@@ -91,6 +94,7 @@ public record LlmModelDTO(
                 model.isEnabled(),
                 currentPrice != null ? LlmModelPriceDTO.from(currentPrice) : null,
                 model.getCreatedAt(),
-                model.getUpdatedAt());
+                model.getUpdatedAt(),
+                model.getCallPoolId());
     }
 }

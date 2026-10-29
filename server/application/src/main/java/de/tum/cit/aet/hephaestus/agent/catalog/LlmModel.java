@@ -97,6 +97,14 @@ public class LlmModel {
     @Column(name = "visibility", nullable = false, length = 16)
     private ModelVisibility visibility = ModelVisibility.GRANTED;
 
+    /**
+     * The {@link LlmCallPool} whose capacity the model's calls share; {@code null} for none, which does not limit them.
+     * Only the instance admin sets it. Backed by {@code sfk_llm_model_call_pool}.
+     */
+    @Nullable
+    @Column(name = "call_pool_id")
+    private Long callPoolId;
+
     @ColumnDefault("false")
     @Column(name = "enabled", nullable = false)
     private boolean enabled = false;

@@ -118,7 +118,7 @@ public final class ProxyStreamingUtils {
     }
 
     /**
-     * As {@link #parts(ClientResponse, Duration)}, but reads an SSE body through {@code body}: a caller bounds or
+     * As {@link #parts(ClientResponse, Duration)}, but reads each response body through {@code body}: a caller bounds or
      * cancels the stream there, and the response ends with what it relayed.
      */
     public static Flux<Part> parts(
@@ -132,6 +132,9 @@ public final class ProxyStreamingUtils {
             return Flux.<Part>concat(
                     Mono.just(head),
                     clientResp
+                            .mutate()
+                            .body(body)
+                            .build()
                             .bodyToMono(byte[].class)
                             .defaultIfEmpty(new byte[0])
                             .map(Body::new));

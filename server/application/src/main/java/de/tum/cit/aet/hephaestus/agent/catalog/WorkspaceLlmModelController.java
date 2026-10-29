@@ -39,6 +39,7 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 public class WorkspaceLlmModelController {
 
     private final WorkspaceLlmModelService modelService;
+    private final LlmCallPoolService callPools;
 
     @PostMapping("/connections/{connectionId}/models")
     @Operation(summary = "Create a model on your AI provider", operationId = "workspaceCreateLlmModel")
@@ -62,16 +63,15 @@ public class WorkspaceLlmModelController {
                 .path("/workspaces/{workspaceSlug}/llm/models/{id}")
                 .buildAndExpand(workspaceContext.slug(), created.getId())
                 .toUri();
-        return ResponseEntity.created(location).body(WorkspaceLlmModelDTO.from(created));
+        return ResponseEntity.created(location).body(toDTO(created));
     }
 
     @GetMapping("/models")
     @Operation(summary = "List models on your AI provider", operationId = "workspaceListLlmModels")
     @RequireAtLeastWorkspaceAdmin
     public ResponseEntity<List<WorkspaceLlmModelDTO>> list(WorkspaceContext workspaceContext) {
-        return ResponseEntity.ok(modelService.list(workspaceContext).stream()
-                .map(WorkspaceLlmModelDTO::from)
-                .toList());
+        return ResponseEntity.ok(
+                modelService.list(workspaceContext).stream().map(this::toDTO).toList());
     }
 
     @GetMapping("/models/{id}")
@@ -86,7 +86,7 @@ public class WorkspaceLlmModelController {
             content = @Content(schema = @Schema(hidden = true)))
     @RequireAtLeastWorkspaceAdmin
     public ResponseEntity<WorkspaceLlmModelDTO> get(WorkspaceContext workspaceContext, @PathVariable Long id) {
-        return ResponseEntity.ok(WorkspaceLlmModelDTO.from(modelService.get(workspaceContext, id)));
+        return ResponseEntity.ok(toDTO(modelService.get(workspaceContext, id)));
     }
 
     @PatchMapping("/models/{id}")
@@ -109,7 +109,7 @@ public class WorkspaceLlmModelController {
             WorkspaceContext workspaceContext,
             @PathVariable Long id,
             @Valid @RequestBody UpdateWorkspaceLlmModelRequestDTO request) {
-        return ResponseEntity.ok(WorkspaceLlmModelDTO.from(modelService.update(workspaceContext, id, request)));
+        return ResponseEntity.ok(toDTO(modelService.update(workspaceContext, id, request)));
     }
 
     @DeleteMapping("/models/{id}")
@@ -137,5 +137,10 @@ public class WorkspaceLlmModelController {
     @RequireAtLeastWorkspaceAdmin
     public ResponseEntity<List<AvailableLlmModelDTO>> availableModels(WorkspaceContext workspaceContext) {
         return ResponseEntity.ok(modelService.availableModels(workspaceContext));
+    }
+
+    private WorkspaceLlmModelDTO toDTO(WorkspaceLlmModel model) {
+        return WorkspaceLlmModelDTO.from(
+                model, callPools.find(model.getCallPoolId()).orElse(null));
     }
 }

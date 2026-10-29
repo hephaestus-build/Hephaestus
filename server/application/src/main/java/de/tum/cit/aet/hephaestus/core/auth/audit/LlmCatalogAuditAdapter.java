@@ -77,6 +77,11 @@ public class LlmCatalogAuditAdapter implements LlmConnectionAudit, LlmModelAudit
                 details("allowWorkspaceConnections", allowWorkspaceConnections));
     }
 
+    @Override
+    public void callPoolChanged(Long poolId, String slug, String change) {
+        record(AuthEvent.EventType.LLM_SETTINGS_CHANGED, details("callPoolId", poolId, "slug", slug, "change", change));
+    }
+
     private void record(AuthEvent.EventType type, Map<String, Object> details) {
         authEventLogger
                 .event(type, AuthEvent.Result.SUCCESS)

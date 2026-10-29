@@ -2154,6 +2154,84 @@ export type ListedScanReportItem = {
 };
 
 /**
+ * Provider capacity that the models in it share
+ */
+export type LlmCallPool = {
+    /**
+     * Human-readable name
+     */
+    displayName: string;
+    /**
+     * Pool id
+     */
+    id: number;
+    /**
+     * Calls only Heph conversations may use
+     */
+    interactiveReserve: number;
+    /**
+     * Most model calls in flight at once; null does not limit them
+     */
+    maxConcurrentCalls?: number;
+    /**
+     * The provider asked for no call before this time
+     */
+    noCallBefore?: Date;
+    requestsPerMinute?: number;
+    /**
+     * Unique slug; also the pool label of its metrics
+     */
+    slug: string;
+    tokensPerCall?: number;
+    tokensPerMinute?: number;
+};
+
+/**
+ * Tenant-visible membership, without shared activity or cooldown information.
+ */
+export type LlmCallPoolMembership = {
+    displayName: string;
+    id: number;
+    interactiveReserve: number;
+    maxConcurrentCalls?: number;
+    slug: string;
+};
+
+/**
+ * A model and the pool its calls share
+ */
+export type LlmCallPoolModel = {
+    /**
+     * The pool the model is in; null for none
+     */
+    callPoolId?: number;
+    /**
+     * Connection's display name
+     */
+    connectionDisplayName: string;
+    /**
+     * Human-readable name
+     */
+    displayName: string;
+    /**
+     * The connection's host; null when its URL has none
+     */
+    host?: string;
+    /**
+     * Model id within its scope
+     */
+    modelId: number;
+    /**
+     * INSTANCE for the instance catalog, WORKSPACE for a workspace's own model
+     */
+    scope: 'INSTANCE' | 'WORKSPACE';
+    /**
+     * Slug of the workspace that owns the model; null for an instance model
+     */
+    workspaceSlug?: string;
+};
+
+/**
  * Instance LLM provider connection (API key redacted)
  */
 export type LlmConnection = {
@@ -2219,6 +2297,10 @@ export type LlmModel = {
      * Model brand declared by an admin; display only
      */
     brand?: 'OPENAI' | 'ANTHROPIC' | 'GEMINI' | 'GEMMA' | 'META' | 'MISTRAL' | 'QWEN' | 'DEEPSEEK' | 'XAI' | 'COHERE' | 'Z_AI' | 'MOONSHOT';
+    /**
+     * The pool whose capacity the model's calls share; null for none
+     */
+    callPoolId?: number;
     /**
      * Owning connection's display name
      */
@@ -5236,6 +5318,31 @@ export type RuntimeNonResult = {
     reason: 'TIMED_OUT' | 'EXECUTION_FAILED' | 'PREPARATION_FAILED' | 'PROCESSING_FAILED' | 'PERSON_DATA_ERASED' | 'STALE_ROLLOUT_REVISION' | 'CANCELLED_BY_ADMIN' | 'REPLACED' | 'LEGACY_FAILURE' | 'EXECUTION_INCOMPLETE' | 'RESULT_WITHHELD' | 'READINESS_REFUSED' | 'SUSPECT_LISTING' | 'BUDGET' | 'USAGE_UNVERIFIABLE' | 'DEADLINE' | 'CANCELLED' | 'ENUMERATION_FAILED' | 'ENUMERATION_LIMIT' | 'NO_SCAN_PRACTICES' | 'MODEL_CHANGED' | 'MODEL_UNAVAILABLE' | 'ERROR' | 'LEGACY_SCOPE_UNKNOWN' | 'CONTRACT_CHANGED' | 'NO_SANDBOX_ROOM';
 };
 
+/**
+ * Create or change a pool of provider capacity
+ */
+export type SaveLlmCallPoolRequest = {
+    /**
+     * Human-readable name
+     */
+    displayName: string;
+    /**
+     * Calls only Heph conversations may use
+     */
+    interactiveReserve: number;
+    /**
+     * Most model calls in flight at once; null does not limit them
+     */
+    maxConcurrentCalls?: number;
+    requestsPerMinute?: number;
+    /**
+     * Unique slug, lowercase words joined by hyphens; set at creation only
+     */
+    slug: string;
+    tokensPerCall?: number;
+    tokensPerMinute?: number;
+};
+
 export type ScanAvailability = {
     expired: boolean;
     expiredProofPairs: number;
@@ -5984,6 +6091,20 @@ export type UpdateLlmBudgetRequest = {
      * Cap in USD; 0 pauses the affected work immediately, null removes the cap. The purse it governs is the one the path names, and only that one: /admin/workspaces/{workspaceSlug}/llm/budget caps spend on shared (instance) models, /workspaces/{workspaceSlug}/llm/budget caps the workspace's spend on its own connected provider. The two are never added together.
      */
     monthlyBudgetUsd?: number;
+};
+
+/**
+ * The models whose calls share a pool
+ */
+export type UpdateLlmCallPoolModelsRequest = {
+    /**
+     * Ids of instance models
+     */
+    instanceModelIds: Array<number>;
+    /**
+     * Ids of models on workspaces' own connections
+     */
+    workspaceModelIds: Array<number>;
 };
 
 /**
@@ -6894,6 +7015,10 @@ export type WorkspaceLlmModel = {
      */
     brand?: 'OPENAI' | 'ANTHROPIC' | 'GEMINI' | 'GEMMA' | 'META' | 'MISTRAL' | 'QWEN' | 'DEEPSEEK' | 'XAI' | 'COHERE' | 'Z_AI' | 'MOONSHOT';
     /**
+     * The instance pool whose capacity the model's calls share; only an instance admin sets it
+     */
+    callPool?: LlmCallPoolMembership;
+    /**
      * Owning connection's display name
      */
     connectionDisplayName: string;
@@ -7427,6 +7552,152 @@ export type AdminSendTestEmailResponses = {
 };
 
 export type AdminSendTestEmailResponse = AdminSendTestEmailResponses[keyof AdminSendTestEmailResponses];
+
+export type AdminListLlmCallPoolsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/admin/llm/call-pools';
+};
+
+export type AdminListLlmCallPoolsResponses = {
+    /**
+     * OK
+     */
+    200: Array<LlmCallPool>;
+};
+
+export type AdminListLlmCallPoolsResponse = AdminListLlmCallPoolsResponses[keyof AdminListLlmCallPoolsResponses];
+
+export type AdminCreateLlmCallPoolData = {
+    body: SaveLlmCallPoolRequest;
+    path?: never;
+    query?: never;
+    url: '/admin/llm/call-pools';
+};
+
+export type AdminCreateLlmCallPoolErrors = {
+    /**
+     * A pool with this slug already exists
+     */
+    409: unknown;
+};
+
+export type AdminCreateLlmCallPoolResponses = {
+    /**
+     * Pool created; URL in the Location header
+     */
+    201: LlmCallPool;
+};
+
+export type AdminCreateLlmCallPoolResponse = AdminCreateLlmCallPoolResponses[keyof AdminCreateLlmCallPoolResponses];
+
+export type AdminListLlmCallPoolModelsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/admin/llm/call-pools/models';
+};
+
+export type AdminListLlmCallPoolModelsResponses = {
+    /**
+     * OK
+     */
+    200: Array<LlmCallPoolModel>;
+};
+
+export type AdminListLlmCallPoolModelsResponse = AdminListLlmCallPoolModelsResponses[keyof AdminListLlmCallPoolModelsResponses];
+
+export type AdminDeleteLlmCallPoolData = {
+    body?: never;
+    path: {
+        id: number;
+    };
+    query?: never;
+    url: '/admin/llm/call-pools/{id}';
+};
+
+export type AdminDeleteLlmCallPoolErrors = {
+    /**
+     * Pool not found
+     */
+    404: unknown;
+    /**
+     * The pool still has calls, rate history, or a cooldown
+     */
+    409: unknown;
+};
+
+export type AdminDeleteLlmCallPoolResponses = {
+    /**
+     * Pool deleted
+     */
+    204: void;
+};
+
+export type AdminDeleteLlmCallPoolResponse = AdminDeleteLlmCallPoolResponses[keyof AdminDeleteLlmCallPoolResponses];
+
+export type AdminUpdateLlmCallPoolData = {
+    body: SaveLlmCallPoolRequest;
+    path: {
+        id: number;
+    };
+    query?: never;
+    url: '/admin/llm/call-pools/{id}';
+};
+
+export type AdminUpdateLlmCallPoolErrors = {
+    /**
+     * The pool slug cannot change or the limits are invalid
+     */
+    400: unknown;
+    /**
+     * Pool not found
+     */
+    404: unknown;
+    /**
+     * The pool still has calls, rate history, or a cooldown
+     */
+    409: unknown;
+};
+
+export type AdminUpdateLlmCallPoolResponses = {
+    /**
+     * OK
+     */
+    200: LlmCallPool;
+};
+
+export type AdminUpdateLlmCallPoolResponse = AdminUpdateLlmCallPoolResponses[keyof AdminUpdateLlmCallPoolResponses];
+
+export type AdminUpdateLlmCallPoolModelsData = {
+    body: UpdateLlmCallPoolModelsRequest;
+    path: {
+        id: number;
+    };
+    query?: never;
+    url: '/admin/llm/call-pools/{id}/models';
+};
+
+export type AdminUpdateLlmCallPoolModelsErrors = {
+    /**
+     * Pool or model not found
+     */
+    404: unknown;
+    /**
+     * The pool still has calls, rate history, or a cooldown
+     */
+    409: unknown;
+};
+
+export type AdminUpdateLlmCallPoolModelsResponses = {
+    /**
+     * OK
+     */
+    200: Array<LlmCallPoolModel>;
+};
+
+export type AdminUpdateLlmCallPoolModelsResponse = AdminUpdateLlmCallPoolModelsResponses[keyof AdminUpdateLlmCallPoolModelsResponses];
 
 export type AdminListLlmConnectionsData = {
     body?: never;

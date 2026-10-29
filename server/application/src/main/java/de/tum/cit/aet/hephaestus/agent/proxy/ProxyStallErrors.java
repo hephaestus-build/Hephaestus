@@ -67,12 +67,15 @@ final class ProxyStallErrors {
      * stream that just stops would read as a broken one; both OpenAI protocols' clients raise this event as an error.
      */
     void writeStallFrame(HttpServletResponse response, String message) {
+        writeErrorFrame(response, LlmProxyService.UPSTREAM_STALLED, message);
+    }
+
+    /** Ends a stream the proxy stopped with an error event, so a client cannot read the cut answer as complete. */
+    void writeErrorFrame(HttpServletResponse response, String code, String message) {
         try {
             OutputStream out = response.getOutputStream();
-            out.write(
-                    ("data: " + objectMapper.writeValueAsString(errorPayload(LlmProxyService.UPSTREAM_STALLED, message))
-                                    + "\n\n")
-                            .getBytes(StandardCharsets.UTF_8));
+            out.write(("data: " + objectMapper.writeValueAsString(errorPayload(code, message)) + "\n\n")
+                    .getBytes(StandardCharsets.UTF_8));
             out.flush();
         } catch (IOException clientGone) {
             log.debug("The client left before the stall was reported");

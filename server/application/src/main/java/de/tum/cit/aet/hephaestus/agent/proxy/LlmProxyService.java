@@ -34,7 +34,6 @@ import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.slf4j.event.Level;
 import org.slf4j.spi.LoggingEventBuilder;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -48,6 +47,7 @@ import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientRequestException;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.netty.Connection;
 import reactor.netty.http.client.HttpClientRequest;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -94,6 +94,7 @@ class LlmProxyService {
     private final ProxyCallsInFlight callsInFlight;
     private final LlmConnectionHealth health;
     private final Bounds hephBounds;
+    private final LlmCallPermits callPermits;
 
     LlmProxyService(
             Tracer tracer,
@@ -106,8 +107,8 @@ class LlmProxyService {
             ProxyRoutingService routingService,
             ProxyCallsInFlight callsInFlight,
             LlmConnectionHealth health,
-            @Value("${hephaestus.mentor.turn.model-first-byte-timeout:PT5M}") Duration hephFirstByteTimeout,
-            @Value("${hephaestus.mentor.turn.model-idle-timeout:PT2M}") Duration hephIdleTimeout) {
+            LlmCallPermits callPermits,
+            HephCallProperties hephProperties) {
         this.tracer = tracer;
         this.webClient = llmProxyWebClient;
         this.resolver = llmModelResolver;
@@ -119,7 +120,8 @@ class LlmProxyService {
         this.routingService = routingService;
         this.callsInFlight = callsInFlight;
         this.health = health;
-        this.hephBounds = new Bounds(hephFirstByteTimeout, hephIdleTimeout);
+        this.hephBounds = new Bounds(hephProperties.modelFirstByteTimeout(), hephProperties.modelIdleTimeout());
+        this.callPermits = callPermits;
     }
 
     public @Nullable ResponseEntity<?> proxy(
@@ -408,129 +410,187 @@ class LlmProxyService {
             return ResponseEntity.status(502).body("Invalid upstream configuration");
         }
 
-        LlmConnectionHealth.Permit permit = health.acquire(routing.connectionScope(), routing.connectionId());
-        if (permit == null) {
-            accounting.recordError(routing.apiProtocol());
-            call.failed(new MentorTurn.FailedCall(UPSTREAM_PAUSED, null));
-            return errors.providerError(
+        Long poolId = credential.callPoolId();
+        LlmCallPermits.Permit poolPermit = poolId == null
+                ? null
+                : callPermits.acquire(
+                        poolId,
+                        routingService.callClass(routing),
+                        new LlmCallPermits.Caller(
+                                Objects.requireNonNull(routing.workspaceId()),
+                                routing.sourceId(),
+                                attempt.number(),
+                                new LlmModelResolver.ConnectionRef(
+                                        routing.connectionScope(),
+                                        routing.connectionId(),
+                                        routing.modelId(),
+                                        routing.workspaceId())),
+                        () -> call.isCancelled() || !routingService.ownsAttempt(routing),
+                        routing.workDeadline());
+        if (poolId != null && poolPermit == null) {
+            return refusal(
                     HttpStatus.SERVICE_UNAVAILABLE,
-                    UPSTREAM_PAUSED,
-                    "the model provider failed repeatedly, so Hephaestus waits up to "
-                            + LlmConnectionHealth.OPEN_FOR.toSeconds() + " seconds before it calls it again");
+                    ReviewModelGateway.Refusal.CAPACITY,
+                    "The model capacity was unavailable before this attempt ended.");
         }
-        span.tag("gen_ai.request.model", credential.upstreamModelId());
-        Exchange exchange = new Exchange(
-                upstreamUri,
-                buildUpstreamHeaders(incomingHeaders, credential),
-                attempt.sourceType() == UsageSourceType.MENTOR_TURN ? hephBounds : null,
-                call.cancelled());
-        ProxyStreamUsageTap tap = new ProxyStreamUsageTap(objectMapper, responsesProtocol);
-        // Both requests below share the attempt's one deadline; the second one does not get a new window.
-        Instant deadline = routing.workDeadline();
-        boolean reviewStream = practiceScript == null && requestsStream(prepared.body());
-        UpstreamResult upstream;
+        ProxyTransportClosure transports = new ProxyTransportClosure();
         try {
-            if (workTimeOver(routing)) {
-                permit.released();
-                return refusal(HttpStatus.FORBIDDEN, ReviewModelGateway.Refusal.WORK_TIME, WORK_TIME_OVER);
+            LlmConnectionHealth.Permit permit = health.acquire(routing.connectionScope(), routing.connectionId());
+            if (permit == null) {
+                accounting.recordError(routing.apiProtocol());
+                call.failed(new MentorTurn.FailedCall(UPSTREAM_PAUSED, null));
+                return errors.providerError(
+                        HttpStatus.SERVICE_UNAVAILABLE,
+                        UPSTREAM_PAUSED,
+                        "the model provider failed repeatedly, so Hephaestus waits up to "
+                                + LlmConnectionHealth.OPEN_FOR.toSeconds() + " seconds before it calls it again");
             }
-            upstream = callUpstream(exchange, prepared.body(), span, response, tap, deadline, reviewStream);
-            if (rejectedOurUsageRequest(upstream, prepared)) {
-                // Asking for usage is OUR addition, so refusing it must cost the caller nothing.
-                log.info(
-                        "Upstream rejected stream_options.include_usage for principal {}; retrying without it — "
-                                + "this call's tokens will not be metered",
-                        routing.principalDescription());
-                accounting.recordStreamUsageUnsupported(routing.apiProtocol());
-                if (!requestPolicy.allows(routing)) {
-                    permit.released();
-                    return refusal(HttpStatus.FORBIDDEN, ReviewModelGateway.Refusal.AI_CHOICE, AI_CHOICE_REFUSED);
-                }
+            span.tag("gen_ai.request.model", credential.upstreamModelId());
+            Exchange exchange = new Exchange(
+                    upstreamUri,
+                    buildUpstreamHeaders(incomingHeaders, credential),
+                    attempt.sourceType() == UsageSourceType.MENTOR_TURN ? hephBounds : null,
+                    poolPermit == null
+                            ? call.cancelled()
+                            : Mono.firstWithSignal(call.cancelled(), poolPermit.revoked()),
+                    transports);
+            ProxyStreamUsageTap tap = new ProxyStreamUsageTap(objectMapper, responsesProtocol);
+            // Both requests below share the attempt's one deadline; the second one does not get a new window.
+            Instant deadline = routing.workDeadline();
+            boolean reviewStream = practiceScript == null && requestsStream(prepared.body());
+            UpstreamResult upstream;
+            try {
                 if (workTimeOver(routing)) {
                     permit.released();
                     return refusal(HttpStatus.FORBIDDEN, ReviewModelGateway.Refusal.WORK_TIME, WORK_TIME_OVER);
                 }
-                upstream = callUpstream(
-                        exchange, prepared.withoutUsageRequestOrBody(), span, response, tap, deadline, reviewStream);
-            }
-        } catch (Exception e) {
-            // Only a failure before a stream's head reaches here, so nothing has been written to the client.
-            permit.failed(e);
-            if (practiceScript != null) accounting.recordUsage(attempt, practiceScript, null);
-            Bounds bounds = exchange.bounds();
-            if (bounds != null && ProxyStreamingUtils.readTimedOut(e)) {
-                accounting.recordError(routing.apiProtocol());
-                accounting.recordUpstreamStalled(routing.apiProtocol());
-                String stall = "the model provider sent no first byte within "
-                        + bounds.firstByte().toSeconds() + " seconds";
-                if (!routing.hephTurn())
-                    log.warn("LLM upstream stalled for principal {}: {}", routing.principalDescription(), stall);
-                call.failed(new MentorTurn.FailedCall(UPSTREAM_STALLED, null));
-                return errors.providerError(HttpStatus.GATEWAY_TIMEOUT, UPSTREAM_STALLED, stall);
-            }
-            // An anonymous class has no simple name.
-            String failure = e.getClass().getSimpleName();
-            call.failed(
-                    new MentorTurn.FailedCall(failure.isEmpty() ? e.getClass().getName() : failure, null));
-            if (e instanceof WebClientRequestException) {
+                if (poolPermit != null && poolPermit.isRevoked()) {
+                    permit.released();
+                    return errors.providerError(
+                            HttpStatus.SERVICE_UNAVAILABLE, UPSTREAM_PAUSED, "The model capacity lease ended.");
+                }
+                upstream = callUpstream(exchange, prepared.body(), span, response, tap, deadline, reviewStream);
+                if (rejectedOurUsageRequest(upstream, prepared)) {
+                    // Asking for usage is OUR addition, so refusing it must cost the caller nothing.
+                    log.info(
+                            "Upstream rejected stream_options.include_usage for principal {}; retrying without it — "
+                                    + "this call's tokens will not be metered",
+                            routing.principalDescription());
+                    accounting.recordStreamUsageUnsupported(routing.apiProtocol());
+                    if (!requestPolicy.allows(routing)) {
+                        permit.released();
+                        return refusal(HttpStatus.FORBIDDEN, ReviewModelGateway.Refusal.AI_CHOICE, AI_CHOICE_REFUSED);
+                    }
+                    if (workTimeOver(routing)) {
+                        permit.released();
+                        return refusal(HttpStatus.FORBIDDEN, ReviewModelGateway.Refusal.WORK_TIME, WORK_TIME_OVER);
+                    }
+                    if (poolPermit != null && !callPermits.beforeRetry(poolPermit, call::isCancelled, deadline)) {
+                        permit.released();
+                        return refusal(
+                                HttpStatus.SERVICE_UNAVAILABLE,
+                                ReviewModelGateway.Refusal.CAPACITY,
+                                "Model capacity is unavailable for this retry.");
+                    }
+                    upstream = callUpstream(
+                            exchange,
+                            prepared.withoutUsageRequestOrBody(),
+                            span,
+                            response,
+                            tap,
+                            deadline,
+                            reviewStream);
+                }
+            } catch (Exception e) {
+                // Only a failure before a stream's head reaches here, so nothing has been written to the client.
+                permit.failed(e);
+                if (practiceScript != null) accounting.recordUsage(attempt, practiceScript, null);
+                Bounds bounds = exchange.bounds();
+                if (bounds != null && ProxyStreamingUtils.readTimedOut(e)) {
+                    accounting.recordError(routing.apiProtocol());
+                    accounting.recordUpstreamStalled(routing.apiProtocol());
+                    String stall = "the model provider sent no first byte within "
+                            + bounds.firstByte().toSeconds() + " seconds";
+                    if (!routing.hephTurn())
+                        log.warn("LLM upstream stalled for principal {}: {}", routing.principalDescription(), stall);
+                    call.failed(new MentorTurn.FailedCall(UPSTREAM_STALLED, null));
+                    return errors.providerError(HttpStatus.GATEWAY_TIMEOUT, UPSTREAM_STALLED, stall);
+                }
+                // An anonymous class has no simple name.
+                String failure = e.getClass().getSimpleName();
+                call.failed(new MentorTurn.FailedCall(
+                        failure.isEmpty() ? e.getClass().getName() : failure, null));
+                if (e instanceof WebClientRequestException) {
+                    if (!routing.hephTurn())
+                        log.warn(
+                                "LLM upstream unreachable for principal {}: reason={}",
+                                routing.principalDescription(),
+                                e.getClass().getSimpleName());
+                    accounting.recordError(routing.apiProtocol());
+                    return ResponseEntity.status(502).body("Upstream provider unreachable");
+                }
                 if (!routing.hephTurn())
                     log.warn(
-                            "LLM upstream unreachable for principal {}: reason={}",
+                            "LLM upstream request failed for principal {}: reason={}",
                             routing.principalDescription(),
                             e.getClass().getSimpleName());
                 accounting.recordError(routing.apiProtocol());
-                return ResponseEntity.status(502).body("Upstream provider unreachable");
+                // The work deadline is answered as such; any other failure as before.
+                if (workTimeOver(routing))
+                    return refusal(HttpStatus.FORBIDDEN, ReviewModelGateway.Refusal.WORK_TIME, WORK_TIME_OVER);
+                return ResponseEntity.status(502).body("Upstream request failed");
             }
-            if (!routing.hephTurn())
-                log.warn(
-                        "LLM upstream request failed for principal {}: reason={}",
-                        routing.principalDescription(),
-                        e.getClass().getSimpleName());
-            accounting.recordError(routing.apiProtocol());
-            // The work deadline is answered as such; any other failure as before.
-            if (workTimeOver(routing))
-                return refusal(HttpStatus.FORBIDDEN, ReviewModelGateway.Refusal.WORK_TIME, WORK_TIME_OVER);
-            return ResponseEntity.status(502).body("Upstream request failed");
-        }
 
-        if (upstream == null) {
-            // The turn's end cancelled the call before the provider answered.
-            permit.released();
-            if (practiceScript != null) accounting.recordUsage(attempt, practiceScript, null);
-            accounting.recordError(routing.apiProtocol());
-            return ResponseEntity.status(502).body("Upstream provider unavailable");
+            if (upstream == null) {
+                // The turn's end cancelled the call before the provider answered.
+                permit.released();
+                if (practiceScript != null) accounting.recordUsage(attempt, practiceScript, null);
+                accounting.recordError(routing.apiProtocol());
+                return ResponseEntity.status(502).body("Upstream provider unavailable");
+            }
+            if (upstream.status() == 429
+                    && poolPermit != null
+                    && routing.connectionScope() == UsageFundingSource.INSTANCE)
+                callPermits.coolDown(poolPermit, upstream.headers());
+            // Report revocation in the stream; buffered responses still settle health and usage below.
+            if (poolPermit != null && poolPermit.isRevoked() && upstream.streamOutcome() != null && response != null) {
+                call.failed(new MentorTurn.FailedCall(UPSTREAM_PAUSED, null));
+                errors.writeErrorFrame(response, UPSTREAM_PAUSED, "The model capacity lease ended.");
+            }
+            if (call.isCancelled()) {
+                // The turn ended without this call; the provider's state is unknown.
+                permit.released();
+            } else {
+                ProxyStallErrors.judge(upstream, permit);
+            }
+            Bounds bounds = exchange.bounds();
+            if (bounds != null && upstream.streamOutcome() == StreamOutcome.UPSTREAM_IDLE) {
+                accounting.recordUpstreamStalled(routing.apiProtocol());
+                String stall = "the model provider's stream sent nothing for "
+                        + bounds.idle().toSeconds() + " seconds";
+                if (!routing.hephTurn())
+                    log.warn("LLM upstream stalled for principal {}: {}", routing.principalDescription(), stall);
+                if (response != null) errors.writeStallFrame(response, stall);
+            }
+            var outcome = upstream.streamOutcome();
+            if (outcome != null)
+                return settleStream(routing, attempt, practiceScript, span, upstream.status(), outcome, tap, call);
+            boolean served = upstream.status() >= 200 && upstream.status() < 300;
+            if (!served) {
+                call.failed(new MentorTurn.FailedCall(UPSTREAM_STATUS, upstream.status()));
+                logUnserved(routing, upstream.status());
+                accounting.recordError(routing.apiProtocol());
+            }
+            // Attributed now, not at the run's terminal write, so an execution that dies still bills.
+            if (upstream.body() != null && served) {
+                tagUsage(span, accounting.recordUsage(attempt, practiceScript, protocol, upstream.body()));
+            }
+            return ResponseEntity.status(upstream.status())
+                    .headers(upstream.headers())
+                    .body(upstream.body());
+        } finally {
+            if (poolPermit != null) transports.releaseWhenClosed(poolPermit::close);
         }
-        if (call.isCancelled()) {
-            // The turn ended without this call; the provider's state is unknown.
-            permit.released();
-        } else {
-            ProxyStallErrors.judge(upstream, permit);
-        }
-        Bounds bounds = exchange.bounds();
-        if (bounds != null && upstream.streamOutcome() == StreamOutcome.UPSTREAM_IDLE) {
-            accounting.recordUpstreamStalled(routing.apiProtocol());
-            String stall = "the model provider's stream sent nothing for "
-                    + bounds.idle().toSeconds() + " seconds";
-            if (!routing.hephTurn())
-                log.warn("LLM upstream stalled for principal {}: {}", routing.principalDescription(), stall);
-            if (response != null) errors.writeStallFrame(response, stall);
-        }
-        var outcome = upstream.streamOutcome();
-        if (outcome != null)
-            return settleStream(routing, attempt, practiceScript, span, upstream.status(), outcome, tap, call);
-        boolean served = upstream.status() >= 200 && upstream.status() < 300;
-        if (!served) {
-            call.failed(new MentorTurn.FailedCall(UPSTREAM_STATUS, upstream.status()));
-            logUnserved(routing, upstream.status());
-            accounting.recordError(routing.apiProtocol());
-        }
-        // Attributed now, not at the run's terminal write, so an execution that dies still bills.
-        if (upstream.body() != null && served) {
-            tagUsage(span, accounting.recordUsage(attempt, practiceScript, protocol, upstream.body()));
-        }
-        return ResponseEntity.status(upstream.status())
-                .headers(upstream.headers())
-                .body(upstream.body());
     }
 
     /**
@@ -604,7 +664,11 @@ class LlmProxyService {
      * @param cancelled completes when the attempt's end cancels the call
      */
     private record Exchange(
-            URI uri, HttpHeaders headers, @Nullable Bounds bounds, Mono<Void> cancelled) {}
+            URI uri,
+            HttpHeaders headers,
+            @Nullable Bounds bounds,
+            Mono<Void> cancelled,
+            ProxyTransportClosure transports) {}
 
     /**
      * One upstream exchange, run on this request thread, which alone writes the servlet response. Without a work
@@ -631,16 +695,19 @@ class LlmProxyService {
             headers.clear();
             headers.addAll(exchange.headers());
         });
-        if (bounds != null) {
-            // Reactor Netty's response timeout bounds each read until the response is complete.
-            request = request.httpRequest(
-                    client -> client.<HttpClientRequest>getNativeRequest().responseTimeout(bounds.firstByte()));
-        }
+        var transport = exchange.transports().begin();
+        request = request.httpRequest(client -> {
+            HttpClientRequest nativeRequest = client.getNativeRequest();
+            if (nativeRequest instanceof Connection opened) transport.connected(opened);
+            else throw new IllegalStateException("The model transport must expose its connection lifecycle");
+            if (bounds != null) nativeRequest.responseTimeout(bounds.firstByte());
+        });
+        AtomicBoolean cancelled = new AtomicBoolean();
+        Mono<Void> stop = exchange.cancelled().doOnSuccess(unused -> cancelled.set(true));
         UnaryOperator<Flux<DataBuffer>> body = bounds == null
-                ? stream -> stream.takeUntilOther(exchange.cancelled())
+                ? stream -> stream.takeUntilOther(stop)
                 // Each data buffer is a read, so a keep-alive comment counts as a sign of life.
-                : stream ->
-                        ProxyStreamingUtils.endingWhenIdle(stream.takeUntilOther(exchange.cancelled()), bounds.idle());
+                : stream -> ProxyStreamingUtils.endingWhenIdle(stream.takeUntilOther(stop), bounds.idle());
         AtomicBoolean answered = new AtomicBoolean();
         AtomicBoolean cancelledFirst = new AtomicBoolean();
         var parts = request.bodyValue(outgoingBody)
@@ -649,16 +716,22 @@ class LlmProxyService {
                     return ProxyStreamingUtils.parts(upstream, bodyLimit, body);
                 })
                 // Before the response, a cancel drops the exchange; after it, the body stops and the stream ends.
-                .takeUntilOther(exchange.cancelled().then(Mono.defer(() -> {
+                .takeUntilOther(stop.then(Mono.defer(() -> {
                     if (answered.get()) return Mono.never();
                     cancelledFirst.set(true);
                     return Mono.just(Boolean.TRUE);
                 })));
+        boolean completed = false;
         try {
-            return ProxyStreamingUtils.forward(parts, limit, response, tap);
+            UpstreamResult result = ProxyStreamingUtils.forward(parts, limit, response, tap);
+            completed = !cancelled.get()
+                    && (result.streamOutcome() == null || result.streamOutcome() == StreamOutcome.COMPLETED);
+            return cancelled.get() && !result.streamed() ? null : result;
         } catch (IllegalStateException noHead) {
             if (cancelledFirst.get()) return null;
             throw noHead;
+        } finally {
+            transport.finish(completed);
         }
     }
 

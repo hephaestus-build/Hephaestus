@@ -9,6 +9,7 @@ import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.Limit;
@@ -394,19 +395,44 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
      * alone left an admitted review's composition behind every fresh review queued before it. Within each group the
      * oldest available job comes first.
      */
-    @WorkspaceAgnostic("Cross-workspace poll candidates; caller is the @WorkspaceAgnostic job poller")
-    @Query(
-            value = "SELECT j.id FROM review_job j JOIN workspace w ON w.id = j.workspace_id WHERE j.status = 'QUEUED'"
-                    + " AND w.status = 'ACTIVE' AND j.available_at <= now() AND (  (SELECT count(*) FROM review_job r     "
-                    + " WHERE r.workspace_id = j.workspace_id AND r.status = 'RUNNING'        AND"
-                    + " COALESCE(r.config_snapshot -> 'model' ->> 'dataHandlingTier', 'UNDECLARED')          ="
-                    + " COALESCE(j.config_snapshot -> 'model' ->> 'dataHandlingTier', 'UNDECLARED'))   < COALESCE((SELECT"
-                    + " b.max_concurrent_jobs FROM workspace_agent_binding b      WHERE b.workspace_id = j.workspace_id"
-                    + " AND b.purpose = 'PRACTICE_REVIEW'        AND b.data_handling_tier = COALESCE(j.config_snapshot ->"
-                    + " 'model' ->> 'dataHandlingTier', 'UNDECLARED')),      2147483647)) ORDER BY (j.attempt > 0 OR"
-                    + " j.capture -> 'admission' IS NOT NULL) DESC, j.available_at ASC, j.id ASC LIMIT :limit",
-            nativeQuery = true)
-    List<UUID> findQueuedIdsStartedFirst(@Param("limit") int limit);
+    @WorkspaceAgnostic("Cross-workspace poll candidates; caller is the workspace-agnostic job poller")
+    default List<UUID> findQueuedIdsStartedFirst(int limit) {
+        return findQueuedIdsStartedFirst(limit, Set.of(), Set.of());
+    }
+
+    /**
+     * Offer fresh demand to fairness first. The poller then dispatches the fair winner; only an unavailable
+     * endpoint is skipped for the rest of this poll.
+     */
+    @WorkspaceAgnostic("Cross-workspace candidate scan with live catalog membership and per-poll endpoint exclusions")
+    @Query(value = """
+            SELECT j.id FROM review_job j JOIN workspace w ON w.id=j.workspace_id
+            LEFT JOIN llm_model im ON j.config_snapshot->'model'->>'connectionScope'='INSTANCE'
+              AND im.id=CAST(j.config_snapshot->'model'->>'modelId' AS bigint)
+              AND im.connection_id=CAST(j.config_snapshot->'model'->>'connectionId' AS bigint)
+            LEFT JOIN workspace_llm_model wm ON j.config_snapshot->'model'->>'connectionScope'='WORKSPACE'
+              AND wm.id=CAST(j.config_snapshot->'model'->>'modelId' AS bigint)
+              AND wm.connection_id=CAST(j.config_snapshot->'model'->>'connectionId' AS bigint)
+              AND wm.workspace_id=j.workspace_id
+            WHERE j.status='QUEUED' AND w.status='ACTIVE' AND j.available_at<=now()
+              AND (SELECT count(*) FROM review_job r WHERE r.workspace_id=j.workspace_id AND r.status='RUNNING'
+                AND COALESCE(r.config_snapshot->'model'->>'dataHandlingTier','UNDECLARED')=
+                    COALESCE(j.config_snapshot->'model'->>'dataHandlingTier','UNDECLARED'))
+                < COALESCE((SELECT b.max_concurrent_jobs FROM workspace_agent_binding b
+                    WHERE b.workspace_id=j.workspace_id AND b.purpose='PRACTICE_REVIEW'
+                      AND b.data_handling_tier=COALESCE(j.config_snapshot->'model'->>'dataHandlingTier','UNDECLARED')),2147483647)
+              AND (:#{#excludedJobs.isEmpty()} OR j.id NOT IN (:excludedJobs))
+              AND (j.capture->'admission' IS NOT NULL OR :#{#excludedPools.isEmpty()}
+                OR COALESCE(im.call_pool_id,wm.call_pool_id,0) NOT IN (:excludedPools))
+            ORDER BY (j.attempt>0 OR j.capture->'admission' IS NOT NULL) DESC,
+              (SELECT max(pending.renewed_at) FROM llm_call_permit pending WHERE pending.source_id=j.id
+                 AND pending.workspace_id=j.workspace_id AND pending.attempt=j.attempt AND pending.state='CLAIM_WAITING') ASC NULLS FIRST,
+              j.available_at ASC,j.id ASC LIMIT :limit
+            """, nativeQuery = true)
+    List<UUID> findQueuedIdsStartedFirst(
+            @Param("limit") int limit,
+            @Param("excludedPools") Set<Long> excludedPools,
+            @Param("excludedJobs") Set<UUID> excludedJobs);
 
     @WorkspaceAgnostic("Cross-workspace stale job reaper; caller is @WorkspaceAgnostic sweeper")
     @Query("SELECT j FROM ReviewJob j WHERE j.status = 'RUNNING' AND j.startedAt < :cutoff")
