@@ -8,8 +8,8 @@ podPidsLimit: 4096
 # critical Pods (Traefik, CoreDNS) get the last minute, and the other Pods get the first 4, more
 # than PostgreSQL's termination grace period of 120 seconds. k3s-logind.conf lets logind wait that
 # long.
-shutdownGracePeriod: 5m
-shutdownGracePeriodCriticalPods: 1m
+shutdownGracePeriod: 5m0s
+shutdownGracePeriodCriticalPods: 1m0s
 # Memory and CPU that Pods cannot request: k3s itself (the API server, the kubelet and containerd
 # in one process, about 1 GB resident) and the host's own services. The node's allocatable is its
 # capacity less both and less the memory eviction threshold.
@@ -19,6 +19,10 @@ kubeReserved:
 systemReserved:
   cpu: 250m
   memory: 512Mi
+enforceNodeAllocatable: [pods]
+failSwapOn: true
+memorySwap:
+  swapBehavior: NoSwap
 # The kubelet evicts Pods before the kernel's OOM killer acts on the host. Every signal is stated:
 # a map that sets one signal sets the others to zero (upstream § Node-pressure eviction).
 evictionHard:
@@ -27,3 +31,16 @@ evictionHard:
   nodefs.inodesFree: 5%
   imagefs.available: 15%
   imagefs.inodesFree: 5%
+# Application admission must back off before this recovery threshold is reached.
+evictionSoft:
+  memory.available: 1Gi
+evictionSoftGracePeriod:
+  memory.available: 1m0s
+evictionMaxPodGracePeriod: 120
+evictionMinimumReclaim:
+  memory.available: 256Mi
+evictionPressureTransitionPeriod: 5m0s
+containerLogMaxSize: 10Mi
+containerLogMaxFiles: 5
+imageGCHighThresholdPercent: 75
+imageGCLowThresholdPercent: 65

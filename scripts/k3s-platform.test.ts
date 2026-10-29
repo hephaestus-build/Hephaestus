@@ -27,10 +27,8 @@ const named = (resources: Record<string, unknown>[], kind: string, name: string)
 await test("the kubelet reserves memory for k3s and the host, and states every hard eviction signal", () => {
 	const [kubelet] = documents(read("k3s-kubelet.yaml"));
 	assert.ok(kubelet);
-	for (const key of ["kubeReserved", "systemReserved"]) {
-		const reserved = kubelet[key];
-		assert.ok(isRecord(reserved) && typeof reserved.memory === "string", `${key} reserves memory`);
-	}
+	assert.deepEqual(kubelet.kubeReserved, { cpu: "250m", memory: "1Gi" });
+	assert.deepEqual(kubelet.systemReserved, { cpu: "250m", memory: "512Mi" });
 	// A partial map sets the signals that it leaves out to zero, so each Linux signal is stated.
 	assert.deepEqual(
 		Object.keys(isRecord(kubelet.evictionHard) ? kubelet.evictionHard : {}).toSorted(),
@@ -42,6 +40,34 @@ await test("the kubelet reserves memory for k3s and the host, and states every h
 			"nodefs.inodesFree",
 		],
 	);
+});
+
+await test("the node policy bounds soft eviction, logs, images, and swap without hard-capping host slices", () => {
+	const [policy] = documents(read("k3s-kubelet.yaml"));
+	assert.ok(policy);
+	assert.deepEqual(policy.evictionHard, {
+		"memory.available": "256Mi",
+		"nodefs.available": "10%",
+		"nodefs.inodesFree": "5%",
+		"imagefs.available": "15%",
+		"imagefs.inodesFree": "5%",
+	});
+	assert.deepEqual(policy.evictionSoft, { "memory.available": "1Gi" });
+	assert.deepEqual(policy.evictionSoftGracePeriod, { "memory.available": "1m0s" });
+	assert.equal(policy.evictionMaxPodGracePeriod, 120);
+	assert.deepEqual(policy.evictionMinimumReclaim, { "memory.available": "256Mi" });
+	assert.equal(policy.evictionPressureTransitionPeriod, "5m0s");
+	assert.deepEqual(policy.enforceNodeAllocatable, ["pods"]);
+	assert.equal(policy.failSwapOn, true);
+	assert.deepEqual(policy.memorySwap, { swapBehavior: "NoSwap" });
+	assert.equal(policy.containerLogMaxSize, "10Mi");
+	assert.equal(policy.containerLogMaxFiles, 5);
+	assert.equal(policy.imageGCHighThresholdPercent, 75);
+	assert.equal(policy.imageGCLowThresholdPercent, 65);
+	const journal = read("k3s-journald.conf");
+	assert.match(journal, /^SystemMaxUse=512M$/mu);
+	assert.match(journal, /^RuntimeMaxUse=128M$/mu);
+	assert.match(journal, /^MaxRetentionSec=7day$/mu);
 });
 
 await test("a Go duration reads in seconds, and anything else is refused", () => {
@@ -235,3 +261,101 @@ await test(
 		assert.notEqual(rendered("--host", "a&b.example.org", "--email", "a@example.org").status, 0);
 	},
 );
+
+const nodeStatus = {
+	capacity: { memory: "16372036Ki", cpu: "4" },
+	allocatable: { memory: "14537028Ki", cpu: "3500m" },
+};
+
+/** Run the installer's operator-facing check against recorded API responses, with real Helm parsing. */
+function checkKubelet(live: Record<string, unknown>, status: Record<string, unknown> = nodeStatus) {
+	const directory = mkdtempSync(path.join(tmpdir(), "hephaestus-kubelet-"));
+	try {
+		writeFileSync(path.join(directory, "configz.json"), JSON.stringify({ kubeletconfig: live }));
+		writeFileSync(
+			path.join(directory, "nodes.json"),
+			JSON.stringify({ items: [{ metadata: { name: "one-host" }, status }] }),
+		);
+		const calls = path.join(directory, "calls");
+		writeFileSync(calls, "");
+		writeFileSync(
+			path.join(directory, "kubectl"),
+			`#!/bin/sh
+set -eu
+printf '%s\\n' "$*" >> "$KUBELET_FIXTURE/calls"
+case "$*" in
+'get nodes -o json') cat "$KUBELET_FIXTURE/nodes.json" ;;
+'get --raw /api/v1/nodes/one-host/proxy/configz') cat "$KUBELET_FIXTURE/configz.json" ;;
+*) echo "unexpected cluster command" >&2; exit 1 ;;
+esac
+`,
+			{ mode: 0o755 },
+		);
+		const result = spawnSync("sh", [path.join(PLATFORM, "k3s-install.sh"), "--verify-kubelet"], {
+			encoding: "utf8",
+			timeout: 30_000,
+			env: {
+				...process.env,
+				PATH: `${directory}${path.delimiter}${process.env.PATH ?? ""}`,
+				KUBELET_FIXTURE: directory,
+			},
+		});
+		return { ...result, calls: readFileSync(calls, "utf8").trim().split("\n").filter(Boolean) };
+	} finally {
+		rmSync(directory, { recursive: true, force: true });
+	}
+}
+
+await test("the operator can repeat the effective-policy check without a cluster mutation", () => {
+	const [wanted] = documents(read("k3s-kubelet.yaml"));
+	assert.ok(wanted);
+	for (let run = 0; run < 2; run += 1) {
+		const result = checkKubelet({
+			...wanted,
+			address: "0.0.0.0",
+			authentication: { anonymous: { enabled: false } },
+		});
+		assert.equal(result.status, 0, result.stderr);
+		assert.match(result.stdout, /Effective kubelet policy and node allocatable match/u);
+		assert.deepEqual(result.calls, [
+			"get nodes -o json",
+			"get --raw /api/v1/nodes/one-host/proxy/configz",
+		]);
+	}
+});
+
+await test("an overridden or absent kubelet budget stops the upgrade check", () => {
+	const [wanted] = documents(read("k3s-kubelet.yaml"));
+	assert.ok(wanted);
+	for (const [key, value] of [
+		["kubeReserved", null],
+		["evictionSoft", {}],
+		["failSwapOn", false],
+		["enforceNodeAllocatable", ["pods", "system-reserved"]],
+		["imageGCHighThresholdPercent", 85],
+		["containerLogMaxFiles", 20],
+	] as const) {
+		const result = checkKubelet({ ...wanted, [key]: value });
+		assert.notEqual(result.status, 0, key);
+		assert.match(result.stderr, /effective kubelet policy differs/u);
+		assert.ok(result.stderr.includes(key), result.stderr);
+	}
+});
+
+await test("allocatable must subtract reserves and the hard floor, without subtracting the soft floor", () => {
+	const [wanted] = documents(read("k3s-kubelet.yaml"));
+	assert.ok(wanted);
+	const capacity = { memory: "16Gi", cpu: "4000m" };
+	const correct = { memory: "14592Mi", cpu: "3.5" };
+	assert.equal(checkKubelet(wanted, { capacity, allocatable: correct }).status, 0);
+	for (const allocatable of [
+		{ ...correct, memory: "16Gi" },
+		{ ...correct, memory: "13568Mi" },
+		{ ...correct, cpu: "4" },
+		{ cpu: "3500m" },
+	]) {
+		const result = checkKubelet(wanted, { capacity, allocatable });
+		assert.notEqual(result.status, 0);
+		assert.match(result.stderr, /node allocatable does not enforce/u);
+	}
+});

@@ -562,6 +562,7 @@ Each release publishes the files of the one-host install as signed assets.
 | `k3s-config.yaml` | The k3s configuration: the kubelet configuration file, and no bundled Traefik. |
 | `k3s-kubelet.yaml` | A limit of 4096 processes for each Pod, the shutdown grace period, the memory and CPU reserved for k3s and the host, and the eviction thresholds. |
 | `k3s-logind.conf` | How long logind lets the kubelet hold a shutdown. |
+| `k3s-journald.conf` | Host journal limits: 512 MiB on disk, 128 MiB in memory, and seven days. |
 | `k3s-values.yaml` | The chart values of every one-host install: the Gateway, the Traefik Pods, the Secret names, the sandbox namespace, and reviews with repository checkouts. |
 
 `k3s-platform.yaml` contains these add-ons:
@@ -592,8 +593,31 @@ Pods cannot request all of the host's memory.
 `k3s-kubelet.yaml` reserves 1 GiB and 250m CPU for k3s, which runs the API server, the kubelet and containerd in one process of about 1 GB.
 It reserves 512 MiB and 250m CPU for the host's own services.
 The kubelet evicts Pods when less than 256 MiB of memory is available, before the kernel's out-of-memory killer stops a process on the host.
-Thus, a host of 16 GiB and 4 vCPU gives Pods about 13.9 GiB and 3.5 CPUs.
-The installer restarts k3s when this file changes, so the next run of the installer applies the reservations to an existing host.
+For a measured Node capacity of 16 GiB and 4 vCPU, this leaves 14 592 MiB (14.25 GiB) and 3.5 CPUs for Pods.
+The installer restarts k3s when this file changes.
+After the node becomes ready, it reads the kubelet configuration endpoint and Node allocatable.
+It stops before the application upgrade if the configured policy is absent or overridden.
+Allocatable must equal measured capacity less the reservations and the hard memory floor.
+The soft threshold does not reduce allocatable again.
+Only Pod allocatable is enforced. The reservations do not impose hard memory caps on the host or k3s system slices.
+To repeat these read-only cluster checks with your current kubeconfig, run `sh k3s-install.sh --verify-kubelet`.
+The command uses Helm locally to parse the policy; it does not change the cluster.
+
+Memory below 1 GiB for one minute triggers soft eviction, with at most 120 seconds of Pod grace.
+The kubelet targets an additional 256 MiB of reclaim and holds a pressure condition for five minutes.
+Application admission must stop new background work before these recovery thresholds.
+Container logs rotate at 10 MiB with at most five files per container.
+Image garbage collection starts at 75 percent disk use and targets 65 percent.
+It does not reclaim live volumes or database files.
+The installer bounds the host journal and restarts journald only when its policy changes.
+
+Host swap must be disabled, including at boot.
+The installer rejects active swap, and the kubelet requires `failSwapOn=true` and `NoSwap`.
+These policies do not qualify a smaller container memory limit or a higher review count.
+Before enabling either, measure synchronized node peaks, pressure, queue waits, and OOM counters under the reference load.
+A pressure rehearsal must show application backoff before soft eviction, with no OOM.
+Record the distribution, kernel, CPU count, effective policy, and observed log and image reclamation.
+The release host smoke checks installation and idempotency on Ubuntu 24.04; other host shapes need their own qualification.
 
 ### Requirements
 
@@ -617,6 +641,7 @@ The installer stops before it changes the host when one of these checks fails. E
 | Input | The host name, the address, the OAuth client ID, and the admin list have a strict format. |
 | Size | The host has 4 CPUs and at least 15 GiB of memory. Below 30 GiB, the installer adds the `small-16gib.yaml` profile. |
 | Clock | NTP synchronizes the clock. |
+| Swap | No swap device or file is active. The kubelet also refuses swap. |
 | Ports | No other program listens on port 80 or 443. The installer checks this before k3s runs. |
 | Host firewall | If `ufw` is active, it allows `80/tcp` and `443/tcp` by a port rule or by the `Nginx`, `Apache`, or `WWW` profile. If `firewalld` is active, the zone of the default route allows `http` and `https`, or ports 80 and 443. Otherwise the installer stops and gives the command to run. |
 | DNS | The host name resolves to this host. Before k3s runs, the installer serves a random token on port 80 for a moment, and it fetches the token through the host name. |
@@ -642,7 +667,7 @@ If your network cannot reach its own public address, the DNS check fails. Then r
 
    ```bash
    release="https://github.com/hephaestus-build/Hephaestus/releases/download/v$VERSION"
-   for file in k3s-install.sh k3s-platform.yaml k3s-certificates.yaml k3s-config.yaml k3s-kubelet.yaml k3s-logind.conf k3s-values.yaml; do
+   for file in k3s-install.sh k3s-platform.yaml k3s-certificates.yaml k3s-config.yaml k3s-kubelet.yaml k3s-logind.conf k3s-journald.conf k3s-values.yaml; do
      curl -fsSLO "$release/$file"
      curl -fsSLO "$release/$file.sigstore.json"
      cosign verify-blob --bundle "$file.sigstore.json" \
