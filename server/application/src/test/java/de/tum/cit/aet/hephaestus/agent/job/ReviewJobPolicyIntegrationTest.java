@@ -382,7 +382,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
                 jobs,
                 mock(DefaultReviewExecutionHandler.class),
                 mock(PracticePiAdapter.class),
-                mock(WorkerJwtIssuer.class),
+                mock(AttemptTokenIssuer.class),
                 sandboxes,
                 SandboxTestLimits.PROPERTIES,
                 mock(AsyncTaskExecutor.class),
