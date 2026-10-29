@@ -42,7 +42,7 @@ await test("the kubelet reserves memory for k3s and the host, and states every h
 	);
 });
 
-await test("the node policy bounds soft eviction, logs, images, and swap without hard-capping host slices", () => {
+await test("the node policy keeps only hard eviction and bounds logs, images, and swap", () => {
 	const [policy] = documents(read("k3s-kubelet.yaml"));
 	assert.ok(policy);
 	assert.deepEqual(policy.evictionHard, {
@@ -52,9 +52,9 @@ await test("the node policy bounds soft eviction, logs, images, and swap without
 		"imagefs.available": "15%",
 		"imagefs.inodesFree": "5%",
 	});
-	assert.deepEqual(policy.evictionSoft, { "memory.available": "1Gi" });
-	assert.deepEqual(policy.evictionSoftGracePeriod, { "memory.available": "1m0s" });
-	assert.equal(policy.evictionMaxPodGracePeriod, 120);
+	assert.deepEqual(policy.evictionSoft, {});
+	assert.deepEqual(policy.evictionSoftGracePeriod, {});
+	assert.equal(policy.evictionMaxPodGracePeriod, undefined);
 	assert.deepEqual(policy.evictionMinimumReclaim, { "memory.available": "256Mi" });
 	assert.equal(policy.evictionPressureTransitionPeriod, "5m0s");
 	assert.deepEqual(policy.enforceNodeAllocatable, ["pods"]);
@@ -265,10 +265,16 @@ await test(
 const nodeStatus = {
 	capacity: { memory: "16372036Ki", cpu: "4" },
 	allocatable: { memory: "14537028Ki", cpu: "3500m" },
+	nodeInfo: { osImage: "Ubuntu 24.04.4 LTS", kernelVersion: "6.8.0-100-generic" },
 };
 
 /** Run the installer's operator-facing check against recorded API responses, with real Helm parsing. */
-function checkKubelet(live: Record<string, unknown>, status: Record<string, unknown> = nodeStatus) {
+function checkKubelet(
+	live: Record<string, unknown>,
+	status: Record<string, unknown> = nodeStatus,
+	args: readonly string[] = [],
+	settlesAfterRestart = false,
+) {
 	const directory = mkdtempSync(path.join(tmpdir(), "hephaestus-kubelet-"));
 	try {
 		writeFileSync(path.join(directory, "configz.json"), JSON.stringify({ kubeletconfig: live }));
@@ -276,6 +282,18 @@ function checkKubelet(live: Record<string, unknown>, status: Record<string, unkn
 			path.join(directory, "nodes.json"),
 			JSON.stringify({ items: [{ metadata: { name: "one-host" }, status }] }),
 		);
+		if (settlesAfterRestart) {
+			writeFileSync(path.join(directory, "settling"), "");
+			writeFileSync(
+				path.join(directory, "stale-nodes.json"),
+				JSON.stringify({
+					items: [
+						{ metadata: { name: "one-host" }, status: { ...status, allocatable: status.capacity } },
+					],
+				}),
+			);
+		}
+		writeFileSync(path.join(directory, "sleep"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
 		const calls = path.join(directory, "calls");
 		writeFileSync(calls, "");
 		writeFileSync(
@@ -284,22 +302,33 @@ function checkKubelet(live: Record<string, unknown>, status: Record<string, unkn
 set -eu
 printf '%s\\n' "$*" >> "$KUBELET_FIXTURE/calls"
 case "$*" in
-'get nodes -o json') cat "$KUBELET_FIXTURE/nodes.json" ;;
-'get --raw /api/v1/nodes/one-host/proxy/configz') cat "$KUBELET_FIXTURE/configz.json" ;;
+'get nodes -o json')
+if [ -f "$KUBELET_FIXTURE/settling" ]; then cat "$KUBELET_FIXTURE/stale-nodes.json"; exit 0; fi
+cat "$KUBELET_FIXTURE/nodes.json" ;;
+'get --raw /api/v1/nodes/one-host/proxy/configz')
+if [ -f "$KUBELET_FIXTURE/settling" ]; then
+ if [ ! -f "$KUBELET_FIXTURE/body-ready" ]; then touch "$KUBELET_FIXTURE/body-ready"; exit 1; fi
+ rm "$KUBELET_FIXTURE/settling"
+fi
+cat "$KUBELET_FIXTURE/configz.json" ;;
 *) echo "unexpected cluster command" >&2; exit 1 ;;
 esac
 `,
 			{ mode: 0o755 },
 		);
-		const result = spawnSync("sh", [path.join(PLATFORM, "k3s-install.sh"), "--verify-kubelet"], {
-			encoding: "utf8",
-			timeout: 30_000,
-			env: {
-				...process.env,
-				PATH: `${directory}${path.delimiter}${process.env.PATH ?? ""}`,
-				KUBELET_FIXTURE: directory,
+		const result = spawnSync(
+			"sh",
+			[path.join(PLATFORM, "k3s-install.sh"), "--verify-kubelet", ...args],
+			{
+				encoding: "utf8",
+				timeout: 30_000,
+				env: {
+					...process.env,
+					PATH: `${directory}${path.delimiter}${process.env.PATH ?? ""}`,
+					KUBELET_FIXTURE: directory,
+				},
 			},
-		});
+		);
 		return { ...result, calls: readFileSync(calls, "utf8").trim().split("\n").filter(Boolean) };
 	} finally {
 		rmSync(directory, { recursive: true, force: true });
@@ -329,7 +358,7 @@ await test("an overridden or absent kubelet budget stops the upgrade check", () 
 	assert.ok(wanted);
 	for (const [key, value] of [
 		["kubeReserved", null],
-		["evictionSoft", {}],
+		["evictionSoft", { "memory.available": "1Gi" }],
 		["failSwapOn", false],
 		["enforceNodeAllocatable", ["pods", "system-reserved"]],
 		["imageGCHighThresholdPercent", 85],
@@ -339,23 +368,76 @@ await test("an overridden or absent kubelet budget stops the upgrade check", () 
 		assert.notEqual(result.status, 0, key);
 		assert.match(result.stderr, /effective kubelet policy differs/u);
 		assert.ok(result.stderr.includes(key), result.stderr);
+		assert.match(result.stderr, /did not converge after 31 attempts/u);
+		assert.equal(result.calls.filter((call) => call === "get nodes -o json").length, 31);
 	}
 });
 
-await test("allocatable must subtract reserves and the hard floor, without subtracting the soft floor", () => {
+await test("allocatable matches measured capacity less reserves and the hard floor", () => {
 	const [wanted] = documents(read("k3s-kubelet.yaml"));
 	assert.ok(wanted);
 	const capacity = { memory: "16Gi", cpu: "4000m" };
 	const correct = { memory: "14592Mi", cpu: "3.5" };
-	assert.equal(checkKubelet(wanted, { capacity, allocatable: correct }).status, 0);
+	assert.equal(checkKubelet(wanted, { ...nodeStatus, capacity, allocatable: correct }).status, 0);
 	for (const allocatable of [
 		{ ...correct, memory: "16Gi" },
 		{ ...correct, memory: "13568Mi" },
 		{ ...correct, cpu: "4" },
 		{ cpu: "3500m" },
 	]) {
-		const result = checkKubelet(wanted, { capacity, allocatable });
+		const result = checkKubelet(wanted, { ...nodeStatus, capacity, allocatable });
 		assert.notEqual(result.status, 0);
 		assert.match(result.stderr, /node allocatable does not enforce/u);
 	}
+});
+
+await test("soft eviction cannot be re-enabled through a startup override", () => {
+	const [wanted] = documents(read("k3s-kubelet.yaml"));
+	assert.ok(wanted);
+	for (const key of ["evictionSoft", "evictionSoftGracePeriod"]) {
+		for (const value of [null, {}]) {
+			const allowed = checkKubelet({ ...wanted, [key]: value });
+			assert.equal(allowed.status, 0, allowed.stderr);
+		}
+		const refused = checkKubelet({ ...wanted, [key]: { "memory.available": "1Gi" } });
+		assert.notEqual(refused.status, 0);
+		assert.match(refused.stderr, /effective kubelet policy differs/u);
+	}
+});
+
+await test("an unknown host requires explicit qualification override without skipping resource checks", () => {
+	const [wanted] = documents(read("k3s-kubelet.yaml"));
+	assert.ok(wanted);
+	for (const nodeInfo of [
+		{ osImage: "Ubuntu 26.04.1 LTS", kernelVersion: "7.0.0-34-generic" },
+		{ osImage: "Ubuntu 24.04.4 LTS", kernelVersion: "7.0.0-34-generic" },
+		{ osImage: "Debian GNU/Linux 13", kernelVersion: "6.8.0-100-generic" },
+		{},
+	]) {
+		const status = { ...nodeStatus, nodeInfo };
+		const refused = checkKubelet(wanted, status);
+		assert.notEqual(refused.status, 0);
+		assert.match(refused.stderr, /unqualified host/u);
+		const allowed = checkKubelet(wanted, status, ["--allow-unqualified-host"]);
+		assert.equal(allowed.status, 0, allowed.stderr);
+		assert.match(allowed.stderr, /explicit host qualification override/u);
+		const badPolicy = checkKubelet({ ...wanted, kubeReserved: null }, status, [
+			"--allow-unqualified-host",
+		]);
+		assert.notEqual(badPolicy.status, 0);
+		assert.match(badPolicy.stderr, /effective kubelet policy differs/u);
+	}
+});
+
+await test("verification waits for configz and refreshed allocatable after restart", () => {
+	const [wanted] = documents(read("k3s-kubelet.yaml"));
+	assert.ok(wanted);
+	const result = checkKubelet(wanted, nodeStatus, [], true);
+	assert.equal(result.status, 0, result.stderr);
+	assert.match(result.stdout, /Effective kubelet policy and node allocatable match/u);
+	assert.equal(result.calls.filter((call) => call === "get nodes -o json").length, 3);
+	assert.equal(
+		result.calls.filter((call) => call === "get --raw /api/v1/nodes/one-host/proxy/configz").length,
+		3,
+	);
 });

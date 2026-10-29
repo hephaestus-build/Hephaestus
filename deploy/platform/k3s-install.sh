@@ -51,6 +51,7 @@ usage: sh k3s-install.sh --version X.Y.Z --host NAME --email ADDRESS [options]
   --skip-check NAME          skip one host check: dns, size or clock. Repeat it for each.
   --render-certificates      print the certificates file that this run would install, and stop
   --verify-kubelet           check the running kubelet policy and allocatable, and stop
+  --allow-unqualified-host   explicitly permit a host outside the Ubuntu 24.04/kernel 6.8 baseline
 
 The environment variable GITHUB_OAUTH_CLIENT_SECRET, when set, goes into the release Secret.
 EOF
@@ -78,6 +79,7 @@ LOCK=
 SKIPPED=
 RENDER=false
 VERIFY=false
+ALLOW_UNQUALIFIED_HOST=false
 while [ $# -gt 0 ]; do
 	case $1 in
 	--version | --host | --email | --dns01-issuer | --github-client-id | --bootstrap-admins | --certificates | --lock | --skip-check)
@@ -108,6 +110,10 @@ while [ $# -gt 0 ]; do
 		;;
 	--verify-kubelet)
 		VERIFY=true
+		shift
+		;;
+	--allow-unqualified-host)
+		ALLOW_UNQUALIFIED_HOST=true
 		shift
 		;;
 	--render-certificates)
@@ -178,6 +184,18 @@ cleanup() {
 trap cleanup EXIT
 trap 'exit 130' INT TERM
 
+# Ubuntu 24.04 with its GA kernel is the declared baseline. Other families require an
+# explicit rehearsal override; this gate does not substitute for the loaded host acceptance.
+check_host_profile() {
+	if matches "$1" 'Ubuntu 24\.04(\.[0-9]+)?( LTS)?' &&
+		matches "$2" '6\.8\.[0-9]+([-+][A-Za-z0-9._+-]+)?'; then
+		return
+	fi
+	[ "$ALLOW_UNQUALIFIED_HOST" = true ] ||
+		die "unqualified host: $1 / $2; use --allow-unqualified-host only for an authorized rehearsal"
+	warn "explicit host qualification override: $1 / $2; resource policy checks remain mandatory"
+}
+
 # Helm already ships with the installer. Use its YAML parser rather than parsing YAML in shell.
 verify_kubelet() {
 	policy="$TEMP/kubelet-policy"
@@ -186,18 +204,37 @@ verify_kubelet() {
 	printf '{{ toJson .Values }}\n' >"$policy/templates/policy.yaml"
 	helm template kubelet-policy "$policy" --values "$HERE/k3s-kubelet.yaml" >"$TEMP/rendered.yaml"
 	sed '/^#/d; /^---$/d' "$TEMP/rendered.yaml" >"$TEMP/wanted.json"
-	kubectl get nodes -o json >"$TEMP/nodes.json"
+	# Ready can predate a restart. Allow configz and Node allocatable to converge together.
+	verification_attempt=0
+	until check_kubelet_snapshot; do
+		verification_attempt=$((verification_attempt + 1))
+		[ "$verification_attempt" -lt 31 ] || die "effective kubelet verification did not converge after 31 attempts"
+		sleep 2
+	done
+}
+
+check_kubelet_snapshot() {
+	kubectl get nodes -o json >"$TEMP/nodes.json" || return 1
 	[ "$(jq '.items | length' "$TEMP/nodes.json")" = 1 ] || die "the one-host policy requires exactly one node"
-	node=$(jq -er '.items[0].metadata.name' "$TEMP/nodes.json")
-	kubectl get --raw "/api/v1/nodes/$node/proxy/configz" >"$TEMP/configz.json"
+	node=$(jq -er '.items[0].metadata.name' "$TEMP/nodes.json") || return 1
+	host_os=$(jq -r '.items[0].status.nodeInfo.osImage // "unknown"' "$TEMP/nodes.json") || return 1
+	host_kernel=$(jq -r '.items[0].status.nodeInfo.kernelVersion // "unknown"' "$TEMP/nodes.json") || return 1
+	check_host_profile "$host_os" "$host_kernel"
+	kubectl get --raw "/api/v1/nodes/$node/proxy/configz" >"$TEMP/configz.json" || return 1
 	# Configz adds defaults. Compare each configured leaf, including false and zero values.
 	jq -e --slurpfile wanted "$TEMP/wanted.json" '
 		.kubeletconfig as $live | $wanted[0] | del(.kind, .apiVersion) |
-		[paths as $path | select((getpath($path) | type) != "object") |
-		 select(getpath($path) != ($live | getpath($path))) |
+		[paths as $path | getpath($path) as $want |
+		 select(($want | type) != "object" or ($want | length) == 0) |
+		 ($live | getpath($path)) as $actual |
+		 select(if ($want | type) == "object" then $actual != null and $actual != {}
+		        else $want != $actual end) |
 		 ($path | map(tostring) | join("."))] |
 		if length == 0 then true else error("kubelet policy differs: " + join(", ")) end
-	' "$TEMP/configz.json" >/dev/null || die "effective kubelet policy differs from k3s-kubelet.yaml; check k3s startup flags and drop-ins"
+	' "$TEMP/configz.json" >/dev/null || {
+		warn "effective kubelet policy differs from k3s-kubelet.yaml; check k3s startup flags and drop-ins"
+		return 1
+	}
 	jq -e --slurpfile wanted "$TEMP/wanted.json" '
 		def quantity:
 		  tostring | capture("^(?<n>[0-9]+(?:\\.[0-9]+)?)(?<u>Ki|Mi|Gi|m)?$") |
@@ -210,7 +247,10 @@ verify_kubelet() {
 		if ($s.allocatable.memory | quantity) == $memory and
 		   (($s.allocatable.cpu | quantity) * 1000 | round) == ($cpu * 1000 | round)
 		then true else error("node allocatable differs from capacity less reservations and hard eviction floor") end
-	' "$TEMP/nodes.json" >/dev/null || die "node allocatable does not enforce the configured budget"
+	' "$TEMP/nodes.json" >/dev/null || {
+		warn "node allocatable does not enforce the configured budget"
+		return 1
+	}
 	say "Effective kubelet policy and node allocatable match k3s-kubelet.yaml"
 }
 
@@ -243,7 +283,7 @@ x86_64 | aarch64) ;;
 esac
 # shellcheck disable=SC1091 # The file of the host, not of this script.
 os=$(. /etc/os-release && printf '%s %s' "$NAME" "$VERSION_ID")
-[ "$os" = "Ubuntu 24.04" ] || warn "the release smoke tests Ubuntu 24.04, not $os"
+check_host_profile "$os" "$(uname -r)"
 memory=$(awk '/^MemTotal:/ { print $2 }' /proc/meminfo)
 PROFILE_16GIB=false
 if [ "$memory" -lt "$SMALL_MEMORY_KIB" ]; then PROFILE_16GIB=true; fi

@@ -31,12 +31,10 @@ evictionHard:
   nodefs.inodesFree: 5%
   imagefs.available: 15%
   imagefs.inodesFree: 5%
-# Application admission must back off before this recovery threshold is reached.
-evictionSoft:
-  memory.available: 1Gi
-evictionSoftGracePeriod:
-  memory.available: 1m0s
-evictionMaxPodGracePeriod: 120
+# Request overage ranks before priority during eviction. Stateful services can exceed their
+# requests, so leave soft eviction disabled until their request sizing is qualified.
+evictionSoft: {}
+evictionSoftGracePeriod: {}
 evictionMinimumReclaim:
   memory.available: 256Mi
 evictionPressureTransitionPeriod: 5m0s

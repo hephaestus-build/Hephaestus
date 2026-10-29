@@ -602,10 +602,14 @@ The soft threshold does not reduce allocatable again.
 Only Pod allocatable is enforced. The reservations do not impose hard memory caps on the host or k3s system slices.
 To repeat these read-only cluster checks with your current kubeconfig, run `sh k3s-install.sh --verify-kubelet`.
 The command uses Helm locally to parse the policy; it does not change the cluster.
+After a restart, verification allows 31 checks with two-second pauses for the Node status and configuration endpoint to converge.
 
-Memory below 1 GiB for one minute triggers soft eviction, with at most 120 seconds of Pod grace.
+Soft eviction is disabled until stateful-service requests and admission protection are qualified.
+For memory eviction, usage above requests ranks before Pod priority.
+Thus, a higher priority cannot protect PostgreSQL or NATS above their requests from a review below its request.
+The existing hard thresholds remain emergency recovery boundaries.
 The kubelet targets an additional 256 MiB of reclaim and holds a pressure condition for five minutes.
-Application admission must stop new background work before these recovery thresholds.
+Application admission must stop new background work before those boundaries.
 Container logs rotate at 10 MiB with at most five files per container.
 Image garbage collection starts at 75 percent disk use and targets 65 percent.
 It does not reclaim live volumes or database files.
@@ -615,15 +619,30 @@ Host swap must be disabled, including at boot.
 The installer rejects active swap, and the kubelet requires `failSwapOn=true` and `NoSwap`.
 These policies do not qualify a smaller container memory limit or a higher review count.
 Before enabling either, measure synchronized node peaks, pressure, queue waits, and OOM counters under the reference load.
-A pressure rehearsal must show application backoff before soft eviction, with no OOM.
-Record the distribution, kernel, CPU count, effective policy, and observed log and image reclamation.
-The release host smoke checks installation and idempotency on Ubuntu 24.04; other host shapes need their own qualification.
+The verifier accepts the declared Ubuntu 24.04/kernel 6.8 GA baseline and rejects unknown OS or kernel families.
+The optional `--allow-unqualified-host` flag permits an explicitly authorized rehearsal on another family.
+It preserves all effective-policy and allocatable checks.
+A matching host family alone does not prove installation, pressure behavior, or loaded capacity.
+
+The current proof consists of policy/parser fixtures, read-only Node API observations, and rendered chart checks.
+The release host smoke targets Ubuntu 24.04 on both architectures; this change has not run a full host installation.
+
+Before target-host rollout, the release lane must rehearse the exact assets and pinned k3s release on disposable Ubuntu 26.04/kernel 7 with 16 GiB.
+Use the qualification override for that rehearsal and record the actual OS, kernel, CPU count, capacity, and allocatable.
+Run the installer, then repeat it and verify stateful Pod identity and service continuity.
+The second run must preserve unchanged configuration and avoid unnecessary k3s or journald restarts.
+Verify disabled swap and its boot activation settings.
+
+Apply pressure with PostgreSQL and NATS above their requests and review/turn Pods below theirs.
+Require application backoff and recovery before hard eviction, with no database/broker loss or OOM.
+Observe container and journal rollover, image GC at 75/65, and image pull/start latency.
+Retain the command logs, effective configuration, pressure/OOM counters, and synchronized footprint samples as release evidence.
 
 ### Requirements
 
 - A host of 4 vCPU, 32 GiB of memory, and 150 GiB of disk, as [Profiles](#profiles) gives for `small.yaml`.
   On a host of 16 GiB, the installer adds `small-16gib.yaml`, and each upgrade stops reviews and Heph for a while.
-- Ubuntu 24.04 on `amd64` or `arm64`. k3s supports other distributions, but no job tests them.
+- Ubuntu 24.04 with its 6.8 GA kernel on `amd64` or `arm64`. Other OS or kernel families require explicit qualification with `--allow-unqualified-host`.
 - A DNS A record for your host name that points to the public address of the host.
 - Ports 80 and 443 open from the internet, for `Let's Encrypt`, OAuth callbacks, and provider webhooks. Keep port 6443, the Kubernetes API, and port 10250, the kubelet, closed to the internet.
 - If `ufw` is active, rules that let in ports 80 and 443 and the k3s networks: `sudo ufw allow 80,443/tcp`, `sudo ufw allow from 10.42.0.0/16`, and `sudo ufw allow from 10.43.0.0/16`.
