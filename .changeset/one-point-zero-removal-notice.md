@@ -4,6 +4,10 @@
 
 0.95.0 is the last 0.x release and the required source for 1.0.
 
+The worker hub, its `POST /api/workers/exchange` and WebSocket `/api/workers/connect` endpoints, and its control and token settings are already removed in 0.95.0.
+Apply **Workers no longer connect to the server** in [this release's migration guide](https://github.com/hephaestus-build/Hephaestus/blob/main/MIGRATION.md) now.
+Workers use the database for coordination.
+
 1.0 supports the Helm chart on Kubernetes, including one host with k3s.
 The following settings, values and interfaces are deprecated for removal in 1.0.
 This notice does not remove them from 0.95.
@@ -20,13 +24,8 @@ An image rollback cannot undo that migration.
   Remove `SANDBOX_MEMORY_BYTES` (`hephaestus.sandbox.default-resource-limits.memory-bytes`), `DOCKER_GROUP_ID`, `SANDBOX_DOCKER_HOST`, `SANDBOX_DOCKER_TLS_VERIFY`, `SANDBOX_DOCKER_CERT_PATH`, `SANDBOX_DOCKER_OWNER` and `SANDBOX_DOCKER_CONTAINER_RUNTIME`.
   The `SANDBOX_DOCKER_*` properties are `hephaestus.sandbox.docker.host`, `.tls-verify`, `.cert-path`, `.owner` and `.container-runtime`.
   The already rejected names `SANDBOX_TLS_VERIFY`, `SANDBOX_CONTAINER_RUNTIME`, `hephaestus.sandbox.docker-host`, `hephaestus.sandbox.tls-verify`, `hephaestus.sandbox.cert-path`, `hephaestus.sandbox.container-runtime`, `hephaestus.sandbox.app-server-container-id` and `hephaestus.mentor.docker-cli` have no replacement in 1.0.
-- **Runtime roles and worker control:** the Spring profile aliases `webhook-server` and `worker-node` go. Use `prod,webhook` and `prod,worker`.
+- **Runtime roles:** the Spring profile aliases `webhook-server` and `worker-node` go. Use `prod,webhook` and `prod,worker`.
   Remove `NATS_ENABLED` (`hephaestus.sync.nats.enabled`): the runtime role selects whether it uses NATS.
-  The worker hub and its `POST /api/workers/exchange` and WebSocket `/api/workers/connect` endpoints go.
-  Remove `hephaestus.worker.control.endpoint`, `.registration-token` and `.handshake-timeout`.
-  Remove `hephaestus.worker.hub.token.issuer`, `.audience`, `.ttl`, `.registration-token`, `.keys` (entries `kid` and `private-key`) and `.active-kid`.
-  This includes `HEPHAESTUS_WORKER_CONTROL_ENDPOINT`, `HEPHAESTUS_WORKER_CONTROL_REGISTRATION_TOKEN`, `HEPHAESTUS_WORKER_CONTROL_HANDSHAKE_TIMEOUT`, `HEPHAESTUS_WORKER_HUB_TOKEN_ISSUER`, `HEPHAESTUS_WORKER_HUB_TOKEN_AUDIENCE`, `HEPHAESTUS_WORKER_HUB_TOKEN_TTL`, `HEPHAESTUS_WORKER_HUB_TOKEN_REGISTRATION_TOKEN`, `HEPHAESTUS_WORKER_HUB_TOKEN_KEYS`, `HEPHAESTUS_WORKER_HUB_TOKEN_ACTIVE_KID` and the Compose input `HEPHAESTUS_WORKER_REGISTRATION_TOKEN`.
-  Workers use the database for coordination.
 - **Capacity:** `HEPHAESTUS_WORKER_CAPACITY_MENTOR_MAX` (`hephaestus.worker.capacity.mentor-max`) moves to the conversation runtime in 1.0.
   `HEPHAESTUS_WORKER_CAPACITY_REVIEW_MAX` (`hephaestus.worker.capacity.review-max`) moves with review orchestration.
   The Compose aliases `HEPHAESTUS_WORKER_MENTOR_MAX` and `HEPHAESTUS_WORKER_REVIEW_MAX` go with Compose.
