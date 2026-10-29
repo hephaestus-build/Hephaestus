@@ -12,7 +12,7 @@ data:
   maps.conf: |
     map $host $workspace_tenant {
       default 0;
-      "~^(?!(?:{{ $reserved }})[.]{{ $domain }}$)(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9][.]{{ $domain }}$" 1;
+      "~^(?!(?:{{ $reserved }})[.]{{ $domain }}$)(?![a-z0-9-]*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9][.]{{ $domain }}$" 1;
     }
     map $host $workspace_suffix {
       default 0;

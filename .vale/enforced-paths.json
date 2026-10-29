@@ -103,6 +103,7 @@
 	"docs/admin/backup-restore.mdx",
 	"docs/admin/browser-extension.mdx",
 	"docs/admin/compatibility-policy.mdx",
+	"docs/admin/compose-to-kubernetes.mdx",
 	"docs/admin/configuration-readiness.mdx",
 	"docs/admin/configuration-reference.mdx",
 	"docs/admin/credential-key-rotation.mdx",

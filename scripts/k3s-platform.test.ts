@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -184,16 +184,25 @@ await test("the Gateway, its certificate, the installer and the smoke name one n
 
 /** The certificates file that k3s-install.sh would install for these arguments. */
 function rendered(...args: string[]) {
+	return renderedAt(PLATFORM, ...args);
+}
+
+function renderedAt(platform: string, ...args: string[]) {
+	return installerAt(platform, ...args, "--render-certificates");
+}
+
+function installerAt(platform: string, ...args: string[]) {
 	const result = spawnSync(
 		"sh",
-		[
-			path.join(PLATFORM, "k3s-install.sh"),
-			"--version",
-			"0.95.0",
-			...args,
-			"--render-certificates",
-		],
-		{ encoding: "utf8", timeout: 30_000 },
+		[path.join(platform, "k3s-install.sh"), "--version", "0.95.0", ...args],
+		{
+			encoding: "utf8",
+			timeout: 30_000,
+			env: {
+				...process.env,
+				PATH: `${path.join(platform, "bin")}${path.delimiter}${process.env.PATH ?? ""}`,
+			},
+		},
 	);
 	return { status: result.status, stderr: result.stderr, resources: documents(result.stdout) };
 }
@@ -277,6 +286,8 @@ function checkKubelet(
 ) {
 	const directory = mkdtempSync(path.join(tmpdir(), "hephaestus-kubelet-"));
 	try {
+		cpSync(PLATFORM, directory, { recursive: true });
+		writeFileSync(path.join(directory, "site.yaml"), "workspaceSubdomains:\n  enabled: true\n");
 		writeFileSync(path.join(directory, "configz.json"), JSON.stringify({ kubeletconfig: live }));
 		writeFileSync(
 			path.join(directory, "nodes.json"),
@@ -318,7 +329,7 @@ esac
 		);
 		const result = spawnSync(
 			"sh",
-			[path.join(PLATFORM, "k3s-install.sh"), "--verify-kubelet", ...args],
+			[path.join(directory, "k3s-install.sh"), "--verify-kubelet", ...args],
 			{
 				encoding: "utf8",
 				timeout: 30_000,
@@ -440,4 +451,65 @@ await test("verification waits for configz and refreshed allocatable after resta
 		result.calls.filter((call) => call === "get --raw /api/v1/nodes/one-host/proxy/configz").length,
 		3,
 	);
+});
+
+await test("repeat installs require an explicit certificate choice before changing the host", () => {
+	const directory = mkdtempSync(path.join(tmpdir(), "hephaestus-repeat-install-"));
+	try {
+		cpSync(PLATFORM, directory, { recursive: true });
+		mkdirSync(path.join(directory, "bin"));
+		// A regressed guard must never reach a real sudo during a unit test.
+		writeFileSync(path.join(directory, "bin", "sudo"), "#!/bin/sh\nexit 97\n", { mode: 0o755 });
+		for (const enabled of [true, false]) {
+			writeFileSync(
+				path.join(directory, "site.yaml"),
+				`workspaceSubdomains:\n  enabled: ${String(enabled)}\n`,
+			);
+			const args = ["--host", "heph.example.org", "--email", "ops@example.org"];
+			const implicit = installerAt(directory, ...args);
+			assert.notEqual(implicit.status, 0);
+			assert.match(implicit.stderr, /site.yaml exists: choose/u);
+			assert.deepEqual(implicit.resources, []);
+			const wildcard = renderedAt(
+				directory,
+				...args,
+				"--workspace-subdomains",
+				"--dns01-issuer",
+				"zone-dns",
+			);
+			assert.equal(wildcard.status, 0, wildcard.stderr);
+			assert.deepEqual(
+				named(wildcard.resources, "Certificate", "hephaestus-tls")?.spec,
+				named(
+					rendered(...args, "--workspace-subdomains", "--dns01-issuer", "zone-dns").resources,
+					"Certificate",
+					"hephaestus-tls",
+				)?.spec,
+			);
+			const customFile = path.join(directory, "saved-certificates.yaml");
+			writeFileSync(
+				customFile,
+				wildcard.resources.map((resource) => JSON.stringify(resource)).join("\n---\n"),
+				{ mode: 0o600 },
+			);
+			const custom = renderedAt(directory, ...args, "--certificates", customFile);
+			assert.equal(custom.status, 0, custom.stderr);
+			assert.deepEqual(custom.resources, wildcard.resources);
+			const standard = renderedAt(directory, ...args, "--standard-certificates");
+			assert.equal(standard.status, 0, standard.stderr);
+			const issuer = named(standard.resources, "ClusterIssuer", "gateway");
+			assert.ok(issuer && isRecord(issuer.spec) && isRecord(issuer.spec.acme));
+			assert.equal(issuer.spec.acme.server, "https://acme-v02.api.letsencrypt.org/directory");
+			const preview = renderedAt(directory, ...args);
+			assert.equal(preview.status, 0, preview.stderr);
+			assert.deepEqual(preview.resources, standard.resources);
+			assert.notEqual(
+				renderedAt(directory, ...args, "--standard-certificates", "--certificates", customFile)
+					.status,
+				0,
+			);
+		}
+	} finally {
+		rmSync(directory, { recursive: true, force: true });
+	}
 });

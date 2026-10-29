@@ -714,7 +714,8 @@ If your network cannot reach its own public address, the DNS check fails. Then r
    ```
 
    For a first try, add `--staging`: the `Let's Encrypt` staging service has higher rate limits, and no browser trusts its certificate.
-   Later, run the installer again without `--staging`, and delete the Secret `traefik/hephaestus-tls` to get a trusted certificate.
+   Later, run the installer again without `--staging`, with the explicit certificate choice described below.
+   Delete the Secret `traefik/hephaestus-tls` to get a trusted certificate.
    [First steps § 2](./first-steps#2-name-the-first-admin) explains the admin list.
 
 3. Keep the required keys of the release Secret outside the host, as [Keep the required keys outside the cluster](./secret-custody#keep-the-required-keys-outside-the-cluster) describes. For `kubectl` on this host, run `export KUBECONFIG=~/hephaestus/kubeconfig` first.
@@ -729,6 +730,27 @@ If the PostgreSQL volume exists and the Secret lacks the database login or an en
 The installer writes `site.yaml` only when the file does not exist.
 It holds the host name, the Kubernetes API endpoint, the OAuth client ID, the admin list, and `config.gitCheckoutEnabled: true`.
 Change the file to change these values, and run the installer again.
+
+On a repeat run, select certificates explicitly:
+
+- For standard apex certificates, pass `--standard-certificates`. Omit `--staging` to use the production issuer.
+- For standard workspace certificates, repeat `--workspace-subdomains --dns01-issuer NAME`.
+- For custom certificates, including workspace hosts, pass the intended manifest with `--certificates FILE`.
+  Keep its issuer and every required apex and wildcard name.
+
+This check prevents a repeat run from replacing wildcard TLS with an implicit apex-only certificate.
+`--render-certificates` previews the selected manifest without host changes and needs no repeat-install choice.
+
+The installed manifest is root-only, mode 0600.
+Before using it with `--certificates`, copy it to a file that you own:
+
+```bash
+sudo install -m 0600 -o "$(id -u)" -g "$(id -g)" \
+  /var/lib/rancher/k3s/server/manifests/hephaestus-certificates.yaml ./saved-certificates.yaml
+```
+
+Then pass `--certificates ./saved-certificates.yaml`. This preserves the existing issuer, including a staging issuer.
+
 A new `GITHUB_OAUTH_CLIENT_SECRET` replaces the stored one and restarts the server.
 
 ### Certificate renewal
@@ -1134,6 +1156,12 @@ The restored database is readable only with the keys that sealed its values.
 Keep them as [Secret custody](./secret-custody#keep-the-required-keys-outside-the-cluster) describes.
 Restore the NATS JetStream data separately, as [Backup and restore](./backup-restore) describes.
 
+#### Isolated restore drill
+
+Run the following procedure only on a disposable, isolated clone.
+It changes control settings with clone lockdown SQL.
+Use [Recover the live installation](#recover-the-live-installation) for a live recovery.
+
 1. Upgrade the release with `postgresql.backup.restore.enabled=true`.
    Set `postgresql.backup.restore.time` to restore the database as it was at that time, for example `2026-10-24 18:00:00+00`.
    Leave it empty to restore the latest backup and every archived WAL segment.
@@ -1148,7 +1176,14 @@ Restore the NATS JetStream data separately, as [Backup and restore](./backup-res
    The Job retries while PostgreSQL still shuts down.
 3. Keep the clone isolated before any application code starts. Deny provider and model egress independently of silent mode.
 4. Upgrade with `postgresql.backup.restore.enabled=false`, `migration.enabled=false`, and server, webhook and worker replica counts of zero.
-   PostgreSQL alone replays the WAL up to the target. Wait for its readiness.
+   PostgreSQL alone replays the WAL up to the target.
+   Readiness does not prove that replay finished. Wait until this command prints `f`:
+
+   ```bash
+   kubectl -n hephaestus exec hephaestus-postgresql-0 -c postgresql -- \
+     sh -c 'exec psql -Atc "SELECT pg_is_in_recovery()" -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
+   ```
+
 5. Apply the lockdown SQL from the verified chart, before starting migrations or application roles:
 
    ```bash
@@ -1166,6 +1201,28 @@ Restore the NATS JetStream data separately, as [Backup and restore](./backup-res
 The restored database has the database password that it had at the backup.
 If `DATABASE_PASSWORD` changed since then, put the old value back in the Secret before step 3.
 Rehearse a restore on a copy of the instance before you need one.
+
+#### Recover the live installation
+
+1. Close traffic and provider reception. Stop application roles and sandboxes, and pause reconciliation.
+2. Keep a copy of the failed data and record the chosen recovery point and expected lost writes.
+3. Check whether `DATABASE_PASSWORD` changed after the recovery point. If it changed, restore the matching value in the Secret before startup.
+   Complete steps 1, 2 and 4 of the isolated drill with application replicas at zero.
+   Keep provider and model egress denied. Wait for `pg_is_in_recovery()` to return `f`.
+4. Do not apply `restore-clone-lockdown.sql` to the live recovery database.
+   Verify silent mode, delivery status, review triggers and conversation bindings against the intended live settings.
+5. Complete [Choose the broker recovery strategy](./production-operations-runbook#choose-the-broker-recovery-strategy-before-starting-consumers) before consumers start.
+   The default is to quarantine and recreate the instance's broker state, with recorded event loss.
+   Snapshot replay needs a separate drill. A matching timestamp or recovery fence alone does not make it safe.
+6. Enable migrations and start the server alone. Verify readiness, authenticated reads and encrypted values.
+7. Before access or delivery resumes, reapply post-backup security and privacy decisions from the restricted incident record.
+   [Before restarting services](./backup-restore#before-restarting-services) gives the required suspension, session, consent and deletion checks.
+8. Start the worker and require its isolation probe.
+   Permit only the approved model endpoint for the controlled test while provider writes remain blocked.
+   Test an approved practice review and conversation with delivery paused.
+9. Complete **Prove silence**, **Inspect and decide**, and **Turn off silent mode deliberately** in the [silent checklist](./production-operations-runbook#silent-deployment-checklist).
+   Restore the intended live control settings, provider reception and egress. Start the remaining roles and reopen traffic after the checks pass.
+10. Verify every connected provider and feedback destination. Resume reconciliation only after its release and apply mode match the recovered deployment.
 
 ## Upgrades
 
