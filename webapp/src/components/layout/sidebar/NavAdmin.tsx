@@ -12,7 +12,7 @@ import {
 	ScanEye,
 	ScrollText,
 	Settings2,
-	Users,
+	Network,
 	Workflow,
 } from "lucide-react";
 
@@ -97,10 +97,10 @@ export function NavAdmin({
 	return (
 		<SidebarGroup>
 			<SidebarGroupLabel>Administration</SidebarGroupLabel>
-			<SidebarMenu>
+			<SidebarMenu aria-label="Administration">
 				<SidebarMenuItem>
 					<SidebarMenuButton
-						tooltip="Workspace settings"
+						tooltip="Settings"
 						isActive={onWorkspaceSettings}
 						render={<Link to="/w/$workspaceSlug/admin/settings" params={{ workspaceSlug }} />}
 					>
@@ -132,12 +132,12 @@ export function NavAdmin({
 				)}
 				<SidebarMenuItem>
 					<SidebarMenuButton
-						tooltip="Teams"
+						tooltip="Team setup"
 						isActive={onTeams}
 						render={<Link to="/w/$workspaceSlug/admin/teams" params={{ workspaceSlug }} />}
 					>
-						<Users />
-						<span>Teams</span>
+						<Network />
+						<span>Team setup</span>
 					</SidebarMenuButton>
 				</SidebarMenuItem>
 				<NavSection
@@ -304,7 +304,7 @@ export function NavAdmin({
 				</SidebarMenuItem>
 				<SidebarMenuItem>
 					<SidebarMenuButton
-						tooltip="What this workspace spent on AI"
+						tooltip={ADMIN_NAV_LABELS.usage}
 						isActive={onUsage}
 						render={<Link to="/w/$workspaceSlug/admin/usage" params={{ workspaceSlug }} />}
 					>
@@ -314,7 +314,7 @@ export function NavAdmin({
 				</SidebarMenuItem>
 				<SidebarMenuItem>
 					<SidebarMenuButton
-						tooltip="Settings changes in this workspace"
+						tooltip={ADMIN_NAV_LABELS.audit}
 						isActive={onAudit}
 						render={
 							<Link to="/w/$workspaceSlug/admin/audit" params={{ workspaceSlug }} search={{}} />
