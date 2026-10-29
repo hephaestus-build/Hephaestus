@@ -2787,3 +2787,31 @@ await test("a restore clone starts PostgreSQL alone before lockdown and migratio
 		);
 	}
 });
+
+await test("tenant hostname validation checks double hyphens only in the workspace label", () => {
+	for (const host of ["hephaestus.example.com", "heph--prod.example.org"]) {
+		const resources = rendered([
+			profile("small"),
+			prepared,
+			operator,
+			reviews,
+			{ host, workspaceSubdomains: { enabled: true } },
+		]);
+		const routing = resources.find(
+			(resource) =>
+				kindOf(resource) === "ConfigMap" &&
+				componentOf(resource) === "webapp" &&
+				typeof get(resource, "data", "maps.conf") === "string",
+		);
+		const maps = get(routing, "data", "maps.conf");
+		assert.equal(typeof maps, "string");
+		const pattern = /"~(?<pattern>[^"\n]+)" 1;/u.exec(String(maps))?.groups?.pattern;
+		assert.ok(pattern !== undefined);
+		const accepts = new RegExp(pattern, "u");
+		assert.ok(accepts.test(`team-one.${host}`));
+		assert.ok(accepts.test(`abc.${host}`));
+		for (const slug of ["team--one", "api", "ab", "-team", "team-", "a".repeat(52)]) {
+			assert.equal(accepts.test(`${slug}.${host}`), false, slug);
+		}
+	}
+});

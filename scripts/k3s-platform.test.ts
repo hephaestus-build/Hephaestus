@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -184,10 +184,14 @@ await test("the Gateway, its certificate, the installer and the smoke name one n
 
 /** The certificates file that k3s-install.sh would install for these arguments. */
 function rendered(...args: string[]) {
+	return renderedAt(PLATFORM, ...args);
+}
+
+function renderedAt(platform: string, ...args: string[]) {
 	const result = spawnSync(
 		"sh",
 		[
-			path.join(PLATFORM, "k3s-install.sh"),
+			path.join(platform, "k3s-install.sh"),
 			"--version",
 			"0.95.0",
 			...args,
@@ -440,4 +444,48 @@ await test("verification waits for configz and refreshed allocatable after resta
 		result.calls.filter((call) => call === "get --raw /api/v1/nodes/one-host/proxy/configz").length,
 		3,
 	);
+});
+
+await test("repeat installs require an explicit certificate choice before changing the host", () => {
+	const directory = mkdtempSync(path.join(tmpdir(), "hephaestus-repeat-install-"));
+	try {
+		cpSync(PLATFORM, directory, { recursive: true });
+		for (const enabled of [true, false]) {
+			writeFileSync(
+				path.join(directory, "site.yaml"),
+				`workspaceSubdomains:\n  enabled: ${String(enabled)}\n`,
+			);
+			const args = ["--host", "heph.example.org", "--email", "ops@example.org"];
+			const implicit = renderedAt(directory, ...args);
+			assert.notEqual(implicit.status, 0);
+			assert.match(implicit.stderr, /site.yaml exists: repeat --workspace-subdomains/u);
+			assert.deepEqual(implicit.resources, []);
+			const wildcard = renderedAt(
+				directory,
+				...args,
+				"--workspace-subdomains",
+				"--dns01-issuer",
+				"zone-dns",
+			);
+			assert.equal(wildcard.status, 0, wildcard.stderr);
+			assert.deepEqual(
+				named(wildcard.resources, "Certificate", "hephaestus-tls")?.spec,
+				named(
+					rendered(...args, "--workspace-subdomains", "--dns01-issuer", "zone-dns").resources,
+					"Certificate",
+					"hephaestus-tls",
+				)?.spec,
+			);
+			const custom = renderedAt(
+				directory,
+				...args,
+				"--certificates",
+				path.join(directory, "k3s-certificates.yaml"),
+			);
+			assert.equal(custom.status, 0, custom.stderr);
+			assert.ok(named(custom.resources, "Certificate", "hephaestus-tls"));
+		}
+	} finally {
+		rmSync(directory, { recursive: true, force: true });
+	}
 });

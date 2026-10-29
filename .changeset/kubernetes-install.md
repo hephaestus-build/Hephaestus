@@ -8,7 +8,7 @@ The single-node profile enables them. The install guide shows how to name the sa
 That profile stops the worker before its replacement starts, so reviews and conversations pause during the drain and startup.
 Each worker checks isolation at startup and every 15 minutes.
 
-Each chart revision runs the database migration once, in a Job.
+When `migration.enabled=true` and the release is not restoring, the chart runs the database migration once per revision in a Job.
 The 0.95.0 schema upgrade requires every old runtime role to stop first, as the migration guide describes.
 A failed schema migration needs the documented recovery procedure. An image rollback cannot undo it.
 

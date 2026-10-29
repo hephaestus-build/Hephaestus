@@ -61,6 +61,10 @@ Rehearse the mount with the same numeric owners and modes.
 PostgreSQL must retain a restrictive PGDATA mode, such as 0700 or 0750.
 Do not recursively chmod its files.
 
+The examples use the Helm release name and namespace `hephaestus`.
+For another release name, derive each claim name as `data-<statefulset-name>-0` from the rendered StatefulSet names.
+Use the target namespace in each claim and `claimRef`.
+
 For each adopted volume, create a PV with these fields:
 
 ```yaml

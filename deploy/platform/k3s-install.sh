@@ -151,6 +151,11 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 for file in k3s-platform.yaml k3s-certificates.yaml k3s-config.yaml k3s-kubelet.yaml k3s-logind.conf k3s-journald.conf k3s-values.yaml; do
 	[ -f "$HERE/$file" ] || die "$file is not beside this script: download and verify the k3s-* assets of the release first"
 done
+# Existing values can enable wildcard routing. Require an explicit certificate choice on reruns
+# instead of parsing YAML in shell or replacing that certificate with an implicit apex-only one.
+if [ -f "$HERE/site.yaml" ] && [ "$WORKSPACE_SUBDOMAINS" = false ] && [ -z "$CERTIFICATES" ]; then
+	die "site.yaml exists: repeat --workspace-subdomains --dns01-issuer NAME for workspace hosts, or select the intended manifest with --certificates FILE"
+fi
 # The certificates file: the operator's host name and address, which passed the checks above and so
 # hold no sed metacharacter, and the staging service of Let's Encrypt on request.
 render_certificates() {
