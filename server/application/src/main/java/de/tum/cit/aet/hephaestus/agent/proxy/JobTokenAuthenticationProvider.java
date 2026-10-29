@@ -1,11 +1,10 @@
 package de.tum.cit.aet.hephaestus.agent.proxy;
 
+import de.tum.cit.aet.hephaestus.agent.attempt.AttemptJwt;
+import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenInvalidException;
+import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenVerifier;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
-import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.AttemptJwt;
-import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwt;
-import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtInvalidException;
-import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtVerifier;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import java.io.Serial;
@@ -26,14 +25,14 @@ final class JobTokenAuthenticationProvider implements AuthenticationProvider {
     private final ReviewJobRepository jobs;
     private final MentorTurnRepository turns;
     private final SandboxGatewaySessions sessions;
-    private final WorkerJwtVerifier verifier;
+    private final AttemptTokenVerifier verifier;
     private final String workerId;
 
     JobTokenAuthenticationProvider(
             ReviewJobRepository jobs,
             MentorTurnRepository turns,
             SandboxGatewaySessions sessions,
-            WorkerJwtVerifier verifier,
+            AttemptTokenVerifier verifier,
             String workerId) {
         this.jobs = jobs;
         this.turns = turns;
@@ -47,17 +46,16 @@ final class JobTokenAuthenticationProvider implements AuthenticationProvider {
         var token = (BearerTokenAuthenticationToken) authentication;
         var request = (JobTokenAuthenticationFilter.RequestIdentity) token.getDetails();
         if (request == null) throw invalid();
-        WorkerJwt verified;
+        AttemptJwt attempt;
         try {
-            verified = verifier.verify(token.getToken());
-        } catch (WorkerJwtInvalidException invalid) {
+            attempt = verifier.verify(token.getToken());
+        } catch (AttemptTokenInvalidException invalid) {
             // Only a session registered as a Heph host's takes an unsigned token. A rejected job token is never
             // read as one, even while its review session is open.
             var session = sessions.unsignedSessionFor(token.getToken());
             if (session.isPresent()) return unsignedSession(session.get(), request);
             throw new BadCredentialsException("Invalid or expired credential", invalid);
         }
-        if (!(verified instanceof AttemptJwt attempt)) throw invalid();
         return switch (attempt.kind()) {
             case REVIEW -> review(attempt, request);
             case TURN -> turn(attempt, request);

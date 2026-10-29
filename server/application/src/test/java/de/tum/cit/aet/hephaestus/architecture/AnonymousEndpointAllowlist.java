@@ -11,7 +11,6 @@ final class AnonymousEndpointAllowlist {
             "ContributorController.listGlobalContributors",
             "WorkspaceRegistryController.getProviders",
             "EmailUnsubscribeController.unsubscribe",
-            "WorkerTokenExchangeController.exchange",
             "SlackInteractivityController.interactivity",
             "AuthBeginController.begin",
             "AuthBeginController.beginClient",

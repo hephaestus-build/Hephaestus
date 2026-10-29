@@ -94,7 +94,7 @@ Traefik never routes to this port.
 To deploy a worker pod:
 
 1. Set `SPRING_PROFILES_ACTIVE=prod,worker`.
-2. Point `HEPHAESTUS_HUB_URL` at the app pod's WSS endpoint.
+2. Give it the app pod's database. Workers and the app pod coordinate only through PostgreSQL.
 
 `docker/compose.app.yaml` contains a functional Compose template.
 
@@ -313,8 +313,8 @@ file sets the env var the base default leaves off:
   with NATS **on**. The `webhook` overlay pins it `true` regardless (it needs the shared `Connection`
   bean). The `worker` overlay pins it `false` (the job queue is PostgreSQL, ADR 0025).
 
-`hephaestus.agent.enabled` (`AGENT_ENABLED`) gates three things that must agree, or a split
-deployment silently does half its job. They do **not** share a gate:
+`hephaestus.agent.enabled` (`AGENT_ENABLED`) controls submission and execution.
+Server maintenance runs independently of this flag:
 
 - **Submission** (turning pull request, issue and bot-command events into queued jobs) needs
   this flag **and** the server role. A worker-only container executes jobs. It does not submit these reviews.
@@ -328,8 +328,12 @@ deployment silently does half its job. They do **not** share a gate:
     A slow check alone does not delay recovery.
   - A job from before the upgrade to 1.0 has no lease.
     The server recovers it as an expired lease.
-  - Orphan recovery needs this flag **and** the server role.
+  - Orphan recovery needs the server role, including when `AGENT_ENABLED=false`.
     It therefore does not run twice on a dedicated worker pod.
+  - If recovery cannot finish, the timeout backstop ends the attempt.
+    [ADR 0070](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0070-1-0-is-a-cutover-release.md) defines the fresh timeout for a cutover claim.
+- **Completion** closes the parent review of a terminal job and records its stop reason.
+  This server maintenance also runs when `AGENT_ENABLED=false`.
 - **Execution** (the poll loop that claims and runs jobs) needs this flag **and** the worker role.
   Worker admission and server preparation read the same practice-page feedback support, so that read exists in every role.
   A review attempt that was cancelled, requeued or moved to another worker writes nothing more.
@@ -339,14 +343,15 @@ deployment silently does half its job. They do **not** share a gate:
 
 `AGENT_ENABLED` is `false` on all roles until you set it, regardless of how the pod starts.
 
-1. Set it to `true` on **each** pod that needs submission, orphan recovery, or execution.
+1. Set it to `true` on **each** pod that needs submission or execution.
 
 In a split-pod topology, both pods need it:
 
-- `application-server`: submission and recovery.
+- `application-server`: submission. Recovery runs independently of the flag.
 - `application-worker`: execution.
 
-A pod without this setting claims nothing and spends nothing.
+A worker with this flag set to `false` claims no practice reviews.
+Server maintenance still records the spend of attempts that already ran.
 
 ## Heph turns
 
@@ -620,17 +625,15 @@ An example is `HEPHAESTUS_MENTOR_TURN_LEASE`.
 
 ## Worker pod env vars
 
-The bare minimum to boot a worker against a remote hub:
+The bare minimum to boot a worker, beside the database settings:
 
 ```sh
 SPRING_PROFILES_ACTIVE=prod,worker
-HEPHAESTUS_HUB_URL=wss://app.example.com/api/workers/connect
-HEPHAESTUS_WORKER_REGISTRATION_TOKEN=<shared bootstrap secret>
 HEPHAESTUS_WORKER_DRAIN_TIMEOUT=5m
 AGENT_ENABLED=true
 ```
 
-Without the last line, the worker boots and registers but claims no practice-review jobs.
+Without the last line, the worker boots but claims no practice-review jobs.
 It can still run Heph turns: `AGENT_ENABLED` does not gate them.
 
 No LLM environment variables are necessary.
@@ -659,11 +662,8 @@ A higher review capacity there has no effect until you also raise the sandbox li
 
 1. Raise the sandbox limit only with sufficient RAM, as [Sizing](./sizing) describes.
 
-The app pod signs worker tokens from a key *ring*, not a single value:
-`hephaestus.worker.hub.token.keys[0].kid` + `.private-key` and
-`hephaestus.worker.hub.token.active-kid`. Indexed list binding has no single env-var form, so
-configure it through a mounted YAML/config-tree rather than a flat variable. Unset, the app logs a
-warning and generates an ephemeral key that invalidates every worker token on restart.
+Each worker signs the attempt tokens of its sandboxes with a key that it generates at start and keeps in memory.
+A sandbox calls only the gateway of the worker that runs its attempt, so the key needs no configuration.
 
 [Sizing](./sizing#database-connections) owns the connection pool budget of each role and the JVM [memory headroom](./sizing#memory-headroom).
 
@@ -683,8 +683,7 @@ The other workers keep a worker's Heph host and turn sandboxes while it beats.
 
 On SIGTERM, the worker does these actions in order:
 
-1. It sends `Heartbeat{draining=true}` to the hub.
-   The dispatcher stops claiming new jobs for it.
+1. It reports itself not ready and stops claiming new jobs.
 2. It waits up to `hephaestus.worker.drain.timeout` (default 5 min) for active jobs to finish.
 3. It settles each remaining job under its ownership fence before it waits for any container stop.
 4. It stops the settled jobs' containers in parallel, with one 30s cleanup deadline for the batch.
@@ -722,6 +721,13 @@ Leftover containers remain subject to normal sandbox reconciliation.
 The Helm chart sets the drain timeout from `worker.drainTimeoutSeconds`, 3600 by default, and the grace period to that value plus two minutes.
 The cleanup deadline does not extend this grace period or guarantee that all containers stop.
 
+## Cancellation
+
+A cancel ends a review on its row at once.
+The sandbox gateway then refuses the review's next model call.
+The worker that runs the review stops its sandbox at its next heartbeat (`hephaestus.agent.heartbeat-interval`).
+A requeue or a reap of the review ends it in the same way.
+
 ## See also
 
 The full design rationale lives in the architecture decision records, which are kept in the
@@ -729,5 +735,5 @@ repository rather than on this site:
 
 - [**ADR 0005**](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0005-two-role-runtime-via-conditional-on-property.md) — original two-role design.
 - [**ADR 0008**](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0008-webhook-runtime-role.md) — webhook role rationale.
-- [**ADR 0009**](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0009-worker-runtime-substrate-wss-control-channel.md) — worker substrate + WSS control channel.
+- [**ADR 0009**](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0009-worker-runtime-substrate-wss-control-channel.md) — worker substrate. Its WSS control channel is superseded by ADR 0068.
 - [**ADR 0025**](https://github.com/hephaestus-build/Hephaestus/blob/main/docs/decisions/0025-agent-job-queue-on-postgresql.md) — agent job queue moved off NATS onto PostgreSQL.

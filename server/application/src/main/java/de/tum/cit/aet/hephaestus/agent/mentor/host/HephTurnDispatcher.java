@@ -1,5 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.mentor.host;
 
+import de.tum.cit.aet.hephaestus.agent.attempt.AttemptJwt;
+import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenIssuer;
 import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnAttempt;
 import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnSandboxes;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnCompletion;
@@ -7,8 +9,6 @@ import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnStarter;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.proxy.ProxyCallsInFlight;
 import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerDrainCoordinator;
-import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.AttemptJwt;
-import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtIssuer;
 import de.tum.cit.aet.hephaestus.mentor.MentorLeaseLostException;
 import de.tum.cit.aet.hephaestus.mentor.MentorLedgerEvents;
 import de.tum.cit.aet.hephaestus.mentor.MentorLedgerNotifications;
@@ -75,7 +75,7 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
     private final HephHost host;
     private final ProxyCallsInFlight callsInFlight;
     private final TurnSandboxes sandboxes;
-    private final WorkerJwtIssuer issuer;
+    private final AttemptTokenIssuer issuer;
     private final ObjectMapper mapper;
     private final Clock clock;
     private final String workerId;
@@ -102,7 +102,7 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
             HephHost host,
             ProxyCallsInFlight callsInFlight,
             TurnSandboxes sandboxes,
-            WorkerJwtIssuer issuer,
+            AttemptTokenIssuer issuer,
             ObjectMapper mapper,
             Clock clock,
             MeterRegistry meters,

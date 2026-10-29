@@ -21,6 +21,8 @@ import static org.mockito.Mockito.when;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
+import de.tum.cit.aet.hephaestus.agent.attempt.AttemptJwt;
+import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenIssuer;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.agent.composer.CompositionHandedOnException;
 import de.tum.cit.aet.hephaestus.agent.composer.CompositionStop;
@@ -55,8 +57,6 @@ import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetBlockReason;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetDecision;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmBudgetService;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder;
-import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.AttemptJwt;
-import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtIssuer;
 import de.tum.cit.aet.hephaestus.evidence.AppliesWhenCheck;
 import de.tum.cit.aet.hephaestus.evidence.AutomatedReviewReadinessDecision;
 import de.tum.cit.aet.hephaestus.evidence.AutomatedReviewReadinessReport;
@@ -83,12 +83,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
@@ -109,7 +112,7 @@ class ReviewJobExecutorTest extends BaseUnitTest {
     private final SandboxManager sandbox = mock(SandboxManager.class);
     private final LlmBudgetService budgets = mock(LlmBudgetService.class);
     private final PracticePiAdapter practiceAgent = mock(PracticePiAdapter.class);
-    private final WorkerJwtIssuer jwtIssuer = mock(WorkerJwtIssuer.class);
+    private final AttemptTokenIssuer jwtIssuer = mock(AttemptTokenIssuer.class);
     private Optional<WorkerCapacityState> capacity = Optional.empty();
     private WorkerProperties worker = workerNamed("worker-1");
     private SandboxProperties sandboxProperties = SandboxTestLimits.PROPERTIES;
@@ -932,6 +935,33 @@ class ReviewJobExecutorTest extends BaseUnitTest {
 
         verify(sandbox).cancel(job.getId());
         verify(jobs, never()).transitionStatusOwnedBy(any(), any(), any(), any(), any(), anyInt());
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void shouldStopTheLocalAttemptOfAJobWhoseRowThisWorkerNoLongerRuns(boolean stillRuns) {
+        var job = configuredJob();
+        var properties = mock(WorkerProperties.class);
+        when(properties.resolvedWorkerId()).thenReturn("worker-1");
+        worker = properties;
+        when(jobs.findByIdQueuedForUpdateSkipLocked(any(), any())).thenReturn(Optional.of(job));
+        when(jobs.findById(job.getId())).thenReturn(Optional.of(job));
+        when(policy.permitsReview(job)).thenReturn(true);
+        var binding = mock(WorkspaceAgentBinding.class);
+        when(binding.getDataHandlingTier()).thenReturn(DataHandlingTier.UNDECLARED);
+        when(binding.getMaxConcurrentJobs()).thenReturn(1);
+        when(policy.binding(job)).thenReturn(Optional.of(binding));
+        when(budgets.decide(job.getWorkspaceId())).thenReturn(LlmBudgetDecision.ALLOWED);
+        when(assignments.load(job)).thenReturn(List.of(RuntimeReviewTestData.assignment(null, null)));
+        var executor = executor(mock(AsyncTaskExecutor.class));
+        assertThat(executor.processJob(job.getId())).isEqualTo(ReviewJobExecutor.StartOutcome.STARTED);
+        // A cancel, a requeue or a reap ended the attempt on its row alone.
+        when(jobs.findRunningIdsOwnedBy("worker-1", Set.of(job.getId())))
+                .thenReturn(stillRuns ? List.of(job.getId()) : List.of());
+
+        executor.stopEndedAttempts();
+
+        verify(sandbox, stillRuns ? never() : times(1)).cancel(job.getId());
     }
 
     @Test

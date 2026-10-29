@@ -10,18 +10,16 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenIssuer;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobExecutor;
 import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnSandboxes;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnCompletion;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnStarter;
 import de.tum.cit.aet.hephaestus.agent.proxy.ProxyCallsInFlight;
-import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerCapacityState;
-import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerControlClient;
 import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerDrainCoordinator;
 import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerProperties;
 import de.tum.cit.aet.hephaestus.agent.runtime.worker.testing.WorkerPropertiesFixtures;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.HostSandbox;
-import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtIssuer;
 import de.tum.cit.aet.hephaestus.mentor.MentorLedgerNotifications;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnService;
@@ -118,12 +116,7 @@ class HephTurnDispatcherShutdownTest extends BaseUnitTest {
         });
         WorkerProperties properties = WorkerPropertiesFixtures.withDrain(Duration.ofMinutes(5));
         var coordinator = new WorkerDrainCoordinator(
-                mock(WorkerControlClient.class),
-                new WorkerCapacityState(properties),
-                properties,
-                Optional.of(executor),
-                mock(ApplicationEventPublisher.class),
-                new SimpleMeterRegistry());
+                properties, Optional.of(executor), mock(ApplicationEventPublisher.class), new SimpleMeterRegistry());
         HephTurnDispatcher dispatcher = dispatcher();
         var webServer = new WebServerPhase(() -> reviewEnded.get() && hephEnded.get());
 
@@ -358,7 +351,7 @@ class HephTurnDispatcherShutdownTest extends BaseUnitTest {
                 host,
                 new ProxyCallsInFlight(3),
                 mock(TurnSandboxes.class),
-                mock(WorkerJwtIssuer.class),
+                mock(AttemptTokenIssuer.class),
                 new JsonMapper(),
                 Clock.systemUTC(),
                 new SimpleMeterRegistry(),

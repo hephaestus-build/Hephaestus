@@ -5,6 +5,10 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.agent.attempt.AttemptJwt;
+import de.tum.cit.aet.hephaestus.agent.attempt.AttemptSigningKey;
+import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenIssuer;
+import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenVerifier;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmAuthMode;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmConnection;
@@ -33,9 +37,6 @@ import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmUsageRecorder;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageFundingSource;
 import de.tum.cit.aet.hephaestus.agent.usage.UsageSourceType;
-import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.AttemptJwt;
-import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtIssuer;
-import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtVerifier;
 import de.tum.cit.aet.hephaestus.integration.core.spi.ItemKind;
 import de.tum.cit.aet.hephaestus.integration.core.spi.UsagePricingState;
 import de.tum.cit.aet.hephaestus.integration.scm.domain.user.User;
@@ -116,11 +117,12 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
     @Autowired
     private LlmModelResolver modelResolver;
 
-    @Autowired
-    private WorkerJwtVerifier jwtVerifier;
+    /** This test's worker key: the worker role, which signs attempt tokens, is off in the test context. */
+    private static final AttemptSigningKey KEY = AttemptSigningKey.generate();
 
-    @Autowired
-    private WorkerJwtIssuer jwtIssuer;
+    private final AttemptTokenVerifier jwtVerifier = new AttemptTokenVerifier(KEY, new SimpleMeterRegistry());
+
+    private final AttemptTokenIssuer jwtIssuer = new AttemptTokenIssuer(KEY);
 
     @Autowired
     private TransactionTemplate transactionTemplate;
@@ -194,10 +196,18 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
     }
 
     @Test
-    void shouldRejectWorkerSessionJwtAtTheProxy() throws Exception {
-        runningJob(true);
+    void shouldRejectAnAttemptTokenThatAnotherWorkerSigned() throws Exception {
+        ReviewJob job = runningJob(true);
+        Instant work = Instant.now().plus(Duration.ofMinutes(5));
 
-        AuthenticationResult result = authenticate(jwtIssuer.issue("worker-1").token());
+        AuthenticationResult result = authenticate(new AttemptTokenIssuer(AttemptSigningKey.generate())
+                .issueForAttempt(
+                        AttemptJwt.Kind.REVIEW,
+                        job.getId(),
+                        job.getWorkspaceId(),
+                        job.getAttempt(),
+                        work,
+                        work.plus(Duration.ofMinutes(10))));
 
         assertThat(result.status()).isEqualTo(401);
         assertThat(result.authentication()).isNull();
@@ -308,7 +318,7 @@ class LlmProxyIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 .isEqualTo("job:" + job.getId());
         assertThat(authentication.getAuthorities())
                 .extracting(GrantedAuthority::getAuthority)
-                .containsExactly("SCOPE_" + WorkerJwtIssuer.LLM_PROXY_SCOPE);
+                .containsExactly("SCOPE_" + AttemptTokenIssuer.LLM_PROXY_SCOPE);
     }
 
     @ParameterizedTest

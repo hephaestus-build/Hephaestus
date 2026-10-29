@@ -98,7 +98,6 @@ class PersonalDataMapArchTest {
             "release_start",
             "repository_to_monitor",
             "worker_registry",
-            "worker_token_denylist",
             "workspace",
             "workspace_agent_binding",
             "workspace_llm_connection",

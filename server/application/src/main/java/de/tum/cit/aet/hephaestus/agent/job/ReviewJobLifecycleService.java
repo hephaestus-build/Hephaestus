@@ -4,10 +4,8 @@ import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.SandboxManager;
 import de.tum.cit.aet.hephaestus.agent.usage.LlmPriceSnapshot;
 import de.tum.cit.aet.hephaestus.core.exception.EntityNotFoundException;
-import de.tum.cit.aet.hephaestus.core.runtime.hub.WorkerJobCancelDispatcher;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
 import java.time.Instant;
-import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
@@ -27,7 +25,6 @@ public class ReviewJobLifecycleService {
     private final ReviewJobRepository jobRepository;
     private final TransactionTemplate transactionTemplate;
     private final @Nullable SandboxManager sandboxManager;
-    private final Optional<WorkerJobCancelDispatcher> workerJobCancelDispatcher;
     private final ReviewAttemptUsageService attemptUsage;
     private final ObjectMapper objectMapper;
     private final ReviewJobTelemetry jobTelemetry;
@@ -36,14 +33,12 @@ public class ReviewJobLifecycleService {
             ReviewJobRepository jobRepository,
             TransactionTemplate transactionTemplate,
             @Nullable SandboxManager sandboxManager,
-            Optional<WorkerJobCancelDispatcher> workerJobCancelDispatcher,
             ReviewAttemptUsageService attemptUsage,
             ObjectMapper objectMapper,
             ReviewJobTelemetry jobTelemetry) {
         this.jobRepository = jobRepository;
         this.transactionTemplate = transactionTemplate;
         this.sandboxManager = sandboxManager;
-        this.workerJobCancelDispatcher = workerJobCancelDispatcher;
         this.attemptUsage = attemptUsage;
         this.objectMapper = objectMapper;
         this.jobTelemetry = jobTelemetry;
@@ -61,15 +56,9 @@ public class ReviewJobLifecycleService {
     public ReviewJob cancel(Long workspaceId, UUID jobId) {
         CancelOutcome outcome = transactionTemplate.execute(status -> cancelTransition(workspaceId, jobId));
 
-        // Split deployment: ask the owning worker to stop its container over the WSS channel (ADR 0009).
-        // No-op if that worker isn't connected here — the DB transition + backstops still finish the cancel.
+        // The proxy refuses the cancelled attempt's next call at once. Its own worker stops the sandbox at its next
+        // heartbeat; a worker in this process stops it now.
         if (outcome.stopContainer()) {
-            String workerId = outcome.job().getWorkerId();
-            if (workerId != null) {
-                workerJobCancelDispatcher.ifPresent(d -> d.sendCancel(workerId, jobId, "user-cancel"));
-            }
-
-            // Monolith / co-located worker: stop the container in-process.
             if (sandboxManager != null) {
                 try {
                     sandboxManager.cancel(jobId);

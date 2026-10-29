@@ -7,8 +7,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import de.tum.cit.aet.hephaestus.Application;
 import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceDeliveryAuthorization;
 import de.tum.cit.aet.hephaestus.agent.context.CitedSourceAccess;
+import de.tum.cit.aet.hephaestus.agent.job.ReviewJobCompletionService;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobExecutor;
-import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerControlClient;
+import de.tum.cit.aet.hephaestus.agent.job.ReviewJobZombieSweeper;
+import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerDrainCoordinator;
 import de.tum.cit.aet.hephaestus.core.auth.AccountReferenceService;
 import de.tum.cit.aet.hephaestus.core.auth.domain.Account;
 import de.tum.cit.aet.hephaestus.core.auth.domain.AccountRepository;
@@ -140,9 +142,7 @@ class RuntimeRoleContextIntegrationTest {
                         "spring.datasource.url=" + database.jdbcUrl(),
                         "spring.datasource.username=" + database.username(),
                         "spring.datasource.password=" + database.password(),
-                        "hephaestus.agent.enabled=true",
-                        "hephaestus.worker.control.endpoint=wss://127.0.0.1:1/control",
-                        "hephaestus.worker.control.registration-token=role-context-test",
+                        "hephaestus.agent.enabled=" + (role == RuntimeRole.WORKER),
                         "hephaestus.worker.capacity.review-max=1",
                         "hephaestus.worker.capacity.mentor-max=1",
                         "hephaestus.sync.nats.enabled=" + (role != RuntimeRole.WORKER),
@@ -159,6 +159,8 @@ class RuntimeRoleContextIntegrationTest {
                     assertThat(application.getBeansOfType(ScmRepositoryItemLifecycle.class))
                             .hasSize(role == RuntimeRole.SERVER ? 1 : 0);
                     if (role == RuntimeRole.SERVER) {
+                        assertThat(application).hasSingleBean(ReviewJobZombieSweeper.class);
+                        assertThat(application).hasSingleBean(ReviewJobCompletionService.class);
                         assertThat(application.getBeansWithAnnotation(WorkspaceScopedController.class))
                                 .isNotEmpty();
                         assertThat(application).hasSingleBean(AccountReferenceService.class);
@@ -173,6 +175,8 @@ class RuntimeRoleContextIntegrationTest {
                         assertThat(application).hasSingleBean(SlackWorkspaceContentEraser.class);
                         assertThat(application).hasSingleBean(SlackWorkspacePurgeAdapter.class);
                     } else {
+                        assertThat(application).doesNotHaveBean(ReviewJobZombieSweeper.class);
+                        assertThat(application).doesNotHaveBean(ReviewJobCompletionService.class);
                         assertThat(application.getBeansWithAnnotation(WorkspaceScopedController.class))
                                 .isEmpty();
                         assertThat(application).doesNotHaveBean(AccountReferenceService.class);
@@ -188,7 +192,7 @@ class RuntimeRoleContextIntegrationTest {
                     }
                     if (role == RuntimeRole.WORKER) {
                         assertThat(application).hasSingleBean(ReviewJobExecutor.class);
-                        assertThat(application).hasSingleBean(WorkerControlClient.class);
+                        assertThat(application).hasSingleBean(WorkerDrainCoordinator.class);
                         assertThat(application).hasSingleBean(ResultAdmissionPolicy.class);
                     } else {
                         assertThat(application).doesNotHaveBean(ReviewJobExecutor.class);

@@ -7,6 +7,8 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenInvalidException;
+import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenVerifier;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayConfiguration;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewayConnector;
 import de.tum.cit.aet.hephaestus.agent.gateway.SandboxGatewaySessions;
@@ -17,8 +19,6 @@ import de.tum.cit.aet.hephaestus.agent.runtime.worker.testing.WorkerPropertiesFi
 import de.tum.cit.aet.hephaestus.agent.sandbox.spi.HostSandbox;
 import de.tum.cit.aet.hephaestus.core.auth.ratelimit.BucketResolver;
 import de.tum.cit.aet.hephaestus.core.runtime.RuntimeRole;
-import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtInvalidException;
-import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtVerifier;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import io.github.bucket4j.Bucket;
 import java.net.URI;
@@ -201,9 +201,9 @@ class HephHostCommandChannelIntegrationTest {
 
         /** A host session token is not a signed worker token, so the verifier refuses it. */
         @Bean
-        WorkerJwtVerifier workerJwtVerifier() {
-            WorkerJwtVerifier verifier = mock(WorkerJwtVerifier.class);
-            when(verifier.verify(anyString())).thenThrow(new WorkerJwtInvalidException("unsigned", "malformed"));
+        AttemptTokenVerifier attemptTokenVerifier() {
+            AttemptTokenVerifier verifier = mock(AttemptTokenVerifier.class);
+            when(verifier.verify(anyString())).thenThrow(new AttemptTokenInvalidException("unsigned", "malformed"));
             return verifier;
         }
 

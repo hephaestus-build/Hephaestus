@@ -71,7 +71,6 @@ class ReviewJobLifecycleServiceTest extends BaseUnitTest {
                 jobRepository,
                 transactionTemplate,
                 sandboxManager,
-                Optional.empty(),
                 TerminalUsageTestFixtures.attemptUsageOverMocks(jobRepository, usageRecorder),
                 objectMapper,
                 new ReviewJobTelemetry(new SimpleMeterRegistry(), Tracer.NOOP));

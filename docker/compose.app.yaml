@@ -380,8 +380,6 @@ services:
       GITLAB_WORKSPACE_CREATION: ${GITLAB_WORKSPACE_CREATION:-false}
       # LLM providers are registered at runtime (Instance admin → AI models), not via env vars —
       # the proxy reads each connection's base URL/auth from the catalog per request.
-      # Worker control channel: same env var feeds the worker pod's registration-token claim.
-      HEPHAESTUS_WORKER_HUB_TOKEN_REGISTRATION_TOKEN: ${HEPHAESTUS_WORKER_REGISTRATION_TOKEN:-}
       # thc probes liveness on the application listener, independently of management.
       THC_PORT: "8080"
       THC_PATH: /livez
@@ -460,8 +458,8 @@ services:
         max-size: "50m"
         max-file: "5"
 
-  # Worker runtime — same image, worker profile. Dials the hub over WSS; the only inbound port is
-  # the sandbox gateway.
+  # Worker runtime — same image, worker profile. It shares only the database with the server; the only
+  # inbound port is the sandbox gateway.
   application-worker:
     image: "${HEPHAESTUS_IMAGE_APPLICATION_SERVER:?verified release lock required}"
     # Bounds heap sizing to this container (see application-server).
@@ -486,8 +484,6 @@ services:
       HEPHAESTUS_AGENT_IMAGE_REQUIRE_DIGEST: ${HEPHAESTUS_AGENT_IMAGE_REQUIRE_DIGEST:-true}
       # Valueless, as on application-server above; this is the pod that actually opens sandboxes.
       HEPHAESTUS_AGENT_IMAGE_REFERENCE: ${HEPHAESTUS_IMAGE_AGENT_PI:?verified release lock required}
-      HEPHAESTUS_HUB_URL: ws://application-server:8080/api/workers/connect
-      HEPHAESTUS_WORKER_REGISTRATION_TOKEN: ${HEPHAESTUS_WORKER_REGISTRATION_TOKEN:-}
       # Agent job queue (practice review). The queue runs on PostgreSQL — this pod needs no NATS at
       # all (it runs no sync/webhook role), so no NATS_SERVER is set here.
       AGENT_ENABLED: ${AGENT_ENABLED:-false}

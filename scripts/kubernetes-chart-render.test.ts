@@ -780,9 +780,21 @@ for (const name of ["small", "external"] as const) {
 		] as const) {
 			const ingress = list(get(policy(component), "spec", "ingress"));
 			assert.equal(ingress.length, 1, `${component}: no scraper is configured`);
-			assert.deepEqual(get(ingress[0], "from", 0), gatewayPeer, component);
+			// Only the gateway: a worker peer, which the server once admitted for the worker hub, fails here.
+			assert.deepEqual(get(ingress[0], "from"), [gatewayPeer], component);
 			assert.deepEqual(get(ingress[0], "ports"), [{ port, protocol: "TCP" }], component);
 		}
+		// Workers and the server share only the database: no worker rule names a server Pod.
+		const workerPeers = list(get(policy("worker"), "spec", "egress")).flatMap((rule) =>
+			list(get(rule, "to")),
+		);
+		assert.ok(
+			!workerPeers.some(
+				(peer) =>
+					get(peer, "podSelector", "matchLabels", "app.kubernetes.io/component") === "server",
+			),
+			"the worker reaches no server Pod",
+		);
 		const webhookEgress = list(get(policy("webhook"), "spec", "egress"));
 		const serverEgress = list(get(policy("server"), "spec", "egress"));
 		if (name === "external") {
@@ -1644,28 +1656,6 @@ await test("a private S3 CA reaches every Pod that reads the repository, and no 
 			"heph-postgresql-backup-stanza-1",
 			"postgresql",
 		],
-	);
-});
-
-await test("the server requires the worker registration token exactly when a worker runs", () => {
-	const optional = (layers: readonly Layer[]) =>
-		get(
-			env(workload(rendered(layers), "server"), "HEPHAESTUS_WORKER_HUB_TOKEN_REGISTRATION_TOKEN"),
-			"valueFrom",
-			"secretKeyRef",
-			"optional",
-		);
-	assert.equal(optional(layersFor("dev")), true);
-	assert.equal(optional([...layersFor("small"), workerLayer]), undefined);
-	const worker = workload(rendered([...layersFor("small"), workerLayer]), "worker");
-	assert.equal(
-		get(
-			env(worker, "HEPHAESTUS_WORKER_REGISTRATION_TOKEN"),
-			"valueFrom",
-			"secretKeyRef",
-			"optional",
-		),
-		undefined,
 	);
 });
 

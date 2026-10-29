@@ -3,9 +3,6 @@ package de.tum.cit.aet.hephaestus.agent.runtime.worker;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobCancellationReason;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobExecutor;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
-import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.CapacityReport;
-import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.Heartbeat;
-import de.tum.cit.aet.hephaestus.core.runtime.worker.protocol.WorkerControlFrame;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
@@ -23,8 +20,7 @@ import org.springframework.context.SmartLifecycle;
  * Graceful shutdown for the worker. Liveness stays {@code CORRECT} — kubelet must not kill the
  * pod early; only readiness flips to {@code REFUSING_TRAFFIC}.
  *
- * <p>Sequence: readiness flip → final {@code Heartbeat{draining}} + capacity report with
- * {@code spare=0} → stop accepting new jobs → await in-flight (or cancel immediately when
+ * <p>Sequence: readiness flip → stop accepting new jobs → await in-flight (or cancel immediately when
  * {@code timeout=0}).
  *
  * <p>The phase is one above {@link WebServerApplicationContext#GRACEFUL_SHUTDOWN_PHASE}, so the drain
@@ -38,8 +34,6 @@ public class WorkerDrainCoordinator implements SmartLifecycle {
 
     public static final int PHASE = WebServerApplicationContext.GRACEFUL_SHUTDOWN_PHASE + 1;
 
-    private final WorkerControlClient client;
-    private final WorkerCapacityState state;
     private final WorkerProperties properties;
     private final Optional<ReviewJobExecutor> executor;
     private final ApplicationEventPublisher events;
@@ -47,14 +41,10 @@ public class WorkerDrainCoordinator implements SmartLifecycle {
     private final AtomicBoolean draining = new AtomicBoolean(false);
 
     public WorkerDrainCoordinator(
-            WorkerControlClient client,
-            WorkerCapacityState state,
             WorkerProperties properties,
             Optional<ReviewJobExecutor> executor,
             ApplicationEventPublisher events,
             MeterRegistry meterRegistry) {
-        this.client = client;
-        this.state = state;
         this.properties = properties;
         this.executor = executor;
         this.events = events;
@@ -97,7 +87,7 @@ public class WorkerDrainCoordinator implements SmartLifecycle {
         });
     }
 
-    /** Readiness flip, final heartbeat and capacity report, then no new job; false when the drain already began. */
+    /** Readiness flip, then no new job; false when the drain already began. */
     private boolean stopAccepting() {
         if (!running.compareAndSet(true, false)) {
             return false;
@@ -106,9 +96,6 @@ public class WorkerDrainCoordinator implements SmartLifecycle {
         log.info("Worker drain starting (timeout={})…", properties.drain().timeout());
 
         AvailabilityChangeEvent.publish(events, this, ReadinessState.REFUSING_TRAFFIC);
-        safeSend(new Heartbeat(true));
-        CapacityReport snap = state.snapshot();
-        safeSend(new CapacityReport(snap.reviewMax(), snap.inFlightReview(), 0));
         executor.ifPresent(ReviewJobExecutor::stopAcceptingNewJobs);
         return true;
     }
@@ -137,17 +124,6 @@ public class WorkerDrainCoordinator implements SmartLifecycle {
         }
         log.warn("Drain budget exhausted after {}; cancelling in-flight jobs.", timeout);
         return exec.cancelInFlight(ReviewJobCancellationReason.DRAIN_GRACEFUL);
-    }
-
-    private void safeSend(WorkerControlFrame frame) {
-        try {
-            client.send(frame);
-        } catch (Exception e) {
-            log.warn(
-                    "Drain-time send failed for {}: {}",
-                    frame.getClass().getSimpleName(),
-                    e.getClass().getSimpleName());
-        }
     }
 
     @Override

@@ -12,11 +12,7 @@ import org.springframework.context.support.AbstractApplicationContext;
 import org.springframework.context.support.DefaultLifecycleProcessor;
 import org.springframework.core.env.Environment;
 
-/**
- * Binds {@link WorkerProperties} whenever the worker role is enabled — deliberately NOT also gated on
- * the WSS endpoint the way {@link WorkerConfiguration} is. Worker identity drives job ownership and
- * orphan recovery, which a worker without a control channel still needs.
- */
+/** Binds {@link WorkerProperties} whenever the worker role is enabled: worker identity drives job ownership. */
 @Configuration(proxyBeanMethods = false)
 @ConditionalOnWorkerRole
 @EnableConfigurationProperties(WorkerProperties.class)

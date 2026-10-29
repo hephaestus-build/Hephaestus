@@ -33,8 +33,8 @@ import tools.jackson.databind.ObjectMapper;
  *
  * <p>On breach the response is HTTP 429 with an RFC 9457 {@code application/problem+json} body and a
  * {@code Retry-After} header (seconds until the bucket next has a token). Requests that match no
- * configured limit pass through untouched — in particular the worker-hub / webhook paths, which live
- * on a different chain and are additionally guarded here defensively.
+ * configured limit pass through untouched — in particular the webhook paths, which live on a different
+ * chain and are additionally guarded here defensively.
  *
  * <p>Which endpoints are limited and how each is keyed is encoded by the {@link Endpoint} enum
  * (namespace + account-vs-IP scope) and applied in {@link #resolveBucketKey}. The namespace prefix
@@ -134,8 +134,8 @@ public class AuthRateLimitFilter extends OncePerRequestFilter {
     }
 
     /**
-     * Maps {@code (method, path)} to the configured limit, or {@code null} if none applies. Worker-hub
-     * and webhook paths are explicitly excluded (defence in depth — they live on another chain).
+     * Maps {@code (method, path)} to the configured limit, or {@code null} if none applies. Webhook and
+     * actuator paths are explicitly excluded (defence in depth — they live on another chain).
      */
     @Nullable
     private static Endpoint match(HttpServletRequest request) {
@@ -143,7 +143,7 @@ public class AuthRateLimitFilter extends OncePerRequestFilter {
         if (path == null || path.isEmpty()) {
             path = request.getRequestURI();
         }
-        if (path.startsWith("/api/workers/") || path.startsWith("/webhooks/") || path.startsWith("/actuator/")) {
+        if (path.startsWith("/webhooks/") || path.startsWith("/actuator/")) {
             return null;
         }
         String method = request.getMethod();

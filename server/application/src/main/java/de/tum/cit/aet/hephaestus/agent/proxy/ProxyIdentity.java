@@ -1,6 +1,6 @@
 package de.tum.cit.aet.hephaestus.agent.proxy;
 
-import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.AttemptJwt;
+import de.tum.cit.aet.hephaestus.agent.attempt.AttemptJwt;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.Stream;

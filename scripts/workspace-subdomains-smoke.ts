@@ -476,7 +476,6 @@ try {
 							...env,
 							ACME_EMAIL: "smoke@example.invalid",
 							POSTGRES_PASSWORD: "smoke",
-							HEPHAESTUS_WORKER_REGISTRATION_TOKEN: "smoke",
 						},
 					},
 				),

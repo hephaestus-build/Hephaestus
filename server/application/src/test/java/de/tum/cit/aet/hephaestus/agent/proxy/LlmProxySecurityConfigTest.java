@@ -4,6 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.InstanceOfAssertFactories.type;
 import static org.mockito.Mockito.when;
 
+import de.tum.cit.aet.hephaestus.agent.attempt.AttemptJwt;
+import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenInvalidException;
+import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenVerifier;
 import de.tum.cit.aet.hephaestus.agent.catalog.LlmApiProtocol;
 import de.tum.cit.aet.hephaestus.agent.config.ConfigSnapshot;
 import de.tum.cit.aet.hephaestus.agent.config.FrozenModel;
@@ -15,9 +18,6 @@ import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
 import de.tum.cit.aet.hephaestus.agent.job.RuntimeJobTestData;
 import de.tum.cit.aet.hephaestus.agent.runtime.worker.testing.WorkerPropertiesFixtures;
 import de.tum.cit.aet.hephaestus.core.auth.ratelimit.BucketResolver;
-import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.AttemptJwt;
-import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtInvalidException;
-import de.tum.cit.aet.hephaestus.core.runtime.hub.auth.WorkerJwtVerifier;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
@@ -75,7 +75,7 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
     private ReviewJobRepository jobRepository;
 
     @Mock
-    private WorkerJwtVerifier jwtVerifier;
+    private AttemptTokenVerifier jwtVerifier;
 
     @Mock
     private ProxyBudgetGate budgetGate;
@@ -400,7 +400,7 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
         chains = chains(sessions);
         UUID job = UUID.randomUUID();
         String token = reason + "-job-token";
-        when(jwtVerifier.verify(token)).thenThrow(new WorkerJwtInvalidException("job token " + reason, reason));
+        when(jwtVerifier.verify(token)).thenThrow(new AttemptTokenInvalidException("job token " + reason, reason));
         try (var review = sessions.register(job, token, Files.createFile(directory.resolve("input.tar")), "out")) {
             assertThat(review.id()).isEqualTo(job);
             for (String suffix : List.of("", "/workspace", "/commands")) {
@@ -420,7 +420,7 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
         for (String suffix : List.of("", "/workspace", "/commands")) {
             UUID host = UUID.randomUUID();
             String token = "session-token-" + host;
-            when(jwtVerifier.verify(token)).thenThrow(new WorkerJwtInvalidException("unsigned", "malformed"));
+            when(jwtVerifier.verify(token)).thenThrow(new AttemptTokenInvalidException("unsigned", "malformed"));
             when(gatewaySessions.unsignedSessionFor(token))
                     .thenReturn(Optional.of(
                             new SandboxGatewaySessions.UnsignedSession(host, SandboxGatewaySessions.Kind.HEPH_HOST)));
@@ -437,7 +437,7 @@ class LlmProxySecurityConfigTest extends BaseUnitTest {
                     .isEqualTo("gateway-session:" + host);
         }
         UUID host = UUID.randomUUID();
-        when(jwtVerifier.verify("session-token")).thenThrow(new WorkerJwtInvalidException("unsigned", "malformed"));
+        when(jwtVerifier.verify("session-token")).thenThrow(new AttemptTokenInvalidException("unsigned", "malformed"));
         when(gatewaySessions.unsignedSessionFor("session-token"))
                 .thenReturn(Optional.of(
                         new SandboxGatewaySessions.UnsignedSession(host, SandboxGatewaySessions.Kind.HEPH_HOST)));

@@ -434,6 +434,13 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
             nativeQuery = true)
     int lease(@Param("id") UUID id, @Param("ttlSeconds") long ttlSeconds);
 
+    /** The jobs among {@code ids} that this worker still runs. */
+    @WorkspaceAgnostic("Reads one worker's own attempts across workspaces")
+    @Query(
+            value = "SELECT id FROM review_job WHERE worker_id = :workerId AND status = 'RUNNING' AND id IN (:ids)",
+            nativeQuery = true)
+    List<UUID> findRunningIdsOwnedBy(@Param("workerId") String workerId, @Param("ids") Collection<UUID> ids);
+
     /** Renews the leases of every attempt that this worker runs, on the database clock. */
     @WorkspaceAgnostic("Renews the leases of one worker's attempts across workspaces")
     @Modifying

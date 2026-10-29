@@ -1,6 +1,9 @@
 package de.tum.cit.aet.hephaestus.agent.job;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.timeout;
+import static org.mockito.Mockito.verify;
 
 import de.tum.cit.aet.hephaestus.agent.runtime.worker.WorkerProperties;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewJobStatus;
@@ -12,6 +15,7 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
@@ -54,8 +58,7 @@ class ReviewJobLeaseIntegrationTest extends BaseIntegrationTest {
     @Autowired
     private JdbcTemplate jdbc;
 
-    // This context has worker.enabled=true and NO hephaestus.worker.control.endpoint. required=false so a regression
-    // (identity bound only when WSS is configured) fails on the assertion, not on context load.
+    // required=false, so that a context without the worker's identity fails on the assertion, not on context load.
     @Autowired(required = false)
     private WorkerProperties workerProperties;
 
@@ -116,10 +119,12 @@ class ReviewJobLeaseIntegrationTest extends BaseIntegrationTest {
     @DisplayName("this worker's heartbeat renews the lease of an attempt that it runs")
     void shouldRenewTheLeaseWhenTheWorkerThatRunsTheAttemptBeats() {
         assertThat(workerProperties).isNotNull();
+        ReviewJobExecutor executor = mock(ReviewJobExecutor.class);
         var reporter = new WorkerLivenessReporter(
                 workerRegistryRepository,
                 jobRepository,
                 transactionTemplate,
+                Optional.of(executor),
                 agentProperties,
                 workerProperties,
                 new SimpleMeterRegistry());
@@ -129,6 +134,7 @@ class ReviewJobLeaseIntegrationTest extends BaseIntegrationTest {
         reporter.beat();
 
         assertThat(expired()).extracting(OrphanedJobRef::getJobId).doesNotContain(id);
+        verify(executor, timeout(5_000)).stopEndedAttempts();
     }
 
     @Test
@@ -168,6 +174,39 @@ class ReviewJobLeaseIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    @DisplayName("of the attempts a worker holds locally, it still runs only those whose row it owns and runs")
+    void shouldFindOnlyTheRunningAttemptsThatThisWorkerOwns() {
+        UUID mine = runningJob("w-me");
+        UUID theirs = runningJob("w-other");
+        UUID requeued = runningJob("w-me");
+        jdbc.update("UPDATE review_job SET status = 'QUEUED', worker_id = NULL WHERE id = ?", requeued);
+
+        assertThat(jobRepository.findRunningIdsOwnedBy("w-me", List.of(mine, theirs, requeued)))
+                .containsExactly(mine);
+    }
+
+    @Autowired
+    private ReviewJobRecovery recovery;
+
+    @Test
+    @DisplayName("an attempt that 0.x claimed and the 1.0 changelog counted as a drain is requeued with no retry spent")
+    void shouldRequeueACutoverAttemptWithoutSpendingARetry() {
+        UUID id = runningJob("worker-0x");
+        // In 0.x the attempt was number 1 with no drain: it had spent 1 retry. The changelog then counted one drain.
+        jdbc.update("UPDATE review_job SET attempt = 1, drain_count = 1, leased_until = NULL WHERE id = ?", id);
+
+        assertThat(expired()).extracting(OrphanedJobRef::getJobId).contains(id);
+        transactionTemplate.execute(s -> recovery.recover(id, "worker-0x", 1, null));
+
+        ReviewJob requeued = jobRepository.findById(id).orElseThrow();
+        assertThat(requeued.getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
+        assertThat(requeued.getAttempt()).isEqualTo(2);
+        assertThat(requeued.spentAttempts())
+                .as("the upgrade spent no retry: as many as in 0.x")
+                .isEqualTo(1);
+    }
+
+    @Test
     @DisplayName("requeueOrphan is a CAS: first caller wins (1), the second is a no-op (0)")
     void requeueOrphanIsCasIdempotent() {
         UUID id = runningJob("w-stale");
@@ -201,15 +240,15 @@ class ReviewJobLeaseIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    @DisplayName("worker identity binds on the worker role WITHOUT a WSS endpoint (orphan recovery always armed)")
-    void workerIdentityBoundWithoutWssEndpoint() {
+    @DisplayName("worker identity binds on the worker role with no other setting (orphan recovery always armed)")
+    void workerIdentityBindsOnTheWorkerRoleAlone() {
         assertThat(workerProperties)
-                .as("WorkerProperties must bind on the worker role independent of the WSS control endpoint")
+                .as("WorkerProperties must bind on the worker role alone")
                 .isNotNull();
         String id = workerProperties.resolvedWorkerId();
         assertThat(id).isNotBlank();
         // Stable per process (the instance suffix is computed once) — both the executor's job-ownership
-        // stamp and the WSS JWT subject rely on this being identical across calls.
+        // stamp and the lease renewal rely on this being identical across calls.
         assertThat(id).isEqualTo(workerProperties.resolvedWorkerId());
     }
 

@@ -74,7 +74,6 @@ await test("the generated Secret holds every key that the chart reads", () => {
 		"HEPHAESTUS_AUTH_STATE_COOKIE_KEY",
 		"WEBHOOK_SECRET",
 		"WEBHOOK_ROUTING_SECRET",
-		"HEPHAESTUS_WORKER_REGISTRATION_TOKEN",
 	]) {
 		assert.ok((first[key] ?? "").length > 0, key);
 	}

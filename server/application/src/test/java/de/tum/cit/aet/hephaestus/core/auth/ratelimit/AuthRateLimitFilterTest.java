@@ -396,10 +396,10 @@ class AuthRateLimitFilterTest extends BaseUnitTest {
     }
 
     @Test
-    void workerAndWebhookPathsAreNeverRateLimited() throws Exception {
+    void webhookAndActuatorPathsAreNeverRateLimited() throws Exception {
         AuthRateLimitFilter f = filter(props());
 
-        for (String path : new String[] {"/api/workers/exchange", "/webhooks/gitlab", "/actuator/health"}) {
+        for (String path : new String[] {"/webhooks/gitlab", "/actuator/health"}) {
             MockHttpServletRequest req = new MockHttpServletRequest("POST", path);
             MockHttpServletResponse res = new MockHttpServletResponse();
             FilterChain chain = mock(FilterChain.class);

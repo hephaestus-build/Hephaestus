@@ -14,7 +14,7 @@ A review can outlive every execution job that produced it.
 ## Execution ownership
 
 The server selects and persists a review before runtime execution.
-A worker claims its job through the existing PostgreSQL queue and authenticated worker hub.
+A worker claims its job through the PostgreSQL queue. The server and the workers share no other channel.
 The webhook role receives provider input and does not execute reviews.
 Only the worker owns sandbox access.
 

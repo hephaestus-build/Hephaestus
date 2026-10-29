@@ -1,4 +1,4 @@
-package de.tum.cit.aet.hephaestus.core.runtime.hub.auth;
+package de.tum.cit.aet.hephaestus.agent.attempt;
 
 import com.auth0.jwt.JWT;
 import com.auth0.jwt.algorithms.Algorithm;
@@ -8,9 +8,11 @@ import java.util.Map;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 
-public class WorkerJwtIssuer {
+/** Issues the attempt tokens of this worker's sandboxes; {@link AttemptTokenVerifier} checks them. */
+public class AttemptTokenIssuer {
 
-    static final String WORKER_TOKEN_TYPE = "worker-session+jwt";
+    static final String ISSUER = "hephaestus-worker";
+    static final String AUDIENCE = "hephaestus-sandbox";
     static final String ATTEMPT_TOKEN_TYPE = "attempt+jwt";
     static final String KIND_CLAIM = "attempt_kind";
     static final String ID_CLAIM = "attempt_id";
@@ -22,34 +24,10 @@ public class WorkerJwtIssuer {
      */
     public static final String LLM_PROXY_SCOPE = "llm_proxy";
 
-    private final WorkerKeyRing keyRing;
-    private final WorkerTokenProperties properties;
+    private final AttemptSigningKey key;
 
-    public WorkerJwtIssuer(WorkerKeyRing keyRing, WorkerTokenProperties properties) {
-        this.keyRing = keyRing;
-        this.properties = properties;
-    }
-
-    public IssuedWorkerJwt issue(String workerId) {
-        if (workerId == null || workerId.isBlank()) {
-            throw new IllegalArgumentException("workerId must not be blank");
-        }
-        WorkerSigningKey active = keyRing.active();
-        Algorithm algorithm = Algorithm.RSA256(active.publicKey(), active.privateKey());
-        Instant now = Instant.now();
-        Instant expires = now.plus(properties.ttl());
-        String jti = UUID.randomUUID().toString();
-        String token = JWT.create()
-                .withHeader(Map.of("kid", active.kid(), "typ", WORKER_TOKEN_TYPE))
-                .withIssuer(properties.issuer())
-                .withAudience(properties.audience())
-                .withSubject(workerId)
-                .withJWTId(jti)
-                .withIssuedAt(now)
-                .withNotBefore(now)
-                .withExpiresAt(expires)
-                .sign(algorithm);
-        return new IssuedWorkerJwt(token, jti, expires);
+    public AttemptTokenIssuer(AttemptSigningKey key) {
+        this.key = key;
     }
 
     /**
@@ -64,7 +42,6 @@ public class WorkerJwtIssuer {
             int attempt,
             @Nullable Instant workDeadline,
             Instant expiresAt) {
-        WorkerSigningKey active = keyRing.active();
         Instant now = Instant.now();
         if (!expiresAt.isAfter(now)) throw new IllegalArgumentException("expiresAt must be in the future");
         if ((kind == AttemptJwt.Kind.REVIEW) != (workDeadline != null))
@@ -72,9 +49,9 @@ public class WorkerJwtIssuer {
         if (workDeadline != null && (!workDeadline.isAfter(now) || workDeadline.isAfter(expiresAt)))
             throw new IllegalArgumentException("workDeadline must be in the future and not after expiresAt");
         var token = JWT.create()
-                .withHeader(Map.of("kid", active.kid(), "typ", ATTEMPT_TOKEN_TYPE))
-                .withIssuer(properties.issuer())
-                .withAudience(properties.audience())
+                .withHeader(Map.of("kid", key.kid(), "typ", ATTEMPT_TOKEN_TYPE))
+                .withIssuer(ISSUER)
+                .withAudience(AUDIENCE)
                 .withClaim(KIND_CLAIM, kind.name())
                 .withClaim(ID_CLAIM, id.toString())
                 .withClaim("workspace_id", workspaceId)
@@ -85,8 +62,6 @@ public class WorkerJwtIssuer {
                 .withNotBefore(now)
                 .withExpiresAt(expiresAt);
         if (workDeadline != null) token = token.withClaim(WORK_DEADLINE_CLAIM, workDeadline);
-        return token.sign(Algorithm.RSA256(active.publicKey(), active.privateKey()));
+        return token.sign(Algorithm.RSA256(key.publicKey(), key.privateKey()));
     }
-
-    public record IssuedWorkerJwt(String token, String jti, Instant expiresAt) {}
 }

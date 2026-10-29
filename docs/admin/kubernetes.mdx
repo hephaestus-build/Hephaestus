@@ -66,7 +66,7 @@ The Job is a plain part of the release and not a Helm hook, because a hook would
 [Runtime roles](./runtime-roles) describes the run mode and the wait.
 
 The server has one replica and the `Recreate` update strategy.
-Each server replica without a configured token key ring signs worker tokens with its own key.
+Servers do not yet process provider events in order across replicas.
 Two server versions never serve the same schema at the same time.
 
 The `Recreate` strategy applies only to the server.
@@ -231,7 +231,6 @@ The chart then opens only these paths:
 | `server`, `webhook` | NATS | 4222, or the external port |
 | `server`, `worker` | `networkPolicy.externalEgress` | 443 |
 | `server`, if `config.email.host` is set | `networkPolicy.externalEgress` | `config.email.port` |
-| `worker` | `server` | 8080 |
 | `worker` | The Kubernetes API, `networkPolicy.kubernetesApi` | Its port |
 | `worker`, if `networkPolicy.workerGatewayPorts` is set | `networkPolicy.gateway` pods | `networkPolicy.workerGatewayPorts` |
 | `server`, `worker`, for each item of `networkPolicy.modelEndpoints` | Its `cidr` | Its `ports` |
