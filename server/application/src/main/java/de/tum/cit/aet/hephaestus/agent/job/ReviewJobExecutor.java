@@ -524,8 +524,7 @@ public class ReviewJobExecutor {
             int blockedBefore = blockedPools.size();
             for (UUID jobId : candidates) {
                 if (!running.get()) break;
-                seen.add(jobId);
-                StartOutcome outcome = processJob(jobId, blockedPools);
+                StartOutcome outcome = processJob(jobId, blockedPools, seen);
                 if (outcome == StartOutcome.POOL_REJECTED) return false;
                 if (outcome == StartOutcome.STARTED) {
                     anyStarted = true;
@@ -580,29 +579,45 @@ public class ReviewJobExecutor {
     }
 
     StartOutcome processJob(UUID jobId) {
-        return processJob(jobId, new HashSet<>());
+        return processJob(jobId, new HashSet<>(), new HashSet<>());
     }
 
-    private StartOutcome processJob(UUID jobId, Set<Long> blockedPools) {
+    private StartOutcome processJob(UUID jobId, Set<Long> blockedPools, Set<UUID> seen) {
+        UUID selected = jobId;
+        while (seen.add(selected)) {
+            var attempt = tryClaim(selected);
+            if (attempt instanceof ReviewJobClaimService.ClaimTurn next) {
+                selected = next.jobId();
+                continue;
+            }
+            return processClaim(selected, attempt, blockedPools);
+        }
+        return StartOutcome.SKIPPED;
+    }
+
+    private ReviewJobClaimService.@Nullable ClaimAttempt tryClaim(UUID jobId) {
         // The poll offers only queued jobs, so a local attempt of this job was requeued: stop it and claim the job
         // once it has ended. One job never has two sandboxes on one worker.
         if (localRunningJobs.containsKey(jobId)) {
             cancelLocalJob(jobId, "the job was requeued while this attempt still ran");
-            return StartOutcome.SKIPPED;
+            return null;
         }
-        ReviewJobClaimService.ClaimAttempt attempt;
         try {
-            attempt = claims.claimJob(jobId);
+            return claims.claimJob(jobId);
         } catch (CannotAcquireLockException e) {
             log.debug("Lock timeout during claim for job {}, will retry on next poll", jobId);
-            return StartOutcome.SKIPPED;
+            return null;
         } catch (Exception e) {
             log.warn(
                     "Claim failed for job {}, will retry on next poll: {}",
                     jobId,
                     e.getClass().getName());
-            return StartOutcome.SKIPPED;
+            return null;
         }
+    }
+
+    private StartOutcome processClaim(
+            UUID jobId, ReviewJobClaimService.@Nullable ClaimAttempt attempt, Set<Long> blockedPools) {
         if (attempt instanceof ReviewJobClaimService.PoolWait waiting) {
             blockedPools.add(waiting.poolId());
             return StartOutcome.SKIPPED;

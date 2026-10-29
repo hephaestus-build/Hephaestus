@@ -139,9 +139,10 @@ class ReviewJobPollFairnessIntegrationTest extends BaseIntegrationTest {
         UUID oldest = Objects.requireNonNull(first);
         var candidates = transactionTemplate.execute(status -> {
             assertThat(capacity.reserve(
-                            blockedId,
-                            LlmCallClass.REQUEST,
-                            new LlmCallPermits.Caller(blockedWorkspace.getId(), oldest, 0, null)))
+                                    blockedId,
+                                    LlmCallClass.REQUEST,
+                                    new LlmCallPermits.Caller(blockedWorkspace.getId(), oldest, 0, null))
+                            .granted())
                     .isFalse();
             return jobRepository.findQueuedIdsStartedFirst(1, Set.of(blockedId), Set.of());
         });

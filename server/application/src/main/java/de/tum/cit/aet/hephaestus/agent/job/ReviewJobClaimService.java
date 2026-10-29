@@ -104,6 +104,8 @@ public class ReviewJobClaimService {
 
     record PoolWait(long poolId) implements ClaimAttempt {}
 
+    record ClaimTurn(UUID jobId) implements ClaimAttempt {}
+
     enum ClaimOutcome implements ClaimAttempt {
         ALREADY_CLAIMED,
         CONCURRENCY_FULL,
@@ -139,7 +141,11 @@ public class ReviewJobClaimService {
 
             ReviewJob job = locked.get();
             try {
-                return claimLocked(job);
+                ClaimAttempt result = claimLocked(job);
+                if (result instanceof ClaimOutcome || result instanceof TerminalClaim)
+                    callPermits.withdrawClaim(
+                            new LlmCallPermits.Caller(job.getWorkspaceId(), job.getId(), job.getAttempt(), null));
+                return result;
             } catch (JobPreparationException failure) {
                 PreparationFailure preparation = PreparationFailure.of(PreparationFailure.Stage.INPUTS, failure);
                 job.setStatus(ReviewJobStatus.FAILED);
@@ -248,17 +254,19 @@ public class ReviewJobClaimService {
         }
 
         Long poolId = callPermits.poolFor(snapshot.model().connectionRef());
-        if (!composing
-                && poolId != null
-                && !callPermits.reserve(
-                        poolId,
-                        LlmCallClass.REQUEST,
-                        new LlmCallPermits.Caller(
-                                job.getWorkspaceId(),
-                                job.getId(),
-                                job.getAttempt(),
-                                snapshot.model().connectionRef()))) {
-            return new PoolWait(poolId);
+        if (!composing && poolId != null) {
+            var reservation = callPermits.reserve(
+                    poolId,
+                    LlmCallClass.REQUEST,
+                    new LlmCallPermits.Caller(
+                            job.getWorkspaceId(),
+                            job.getId(),
+                            job.getAttempt(),
+                            snapshot.model().connectionRef()));
+            if (!reservation.granted()) {
+                UUID next = reservation.nextClaim();
+                return next == null ? new PoolWait(poolId) : new ClaimTurn(next);
+            }
         }
 
         Instant claimedAt = Instant.now();

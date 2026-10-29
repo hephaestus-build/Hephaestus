@@ -58,9 +58,10 @@ public interface LlmCallPermitRepository extends JpaRepository<LlmCallPermit, UU
             DELETE FROM llm_call_permit WHERE pool_id=:poolId AND
               ((state='CLOSED' AND closed_at < clock_timestamp()-interval '1 minute') OR
                (state IN ('WAITING','CLAIM_WAITING') AND renewed_at < clock_timestamp()-make_interval(secs => :staleSeconds)) OR
-               (state='CLAIM_WAITING' AND NOT EXISTS (SELECT 1 FROM review_job j
+               (state='CLAIM_WAITING' AND NOT EXISTS (SELECT 1 FROM review_job j JOIN workspace w ON w.id=j.workspace_id
                  WHERE j.id=llm_call_permit.source_id AND j.workspace_id=llm_call_permit.workspace_id
-                   AND j.attempt=llm_call_permit.attempt AND j.status='QUEUED')))
+                   AND j.attempt=llm_call_permit.attempt AND j.status='QUEUED'
+                   AND j.available_at<=clock_timestamp() AND w.status='ACTIVE')))
             """, nativeQuery = true)
     void prune(@Param("poolId") long poolId, @Param("staleSeconds") long staleSeconds);
 
@@ -92,6 +93,17 @@ public interface LlmCallPermitRepository extends JpaRepository<LlmCallPermit, UU
               q.acquired_at,q.id LIMIT 1
             """, nativeQuery = true)
     Optional<UUID> next(@Param("poolId") long poolId, @Param("interactive") boolean interactive);
+
+    @Query(value = "SELECT source_id FROM llm_call_permit WHERE id=:id AND state='CLAIM_WAITING'", nativeQuery = true)
+    Optional<UUID> claimJobId(@Param("id") UUID id);
+
+    @Modifying
+    @Query(value = """
+            DELETE FROM llm_call_permit WHERE workspace_id=:workspaceId AND source_id=:sourceId
+              AND attempt=:attempt AND state='CLAIM_WAITING'
+            """, nativeQuery = true)
+    void withdrawClaim(
+            @Param("workspaceId") long workspaceId, @Param("sourceId") UUID sourceId, @Param("attempt") int attempt);
 
     @Modifying
     @Query(
@@ -142,6 +154,22 @@ public interface LlmCallPermitRepository extends JpaRepository<LlmCallPermit, UU
                     "UPDATE llm_call_permit SET requests=CASE WHEN state='RESERVED' THEN 0 ELSE requests END,tokens=CASE WHEN state='RESERVED' THEN 0 ELSE tokens END,state='CLOSED',closed_at=clock_timestamp() WHERE id=:id AND worker_id=:workerId AND state IN ('RESERVED','ACTIVE')",
             nativeQuery = true)
     int release(@Param("id") UUID id, @Param("workerId") String workerId);
+
+    /** Only unused first-call reservations can be relinquished without transport-closure proof. */
+    @Query(value = """
+            WITH released AS (
+              UPDATE llm_call_permit SET state='CLOSED',closed_at=clock_timestamp(),requests=0,tokens=0
+              WHERE worker_id=:workerId AND workspace_id=:workspaceId AND source_id=:sourceId
+                AND attempt=:attempt AND pool_id<>:requestedPool AND state='RESERVED'
+              RETURNING id
+            ) SELECT id FROM released
+            """, nativeQuery = true)
+    List<UUID> releaseOtherReservations(
+            @Param("requestedPool") long requestedPool,
+            @Param("workerId") String workerId,
+            @Param("workspaceId") long workspaceId,
+            @Param("sourceId") UUID sourceId,
+            @Param("attempt") int attempt);
 
     @Modifying
     @Query(

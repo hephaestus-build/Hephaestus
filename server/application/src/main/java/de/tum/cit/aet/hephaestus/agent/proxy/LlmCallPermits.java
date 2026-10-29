@@ -118,7 +118,10 @@ public class LlmCallPermits {
     /** No provider call starts without a committed grant, and an ended caller never receives one. */
     public @Nullable Permit acquire(
             long poolId, LlmCallClass callClass, Caller caller, BooleanSupplier ended, @Nullable Instant deadline) {
+        if (TransactionSynchronizationManager.isActualTransactionActive())
+            throw new IllegalStateException("Model calls must acquire capacity outside a database transaction");
         if (ended.getAsBoolean() || expired(deadline)) return null;
+        relinquishOtherReservations(poolId, caller);
         var activated = new AtomicReference<@Nullable Permit>();
         Permit reserved;
         try {
@@ -202,6 +205,17 @@ public class LlmCallPermits {
         }
     }
 
+    private void relinquishOtherReservations(long requestedPool, Caller caller) {
+        // Commit before taking the requested pool lock. An unused reservation must never wait on another pool.
+        var released = transactions.execute(status -> rows.releaseOtherReservations(
+                requestedPool, workerId, caller.workspaceId(), caller.sourceId(), caller.attempt()));
+        if (released == null) return;
+        for (UUID id : released) {
+            Permit permit = held.get(id);
+            if (permit != null) permit.forgetClosed();
+        }
+    }
+
     public @Nullable Long poolFor(LlmModelResolver.ConnectionRef ref) {
         return models.resolveCallPool(ref);
     }
@@ -211,10 +225,19 @@ public class LlmCallPermits {
         return model == null || Objects.equals(poolFor(model), poolId);
     }
 
+    /** A fair claim can be dispatched now; a full pool or a queued proxy call needs another poll. */
+    public record ClaimReservation(
+            boolean granted, @Nullable UUID nextClaim) {}
+
+    /** A claim held by another admission check must not strand the pool's fair queue. */
+    public void withdrawClaim(Caller caller) {
+        rows.withdrawClaim(caller.workspaceId(), caller.sourceId(), caller.attempt());
+    }
+
     /** Called inside the review claim transaction, before any Pod can be created. */
-    public boolean reserve(long poolId, LlmCallClass callClass, Caller caller) {
+    public ClaimReservation reserve(long poolId, LlmCallClass callClass, Caller caller) {
         LlmCallPoolRepository.Admission pool = pools.lockAdmission(poolId).orElseThrow();
-        if (!samePool(poolId, caller)) return false;
+        if (!samePool(poolId, caller)) return new ClaimReservation(false, null);
         rows.prune(poolId, properties.permitLease().toSeconds());
         UUID id = rows.waitingClaim(poolId, caller.sourceId(), caller.workspaceId(), caller.attempt())
                 .orElse(null);
@@ -230,8 +253,11 @@ public class LlmCallPermits {
                     caller.attempt(),
                     "CLAIM_WAITING"));
         } else rows.pollClaim(id, workerId);
-        if (!room(poolId, pool, callClass)
-                || !rows.next(poolId, false).filter(id::equals).isPresent()) return false;
+        if (!room(poolId, pool, callClass)) return new ClaimReservation(false, null);
+        UUID next = rows.next(poolId, false).orElse(null);
+        if (!id.equals(next))
+            return new ClaimReservation(
+                    false, next == null ? null : rows.claimJobId(next).orElse(null));
         if (rows.grant(id, "RESERVED", tokenBound(pool), workerId) != 1)
             throw new IllegalStateException("Claim reservation was lost");
         Permit permit = new Permit(id, poolId, pool.getSlug(), callClass);
@@ -241,7 +267,7 @@ public class LlmCallPermits {
                 register(permit);
             }
         });
-        return true;
+        return new ClaimReservation(true, null);
     }
 
     // A proxy request already resolved its credential. Changed membership aborts that request; a claim can retry.

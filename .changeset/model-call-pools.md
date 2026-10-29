@@ -7,3 +7,5 @@ Models that share provider capacity can now share one call pool across workers a
 The optional `AGENT_MAX_ACTIVE_COMPOSITIONS` setting bounds loaded compositions per worker and defaults to 4. `AGENT_MAX_CONCURRENT_COMPOSITIONS` continues to bound all review attempts.
 
 Queued review claims take part in fair scheduling before a sandbox starts. Unused first-call reservations recover when a worker stops renewing them. Active calls retain their fenced permits until their transport closes, including cancellation after JSON response headers.
+
+A new review cannot hide the claim that owns the pool's next turn. A first call to another pool releases only its unused primary reservation before it waits.

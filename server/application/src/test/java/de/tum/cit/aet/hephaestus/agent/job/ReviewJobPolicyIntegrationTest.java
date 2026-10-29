@@ -58,6 +58,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.Executors;
@@ -240,6 +241,52 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
         }
     }
 
+    @Test
+    void shouldAdmitAnExistingFairClaimWhileFreshReviewsKeepArriving() {
+        var unrelated = Set.copyOf(jobs.findAll().stream().map(ReviewJob::getId).toList());
+        var selected = binding(DataHandlingTier.IN_HOUSE);
+        long poolId = endpointPool(selected, true);
+        var capacity = LlmCallPermitsTestFixtures.worker(context, "test-worker");
+        var oldest = queued(selected);
+        Boolean initial = transactions.execute(status -> capacity.reserve(
+                        poolId,
+                        LlmCallClass.REQUEST,
+                        new LlmCallPermits.Caller(workspace.getId(), oldest.getId(), oldest.getAttempt(), null))
+                .granted());
+        assertThat(initial).isFalse();
+        jdbc.update("UPDATE llm_call_pool SET no_call_before=NULL WHERE id=?", poolId);
+        var polling = pooledExecutor(properties, capacity, mock(SandboxManager.class));
+        int granted = 0;
+        try {
+            for (int round = 0; round < 6; round++) {
+                var fresh = queued(selected);
+                UUID candidate =
+                        jobs.findQueuedIdsStartedFirst(1, Set.of(), unrelated).getFirst();
+                assertThat(candidate).isEqualTo(fresh.getId());
+                if (polling.processJob(candidate) == ReviewJobExecutor.StartOutcome.STARTED) {
+                    granted++;
+                    var stillQueued = jobs.findById(fresh.getId()).orElseThrow();
+                    assertThat(stillQueued.getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
+                    assertThat(stillQueued.getWorkerId()).isNull();
+                    assertThat(stillQueued.getExecutionStartedAt()).isNull();
+                    break;
+                }
+            }
+            assertThat(granted)
+                    .as("an idle endpoint must admit its waiting claim despite fresh arrivals on each poll")
+                    .isPositive();
+            assertThat(jobs.findById(oldest.getId()).orElseThrow().getStatus()).isEqualTo(ReviewJobStatus.RUNNING);
+        } finally {
+            var unused = capacity.acquire(
+                    poolId,
+                    LlmCallClass.REQUEST,
+                    new LlmCallPermits.Caller(workspace.getId(), oldest.getId(), oldest.getAttempt(), null),
+                    () -> false,
+                    Instant.now().plusMillis(100));
+            if (unused != null) unused.close();
+        }
+    }
+
     private long endpointPool(WorkspaceAgentBinding binding, boolean cooling) {
         var pool = new LlmCallPool();
         pool.setSlug("endpoint-" + UUID.randomUUID());
@@ -251,6 +298,74 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
         model.setCallPoolId(pool.getId());
         models.saveAndFlush(model);
         return pool.getId();
+    }
+
+    @Test
+    void shouldWithdrawAWaitingClaimWhoseReadinessMovesIntoTheFuture() {
+        var selected = binding(DataHandlingTier.IN_HOUSE);
+        long poolId = endpointPool(selected, true);
+        var waiting = queued(selected);
+        var capacity = LlmCallPermitsTestFixtures.worker(context, "test-worker");
+        transactions.executeWithoutResult(status -> capacity.reserve(
+                poolId,
+                LlmCallClass.REQUEST,
+                new LlmCallPermits.Caller(workspace.getId(), waiting.getId(), waiting.getAttempt(), null)));
+        waiting.setAvailableAt(Instant.now().plusSeconds(60));
+        jobs.saveAndFlush(waiting);
+        var runnable = queued(selected);
+        jdbc.update("UPDATE llm_call_pool SET no_call_before=NULL WHERE id=?", poolId);
+        var polling = pooledExecutor(properties, capacity, mock(SandboxManager.class));
+        try {
+            assertThat(polling.processJob(runnable.getId())).isEqualTo(ReviewJobExecutor.StartOutcome.STARTED);
+            assertThat(jobs.findById(waiting.getId()).orElseThrow().getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
+            assertThat(jobs.findById(runnable.getId()).orElseThrow().getStatus())
+                    .isEqualTo(ReviewJobStatus.RUNNING);
+        } finally {
+            var unused = capacity.acquire(
+                    poolId,
+                    LlmCallClass.REQUEST,
+                    new LlmCallPermits.Caller(workspace.getId(), runnable.getId(), runnable.getAttempt(), null),
+                    () -> false,
+                    Instant.now().plusMillis(100));
+            if (unused != null) unused.close();
+        }
+    }
+
+    @Test
+    void shouldWithdrawAnUnclaimableWinnerSoAnotherBindingCanUseThePool() {
+        var capped = binding(DataHandlingTier.IN_HOUSE);
+        long poolId = endpointPool(capped, true);
+        var waiting = queued(capped);
+        var capacity = LlmCallPermitsTestFixtures.worker(context, "test-worker");
+        transactions.executeWithoutResult(status -> capacity.reserve(
+                poolId,
+                LlmCallClass.REQUEST,
+                new LlmCallPermits.Caller(workspace.getId(), waiting.getId(), waiting.getAttempt(), null)));
+        var running = queued(capped);
+        running.setStatus(ReviewJobStatus.RUNNING);
+        jobs.saveAndFlush(running);
+        var open = binding(DataHandlingTier.CLOUD);
+        var model = Objects.requireNonNull(open.getInstanceModel());
+        model.setCallPoolId(poolId);
+        models.saveAndFlush(model);
+        var runnable = queued(open);
+        jdbc.update("UPDATE llm_call_pool SET no_call_before=NULL WHERE id=?", poolId);
+        var polling = pooledExecutor(properties, capacity, mock(SandboxManager.class));
+        try {
+            assertThat(polling.processJob(runnable.getId())).isEqualTo(ReviewJobExecutor.StartOutcome.SKIPPED);
+            assertThat(polling.processJob(runnable.getId())).isEqualTo(ReviewJobExecutor.StartOutcome.STARTED);
+            assertThat(jobs.findById(waiting.getId()).orElseThrow().getStatus()).isEqualTo(ReviewJobStatus.QUEUED);
+            assertThat(jobs.findById(runnable.getId()).orElseThrow().getStatus())
+                    .isEqualTo(ReviewJobStatus.RUNNING);
+        } finally {
+            var unused = capacity.acquire(
+                    poolId,
+                    LlmCallClass.REQUEST,
+                    new LlmCallPermits.Caller(workspace.getId(), runnable.getId(), runnable.getAttempt(), null),
+                    () -> false,
+                    Instant.now().plusMillis(100));
+            if (unused != null) unused.close();
+        }
     }
 
     private ReviewJobExecutor pooledExecutor(
@@ -456,6 +571,7 @@ class ReviewJobPolicyIntegrationTest extends BaseIntegrationTest {
         var metrics = new SimpleMeterRegistry();
         var capacity = mock(LlmCallPermits.class);
         when(capacity.poolFor(any())).thenReturn(42L);
+        when(capacity.reserve(anyLong(), any(), any())).thenReturn(new LlmCallPermits.ClaimReservation(false, null));
         var claims = new ReviewJobClaimService(
                 jobs,
                 policy,

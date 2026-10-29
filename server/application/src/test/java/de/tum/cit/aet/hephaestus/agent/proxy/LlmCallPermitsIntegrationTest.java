@@ -264,10 +264,10 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
     void shouldReserveTheLastBackgroundSlotForOnlyOneClaimAcrossWorkers() throws Exception {
         long pool = pool(2, 1);
         try (var calls = Executors.newVirtualThreadPerTaskExecutor()) {
-            var first = calls.submit(
-                    () -> transactions.execute(status -> workerA.reserve(pool, LlmCallClass.EVENT, caller(1))));
-            var second = calls.submit(
-                    () -> transactions.execute(status -> workerB.reserve(pool, LlmCallClass.EVENT, caller(2))));
+            var first = calls.submit(() -> transactions.execute(status ->
+                    workerA.reserve(pool, LlmCallClass.EVENT, caller(1)).granted()));
+            var second = calls.submit(() -> transactions.execute(status ->
+                    workerB.reserve(pool, LlmCallClass.EVENT, caller(2)).granted()));
             assertThat(List.of(first.get(5, TimeUnit.SECONDS), second.get(5, TimeUnit.SECONDS)))
                     .containsExactlyInAnyOrder(true, false);
         }
@@ -279,7 +279,8 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
     void shouldUseOnlyTheReservationForTheExactAttemptAndWorker() {
         long pool = pool(1, 0);
         var caller = caller(1);
-        Boolean reserved = transactions.execute(status -> workerA.reserve(pool, LlmCallClass.EVENT, caller));
+        Boolean reserved = transactions.execute(
+                status -> workerA.reserve(pool, LlmCallClass.EVENT, caller).granted());
         assertThat(reserved).isTrue();
         assertThat(probe(workerB, pool, LlmCallClass.EVENT, 1)).isNull();
         var call = Objects.requireNonNull(workerA.acquire(
@@ -292,7 +293,8 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
     @Test
     void shouldRecoverAnUnusedReservationFromADeadWorkerBeforeGrantingItsReplacement() {
         long pool = pool(2, 1);
-        Boolean reserved = transactions.execute(status -> workerA.reserve(pool, LlmCallClass.REQUEST, caller(1)));
+        Boolean reserved = transactions.execute(
+                status -> workerA.reserve(pool, LlmCallClass.REQUEST, caller(1)).granted());
         assertThat(reserved).isTrue();
         jdbc.update(
                 "UPDATE llm_call_permit SET renewed_at=clock_timestamp()-interval '1 minute' WHERE pool_id=?", pool);
@@ -334,7 +336,8 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
     void shouldCloseAnActivatedReservationWhenTheFinalOwnershipReadThrows() {
         long pool = pool(1, 0);
         var caller = caller(1);
-        Boolean reserved = transactions.execute(status -> workerA.reserve(pool, LlmCallClass.REQUEST, caller));
+        Boolean reserved = transactions.execute(
+                status -> workerA.reserve(pool, LlmCallClass.REQUEST, caller).granted());
         assertThat(reserved).isTrue();
         AtomicInteger checks = new AtomicInteger();
         assertThatThrownBy(() -> workerA.acquire(
@@ -389,9 +392,147 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
         }
     }
 
+    @Test
+    void shouldMakeProgressWhenReviewsCallAnotherPoolBeforeTheirReservedModel() throws Exception {
+        long firstPool = pool(1, 0);
+        long secondPool = pool(1, 0);
+        var firstCaller = caller(1);
+        var secondCaller = caller(2);
+        Boolean firstReserved = transactions.execute(status ->
+                workerA.reserve(firstPool, LlmCallClass.REQUEST, firstCaller).granted());
+        Boolean secondReserved = transactions.execute(status ->
+                workerB.reserve(secondPool, LlmCallClass.REQUEST, secondCaller).granted());
+        assertThat(firstReserved).isTrue();
+        assertThat(secondReserved).isTrue();
+        try (var calls = Executors.newVirtualThreadPerTaskExecutor()) {
+            var first = calls.submit(() -> {
+                try (var permit = workerA.acquire(
+                        secondPool,
+                        LlmCallClass.REQUEST,
+                        firstCaller,
+                        () -> false,
+                        Instant.now().plusSeconds(2))) {
+                    return permit != null;
+                }
+            });
+            var second = calls.submit(() -> {
+                try (var permit = workerB.acquire(
+                        firstPool,
+                        LlmCallClass.REQUEST,
+                        secondCaller,
+                        () -> false,
+                        Instant.now().plusSeconds(2))) {
+                    return permit != null;
+                }
+            });
+            assertThat(List.of(first.get(5, TimeUnit.SECONDS), second.get(5, TimeUnit.SECONDS)))
+                    .as("both calls must progress without retaining unused reservations in the other endpoint")
+                    .containsOnly(true);
+        } finally {
+            Objects.requireNonNull(workerA.acquire(
+                            firstPool,
+                            LlmCallClass.REQUEST,
+                            firstCaller,
+                            () -> false,
+                            Instant.now().plusSeconds(2)))
+                    .close();
+            Objects.requireNonNull(workerB.acquire(
+                            secondPool,
+                            LlmCallClass.REQUEST,
+                            secondCaller,
+                            () -> false,
+                            Instant.now().plusSeconds(2)))
+                    .close();
+        }
+    }
+
     private LlmCallPermits worker(String id) {
         return new LlmCallPermits(
                 pools, rows, transactions, PROPERTIES, id, new SimpleMeterRegistry(), mock(LlmModelResolver.class));
+    }
+
+    @Test
+    void shouldKeepAnActiveCallWhileItsAttemptAcquiresAnotherPool() {
+        long primary = pool(1, 0);
+        long auxiliary = pool(1, 0);
+        var caller = caller(1);
+        transactions.executeWithoutResult(status -> workerA.reserve(primary, LlmCallClass.REQUEST, caller));
+        try (var active = Objects.requireNonNull(workerA.acquire(
+                primary,
+                LlmCallClass.REQUEST,
+                caller,
+                () -> false,
+                Instant.now().plusSeconds(2)))) {
+            try (var other = Objects.requireNonNull(workerA.acquire(
+                    auxiliary,
+                    LlmCallClass.REQUEST,
+                    caller,
+                    () -> false,
+                    Instant.now().plusSeconds(2)))) {
+                assertThat(rows.countActive(primary)).isEqualTo(1);
+                assertThat(rows.countActive(auxiliary)).isEqualTo(1);
+                assertThat(active.isRevoked()).isFalse();
+                assertThat(other.isRevoked()).isFalse();
+            }
+            assertThat(rows.countActive(primary)).isEqualTo(1);
+        }
+    }
+
+    @Test
+    void shouldKeepOtherOwnersAndAttemptsUnusedReservationsWhenChangingPools() {
+        long primary = pool(1, 0);
+        long auxiliary = pool(1, 0);
+        var caller = caller(1);
+        transactions.executeWithoutResult(status -> workerA.reserve(primary, LlmCallClass.REQUEST, caller));
+        var otherAttempt =
+                new LlmCallPermits.Caller(caller.workspaceId(), caller.sourceId(), caller.attempt() + 1, null);
+        var otherWorkspace =
+                new LlmCallPermits.Caller(caller.workspaceId() + 1, caller.sourceId(), caller.attempt(), null);
+        var otherSource = new LlmCallPermits.Caller(caller.workspaceId(), UUID.randomUUID(), caller.attempt(), null);
+        try {
+            for (var fenced : List.of(otherAttempt, otherWorkspace, otherSource)) {
+                try (var call = Objects.requireNonNull(workerA.acquire(
+                        auxiliary,
+                        LlmCallClass.REQUEST,
+                        fenced,
+                        () -> false,
+                        Instant.now().plusSeconds(2)))) {
+                    assertThat(call.isRevoked()).isFalse();
+                    assertThat(rows.countActive(primary)).isEqualTo(1);
+                }
+            }
+            try (var otherWorker = Objects.requireNonNull(workerB.acquire(
+                    auxiliary,
+                    LlmCallClass.REQUEST,
+                    caller,
+                    () -> false,
+                    Instant.now().plusSeconds(2)))) {
+                assertThat(otherWorker.isRevoked()).isFalse();
+                assertThat(rows.countActive(primary)).isEqualTo(1);
+            }
+        } finally {
+            Objects.requireNonNull(workerA.acquire(
+                            primary,
+                            LlmCallClass.REQUEST,
+                            caller,
+                            () -> false,
+                            Instant.now().plusSeconds(2)))
+                    .close();
+        }
+    }
+
+    @Test
+    void shouldRefuseToWaitForCapacityInsideAnOpenTransaction() {
+        long pool = pool(1, 0);
+        transactions.executeWithoutResult(status -> assertThatThrownBy(() -> workerA.acquire(
+                        pool,
+                        LlmCallClass.REQUEST,
+                        caller(1),
+                        () -> false,
+                        Instant.now().plusSeconds(2)))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("Model calls must acquire capacity outside a database transaction"));
+        assertThat(rows.countActive(pool)).isZero();
     }
 
     private long pool(int maximum, int reserve) {

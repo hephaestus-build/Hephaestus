@@ -400,7 +400,10 @@ public interface ReviewJobRepository extends JpaRepository<ReviewJob, UUID> {
         return findQueuedIdsStartedFirst(limit, Set.of(), Set.of());
     }
 
-    /** Skip endpoints already refused during this poll, so another endpoint can enter even a one-row window. */
+    /**
+     * Offer fresh demand to fairness first. The poller then dispatches the fair winner; only an unavailable
+     * endpoint is skipped for the rest of this poll.
+     */
     @WorkspaceAgnostic("Cross-workspace candidate scan with live catalog membership and per-poll endpoint exclusions")
     @Query(value = """
             SELECT j.id FROM review_job j JOIN workspace w ON w.id=j.workspace_id

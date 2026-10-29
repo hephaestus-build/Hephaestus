@@ -514,14 +514,23 @@ A review claim reserves its first grant before capture or Pod creation.
 A saturated pool leaves the review queued.
 The first call consumes only its exact attempt and worker reservation.
 
+A script can call another pool before its primary model.
+The worker first releases its unused reservation.
+That release commits before another pool lock or capacity wait.
+Active calls retain their grants until their transports close.
+
 Unused reservations expire when their owner stops renewing them for a full permit lease.
 Any worker can reclaim these reservations under the pool lock, with an atomic state fence against activation.
 Active grants never use that expiry path.
 
 A review that cannot claim records its demand in the same fair queue as background calls.
 It stays queued and creates no Pod.
-After a refused claim, the same poll scans other endpoint pools before it sleeps.
+After a capacity refusal, the same poll scans other endpoint pools before it sleeps.
 The job retains its original readiness time.
+
+If another claim owns the next turn, the poll dispatches that claim.
+A budget hold or workspace limit withdraws ineligible claim demand.
+A paused workspace or future readiness time also withdraws that demand.
 Conversation and background grants have separate fairness history, so conversations do not defer their workspace's composition.
 
 The pool also accounts for request and token rates across workers.
