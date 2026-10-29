@@ -10,3 +10,7 @@ Queued review claims take part in fair scheduling before a sandbox starts. Unuse
 
 A new review cannot hide the claim that owns the pool's next turn. A first call to another pool releases only its unused primary reservation before it waits.
 Refunds for unused reservations preserve scheduling order, so an older composition retains its turn.
+
+Queued calls keep their scheduling position while they wait for local admission. Completed JSON answers retain their usage charge if capacity is revoked before settlement. Exhausted retries record withheld feedback without waiting for a composition slot.
+
+Changing a busy call pool returns a conflict with the `llm-call-pool-in-use` problem type and a message that explains when to retry.

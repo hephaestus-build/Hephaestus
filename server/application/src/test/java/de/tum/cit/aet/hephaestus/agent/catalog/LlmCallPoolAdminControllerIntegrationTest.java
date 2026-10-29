@@ -81,6 +81,21 @@ class LlmCallPoolAdminControllerIntegrationTest extends AbstractWorkspaceIntegra
     }
 
     @Test
+    void shouldDocumentBusyPoolAndImmutableSlugResponses() throws Exception {
+        Object specification = new Yaml().load(Files.readString(Path.of("..", "openapi.yaml")));
+        var paths = new ObjectMapper().valueToTree(specification).path("paths");
+        var pool = paths.path("/admin/llm/call-pools/{id}");
+        assertThat(pool.path("put").path("responses").has("400")).isTrue();
+        assertThat(pool.path("put").path("responses").has("409")).isTrue();
+        assertThat(pool.path("delete").path("responses").has("409")).isTrue();
+        assertThat(paths.path("/admin/llm/call-pools/{id}/models")
+                        .path("put")
+                        .path("responses")
+                        .has("409"))
+                .isTrue();
+    }
+
+    @Test
     @WithAdminUser
     void shouldShareAPoolBetweenAnInstanceModelAndAWorkspaceModel() {
         Workspace workspace = workspace("pool-share");
@@ -301,7 +316,11 @@ class LlmCallPoolAdminControllerIntegrationTest extends AbstractWorkspaceIntegra
                 .exchange()
                 .expectStatus()
                 .isEqualTo(409)
-                .expectBody(Void.class);
+                .expectBody()
+                .jsonPath("$.type")
+                .isEqualTo("/problems/llm-call-pool-in-use")
+                .jsonPath("$.detail")
+                .value(detail -> assertThat(String.valueOf(detail)).contains("rate window"));
         jdbc.update(
                 "UPDATE llm_call_permit SET state='CLOSED',granted_at=clock_timestamp(),closed_at=clock_timestamp() WHERE id=?",
                 call);
@@ -312,7 +331,11 @@ class LlmCallPoolAdminControllerIntegrationTest extends AbstractWorkspaceIntegra
                 .exchange()
                 .expectStatus()
                 .isEqualTo(409)
-                .expectBody(Void.class);
+                .expectBody()
+                .jsonPath("$.type")
+                .isEqualTo("/problems/llm-call-pool-in-use")
+                .jsonPath("$.detail")
+                .value(detail -> assertThat(String.valueOf(detail)).contains("rate window"));
         jdbc.update("UPDATE llm_call_permit SET closed_at=clock_timestamp()-interval '61 seconds' WHERE id=?", call);
         webTestClient
                 .delete()

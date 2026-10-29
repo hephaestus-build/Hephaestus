@@ -7622,6 +7622,10 @@ export type AdminDeleteLlmCallPoolErrors = {
      * Pool not found
      */
     404: unknown;
+    /**
+     * The pool still has calls, rate history, or a cooldown
+     */
+    409: unknown;
 };
 
 export type AdminDeleteLlmCallPoolResponses = {
@@ -7644,9 +7648,17 @@ export type AdminUpdateLlmCallPoolData = {
 
 export type AdminUpdateLlmCallPoolErrors = {
     /**
+     * The pool slug cannot change or the limits are invalid
+     */
+    400: unknown;
+    /**
      * Pool not found
      */
     404: unknown;
+    /**
+     * The pool still has calls, rate history, or a cooldown
+     */
+    409: unknown;
 };
 
 export type AdminUpdateLlmCallPoolResponses = {
@@ -7672,6 +7684,10 @@ export type AdminUpdateLlmCallPoolModelsErrors = {
      * Pool or model not found
      */
     404: unknown;
+    /**
+     * The pool still has calls, rate history, or a cooldown
+     */
+    409: unknown;
 };
 
 export type AdminUpdateLlmCallPoolModelsResponses = {

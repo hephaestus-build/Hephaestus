@@ -76,6 +76,14 @@ public class LlmCallPoolAdminController {
             responseCode = "404",
             description = "Pool not found",
             content = @Content(schema = @Schema(hidden = true)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "The pool still has calls, rate history, or a cooldown",
+            content = @Content(schema = @Schema(hidden = true)))
+    @ApiResponse(
+            responseCode = "400",
+            description = "The pool slug cannot change or the limits are invalid",
+            content = @Content(schema = @Schema(hidden = true)))
     @Audited(ledger = AuditLedger.AUTH_EVENT, type = "LLM_SETTINGS_CHANGED")
     public ResponseEntity<LlmCallPoolDTO> update(
             @PathVariable Long id, @Valid @RequestBody SaveLlmCallPoolRequestDTO request) {
@@ -88,6 +96,10 @@ public class LlmCallPoolAdminController {
     @ApiResponse(
             responseCode = "404",
             description = "Pool not found",
+            content = @Content(schema = @Schema(hidden = true)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "The pool still has calls, rate history, or a cooldown",
             content = @Content(schema = @Schema(hidden = true)))
     @Audited(ledger = AuditLedger.AUTH_EVENT, type = "LLM_SETTINGS_CHANGED")
     public ResponseEntity<Void> delete(@PathVariable Long id) {
@@ -112,6 +124,10 @@ public class LlmCallPoolAdminController {
     @ApiResponse(
             responseCode = "404",
             description = "Pool or model not found",
+            content = @Content(schema = @Schema(hidden = true)))
+    @ApiResponse(
+            responseCode = "409",
+            description = "The pool still has calls, rate history, or a cooldown",
             content = @Content(schema = @Schema(hidden = true)))
     @Audited(ledger = AuditLedger.AUTH_EVENT, type = "LLM_SETTINGS_CHANGED")
     public ResponseEntity<List<LlmCallPoolModelDTO>> replaceModels(

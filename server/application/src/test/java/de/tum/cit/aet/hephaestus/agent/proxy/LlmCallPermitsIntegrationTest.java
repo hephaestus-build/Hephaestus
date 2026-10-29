@@ -184,6 +184,73 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
+    void shouldRenewQueuedCallsWhileAnotherWaiterHoldsLocalAdmission() throws Exception {
+        long pool = pool(1, 0);
+        var gatedPools = mock(LlmCallPoolRepository.class);
+        var blockNext = new AtomicBoolean();
+        var entered = new CompletableFuture<Void>();
+        var resume = new CompletableFuture<Void>();
+        when(gatedPools.lockAdmission(pool)).thenAnswer(invocation -> {
+            if (blockNext.compareAndSet(true, false)) {
+                entered.complete(null);
+                resume.get(10, TimeUnit.SECONDS);
+            }
+            return pools.lockAdmission(pool);
+        });
+        var worker = new LlmCallPermits(
+                gatedPools,
+                rows,
+                transactions,
+                PROPERTIES,
+                "waiting-" + UUID.randomUUID(),
+                new SimpleMeterRegistry(),
+                mock(LlmModelResolver.class));
+        var ended = new AtomicBoolean();
+        try (var occupied = admit(workerB, pool, LlmCallClass.EVENT, 1);
+                var calls = Executors.newVirtualThreadPerTaskExecutor()) {
+            assertThat(occupied.isRevoked()).isFalse();
+            var first = calls.submit(() -> worker.acquire(
+                    pool,
+                    LlmCallClass.COMPOSITION,
+                    caller(2),
+                    ended::get,
+                    Instant.now().plusSeconds(15)));
+            var second = calls.submit(() -> worker.acquire(
+                    pool,
+                    LlmCallClass.EVENT,
+                    caller(3),
+                    ended::get,
+                    Instant.now().plusSeconds(15)));
+            try {
+                await().atMost(Duration.ofSeconds(5))
+                        .untilAsserted(() -> assertThat(waiting(pool)).isEqualTo(2));
+                blockNext.set(true);
+                entered.get(5, TimeUnit.SECONDS);
+                var ids = jdbc.queryForList(
+                        "SELECT id FROM llm_call_permit WHERE pool_id=? AND state='WAITING'", UUID.class, pool);
+                jdbc.update(
+                        "UPDATE llm_call_permit SET renewed_at=clock_timestamp()-interval '1 hour' "
+                                + "WHERE pool_id=? AND state='WAITING'",
+                        pool);
+                worker.renew();
+                transactions.executeWithoutResult(status -> {
+                    assertThat(pools.lockAdmission(pool)).isPresent();
+                    rows.prune(pool, PROPERTIES.permitLease().toSeconds());
+                });
+                assertThat(jdbc.queryForList(
+                                "SELECT id FROM llm_call_permit WHERE pool_id=? AND state='WAITING'", UUID.class, pool))
+                        .containsExactlyInAnyOrderElementsOf(ids);
+            } finally {
+                ended.set(true);
+                resume.complete(null);
+            }
+            assertThat(first.get(5, TimeUnit.SECONDS)).isNull();
+            assertThat(second.get(5, TimeUnit.SECONDS)).isNull();
+        }
+        assertThat(waiting(pool)).isZero();
+    }
+
+    @Test
     void shouldStopAnEndedWaiterWithoutGrantingIt() throws Exception {
         long pool = pool(1, 0);
         var held = admit(workerA, pool, LlmCallClass.EVENT, 1);

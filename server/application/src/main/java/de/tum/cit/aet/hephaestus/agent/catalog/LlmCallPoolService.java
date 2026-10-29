@@ -160,10 +160,7 @@ public class LlmCallPoolService {
         if (permits.countUnclosed(id) > 0
                 || rates.getRequests() > 0
                 || rates.getTokens() > 0
-                || admission.getCooldownMillis() > 0)
-            throw new ResponseStatusException(
-                    HttpStatus.CONFLICT,
-                    "Wait for the pool's calls, rate window, and cooldown to end before changing it.");
+                || admission.getCooldownMillis() > 0) throw new LlmCallPoolInUseException(id);
         return get(id);
     }
 

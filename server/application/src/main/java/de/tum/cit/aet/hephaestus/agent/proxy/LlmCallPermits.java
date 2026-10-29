@@ -55,6 +55,7 @@ public class LlmCallPermits {
     private final LlmPoolMeters meters;
     private final Map<UUID, Permit> held = new ConcurrentHashMap<>();
     private final Set<UUID> pendingRelease = ConcurrentHashMap.newKeySet();
+    private final Set<UUID> waiting = ConcurrentHashMap.newKeySet();
     private final Map<Long, ReentrantLock> localAdmissions = new ConcurrentHashMap<>();
     private @Nullable ScheduledExecutorService scheduler;
     private final LlmModelResolver models;
@@ -153,6 +154,7 @@ public class LlmCallPermits {
                     "WAITING"));
             return admission.getSlug();
         }));
+        waiting.add(id);
         long began = System.nanoTime();
         boolean handedOff = false;
         Permit admitted = null;
@@ -169,6 +171,7 @@ public class LlmCallPermits {
             }
             return null;
         } finally {
+            waiting.remove(id);
             if (!handedOff && admitted != null) admitted.close();
             if (!handedOff && admitted == null) {
                 meters.pool(poolSlug).abandoned(callClass, "capacity");
@@ -384,6 +387,8 @@ public class LlmCallPermits {
     /** Retries only releases whose request thread already confirmed transport closure. */
     void renew() {
         try {
+            Set<UUID> queued = Set.copyOf(waiting);
+            if (!queued.isEmpty()) transactions.executeWithoutResult(status -> rows.renew(workerId, queued));
             var abandoned = transactions.execute(status -> rows.abandonedReservations(workerId));
             if (abandoned != null) {
                 for (UUID id : abandoned) {

@@ -552,13 +552,10 @@ class LlmProxyService {
                     && poolPermit != null
                     && routing.connectionScope() == UsageFundingSource.INSTANCE)
                 callPermits.coolDown(poolPermit, upstream.headers());
-            if (poolPermit != null && poolPermit.isRevoked()) {
+            // Report revocation in the stream; buffered responses still settle health and usage below.
+            if (poolPermit != null && poolPermit.isRevoked() && upstream.streamOutcome() != null && response != null) {
                 call.failed(new MentorTurn.FailedCall(UPSTREAM_PAUSED, null));
-                if (upstream.streamOutcome() != null && response != null)
-                    errors.writeErrorFrame(response, UPSTREAM_PAUSED, "The model capacity lease ended.");
-                else
-                    return errors.providerError(
-                            HttpStatus.SERVICE_UNAVAILABLE, UPSTREAM_PAUSED, "The model capacity lease ended.");
+                errors.writeErrorFrame(response, UPSTREAM_PAUSED, "The model capacity lease ended.");
             }
             if (call.isCancelled()) {
                 // The turn ended without this call; the provider's state is unknown.

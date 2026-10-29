@@ -34,6 +34,7 @@ import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
 import de.tum.cit.aet.hephaestus.practices.spi.ModelKind;
 import de.tum.cit.aet.hephaestus.testconfig.BaseUnitTest;
 import de.tum.cit.aet.hephaestus.workspace.spi.DataHandlingTier;
+import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import io.micrometer.tracing.Span;
@@ -849,8 +850,8 @@ class LlmProxyServiceTest extends BaseUnitTest {
         private SimpleMeterRegistry streamingMeterRegistry;
         private final ProxyCallsInFlight streamingCalls = new ProxyCallsInFlight(3);
         private final LlmCallPermits streamingPermits = mock(LlmCallPermits.class);
-        private final LlmConnectionHealth streamingHealth =
-                new LlmConnectionHealth(CircuitBreakerRegistry.ofDefaults());
+        private final CircuitBreakerRegistry streamingBreakers = CircuitBreakerRegistry.ofDefaults();
+        private final LlmConnectionHealth streamingHealth = new LlmConnectionHealth(streamingBreakers);
 
         @BeforeEach
         void startUpstream() throws IOException {
@@ -1063,6 +1064,37 @@ class LlmProxyServiceTest extends BaseUnitTest {
             String text =
                     body instanceof byte[] bytes ? new String(bytes, StandardCharsets.UTF_8) : String.valueOf(body);
             return new Answer(answer.getStatusCode().value(), text);
+        }
+
+        @Test
+        void shouldBillACompletedJsonAnswerWhenItsPermitIsRevokedBeforeSettlement() throws Exception {
+            var routing = streamingRouting();
+            Objects.requireNonNull(streamingHealth.acquire(routing.connectionScope(), routing.connectionId()))
+                    .released();
+            var breaker = streamingBreakers.circuitBreaker("llm-connection-INSTANCE-7");
+            breaker.transitionToOpenState();
+            breaker.transitionToHalfOpenState();
+            var permit = mock(LlmCallPermits.Permit.class);
+            when(permit.revoked()).thenReturn(Mono.never());
+            // The first read precedes the HTTP call; the second follows its fully buffered answer.
+            when(permit.isRevoked()).thenReturn(false, true);
+            upstream.enqueue(new MockResponse.Builder()
+                    .code(200)
+                    .addHeader("Content-Type", "application/json")
+                    .body("{\"choices\":[{\"message\":{\"content\":\"complete\"}}],"
+                            + "\"usage\":{\"prompt_tokens\":12,\"completion_tokens\":3}}")
+                    .build());
+
+            var answer = proxyPooledStream(upstream.url("/v1").toString(), permit);
+
+            assertThat(answer.status()).isEqualTo(200);
+            assertThat(answer.body()).contains("complete");
+            ArgumentCaptor<ProxyTokenUsage> usage = ArgumentCaptor.forClass(ProxyTokenUsage.class);
+            verify(usageAccumulator).accumulate(eq(ATTEMPT), isNull(), usage.capture());
+            assertThat(usage.getValue().billableInputTokens()).isEqualTo(12);
+            assertThat(usage.getValue().outputTokens()).isEqualTo(3);
+            assertThat(breaker.getState()).isEqualTo(CircuitBreaker.State.CLOSED);
+            verify(permit).close();
         }
 
         @Test

@@ -681,9 +681,10 @@ hephaestus:
         # Max candidate QUEUED jobs considered per poll iteration; bounded by this worker's own
         # free local capacity so one poll never over-claims.
         claim-batch-size: ${AGENT_CLAIM_BATCH_SIZE:5}
+        # The most compositions whose inputs one worker loads at once. Further attempts wait without loading inputs.
+        max-active-compositions: ${AGENT_MAX_ACTIVE_COMPOSITIONS:4}
         # The most review attempts one worker runs at once. An attempt composes its feedback after its sandbox
         # ends and holds no sandbox slot then, so this bounds the concurrent compositions.
-        max-active-compositions: ${AGENT_MAX_ACTIVE_COMPOSITIONS:4}
         max-concurrent-compositions: ${AGENT_MAX_CONCURRENT_COMPOSITIONS:16}
         # Max orphan-requeue attempts before a RUNNING job whose owning worker was lost is failed
         # instead of requeued again. Authoritative budget lives on agent_job.retry_count.

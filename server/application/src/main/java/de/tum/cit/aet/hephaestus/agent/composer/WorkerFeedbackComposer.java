@@ -195,13 +195,12 @@ public class WorkerFeedbackComposer {
      * @throws CompositionHandedOnException when a passing cause left a destination open before the retry limit
      */
     public void composeResumed(ReviewJob job, String workerId, Instant notAfter) {
+        if (job.spentAttempts() > agentProperties.maxRetries()) {
+            withholdWithoutInputs(job, workerId, CompositionStop.RETRIES_EXHAUSTED);
+            return;
+        }
         var slot = capacity.acquire(deadline(notAfter));
         try {
-
-            if (job.spentAttempts() > agentProperties.maxRetries()) {
-                withholdWithoutInputs(job, workerId, CompositionStop.RETRIES_EXHAUSTED);
-                return;
-            }
             ReviewCompositionContinuation.Restored restored;
             try {
                 restored = continuation.restore(job);

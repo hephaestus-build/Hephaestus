@@ -553,6 +553,8 @@ paths:
           description: Pool deleted
         "404":
           description: Pool not found
+        "409":
+          description: "The pool still has calls, rate history, or a cooldown"
       summary: Delete a pool; its models are no longer limited
       tags:
       - Admin LLM
@@ -578,8 +580,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/LlmCallPool"
           description: OK
+        "400":
+          description: The pool slug cannot change or the limits are invalid
         "404":
           description: Pool not found
+        "409":
+          description: "The pool still has calls, rate history, or a cooldown"
       summary: Change a pool's name and limits
       tags:
       - Admin LLM
@@ -610,6 +616,8 @@ paths:
           description: OK
         "404":
           description: Pool or model not found
+        "409":
+          description: "The pool still has calls, rate history, or a cooldown"
       summary: Replace the models in a pool
       tags:
       - Admin LLM
