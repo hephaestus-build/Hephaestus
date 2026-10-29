@@ -21,3 +21,8 @@ Update configuration, dashboard queries, spans and API callers with those exact 
 The list includes HTTP paths, operation IDs, schema names, DTO fields and enum values.
 `FREE_HEPH` becomes `CAPACITY` only in 1.0. The field name stays `waitingFor`.
 The old web-page redirect and Slack message identifiers remain as stated in that notice.
+
+In 1.0, personal-data exports change `notification_subscription.kind` from `MENTOR_DIGEST` to `WEEKLY_DIGEST`.
+For `notification.email.delivery`, update the `kind` tag from `mentor_digest` to `weekly_digest`.
+For the auth rate-limit blocked metric, update the `bucket` tag from `mentor-turns` to `conversation-turns`.
+Unsubscribe links stay unchanged because they use persisted UUIDs.
