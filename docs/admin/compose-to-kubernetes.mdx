@@ -53,13 +53,17 @@ Check these facts before choosing in-place adoption:
 
 The chart's `fsGroupChangePolicy` is `OnRootMismatch`.
 Check the volume root's group and permissions, not only PGDATA.
-For a writable local PV, its root must match group 999, group mode 0770 and the setgid bit.
-After the source stops, prepare only that mount root as 999:999 with mode 2770.
+Each writable local PV root must match its Pod's fsGroup, with group read, write and execute permissions and the setgid bit.
+After the source stops, prepare only the PostgreSQL mount root as 999:999 with mode 2770.
 
 Preserve PGDATA and its children. Do not apply that mode recursively.
 Rehearse the mount with the same numeric owners and modes.
 PostgreSQL must retain a restrictive PGDATA mode, such as 0700 or 0750.
 Do not recursively chmod its files.
+
+For NATS, verify that user 1000 can read and write every stored file and directory.
+While NATS is stopped, change its adopted tree's ownership to 1000:1000 as rehearsed.
+Set its mount root to mode 2770. Do not recursively chmod the NATS tree.
 
 The examples use the Helm release name and namespace `hephaestus`.
 For another release name, derive each claim name as `data-<statefulset-name>-0` from the rendered StatefulSet names.

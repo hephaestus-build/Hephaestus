@@ -46,6 +46,7 @@ usage: sh k3s-install.sh --version X.Y.Z --host NAME --email ADDRESS [options]
   --staging                  use the Let's Encrypt staging service: a certificate that no browser trusts
   --github-client-id ID      the client ID of the GitHub OAuth app, for a new site.yaml
   --bootstrap-admins LIST    for example github:1234567, for a new site.yaml
+  --standard-certificates    explicitly render the standard certificates on a repeat install
   --certificates FILE        install FILE in place of k3s-certificates.yaml (the release smoke)
   --lock FILE                the joint lock of the release, already downloaded (a draft release)
   --skip-check NAME          skip one host check: dns, size or clock. Repeat it for each.
@@ -75,6 +76,7 @@ DNS01_ISSUER=
 GITHUB_CLIENT_ID=
 BOOTSTRAP_ADMINS=
 CERTIFICATES=
+STANDARD_CERTIFICATES=false
 LOCK=
 SKIPPED=
 RENDER=false
@@ -102,6 +104,10 @@ while [ $# -gt 0 ]; do
 		;;
 	--workspace-subdomains)
 		WORKSPACE_SUBDOMAINS=true
+		shift
+		;;
+	--standard-certificates)
+		STANDARD_CERTIFICATES=true
 		shift
 		;;
 	--staging)
@@ -143,6 +149,7 @@ if [ "$VERIFY" = false ]; then
 		[ -z "$CERTIFICATES" ] || die "--workspace-subdomains uses the standard certificates asset; configure a custom certificate in --certificates yourself"
 		matches "$DNS01_ISSUER" "$LABEL" || die "workspace subdomains need --dns01-issuer with a ClusterIssuer name"
 	}
+	[ "$STANDARD_CERTIFICATES" = false ] || [ -z "$CERTIFICATES" ] || die "--standard-certificates cannot be combined with --certificates"
 	[ -z "$DNS01_ISSUER" ] || [ "$WORKSPACE_SUBDOMAINS" = true ] || die "--dns01-issuer needs --workspace-subdomains"
 	[ -z "$LOCK" ] || [ -f "$LOCK" ] || die "--lock names no file: $LOCK"
 fi
@@ -153,8 +160,8 @@ for file in k3s-platform.yaml k3s-certificates.yaml k3s-config.yaml k3s-kubelet.
 done
 # Existing values can enable wildcard routing. Require an explicit certificate choice on reruns
 # instead of parsing YAML in shell or replacing that certificate with an implicit apex-only one.
-if [ -f "$HERE/site.yaml" ] && [ "$WORKSPACE_SUBDOMAINS" = false ] && [ -z "$CERTIFICATES" ]; then
-	die "site.yaml exists: repeat --workspace-subdomains --dns01-issuer NAME for workspace hosts, or select the intended manifest with --certificates FILE"
+if [ "$VERIFY" = false ] && [ "$RENDER" = false ] && [ -f "$HERE/site.yaml" ] && [ "$STANDARD_CERTIFICATES" = false ] && [ "$WORKSPACE_SUBDOMAINS" = false ] && [ -z "$CERTIFICATES" ]; then
+	die "site.yaml exists: choose --standard-certificates, --workspace-subdomains --dns01-issuer NAME, or --certificates FILE"
 fi
 # The certificates file: the operator's host name and address, which passed the checks above and so
 # hold no sed metacharacter, and the staging service of Let's Encrypt on request.
