@@ -12,6 +12,7 @@ import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.FakeExecSandboxes;
 import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnAttempt;
 import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnSandboxes;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnCompletion;
+import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnLeaseReaper;
 import de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnStarts;
 import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.agent.proxy.ProxyCallsInFlight;
@@ -31,6 +32,7 @@ import de.tum.cit.aet.hephaestus.mentor.MentorTurn;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnRepository;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnService;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnUsage;
+import de.tum.cit.aet.hephaestus.mentor.MentorTurnWaits;
 import de.tum.cit.aet.hephaestus.testconfig.LlmCatalogTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.AccountType;
@@ -59,6 +61,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.health.contributor.Status;
 import org.springframework.boot.jdbc.autoconfigure.DataSourceProperties;
 import org.springframework.context.ApplicationContext;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -94,6 +97,9 @@ class HephTurnDispatchIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
     @Autowired
     private MentorTurnService turns;
+
+    @Autowired
+    private MentorTurnWaits waits;
 
     @Autowired
     private MentorTurnRepository turnRepository;
@@ -143,6 +149,8 @@ class HephTurnDispatchIntegrationTest extends AbstractWorkspaceIntegrationTest {
         /** How many of the next starts fail, as a host that exits before its channel opens. */
         final AtomicInteger failsFirst = new AtomicInteger();
 
+        final AtomicInteger readyAttempts = new AtomicInteger();
+
         volatile @Nullable RuntimeException breaksOnce;
         volatile Runnable beforeStart = () -> {};
         volatile Runnable lost = () -> {};
@@ -168,6 +176,7 @@ class HephTurnDispatchIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
         @Override
         boolean awaitReady(Duration timeout) {
+            readyAttempts.incrementAndGet();
             RuntimeException failure = breaksOnce;
             if (failure != null) {
                 breaksOnce = null;
@@ -214,23 +223,7 @@ class HephTurnDispatchIntegrationTest extends AbstractWorkspaceIntegrationTest {
         meters = new SimpleMeterRegistry();
         // Its own listener, so the dispatcher stops hearing the ledger when this test ends.
         notifications = new MentorLedgerNotifications(turnRepository, dataSource, mapper);
-        dispatcher = new HephTurnDispatcher(
-                MentorTurnStarts.admitting(turns, metrics),
-                turns,
-                completion,
-                notifications,
-                host,
-                callsInFlight,
-                sandboxes,
-                issuer,
-                mapper,
-                clock,
-                meters,
-                WORKER,
-                4,
-                LEASE,
-                HephTurnDispatcher.STOP_GRACE,
-                Duration.ofMinutes(2));
+        dispatcher = newDispatcher(host, WORKER, 4);
         controller = new HephTurnController(
                 HephTurnFixtures.contexts(beans),
                 completion,
@@ -240,8 +233,35 @@ class HephTurnDispatchIntegrationTest extends AbstractWorkspaceIntegrationTest {
         dispatcher.start();
     }
 
+    private HephTurnDispatcher newDispatcher(FakeHost target, String workerId, int capacity) {
+        return new HephTurnDispatcher(
+                MentorTurnStarts.admitting(turns, metrics),
+                turns,
+                completion,
+                notifications,
+                target,
+                callsInFlight,
+                sandboxes,
+                issuer,
+                mapper,
+                clock,
+                meters,
+                workerId,
+                capacity,
+                LEASE,
+                HephTurnDispatcher.STOP_GRACE,
+                Duration.ofMinutes(2));
+    }
+
+    private void reapStartWaits() {
+        new MentorTurnLeaseReaper(
+                        turns, completion, metrics, Objects.requireNonNull(transactions.getTransactionManager()), waits)
+                .reap();
+    }
+
     @AfterEach
     void stopTheDispatcher() {
+        host.starts = false;
         host.lose(); // Turns a test leaves running would hold the drain.
         dispatcher.stop();
         notifications.destroy();
@@ -488,14 +508,178 @@ class HephTurnDispatchIntegrationTest extends AbstractWorkspaceIntegrationTest {
     }
 
     @Test
-    void shouldFailTheTurnWithoutContactingTheHostWhenNoHostCanStart() {
+    void shouldKeepTheTurnQueuedUntilAHostCanStart() throws Exception {
         host.starts = false;
+        int attempts = host.readyAttempts.get();
 
         MentorTurn asked = ask("Anything new?");
 
-        await().atMost(NOTIFIED).until(() -> row(asked).getStatus() == MentorTurn.Status.FAILED);
-        assertThat(row(asked).getError()).isEqualTo(HephTurnDispatcher.COULD_NOT_START);
+        await().atMost(NOTIFIED).until(() -> host.readyAttempts.get() > attempts);
+        assertThat(row(asked).getStatus()).isEqualTo(MentorTurn.Status.QUEUED);
+        assertThat(row(asked).getAttempt()).isZero();
+        assertThat(dispatcher.health().getStatus()).isEqualTo(Status.DOWN);
         assertThat(host.frames).isEmpty();
+
+        host.starts = true;
+        dispatcher.resync();
+        assertThat(host.next("start").path("turnId").asString())
+                .isEqualTo(asked.getId().toString());
+        assertThat(row(asked).getStatus()).isEqualTo(MentorTurn.Status.RUNNING);
+        assertThat(row(asked).getAttempt()).isOne();
+    }
+
+    @Test
+    void shouldKeepClaimingAfterHostPreparationThrowsWithoutFailingAQueuedTurn() throws Exception {
+        host.starts = false;
+        host.breaksOnce = new IllegalStateException("the sandbox API went away");
+        int attempts = host.readyAttempts.get();
+        MentorTurn asked = ask("Wait for the replacement host");
+        await().atMost(NOTIFIED).until(() -> host.readyAttempts.get() > attempts);
+        assertThat(row(asked).getStatus()).isEqualTo(MentorTurn.Status.QUEUED);
+        assertThat(row(asked).getAttempt()).isZero();
+
+        host.starts = true;
+        dispatcher.resync();
+
+        assertThat(host.next("start").path("turnId").asString())
+                .isEqualTo(asked.getId().toString());
+        assertThat(row(asked).getStatus()).isEqualTo(MentorTurn.Status.RUNNING);
+        assertThat(row(asked).getAttempt()).isOne();
+    }
+
+    @Test
+    void shouldFailTheTurnWithoutFaultWhenHostPreparationKeepsFailing() throws Exception {
+        host.starts = false;
+        int attempts = host.readyAttempts.get();
+        MentorTurn asked = ask("Can Heph start?");
+        await().atMost(NOTIFIED).until(() -> host.readyAttempts.get() > attempts);
+        assertThat(row(asked).getStatus()).isEqualTo(MentorTurn.Status.QUEUED);
+        assertThat(row(asked).getAttempt()).isZero();
+
+        dispatcher.resync();
+        await().atMost(NOTIFIED).until(() -> host.readyAttempts.get() >= attempts + 2);
+        assertThat(row(asked).getStatus()).isEqualTo(MentorTurn.Status.QUEUED);
+        assertThat(row(asked).getAttempt()).isZero();
+
+        jdbc.update(
+                "UPDATE mentor_turn SET queued_at = now() - interval '3 minutes 1 second' WHERE id = ?", asked.getId());
+        reapStartWaits();
+
+        assertThat(row(asked).getStatus()).isEqualTo(MentorTurn.Status.FAILED);
+        MentorTurn failed = row(asked);
+        assertThat(failed.getError()).isEqualTo(MentorTurnCompletion.COULD_NOT_START);
+        assertThat(failed.getFailureCause()).isEqualTo("start_wait_expired");
+        assertThat(failed.getAttempt()).isZero();
+        assertThat(failed.isLeased()).isFalse();
+        assertThat(host.frames).isEmpty();
+
+        host.starts = true;
+        MentorTurn next = ask("Try this question instead");
+        assertThat(host.next("start").path("turnId").asString())
+                .isEqualTo(next.getId().toString());
+        assertThat(row(next).getStatus()).isEqualTo(MentorTurn.Status.RUNNING);
+    }
+
+    @Test
+    void shouldLeaveAFreshQuestionForTheReadyWorkerAfterReplacementWarmupKeepsFailing() throws Exception {
+        dispatcher.stop();
+        dispatcher = newDispatcher(host, WORKER, 1);
+        controller = new HephTurnController(
+                HephTurnFixtures.contexts(beans),
+                completion,
+                dispatcher,
+                callsInFlight,
+                WorkerPropertiesFixtures.minimal("1", "1"));
+        dispatcher.start();
+        MentorTurn busy = ask("Keep the ready worker busy");
+        var busyAttempt = credential(host.next("start"));
+        conversation = conversations.openThread(
+                workspace.getId(),
+                turns.question(workspace.getId(), busy.getId()).getId());
+        FakeHost replacementHost = new FakeHost();
+        replacementHost.starts = false;
+        HephTurnDispatcher replacement = newDispatcher(replacementHost, "replacement-worker", 1);
+        replacement.start();
+        try {
+            await().atMost(NOTIFIED).until(() -> replacementHost.readyAttempts.get() > 0);
+            clock.advance(Duration.ofMinutes(3).plusSeconds(1));
+            int probes = replacementHost.readyAttempts.get();
+            MentorTurn fresh = ask("A fresh question after the replacement's idle window");
+            replacement.resync();
+            await().atMost(NOTIFIED).until(() -> replacementHost.readyAttempts.get() > probes);
+            assertThat(row(fresh).getStatus()).isEqualTo(MentorTurn.Status.QUEUED);
+            assertThat(row(fresh).getAttempt()).isZero();
+            assertThat(replacementHost.frames).isEmpty();
+
+            controller.end(
+                    busy.getId(),
+                    new HephTurnController.EndRequest(
+                            HephTurnController.Outcome.DONE, List.of(answer("The ready worker finished.")), null, null),
+                    HephTurnFixtures.authenticated(busyAttempt));
+            assertThat(host.next("start").path("turnId").asString())
+                    .isEqualTo(fresh.getId().toString());
+            assertThat(row(fresh).getWorkerId()).isEqualTo(WORKER);
+        } finally {
+            replacementHost.lose();
+            replacement.stop();
+        }
+    }
+
+    @Test
+    void shouldKeepTheQuestionsStartDeadlineAcrossAWorkerRestart() throws Exception {
+        host.starts = false;
+        MentorTurn asked = ask("Keep my original start deadline");
+        await().atMost(NOTIFIED).until(() -> host.readyAttempts.get() > 0);
+        jdbc.update(
+                "UPDATE mentor_turn SET queued_at = now() - interval '3 minutes 1 second' WHERE id = ?", asked.getId());
+        Instant queuedAt = row(asked).getQueuedAt();
+
+        dispatcher.stop();
+        int probes = host.readyAttempts.get();
+        dispatcher.start();
+        await().atMost(NOTIFIED).until(() -> host.readyAttempts.get() > probes);
+        assertThat(row(asked).getQueuedAt()).isEqualTo(queuedAt);
+        reapStartWaits();
+
+        MentorTurn expired = row(asked);
+        assertThat(expired.getStatus()).isEqualTo(MentorTurn.Status.FAILED);
+        assertThat(expired.getAttempt()).isZero();
+        assertThat(expired.getFailureCause()).isEqualTo("start_wait_expired");
+        assertThat(expired.getError()).isEqualTo(MentorTurnCompletion.COULD_NOT_START);
+        assertThat(expired.isLeased()).isFalse();
+        assertThat(host.frames).isEmpty();
+    }
+
+    @Test
+    void shouldLeaveAnOverdueQuestionWithTheReadyWorkerThatClaimedIt() throws Exception {
+        host.starts = false;
+        MentorTurn asked = ask("A ready worker can still take this question");
+        jdbc.update("UPDATE mentor_turn SET queued_at = now() - interval '4 minutes' WHERE id = ?", asked.getId());
+        Instant sweepTime = turns.databaseNow();
+        assertThat(waits.overdueQueued(sweepTime)).contains(asked.getId());
+
+        host.starts = true;
+        dispatcher.resync();
+        host.next("start");
+        waits.expireQueued(asked.getId(), sweepTime, MentorTurnCompletion.COULD_NOT_START);
+
+        assertThat(row(asked).getStatus()).isEqualTo(MentorTurn.Status.RUNNING);
+        assertThat(row(asked).getAttempt()).isOne();
+        assertThat(host.frames).isEmpty();
+    }
+
+    @Test
+    void shouldKeepAnOverdueFollowUpQueuedWhileItsConversationIsHeld() throws Exception {
+        MentorTurn running = ask("Keep answering this question");
+        host.next("start");
+        MentorTurn followUp = ask("Wait behind the current answer");
+        jdbc.update("UPDATE mentor_turn SET queued_at = now() - interval '4 minutes' WHERE id = ?", followUp.getId());
+
+        reapStartWaits();
+
+        assertThat(row(running).getStatus()).isEqualTo(MentorTurn.Status.RUNNING);
+        assertThat(row(followUp).getStatus()).isEqualTo(MentorTurn.Status.QUEUED);
+        assertThat(row(followUp).getAttempt()).isZero();
     }
 
     @Test
@@ -521,7 +705,7 @@ class HephTurnDispatchIntegrationTest extends AbstractWorkspaceIntegrationTest {
 
         assertThat(host.next("start").path("turnId").asString())
                 .isEqualTo(next.getId().toString());
-        assertThat(row(broken).getError()).isEqualTo(HephTurnDispatcher.COULD_NOT_START);
+        assertThat(row(broken).getError()).isEqualTo(MentorTurnCompletion.COULD_NOT_START);
         assertThat(meters.counter(AgentMetrics.MENTOR_TURN_CLAIM_FAILURE).count())
                 .isEqualTo(1.0);
         assertThat(callsInFlight

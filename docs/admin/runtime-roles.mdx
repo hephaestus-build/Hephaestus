@@ -394,10 +394,16 @@ The model provider usually sets the real limit, not the worker:
   In the same load test, one provider key answered a single call in 4 seconds.
   With 8 calls at once, each call took 34 seconds.
 
-A turn that waits in the Hephaestus queue does not count against its deadline.
+A turn that waits in the Hephaestus queue does not count against its execution deadline.
 A call that waits at the provider counts against the deadline and against the model idle timeout.
 Thus, find how many calls your provider serves at once at full speed.
 Keep the total capacity of all workers at or below that number.
+
+A queued turn has a separate wait of three minutes to start, counted from its stored queue time.
+Server maintenance ends an overdue queued question with a message that asks the developer to try again.
+
+A follow-up stays queued while an answer holds its conversation.
+The wait survives worker restarts. A lease retry gets a new wait.
 
 Within that limit, size the capacity from the expected load.
 Concurrent turns are about the questions each second multiplied by the seconds for each answer.

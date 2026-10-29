@@ -245,10 +245,10 @@ management:
             #
             # `practiceReview` is the worker's own configuration. `kubernetesSandbox` holds a Kubernetes
             # worker unready until its isolation probe passed, so a rollout drains an old worker only after
-            # the new one proved the cluster.
+            # the new one proved the cluster. `hephTurnDispatcher` also requires its Heph host's command channel.
             group:
                 readiness:
-                    include: readinessState,practiceReview,kubernetesSandbox
+                    include: readinessState,practiceReview,kubernetesSandbox,hephTurnDispatcher
             # Most of the group is role-gated, and the default (true) aborts the refresh wherever a
             # named contributor is absent — so every container that is not a Kubernetes worker, plus the
             # specs and test profiles. What it removes is a spelling check, and

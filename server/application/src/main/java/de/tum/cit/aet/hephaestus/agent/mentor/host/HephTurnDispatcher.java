@@ -1,5 +1,7 @@
 package de.tum.cit.aet.hephaestus.agent.mentor.host;
 
+import static de.tum.cit.aet.hephaestus.agent.mentor.turn.MentorTurnCompletion.COULD_NOT_START;
+
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptJwt;
 import de.tum.cit.aet.hephaestus.agent.attempt.AttemptTokenIssuer;
 import de.tum.cit.aet.hephaestus.agent.mentor.sandbox.TurnAttempt;
@@ -31,6 +33,8 @@ import java.util.concurrent.TimeUnit;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.health.contributor.Health;
+import org.springframework.boot.health.contributor.HealthIndicator;
 import org.springframework.context.SmartLifecycle;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -44,11 +48,10 @@ import tools.jackson.databind.node.ObjectNode;
  * claiming goes on.
  * {@code docs/contributor/unified-pi-runtime.mdx} § Turn lifecycle and § Dispatch have the protocol.
  */
-public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, SmartLifecycle {
+public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, SmartLifecycle, HealthIndicator {
 
     private static final Logger log = LoggerFactory.getLogger(HephTurnDispatcher.class);
 
-    static final String COULD_NOT_START = "Heph could not start. Try again in a moment.";
     static final String TOOK_TOO_LONG = "Heph took too long to reply and stopped. Try again.";
     static final String COULD_NOT_FINISH = "Heph could not finish this reply. Try again.";
     static final String MODEL_STOPPED_ANSWERING =
@@ -67,7 +70,6 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
 
     private static final Duration BACKSTOP = Duration.ofSeconds(30);
     private static final Duration HOST_READY_TIMEOUT = Duration.ofMinutes(3);
-
     private final MentorTurnStarter starter;
     private final MentorTurnService turns;
     private final MentorTurnCompletion completion;
@@ -172,6 +174,15 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
         active = true;
         notifications.subscribe(this);
         claimer = Thread.ofPlatform().name("heph-turn-claimer").daemon(true).start(this::claimLoop);
+        wake.release();
+    }
+
+    /** A rolling replacement must have its own command channel before it can replace the old worker. */
+    @Override
+    public Health health() {
+        return (capacity == 0 || host.isReady())
+                ? Health.up().build()
+                : Health.down().build();
     }
 
     /** Stops claiming, lets running turns finish for a while, then removes the host. */
@@ -361,9 +372,12 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
                 Thread.currentThread().interrupt();
                 return;
             }
-            while (active && running.size() < capacity && host.sandboxReady()) {
+            while (active && running.size() < capacity) {
                 Optional<MentorTurnStarter.StartedTurn> started;
                 try {
+                    if (!prepareHost() || !active) {
+                        break;
+                    }
                     started = starter.startNext(workerId, lease);
                 } catch (RuntimeException e) {
                     claimFailures.increment();
@@ -393,6 +407,16 @@ public class HephTurnDispatcher implements MentorLedgerNotifications.Listener, S
                     }
                 }
             }
+        }
+    }
+
+    private boolean prepareHost() {
+        try {
+            return host.sandboxReady() && (host.isReady() || host.awaitReady(HOST_READY_TIMEOUT));
+        } catch (RuntimeException failure) {
+            claimFailures.increment();
+            log.warn("Could not prepare the Heph host: {}", failure.getClass().getSimpleName(), failure);
+            return false;
         }
     }
 

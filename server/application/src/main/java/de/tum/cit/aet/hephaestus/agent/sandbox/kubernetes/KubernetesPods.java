@@ -202,15 +202,19 @@ public class KubernetesPods {
 
     /**
      * A turn sandbox's command container: 3 MiB measured. Its workspace, where a repository that a turn loads lands,
-     * and its scratch places each hold Docker's turn workspace size.
+     * and its scratch places each hold Docker's turn workspace size. It requests 20m: a pooled sandbox is idle, and a
+     * turn's commands are short bursts that its limit serves.
      */
-    static final Size TURN = new Size(
-            128 * MIB, 512 * MIB, 256 * MIB, SandboxLayout.TURN_WORKSPACE_BYTES, 1 + SCRATCH_PATHS.size(), 100);
+    static final Size TURN =
+            new Size(128 * MIB, 512 * MIB, 256 * MIB, SandboxLayout.TURN_WORKSPACE_BYTES, 1 + SCRATCH_PATHS.size(), 20);
 
     /** The stager of a turn sandbox: a shell that sleeps, 1 MiB measured. It writes the workspace to disk. */
     private static final Quantity STAGER_MEMORY = new Quantity(Long.toString(32 * MIB));
 
     private static final long STAGER_CPU_MILLICORES = 250;
+
+    /** The stager sleeps until a turn loads a repository, so it requests almost nothing. */
+    private static final long STAGER_CPU_REQUEST_MILLICORES = 5;
 
     /**
      * The turn sandbox's first process, the init process of its container's PID namespace. The kernel delivers it no
@@ -347,7 +351,7 @@ public class KubernetesPods {
                                 bytes(SIDE_LOG_BYTES)))
                         .withRequests(Map.of(
                                 "cpu",
-                                cpuRequest(STAGER_CPU_MILLICORES),
+                                new Quantity(STAGER_CPU_REQUEST_MILLICORES + "m"),
                                 "memory",
                                 STAGER_MEMORY,
                                 "ephemeral-storage",

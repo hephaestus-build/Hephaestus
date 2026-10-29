@@ -4,7 +4,9 @@ import de.tum.cit.aet.hephaestus.agent.metrics.AgentMetrics;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnServerRole;
 import de.tum.cit.aet.hephaestus.mentor.MentorTurnService;
+import de.tum.cit.aet.hephaestus.mentor.MentorTurnWaits;
 import io.micrometer.core.instrument.MeterRegistry;
+import java.time.Instant;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
@@ -17,7 +19,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * Takes back the turns whose lease the worker stopped renewing: a crashed worker or host. Each turn is taken back and
- * billed in its own transaction, so one failure cannot stop the turns behind it.
+ * billed in its own transaction, so one failure cannot stop the turns behind it. Also ends queued questions that
+ * exceed their persisted start budget, without claiming them.
  */
 @ConditionalOnServerRole
 @Component
@@ -30,10 +33,11 @@ public class MentorTurnLeaseReaper {
     private final MentorTurnCompletion completion;
     private final MeterRegistry meters;
     private final PlatformTransactionManager transactions;
+    private final MentorTurnWaits waits;
 
     @Scheduled(fixedDelayString = "${hephaestus.mentor.turn.lease-reaper-delay:PT15S}")
     @SchedulerLock(name = "mentor-turn-lease-reaper", lockAtMostFor = "PT5M", lockAtLeastFor = "PT5S")
-    @WorkspaceAgnostic("Sweeps expired leases across tenants; each turn carries its workspace")
+    @WorkspaceAgnostic("Sweeps expired leases and queued start waits across tenants; each turn carries its workspace")
     public void reap() {
         TransactionTemplate tx = new TransactionTemplate(transactions);
         for (UUID turnId : turns.expiredLeases()) {
@@ -48,6 +52,21 @@ public class MentorTurnLeaseReaper {
                 }));
             } catch (RuntimeException e) {
                 log.warn("Mentor turn lease reaper could not take back turn {}; trying again next tick", turnId, e);
+                meters.counter(AgentMetrics.MENTOR_TURN_LEASE_REAPER_FAILURE).increment();
+            }
+        }
+        Instant now = turns.databaseNow();
+        for (UUID turnId : waits.overdueQueued(now)) {
+            try {
+                boolean ended = Boolean.TRUE.equals(
+                        tx.execute(status -> waits.expireQueued(turnId, now, MentorTurnCompletion.COULD_NOT_START)));
+                if (ended) {
+                    meters.counter(AgentMetrics.MENTOR_TURN_COMPLETED, "outcome", "failed")
+                            .increment();
+                    log.warn("Heph turn {} could not start before its queue deadline", turnId);
+                }
+            } catch (RuntimeException e) {
+                log.warn("Mentor turn reaper could not end queued turn {}; trying again next tick", turnId, e);
                 meters.counter(AgentMetrics.MENTOR_TURN_LEASE_REAPER_FAILURE).increment();
             }
         }

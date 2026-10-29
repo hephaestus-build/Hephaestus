@@ -26,7 +26,8 @@ import org.springframework.data.domain.Persistable;
 import tools.jackson.databind.JsonNode;
 
 /**
- * One question to Heph and the work to answer it; {@link MentorTurnService} owns the lifecycle. {@code attempt} counts
+ * One question to Heph and the work to answer it. {@link MentorTurnService} owns execution and
+ * {@link MentorTurnWaits} owns the queue wait. {@code attempt} counts
  * claims.
  *
  * <p>The token columns hold the current attempt's usage, which the LLM proxy adds call by call. {@code admission}
@@ -45,6 +46,7 @@ import tools.jackson.databind.JsonNode;
         indexes = {
             @Index(name = "idx_mentor_turn_conversation_status", columnList = "conversation_id, status"),
             @Index(name = "idx_mentor_turn_status_created", columnList = "status, created_at"),
+            @Index(name = "idx_mentor_turn_status_queued", columnList = "status, queued_at"),
             @Index(name = "idx_mentor_turn_workspace_surface", columnList = "workspace_id, surface"),
         })
 @DynamicUpdate
@@ -201,6 +203,11 @@ public class MentorTurn implements Persistable<UUID> {
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
+    /** When this question entered its current queue wait, retained across worker and server restarts. */
+    @Column(name = "queued_at", nullable = false)
+    @ColumnDefault("now()")
+    private Instant queuedAt;
+
     @Nullable
     @Column(name = "started_at")
     private Instant startedAt;
@@ -226,6 +233,7 @@ public class MentorTurn implements Persistable<UUID> {
         this.pageContext = pageContext;
         this.status = Status.QUEUED;
         this.createdAt = now;
+        this.queuedAt = now;
         this.fresh = true;
     }
 
@@ -311,8 +319,9 @@ public class MentorTurn implements Persistable<UUID> {
     }
 
     /** Returns the turn to the queue for one more attempt after its lease expired. */
-    void requeue() {
+    void requeue(Instant now) {
         this.status = Status.QUEUED;
+        this.queuedAt = now;
         this.workerId = null;
         this.leasedUntil = null;
         this.startedAt = null;

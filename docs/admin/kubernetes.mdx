@@ -451,15 +451,15 @@ A chart test adds up what that node holds during an upgrade, with backups on:
 | Part | Memory | CPU requests | Disk |
 | --- | --- | --- | --- |
 | Server, webhook role, worker, webapp, PostgreSQL with pgBackRest, NATS | 7.9 GiB | 1.25 | The volumes of PostgreSQL and NATS, and bounded caches |
-| An upgrade: the new webhook and webapp Pods beside the old ones, the migration Job, the stanza Job and one backup. The worker recreates. | 3.1 GiB | 0.75 | The new Pods' caches |
-| The sandbox quotas: in the reviews tier one review and the isolation probe, in the conversations tier the Heph host, its two pooled turn sandboxes and 8 running turns | 3.2 GiB | 1.55 | The disk requests of the sandbox Pods ([Sandbox sizes](#sandbox-sizes)) |
-| Total, against the node less what k3s requests | 14.2 GiB of 31 GiB | 3.55 of 3.75 | 65 GiB of the 110 GiB left beside images and review workspaces |
+| An upgrade: the new worker, webhook and webapp Pods beside the old ones, the migration Job, the stanza Job and one backup | 5.1 GiB | 1.00 | The new Pods' caches |
+| The sandbox quotas during the upgrade: in the reviews tier one review and the isolation probes of both workers, in the conversations tier the Heph host, its two pooled turn sandboxes and 8 running turns of each worker | 5.8 GiB | 1.00 | The disk requests of the sandbox Pods ([Sandbox sizes](#sandbox-sizes)) |
+| Total, against the node less what k3s requests | 18.8 GiB of 31 GiB | 3.25 of 3.75 | 80 GiB of the 110 GiB left beside images and review workspaces |
 
-The worker upgrades by `Recreate`, with a drain of at most 10 minutes.
-Each upgrade stops the worker first, so reviews and Heph turns stop for the drain and for the new worker's start and isolation probe.
-A surge would run a second Heph host and turn pool beside the old ones, which the node's CPU does not hold.
-The old worker's Heph sandboxes stay until the new worker removes them, within a minute of its start.
-Until then, the new worker's Heph sandboxes can find no room in the conversations quota, so they wait and are tried again.
+The worker upgrades by a rolling update with a surge of one.
+The new worker passes its isolation probe and opens its Heph host's command channel before the old worker drains.
+Heph keeps answering during the upgrade.
+The old worker finishes its running review within its drain of up to 60 minutes. The new worker's review waits for that review's room in the reviews quota.
+A turn sandbox requests 25m of CPU, so a second Heph host and turn pool fit beside the old ones.
 
 The table gives the measured resident memory of each role and the chart's sizes.
 Each JVM role requests all of its memory limit, because the heap is sized from the limit, and the limit is the measurement plus headroom.
@@ -482,8 +482,10 @@ For one node of 16 GiB, apply `small-16gib.yaml` after `small.yaml`:
 --values deploy/chart/hephaestus/profiles/small-16gib.yaml
 ```
 
-It changes one item: NATS requests 512 MiB and keeps its limit of 3 GiB.
-The worker recreates and runs one review and up to 8 Heph turns at a time, as in `small.yaml`.
+The overlay lowers the NATS request to 512 MiB and keeps its limit at 3 GiB.
+It also changes worker updates to `Recreate`, with a drain of at most 10 minutes.
+The worker still runs one review and up to 8 Heph turns at a time, as in `small.yaml`.
+A second worker's Heph host and turn pool do not fit in 16 GiB beside the first: the upgrade stops reviews and Heph turns for the drain, the new worker's start and its isolation probe.
 The webhook role keeps its rolling update: it receives provider deliveries during an upgrade.
 
 A chart test adds up what one node of 16 GiB holds, with backups on:
@@ -1024,7 +1026,7 @@ The worker sizes each sandbox Pod from the measured use of that kind of sandbox.
 | --- | --- | --- | --- | --- | --- | --- |
 | Review | 100m | 640 MiB | 1,280 MiB | 1 GiB | 1 GiB, 7 volumes | 7 GiB and 64 MiB |
 | Heph host | 50m | 256 MiB | 1 GiB | 256 MiB | 1 GiB, 7 volumes | 7 GiB and 64 MiB |
-| Turn sandbox | 100m, and 25m for its stager | 128 MiB, and 32 MiB for its stager | 512 MiB, and 32 MiB | 256 MiB, and 16 MiB | 512 MiB, 3 volumes | 1.5 GiB and 64 MiB, and 16 MiB |
+| Turn sandbox | 20m, and 5m for its stager | 128 MiB, and 32 MiB for its stager | 512 MiB, and 32 MiB | 256 MiB, and 16 MiB | 512 MiB, 3 volumes | 1.5 GiB and 64 MiB, and 16 MiB |
 
 A review and the Heph host have seven volumes on the node's disk: the workspace, `work`, `out`, `.pi`, `.sessions`, `/tmp` and `~/.local`.
 A turn sandbox has three: its workspace, `/tmp` and `~/.local`.

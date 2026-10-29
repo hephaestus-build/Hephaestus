@@ -72,6 +72,7 @@ erDiagram
         VARCHAR(64) failed_call
         INTEGER failed_call_status
         VARCHAR(200) failure_cause
+        TIMESTAMPTZ queued_at "NOT NULL"
     }
 
     Account["Account · Core"]

@@ -48,6 +48,8 @@ public class MentorTurnCompletion {
 
     private static final Logger log = LoggerFactory.getLogger(MentorTurnCompletion.class);
 
+    public static final String COULD_NOT_START = "Heph could not start. Try again in a moment.";
+
     static final String NOT_SHOWN = "Heph's answer did not show the feedback.";
     static final String CUT_OFF = "Heph's answer stopped or failed after it showed the feedback.";
     static final String LEASE_LOST = "Heph's answer was lost while it showed the feedback.";
