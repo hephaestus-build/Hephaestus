@@ -35,8 +35,21 @@ jobs:
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ steps.candidate.outputs.sha }}
+          ref: ${{ github.sha }}
           persist-credentials: false
+
+      - name: Read the candidate chart
+        env:
+          CANDIDATE_SHA: ${{ steps.candidate.outputs.sha }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --depth=1 origin "$CANDIDATE_SHA"
+          test "$(git rev-parse FETCH_HEAD)" = "$CANDIDATE_SHA"
+          git ls-tree -r "$CANDIDATE_SHA" -- deploy/chart/hephaestus |
+            awk '$1 !~ /^100(644|755)$/ { invalid=1 } END { exit invalid }'
+          mkdir "$RUNNER_TEMP/candidate"
+          git archive "$CANDIDATE_SHA" deploy/chart/hephaestus |
+            tar -x -C "$RUNNER_TEMP/candidate"
 
       - uses: ./.github/actions/setup-toolchain
         with:
@@ -69,7 +82,8 @@ jobs:
           printf '%s' "$REGISTRY_TOKEN" | helm registry login ghcr.io --username "$ACTOR" --password-stdin
           mkdir "$RUNNER_TEMP/chart"
           node scripts/rehearse-chart-signing.ts "$RUN_ID" "$SHA" \
-            "ghcr.io/${OWNER,,}/charts-rehearsal/hephaestus" "$RUNNER_TEMP/chart" > "$RUNNER_TEMP/chart.json"
+            "ghcr.io/${OWNER,,}/charts-rehearsal/hephaestus" \
+            "$RUNNER_TEMP/candidate/deploy/chart/hephaestus" "$RUNNER_TEMP/chart" > "$RUNNER_TEMP/chart.json"
           jq . "$RUNNER_TEMP/chart.json"
           chart=$(jq -er '"\(.repository)@\(.digest)"' "$RUNNER_TEMP/chart.json")
           node scripts/keyless-sign.ts sign --yes "$chart"

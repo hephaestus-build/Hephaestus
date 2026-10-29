@@ -5322,7 +5322,7 @@ void test("the chart signing rehearsal runs steps 2 to 4 of Verify the release c
 	}
 	assert.equal(
 		step(rehearsal, ["jobs", "rehearse"], "actions/checkout").get("ref"),
-		`\${{ steps.candidate.outputs.sha }}`,
+		`\${{ github.sha }}`,
 	);
 	assert.equal(
 		namedStep(rehearsal, ["jobs", "rehearse"], "Publish and sign a rehearsal chart").getIn([
@@ -5360,6 +5360,98 @@ void test("the chart signing rehearsal runs steps 2 to 4 of Verify the release c
 		namedStep(rehearsal, ["jobs", "rehearse"], "Publish and sign a rehearsal chart").get("run"),
 	);
 	assert.match(signing, /^node scripts\/keyless-sign\.ts sign --yes "\$chart"$/mu);
+});
+
+void test("the chart rehearsal reads candidate data without replacing trusted tools or following links", async (context) => {
+	const workflow = parseDocument(
+		await readFile(".github/workflows/chart-signing-rehearsal.yml", "utf8"),
+	);
+	const extraction = namedStep(workflow, ["jobs", "rehearse"], "Read the candidate chart");
+	assert.equal(extraction.getIn(["env", "CANDIDATE_SHA"]), `\${{ steps.candidate.outputs.sha }}`);
+	const directory = await mkdtemp(path.join(tmpdir(), "chart-candidate-"));
+	context.after(async () => rm(directory, { recursive: true, force: true }));
+	const source = path.join(directory, "source");
+	const trusted = path.join(directory, "trusted");
+	await mkdir(path.join(source, "deploy/chart/hephaestus"), { recursive: true });
+	await mkdir(path.join(source, "scripts"));
+	await writeFile(path.join(source, "scripts/tool.ts"), "trusted tooling");
+	await writeFile(path.join(source, "deploy/chart/hephaestus/values.yaml"), "candidate: false\n");
+	const env = environmentForGitFixture();
+	const git = (cwd: string, ...args: string[]) => {
+		const result = spawnSync("git", args, { cwd, env, encoding: "utf8" });
+		assert.equal(result.status, 0, result.stderr);
+		return result.stdout.trim();
+	};
+	git(source, "init", "-q");
+	git(source, "add", ".");
+	git(
+		source,
+		"-c",
+		"user.name=Test",
+		"-c",
+		"user.email=test@example.com",
+		"commit",
+		"-qm",
+		"trusted",
+	);
+	git(directory, "clone", "-q", source, trusted);
+	await writeFile(path.join(source, "scripts/tool.ts"), "candidate-controlled tooling");
+	await writeFile(path.join(source, "deploy/chart/hephaestus/values.yaml"), "candidate: true\n");
+	git(source, "add", ".");
+	git(
+		source,
+		"-c",
+		"user.name=Test",
+		"-c",
+		"user.email=test@example.com",
+		"commit",
+		"-qm",
+		"candidate",
+	);
+	const candidate = git(source, "rev-parse", "HEAD");
+	const readChart = async (sha: string, name: string) => {
+		const work = path.join(directory, name);
+		await mkdir(work);
+		const result = spawnSync(
+			"bash",
+			["--noprofile", "--norc", "-e", "-c", String(extraction.get("run"))],
+			{
+				cwd: trusted,
+				env: { ...env, CANDIDATE_SHA: sha, RUNNER_TEMP: work },
+				encoding: "utf8",
+			},
+		);
+		return { result, work };
+	};
+	const accepted = await readChart(candidate, "accepted");
+	assert.equal(accepted.result.status, 0, accepted.result.stderr);
+	assert.equal(
+		await readFile(
+			path.join(accepted.work, "candidate/deploy/chart/hephaestus/values.yaml"),
+			"utf8",
+		),
+		"candidate: true\n",
+	);
+	assert.equal(await readFile(path.join(trusted, "scripts/tool.ts"), "utf8"), "trusted tooling");
+	assert.equal(existsSync(path.join(accepted.work, "candidate/scripts")), false);
+	await writeFile(path.join(source, "link-target"), path.join(trusted, "scripts/tool.ts"));
+	const blob = git(source, "hash-object", "-w", "link-target");
+	for (const { name, mode, object } of [
+		{ name: "symlink", mode: "120000", object: blob },
+		{ name: "submodule", mode: "160000", object: candidate },
+	]) {
+		git(
+			source,
+			"update-index",
+			"--cacheinfo",
+			`${mode},${object},deploy/chart/hephaestus/values.yaml`,
+		);
+		git(source, "-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-qm", name);
+		const rejected = await readChart(git(source, "rev-parse", "HEAD"), name);
+		assert.notEqual(rejected.result.status, 0, rejected.result.stderr);
+		assert.equal(existsSync(path.join(rejected.work, "candidate")), false);
+		assert.equal(await readFile(path.join(trusted, "scripts/tool.ts"), "utf8"), "trusted tooling");
+	}
 });
 
 void test("every job that runs Helm installs the pinned one first, and the render gate runs on Linux and Windows", async () => {

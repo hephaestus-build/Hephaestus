@@ -288,7 +288,9 @@ Before release, rehearse chart signing for the exact candidate commit:
 gh workflow run chart-signing-rehearsal.yml --ref main -f candidate-sha="$SHA"
 ```
 
-Set `SHA` to the full candidate commit. The workflow runs with the main identity and checks out that commit.
+Set `SHA` to the full candidate commit. The workflow uses its main commit for actions and tools.
+It reads the candidate chart as data, and rejects symbolic links and submodules.
+
 It writes only to the chart rehearsal repository. It creates no release or release tag.
 The rehearsal uses its own signing identity. Verify the release workflow's signatures when the release artifacts exist.
 
