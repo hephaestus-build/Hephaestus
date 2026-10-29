@@ -1,7 +1,7 @@
 #### 🔴 Stop every role before the 0.95.0 database migration
 
 Under the `prod` profile, runtime roles do not migrate the database at startup.
-The server, worker and webhook receiver wait for every database change set of their release.
+The server and worker wait for every database change set of their release.
 The wait ends after `hephaestus.database.migration-wait` (`HEPHAESTUS_DATABASE_MIGRATION_WAIT`, default `10m`).
 A role then stops and names the first change set that has not run.
 

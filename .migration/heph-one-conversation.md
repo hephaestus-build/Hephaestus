@@ -113,12 +113,12 @@ The recommended single host increases from 16 GB to 24 GB of memory ([Install](h
   Its `auto` default is 8.
   In the previous release, it limited the Hephaestus sandboxes of one worker, and `auto` was half the CPUs.
   [Hephaestus capacity](https://docs.hephaestus.build/admin/runtime-roles#conversation-turn-capacity) tells how to size it.
-- A worker in a container that it cannot identify starts no Hephaestus host, and its Hephaestus turns fail.
+- With the Docker sandbox runtime, a worker in a container that it cannot identify starts no Hephaestus host, and its Hephaestus turns fail.
   [Docker configuration](https://docs.hephaestus.build/admin/configuration-readiness#docker-configuration) gives the hostname rule.
 - Hephaestus reads context documents, code and Git history in turn sandboxes on the worker, not in the Hephaestus host.
-  Each worker keeps 2 empty turn sandboxes and starts one for each running Hephaestus turn that reads.
+  With the Docker sandbox runtime, each worker keeps 2 empty turn sandboxes and starts one for each running Hephaestus turn that reads.
   Each has 1 CPU, 1 GiB of memory and no network ([Turn sandboxes](https://docs.hephaestus.build/admin/runtime-roles#turn-sandboxes)).
-  The worker needs Docker for them.
+  With Kubernetes, use the chart's [sandbox sizes](https://docs.hephaestus.build/admin/kubernetes#sandbox-sizes).
   Hephaestus reads repositories only where Git mirrors are enabled (`GIT_CHECKOUT_ENABLED`).
 
 **Models.**
