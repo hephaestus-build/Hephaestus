@@ -1428,6 +1428,9 @@ export async function releaseSmoke(options: SmokeOptions): Promise<void> {
 	await writeFile(certificatesFile, await smokeCertificates(certificatesSource, SMOKE_HOST));
 	const installer = [
 		path.join(options.assets, "k3s-install.sh"),
+		// Hosted runner labels do not pin a kernel. This smoke explicitly qualifies its host;
+		// the installer still verifies the effective policy and allocatable before startup.
+		"--allow-unqualified-host",
 		"--version",
 		version,
 		"--host",
