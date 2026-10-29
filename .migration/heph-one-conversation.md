@@ -39,18 +39,15 @@ Keep the outage short.
 3. Use the agent image of this release.
    If you pin a custom agent image, rebuild it from the matching source.
    Its `hephaestus.agent.runtime-contract` label must be `9`.
-4. Start the server role.
-   The migration runs at its startup.
-5. Start the worker and webhook roles.
+4. Run the [database migration step](https://docs.hephaestus.build/admin/runtime-roles#database-migrations) with this release while every runtime role stays stopped.
+   Continue only after the migration completes successfully.
+   On Kubernetes, follow [Stopped schema upgrades](https://docs.hephaestus.build/admin/kubernetes#stopped-schema-upgrades), with all three replica counts at zero through migration success and no automatic rollback.
+5. Start the server, worker and webhook roles.
 6. Update the Slack app, as **Slack app** below tells.
 
 **If the migration fails.**
 Keep every role stopped.
-Capture the first failed startup log before you retry:
-
-```bash
-docker compose logs application-server | grep -i -m5 liquibase
-```
+Preserve the migration command output and the first failed change set before you retry.
 
 Do not start the previous release against this database.
 Choose one recovery path:
