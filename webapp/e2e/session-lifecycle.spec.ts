@@ -32,9 +32,14 @@ async function waitForRefresh(page: Page, status: number) {
 	);
 }
 
+async function waitForIdentity(page: Page) {
+	return page.waitForResponse(
+		(response) => response.url().endsWith("/user") && response.status() === 200,
+	);
+}
+
 // Advance only the SPA schedule; JWT expiry and revocation use the server clock.
 async function scheduleRenewal(page: Page) {
-	await page.clock.install();
 	await page.route(
 		"**/user",
 		async (route) => {
@@ -51,10 +56,10 @@ async function scheduleRenewal(page: Page) {
 	await expect(page.getByRole("heading", { name: "User settings", exact: true })).toBeVisible();
 }
 
-async function holdRenewal(page: Page, request: APIRequestContext) {
+async function holdRenewal(context: BrowserContext, request: APIRequestContext) {
 	const processed = Promise.withResolvers<undefined>();
 	const release = Promise.withResolvers<undefined>();
-	await page.route(
+	await context.route(
 		"**/auth/refresh",
 		async (route) => {
 			// The isolated API context holds Set-Cookie back from the browser until fulfillment.
@@ -97,14 +102,31 @@ test("a session persists across browser contexts with a full-day cookie lifetime
 test("two tabs renew without losing their shared session and old tokens stay revoked", async ({
 	page,
 	context,
+	request,
 }) => {
+	await context.clock.install();
 	await loginAsDevAdmin(page, "session-tabs");
 	const oldCookie = await accessCookie(context);
 	const other = await context.newPage();
 	await Promise.all([scheduleRenewal(page), scheduleRenewal(other)]);
-	const refreshed = [waitForRefresh(page, 204), waitForRefresh(other, 204)];
-	await Promise.all([page.clock.fastForward(61_000), other.clock.fastForward(61_000)]);
-	await Promise.all(refreshed);
+	const held = await holdRenewal(context, request);
+	const requests: string[] = [];
+	context.on("request", (outgoing) => {
+		requests.push(outgoing.url());
+	});
+	const identities = [waitForIdentity(page), waitForIdentity(other)];
+	try {
+		// Playwright's clock covers both tabs; either tab can acquire the cookie lock first.
+		await context.clock.fastForward(61_000);
+		await held.processed;
+	} finally {
+		held.release();
+	}
+	await Promise.all(identities);
+	expect(requests.filter((url) => url.endsWith("/auth/refresh"))).toHaveLength(1);
+	const renewedCookie = await accessCookie(context);
+	const cookieChanged = renewedCookie.value !== oldCookie.value;
+	expect(cookieChanged).toBe(true);
 	expect(await statusOf(context.request.get(`${serverUrl}/user`))).toBe(200);
 	expect(
 		await statusOf(
@@ -122,6 +144,7 @@ test("a temporary renewal outage preserves the page and later activity recovers"
 	page,
 	context,
 }) => {
+	await context.clock.install();
 	await loginAsDevAdmin(page, "session-outage");
 	await page.route("**/auth/refresh", async (route) => route.fulfill({ status: 503 }), {
 		times: 1,
@@ -144,6 +167,7 @@ test("logout requires CSRF protection and revoked sessions cannot renew", async 
 	page,
 	context,
 }) => {
+	await context.clock.install();
 	await loginAsDevAdmin(page, "session-logout");
 	const signedInCookie = await accessCookie(context);
 	await scheduleRenewal(page);
@@ -183,8 +207,9 @@ test("signing out in another tab cannot be undone by a delayed renewal response"
 	context,
 	request,
 }) => {
+	await context.clock.install();
 	await loginAsDevAdmin(page, "session-logout-race");
-	const held = await holdRenewal(page, request);
+	const held = await holdRenewal(context, request);
 	await scheduleRenewal(page);
 	const other = await context.newPage();
 	await other.goto("/settings");
