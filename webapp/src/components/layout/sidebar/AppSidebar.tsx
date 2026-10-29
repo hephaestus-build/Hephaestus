@@ -153,7 +153,9 @@ export function AppSidebar({
 					workspaceSlug={activeWorkspace.workspaceSlug}
 					practicesEnabled={activeWorkspace.practicesEnabled}
 				/>
-				{showMentor && <NavMentor workspaceSlug={activeWorkspace.workspaceSlug} />}
+				{showMentor && (
+					<NavMentor workspaceSlug={activeWorkspace.workspaceSlug} readOnly={readOnly} />
+				)}
 				{isAdmin && (
 					<NavAdmin
 						isOwner={isOwner}

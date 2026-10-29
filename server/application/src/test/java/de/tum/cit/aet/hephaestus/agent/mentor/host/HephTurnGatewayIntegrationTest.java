@@ -71,7 +71,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.core.io.ClassPathResource;
 
 /**
- * Every endpoint that a Heph host calls, over real HTTP through the worker's real gateway connector and its real
+ * Every endpoint that a Hephaestus host calls, over real HTTP through the worker's real gateway connector and its real
  * security chain, with a signed turn credential. A request without a body carries no {@code Content-Length}, as the
  * host's {@code fetch} sends it. The worker role is off in the test context, so the gateway runs as a small
  * application of its own, wired from the test context's beans.
@@ -120,7 +120,7 @@ class HephTurnGatewayIntegrationTest extends AbstractWorkspaceIntegrationTest {
         String suffix = UUID.randomUUID().toString().substring(0, 8);
         User developerUser = persistUser("heph-gateway-" + suffix);
         workspace = createWorkspace(
-                "heph-gateway-" + suffix, "Heph Gateway", "heph-gateway-org", AccountType.ORG, developerUser);
+                "heph-gateway-" + suffix, "Hephaestus Gateway", "heph-gateway-org", AccountType.ORG, developerUser);
         developer = accountId(developerUser);
         conversation = conversations.findOrCreateMain(workspace.getId(), developer);
         turn = MentorTurnStarts.askAndStart(
@@ -175,7 +175,7 @@ class HephTurnGatewayIntegrationTest extends AbstractWorkspaceIntegrationTest {
                 Arguments.of("GET", "context", null, 200),
                 Arguments.of("PUT", "partial", "partial.request.json", 204),
                 Arguments.of("POST", "search", "search.request.json", 200),
-                // The controller answers: the result, problem or feedback is unknown, so Heph may not show it.
+                // The controller answers: the result, problem or feedback is unknown, so Hephaestus may not show it.
                 Arguments.of("POST", "link-result", "{\"resultId\":\"" + UUID.randomUUID() + "\"}", 422),
                 Arguments.of("POST", "link-problem", "link-problem.request.json", 422),
                 Arguments.of("POST", "show-feedback", "show-feedback.request.json", 422),

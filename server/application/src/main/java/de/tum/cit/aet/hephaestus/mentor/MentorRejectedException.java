@@ -10,18 +10,19 @@ public final class MentorRejectedException extends RuntimeException {
 
     public enum Reason {
         /** The conversation already holds the maximum number of follow-ups waiting for an answer. */
-        FOLLOW_UPS_FULL("Heph is still answering. Wait for an answer before you send more messages."),
+        FOLLOW_UPS_FULL("Hephaestus is still answering. Wait for an answer before you send more messages."),
         /** The request id belongs to a different conversation or kind of write. */
         REQUEST_ID_REUSED("This message was already sent somewhere else."),
         /** Threads start only on a message of a main conversation. */
-        NOT_A_THREAD_PARENT("You can reply in a thread only to a message in your conversation with Heph."),
-        /** Votes are only on Heph's messages that are not erased. */
-        NOT_VOTABLE("You can rate only Heph's messages that are still in your conversation."),
+        NOT_A_THREAD_PARENT("You can reply in a thread only to a message in your conversation with Hephaestus."),
+        /** Votes are only on Hephaestus's messages that are not erased. */
+        NOT_VOTABLE("You can rate only Hephaestus's messages that are still in your conversation."),
         /** Only a Slack message the developer wrote can be edited. */
         NOT_EDITABLE("This message cannot be edited."),
         NOT_DELETABLE("You can delete only your own messages."),
-        /** The developer's personal data was erased, so Heph stores nothing new about them. */
-        PERSON_ERASED("Heph cannot reply because your personal data was erased. Contact the instance privacy contact.");
+        /** The developer's personal data was erased, so Hephaestus stores nothing new about them. */
+        PERSON_ERASED(
+                "Hephaestus cannot reply because your personal data was erased. Contact the instance privacy contact.");
 
         private final String userMessage;
 

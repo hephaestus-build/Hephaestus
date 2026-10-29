@@ -48,7 +48,7 @@ class MentorContextPathBuilderIntegrationTest extends AbstractWorkspaceIntegrati
     @BeforeEach
     void setUpLedger() {
         User developer = persistUser("heph-path-developer");
-        workspace = createWorkspace("heph-path", "Heph", "heph-org", AccountType.ORG, developer);
+        workspace = createWorkspace("heph-path", "Hephaestus", "heph-org", AccountType.ORG, developer);
         main = conversations.findOrCreateMain(workspace.getId(), accountId(developer));
     }
 

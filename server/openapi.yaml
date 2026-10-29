@@ -94,8 +94,6 @@ tags:
   name: Agents
 - description: The current developer's standing in each practice group
   name: Practice Group Standings
-- description: The developer's conversation with Heph
-  name: Mentor
 - description: Asking for a review of a piece of work by hand
   name: Practice review requests
 - description: Current account transparency and research consent
@@ -119,6 +117,8 @@ tags:
   name: Admin LLM
 - description: Public JWK set for verifying Hephaestus session JWTs
   name: Auth discovery
+- description: The developer's conversation with Hephaestus
+  name: Mentor
 - description: Workspace-scoped team settings management
   name: Team Settings
 - description: Repository contributions and open work
@@ -5841,7 +5841,7 @@ paths:
       - Mentor
   /workspaces/{workspaceSlug}/mentor/entries/{entryId}:
     delete:
-      description: Erases its text and every summary that read it. A question Heph
+      description: Erases its text and every summary that read it. A question Hephaestus
         has not answered yet is not answered.
       operationId: deleteMentorEntry
       parameters:
@@ -5947,7 +5947,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/MentorEntry"
           description: OK
-      summary: Clear the vote on one of Heph's messages
+      summary: Clear the vote on one of Hephaestus's messages
       tags:
       - Mentor
     put:
@@ -5986,14 +5986,14 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
-          description: The message is not one of Heph's
-      summary: Rate one of Heph's messages as helpful or not helpful
+          description: The message is not one of Hephaestus's
+      summary: Rate one of Hephaestus's messages as helpful or not helpful
       tags:
       - Mentor
   /workspaces/{workspaceSlug}/mentor/turns:
     post:
       description: Stores the question before anything is shown and queues a turn.
-        A question while Heph answers waits as a follow-up. Repeating a requestId
+        A question while Hephaestus answers waits as a follow-up. Repeating a requestId
         returns the first submission.
       operationId: submitMentorTurn
       parameters:
@@ -6024,17 +6024,17 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ProblemDetail"
-          description: "Heph declines the developer (mentor-refused), too many follow-ups\
-            \ wait, the requestId was used for another message, or the parent cannot\
-            \ have a thread (mentor-rejected)"
-      summary: Ask Heph
+          description: "Hephaestus declines the developer (mentor-refused), too many\
+            \ follow-ups wait, the requestId was used for another message, or the\
+            \ parent cannot have a thread (mentor-rejected)"
+      summary: Ask Hephaestus
       tags:
       - Mentor
   /workspaces/{workspaceSlug}/mentor/turns/{turnId}/status:
     patch:
       description: A queued turn never runs and keeps its question. A running turn
-        keeps what Heph already wrote. Stopping an ended turn changes nothing. A turn
-        asked in Slack can be stopped here.
+        keeps what Hephaestus already wrote. Stopping an ended turn changes nothing.
+        A turn asked in Slack can be stopped here.
       operationId: updateMentorTurnStatus
       parameters:
       - description: Workspace slug
@@ -15530,7 +15530,7 @@ components:
           - string
           - "null"
           format: uuid
-          description: The Heph answer that showed a conversation copy
+          description: The Hephaestus answer that showed a conversation copy
         path:
           type:
           - string
@@ -16997,7 +16997,7 @@ components:
         interactiveReserve:
           type: integer
           format: int32
-          description: Calls only Heph conversations may use
+          description: Calls only conversations may use
         maxConcurrentCalls:
           type: integer
           format: int32
@@ -17608,7 +17608,7 @@ components:
       - updatedAt
     MentorConversation:
       type: object
-      description: The developer's Heph conversation in a workspace at one moment
+      description: The developer's Hephaestus conversation in a workspace at one moment
       properties:
         activeTurns:
           type: array
@@ -17620,18 +17620,18 @@ components:
           type: string
           format: uuid
           description: The main conversation; absent until the developer writes to
-            Heph or gets a weekly digest
+            Hephaestus or gets a weekly digest
         lastAnswerAt:
           type: string
           format: date-time
-          description: When Heph's newest shown answer in the conversation or any
-            of its threads was written; absent before the first. Compare it with the
-            newest answer the client has seen.
+          description: When Hephaestus's newest shown answer in the conversation or
+            any of its threads was written; absent before the first. Compare it with
+            the newest answer the client has seen.
         lastReadAt:
           type: string
           format: date-time
           description: How far the developer read the conversation on any device;
-            absent before the first read. Heph has an unread answer when lastAnswerAt
+            absent before the first read. Hephaestus has an unread answer when lastAnswerAt
             is later.
         latestSeq:
           type: integer
@@ -17649,7 +17649,7 @@ components:
       - threads
     MentorEntry:
       type: object
-      description: One message of a Heph conversation
+      description: One message of a Hephaestus conversation
       properties:
         conversationId:
           type: string
@@ -17679,8 +17679,8 @@ components:
           - DIGEST
         links:
           type: array
-          description: "The results, problems and prepared feedback Heph showed in\
-            \ this message, in order"
+          description: "The results, problems and prepared feedback Hephaestus showed\
+            \ in this message, in order"
           items:
             $ref: "#/components/schemas/MentorLink"
         parentEntryId:
@@ -17698,11 +17698,11 @@ components:
           description: Order within its conversation
         slackDelivery:
           type: string
-          description: "Only on a question asked in Slack: whether Heph's reply reached\
-            \ Slack. FAILED means Slack does not show the whole reply: it is not there,\
-            \ or a stream showed only part of it before Slack or Silent Mode refused\
-            \ the rest; the full reply is in the app. UNCERTAIN means Slack cannot\
-            \ tell."
+          description: "Only on a question asked in Slack: whether Hephaestus's reply\
+            \ reached Slack. FAILED means Slack does not show the whole reply: it\
+            \ is not there, or a stream showed only part of it before Slack or Silent\
+            \ Mode refused the rest; the full reply is in the app. UNCERTAIN means\
+            \ Slack cannot tell."
           enum:
           - PENDING
           - DELIVERED
@@ -17717,8 +17717,9 @@ components:
           - SYSTEM
         text:
           type: string
-          description: "The developer's words or Heph's answer; for a weekly digest,\
-            \ the note that points Heph to it; empty when the message was deleted"
+          description: "The developer's words or Hephaestus's answer; for a weekly\
+            \ digest, the note that points Hephaestus to it; empty when the message\
+            \ was deleted"
         thread:
           $ref: "#/components/schemas/MentorThreadSummary"
           description: The thread on this message; only on top-level messages that
@@ -17743,7 +17744,7 @@ components:
           - STOPPED
         vote:
           type: string
-          description: The developer's vote; only on Heph's messages
+          description: The developer's vote; only on Hephaestus's messages
           enum:
           - HELPFUL
           - NOT_HELPFUL
@@ -17774,8 +17775,8 @@ components:
       - entries
     MentorLink:
       type: object
-      description: "A practice result, problem or prepared feedback Heph showed in\
-        \ a message"
+      description: "A practice result, problem or prepared feedback Hephaestus showed\
+        \ in a message"
       properties:
         id:
           type: string
@@ -17800,14 +17801,14 @@ components:
             \ can no longer read it"
         text:
           type: string
-          description: "Heph's words about it, shown to the developer"
+          description: "Hephaestus's words about it, shown to the developer"
       required:
       - id
       - kind
       - text
     MentorRead:
       type: object
-      description: How far the developer read their Heph conversation
+      description: How far the developer read their Hephaestus conversation
       properties:
         lastReadAt:
           type: string
@@ -17816,7 +17817,7 @@ components:
             yet
     MentorReadRequest:
       type: object
-      description: How far the developer read their Heph conversation
+      description: How far the developer read their Hephaestus conversation
       properties:
         at:
           type: string
@@ -17882,8 +17883,8 @@ components:
         replyCount:
           type: integer
           format: int64
-          description: Messages in the thread; can count a Heph message without text
-            whose feedback is no longer shown
+          description: Messages in the thread; can count a Hephaestus message without
+            text whose feedback is no longer shown
       required:
       - conversationId
       - latestSeq
@@ -17891,7 +17892,7 @@ components:
       - replyCount
     MentorTurn:
       type: object
-      description: One question to Heph and the work to answer it
+      description: One question to Hephaestus and the work to answer it
       properties:
         attempt:
           type: integer
@@ -17923,7 +17924,7 @@ components:
             \ the thread replies to"
         partial:
           $ref: "#/components/schemas/MentorTurnPartial"
-          description: Heph's answer in progress; only while the turn runs
+          description: Hephaestus's answer in progress; only while the turn runs
         requestId:
           type: string
           description: The submission that asked; the question's entry carries the
@@ -17944,10 +17945,11 @@ components:
         waitingFor:
           type: string
           description: "Why a queued turn has not started. FREE_HEPH: a worker may\
-            \ start it, and every Heph slot of the deployment is taken, so it starts\
-            \ when one is free. Absent when the turn does not wait, waits for an earlier\
-            \ question of its conversation, or waits for a reason that the server\
-            \ does not know, such as a server without a configured Heph capacity."
+            \ start it, and every conversation slot of the deployment is taken, so\
+            \ it starts when one is free. Absent when the turn does not wait, waits\
+            \ for an earlier question of its conversation, or waits for a reason that\
+            \ the server does not know, such as a server without a configured conversation\
+            \ turn capacity."
           enum:
           - FREE_HEPH
       required:
@@ -17960,7 +17962,7 @@ components:
       - surface
     MentorTurnPartial:
       type: object
-      description: What Heph is doing in a running turn
+      description: What Hephaestus is doing in a running turn
       properties:
         activity:
           type: string
@@ -17970,21 +17972,21 @@ components:
           - TOOL
         stage:
           type: string
-          description: "What Heph is doing, in the developer's words, for example\
+          description: "What Hephaestus is doing, in the developer's words, for example\
             \ \"Reading your practice feedback…\""
         text:
           type: string
-          description: The text Heph has written in this turn so far
+          description: The text Hephaestus has written in this turn so far
         tool:
           type: string
-          description: "The tool Heph runs, while the activity is TOOL"
+          description: "The tool Hephaestus runs, while the activity is TOOL"
       required:
       - activity
       - stage
       - text
     MentorTurnRequest:
       type: object
-      description: A question to Heph from the app
+      description: A question to Hephaestus from the app
       properties:
         pageContext:
           type: string
@@ -18015,15 +18017,15 @@ components:
       properties:
         status:
           type: string
-          description: STOPPED stops a queued or running turn. Heph keeps what it
-            already wrote.
+          description: STOPPED stops a queued or running turn. Hephaestus keeps what
+            it already wrote.
           enum:
           - STOPPED
       required:
       - status
     MentorVoteRequest:
       type: object
-      description: The developer's vote on one of Heph's messages
+      description: The developer's vote on one of Hephaestus's messages
       properties:
         vote:
           type: string
@@ -18102,8 +18104,8 @@ components:
           description: The weekly digest is on
         weeklyDigestAvailable:
           type: boolean
-          description: "Heph can answer in at least one of your workspaces, so a weekly\
-            \ digest can be written"
+          description: "Hephaestus can answer in at least one of your workspaces,\
+            \ so a weekly digest can be written"
         workspaceAlerts:
           type: boolean
       required:
@@ -25311,7 +25313,7 @@ components:
         interactiveReserve:
           type: integer
           format: int32
-          description: Calls only Heph conversations may use
+          description: Calls only conversations may use
           minimum: 0
         maxConcurrentCalls:
           type: integer
@@ -27188,8 +27190,8 @@ components:
           type: boolean
         weeklyDigest:
           type: boolean
-          description: "The weekly digest in your Heph conversation, with one note\
-            \ in Slack or email that it is ready. Absent keeps the saved choice."
+          description: "The weekly digest in your Hephaestus conversation, with one\
+            \ note in Slack or email that it is ready. Absent keeps the saved choice."
         workspaceAlerts:
           type: boolean
       required:
@@ -27764,8 +27766,8 @@ components:
         destination:
           type: string
           description: "Where it was delivered: on the work (ON_WORK) or in the conversation\
-            \ with Heph (CONVERSATION). Practice page feedback is never listed; the\
-            \ waiting count covers it"
+            \ with Hephaestus (CONVERSATION). Practice page feedback is never listed;\
+            \ the waiting count covers it"
           enum:
           - ON_WORK
           - PRACTICE_PAGE
@@ -27784,12 +27786,12 @@ components:
         mentorEntryId:
           type: string
           format: uuid
-          description: "The Heph message it appeared in; only for CONVERSATION, and\
-            \ never when withdrawn"
+          description: "The Hephaestus message it appeared in; only for CONVERSATION,\
+            \ and never when withdrawn"
         mentorParentEntryId:
           type: string
           format: uuid
-          description: "The top-level message whose thread holds that Heph message;\
+          description: "The top-level message whose thread holds that Hephaestus message;\
             \ only for CONVERSATION, and absent when the message is not in a thread"
         practiceName:
           type: string
@@ -28654,7 +28656,7 @@ components:
       description: |-
         One member's view of setup in one workspace. <code>aiChoice</code> is the account's answer, the same in
          every workspace; <code>aiOptions</code> says what this workspace has set up under each answer, which is
-         what differs between workspaces. <code>mentorRefusal</code> is this member's own answer from Heph's admission.
+         what differs between workspaces. <code>mentorRefusal</code> is this member's own answer from Hephaestus's admission.
       properties:
         aiChoice:
           type: string
@@ -28676,8 +28678,8 @@ components:
             $ref: "#/components/schemas/WorkspaceOnboardingLink"
         mentorRefusal:
           type: string
-          description: "Why Heph declines this member here, by the rule that admits\
-            \ each question; null when Heph can answer"
+          description: "Why Hephaestus declines this member here, by the rule that\
+            \ admits each question; null when Hephaestus can answer"
           enum:
           - PERSON_ERASED
           - NO_AI

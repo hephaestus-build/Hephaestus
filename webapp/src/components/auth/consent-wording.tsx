@@ -104,6 +104,7 @@ export function ResearchSummary({ organization, id }: { organization: string; id
 				<li>your work in the tools your project connects</li>
 				<li>Hephaestus’s observations and feedback about that work</li>
 				<li>your responses to that feedback</li>
+				{/* oxlint-disable-next-line hephaestus/ui-text-voice -- This wording is versioned and stays until the next consent revision. */}
 				<li>how you use Hephaestus, including your conversations with Heph</li>
 				<li>your answers to research surveys</li>
 			</ul>

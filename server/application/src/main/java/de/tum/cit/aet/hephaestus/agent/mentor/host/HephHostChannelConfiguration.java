@@ -23,7 +23,7 @@ import org.springframework.web.socket.server.HandshakeInterceptor;
 import org.springframework.web.util.UriTemplate;
 
 /**
- * The Heph host's command channel: one WebSocket the host opens to its own gateway session, at
+ * The Hephaestus host's command channel: one WebSocket the host opens to its own gateway session, at
  * {@code /internal/llm/runtime/{id}/commands}, over which this worker sends it {@code start}, {@code stop} and pings
  * ({@link HephHost#ping}). Only the host that runs now may connect, once, with the token its session was registered
  * with. The gateway's token filter refuses a handshake with another token ({@code 401}); a session token of a host
@@ -72,7 +72,7 @@ public class HephHostChannelConfiguration implements WebSocketConfigurer {
             } catch (RuntimeException refused) {
                 // The class only: the message can quote the path or the credential the caller sent.
                 log.debug(
-                        "Refused a Heph host command channel: {}",
+                        "Refused a Hephaestus host command channel: {}",
                         refused.getClass().getSimpleName());
             }
             response.setStatusCode(HttpStatus.NOT_FOUND);
@@ -98,7 +98,7 @@ public class HephHostChannelConfiguration implements WebSocketConfigurer {
         /** The host sends nothing on this channel; its turns talk to the worker over HTTP with their credential. */
         @Override
         protected void handleTextMessage(WebSocketSession socket, TextMessage message) {
-            log.debug("Ignoring a frame from the Heph host");
+            log.debug("Ignoring a frame from the Hephaestus host");
         }
 
         @Override

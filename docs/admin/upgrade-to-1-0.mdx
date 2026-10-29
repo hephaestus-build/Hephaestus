@@ -42,7 +42,7 @@ The migration guide also has the entries of the releases before v0.94.7.
 
 | Change | Operator action | Migration guide entry |
 | --- | --- | --- |
-| Heph keeps one conversation for each developer in each workspace. The upgrade deletes the earlier Heph chat history. | Stop every role before the upgrade, then follow the entry. | Stop every role for the Heph conversation upgrade, which deletes Heph chat history |
+| Hephaestus keeps one conversation for each developer in each workspace. The upgrade deletes the earlier Hephaestus chat history. | Stop every role before the upgrade, then follow the entry. | Stop every role for the conversation upgrade, which deletes Hephaestus chat history |
 | Production instance administration requires passkeys. | Before the upgrade, read [Admin passkeys](./passkeys). After the upgrade, enroll two passkeys and save the recovery codes. Set the passkey origin and RP ID if the webapp uses another origin. | Admin passkey protection |
 | Delayed reviews use the work that was saved when their event was recorded. | Stop every role, back up the database, and deploy matching server, worker, and webhook images. | Deploy matching runtime roles for retained review evidence |
 | Logs use the Elastic Common Schema, and Sentry is removed. | Remove `SENTRY_DSN`. Update log queries, alerts, and dashboards for the new field names. | Update log queries for the new log format and remove `SENTRY_DSN` |

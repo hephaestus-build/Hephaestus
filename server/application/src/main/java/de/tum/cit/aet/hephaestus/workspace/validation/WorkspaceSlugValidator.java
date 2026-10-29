@@ -61,6 +61,7 @@ public class WorkspaceSlugValidator implements ConstraintValidator<WorkspaceSlug
             "workspaces",
             "workers",
             "mentor",
+            "conversation",
             "feedback",
             "practices",
             "activity",

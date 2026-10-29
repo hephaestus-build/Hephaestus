@@ -1,8 +1,7 @@
 import { Link, useMatchRoute } from "@tanstack/react-router";
-import { ChevronRight, Sparkles } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 
 import { HEPH_LABEL, HephIcon } from "@/components/brand/HephIcon";
-import { Badge } from "@/components/ui/badge";
 import {
 	SidebarGroup,
 	SidebarGroupLabel,
@@ -11,9 +10,15 @@ import {
 	SidebarMenuItem,
 } from "@/components/ui/sidebar";
 
-export function NavMentor({ workspaceSlug }: { workspaceSlug: string }) {
+export function NavMentor({
+	workspaceSlug,
+	readOnly = false,
+}: {
+	workspaceSlug: string;
+	readOnly?: boolean;
+}) {
 	const matchRoute = useMatchRoute();
-	const onMentor = Boolean(matchRoute({ to: "/w/$workspaceSlug/mentor", fuzzy: true }));
+	const onMentor = Boolean(matchRoute({ to: "/w/$workspaceSlug/conversation", fuzzy: true }));
 
 	return (
 		<SidebarGroup>
@@ -21,24 +26,21 @@ export function NavMentor({ workspaceSlug }: { workspaceSlug: string }) {
 			<SidebarMenu>
 				<SidebarMenuItem>
 					<SidebarMenuButton
-						tooltip={HEPH_LABEL}
+						tooltip={readOnly ? "Conversation" : HEPH_LABEL}
 						isActive={onMentor}
 						render={
 							<Link
-								to="/w/$workspaceSlug/mentor"
+								to="/w/$workspaceSlug/conversation"
 								params={{ workspaceSlug }}
 								className="group/mentor items-center gap-2"
 							/>
 						}
 					>
 						<HephIcon className="-mx-1" size={28} pad={5} strokeWidth={1.5} />
-						<span className="flex items-center gap-2">
-							Heph
-							<Badge variant="muted">
-								<Sparkles className="h-3.5 w-3.5" /> AI assistant
-							</Badge>
+						<span className="min-w-0 flex-1 truncate">
+							{readOnly ? "Conversation" : "Ask Hephaestus"}
 						</span>
-						<div className="flex w-full justify-end">
+						<div className="ms-auto flex shrink-0 justify-end">
 							<ChevronRight className="h-4 w-4 opacity-0 transition-opacity group-hover/mentor:opacity-100" />
 						</div>
 					</SidebarMenuButton>

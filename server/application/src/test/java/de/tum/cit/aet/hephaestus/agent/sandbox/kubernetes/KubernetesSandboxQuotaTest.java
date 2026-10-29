@@ -30,7 +30,7 @@ class KubernetesSandboxQuotaTest extends BaseUnitTest {
 
     @Test
     void shouldAdmitNoReviewWhenTheQuotaHoldsLessMemoryThanItsSandbox() {
-        // 9 of 9.5 GiB requested by the Heph host and the turn sandboxes: 512 MiB is free, a review requests 640.
+        // 9 of 9.5 GiB requested by the Hephaestus host and the turn sandboxes: 512 MiB is free, a review requests 640.
         var quota = quota(
                 Map.of("requests.memory", "9728Mi", "pods", "10"), Map.of("requests.memory", "9216Mi", "pods", "4"));
 
@@ -164,7 +164,7 @@ class KubernetesSandboxQuotaTest extends BaseUnitTest {
                 "hephaestus-heph-conversations", Map.of("requests.memory", "1Gi"), Map.of("requests.memory", "1Gi"));
 
         assertThat(KubernetesSandboxQuota.fits(List.of(conversations), REVIEW, REVIEWS))
-                .as("Heph's full tier takes no room from reviews")
+                .as("Hephaestus's full tier takes no room from reviews")
                 .isEqualTo(Integer.MAX_VALUE);
         assertThat(KubernetesSandboxQuota.neverFits(List.of(conversations), REVIEW, REVIEWS))
                 .isFalse();

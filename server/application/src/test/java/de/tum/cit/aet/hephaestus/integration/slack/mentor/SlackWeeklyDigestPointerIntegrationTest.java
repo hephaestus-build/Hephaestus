@@ -142,9 +142,9 @@ class SlackWeeklyDigestPointerIntegrationTest extends AbstractWorkspaceIntegrati
                 .contains(
                         "*Your weekly digest is ready*\n5–11 October · Delivery team",
                         SlackWeeklyDigestPointer.OPEN_ACTION,
-                        "https://hephaestus.example/w/digest-slack/mentor?entry=" + digest.getId(),
+                        "https://hephaestus.example/w/digest-slack/conversation?entry=" + digest.getId(),
                         SlackWeeklyDigestPointer.TURN_OFF_ACTION,
-                        "Reply in this thread to go through it with Heph.")
+                        "Reply in this thread to go through it.")
                 .doesNotContainPattern("\\d+ (pieces|piece) of feedback");
 
         MentorEntry posted = entryRepository.findById(digest.getId()).orElseThrow();

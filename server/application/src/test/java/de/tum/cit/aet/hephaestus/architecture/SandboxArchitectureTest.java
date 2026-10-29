@@ -146,8 +146,9 @@ class SandboxArchitectureTest extends HephaestusArchitectureTest {
                     .resideInAPackage("..agent.mentor..")
                     .should()
                     .callMethod(SandboxManager.class, "execute", SandboxSpec.class)
-                    .because("Heph turns run in the worker's long-lived Heph host; SandboxManager.execute is the "
-                            + "one-shot path of a practice review.")
+                    .because(
+                            "conversation turns run in the worker's long-lived Hephaestus host; SandboxManager.execute is the "
+                                    + "one-shot path of a practice review.")
                     .check(classes);
         }
 

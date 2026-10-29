@@ -38,7 +38,7 @@ import org.springframework.web.server.ResponseStatusException;
 import tools.jackson.databind.JsonNode;
 
 /**
- * The endpoints a Heph host calls for one turn, on this worker's sandbox gateway, with the turn's credential. Each
+ * The endpoints a Hephaestus host calls for one turn, on this worker's sandbox gateway, with the turn's credential. Each
  * acts only for the turn, developer and conversation the credential names, and only while the attempt runs on this
  * worker ({@link MentorLeaseLostException}). The ledger classifies the
  * entries that the end carries; the host's word is not taken for that.
@@ -97,7 +97,7 @@ public class HephTurnController {
                 "link_result",
                 () -> {
                     if (!contexts.admitsResult(turn, request.resultId())) {
-                        throw refused("it is not a result of the developer that Heph may show");
+                        throw refused("it is not a result of the developer that Hephaestus may show");
                     }
                     return request;
                 },
@@ -116,7 +116,7 @@ public class HephTurnController {
                 "link_problem",
                 () -> {
                     if (!contexts.admitsProblem(turn, request.problemId())) {
-                        throw refused("it is not a problem on a result of the developer that Heph may show");
+                        throw refused("it is not a problem on a result of the developer that Hephaestus may show");
                     }
                     return request;
                 },
@@ -263,12 +263,12 @@ public class HephTurnController {
         String detail = request.detail();
         String cause = outcome != MentorTurn.Status.FAILED
                 ? null
-                : "its Heph host reported " + reason
+                : "its Hephaestus host reported " + reason
                         + (detail == null ? "" : ": " + (FAILURE_DETAILS.contains(detail) ? detail : "unrecognized"));
         // A host that gave up on its model call cannot wait for it: a silent provider would hold the end.
         if (!callsInFlight.settle(turn.turnId(), turn.attempt(), outcome != MentorTurn.Status.DONE)) {
             log.warn(
-                    "Heph turn {} attempt {} ended with a model call still in flight; that call may go unbilled",
+                    "conversation turn {} attempt {} ended with a model call still in flight; that call may go unbilled",
                     turn.turnId(),
                     turn.attempt());
         }

@@ -19,7 +19,7 @@ SET practice_delivery_status = 'PAUSED',
     practice_review_auto_trigger_enabled = FALSE,
     practice_review_manual_trigger_enabled = FALSE;
 
--- Heph answers wherever a Heph binding is enabled; disable every one, and an admin re-enables them under AI models.
+-- Hephaestus answers wherever a conversation model binding is enabled; disable every one, and an admin re-enables them under AI models.
 UPDATE workspace_agent_binding
 SET enabled = FALSE,
     updated_at = now()

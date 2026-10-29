@@ -249,7 +249,7 @@ export function WorkspaceUsageReport({
 						</EmptyMedia>
 						<EmptyTitle>No AI usage in {formatMonthLabel(month)}</EmptyTitle>
 						<EmptyDescription>
-							Spend appears here after practice reviews or Heph use a model.
+							Spend appears here after practice reviews or conversations use a model.
 						</EmptyDescription>
 					</EmptyHeader>
 					<EmptyContent>

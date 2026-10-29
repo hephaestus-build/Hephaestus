@@ -95,7 +95,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * The worker endpoints a Heph host calls for one turn. The worker role is off in the test context, so the controller
+ * The worker endpoints a Hephaestus host calls for one turn. The worker role is off in the test context, so the controller
  * is built by hand from the context's own beans. The gateway client sends the contract files in
  * {@code heph-turn-contract/} with a signed turn credential, authenticated by the gateway's own filter, and maps
  * errors with the production controller advice. The direct client passes an authenticated credential as the gateway
@@ -161,7 +161,8 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
     void claimATurn() throws Exception {
         String suffix = UUID.randomUUID().toString().substring(0, 8);
         developer = persistUser("heph-turn-" + suffix);
-        workspace = createWorkspace("heph-turn-" + suffix, "Heph Turn", "heph-turn-org", AccountType.ORG, developer);
+        workspace =
+                createWorkspace("heph-turn-" + suffix, "Hephaestus Turn", "heph-turn-org", AccountType.ORG, developer);
         developerAccount = accountId(developer);
         conversation = conversations.findOrCreateMain(workspace.getId(), developerAccount);
         turn = MentorTurnStarts.askAndStart(turns, metrics, workspace.getId(), conversation.getId(), QUESTION, WORKER);
@@ -253,7 +254,7 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
     }
 
     /**
-     * A request body exactly as the Heph host sends it, or the context it reads. {@code heph-turn-api.spec.ts} checks
+     * A request body exactly as the Hephaestus host sends it, or the context it reads. {@code heph-turn-api.spec.ts} checks
      * that the host's own HTTP client sends and reads these same files.
      */
     private static String contract(String name) throws IOException {
@@ -538,7 +539,7 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
         MentorTurn ended = reloaded();
         assertThat(ended.getStatus()).isEqualTo(MentorTurn.Status.FAILED);
         assertThat(ended.getError()).isEqualTo(HephTurnDispatcher.TOOK_TOO_LONG);
-        assertThat(ended.getFailureCause()).isEqualTo("its Heph host reported DEADLINE: deadline");
+        assertThat(ended.getFailureCause()).isEqualTo("its Hephaestus host reported DEADLINE: deadline");
         assertThat(ended.getFailedCall())
                 .as("no model call of the attempt failed")
                 .isNull();
@@ -561,7 +562,7 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
 
         MentorTurn ended = reloaded();
         assertThat(ended.getStatus()).isEqualTo(MentorTurn.Status.FAILED);
-        assertThat(ended.getFailureCause()).isEqualTo("its Heph host reported ERROR: provider_unavailable");
+        assertThat(ended.getFailureCause()).isEqualTo("its Hephaestus host reported ERROR: provider_unavailable");
         assertThat(ended.getFailedCall()).isEqualTo("upstream_status");
         assertThat(ended.getFailedCallStatus()).isEqualTo(503);
         assertThat(callsInFlight.lastFailed(turn.getId(), turn.getAttempt()))
@@ -604,7 +605,7 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
         call("POST", "end", turn.getAttempt(), """
                         {"outcome":"FAILED","entries":[],"reason":"ERROR","detail":"provider said: rate limited for alice@example.com"}""").andExpect(status().isNoContent());
 
-        assertThat(reloaded().getFailureCause()).isEqualTo("its Heph host reported ERROR: unrecognized");
+        assertThat(reloaded().getFailureCause()).isEqualTo("its Hephaestus host reported ERROR: unrecognized");
     }
 
     @Test
@@ -617,7 +618,7 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
         MentorTurn ended = reloaded();
         assertThat(ended.getStatus()).isEqualTo(MentorTurn.Status.FAILED);
         assertThat(ended.getError()).isEqualTo(HephTurnDispatcher.MODEL_STOPPED_ANSWERING);
-        assertThat(output.getAll()).contains("failed: its Heph host reported STALLED: upstream_stalled");
+        assertThat(output.getAll()).contains("failed: its Hephaestus host reported STALLED: upstream_stalled");
     }
 
     /**
@@ -638,8 +639,8 @@ class HephTurnControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
         assertThat(ended.getStatus()).isEqualTo(MentorTurn.Status.FAILED);
         assertThat(ended.getError()).isEqualTo(HephTurnDispatcher.COULD_NOT_FINISH);
         assertThat(output.getAll())
-                .contains("Heph turn " + turn.getId() + " attempt " + turn.getAttempt()
-                        + " failed: its Heph host reported ERROR: unrecognized")
+                .contains("conversation turn " + turn.getId() + " attempt " + turn.getAttempt()
+                        + " failed: its Hephaestus host reported ERROR: unrecognized")
                 .doesNotContain(key)
                 .doesNotContain(quoted);
     }

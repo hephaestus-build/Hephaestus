@@ -195,7 +195,7 @@ export const FirstVisit: Story = {
 			await expect(canvas.getByRole("radio", { name })).not.toBeChecked();
 		}
 		await expect(canvas.getByRole("heading", { level: 1, name: "Your AI choice" })).toBeVisible();
-		canvas.getByText("Heph says:");
+		canvas.getByText("Hephaestus says:");
 		await expect(
 			canvas.getByText("Compare the three below. Any answer is fine, including none."),
 		).toBeVisible();
@@ -522,21 +522,21 @@ export const HephNotCovered: Story = {
 		).toBeVisible();
 		await expect(
 			canvas.getByText(
-				"Practice reviews run in Engineering for this choice. Heph is not set up here yet.",
+				"Practice reviews run in Engineering for this choice. Ask Hephaestus is not set up here yet.",
 			),
 		).toBeVisible();
 		await userEvent.click(canvas.getByRole("radio", { name: CLOUD }));
 		await expect(
 			canvas.getByText(
-				"Heph runs in Engineering for this choice. Practice reviews are not set up here yet.",
+				"Ask Hephaestus works in Engineering for this choice. Practice reviews are not set up here yet.",
 			),
 		).toBeVisible();
 	},
 };
 
 /**
- * Only practice reviews have a model here: the page speaks for itself instead of Heph, and no card
- * promises Heph in this workspace. The answer still holds in every workspace.
+ * Only practice reviews have a model here: the page speaks for itself instead of Hephaestus, and no card
+ * promises Hephaestus in this workspace. The answer still holds in every workspace.
  */
 export const PracticeReviewsOnly: Story = {
 	args: {
@@ -550,17 +550,17 @@ export const PracticeReviewsOnly: Story = {
 		},
 	},
 	play: async ({ canvas, userEvent }) => {
-		await expect(canvas.queryByText("Heph says:")).toBeNull();
+		await expect(canvas.queryByText("Hephaestus says:")).toBeNull();
 		await expect(
 			canvas.getByText(
 				"Before you start in Engineering, one question. Your answer controls future AI requests across all your workspaces.",
 			),
 		).toBeVisible();
-		await expect(canvas.queryByText(/Heph talks it through with you/u)).toBeNull();
+		await expect(canvas.queryByText(/Hephaestus talks it through with you/u)).toBeNull();
 		canvas.getByText(/Hephaestus can review your work against your team’s practices where set up/u);
 		const inHouse = canvas.getByRole("radio", { name: IN_HOUSE });
 		await expect(inHouse).toHaveAccessibleName(/AI help Practice feedback/u);
-		await expect(inHouse).not.toHaveAccessibleName(/Feedback and Heph/u);
+		await expect(inHouse).not.toHaveAccessibleName(/Feedback and Hephaestus/u);
 		await expect(canvas.getByRole("radio", { name: NO_AI })).toHaveAccessibleName(
 			/AI help No new AI requests Models/u,
 		);
@@ -574,7 +574,7 @@ export const PracticeReviewsOnly: Story = {
 		);
 		await expect(
 			canvas.getByText(
-				"Practice reviews run in Engineering for this choice. Heph is not set up here yet.",
+				"Practice reviews run in Engineering for this choice. Ask Hephaestus is not set up here yet.",
 			),
 		).toBeVisible();
 	},
@@ -598,7 +598,7 @@ export const NothingSetUp: Story = {
 	},
 	play: async ({ canvas }) => {
 		canvas.getByText(/Hephaestus can review your work against your team’s practices where set up/u);
-		await expect(canvas.queryByText("Heph says:")).toBeNull();
+		await expect(canvas.queryByText("Hephaestus says:")).toBeNull();
 	},
 };
 
@@ -709,7 +709,7 @@ export const OAuthReturn: Story = {
 
 /**
  * The round-trip that connected the last required account: the server now reports nothing owed, so
- * the page is a return visit and Heph names the exit instead of leaving a disabled Save as the
+ * the page is a return visit and Hephaestus names the exit instead of leaving a disabled Save as the
  * only visible control.
  */
 export const OAuthReturnDone: Story = {
@@ -738,7 +738,7 @@ export const OAuthReturnDone: Story = {
 
 /**
  * A member who answered in another workspace is never asked again: the saved answer is checked,
- * Heph says it holds here, and only this workspace's required account link stands between them
+ * Hephaestus says it holds here, and only this workspace's required account link stands between them
  * and the workspace.
  */
 export const AnsweredElsewhere: Story = {
@@ -840,8 +840,8 @@ export const Loading: Story = {
 	play: async ({ canvas }) => {
 		await expect(canvas.getByRole("heading", { level: 1, name: "Your AI choice" })).toBeVisible();
 		await expect(canvas.getByText("Loading your setup…")).toBeVisible();
-		// Whether Heph is set up here is not known yet, so the page does not speak as Heph.
-		await expect(canvas.queryByText("Heph says:")).toBeNull();
+		// Whether Hephaestus is set up here is not known yet, so the page does not speak as Hephaestus.
+		await expect(canvas.queryByText("Hephaestus says:")).toBeNull();
 	},
 };
 

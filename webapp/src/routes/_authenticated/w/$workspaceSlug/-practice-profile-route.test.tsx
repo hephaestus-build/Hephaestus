@@ -1390,16 +1390,16 @@ describe("the feedback an observation gave", () => {
 		await within(back).findByText(completeObservation.explanation, undefined, SETTLE_WAIT);
 	});
 
-	it("links feedback raised in conversation to the conversation with Heph", async () => {
+	it("links feedback raised in conversation to the conversation with Hephaestus", async () => {
 		withFeedback("CONVERSATION");
 		renderRouteAtWithRouter(observationPage());
 		const selected = await screen.findByRole("list", { name: "Reviews" }, ROUTE_RENDER_WAIT);
 		const link = await within(selected).findByRole(
 			"link",
-			{ name: "Read it in your conversation with Heph" },
+			{ name: "Read it in your conversation" },
 			SETTLE_WAIT,
 		);
-		expect(link.getAttribute("href")).toBe("/w/acme/mentor");
+		expect(link.getAttribute("href")).toBe("/w/acme/conversation");
 	});
 
 	it("turns the observations' timeframe into the since the group's reviews ask for", async () => {

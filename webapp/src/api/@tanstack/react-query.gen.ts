@@ -3886,7 +3886,7 @@ export const listMentorEntriesInfiniteOptions = (options: Options<ListMentorEntr
 /**
  * Delete a message the developer wrote
  *
- * Erases its text and every summary that read it. A question Heph has not answered yet is not answered.
+ * Erases its text and every summary that read it. A question Hephaestus has not answered yet is not answered.
  */
 export const deleteMentorEntryMutation = (options?: Partial<Options<DeleteMentorEntryData>>): UseMutationOptions<DeleteMentorEntryResponse, DeleteMentorEntryError, Options<DeleteMentorEntryData>> => {
     const mutationOptions: UseMutationOptions<DeleteMentorEntryResponse, DeleteMentorEntryError, Options<DeleteMentorEntryData>> = {
@@ -3951,7 +3951,7 @@ export const getMentorThreadInfiniteOptions = (options: Options<GetMentorThreadD
 };
 
 /**
- * Clear the vote on one of Heph's messages
+ * Clear the vote on one of Hephaestus's messages
  */
 export const clearMentorVoteMutation = (options?: Partial<Options<ClearMentorVoteData>>): UseMutationOptions<ClearMentorVoteResponse, DefaultError, Options<ClearMentorVoteData>> => {
     const mutationOptions: UseMutationOptions<ClearMentorVoteResponse, DefaultError, Options<ClearMentorVoteData>> = {
@@ -3968,7 +3968,7 @@ export const clearMentorVoteMutation = (options?: Partial<Options<ClearMentorVot
 };
 
 /**
- * Rate one of Heph's messages as helpful or not helpful
+ * Rate one of Hephaestus's messages as helpful or not helpful
  */
 export const setMentorVoteMutation = (options?: Partial<Options<SetMentorVoteData>>): UseMutationOptions<SetMentorVoteResponse, SetMentorVoteError, Options<SetMentorVoteData>> => {
     const mutationOptions: UseMutationOptions<SetMentorVoteResponse, SetMentorVoteError, Options<SetMentorVoteData>> = {
@@ -3985,9 +3985,9 @@ export const setMentorVoteMutation = (options?: Partial<Options<SetMentorVoteDat
 };
 
 /**
- * Ask Heph
+ * Ask Hephaestus
  *
- * Stores the question before anything is shown and queues a turn. A question while Heph answers waits as a follow-up. Repeating a requestId returns the first submission.
+ * Stores the question before anything is shown and queues a turn. A question while Hephaestus answers waits as a follow-up. Repeating a requestId returns the first submission.
  */
 export const submitMentorTurnMutation = (options?: Partial<Options<SubmitMentorTurnData>>): UseMutationOptions<SubmitMentorTurnResponse, SubmitMentorTurnError, Options<SubmitMentorTurnData>> => {
     const mutationOptions: UseMutationOptions<SubmitMentorTurnResponse, SubmitMentorTurnError, Options<SubmitMentorTurnData>> = {
@@ -4006,7 +4006,7 @@ export const submitMentorTurnMutation = (options?: Partial<Options<SubmitMentorT
 /**
  * Stop a turn
  *
- * A queued turn never runs and keeps its question. A running turn keeps what Heph already wrote. Stopping an ended turn changes nothing. A turn asked in Slack can be stopped here.
+ * A queued turn never runs and keeps its question. A running turn keeps what Hephaestus already wrote. Stopping an ended turn changes nothing. A turn asked in Slack can be stopped here.
  */
 export const updateMentorTurnStatusMutation = (options?: Partial<Options<UpdateMentorTurnStatusData>>): UseMutationOptions<UpdateMentorTurnStatusResponse, DefaultError, Options<UpdateMentorTurnStatusData>> => {
     const mutationOptions: UseMutationOptions<UpdateMentorTurnStatusResponse, DefaultError, Options<UpdateMentorTurnStatusData>> = {

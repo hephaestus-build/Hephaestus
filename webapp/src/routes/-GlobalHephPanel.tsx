@@ -129,7 +129,7 @@ function WorkspaceHephPanel({ workspaceSlug }: { workspaceSlug: string }) {
 			unread={unread}
 			onOpenInMentor={() => {
 				void navigate({
-					to: "/w/$workspaceSlug/mentor",
+					to: "/w/$workspaceSlug/conversation",
 					params: { workspaceSlug },
 					search: thread ? { thread: thread.parentEntryId } : {},
 				});

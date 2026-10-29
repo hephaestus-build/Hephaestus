@@ -193,7 +193,7 @@ describe("applyEntry", () => {
 		]);
 	});
 
-	it("removes Heph's deleted message and keeps the developer's as a placeholder", () => {
+	it("removes Hephaestus's deleted message and keeps the developer's as a placeholder", () => {
 		queryClient.setQueryData(
 			entriesKey,
 			pages<MentorEntryPage>({ entries: [entry(1, { kind: "USER" }), entry(2)] }),
@@ -301,7 +301,7 @@ describe("applyTurn", () => {
 	it("marks a failed turn's question failed and takes the turn off the running ones", () => {
 		conversation({ activeTurns: [turn("RUNNING")] });
 
-		applyTurn(queryClient, SLUG, turn("FAILED", { error: "Heph took too long to answer." }));
+		applyTurn(queryClient, SLUG, turn("FAILED", { error: "Hephaestus took too long to answer." }));
 
 		expect(
 			queryClient.getQueryData<MentorConversation>(conversationKey)?.activeTurns,
@@ -310,7 +310,7 @@ describe("applyTurn", () => {
 			queryClient.getQueryData<InfiniteData<MentorEntryPage>>(entriesKey)?.pages[0]?.entries[0];
 		expect(question).toMatchObject({
 			turnStatus: "FAILED",
-			turnError: "Heph took too long to answer.",
+			turnError: "Hephaestus took too long to answer.",
 		});
 	});
 
@@ -330,7 +330,7 @@ describe("applyTurn", () => {
 		const question = entry(1, { kind: "USER", turnId: turn("QUEUED").id, turnStatus: "QUEUED" });
 		conversation({ activeTurns: [] });
 
-		applyTurn(queryClient, SLUG, turn("FAILED", { error: "Heph took too long to answer." }));
+		applyTurn(queryClient, SLUG, turn("FAILED", { error: "Hephaestus took too long to answer." }));
 		applySubmission(queryClient, SLUG, { question, turn: turn("QUEUED") });
 
 		expect(
@@ -338,7 +338,7 @@ describe("applyTurn", () => {
 		).toStrictEqual([]);
 		expect(mainEntries()[0]).toMatchObject({
 			turnStatus: "FAILED",
-			turnError: "Heph took too long to answer.",
+			turnError: "Hephaestus took too long to answer.",
 		});
 	});
 
@@ -496,7 +496,7 @@ describe("a late answer to the developer's own write", () => {
 		expect(mainEntries()).toMatchObject([{ text: "Edited in Slack since", vote: "HELPFUL" }]);
 	});
 
-	it("never shows again an answer of Heph's that was deleted before the vote's answer arrived", () => {
+	it("never shows again an answer of Hephaestus's that was deleted before the vote's answer arrived", () => {
 		queryClient.setQueryData(entriesKey, pages<MentorEntryPage>({ entries: [entry(1)] }));
 
 		applyVote(queryClient, SLUG, entry(2, { vote: "NOT_HELPFUL" }));
@@ -511,10 +511,10 @@ const readThreadWithReply = () =>
 describe("a read in flight", () => {
 	const turnId = turn("RUNNING").id;
 
-	it("keeps Heph's answer that arrives live while a refetch on focus of the conversation is in flight", async () => {
+	it("keeps Hephaestus's answer that arrives live while a refetch on focus of the conversation is in flight", async () => {
 		const question = entry(1, { kind: "USER", turnId, turnStatus: "RUNNING" });
 		const response = deferred();
-		// Both reads are from before Heph answered: the question still runs, and no answer is stored.
+		// Both reads are from before Hephaestus answered: the question still runs, and no answer is stored.
 		const read = () => HttpResponse.json({ entries: [question] });
 		server.use(
 			http.get("*/workspaces/acme/mentor/entries", async () => {

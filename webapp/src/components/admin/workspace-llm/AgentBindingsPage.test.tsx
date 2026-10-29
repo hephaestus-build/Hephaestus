@@ -99,7 +99,7 @@ describe("AgentBindingsPage", () => {
 			.map((heading) => heading.textContent);
 		expect(rowNames).toStrictEqual(["In-house", "Cloud", UNCHOSEN_ROW]);
 
-		const unassignedSwitch = row("Heph", "In-house").getByRole("switch", {
+		const unassignedSwitch = row("Conversations", "In-house").getByRole("switch", {
 			name: /^Use this model/u,
 		});
 		expect(unassignedSwitch.getAttribute("aria-checked")).toBe("false");

@@ -32,7 +32,7 @@ export type WeeklyDigestSectionState =
 	| {
 			status: "ready";
 			enabled: boolean;
-			/** Heph can answer in at least one of the account's workspaces. */
+			/** Hephaestus can answer in at least one of the account's workspaces. */
 			available: boolean;
 			/** The account's IANA time zone; absent means UTC. */
 			timeZone?: string;
@@ -52,7 +52,7 @@ export function hasWeeklyDigest(state: WeeklyDigestSectionState): boolean {
 }
 
 /**
- * The weekly digest: off until the developer turns it on, for every workspace where Heph can
+ * The weekly digest: off until the developer turns it on, for every workspace where Hephaestus can
  * answer them. The time zone decides when the digest arrives.
  */
 export function WeeklyDigestSection({ state }: WeeklyDigestSectionProps) {
@@ -81,11 +81,11 @@ export function WeeklyDigestSection({ state }: WeeklyDigestSectionProps) {
 				</div>
 				<p className="text-sm text-muted-foreground">
 					Each Monday at 09:00 in your time zone, Hephaestus adds a weekly digest to your
-					conversation with Heph. It comes in each workspace where something happened. It lists the
-					feedback that reached you and what changed on your Practice profile. A short note tells
-					you it is ready, without its contents. It comes in Slack, or by email if you have not
-					connected Slack there and Hephaestus can email you. Otherwise, the digest waits for you in
-					Hephaestus. Quiet weeks send nothing.
+					conversation with Hephaestus. It comes in each workspace where something happened. It
+					lists the feedback that reached you and what changed on your Practice profile. A short
+					note tells you it is ready, without its contents. It comes in Slack, or by email if you
+					have not connected Slack there and Hephaestus can email you. Otherwise, the digest waits
+					for you in Hephaestus. Quiet weeks send nothing.
 				</p>
 			</div>
 			{state.status === "loading" && (
@@ -108,7 +108,8 @@ export function WeeklyDigestSection({ state }: WeeklyDigestSectionProps) {
 				<FieldGroup>
 					{!state.available && (
 						<p className="text-sm text-muted-foreground">
-							Heph cannot answer you in any of your workspaces now, so no weekly digest is written.
+							Hephaestus cannot answer you in any of your workspaces now, so no weekly digest is
+							written.
 							{state.enabled && " You can still turn it off."}
 						</p>
 					)}

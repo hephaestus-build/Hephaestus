@@ -39,8 +39,8 @@ import org.springframework.test.web.reactive.server.WebTestClient;
 import org.testcontainers.DockerClientFactory;
 
 /**
- * One Heph turn end to end: the app's ask endpoint, the worker's claim, the Heph host container from the agent image,
- * the LLM proxy and a real model, and the answer written back. Everything else tests Heph with a fake host.
+ * One conversation turn end to end: the app's ask endpoint, the worker's claim, the Hephaestus host container from the agent image,
+ * the LLM proxy and a real model, and the answer written back. Everything else tests Hephaestus with a fake host.
  *
  * <p>Needs Docker, the agent image ({@code HEPHAESTUS_AGENT_IMAGE_REFERENCE}, built from {@code docker/agents/pi}),
  * and an OpenAI-compatible model ({@code HEPHAESTUS_LIVE_LLM_*}). The host reaches the worker's sandbox gateway at
@@ -96,8 +96,8 @@ class HephTurnLiveTest extends AbstractWorkspaceIntegrationTest {
     void shouldAnswerAQuestionThroughTheHephHostAndAModel() throws InterruptedException {
         LiveLlmCredentials llm = LiveLlmCredentials.fromEnv();
         var developer = persistUser("mentor");
-        Workspace workspace =
-                createWorkspace("heph-live", "Heph live", "heph-live", AccountType.ORG, persistUser("heph-live-owner"));
+        Workspace workspace = createWorkspace(
+                "heph-live", "Hephaestus live", "heph-live", AccountType.ORG, persistUser("heph-live-owner"));
         ensureMembership(workspace, developer, Membership.WorkspaceRole.MEMBER);
         LlmConnection connection = LlmCatalogTestFixtures.connection("heph-live");
         connection.setBaseUrl(llm.baseUrl());

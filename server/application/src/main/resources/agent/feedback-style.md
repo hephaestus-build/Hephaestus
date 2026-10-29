@@ -33,7 +33,7 @@ Use the reader's words: the writing guide below names the internal terms to leav
 
 Use plain paragraphs for one point or a short list for separate points. Do not put headings or internal field labels
 in delivered text: no "Situation:", "Capability:", "Evidence:" or "Next step:". Practice-page titles and next steps stay
-in their separate fields; the UI supplies their layout. Conversation notes keep their named fields for Heph,
+in their separate fields; the UI supplies their layout. Conversation notes keep their named fields for Hephaestus,
 but their contents contain no labels. Avoid the same opening for every point and a closing line that repeats it.
 
 Write no links: Hephaestus places line notes on the cited code and adds its own links. Write no @-mentions or Slack

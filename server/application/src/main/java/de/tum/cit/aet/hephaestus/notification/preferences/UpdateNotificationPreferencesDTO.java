@@ -25,6 +25,7 @@ public record UpdateNotificationPreferencesDTO(
         // Absent keeps the saved choice.
         @Nullable
         @Schema(
-                description = "The weekly digest in your Heph conversation, with one note in Slack or email that it is"
-                        + " ready. Absent keeps the saved choice.")
+                description =
+                        "The weekly digest in your Hephaestus conversation, with one note in Slack or email that it is"
+                                + " ready. Absent keeps the saved choice.")
         Boolean weeklyDigest) {}

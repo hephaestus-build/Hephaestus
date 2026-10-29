@@ -16,7 +16,7 @@ export const surveyQuestions = [
 		id: "channel",
 		prompt: "Where do you read feedback most often?",
 		type: "SINGLE_CHOICE",
-		options: ["On the pull request", "On my practice page", "In conversation with Heph"],
+		options: ["On the pull request", "On my practice page", "In conversation with Hephaestus"],
 		required: false,
 		allowOther: true,
 	},
@@ -63,7 +63,7 @@ export const researchInvitation = {
 			options: [
 				"Changed the pull request",
 				"Discussed it with a teammate",
-				"Asked Heph about it",
+				"Asked Hephaestus about it",
 				"Nothing yet",
 			],
 			required: false,
@@ -171,7 +171,7 @@ export const surveySummary = {
 			counts: [
 				{ value: "On the pull request", count: 9 },
 				{ value: "On my practice page", count: 3 },
-				{ value: "In conversation with Heph", count: 2 },
+				{ value: "In conversation with Hephaestus", count: 2 },
 			],
 			other: 3,
 		},
@@ -198,7 +198,7 @@ export const researchSummary = {
 			counts: [
 				{ value: "Changed the pull request", count: 3 },
 				{ value: "Discussed it with a teammate", count: 1 },
-				{ value: "Asked Heph about it", count: 1 },
+				{ value: "Asked Hephaestus about it", count: 1 },
 				{ value: "Nothing yet", count: 0 },
 			],
 			other: 1,

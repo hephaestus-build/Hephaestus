@@ -2782,7 +2782,7 @@ export const listMentorEntries = <ThrowOnError extends boolean = false>(options:
 /**
  * Delete a message the developer wrote
  *
- * Erases its text and every summary that read it. A question Heph has not answered yet is not answered.
+ * Erases its text and every summary that read it. A question Hephaestus has not answered yet is not answered.
  */
 export const deleteMentorEntry = <ThrowOnError extends boolean = false>(options: Options<DeleteMentorEntryData, ThrowOnError>): RequestResult<DeleteMentorEntryResponses, DeleteMentorEntryErrors, ThrowOnError> => (options.client ?? client).delete<DeleteMentorEntryResponses, DeleteMentorEntryErrors, ThrowOnError>({
     security: [{
@@ -2808,7 +2808,7 @@ export const getMentorThread = <ThrowOnError extends boolean = false>(options: O
 });
 
 /**
- * Clear the vote on one of Heph's messages
+ * Clear the vote on one of Hephaestus's messages
  */
 export const clearMentorVote = <ThrowOnError extends boolean = false>(options: Options<ClearMentorVoteData, ThrowOnError>): RequestResult<ClearMentorVoteResponses, unknown, ThrowOnError> => (options.client ?? client).delete<ClearMentorVoteResponses, unknown, ThrowOnError>({
     security: [{
@@ -2821,7 +2821,7 @@ export const clearMentorVote = <ThrowOnError extends boolean = false>(options: O
 });
 
 /**
- * Rate one of Heph's messages as helpful or not helpful
+ * Rate one of Hephaestus's messages as helpful or not helpful
  */
 export const setMentorVote = <ThrowOnError extends boolean = false>(options: Options<SetMentorVoteData, ThrowOnError>): RequestResult<SetMentorVoteResponses, SetMentorVoteErrors, ThrowOnError> => (options.client ?? client).put<SetMentorVoteResponses, SetMentorVoteErrors, ThrowOnError>({
     security: [{
@@ -2838,9 +2838,9 @@ export const setMentorVote = <ThrowOnError extends boolean = false>(options: Opt
 });
 
 /**
- * Ask Heph
+ * Ask Hephaestus
  *
- * Stores the question before anything is shown and queues a turn. A question while Heph answers waits as a follow-up. Repeating a requestId returns the first submission.
+ * Stores the question before anything is shown and queues a turn. A question while Hephaestus answers waits as a follow-up. Repeating a requestId returns the first submission.
  */
 export const submitMentorTurn = <ThrowOnError extends boolean = false>(options: Options<SubmitMentorTurnData, ThrowOnError>): RequestResult<SubmitMentorTurnResponses, SubmitMentorTurnErrors, ThrowOnError> => (options.client ?? client).post<SubmitMentorTurnResponses, SubmitMentorTurnErrors, ThrowOnError>({
     security: [{
@@ -2859,7 +2859,7 @@ export const submitMentorTurn = <ThrowOnError extends boolean = false>(options: 
 /**
  * Stop a turn
  *
- * A queued turn never runs and keeps its question. A running turn keeps what Heph already wrote. Stopping an ended turn changes nothing. A turn asked in Slack can be stopped here.
+ * A queued turn never runs and keeps its question. A running turn keeps what Hephaestus already wrote. Stopping an ended turn changes nothing. A turn asked in Slack can be stopped here.
  */
 export const updateMentorTurnStatus = <ThrowOnError extends boolean = false>(options: Options<UpdateMentorTurnStatusData, ThrowOnError>): RequestResult<UpdateMentorTurnStatusResponses, unknown, ThrowOnError> => (options.client ?? client).patch<UpdateMentorTurnStatusResponses, unknown, ThrowOnError>({
     security: [{

@@ -54,8 +54,8 @@ export const Default: Story = {
 			"On GitHub",
 			"On GitLab",
 			"On the work",
-			"With Heph in the app",
-			"With Heph in Slack",
+			"In conversation in the app",
+			"In conversation in Slack",
 			"In conversation",
 			"On the practice page",
 		]) {
@@ -81,7 +81,7 @@ export const OneLocation: Story = {
 	parameters: { chromatic: { viewports: [1440] } },
 	play: async ({ canvas }) => {
 		const table = canvas.getByRole("table");
-		within(table).getByRole("cell", { name: "With Heph in Slack" });
+		within(table).getByRole("cell", { name: "In conversation in Slack" });
 		await expect(within(table).queryByRole("cell", { name: "On GitHub" })).toBeNull();
 	},
 };

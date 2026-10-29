@@ -1,5 +1,5 @@
 // Live models vary: each case asserts what a reply must never do, and prints what the turn cost.
-// docs/contributor/testing.mdx § Heph voice eval says how to run it and why `vp run test:agents` does not.
+// docs/contributor/testing.mdx § Hephaestus voice eval says how to run it and why `vp run test:agents` does not.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
@@ -28,7 +28,7 @@ const apiKey = env.HEPHAESTUS_LIVE_LLM_API_KEY ?? "";
 const modelId = env.HEPHAESTUS_LIVE_LLM_MODEL ?? "";
 const skip =
 	(baseUrl === "" || apiKey === "" || modelId === "") && "set HEPHAESTUS_LIVE_LLM_* to run";
-// A model turn can retry its provider; a single Heph turn stays well inside this.
+// A model turn can retry its provider; a single conversation turn stays well inside this.
 const TURN_MS = 180_000;
 
 const RESOURCES = new URL("../../../main/resources/agent/mentor/", import.meta.url);
@@ -515,7 +515,7 @@ function assertNoInternalTerm(terms: readonly string[], text: string) {
 }
 
 void test(
-	"E12: Heph does not take an observation's time for when its review finished",
+	"E12: Hephaestus does not take an observation's time for when its review finished",
 	{ skip, timeout: TURN_MS },
 	async () => {
 		const reply = await ask(
@@ -537,7 +537,7 @@ void test(
 );
 
 void test(
-	"E12: Heph gives a review's start time without a cause that no record shows",
+	"E12: Hephaestus gives a review's start time without a cause that no record shows",
 	{ skip, timeout: TURN_MS },
 	async () => {
 		const reply = await ask(
@@ -557,7 +557,7 @@ const CANNOT_LOOK =
 	/\b(?:can't|can’t|cannot|can not|unable to|don't have|don’t have)\b[^.!?]*\b(?:look|see|open|check|read|access)/iu;
 
 void test(
-	"without a context folder Heph answers in a few sentences and says it cannot look",
+	"without a context folder Hephaestus answers in a few sentences and says it cannot look",
 	{ skip, timeout: TURN_MS },
 	async () => {
 		const reply = await ask(
@@ -574,7 +574,7 @@ void test(
 );
 
 void test(
-	"O8: Heph answers a plain question about one problem briefly",
+	"O8: Hephaestus answers a plain question about one problem briefly",
 	{ skip, timeout: TURN_MS },
 	async () => {
 		const reply = await ask(
@@ -587,12 +587,12 @@ void test(
 	},
 );
 
-/** Says that Heph could not check or tell something, which a sentence may say about the rest. */
+/** Says that Hephaestus could not check or tell something, which a sentence may say about the rest. */
 const CANNOT =
 	/\b(?:can't|can’t|cannot|can not|couldn't|couldn’t|unable to|don't know|don’t know|no record)\b/iu;
 
 void test(
-	"W2-17: Heph says a withheld practice could not be checked and never calls the rest clean",
+	"W2-17: Hephaestus says a withheld practice could not be checked and never calls the rest clean",
 	{ skip, timeout: TURN_MS },
 	async () => {
 		const reply = await ask(
@@ -618,7 +618,7 @@ void test(
 	},
 );
 
-/** Earlier exchanges of the conversation, each a question at 09:05 and Heph's answer, as the ledger stores them. */
+/** Earlier exchanges of the conversation, each a question at 09:05 and Hephaestus's answer, as the ledger stores them. */
 function earlier(...exchanges: (readonly [string, string])[]): unknown[] {
 	const timestamp = "2026-10-27T08:05:00.000Z";
 	let parentId: string | null = null;
@@ -677,7 +677,7 @@ function exchange(
 }
 
 void test(
-	"W2-17: Heph claims no history that the observations it read cannot show",
+	"W2-17: Hephaestus claims no history that the observations it read cannot show",
 	{ skip, timeout: TURN_MS },
 	async () => {
 		const reply = await ask(
@@ -743,7 +743,7 @@ void test(
 );
 
 void test(
-	"#3371: without a context folder Heph says it did not look instead of stating a check result",
+	"#3371: without a context folder Hephaestus says it did not look instead of stating a check result",
 	{ skip, timeout: TURN_MS },
 	async () => {
 		const reply = await ask(
@@ -802,7 +802,7 @@ const WAITING =
 	"Start with `read INDEX.md`: it lists what this turn can read.\n";
 
 void test(
-	"E15: Heph tries feedback it may not show once and says nothing about why",
+	"E15: Hephaestus tries feedback it may not show once and says nothing about why",
 	{ skip, timeout: TURN_MS },
 	async () => {
 		const reply = await ask(

@@ -6,21 +6,21 @@ import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import tools.jackson.databind.JsonNode;
 
-/** What Heph is doing in a running turn, and the text it has written in the turn so far. Reasoning is never sent. */
-@Schema(description = "What Heph is doing in a running turn")
+/** What Hephaestus is doing in a running turn, and the text it has written in the turn so far. Reasoning is never sent. */
+@Schema(description = "What Hephaestus is doing in a running turn")
 public record MentorTurnPartialDTO(
         @NonNull Activity activity,
 
-        @Schema(description = "The tool Heph runs, while the activity is TOOL") @Nullable
+        @Schema(description = "The tool Hephaestus runs, while the activity is TOOL") @Nullable
         String tool,
 
         @Schema(
                 description =
-                        "What Heph is doing, in the developer's words, for example \"Reading your practice feedback…\"")
+                        "What Hephaestus is doing, in the developer's words, for example \"Reading your practice feedback…\"")
         @NonNull
         String stage,
 
-        @Schema(description = "The text Heph has written in this turn so far") @NonNull
+        @Schema(description = "The text Hephaestus has written in this turn so far") @NonNull
         String text) {
 
     /** {@code THINKING_STAGE} in {@code heph-host.ts}. */
@@ -32,7 +32,7 @@ public record MentorTurnPartialDTO(
         TOOL,
     }
 
-    /** Reads the Heph host's whole snapshot: {@code activity}, {@code tool} and the turn's Pi messages so far. */
+    /** Reads the Hephaestus host's whole snapshot: {@code activity}, {@code tool} and the turn's Pi messages so far. */
     static MentorTurnPartialDTO from(JsonNode snapshot) {
         Activity activity;
         try {
@@ -42,7 +42,7 @@ public record MentorTurnPartialDTO(
             activity = Activity.THINKING;
         }
         String tool = snapshot.path("tool").isString() ? snapshot.path("tool").asString() : null;
-        // The Heph host names the stage; a snapshot without one is the host's own default.
+        // The Hephaestus host names the stage; a snapshot without one is the host's own default.
         String stage =
                 snapshot.path("stage").isString() ? snapshot.path("stage").asString() : THINKING_STAGE;
         return new MentorTurnPartialDTO(activity, tool, stage, MentorPiEntries.partialText(snapshot, false));

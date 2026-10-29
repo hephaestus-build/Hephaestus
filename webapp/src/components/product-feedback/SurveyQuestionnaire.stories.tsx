@@ -153,7 +153,7 @@ const wordChoices = [
 		id: "channel",
 		prompt: "Where do you read feedback most often?",
 		type: "SINGLE_CHOICE",
-		options: ["On the pull request", "On my practice page", "In conversation with Heph"],
+		options: ["On the pull request", "On my practice page", "In conversation with Hephaestus"],
 		required: true,
 	}),
 	question({

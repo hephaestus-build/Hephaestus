@@ -63,7 +63,7 @@ public class MentorTurnLeaseReaper {
                 if (ended) {
                     meters.counter(AgentMetrics.MENTOR_TURN_COMPLETED, "outcome", "failed")
                             .increment();
-                    log.warn("Heph turn {} could not start before its queue deadline", turnId);
+                    log.warn("Conversation turn {} could not start before its queue deadline", turnId);
                 }
             } catch (RuntimeException e) {
                 log.warn("Mentor turn reaper could not end queued turn {}; trying again next tick", turnId, e);

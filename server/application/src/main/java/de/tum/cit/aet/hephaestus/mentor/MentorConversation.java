@@ -19,7 +19,7 @@ import org.jspecify.annotations.Nullable;
 import org.springframework.data.domain.Persistable;
 
 /**
- * One Heph conversation. The main conversation is the developer's single conversation in a workspace: the Slack
+ * One Hephaestus conversation. The main conversation is the developer's single conversation in a workspace: the Slack
  * DM top level and the app timeline. A thread is a conversation of its own that forks the main conversation at one
  * top-level entry, so it runs its own turns in parallel with the main conversation.
  *
@@ -135,7 +135,7 @@ public class MentorConversation implements Persistable<UUID> {
 
     void bindSlack(String teamId, String userId, String channelId) {
         if (isThread()) {
-            throw new IllegalStateException("A Heph thread inherits the Slack identity of its main conversation");
+            throw new IllegalStateException("A Hephaestus thread inherits the Slack identity of its main conversation");
         }
         this.slackTeamId = teamId;
         this.slackUserId = userId;

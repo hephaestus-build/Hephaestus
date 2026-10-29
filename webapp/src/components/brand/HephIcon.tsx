@@ -4,8 +4,8 @@ import styles from "./HephIcon.module.css";
 import type { BrandIcon } from "@/components/icons/brand";
 import { hasText } from "@/lib/text";
 
-/** Heph's name as the mark carries it, where the mark stands for Heph rather than beside the word. */
-export const HEPH_LABEL = "Heph, AI assistant";
+/** Hephaestus's name as the mark carries it, where the mark stands for Hephaestus rather than beside the word. */
+export const HEPH_LABEL = "Ask Hephaestus";
 
 interface HephIconProps {
 	size?: number;
@@ -74,7 +74,7 @@ export function HephIcon({
 }
 
 /**
- * Heph's mark at rest, in the slot of a Lucide or brand icon: a badge, a facet option or a registry
+ * Hephaestus's mark at rest, in the slot of a Lucide or brand icon: a badge, a facet option or a registry
  * entry. The module owns its size, so it is set here rather than by the slot's `size-*` utility.
  */
 function HephMark({ className }: Parameters<BrandIcon>[0]) {

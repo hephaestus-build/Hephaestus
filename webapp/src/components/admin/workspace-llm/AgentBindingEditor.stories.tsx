@@ -53,7 +53,7 @@ export const Error: Story = {
 	},
 };
 
-/** A Heph answer stops after five minutes, so its timeout cannot be set longer. */
+/** A Hephaestus answer stops after five minutes, so its timeout cannot be set longer. */
 export const HephAnswerCeiling: Story = {
 	args: {
 		target: { purpose: "MENTOR", tier: "IN_HOUSE" },
@@ -75,7 +75,9 @@ export const HephAnswerCeiling: Story = {
 		await userEvent.type(timeout, "600");
 		await userEvent.click(canvas.getByRole("button", { name: "Save assignment for In-house" }));
 		await expect(
-			canvas.getByText("Heph stops an answer after five minutes, so enter 300 seconds or less."),
+			canvas.getByText(
+				"Hephaestus stops an answer after five minutes, so enter 300 seconds or less.",
+			),
 		).toBeVisible();
 		await expect(args.onSave).not.toHaveBeenCalled();
 	},

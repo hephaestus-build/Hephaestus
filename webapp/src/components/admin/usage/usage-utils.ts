@@ -10,7 +10,7 @@ export const JOB_TYPE_LABELS: Record<LlmJobType, string> = {
 	ISSUE_REVIEW: "Issue review",
 	CONVERSATION_REVIEW: "Conversation review",
 	DOCUMENT_REVIEW: "Document review",
-	MENTOR_TURN: "Heph turn",
+	MENTOR_TURN: "Conversation answer",
 };
 
 export interface PurseSpend {

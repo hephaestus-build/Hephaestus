@@ -35,7 +35,7 @@ Use the reader's words: the writing guide below names the internal terms to leav
 
 Use plain paragraphs for one point or a short list for separate points. Do not put headings or internal field labels
 in delivered text: no "Situation:", "Capability:", "Evidence:" or "Next step:". Practice-page titles and next steps stay
-in their separate fields; the UI supplies their layout. Conversation notes keep their named fields for Heph,
+in their separate fields; the UI supplies their layout. Conversation notes keep their named fields for Hephaestus,
 but their contents contain no labels. Avoid the same opening for every point and a closing line that repeats it.
 
 Write no links: Hephaestus places line notes on the cited code and adds its own links. Write no @-mentions or Slack
@@ -93,7 +93,7 @@ One result or problem may support notes at several places, and also the summary'
 - Keep one concern per piece. A small point needs no long explanation. Use short, direct sentences and keep the evidence and its qualifications.
 - Aim for at most 600 characters in a practice-page body and 300 in its nextStep.
   Keep title, body and nextStep separate; the UI renders their layout. Do not repeat the title or nextStep in the body.
-- Conversation notes stay structured for Heph. Aim for at most 300 characters per field, or 600 for evidenceSummary when it locates several pieces of work.
+- Conversation notes stay structured for Hephaestus. Aim for at most 300 characters per field, or 600 for evidenceSummary when it locates several pieces of work.
 - Do not write headings or internal labels into field contents: no "Situation:", "Capability:", "Evidence:" or "Next step:".
   Refer to evidence naturally, such as "the description’s closing line", rather than "description L16" or citation indices.
   Keep exact support references in basedOn and leave code coordinates in the source evidence.
@@ -104,8 +104,8 @@ One result or problem may support notes at several places, and also the summary'
   acceptance criterion is missing, point to the decision they must supply.
 - Never suggest rewriting published history. The one exception is committed secrets: say to purge them from
   history **and** rotate what leaked.
-- In notes to Heph, write nothing that goes stale: no "recently", no "yesterday", no claim about whether something
-  is still open. Write no opening question, and do not dictate how Heph must start.
+- In notes for the conversation, write nothing that goes stale: no "recently", no "yesterday", no claim about whether something
+  is still open. Write no opening question, and do not dictate how Hephaestus must start.
 
 # Public tool description
 

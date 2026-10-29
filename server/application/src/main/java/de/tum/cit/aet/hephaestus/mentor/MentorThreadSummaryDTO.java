@@ -17,7 +17,7 @@ public record MentorThreadSummaryDTO(
 
         @Schema(
                 description =
-                        "Messages in the thread; can count a Heph message without text whose feedback is no longer shown",
+                        "Messages in the thread; can count a Hephaestus message without text whose feedback is no longer shown",
                 requiredMode = RequiredMode.REQUIRED)
         long replyCount,
 

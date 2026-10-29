@@ -1,13 +1,13 @@
 {{- /*
 Under memory pressure the kubelet evicts lower priorities first, and the scheduler makes room for a
-higher priority by preempting lower ones. The roles serve everyone. A Heph host or turn sandbox is a
+higher priority by preempting lower ones. The roles serve everyone. A conversation host or turn sandbox is a
 person waiting for an answer. A review is an attempt that runs again, so it never preempts. The
 values stay below the system classes (2000000000 and above).
 */}}
 {{- if .Values.priorityClasses.create }}
 {{- $tiers := list (dict "tier" "roles" "value" 100000 "preemption" "PreemptLowerPriority" "description" "Hephaestus roles, PostgreSQL and NATS") }}
 {{- if .Values.worker.enabled }}
-{{- $tiers = append $tiers (dict "tier" "conversations" "value" 10000 "preemption" "PreemptLowerPriority" "description" "Hephaestus Heph host and turn sandboxes") }}
+{{- $tiers = append $tiers (dict "tier" "conversations" "value" 10000 "preemption" "PreemptLowerPriority" "description" "Hephaestus conversation host and turn sandboxes") }}
 {{- $tiers = append $tiers (dict "tier" "reviews" "value" 1000 "preemption" "Never" "description" "Hephaestus review sandboxes and isolation probes") }}
 {{- end }}
 {{- range $tiers }}

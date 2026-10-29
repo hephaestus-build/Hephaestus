@@ -20,7 +20,7 @@ import org.junit.jupiter.api.Test;
 
 /**
  * The shared writing guide as the prompts receive it, and its "no internal names or mechanics" rule against what
- * Hephaestus writes itself: the good examples in Heph's prompt, which the model imitates, Heph's own notices and the
+ * Hephaestus writes itself: the good examples in Hephaestus's prompt, which the model imitates, Hephaestus's own notices and the
  * practice-page card template. What a model writes is the live eval's to check.
  */
 @Tag("unit")
@@ -67,7 +67,7 @@ class FeedbackWritingGuideTest {
                 fixed.add((String) Objects.requireNonNull(field.get(null)));
             }
         }
-        assertThat(fixed).as("Heph's own notices").isNotEmpty();
+        assertThat(fixed).as("Hephaestus's own notices").isNotEmpty();
         fixed.add(PracticePageFeedbackBody.render("A title", "A body.", "A next step."));
 
         InternalFeedbackTerms.assertPlain(fixed);

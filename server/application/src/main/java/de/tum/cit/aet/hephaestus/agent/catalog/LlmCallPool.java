@@ -57,7 +57,7 @@ public class LlmCallPool {
     @Column(name = "max_concurrent_calls")
     private Integer maxConcurrentCalls;
 
-    /** The calls that only Heph turns may use: a review call needs fewer than the maximum minus these in flight. */
+    /** The calls that only conversation turns may use: a review call needs fewer than the maximum minus these in flight. */
     @ColumnDefault("0")
     @Column(name = "interactive_reserve", nullable = false)
     private int interactiveReserve;

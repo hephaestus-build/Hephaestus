@@ -39,10 +39,10 @@ export const FEEDBACK_COPY_KIND_DEFS: StatusDefs<FeedbackCopyKind> = {
 		description: "Anchored to one file rather than to lines in it.",
 	},
 	CHAT_TURN: {
-		label: "Conversation turn",
+		label: "Conversation answer",
 		icon: BotMessageSquareIcon,
 		badgeVariant: "outline",
-		description: "Raised by Heph in a turn of the developer’s conversation.",
+		description: "Raised by Hephaestus in a turn of the developer’s conversation.",
 	},
 };
 

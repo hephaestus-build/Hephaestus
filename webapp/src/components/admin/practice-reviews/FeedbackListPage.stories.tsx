@@ -214,7 +214,9 @@ export const DeveloperSummary: Story = {
 	play: async ({ canvas }) => {
 		await canvas.findByRole("heading", { name: "Feedback for Grace Hopper" });
 		const table = canvas.getByRole("table", { name: "Feedback for Grace Hopper by where it goes" });
-		await expect(within(table).getByRole("cell", { name: "With Heph in Slack" })).toBeVisible();
+		await expect(
+			within(table).getByRole("cell", { name: "In conversation in Slack" }),
+		).toBeVisible();
 		await expect(within(table).getByRole("cell", { name: "In conversation" })).toBeVisible();
 		const [count] = within(table).getAllByRole("link");
 		await expect(
@@ -244,7 +246,7 @@ export const DeveloperSummaryFailed: Story = {
 
 /**
  * Every row says where its feedback went, by provider, in a short label beside the provider's mark:
- * on GitHub or GitLab, with Heph in Slack, or in the next conversation.
+ * on GitHub or GitLab, with Hephaestus in Slack, or in the next conversation.
  */
 export const EveryRowNamesItsLocation: Story = {
 	parameters: { chromatic: { viewports: [1440] } },
@@ -253,7 +255,7 @@ export const EveryRowNamesItsLocation: Story = {
 		const table = within(canvas.getByRole("table", { name: "Feedback" }));
 		await expect(table.getAllByText("On GitHub").length).toBeGreaterThan(0);
 		await expect(table.getAllByText("On GitLab").length).toBeGreaterThan(0);
-		await expect(table.getAllByText("With Heph in Slack").length).toBeGreaterThan(0);
+		await expect(table.getAllByText("In conversation in Slack").length).toBeGreaterThan(0);
 		await expect(table.getAllByText("In conversation").length).toBeGreaterThan(0);
 	},
 };

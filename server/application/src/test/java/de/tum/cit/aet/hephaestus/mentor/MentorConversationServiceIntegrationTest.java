@@ -44,7 +44,7 @@ class MentorConversationServiceIntegrationTest extends AbstractWorkspaceIntegrat
     @BeforeEach
     void setUpConversation() {
         User developerUser = persistUser("heph-conversation-developer");
-        workspace = createWorkspace("heph-conversation", "Heph", "heph-org", AccountType.ORG, developerUser);
+        workspace = createWorkspace("heph-conversation", "Hephaestus", "heph-org", AccountType.ORG, developerUser);
         developer = accountId(developerUser);
         colleague = accountId(persistUser("heph-conversation-colleague"));
     }

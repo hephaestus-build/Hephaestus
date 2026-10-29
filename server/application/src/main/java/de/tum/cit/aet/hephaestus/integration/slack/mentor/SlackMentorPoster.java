@@ -140,7 +140,7 @@ public class SlackMentorPoster {
                     message -> SlackMentorPosts.isPostOf(message, entryId));
         } catch (SlackSendException e) {
             log.warn(
-                    "Slack history unreadable; Heph post stays uncertain: workspaceId={}, entryId={}, error={}",
+                    "Slack history unreadable; Hephaestus post stays uncertain: workspaceId={}, entryId={}, error={}",
                     workspaceId,
                     entryId,
                     e.slackError());
@@ -157,13 +157,13 @@ public class SlackMentorPoster {
         }
         if (matches.more()) {
             log.warn(
-                    "Slack history has more pages; Heph post stays uncertain: workspaceId={}, entryId={}",
+                    "Slack history has more pages; Hephaestus post stays uncertain: workspaceId={}, entryId={}",
                     workspaceId,
                     entryId);
             return Result.of(Outcome.UNKNOWN);
         }
         delivery.settle(workspaceId, entryId, MentorEntry.SlackDelivery.FAILED, () -> receipts.record(Outcome.FAILED));
-        log.warn("Heph Slack post is not in the Slack history: workspaceId={}, entryId={}", workspaceId, entryId);
+        log.warn("Hephaestus Slack post is not in the Slack history: workspaceId={}, entryId={}", workspaceId, entryId);
         return Result.of(Outcome.FAILED);
     }
 
@@ -181,14 +181,18 @@ public class SlackMentorPoster {
         if (leavesEffectUnknown(e)) {
             delivery.markUncertain(workspaceId, entryId);
             log.warn(
-                    "Heph Slack post outcome unknown: workspaceId={}, entryId={}, error={}",
+                    "Hephaestus Slack post outcome unknown: workspaceId={}, entryId={}, error={}",
                     workspaceId,
                     entryId,
                     e.slackError());
             return Result.of(Outcome.UNKNOWN);
         }
         delivery.settle(workspaceId, entryId, MentorEntry.SlackDelivery.FAILED, () -> receipts.record(Outcome.FAILED));
-        log.warn("Heph Slack post failed: workspaceId={}, entryId={}, error={}", workspaceId, entryId, e.slackError());
+        log.warn(
+                "Hephaestus Slack post failed: workspaceId={}, entryId={}, error={}",
+                workspaceId,
+                entryId,
+                e.slackError());
         return Result.of(Outcome.FAILED);
     }
 }

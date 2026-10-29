@@ -48,7 +48,7 @@ The jobs that delete review job data run only when `AGENT_ENABLED` is `true`.
 | Practice results that no feedback cites, and the raw proof of scans | 400 days | None | A server job at 03:00 every day |
 | Feedback and its delivery records | No automatic deletion. Conversation feedback that is never shown is withheld after 14 days and kept. | None | Workspace purge or person erasure |
 | LLM usage records | 400 days | `HEPHAESTUS_LLM_USAGE_RETENTION` | A server job at 04:15 every day |
-| Heph conversations | No automatic deletion | None | Workspace purge, person erasure, or Slack disconnection |
+| conversations | No automatic deletion | None | Workspace purge, person erasure, or Slack disconnection |
 | Slack messages and threads | 30 days for each connection, at most 180 days | None | A server job at 03:30 every day |
 | Outline documents | No age limit. Document bodies above 200 MB for each workspace are evicted. | `hephaestus.integration.outline.cache.max-size-mb` | Outline sync |
 | GitHub and GitLab mirror tables | No age limit while a workspace monitors the repository | None | Repository monitoring |

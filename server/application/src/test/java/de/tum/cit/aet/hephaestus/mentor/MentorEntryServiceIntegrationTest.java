@@ -83,7 +83,7 @@ class MentorEntryServiceIntegrationTest extends AbstractWorkspaceIntegrationTest
     @BeforeEach
     void setUpLedger() {
         User developer = persistUser("heph-entries-developer");
-        workspace = createWorkspace("heph-entries", "Heph", "heph-org", AccountType.ORG, developer);
+        workspace = createWorkspace("heph-entries", "Hephaestus", "heph-org", AccountType.ORG, developer);
         developerAccountId = accountId(developer);
         main = conversations.findOrCreateMain(workspace.getId(), developerAccountId);
     }
@@ -477,7 +477,7 @@ class MentorEntryServiceIntegrationTest extends AbstractWorkspaceIntegrationTest
                 .containsExactly(answers.shown());
     }
 
-    /** Two of Heph's answers in one turn that have no text blocks. */
+    /** Two of Hephaestus's answers in one turn that have no text blocks. */
     private record LinkAnswers(UUID shown, UUID failed) {}
 
     /**
@@ -531,7 +531,7 @@ class MentorEntryServiceIntegrationTest extends AbstractWorkspaceIntegrationTest
                 new MentorEntryService.SearchQuery(query, MentorEntryService.SearchScope.ALL, null, null, 20));
     }
 
-    /** The developer's own Heph messages as the person-data export writes them. */
+    /** The developer's own Hephaestus messages as the person-data export writes them. */
     private List<JsonNode> exportOwnEntries() {
         PersonDataContributor store = personDataCatalog.contributors().stream()
                 .filter(contributor -> contributor.store().equals("mentor_entry"))

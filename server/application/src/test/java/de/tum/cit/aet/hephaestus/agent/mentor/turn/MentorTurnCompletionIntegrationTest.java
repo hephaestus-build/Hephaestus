@@ -97,7 +97,7 @@ class MentorTurnCompletionIntegrationTest extends AbstractWorkspaceIntegrationTe
     @BeforeEach
     void setUpLedger() {
         User developer = persistUser("heph-billing-developer");
-        workspace = createWorkspace("heph-billing", "Heph", "heph-org", AccountType.ORG, developer);
+        workspace = createWorkspace("heph-billing", "Hephaestus", "heph-org", AccountType.ORG, developer);
         account = accountId(developer);
         main = conversations.findOrCreateMain(workspace.getId(), account);
     }
@@ -107,7 +107,7 @@ class MentorTurnCompletionIntegrationTest extends AbstractWorkspaceIntegrationTe
         return ConversationFeedbackRows.claimedBy(jdbc, workspace.getId(), account, turn.getId(), "Pin images.");
     }
 
-    /** Heph's message that shows the feedback, the call's successful result, and its closing words. */
+    /** Hephaestus's message that shows the feedback, the call's successful result, and its closing words. */
     private static List<JsonNode> showing(UUID feedbackId, String messageId) {
         return List.of(
                 MentorLedgerFixtures.showFeedback(
@@ -411,13 +411,13 @@ class MentorTurnCompletionIntegrationTest extends AbstractWorkspaceIntegrationTe
                 new MentorTurnCompletion.Ending(
                         MentorTurn.Status.FAILED,
                         List.of(),
-                        "Heph could not finish this reply.",
-                        "its Heph host reported ERROR: provider_unavailable",
+                        "Hephaestus could not finish this reply.",
+                        "its Hephaestus host reported ERROR: provider_unavailable",
                         new MentorTurn.FailedCall("upstream_status", 503)));
 
         MentorTurn row = turnRepository.findById(turn.getId()).orElseThrow();
         assertThat(row.getStatus()).isEqualTo(MentorTurn.Status.FAILED);
-        assertThat(row.getFailureCause()).isEqualTo("its Heph host reported ERROR: provider_unavailable");
+        assertThat(row.getFailureCause()).isEqualTo("its Hephaestus host reported ERROR: provider_unavailable");
         assertThat(row.getFailedCall()).isEqualTo("upstream_status");
         assertThat(row.getFailedCallStatus()).isEqualTo(503);
         assertThat(row.getLlmCalls())
@@ -436,7 +436,7 @@ class MentorTurnCompletionIntegrationTest extends AbstractWorkspaceIntegrationTe
                 new MentorTurnCompletion.Ending(
                         MentorTurn.Status.FAILED,
                         List.of(),
-                        "Heph could not finish this reply.",
+                        "Hephaestus could not finish this reply.",
                         "c".repeat(300),
                         new MentorTurn.FailedCall("k".repeat(100), null)));
 

@@ -962,7 +962,7 @@ class LlmProxyServiceTest extends BaseUnitTest {
                     null);
         }
 
-        /** A Heph turn's call to {@code baseUrl}, which the proxy cuts after {@link #HEPH_IDLE} without a byte. */
+        /** A conversation turn's call to {@code baseUrl}, which the proxy cuts after {@link #HEPH_IDLE} without a byte. */
         private MockHttpServletResponse proxyHephTurn(String baseUrl) {
             ProxyRouting routing = hephTurnRouting(baseUrl);
             authenticate(routing);
@@ -981,7 +981,7 @@ class LlmProxyServiceTest extends BaseUnitTest {
         }
 
         @Test
-        @DisplayName("keep-alive comments keep a slow Heph call alive past the idle bound until it answers")
+        @DisplayName("keep-alive comments keep a slow Hephaestus call alive past the idle bound until it answers")
         void keepAliveCommentsKeepASlowHephCallAlive() throws Exception {
             // A gateway that schedules the answer: comments for about 1.5 seconds, nearly 4 idle bounds, then the
             // whole answer at once.
@@ -1019,7 +1019,8 @@ class LlmProxyServiceTest extends BaseUnitTest {
         }
 
         @Test
-        @DisplayName("a provider that queues a Heph call past the idle bound still answers within the first-byte bound")
+        @DisplayName(
+                "a provider that queues a Hephaestus call past the idle bound still answers within the first-byte bound")
         void aQueuedHephCallAnswersWithinTheFirstByteBound() throws Exception {
             MockHttpServletResponse response = proxyHephTurn(new MockResponse.Builder()
                     .code(200)
@@ -1176,7 +1177,7 @@ class LlmProxyServiceTest extends BaseUnitTest {
         }
 
         @Test
-        @DisplayName("a Heph call whose provider goes silent after its headers ends with a stall error event")
+        @DisplayName("a Hephaestus call whose provider goes silent after its headers ends with a stall error event")
         void aSilentHephCallEndsWithAStallErrorEvent() throws Exception {
             MockHttpServletResponse response = proxyHephTurn(new MockResponse.Builder()
                     .code(200)
@@ -1201,7 +1202,7 @@ class LlmProxyServiceTest extends BaseUnitTest {
 
         @Test
         @DisplayName(
-                "a review call keeps the client's read bound when its provider pauses longer than a Heph idle bound")
+                "a review call keeps the client's read bound when its provider pauses longer than a Hephaestus idle bound")
         void aReviewCallIsNotCutAtTheHephIdleBound() throws Exception {
             MockHttpServletResponse response =
                     proxyStreamAfter(800, "{\"choices\":[{\"delta\":{\"content\":\"slow review\"}}]}", "[DONE]");
@@ -1317,7 +1318,7 @@ class LlmProxyServiceTest extends BaseUnitTest {
         }
 
         @Test
-        @DisplayName("a Heph call whose provider sends no headers gets a gateway timeout the host can name")
+        @DisplayName("a Hephaestus call whose provider sends no headers gets a gateway timeout the host can name")
         void aHephCallWithoutHeadersGetsAGatewayTimeout() throws Exception {
             upstream.enqueue(new MockResponse.Builder()
                     .code(200)
@@ -1357,7 +1358,7 @@ class LlmProxyServiceTest extends BaseUnitTest {
 
         @Test
         @DisplayName(
-                "a Heph turn attempt remembers its last failed model call by kind and status until its end forgets it")
+                "a conversation turn attempt remembers its last failed model call by kind and status until its end forgets it")
         void aHephAttemptRemembersItsLastFailedModelCall() throws Exception {
             ProxyRouting routing = hephTurnRouting(upstream.url("/v1").toString());
             authenticate(routing);
@@ -1450,7 +1451,7 @@ class LlmProxyServiceTest extends BaseUnitTest {
         }
 
         @Test
-        @DisplayName("a Heph turn's call that the proxy refuses is remembered by its rule and status")
+        @DisplayName("a conversation turn's call that the proxy refuses is remembered by its rule and status")
         void aRefusedHephCallIsRememberedByItsRule() {
             ProxyRouting routing = hephTurnRouting(upstream.url("/v1").toString());
             authenticate(routing);
@@ -2334,7 +2335,8 @@ class LlmProxyServiceTest extends BaseUnitTest {
                             }
                         })
                         .thenAwait(Duration.ofSeconds(601))
-                        // A Heph turn's stream ends at its idle bound, long before the body limit, with the stall
+                        // A conversation turn's stream ends at its idle bound, long before the body limit, with the
+                        // stall
                         // event.
                         .expectNextMatches(content -> mentor
                                 ? content.startsWith(USAGE_FRAME)
@@ -2462,10 +2464,10 @@ class LlmProxyServiceTest extends BaseUnitTest {
                 .count();
     }
 
-    /** How long a Heph turn's provider may take to its first byte in these tests. */
+    /** How long a conversation turn's provider may take to its first byte in these tests. */
     private static final Duration HEPH_FIRST_BYTE = Duration.ofMillis(1500);
 
-    /** How long a Heph turn's stream may send no byte in these tests. */
+    /** How long a conversation turn's stream may send no byte in these tests. */
     private static final Duration HEPH_IDLE = Duration.ofMillis(400);
 
     /** The review cap at practice concurrency 3: 2 × (3 + 1) + 4. */

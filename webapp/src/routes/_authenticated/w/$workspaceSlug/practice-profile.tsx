@@ -422,7 +422,7 @@ function OwnObservationDetail({
 						})}
 					/>
 				),
-				conversation: <Link to="/w/$workspaceSlug/mentor" params={{ workspaceSlug }} />,
+				conversation: <Link to="/w/$workspaceSlug/conversation" params={{ workspaceSlug }} />,
 			}}
 		/>
 	);

@@ -100,13 +100,13 @@ public class AgentControllerAdvice {
                 HttpStatus.CONFLICT, "llm-model-upstream-id-conflict", "LLM model upstream id conflict", exception);
     }
 
-    /** Heph declines the member; {@code reason} lets the app point at the setting that changes it. */
+    /** Hephaestus declines the member; {@code reason} lets the app point at the setting that changes it. */
     @ExceptionHandler(MentorRefusedException.class)
     ProblemDetail handleMentorRefused(MentorRefusedException exception) {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(
                 HttpStatus.CONFLICT, exception.reason().userMessage());
         problem.setType(URI.create("/problems/mentor-refused"));
-        problem.setTitle("Heph cannot reply");
+        problem.setTitle("Hephaestus cannot reply");
         problem.setProperty("reason", exception.reason().name());
         return problem;
     }
@@ -117,12 +117,12 @@ public class AgentControllerAdvice {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(
                 HttpStatus.CONFLICT, exception.reason().userMessage());
         problem.setType(URI.create("/problems/mentor-rejected"));
-        problem.setTitle("Heph conversation conflict");
+        problem.setTitle("Conversation conflict");
         problem.setProperty("reason", exception.reason().name());
         return problem;
     }
 
-    /** A Heph host wrote for a turn attempt that lost its lease. */
+    /** A Hephaestus host wrote for a turn attempt that lost its lease. */
     @ExceptionHandler(MentorLeaseLostException.class)
     ProblemDetail handleMentorLeaseLost(MentorLeaseLostException exception) {
         return problem(HttpStatus.CONFLICT, "mentor-lease-lost", "Turn lease lost", exception);

@@ -60,9 +60,9 @@ export function WorkspaceSlackConnectionSettings(props: WorkspaceSlackConnection
 					Slack integration
 				</IntegrationCardHeading>
 				<CardDescription>
-					Install Hephaestus in Slack to talk with Heph in direct messages, manage privacy controls
-					in App Home, and monitor channels you choose. Hephaestus stores no channel messages until
-					an admin activates a channel.
+					Install Hephaestus in Slack to talk with Hephaestus in direct messages, manage privacy
+					controls in App Home, and monitor channels you choose. Hephaestus stores no channel
+					messages until an admin activates a channel.
 				</CardDescription>
 			</CardHeader>
 

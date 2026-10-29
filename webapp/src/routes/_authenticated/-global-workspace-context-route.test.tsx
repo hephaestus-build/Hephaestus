@@ -64,7 +64,7 @@ function Chrome() {
 	);
 }
 
-function renderNavigation(initialEntry = "/w/beta/mentor") {
+function renderNavigation(initialEntry = "/w/beta/conversation") {
 	const queryClient = new QueryClient({
 		defaultOptions: { queries: { staleTime: QUERY_STALE_TIME_MS } },
 	});

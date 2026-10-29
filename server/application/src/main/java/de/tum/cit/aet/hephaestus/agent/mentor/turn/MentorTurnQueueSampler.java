@@ -15,7 +15,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
- * Samples how many Heph turns wait for a worker, on a timer and never on a scrape. Gated to the server role, so a
+ * Samples how many conversation turns wait for a worker, on a timer and never on a scrape. Gated to the server role, so a
  * worker or webhook pod does not publish a permanent 0 into the same series.
  */
 @ConditionalOnServerRole
@@ -31,7 +31,7 @@ public class MentorTurnQueueSampler {
     public MentorTurnQueueSampler(MentorTurnRepository turns, MeterRegistry meters) {
         this.turns = turns;
         Gauge.builder(AgentMetrics.MENTOR_TURN_QUEUED, queued, AtomicLong::get)
-                .description("Heph turns that wait for a worker; last-good when a sample fails")
+                .description("conversation turns that wait for a worker; last-good when a sample fails")
                 .register(meters);
     }
 
@@ -42,7 +42,7 @@ public class MentorTurnQueueSampler {
         } catch (RuntimeException e) {
             // A database blip must not read as an empty queue.
             log.warn(
-                    "Heph turn queue sample failed, keeping the last value: {}",
+                    "conversation turn queue sample failed, keeping the last value: {}",
                     e.getClass().getSimpleName());
         }
     }

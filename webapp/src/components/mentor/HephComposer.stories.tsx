@@ -10,7 +10,7 @@ const meta = {
 	component: HephComposer,
 	parameters: { layout: "padded" },
 	tags: ["autodocs"],
-	args: { label: "Message Heph", placeholder: "Message Heph", onSend: fn() },
+	args: { label: "Message Hephaestus", placeholder: "Message Hephaestus", onSend: fn() },
 	decorators: [
 		(Story) => (
 			<div className="max-w-3xl">
@@ -40,7 +40,7 @@ function oneLineHeight(field: HTMLElement): number {
  */
 export const Default: Story = {
 	play: async ({ args, canvas, userEvent }) => {
-		const field = canvas.getByRole("textbox", { name: "Message Heph" });
+		const field = canvas.getByRole("textbox", { name: "Message Hephaestus" });
 		const empty = field.getBoundingClientRect().height;
 		await expect(empty).toBeLessThanOrEqual(oneLineHeight(field) + 1);
 		await expect(canvas.getByRole("button", { name: "Send message" })).toBeDisabled();
@@ -55,22 +55,22 @@ export const Default: Story = {
 };
 
 /**
- * Heph is answering. Send stays: a message written now waits as a follow-up. Stop sits beside it
+ * Hephaestus is answering. Send stays: a message written now waits as a follow-up. Stop sits beside it
  * rather than replacing it, so stopping and asking are never the same press. It is the one Stop
- * while Heph answers, and an icon, so a pointer that rests on it reads its name.
+ * while Hephaestus answers, and an icon, so a pointer that rests on it reads its name.
  */
 export const Busy: Story = {
-	args: { stop: { label: "Stop Heph", onStop: fn() } },
+	args: { stop: { label: "Stop answer", onStop: fn() } },
 	play: async ({ args, canvas, userEvent }) => {
 		await userEvent.type(
-			canvas.getByRole("textbox", { name: "Message Heph" }),
+			canvas.getByRole("textbox", { name: "Message Hephaestus" }),
 			"And one more{Enter}",
 		);
 		await expect(args.onSend).toHaveBeenCalledWith("And one more");
-		const stop = canvas.getByRole("button", { name: "Stop Heph" });
+		const stop = canvas.getByRole("button", { name: "Stop answer" });
 		await userEvent.hover(stop);
 		await expectSettledVisible(
-			await screen.findByText("Stop Heph", { selector: "[data-slot=tooltip-content]" }),
+			await screen.findByText("Stop answer", { selector: "[data-slot=tooltip-content]" }),
 		);
 		await userEvent.click(stop);
 		await expect(args.stop?.onStop).toHaveBeenCalledOnce();
@@ -83,12 +83,12 @@ function pageContext(label: string) {
 	return <RemovableToken label={label} removeLabel={REMOVE_PAGE} onRemove={fn()} />;
 }
 
-/** In the Heph panel: the page the developer asks from travels with the message until they remove it. */
+/** In the Hephaestus panel: the page the developer asks from travels with the message until they remove it. */
 export const WithContext: Story = {
 	args: { context: pageContext("From Practice profile") },
 };
 
-/** The composer as the Heph panel draws it in a 319px phone window: 287px inside the panel's padding. */
+/** The composer as the Hephaestus panel draws it in a 319px phone window: 287px inside the panel's padding. */
 function PhonePanel(Story: Parameters<Decorator>[0]) {
 	return (
 		<div className="w-[287px]">
@@ -108,12 +108,12 @@ function overlaps(a: DOMRect, b: DOMRect): boolean {
 function keepsControlsApart(page: string): Story["play"] {
 	return async ({ canvas }) => {
 		const frame = canvas
-			.getByRole("textbox", { name: "Message Heph" })
+			.getByRole("textbox", { name: "Message Hephaestus" })
 			.parentElement?.getBoundingClientRect();
 		if (frame === undefined) {
 			throw new Error("Expected the field inside the composer's frame");
 		}
-		const [remove, ...rest] = [REMOVE_PAGE, "Stop Heph", "Send message"].map((name) =>
+		const [remove, ...rest] = [REMOVE_PAGE, "Stop answer", "Send message"].map((name) =>
 			canvas.getByRole("button", { name }).getBoundingClientRect(),
 		);
 		if (remove === undefined) {
@@ -134,10 +134,10 @@ function keepsControlsApart(page: string): Story["play"] {
 	};
 }
 
-const BUSY = { label: "Stop Heph", onStop: fn() };
+const BUSY = { label: "Stop answer", onStop: fn() };
 
 /**
- * A phone's panel while Heph answers, asked from Workspace activity. The page, Stop and Send do not
+ * A phone's panel while Hephaestus answers, asked from Workspace activity. The page, Stop and Send do not
  * fit on one row, so Stop and Send wrap below the page rather than over its remove control.
  */
 export const PhoneBusyWithPage: Story = {

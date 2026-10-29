@@ -339,7 +339,7 @@ export function ReviewResultDetails({
 					<span className="font-medium">
 						A workspace admin marked this observation as incorrect.
 					</span>{" "}
-					It no longer counts toward your standing or what Heph knows about your work.
+					It no longer counts toward your standing or what Hephaestus knows about your work.
 				</p>
 			)}
 			{result.currentness !== "CURRENT" && note !== undefined && (

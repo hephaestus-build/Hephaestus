@@ -44,13 +44,13 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 
 /**
- * The developer's Heph conversation in a workspace. Heph is for the workspace's own members: instance-admin elevation
+ * The developer's Hephaestus conversation in a workspace. Hephaestus is for the workspace's own members: instance-admin elevation
  * gives no place in it, and a conversation, message or turn of another member is not found. A read-only user view
  * reads the viewed member's conversation through the {@code GET} routes.
  */
 @WorkspaceScopedController
 @RequestMapping("/mentor")
-@Tag(name = "Mentor", description = "The developer's conversation with Heph")
+@Tag(name = "Mentor", description = "The developer's conversation with Hephaestus")
 @PreAuthorize("@workspaceSecure.isMemberWithoutElevation()")
 @RequiredArgsConstructor
 public class MentorConversationController {
@@ -109,14 +109,15 @@ public class MentorConversationController {
 
     @PostMapping("/turns")
     @Operation(
-            summary = "Ask Heph",
-            description = "Stores the question before anything is shown and queues a turn. A question while Heph "
+            summary = "Ask Hephaestus",
+            description = "Stores the question before anything is shown and queues a turn. A question while Hephaestus "
                     + "answers waits as a follow-up. Repeating a requestId returns the first submission.")
     @ApiResponse(responseCode = "200", description = "The stored question and its turn")
     @ApiResponse(
             responseCode = "409",
-            description = "Heph declines the developer (mentor-refused), too many follow-ups wait, the requestId was "
-                    + "used for another message, or the parent cannot have a thread (mentor-rejected)",
+            description =
+                    "Hephaestus declines the developer (mentor-refused), too many follow-ups wait, the requestId was "
+                            + "used for another message, or the parent cannot have a thread (mentor-rejected)",
             content =
                     @Content(
                             mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,
@@ -157,8 +158,9 @@ public class MentorConversationController {
     @PatchMapping("/turns/{turnId}/status")
     @Operation(
             summary = "Stop a turn",
-            description = "A queued turn never runs and keeps its question. A running turn keeps what Heph already "
-                    + "wrote. Stopping an ended turn changes nothing. A turn asked in Slack can be stopped here.")
+            description =
+                    "A queued turn never runs and keeps its question. A running turn keeps what Hephaestus already "
+                            + "wrote. Stopping an ended turn changes nothing. A turn asked in Slack can be stopped here.")
     public MentorTurnDTO updateMentorTurnStatus(
             WorkspaceContext workspace,
             @PathVariable UUID turnId,
@@ -173,11 +175,11 @@ public class MentorConversationController {
     }
 
     @PutMapping("/entries/{entryId}/vote")
-    @Operation(summary = "Rate one of Heph's messages as helpful or not helpful")
+    @Operation(summary = "Rate one of Hephaestus's messages as helpful or not helpful")
     @ApiResponse(responseCode = "200", description = "The message with its vote")
     @ApiResponse(
             responseCode = "409",
-            description = "The message is not one of Heph's",
+            description = "The message is not one of Hephaestus's",
             content =
                     @Content(
                             mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,
@@ -188,7 +190,7 @@ public class MentorConversationController {
     }
 
     @DeleteMapping("/entries/{entryId}/vote")
-    @Operation(summary = "Clear the vote on one of Heph's messages")
+    @Operation(summary = "Clear the vote on one of Hephaestus's messages")
     public MentorEntryDTO clearMentorVote(WorkspaceContext workspace, @PathVariable UUID entryId) {
         return vote(workspace.id(), entryId, null);
     }
@@ -196,8 +198,9 @@ public class MentorConversationController {
     @DeleteMapping("/entries/{entryId}")
     @Operation(
             summary = "Delete a message the developer wrote",
-            description = "Erases its text and every summary that read it. A question Heph has not answered yet is "
-                    + "not answered.")
+            description =
+                    "Erases its text and every summary that read it. A question Hephaestus has not answered yet is "
+                            + "not answered.")
     @ApiResponse(responseCode = "204", description = "The message is deleted")
     @ApiResponse(
             responseCode = "409",

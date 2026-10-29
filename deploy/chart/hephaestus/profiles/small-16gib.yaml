@@ -2,8 +2,8 @@
 # docs/admin/kubernetes.mdx § Profiles gives the arithmetic; a chart test checks that the steady state and an
 # upgrade fit the node.
 worker:
-  # The worker stops before its replacement starts, so each upgrade is a planned outage of reviews and Heph.
-  # 16 GiB cannot hold a second worker beside its Heph host and turn pool.
+  # The worker stops before its replacement starts, so each upgrade is a planned outage of reviews and conversations.
+  # 16 GiB cannot hold a second worker beside its conversation host and turn pool.
   rolloutStrategy: Recreate
   # An upgrade waits for the drain, so the outage stays short.
   drainTimeoutSeconds: 600

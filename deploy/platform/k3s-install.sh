@@ -305,7 +305,7 @@ else
 	[ "$memory" -ge "$SMALL_16GIB_MEMORY_KIB" ] ||
 		die "this host has $((memory / 1048576)) GiB of memory; the smallest profile needs a host of 16 GiB"
 	[ "$PROFILE_16GIB" = false ] ||
-		warn "this host has less than 32 GiB of memory: the install adds the small-16gib profile, and each upgrade stops reviews and Heph for a while"
+		warn "this host has less than 32 GiB of memory: the install adds the small-16gib profile, and each upgrade stops reviews and conversations for a while"
 	[ "$(nproc)" -ge "$MIN_CPUS" ] || die "this host has $(nproc) CPUs; the small profile needs 4"
 	free=$(df -Pk /var | awk 'NR == 2 { print $4 }')
 	[ "$free" -ge 104857600 ] || warn "/var has $((free / 1048576)) GiB free; the small profile counts on 100 GiB for volumes, images and caches"

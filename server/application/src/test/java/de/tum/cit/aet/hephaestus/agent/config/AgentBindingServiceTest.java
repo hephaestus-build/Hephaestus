@@ -112,7 +112,7 @@ class AgentBindingServiceTest extends BaseUnitTest {
                         new AgentBindingRequestDTO(
                                 99L, null, AgentBindingLimits.MAX_HEPH_TURN_SECONDS + 1, null, true)))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("Heph stops an answer");
+                .hasMessageContaining("Hephaestus stops an answer");
     }
 
     @Test

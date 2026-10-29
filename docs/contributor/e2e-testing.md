@@ -113,9 +113,9 @@ Only the worker that started it joins this network.
 Thus, practice reviews need the worker role in a Docker container under its default hostname, as `application-worker` does.
 A host-run server refuses them.
 
-The Heph host is different.
+The conversation host is different.
 When the worker runs outside any container, the host uses an ordinary bridge network and reaches the worker through `host.docker.internal`.
-[Runtime roles](/admin/runtime-roles#the-heph-host) gives the rule.
+[Runtime roles](/admin/runtime-roles#the-conversation-host) gives the rule.
 No binding setting controls this.
 Hephaestus posts feedback back to the MR.
 The workspace's **Practices → Practice reviews** view shows the results behind it.

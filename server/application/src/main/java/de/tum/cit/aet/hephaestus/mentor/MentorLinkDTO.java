@@ -6,17 +6,17 @@ import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
 /**
- * What one of Heph's link tools showed in a message: a practice result, one of its problems, or prepared feedback,
- * with Heph's words about it. A link to a result or problem is discussion; only shown prepared feedback is delivery.
+ * What one of Hephaestus's link tools showed in a message: a practice result, one of its problems, or prepared feedback,
+ * with Hephaestus's words about it. A link to a result or problem is discussion; only shown prepared feedback is delivery.
  */
-@Schema(description = "A practice result, problem or prepared feedback Heph showed in a message")
+@Schema(description = "A practice result, problem or prepared feedback Hephaestus showed in a message")
 public record MentorLinkDTO(
         @NonNull Kind kind,
 
         @Schema(description = "The result, problem or feedback id, by kind") @NonNull
         UUID id,
 
-        @Schema(description = "Heph's words about it, shown to the developer") @NonNull
+        @Schema(description = "Hephaestus's words about it, shown to the developer") @NonNull
         String text,
 
         @Schema(

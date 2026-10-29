@@ -1,117 +1,118 @@
 ---
-title: Talk with Heph
-description: Ask Heph about practice feedback and recent work in the web app or Slack.
+title: Ask Hephaestus
+description: Ask Hephaestus about practice feedback and recent work in the web app or Slack.
 page_type: feature
 ---
 
 import Screenshot from "@site/src/components/Screenshot";
 
-Ask Heph about your work, discuss feedback, or decide what to try on your next review.
+Ask Hephaestus about your work, discuss feedback, or decide what to try on your next review.
 It can use permitted recent work and practice feedback as context.
 [Practice feedback](./ai-code-review) explains how that feedback is prepared.
 
 <Screenshot
-  src="ai-mentor/conversation"
-  alt="A conversation in which a developer asks Heph why they got feedback, and Heph explains the gap and suggests a How to verify section."
+  src="ask-hephaestus/conversation"
+  alt="A conversation in which a developer asks Hephaestus why they got feedback, and Hephaestus explains the gap and suggests a How to verify section."
 />
 
-## Who can use Heph
+## Who can use Ask Hephaestus
 
-Heph is available to each workspace member when a workspace admin sets up a model for it.
+Ask Hephaestus is available to each workspace member when a workspace admin sets up a conversation model.
 It answers only within [your AI choice](./user-settings#your-ai-choice).
 You do not need to request access or sign in again.
-Instance admins who are not members cannot use Heph in that workspace.
+Instance admins who are not members cannot use Ask Hephaestus in that workspace.
 
 These conditions apply in each workspace:
 
-- **Heph is not set up in this workspace yet.** A workspace admin needs to set up a model for Heph.
-- **Heph is off for you.** You chose **No AI**. Select **Change your AI choice** to turn Heph on again.
+- **Ask Hephaestus is not set up in this workspace yet.** A workspace admin needs to set up a conversation model.
+- **Ask Hephaestus is off for you.** You chose **No AI**. Select **Change your AI choice** to let Hephaestus answer again.
 - **Choose which AI may handle your work.** This workspace needs your AI choice first.
-- **Heph is not set up for your AI choice yet.** No workspace Heph model meets your choice.
+- **Ask Hephaestus is not set up for your AI choice yet.** No workspace conversation model meets your choice.
 
 For the last condition, a workspace admin can add a model, or you can change your choice.
 Slack direct messages follow the same rules.
-If the workspace has no model for Heph, Heph does not reply in Slack.
-In the other cases above, Heph replies in Slack with the same reason instead of an answer.
+If the workspace has no conversation model, Hephaestus does not reply in Slack.
+In the other cases above, Hephaestus replies in Slack with the same reason instead of an answer.
 
-## Your conversation with Heph
+## Your conversation
 
-You have one conversation with Heph in each workspace.
-The **Heph** page and the Heph panel on other pages show all of it.
-Your Slack direct message with Heph shows only the messages that you wrote in Slack and Heph's answers to them.
+You have one conversation with Hephaestus in each workspace.
+The **Ask Hephaestus** page and the Ask Hephaestus panel on other pages show all of it.
+Your Slack direct message with Hephaestus shows only the messages that you wrote in Slack and Hephaestus's answers to them.
 It also shows the notes of your weekly digest.
-If Heph has not started on a question after 10 seconds, a short note says so, and it goes away when Heph starts.
-If Heph is answering other questions, the note says that Heph starts on yours when it is free.
+If Hephaestus has not started on a question after 10 seconds, a short note says so, and it goes away when Hephaestus starts.
+If Hephaestus is answering other questions, the note says that yours starts when one finishes.
 
-There is no list of earlier Heph conversations, and you do not start new ones.
-Heph can look back through the conversation, so you can return to an earlier topic at any time.
+There is no list of earlier conversations, and you do not start new ones.
+Hephaestus can look back through the conversation, so you can return to an earlier topic at any time.
 To keep a side topic apart, [reply in a thread](#reply-in-a-thread).
 
-[Your Heph conversation](./privacy.mdx#your-heph-conversation) tells what happened to earlier Heph conversations.
+[Your conversation](./privacy.mdx#your-conversation) tells what happened to earlier conversations.
 
-## Ask Heph a question
+## Ask Hephaestus a question
 
-1. Open **Heph**.
-2. In **Message Heph**, enter a specific question, such as "What feedback did I get on my latest pull request?"
+1. Open **Ask Hephaestus**.
+2. In **Message Hephaestus**, enter a specific question, such as "What feedback did I get on my latest pull request?"
 3. Press Enter to send it.
 4. Ask a follow-up question if you need more detail.
 
 Shift+Enter starts a new line.
 On a touch screen, including a tablet with a keyboard, Enter starts a new line. To send, select **Send message**, or press Cmd+Enter or Ctrl+Enter.
 
-While Heph answers, it shows what it is doing, such as *Thinking…* or *Reading your practice feedback…*.
-If Heph has not started on your question after a second, the line says *Waiting for Heph to start…*.
-If Heph is answering other questions, it says this instead: *Heph is answering other questions. Yours starts when Heph is free.*
-Your question moves near the top, and the answer appears below it as Heph writes it, while the view stays where you are.
+While Hephaestus answers, it shows what it is doing, such as *Thinking…* or *Reading your practice feedback…*.
+If Hephaestus has not started on your question after a second, the line says *Waiting to start…*.
+If Hephaestus is answering other questions, it says this instead: *Hephaestus is answering other questions. Yours starts when one finishes.*
+Your question moves near the top, and the answer appears below it as Hephaestus writes it, while the view stays where you are.
 If you scroll up, select **Jump to latest** to go back to the newest message.
 
 After 10 seconds, the line also counts the time and says *You can leave. The answer stays here.*
-Heph keeps working when you go to another page or close the tab.
+Hephaestus keeps working when you go to another page or close the tab.
 
-If Heph answers while the Heph panel is closed, in the conversation or in a thread, a dot on the Heph button shows it.
-The dot stays until you open the panel or the **Heph** page on any of your devices.
+If Hephaestus answers while the panel is closed, a dot appears on the **Ask Hephaestus** button.
+It appears for answers in the conversation and in a thread.
+The dot stays until you open the panel or the **Ask Hephaestus** page on any of your devices.
 A page in a background tab does not clear it.
 A message that you write, in the app or in Slack, never sets it.
 
-If Heph could not answer, the message says why.
+If Hephaestus could not answer, the message says why.
 Select **Try again** to ask the same question again.
 
-If Heph did not get your message, it shows *Not sent.* and the reason.
+If Hephaestus did not get your message, it shows *Not sent.* and the reason.
 Select **Retry** to send it again.
 To keep the text, select **Copy message**.
 To remove the message, select **Delete message**.
 
 ### Observations, problems, and feedback in an answer
 
-Heph can point to one of your practice review observations or to one problem in your work.
+Hephaestus can point to one of your practice review observations or to one problem in your work.
 It can also show you feedback that a review prepared for your conversation.
-Each one appears below the answer in Heph's own words.
+Each one appears below the answer in Hephaestus's own words.
 If it is about a piece of your work that you can still see, it ends with **Your feedback on this work**.
 Select it to open your feedback for that work.
 
-### Send while Heph answers
+### Send while Hephaestus answers
 
-You can send another message while Heph answers.
-It waits under your message with *Queued. Heph answers this next.*
+You can send another message while Hephaestus answers.
+It waits under your message with *Queued. This is answered next.*
 Up to 3 messages can wait in the conversation, and up to 3 in each thread.
-If you send more, Heph asks you to wait for an answer first.
+If you send more, Hephaestus asks you to wait for an answer first.
 
 ### Stop an answer
 
-1. To stop the answer in progress, select **Stop Heph** beside **Send message**.
+1. To stop the answer in progress, select **Stop answer** beside **Send message**.
 2. To stop a message that still waits, select **Stop** under it.
 
 Where you cannot write a message, such as in the thread of a deleted message, **Stop** is on the line under the answer.
 
-Heph keeps what it wrote before you stopped it.
+Hephaestus keeps what it wrote before you stopped it.
 A waiting message that you stop stays in the conversation without an answer.
-In the app, you can also stop an answer that Heph is writing in Slack.
+In the app, you can also stop an answer that Hephaestus is writing in Slack.
 
 ## Reply in a thread
 
 A thread keeps a side topic next to the conversation.
 Each message in the conversation can have one thread.
-This includes your messages, Heph's answers, and weekly digests.
+This includes your messages, Hephaestus's answers, and weekly digests.
 
 1. Under a message, select **Reply in thread**.
 2. Enter your reply.
@@ -119,14 +120,14 @@ This includes your messages, Heph's answers, and weekly digests.
 
 When the page has room beside the conversation, the thread opens beside it.
 When it does not, such as on a phone or a tablet, the thread opens over the conversation.
-In the Heph panel, the thread replaces the conversation, and **Back to the conversation** returns to it.
+In the Ask Hephaestus panel, the thread replaces the conversation, and **Back to the conversation** returns to it.
 A message with a thread shows its replies, such as *3 replies*.
 Select it to open the thread.
 
 Threads have one level, so a reply in a thread cannot start another thread.
 If you start a reply and then open another thread, Hephaestus keeps the reply.
 It is there again when you come back to its thread in the same tab.
-Heph can answer in a thread while it answers in the main conversation.
+Hephaestus can answer in a thread while it answers in the main conversation.
 A thread that you start in Slack also appears in the app.
 A thread that you start in the app stays in the app.
 
@@ -134,20 +135,20 @@ A thread that you start in the app stays in the app.
 
 The controls appear under a message when you point at it or move to it with the keyboard.
 
-- **Helpful** and **Not helpful** rate one of Heph's answers. Select your rating again to clear it.
+- **Helpful** and **Not helpful** rate one of Hephaestus's answers. Select your rating again to clear it.
 - **Copy message** copies the text of the message.
-- **Delete message** appears on your own messages. You cannot delete Heph's messages.
+- **Delete message** appears on your own messages. You cannot delete Hephaestus's messages.
 
 To delete one of your messages:
 
 1. Under the message, select **Delete message**.
 2. In the dialog, select **Delete message**.
 
-Heph forgets the message.
-If Heph has not answered it yet, Heph does not answer it.
+Hephaestus forgets the message.
+If Hephaestus has not answered it yet, Hephaestus does not answer it.
 You cannot undo this.
 The conversation shows *This message was deleted.* in its place.
-If you wrote the message in Slack, the message and Heph's answer stay in Slack.
+If you wrote the message in Slack, the message and Hephaestus's answer stay in Slack.
 
 If the message had a thread, the replies stay.
 The thread shows *This message was deleted.* above them, and you can delete your own replies one at a time.
@@ -156,24 +157,24 @@ You cannot reply in that thread.
 Ratings are the **Helpful** and **Not helpful** buttons.
 Hephaestus does not read your emoji reactions in Slack.
 
-## Use Heph on other pages
+## Ask Hephaestus on other pages
 
-On other pages of a workspace, a Heph button sits in the lower-right corner.
-It opens a panel with the same conversation as the **Heph** page.
+On other pages of a workspace, the **Ask Hephaestus** button sits in the lower-right corner.
+It opens a panel with the same conversation as the **Ask Hephaestus** page.
 
-1. Select the Heph button.
+1. Select the **Ask Hephaestus** button.
 2. Enter your question.
 3. Press Enter to send it.
 
 Your message carries the page you opened the panel from, such as **From Practice profile**.
-Heph uses that page to understand your question.
+Hephaestus uses that page to understand your question.
 To send a message without it, select **Do not send this page with your message**.
 The page comes back when you open another page.
 
 In the panel, a thread opens over the conversation.
 Select **Back to the conversation**, or press Escape, to return.
 Press Escape again to close the panel.
-Select **Open the Heph page** to continue there, with the open thread.
+Select **Open full page** to continue there, with the open thread.
 
 ## Questions to try
 
@@ -185,50 +186,50 @@ Select **Open the Heph page** to continue there, with the open thread.
 
 For example, ask why a review raised a concern before you decide whether to change the work.
 If the evidence is wrong, use the response controls in Hephaestus to disagree with the feedback.
-A conversation with Heph alone does not record a saved disagreement.
+A conversation with Hephaestus alone does not record a saved disagreement.
 
 ## Check the answer
 
-Heph can misunderstand your work or repeat an incorrect observation.
+Hephaestus can misunderstand your work or repeat an incorrect observation.
 Its answers are suggestions, not decisions.
 
 If an answer does not match the work:
 
 1. State what looks wrong.
-2. Point Heph to the relevant comment, line, or explanation.
+2. Point Hephaestus to the relevant comment, line, or explanation.
 3. Ask it to reconsider with that evidence.
 
 You and your human reviewers stay responsible for decisions about the work.
 
-## Use Heph in Slack
+## Use Hephaestus in Slack
 
-To talk to Heph in Slack, your workspace needs a Slack connection, and you must have connected your Slack account.
+To talk to Hephaestus in Slack, your workspace needs a Slack connection, and you must have connected your Slack account.
 
-1. Open a direct message to Heph in that Slack workspace.
+1. Open a direct message to Hephaestus in that Slack workspace.
 2. Send a question about your work or feedback.
 
-What you write to Heph in Slack is part of your one conversation.
-Heph answers where you asked.
-While it works, Heph adds 👀 to your message.
+What you write to Hephaestus in Slack is part of your one conversation.
+Hephaestus answers where you asked.
+While it works, Hephaestus adds 👀 to your message.
 
-- **In the direct message itself**, Heph then posts one reply with everything it wrote.
-  The reply quotes the observations, problems, and feedback that Heph showed you.
-- **In a Slack thread**, Heph writes its answer as it goes.
+- **In the direct message itself**, Hephaestus then posts one reply with everything it wrote.
+  The reply quotes the observations, problems, and feedback that Hephaestus showed you.
+- **In a Slack thread**, Hephaestus writes its answer as it goes.
   The answer ends with **Helpful** and **Not helpful** buttons.
 
-You can stop any answer in the app ([Stop an answer](#stop-an-answer)), also an answer that Heph writes in Slack.
-In a Slack thread, Slack also shows that Heph works, with a **Stop** control.
-Select it to stop the answer, also before Heph writes its first words or while it reads your work.
-Heph then stops, but not always at once: it can take a moment before Slack shows that it no longer works.
+You can stop any answer in the app ([Stop an answer](#stop-an-answer)), also an answer that Hephaestus writes in Slack.
+In a Slack thread, Slack also shows that Hephaestus works, with a **Stop** control.
+Select it to stop the answer, also before Hephaestus writes its first words or while it reads your work.
+Hephaestus then stops, but not always at once: it can take a moment before Slack shows that it no longer works.
 
-If your workspace's Slack app does not show **Stop**, use **Stop Heph** in the app.
+If your workspace's Slack app does not show **Stop**, use **Stop answer** in the app.
 Questions you sent after it keep their place.
-The reply in Slack keeps what Heph wrote before the stop.
+The reply in Slack keeps what Hephaestus wrote before the stop.
 
-Feedback that Heph shows in Slack counts as delivered only when its text appears in Slack.
+Feedback that Hephaestus shows in Slack counts as delivered only when its text appears in Slack.
 A reply longer than Slack shows ends with a note, and the full answer is in Hephaestus.
 The same note ends a Slack thread answer that Hephaestus could not finish writing in Slack.
-If Heph has to start an answer again, the first try ends with a note, and the new answer follows below it.
+If Hephaestus has to start an answer again, the first try ends with a note, and the new answer follows below it.
 
 If Hephaestus cannot tell whether an answer reached Slack, it checks Slack once and never posts the answer again.
 If an answer does not fully reach Slack, the app shows *Not fully delivered to Slack. The full answer is here.* under it.
@@ -239,12 +240,12 @@ A reply in the Slack thread of a message goes to that message's thread, which th
 The app shows the whole conversation.
 Messages written in Slack carry a **Slack** marker there.
 Questions you ask in the app are never posted to Slack.
-In Slack, Heph says so when it refers to something from the app.
+In Slack, Hephaestus says so when it refers to something from the app.
 
 If you edit a message in Slack, Hephaestus stores the new text and the app marks it *(edited)*.
-Heph does not answer the edited message again.
+Hephaestus does not answer the edited message again.
 If you delete a message in Slack, Hephaestus erases it too.
-If Heph is still answering that message, it stops.
+If Hephaestus is still answering that message, it stops.
 
 Workspace admins can separately enable monitored channels as context.
 Monitoring starts only after Hephaestus posts a visible announcement.
@@ -253,15 +254,15 @@ Each person’s own privacy controls apply.
 
 ## Notifications
 
-Heph messages you in Slack only when you wrote to it in Slack.
+Hephaestus messages you in Slack only when you wrote to it in Slack.
 Questions you ask in the app get their answers only in the app.
 The only other notification is the [weekly digest](#weekly-digest), if you turn it on.
 
 ## Weekly digest
 
-The weekly digest is a message in your Heph conversation that lists what happened in your week.
+The weekly digest is a message in your conversation that lists what happened in your week.
 It is off until you turn it on.
-One switch covers each workspace where Heph can answer you.
+One switch covers each workspace where Hephaestus can answer you.
 
 To turn it on:
 
@@ -278,7 +279,7 @@ Quiet weeks send nothing.
 
 A digest lists:
 
-- **Feedback that reached you** that week, on your work or in your Heph conversation. Each piece links to where it appeared.
+- **Feedback that reached you** that week, on your work or in your conversation. Each piece links to where it appeared.
 - **What changed** on your Practice profile.
 - How many pieces of feedback from that week wait unread on your Practice profile.
 
@@ -292,11 +293,11 @@ Reading the digest does not mark feedback as read.
 
 When a digest is ready, you get a short note in Slack.
 If you have not connected your Slack account, the note arrives by email instead.
-If Hephaestus cannot reach you in Slack or by email, the digest is only in your Heph conversation.
+If Hephaestus cannot reach you in Slack or by email, the digest is only in your conversation.
 Both notes say *Your weekly digest is ready* and link to the digest with **Open in Hephaestus**.
 Notes contain no feedback, counts, or practice names.
 
-To go through the digest with Heph, reply in its thread.
+To go through the digest with Hephaestus, reply in its thread.
 In the app, select **Reply in thread** on the digest.
 In Slack, reply in the thread of the note.
 
@@ -306,16 +307,16 @@ To turn the weekly digest off, use any of these:
 - In the Slack note, select **Turn off weekly digest**, then **Turn off**.
 - In the email, use the link to turn off the weekly digest.
 
-## What Heph can use as context
+## What Hephaestus can use as context
 
-Heph does not have a complete or live view of your project.
+Hephaestus does not have a complete or live view of your project.
 Check the current status on GitHub or GitLab before you act on its answer.
-What Heph can use depends on how your workspace is set up.
+What Hephaestus can use depends on how your workspace is set up.
 It can include the sources below.
 
 ### Recent work
 
-Heph can use your recent pull requests, merge requests, and issues, plus how much you have reviewed.
+Hephaestus can use your recent pull requests, merge requests, and issues, plus how much you have reviewed.
 For your open pull requests and merge requests, it can use these details as Hephaestus last recorded them:
 
 - Whether GitHub or GitLab reported the work as mergeable.
@@ -325,11 +326,11 @@ For your open pull requests and merge requests, it can use these details as Heph
 
 An approval or a resolved thread does not prove that the work meets a condition in a comment or thread.
 This record can lag GitHub or GitLab.
-Heph states what it could not confirm and asks you to check there before you merge.
+Hephaestus states what it could not confirm and asks you to check there before you merge.
 
 ### Recent feedback
 
-Heph can use your most recent practice feedback records:
+Hephaestus can use your most recent practice feedback records:
 
 - Feedback that Hephaestus recorded as delivered to you.
 - Feedback that is ready for your work or your Practice profile but not delivered yet.
@@ -337,14 +338,14 @@ Heph can use your most recent practice feedback records:
 - Whether Hephaestus recorded that you opened feedback prepared for your Practice profile.
 - Whether Hephaestus recorded a failure to deliver feedback.
 
-This record gives Heph text only for feedback recorded as delivered on your work or Practice profile, never for conversations.
+This record gives Hephaestus text only for feedback recorded as delivered on your work or Practice profile, never for conversations.
 It does not necessarily include your full feedback history.
-A private brief prepared for Heph reaches it separately, as described below.
+A private brief prepared for Hephaestus reaches it separately, as described below.
 A practice that continues to go well appears as such on your Practice profile, without private feedback there.
-Heph does not treat the absence of feedback as a delivery failure.
+Hephaestus does not treat the absence of feedback as a delivery failure.
 
-Heph sees only feedback records that it may use in conversation.
-In its record of your recent feedback, Heph does not see:
+Hephaestus sees only feedback records that it may use in conversation.
+In its record of your recent feedback, Hephaestus does not see:
 
 - Feedback proposed for a reviewer to approve, or feedback that a reviewer rejected.
 - Withheld or replaced feedback.
@@ -352,63 +353,63 @@ In its record of your recent feedback, Heph does not see:
 - Feedback whose evidence is no longer available for conversations.
 - Feedback about a Slack conversation with paused or revoked consent, even if that feedback reached you.
 
-When Heph goes through your weekly digest with you, it reads the digest you see, which also shows replaced and withdrawn pieces.
+When Hephaestus goes through your weekly digest with you, it reads the digest you see, which also shows replaced and withdrawn pieces.
 
-If Heph sees no feedback for some work, it cannot tell whether feedback reached you, was drafted, or was rejected.
+If Hephaestus sees no feedback for some work, it cannot tell whether feedback reached you, was drafted, or was rejected.
 It states this limit instead of saying there was no feedback.
 A change to your work does not by itself remove delivered feedback from this record.
-If the work or practice changed after the review, Heph treats that feedback as possibly out of date.
+If the work or practice changed after the review, Hephaestus treats that feedback as possibly out of date.
 
 ### Recent review observations
 
-Heph can use a recent sample of practice review observations about your work, from about the last 90 days.
+Hephaestus can use a recent sample of practice review observations about your work, from about the last 90 days.
 This includes the latest observation for each practice on each piece of work, including observations that say **Does not apply** or **Could not determine**.
 It also includes some earlier observations for the same practice on the same work.
 An earlier observation stays in your history after you change the work.
-Heph describes it as that review’s observation at the time, not as a withdrawn observation.
+Hephaestus describes it as that review’s observation at the time, not as a withdrawn observation.
 
 Catch-up reviews of existing work stay separate from reviews that started from your work or from a request.
-The sample is bounded and includes only observations Heph may use in conversation.
-Heph does not treat it as your full history.
+The sample is bounded and includes only observations Hephaestus may use in conversation.
+Hephaestus does not treat it as your full history.
 Your [Practice profile](./practice-profile.mdx) shows your current standing.
 
 ### Code in your repositories
 
-Heph can read the code of repositories that your workspace monitors, with their history and diffs.
+Hephaestus can read the code of repositories that your workspace monitors, with their history and diffs.
 When you ask, it opens a repository at a branch, a commit, or a pull request or merge request.
 It can search the files, follow a change through the history, and compare two versions.
-In its answer, Heph names the commit that it read and the lines that it cites.
+In its answer, Hephaestus names the commit that it read and the lines that it cites.
 It cannot read a repository that your team hides from contributions.
 
-Heph reads the copy that Hephaestus keeps of each repository.
+It reads the copy that Hephaestus keeps of each repository.
 The copy can lag behind your latest push.
 
-Heph only reads.
+Hephaestus only reads.
 It cannot run your code, build it, run tests, or change anything in the repository.
-If your Hephaestus instance does not keep copies of your repositories, Heph tells you that it cannot read the code.
+If your Hephaestus instance does not keep copies of your repositories, Hephaestus tells you that it cannot read the code.
 It may then ask you for a specific snippet.
 
 ### Other context
 
-Heph can also use:
+Hephaestus can also use:
 
 - Review requests that wait for you.
 - Open issues assigned to you.
-- Your conversation with Heph.
-- The page you asked from, when you send it from the Heph panel.
+- Your conversation with Hephaestus.
+- The page you asked from, when you send it from the Ask Hephaestus panel.
 - The engineering practices configured for your workspace, with the introduction and guide that each practice panel shows.
 - Messages from monitored Slack channels that you have allowed Hephaestus to use.
 - Selected team documents from a connected Outline workspace.
 
-Heph uses this context to answer your question.
+Hephaestus uses this context to answer your question.
 
-Heph does not use work deleted on GitHub or GitLab.
+Hephaestus does not use work deleted on GitHub or GitLab.
 Your activity counts and the practice feedback you already received do not change.
 They record what happened at the time.
 
-A practice review can prepare private feedback for your next conversation with Heph.
-When you next talk to Heph, it receives the prepared feedback and its permitted evidence.
+A practice review can prepare private feedback for your next conversation with Hephaestus.
+When you next talk to Hephaestus, it receives the prepared feedback and its permitted evidence.
 It can show relevant feedback as a separate part of its answer.
-That feedback counts as delivered only when Heph shows it in an answer that you can see.
-Once Heph starts to show a piece of feedback, it does not show that piece again.
+That feedback counts as delivered only when Hephaestus shows it in an answer that you can see.
+Once Hephaestus starts to show a piece of feedback, it does not show that piece again.
 If you stop that answer, or it fails, the feedback does not count as delivered.

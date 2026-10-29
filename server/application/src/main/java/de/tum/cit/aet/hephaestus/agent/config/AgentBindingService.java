@@ -81,7 +81,7 @@ public class AgentBindingService {
         }
         if (request.timeoutSeconds() != null) {
             if (purpose == AgentPurpose.MENTOR && request.timeoutSeconds() > AgentBindingLimits.MAX_HEPH_TURN_SECONDS)
-                throw new IllegalArgumentException("Heph stops an answer after %s seconds, so enter %s or less."
+                throw new IllegalArgumentException("Hephaestus stops an answer after %s seconds, so enter %s or less."
                         .formatted(AgentBindingLimits.MAX_HEPH_TURN_SECONDS, AgentBindingLimits.MAX_HEPH_TURN_SECONDS));
             binding.setTimeoutSeconds(request.timeoutSeconds());
         }

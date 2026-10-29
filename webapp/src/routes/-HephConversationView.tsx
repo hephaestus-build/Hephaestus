@@ -26,7 +26,7 @@ import { firstNonBlank } from "@/lib/text";
 import { useAuth } from "@/runtime/auth/AuthContext";
 
 /**
- * The containers of the developer's Heph conversation, shared by the mentor page and the Heph panel:
+ * The containers of the developer's Hephaestus conversation, shared by the mentor page and the Hephaestus panel:
  * they read the conversation through the hooks and hand the components plain props.
  */
 
@@ -46,7 +46,7 @@ function useDeveloper(): MessageAuthor {
 
 /**
  * The writes the conversation offers: none in a user view, and no asking again — Reply in thread,
- * Try again, Retry — while the developer cannot ask Heph.
+ * Try again, Retry — while the developer cannot ask Hephaestus.
  */
 function offeredActions(actions: HephActions, { readOnly, canAsk }: ConversationAccess) {
 	if (readOnly) {
@@ -62,7 +62,7 @@ function NoMessagesYet({ name }: { name: string }) {
 			<EmptyHeader>
 				<EmptyTitle>No messages yet</EmptyTitle>
 				<EmptyDescription>
-					Questions {name} asks Heph, here or in Slack, show up with Heph’s answers.
+					Questions {name} asks Hephaestus, here or in Slack, show up with Hephaestus’s answers.
 				</EmptyDescription>
 			</EmptyHeader>
 		</Empty>
@@ -101,7 +101,7 @@ export interface MainConversationProps extends ConversationAccess {
 	/** The page the developer asks from, sent with each message while the chip stays. */
 	pageContext?: { label: string; chip: ReactNode };
 	jumpTo?: string;
-	/** The Heph panel was just opened, so its composer takes focus. */
+	/** The Hephaestus panel was just opened, so its composer takes focus. */
 	focusComposer?: boolean;
 }
 
@@ -118,13 +118,13 @@ export function MainConversation({
 	const developer = useDeveloper();
 	const state = useHephTimeline(workspaceSlug, readOnly);
 	const actions = useHephActions(workspaceSlug);
-	// Reading the conversation here, on the mentor page or in the Heph panel, clears the launcher's dot,
+	// Reading the conversation here, on the mentor page or in the Hephaestus panel, clears the launcher's dot,
 	// for answers in its threads too. A user view reads another member's conversation, not the reader's.
 	useMarkHephRead(workspaceSlug, !readOnly);
 	const stoppable = stoppableTurn(state);
 	return (
 		<HephTimeline
-			label="Conversation with Heph"
+			label="Your conversation"
 			workspaceSlug={workspaceSlug}
 			state={state}
 			developer={developer}
@@ -137,8 +137,8 @@ export function MainConversation({
 			composer={
 				canAsk ? (
 					<HephComposer
-						label="Message Heph"
-						placeholder="Message Heph"
+						label="Message Hephaestus"
+						placeholder="Message Hephaestus"
 						focusOnMount={focusComposer}
 						draftKey={`${workspaceSlug}:main`}
 						context={pageContext?.chip}
@@ -146,7 +146,7 @@ export function MainConversation({
 						stop={
 							stoppable === undefined
 								? undefined
-								: { label: "Stop Heph", onStop: () => actions.onStop(stoppable) }
+								: { label: "Stop answer", onStop: () => actions.onStop(stoppable) }
 						}
 					/>
 				) : undefined
@@ -237,7 +237,10 @@ export function ThreadConversation({
 								stop={
 									stoppable === undefined
 										? undefined
-										: { label: "Stop Heph in this thread", onStop: () => actions.onStop(stoppable) }
+										: {
+												label: "Stop answer in this thread",
+												onStop: () => actions.onStop(stoppable),
+											}
 								}
 							/>
 						) : undefined

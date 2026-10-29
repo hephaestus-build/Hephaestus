@@ -153,11 +153,11 @@ The same name is the source capture code that causes it.
 | **Seal**                       | The one transaction that writes a review's staged results and problems. | planned |
 | **Send**                       | One leased provider write or retraction of on-work feedback, with its reconciliation state.               | feedback_send                  |
 | **Review digest**              | The digest of the definition inputs that can change an observation from the same evidence.                | practice_version.review_digest |
-| **Conversation host**                  | The one long-lived sandboxed process on a worker that runs conversation turns.                      | heph-host.ts, HephHost         |
+| **Conversation host**                  | The one long-lived sandboxed process on a worker that runs conversation turns.                      | `heph-host.ts`, `HephHost`         |
 | **Turn**                       | One run of Hephaestus for one question in a conversation, with its attempts, lease, partial answer and usage.       | mentor_turn, conversation_turn from 1.0                    |
 | **Call pool**                  | Provider capacity that the models in it share, whichever workspace calls them: a limit of calls in flight, an interactive reserve and a cooldown. | llm_call_pool |
 | **Call permit**                | One model call's share of its call pool, held as a lease by the worker that makes the call. | llm_call_permit |
-| **Call class**                 | Whose call takes a permit: a Heph turn, or a review of one origin. Only a turn may use the interactive reserve. | LlmCallClass |
+| **Call class**                 | Whose call takes a permit: a conversation turn, or a review of one origin. Only a turn may use the interactive reserve. | LlmCallClass |
 | **Context folder**             | The read-only files that one agent may read for one person, in one workspace, for one purpose. | INDEX.md, inputs/context/, repos/ |
 | **Context document**           | One JSON document about the developer or the workspace in the context folder of a conversation.            | inputs/context/*.json          |
 | **Context loader**             | The integration part that stages a heavy item, such as a repository, into a context folder on request. | ContextLoader, load_context |

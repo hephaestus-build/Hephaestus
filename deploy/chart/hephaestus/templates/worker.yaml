@@ -23,11 +23,11 @@ on a schedule, that the cluster enforces them (the isolation probe, docs/admin/k
 {{- $drain := int .Values.worker.drainTimeoutSeconds }}
 {{- if .Values.worker.sandbox.quota.enabled }}
 {{- /*
-One quota for each PriorityClass tier, so that Heph's sandboxes can never take a review's room, nor reviews
-Heph's. sandbox-pod-requests.json holds what each sandbox Pod requests; SandboxPodRequestsTableTest pins it to the Pods the
-worker builds, and the chart's fit tests read it too. The reviews tier holds each worker's reviews once: during
+Each PriorityClass tier has its own quota, so that review and conversation sandboxes cannot take each
+other's room. sandbox-pod-requests.json holds what each sandbox Pod requests; SandboxPodRequestsTableTest
+pins it to the Pods the worker builds, and the chart's fit tests read it too. The reviews tier holds each worker's reviews once: during
 a rollout the new workers wait for the old ones' room. Every running worker, the old ones during a rollout
-included, has its isolation probe there, and its Heph host and turn sandboxes in the conversations tier.
+included, has its isolation probe there, and its conversation host and turn sandboxes in the conversations tier.
 */}}
 {{- $table := .Files.Get "sandbox-pod-requests.json" | fromJson }}
 {{- $replicas := int .Values.worker.replicas }}
@@ -168,7 +168,7 @@ subjects:
     name: {{ $name }}
     namespace: {{ .Release.Namespace }}
 ---
-# Review sandboxes and Heph hosts may reach the workers on the gateway port, and nothing else: no
+# Review sandboxes and conversation hosts may reach the workers on the gateway port, and nothing else: no
 # DNS, no API, no database, no broker. A sandbox is bound to its own worker by its credential, not
 # by the network.
 apiVersion: networking.k8s.io/v1

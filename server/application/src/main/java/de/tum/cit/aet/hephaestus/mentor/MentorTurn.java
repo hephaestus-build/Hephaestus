@@ -26,7 +26,7 @@ import org.springframework.data.domain.Persistable;
 import tools.jackson.databind.JsonNode;
 
 /**
- * One question to Heph and the work to answer it. {@link MentorTurnService} owns execution and
+ * One question to Hephaestus and the work to answer it. {@link MentorTurnService} owns execution and
  * {@link MentorTurnWaits} owns the queue wait. {@code attempt} counts
  * claims.
  *

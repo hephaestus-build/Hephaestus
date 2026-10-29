@@ -30,17 +30,16 @@ export const FEEDBACK_LOCATION_DEFS: StatusDefs<FeedbackLocation> = {
 			"Posted on the work the feedback is about, at a provider the record does not name as GitHub or GitLab.",
 	},
 	HEPH: {
-		label: "With Heph in the app",
+		label: "In conversation in the app",
 		icon: HephMarkIcon,
 		badgeVariant: "outline",
-		description: "Raised in a turn of the developer’s conversation with Heph in Hephaestus.",
+		description: "Raised in a turn of the developer’s conversation in the app.",
 	},
 	SLACK: {
-		label: "With Heph in Slack",
+		label: "In conversation in Slack",
 		icon: SlackIcon,
 		badgeVariant: "outline",
-		description:
-			"Raised in a turn of the developer’s conversation with Heph in a Slack direct message.",
+		description: "Raised in a turn of the developer’s conversation in a Slack direct message.",
 	},
 	NEXT_CONVERSATION: {
 		// The destination's own word and mark, so the Destination filter and the destination tag agree.
@@ -48,7 +47,7 @@ export const FEEDBACK_LOCATION_DEFS: StatusDefs<FeedbackLocation> = {
 		icon: FEEDBACK_DESTINATION_DEFS.CONVERSATION.icon,
 		badgeVariant: "outline",
 		description:
-			"For the developer’s conversation with Heph. No turn raised it yet, or the turn that raised it is gone.",
+			"For the developer’s conversation with Hephaestus. No turn raised it yet, or the turn that raised it is gone.",
 	},
 	PRACTICE_PAGES: {
 		// The destination's own word and mark, so the Destination filter and the destination tag agree.
@@ -61,7 +60,7 @@ export const FEEDBACK_LOCATION_DEFS: StatusDefs<FeedbackLocation> = {
 
 /**
  * The location in words, where a reader asks where one piece of feedback went: "Comment on GitHub
- * pull request #12", "Conversation with Heph in Slack", "Card on their practice pages". The work's
+ * pull request #12", "Conversation in Slack", "Card on their practice pages". The work's
  * own noun comes from the provider, so a GitLab one reads "merge request !425".
  */
 export function feedbackLocationSentence(
@@ -81,13 +80,13 @@ export function feedbackLocationSentence(
 			return work === undefined ? "Comment on the work" : `Comment on ${lowerFirst(work)}`;
 		}
 		case "HEPH": {
-			return "Conversation with Heph in the app";
+			return "Conversation in the app";
 		}
 		case "SLACK": {
-			return "Conversation with Heph in Slack";
+			return "Conversation in Slack";
 		}
 		case "NEXT_CONVERSATION": {
-			return "For a conversation with Heph";
+			return "For a conversation";
 		}
 		case "PRACTICE_PAGES": {
 			return "Card on their practice pages";

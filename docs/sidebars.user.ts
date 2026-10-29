@@ -18,7 +18,7 @@ const sidebars: SidebarsConfig = {
 				"activity",
 				"public-activity",
 				"ai-code-review",
-				"ai-mentor",
+				"ask-hephaestus",
 				"workspace",
 				"user-settings",
 				"passkeys",

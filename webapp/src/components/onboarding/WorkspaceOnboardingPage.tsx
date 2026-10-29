@@ -166,7 +166,7 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 
 					<header className="space-y-4">
 						<h1 className="text-2xl font-semibold tracking-tight break-words">{heading}</h1>
-						{/* Heph speaks only where a Heph model is ready; until that is known, the page does. */}
+						{/* Hephaestus speaks only where a conversation model is ready; until that is known, the page does. */}
 						{mentorSetUp ? (
 							<HephSays intro={intro} narration={narration} />
 						) : (
@@ -212,7 +212,7 @@ export function WorkspaceOnboardingPage({ focus, state }: WorkspaceOnboardingPag
 								</QuestionnaireTitle>
 								<QuestionnaireDescription>
 									{mentorSetUp
-										? "Hephaestus reviews your work against your team’s practices, and Heph talks it through with you."
+										? "Hephaestus reviews your work against your team’s practices and talks it through with you."
 										: "Hephaestus can review your work against your team’s practices where set up."}{" "}
 									Choose which AI may do that. Cloud also allows in-house models. What Hephaestus
 									syncs and stores does not change.
@@ -483,15 +483,15 @@ function memberSetupState(
 	const heading = "Your AI choice";
 	const models = data?.aiOptions.find((option) => option.choice === choice)?.models ?? [];
 	const workspaceName = data?.workspaceName ?? "this workspace";
-	// Whether any choice would bring Heph here, so the question names it.
+	// Whether any choice would bring Hephaestus here, so the question names it.
 	const mentorSetUp = data?.aiOptions.some((option) => option.mentorReady) === true;
 	let intro = "Your answer controls future AI requests across all your workspaces.";
 	if (firstVisit) {
 		intro = mentorSetUp
-			? `Before you start in ${workspaceName}, one question. Your answer controls future AI requests for practice reviews and Heph across all your workspaces.`
+			? `Before you start in ${workspaceName}, one question. Your answer controls future AI requests for practice reviews and conversations across all your workspaces.`
 			: `Before you start in ${workspaceName}, one question. ${intro}`;
 	} else if (mentorSetUp) {
-		intro = `Your answer controls future AI requests for practice reviews and Heph in ${workspaceName}, and holds in all your workspaces.`;
+		intro = `Your answer controls future AI requests for practice reviews and conversations in ${workspaceName}, and holds in all your workspaces.`;
 	}
 	let hint: string | undefined;
 	if (data !== undefined) {

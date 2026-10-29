@@ -221,7 +221,7 @@ class LlmProxyService {
 
     /**
      * Serves one call on a routing: the AI-choice, budget, connection, deadline and usage rules. A null practiceScript
-     * denotes a review or Heph call. A null response serves a worker step in-process: the call must not stream, and a
+     * denotes a review or Hephaestus call. A null response serves a worker step in-process: the call must not stream, and a
      * provider that answers with a stream anyway is refused.
      */
     @SuppressWarnings("try") // The scope installs the current span and restores it on close.
@@ -272,7 +272,8 @@ class LlmProxyService {
                 recordSpanError(span, e.getClass().getSimpleName());
                 throw e;
             } finally {
-                // One line per model call of a Heph turn, as for its tool calls (HephToolCalls): a turn that keeps
+                // One line per model call of a conversation turn, as for its tool calls (HephToolCalls): a turn that
+                // keeps
                 // calling shows as a run of them. A retry of a failed call is its own line, and a failed call a
                 // warning.
                 if (routing.attempt().sourceType() == UsageSourceType.MENTOR_TURN) {
@@ -290,7 +291,7 @@ class LlmProxyService {
                         line = line.addKeyValue("failure", failure.kind());
                         if (failure.status() != null) line = line.addKeyValue("failure.status", failure.status());
                     }
-                    line.log(failure == null ? "Heph model call" : "Heph model call failed");
+                    line.log(failure == null ? "conversation model call" : "conversation model call failed");
                 }
                 span.end();
                 accounting.stopTimer(timer, routing.apiProtocol());
@@ -648,7 +649,7 @@ class LlmProxyService {
     }
 
     /**
-     * How long a Heph turn's provider may send nothing. A provider can queue a request before it sends its response
+     * How long a conversation turn's provider may send nothing. A provider can queue a request before it sends its response
      * headers, so the first byte gets its own, longer bound. The turn's deadline bounds both: its stop cancels the call.
      *
      * @param firstByte until the response headers
@@ -675,7 +676,7 @@ class LlmProxyService {
      * deadline (a mentor turn) it keeps the proxy's own limits: the whole exchange, and a stream's body from its start.
      * With one, the whole exchange — waiting for the head, the body, and a stream — ends by the deadline; a review's
      * stream may use all of the attempt's remaining time, while every other call also keeps the proxy's own ceiling.
-     * A Heph turn's call also ends on the turn's {@code bounds} and when the turn ends.
+     * A conversation turn's call also ends on the turn's {@code bounds} and when the turn ends.
      *
      * @return {@code null} when the attempt's end cancelled the call before the provider answered
      */

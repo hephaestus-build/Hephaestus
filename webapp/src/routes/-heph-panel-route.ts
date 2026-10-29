@@ -1,5 +1,5 @@
 export function isMentorRoute(pathname: string) {
-	return pathname === "/mentor" || /^\/w\/[^/]+\/mentor(?:\/|$)/u.test(pathname);
+	return pathname === "/conversation" || /^\/w\/[^/]+\/conversation(?:\/|$)/u.test(pathname);
 }
 
 export function isHephPanelExcludedRoute(pathname: string) {

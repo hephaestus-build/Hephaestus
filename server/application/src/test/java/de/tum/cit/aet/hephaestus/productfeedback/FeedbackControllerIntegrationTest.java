@@ -537,7 +537,7 @@ class FeedbackControllerIntegrationTest extends AbstractWorkspaceIntegrationTest
                         "channel",
                         "Where do you read feedback?",
                         QuestionType.SINGLE_CHOICE,
-                        List.of("On the pull request", "In conversation with Heph"),
+                        List.of("On the pull request", "In conversation with Hephaestus"),
                         false,
                         true,
                         null,

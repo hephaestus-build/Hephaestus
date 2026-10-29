@@ -7,7 +7,7 @@ import java.util.UUID;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
-@Schema(description = "One question to Heph and the work to answer it")
+@Schema(description = "One question to Hephaestus and the work to answer it")
 public record MentorTurnDTO(
         @NonNull UUID id,
         @NonNull UUID conversationId,
@@ -22,10 +22,11 @@ public record MentorTurnDTO(
         MentorTurn.@NonNull Status status,
 
         @Schema(
-                description = "Why a queued turn has not started. FREE_HEPH: a worker may start it, and every Heph"
-                        + " slot of the deployment is taken, so it starts when one is free. Absent when the turn does"
-                        + " not wait, waits for an earlier question of its conversation, or waits for a reason that"
-                        + " the server does not know, such as a server without a configured Heph capacity.")
+                description =
+                        "Why a queued turn has not started. FREE_HEPH: a worker may start it, and every conversation"
+                                + " slot of the deployment is taken, so it starts when one is free. Absent when the turn does"
+                                + " not wait, waits for an earlier question of its conversation, or waits for a reason that"
+                                + " the server does not know, such as a server without a configured conversation turn capacity.")
         MentorTurn.@Nullable WaitingFor waitingFor,
 
         @Schema(
@@ -37,7 +38,7 @@ public record MentorTurnDTO(
 
         MentorTurn.@NonNull Surface surface,
 
-        @Schema(description = "Heph's answer in progress; only while the turn runs") @Nullable
+        @Schema(description = "Hephaestus's answer in progress; only while the turn runs") @Nullable
         MentorTurnPartialDTO partial,
 
         @Schema(description = "Why the turn failed, worded for the developer; only on a failed turn") @Nullable

@@ -9,11 +9,11 @@ Fill in the recipient record below for each recipient before you enable it.
 | Component | What it receives | Role to assess |
 |---|---|---|
 | Your container host, PostgreSQL, NATS and the application roles | All application data | Own infrastructure needs no agreement. An externally operated host or database needs an Art. 28 assessment. |
-| Worker, review sandboxes and the Heph host | AI work, temporary context and mounted evidence | Own infrastructure needs no agreement. Record each external worker operator, location, access and deletion acknowledgement. |
+| Worker, review sandboxes and the conversation host | AI work, temporary context and mounted evidence | Own infrastructure needs no agreement. Record each external worker operator, location, access and deletion acknowledgement. |
 | Reverse proxy or Gateway, ACME endpoint, DNS provider | TLS traffic and domain-validation data | A DNS-only record carries no request data. A proxied record or CDN makes its provider a recipient of request data. |
 | GitHub, a GitLab instance | Sign-in identities and the source system's data | Assess whether the provider processes on your instructions or is a separate controller of its own service. |
-| Model providers configured for a workspace | Prompts and responses for practice review and Heph, where the AI choice allows them | An external provider processes on your instructions and needs an agreement. An in-house model on your infrastructure does not. |
-| Slack | App delivery, identity linking, Heph messages and monitored-channel events | Assess when a workspace enables it. |
+| Model providers configured for a workspace | Prompts and responses for practice review and Hephaestus, where the AI choice allows them | An external provider processes on your instructions and needs an agreement. An in-house model on your infrastructure does not. |
+| Slack | App delivery, identity linking, Hephaestus messages and monitored-channel events | Assess when a workspace enables it. |
 | An Outline instance | Selected documents and optional sign-in linking | Classify the exact origin: your infrastructure, a processor, or a separate controller. |
 | SMTP relay | Recipient addresses, notification type and links | Record the relay operator, hosting, retention terms and role before you enable email. |
 | Log store, trace collector | Container logs and traces | See [Optional log collection and monitoring](#optional-log-collection-and-monitoring). |
@@ -30,7 +30,7 @@ uses the stated endpoint. Before activation or renewal, the controller must fill
 |---|---|
 | Recipient and role | `[legal entity, service, endpoint, controller/processor/joint-controller analysis]`. Distinguish source-platform purposes from processing on instructions. |
 | Contract | `[signed DPA reference, instructions, subprocessors, renewal/review owner]`. An API key is not an agreement. |
-| Scope | `[data categories, subjects, purposes, review/Heph inputs and any human provider access]`. Include broader Slack-thread and person-history context. |
+| Scope | `[data categories, subjects, purposes, review/Hephaestus inputs and any human provider access]`. Include broader Slack-thread and person-history context. |
 | Retention and training | `[prompt/response and abuse-monitoring retention, deletion path, training terms, any exception]`. No-training is not zero retention. |
 | Location and transfer | `[storage, inference, support access, subprocessors, transfer mechanism and evidence date]`. Verify deployment type, not just a resource's region. |
 | Rights and exit | `[export/erasure assistance, incident notice, credential revocation, deletion confirmation]`. State what a completed request cannot retract. |
@@ -89,7 +89,7 @@ Amend this record, your Art. 30 record, and the privacy statement before deployi
 - SMTP email delivery becomes active. The chosen SMTP host becomes a recipient of personal data. An external relay needs an Art. 28 DPA.
 - Collecting container logs into a log store, or adding a recipient to one. Record the exact operator, role, region, retention and transfer path. Amend the notice and reassess the DPIA. An external processor needs an Art. 28 agreement.
 - The application adds external storage (S3, CDN) or serves a third-party font, script, image, or embed. This requires a recipient-role assessment, any applicable agreement and a privacy-statement entry.
-- Heph gains internet access or the practice-review sandbox network posture expands beyond the governed worker gateway. This triggers a new DPIA assessment.
+- Hephaestus gains internet access or the practice-review sandbox network posture expands beyond the governed worker gateway. This triggers a new DPIA assessment.
 - An existing processor receives a new source privacy class. Its region or provider retention changes. Product evidence gains an operator/research evaluation use. An existing DPA does not by itself authorize a new purpose or data category. Complete the [source governance gate](./item-source-governance.md).
 - Research benchmark runs start without the agreement that "Research benchmark runs" requires.
 - Research benchmark runs use data that is not pseudonymized.

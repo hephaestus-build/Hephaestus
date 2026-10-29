@@ -2,7 +2,7 @@
 id: system-design
 sidebar_position: 5
 title: System design
-description: Runtime roles, module boundaries, and the paths from connected work to practice feedback and Heph.
+description: Runtime roles, module boundaries, and the paths from connected work to practice feedback and Hephaestus.
 ---
 
 ## Runtime topology
@@ -10,22 +10,22 @@ description: Runtime roles, module boundaries, and the paths from connected work
 ```mermaid
 flowchart TB
     accTitle: Hephaestus runtime topology
-    accDescr: The webapp calls the server. The webhook role verifies provider events and publishes them to NATS. The server consumes events and writes jobs and Heph turns to PostgreSQL. Workers claim them from PostgreSQL and run reviews in sandboxes and Heph turns in one Heph host each.
+    accDescr: The webapp calls the server. The webhook role verifies provider events and publishes them to NATS. The server consumes events and writes jobs and conversation turns to PostgreSQL. Workers claim them from PostgreSQL and run reviews in sandboxes and conversation turns in one conversation host each.
     Providers[GitHub, GitLab, Slack, Outline] --> Webhook[Webhook role]
     Webhook --> NATS[NATS JetStream]
     NATS --> Server[Server role]
     SPA[React webapp] --> Server
     Server --> DB[(PostgreSQL)]
     Worker[Worker role] --> DB
-    Worker --> Sandbox[Review sandboxes and the Heph host]
+    Worker --> Sandbox[Review sandboxes and the conversation host]
     Sandbox --> Proxy[Worker LLM proxy]
     Proxy --> Models[Configured model services]
     Worker -->|Automatic review feedback| Providers
-    Server -->|Approved feedback and Heph replies| Providers
+    Server -->|Approved feedback and Hephaestus replies| Providers
 ```
 
 One JAR boots in the server, worker, and webhook roles. The supported Compose deployment runs each
-in its own container. Only the worker has Docker access. Heph turns need a running worker even
+in its own container. Only the worker has Docker access. Conversation turns need a running worker even
 when server and worker roles share a JVM.
 There is no direct server-side sandbox fallback.
 
@@ -121,17 +121,17 @@ and delivery. [Review runtime](./practice-review-runtime) owns execution and ret
 [Workspace ABI](./agent/workspace-abi.mdx) owns the job folder, capture manifest, and output contract.
 Missing required capture produces no result.
 
-## Heph
+## Conversation
 
 ```mermaid
 sequenceDiagram
-    accTitle: One Heph turn
-    accDescr: The server stores the question and a queued turn. A worker claims the turn after a PostgreSQL notification and starts it in its Heph host. The host reads the context, reports partial answers, and sends all entries with the end of the turn. The server streams changes to the app and posts Slack answers.
+    accTitle: One conversation turn
+    accDescr: The server stores the question and a queued turn. A worker claims the turn after a PostgreSQL notification and starts it in its conversation host. The host reads the context, reports partial answers, and sends all entries with the end of the turn. The server streams changes to the app and posts Slack answers.
     participant C as App or Slack
     participant S as Server role
     participant DB as PostgreSQL
     participant W as Worker role
-    participant H as Heph host
+    participant H as conversation host
     C->>S: Question
     S->>DB: Question entry and queued turn
     DB-->>W: NOTIFY mentor_ledger
@@ -144,29 +144,29 @@ sequenceDiagram
     S-->>C: SSE events, or the Slack answer
 ```
 
-PostgreSQL holds the whole Heph conversation in three workspace-scoped tables.
+PostgreSQL holds the whole conversation in three workspace-scoped tables.
 The server role owns the HTTP API, the live stream, Slack ingress and posts, submission, and the weekly digest.
-A worker owns dispatch, admission, its Heph host, and the turn endpoints that the host calls.
+A worker owns dispatch, admission, its conversation host, and the turn endpoints that the host calls.
 No conversation state lives in a process, so any worker can run any turn.
-[Heph runtime](./unified-pi-runtime) owns the turn lifecycle, the host, and the context of a turn.
+[Conversation runtime](./unified-pi-runtime) owns the turn lifecycle, the host, and the context of a turn.
 
 The UI uses shadcn components over Base UI.
 It renders the stored messages and the partial answer from the generated client, with no assistant runtime.
 
-Each account has one [Conversation](./practice-feedback-language.md#conversation) per workspace, with one level of Heph threads.
+Each account has one [Conversation](./practice-feedback-language.md#conversation) per workspace, with one level of threads.
 The app shows the whole conversation. Slack shows what was asked there.
 
-Heph is available to workspace members only, within their account-wide AI choice. It uses permitted
+Hephaestus is available to workspace members only, within their account-wide AI choice. It uses permitted
 recent work, review requests, assigned issues, the conversation itself, practices, and connected
-context. [Heph runtime](./unified-pi-runtime#delivery-of-shown-feedback) owns how a turn delivers feedback.
-[Talk with Heph](/user/ai-mentor) owns the member-facing behavior.
+context. [Conversation runtime](./unified-pi-runtime#delivery-of-shown-feedback) owns how a turn delivers feedback.
+[Ask Hephaestus](/user/ask-hephaestus) owns the member-facing behavior.
 
 ## Member pages
 
 A workspace that reviews practices opens on the member's private Practice profile. Other workspaces
 open on Activity. Activity and Workspace activity count and list work without ranking developers.
 Members read reviews of their own work from the Practice profile. Workspace admins inspect the wider
-history under Practice reviews. Workspace review history does not grant access to a member's private Practice profile or Heph feedback.
+history under Practice reviews. Workspace review history does not grant access to a member's private Practice profile or Hephaestus feedback.
 
 ## Repository scans
 

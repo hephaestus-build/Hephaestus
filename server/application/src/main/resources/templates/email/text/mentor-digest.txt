@@ -2,9 +2,9 @@
 
 Your weekly digest for [(${weekDays})] in [(${workspaceName})] is ready in Hephaestus.
 
-Open in Hephaestus: [(${workspaceAddress})]/mentor?entry=[(${entryId})]
+Open in Hephaestus: [(${workspaceAddress})]/conversation?entry=[(${entryId})]
 
-Open it to go through it with Heph. Replies to this email are not read.
+Open it to go through it in Hephaestus. Replies to this email are not read.
 
 Turn off the weekly digest: [(${unsubscribeUrl})]
 

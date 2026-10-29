@@ -79,8 +79,8 @@ export interface TimelineActions {
 	/** Removes a message that the server did not store from this device. */
 	onDiscardSend: (requestId: string) => void;
 	/**
-	 * Asking Heph again. Absent while the developer cannot ask, such as when their AI choice keeps
-	 * Heph from answering: then no message offers Reply in thread, Try again or Retry.
+	 * Asking Hephaestus again. Absent while the developer cannot ask, such as when their AI choice keeps
+	 * Hephaestus from answering: then no message offers Reply in thread, Try again or Retry.
 	 */
 	ask?: {
 		onRetrySend: (requestId: string) => void;
@@ -132,7 +132,7 @@ const JUMP_READ_LIMIT = 250;
  * Above the oldest loaded message: loads the older page once that message comes into view. The
  * button serves a keyboard and a failed load. Show earlier messages stands alone on the separator's
  * line, so it is 24 px tall (WCAG 2.5.8). Retry follows a sentence, where the inline exception
- * would allow less; it takes the same size, so the recovery actions in Heph read as one kind.
+ * would allow less; it takes the same size, so the recovery actions in Hephaestus read as one kind.
  */
 function EarlierMessagesControl({
 	earlier,
@@ -238,7 +238,7 @@ function JumpTo({
 }
 
 /**
- * Each message's subject, which names its controls. Messages that share one, such as two of Heph's
+ * Each message's subject, which names its controls. Messages that share one, such as two of Hephaestus's
  * in one minute, also say which of them they are.
  */
 function subjectsOf(rows: TimelineRow[], developer: MessageAuthor): Map<string, string> {
@@ -366,9 +366,9 @@ function useAnchorKeys(rows: TimelineRow[], ready: boolean): AnchorKeys {
  */
 function deleteDescription(entry: MentorEntry): string {
 	return [
-		"Heph forgets it. If Heph has not answered it yet, Heph does not answer it.",
+		"Hephaestus forgets it. If it has not answered yet, it does not answer.",
 		(entry.thread?.replyCount ?? 0) > 0 ? "The replies in its thread stay." : undefined,
-		entry.surface === "SLACK" ? "It and Heph's answer stay in Slack." : undefined,
+		entry.surface === "SLACK" ? "It and Hephaestus's answer stay in Slack." : undefined,
 		"You cannot undo this.",
 	]
 		.filter(hasText)
@@ -395,7 +395,7 @@ function TimelineError({ onRetry }: { onRetry: () => void }) {
 }
 
 /**
- * One scope of the developer's Heph conversation — the main conversation or a thread — as a log.
+ * One scope of the developer's Hephaestus conversation — the main conversation or a thread — as a log.
  * It opens at the newest question without motion. A question the developer sends scrolls near the
  * top, and the answer grows into the space the scroller keeps below it; the view never follows the
  * stream, so the reader keeps their place, and Jump to latest takes them to the end. Older messages
@@ -407,7 +407,7 @@ function TimelineError({ onRetry }: { onRetry: () => void }) {
  * and empty while the first page loads. Every later day closes the row before it, so a row on screen
  * keeps its content when older rows arrive above it.
  *
- * The log announces new rows, not a row whose words change: it is busy while Heph writes, and the
+ * The log announces new rows, not a row whose words change: it is busy while Hephaestus writes, and the
  * status line speaks from its own live region outside the log, so the finished answer is read once.
  */
 export function HephTimeline(props: HephTimelineProps) {
@@ -426,7 +426,8 @@ export function HephTimeline(props: HephTimelineProps) {
 			row.entry.turnId === liveTurn.id,
 	);
 	const questionSubject = question && subjects.get(question.key);
-	const stopLabel = questionSubject === undefined ? "Stop Heph" : `Stop Heph (${questionSubject})`;
+	const stopLabel =
+		questionSubject === undefined ? "Stop answer" : `Stop answer (${questionSubject})`;
 	const statusLabel = useTurnStatusLabel(liveTurn);
 	const anchors = useAnchorKeys(rows, state.status === "ready");
 	const isAnchor = (key: string) => anchors.opened.has(key) || anchors.sent.has(key);
@@ -472,7 +473,7 @@ export function HephTimeline(props: HephTimelineProps) {
 												row={row}
 												nextDay={next !== undefined && next.kind !== "live" ? next.day : undefined}
 												subject={subjects.get(row.key) ?? ""}
-												// One Stop while Heph answers: the composer's, beside Send. The status line
+												// One Stop while Hephaestus answers: the composer's, beside Send. The status line
 												// offers its own only where no composer shows, such as a thread on a
 												// deleted message.
 												stopLabel={composer === undefined ? stopLabel : undefined}
@@ -513,7 +514,7 @@ export function HephTimeline(props: HephTimelineProps) {
 					{composer}
 					{composer !== undefined && (
 						<p className="text-center text-xs text-balance text-muted-foreground">
-							Heph can make mistakes. Check anything important before you rely on it.
+							Hephaestus can make mistakes. Check anything important before you rely on it.
 						</p>
 					)}
 				</KeepsEndInView>

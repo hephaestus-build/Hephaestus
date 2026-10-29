@@ -9,7 +9,7 @@ import { WorkspaceLlmUsagePage, type WorkspaceLlmUsagePageProps } from "./Worksp
 
 const pricedReport = withOwnProvider(usageReport("2026-07"));
 
-/** Two Heph turns without a price: enough to make the no-price warnings and the pause banners speak. */
+/** Two conversation turns without a price: enough to make the no-price warnings and the pause banners speak. */
 const baseReport: WorkspaceLlmUsageReport = {
 	...pricedReport,
 	unpricedEventCount: 2,
@@ -119,7 +119,7 @@ describe("WorkspaceLlmUsagePage", () => {
 
 		const byJobType = screen.getByRole("table", { name: "AI spend by run type" });
 		expect(within(byJobType).getAllByRole("columnheader", { name: "Avg per run" })).toHaveLength(2);
-		const mentorTurns = within(byJobType).getByRole("row", { name: /^Heph turn/u });
+		const mentorTurns = within(byJobType).getByRole("row", { name: /^Conversation answer/u });
 		expect(
 			within(mentorTurns)
 				.getAllByRole("cell")
@@ -172,7 +172,7 @@ describe("WorkspaceLlmUsagePage", () => {
 				"an exhausted shared budget",
 				{ instancePaused: true, instanceBudgetVerdict: "EXHAUSTED", instanceTotalCostUsd: 25 },
 				"Shared-model budget reached",
-				"Paused until August 1 (UTC), or until an instance admin raises the budget. Practice reviews and Heph can keep running on your own models.",
+				"Paused until August 1 (UTC), or until an instance admin raises the budget. Practice reviews and conversations can keep running on your own models.",
 				"/w/acme/admin/models",
 			],
 			[

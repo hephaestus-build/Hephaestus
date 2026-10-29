@@ -1,4 +1,4 @@
-import { ArrowLeftIcon, Sparkles, SquareArrowOutUpRight, X } from "lucide-react";
+import { ArrowLeftIcon, SquareArrowOutUpRight, X } from "lucide-react";
 import { type ReactNode, useEffect, useRef } from "react";
 
 import { cn } from "cn";
@@ -38,7 +38,7 @@ export interface HephPanelProps {
 }
 
 /**
- * Heph's launcher and its panel: the developer's one conversation with Heph, on any page. A
+ * Hephaestus's launcher and its panel: the developer's one conversation with Hephaestus, on any page. A
  * `Drawer` rather than a `Popover`: the panel holds a conversation, so it is a dialog, and scroll
  * lock, focus and every dismissal come with it. A thread opens as a view pushed over the
  * conversation, because a side panel has no room for a second column.
@@ -75,23 +75,28 @@ export function HephPanel({
 			}}
 		>
 			<div className={cn("fixed right-6 bottom-6 z-50", className)}>
-				<DrawerTrigger
-					render={
-						<Button
-							shape="pill"
-							size="icon"
-							className="relative size-16 shadow-lg transition-all duration-200 hover:shadow-xl motion-safe:active:scale-95"
-							aria-label={
-								unread ? "Open Heph, AI assistant, new answer" : "Open Heph, AI assistant"
-							}
-						/>
-					}
-				>
-					<HephIcon size={56} pad={8} />
-					{unread && (
-						<span className="absolute top-1 right-1 size-3.5 rounded-full bg-mentor ring-2 ring-background" />
-					)}
-				</DrawerTrigger>
+				<Tooltip>
+					<TooltipTrigger
+						render={
+							<DrawerTrigger
+								render={
+									<Button
+										shape="pill"
+										size="icon"
+										className="relative size-16 shadow-lg transition-all duration-200 hover:shadow-xl motion-safe:active:scale-95"
+										aria-label={unread ? "Ask Hephaestus, new answer" : "Ask Hephaestus"}
+									/>
+								}
+							>
+								<HephIcon size={56} pad={8} />
+								{unread && (
+									<span className="absolute top-1 right-1 size-3.5 rounded-full bg-mentor ring-2 ring-background" />
+								)}
+							</DrawerTrigger>
+						}
+					/>
+					<TooltipContent>Ask Hephaestus</TooltipContent>
+				</Tooltip>
 			</div>
 			<DrawerContent size="panel">
 				<DrawerHeader className="flex-row items-center justify-between gap-3 px-4 py-2">
@@ -112,16 +117,13 @@ export function HephPanel({
 							) : (
 								<>
 									<HephIcon className="-mx-1.5" size={32} pad={4} />
-									Heph{" "}
-									<Badge variant="muted">
-										<Sparkles /> AI assistant
-									</Badge>
+									Ask Hephaestus <Badge variant="muted">AI</Badge>
 								</>
 							)}
 						</DrawerTitle>
 					</div>
 					<DrawerDescription className="sr-only">
-						Your conversation with Heph, the same as on the Heph page.
+						Your conversation, the same as on the Ask Hephaestus page.
 					</DrawerDescription>
 					<TooltipProvider delay={0}>
 						<div className="flex items-center gap-1">
@@ -132,24 +134,20 @@ export function HephPanel({
 											variant="outline"
 											size="icon"
 											onClick={onOpenInMentor}
-											aria-label="Open the Heph page"
+											aria-label="Open full page"
 										/>
 									}
 								>
 									<SquareArrowOutUpRight />
 								</TooltipTrigger>
-								<TooltipContent>Open the Heph page</TooltipContent>
+								<TooltipContent>Open full page</TooltipContent>
 							</Tooltip>
 							<Tooltip>
 								<TooltipTrigger
 									render={
 										<DrawerClose
 											render={
-												<Button
-													variant="outline"
-													size="icon"
-													aria-label="Close Heph, AI assistant"
-												/>
+												<Button variant="outline" size="icon" aria-label="Close Ask Hephaestus" />
 											}
 										/>
 									}

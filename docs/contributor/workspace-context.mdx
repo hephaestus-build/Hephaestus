@@ -48,7 +48,7 @@ Instance admins can access active workspaces as ADMIN without a membership or an
 Elevation does not grant OWNER. An explicit OWNER membership still permits owner-only operations.
 Elevation does not make them a member either.
 
-Declare member-only features, such as Heph, with `@PreAuthorize("@workspaceSecure.isMemberWithoutElevation()")`.
+Declare member-only features, such as Hephaestus, with `@PreAuthorize("@workspaceSecure.isMemberWithoutElevation()")`.
 A user view still satisfies this check as the viewed member.
 
 `@PreAuthorize("@workspaceSecure.isMember()")` admits any effective role, including elevation, but never anonymous access.
@@ -132,12 +132,12 @@ The [data map](/admin/dsms/personal-data-map) owns erasure and restrictions.
 not propagate Spring authentication or `CurrentScmIdentityHolder`. Tasks that need the authenticated
 actor must carry that identity separately.
 
-A Heph turn needs no request identity.
+A conversation turn needs no request identity.
 Its attempt token (`AttemptJwt`) names the turn.
 The worker that claimed the turn knows its conversation and the account that owns the conversation.
 The worker builds the turn's context for that account.
-The server finds a Heph conversation by account, never by an SCM identity
-([Heph runtime](./unified-pi-runtime.mdx#owner-and-tenancy)).
+The server finds a conversation by account, never by an SCM identity
+([Conversation runtime](./unified-pi-runtime.mdx#owner-and-tenancy)).
 
 For work that needs only workspace context:
 

@@ -885,7 +885,7 @@ describe("instance administrator workspace settings", () => {
 		screen.getByRole("link", { name: "Back to instance workspaces" });
 		expect(screen.queryByRole("heading", { name: "Capabilities" })).toBeNull();
 		expect(screen.queryByRole("link", { name: /Review settings/u })).toBeNull();
-		expect(screen.queryByRole("link", { name: "Heph" })).toBeNull();
+		expect(screen.queryByRole("link", { name: "Ask Hephaestus" })).toBeNull();
 		expect(otherRequests).toStrictEqual([]);
 		expect(queryClient.getQueryData(listWorkspacesQueryKey())).toStrictEqual([
 			workspaceListItem("acme"),

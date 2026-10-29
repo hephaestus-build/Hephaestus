@@ -17,6 +17,19 @@ import org.junit.jupiter.api.Test;
 class SlackConsentBlocksTest extends BaseUnitTest {
 
     @Test
+    void newlyRenderedChannelNoticesUseTheProductName() {
+        assertThat(SlackConsentBlocks.activationNotice().toString())
+                .contains("helps Hephaestus answer them in direct messages")
+                .doesNotContainPattern("\\bHeph\\b");
+        assertThat(SlackConsentBlocks.lateJoinNotice().toString())
+                .contains("helps Hephaestus answer you in direct messages")
+                .doesNotContainPattern("\\bHeph\\b");
+        assertThat(SlackConsentBlocks.channelMessageOptOutConfirm().getText().getText())
+                .contains("Your direct messages with Hephaestus stay as they are.")
+                .doesNotContainPattern("\\bHeph\\b");
+    }
+
+    @Test
     void consentNotice_carriesTheOneClickOptOutButton() {
         List<LayoutBlock> blocks = SlackConsentBlocks.consentNotice();
 
@@ -45,12 +58,13 @@ class SlackConsentBlocksTest extends BaseUnitTest {
                 .contains(
                         "From now on",
                         "new messages and thread replies",
-                        "give each person private feedback on software practices and helps Heph answer them in direct messages",
+                        "give each person private feedback on software practices and helps Hephaestus answer them in direct messages",
                         "Hephaestus does not read earlier history",
                         "It will not reply in this channel",
                         "deletes the channel-message data that Hephaestus already collected from you",
                         "Do not use my channel messages")
-                .doesNotContain("AI-powered", "Opt me out", "Exclude my channel messages", "—", ";");
+                .doesNotContain("AI-powered", "Opt me out", "Exclude my channel messages", "—", ";")
+                .doesNotContainPattern("\\bHeph\\b");
     }
 
     @Test
@@ -66,8 +80,9 @@ class SlackConsentBlocksTest extends BaseUnitTest {
                 .contains(
                         "You joined a channel that Hephaestus monitors",
                         "From now on",
-                        "give you private feedback on software practices and helps Heph answer you in direct messages",
+                        "give you private feedback on software practices and helps Hephaestus answer you in direct messages",
                         "You can manage this at any time in App Home")
-                .doesNotContain("Starting now");
+                .doesNotContain("Starting now")
+                .doesNotContainPattern("\\bHeph\\b");
     }
 }

@@ -1,7 +1,7 @@
-#### 🔴 Stop every role for the Heph conversation upgrade, which deletes Heph chat history
+#### 🔴 Stop every role for the Hephaestus conversation upgrade, which deletes Hephaestus chat history
 
-This release gives each developer one Heph conversation in each workspace.
-One migration drops the Heph chat tables of the previous release: `chat_thread`, `chat_message`, `chat_message_vote` and `mentor_slack_thread`.
+This release gives each developer one Hephaestus conversation in each workspace.
+One migration drops the Hephaestus chat tables of the previous release: `chat_thread`, `chat_message`, `chat_message_vote` and `mentor_slack_thread`.
 A runtime role of the previous release fails when it reads these tables.
 Old and new runtime roles cannot use the database together.
 There is no rolling upgrade or compatibility period.
@@ -11,14 +11,14 @@ This procedure takes precedence over normal startup.
 
 **What the upgrade deletes.**
 
-- All earlier Heph chat history: web chats, the history of Slack direct messages in Hephaestus, and votes.
+- All earlier Hephaestus chat history: web chats, the history of Slack direct messages in Hephaestus, and votes.
   Slack keeps its own copy of the direct messages.
-- The link from feedback to the Heph chat message that showed it.
+- The link from feedback to the Hephaestus chat message that showed it.
   The migration keeps every feedback row and its state.
-  Feedback that Heph showed in a chat stays delivered, but its conversation copy no longer points to a message.
+  Feedback that Hephaestus showed in a chat stays delivered, but its conversation copy no longer points to a message.
 
 There is no Liquibase rollback for this migration.
-The pre-upgrade backup is the only way back to the previous release with its Heph chat history.
+The pre-upgrade backup is the only way back to the previous release with its Hephaestus chat history.
 
 **Before you upgrade:**
 
@@ -65,12 +65,12 @@ Update the app from `docs/admin/slack-app-manifest-template.yml`.
 The manifest adds the bot scope `reactions:write` and removes the `app_context_changed` event.
 Reinstall the app in the Slack workspace.
 Then select **Reconnect Slack** in each Hephaestus workspace that uses it.
-Until then, Heph cannot add 👀 to a question.
+Until then, Hephaestus cannot add 👀 to a question.
 See [Update an existing Slack app](https://docs.hephaestus.build/admin/production-setup#update-an-existing-slack-app).
 
 **Configuration.**
 
-- With Slack enabled, the application server now answers Slack interactivity, the App Home and Heph buttons.
+- With Slack enabled, the application server now answers Slack interactivity, the App Home and Hephaestus buttons.
   It commits a button's consent change before Slack gets its answer.
   The webhook role does not answer `/webhooks/slack/interactivity`; it keeps `/webhooks/slack` for Events.
   - Give `HEPHAESTUS_INTEGRATION_SLACK_SIGNING_SECRET` to `application-server` as well.
@@ -90,45 +90,45 @@ See [Update an existing Slack app](https://docs.hephaestus.build/admin/productio
   - `hephaestus.mentor.stdin-write-timeout-ms`, `send-queue-capacity`, `subscriber-queue-capacity` and `attach-first-frame-timeout-seconds`.
   - `hephaestus.mentor.max-sessions-per-user`, `max-sessions-total` and `max-frame-bytes`.
   - `hephaestus.mentor.in-flight-reaper.window` and `hephaestus.mentor.in-flight-reaper.cron`.
-- Rename the Heph rate limit `hephaestus.auth.rate-limit.mentor-chat` to `mentor-turns`.
+- Rename the Hephaestus rate limit `hephaestus.auth.rate-limit.mentor-chat` to `mentor-turns`.
   Rename `HEPHAESTUS_RATE_LIMIT_MENTOR_CHAT_CAPACITY` to `HEPHAESTUS_RATE_LIMIT_MENTOR_TURNS_CAPACITY`.
   Rename `HEPHAESTUS_RATE_LIMIT_MENTOR_CHAT_PERIOD` to `HEPHAESTUS_RATE_LIMIT_MENTOR_TURNS_PERIOD`.
   This release does not read the old names, so a changed limit goes back to its default until you rename it.
-- The **Internet access** switch of the Heph model assignment is removed.
+- The **Internet access** switch of the Hephaestus model assignment is removed.
   The `allowInternet` field of the agent-binding API and the `workspace_agent_binding.allow_internet` column are removed too.
-  In the previous release, the switch gave Heph's sandbox internet access.
-  The Heph host runs on an internal network with no internet access.
-  [Runtime roles](https://docs.hephaestus.build/admin/runtime-roles#the-heph-host) gives the one exception: a worker that runs outside a container.
-- The Heph API under `/api/workspaces/{slug}/mentor/` changed.
+  In the previous release, the switch gave Hephaestus's sandbox internet access.
+  The Hephaestus host runs on an internal network with no internet access.
+  [Runtime roles](https://docs.hephaestus.build/admin/runtime-roles#the-conversation-host) gives the one exception: a worker that runs outside a container.
+- The Hephaestus API under `/api/workspaces/{slug}/mentor/` changed.
   The `chat`, `sandbox` and `threads` endpoints are removed.
   Regenerate a custom API client from the `server/openapi.yaml` of this release.
 - [Tunables](https://docs.hephaestus.build/admin/runtime-roles#tunables) lists the new `hephaestus.mentor.turn.*` settings.
   All roles must have the same values.
 
-**Worker and Heph host.**
-In the previous release, a worker started one Heph sandbox for each developer and workspace.
-In this release, each worker starts one Heph host container when it claims its first Heph turn.
-That host runs all Heph turns of the worker.
-It has a fixed limit of 2 GiB of memory ([The Heph host](https://docs.hephaestus.build/admin/runtime-roles#the-heph-host)).
+**Worker and Hephaestus host.**
+In the previous release, a worker started one Hephaestus sandbox for each developer and workspace.
+In this release, each worker starts one Hephaestus host container when it claims its first Hephaestus turn.
+That host runs all Hephaestus turns of the worker.
+It has a fixed limit of 2 GiB of memory ([The Hephaestus host](https://docs.hephaestus.build/admin/runtime-roles#the-conversation-host)).
 The recommended single host increases from 16 GB to 24 GB of memory ([Install](https://docs.hephaestus.build/admin/install#requirements)).
 
-- `HEPHAESTUS_WORKER_MENTOR_MAX` (`hephaestus.worker.capacity.mentor-max`) sets how many Heph turns the Heph host of one worker runs at the same time.
+- `HEPHAESTUS_WORKER_MENTOR_MAX` (`hephaestus.worker.capacity.mentor-max`) sets how many Hephaestus turns the Hephaestus host of one worker runs at the same time.
   Its `auto` default is 8.
-  In the previous release, it limited the Heph sandboxes of one worker, and `auto` was half the CPUs.
-  [Heph capacity](https://docs.hephaestus.build/admin/runtime-roles#heph-capacity) tells how to size it.
-- A worker in a container that it cannot identify starts no Heph host, and its Heph turns fail.
+  In the previous release, it limited the Hephaestus sandboxes of one worker, and `auto` was half the CPUs.
+  [Hephaestus capacity](https://docs.hephaestus.build/admin/runtime-roles#conversation-turn-capacity) tells how to size it.
+- A worker in a container that it cannot identify starts no Hephaestus host, and its Hephaestus turns fail.
   [Docker configuration](https://docs.hephaestus.build/admin/configuration-readiness#docker-configuration) gives the hostname rule.
-- Heph reads context documents, code and Git history in turn sandboxes on the worker, not in the Heph host.
-  Each worker keeps 2 empty turn sandboxes and starts one for each running Heph turn that reads.
+- Hephaestus reads context documents, code and Git history in turn sandboxes on the worker, not in the Hephaestus host.
+  Each worker keeps 2 empty turn sandboxes and starts one for each running Hephaestus turn that reads.
   Each has 1 CPU, 1 GiB of memory and no network ([Turn sandboxes](https://docs.hephaestus.build/admin/runtime-roles#turn-sandboxes)).
   The worker needs Docker for them.
-  Heph reads repositories only where Git mirrors are enabled (`GIT_CHECKOUT_ENABLED`).
+  Hephaestus reads repositories only where Git mirrors are enabled (`GIT_CHECKOUT_ENABLED`).
 
 **Models.**
 
-- Heph refuses a model whose stated context window is below 32,768 tokens or whose output limit is below 4,096 tokens.
-  Check the Heph model assignment of each workspace ([AI providers](https://docs.hephaestus.build/admin/ai-providers#the-smallest-model-for-heph)).
-- A Heph turn fails when its model provider sends no response headers for 5 minutes, or no byte of its stream for 2 minutes.
+- Hephaestus refuses a model whose stated context window is below 32,768 tokens or whose output limit is below 4,096 tokens.
+  Check the Hephaestus model assignment of each workspace ([AI providers](https://docs.hephaestus.build/admin/ai-providers#the-smallest-conversation-model)).
+- A Hephaestus turn fails when its model provider sends no response headers for 5 minutes, or no byte of its stream for 2 minutes.
   SSE keep-alive comments count as bytes.
   `HEPHAESTUS_MENTOR_TURN_MODEL_FIRST_BYTE_TIMEOUT` and `HEPHAESTUS_MENTOR_TURN_MODEL_IDLE_TIMEOUT` change these bounds.
   A provider gateway that buffers whole answers must stream them or send keep-alive comments.
@@ -138,10 +138,10 @@ The recommended single host increases from 16 GB to 24 GB of memory ([Install](h
 
 **Metrics.**
 Update dashboards and alerts that use these series.
-[Heph turn metrics](https://docs.hephaestus.build/admin/observability#heph-turn-metrics) lists the series of this release.
+[Hephaestus turn metrics](https://docs.hephaestus.build/admin/observability#conversation-turn-metrics) lists the series of this release.
 
 - These series are removed: `mentor_attach_*`, `mentor_session_*`, `mentor_relay_*`, `mentor_turn_runtime_ready_seconds`, `mentor_frame_parse_error_total`, `mentor_in_flight_reaper_failure_total`, `mentor_ring_buffer_dropped_total`, `mentor_send_frame_bytes`, `mentor_send_rejected_total`, `mentor_subscriber_dropped_total`, `mentor_subscriber_error_total`, `mentor_watchdog_targets` and `llm_proxy_unbillable_refused_total`.
-- The `worker_capacity_*{type="mentor"}` series are removed. Use `mentor_host_turns_active` for the Heph turns that a worker runs.
+- The `worker_capacity_*{type="mentor"}` series are removed. Use `mentor_host_turns_active` for the Hephaestus turns that a worker runs.
 - The `sandbox` label of `mentor_turn_first_token_seconds` is removed.
 - `mentor_turn_cost_usd_USD` is renamed to `mentor_turn_cost_usd`, with the same `_count`, `_sum` and `_max` series.
 - `mentor_turn_completed_total{outcome}` has the values `success`, `stopped`, `failed` and `lease_expired`.

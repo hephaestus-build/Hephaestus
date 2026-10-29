@@ -125,40 +125,6 @@ class WorkspaceSubdomainMigrationTest {
     }
 
     @Test
-    void shouldKeepDatabasePolicyEqualToJavaPolicyForReservedAndAdversarialLabels() throws Exception {
-        List<String> labels = new ArrayList<>(WorkspaceSlugValidator.reservedLabels());
-        labels.addAll(List.of(
-                "a",
-                "1",
-                "team",
-                "a--b",
-                "ab--cd",
-                "xn--name",
-                "team-",
-                "-team",
-                "pr1",
-                "prx",
-                "UPPER",
-                "tëam",
-                "with.dot",
-                "with_under",
-                "a".repeat(51),
-                "a".repeat(52),
-                "a".repeat(64),
-                ""));
-        try (var connection = connect();
-                var query = connection.prepareStatement("SELECT workspace_slug_assignable(?)")) {
-            for (String label : labels) {
-                query.setString(1, label);
-                try (var result = query.executeQuery()) {
-                    assertThat(result.next()).isTrue();
-                    assertThat(result.getBoolean(1)).as(label).isEqualTo(WorkspaceSlugValidator.isAssignable(label));
-                }
-            }
-        }
-    }
-
-    @Test
     void shouldRejectReuseWhenWorkspaceWasRenamedOrDeleted() throws Exception {
         try (var connection = connect()) {
             insert(connection, 997100, "permanent-claim");

@@ -59,7 +59,7 @@ class ProxyRoutingService {
     }
 
     /**
-     * Whose call this is, for its pool: a Heph turn, or the origin of the review that makes it.
+     * Whose call this is, for its pool: a conversation turn, or the origin of the review that makes it.
      *
      * @throws ResponseStatusException 409 when the call's review no longer exists
      */
@@ -167,7 +167,7 @@ class ProxyRoutingService {
     }
 
     /**
-     * The routing of a Heph turn attempt while this worker holds its lease: the route frozen at admission, and what the
+     * The routing of a conversation turn attempt while this worker holds its lease: the route frozen at admission, and what the
      * attempt has spent so far, priced at the admitted rates. An attempt that ended or moved on gets {@code 409}, so its
      * host stops.
      */

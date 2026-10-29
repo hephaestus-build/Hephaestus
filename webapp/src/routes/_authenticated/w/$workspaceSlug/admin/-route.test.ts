@@ -233,7 +233,7 @@ describe("workspace-admin route gate", () => {
 
 	it("does not extend instance administration to ordinary nonmember workspace pages", async () => {
 		server.use(http.get("*/user", () => HttpResponse.json(currentUser)));
-		await expect(land("/w/tutors/mentor")).resolves.toBe(WORKSPACE_HOME);
+		await expect(land("/w/tutors/conversation")).resolves.toBe(WORKSPACE_HOME);
 	});
 
 	it("admits an ADMIN", async () => {

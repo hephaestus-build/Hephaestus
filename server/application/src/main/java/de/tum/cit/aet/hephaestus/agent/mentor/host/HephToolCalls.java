@@ -9,7 +9,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.web.server.ResponseStatusException;
 
 /**
- * One log line for each tool call of a Heph turn: the tool, how it ended and how long it took, never its arguments or
+ * One log line for each tool call of a conversation turn: the tool, how it ended and how long it took, never its arguments or
  * its answer. A turn that keeps calling a tool shows as a run of these lines; a repeat of a call is its own line.
  */
 final class HephToolCalls {
@@ -43,7 +43,7 @@ final class HephToolCalls {
                     .addKeyValue(
                             "duration.ms",
                             Duration.ofNanos(System.nanoTime() - started).toMillis())
-                    .log("Heph tool call");
+                    .log("Hephaestus tool call");
         }
     }
 }

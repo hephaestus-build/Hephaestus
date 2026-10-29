@@ -19,7 +19,7 @@ import org.springframework.transaction.event.TransactionalEventListener;
 
 /**
  * Tracks why a queued turn has not started and ends an eligible question past its start budget.
- * A turn waits for a free Heph when a worker may start it
+ * A turn waits for a free conversation slot when a worker may start it
  * ({@link MentorTurnRepository#CLAIMABLE}) and the turns that hold a Heph slot are at least
  * {@code hephaestus.mentor.turn.capacity}: every slot of the deployment is taken. Both facts are rows, so the reason
  * is as fresh as the read. Otherwise the reason is not known: the turn starts at once, waits for an earlier question
