@@ -125,6 +125,9 @@ Replace `mentor.` with `conversation.` in these metric names:
 
 Also rename `llm.proxy.usage.mentor.failure` and `llm.proxy.usage.mentor.superseded` to `llm.proxy.usage.conversation.failure` and `llm.proxy.usage.conversation.superseded`. Change `surface=mentor` to `surface=conversation`. Replace `heph.turn.*` span/event names, including `heph.turn.tool_call`, with `conversation.turn.*`.
 
+In `notification.email.delivery`, the `kind` tag changes from `mentor_digest` to `weekly_digest` in 1.0.
+In the auth rate-limit blocked metric, the `bucket` tag changes from `mentor-turns` to `conversation-turns` in 1.0.
+
 `mentor.host.ready`, `mentor.host.turns.active` and `heph.host.id` leave with the old host.
 Remove queries that use them. Use the replacement instrumentation documented for the conversation runtime.
 
@@ -162,6 +165,11 @@ Slack message metadata and button action identifiers `heph_entry`, `heph_notice`
 
 `CAPACITY` means every conversation slot of the deployment is taken.
 The field name stays `waitingFor`. This value changes only in 1.0.
+
+### Data exports in 1.0
+
+In personal-data exports, `notification_subscription.kind` changes from `MENTOR_DIGEST` to `WEEKLY_DIGEST` in 1.0.
+Unsubscribe links stay unchanged because they use persisted UUIDs.
 
 ### DTO fields removed in 1.0
 
