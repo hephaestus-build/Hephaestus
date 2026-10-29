@@ -5417,7 +5417,12 @@ void test("the chart rehearsal reads candidate data without replacing trusted to
 			["--noprofile", "--norc", "-e", "-c", String(extraction.get("run"))],
 			{
 				cwd: trusted,
-				env: { ...env, CANDIDATE_SHA: sha, RUNNER_TEMP: work },
+				env: {
+					...env,
+					CANDIDATE_SHA: sha,
+					// Bash tar needs a POSIX path; native Windows paths arrive unchanged through env.
+					RUNNER_TEMP: path.relative(trusted, work).split(path.sep).join("/"),
+				},
 				encoding: "utf8",
 			},
 		);
