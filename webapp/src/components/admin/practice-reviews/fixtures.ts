@@ -665,6 +665,39 @@ export const PRIVATE_FEEDBACK_TEXT =
 
 const DISAGREEMENT = "The two cases share a cause, so one status is right here.";
 
+const LONG_FEEDBACK: FeedbackSpec = {
+	id: "44444444-4444-4444-4444-444444444444",
+	body: LONG_BODY,
+	destination: "ON_WORK",
+	state: "DELIVERED",
+	composedAt: "2026-07-28T13:41:00Z",
+	deliveredAt: "2026-07-28T13:41:30Z",
+	replaces: "99999999-3333-3333-3333-333333333333",
+	from: ["66666666-6666-6666-6666-666666666666", "77777777-7777-7777-7777-777777777777"],
+	copies: [
+		{ kind: "SUMMARY", state: "POSTED" },
+		{
+			kind: "LINE_NOTE",
+			state: "FAILED",
+			body: "Fetch the row first, then check the grant, and answer 403 when the caller may not read it.",
+			at: { path: "ReviewQueryService.java", startLine: 116, endLine: 119 },
+			lastError: "GitHub answered 422: the line is no longer part of the diff.",
+		},
+		{
+			kind: "LINE_NOTE",
+			state: "FAILED",
+			body: "Rename this for the read it pins down: `returnsTheCachedMembersOnASecondRead`.",
+			at: { path: "ReviewQueryServiceTest.java", startLine: 44, endLine: 46 },
+			lastError: "GitHub answered 422: the line is no longer part of the diff.",
+		},
+	],
+	response: {
+		resolution: "DISAGREE",
+		comment: DISAGREEMENT,
+		at: "2026-07-28T16:05:00Z",
+	},
+};
+
 export const REVIEW_FIXTURE: ReviewSpec[] = [
 	{
 		id: "11111111-1111-1111-1111-111111111111",
@@ -907,37 +940,14 @@ export const REVIEW_FIXTURE: ReviewSpec[] = [
 				decisions: [{ action: "APPROVE", by: reviewAccounts.grace, at: "2026-07-28T13:42:40Z" }],
 				response: { resolution: null, usefulness: "HELPFUL", at: "2026-07-28T15:20:00Z" },
 			},
+			LONG_FEEDBACK,
 			{
-				id: "44444444-4444-4444-4444-444444444444",
-				body: LONG_BODY,
-				destination: "ON_WORK",
-				state: "DELIVERED",
-				composedAt: "2026-07-28T13:41:00Z",
-				deliveredAt: "2026-07-28T13:41:30Z",
-				replaces: "99999999-3333-3333-3333-333333333333",
-				from: ["66666666-6666-6666-6666-666666666666", "77777777-7777-7777-7777-777777777777"],
-				copies: [
-					{ kind: "SUMMARY", state: "POSTED" },
-					{
-						kind: "LINE_NOTE",
-						state: "FAILED",
-						body: "Fetch the row first, then check the grant, and answer 403 when the caller may not read it.",
-						at: { path: "ReviewQueryService.java", startLine: 116, endLine: 119 },
-						lastError: "GitHub answered 422: the line is no longer part of the diff.",
-					},
-					{
-						kind: "LINE_NOTE",
-						state: "FAILED",
-						body: "Rename this for the read it pins down: `returnsTheCachedMembersOnASecondRead`.",
-						at: { path: "ReviewQueryServiceTest.java", startLine: 44, endLine: 46 },
-						lastError: "GitHub answered 422: the line is no longer part of the diff.",
-					},
-				],
-				response: {
-					resolution: "DISAGREE",
-					comment: DISAGREEMENT,
-					at: "2026-07-28T16:05:00Z",
-				},
+				...LONG_FEEDBACK,
+				id: "44444444-4444-4444-4444-555555555555",
+				state: "FAILED",
+				composedAt: minutesBefore(1450).toISOString(),
+				deliveredAt: minutesBefore(1449).toISOString(),
+				response: undefined,
 			},
 			{
 				id: "99999999-3333-3333-3333-333333333333",
@@ -2213,13 +2223,7 @@ export const longFeedbackDetail: ReviewFeedbackDetail = feedbackDetail(
 );
 
 /** The summary posted and both line notes failed: partly delivered. */
-export const partialPackageFeedbackDetail: ReviewFeedbackDetail = {
-	...longFeedbackDetail,
-	state: "FAILED",
-	disagreedAt: null,
-	response: null,
-	deliveredAt: longFeedbackDetail.copies.find((copy) => copy.postedAt !== null)?.postedAt ?? null,
-};
+export const partialPackageFeedbackDetail = feedbackDetail("44444444-4444-4444-4444-555555555555");
 
 export const awaitingApprovalFeedbackDetail: ReviewFeedbackDetail = feedbackDetail(
 	"aaaaaaaa-6666-6666-6666-666666666666",

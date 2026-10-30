@@ -928,6 +928,46 @@ export const DeliveryCheckInProgress: Story = {
 	},
 };
 
+export const PartlyDeliveredCheckAvailable: Story = {
+	args: {
+		feedback: ready({
+			...partlyUnknownOnWork({ action: "POST", state: "DONE", attemptCount: 8 }),
+			disagreedAt: null,
+			response: null,
+		}),
+	},
+	play: async () => {
+		const panelElement = await settledDrawerPanel();
+		const panel = within(panelElement);
+		await expectHeaderChip(panelElement, "Partly delivered");
+		panel.getByText(
+			"Part of this feedback appeared on the work. The rest is not confirmed yet. Check delivery to find out whether the remaining copies appeared. Until then, later reviews post no new feedback for this developer on this work.",
+		);
+		await expect(panel.getByRole("button", { name: "Check delivery" })).toBeEnabled();
+		await expect(panel.queryByText(/does not count as delivered/u)).toBeNull();
+	},
+};
+
+export const PartlyDeliveredCheckInProgress: Story = {
+	args: {
+		feedback: ready({
+			...partlyUnknownOnWork({ action: "POST", state: "PENDING", attemptCount: 8 }),
+			disagreedAt: null,
+			response: null,
+		}),
+	},
+	play: async () => {
+		const panelElement = await settledDrawerPanel();
+		const panel = within(panelElement);
+		await expectHeaderChip(panelElement, "Partly delivered");
+		panel.getByText(
+			"Part of this feedback appeared on the work. The rest is not confirmed yet. Hephaestus is checking whether the remaining copies appeared on the work.",
+		);
+		await expect(panel.queryByRole("button", { name: "Check delivery" })).toBeNull();
+		await expect(panel.queryByText(/does not count as delivered/u)).toBeNull();
+	},
+};
+
 /** The check proved the summary absent: it is a failed copy, not an unknown one, and is not checked again. */
 export const DeliveryKnownAbsent: Story = {
 	args: {

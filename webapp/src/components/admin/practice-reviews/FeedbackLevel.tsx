@@ -746,8 +746,23 @@ function unconfirmedLine(feedback: FeedbackRecord): string {
 	if (feedback.destination !== "ON_WORK") {
 		return "A conversation linked it, but its appearance was not recorded, so it does not count as delivered.";
 	}
+	const check = deliveryCheck(feedback);
+	if (isPartialDelivery(feedback)) {
+		const description = partialDeliveryDescription(feedback);
+		switch (check) {
+			case "available": {
+				return `${description} Check delivery to find out whether the remaining copies appeared. Until then, later reviews post no new feedback for this developer on this work.`;
+			}
+			case "checking": {
+				return `${description} Hephaestus is checking whether the remaining copies appeared on the work.`;
+			}
+			case undefined: {
+				return description;
+			}
+		}
+	}
 	// Only the approval stage holds later feedback; preparation and the write stop it instead.
-	switch (deliveryCheck(feedback)) {
+	switch (check) {
 		case "available": {
 			return "A comment was being written to the work, but the provider has not confirmed whether it appeared. It does not count as delivered until that is known. Until then, later reviews post no new feedback for this developer on this work.";
 		}
@@ -755,9 +770,7 @@ function unconfirmedLine(feedback: FeedbackRecord): string {
 			return "Hephaestus is confirming whether a comment it began writing appeared on the work. Until the provider confirms it, it does not count as delivered.";
 		}
 		case undefined: {
-			return isPartialDelivery(feedback)
-				? partialDeliveryDescription(feedback)
-				: "A write to the work was not confirmed, so it does not count as delivered.";
+			return "A write to the work was not confirmed, so it does not count as delivered.";
 		}
 	}
 }

@@ -143,6 +143,35 @@ describe("traceVerdict on a result", () => {
 		});
 	});
 
+	it.each([
+		["FAILED", "Partly delivered"],
+		["UNCONFIRMED", "Partly delivered"],
+		["REJECTED", "Partly delivered"],
+		["DELIVERED", "Delivered"],
+	] as const)("labels partial feedback grouped with %s as %s", (state, label) => {
+		const { item, reviews, results, feedback } = lineageRecords(
+			lineageStateCase("destination-on-work").lineage,
+		);
+		const [first] = feedback;
+		const [review] = reviews;
+		assert(item !== undefined);
+		assert(first !== undefined);
+		assert(review !== undefined);
+		const lineage = storyLineage({
+			root: { kind: "REVIEW", id: review.id },
+			item,
+			reviews,
+			results: results.map((result) => ({ result })),
+			feedback: [
+				{ feedback: { ...first, state: "FAILED" }, basis: first.basis },
+				{ feedback: { ...first, id: "second", state }, basis: first.basis },
+			],
+		});
+		for (const node of [REVIEW, resultNode(STATE_RESULT_ID)]) {
+			expect(traceVerdict(lineage, node).end).toMatchObject({ kind: "delivered", label });
+		}
+	});
+
 	it("says a met result needed no feedback", () => {
 		const { results } = lineageRecords(lineageStateCase("not-met-silent").lineage);
 		const met = results.find((entry) => entry.outcome === "MET");

@@ -373,7 +373,14 @@ function endOfMany(fates: readonly FeedbackFate[]): TraceEnd {
 					.map(({ kind, count }) => `${count} ${KIND_PHRASE[kind]}`)
 					.join(", ")
 			: [...counts.entries()].map(([phrase, count]) => `${count} ${phrase}`).join(", ");
-	return end(best.end.kind, `${countOf(fates.length, "piece", "pieces")} of feedback: ${reason}`);
+	const label =
+		best.end.kind === "delivered" &&
+		fates.every((fate) => fate.end.kind !== "delivered" || fate.end.label === "Partly delivered")
+			? "Partly delivered"
+			: TRACE_END_LABELS[best.end.kind];
+	return end(best.end.kind, `${countOf(fates.length, "piece", "pieces")} of feedback: ${reason}`, {
+		label,
+	});
 }
 
 function isRunning(review: ReviewRef | undefined): boolean {
