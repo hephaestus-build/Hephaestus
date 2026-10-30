@@ -157,8 +157,7 @@ mock.module("node:child_process", { exports: {
     else if (args[0] === "inspect") stdout = "running";
     else if (args.includes("--command")) {
       const sql = args.at(-1);
-      if (sql.includes("information_schema.tables")) stdout = "identity_link\\nuser\\nworkspace_membership";
-      else if (sql.includes("chat_message_id")) stdout = previousKeepsChat ? "1" : "0";
+      if (sql.includes("chat_message_id")) stdout = previousKeepsChat ? "1" : "0";
       else if (sql.includes("INSERT INTO")) stdout = "7";
       else if (sql.includes("SELECT kind ||")) {
         stdout = "account|1\\nidentity|1\\nuser|1\\nworkspace|1\\nmembership|1\\nconnection|1";
