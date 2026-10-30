@@ -56,3 +56,6 @@ Unavailable evidence is not an empty problem list.
 A refusal to copy earlier feedback cannot establish that the developer never received advice.
 A complete scan proves only its recorded boundary, not the correctness of the repository.
 The [data map](/admin/dsms/personal-data-map) owns export and retention limits.
+
+The [offline feedback quality harness](./feedback-quality-evals.md) applies these limits to captured outputs.
+It separates provisional labels, independent human judgments, and advisory judge ratings.
