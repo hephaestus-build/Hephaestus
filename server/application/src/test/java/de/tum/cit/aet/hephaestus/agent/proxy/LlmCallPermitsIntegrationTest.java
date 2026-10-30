@@ -211,8 +211,8 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
         jdbc.update(
                 "UPDATE llm_call_permit SET renewed_at=clock_timestamp()-interval '21 seconds' WHERE pool_id=?", pool);
         transactions.executeWithoutResult(status -> {
-            String owner = (String) row.get("worker_id");
-            UUID id = (UUID) row.get("id");
+            String owner = Objects.requireNonNull((String) row.get("worker_id"));
+            UUID id = Objects.requireNonNull((UUID) row.get("id"));
             assertThat(rows.renew(owner, List.of(id), PROPERTIES.permitLease().toSeconds()))
                     .isZero();
             assertThat(rows.findHeld(

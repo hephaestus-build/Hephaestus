@@ -555,7 +555,7 @@ A late release cannot affect another call.
 An ended attempt cannot start a provider call after a capacity wait.
 
 Admission and administration reclaim grants that the worker has not renewed within `hephaestus.llm.call-pools.permit-lease` (one minute by default).
-A stopped worker's sockets close with its process.
+When a worker process ends, its sockets close.
 The expired grant cannot renew or debit a retry.
 Its provider rate debit remains for one minute after lease expiry.
 Pool edits, deletion, and membership changes wait for open requests, retained rate debits, and cooldowns to end.

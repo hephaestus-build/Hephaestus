@@ -128,6 +128,8 @@ class LlmCallPermitCrashIntegrationTest extends BaseIntegrationTest {
                             "permitLeaseMs",
                             Long.toString(PROPERTIES.permitLease().toMillis()));
                 }
+            } catch (Exception failed) {
+                throw new IllegalStateException(Files.readString(output), failed);
             } finally {
                 worker.destroyForcibly();
                 assertThat(worker.waitFor(5, TimeUnit.SECONDS)).isTrue();
