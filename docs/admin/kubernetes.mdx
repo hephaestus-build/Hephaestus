@@ -426,6 +426,10 @@ The image's entrypoint starts PostgreSQL with `ssl=on` and the certificate and k
 No real volume driver has shown this configuration yet.
 First initialization, restart, and restore need a start of the release image on a volume before this path counts as working.
 
+The small profile sets explicit PostgreSQL memory parameters and per-role connection pools.
+See [PostgreSQL memory](./sizing#postgresql-memory) and [Database connections](./sizing#database-connections) for the values, surge budget, and measurement gates.
+It retains the larger PostgreSQL process limit until a loaded trial qualifies the lower ceiling.
+
 Every container of the release has CPU, memory, and ephemeral storage requests and limits.
 The schema refuses a zero value.
 Sandbox containers have CPU, memory, and disk limits ([Sandbox sizes](#sandbox-sizes)).

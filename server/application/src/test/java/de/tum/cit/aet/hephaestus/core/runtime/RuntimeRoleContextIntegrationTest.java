@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.zaxxer.hikari.HikariDataSource;
 import de.tum.cit.aet.hephaestus.Application;
 import de.tum.cit.aet.hephaestus.agent.adapter.EvidenceDeliveryAuthorization;
 import de.tum.cit.aet.hephaestus.agent.context.CitedSourceAccess;
@@ -58,16 +59,21 @@ import jakarta.servlet.Filter;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
+import java.sql.DriverManager;
+import java.sql.SQLException;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
+import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -77,6 +83,7 @@ import org.springframework.boot.test.context.ConfigDataApplicationContextInitial
 import org.springframework.boot.test.context.assertj.AssertableWebApplicationContext;
 import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
+import org.springframework.core.env.SystemEnvironmentPropertySource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.BootstrapUtils;
@@ -115,6 +122,8 @@ class RuntimeRoleContextIntegrationTest {
         var properties = Arrays.stream(RuntimeRole.values())
                 .map(candidate -> candidate.property() + "=" + (candidate == role))
                 .toArray(String[]::new);
+        // A valid positive pool setting must not make the database-free receiver create a DataSource.
+        int maximum = role == RuntimeRole.SERVER ? 16 : 24;
         var configuration =
                 BootstrapUtils.resolveTestContextBootstrapper(getClass()).buildMergedContextConfiguration();
         new WebApplicationContextRunner()
@@ -124,6 +133,16 @@ class RuntimeRoleContextIntegrationTest {
                     application.getBeanFactory().setConversionService(conversion);
                 })
                 .withInitializer(new ConfigDataApplicationContextInitializer())
+                .withInitializer(application -> application
+                        .getEnvironment()
+                        .getPropertySources()
+                        .addFirst(new SystemEnvironmentPropertySource(
+                                "chart-role-pool",
+                                Map.of(
+                                        "SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE",
+                                        Integer.toString(maximum),
+                                        "SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE",
+                                        "2"))))
                 // SpringApplication applies this from spring.factories; a webhook-only context scans only the receiver.
                 .withInitializer(new WebhookReceiverScope.Initializer())
                 .withInitializer(application -> configuration
@@ -209,8 +228,48 @@ class RuntimeRoleContextIntegrationTest {
                         assertThat(application).hasSingleBean(CitedSourceAccess.class);
                         assertThat(application).hasSingleBean(EvidenceDeliveryAuthorization.class);
                     }
+                    assertDatabaseConnections(application, role, database, maximum);
                     assertSlackIngressOwnership(application, role);
                 });
+    }
+
+    /** Count live connections while the role holds its entire configured pool; the receiver must hold none. */
+    private static void assertDatabaseConnections(
+            AssertableWebApplicationContext application,
+            RuntimeRole role,
+            PostgreSQLTestContainer.TestDatabase database,
+            int maximum)
+            throws SQLException {
+        var borrowed = new ArrayList<java.sql.Connection>();
+        try {
+            if (role == RuntimeRole.WEBHOOK) {
+                assertThat(application).doesNotHaveBean(DataSource.class);
+            } else {
+                var pool = application.getBean(HikariDataSource.class);
+                assertThat(pool.getMaximumPoolSize()).isEqualTo(maximum);
+                assertThat(pool.getMinimumIdle()).isEqualTo(2);
+                for (int i = 0; i < maximum; i++) {
+                    borrowed.add(pool.getConnection());
+                }
+            }
+            try (var observer =
+                            DriverManager.getConnection(database.jdbcUrl(), database.username(), database.password());
+                    var statement = observer.createStatement();
+                    var result = statement.executeQuery("SELECT count(*) FROM pg_stat_activity "
+                            + "WHERE datname=current_database() AND pid<>pg_backend_pid()")) {
+                assertThat(result.next()).isTrue();
+                if (role == RuntimeRole.WEBHOOK) {
+                    assertThat(result.getInt(1)).isZero();
+                } else {
+                    // The lazy ledger listener is the only dedicated connection outside Hikari.
+                    assertThat(result.getInt(1)).isBetween(maximum, maximum + 1);
+                }
+            }
+        } finally {
+            for (var connection : borrowed) {
+                connection.close();
+            }
+        }
     }
 
     /**

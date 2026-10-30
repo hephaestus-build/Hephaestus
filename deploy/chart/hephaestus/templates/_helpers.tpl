@@ -595,3 +595,33 @@ capacity and the sandbox quotas all read it here.
       key: DATABASE_USERNAME
 {{ include "hephaestus.backup.env" . }}
 {{- end -}}
+
+{{/* Native Spring properties override profile defaults for this role only. */}}
+{{- define "hephaestus.env.databasePool" -}}
+{{- if gt (int .minimumIdle) (int .maximumPoolSize) -}}
+{{- fail "databasePool.minimumIdle must not exceed maximumPoolSize" -}}
+{{- end -}}
+- name: SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE
+  value: {{ .maximumPoolSize | quote }}
+- name: SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE
+  value: {{ .minimumIdle | quote }}
+{{- end -}}
+
+{{/* All worker replicas can surge once; another overlapping rollout is outside this budget. */}}
+{{- define "hephaestus.databaseConnectionBudget" -}}
+{{- if hasKey .Values.postgresql.parameters "max_connections" -}}
+{{- $servers := int .Values.server.replicas -}}
+{{- $workers := 0 -}}
+{{- if .Values.worker.enabled -}}
+{{- $workers = int .Values.worker.replicas -}}
+{{- if eq .Values.worker.rolloutStrategy "RollingUpdate" -}}{{- $workers = mul 2 $workers -}}{{- end -}}
+{{- end -}}
+{{- $pooled := add (mul $servers (int .Values.server.databasePool.maximumPoolSize)) (mul $workers (int .Values.worker.databasePool.maximumPoolSize)) -}}
+{{- $listeners := add $servers $workers -}}
+{{- /* One listener per role replica, migration pool, two backup sessions, four operator sessions, three superuser slots. */ -}}
+{{- $required := add $pooled $listeners (int .Values.migration.databasePool.maximumPoolSize) 2 4 3 -}}
+{{- if gt $required (int .Values.postgresql.parameters.max_connections) -}}
+{{- fail (printf "PostgreSQL max_connections needs at least %d for role pools, one worker surge, listeners and maintenance/admin reserves" $required) -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
