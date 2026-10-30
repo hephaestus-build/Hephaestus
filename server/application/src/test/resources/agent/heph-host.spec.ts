@@ -1390,6 +1390,127 @@ void test("an answer with no words fails the turn instead of ending it done with
 	assert.equal(end.reason, "ERROR");
 });
 
+/** A model that answers with `first`, then ends with an empty message, as a model may after a tool. */
+function thenEmpty(...first: FauxStep[]): ModelFactory {
+	return fauxModels([...first, () => faux.fauxAssistantMessage("")]);
+}
+
+function linkCall(text: string) {
+	return faux.fauxToolCall("link_result", { ...LINK_CALLS[0][1], text });
+}
+
+/** What the developer reads of the stored turn: its words and the text of each link call. */
+function shownText(worker: FakeWorker): string[] {
+	const shown: string[] = [];
+	for (const entry of messages(worker.appended, "assistant")) {
+		if (entry.message.role !== "assistant") {
+			continue;
+		}
+		for (const part of entry.message.content) {
+			if (part.type === "text" && part.text !== "") {
+				shown.push(part.text);
+			} else if (part.type === "toolCall" && typeof part.arguments.text === "string") {
+				shown.push(part.arguments.text);
+			}
+		}
+	}
+	return shown;
+}
+
+void test("an answer that was whole with the feedback it links ends done with nothing more to say", async () => {
+	const worker = fakeWorker(contextOf([], "what did the review say?"));
+
+	const end = await runTurn(
+		worker,
+		thenEmpty(() =>
+			faux.fauxAssistantMessage(
+				[
+					faux.fauxText("The review found the why missing on #46."),
+					linkCall("The why is missing."),
+				],
+				{ stopReason: "toolUse" },
+			),
+		),
+	);
+
+	assert.equal(end.outcome, "DONE");
+	assert.deepEqual(shownText(worker), [
+		"The review found the why missing on #46.",
+		"The why is missing.",
+	]);
+});
+
+void test("an answer told only in the text of the feedback it links, or in a link batch after it, ends done", async () => {
+	for (const answer of [
+		[
+			() =>
+				faux.fauxAssistantMessage([linkCall("The why is missing on #46.")], {
+					stopReason: "toolUse",
+				}),
+		],
+		[
+			() =>
+				faux.fauxAssistantMessage(
+					[
+						faux.fauxText("The review found the why missing on #46."),
+						faux.fauxToolCall("link_problem", { ...LINK_CALLS[1][1] }),
+					],
+					{ stopReason: "toolUse" },
+				),
+			() => faux.fauxAssistantMessage([linkCall("The why is missing.")], { stopReason: "toolUse" }),
+		],
+	] satisfies FauxStep[][]) {
+		const worker = fakeWorker(contextOf([], "what did the review say?"));
+
+		const end = await runTurn(worker, thenEmpty(...answer));
+
+		assert.equal(end.outcome, "DONE");
+		assert.ok(
+			shownText(worker).some((text) => text.includes("#46")),
+			shownText(worker).join(" | "),
+		);
+	}
+});
+
+void test("a turn that announced a read, or whose answer was a link the worker refused, still fails when it ends empty", async () => {
+	const announced = fakeWorker(contextOf([], "what did the review say?"));
+	const refused = fakeWorker(
+		contextOf([], "what did the review say?"),
+		undefined,
+		undefined,
+		async () => ({ admitted: false, reason: null }),
+	);
+
+	const ends = [
+		await runTurn(
+			announced,
+			thenEmpty(() =>
+				faux.fauxAssistantMessage(
+					[
+						faux.fauxText("Let me look."),
+						faux.fauxToolCall("read", { path: "inputs/context/user.json" }),
+					],
+					{ stopReason: "toolUse" },
+				),
+			),
+		),
+		await runTurn(
+			refused,
+			thenEmpty(() =>
+				faux.fauxAssistantMessage(
+					[faux.fauxText("Here is what the review found:"), linkCall("The why is missing on #46.")],
+					{ stopReason: "toolUse" },
+				),
+			),
+		),
+	];
+
+	for (const end of ends) {
+		assert.equal(end.outcome, "FAILED");
+		assert.equal(end.reason, "ERROR");
+	}
+});
+
 void test("an answer of only chat-template control tokens fails the turn and stores no answer", async () => {
 	const worker = fakeWorker(contextOf([], "the question"));
 
