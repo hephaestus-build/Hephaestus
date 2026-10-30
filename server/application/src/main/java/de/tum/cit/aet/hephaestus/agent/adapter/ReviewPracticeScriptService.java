@@ -43,11 +43,6 @@ public class ReviewPracticeScriptService implements ReviewScriptQuery {
     private final ReviewRuntimeRepository runtime;
 
     @Override
-    public List<PracticeScriptRunDTO> forReview(long workspaceId, UUID reviewId) {
-        return forReviews(workspaceId, List.of(reviewId)).getOrDefault(reviewId, List.of());
-    }
-
-    @Override
     public Map<UUID, List<PracticeScriptRunDTO>> forReviews(long workspaceId, Collection<UUID> reviewIds) {
         var pinnedByReview = reviews.findPinned(workspaceId, reviewIds);
         if (pinnedByReview.isEmpty()) return Map.of();

@@ -21,6 +21,7 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -157,7 +158,7 @@ class LlmModelAdminControllerIntegrationTest extends AbstractWorkspaceIntegratio
     }
 
     @Test
-    void appAdminCanCreateGetListUpdateAndDeleteAModel() {
+    void appAdminCanCreateListUpdateAndDeleteAModel() {
         LlmConnection connection = seedConnection();
         LlmModelDTO created = createModel(connection.getId(), "gpt-5-eu");
         assertThat(created).isNotNull();
@@ -165,16 +166,7 @@ class LlmModelAdminControllerIntegrationTest extends AbstractWorkspaceIntegratio
         assertThat(created.visibility()).isEqualTo(ModelVisibility.GRANTED);
         assertThat(created.currentPrice()).isNull();
 
-        webTestClient
-                .get()
-                .uri("/admin/llm/models/{id}", created.id())
-                .headers(h -> h.setBearerAuth(ADMIN_TOKEN))
-                .exchange()
-                .expectStatus()
-                .isOk()
-                .expectBody()
-                .jsonPath("$.slug")
-                .isEqualTo("gpt-5-eu");
+        assertThat(listedModel(created.id())).map(LlmModelDTO::slug).contains("gpt-5-eu");
 
         webTestClient
                 .get()
@@ -211,14 +203,7 @@ class LlmModelAdminControllerIntegrationTest extends AbstractWorkspaceIntegratio
                 .isNoContent()
                 .expectBody(Void.class);
 
-        webTestClient
-                .get()
-                .uri("/admin/llm/models/{id}", created.id())
-                .headers(h -> h.setBearerAuth(ADMIN_TOKEN))
-                .exchange()
-                .expectStatus()
-                .isNotFound()
-                .expectBody(Void.class);
+        assertThat(listedModel(created.id())).isEmpty();
     }
 
     @Test
@@ -346,22 +331,13 @@ class LlmModelAdminControllerIntegrationTest extends AbstractWorkspaceIntegratio
                 .isOk()
                 .expectBody(Void.class);
 
-        webTestClient
-                .get()
-                .uri("/admin/llm/models/{id}", created.id())
-                .headers(h -> h.setBearerAuth(ADMIN_TOKEN))
-                .exchange()
-                .expectStatus()
-                .isOk()
-                .expectBody()
-                .jsonPath("$.enabled")
-                .isEqualTo(true)
-                .jsonPath("$.dataHandlingTier")
-                .isEqualTo("IN_HOUSE");
+        LlmModelDTO updated = listedModel(created.id()).orElseThrow();
+        assertThat(updated.enabled()).isTrue();
+        assertThat(updated.dataHandlingTier()).isEqualTo(DataHandlingTier.IN_HOUSE);
     }
 
     @Test
-    void repricingTwiceSupersedesAndGetReturnsOnlyTheCurrentPrice() {
+    void repricingTwiceSupersedesAndListReturnsOnlyTheCurrentPrice() {
         LlmConnection connection = seedConnection();
         LlmModelDTO model = createModel(connection.getId(), "reprice-model");
 
@@ -398,16 +374,7 @@ class LlmModelAdminControllerIntegrationTest extends AbstractWorkspaceIntegratio
         assertThat(afterSecondPrice.currentPrice().per1mInputUsd()).isEqualByComparingTo("3.00");
         assertThat(afterSecondPrice.currentPrice().per1mOutputUsd()).isEqualByComparingTo("4.00");
 
-        LlmModelDTO fetched = webTestClient
-                .get()
-                .uri("/admin/llm/models/{id}", model.id())
-                .headers(h -> h.setBearerAuth(ADMIN_TOKEN))
-                .exchange()
-                .expectStatus()
-                .isOk()
-                .expectBody(LlmModelDTO.class)
-                .returnResult()
-                .getResponseBody();
+        LlmModelDTO fetched = listedModel(model.id()).orElseThrow();
         assertThat(fetched).isNotNull();
         assertThat(Objects.requireNonNull(fetched.currentPrice()).per1mInputUsd())
                 .isEqualByComparingTo("3.00");
@@ -545,6 +512,22 @@ class LlmModelAdminControllerIntegrationTest extends AbstractWorkspaceIntegratio
                 .expectStatus()
                 .isForbidden()
                 .expectBody(Void.class);
+    }
+
+    private Optional<LlmModelDTO> listedModel(Long id) {
+        List<LlmModelDTO> models = webTestClient
+                .get()
+                .uri("/admin/llm/models")
+                .headers(h -> h.setBearerAuth(ADMIN_TOKEN))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBodyList(LlmModelDTO.class)
+                .returnResult()
+                .getResponseBody();
+        return Objects.requireNonNull(models).stream()
+                .filter(m -> m.id().equals(id))
+                .findFirst();
     }
 
     private LlmModel llmModelFromRepository(Long id) {

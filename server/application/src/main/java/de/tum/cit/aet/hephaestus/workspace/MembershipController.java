@@ -87,14 +87,6 @@ public class MembershipController {
                 eligible.contains(member.getAccountId())))));
     }
 
-    @GetMapping("/{accountId}")
-    @Operation(operationId = "getMembership", summary = "Get a workspace membership")
-    public ResponseEntity<WorkspaceMembershipDTO> getMember(
-            WorkspaceContext context, @PathVariable @AccountId String accountId) {
-        Membership membership = workspaceMembershipService.getMembership(context.id(), accountId(accountId));
-        return ResponseEntity.ok(toDTO(context.id(), membership, membership.getRole()));
-    }
-
     @PostMapping("/assign")
     @Operation(operationId = "assignMemberRole", summary = "Assign a workspace role")
     @RequireAtLeastWorkspaceAdmin

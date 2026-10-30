@@ -54,12 +54,6 @@ public class ReviewBatchController {
         return ResponseEntity.status(201).body(batches.create(ws, input));
     }
 
-    @GetMapping("/{batchId}")
-    @Operation(operationId = "getReviewBatch", summary = "Get a review batch")
-    public ReviewBatchDTO get(WorkspaceContext ws, @PathVariable UUID batchId) {
-        return batches.get(ws, batchId);
-    }
-
     @PatchMapping("/{batchId}/status")
     @Operation(operationId = "updateReviewBatchStatus", summary = "Pause, resume or cancel a review batch")
     @Audited(ledger = AuditLedger.CONFIG_AUDIT, type = "REVIEW_BATCH")

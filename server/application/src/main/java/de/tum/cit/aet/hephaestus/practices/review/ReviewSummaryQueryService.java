@@ -376,11 +376,6 @@ public class ReviewSummaryQueryService {
                         .toList());
     }
 
-    public List<PracticeScriptRunDTO> scripts(long ws, UUID id) {
-        require(ws, id);
-        return scripts.forReview(ws, id);
-    }
-
     private static List<ReviewPracticeDTO> practices(Review review, List<ReviewPractice> rows, SummaryReads reads) {
         var counts = reads.memberCounts.getOrDefault(review.getId(), Map.of());
         var scriptRows = reads.scriptsByReview.getOrDefault(review.getId(), List.of());

@@ -142,14 +142,6 @@ class OutlineCollectionAdminControllerIntegrationTest extends AbstractWorkspaceI
 
         listRequest().expectStatus().isNotFound().expectBody(Void.class);
         registerRequest(COLLECTION_ID).expectStatus().isNotFound().expectBody(Void.class);
-        webTestClient
-                .get()
-                .uri("/workspaces/{slug}/outline/collections/{id}", workspace.getWorkspaceSlug(), COLLECTION_ID)
-                .headers(TestAuthUtils.withCurrentUser())
-                .exchange()
-                .expectStatus()
-                .isNotFound()
-                .expectBody(Void.class);
         // The unified sync-observability endpoints 404 the same way once the connection row is gone.
         webTestClient
                 .get()
@@ -210,35 +202,23 @@ class OutlineCollectionAdminControllerIntegrationTest extends AbstractWorkspaceI
 
     @Test
     @WithAdminUser
-    @DisplayName("item GET returns one mirrored collection; an unregistered id is 404")
-    void getSingleCollection() {
+    @DisplayName("list returns each mirrored collection with its live document count")
+    void listCountsLiveDocuments() {
         ensureAdminMembership(workspace);
         seedCollection(MirrorState.ENABLED, SyncStatus.COMPLETE);
         seedDocument("doc-1");
 
-        OutlineCollectionDTO fetched = webTestClient
-                .get()
-                .uri("/workspaces/{slug}/outline/collections/{id}", workspace.getWorkspaceSlug(), COLLECTION_ID)
-                .headers(TestAuthUtils.withCurrentUser())
-                .exchange()
+        List<OutlineCollectionDTO> listed = listRequest()
                 .expectStatus()
                 .isOk()
-                .expectBody(OutlineCollectionDTO.class)
+                .expectBodyList(OutlineCollectionDTO.class)
                 .returnResult()
                 .getResponseBody();
 
-        assertThat(fetched).isNotNull();
-        assertThat(fetched.collectionId()).isEqualTo(COLLECTION_ID);
-        assertThat(fetched.documentCount()).isEqualTo(1L);
-
-        webTestClient
-                .get()
-                .uri("/workspaces/{slug}/outline/collections/{id}", workspace.getWorkspaceSlug(), "no-such-collection")
-                .headers(TestAuthUtils.withCurrentUser())
-                .exchange()
-                .expectStatus()
-                .isNotFound()
-                .expectBody(Void.class);
+        assertThat(listed).singleElement().satisfies(fetched -> {
+            assertThat(fetched.collectionId()).isEqualTo(COLLECTION_ID);
+            assertThat(fetched.documentCount()).isEqualTo(1L);
+        });
     }
 
     @Test

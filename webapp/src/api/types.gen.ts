@@ -3177,25 +3177,6 @@ export type PageResponseDtoConfigAuditEntryView = {
  * is an implementation detail, not a JSON contract; these fields preserve the existing clients'
  * response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
  */
-export type PageResponseDtoItemEvent = {
-    content: Array<ItemEvent>;
-    empty: boolean;
-    first: boolean;
-    last: boolean;
-    number: number;
-    numberOfElements: number;
-    pageable: Pageable;
-    size: number;
-    sort: Sort;
-    totalElements: number;
-    totalPages: number;
-};
-
-/**
- * Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl
- * is an implementation detail, not a JSON contract; these fields preserve the existing clients'
- * response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
- */
 export type PageResponseDtoItemRef = {
     content: Array<ItemRef>;
     empty: boolean;
@@ -4498,16 +4479,6 @@ export type RemoveResultMarkRequest = {
     reason: string;
 };
 
-/**
- * Request to rename a workspace's URL slug
- */
-export type RenameWorkspaceSlugRequest = {
-    /**
-     * Non-reserved lowercase ASCII DNS label. Consecutive hyphens are prohibited.
-     */
-    newSlug: string;
-};
-
 export type ReorderRequest = {
     slugs: Array<string>;
 };
@@ -4807,14 +4778,6 @@ export type ReviewDeveloper = {
     avatarUrl: string | null;
     displayName: string | null;
     providerLogin: string | null;
-};
-
-export type ReviewEvidenceOutcome = {
-    notReviewed: number;
-    outcomes: OutcomeVector;
-    practiceName: string;
-    practiceSlug: string;
-    withheld: number;
 };
 
 export type ReviewFeedback = {
@@ -6324,16 +6287,6 @@ export type UpdatePracticeReviewSettingsRequest = {
     reviewScope?: WorkspaceReviewScope;
 };
 
-/**
- * Request to update repository contribution visibility settings in a workspace
- */
-export type UpdateRepositorySettingsRequest = {
-    /**
-     * Whether activity in this repository should be left out of the team's activity
-     */
-    hiddenFromContributions: boolean;
-};
-
 export type UpdateReviewBatchStatusRequest = {
     status: 'AWAITING_CONFIRMATION' | 'RUNNING' | 'PAUSED' | 'COMPLETED' | 'CANCELLED';
 };
@@ -6363,16 +6316,6 @@ export type UpdateSlackUserPreferencesRequest = {
 
 export type UpdateSyncJobRequest = {
     cancelRequested: boolean;
-};
-
-/**
- * Request to update team visibility settings in a workspace
- */
-export type UpdateTeamSettingsRequest = {
-    /**
-     * Whether the team should be hidden from workspace activity
-     */
-    hidden: boolean;
 };
 
 /**
@@ -7377,46 +7320,6 @@ export type WorkspaceSplitPart = {
 };
 
 /**
- * Repository contribution visibility settings for a specific team within a workspace
- */
-export type WorkspaceTeamRepositorySettings = {
-    /**
-     * Whether activity in this repository is left out of the team's activity
-     */
-    hiddenFromContributions: boolean;
-    /**
-     * The repository ID these settings apply to
-     */
-    repositoryId: number;
-    /**
-     * The team ID these settings apply to
-     */
-    teamId: number;
-    /**
-     * The workspace ID these settings belong to
-     */
-    workspaceId: number;
-};
-
-/**
- * Team visibility settings for a specific workspace
- */
-export type WorkspaceTeamSettings = {
-    /**
-     * Whether the team is hidden from workspace activity
-     */
-    hidden: boolean;
-    /**
-     * The team ID these settings apply to
-     */
-    teamId: number;
-    /**
-     * The workspace ID these settings belong to
-     */
-    workspaceId: number;
-};
-
-/**
  * One figure: the reader's own value, then the middle half of the developers counted
  */
 export type WorkspaceTile = {
@@ -7830,31 +7733,6 @@ export type AdminDeleteLlmConnectionResponses = {
 
 export type AdminDeleteLlmConnectionResponse = AdminDeleteLlmConnectionResponses[keyof AdminDeleteLlmConnectionResponses];
 
-export type AdminGetLlmConnectionData = {
-    body?: never;
-    path: {
-        id: number;
-    };
-    query?: never;
-    url: '/admin/llm/connections/{id}';
-};
-
-export type AdminGetLlmConnectionErrors = {
-    /**
-     * LLM connection not found
-     */
-    404: unknown;
-};
-
-export type AdminGetLlmConnectionResponses = {
-    /**
-     * OK
-     */
-    200: LlmConnection;
-};
-
-export type AdminGetLlmConnectionResponse = AdminGetLlmConnectionResponses[keyof AdminGetLlmConnectionResponses];
-
 export type AdminUpdateLlmConnectionData = {
     body: UpdateLlmConnectionRequest;
     path: {
@@ -7942,31 +7820,6 @@ export type AdminDeleteLlmModelResponses = {
 };
 
 export type AdminDeleteLlmModelResponse = AdminDeleteLlmModelResponses[keyof AdminDeleteLlmModelResponses];
-
-export type AdminGetLlmModelData = {
-    body?: never;
-    path: {
-        id: number;
-    };
-    query?: never;
-    url: '/admin/llm/models/{id}';
-};
-
-export type AdminGetLlmModelErrors = {
-    /**
-     * LLM model not found
-     */
-    404: unknown;
-};
-
-export type AdminGetLlmModelResponses = {
-    /**
-     * OK
-     */
-    200: LlmModel;
-};
-
-export type AdminGetLlmModelResponse = AdminGetLlmModelResponses[keyof AdminGetLlmModelResponses];
 
 export type AdminUpdateLlmModelData = {
     body: UpdateLlmModelRequest;
@@ -11464,35 +11317,6 @@ export type WorkspaceDeleteLlmConnectionResponses = {
 
 export type WorkspaceDeleteLlmConnectionResponse = WorkspaceDeleteLlmConnectionResponses[keyof WorkspaceDeleteLlmConnectionResponses];
 
-export type WorkspaceGetLlmConnectionData = {
-    body?: never;
-    path: {
-        /**
-         * Workspace slug
-         */
-        workspaceSlug: string;
-        id: number;
-    };
-    query?: never;
-    url: '/workspaces/{workspaceSlug}/llm/connections/{id}';
-};
-
-export type WorkspaceGetLlmConnectionErrors = {
-    /**
-     * Connection not found
-     */
-    404: unknown;
-};
-
-export type WorkspaceGetLlmConnectionResponses = {
-    /**
-     * OK
-     */
-    200: WorkspaceLlmConnection;
-};
-
-export type WorkspaceGetLlmConnectionResponse = WorkspaceGetLlmConnectionResponses[keyof WorkspaceGetLlmConnectionResponses];
-
 export type WorkspaceUpdateLlmConnectionData = {
     body: UpdateWorkspaceLlmConnectionRequest;
     path: {
@@ -11597,35 +11421,6 @@ export type WorkspaceDeleteLlmModelResponses = {
 };
 
 export type WorkspaceDeleteLlmModelResponse = WorkspaceDeleteLlmModelResponses[keyof WorkspaceDeleteLlmModelResponses];
-
-export type WorkspaceGetLlmModelData = {
-    body?: never;
-    path: {
-        /**
-         * Workspace slug
-         */
-        workspaceSlug: string;
-        id: number;
-    };
-    query?: never;
-    url: '/workspaces/{workspaceSlug}/llm/models/{id}';
-};
-
-export type WorkspaceGetLlmModelErrors = {
-    /**
-     * Model not found
-     */
-    404: unknown;
-};
-
-export type WorkspaceGetLlmModelResponses = {
-    /**
-     * OK
-     */
-    200: WorkspaceLlmModel;
-};
-
-export type WorkspaceGetLlmModelResponse = WorkspaceGetLlmModelResponses[keyof WorkspaceGetLlmModelResponses];
 
 export type WorkspaceUpdateLlmModelData = {
     body: UpdateWorkspaceLlmModelRequest;
@@ -11825,28 +11620,6 @@ export type RemoveMemberResponses = {
 };
 
 export type RemoveMemberResponse = RemoveMemberResponses[keyof RemoveMemberResponses];
-
-export type GetMembershipData = {
-    body?: never;
-    path: {
-        /**
-         * Workspace slug
-         */
-        workspaceSlug: string;
-        accountId: string;
-    };
-    query?: never;
-    url: '/workspaces/{workspaceSlug}/members/{accountId}';
-};
-
-export type GetMembershipResponses = {
-    /**
-     * OK
-     */
-    200: WorkspaceMembership;
-};
-
-export type GetMembershipResponse = GetMembershipResponses[keyof GetMembershipResponses];
 
 export type SetMemberHiddenData = {
     body: SetMemberHiddenRequest;
@@ -12364,35 +12137,6 @@ export type DeleteOutlineCollectionResponses = {
 };
 
 export type DeleteOutlineCollectionResponse = DeleteOutlineCollectionResponses[keyof DeleteOutlineCollectionResponses];
-
-export type GetOutlineCollectionData = {
-    body?: never;
-    path: {
-        /**
-         * Workspace slug
-         */
-        workspaceSlug: string;
-        collectionId: string;
-    };
-    query?: never;
-    url: '/workspaces/{workspaceSlug}/outline/collections/{collectionId}';
-};
-
-export type GetOutlineCollectionErrors = {
-    /**
-     * The collection is not registered for this workspace, or the workspace has no ACTIVE Outline connection
-     */
-    404: unknown;
-};
-
-export type GetOutlineCollectionResponses = {
-    /**
-     * Mirrored collection returned
-     */
-    200: OutlineCollection;
-};
-
-export type GetOutlineCollectionResponse = GetOutlineCollectionResponses[keyof GetOutlineCollectionResponses];
 
 export type UpdateOutlineCollectionStateData = {
     body: UpdateOutlineCollectionStateRequest;
@@ -13227,53 +12971,6 @@ export type ResolveLegacyFeedbackItemResponses = {
 
 export type ResolveLegacyFeedbackItemResponse = ResolveLegacyFeedbackItemResponses[keyof ResolveLegacyFeedbackItemResponses];
 
-export type GetReviewItemData = {
-    body?: never;
-    path: {
-        /**
-         * Workspace slug
-         */
-        workspaceSlug: string;
-        itemId: string;
-    };
-    query?: never;
-    url: '/workspaces/{workspaceSlug}/practices/items/{itemId}';
-};
-
-export type GetReviewItemResponses = {
-    /**
-     * OK
-     */
-    200: ItemRef;
-};
-
-export type GetReviewItemResponse = GetReviewItemResponses[keyof GetReviewItemResponses];
-
-export type ListItemEventsData = {
-    body?: never;
-    path: {
-        /**
-         * Workspace slug
-         */
-        workspaceSlug: string;
-        itemId: string;
-    };
-    query?: {
-        page?: number;
-        size?: number;
-    };
-    url: '/workspaces/{workspaceSlug}/practices/items/{itemId}/events';
-};
-
-export type ListItemEventsResponses = {
-    /**
-     * OK
-     */
-    200: PageResponseDtoItemEvent;
-};
-
-export type ListItemEventsResponse = ListItemEventsResponses[keyof ListItemEventsResponses];
-
 export type GetItemFactsData = {
     body?: never;
     path: {
@@ -13481,27 +13178,6 @@ export type AcceptPracticeReleaseResponses = {
 
 export type AcceptPracticeReleaseResponse = AcceptPracticeReleaseResponses[keyof AcceptPracticeReleaseResponses];
 
-export type ReorderPracticesData = {
-    body: ReorderRequest;
-    path: {
-        /**
-         * Workspace slug
-         */
-        workspaceSlug: string;
-    };
-    query?: never;
-    url: '/workspaces/{workspaceSlug}/practices/reorder';
-};
-
-export type ReorderPracticesResponses = {
-    /**
-     * OK
-     */
-    200: Array<Practice>;
-};
-
-export type ReorderPracticesResponse = ReorderPracticesResponses[keyof ReorderPracticesResponses];
-
 export type ListOwnResultsData = {
     body?: never;
     path: {
@@ -13607,28 +13283,6 @@ export type CreateReviewBatchResponses = {
 };
 
 export type CreateReviewBatchResponse = CreateReviewBatchResponses[keyof CreateReviewBatchResponses];
-
-export type GetReviewBatchData = {
-    body?: never;
-    path: {
-        /**
-         * Workspace slug
-         */
-        workspaceSlug: string;
-        batchId: string;
-    };
-    query?: never;
-    url: '/workspaces/{workspaceSlug}/practices/review-batches/{batchId}';
-};
-
-export type GetReviewBatchResponses = {
-    /**
-     * OK
-     */
-    200: ReviewBatch;
-};
-
-export type GetReviewBatchResponse = GetReviewBatchResponses[keyof GetReviewBatchResponses];
 
 export type UpdateReviewBatchStatusData = {
     body: UpdateReviewBatchStatusRequest;
@@ -13966,27 +13620,6 @@ export type ListReviewsResponses = {
 };
 
 export type ListReviewsResponse = ListReviewsResponses[keyof ListReviewsResponses];
-
-export type GetReviewEvidenceOutcomesData = {
-    body?: never;
-    path: {
-        /**
-         * Workspace slug
-         */
-        workspaceSlug: string;
-    };
-    query?: never;
-    url: '/workspaces/{workspaceSlug}/practices/reviews/evidence-outcomes';
-};
-
-export type GetReviewEvidenceOutcomesResponses = {
-    /**
-     * Evidence outcomes returned
-     */
-    200: Array<ReviewEvidenceOutcome>;
-};
-
-export type GetReviewEvidenceOutcomesResponse = GetReviewEvidenceOutcomesResponses[keyof GetReviewEvidenceOutcomesResponses];
 
 export type ListReviewFeedbackData = {
     body?: never;
@@ -14611,50 +14244,6 @@ export type ListReviewFeedbackChecksResponses = {
 };
 
 export type ListReviewFeedbackChecksResponse = ListReviewFeedbackChecksResponses[keyof ListReviewFeedbackChecksResponses];
-
-export type ListReviewPracticeScriptsData = {
-    body?: never;
-    path: {
-        /**
-         * Workspace slug
-         */
-        workspaceSlug: string;
-        reviewId: string;
-    };
-    query?: never;
-    url: '/workspaces/{workspaceSlug}/practices/reviews/{reviewId}/practice-scripts';
-};
-
-export type ListReviewPracticeScriptsResponses = {
-    /**
-     * OK
-     */
-    200: Array<PracticeScriptRun>;
-};
-
-export type ListReviewPracticeScriptsResponse = ListReviewPracticeScriptsResponses[keyof ListReviewPracticeScriptsResponses];
-
-export type GetReviewUsageData = {
-    body?: never;
-    path: {
-        /**
-         * Workspace slug
-         */
-        workspaceSlug: string;
-        reviewId: string;
-    };
-    query?: never;
-    url: '/workspaces/{workspaceSlug}/practices/reviews/{reviewId}/usage';
-};
-
-export type GetReviewUsageResponses = {
-    /**
-     * OK
-     */
-    200: ReviewUsage;
-};
-
-export type GetReviewUsageResponse = GetReviewUsageResponses[keyof GetReviewUsageResponses];
 
 export type ListScansData = {
     body?: never;
@@ -15567,27 +15156,6 @@ export type UpdateSlackUserPreferencesResponses = {
 
 export type UpdateSlackUserPreferencesResponse = UpdateSlackUserPreferencesResponses[keyof UpdateSlackUserPreferencesResponses];
 
-export type RenameSlugData = {
-    body: RenameWorkspaceSlugRequest;
-    path: {
-        /**
-         * Workspace slug
-         */
-        workspaceSlug: string;
-    };
-    query?: never;
-    url: '/workspaces/{workspaceSlug}/slug';
-};
-
-export type RenameSlugResponses = {
-    /**
-     * Workspace renamed
-     */
-    200: Workspace;
-};
-
-export type RenameSlugResponse = RenameSlugResponses[keyof RenameSlugResponses];
-
 export type UpdateStatusData = {
     body: UpdateWorkspaceStatusRequest;
     path: {
@@ -15721,194 +15289,6 @@ export type AddLabelToTeamResponses = {
 };
 
 export type AddLabelToTeamResponse = AddLabelToTeamResponses[keyof AddLabelToTeamResponses];
-
-export type GetTeamSettingsData = {
-    body?: never;
-    path: {
-        /**
-         * Workspace slug
-         */
-        workspaceSlug: string;
-        teamId: number;
-    };
-    query?: never;
-    url: '/workspaces/{workspaceSlug}/teams/{teamId}/settings';
-};
-
-export type GetTeamSettingsResponses = {
-    /**
-     * Team settings returned
-     */
-    200: WorkspaceTeamSettings;
-};
-
-export type GetTeamSettingsResponse = GetTeamSettingsResponses[keyof GetTeamSettingsResponses];
-
-export type UpdateTeamSettingsData = {
-    body: UpdateTeamSettingsRequest;
-    path: {
-        /**
-         * Workspace slug
-         */
-        workspaceSlug: string;
-        teamId: number;
-    };
-    query?: never;
-    url: '/workspaces/{workspaceSlug}/teams/{teamId}/settings';
-};
-
-export type UpdateTeamSettingsErrors = {
-    /**
-     * Team not found in workspace
-     */
-    404: WorkspaceTeamSettings;
-};
-
-export type UpdateTeamSettingsError = UpdateTeamSettingsErrors[keyof UpdateTeamSettingsErrors];
-
-export type UpdateTeamSettingsResponses = {
-    /**
-     * Team settings updated
-     */
-    200: WorkspaceTeamSettings;
-};
-
-export type UpdateTeamSettingsResponse = UpdateTeamSettingsResponses[keyof UpdateTeamSettingsResponses];
-
-export type GetLabelFiltersData = {
-    body?: never;
-    path: {
-        /**
-         * Workspace slug
-         */
-        workspaceSlug: string;
-        teamId: number;
-    };
-    query?: never;
-    url: '/workspaces/{workspaceSlug}/teams/{teamId}/settings/label-filters';
-};
-
-export type GetLabelFiltersResponses = {
-    /**
-     * Label filters returned
-     */
-    200: Array<LabelInfo>;
-};
-
-export type GetLabelFiltersResponse = GetLabelFiltersResponses[keyof GetLabelFiltersResponses];
-
-export type RemoveLabelFilterData = {
-    body?: never;
-    path: {
-        /**
-         * Workspace slug
-         */
-        workspaceSlug: string;
-        teamId: number;
-        labelId: number;
-    };
-    query?: never;
-    url: '/workspaces/{workspaceSlug}/teams/{teamId}/settings/label-filters/{labelId}';
-};
-
-export type RemoveLabelFilterErrors = {
-    /**
-     * Label filter not found
-     */
-    404: unknown;
-};
-
-export type RemoveLabelFilterResponses = {
-    /**
-     * Label filter removed
-     */
-    204: void;
-};
-
-export type RemoveLabelFilterResponse = RemoveLabelFilterResponses[keyof RemoveLabelFilterResponses];
-
-export type AddLabelFilterData = {
-    body?: never;
-    path: {
-        /**
-         * Workspace slug
-         */
-        workspaceSlug: string;
-        teamId: number;
-        labelId: number;
-    };
-    query?: never;
-    url: '/workspaces/{workspaceSlug}/teams/{teamId}/settings/label-filters/{labelId}';
-};
-
-export type AddLabelFilterErrors = {
-    /**
-     * Team or label not found
-     */
-    404: unknown;
-};
-
-export type AddLabelFilterResponses = {
-    /**
-     * Label filter added
-     */
-    201: unknown;
-};
-
-export type GetRepositorySettingsData = {
-    body?: never;
-    path: {
-        /**
-         * Workspace slug
-         */
-        workspaceSlug: string;
-        teamId: number;
-        repositoryId: number;
-    };
-    query?: never;
-    url: '/workspaces/{workspaceSlug}/teams/{teamId}/settings/repositories/{repositoryId}';
-};
-
-export type GetRepositorySettingsResponses = {
-    /**
-     * Repository settings returned
-     */
-    200: WorkspaceTeamRepositorySettings;
-};
-
-export type GetRepositorySettingsResponse = GetRepositorySettingsResponses[keyof GetRepositorySettingsResponses];
-
-export type UpdateRepositorySettingsData = {
-    body: UpdateRepositorySettingsRequest;
-    path: {
-        /**
-         * Workspace slug
-         */
-        workspaceSlug: string;
-        teamId: number;
-        repositoryId: number;
-    };
-    query?: never;
-    url: '/workspaces/{workspaceSlug}/teams/{teamId}/settings/repositories/{repositoryId}';
-};
-
-export type UpdateRepositorySettingsErrors = {
-    /**
-     * Team or repository not found
-     */
-    404: WorkspaceTeamRepositorySettings;
-};
-
-export type UpdateRepositorySettingsError = UpdateRepositorySettingsErrors[keyof UpdateRepositorySettingsErrors];
-
-export type UpdateRepositorySettingsResponses = {
-    /**
-     * Repository settings updated
-     */
-    200: WorkspaceTeamRepositorySettings;
-};
-
-export type UpdateRepositorySettingsResponse = UpdateRepositorySettingsResponses[keyof UpdateRepositorySettingsResponses];
 
 export type UpdateTokenData = {
     body: UpdateWorkspaceTokenRequest;

@@ -105,8 +105,9 @@ class ReviewPracticeScriptServiceTest extends BaseUnitTest {
                                         "\"review\":1,\"chat\":0,\"decision\":1,\"embedding\":0,\"reranking\":0",
                                         "{\"modelCalls\":3,\"evidenceRefusals\":1,\"formatRefusals\":0}"))));
 
-        List<PracticeScriptRunDTO> mapped =
-                new ReviewPracticeScriptService(usage, runs, reviews, runtime).forReview(WORKSPACE, REVIEW);
+        List<PracticeScriptRunDTO> mapped = new ReviewPracticeScriptService(usage, runs, reviews, runtime)
+                .forReviews(WORKSPACE, List.of(REVIEW))
+                .get(REVIEW);
 
         assertThat(mapped)
                 .extracting(

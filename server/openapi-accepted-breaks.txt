@@ -69,3 +69,26 @@ in API GET /workspaces/{workspaceSlug}/llm/connections added the new `anthropic-
 in API POST /workspaces/{workspaceSlug}/llm/connections added the new `anthropic-messages` enum value to the `apiProtocol` response property for the response status `201`
 in API GET /workspaces/{workspaceSlug}/llm/connections/{id} added the new `anthropic-messages` enum value to the `apiProtocol` response property for the response status `200`
 in API PATCH /workspaces/{workspaceSlug}/llm/connections/{id} added the new `anthropic-messages` enum value to the `apiProtocol` response property for the response status `200`
+
+# 1.0: the 21 operations that 0.95.0 deprecated for removal. The UI uses the retained list, review-detail and trace operations.
+in API DELETE /workspaces/{workspaceSlug}/teams/{teamId}/settings/label-filters/{labelId} api path removed without deprecation
+in API GET /admin/llm/connections/{id} api removed without deprecation
+in API GET /admin/llm/models/{id} api removed without deprecation
+in API GET /workspaces/{workspaceSlug}/llm/connections/{id} api removed without deprecation
+in API GET /workspaces/{workspaceSlug}/llm/models/{id} api removed without deprecation
+in API GET /workspaces/{workspaceSlug}/members/{accountId} api removed without deprecation
+in API GET /workspaces/{workspaceSlug}/outline/collections/{collectionId} api removed without deprecation
+in API GET /workspaces/{workspaceSlug}/practices/items/{itemId} api path removed without deprecation
+in API GET /workspaces/{workspaceSlug}/practices/items/{itemId}/events api path removed without deprecation
+in API GET /workspaces/{workspaceSlug}/practices/review-batches/{batchId} api path removed without deprecation
+in API GET /workspaces/{workspaceSlug}/practices/reviews/evidence-outcomes api path removed without deprecation
+in API GET /workspaces/{workspaceSlug}/practices/reviews/{reviewId}/practice-scripts api path removed without deprecation
+in API GET /workspaces/{workspaceSlug}/practices/reviews/{reviewId}/usage api path removed without deprecation
+in API GET /workspaces/{workspaceSlug}/teams/{teamId}/settings api path removed without deprecation
+in API GET /workspaces/{workspaceSlug}/teams/{teamId}/settings/label-filters api path removed without deprecation
+in API GET /workspaces/{workspaceSlug}/teams/{teamId}/settings/repositories/{repositoryId} api path removed without deprecation
+in API PATCH /workspaces/{workspaceSlug}/practices/reorder api path removed without deprecation
+in API PATCH /workspaces/{workspaceSlug}/slug api path removed without deprecation
+in API PATCH /workspaces/{workspaceSlug}/teams/{teamId}/settings api path removed without deprecation
+in API PATCH /workspaces/{workspaceSlug}/teams/{teamId}/settings/repositories/{repositoryId} api path removed without deprecation
+in API POST /workspaces/{workspaceSlug}/teams/{teamId}/settings/label-filters/{labelId} api path removed without deprecation

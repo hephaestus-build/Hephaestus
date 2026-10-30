@@ -3262,13 +3262,6 @@ export const zRemoveResultMarkRequest = z.object({
     reason: z.string()
 });
 
-/**
- * Request to rename a workspace's URL slug
- */
-export const zRenameWorkspaceSlugRequest = z.object({
-    newSlug: z.string().min(3).max(51).regex(/^(?!.*--)[a-z0-9][a-z0-9-]{1,49}[a-z0-9]$/)
-});
-
 export const zReorderRequest = z.object({
     slugs: z.array(z.string().min(0).max(64).regex(/[a-z0-9]+(?:-[a-z0-9]+)*/)).min(0).max(10000)
 });
@@ -3618,14 +3611,6 @@ export const zFeedbackBasis = z.object({
     problemId: z.uuid().nullable(),
     result: zReviewBoundResult,
     resultId: z.uuid()
-});
-
-export const zReviewEvidenceOutcome = z.object({
-    notReviewed: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
-    outcomes: zOutcomeVector,
-    practiceName: z.string(),
-    practiceSlug: z.string(),
-    withheld: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' })
 });
 
 export const zReviewFeedback = z.object({
@@ -5165,25 +5150,6 @@ export const zPageResponseDtoConfigAuditEntryView = z.object({
  * is an implementation detail, not a JSON contract; these fields preserve the existing clients'
  * response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
  */
-export const zPageResponseDtoItemEvent = z.object({
-    content: z.array(zItemEvent),
-    empty: z.boolean(),
-    first: z.boolean(),
-    last: z.boolean(),
-    number: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
-    numberOfElements: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
-    pageable: zPageable,
-    size: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }),
-    sort: zSort,
-    totalElements: z.int(),
-    totalPages: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' })
-});
-
-/**
- * Stable wire representation for the APIs that expose flat page metadata. Spring Data's PageImpl
- * is an implementation detail, not a JSON contract; these fields preserve the existing clients'
- * response shape without relying on its bean properties. New APIs use Spring Data's PagedModel.
- */
 export const zPageResponseDtoItemRef = z.object({
     content: z.array(zItemRef),
     empty: z.boolean(),
@@ -5970,13 +5936,6 @@ export const zUpdatePracticeRequest = z.object({
     expectedVersionId: z.string().regex(/[1-9][0-9]*/)
 });
 
-/**
- * Request to update repository contribution visibility settings in a workspace
- */
-export const zUpdateRepositorySettingsRequest = z.object({
-    hiddenFromContributions: z.boolean()
-});
-
 export const zUpdateReviewBatchStatusRequest = z.object({
     status: z.enum([
         'AWAITING_CONFIRMATION',
@@ -6011,13 +5970,6 @@ export const zUpdateSlackUserPreferencesRequest = z.object({
 
 export const zUpdateSyncJobRequest = z.object({
     cancelRequested: z.boolean()
-});
-
-/**
- * Request to update team visibility settings in a workspace
- */
-export const zUpdateTeamSettingsRequest = z.object({
-    hidden: z.boolean()
 });
 
 /**
@@ -6911,25 +6863,6 @@ export const zWorkspaceGroupSplit = z.object({
         'NOT_OBSERVED',
         'NO_OPPORTUNITY'
     ]).nullable()
-});
-
-/**
- * Repository contribution visibility settings for a specific team within a workspace
- */
-export const zWorkspaceTeamRepositorySettings = z.object({
-    hiddenFromContributions: z.boolean(),
-    repositoryId: z.int(),
-    teamId: z.int(),
-    workspaceId: z.int()
-});
-
-/**
- * Team visibility settings for a specific workspace
- */
-export const zWorkspaceTeamSettings = z.object({
-    hidden: z.boolean(),
-    teamId: z.int(),
-    workspaceId: z.int()
 });
 
 /**

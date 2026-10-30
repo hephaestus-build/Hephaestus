@@ -10,7 +10,6 @@ import de.tum.cit.aet.hephaestus.practices.profile.OwnReviewFilter;
 import de.tum.cit.aet.hephaestus.practices.profile.PracticeProfileReviewService;
 import de.tum.cit.aet.hephaestus.practices.profile.dto.ProfileReviewDTO;
 import de.tum.cit.aet.hephaestus.practices.review.ProductItemQuery;
-import de.tum.cit.aet.hephaestus.practices.review.dto.ItemEventDTO;
 import de.tum.cit.aet.hephaestus.practices.review.dto.ItemFactDTO;
 import de.tum.cit.aet.hephaestus.practices.review.dto.ItemFactsDTO;
 import de.tum.cit.aet.hephaestus.practices.trace.ItemTraceQueryService;
@@ -63,13 +62,6 @@ public class ItemController {
         return directory.legacyFeedback(ws.id(), artifactKind, artifactId);
     }
 
-    @GetMapping("/{itemId}")
-    @RequireAtLeastWorkspaceAdmin
-    @Operation(operationId = "getReviewItem", summary = "Get an item")
-    public ItemRefDTO get(WorkspaceContext ws, @PathVariable long itemId) {
-        return trace.requireItem(ws.id(), itemId);
-    }
-
     @GetMapping("/{itemId}/facts")
     @RequireAtLeastWorkspaceAdmin
     @Operation(operationId = "getItemFacts", summary = "Get current facts about an item")
@@ -91,17 +83,6 @@ public class ItemController {
                         .sorted(Map.Entry.comparingByKey())
                         .map(e -> new ItemFactDTO(e.getKey(), e.getValue(), null))
                         .toList());
-    }
-
-    @GetMapping("/{itemId}/events")
-    @RequireAtLeastWorkspaceAdmin
-    @Operation(operationId = "listItemEvents", summary = "List item events")
-    public PageResponseDTO<ItemEventDTO> events(
-            WorkspaceContext ws,
-            @PathVariable long itemId,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "25") int size) {
-        return PageResponseDTO.from(trace.events(ws.id(), itemId, PageRequest.of(page, size)));
     }
 
     @GetMapping("/{itemId}/reviews")

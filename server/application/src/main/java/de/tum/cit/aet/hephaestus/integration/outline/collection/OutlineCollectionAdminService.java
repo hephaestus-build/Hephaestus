@@ -105,12 +105,6 @@ public class OutlineCollectionAdminService {
                 .toList();
     }
 
-    /** One mirrored collection by its Outline id, or {@link EntityNotFoundException} (404) when not registered. */
-    public OutlineCollectionDTO getCollection(Long workspaceId, String collectionId) {
-        OutlineInstall install = requireInstall(workspaceId);
-        return toDto(install, requireRegistered(install, collectionId));
-    }
-
     /**
      * Live proxy to {@code collections.list}: every collection the token can see, flagged with whether it is
      * already mirrored. Doubles as the connectivity probe — unreachable surfaces as 502, throttled as 503.

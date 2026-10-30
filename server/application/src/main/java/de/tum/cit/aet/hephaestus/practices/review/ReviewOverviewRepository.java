@@ -3,7 +3,6 @@ package de.tum.cit.aet.hephaestus.practices.review;
 import de.tum.cit.aet.hephaestus.practices.review.model.Review;
 import de.tum.cit.aet.hephaestus.practices.spi.FeedbackState;
 import de.tum.cit.aet.hephaestus.practices.spi.ResultOutcome;
-import de.tum.cit.aet.hephaestus.practices.spi.ReviewItemState;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewShownStatus;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStatus;
 import java.time.Instant;
@@ -63,14 +62,6 @@ public interface ReviewOverviewRepository extends Repository<Review, UUID> {
         """, nativeQuery = true)
     List<BucketCount> buckets(long ws, Instant from, Instant to, Long[] starts);
 
-    @Query(value = """
-        SELECT m.practice_id AS practiceId,m.state,count(*) AS count FROM review_item m JOIN review q
-          ON q.workspace_id=m.workspace_id AND q.id=m.review_id WHERE m.workspace_id=:ws AND q.created_at>=:from AND q.created_at<:to
-          AND (m.state='WITHHELD' OR (m.state='LISTED' AND q.status IN ('COMPLETE','PARTIAL','FAILED','CANCELLED')))
-        GROUP BY m.practice_id,m.state
-        """, nativeQuery = true)
-    List<ItemCount> itemStates(long ws, Instant from, Instant to);
-
     interface OutcomeCount {
         @Nullable
         Long getPracticeId();
@@ -98,14 +89,6 @@ public interface ReviewOverviewRepository extends Repository<Review, UUID> {
 
     interface StatusCount {
         ReviewStatus getStatus();
-
-        int getCount();
-    }
-
-    interface ItemCount {
-        long getPracticeId();
-
-        ReviewItemState getState();
 
         int getCount();
     }

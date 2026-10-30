@@ -77,14 +77,6 @@ class ReviewBatchControllerIntegrationTest extends BaseIntegrationTest {
     }
 
     @Test
-    void unknownBatchIsNotFound() {
-        get("/practices/review-batches/" + UUID.randomUUID())
-                .expectStatus()
-                .isNotFound()
-                .expectBody(Void.class);
-    }
-
-    @Test
     void shouldReturnConflictWhenAnEndedBatchIsResumed() {
         var now = Instant.now();
         var batch = batches.saveAndFlush(ReviewBatch.builder()

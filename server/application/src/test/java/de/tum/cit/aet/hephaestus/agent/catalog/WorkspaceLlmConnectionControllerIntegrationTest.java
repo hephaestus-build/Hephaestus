@@ -13,8 +13,10 @@ import de.tum.cit.aet.hephaestus.workspace.AccountType;
 import de.tum.cit.aet.hephaestus.workspace.Membership.WorkspaceRole;
 import de.tum.cit.aet.hephaestus.workspace.Workspace;
 import de.tum.cit.aet.hephaestus.workspace.spi.LlmConnectionPlatform;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
@@ -33,6 +35,22 @@ class WorkspaceLlmConnectionControllerIntegrationTest extends AbstractWorkspaceI
         Workspace workspace = createWorkspace(slug, "Workspace " + slug, slug + "-org", AccountType.ORG, owner);
         ensureAdminMembership(workspace);
         return workspace;
+    }
+
+    private Optional<WorkspaceLlmConnectionDTO> listedConnection(Workspace workspace, Long id) {
+        List<WorkspaceLlmConnectionDTO> listed = webTestClient
+                .get()
+                .uri("/workspaces/{slug}/llm/connections", workspace.getWorkspaceSlug())
+                .headers(TestAuthUtils.withCurrentUser())
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBodyList(WorkspaceLlmConnectionDTO.class)
+                .returnResult()
+                .getResponseBody();
+        return Objects.requireNonNull(listed).stream()
+                .filter(c -> c.id().equals(id))
+                .findFirst();
     }
 
     private WorkspaceLlmConnectionDTO createConnection(Workspace workspace, String slug) {
@@ -61,7 +79,7 @@ class WorkspaceLlmConnectionControllerIntegrationTest extends AbstractWorkspaceI
 
     @Test
     @WithAdminUser
-    void workspaceAdminCanCreateGetListUpdateAndDeleteAConnection() {
+    void workspaceAdminCanCreateListUpdateAndDeleteAConnection() {
         Workspace workspace = setupWorkspace("byo-crud-ws");
         WorkspaceLlmConnectionDTO created = createConnection(workspace, "my-openai");
 
@@ -73,18 +91,10 @@ class WorkspaceLlmConnectionControllerIntegrationTest extends AbstractWorkspaceI
         assertThat(created.purposes())
                 .containsExactly(AgentPurpose.PRACTICE_REVIEW, AgentPurpose.MENTOR, AgentPurpose.PRACTICE_DECISION);
 
-        webTestClient
-                .get()
-                .uri("/workspaces/{slug}/llm/connections/{id}", workspace.getWorkspaceSlug(), created.id())
-                .headers(TestAuthUtils.withCurrentUser())
-                .exchange()
-                .expectStatus()
-                .isOk()
-                .expectBody()
-                .jsonPath("$.slug")
-                .isEqualTo("my-openai")
-                .jsonPath("$.apiProtocol")
-                .isEqualTo("openai-completions");
+        assertThat(listedConnection(workspace, created.id())).hasValueSatisfying(listed -> {
+            assertThat(listed.slug()).isEqualTo("my-openai");
+            assertThat(listed.apiProtocol()).isEqualTo(LlmApiProtocol.OPENAI_COMPLETIONS);
+        });
 
         webTestClient
                 .get()
@@ -122,14 +132,7 @@ class WorkspaceLlmConnectionControllerIntegrationTest extends AbstractWorkspaceI
                 .isNoContent()
                 .expectBody(Void.class);
 
-        webTestClient
-                .get()
-                .uri("/workspaces/{slug}/llm/connections/{id}", workspace.getWorkspaceSlug(), created.id())
-                .headers(TestAuthUtils.withCurrentUser())
-                .exchange()
-                .expectStatus()
-                .isNotFound()
-                .expectBody(Void.class);
+        assertThat(listedConnection(workspace, created.id())).isEmpty();
     }
 
     @Test
@@ -195,13 +198,14 @@ class WorkspaceLlmConnectionControllerIntegrationTest extends AbstractWorkspaceI
         ensureAdminMembership(workspaceB);
 
         webTestClient
-                .get()
+                .delete()
                 .uri("/workspaces/{slug}/llm/connections/{id}", workspaceB.getWorkspaceSlug(), connectionInA.id())
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
                 .isNotFound()
                 .expectBody(Void.class);
+        assertThat(listedConnection(workspaceA, connectionInA.id())).isPresent();
     }
 
     @Test

@@ -34,11 +34,6 @@ public class LlmConnectionService {
         return connectionRepository.findAll();
     }
 
-    @Transactional(readOnly = true)
-    public LlmConnection get(Long id) {
-        return connectionRepository.findById(id).orElseThrow(() -> new EntityNotFoundException("LlmConnection", id));
-    }
-
     @Transactional
     public LlmConnection create(CreateLlmConnectionRequestDTO request) {
         String slug = connectionSlug(request.slug(), request.displayName());

@@ -6,7 +6,9 @@ import de.tum.cit.aet.hephaestus.agent.config.AgentPurpose;
 import de.tum.cit.aet.hephaestus.testconfig.LlmCatalogTestFixtures;
 import de.tum.cit.aet.hephaestus.workspace.AbstractWorkspaceIntegrationTest;
 import de.tum.cit.aet.hephaestus.workspace.spi.LlmConnectionPlatform;
+import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -31,6 +33,22 @@ class LlmConnectionAdminControllerIntegrationTest extends AbstractWorkspaceInteg
 
     @Autowired
     private LlmConnectionRepository llmConnectionRepository;
+
+    private Optional<LlmConnectionDTO> listedConnection(Long id) {
+        List<LlmConnectionDTO> listed = webTestClient
+                .get()
+                .uri("/admin/llm/connections")
+                .headers(h -> h.setBearerAuth(ADMIN_TOKEN))
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBodyList(LlmConnectionDTO.class)
+                .returnResult()
+                .getResponseBody();
+        return Objects.requireNonNull(listed).stream()
+                .filter(c -> c.id().equals(id))
+                .findFirst();
+    }
 
     private LlmConnectionDTO createConnection(String slug) {
         var request = new CreateLlmConnectionRequestDTO(
@@ -57,7 +75,7 @@ class LlmConnectionAdminControllerIntegrationTest extends AbstractWorkspaceInteg
     }
 
     @Test
-    void appAdminCanCreateGetListUpdateAndDeleteAConnection() {
+    void appAdminCanCreateListUpdateAndDeleteAConnection() {
         LlmConnectionDTO created = createConnection("openai-prod");
         assertThat(created).isNotNull();
         assertThat(created.slug()).isEqualTo("openai-prod");
@@ -68,16 +86,7 @@ class LlmConnectionAdminControllerIntegrationTest extends AbstractWorkspaceInteg
         assertThat(created.purposes())
                 .containsExactly(AgentPurpose.PRACTICE_REVIEW, AgentPurpose.MENTOR, AgentPurpose.PRACTICE_DECISION);
 
-        webTestClient
-                .get()
-                .uri("/admin/llm/connections/{id}", created.id())
-                .headers(h -> h.setBearerAuth(ADMIN_TOKEN))
-                .exchange()
-                .expectStatus()
-                .isOk()
-                .expectBody()
-                .jsonPath("$.slug")
-                .isEqualTo("openai-prod");
+        assertThat(listedConnection(created.id())).map(LlmConnectionDTO::slug).contains("openai-prod");
 
         webTestClient
                 .get()
@@ -120,14 +129,7 @@ class LlmConnectionAdminControllerIntegrationTest extends AbstractWorkspaceInteg
                 .isNoContent()
                 .expectBody(Void.class);
 
-        webTestClient
-                .get()
-                .uri("/admin/llm/connections/{id}", created.id())
-                .headers(h -> h.setBearerAuth(ADMIN_TOKEN))
-                .exchange()
-                .expectStatus()
-                .isNotFound()
-                .expectBody(Void.class);
+        assertThat(listedConnection(created.id())).isEmpty();
     }
 
     @Test

@@ -32,7 +32,6 @@ import de.tum.cit.aet.hephaestus.practices.result.ResultMarkService;
 import de.tum.cit.aet.hephaestus.practices.result.ResultRetentionService;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewIntegrationData;
 import de.tum.cit.aet.hephaestus.practices.review.ReviewItemRepository;
-import de.tum.cit.aet.hephaestus.practices.review.ReviewOverviewService;
 import de.tum.cit.aet.hephaestus.practices.review.model.ReviewItem;
 import de.tum.cit.aet.hephaestus.practices.review.report.ScanMembershipQueries;
 import de.tum.cit.aet.hephaestus.practices.review.report.ScanReportService;
@@ -118,9 +117,6 @@ class ScanReportIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     ReviewAssignmentStore assignments;
-
-    @Autowired
-    ReviewOverviewService overview;
 
     @Autowired
     ReviewService reviews;
@@ -511,9 +507,6 @@ class ScanReportIntegrationTest extends BaseIntegrationTest {
         assertThat(recorded.withheld()).isOne();
         assertThat(recorded.notReviewed()).isZero();
         assertThat(recorded.reviewed()).isZero();
-        var evidence = overview.evidenceOutcomes(workspaceId).getFirst();
-        assertThat(evidence.withheld()).isOne();
-        assertThat(evidence.notReviewed()).isZero();
         assertThat(jdbc.sql("SELECT COUNT(*) FROM result WHERE workspace_id=:ws AND review_id=:review")
                         .param("ws", workspaceId)
                         .param("review", reviewId)

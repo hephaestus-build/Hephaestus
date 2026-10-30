@@ -289,11 +289,11 @@ class ReviewSummaryControllerIntegrationTest extends BaseIntegrationTest {
     @Test
     void usageHasAnExplicitEmptyAttemptListAfterRuntimeExpiry() {
         var r = data.result(scenario, ResultOutcome.MET, Instant.now());
-        get("/practices/reviews/" + r.getReviewId() + "/usage")
+        get("/practices/reviews/" + r.getReviewId())
                 .expectStatus()
                 .isOk()
                 .expectBody()
-                .jsonPath("$.attempts.length()")
+                .jsonPath("$.usage.attempts.length()")
                 .isEqualTo(0);
     }
 

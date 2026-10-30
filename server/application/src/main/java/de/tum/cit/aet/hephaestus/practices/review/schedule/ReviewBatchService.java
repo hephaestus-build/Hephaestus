@@ -164,10 +164,6 @@ public class ReviewBatchService {
         return batches.findByWorkspaceId(context.id(), page).map(this::dto);
     }
 
-    public ReviewBatchDTO get(WorkspaceContext context, UUID id) {
-        return dto(require(context.id(), id));
-    }
-
     public ReviewBatchDTO dto(ReviewBatch batch) {
         var ids = Stream.of(batch.getRequestedByAccountId(), batch.getConfirmedByAccountId())
                 .filter(Objects::nonNull)

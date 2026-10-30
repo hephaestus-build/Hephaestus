@@ -76,21 +76,6 @@ public class WorkspaceLlmModelController {
                 modelService.list(workspaceContext).stream().map(this::toDTO).toList());
     }
 
-    @GetMapping("/models/{id}")
-    @Operation(summary = "Get a model on your AI provider", operationId = "workspaceGetLlmModel")
-    @ApiResponse(
-            responseCode = "200",
-            description = "OK",
-            content = @Content(schema = @Schema(implementation = WorkspaceLlmModelDTO.class)))
-    @ApiResponse(
-            responseCode = "404",
-            description = "Model not found",
-            content = @Content(schema = @Schema(hidden = true)))
-    @RequireAtLeastWorkspaceAdmin
-    public ResponseEntity<WorkspaceLlmModelDTO> get(WorkspaceContext workspaceContext, @PathVariable Long id) {
-        return ResponseEntity.ok(toDTO(modelService.get(workspaceContext, id)));
-    }
-
     @PatchMapping("/models/{id}")
     @Operation(summary = "Update a model on your AI provider", operationId = "workspaceUpdateLlmModel")
     @ApiResponse(

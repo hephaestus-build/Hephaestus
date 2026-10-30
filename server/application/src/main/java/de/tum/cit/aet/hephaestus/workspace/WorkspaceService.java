@@ -325,23 +325,7 @@ public class WorkspaceService {
     }
 
     @Transactional
-    public Workspace renameSlug(WorkspaceContext workspaceContext, String newSlug) {
-        Objects.requireNonNull(workspaceContext, "WorkspaceContext must not be null");
-
-        Long workspaceId = workspaceContext.id();
-        if (workspaceId == null) {
-            throw new EntityNotFoundException("Workspace", "context");
-        }
-
-        return renameSlugInTransaction(workspaceId, newSlug);
-    }
-
-    @Transactional
     public Workspace renameSlug(Long workspaceId, String newSlug) {
-        return renameSlugInTransaction(workspaceId, newSlug);
-    }
-
-    private Workspace renameSlugInTransaction(Long workspaceId, String newSlug) {
         workspaceSlugService.validate(newSlug);
 
         Workspace workspace = workspaceRepository

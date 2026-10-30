@@ -23,6 +23,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -127,6 +128,22 @@ class WorkspaceLlmModelControllerIntegrationTest extends AbstractWorkspaceIntegr
                 .getResponseBody());
     }
 
+    private Optional<WorkspaceLlmModelDTO> listedModel(Workspace workspace, Long id) {
+        List<WorkspaceLlmModelDTO> listed = webTestClient
+                .get()
+                .uri("/workspaces/{slug}/llm/models", workspace.getWorkspaceSlug())
+                .headers(TestAuthUtils.withCurrentUser())
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBodyList(WorkspaceLlmModelDTO.class)
+                .returnResult()
+                .getResponseBody();
+        return Objects.requireNonNull(listed).stream()
+                .filter(c -> c.id().equals(id))
+                .findFirst();
+    }
+
     private void saveGrant(Long modelId, Long workspaceId) {
         LlmModelWorkspaceGrant grant = new LlmModelWorkspaceGrant(modelId, workspaceId);
         grant.setGrantedAt(Instant.now());
@@ -196,7 +213,7 @@ class WorkspaceLlmModelControllerIntegrationTest extends AbstractWorkspaceIntegr
 
     @Test
     @WithAdminUser
-    void workspaceAdminCanCreateGetListUpdateAndDeleteAModel() {
+    void workspaceAdminCanCreateListUpdateAndDeleteAModel() {
         Workspace workspace = setupWorkspace("wsmodel-crud-ws");
         WorkspaceLlmConnectionDTO connection = createWorkspaceConnection(workspace, "conn-1");
         WorkspaceLlmModelDTO created = createWorkspaceModel(workspace, connection.id(), "model-1");
@@ -204,16 +221,9 @@ class WorkspaceLlmModelControllerIntegrationTest extends AbstractWorkspaceIntegr
         assertThat(created).isNotNull();
         assertThat(created.slug()).isEqualTo("model-1");
 
-        webTestClient
-                .get()
-                .uri("/workspaces/{slug}/llm/models/{id}", workspace.getWorkspaceSlug(), created.id())
-                .headers(TestAuthUtils.withCurrentUser())
-                .exchange()
-                .expectStatus()
-                .isOk()
-                .expectBody()
-                .jsonPath("$.slug")
-                .isEqualTo("model-1");
+        assertThat(listedModel(workspace, created.id()))
+                .map(WorkspaceLlmModelDTO::slug)
+                .contains("model-1");
 
         webTestClient
                 .get()
@@ -265,14 +275,7 @@ class WorkspaceLlmModelControllerIntegrationTest extends AbstractWorkspaceIntegr
                 .isNoContent()
                 .expectBody(Void.class);
 
-        webTestClient
-                .get()
-                .uri("/workspaces/{slug}/llm/models/{id}", workspace.getWorkspaceSlug(), created.id())
-                .headers(TestAuthUtils.withCurrentUser())
-                .exchange()
-                .expectStatus()
-                .isNotFound()
-                .expectBody(Void.class);
+        assertThat(listedModel(workspace, created.id())).isEmpty();
     }
 
     @Test
@@ -377,13 +380,14 @@ class WorkspaceLlmModelControllerIntegrationTest extends AbstractWorkspaceIntegr
         ensureAdminMembership(workspaceB);
 
         webTestClient
-                .get()
+                .delete()
                 .uri("/workspaces/{slug}/llm/models/{id}", workspaceB.getWorkspaceSlug(), modelInA.id())
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
                 .isNotFound()
                 .expectBody(Void.class);
+        assertThat(workspaceLlmModelRepository.findById(modelInA.id())).isPresent();
     }
 
     @Test

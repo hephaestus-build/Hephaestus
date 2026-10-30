@@ -106,13 +106,13 @@ class PracticeReviewItemFactsIntegrationTest extends BaseIntegrationTest {
 
     @Test
     void itemReferenceUsesTheCanonicalId() {
-        get("/practices/items/" + scenario.item().getId())
+        get("/practices/items/" + scenario.item().getId() + "/trace")
                 .expectStatus()
                 .isOk()
                 .expectBody()
-                .jsonPath("$.id")
+                .jsonPath("$.item.id")
                 .isEqualTo(scenario.item().getId().toString())
-                .jsonPath("$.kind")
+                .jsonPath("$.item.kind")
                 .isEqualTo("scm.pull_request");
     }
 
@@ -192,15 +192,5 @@ class PracticeReviewItemFactsIntegrationTest extends BaseIntegrationTest {
                 .isEqualTo("OPEN")
                 .jsonPath("$.facts[?(@.name == 'baseBranch')].value")
                 .isEqualTo("main");
-    }
-
-    @Test
-    void itemWithNoEventsReturnsAnEmptyPage() {
-        get("/practices/items/" + scenario.item().getId() + "/events")
-                .expectStatus()
-                .isOk()
-                .expectBody()
-                .jsonPath("$.totalElements")
-                .isEqualTo(0);
     }
 }

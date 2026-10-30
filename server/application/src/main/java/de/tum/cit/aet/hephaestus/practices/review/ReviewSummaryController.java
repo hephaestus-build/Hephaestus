@@ -9,13 +9,10 @@ import de.tum.cit.aet.hephaestus.core.time.TimeRangeFilterParams;
 import de.tum.cit.aet.hephaestus.core.web.PageResponseDTO;
 import de.tum.cit.aet.hephaestus.practices.review.dto.ReviewDTO;
 import de.tum.cit.aet.hephaestus.practices.review.dto.ReviewDetailDTO;
-import de.tum.cit.aet.hephaestus.practices.review.dto.ReviewEvidenceOutcomeDTO;
 import de.tum.cit.aet.hephaestus.practices.review.dto.ReviewOverviewDTO;
 import de.tum.cit.aet.hephaestus.practices.review.dto.ReviewQueueDTO;
 import de.tum.cit.aet.hephaestus.practices.review.dto.ReviewSummaryDTO;
 import de.tum.cit.aet.hephaestus.practices.review.dto.ReviewTimingDTO;
-import de.tum.cit.aet.hephaestus.practices.review.dto.ReviewUsageDTO;
-import de.tum.cit.aet.hephaestus.practices.spi.PracticeScriptRunDTO;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewListSort;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewService;
 import de.tum.cit.aet.hephaestus.practices.spi.ReviewStatus;
@@ -32,7 +29,6 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import java.time.Clock;
-import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springdoc.core.annotations.ParameterObject;
@@ -108,16 +104,6 @@ public class ReviewSummaryController {
                 PageResponseDTO.from(queryService.list(workspaceContext.id(), filter.validated(), pageable)));
     }
 
-    @GetMapping("/evidence-outcomes")
-    @Operation(
-            summary = "Summarize how each practice's evidence requirements turned out on recent reviews",
-            description = "One entry per practice that recent reviews considered, with the sources that skipped it.",
-            operationId = "getReviewEvidenceOutcomes")
-    @ApiResponse(responseCode = "200", description = "Evidence outcomes returned")
-    public ResponseEntity<List<ReviewEvidenceOutcomeDTO>> listEvidenceOutcomes(WorkspaceContext workspaceContext) {
-        return ResponseEntity.ok(overviewService.evidenceOutcomes(workspaceContext.id()));
-    }
-
     @GetMapping("/overview")
     @Operation(
             summary = "Count practice reviews, results and feedback in a time range",
@@ -184,17 +170,5 @@ public class ReviewSummaryController {
     @Operation(operationId = "getReview", summary = "Get a review")
     public ReviewDetailDTO get(WorkspaceContext ws, @PathVariable UUID reviewId) {
         return queryService.detail(ws.id(), reviewId);
-    }
-
-    @GetMapping("/{reviewId}/usage")
-    @Operation(operationId = "getReviewUsage", summary = "Get review usage")
-    public ReviewUsageDTO usage(WorkspaceContext ws, @PathVariable UUID reviewId) {
-        return queryService.usage(ws.id(), reviewId);
-    }
-
-    @GetMapping("/{reviewId}/practice-scripts")
-    @Operation(operationId = "listReviewPracticeScripts", summary = "List scripts executed in a review")
-    public List<PracticeScriptRunDTO> scripts(WorkspaceContext ws, @PathVariable UUID reviewId) {
-        return queryService.scripts(ws.id(), reviewId);
     }
 }

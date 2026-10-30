@@ -115,17 +115,17 @@ class LlmCallPoolAdminControllerIntegrationTest extends AbstractWorkspaceIntegra
                 .isEqualTo(pool.id());
         webTestClient
                 .get()
-                .uri("/workspaces/{slug}/llm/models/{id}", workspace.getWorkspaceSlug(), workspaceModel.getId())
+                .uri("/workspaces/{slug}/llm/models", workspace.getWorkspaceSlug())
                 .headers(TestAuthUtils.withCurrentUser())
                 .exchange()
                 .expectStatus()
                 .isOk()
                 .expectBody()
-                .jsonPath("$.callPool.slug")
+                .jsonPath("$[?(@.id == %d)].callPool.slug".formatted(workspaceModel.getId()))
                 .isEqualTo(pool.slug())
-                .jsonPath("$.callPool.interactiveReserve")
+                .jsonPath("$[?(@.id == %d)].callPool.interactiveReserve".formatted(workspaceModel.getId()))
                 .isEqualTo(2)
-                .jsonPath("$.callPool.noCallBefore")
+                .jsonPath("$[?(@.id == %d)].callPool.noCallBefore".formatted(workspaceModel.getId()))
                 .doesNotExist();
 
         models = putModels(pool.id(), List.of(), List.of(workspaceModel.getId()));
