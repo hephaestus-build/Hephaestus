@@ -1007,7 +1007,7 @@ Hephaestus uses Pi's own compaction, with Pi's default summary prompt.
   An answer then cites files that it no longer sees.
   A summary can also split an older turn.
   It then describes that turn's question as still open, next to the answer in progress.
-  If the turn no longer fits the model's window, Pi's overflow recovery still compacts it.
+  If the model runs out of room during the answer, Pi's overflow recovery still compacts the conversation.
 
 Pi's own check before a prompt reads only the usage of its last answer.
 The host also counts what the ledger holds after that answer, for example the question of a failed turn.

@@ -1144,13 +1144,22 @@ const REPOSITORY_NOT_READ =
 const ABOUT_TESTS =
 	/\bUserServiceTest\b|\b(?:the|its|existing|current|three|two|only) tests?\b|\btests? (?:covers?|checks?|pins?|asserts?|exercises?)\b/iu;
 
-/** A sentence that proposes a test rather than saying that one exists. */
+/** Words before a test name that propose it rather than say that it exists. */
 const PROPOSES =
 	/\b(?:add|adding|write|writing|missing|should|could|would|consider|propose|suggest|no|not|needs?)\b/iu;
 
+/** Words before a test name that say that the file has it. */
+const ASSERTS_EXISTENCE = /\b(?:has|have|contains?|includes?|there (?:is|are))\b/iu;
+
 /** A sentence about what the code did before the change. */
 const BEFORE_THE_CHANGE =
-	/\b(?:previously|used to|old code|earlier|threw|fell|went|was|were|did)\b/iu;
+	/\b(?:previously|used to|old code|earlier|threw|fell|went|was|were|did)\b|\bbefore (?:this|the) (?:PR|pull request|change)\b/iu;
+
+/** Whether the words of `sentence` before `name` say that the test file has it, rather than propose it. */
+function claimsTest(sentence: string, name: string): boolean {
+	const before = sentence.slice(0, sentence.indexOf(name));
+	return ASSERTS_EXISTENCE.test(before) || !PROPOSES.test(before);
+}
 
 /** The identifier of the last code span in `text` that is not a file name: what a citation after it quotes. */
 function quotedBefore(text: string): string | undefined {
@@ -1183,14 +1192,12 @@ function assertGroundedInPr66(text: string, evidence: Pr66Evidence) {
 	const testsLimited = all.some((sentence) => TESTS_NOT_READ.test(sentence));
 	const repositoryLimited = all.some((sentence) => REPOSITORY_NOT_READ.test(sentence));
 	for (const sentence of all) {
-		// A test that the answer proposes ("add …", "is missing") is not a claim that it exists.
-		if (!PROPOSES.test(sentence)) {
-			for (const name of sentence.match(/\b(?:findById|createUser)_\w+/gu) ?? []) {
-				assert.ok(
-					PR66_TESTS.includes(name),
-					`names a test the file does not have (${name}): ${text}`,
-				);
-			}
+		// A test that the answer proposes ("add …") is not a claim that it exists; "has …" is, whatever follows.
+		for (const name of sentence.match(/\b(?:findById|createUser)_\w+/gu) ?? []) {
+			assert.ok(
+				PR66_TESTS.includes(name) || !claimsTest(sentence, name),
+				`names a test the file does not have (${name}): ${text}`,
+			);
 		}
 		if (!read.tests && !testsLimited && ABOUT_TESTS.test(sentence)) {
 			assert.fail(`describes tests it did not read: ${text}`);
@@ -1251,6 +1258,11 @@ void test("T4-4: the oracle rejects staging's two claims and accepts grounded an
 		["`validateId` is at UserService.java:1.", all],
 		["`validateId` is shown in `UserService.java:1`.", all],
 		["The tests cover successful creation but are missing null cases.", staging],
+		[
+			"UserServiceTest has `createUser_validInput_returnsUser`, which should cover successful creation.",
+			all,
+		],
+		["Before this PR, `findById(null)` throws `UserNotFoundException`.", staging],
 	];
 	for (const [text, read] of wrong) {
 		assert.throws(() => assertGroundedInPr66(text, read), text);
