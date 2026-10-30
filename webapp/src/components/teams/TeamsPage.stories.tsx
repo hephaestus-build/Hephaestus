@@ -146,6 +146,11 @@ export const WithTeams: Story = {
 		teams: mockTeams,
 		state: { status: "ready" },
 	},
+	play: async ({ canvas }) => {
+		await expect(
+			canvas.getByText("See members grouped by team and explore their activity."),
+		).toBeVisible();
+	},
 };
 
 export const Loading: Story = {

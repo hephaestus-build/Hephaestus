@@ -238,7 +238,7 @@ export function TeamsPage({ teams, state }: TeamsPageProps) {
 			<PageHeader
 				icon={<Users />}
 				title="Teams"
-				description="See contributors grouped by team and explore their activity."
+				description="See members grouped by team and explore their activity."
 			/>
 
 			{state.status === "ready" && state.refresh !== undefined && (

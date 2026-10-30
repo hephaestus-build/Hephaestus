@@ -22,13 +22,10 @@ const meta = {
 			allowSearchEngines: false,
 			live: false,
 			hiddenPeople: undefined,
-			hiddenContributors: { status: "ready", people: [] },
-			restoring: undefined,
 			pending: undefined,
 		},
 		onEnabledChange: fn(),
 		onSearchEnginesChange: fn(),
-		onShowAgain: fn(),
 	},
 } satisfies Meta<typeof WorkspacePublicActivitySettings>;
 
@@ -50,8 +47,6 @@ const live = {
 	allowSearchEngines: false,
 	live: true,
 	hiddenPeople: 3,
-	hiddenContributors: { status: "ready", people: [] },
-	restoring: undefined,
 	pending: undefined,
 } as const;
 
@@ -166,126 +161,6 @@ export const OnPublicationUnconfirmedSearchAllowed: Story = {
 			canvas.getByText("On. Search engines are allowed to list the page when it is public."),
 		).toBeVisible();
 		await expect(canvas.queryByText(/Anyone can see it/u)).toBeNull();
-	},
-};
-
-/** A person an admin hid with no membership can be shown again here, and nowhere else. */
-export const HiddenByAnAdmin: Story = {
-	args: {
-		state: {
-			...live,
-			hiddenPeople: 2,
-			hiddenContributors: {
-				status: "ready",
-				people: [
-					{ id: 11, login: "ada", name: "Ada Lovelace", avatarUrl: "" },
-					{ id: 12, login: "bob", name: "Bob Brenner", avatarUrl: "" },
-				],
-			},
-		},
-	},
-	play: async ({ args, canvas, userEvent }) => {
-		const list = within(canvas.getByRole("region", { name: "Hidden by an admin" }));
-		await expect(list.getAllByRole("listitem")).toHaveLength(2);
-		const [ada] = list.getAllByRole("button", { name: "Show again" });
-		await userEvent.click(ada ?? list.getByRole("list"));
-		await expect(args.onShowAgain).toHaveBeenCalledWith(11);
-	},
-};
-
-export const ShowingAgain: Story = {
-	args: {
-		state: {
-			...live,
-			hiddenContributors: {
-				status: "ready",
-				people: [{ id: 11, login: "ada", name: "Ada Lovelace", avatarUrl: "" }],
-			},
-			restoring: 11,
-		},
-	},
-	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("button", { name: "Show again" })).toHaveAttribute(
-			"aria-disabled",
-			"true",
-		);
-	},
-};
-
-/** While the hidden people are read, the settings stand and nothing claims nobody is hidden. */
-export const HiddenContributorsLoading: Story = {
-	args: { state: { ...live, hiddenContributors: { status: "loading" } } },
-	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("switch", { name: PAGE })).toBeChecked();
-		await expect(canvas.queryByRole("region", { name: "Hidden by an admin" })).toBeNull();
-		await expect(canvas.queryByRole("alert")).toBeNull();
-	},
-};
-
-/** A failed read of the hidden people is said beside settings that still work. */
-export const HiddenContributorsFailed: Story = {
-	args: {
-		state: {
-			...live,
-			hiddenContributors: { status: "error", error: new Error("Network down"), onRetry: fn() },
-		},
-	},
-	play: async ({ canvas }) => {
-		await expect(canvas.getByText("We could not load hidden contributors")).toBeVisible();
-		await expect(canvas.getByRole("switch", { name: PAGE })).toBeChecked();
-		await expect(canvas.getByRole("button", { name: /Retry/u })).toBeEnabled();
-	},
-};
-
-/** A refused read of the hidden people shows nobody and no retry that would be refused again. */
-export const HiddenContributorsRefused: Story = {
-	args: {
-		state: {
-			...live,
-			hiddenContributors: { status: "error", error: { status: 403 }, onRetry: fn() },
-		},
-	},
-	play: async ({ canvas }) => {
-		await expect(canvas.getByText("You do not have access to hidden contributors")).toBeVisible();
-		await expect(canvas.queryByRole("button", { name: /Retry/u })).toBeNull();
-		await expect(canvas.queryByRole("button", { name: "Show again" })).toBeNull();
-		await expect(canvas.getByRole("switch", { name: PAGE })).toBeChecked();
-	},
-};
-
-/** A failed refresh keeps the people last read, and their Show again, with a notice and Retry. */
-export const HiddenContributorsRefreshFailed: Story = {
-	args: {
-		state: {
-			...live,
-			hiddenContributors: {
-				status: "ready",
-				people: [{ id: 11, login: "ada", name: "Ada Lovelace", avatarUrl: "" }],
-				refreshFailure: { error: { status: 503 }, onRetry: fn(), pending: false },
-			},
-		},
-	},
-	play: async ({ canvas }) => {
-		await expect(canvas.getByText("Hidden contributors may be out of date")).toBeVisible();
-		await expect(canvas.getByRole("button", { name: /Retry/u })).toBeEnabled();
-		await expect(canvas.getByRole("button", { name: "Show again" })).toBeEnabled();
-	},
-};
-
-export const HiddenContributorsRetrying: Story = {
-	args: {
-		state: {
-			...live,
-			hiddenContributors: {
-				status: "ready",
-				people: [{ id: 11, login: "ada", name: "Ada Lovelace", avatarUrl: "" }],
-				refreshFailure: { error: { status: 503 }, onRetry: fn(), pending: true },
-			},
-		},
-	},
-	play: async ({ canvas }) => {
-		await expect(canvas.getByRole("button", { name: "Retrying…" })).toBeDisabled();
-		await expect(canvas.getByText("Ada Lovelace")).toBeVisible();
 	},
 };
 

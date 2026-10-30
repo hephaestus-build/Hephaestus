@@ -240,7 +240,7 @@ describe("the public activity page setting", () => {
 		},
 	);
 
-	it("waits for hidden contributors without saying there are none, and reads them again on retry", async () => {
+	it("waits for hidden people without saying there are none, and reads them again on retry", async () => {
 		const user = userEvent.setup();
 		settings = { enabled: true, allowSearchEngines: false };
 		const first = deferred<Response>();
@@ -258,19 +258,20 @@ describe("the public activity page setting", () => {
 			{ name: "Publish the page" },
 			ROUTE_RENDER_WAIT,
 		);
-		const page = screen.getByRole("region", { name: "Public activity page" });
+		const page = screen.getByRole("region", { name: "Hidden people" });
 		await waitFor(() => expect(reads).toBe(1));
 		expect(page.querySelector("[data-slot='skeleton']")).not.toBeNull();
 		expect(within(page).queryByRole("button", { name: "Show again" })).toBeNull();
+		expect(within(page).queryByText("No person without a membership is hidden.")).toBeNull();
 
 		first.resolve(HttpResponse.json({ status: 500 }, { status: 500 }));
-		await within(page).findByText("We could not load hidden contributors");
+		await within(page).findByText("We could not load hidden people");
 		expect(control.getAttribute("aria-checked")).toBe("true");
 		await user.click(screen.getByRole("switch", { name: "Allow search engines" }));
 		await waitFor(() =>
 			expect(changes).toStrictEqual([{ publicActivityEnabled: true, allowSearchEngines: true }]),
 		);
-		within(page).getByText("We could not load hidden contributors");
+		within(page).getByText("We could not load hidden people");
 		server.use(
 			http.get("*/workspaces/acme/activity/hidden-contributors", async () => {
 				reads += 1;
@@ -288,7 +289,7 @@ describe("the public activity page setting", () => {
 			]),
 		);
 		await within(page).findByRole("button", { name: "Show again" });
-		expect(within(page).queryByText("We could not load hidden contributors")).toBeNull();
+		expect(within(page).queryByText("We could not load hidden people")).toBeNull();
 		expect(reads).toBe(2);
 	});
 
@@ -313,7 +314,7 @@ describe("the public activity page setting", () => {
 		await waitFor(() => expect(shown).toStrictEqual(["?hidden=false"]));
 	});
 
-	it("hides refused hidden contributors, keeps them hidden through an outage, and shows only a fresh read", async () => {
+	it("hides refused hidden people, keeps them hidden through an outage, and shows only a fresh read", async () => {
 		settings = { enabled: true, allowSearchEngines: false };
 		const contributors = serveRead("*/workspaces/acme/activity/hidden-contributors", {
 			status: 200,
@@ -323,25 +324,25 @@ describe("the public activity page setting", () => {
 		const user = userEvent.setup();
 		const queryClient = renderSettingsRoute(false);
 		const page = within(
-			await screen.findByRole("region", { name: "Public activity page" }, ROUTE_RENDER_WAIT),
+			await screen.findByRole("region", { name: "Hidden people" }, ROUTE_RENDER_WAIT),
 		);
 		await page.findByText("Ada Lovelace");
 
 		contributors.answer = { status: 403 };
 		await reread(queryClient, listHiddenContributorsQueryKey(ACME));
 		expect(contributors.count).toBe(2);
-		await page.findByText("You do not have access to hidden contributors");
+		await page.findByText("You do not have access to hidden people");
 		expect(page.queryByText("Ada Lovelace")).toBeNull();
 		expect(page.queryByRole("button", { name: "Show again" })).toBeNull();
 		expect(page.queryByRole("button", { name: "Retry" })).toBeNull();
-		page.getByRole("switch", { name: "Publish the page" });
+		screen.getByRole("switch", { name: "Publish the page" });
 
 		contributors.answer = { status: 503 };
 		await reread(queryClient, listHiddenContributorsQueryKey(ACME));
 		expect(contributors.count).toBe(3);
-		await page.findByText("We could not load hidden contributors");
+		await page.findByText("We could not load hidden people");
 		expect(page.queryByText("Ada Lovelace")).toBeNull();
-		expect(page.queryByText("Hidden contributors may be out of date")).toBeNull();
+		expect(page.queryByText("Hidden people may be out of date")).toBeNull();
 
 		contributors.answer = { status: 200, body: [HIDDEN_GRACE] };
 		await user.click(page.getByRole("button", { name: "Retry" }));
@@ -351,7 +352,7 @@ describe("the public activity page setting", () => {
 		expect(shown).toStrictEqual([]);
 	});
 
-	it("keeps hidden contributors through an outage with a notice, and reads them again", async () => {
+	it("keeps hidden people through an outage with a notice, and reads them again", async () => {
 		settings = { enabled: true, allowSearchEngines: false };
 		const contributors = serveRead("*/workspaces/acme/activity/hidden-contributors", {
 			status: 200,
@@ -360,14 +361,14 @@ describe("the public activity page setting", () => {
 		const user = userEvent.setup();
 		const queryClient = renderSettingsRoute(false);
 		const page = within(
-			await screen.findByRole("region", { name: "Public activity page" }, ROUTE_RENDER_WAIT),
+			await screen.findByRole("region", { name: "Hidden people" }, ROUTE_RENDER_WAIT),
 		);
 		await page.findByText("Ada Lovelace");
 
 		contributors.answer = { status: 503 };
 		await reread(queryClient, listHiddenContributorsQueryKey(ACME));
 		expect(contributors.count).toBe(2);
-		await page.findByText("Hidden contributors may be out of date");
+		await page.findByText("Hidden people may be out of date");
 		page.getByText("Ada Lovelace");
 		page.getByRole("button", { name: "Show again" });
 
@@ -383,7 +384,7 @@ describe("the public activity page setting", () => {
 		}
 		await page.findByText("Grace Hopper");
 		expect(contributors.count).toBe(3);
-		expect(page.queryByText("Hidden contributors may be out of date")).toBeNull();
+		expect(page.queryByText("Hidden people may be out of date")).toBeNull();
 	});
 
 	it("closes a refused page's publishing confirmation and does not reopen it once the settings read again", async () => {

@@ -138,7 +138,7 @@ export function WorkspaceTeamsTable({
 		<PageHeader
 			icon={<Network />}
 			title="Team setup"
-			description="Manage which synced teams and repositories participate in this workspace."
+			description="Choose which teams and repositories count in workspace activity, and which labels count toward a team."
 		/>
 	);
 

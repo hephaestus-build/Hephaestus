@@ -39,7 +39,36 @@ export function WorkspaceCapabilitiesSettings({
 				<Capability
 					icon={<Activity />}
 					title="Activity"
-					description="Always on. Every member sees their own activity and the workspace’s. Hide members or teams from workspace activity under Members and Teams."
+					description={
+						<>
+							Always on. Every member sees their own activity and the workspace’s. To hide someone
+							or show them again, use{" "}
+							<InlineLink
+								render={<Link to="/w/$workspaceSlug/admin/members" params={{ workspaceSlug }} />}
+							>
+								Members
+							</InlineLink>{" "}
+							for members,{" "}
+							<InlineLink
+								render={<Link to="/w/$workspaceSlug/admin/teams" params={{ workspaceSlug }} />}
+							>
+								Team setup
+							</InlineLink>{" "}
+							for teams and repositories, and{" "}
+							<InlineLink
+								render={
+									<Link
+										to="/w/$workspaceSlug/admin/settings"
+										params={{ workspaceSlug }}
+										hash="hidden-people-heading"
+									/>
+								}
+							>
+								Hidden people
+							</InlineLink>{" "}
+							for people without a membership.
+						</>
+					}
 				/>
 				<Capability
 					icon={<Compass />}
@@ -84,7 +113,7 @@ function Capability({
 }: {
 	icon: ReactNode;
 	title: string;
-	description: string;
+	description: ReactNode;
 	action?: ReactNode;
 }) {
 	return (

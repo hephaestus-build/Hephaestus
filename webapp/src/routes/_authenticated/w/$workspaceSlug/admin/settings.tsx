@@ -37,7 +37,7 @@ function AdminSettings() {
 	} = useWorkspaceAccess();
 	const workspace =
 		administrationWorkspaceSlug === undefined ? chromeWorkspace : administrationWorkspace;
-	const publicActivity = useWorkspacePublicActivity({
+	const { hiddenPeople, ...publicActivity } = useWorkspacePublicActivity({
 		workspaceSlug,
 		live:
 			administrationWorkspaceSlug === undefined
@@ -75,6 +75,7 @@ function AdminSettings() {
 					address: workspace.workspaceAddress,
 					...publicActivity,
 				}}
+				hiddenPeople={hiddenPeople}
 			/>
 		);
 	}

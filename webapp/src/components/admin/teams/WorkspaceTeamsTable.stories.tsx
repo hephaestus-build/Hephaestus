@@ -140,7 +140,21 @@ const meta = {
 export default meta;
 export type Story = StoryObj<typeof meta>;
 
-export const Default: Story = {};
+/**
+ * The page says what it decides: what counts in workspace activity, not what gets reviewed. A hidden
+ * team is shown again from the same place.
+ */
+export const Default: Story = {
+	play: async ({ args, canvas, userEvent }) => {
+		await expect(
+			canvas.getByText(
+				"Choose which teams and repositories count in workspace activity, and which labels count toward a team.",
+			),
+		).toBeVisible();
+		await userEvent.click(canvas.getByRole("button", { name: "Show QA in workspace activity" }));
+		await expect(args.onHideTeam).toHaveBeenCalledWith(3, false);
+	},
+};
 export const Loading: Story = { args: { isLoading: true, teams: [] } };
 
 export const Empty: Story = {

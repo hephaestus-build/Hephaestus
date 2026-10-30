@@ -15,7 +15,7 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** Hiding asks first, and says where the person goes. */
+/** Hiding asks first, says where the person goes, and names the one place to show them again. */
 export const Default: Story = {
 	play: async ({ args, canvas, userEvent }) => {
 		await userEvent.click(canvas.getByRole("button", { name: "Hide from activity" }));
@@ -25,6 +25,9 @@ export const Default: Story = {
 		await expect(
 			step.getByRole("heading", { name: "Hide Ada Lovelace from activity?" }),
 		).toBeVisible();
+		await expect(dialog).toHaveAccessibleDescription(
+			/use Undo right after, or Hidden people in Workspace settings later\.$/u,
+		);
 		await expect(args.onConfirm).not.toHaveBeenCalled();
 		await userEvent.click(step.getByRole("button", { name: "Hide" }));
 		await expect(args.onConfirm).toHaveBeenCalledOnce();

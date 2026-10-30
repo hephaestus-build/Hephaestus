@@ -29,6 +29,24 @@ export const Default: Story = {
 	},
 };
 
+/** Activity has no switch, so it names the three places that hide someone and show them again. */
+export const WhereToShowPeopleAgain: Story = {
+	play: async ({ canvas }) => {
+		await expect(canvas.getByRole("link", { name: "Members" })).toHaveAttribute(
+			"href",
+			"/w/ase/admin/members",
+		);
+		await expect(canvas.getByRole("link", { name: "Team setup" })).toHaveAttribute(
+			"href",
+			"/w/ase/admin/teams",
+		);
+		await expect(canvas.getByRole("link", { name: "Hidden people" })).toHaveAttribute(
+			"href",
+			"/w/ase/admin/settings#hidden-people-heading",
+		);
+	},
+};
+
 export const PracticeReviewsOff: Story = {
 	args: { practicesEnabled: false },
 	play: async ({ canvas }) => {
