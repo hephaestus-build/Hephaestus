@@ -31,7 +31,7 @@ This page owns authorization, routing, and persistence implementation.
 The admin area is a **dedicated sidebar context** (`AppSidebar` `context === "admin"`).
 It has its own "Back to app" header, with no workspace switcher, as in the GitLab/Grafana "admin area" pattern.
 It does **not** reuse the mentor context.
-The always-present sidebar footer has an `app_admin`-gated **"Instance admin"** entry.
+The always-present sidebar footer has an `app_admin`-gated **"Instance administration"** entry.
 Thus, a newly bootstrapped admin with **zero workspaces** can reach it.
 
 `beforeLoad` (`isAppAdmin`) guards the `/admin` route tree.
@@ -59,7 +59,7 @@ Instance metadata endpoints under `/admin`, all gated by `hasAuthority('app_admi
 
 ## Instance silent mode
 
-[Instance admin](/admin/instance-admin#silent-mode) owns operator behavior and recovery.
+[Instance administration](/admin/instance-admin#silent-mode) owns operator behavior and recovery.
 `GET /admin/settings` returns an ETag. `PATCH /admin/settings/silent-mode` requires `If-Match`
 when releasing the brake. Provider gateways enforce it independently from result persistence.
 
@@ -110,7 +110,7 @@ A queued privileged write is exactly what an attacker would want confirmation to
 
 ## Read-only user views
 
-**Instance admin → Workspaces → View as user**, then **View as user** on an account, opens the normal workspace app as that account member.
+**Instance administration → Workspaces → View as user**, then **View as user** on an account, opens the normal workspace app as that account member.
 The instance administrator remains authenticated as themselves.
 The selected identity is an account, including an unclaimed roster account.
 Its provider mirrors remain source attribution rather than sign-in principals.

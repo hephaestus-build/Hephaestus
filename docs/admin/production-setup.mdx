@@ -266,7 +266,7 @@ There is no "sign in with Outline".
 The provider never appears on the login picker.
 
 A blank `OUTLINE_OAUTH_CLIENT_ID` leaves it unseeded.
-You can add the provider later under **Instance admin → Login providers**.
+You can add the provider later under **Instance administration → Login providers**.
 
 **Registering the OAuth app in Outline** (Settings → Applications, admin-only):
 
@@ -336,7 +336,7 @@ For self-hosted GitLab, set `GITLAB_OAUTH_BASE_URL` to that instance.
 4. Enable Confidential client.
 
 The environment seeds **one** default login provider, with registration id `gitlab`.
-An instance admin can add other GitLab instances at runtime under **Instance admin → Login providers**, without redeployment.
+An instance admin can add other GitLab instances at runtime under **Instance administration → Login providers**, without redeployment.
 
 GitLab workspaces exist only on `GITLAB_DEFAULT_SERVER_URL`.
 Hephaestus reads every GitLab project, member, and event from that instance.
@@ -463,7 +463,7 @@ Two monthly LLM budgets exist.
 **They are never added together**:
 
 - **The instance budget** caps a workspace's **shared** model spend on your registered connections, billed to you.
-  An instance admin sets it under **Instance admin → AI usage → Set budget**.
+  An instance admin sets it under **Instance administration → AI usage → Set budget**.
   It applies per workspace and UTC calendar month.
 - **The workspace's own budget** caps its spend on **its own connected provider**, billed to its provider account.
   A workspace admin sets it on their **AI usage** page.

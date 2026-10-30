@@ -253,85 +253,85 @@
       "name": "hephaestus.auth.login-providers.github.client-id",
       "type": "java.lang.String",
       "sourceType": "de.tum.cit.aet.hephaestus.core.auth.AuthProperties",
-      "description": "Client ID of the GitHub OAuth App for sign-in. Set it with its client secret: a provider with only one of the two is not seeded. It seeds the github login provider at startup only when that provider does not exist yet. Later changes go through Instance admin, Login providers."
+      "description": "Client ID of the GitHub OAuth App for sign-in. Set it with its client secret: a provider with only one of the two is not seeded. It seeds the github login provider at startup only when that provider does not exist yet. Later changes go through Instance administration, Login providers."
     },
     {
       "name": "hephaestus.auth.login-providers.github.client-secret",
       "type": "java.lang.String",
       "sourceType": "de.tum.cit.aet.hephaestus.core.auth.AuthProperties",
-      "description": "Client secret of the GitHub OAuth App for sign-in. Set it with its client ID. It seeds the github login provider at startup only when that provider does not exist yet. Later changes go through Instance admin, Login providers."
+      "description": "Client secret of the GitHub OAuth App for sign-in. Set it with its client ID. It seeds the github login provider at startup only when that provider does not exist yet. Later changes go through Instance administration, Login providers."
     },
     {
       "name": "hephaestus.auth.login-providers.github.display-name",
       "type": "java.lang.String",
       "sourceType": "de.tum.cit.aet.hephaestus.core.auth.AuthProperties",
-      "description": "Label of the GitHub button on the sign-in or account-linking page. It seeds the github login provider at startup only when that provider does not exist yet. Later changes go through Instance admin, Login providers."
+      "description": "Label of the GitHub button on the sign-in or account-linking page. It seeds the github login provider at startup only when that provider does not exist yet. Later changes go through Instance administration, Login providers."
     },
     {
       "name": "hephaestus.auth.login-providers.gitlab.client-id",
       "type": "java.lang.String",
       "sourceType": "de.tum.cit.aet.hephaestus.core.auth.AuthProperties",
-      "description": "Client ID of the GitLab OAuth application for sign-in. Set it with its client secret: a provider with only one of the two is not seeded. It seeds the gitlab login provider at startup only when that provider does not exist yet. Later changes go through Instance admin, Login providers."
+      "description": "Client ID of the GitLab OAuth application for sign-in. Set it with its client secret: a provider with only one of the two is not seeded. It seeds the gitlab login provider at startup only when that provider does not exist yet. Later changes go through Instance administration, Login providers."
     },
     {
       "name": "hephaestus.auth.login-providers.gitlab.client-secret",
       "type": "java.lang.String",
       "sourceType": "de.tum.cit.aet.hephaestus.core.auth.AuthProperties",
-      "description": "Client secret of the GitLab OAuth application for sign-in. Set it with its client ID. It seeds the gitlab login provider at startup only when that provider does not exist yet. Later changes go through Instance admin, Login providers."
+      "description": "Client secret of the GitLab OAuth application for sign-in. Set it with its client ID. It seeds the gitlab login provider at startup only when that provider does not exist yet. Later changes go through Instance administration, Login providers."
     },
     {
       "name": "hephaestus.auth.login-providers.gitlab.display-name",
       "type": "java.lang.String",
       "sourceType": "de.tum.cit.aet.hephaestus.core.auth.AuthProperties",
-      "description": "Label of the GitLab button on the sign-in or account-linking page. It seeds the gitlab login provider at startup only when that provider does not exist yet. Later changes go through Instance admin, Login providers."
+      "description": "Label of the GitLab button on the sign-in or account-linking page. It seeds the gitlab login provider at startup only when that provider does not exist yet. Later changes go through Instance administration, Login providers."
     },
     {
       "name": "hephaestus.auth.login-providers.gitlab.base-url",
       "type": "java.lang.String",
       "sourceType": "de.tum.cit.aet.hephaestus.core.auth.AuthProperties",
-      "description": "Origin of the GitLab instance for sign-in, such as https://gitlab.example.com. It seeds the gitlab login provider at startup only when that provider does not exist yet. Later changes go through Instance admin, Login providers."
+      "description": "Origin of the GitLab instance for sign-in, such as https://gitlab.example.com. It seeds the gitlab login provider at startup only when that provider does not exist yet. Later changes go through Instance administration, Login providers."
     },
     {
       "name": "hephaestus.auth.login-providers.slack.client-id",
       "type": "java.lang.String",
       "sourceType": "de.tum.cit.aet.hephaestus.core.auth.AuthProperties",
-      "description": "Client ID of the Slack app for linking a Slack account. It falls back to the Slack workspace-install credentials. Set it with its client secret: a provider with only one of the two is not seeded. It seeds the slack login provider at startup only when that provider does not exist yet. Later changes go through Instance admin, Login providers."
+      "description": "Client ID of the Slack app for linking a Slack account. It falls back to the Slack workspace-install credentials. Set it with its client secret: a provider with only one of the two is not seeded. It seeds the slack login provider at startup only when that provider does not exist yet. Later changes go through Instance administration, Login providers."
     },
     {
       "name": "hephaestus.auth.login-providers.slack.client-secret",
       "type": "java.lang.String",
       "sourceType": "de.tum.cit.aet.hephaestus.core.auth.AuthProperties",
-      "description": "Client secret of the Slack app for linking a Slack account. It falls back to the Slack workspace-install credentials. Set it with its client ID. It seeds the slack login provider at startup only when that provider does not exist yet. Later changes go through Instance admin, Login providers."
+      "description": "Client secret of the Slack app for linking a Slack account. It falls back to the Slack workspace-install credentials. Set it with its client ID. It seeds the slack login provider at startup only when that provider does not exist yet. Later changes go through Instance administration, Login providers."
     },
     {
       "name": "hephaestus.auth.login-providers.slack.display-name",
       "type": "java.lang.String",
       "sourceType": "de.tum.cit.aet.hephaestus.core.auth.AuthProperties",
-      "description": "Label of the Slack button on the sign-in or account-linking page. It seeds the slack login provider at startup only when that provider does not exist yet. Later changes go through Instance admin, Login providers."
+      "description": "Label of the Slack button on the sign-in or account-linking page. It seeds the slack login provider at startup only when that provider does not exist yet. Later changes go through Instance administration, Login providers."
     },
     {
       "name": "hephaestus.auth.login-providers.outline.client-id",
       "type": "java.lang.String",
       "sourceType": "de.tum.cit.aet.hephaestus.core.auth.AuthProperties",
-      "description": "Client ID of the Outline OAuth application for linking an Outline account. Set it with its client secret: a provider with only one of the two is not seeded. It seeds the outline login provider at startup only when that provider does not exist yet. Later changes go through Instance admin, Login providers."
+      "description": "Client ID of the Outline OAuth application for linking an Outline account. Set it with its client secret: a provider with only one of the two is not seeded. It seeds the outline login provider at startup only when that provider does not exist yet. Later changes go through Instance administration, Login providers."
     },
     {
       "name": "hephaestus.auth.login-providers.outline.client-secret",
       "type": "java.lang.String",
       "sourceType": "de.tum.cit.aet.hephaestus.core.auth.AuthProperties",
-      "description": "Client secret of the Outline OAuth application for linking an Outline account. Set it with its client ID. It seeds the outline login provider at startup only when that provider does not exist yet. Later changes go through Instance admin, Login providers."
+      "description": "Client secret of the Outline OAuth application for linking an Outline account. Set it with its client ID. It seeds the outline login provider at startup only when that provider does not exist yet. Later changes go through Instance administration, Login providers."
     },
     {
       "name": "hephaestus.auth.login-providers.outline.display-name",
       "type": "java.lang.String",
       "sourceType": "de.tum.cit.aet.hephaestus.core.auth.AuthProperties",
-      "description": "Label of the Outline button on the sign-in or account-linking page. It seeds the outline login provider at startup only when that provider does not exist yet. Later changes go through Instance admin, Login providers."
+      "description": "Label of the Outline button on the sign-in or account-linking page. It seeds the outline login provider at startup only when that provider does not exist yet. Later changes go through Instance administration, Login providers."
     },
     {
       "name": "hephaestus.auth.login-providers.outline.base-url",
       "type": "java.lang.String",
       "sourceType": "de.tum.cit.aet.hephaestus.core.auth.AuthProperties",
-      "description": "Origin of the Outline instance for account linking, such as https://wiki.example.com. Required when the client ID is set. It seeds the outline login provider at startup only when that provider does not exist yet. Later changes go through Instance admin, Login providers."
+      "description": "Origin of the Outline instance for account linking, such as https://wiki.example.com. Required when the client ID is set. It seeds the outline login provider at startup only when that provider does not exist yet. Later changes go through Instance administration, Login providers."
     },
     {
       "name": "hephaestus.features.flags.gitlab-workspace-creation",

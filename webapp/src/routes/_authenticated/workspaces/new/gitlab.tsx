@@ -85,7 +85,7 @@ function BackToProviders() {
 
 /**
  * Shown when no GitLab sign-in is configured for the instance workspaces are created on, so there is
- * nothing to link. An admin must add a GitLab login provider for it first (Instance admin → Login
+ * nothing to link. An admin must add a GitLab login provider for it first (Instance administration → Login
  * providers).
  */
 function NoGitLabProviderNotice({
@@ -105,7 +105,7 @@ function NoGitLabProviderNotice({
 					so you cannot connect a GitLab account there yet.
 					{isAppAdmin
 						? " Add one to turn on GitLab sign-in."
-						: " Ask an instance admin to add one (Instance admin → Login providers)."}
+						: " Ask an instance admin to add one (Instance administration → Login providers)."}
 				</p>
 				{isAppAdmin && (
 					<Link to="/admin/login-providers" className={buttonVariants({ className: "w-fit" })}>

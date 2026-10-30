@@ -54,7 +54,7 @@ The **first instance admin must therefore come from operator config**, not the U
 3. If you omitted the value, add it.
    Then run the install command again: `helm upgrade --install` on Kubernetes, or `docker compose up -d` on Docker Compose.
 
-For the break-glass bootstrap token, see [Instance admin](./instance-admin#bootstrap-and-recovery).
+For the break-glass bootstrap token, see [Instance administration](./instance-admin#bootstrap-and-recovery).
 
 ## 3. Sign in
 
@@ -79,10 +79,10 @@ After the first start:
 
 A new instance starts in **Silent mode**. Sync and reviews can run, but outbound feedback is blocked.
 Turning silent mode off does not replay feedback withheld while it was on.
-See [Instance admin](./instance-admin#silent-mode).
+See [Instance administration](./instance-admin#silent-mode).
 
 1. Check the deployment and integrations.
-2. Open **Instance admin → Instance settings**.
+2. Open **Instance administration → Instance settings**.
 3. Turn silent mode off.
 
 For GitLab workspaces, use [Integrations](./integrations#gitlab). For GitHub:
