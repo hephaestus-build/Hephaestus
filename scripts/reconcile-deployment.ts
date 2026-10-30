@@ -956,28 +956,27 @@ async function fetchSignedChannel(
 	};
 }
 
-/**
- * Whether the target is behind what runs. Both are commits of the default branch here, so the
- * clone answers it directly; between releases the version comparison in decide covers it, and a
- * change of form is a deliberate move only a version or an operator can order.
- *
- * The branch is fetched first: without the objects, `merge-base` fails and a failure would read
- * as "not behind", which is the wrong way for this check to be wrong.
- */
+/** A commit channel must descend from the accepted source, including a recorded release's source. */
 async function targetIsBehindApplied(
 	config: HostConfig,
 	channel: Channel,
 	applied: AppliedState | undefined,
 ): Promise<boolean> {
-	if (!applied || RELEASE_TAG.test(channel.release) || RELEASE_TAG.test(applied.release)) {
+	if (!applied || RELEASE_TAG.test(channel.release)) {
 		return false;
+	}
+	const previous = appliedCommit(applied);
+	if (previous === undefined) {
+		throw new OperatorActionRequiredError(
+			"The applied release has no recorded source commit. Pause reconciliation and establish the installed release source before selecting a commit channel.",
+		);
 	}
 	await run(
 		"git",
 		["fetch", "--quiet", "origin", "+refs/heads/main:refs/remotes/origin/main"],
 		fetchOptions(config),
 	);
-	for (const commit of [channel.release, applied.release]) {
+	for (const commit of [channel.release, previous]) {
 		if (
 			!(await succeeds("git", ["cat-file", "-e", `${commit}^{commit}`], { cwd: config.checkout }))
 		) {
@@ -987,8 +986,8 @@ async function targetIsBehindApplied(
 		}
 	}
 	return (
-		channel.release !== applied.release &&
-		(await succeeds("git", ["merge-base", "--is-ancestor", channel.release, applied.release], {
+		channel.release !== previous &&
+		!(await succeeds("git", ["merge-base", "--is-ancestor", previous, channel.release], {
 			cwd: config.checkout,
 		}))
 	);
@@ -1044,6 +1043,11 @@ async function prepareDeployment(
 	if (config.chart !== undefined && channel.images === undefined) {
 		const directory = path.join(config.stateDirectory, "chart");
 		await mkdir(directory, { recursive: true });
+		for (const entry of await readdir(directory, { withFileTypes: true })) {
+			if (entry.isDirectory() && /^\.(?:release|chart)-/u.test(entry.name)) {
+				await rm(path.join(directory, entry.name), { recursive: true, force: true });
+			}
+		}
 		await run(
 			process.execPath,
 			[
@@ -1440,6 +1444,16 @@ export function isMajorCutover(target: string, applied?: string, installed?: str
 			"A commit chart has no release version. Pause reconciliation, apply the verified target release through Database maintenance, then resume the timer. The next tick reads that chart's release version.",
 		);
 	}
+	if (
+		[installedRelease, appliedRelease].some(
+			(version) =>
+				version !== undefined && (releaseParts(version)[0] ?? 0) > (releaseParts(target)[0] ?? 0),
+		)
+	) {
+		throw new OperatorActionRequiredError(
+			"A major downgrade requires a database restore. Pause reconciliation, follow https://docs.hephaestus.build/admin/pull-based-deployment#recover-a-stopped-cutover, restore the previous database, then manually helm rollback to its stopped revision before restoring writers.",
+		);
+	}
 	return [installedRelease, appliedRelease].some(
 		(version) => version !== undefined && releaseParts(version)[0] !== releaseParts(target)[0],
 	);
@@ -1490,17 +1504,12 @@ async function checkStoppedUpgrade(
 	);
 	if (status === "failed") {
 		throw new OperatorActionRequiredError(
-			`Helm marked ${settings.release} failed. Pause reconciliation with \`systemctl stop hephaestus-reconcile.timer\`, inspect \`helm history ${settings.release} --namespace ${settings.namespace}\`, then follow Database recovery before retrying this cutover.`,
+			`Helm marked ${settings.release} failed. Pause reconciliation with \`systemctl stop hephaestus-reconcile.timer\`, inspect \`helm history ${settings.release} --namespace ${settings.namespace}\`, then follow https://docs.hephaestus.build/admin/pull-based-deployment#recover-a-stopped-cutover before retrying.`,
 		);
 	}
 	// Helm can finish before applied.json is renamed. Resume only the verified target, already
-	// deployed with the server alone; a failed migration or another set of pins still needs recovery.
-	if (
-		status === "deployed" &&
-		matchesChartValues(values, expected) &&
-		asRecord(values.server, "server values").replicas === 1 &&
-		asRecord(values.worker, "worker values").replicas === 0
-	) {
+	// deployed; an operator can already have restored worker replicas before this tick.
+	if (status === "deployed" && matchesChartValues(values, expected)) {
 		return "applied";
 	}
 	if (
@@ -1587,7 +1596,7 @@ async function recoverPendingRelease(
 	}
 	if (!rollback) {
 		throw new OperatorActionRequiredError(
-			`Helm left ${settings.release} in ${status}. Pause with \`systemctl stop hephaestus-reconcile.timer\`, inspect \`helm history ${settings.release} --namespace ${settings.namespace}\`, then follow Database recovery before retrying. Automatic rollback cannot restore a migration.`,
+			`Helm left ${settings.release} in ${status}. Pause with \`systemctl stop hephaestus-reconcile.timer\`, inspect \`helm history ${settings.release} --namespace ${settings.namespace}\`, then follow https://docs.hephaestus.build/admin/pull-based-deployment#recover-a-stopped-cutover before retrying. Automatic rollback cannot restore a migration.`,
 		);
 	}
 	const history = asArray(
@@ -2009,13 +2018,12 @@ export async function adoptTooling(link: string, tree: string): Promise<boolean>
 export async function syncUnits(tree: string, unitsDirectory: string): Promise<string[]> {
 	const changed: string[] = [];
 	const contents = await Promise.all(
-		UNIT_FILES.map(async (name) => readFile(path.join(tree, "deploy/reconcile", name), "utf8")),
+		UNIT_FILES.map(async (name) => ({
+			name,
+			wanted: await readFile(path.join(tree, "deploy/reconcile", name), "utf8"),
+		})),
 	);
-	for (const [index, name] of UNIT_FILES.entries()) {
-		const wanted = contents[index];
-		if (wanted === undefined) {
-			throw new Error(`missing unit ${name}`);
-		}
+	for (const { name, wanted } of contents) {
 		const unit = path.join(unitsDirectory, name);
 		const installed = await lstat(unit).catch(() => undefined);
 		if (installed && !installed.isSymbolicLink() && (await readFile(unit, "utf8")) === wanted) {

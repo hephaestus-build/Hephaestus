@@ -18,7 +18,7 @@ StateDirectoryMode=0750
 # older than this link keeps the tooling the host has. The reconciler also keeps this unit and its
 # timer in /etc/systemd/system at that release and reloads systemd itself.
 ExecStart=/usr/bin/env node /var/lib/hephaestus/tooling/scripts/reconcile-deployment.ts
-TimeoutStartSec=1h
+TimeoutStartSec=2h
 # Helm keeps its cache, configuration and data in the state directory: ProtectHome hides /root.
 # Only a host whose stack is `chart` starts Helm.
 Environment=HELM_CACHE_HOME=/var/lib/hephaestus/helm/cache

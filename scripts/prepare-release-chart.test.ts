@@ -87,6 +87,7 @@ for (const failure of [
 		await writeFile(targetInventoryFile, JSON.stringify(targetInventory));
 		const requested: string[] = [];
 		const calls: string[] = [];
+		const signatureCalls: (readonly string[])[] = [];
 		const prepare = prepareReleaseChart(
 			release,
 			failure === "source" ? "d".repeat(40) : commit,
@@ -115,6 +116,9 @@ for (const failure of [
 			async (command, args) => {
 				calls.push(`${command} ${args[0] ?? ""}`);
 				if (command === "cosign") {
+					if (args[0] === "verify-blob") {
+						signatureCalls.push(args);
+					}
 					if (
 						(args[0] === "verify-blob" && failure === "lock signature") ||
 						(args[0] === "verify" && failure === "chart signature")
@@ -125,7 +129,7 @@ for (const failure of [
 				}
 				if (args[0] === "pull") {
 					await writeFile(
-						path.join(args.at(-1) ?? "", "hephaestus-1.0.0.tgz"),
+						path.join(args.at(-1) ?? "", `hephaestus@${digest.replace(":", "-")}.tgz`),
 						"verified fixture package",
 					);
 					return `Digest: ${failure === "digest" ? `sha256:${"b".repeat(64)}` : digest}\n`;
@@ -148,6 +152,19 @@ for (const failure of [
 				assert.ok(!calls.includes("helm pull"));
 			}
 		}
+		assert.equal(signatureCalls.length, 1);
+		const signature = signatureCalls[0] ?? [];
+		assert.equal(
+			signature[signature.indexOf("--certificate-identity") + 1],
+			"https://github.com/hephaestus-build/Hephaestus/.github/workflows/release.yml@refs/heads/main",
+		);
+		assert.equal(
+			signature[signature.indexOf("--certificate-oidc-issuer") + 1],
+			"https://token.actions.githubusercontent.com",
+		);
+		const blob = signature.at(-1) ?? "";
+		assert.equal(path.basename(blob), jointLockAsset(release));
+		assert.equal(signature[signature.indexOf("--bundle") + 1], `${blob}.sigstore.json`);
 		assert.ok(
 			!requested.includes(`release-${release}.json`),
 			"no schema-1 projection is downloaded",

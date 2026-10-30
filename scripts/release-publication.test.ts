@@ -268,6 +268,8 @@ async function fixture(directory: string, source = commit) {
 		CALL_LOG: path.join(directory, "calls"),
 		RUNNER_TEMP: directory,
 		GITHUB_REPOSITORY: "hephaestus-build/Hephaestus",
+		GITHUB_ACTIONS: "true",
+		GH_TOKEN: "fixture-not-a-secret",
 		TAG_NAME: release,
 		RELEASE_SHA: source,
 		VERSION: release.slice(1),
@@ -450,6 +452,7 @@ async function fixture(directory: string, source = commit) {
 			await rm(path.join(directory, "evidence"), { recursive: true, force: true });
 			await rm(path.join(directory, "release-lock.env"), { force: true });
 			await rm(path.join(directory, "chart"), { recursive: true, force: true });
+			await rm(path.join(directory, "installed-chart"), { recursive: true, force: true });
 		}
 		await writeFile(environment.CALL_LOG, "");
 		let status: number | null = 0;

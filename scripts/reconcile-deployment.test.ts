@@ -671,6 +671,10 @@ await test("release cutovers distinguish major changes, first installs and an un
 	assert.equal(isMajorCutover("v1.0.0", undefined, "0.95.1"), true);
 	assert.equal(isMajorCutover("v1.0.0"), false);
 	assert.throws(
+		() => isMajorCutover("v0.95.1", "v1.0.0", "1.0.0"),
+		/major downgrade requires a database restore/u,
+	);
+	assert.throws(
 		() => isMajorCutover("v1.0.0", "c".repeat(40), ""),
 		/Pause reconciliation.*Database maintenance/u,
 	);
@@ -1607,6 +1611,9 @@ for (const mode of [
 for (const failure of [
 	"none",
 	"completed before record",
+	"completed with workers",
+	"failed migration",
+	"installed major downgrade",
 	"workers disabled",
 	"verification",
 	"apply",
@@ -1633,6 +1640,27 @@ for (const failure of [
 						server: { replicas: 1 },
 						worker: { replicas: 0 },
 					}),
+				},
+				"completed with workers": {
+					HELM_RELEASES: JSON.stringify([
+						{ name: "hephaestus", app_version: "1.0.0", status: "deployed" },
+					]),
+					HELM_VALUES: JSON.stringify({
+						release: { version: "v1.0.0", commit: fixture.releaseCommit },
+						images: {},
+						server: { replicas: 1 },
+						worker: { replicas: 2 },
+					}),
+				},
+				"failed migration": {
+					HELM_RELEASES: JSON.stringify([
+						{ name: "hephaestus", app_version: "1.0.0", status: "failed" },
+					]),
+				},
+				"installed major downgrade": {
+					HELM_RELEASES: JSON.stringify([
+						{ name: "hephaestus", app_version: "2.0.0", status: "deployed" },
+					]),
 				},
 				"workers disabled": {
 					HELM_VALUES:
@@ -1668,13 +1696,14 @@ for (const failure of [
 				failure === "none" ||
 				failure === "workers disabled" ||
 				failure === "completed before record" ||
+				failure === "completed with workers" ||
 				failure === "reload" ||
 				failure === "unitcopy"
 			) {
 				assert.equal(record?.release, "v1.0.0");
 				const calls = await log();
 				const upgrade = calls.find((call) => call.startsWith("upgrade ")) ?? "";
-				if (failure === "completed before record") {
+				if (failure === "completed before record" || failure === "completed with workers") {
 					assert.equal(upgrade, "", "a completed cutover does not run migration hooks again");
 				} else {
 					assert.match(upgrade, /chart\/hephaestus-1\.0\.0\.tgz/u);
@@ -1713,6 +1742,71 @@ for (const failure of [
 			await rm(directory, { recursive: true, force: true });
 		}
 	});
+}
+
+for (const direction of ["behind", "divergent"] as const) {
+	await test(
+		`a commit channel ${direction} the recorded release is refused before Helm`,
+		reconcilerSubprocess,
+		async () => {
+			const directory = await mkdtemp(path.join(tmpdir(), "release-commit-order-"));
+			try {
+				const fixture = await reconcilerFixture(directory);
+				const { helm, log } = await fakeHelm(directory);
+				let target = fixture.commitOf("v0.9.0");
+				if (direction === "divergent") {
+					gitIn(fixture.checkout, "checkout", "--quiet", "-b", "divergent", target);
+					await writeFile(path.join(fixture.checkout, "branch-marker"), "another source history");
+					gitIn(fixture.checkout, "add", "branch-marker");
+					gitIn(fixture.checkout, "commit", "--quiet", "-m", "divergent source");
+					target = gitIn(fixture.checkout, "rev-parse", "HEAD");
+					gitIn(fixture.checkout, "push", "--quiet", "origin", "divergent:refs/heads/divergent");
+				}
+				gitIn(fixture.checkout, "checkout", "--quiet", "deploy-state");
+				await writeFile(
+					path.join(fixture.checkout, "channels/chart.json"),
+					JSON.stringify({ commit: target, images: chartChannelImages() }),
+				);
+				gitIn(fixture.checkout, "add", "channels/chart.json");
+				gitIn(fixture.checkout, "commit", "--quiet", "-m", "commit promotion");
+				gitIn(
+					fixture.checkout,
+					"push",
+					"--quiet",
+					"origin",
+					"deploy-state:refs/heads/deploy-state",
+				);
+				gitIn(fixture.checkout, "checkout", "--quiet", "main");
+				const record = { ...fixture.record, commit: fixture.releaseCommit };
+				await writeFile(path.join(directory, "applied.json"), JSON.stringify(record));
+				// The first tick finishes adoption of the recorded source before reading a channel.
+				assert.equal(
+					fixture.run({
+						environment: {
+							HEPHAESTUS_STACKS: "chart",
+							HEPHAESTUS_HELM: helm,
+							HEPHAESTUS_SECRETS: directory,
+						},
+					}).status,
+					0,
+				);
+				const result = fixture.run({
+					channel: "chart",
+					environment: {
+						HEPHAESTUS_STACKS: "chart",
+						HEPHAESTUS_HELM: helm,
+						HEPHAESTUS_SECRETS: directory,
+					},
+				});
+				assert.notEqual(result.status, 0, result.stderr);
+				assert.match(result.stderr, /behind the running/u);
+				assert.deepEqual(await readApplied(path.join(directory, "applied.json")), record);
+				assert.deepEqual(await log(), []);
+			} finally {
+				await rm(directory, { recursive: true, force: true });
+			}
+		},
+	);
 }
 
 await test(
