@@ -129,7 +129,7 @@ class FeedbackCopyDeliveryIntegrationTest extends AbstractFeedbackDeliveryIntegr
 
     @Test
     @Timeout(value = 120, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
-    void shouldLeaveACopyThatWithdrawalStoppedForTheRetractionAndNotFailIt() {
+    void shouldKeepAnUnsentCopyWithdrawnAndMakeItRetryableAfterRestore() {
         prepare(true);
         // The hook runs inside the recipient write; the withdrawal commits on its own, as an admin's would.
         var apart = new TransactionTemplate(transactionManager);
@@ -144,6 +144,25 @@ class FeedbackCopyDeliveryIntegrationTest extends AbstractFeedbackDeliveryIntegr
         assertThat(children().get(0).getState()).isEqualTo(FeedbackCopyState.RETRACTED);
         assertThat(children().get(1).getState()).isEqualTo(FeedbackCopyState.PLANNED);
         assertThat(provider.noteCreates).isZero();
+        var first = current().getDeliveredAt();
+        provider.beforeNotes = null;
+        store.decide(
+                workspace.getId(),
+                feedbackId,
+                developerId,
+                new FeedbackDecisionInput(FeedbackDecisionAction.RESTORE, null, "Restore this guidance.", null));
+        due();
+        newSender().send(workspace.getId(), feedbackId);
+        assertThat(children().get(0).getState()).isEqualTo(FeedbackCopyState.POSTED);
+        assertThat(children().get(1).getState()).isEqualTo(FeedbackCopyState.FAILED);
+        assertThat(children().get(1).getReadback()).isEqualTo(FeedbackCopyReadback.ABSENT);
+        assertThat(current().getState()).isEqualTo(FeedbackState.FAILED);
+        assertThat(current().getDeliveredAt()).isEqualTo(first);
+        store.retry(workspace.getId(), feedbackId, developerId);
+        newSender().send(workspace.getId(), feedbackId);
+        assertThat(current().getState()).isEqualTo(FeedbackState.DELIVERED);
+        assertThat(current().getDeliveredAt()).isEqualTo(first);
+        assertThat(provider.noteCreates).isEqualTo(1);
     }
 
     @Test
