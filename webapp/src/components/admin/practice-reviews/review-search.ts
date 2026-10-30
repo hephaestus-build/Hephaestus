@@ -173,13 +173,6 @@ export const overviewSearchSchema = z
 	})
 	.transform(canonicalDateRange);
 
-export const reviewPageSearchSchema = z
-	.object({
-		...scope,
-		focus: z.string().min(1).max(REVIEW_FILTER_MAX_LENGTH).optional().catch(undefined),
-	})
-	.transform(canonicalDateRange);
-
 export type FeedbackSearch = z.infer<typeof feedbackSearchSchema>;
 export type ResultsSearch = z.infer<typeof resultsSearchSchema>;
 export type ProblemsSearch = z.infer<typeof problemsSearchSchema>;

@@ -1,5 +1,8 @@
 import { z } from "zod";
 
+import { personLevel } from "@/components/activity/activity-search";
+import { detailSearch } from "@/components/layout/detail-drawer/detail-stack";
+import { stringifySearch } from "@/lib/router-search";
 import { apiBasePath } from "@/runtime/api-base-path";
 import { workspaceAddressConfig, publicHref } from "@/runtime/workspace-address";
 
@@ -42,7 +45,7 @@ export function startUserView(session: UserViewSession): void {
 	const path =
 		session.providerLogin === null
 			? `/w/${session.workspaceSlug}`
-			: `/w/${session.workspaceSlug}/user/${encodeURIComponent(session.providerLogin)}`;
+			: `/w/${session.workspaceSlug}/workspace-activity${stringifySearch(detailSearch(personLevel(session.providerLogin)))}`;
 	window.location.assign(publicHref(path));
 }
 

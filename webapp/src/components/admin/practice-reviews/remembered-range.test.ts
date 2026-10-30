@@ -24,9 +24,7 @@ describe("the overview's remembered range", () => {
 		expect(rangeToRestore("acme", "", "30d")).toBeUndefined();
 	});
 
-	it("reads an old 12 months as all time and ignores what is no range", () => {
-		sessionStorage.setItem("hephaestus.practice-reviews.range:acme", "1y");
-		expect(rememberedRange("acme")).toBe("all");
+	it("ignores what is no range", () => {
 		sessionStorage.setItem("hephaestus.practice-reviews.range:acme", "forever");
 		expect(rememberedRange("acme")).toBeUndefined();
 	});

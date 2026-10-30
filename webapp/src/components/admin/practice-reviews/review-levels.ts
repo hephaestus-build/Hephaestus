@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { REVIEW_RANGES, reviewRangeOf } from "@/components/admin/practice-reviews/review-range";
+import { REVIEW_RANGES } from "@/components/admin/practice-reviews/review-range";
 import {
 	type DetailStackEntry,
 	detailStackSchema,
@@ -36,8 +36,7 @@ export const PRACTICE_REVIEW_LEVEL_LABELS = {
  * per piece of work, so a week of them is often too few to read a mix from.
  */
 const rangeFilterSchema = z.object({
-	// An address from before that asked for 12 months opens all time, which took its place.
-	range: z.preprocess(reviewRangeOf, z.enum(REVIEW_RANGES).default("30d").catch("30d")),
+	range: z.enum(REVIEW_RANGES).default("30d").catch("30d"),
 });
 
 export const PRACTICE_REVIEWS_SEARCH_DEFAULTS = rangeFilterSchema.parse({});

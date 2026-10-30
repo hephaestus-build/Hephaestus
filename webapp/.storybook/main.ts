@@ -31,6 +31,9 @@ const config: StorybookConfig = {
 		name: getAbsolutePath("@storybook/react-vite"),
 		options: {},
 	},
+	// The MSW worker, for stories and story tests only: outside Vite's `public/`, the app build never
+	// ships it.
+	staticDirs: ["./public"],
 	// Pre-bundling prevents Vite from reloading the page while browser-mode tests are running.
 	viteFinal: (viteConfig) => {
 		viteConfig.build ??= {};

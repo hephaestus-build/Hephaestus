@@ -36,15 +36,6 @@ client.setConfig({
 	fetch: csrfFetch,
 });
 
-// CSP blocks inline scripts; select the manifest from the allowed application bundle.
-{
-	const manifestLink = document.createElement("link");
-	manifestLink.rel = "manifest";
-	manifestLink.href =
-		window.location.hostname === "localhost" ? "/manifest-dev.json" : "/manifest.json";
-	document.head.append(manifestLink);
-}
-
 client.interceptors.request.use((request) =>
 	applyUserViewHeaders(applyStateChangingHeaders(request)),
 );

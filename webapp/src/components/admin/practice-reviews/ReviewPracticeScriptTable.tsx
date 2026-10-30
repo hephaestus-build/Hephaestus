@@ -112,7 +112,7 @@ function ScriptRow({
 			<TableHead scope="row" variant="body">
 				<InlineLink
 					className="font-medium"
-					render={<DetailStackLink entry={practiceLevel(practice.practiceSlug)} />}
+					render={<DetailStackLink entry={practiceLevel(practice.practiceSlug)} single />}
 				>
 					{practice.practiceName}
 				</InlineLink>

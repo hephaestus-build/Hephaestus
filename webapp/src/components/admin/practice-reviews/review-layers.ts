@@ -114,14 +114,3 @@ export function selectionRecord(selection: ReviewSelection): RecordRef {
 		}
 	}
 }
-
-export function layeredStack(stack: readonly PracticeReviewLevel[]): PracticeReviewLevel[] {
-	const at = stack.map((entry) => entry.kind).lastIndexOf("trace");
-	const front = stack.at(-1);
-	const trace = stack[at];
-	if (trace === undefined) {
-		return front === undefined ? [] : [front];
-	}
-	const over = stack.slice(at + 1).at(-1);
-	return over === undefined ? [trace] : [trace, over];
-}

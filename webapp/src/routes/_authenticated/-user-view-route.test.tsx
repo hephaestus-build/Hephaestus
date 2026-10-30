@@ -55,7 +55,7 @@ function usersPage(content: Wire<UserViewAccount>[]): Wire<PageResponseDtoUserVi
 	};
 }
 const users = usersPage([sam]);
-const viewedProfile = "/w/engineering/user/never-signed-in";
+const viewedProfile = "/w/engineering/workspace-activity?detail=person:never-signed-in";
 
 async function submitReason() {
 	const user = userEvent.setup();
@@ -249,9 +249,9 @@ describe("user view guard", () => {
 	// A view outside its workspace lands on the workspace home, which the home route decides.
 	it.each([
 		["/settings", "/w/engineering/practice-profile"],
-		["/w/other/user/alex", "/w/engineering/practice-profile"],
+		["/w/other/workspace-activity?detail=person:alex", "/w/engineering/practice-profile"],
 		["/w/engineering/admin", "/w/engineering/practice-profile"],
-		["/w/engineering/user/sam", "/w/engineering/workspace-activity"],
+		["/w/engineering/workspace-activity?detail=person:sam", "/w/engineering/workspace-activity"],
 	])("resolves %s to %s", async (path, expected) => {
 		const { router } = renderRouteAtWithRouter(path);
 		await waitFor(

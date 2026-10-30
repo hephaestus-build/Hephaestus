@@ -90,7 +90,9 @@ export function WorkLevel({
 							status={<StatusBadge def={REVIEW_STATUS_DEFS[latestReview.status]} />}
 							flag={<StatusBadge def={REVIEW_ORIGIN_DEFS[latestReview.origin]} />}
 							figure={
-								<InlineLink render={<DetailStackLink entry={reviewLevel(latestReview.id)} />}>
+								<InlineLink
+									render={<DetailStackLink entry={reviewLevel(latestReview.id)} single />}
+								>
 									Open review
 								</InlineLink>
 							}
@@ -164,7 +166,7 @@ export function WorkLevel({
 							)}
 							{hasText(item.parentId) && (
 								<ReviewFact label="Part of">
-									<InlineLink render={<DetailStackLink entry={itemLevel(item.parentId)} />}>
+									<InlineLink render={<DetailStackLink entry={itemLevel(item.parentId)} single />}>
 										Open the work it belongs to
 									</InlineLink>
 								</ReviewFact>
@@ -297,7 +299,7 @@ function reviewEvent(review: ReviewRef): SheetEvent {
 		key: `review:${review.id}`,
 		at: review.createdAt,
 		title: (
-			<InlineLink render={<DetailStackLink entry={reviewLevel(review.id)} />}>
+			<InlineLink render={<DetailStackLink entry={reviewLevel(review.id)} single />}>
 				{REVIEW_ORIGIN_DEFS[review.origin].label} review
 			</InlineLink>
 		),
