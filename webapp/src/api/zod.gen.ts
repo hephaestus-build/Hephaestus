@@ -4998,6 +4998,16 @@ export const zScanReport = z.object({
     withheldReasons: z.array(zReasonCount)
 });
 
+/**
+ * Identity of the retained set to seal; candidates can only enter through per-practice staging.
+ */
+export const zSealResultsRequest = z.object({
+    attempt: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }).optional(),
+    contractVersion: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }).optional(),
+    jobId: z.uuid(),
+    reviewId: z.uuid()
+});
+
 export const zSearchWarrant = z.object({
     boundary: z.string().optional(),
     consulted: z.array(z.string()).optional(),
@@ -5346,6 +5356,14 @@ export const zPageResponseDtoScanSummary = z.object({
     totalPages: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' })
 });
 
+/**
+ * A private staging receipt; staging creates no visible result or feedback.
+ */
+export const zStageResponse = z.object({
+    digest: z.string(),
+    practiceSlug: z.string()
+});
+
 export const zStartScanRequest = z.object({
     budgetUsd: z.string(),
     expectedVersion: z.string().min(1).max(1024).nullable(),
@@ -5376,8 +5394,8 @@ export const zAdmissionRequest = z.object({
     attempt: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }).optional(),
     contractVersion: z.int().min(-2147483648, { error: 'Invalid value: Expected int32 to be >= -2147483648' }).max(2147483647, { error: 'Invalid value: Expected int32 to be <= 2147483647' }).optional(),
     jobId: z.uuid().optional(),
-    nonResults: z.array(zRuntimeNonResult),
-    results: z.array(zSubmittedResult).optional(),
+    nonResults: z.array(zRuntimeNonResult).min(0).max(1),
+    results: z.array(zSubmittedResult).min(0).max(1).optional(),
     reviewId: z.uuid().optional()
 });
 

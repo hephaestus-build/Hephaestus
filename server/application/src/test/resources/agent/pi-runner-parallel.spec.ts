@@ -14,11 +14,11 @@ import {
 	readJsonFile,
 	runRunner,
 	stagePractices,
+	stagedRequest,
 } from "./program-host-runner.ts";
 
 function resultsOf(cwd: string) {
-	const [request] = capturedLines(cwd, "admission");
-	const body = field(request, "body");
+	const body = stagedRequest(cwd);
 	const results = field(body, "results");
 	assert.ok(Array.isArray(results));
 	return { body, results: results.map((result: unknown) => result) };
@@ -281,8 +281,10 @@ for (const cold of [false, true]) {
 					PI_HOST_COLD_LEADER: cold ? "z-running" : "",
 				},
 			);
-			assert.equal(exit.status, 0, exit.stderr);
-			const { body, results } = resultsOf(cwd);
+			assert.equal(exit.status, 1, exit.stderr);
+			const { results } = resultsOf(cwd);
+			const body = readJsonFile(cwd, "out/result.json");
+			assert.deepEqual(capturedLines(cwd, "admission"), []);
 			assert.deepEqual(
 				results.map((result: unknown) => field(result, "practiceSlug")),
 				["a-finished"],
@@ -448,7 +450,8 @@ void test("a session stop failure preserves completed siblings for admission and
 				PI_HOST_DELAYS: JSON.stringify({ "z-stop": 150 }),
 			},
 		);
-		assert.equal(exit.status, 0, exit.stderr);
+		assert.equal(exit.status, 1, exit.stderr);
+		assert.deepEqual(capturedLines(cwd, "admission"), []);
 		assert.deepEqual(
 			resultsOf(cwd).results.map((result: unknown) => field(result, "practiceSlug")),
 			["a-finished"],

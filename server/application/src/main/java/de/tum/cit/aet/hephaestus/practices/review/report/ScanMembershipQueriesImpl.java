@@ -41,7 +41,8 @@ public class ScanMembershipQueriesImpl implements ScanMembershipQueries {
         add(
                 where,
                 params,
-                "(CASE WHEN m.state='LISTED' AND v.status NOT IN ('QUEUED','RUNNING') THEN 'NOT_REVIEWED' ELSE m.state"
+                "(CASE WHEN m.state IN ('LISTED','STAGED') AND v.status NOT IN ('QUEUED','RUNNING') THEN 'NOT_REVIEWED'"
+                        + " WHEN m.state='STAGED' THEN 'LISTED' ELSE m.state"
                         + " END)=:status",
                 "status",
                 filter.status());

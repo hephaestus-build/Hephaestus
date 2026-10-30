@@ -131,7 +131,7 @@ public class ReviewJobClaimService {
     record TerminalClaim(ReviewJob job, ReviewJobStatus status) implements ClaimAttempt {}
 
     @Nullable
-    ClaimAttempt claimJob(UUID jobId) {
+    ClaimAttempt claimJob(UUID jobId, int maxRetries) {
         return transactionTemplate.execute(status -> {
             Optional<ReviewJob> locked = jobRepository.findByIdQueuedForUpdateSkipLocked(jobId, Instant.now());
             if (locked.isEmpty()) {
@@ -141,7 +141,7 @@ public class ReviewJobClaimService {
 
             ReviewJob job = locked.get();
             try {
-                ClaimAttempt result = claimLocked(job);
+                ClaimAttempt result = claimLocked(job, maxRetries);
                 if (result instanceof ClaimOutcome || result instanceof TerminalClaim)
                     callPermits.withdrawClaim(
                             new LlmCallPermits.Caller(job.getWorkspaceId(), job.getId(), job.getAttempt(), null));
@@ -181,7 +181,7 @@ public class ReviewJobClaimService {
         job.setLeasedUntil(jobRepository.databaseNow().plusSeconds(ttl));
     }
 
-    private ClaimAttempt claimLocked(ReviewJob job) {
+    private ClaimAttempt claimLocked(ReviewJob job, int maxRetries) {
 
         if (memberAiPolicy.isProcessingSuppressed(job)) {
             job.setStatus(ReviewJobStatus.CANCELLED);
@@ -219,10 +219,14 @@ public class ReviewJobClaimService {
             return new TerminalClaim(job, ReviewJobStatus.CANCELLED);
         }
 
+        if (job.spentAttempts() > maxRetries && assignments.hasStaged(job))
+            return claimToWithhold(job, CompositionStop.RETRIES_EXHAUSTED);
+
+        boolean retained = assignments.hasStaged(job);
         LlmBudgetBlockReason blockReason =
                 llmBudgetService.decide(job.getWorkspaceId()).forFunding(claimedFundingSource(job));
         if (blockReason != LlmBudgetBlockReason.NONE) {
-            if (composing) return claimToWithhold(job, CompositionStop.BUDGET);
+            if (composing || assignments.readyToSeal(job)) return claimToWithhold(job, CompositionStop.BUDGET);
             return holdOrCancelOverBudget(job, blockReason);
         }
 
@@ -231,12 +235,16 @@ public class ReviewJobClaimService {
         // is refused rather than silently switching the queued job to another model.
         WorkspaceAgentBinding binding = memberAiPolicy.binding(job).orElse(null);
         if (binding == null) {
-            return composing ? claimToWithhold(job, CompositionStop.MODEL_UNAVAILABLE) : refuseUnavailableModel(job);
+            return composing || retained
+                    ? claimToWithhold(job, CompositionStop.MODEL_UNAVAILABLE)
+                    : refuseUnavailableModel(job);
         }
         var assigned = assignments.load(job);
         ConfigSnapshot snapshot = admitModels(job, binding, assigned);
         if (snapshot == null)
-            return composing ? claimToWithhold(job, CompositionStop.MODEL_UNAVAILABLE) : refuseUnavailableModel(job);
+            return composing || retained
+                    ? claimToWithhold(job, CompositionStop.MODEL_UNAVAILABLE)
+                    : refuseUnavailableModel(job);
         String itemKind = assigned.getFirst().item().kind().value();
         // Admission holds this slot's binding row lock until the RUNNING transition commits.
         long runningCount = jobRepository.countRunningByWorkspaceIdAndDataHandlingTier(
@@ -254,7 +262,7 @@ public class ReviewJobClaimService {
         }
 
         Long poolId = callPermits.poolFor(snapshot.model().connectionRef());
-        if (!composing && poolId != null) {
+        if (!composing && !assignments.readyToSeal(job) && poolId != null) {
             var reservation = callPermits.reserve(
                     poolId,
                     LlmCallClass.REQUEST,

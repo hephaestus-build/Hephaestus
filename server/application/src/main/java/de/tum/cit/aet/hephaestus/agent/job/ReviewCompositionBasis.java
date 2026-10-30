@@ -15,6 +15,7 @@ import lombok.Getter;
 import lombok.Setter;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
+import org.jspecify.annotations.Nullable;
 import tools.jackson.databind.JsonNode;
 
 /**
@@ -62,11 +63,13 @@ public class ReviewCompositionBasis {
     @Column(name = "workspace_id", nullable = false)
     private long workspaceId;
 
+    /** The capture attempt of the root copy; it can precede the attempt that seals the results. */
     @Column(name = "admission_attempt", nullable = false)
     private int admissionAttempt;
 
-    @Column(name = "admission_digest", nullable = false, length = 64)
-    private String admissionDigest;
+    /** Set only when the staged set is sealed. An unsealed root cannot be composed from. */
+    @Column(name = "admission_digest", length = 64)
+    private @Nullable String admissionDigest;
 
     @Column(name = "basis_version", nullable = false)
     private int basisVersion;

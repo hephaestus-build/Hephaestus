@@ -85,7 +85,7 @@ async function postAdmission(body: string, send: AdmissionFetch): Promise<unknow
 	}
 }
 
-export async function admit(request: unknown, send: AdmissionFetch): Promise<Admission> {
+async function sendRecorded(request: unknown, send: AdmissionFetch): Promise<unknown> {
 	const body = JSON.stringify(request);
 	const response: unknown = await retrying(
 		async () => postAdmission(body, send),
@@ -96,5 +96,21 @@ export async function admit(request: unknown, send: AdmissionFetch): Promise<Adm
 				`[pi-runner] admission attempt ${attempt}/${ADMISSION_ATTEMPTS} did not arrive (${errorText(error)}); retrying in ${delayMs}ms`,
 			),
 	);
-	return parseAdmission(response);
+	return response;
+}
+
+export async function admit(request: unknown, send: AdmissionFetch): Promise<Admission> {
+	return parseAdmission(await sendRecorded(request, send));
+}
+
+export async function stagePractice(
+	practiceSlug: string,
+	request: unknown,
+	send: AdmissionFetch,
+): Promise<void> {
+	const receipt = z.object({
+		practiceSlug: z.literal(practiceSlug),
+		digest: z.string().regex(/^[0-9a-f]{64}$/u),
+	});
+	receipt.parse(await sendRecorded(request, send));
 }

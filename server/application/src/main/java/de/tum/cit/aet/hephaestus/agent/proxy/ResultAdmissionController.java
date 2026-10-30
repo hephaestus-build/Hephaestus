@@ -5,6 +5,8 @@ import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
 import de.tum.cit.aet.hephaestus.agent.handler.spi.JobDeliveryException;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.AdmissionRequestDTO;
 import de.tum.cit.aet.hephaestus.agent.proxy.dto.AdmissionResponseDTO;
+import de.tum.cit.aet.hephaestus.agent.proxy.dto.SealResultsRequestDTO;
+import de.tum.cit.aet.hephaestus.agent.proxy.dto.StageResponseDTO;
 import de.tum.cit.aet.hephaestus.core.WorkspaceAgnostic;
 import de.tum.cit.aet.hephaestus.core.runtime.ConditionalOnWorkerRole;
 import io.swagger.v3.oas.annotations.Operation;
@@ -31,7 +33,7 @@ public class ResultAdmissionController {
 
     @Operation(
             operationId = "admitResults",
-            summary = "Admit results for the current review attempt",
+            summary = "Seal the staged results for the current review attempt",
             description = "Requires the private worker connector and a proxy-scoped worker credential bound to the"
                     + " workspace, job and attempt. Browser cookies and app-admin authority do not authorize this"
                     + " request.",
@@ -39,9 +41,21 @@ public class ResultAdmissionController {
     @PostMapping("/admit-results")
     @WorkspaceAgnostic("The worker credential supplies the workspace and exact job attempt")
     public AdmissionResponseDTO admitResults(
-            @Valid @RequestBody AdmissionRequestDTO request, Authentication authentication) {
+            @Valid @RequestBody SealResultsRequestDTO request, Authentication authentication) {
         var identity = attemptOf(authentication);
         return checked(() -> admission.admit(identity, request));
+    }
+
+    @Operation(
+            operationId = "stagePracticeResult",
+            summary = "Stage one completed practice privately",
+            description = "Verifies one candidate or records one runtime withholding under the current attempt fence.",
+            security = @SecurityRequirement(name = "workerBearer"))
+    @PostMapping("/stage-result")
+    @WorkspaceAgnostic("The worker credential supplies the workspace and exact job attempt")
+    public StageResponseDTO stageResult(
+            @Valid @RequestBody AdmissionRequestDTO request, Authentication authentication) {
+        return checked(() -> admission.stage(attemptOf(authentication), request));
     }
 
     private static <T> T checked(Supplier<T> operation) {

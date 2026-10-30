@@ -14,10 +14,9 @@ import de.tum.cit.aet.hephaestus.agent.context.JobEvidenceFiles;
 import de.tum.cit.aet.hephaestus.agent.context.providers.ReviewHistoryContentSource;
 import de.tum.cit.aet.hephaestus.agent.handler.AdmittedResultProjectionService;
 import de.tum.cit.aet.hephaestus.agent.handler.FeedbackCompositionService;
+import de.tum.cit.aet.hephaestus.agent.handler.PracticeResultStaging;
 import de.tum.cit.aet.hephaestus.agent.handler.ResultAdmissionService;
-import de.tum.cit.aet.hephaestus.agent.handler.ReviewOutputService;
 import de.tum.cit.aet.hephaestus.agent.handler.RuntimeReviewTestData;
-import de.tum.cit.aet.hephaestus.agent.job.ReviewCompositionBasisRepository;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJob;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobAssignments;
 import de.tum.cit.aet.hephaestus.agent.job.ReviewJobRepository;
@@ -1044,6 +1043,7 @@ class FeedbackPublicationContextIntegrationTest extends AbstractFeedbackDelivery
         job.setWorkspaceId(workspace.getId());
         job.setReviewId(reviewId);
         job.setStatus(ReviewJobStatus.RUNNING);
+        job.setLeasedUntil(Instant.now().plusSeconds(3600));
         job.setWorkerId("worker");
         job.setAdmissionAttempt(0);
         job.setAdmissionDigest("admitted");
@@ -1087,7 +1087,6 @@ class FeedbackPublicationContextIntegrationTest extends AbstractFeedbackDelivery
                 mapper);
         return new ResultAdmissionService(
                 jobs,
-                mock(ReviewOutputService.class),
                 mock(AdmittedResultQuery.class),
                 assignments,
                 mock(AdmittedResultProjectionService.class),
@@ -1095,9 +1094,9 @@ class FeedbackPublicationContextIntegrationTest extends AbstractFeedbackDelivery
                 source,
                 mapper,
                 transactionManager,
-                mock(ReviewCompositionBasisRepository.class),
                 mock(FeedbackCompositionService.class),
-                mock(ReviewWriteGuard.class));
+                mock(ReviewWriteGuard.class),
+                mock(PracticeResultStaging.class));
     }
 
     private static void await(CountDownLatch latch) {

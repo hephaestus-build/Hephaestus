@@ -5500,6 +5500,16 @@ export type ScanSummary = {
     stopReason: 'TIMED_OUT' | 'EXECUTION_FAILED' | 'PREPARATION_FAILED' | 'PROCESSING_FAILED' | 'PERSON_DATA_ERASED' | 'STALE_ROLLOUT_REVISION' | 'CANCELLED_BY_ADMIN' | 'REPLACED' | 'LEGACY_FAILURE' | 'EXECUTION_INCOMPLETE' | 'RESULT_WITHHELD' | 'READINESS_REFUSED' | 'SUSPECT_LISTING' | 'BUDGET' | 'USAGE_UNVERIFIABLE' | 'DEADLINE' | 'CANCELLED' | 'ENUMERATION_FAILED' | 'ENUMERATION_LIMIT' | 'NO_SCAN_PRACTICES' | 'MODEL_CHANGED' | 'MODEL_UNAVAILABLE' | 'ERROR' | 'LEGACY_SCOPE_UNKNOWN' | 'CONTRACT_CHANGED' | 'NO_SANDBOX_ROOM' | null;
 };
 
+/**
+ * Identity of the retained set to seal; candidates can only enter through per-practice staging.
+ */
+export type SealResultsRequest = {
+    attempt?: number;
+    contractVersion?: number;
+    jobId: string;
+    reviewId: string;
+};
+
 export type SearchWarrant = {
     boundary?: string;
     consulted?: Array<string>;
@@ -5669,6 +5679,14 @@ export type Sort = {
     empty: boolean;
     sorted: boolean;
     unsorted: boolean;
+};
+
+/**
+ * A private staging receipt; staging creates no visible result or feedback.
+ */
+export type StageResponse = {
+    digest: string;
+    practiceSlug: string;
 };
 
 export type StartScanRequest = {
@@ -9293,7 +9311,7 @@ export type ListIdentityProvidersResponses = {
 export type ListIdentityProvidersResponse = ListIdentityProvidersResponses[keyof ListIdentityProvidersResponses];
 
 export type AdmitResultsData = {
-    body: AdmissionRequest;
+    body: SealResultsRequest;
     path?: never;
     query?: never;
     url: '/internal/llm/admit-results';
@@ -9307,6 +9325,22 @@ export type AdmitResultsResponses = {
 };
 
 export type AdmitResultsResponse = AdmitResultsResponses[keyof AdmitResultsResponses];
+
+export type StagePracticeResultData = {
+    body: AdmissionRequest;
+    path?: never;
+    query?: never;
+    url: '/internal/llm/stage-result';
+};
+
+export type StagePracticeResultResponses = {
+    /**
+     * OK
+     */
+    200: StageResponse;
+};
+
+export type StagePracticeResultResponse = StagePracticeResultResponses[keyof StagePracticeResultResponses];
 
 export type UnsubscribeEmailData = {
     body?: {

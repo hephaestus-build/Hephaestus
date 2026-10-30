@@ -189,7 +189,7 @@ for (const [basis, explicitCommit, incremental = false] of [
 			}
 			assert.equal(exit.status, 0, exit.stderr);
 			assert.match(exit.stderr, /Practice concurrency: configured=3, effective=1/u);
-			const [request] = capturedLines(cwd, "admission");
+			const [request] = capturedLines(cwd, "staging");
 			const body = field(request, "body");
 			const results = field(body, "results");
 			assert.ok(Array.isArray(results));
@@ -274,7 +274,7 @@ for (const [readContext, collision] of [
 		);
 		assert.equal(exit.status, readContext ? 0 : 1, exit.stderr);
 		if (readContext) {
-			const [request] = capturedLines(cwd, "admission");
+			const [request] = capturedLines(cwd, "staging");
 			const results = field(field(request, "body"), "results");
 			assert.ok(Array.isArray(results));
 			assert.equal(field(field(field(results[0], "candidate"), "coverage"), "complete"), true);
@@ -347,7 +347,7 @@ export default definePracticeScript({
 	);
 	const exit = await runRunner(cwd, {});
 	assert.equal(exit.status, 0, exit.stderr);
-	const [request] = capturedLines(cwd, "admission");
+	const [request] = capturedLines(cwd, "staging");
 	const results = field(field(request, "body"), "results");
 	assert.ok(Array.isArray(results));
 	assert.partialDeepStrictEqual(field(results[0], "candidate"), {

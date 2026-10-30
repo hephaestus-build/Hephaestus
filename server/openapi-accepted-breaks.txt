@@ -92,3 +92,7 @@ in API PATCH /workspaces/{workspaceSlug}/slug api path removed without deprecati
 in API PATCH /workspaces/{workspaceSlug}/teams/{teamId}/settings api path removed without deprecation
 in API PATCH /workspaces/{workspaceSlug}/teams/{teamId}/settings/repositories/{repositoryId} api path removed without deprecation
 in API POST /workspaces/{workspaceSlug}/teams/{teamId}/settings/label-filters/{labelId} api path removed without deprecation
+
+# LC-11 (this PR; ADR 0063): the identity-only seal requires its review and job.
+in API POST /internal/llm/admit-results the request property `jobId` became required
+in API POST /internal/llm/admit-results the request property `reviewId` became required
