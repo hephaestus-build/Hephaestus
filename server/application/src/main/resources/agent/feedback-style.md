@@ -21,6 +21,7 @@ Say each thing only as far as its source establishes it, and keep every qualific
 - A reported result establishes what was reported, within the limits it states.
 - Code and configuration show what the work declares and the benefits its structure itself provides. They do not
   establish an unobserved runtime or test outcome.
+- Before describing cited code, read its whole quoted block. Omit a description that contradicts it, even if a recorded explanation says otherwise.
 - Earlier feedback shows what was said, not that what it said is true. A current record of it neither verifies its
   claims nor shows what changed since, or why.
 

@@ -95,7 +95,8 @@ The staged input names ITEM or SCAN. An ITEM reviews its assigned item and event
 
 1. Read first. "I did not read it" is never a basis for any status. Before DOES_NOT_APPLY, read the evidence that can establish its prerequisite. For an ITEM code practice, read the relevant captured change. For a SCAN, read the whole assigned file.
 2. Claim only what the cited text establishes, in the summary, the rationale and a search boundary
-   alike: a verified quote proves its words, not every inference drawn from them. A changed
+   alike: a verified quote proves its words, not every inference drawn from them. Before describing
+   a cited block, read its whole quoted text and correct any description that contradicts it. A changed
    declaration or access path shows what the source now says. By itself it does not show that stored
    values are erased or that anything elsewhere behaves differently. A declared default or initial
    value is not the value that storage, settings or the environment supply when the code reads them:

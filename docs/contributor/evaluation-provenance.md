@@ -9,6 +9,10 @@ A result records an evidence-bounded outcome, not a developer's mastery.
 A delivery record states what the system confirmed or withheld, not whether the guidance was correct.
 Keep these dimensions separate in research and operational exports.
 
+Citation verification establishes the quoted text and its location in the captured source.
+It does not establish that an explanation follows from those bytes.
+Evaluate unsupported inferences separately, including a false description beside a correct quotation of the whole cited block.
+
 ## Review provenance
 
 Join a result to its review, practice version, item version and developer account.
