@@ -30,6 +30,7 @@ import {
 	commitImages,
 	commitLockEnvironment,
 	helmArguments,
+	isMajorCutover,
 	profileFiles,
 	ensureReleaseTree,
 	decide,
@@ -664,6 +665,18 @@ await test("a host remembers a commit it applied, not only a release", () => {
 	assert.ok(!isTarget("v1.2"));
 });
 
+await test("release cutovers distinguish major changes, first installs and an unversioned commit chart", () => {
+	assert.equal(isMajorCutover("v1.0.1", "v1.0.0", "1.0.0"), false);
+	assert.equal(isMajorCutover("v1.0.0", "v0.95.1", "0.95.1"), true);
+	assert.equal(isMajorCutover("v1.0.0", undefined, "0.95.1"), true);
+	assert.equal(isMajorCutover("v1.0.0"), false);
+	assert.throws(
+		() => isMajorCutover("v1.0.0", "c".repeat(40), ""),
+		/Pause reconciliation.*Database maintenance/u,
+	);
+	assert.equal(isMajorCutover("v1.0.0", "c".repeat(40), "1.0.0"), false);
+});
+
 await test("the tooling link moves to the applied tree in one step", async () => {
 	const directory = await mkdtemp(path.join(tmpdir(), "reconcile-tooling-"));
 	try {
@@ -684,7 +697,7 @@ await test("installed units follow the applied tree, and a link left by an earli
 	const directory = await mkdtemp(path.join(tmpdir(), "reconcile-units-"));
 	try {
 		const tree = path.join(directory, "tree");
-		const source = path.join(tree, "docker/self-host/systemd");
+		const source = path.join(tree, "deploy/reconcile");
 		const units = path.join(directory, "units");
 		await mkdir(source, { recursive: true });
 		await mkdir(units);
@@ -732,7 +745,7 @@ await test("installed units follow the applied tree, and a link left by an earli
 await test("a tree is adopted as tooling only when its own unit runs through the tooling link", async () => {
 	const directory = await mkdtemp(path.join(tmpdir(), "reconcile-floor-"));
 	try {
-		const units = path.join(directory, "docker/self-host/systemd");
+		const units = path.join(directory, "deploy/reconcile");
 		await mkdir(units, { recursive: true });
 		assert.equal(await carriesToolingLink(directory), false);
 		await writeFile(
@@ -859,6 +872,10 @@ async function reconcilerFixture(directory: string) {
 		for (const file of [
 			"reconcile-deployment.ts",
 			"kubernetes-chart.ts",
+			"release-chart.ts",
+			"release-image-lock.ts",
+			"lib/release-identities.ts",
+			"lib/release-signer.ts",
 			"commit-image-lock.ts",
 			"lib/env.ts",
 			"lib/json.ts",
@@ -867,7 +884,7 @@ async function reconcilerFixture(directory: string) {
 			await copyFile(path.join(import.meta.dirname, file), path.join(tree, "scripts", file));
 		}
 	}
-	const sourceUnits = path.join(checkout, "docker/self-host/systemd");
+	const sourceUnits = path.join(checkout, "deploy/reconcile");
 	await mkdir(sourceUnits, { recursive: true });
 	await writeFile(
 		path.join(sourceUnits, "hephaestus-reconcile.service"),
@@ -982,7 +999,9 @@ if (process.env.FAIL_WORKTREE_REMOVE === "1" && args[0] === "worktree" && args[1
 const result = spawnSync(${JSON.stringify(realGit)}, args, { stdio: "inherit" });
 process.exit(result.status ?? 1);`,
 		cosign: 'process.exit(process.env.FAIL_VERIFICATION === "1" ? 1 : 0);',
-		systemctl: 'if (args[0] === "show") console.log("yes");',
+		systemctl:
+			'if (args[0] === "show") console.log("yes"); if (args[0] === "daemon-reload" && process.env.FAIL_RELOAD === "1") process.exit(1);',
+		kubectl: "console.log(process.env.CHART_WORKLOADS ?? JSON.stringify({items: []}));",
 		// Renders what the given Compose file declares, and stops only a service it declares.
 		docker: `import { existsSync, readFileSync } from "node:fs";
 const file = args[args.indexOf("--file") + 1] ?? "";
@@ -1029,6 +1048,19 @@ writeFileSync(process.argv[3], ${JSON.stringify(`HEPHAESTUS_RELEASE_COMMIT=${rel
 		path.join(directory, "run.mjs"),
 		`import { main } from "./tooling/scripts/reconcile-deployment.ts";
 await main(${JSON.stringify(units)});\n`,
+	);
+	await writeFile(
+		path.join(bootstrap, "scripts/prepare-release-chart.ts"),
+		`import { writeFileSync, copyFileSync, readFileSync, statSync } from "node:fs";
+import path from "node:path";
+if (process.env.FAIL_CHART_VERIFY === "1") throw new Error("chart verification failed");
+const [release, commit, destination, helm, inventory] = process.argv.slice(2);
+if (!statSync(helm).isFile() || !Array.isArray(JSON.parse(readFileSync(inventory, "utf8")).images)) throw new Error("incorrect chart CLI arguments");
+const packaged = path.join(destination, "hephaestus-" + release.slice(1) + ".tgz");
+if (process.env.TRANSITION_PACKAGE) copyFileSync(process.env.TRANSITION_PACKAGE, packaged);
+else writeFileSync(packaged, "verified chart fixture");
+writeFileSync(path.join(destination, release + ".images.yaml"), JSON.stringify({ release: { version: release, commit }, images: {} }));
+`,
 	);
 	const record = { release: "v1.0.0", channelCommit, appliedAt: applied.appliedAt };
 	return {
@@ -1150,10 +1182,7 @@ await test(
 			assert.equal(await readFile(fixture.metricsFile, "utf8"), "previous metrics\n");
 			assert.equal(
 				await readFile(path.join(fixture.units, "hephaestus-reconcile.service"), "utf8"),
-				await readFile(
-					path.join(tree, "docker/self-host/systemd/hephaestus-reconcile.service"),
-					"utf8",
-				),
+				await readFile(path.join(tree, "deploy/reconcile/hephaestus-reconcile.service"), "utf8"),
 			);
 			const calls = await fixture.calls();
 			assert.match(calls, /git worktree add/u);
@@ -1229,6 +1258,8 @@ if (process.env.HELM_STATUS === undefined) process.exit(1);
 console.log(JSON.stringify({ info: { status: process.env.HELM_STATUS } }));
 }
 if (args[0] === "history") console.log(process.env.HELM_HISTORY ?? "[]");
+if (args[0] === "list") console.log(process.env.HELM_RELEASES ?? "[]");
+if (args[0] === "get") console.log(process.env.HELM_VALUES ?? '{"server":{"replicas":0},"worker":{"replicas":0,"sandbox":{"namespace":"sandboxes"}}}');
 process.exit(args[0] === "upgrade" && process.env.FAIL_HELM === "1" ? 1 : 0);
 `,
 		{ mode: 0o755 },
@@ -1387,7 +1418,7 @@ await test(
 );
 
 await test(
-	"nothing that is not verified, complete and from a commit channel reaches Helm",
+	"an unsigned channel or incomplete commit lock never reaches Helm",
 	reconcilerSubprocess,
 	async () => {
 		const directory = await mkdtemp(path.join(tmpdir(), "reconcile-chart-refused-"));
@@ -1399,10 +1430,6 @@ await test(
 				HEPHAESTUS_HELM: helm,
 				HEPHAESTUS_SECRETS: directory,
 			};
-			// A release channel names a signed chart package, which the chart stack cannot verify yet.
-			const release = fixture.run({ environment });
-			assert.notEqual(release.status, 0);
-			assert.match(release.stderr, /release channel applies the signed chart package/u);
 			// A channel whose signature cosign refuses.
 			const unsigned = fixture.run({ channel: "chart", failVerification: true, environment });
 			assert.notEqual(unsigned.status, 0);
@@ -1417,6 +1444,276 @@ await test(
 		}
 	},
 );
+
+await test(
+	"installed 0.95.1 reconciler applies the next chart on Kubernetes",
+	{
+		skip:
+			process.env.RECONCILER_TEST_CONTEXT === undefined &&
+			"set RECONCILER_TEST_CONTEXT to a disposable cluster context",
+	},
+	async () => {
+		const directory = await mkdtemp(path.join(tmpdir(), "reconciler-transition-"));
+		const namespace = `reconciler-${Date.now()}`;
+		const context = process.env.RECONCILER_TEST_CONTEXT ?? "";
+		const realHelm = execFileSync("which", ["helm"], { encoding: "utf8" }).trim();
+		const realKubectl = execFileSync("which", ["kubectl"], { encoding: "utf8" }).trim();
+		const kubectl = (...args: string[]) =>
+			execFileSync(realKubectl, ["--context", context, ...args], { encoding: "utf8" });
+		const helm = (...args: string[]) =>
+			execFileSync(realHelm, ["--kube-context", context, ...args], { encoding: "utf8" });
+		try {
+			const fixture = await reconcilerFixture(directory);
+			const source = path.join(directory, "source");
+			await mkdir(path.join(source, "templates"), { recursive: true });
+			await writeFile(
+				path.join(source, "values.yaml"),
+				JSON.stringify({
+					server: { replicas: 0 },
+					worker: { replicas: 0, sandbox: { namespace: `${namespace}-sandboxes` } },
+				}),
+			);
+			await writeFile(
+				path.join(source, "templates/version.yaml"),
+				"apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: transition-proof\ndata:\n  version: {{ .Chart.AppVersion | quote }}\n",
+			);
+			await writeFile(
+				path.join(source, "Chart.yaml"),
+				"apiVersion: v2\nname: hephaestus\nversion: 0.95.1\nappVersion: 0.95.1\n",
+			);
+			kubectl("create", "namespace", namespace);
+			kubectl("create", "namespace", `${namespace}-sandboxes`);
+			helm("install", "hephaestus", source, "--namespace", namespace, "--wait", "--timeout", "30s");
+			await writeFile(
+				path.join(source, "Chart.yaml"),
+				"apiVersion: v2\nname: hephaestus\nversion: 1.0.0\nappVersion: 1.0.0\n",
+			);
+			helm("package", source, "--destination", directory);
+			// Transport and signature admission have their own failure tests. This leg uses real Helm
+			// and the installed reconciler, with synthetic next-release bytes (1.0 is not published).
+			await writeFile(path.join(directory, "chart.yaml"), "{}\n");
+			await writeFile(
+				path.join(directory, "applied.json"),
+				JSON.stringify({ ...fixture.record, release: "v0.95.1" }),
+			);
+			await writeFile(
+				path.join(directory, "bin/kubectl"),
+				`#!/bin/sh\nexec ${realKubectl} --context ${context} "$@"\n`,
+				{ mode: 0o755 },
+			);
+			const wrappedHelm = path.join(directory, "helm");
+			await writeFile(wrappedHelm, `#!/bin/sh\nexec ${realHelm} --kube-context ${context} "$@"\n`, {
+				mode: 0o755,
+			});
+			const result = fixture.run({
+				environment: {
+					HEPHAESTUS_STACKS: "chart",
+					HEPHAESTUS_HELM: wrappedHelm,
+					HEPHAESTUS_CHART_NAMESPACE: namespace,
+					HEPHAESTUS_SECRETS: directory,
+					HEPHAESTUS_WAIT_TIMEOUT: "30",
+					TRANSITION_PACKAGE: path.join(directory, "hephaestus-1.0.0.tgz"),
+				},
+			});
+			assert.equal(result.status, 0, result.stderr);
+			const proof = asRecord(
+				parseJson(kubectl("get", "configmap", "transition-proof", "-n", namespace, "-o", "json")),
+				"transition proof",
+			);
+			assert.equal(asRecord(proof.data, "proof data").version, "1.0.0");
+			const record = await readApplied(path.join(directory, "applied.json"));
+			assert.equal(record?.release, "v1.0.0");
+			assert.equal(
+				await readlink(path.join(directory, "tooling")),
+				path.join(directory, "releases/v1.0.0"),
+			);
+			assert.equal(await carriesToolingLink(path.join(directory, "releases/v1.0.0")), true);
+			await assert.rejects(
+				readFile(
+					path.join(
+						directory,
+						"releases/v1.0.0/docker/self-host/systemd/hephaestus-reconcile.service",
+					),
+				),
+				{ code: "ENOENT" },
+			);
+		} finally {
+			kubectl(
+				"delete",
+				"namespace",
+				namespace,
+				`${namespace}-sandboxes`,
+				"--ignore-not-found",
+				"--wait=false",
+			);
+			await rm(directory, { recursive: true, force: true });
+		}
+	},
+);
+
+for (const mode of [
+	"first install",
+	"same major",
+	"pending same major",
+	"pending first install",
+] as const) {
+	await test(`signed package recovery: ${mode}`, reconcilerSubprocess, async () => {
+		const directory = await mkdtemp(path.join(tmpdir(), "reconcile-release-recovery-"));
+		try {
+			const fixture = await reconcilerFixture(directory);
+			const { helm, log } = await fakeHelm(directory);
+			if (mode.includes("same major")) {
+				await writeFile(
+					path.join(directory, "applied.json"),
+					JSON.stringify({ ...fixture.record, channelIdentity: "f".repeat(64) }),
+				);
+			}
+			const result = fixture.run({
+				environment: {
+					HEPHAESTUS_STACKS: "chart",
+					HEPHAESTUS_HELM: helm,
+					HEPHAESTUS_SECRETS: directory,
+					...(mode.startsWith("pending")
+						? {
+								HELM_STATUS: "pending-upgrade",
+								HELM_HISTORY: '[{"revision":3,"status":"deployed"}]',
+							}
+						: {}),
+				},
+			});
+			const calls = await log();
+			if (mode === "pending first install") {
+				assert.notEqual(result.status, 0);
+				assert.equal(await readApplied(path.join(directory, "applied.json")), undefined);
+				assert.ok(
+					!calls.some((call) => call.startsWith("upgrade ") || call.startsWith("rollback ")),
+				);
+			} else {
+				assert.equal(result.status, 0, result.stderr);
+				assert.match(calls.at(-1) ?? "", /hephaestus-1\.0\.0\.tgz.*--rollback-on-failure/u);
+				assert.equal(
+					calls.filter((call) => call.startsWith("rollback ")).length,
+					Number(mode === "pending same major"),
+				);
+				const record = await readApplied(path.join(directory, "applied.json"));
+				assert.equal(record?.release, "v1.0.0");
+			}
+		} finally {
+			await rm(directory, { recursive: true, force: true });
+		}
+	});
+}
+
+for (const failure of [
+	"none",
+	"completed before record",
+	"workers disabled",
+	"verification",
+	"apply",
+	"pending",
+	"reload",
+	"unitcopy",
+	"downgrade",
+	"writers",
+	"sandbox",
+] as const) {
+	await test(`signed release channel: ${failure}`, reconcilerSubprocess, async () => {
+		const directory = await mkdtemp(path.join(tmpdir(), "reconcile-signed-chart-"));
+		try {
+			const fixture = await reconcilerFixture(directory);
+			const { helm, log } = await fakeHelm(directory);
+			const failures: Record<string, Record<string, string>> = {
+				"completed before record": {
+					HELM_RELEASES: JSON.stringify([
+						{ name: "hephaestus", app_version: "1.0.0", status: "deployed" },
+					]),
+					HELM_VALUES: JSON.stringify({
+						release: { version: "v1.0.0", commit: fixture.releaseCommit },
+						images: {},
+						server: { replicas: 1 },
+						worker: { replicas: 0 },
+					}),
+				},
+				"workers disabled": {
+					HELM_VALUES:
+						'{"server":{"replicas":0},"worker":{"enabled":false,"replicas":0,"sandbox":{"namespace":""}}}',
+				},
+				verification: { FAIL_CHART_VERIFY: "1" },
+				apply: { FAIL_HELM: "1" },
+				pending: { HELM_STATUS: "pending-upgrade" },
+				reload: { FAIL_RELOAD: "1" },
+				writers: { HELM_VALUES: '{"server":{"replicas":1},"worker":{"replicas":1}}' },
+				sandbox: {
+					CHART_WORKLOADS:
+						'{"items":[{"metadata":{"labels":{"hephaestus.build/sandbox-kind":"review"}}}]}',
+				},
+			};
+			const environment = {
+				HEPHAESTUS_STACKS: "chart",
+				HEPHAESTUS_HELM: helm,
+				HEPHAESTUS_SECRETS: directory,
+				...failures[failure],
+			};
+			if (failure === "unitcopy") {
+				await mkdir(path.join(fixture.units, "hephaestus-reconcile.timer"));
+			}
+			const previous = {
+				...fixture.record,
+				release: failure === "downgrade" ? "v2.0.0" : "v0.95.1",
+			};
+			await writeFile(path.join(directory, "applied.json"), JSON.stringify(previous));
+			const result = fixture.run({ environment });
+			const record = await readApplied(path.join(directory, "applied.json"));
+			if (
+				failure === "none" ||
+				failure === "workers disabled" ||
+				failure === "completed before record" ||
+				failure === "reload" ||
+				failure === "unitcopy"
+			) {
+				assert.equal(record?.release, "v1.0.0");
+				const calls = await log();
+				const upgrade = calls.find((call) => call.startsWith("upgrade ")) ?? "";
+				if (failure === "completed before record") {
+					assert.equal(upgrade, "", "a completed cutover does not run migration hooks again");
+				} else {
+					assert.match(upgrade, /chart\/hephaestus-1\.0\.0\.tgz/u);
+					assert.match(upgrade, /--set server.replicas=1 --set worker.replicas=0/u);
+					assert.doesNotMatch(upgrade, /rollback-on-failure/u);
+				}
+				if (failure === "reload" || failure === "unitcopy") {
+					if (failure === "unitcopy") {
+						await rm(path.join(fixture.units, "hephaestus-reconcile.timer"), { recursive: true });
+					}
+					assert.notEqual(result.status, 0);
+					assert.equal(await readlink(path.join(directory, "tooling")), fixture.bootstrap);
+					const repaired = fixture.run({ environment: { ...environment, FAIL_RELOAD: "0" } });
+					assert.equal(repaired.status, 0, repaired.stderr);
+					assert.equal(
+						await readlink(path.join(directory, "tooling")),
+						path.join(directory, "releases/v1.0.0"),
+					);
+					const recoveredCalls = await log();
+					assert.equal(recoveredCalls.filter((call) => call.startsWith("upgrade ")).length, 1);
+				} else {
+					assert.equal(result.status, 0, result.stderr);
+				}
+			} else {
+				assert.notEqual(result.status, 0);
+				assert.equal(record?.release, previous.release);
+				assert.equal(await readlink(path.join(directory, "tooling")), fixture.bootstrap);
+				const failedCalls = await log();
+				assert.ok(!failedCalls.some((call) => call.startsWith("rollback ")));
+				if (failure !== "apply") {
+					assert.ok(!failedCalls.some((call) => call.startsWith("upgrade ")));
+				}
+			}
+			assert.doesNotMatch(await fixture.calls(), /^docker /mu);
+		} finally {
+			await rm(directory, { recursive: true, force: true });
+		}
+	});
+}
 
 await test(
 	"an apply verifies with the running tooling before starting stacks and adopting the release",

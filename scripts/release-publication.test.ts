@@ -206,6 +206,7 @@ if (tool === 'gh') {
     if (!(reference in packages)) { console.error('Error: ' + reference + ': not found'); process.exit(1); }
     const name = reference.split('/').at(-1).replace(':', '-') + '.tgz';
     fs.writeFileSync(path.join(option('--destination'), name), Buffer.from(packages[reference].bytes, 'base64'));
+    console.log('Digest: ' + reference.split('@')[1]);
   } else if (args[0] === 'show' && args[1] === 'chart') {
     process.stdout.write(fs.readFileSync(path.join(store, 'chart-metadata'), 'utf8'));
   } else if (args[0] === 'show' && args[1] === 'values') {

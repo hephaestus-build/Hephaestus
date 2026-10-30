@@ -1,14 +1,11 @@
-import { mkdtemp, rename, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, rename, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { isSet } from "./lib/env.ts";
 import { run } from "./lib/process.ts";
+import { downloadReleaseAssets, type ReleaseAssetSource } from "./lib/release-assets.ts";
 import { releaseCertificateIdentity, releaseRepository } from "./lib/release-identities.ts";
 import { isRelease } from "./release-image-lock.ts";
-
-/** A stalled download must not hold a host's reconcile tick until its unit gives up. */
-const DOWNLOAD_TIMEOUT_MS = 5 * 60_000;
 
 const repositoryRoot = path.join(import.meta.dirname, "..");
 
@@ -18,50 +15,13 @@ export interface PrepareOptions {
 	output: string;
 }
 
-export interface PrepareDependencies {
-	environment: NodeJS.ProcessEnv;
-	download: (repository: string, release: string, names: string[], into: string) => Promise<void>;
+export interface PrepareDependencies extends ReleaseAssetSource {
 	run: (command: string, args: string[]) => Promise<void>;
-}
-
-async function downloadReleaseAsset(
-	repository: string,
-	tag: string,
-	name: string,
-	into: string,
-): Promise<void> {
-	const url = `https://github.com/${repository}/releases/download/${tag}/${name}`;
-	const response = await fetch(url, { signal: AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS) });
-	if (!response.ok) {
-		throw new Error(`GET ${url} returned ${response.status}`);
-	}
-	await writeFile(path.join(into, name), Buffer.from(await response.arrayBuffer()));
 }
 
 const defaults: PrepareDependencies = {
 	environment: process.env,
-	download: async (repository, release, names, into) => {
-		if (process.env.GITHUB_ACTIONS === "true") {
-			if (!isSet(process.env.GH_TOKEN)) {
-				throw new Error("GH_TOKEN is required to verify a draft release");
-			}
-			// Draft release assets used by the publication smoke test require authenticated GitHub access.
-			await run("gh", [
-				"release",
-				"download",
-				release,
-				"--repo",
-				repository,
-				"--dir",
-				into,
-				...names.flatMap((name) => ["--pattern", name]),
-			]);
-			return;
-		}
-		await Promise.all(
-			names.map(async (name) => downloadReleaseAsset(repository, release, name, into)),
-		);
-	},
+	download: downloadReleaseAssets,
 	run,
 };
 

@@ -43,7 +43,7 @@ function helm() {
 			const bytes = registry.get(target.replace(/^oci:\/\//u, "")) ?? "";
 			const name = `hephaestus@${pushed.replace(":", "-")}.tgz`;
 			await writeFile(path.join(option(args, "--destination"), name), bytes);
-			return "";
+			return `Digest: ${pushed}\n`;
 		}
 		throw new Error(`unexpected ${command} ${args.join(" ")}`);
 	};

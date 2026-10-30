@@ -103,12 +103,15 @@ export async function pullChart(
 	if (chart.repository !== repository) {
 		throw new Error(`the lock names chart ${chart.repository}, not ${repository}`);
 	}
-	await run("helm", [
+	const report = await run("helm", [
 		"pull",
 		`oci://${chart.repository}@${chart.digest}`,
 		"--destination",
 		destination,
 	]);
+	if (digestLine.exec(report)?.groups?.digest !== chart.digest) {
+		throw new Error("Helm did not return the locked chart digest");
+	}
 	const pulled = await readdir(destination);
 	// Helm names an OCI digest download after the reference, not the chart's version.
 	const expected = `hephaestus@${chart.digest.replace(":", "-")}.tgz`;
