@@ -49,6 +49,7 @@ const sidebars: SidebarsConfig = {
 				"structured-logging",
 				"api-error-handling",
 				"brand-assets",
+				"onboarding-guidelines",
 			],
 		},
 		{
