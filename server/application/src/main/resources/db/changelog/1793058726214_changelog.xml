@@ -11,6 +11,7 @@
         <columnExists tableName="feedback" columnName="id"/>
         <columnExists tableName="feedback" columnName="workspace_id"/>
         <columnExists tableName="feedback" columnName="state"/>
+        <columnExists tableName="feedback" columnName="destination"/>
         <columnExists tableName="feedback" columnName="stop_reason"/>
         <columnExists tableName="feedback_copy" columnName="feedback_id"/>
         <columnExists tableName="feedback_copy" columnName="workspace_id"/>
@@ -35,7 +36,7 @@ SELECT f.workspace_id,f.id,
   COALESCE((SELECT d.action='WITHDRAW' FROM feedback_decision d WHERE d.workspace_id=f.workspace_id AND d.feedback_id=f.id
     AND d.action IN ('WITHDRAW','RESTORE') ORDER BY d.decided_at DESC,d.id::text DESC LIMIT 1),false) AS withdrawn
 FROM feedback f
-WHERE f.state='DELIVERED'
+WHERE f.destination='ON_WORK' AND f.state='DELIVERED'
   AND NOT EXISTS (SELECT 1 FROM feedback_send s WHERE s.workspace_id=f.workspace_id AND s.feedback_id=f.id AND s.state<>'DONE')
   AND EXISTS (SELECT 1 FROM feedback_copy c WHERE c.workspace_id=f.workspace_id AND c.feedback_id=f.id
     AND c.state IN ('WRITE_STARTED','FAILED','PLANNED'));

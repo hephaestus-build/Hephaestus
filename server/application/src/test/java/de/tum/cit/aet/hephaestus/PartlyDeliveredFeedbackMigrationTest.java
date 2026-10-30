@@ -12,6 +12,7 @@ import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.stream.IntStream;
@@ -40,10 +41,15 @@ class PartlyDeliveredFeedbackMigrationTest {
     private static final UUID ALL_POSTED = UUID.fromString("00000000-0000-0000-0000-000000993003");
     private static final UUID NEVER_POSTED = UUID.fromString("00000000-0000-0000-0000-000000993004");
     private static final UUID WRITE_STARTED = UUID.fromString("00000000-0000-0000-0000-000000993005");
-    private static final UUID SENDING = UUID.fromString("00000000-0000-0000-0000-000000993006");
+    private static final UUID PENDING = UUID.fromString("00000000-0000-0000-0000-000000993006");
     private static final UUID WITHDRAWN = UUID.fromString("00000000-0000-0000-0000-000000993007");
-    private static final UUID CONVERSATION = UUID.fromString("00000000-0000-0000-0000-000000993008");
     private static final UUID OTHER_WORKSPACE_COPY = UUID.fromString("00000000-0000-0000-0000-000000993009");
+
+    private static final UUID SENDING = UUID.fromString("00000000-0000-0000-0000-000000993010");
+    private static final UUID UNCERTAIN = UUID.fromString("00000000-0000-0000-0000-000000993011");
+    private static final UUID RESTORED = UUID.fromString("00000000-0000-0000-0000-000000993012");
+    private static final UUID TIED_RESTORE = UUID.fromString("00000000-0000-0000-0000-000000993013");
+    private static final UUID STARTED_AND_FAILED = UUID.fromString("00000000-0000-0000-0000-000000993014");
 
     @Test
     void shouldReprojectOnlyDeliveredFeedbackWithACopyThatDidNotPost() throws Exception {
@@ -58,16 +64,28 @@ class PartlyDeliveredFeedbackMigrationTest {
                             connection,
                             "SELECT id::text, state || ',' || coalesce(stop_reason, 'none') FROM feedback"
                                     + " WHERE id::text LIKE '00000000-0000-0000-0000-000000993%'"))
-                    .containsExactlyInAnyOrderEntriesOf(Map.of(
-                            FAILED_NOTE.toString(), "FAILED,none",
-                            PLANNED_NOTE.toString(), "FAILED,none",
-                            ALL_POSTED.toString(), "DELIVERED,none",
-                            NEVER_POSTED.toString(), "FAILED,none",
-                            WRITE_STARTED.toString(), "UNCONFIRMED,DELIVERY_UNCONFIRMED",
-                            SENDING.toString(), "DELIVERED,none",
-                            WITHDRAWN.toString(), "UNCONFIRMED,DELIVERY_UNCONFIRMED",
-                            CONVERSATION.toString(), "FAILED,none",
-                            OTHER_WORKSPACE_COPY.toString(), "DELIVERED,none"));
+                    .containsExactlyInAnyOrderEntriesOf(Map.ofEntries(
+                            Map.entry(FAILED_NOTE.toString(), "FAILED,none"),
+                            Map.entry(PLANNED_NOTE.toString(), "FAILED,none"),
+                            Map.entry(ALL_POSTED.toString(), "DELIVERED,none"),
+                            Map.entry(NEVER_POSTED.toString(), "FAILED,none"),
+                            Map.entry(WRITE_STARTED.toString(), "UNCONFIRMED,DELIVERY_UNCONFIRMED"),
+                            Map.entry(PENDING.toString(), "DELIVERED,none"),
+                            Map.entry(SENDING.toString(), "DELIVERED,none"),
+                            Map.entry(UNCERTAIN.toString(), "DELIVERED,none"),
+                            Map.entry(WITHDRAWN.toString(), "UNCONFIRMED,DELIVERY_UNCONFIRMED"),
+                            Map.entry(RESTORED.toString(), "FAILED,none"),
+                            Map.entry(TIED_RESTORE.toString(), "FAILED,none"),
+                            Map.entry(STARTED_AND_FAILED.toString(), "UNCONFIRMED,DELIVERY_UNCONFIRMED"),
+                            Map.entry(OTHER_WORKSPACE_COPY.toString(), "DELIVERED,none")));
+
+            assertThat(columns(
+                            connection,
+                            "SELECT id::text, (delivered_at=TIMESTAMPTZ '2026-10-20 10:00:00+00')::text FROM feedback"
+                                    + " WHERE id::text LIKE '00000000-0000-0000-0000-000000993%'"
+                                    + " AND id<>'" + NEVER_POSTED + "'"))
+                    .hasSize(12)
+                    .allSatisfy((id, unchanged) -> assertThat(unchanged).as("first appearance of %s", id).isEqualTo("true"));
             // A copy nothing would send fails as absent, so a retry reaches it; a withdrawn piece keeps its own.
             assertThat(columns(
                             connection,
@@ -76,6 +94,21 @@ class PartlyDeliveredFeedbackMigrationTest {
                                     + WITHDRAWN + "')"))
                     .containsExactlyInAnyOrderEntriesOf(
                             Map.of(PLANNED_NOTE.toString(), "FAILED,ABSENT", WITHDRAWN.toString(), "PLANNED,none"));
+        }
+    }
+
+    @Test
+    void shouldHaltWithoutAColumnTheCorrectionReads() throws Exception {
+        TestDatabase database = PostgreSQLTestContainer.createDatabase("partly_delivered_feedback_precondition");
+        try (Connection connection = connect(database);
+                Liquibase liquibase = liquibase(connection)) {
+            int changeSets = migrateToTheChangelog(liquibase);
+            try (var statement = connection.createStatement()) {
+                statement.execute("ALTER TABLE feedback_copy DROP COLUMN last_error");
+            }
+            connection.commit();
+            assertThatThrownBy(() -> liquibase.update(changeSets, CONTEXTS, LABELS))
+                    .hasStackTraceContaining("preconditions failed");
         }
     }
 
@@ -92,7 +125,7 @@ class PartlyDeliveredFeedbackMigrationTest {
         }
     }
 
-    /** Four pieces on the work, each with a summary and a line note, seeded without the rows they refer to. */
+    /** Feedback and its copies, seeded without the rows they refer to. */
     private static void seed(Connection connection) throws SQLException {
         var jdbc = new JdbcTemplate(new SingleConnectionDataSource(connection, true));
         jdbc.execute("SET session_replication_role = 'replica'");
@@ -102,12 +135,29 @@ class PartlyDeliveredFeedbackMigrationTest {
         piece(rows, ALL_POSTED, "ON_WORK", "DELIVERED", "POSTED", "POSTED", "DONE");
         piece(rows, NEVER_POSTED, "ON_WORK", "FAILED", "FAILED", "FAILED", "DONE");
         piece(rows, WRITE_STARTED, "ON_WORK", "DELIVERED", "POSTED", "WRITE_STARTED", "DONE");
-        piece(rows, SENDING, "ON_WORK", "DELIVERED", "POSTED", "FAILED", "PENDING");
+        piece(rows, PENDING, "ON_WORK", "DELIVERED", "POSTED", "FAILED", "PENDING");
+        piece(rows, SENDING, "ON_WORK", "DELIVERED", "POSTED", "FAILED", "SENDING");
+        piece(rows, UNCERTAIN, "ON_WORK", "DELIVERED", "POSTED", "FAILED", "UNCERTAIN");
         piece(rows, WITHDRAWN, "ON_WORK", "DELIVERED", "POSTED", "PLANNED", "DONE");
         rows.insert(
                 "feedback_decision",
                 Map.of("id", UUID.randomUUID(), "workspace_id", 993L, "feedback_id", WITHDRAWN, "action", "WITHDRAW"));
-        piece(rows, CONVERSATION, "CONVERSATION", "DELIVERED", "POSTED", "FAILED", "DONE");
+        piece(rows, RESTORED, "ON_WORK", "DELIVERED", "POSTED", "PLANNED", "DONE");
+        piece(rows, TIED_RESTORE, "ON_WORK", "DELIVERED", "POSTED", "PLANNED", "DONE");
+        for (var id : List.of(RESTORED, TIED_RESTORE)) {
+            rows.insert("feedback_decision", Map.of(
+                    "id", UUID.fromString(id.equals(RESTORED)
+                            ? "00000000-0000-0000-0000-000000000001"
+                            : "00000000-0000-0000-0000-000000000003"),
+                    "workspace_id", 993L, "feedback_id", id, "action", "WITHDRAW", "decided_at", POSTED));
+            rows.insert("feedback_decision", Map.of(
+                    "id", UUID.fromString(id.equals(RESTORED)
+                            ? "00000000-0000-0000-0000-000000000002"
+                            : "00000000-0000-0000-0000-000000000004"),
+                    "workspace_id", 993L, "feedback_id", id, "action", "RESTORE", "decided_at",
+                    id.equals(RESTORED) ? Timestamp.from(POSTED.toInstant().plusSeconds(1)) : POSTED));
+        }
+        piece(rows, STARTED_AND_FAILED, "ON_WORK", "DELIVERED", "WRITE_STARTED", "FAILED", "DONE");
         piece(rows, OTHER_WORKSPACE_COPY, "ON_WORK", "DELIVERED", "POSTED", "POSTED", "DONE");
         var foreign = copy(OTHER_WORKSPACE_COPY, "SUMMARY", 5, "FAILED");
         foreign.put("workspace_id", 994L);
@@ -135,7 +185,16 @@ class PartlyDeliveredFeedbackMigrationTest {
             other.put("end_line", 3);
         }
         rows.insert("feedback_copy", other);
-        rows.insert("feedback_send", Map.of("feedback_id", id, "workspace_id", 993L, "action", "POST", "state", send));
+        var sending = new LinkedHashMap<String, Object>();
+        sending.put("feedback_id", id);
+        sending.put("workspace_id", 993L);
+        sending.put("action", "POST");
+        sending.put("state", send);
+        if (send.equals("SENDING")) {
+            sending.put("lease_owner", "migration-test");
+            sending.put("lease_expires_at", POSTED);
+        }
+        rows.insert("feedback_send", sending);
     }
 
     private static Map<String, Object> copy(UUID feedbackId, String kind, int position, String state) {
