@@ -57,10 +57,11 @@ public class EncryptedStringConverter implements AttributeConverter<String, Stri
 
     @Override
     public String convertToDatabaseColumn(String attribute) {
-        if (attribute == null || !enabled) {
+        if (attribute == null) {
             return attribute;
         }
 
+        requireEnabled();
         try {
             Cipher cipher = Cipher.getInstance(ALGORITHM);
             byte[] iv = new byte[GCM_IV_LENGTH];
@@ -81,17 +82,20 @@ public class EncryptedStringConverter implements AttributeConverter<String, Stri
         }
     }
 
+    private void requireEnabled() {
+        if (!enabled) throw new EncryptionException("A system encryption key is required to read or persist secrets.");
+    }
+
     @Override
     public String convertToEntityAttribute(String dbData) {
-        if (dbData == null || !enabled) {
+        if (dbData == null) {
             return dbData;
         }
 
-        // Handle unencrypted legacy data
         if (!dbData.startsWith(PREFIX)) {
-            log.debug("Found unencrypted value in database: action=returning_as_is");
-            return dbData;
+            throw new EncryptionException("Plaintext secrets are not supported. Run the database migration first.");
         }
+        requireEnabled();
 
         try {
             String encoded = dbData.substring(PREFIX.length());

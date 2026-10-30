@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+    <changeSet id="1793394316000-1" author="hephaestus">
+        <customChange class="de.tum.cit.aet.hephaestus.core.database.LegacySecretsChange"/>
+        <customChange class="de.tum.cit.aet.hephaestus.integration.core.connection.migration.LegacyConnectionSecretsChange"/>
+    </changeSet>
+</databaseChangeLog>

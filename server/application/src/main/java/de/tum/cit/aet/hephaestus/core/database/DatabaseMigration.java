@@ -45,8 +45,8 @@ public class DatabaseMigration {
     }
 
     /** Migrates and returns the exit status. A failed migration throws. */
-    public static int run(String[] args) {
-        var application = new SpringApplication(DatabaseMigration.class);
+    public static int run(String[] args, Class<?> migrationConfiguration) {
+        var application = new SpringApplication(DatabaseMigration.class, migrationConfiguration);
         application.setWebApplicationType(WebApplicationType.NONE);
         // Highest precedence: the role profiles turn Liquibase off, and their order must not decide this.
         String[] arguments = Stream.concat(Arrays.stream(args), Stream.of("--spring.liquibase.enabled=true"))

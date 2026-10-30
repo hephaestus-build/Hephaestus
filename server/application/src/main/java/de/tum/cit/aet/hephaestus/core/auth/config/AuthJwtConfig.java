@@ -82,7 +82,7 @@ public class AuthJwtConfig {
 
     @PostConstruct
     void assertSigningKeysSealed() {
-        keyService.assertProdKeysSealed();
+        keyService.assertKeysSealed();
     }
 
     // Build profiles load the authentication contract but have no database to seed.

@@ -96,8 +96,9 @@ class SystemEncryptionKeyTest extends BaseUnitTest {
     }
 
     @Test
-    void shouldKeepStandaloneSchemaInspectionUnencrypted() {
+    void shouldRefuseSecretWritesWithoutSpringKeyConfiguration() {
         var converter = new EncryptedStringConverter();
-        assertThat(converter.convertToDatabaseColumn("schema-only")).isEqualTo("schema-only");
+        assertThatThrownBy(() -> converter.convertToDatabaseColumn("schema-only"))
+                .isInstanceOf(EncryptionException.class);
     }
 }
