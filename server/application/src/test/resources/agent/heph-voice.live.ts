@@ -857,6 +857,9 @@ void test("T2-2: the oracle rejects staging's remark and accepts an answer that 
 	);
 });
 
+/** Staging's question of turn 115fee59 (T2-2), whose answer ended with "My previous answer already covered this". */
+const T2_2_QUESTION = "What feedback did I get recently, and which item matters most?";
+
 for (const where of ["app", "Slack"] as const) {
 	void test(
 		`T2-2 (${where}): an answer that links what it cites ends without a remark about itself`,
@@ -864,14 +867,13 @@ for (const where of ["app", "Slack"] as const) {
 		async () => {
 			const reply = await ask(
 				`t2-2-no-self-reference-${where}`,
-				turn("What did the review of my pull request #46 find?", true, "", where),
-				ENDED,
+				turn(T2_2_QUESTION, true, WAITING, where),
+				PREPARED,
 			);
 			assertNoSelfReference(reply.text);
-			assert.match(reply.text, /404/u, `does not give what the review found: ${reply.text}`);
 			assert.ok(
-				reply.linked.some(([tool]) => tool === "link_result"),
-				`does not link the observation it discusses: ${reply.text}`,
+				reply.linked.some(([tool]) => tool === "link_result" || tool === "show_feedback"),
+				`does not link the observation or feedback it discusses: ${reply.text}`,
 			);
 			assertNoInternalTerm(TERMS, reply.text);
 		},
