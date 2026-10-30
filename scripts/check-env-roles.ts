@@ -390,7 +390,7 @@ function deploymentFailures(deployment: ReadonlyMap<string, ReadDeployment>): st
 	const failures: string[] = [];
 	for (const [label, read] of deployment) {
 		if ("error" in read) {
-			failures.push(`${label} is not valid YAML: ${read.error}`);
+			failures.push(`${label} could not be checked: ${read.error}`);
 		} else if (read.services.size === 0) {
 			failures.push(
 				`${label} parsed to zero containers, so every check below ran against nothing.\n` +
