@@ -28,6 +28,11 @@ on:
         required: false
         type: string
         default: "true"
+      windows_changed:
+        description: "Whether the pull request changes Windows inputs or requests the queue tier"
+        required: false
+        type: string
+        default: "true"
       pmd_canary:
         description: "Whether PMD wiring inputs changed"
         required: false
@@ -91,7 +96,7 @@ jobs:
 
   windows:
     name: "Windows"
-    if: inputs.should_skip != 'true' && inputs.tooling_changed == 'true'
+    if: inputs.should_skip != 'true' && inputs.tooling_changed == 'true' && (github.event_name != 'pull_request' || inputs.windows_changed != 'false')
     uses: ./.github/workflows/ci-quality-leg.yml
     permissions:
       contents: read

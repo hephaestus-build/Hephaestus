@@ -4797,12 +4797,26 @@ void test("unchanged quality legs are skipped before runner allocation", async (
 		["extension", "extension"],
 		["windows", "tooling"],
 	] as const) {
-		assert.equal(
-			workflow.getIn(["jobs", leg, "if"]),
-			leg === "server"
-				? "inputs.should_skip != 'true' && (inputs.application_server_changed == 'true' || inputs.pmd_canary == 'true')"
-				: `inputs.should_skip != 'true' && inputs.${scope}_changed == 'true'`,
-		);
+		const condition = asString(workflow.getIn(["jobs", leg, "if"]), `${leg} selection`);
+		for (const [changed, skip, expected] of [
+			["false", "false", "false"],
+			["true", "true", "false"],
+			["true", "false", "true"],
+		] as const) {
+			assert.equal(
+				expandExpressions(`\${{ ${condition} }}`, {
+					github: { event_name: "pull_request" },
+					inputs: {
+						[`${scope}_changed`]: changed,
+						should_skip: skip,
+						pmd_canary: "false",
+						windows_changed: "true",
+					},
+				}),
+				expected,
+				`${leg}, changed=${changed}, skip=${skip}`,
+			);
+		}
 		assert.equal(workflow.getIn(["jobs", leg, "uses"]), "./.github/workflows/ci-quality-leg.yml");
 		assert.equal(workflow.getIn(["jobs", leg, "with", "leg"]), leg);
 	}

@@ -117,6 +117,16 @@ A leg runs when the change
 detection in `cicd.yml` says its scope changed. The Windows leg uses the tooling scope.
 Both it and the tooling leg prove the hook dispatcher on rejected and accepted commits.
 
+A pull request that changes only server files, documentation, changesets or `AGENTS.md` and `CLAUDE.md` files usually defers the Windows leg.
+This includes the practice catalog and guidance.
+Changes to [queue-tier inputs](#two-verification-tiers) still select it before the queue.
+Other paths select it when the tooling scope runs.
+
+The merge group keeps the complete Windows leg for that scope.
+The `ci:full` label also runs it on the pull request.
+An unreadable label or a missing selection output runs it too.
+A Windows failure first found in the merge group removes the entry from the queue.
+
 ### API compatibility
 
 A browser tab can run the SPA of one release against the server of the next release for days.
