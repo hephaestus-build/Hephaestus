@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -266,4 +266,57 @@ void test("zero exit without a bundle is not accepted", async (t) => {
 		}),
 		{ code: "ENOENT" },
 	);
+});
+
+void test("an explicit signing config stays identical across attestation retries", async (t) => {
+	const { input } = await fixture(t);
+	const config = path.join(path.dirname(input), "signing-config.json");
+	await writeFile(config, '{"rekorTlogUrls":[{"majorApiVersion":2}]}');
+	const args = [
+		"attest",
+		"--signing-config",
+		config,
+		"--yes",
+		"--type",
+		"spdxjson",
+		"--predicate",
+		input,
+		`ghcr.io/owned/image@sha256:${"a".repeat(64)}`,
+	];
+	let calls = 0;
+	await keylessSign(args, {
+		execute: async (actual) => {
+			assert.deepEqual(actual, args);
+			calls += 1;
+			if (calls === 1) {
+				throw failure(unavailable);
+			}
+		},
+		sleep: async (milliseconds) => {
+			assert.ok(milliseconds >= 30_000);
+		},
+	});
+	assert.equal(calls, 2);
+	await assert.rejects(
+		keylessSign(args, {
+			execute: async () => {
+				await writeFile(config, "changed");
+			},
+		}),
+		/Signing input changed/u,
+	);
+	await assert.rejects(
+		keylessSign(["attest", "--signing-config", config, "--yes", "--key", "other"]),
+		/Expected a release keyless/u,
+	);
+});
+
+void test("missing and symbolic signing configs fail before Cosign starts", async (t) => {
+	const { args, input } = await fixture(t);
+	const config = path.join(path.dirname(input), "missing-config.json");
+	const configured = [args[0] ?? "", "--signing-config", config, ...args.slice(1)];
+	const dependencies = { execute: async () => assert.fail("invalid configuration must not sign") };
+	await assert.rejects(keylessSign(configured, dependencies), { code: "ENOENT" });
+	await symlink(input, config);
+	await assert.rejects(keylessSign(configured, dependencies), /regular file/u);
 });

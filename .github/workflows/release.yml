@@ -196,10 +196,12 @@ jobs:
           node scripts/generate-release-evidence.ts evidence \
             --release "$RELEASE" --commit "$COMMIT" --digests release-images.tsv
           node scripts/verify-release-evidence.ts evidence --write-validation
+          # Rekor v2 logs the signed envelope's digest, so complete SBOMs do not exceed v1 request limits.
+          cosign signing-config create --with-default-rekor-v2 --out "$RUNNER_TEMP/rekor-v2-signing.json"
           jq -er '.subjects[] | select(.provenance == "first-party") | [.repository, .digest, .image, .platform] | @tsv' evidence/manifest.json |
           while IFS=$'\t' read -r repository digest image platform; do
             suffix=${platform//\//-}
-            node scripts/keyless-sign.ts attest --yes --type spdxjson --predicate "evidence/$image-$suffix.spdx.json" "$repository@$digest"
+            node scripts/keyless-sign.ts attest --signing-config "$RUNNER_TEMP/rekor-v2-signing.json" --yes --type spdxjson --predicate "evidence/$image-$suffix.spdx.json" "$repository@$digest"
           done
           (cd evidence && sha256sum -- * > SHA256SUMS)
           node scripts/keyless-sign.ts sign-blob --yes --bundle evidence/SHA256SUMS.sigstore.json evidence/SHA256SUMS
