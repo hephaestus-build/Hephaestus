@@ -115,8 +115,7 @@ public class ReviewServiceImpl implements ReviewService {
             }
         }
         if (!budget.canRequest(request.workspaceId(), request.kind(), request.budgetUsd()))
-            throw new ReviewRequestRejected(
-                    ReviewRequestRejected.Reason.BUDGET_UNAVAILABLE, "The review budget is unavailable.");
+            throw ReviewRequestRejected.budgetUnavailable();
         var ref = items.require(request.workspaceId(), request.itemId());
         // An event review keeps the occasion's own version, state and roles once its source retained them. Every
         // decision below still reads the workspace, its members and their choices as they are now.

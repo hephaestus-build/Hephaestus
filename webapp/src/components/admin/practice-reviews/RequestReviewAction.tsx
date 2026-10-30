@@ -48,22 +48,23 @@ export interface RequestReviewActionProps {
 export function RequestReviewAction({ request, label }: RequestReviewActionProps) {
 	// Said inside a name: "Request review of pull request #1423".
 	const work = `${request.work.charAt(0).toLowerCase()}${request.work.slice(1)}`;
+	const { onRequest, blocked, requesting = false } = request;
 	// A row's button is named by the work, since that is what it reviews: two rows of one work make
-	// the same ask. A sheet's button is about its own work, so its words name it.
-	const name = label === undefined ? `Request review of ${work}` : undefined;
+	// the same ask. Its name says the ask is in flight, since the spinner is hidden from a screen
+	// reader. A sheet's button is about its own work, so its words name it.
+	const name =
+		label === undefined ? `${requesting ? "Requesting" : "Request"} review of ${work}` : undefined;
 	const size = label === undefined ? "icon" : "default";
 	const className = cn(
 		label === undefined && ROW_CONTROL_FOCUS,
 		"aria-disabled:cursor-not-allowed aria-disabled:opacity-50",
 	);
-	const { onRequest, blocked, requesting = false } = request;
 	const content = (
 		<>
 			{requesting ? <Spinner /> : <RequestReviewIcon aria-hidden />}
 			{label !== undefined && (requesting ? REQUESTING : label)}
 		</>
 	);
-	// Why the button cannot ask now, if it cannot.
 	const reason = requesting
 		? REQUESTING
 		: (blocked ?? (onRequest === undefined ? REQUEST_BLOCKED.kind : undefined));

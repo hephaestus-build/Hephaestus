@@ -38,18 +38,22 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** A row's icon button asks on one press, with no dialog, and then waits for the answer. */
+/**
+ * A row's icon button asks on one press, with no dialog. It keeps the focus, and its name says the
+ * ask is in flight; a second press while it waits asks nothing.
+ */
 export const InARow: Story = {
 	play: async ({ args, canvas, userEvent }) => {
 		const button = canvas.getByRole("button", { name: "Request review of pull request #1423" });
-		await userEvent.click(button);
+		button.focus();
+		await userEvent.keyboard("{Enter}");
 		await expect(args.request.onRequest).toHaveBeenCalledOnce();
 		await expect(screen.queryByRole("alertdialog")).toBeNull();
+		await expect(button).toHaveFocus();
+		await expect(button).toHaveAccessibleName("Requesting review of pull request #1423");
 		await expect(button).toHaveAttribute("aria-disabled", "true");
-		// The pointer is still on the button from the press: it leaves and comes back to read why.
-		await userEvent.unhover(button);
-		await userEvent.hover(button);
-		await waitFor(async () => expect(screen.getByText("Requesting review…")).toBeVisible());
+		await userEvent.keyboard("{Enter}");
+		await expect(args.request.onRequest).toHaveBeenCalledOnce();
 	},
 };
 
