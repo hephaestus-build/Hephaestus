@@ -1,9 +1,9 @@
 import { QueryClient } from "@tanstack/react-query";
 import { createMemoryHistory, createRouter } from "@tanstack/react-router";
-import { HttpResponse, http } from "msw";
+import { type HttpHandler, HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
-import type { WorkspaceListItem } from "@/api/types.gen";
+import type { Workspace } from "@/api/types.gen";
 import { isRecord } from "@/lib/is-record";
 import { ROUTER_SEARCH } from "@/lib/router-search";
 import { hasText } from "@/lib/text";
@@ -32,8 +32,12 @@ const adminUrls = Object.values(newRouter().routesById)
 	.filter((fullPath): fullPath is string => typeof fullPath === "string")
 	.filter((fullPath) => fullPath.startsWith("/admin/"));
 
+function appRoleHandler(appRole: "APP_ADMIN" | "APP_USER") {
+	return http.get("*/user", () => HttpResponse.json({ ...currentUser, appRole }));
+}
+
 function mockAppRole(appRole: "APP_ADMIN" | "APP_USER") {
-	server.use(http.get("*/user", () => HttpResponse.json({ ...currentUser, appRole })));
+	server.use(appRoleHandler(appRole));
 }
 
 async function land(url: string) {
@@ -71,12 +75,29 @@ describe("instance-admin route gate", () => {
 	});
 });
 
-async function titleOf(url: string, providerType: WorkspaceListItem["providerType"] = "GITHUB") {
+/** The scoped details of a workspace, as an admin of it, or an instance admin, reads them. */
+function workspaceDetails(kind: "GITHUB" | "GITLAB") {
+	const listed = workspaceListItem("hephaestus", { providerType: kind });
+	return {
+		...listed,
+		kind,
+		gitlabWebhookRegistered: false,
+		hasPersonalAccessToken: false,
+		hasSlackToken: false,
+		publicActivityEnabled: false,
+		practiceReviewAutoTriggerEnabled: false,
+		practiceReviewManualTriggerEnabled: false,
+		updatedAt: listed.createdAt,
+	} satisfies Workspace;
+}
+
+/** A workspace admin who is a member; `handlers` replace what a case changes. */
+async function titleOf(url: string, ...handlers: HttpHandler[]) {
 	mockAppRole("APP_ADMIN");
 	server.use(
-		http.get("*/workspaces", () =>
-			HttpResponse.json([workspaceListItem("hephaestus", { providerType })]),
-		),
+		// MSW answers with the first match, so a case's handlers go before the defaults.
+		...handlers,
+		http.get("*/workspaces", () => HttpResponse.json([workspaceListItem("hephaestus")])),
 		http.get("*/workspaces/:workspaceSlug/members/me", () =>
 			HttpResponse.json(ownMembership("ADMIN")),
 		),
@@ -113,8 +134,39 @@ describe("tab titles name the page the link opened", () => {
 	});
 
 	it("names GitLab on a GitLab workspace's source-control page", async () => {
-		await expect(titleOf("/w/hephaestus/admin/integrations/scm", "GITLAB")).resolves.toBe(
-			"GitLab · Admin · Hephaestus",
-		);
+		await expect(
+			titleOf(
+				"/w/hephaestus/admin/integrations/scm",
+				http.get("*/workspaces", () =>
+					HttpResponse.json([workspaceListItem("hephaestus", { providerType: "GITLAB" })]),
+				),
+			),
+		).resolves.toBe("GitLab · Admin · Hephaestus");
+	});
+
+	it("names the provider from the workspace details when the workspace list could not load", async () => {
+		await expect(
+			titleOf(
+				"/w/hephaestus/admin/integrations/scm",
+				// Not an instance admin, so the workspace gate reads no details of its own.
+				appRoleHandler("APP_USER"),
+				http.get("*/workspaces", () => HttpResponse.json({ status: 503 }, { status: 503 })),
+				http.get("*/workspaces/:workspaceSlug", () =>
+					HttpResponse.json(workspaceDetails("GITLAB")),
+				),
+			),
+		).resolves.toBe("GitLab · Admin · Hephaestus");
+	});
+
+	it("names GitLab for an instance admin who is not a member of the workspace", async () => {
+		await expect(
+			titleOf(
+				"/w/hephaestus/admin/integrations/scm",
+				http.get("*/workspaces", () => HttpResponse.json([])),
+				http.get("*/workspaces/:workspaceSlug", () =>
+					HttpResponse.json(workspaceDetails("GITLAB")),
+				),
+			),
+		).resolves.toBe("GitLab · Admin · Hephaestus");
 	});
 });

@@ -1,7 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { Inbox } from "lucide-react";
-import { type ReactNode, useState } from "react";
+import { createFileRoute } from "@tanstack/react-router";
 import { toast } from "@/lib/toast";
 
 import {
@@ -14,34 +12,19 @@ import {
 	listPracticeScriptNeedsQueryKey,
 	listPracticeVersionsQueryKey,
 } from "@/api/@tanstack/react-query.gen";
-import { PracticeReleaseReview } from "@/components/admin/practices/PracticeReleaseReview";
-import {
-	PracticeListSkeleton,
-	PracticeReleaseSkeleton,
-} from "@/components/admin/practices/PracticeSkeletons";
-import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
-import { PageHeader } from "@/components/layout/PageHeader";
-import { PageLayout } from "@/components/layout/PageLayout";
-import { Button } from "@/components/ui/button";
-import {
-	Empty,
-	EmptyDescription,
-	EmptyHeader,
-	EmptyMedia,
-	EmptyTitle,
-} from "@/components/ui/empty";
+import { CatalogUpdatesPage } from "@/components/admin/practices/CatalogUpdatesPage";
+import { panelState } from "@/components/common/panel-state";
 import { refreshPracticeGuidance } from "@/hooks/practice-guidance-cache";
 import { workspaceAdminHead } from "@/lib/page-title";
 import { problemDetailOf, problemStatusOf } from "@/lib/problem-detail";
 
 export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/admin/practices/releases")({
 	head: workspaceAdminHead("Catalog updates"),
-	component: PracticeReleaseInbox,
+	component: CatalogUpdatesRoute,
 });
 
-function PracticeReleaseInbox() {
+function CatalogUpdatesRoute() {
 	const { workspaceSlug } = Route.useParams();
-	const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
 	const queryClient = useQueryClient();
 	const query = useQuery(listPracticeReleasesOptions({ path: { workspaceSlug } }));
 	const refresh = async (practiceSlug: string) => {
@@ -91,103 +74,25 @@ function PracticeReleaseInbox() {
 			toast.error("We could not decline the update", { description: problemDetailOf(error) });
 		},
 	});
-	const proposals = query.data ?? [];
-	const selected =
-		proposals.find((proposal) => proposal.practiceSlug === selectedSlug) ?? proposals[0];
 	const pending = (accept.isPending ? "accept" : null) ?? (decline.isPending ? "decline" : null);
-	let content: ReactNode;
-	if (query.isPending) {
-		content = (
-			<div className="grid gap-6 lg:grid-cols-[15rem_minmax(0,1fr)]">
-				<PracticeListSkeleton rows={2} />
-				<PracticeReleaseSkeleton rows={3} />
-			</div>
-		);
-	} else if (query.isError) {
-		content = (
-			<QueryErrorAlert
-				error={query.error}
-				title="We could not load practice updates"
-				onRetry={() => {
-					void query.refetch();
-				}}
-			/>
-		);
-	} else if (selected === undefined) {
-		content = (
-			<Empty variant="outlined">
-				<EmptyHeader>
-					<EmptyMedia variant="icon">
-						<Inbox />
-					</EmptyMedia>
-					<EmptyTitle>No updates to review</EmptyTitle>
-					<EmptyDescription>
-						Catalog changes to your practices appear here. Accepted and declined versions do not
-						return unless the catalog changes again. Reset to catalog stays available on each
-						practice.
-					</EmptyDescription>
-				</EmptyHeader>
-			</Empty>
-		);
-	} else {
-		content = (
-			<div className="grid gap-6 lg:grid-cols-[15rem_minmax(0,1fr)]">
-				<nav aria-label="Pending practice updates" className="space-y-2">
-					{proposals.map((proposal) => (
-						<button
-							key={proposal.practiceSlug}
-							type="button"
-							aria-current={proposal.practiceSlug === selected.practiceSlug ? "true" : undefined}
-							className="w-full rounded-md border p-3 text-left text-sm hover:bg-muted aria-current:bg-muted"
-							onClick={() => setSelectedSlug(proposal.practiceSlug)}
-						>
-							<span className="block font-medium">{proposal.offered.name}</span>
-							<span className="text-muted-foreground">
-								{proposal.fields.length} changed {proposal.fields.length === 1 ? "field" : "fields"}
-							</span>
-						</button>
-					))}
-				</nav>
-				<PracticeReleaseReview
-					key={selected.etag}
-					proposal={selected}
-					pending={pending}
-					declineNote="Declining keeps your practice as it is until the catalog changes again. Reset to catalog stays available on the practice."
-					onAccept={(choices) =>
-						accept.mutate({
-							path: { workspaceSlug, slug: selected.practiceSlug },
-							headers: { "If-Match": `"${selected.etag}"` },
-							body: { choices },
-						})
-					}
-					onDecline={() =>
-						decline.mutate({
-							path: { workspaceSlug, slug: selected.practiceSlug },
-							headers: { "If-Match": `"${selected.etag}"` },
-						})
-					}
-				/>
-			</div>
-		);
-	}
-
 	return (
-		<PageLayout>
-			<PageHeader
-				icon={<Inbox />}
-				title="Catalog updates"
-				description="Review catalog changes before they affect this workspace. Each workspace decides for itself."
-				actions={
-					<Button
-						variant="outline"
-						nativeButton={false}
-						render={<Link to="/w/$workspaceSlug/admin/practices" params={{ workspaceSlug }} />}
-					>
-						Back to practice setup
-					</Button>
-				}
-			/>
-			{content}
-		</PageLayout>
+		<CatalogUpdatesPage
+			workspaceSlug={workspaceSlug}
+			state={panelState(query, (proposals) => ({ status: "ready" as const, proposals }))}
+			pending={pending}
+			onAccept={(proposal, choices) =>
+				accept.mutate({
+					path: { workspaceSlug, slug: proposal.practiceSlug },
+					headers: { "If-Match": `"${proposal.etag}"` },
+					body: { choices },
+				})
+			}
+			onDecline={(proposal) =>
+				decline.mutate({
+					path: { workspaceSlug, slug: proposal.practiceSlug },
+					headers: { "If-Match": `"${proposal.etag}"` },
+				})
+			}
+		/>
 	);
 }
