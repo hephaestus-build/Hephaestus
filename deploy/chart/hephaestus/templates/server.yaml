@@ -61,6 +61,7 @@ spec:
               value: {{ .Values.workspaceSubdomains.enabled | quote }}
             - name: HEPHAESTUS_WORKSPACE_SUBDOMAINS_BASE_DOMAIN
               value: {{ .Values.host | quote }}
+            {{- include "hephaestus.env.databasePool" .Values.server.databasePool | nindent 12 }}
             {{- include "hephaestus.env.pod" . | nindent 12 }}
             {{- include "hephaestus.env.release" . | nindent 12 }}
             {{- include "hephaestus.env.shared" . | nindent 12 }}

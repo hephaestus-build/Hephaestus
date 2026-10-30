@@ -1348,7 +1348,7 @@ await test("every role verifies the bundled PostgreSQL at its Service name with 
 	assert.ok(postgresql, "postgresql");
 	const entry = container(postgresql);
 	assert.equal(get(entry, "command"), undefined);
-	assert.deepEqual(get(entry, "args"), [
+	assert.deepEqual(list(get(entry, "args")).slice(0, 6), [
 		"-c",
 		"ssl=on",
 		"-c",
@@ -1700,14 +1700,26 @@ await test("practice reviews run exactly when a worker runs, with its Heph turn 
 		server: String(auto),
 	});
 	assert.deepEqual(
-		capacities([...layersFor("small"), { worker: { replicas: 3, conversationTurns: "auto" } }]),
+		capacities([
+			...layersFor("small"),
+			{
+				worker: { replicas: 3, conversationTurns: "auto" },
+				postgresql: { parameters: { max_connections: 180 } },
+			},
+		]),
 		{
 			worker: String(auto),
 			server: String(3 * auto),
 		},
 	);
 	assert.deepEqual(
-		capacities([...layersFor("small"), { worker: { replicas: 2, conversationTurns: 5 } }]),
+		capacities([
+			...layersFor("small"),
+			{
+				worker: { replicas: 2, conversationTurns: 5 },
+				postgresql: { parameters: { max_connections: 130 } },
+			},
+		]),
 		{
 			worker: "5",
 			server: "10",
@@ -2338,7 +2350,14 @@ await test("every revision migrates the database once, in a Job that only reache
 	);
 	assert.deepEqual(
 		list(get(entry, "env")).map((variable) => get(variable, "name")),
-		["SPRING_PROFILES_ACTIVE", "DATABASE_URL", "DATABASE_USERNAME", "DATABASE_PASSWORD"],
+		[
+			"SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE",
+			"SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE",
+			"SPRING_PROFILES_ACTIVE",
+			"DATABASE_URL",
+			"DATABASE_USERNAME",
+			"DATABASE_PASSWORD",
+		],
 	);
 	// It starts once PostgreSQL accepts connections: on a first install, both start together.
 	const [wait] = list(get(podSpec(migration), "initContainers"));
@@ -2813,5 +2832,102 @@ await test("tenant hostname validation checks double hyphens only in the workspa
 		for (const slug of ["team--one", "api", "ab", "-team", "team-", "a".repeat(52)]) {
 			assert.equal(accepts.test(`${slug}.${host}`), false, slug);
 		}
+	}
+});
+await test("small PostgreSQL overrides the image calculator and gives each database role its own pool", () => {
+	const resources = rendered([prepared, profile("small"), operator, reviews]);
+	const postgres = workload(resources, "postgresql");
+	const args = list(get(container(postgres), "args"));
+	const settings = Object.fromEntries(
+		args.flatMap((arg, index) => {
+			if (args[index - 1] !== "-c" || typeof arg !== "string") {
+				return [];
+			}
+			const equals = arg.indexOf("=");
+			return [[arg.slice(0, equals), arg.slice(equals + 1)]];
+		}),
+	);
+	assert.equal(get(container(postgres), "command"), undefined, "the image entrypoint still runs");
+	assert.equal(settings.shared_buffers, "256MB");
+	assert.equal(settings.work_mem, "2MB");
+	assert.equal(settings.hash_mem_multiplier, "1");
+	assert.equal(settings.max_connections, "80");
+	assert.equal(settings.maintenance_work_mem, "64MB");
+	assert.equal(settings.autovacuum_work_mem, "32MB");
+	assert.equal(settings.autovacuum_max_workers, "3");
+	assert.equal(settings.effective_cache_size, "1GB");
+	assert.equal(settings.max_parallel_workers_per_gather, "0");
+	assert.equal(settings.max_wal_size, "1GB");
+	assert.equal(
+		get(container(postgres), "resources", "limits", "memory"),
+		"2Gi",
+		"the lower trial ceiling is not enabled",
+	);
+	const migration = resources.find(
+		(resource) => kindOf(resource) === "Job" && componentOf(resource) === "migration",
+	);
+	assert.ok(migration);
+	for (const [role, maximum, minimum] of [
+		[workload(resources, "server"), "16", "2"],
+		[workload(resources, "worker"), "24", "2"],
+		[migration, "2", "1"],
+	] as const) {
+		assert.equal(envValue(role, "SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE"), maximum);
+		assert.equal(envValue(role, "SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE"), minimum);
+	}
+	assert.equal(
+		envValue(workload(resources, "webhook"), "SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE"),
+		undefined,
+	);
+});
+
+await test("the small database holds one worker surge and rejects pools beyond the connection budget", () => {
+	const base = [prepared, profile("small"), operator, reviews];
+	assert.ok(render([...base, { worker: { rolloutStrategy: "RollingUpdate" } }]).ok);
+	for (const layer of [
+		{ worker: { rolloutStrategy: "RollingUpdate", replicas: 2 } },
+		{ worker: { rolloutStrategy: "RollingUpdate", databasePool: { maximumPoolSize: 26 } } },
+		{ postgresql: { parameters: { max_connections: 40 } } },
+	]) {
+		const result = render([...base, layer]);
+		assert.equal(result.ok, false);
+		assert.match(result.stderr, /max_connections needs at least/u);
+	}
+});
+
+await test("database pool and PostgreSQL settings reject invalid operator values", () => {
+	for (const layer of [
+		{ server: { databasePool: { maximumPoolSize: 1, minimumIdle: 2 } } },
+		{ migration: { databasePool: { maximumPoolSize: 0 } } },
+		{ postgresql: { parameters: { max_connections: "80" } } },
+		{ postgresql: { parameters: { work_mem: "unbounded" } } },
+		{ postgresql: { parameters: { fsync: "off" } } },
+	]) {
+		assert.equal(render([prepared, profile("small"), operator, reviews, layer]).ok, false);
+	}
+});
+
+await test("every resident small-profile PostgreSQL container reserves its full memory ceiling", () => {
+	const resources = rendered([
+		...layersFor("small"),
+		{
+			postgresql: {
+				backup: {
+					clientTlsSecret: "hephaestus-postgresql-backup-tls",
+					enabled: true,
+					s3: { bucket: "hephaestus-backups", endpoint: "s3.example.com", region: "eu-central-1" },
+				},
+			},
+		},
+	]);
+	const postgres = workload(resources, "postgresql");
+	const postgresContainers = list(get(podSpec(postgres), "containers"));
+	assert.equal(postgresContainers.length, 2);
+	for (const resident of postgresContainers) {
+		assert.equal(
+			get(resident, "resources", "requests", "memory"),
+			get(resident, "resources", "limits", "memory"),
+			String(get(resident, "name")),
+		);
 	}
 });

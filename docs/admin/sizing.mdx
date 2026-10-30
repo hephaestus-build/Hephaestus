@@ -47,22 +47,44 @@ Their limits are fixed and do not count against `SANDBOX_MAX_CONCURRENT`.
 
 ## PostgreSQL memory
 
-The bundled PostgreSQL image sizes its memory settings from the memory limit of its container when it starts.
-`shared_buffers` is the starting value that the [PostgreSQL manual](https://www.postgresql.org/docs/current/runtime-config-resource.html) gives.
-The other values are common starting points:
+The bundled image calculates starting settings from its container limit.
+The chart's `postgresql.parameters` adds explicit `-c` arguments after that calculation.
+The small profile uses these shared-node values:
 
-| Setting                | Value                                    |
-| ---------------------- | ---------------------------------------- |
-| `shared_buffers`       | 25 % of the limit                        |
-| `effective_cache_size` | 75 % of the limit                        |
-| `maintenance_work_mem` | 1/16 of the limit, from 64 MB to 1 GB    |
-| `max_wal_size`         | half of the limit, at least 1 GB         |
-| `max_connections`      | one for each 16 MB, from 100 to 400      |
+| Setting | Value |
+| --- | --- |
+| `shared_buffers` | `256MB` |
+| `work_mem` | `2MB` |
+| `hash_mem_multiplier` | `1.0` |
+| `max_connections` | `80` |
+| `maintenance_work_mem` | `64MB` |
+| `autovacuum_work_mem` | `32MB` |
+| `autovacuum_max_workers` | `3` |
+| `effective_cache_size` | `1GB` |
+| `max_parallel_workers_per_gather` | `0` |
+| `max_wal_size` | `1GB` |
 
-A container without a limit keeps the PostgreSQL defaults, because the memory of the host is shared.
-A `-c` flag in the `command` of the `postgres` service overrides a value.
-The image also records [statement statistics](./observability#database-statement-statistics).
-To give PostgreSQL more memory, raise `POSTGRES_MEM_LIMIT` and restart the `postgres` service.
+`work_mem` applies to each sort or hash operation and can multiply across concurrent queries.
+`effective_cache_size` is a planner estimate. It allocates no memory.
+These settings retain autovacuum, statement statistics, fsync, and WAL durability.
+See [PostgreSQL resource consumption](https://www.postgresql.org/docs/18/runtime-config-resource.html).
+
+The small profile requests the PostgreSQL process's full 2 GiB memory limit.
+Its resident pgBackRest sidecar also requests its full 512 MiB memory limit.
+CPU can still burst. These Pods retain Burstable QoS.
+
+A lower 1536 MiB limit is a qualification target, not an enabled setting.
+Count the pgBackRest server sidecar separately, and count a backup or stanza Job in addition.
+Do not add individual-container p95 values to claim a synchronized node peak.
+
+Before lowering the process limit, run the reference load with the representative database, vacuum work, WAL archiving, and the permitted worker surge.
+Read `pg_settings` to verify the effective values and their command-line source.
+Require process charge within 1536 MiB, no OOM, no Hikari timeouts, and connection-acquire p95 below 50 ms.
+For the initial trial, require WAL archive lag below 60 seconds during steady load and below five minutes during recovery.
+
+Require autovacuum to reduce dead tuples after the peak, and investigate idle transactions older than one minute.
+Record vacuum duration and archive catch-up with the workload. A successful startup does not prove these gates.
+Keep the larger limit and lower concurrency if the trial fails.
 
 ## Review sandbox limits
 
@@ -113,39 +135,36 @@ Without that evidence, keep the conservative defaults above.
 
 ## Database connections
 
-Preparing code evidence can hold two database connections.
-The worker also needs connections for its control traffic and to record results.
-Thus, the worker's pool must hold two connections for each review that can prepare code evidence at the same time, plus room for the rest.
+Each chart role has a typed `databasePool.maximumPoolSize` and `databasePool.minimumIdle`.
+They set native Spring datasource properties for that role and override its profile defaults.
+The small profile uses:
 
-The scheduled GitHub and GitLab syncs together run at most four workspace syncs at the same time on each server.
-A workspace sync can hold two connections, so the scheduled syncs use at most eight connections of the server's pool.
-The rest stays free for requests.
+| Client | Maximum / minimum idle |
+| --- | --- |
+| Server | 16 / 2 |
+| Each worker | 24 / 2 |
+| Migration Job | 2 / 1 |
+| Webhook receiver | 0 / 0: no DataSource |
+| Sandboxes | 0 / 0: use their gateway |
 
-The worker profile gives the worker a pool of 32 connections, in Compose and on any other deployment.
-The webhook server has no database and no pool.
-The server keeps the application default of 20.
-`HIKARI_MAXIMUM_POOL_SIZE` overrides the pool size of each JVM that receives it.
-The Compose stacks pass it to the worker only.
+Preparing code evidence can hold two connections.
+Bound capture concurrency separately. A larger pool does not authorize more simultaneous captures.
+The server's four scheduled workspace syncs can hold eight connections, leaving eight for foreground and control work.
+Do not hold a database transaction while waiting for a model grant or provider response.
 
-Each JVM replica can open up to its own pool size.
-Budget all clients against `max_connections`:
+With one replacement worker beside one old worker, pooled sessions use `16 + 24 + 24 = 64` connections.
+During that worker surge, budget three dedicated listeners outside Hikari, four migration/backup sessions, four operator/monitor sessions, and three superuser-reserved slots.
+The total is 78 of 80.
+The server retains `Recreate`. Do not double the whole release or overlap another worker rollout.
 
-| Clients                                                          | Connections        |
-| ---------------------------------------------------------------- | ------------------ |
-| The pools of one server, one worker and one webhook server       | 20 + 32 + 2 = 54   |
-| The Hephaestus listener of the server and of the worker, outside pools | 2                  |
-| A database migration or a backup                                 | up to 10           |
-| Operator sessions and monitoring                                 | a few              |
-| The superuser reserve of PostgreSQL                              | 3                  |
+The chart rejects a bundled database configuration whose explicit `max_connections` cannot hold its role pools, worker surge, listeners, and maintenance reserves.
+Inventory dedicated listeners after runtime changes and recompute this budget if more exist.
 
-Compose stops the old container of a service before it starts the new one, so the roles of two releases never run together.
-Then about 70 connections are in use at most.
-A rolling update, as on Kubernetes, runs the old and the new roles at the same time.
-It needs both sets of pools and listeners, 112 connections, and about 130 with the other clients.
+The independent mentor loop and tool Pods must use the gateway without a database pool.
 
-At the default limit of 4 GiB, PostgreSQL allows 256 connections.
-Below 1.6 GiB, it allows 100, which holds the roles of one release only.
-For more replicas or larger pools, raise `POSTGRES_MEM_LIMIT`, or lower `HIKARI_MAXIMUM_POOL_SIZE`.
+The chart defaults outside the small profile keep server/worker pools of 20/32 with minimum idle five.
+For more replicas, change the role pools and PostgreSQL budget together.
+Measure pool waits at the actual workload. A rendered connection count does not prove query latency or memory use.
 
 ## Memory headroom
 

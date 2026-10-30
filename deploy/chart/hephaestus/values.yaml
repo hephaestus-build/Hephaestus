@@ -76,6 +76,8 @@ postgresql:
   # true runs the release's PostgreSQL image as one StatefulSet. false uses `external`.
   bundled: true
   database: hephaestus
+  # Explicit PostgreSQL -c overrides, after the image memory calculator.
+  parameters: {}
   # Every role connects with sslmode=verify-full. Required: an existing Secret in the release
   # namespace with ca.crt, the CA that signed the server certificate. The bundled server also reads
   # its certificate and key from the same Secret (tls.crt, tls.key). That certificate must name
@@ -162,6 +164,9 @@ nats:
 # heap from the limit, so a node that has only the request cannot hold what the JVM grows to. Each
 # size is a measured resident set plus headroom (docs/admin/kubernetes.mdx § Profiles).
 server:
+  databasePool:
+    maximumPoolSize: 20
+    minimumIdle: 5
   # 1, or 0 to stop it. Never more until servers process provider events in order across replicas.
   replicas: 1
   # Commit ingestion mirrors under the fabric root, on node storage. A cache: the server rebuilds it.
@@ -176,6 +181,9 @@ server:
 migration:
   # Disable while a restore clone receives its pre-boot lockdown.
   enabled: true
+  databasePool:
+    maximumPoolSize: 2
+    minimumIdle: 1
   resources:
     requests: { cpu: 250m, memory: 1536Mi, ephemeral-storage: 64Mi }
     limits: { cpu: "2", memory: 1536Mi, ephemeral-storage: 256Mi }
@@ -229,6 +237,9 @@ priorityClasses:
   reviews: ""
 
 worker:
+  databasePool:
+    maximumPoolSize: 32
+    minimumIdle: 5
   enabled: false
   # Two workers on different nodes where the cluster has them: one keeps claiming while the other
   # drains. 0 stops every worker and keeps its objects.

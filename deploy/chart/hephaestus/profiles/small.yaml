@@ -8,6 +8,23 @@
 # (docs/admin/kubernetes.mdx § Install).
 postgresql:
   bundled: true
+  # Shared-node policy. Keep the proven container ceiling until the loaded trial qualifies 1536Mi.
+  resources:
+    requests: { memory: 2Gi }
+  backup:
+    resources:
+      requests: { memory: 512Mi }
+  parameters:
+    shared_buffers: 256MB
+    work_mem: 2MB
+    hash_mem_multiplier: 1.0
+    max_connections: 80
+    maintenance_work_mem: 64MB
+    autovacuum_work_mem: 32MB
+    autovacuum_max_workers: 3
+    effective_cache_size: 1GB
+    max_parallel_workers_per_gather: 0
+    max_wal_size: 1GB
 nats:
   bundled: true
   jetstream:
@@ -24,11 +41,13 @@ webhook:
 config:
   consumerInactiveThreshold: 30d
 server:
+  databasePool: { maximumPoolSize: 16, minimumIdle: 2 }
   gitCache:
     sizeLimit: 10Gi
   resources:
     limits: { ephemeral-storage: 12Gi }
 worker:
+  databasePool: { maximumPoolSize: 24, minimumIdle: 2 }
   enabled: true
   replicas: 1
   # An upgrade starts the new worker beside the draining one, so reviews and conversations keep running. A chart

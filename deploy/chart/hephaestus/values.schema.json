@@ -5,6 +5,23 @@
 	"additionalProperties": false,
 	"required": ["release", "images", "host", "trustedProxies", "secret"],
 	"definitions": {
+		"databasePool": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["maximumPoolSize", "minimumIdle"],
+			"properties": {
+				"maximumPoolSize": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 400
+				},
+				"minimumIdle": {
+					"type": "integer",
+					"minimum": 0,
+					"maximum": 400
+				}
+			}
+		},
 		"image": {
 			"description": "An index digest from the verified release lock. Tags are refused.",
 			"type": "string",
@@ -242,8 +259,67 @@
 		"postgresql": {
 			"type": "object",
 			"additionalProperties": false,
-			"required": ["bundled", "database", "tls", "persistence", "resources", "backup", "external"],
+			"required": [
+				"bundled",
+				"database",
+				"tls",
+				"persistence",
+				"resources",
+				"backup",
+				"external",
+				"parameters"
+			],
 			"properties": {
+				"parameters": {
+					"type": "object",
+					"additionalProperties": false,
+					"properties": {
+						"shared_buffers": {
+							"type": "string",
+							"pattern": "^[1-9][0-9]*(?:kB|MB|GB)$"
+						},
+						"work_mem": {
+							"type": "string",
+							"pattern": "^[1-9][0-9]*(?:kB|MB|GB)$"
+						},
+						"maintenance_work_mem": {
+							"type": "string",
+							"pattern": "^[1-9][0-9]*(?:kB|MB|GB)$"
+						},
+						"autovacuum_work_mem": {
+							"type": "string",
+							"pattern": "^[1-9][0-9]*(?:kB|MB|GB)$"
+						},
+						"effective_cache_size": {
+							"type": "string",
+							"pattern": "^[1-9][0-9]*(?:kB|MB|GB)$"
+						},
+						"max_wal_size": {
+							"type": "string",
+							"pattern": "^[1-9][0-9]*(?:kB|MB|GB)$"
+						},
+						"max_connections": {
+							"type": "integer",
+							"minimum": 4,
+							"maximum": 400
+						},
+						"autovacuum_max_workers": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 16
+						},
+						"max_parallel_workers_per_gather": {
+							"type": "integer",
+							"minimum": 0,
+							"maximum": 16
+						},
+						"hash_mem_multiplier": {
+							"type": "number",
+							"minimum": 1,
+							"maximum": 10
+						}
+					}
+				},
 				"bundled": { "type": "boolean" },
 				"database": { "type": "string", "pattern": "^[a-z_][a-z0-9_]{0,62}$" },
 				"tls": {
@@ -384,8 +460,11 @@
 		"server": {
 			"type": "object",
 			"additionalProperties": false,
-			"required": ["replicas", "gitCache", "resources"],
+			"required": ["replicas", "gitCache", "resources", "databasePool"],
 			"properties": {
+				"databasePool": {
+					"$ref": "#/definitions/databasePool"
+				},
 				"replicas": { "type": "integer", "minimum": 0, "maximum": 1 },
 				"gitCache": { "$ref": "#/definitions/cache" },
 				"resources": { "$ref": "#/definitions/resources" }
@@ -394,8 +473,11 @@
 		"migration": {
 			"type": "object",
 			"additionalProperties": false,
-			"required": ["resources", "enabled"],
+			"required": ["resources", "enabled", "databasePool"],
 			"properties": {
+				"databasePool": {
+					"$ref": "#/definitions/databasePool"
+				},
 				"enabled": { "type": "boolean" },
 				"resources": { "$ref": "#/definitions/resources" }
 			}
@@ -486,9 +568,13 @@
 				"runtime",
 				"gitCache",
 				"resources",
-				"sandbox"
+				"sandbox",
+				"databasePool"
 			],
 			"properties": {
+				"databasePool": {
+					"$ref": "#/definitions/databasePool"
+				},
 				"enabled": { "type": "boolean" },
 				"replicas": { "type": "integer", "minimum": 0, "maximum": 16 },
 				"reviews": { "type": "integer", "minimum": 1, "maximum": 32 },

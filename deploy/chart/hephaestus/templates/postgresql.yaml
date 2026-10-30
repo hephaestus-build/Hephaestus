@@ -1,4 +1,5 @@
 {{- if .Values.postgresql.bundled }}
+{{- include "hephaestus.databaseConnectionBudget" . }}
 {{- $name := include "hephaestus.name" (dict "root" . "component" "postgresql") }}
 {{- $backup := .Values.postgresql.backup.enabled }}
 apiVersion: v1
@@ -69,6 +70,10 @@ spec:
             - archive_timeout=60s
             - -c
             - archive_command=pgbackrest --stanza=hephaestus archive-push %p
+            {{- end }}
+            {{- range $key, $value := .Values.postgresql.parameters }}
+            - -c
+            - {{ printf "%s=%v" $key $value | quote }}
             {{- end }}
           env:
             {{- include "hephaestus.secretEnv" (dict "root" . "env" "POSTGRES_USER" "key" "DATABASE_USERNAME") | nindent 12 }}

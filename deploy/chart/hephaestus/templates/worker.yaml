@@ -323,6 +323,7 @@ spec:
           image: {{ include "hephaestus.image" (dict "root" . "name" "application-server") | quote }}
           imagePullPolicy: IfNotPresent
           env:
+            {{- include "hephaestus.env.databasePool" .Values.worker.databasePool | nindent 12 }}
             {{- include "hephaestus.env.pod" . | nindent 12 }}
             {{- include "hephaestus.env.release" . | nindent 12 }}
             {{- include "hephaestus.env.shared" . | nindent 12 }}
