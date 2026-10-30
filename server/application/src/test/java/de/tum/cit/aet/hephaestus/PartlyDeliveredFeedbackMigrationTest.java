@@ -21,6 +21,7 @@ import liquibase.LabelExpression;
 import liquibase.Liquibase;
 import liquibase.database.DatabaseFactory;
 import liquibase.database.jvm.JdbcConnection;
+import liquibase.exception.PreconditionFailedException;
 import liquibase.resource.ClassLoaderResourceAccessor;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -110,7 +111,8 @@ class PartlyDeliveredFeedbackMigrationTest {
             }
             connection.commit();
             assertThatThrownBy(() -> liquibase.update(changeSets, CONTEXTS, LABELS))
-                    .hasStackTraceContaining("preconditions failed");
+                    .hasRootCauseInstanceOf(PreconditionFailedException.class)
+                    .hasStackTraceContaining("feedback_copy.last_error does not exist");
         }
     }
 
