@@ -91,6 +91,9 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
     /** How often a running top-level turn is read again to keep its progress notice on the current stage. */
     static final Duration PROGRESS_INTERVAL = Duration.ofSeconds(2);
 
+    /** History pages that the end of a reply reads to find a progress notice whose receipt this server lost. */
+    private static final int PROGRESS_HISTORY_PAGES = 10;
+
     /** The notice while the question waits for a free Hephaestus ({@link MentorTurn.WaitingFor#FREE_HEPH}). */
     static final String WAITING_FOR_HEPH_NOTICE =
             "Hephaestus is answering other questions. Yours starts when one finishes.";
@@ -151,6 +154,9 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
 
     /** When each workspace may take its next append ({@link #WORKSPACE_APPEND_SPACING}). Guarded by {@code this}. */
     private final Map<Long, Instant> appendSlots = new HashMap<>();
+
+    /** Until when Slack asked each workspace for no more progress notice calls, after a rate limit. */
+    private final Map<Long, Instant> progressPauses = new ConcurrentHashMap<>();
 
     private final ExecutorService workers;
     private final ScheduledExecutorService timer;
@@ -409,7 +415,7 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
         }
         later(projection, PROGRESS_INTERVAL);
         String stage = MentorSlackDelivery.stage(turn);
-        Instant resumes = projection.progressResumesAt;
+        Instant resumes = progressPauses.get(projection.workspaceId);
         if (projection.progressUnknown
                 || stage == null
                 || stage.equals(projection.noticeText)
@@ -442,8 +448,12 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
             projection.noticeText = stage;
         } catch (SlackSendException e) {
             if (e.isRateLimited()) {
-                projection.progressResumesAt = now.plusMillis(e.retryAfterMillis());
-            } else if (notice == null && SlackMentorPoster.leavesEffectUnknown(e)) {
+                // From when Slack answered, for every turn of the workspace: the limit is the workspace's.
+                progressPauses.merge(
+                        projection.workspaceId,
+                        clock.instant().plusMillis(e.retryAfterMillis()),
+                        (earlier, later) -> later.isAfter(earlier) ? later : earlier);
+            } else if (notice == null && (e.visibilityUnknown() || SlackMentorPoster.leavesEffectUnknown(e))) {
                 // Slack may show the notice: posting again could show two. The reply's end looks for it.
                 projection.progressUnknown = true;
             }
@@ -461,20 +471,19 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
      * {@link #PROGRESS_NOTICE_AFTER} can have one. Runs after the reply posted.
      */
     private void removeLostProgress(Projection projection, SlackTurn turn) {
-        if (projection.notice != null
-                || turn.inThread()
-                || !(projection.progressUnknown || ranLong(projection, turn))) {
+        // A retried turn's earlier attempt may have posted one on a server that is gone, however short this run was.
+        boolean mayHaveOne = projection.progressUnknown || turn.turn().getAttempt() > 1 || ranLong(projection, turn);
+        if (projection.notice != null || turn.inThread() || !mayHaveOne) {
             return;
         }
         long workspaceId = projection.workspaceId;
         try {
-            for (String ts : slack.readWorkspaceMessages(
-                            workspaceId,
-                            turn.channelId(),
-                            null,
-                            oldest(turn),
-                            message -> SlackMentorPosts.isProgressOf(message, projection.turnId))
-                    .ts()) {
+            for (String ts : slack.findWorkspaceMessages(
+                    workspaceId,
+                    turn.channelId(),
+                    oldest(turn),
+                    PROGRESS_HISTORY_PAGES,
+                    message -> SlackMentorPosts.isProgressOf(message, projection.turnId))) {
                 slack.deleteMessage(workspaceId, turn.channelId(), ts);
             }
         } catch (SlackSendException e) {
@@ -1262,10 +1271,6 @@ public class SlackMentorProjector implements MentorLedgerNotifications.Listener 
 
         /** When this server first saw the turn's current run, by its clock: a progress notice counts from it. */
         volatile @Nullable Instant runningSince;
-
-        /** Until when Slack asked for no more calls after a rate limit on the progress notice. */
-        @Nullable
-        Instant progressResumesAt;
 
         /** Slack may show a progress notice whose post did not answer: no second one is posted. */
         boolean progressUnknown;

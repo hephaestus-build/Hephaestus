@@ -737,11 +737,74 @@ class SlackMentorProjectorIntegrationTest extends AbstractWorkspaceIntegrationTe
         verify(slack, times(1)).postMessage(anyLong(), eq(CHANNEL), isNull(), eq(List.of()), anyString(), any());
 
         postsAt("200.1");
-        when(slack.readWorkspaceMessages(anyLong(), eq(CHANNEL), isNull(), anyString(), any()))
-                .thenReturn(new SlackMessageService.Matches(List.of("500.9"), false));
+        when(slack.findWorkspaceMessages(anyLong(), eq(CHANNEL), anyString(), anyInt(), any()))
+                .thenReturn(List.of("500.9"));
         end(running, MentorTurn.Status.DONE, linkingAnswer(running, "What do you make of the gap?"), "");
         changed(running);
         changed(running);
+
+        verify(slack).deleteMessage(workspace.getId(), CHANNEL, "500.9");
+    }
+
+    @Test
+    void shouldNotPostProgressAgainWhenSlackAcceptedThePostWithoutAReceipt() {
+        projector = timedProjector();
+        when(slack.postMessage(anyLong(), eq(CHANNEL), isNull(), eq(List.of()), anyString(), any()))
+                .thenThrow(new SlackSendException(workspace.getId(), CHANNEL, "invalid_receipt"));
+        ask(main, "Is anything of mine waiting for a review?", "100.1");
+        MentorTurn running = turns.claimNext(WORKER, LEASE).orElseThrow();
+        turns.updatePartial(running.getId(), running.getAttempt(), WORKER, staged("Reading your pull requests…"));
+        changed(running);
+        advance(SlackMentorProjector.PROGRESS_NOTICE_AFTER);
+        turns.updatePartial(running.getId(), running.getAttempt(), WORKER, staged("Loading the repository…"));
+        advance(SlackMentorProjector.PROGRESS_INTERVAL);
+
+        verify(slack, times(1)).postMessage(anyLong(), eq(CHANNEL), isNull(), eq(List.of()), anyString(), any());
+    }
+
+    @Test
+    void shouldWaitTheWholeRateLimitFromWhenSlackAnsweredBeforeShowingProgressAgain() {
+        projector = timedProjector();
+        doAnswer(call -> {
+                    // The call itself takes five seconds before Slack answers with a 30 second limit.
+                    clock.advance(Duration.ofSeconds(5));
+                    throw new SlackSendException(workspace.getId(), CHANNEL, "ratelimited", 30_000);
+                })
+                .doReturn(new SlackMessageService.Posted(CHANNEL, "500.1"))
+                .when(slack)
+                .postMessage(anyLong(), eq(CHANNEL), isNull(), eq(List.of()), anyString(), any());
+        ask(main, "Is anything of mine waiting for a review?", "100.1");
+        MentorTurn running = turns.claimNext(WORKER, LEASE).orElseThrow();
+        turns.updatePartial(running.getId(), running.getAttempt(), WORKER, staged("Reading your pull requests…"));
+        changed(running);
+        advance(SlackMentorProjector.PROGRESS_NOTICE_AFTER);
+
+        for (int seconds = 0; seconds < 28; seconds += 2) {
+            advance(SlackMentorProjector.PROGRESS_INTERVAL);
+        }
+        verify(slack, times(1)).postMessage(anyLong(), eq(CHANNEL), isNull(), eq(List.of()), anyString(), any());
+        advance(SlackMentorProjector.PROGRESS_INTERVAL.multipliedBy(2));
+        verify(slack, times(2)).postMessage(anyLong(), eq(CHANNEL), isNull(), eq(List.of()), anyString(), any());
+    }
+
+    @Test
+    void shouldFindTheProgressOfAnEarlierAttemptAfterARestartWhenTheRetryWasShort() {
+        MentorTurn asked =
+                ask(main, "Is anything of mine waiting for a review?", "100.1").turn();
+        MentorTurn first = turns.claimNext(WORKER, LEASE).orElseThrow();
+        turns.renewLease(first.getId(), first.getAttempt(), WORKER, Duration.ofSeconds(-1));
+        assertThat(turns.expireLease(first.getId())).isPresent();
+        MentorTurn retried = turns.claimNext(WORKER, LEASE).orElseThrow();
+        // A new process: it holds no receipt of the notice that the first attempt's server posted.
+        projector = timedProjector();
+        changed(retried);
+        when(slack.findWorkspaceMessages(anyLong(), eq(CHANNEL), anyString(), anyInt(), any()))
+                .thenReturn(List.of("500.9"));
+        postsAt("200.1");
+
+        end(retried, MentorTurn.Status.DONE, linkingAnswer(retried, "What do you make of the gap?"), "");
+        changed(turns.require(workspace.getId(), asked.getId()));
+        changed(turns.require(workspace.getId(), asked.getId()));
 
         verify(slack).deleteMessage(workspace.getId(), CHANNEL, "500.9");
     }

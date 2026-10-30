@@ -413,6 +413,52 @@ public class SlackMessageService {
     }
 
     /**
+     * The messages at the top level of a channel posted at or after {@code oldest} that {@code match} accepts, read
+     * page by page, newest first, until Slack holds no more or {@code maxPages} pages were read.
+     *
+     * @throws SlackSendException when a page could not be read
+     */
+    public List<String> findWorkspaceMessages(
+            long workspaceId, String channel, String oldest, int maxPages, Predicate<Message> match) {
+        String token = resolveToken(workspaceId)
+                .orElseThrow(() -> new SlackSendException(workspaceId, channel, "no_active_slack_connection"));
+        List<String> found = new ArrayList<>();
+        String cursor = null;
+        try {
+            for (int page = 0; page < maxPages; page++) {
+                String from = cursor;
+                var r = callHonoringRateLimit(
+                        SlackBackoff.history(rateLimitTracker, workspaceId),
+                        () -> slack.methods(token)
+                                .conversationsHistory(req -> req.channel(channel)
+                                        .oldest(oldest)
+                                        .inclusive(true)
+                                        .includeAllMetadata(true)
+                                        .limit(HISTORY_MATCH_LIMIT)
+                                        .cursor(from)));
+                if (!r.isOk()) {
+                    throw new SlackSendException(workspaceId, channel, r.getError() == null ? "unknown" : r.getError());
+                }
+                (r.getMessages() == null ? List.<Message>of() : r.getMessages())
+                        .stream()
+                                .filter(match)
+                                .map(Message::getTs)
+                                .filter(ts -> ts != null && !ts.isBlank())
+                                .forEach(found::add);
+                cursor = r.getResponseMetadata() == null
+                        ? null
+                        : r.getResponseMetadata().getNextCursor();
+                if (cursor == null || cursor.isBlank()) {
+                    break;
+                }
+            }
+            return found;
+        } catch (SlackApiException | IOException e) {
+            throw new SlackSendException(workspaceId, channel, "transport_failure", e);
+        }
+    }
+
+    /**
      * The messages posted at or after {@code oldest} that {@code match} accepts, read with their metadata: from the top
      * level of the channel, or from the replies of {@code threadTs}. Reads one page.
      *
