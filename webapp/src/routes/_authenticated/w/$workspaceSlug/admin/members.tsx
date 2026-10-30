@@ -70,6 +70,7 @@ function membersSearch(view: WorkspaceMembersTableView) {
 
 function AdminMembersContainer() {
 	const search = Route.useSearch();
+	const params = Route.useParams();
 	const setSearch = useSearchState();
 	const {
 		adminWorkspaceSlug: workspaceSlug,
@@ -207,6 +208,7 @@ function AdminMembersContainer() {
 	return (
 		<>
 			<WorkspaceMembersPage
+				workspaceSlug={params.workspaceSlug}
 				members={members}
 				rowCount={membersQuery.data?.totalElements ?? 0}
 				teams={teams}

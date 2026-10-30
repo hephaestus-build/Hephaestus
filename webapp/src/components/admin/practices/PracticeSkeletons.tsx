@@ -105,7 +105,7 @@ export function ReviewSettingsSkeleton() {
 		<div aria-busy="true">
 			<span className="sr-only">Loading review settings…</span>
 			<div className="space-y-8" aria-hidden>
-				{["status", "timing", "coverage", "delivery"].map((section) => (
+				{["status", "timing", "coverage"].map((section) => (
 					<div key={section} className="space-y-4">
 						<div className="space-y-2">
 							<Skeleton className="h-6 w-48" />

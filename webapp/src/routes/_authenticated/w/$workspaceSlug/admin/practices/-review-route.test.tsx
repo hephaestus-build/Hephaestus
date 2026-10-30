@@ -289,6 +289,39 @@ describe("review route", () => {
 		expect(screen.queryByRole("tabpanel", { name: "Feedback mode" })).toBeNull();
 	});
 
+	it("opens sending feedback in the Feedback mode section that a link names, and saves it there", async () => {
+		const settings = stubSettings(reviewSettings({ deliverToMergedOverride: true }));
+		stubWorkspace(settings.handlers(false));
+
+		renderRouteAt("/w/acme/admin/practices/review?section=feedback-mode#feedback-delivery-heading");
+
+		const panel = await screen.findByRole("tabpanel", { name: "Feedback mode" }, ROUTE_RENDER_WAIT);
+		await within(panel).findByRole("heading", { name: "Sending feedback" }, ROUTE_RENDER_WAIT);
+		await userEvent.click(within(panel).getByRole("switch", { name: "Send feedback" }));
+		const useDefault = within(panel).getByRole("button", {
+			name: "Use default for Post feedback after merge",
+		});
+		// Every control waits while the first save is in flight.
+		await waitFor(() => expect(useDefault).toHaveProperty("disabled", false));
+		await userEvent.click(useDefault);
+		await waitFor(() =>
+			expect(settings.patches.map((patch) => patch.body)).toStrictEqual([
+				{ deliveryStatus: "PAUSED" },
+				{ reset: ["DELIVER_TO_MERGED"] },
+			]),
+		);
+	});
+
+	it("keeps sending feedback out of the Automated review section", async () => {
+		stubWorkspace([]);
+
+		renderRouteAt("/w/acme/admin/practices/review?section=automated-review");
+
+		await screen.findByRole("heading", { name: "Review scope" }, ROUTE_RENDER_WAIT);
+		expect(screen.queryByRole("heading", { name: "Sending feedback" })).toBeNull();
+		expect(screen.queryByRole("switch", { name: "Send feedback" })).toBeNull();
+	});
+
 	// Null restores inheritance; Off is an explicit choice and cannot serve as reset.
 	it("overrides a practice's feedback mode and makes it inherit again with an explicit null", async () => {
 		const bodies: SetFeedbackModeRequest[] = [];
