@@ -34,6 +34,7 @@ public class LegacySecretsChange implements CustomTaskChange {
     }
 
     @Override
+    @SuppressWarnings("PMD.PreserveStackTrace") // SQL and JSON causes can contain secrets.
     public void execute(Database database) throws CustomChangeException {
         if (!(database.getConnection() instanceof JdbcConnection connection)) {
             throw new CustomChangeException("Secret conversion requires a JDBC database");
@@ -71,7 +72,7 @@ public class LegacySecretsChange implements CustomTaskChange {
                 try {
                     KeyFactory.getInstance("EC").generatePrivate(new PKCS8EncodedKeySpec(privateDer));
                 } catch (GeneralSecurityException exception) {
-                    throw new EncryptionException("Invalid legacy JWT signing key");
+                    throw new EncryptionException("Invalid legacy JWT signing key", exception);
                 }
                 jdbc.update(
                         "UPDATE jwt_signing_key SET private_key_pem=?,encryption_key_id=? WHERE kid=?",
@@ -80,7 +81,6 @@ public class LegacySecretsChange implements CustomTaskChange {
                         rs.getString(1));
             });
         } catch (Exception exception) {
-            // Driver and JSON exceptions can contain secret values. Do not attach them to a migration log.
             throw new CustomChangeException(
                     "Secret conversion failed. Keep writers stopped, verify the system, active and prior credential keys, then retry the migration.");
         }

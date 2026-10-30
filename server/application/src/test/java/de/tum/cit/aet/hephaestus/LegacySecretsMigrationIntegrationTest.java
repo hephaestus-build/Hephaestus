@@ -17,6 +17,8 @@ import de.tum.cit.aet.hephaestus.integration.core.spi.IntegrationKind;
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer;
 import de.tum.cit.aet.hephaestus.testconfig.PostgreSQLTestContainer.TestDatabase;
 import java.sql.DriverManager;
+import java.io.StringWriter;
+import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
@@ -114,6 +116,7 @@ class LegacySecretsMigrationIntegrationTest {
     @ParameterizedTest
     @ValueSource(
             strings = {
+                "sql-error-containing-secret",
                 "missing-system-key",
                 "missing-active-key",
                 "wrong-system-key",
@@ -127,6 +130,12 @@ class LegacySecretsMigrationIntegrationTest {
         seed(jdbc);
         var env = environment();
         switch (failure) {
+            case "sql-error-containing-secret" -> jdbc.execute("""
+                    CREATE FUNCTION reject_secret_update() RETURNS trigger LANGUAGE plpgsql AS $$
+                    BEGIN RAISE EXCEPTION 'fixture-secret'; END $$;
+                    CREATE TRIGGER reject_secret_update BEFORE UPDATE ON login_provider
+                    FOR EACH ROW EXECUTE FUNCTION reject_secret_update();
+                    """);
             case "missing-system-key" -> env.setProperty("hephaestus.security.encryption-key", "");
             case "missing-active-key" -> env.setProperty("hephaestus.security.credential-encryption-key", "");
             case "wrong-system-key" -> env.setProperty("hephaestus.security.encryption-key", ACTIVE_KEY);
@@ -140,7 +149,13 @@ class LegacySecretsMigrationIntegrationTest {
         }
         assertThatThrownBy(() -> migrate(database, env))
                 .hasStackTraceContaining("conversion failed")
-                .hasMessageNotContainingAny("fixture-secret", "token-1001");
+                .satisfies(error -> {
+                    var output = new StringWriter();
+                    try (var writer = new PrintWriter(output)) {
+                        error.printStackTrace(writer);
+                    }
+                    assertThat(output.toString()).doesNotContain("fixture-secret", "token-1001");
+                });
         assertThat(jdbc.queryForObject("SELECT client_secret FROM login_provider WHERE id=1001", String.class))
                 .isEqualTo("fixture-secret");
         assertThat(jdbc.queryForObject(

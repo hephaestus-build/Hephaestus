@@ -29,6 +29,7 @@ public class LegacyConnectionSecretsChange implements CustomTaskChange {
     }
 
     @Override
+    @SuppressWarnings("PMD.PreserveStackTrace") // SQL and JSON causes can contain secrets.
     public void execute(Database database) throws CustomChangeException {
         if (!(database.getConnection() instanceof JdbcConnection connection)) {
             throw new CustomChangeException("Connection secret conversion requires a JDBC database");
@@ -77,7 +78,6 @@ public class LegacyConnectionSecretsChange implements CustomTaskChange {
                 }
             }
         } catch (Exception exception) {
-            // Driver and JSON exceptions can contain secret values. Do not attach them to a migration log.
             throw new CustomChangeException(
                     "Connection credential conversion failed. Keep writers stopped, verify the active, prior and system keys, then retry the migration.");
         }
