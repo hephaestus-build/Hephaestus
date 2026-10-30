@@ -1,7 +1,5 @@
 import { readFileSync, writeFileSync } from "node:fs";
 
-import { isCandidatePromotion, parseVersion } from "./lib/release-version.ts";
-
 const digestPattern = /^sha256:[a-f0-9]{64}$/u;
 const commitPattern = /^[a-f0-9]{40}$/u;
 const repositoryPattern = /^(?:ghcr\.io|docker\.io)\/[a-z0-9][a-z0-9._/-]*$/u;
@@ -61,14 +59,7 @@ function parseChart(value: unknown, release: string): ReleaseChart {
 	if (typeof chart.repository !== "string" || !chartRepositoryPattern.test(chart.repository)) {
 		throw new Error("chart has a malformed repository");
 	}
-	if (
-		chart.version !== chartVersion(release) &&
-		!(
-			typeof chart.version === "string" &&
-			parseVersion(chart.version)?.rc !== undefined &&
-			isCandidatePromotion(chart.version, release)
-		)
-	) {
+	if (chart.version !== chartVersion(release)) {
 		throw new Error(`chart version is not ${chartVersion(release)}`);
 	}
 	if (typeof chart.digest !== "string" || !digestPattern.test(chart.digest)) {

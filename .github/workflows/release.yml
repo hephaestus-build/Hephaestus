@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       promote-candidate:
-        description: Promote the latest immutable vX.Y.Z-rc.N on the exact main commit, without rebuilding artifacts
+        description: Promote the latest immutable vX.Y.Z-rc.N on the exact main commit, without rebuilding images
         required: true
         type: string
   workflow_run: # zizmor: ignore[dangerous-triggers] The guard authenticates the completed run before privileged jobs start.
@@ -289,13 +289,12 @@ jobs:
           if [ -n "$CANDIDATE" ]; then
             node scripts/plan-release.ts --candidate-source "$CANDIDATE" "$SHA"
             source="$RUNNER_TEMP/candidate/release-${CANDIDATE}.chart.json"
-            package=$(node scripts/release-chart.ts verify "$source" "$CANDIDATE" security/release-images.json "$RUNNER_TEMP/chart")
-            jq '.chart' "$source" > "$RUNNER_TEMP/chart.json"
-          else
-            node scripts/release-chart.ts publish "v${VERSION}" deploy/chart/hephaestus evidence/manifest.json \
-              security/release-images.json "$RUNNER_TEMP/chart" > "$RUNNER_TEMP/chart.json"
-            package="$RUNNER_TEMP/chart/hephaestus-${VERSION}.tgz"
+            node scripts/release-chart.ts verify "$source" "$CANDIDATE" security/release-images.json "$RUNNER_TEMP/chart" >/dev/null
           fi
+          # The source commit and image digests match the candidate; only release metadata changes.
+          node scripts/release-chart.ts publish "v${VERSION}" deploy/chart/hephaestus evidence/manifest.json \
+            security/release-images.json "$RUNNER_TEMP/chart" > "$RUNNER_TEMP/chart.json"
+          package="$RUNNER_TEMP/chart/hephaestus-${VERSION}.tgz"
           echo "package=$package" >> "$GITHUB_OUTPUT"
           jq . "$RUNNER_TEMP/chart.json"
 

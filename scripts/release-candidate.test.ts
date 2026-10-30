@@ -114,7 +114,7 @@ await test("stable must explicitly promote the latest immutable candidate at its
 	}
 });
 
-await test("promotion preserves every image index, platform, chart byte identity and source commit", () => {
+await test("promotion preserves every image index, platform and source while chart metadata changes", () => {
 	const source = {
 		schemaVersion: 2,
 		release: candidate.tag,
@@ -137,12 +137,18 @@ await test("promotion preserves every image index, platform, chart byte identity
 			},
 		],
 	};
-	const stableLock = { ...source, release: "v1.0.0" };
+	const stableLock = {
+		...source,
+		release: "v1.0.0",
+		chart: { ...source.chart, version: "1.0.0", digest: `sha256:${"f".repeat(64)}` },
+	};
 	assertCandidateArtifacts(parseReleaseImageLock(source), parseReleaseImageLock(stableLock));
 	for (const changed of [
 		{ ...stableLock, commit: "b".repeat(40) },
-		{ ...stableLock, chart: { ...source.chart, version: "1.0.0" } },
-		{ ...stableLock, chart: { ...source.chart, digest: `sha256:${"f".repeat(64)}` } },
+		{
+			...stableLock,
+			chart: { ...stableLock.chart, repository: "ghcr.io/another/charts/hephaestus" },
+		},
 		{ ...stableLock, images: [{ ...source.images[0], indexDigest: `sha256:${"f".repeat(64)}` }] },
 		{
 			...stableLock,
@@ -159,7 +165,13 @@ await test("promotion preserves every image index, platform, chart byte identity
 			/Promotion changed/u,
 		);
 	}
-	for (const version of ["1.0.1-rc.2", "v1.0.0-rc.2", "1.0.0-rc.02", "1.0.0-beta.2"]) {
+	for (const version of [
+		"1.0.0-rc.2",
+		"1.0.1-rc.2",
+		"v1.0.0-rc.2",
+		"1.0.0-rc.02",
+		"1.0.0-beta.2",
+	]) {
 		assert.throws(
 			() => parseReleaseImageLock({ ...stableLock, chart: { ...source.chart, version } }),
 			/chart version/u,

@@ -42,6 +42,7 @@ if (tool === 'cosign') {
 for (const scenario of [
 	"candidate",
 	"stable-promotion",
+	"stale-candidate-chart",
 	"tampered-lock",
 	"foreign-chart",
 	"wrong-release",
@@ -58,7 +59,12 @@ for (const scenario of [
 				await writeFile(path.join(bin, tool), transport, { mode: 0o755 });
 			}
 			const version = scenario === "candidate" ? "1.0.0-rc.2" : "1.0.0";
-			const artifact = scenario === "foreign-chart" ? "1.0.1-rc.2" : "1.0.0-rc.2";
+			const artifact =
+				scenario === "foreign-chart"
+					? "1.0.1-rc.2"
+					: scenario === "stale-candidate-chart"
+						? "1.0.0-rc.2"
+						: version;
 			const lock = path.join(directory, "release.chart.json");
 			const body = JSON.stringify({
 				schemaVersion: 2,

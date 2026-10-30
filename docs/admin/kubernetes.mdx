@@ -78,9 +78,9 @@ The webhook role has no database.
 
 The chart package of a release names the release version, the source commit, and the release's five images by digest.
 Thus, you give Helm only your own values.
-The chart version and its `appVersion` normally equal the release version without the leading `v`.
-A stable release promoted from a candidate keeps that candidate's exact chart version and bytes.
-The signed joint lock records the actual chart version.
+The chart version and its `appVersion` equal the release version without the leading `v`.
+A stable promotion keeps the candidate's images and packages the chart with stable release metadata.
+The signed joint lock records the resulting chart digest.
 The chart source in the repository names no image, tag, or registry.
 
 You need [Cosign](https://docs.sigstore.dev/cosign/system_config/installation/) 3.1 or later, the Helm CLI, `curl`, and `jq`.
@@ -109,9 +109,9 @@ curl -fsSL "$URL/$LOCK.sigstore.json" -o "$LOCK.sigstore.json"
 cosign verify-blob --bundle "$LOCK.sigstore.json" \
   --certificate-identity 'https://github.com/hephaestus-build/Hephaestus/.github/workflows/release.yml@refs/heads/main' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com "$LOCK"
-jq -e --arg release "v$VERSION" '.schemaVersion == 2 and .release == $release' "$LOCK" >/dev/null
+jq -e --arg release "v$VERSION" --arg version "$VERSION" \
+  '.schemaVersion == 2 and .release == $release and .chart.version == $version' "$LOCK" >/dev/null
 DIGEST=$(jq -er .chart.digest "$LOCK")
-CHART_VERSION=$(jq -er .chart.version "$LOCK")
 # 2. The release workflow signed that digest.
 cosign verify "$CHART@$DIGEST" \
   --certificate-identity 'https://github.com/hephaestus-build/Hephaestus/.github/workflows/release.yml@refs/heads/main' \
@@ -119,14 +119,14 @@ cosign verify "$CHART@$DIGEST" \
 # 3. The one pull: Helm gets the chart by that digest, never by a tag.
 helm pull "oci://$CHART@$DIGEST" --untar --untardir "chart-$VERSION"
 # 4. The signed chart is the chart of this release.
-helm show chart "chart-$VERSION/hephaestus" | grep -x "version: $CHART_VERSION" >/dev/null
-# 5. The logical release identity, including when chart metadata keeps its candidate version.
+helm show chart "chart-$VERSION/hephaestus" | grep -x "version: $VERSION" >/dev/null
+# 5. The release identity from the signed lock.
 jq '{release: {version: .release, commit: .commit}}' "$LOCK" > release-values.yaml
 ```
 
 Step 1 verifies the signed joint lock and its release name.
 Step 2 refuses every digest that the release workflow did not sign.
-Step 4 checks the actual chart version from that lock.
+Step 4 checks that the chart names the requested release version.
 Keep `release-values.yaml` and pass it after your site values on every Helm install or upgrade.
 It sets the logical release identity without changing the chart or its images.
 A version tag can move, and it is not a release signal.

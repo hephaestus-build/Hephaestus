@@ -15,7 +15,7 @@ import {
 } from "./release-image-lock.ts";
 import { digestOutputs, formatResolvedImages } from "./resolve-release-images.ts";
 
-/** The only changes on promotion are the logical release name and its newly signed evidence. */
+/** Promotion preserves the qualified source and images while publishing stable chart metadata. */
 export function assertCandidateArtifacts(
 	source: ReleaseImageLock,
 	promoted: ReleaseImageLock,
@@ -30,9 +30,9 @@ export function assertCandidateArtifacts(
 	if (
 		source.commit !== promoted.commit ||
 		!isDeepStrictEqual(source.images, promoted.images) ||
-		!isDeepStrictEqual(source.chart, promoted.chart)
+		source.chart.repository !== promoted.chart.repository
 	) {
-		throw new Error("Promotion changed the candidate's source, image digests or chart artifact");
+		throw new Error("Promotion changed the candidate's source, image digests or chart repository");
 	}
 }
 

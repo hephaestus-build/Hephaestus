@@ -543,21 +543,14 @@ if [ ! -f "$bundle" ]; then
 		"https://github.com/$RELEASE_REPOSITORY/releases/download/v$VERSION/release-v$VERSION.chart.json.sigstore.json"
 fi
 cosign verify-blob --bundle "$bundle" --certificate-identity "$SIGNER" --certificate-oidc-issuer "$ISSUER" "$LOCK" >/dev/null
-jq -e --arg release "v$VERSION" '.schemaVersion == 2 and .release == $release' "$LOCK" >/dev/null || die "the signed joint lock is not for this release"
+jq -e --arg release "v$VERSION" --arg version "$VERSION" '.schemaVersion == 2 and .release == $release and .chart.version == $version' "$LOCK" >/dev/null || die "the signed joint lock is not for this release"
 digest=$(jq -er .chart.digest "$LOCK")
 matches "$digest" 'sha256:[a-f0-9]{64}' || die "the joint lock names no chart digest"
-artifact_version=$(jq -er .chart.version "$LOCK")
-if [ "$artifact_version" != "$VERSION" ]; then
-	# A stable promotion retains its candidate's exact chart bytes and metadata.
-	matches "$VERSION" '(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)' &&
-		matches "$artifact_version" '(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)-rc\.(0|[1-9][0-9]*)' &&
-		[ "${artifact_version%-rc.*}" = "$VERSION" ] || die "the signed chart is not this release or its same-version candidate"
-fi
 commit=$(jq -er .commit "$LOCK")
 matches "$commit" '[a-f0-9]{40}' || die "the joint lock names no source commit"
 cosign verify "$CHART_REPOSITORY@$digest" --certificate-identity "$SIGNER" --certificate-oidc-issuer "$ISSUER" >/dev/null
 helm pull "oci://$CHART_REPOSITORY@$digest" --untar --untardir "$TEMP/chart"
-helm show chart "$TEMP/chart/hephaestus" | grep -qx "version: $artifact_version" || die "the signed chart is not the chart of $artifact_version"
+helm show chart "$TEMP/chart/hephaestus" | grep -qx "version: $VERSION" || die "the signed chart is not the chart of $VERSION"
 rm -rf "$HERE/chart-$VERSION"
 mkdir "$HERE/chart-$VERSION"
 mv "$TEMP/chart/hephaestus" "$HERE/chart-$VERSION/hephaestus"

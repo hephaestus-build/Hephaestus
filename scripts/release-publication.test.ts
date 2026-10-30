@@ -219,6 +219,7 @@ if (tool === 'gh') {
     fs.readFileSync(0);
   } else if (args[0] === 'package') {
     fs.writeFileSync(path.join(option('--destination'), 'hephaestus-' + option('--version') + '.tgz'), 'packaged at ' + option('--app-version') + '\n' + fs.readFileSync(path.join(args[1], 'values.yaml'), 'utf8'));
+    fs.writeFileSync(path.join(store, 'chart-metadata'), 'apiVersion: v2\nname: hephaestus\nversion: ' + option('--version') + '\nappVersion: ' + option('--app-version') + '\n');
   } else if (args[0] === 'push') {
     // A push writes the version tag; the registry answers with the manifest digest on stdout.
     const bytes = fs.readFileSync(args[1]);
@@ -985,12 +986,33 @@ void test(
 		const directory = await mkdtemp(path.join(tmpdir(), "release-prerelease-"));
 		t.after(async () => rm(directory, { recursive: true, force: true }));
 		const tag = "v1.0.0-rc.2";
-		const { archive, json, run } = await fixture(directory, commit, tag);
+		const { archive, json, run, manifest } = await fixture(directory, commit, tag);
 		const aliases = {
 			[`${repository}:latest`]: `sha256:${"f".repeat(64)}`,
 			[`${repository}:1.0`]: `sha256:${"f".repeat(64)}`,
 		};
 		await json("aliases", aliases);
+		const stableChartTag = `${chart.repository}:0.95.1`;
+		await json("chart-tags", { [stableChartTag]: `sha256:${"f".repeat(64)}` });
+		await mkdir(path.join(directory, "evidence"));
+		await writeFile(path.join(directory, "evidence/manifest.json"), JSON.stringify(manifest));
+		const chartPublished = await run(
+			{
+				SHA: commit,
+				ACTOR: "release-bot",
+				REGISTRY_TOKEN: "fixture-token",
+				GITHUB_OUTPUT: path.join(directory, "chart-outputs"),
+			},
+			jobSteps("tag-images", ["Publish the chart by digest", "Write release image lock"]),
+		);
+		assert.equal(chartPublished.status, 0, chartPublished.output);
+		const tags = asRecord(
+			parseJson(await readFile(path.join(archive, "chart-tags"), "utf8")),
+			"chart tags",
+		);
+		assert.equal(tags[stableChartTag], `sha256:${"f".repeat(64)}`);
+		assert.ok(`${chart.repository}:1.0.0-rc.2` in tags);
+		assert.equal(`${chart.repository}:1.0.0` in tags, false);
 		const result = await run();
 		assert.equal(result.status, 0, result.output);
 		assert.match(result.calls, /"--prerelease=true","--latest=false"/u);
@@ -1007,7 +1029,7 @@ void test(
 );
 
 void test(
-	"stable promotion captures signed RC locks and reuses chart bytes without packaging or image builds",
+	"stable promotion preserves signed RC images and source while packaging stable chart metadata",
 	{ skip: process.platform === "win32" },
 	async (t) => {
 		const directory = await mkdtemp(path.join(tmpdir(), "release-promotion-"));
@@ -1049,8 +1071,9 @@ void test(
 			jobSteps("tag-images", ["Publish the chart by digest", "Write release image lock"]),
 		);
 		assert.equal(produced.status, 0, produced.output);
-		assert.doesNotMatch(produced.calls, /"helm","(?:package|push)"|"docker"/u);
-		assert.deepEqual(await readFile(path.join(archive, "chart-registry")), before);
+		assert.doesNotMatch(produced.calls, /"docker"/u);
+		assert.match(produced.calls, /"helm","package"/u);
+		assert.match(produced.calls, /"helm","push"/u);
 		const original = asRecord(
 			parseJson(await readFile(path.join(archive, `release-${tag}.chart.json`), "utf8")),
 			"candidate",
@@ -1059,7 +1082,18 @@ void test(
 			parseJson(await readFile(path.join(directory, "release-v1.0.0.chart.json"), "utf8")),
 			"stable",
 		);
-		assert.deepEqual(promoted, { ...original, release: "v1.0.0" });
+		assert.equal(promoted.release, "v1.0.0");
+		assert.equal(promoted.commit, original.commit);
+		assert.deepEqual(promoted.images, original.images);
+		const stableChart = asRecord(promoted.chart, "stable chart");
+		const candidateChart = asRecord(original.chart, "candidate chart");
+		assert.equal(stableChart.repository, candidateChart.repository);
+		assert.equal(stableChart.version, "1.0.0");
+		assert.notEqual(stableChart.digest, candidateChart.digest);
+		assert.match(
+			await readFile(path.join(directory, "chart/hephaestus-1.0.0.tgz"), "utf8"),
+			/packaged at 1\.0\.0\n/u,
+		);
 		assert.equal(
 			await readFile(path.join(directory, "chart/hephaestus-1.0.0-rc.2.tgz"), "utf8"),
 			Buffer.from(
