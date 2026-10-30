@@ -15,6 +15,7 @@ import {
 	rmSync,
 	statSync,
 	symlinkSync,
+	watch,
 	writeFileSync,
 } from "node:fs";
 import fs from "node:fs/promises";
@@ -1099,27 +1100,24 @@ void test("refused puts acknowledge their end before another upload uses their s
 	assert.equal(next.output, "still open\n");
 });
 
-void test(
-	"concurrent large puts keep bounded memory while another extraction waits",
-	{ timeout: 30_000 },
-	async (t) => {
-		const root = realpathSync(mkdtempSync(path.join(tmpdir(), "tools-stream-")));
-		const mutable = path.join(root, "workspace");
-		const repos = path.join(mutable, "repos");
-		const incoming = path.join(mutable, ".scratch");
-		const bin = path.join(root, "bin");
-		execFileSync("mkdir", ["-p", repos, incoming, bin]);
-		const held = path.join(repos, "held");
-		const started = path.join(root, "extracting");
-		const release = path.join(root, "release");
-		writeFileSync(
-			path.join(bin, "tar"),
-			`#!/bin/sh\nfor arg do\nif [ "$arg" = ${quote(held)} ]; then\ntouch ${quote(started)}\nwhile [ ! -f ${quote(release)} ]; do sleep 0.02; done\nfi\ndone\nexec /usr/bin/tar "$@"\n`,
-			{ mode: 0o755 },
-		);
-		const address = path.join(root, "tools.sock");
-		const module = new URL("../../../main/resources/agent/tools-server.ts", import.meta.url).href;
-		const program = `import { startToolsServer } from ${JSON.stringify(module)};
+void test("concurrent large puts keep bounded memory while another extraction waits", async (t) => {
+	const root = realpathSync(mkdtempSync(path.join(tmpdir(), "tools-stream-")));
+	const mutable = path.join(root, "workspace");
+	const repos = path.join(mutable, "repos");
+	const incoming = path.join(mutable, ".scratch");
+	const bin = path.join(root, "bin");
+	execFileSync("mkdir", ["-p", repos, incoming, bin]);
+	const held = path.join(repos, "held");
+	const started = path.join(root, "extracting");
+	const release = path.join(root, "release");
+	writeFileSync(
+		path.join(bin, "tar"),
+		`#!/bin/sh\nfor arg do\nif [ "$arg" = ${quote(held)} ]; then\ntouch ${quote(started)}\nwhile [ ! -f ${quote(release)} ]; do sleep 0.02; done\nfi\ndone\nexec /usr/bin/tar "$@"\n`,
+		{ mode: 0o755 },
+	);
+	const address = path.join(root, "tools.sock");
+	const module = new URL("../../../main/resources/agent/tools-server.ts", import.meta.url).href;
+	const program = `import { startToolsServer } from ${JSON.stringify(module)};
 const server = startToolsServer(${JSON.stringify({ socketPath: address, nonce, workspace: mutable, roots: [repos, incoming], scratch: incoming, putRoots: [repos], soleUser: false })});
 let peak = 0;
 const sample = () => { global.gc(); peak = Math.max(peak, process.memoryUsage().external); };
@@ -1127,99 +1125,118 @@ const timer = setInterval(sample, 20);
 server.on('listening', () => { sample(); process.send({ready: true, peak}); });
 process.on('message', () => { sample(); process.send({peak}); });
 `;
-		const child = spawn(process.execPath, ["--expose-gc", "--input-type=module", "-e", program], {
-			env: { ...process.env, PATH: `${bin}${path.delimiter}${process.env.PATH ?? ""}` },
-			stdio: ["ignore", "inherit", "inherit", "ipc"],
+	const child = spawn(process.execPath, ["--expose-gc", "--input-type=module", "-e", program], {
+		env: { ...process.env, PATH: `${bin}${path.delimiter}${process.env.PATH ?? ""}` },
+		stdio: ["ignore", "inherit", "inherit", "ipc"],
+	});
+	let extraction: ReturnType<typeof watch> | undefined;
+	let tools: ToolClient | undefined;
+	let uploads: Promise<PromiseSettledResult<void>[]> | undefined;
+	try {
+		const readyMessages: unknown[] = await once(child, "message");
+		const ready = readyMessages[0];
+		assert.ok(
+			typeof ready === "object" &&
+				ready !== null &&
+				"peak" in ready &&
+				typeof ready.peak === "number",
+		);
+		tools = await ToolClient.open(address, nonce);
+		const extractionStarted = Promise.withResolvers<undefined>();
+		extraction = watch(root, () => {
+			if (existsSync(started)) {
+				extractionStarted.resolve(undefined);
+			}
 		});
-		let tools: ToolClient | undefined;
-		let uploads: Promise<PromiseSettledResult<void>[]> | undefined;
-		try {
-			const readyMessages: unknown[] = await once(child, "message");
-			const ready = readyMessages[0];
-			assert.ok(
-				typeof ready === "object" &&
-					ready !== null &&
-					"peak" in ready &&
-					typeof ready.peak === "number",
-			);
-			tools = await ToolClient.open(address, nonce);
-			const first = tools.put(held, archiveOf(tarOf(tarMember("small", { body: "x" }))));
-			const firstDone = Promise.allSettled([first]);
-			for (let i = 0; !existsSync(started) && i < 200; i += 1) {
-				await sleep(10);
-			}
-			assert.ok(existsSync(started), "the first extraction reached its gate");
-			const size = 128 * 1024 * 1024;
-			const chunk = Buffer.alloc(64 * 1024);
-			const header = tarMember("large", { size });
-			const end = Buffer.alloc(1024);
-			const hash = createHash("sha256").update(header);
-			for (let at = 0; at < size; at += chunk.length) {
-				hash.update(chunk);
-			}
-			const sha256 = hash.update(end).digest("hex");
-			const supplied = [Promise.withResolvers<undefined>(), Promise.withResolvers<undefined>()];
-			const large = supplied.map(async (done, index) => {
-				async function* source() {
-					yield header;
-					for (let at = 0; at < size; at += chunk.length) {
-						yield chunk;
-					}
-					done.resolve(undefined);
-					yield end;
+		extraction.on("error", extractionStarted.reject);
+		const first = tools.put(held, archiveOf(tarOf(tarMember("small", { body: "x" }))));
+		const firstDone = Promise.allSettled([first]);
+		await Promise.race([
+			extractionStarted.promise,
+			firstDone.then(([outcome]) => {
+				if (outcome.status === "rejected") {
+					throw outcome.reason;
 				}
+				throw new Error("The first extraction finished before its gate was released");
+			}),
+		]);
+		extraction.close();
+		const size = 128 * 1024 * 1024;
+		const chunk = Buffer.alloc(64 * 1024);
+		const header = tarMember("large", { size });
+		const end = Buffer.alloc(1024);
+		const hash = createHash("sha256").update(header);
+		for (let at = 0; at < size; at += chunk.length) {
+			hash.update(chunk);
+		}
+		const sha256 = hash.update(end).digest("hex");
+		const supplied = [Promise.withResolvers<undefined>(), Promise.withResolvers<undefined>()];
+		const large = supplied.map(async (done, index) => {
+			async function* source() {
+				yield header;
+				for (let at = 0; at < size; at += chunk.length) {
+					yield chunk;
+				}
+				done.resolve(undefined);
+				yield end;
+			}
+			try {
 				assert.ok(tools);
-				return tools.put(path.join(repos, `large-${index}`), {
+				await tools.put(path.join(repos, `large-${index}`), {
 					bytes: source(),
 					size: header.length + size + end.length,
 					sha256,
 				});
-			});
-			uploads = Promise.allSettled([
-				(async () => {
-					const [outcome] = await firstDone;
-					if (outcome.status === "rejected") {
-						throw outcome.reason;
-					}
-				})(),
-				...large,
-			]);
-			await Promise.all(supplied.map(async (done) => done.promise));
-			const stats = once(child, "message");
-			child.send("stats");
-			const memoryMessages: unknown[] = await stats;
-			const memory = memoryMessages[0];
-			assert.ok(
-				typeof memory === "object" &&
-					memory !== null &&
-					"peak" in memory &&
-					typeof memory.peak === "number",
-			);
-			t.diagnostic(
-				`peak added external memory: ${memory.peak - ready.peak} bytes for two 128 MiB uploads`,
-			);
-			assert.ok(
-				memory.peak - ready.peak < 64 * 1024 * 1024,
-				`tools buffered ${memory.peak - ready.peak} bytes during concurrent uploads`,
-			);
-			writeFileSync(release, "");
-			const outcomes = await uploads;
-			assert.ok(outcomes.every((outcome) => outcome.status === "fulfilled"));
-			for (let i = 0; i < large.length; i += 1) {
-				assert.equal(statSync(path.join(repos, `large-${i}`, "large")).size, size);
+			} catch (error) {
+				done.reject(error);
+				throw error;
 			}
-		} finally {
-			writeFileSync(release, "");
-			tools?.close();
-			await uploads;
-			const exited = once(child, "exit");
-			child.kill();
-			await exited;
-			execFileSync("chmod", ["-R", "u+w", root]);
-			rmSync(root, { recursive: true, force: true });
+		});
+		uploads = Promise.allSettled([
+			(async () => {
+				const [outcome] = await firstDone;
+				if (outcome.status === "rejected") {
+					throw outcome.reason;
+				}
+			})(),
+			...large,
+		]);
+		await Promise.all(supplied.map(async (done) => done.promise));
+		const stats = once(child, "message");
+		child.send("stats");
+		const memoryMessages: unknown[] = await stats;
+		const memory = memoryMessages[0];
+		assert.ok(
+			typeof memory === "object" &&
+				memory !== null &&
+				"peak" in memory &&
+				typeof memory.peak === "number",
+		);
+		t.diagnostic(
+			`peak added external memory: ${memory.peak - ready.peak} bytes for two 128 MiB uploads`,
+		);
+		assert.ok(
+			memory.peak - ready.peak < 64 * 1024 * 1024,
+			`tools buffered ${memory.peak - ready.peak} bytes during concurrent uploads`,
+		);
+		writeFileSync(release, "");
+		const outcomes = await uploads;
+		assert.ok(outcomes.every((outcome) => outcome.status === "fulfilled"));
+		for (let i = 0; i < large.length; i += 1) {
+			assert.equal(statSync(path.join(repos, `large-${i}`, "large")).size, size);
 		}
-	},
-);
+	} finally {
+		extraction?.close();
+		writeFileSync(release, "");
+		tools?.close();
+		await uploads;
+		const exited = once(child, "exit");
+		child.kill();
+		await exited;
+		execFileSync("chmod", ["-R", "u+w", root]);
+		rmSync(root, { recursive: true, force: true });
+	}
+});
 
 void test("a put extracts a whole archive read-only, into a new directory only", async () => {
 	const source = mkdtempSync(path.join(tmpdir(), "archive-"));
