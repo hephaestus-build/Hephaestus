@@ -159,7 +159,7 @@ public interface LlmCallPermitRepository extends JpaRepository<LlmCallPermit, UU
             @Param("ids") Collection<UUID> ids,
             @Param("staleSeconds") long staleSeconds);
 
-    /** The UUID is the fence. A release can affect only this request, never a later attempt or grant. */
+    /** The UUID fences a release, including closure after lease expiry, from every later grant. */
     @Modifying
     @Query(
             value =

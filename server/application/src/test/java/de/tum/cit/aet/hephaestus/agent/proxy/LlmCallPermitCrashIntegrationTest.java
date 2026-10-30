@@ -60,7 +60,7 @@ class LlmCallPermitCrashIntegrationTest extends BaseIntegrationTest {
     private Path directory;
 
     @Test
-    void shouldRecoverWithinTheLeaseWhenAWorkerIsKilledDuringACall(TestReporter reporter) throws Exception {
+    void shouldReclaimAKilledWorkersGrantOnceTheLeaseExpires(TestReporter reporter) throws Exception {
         var pool = new LlmCallPool();
         pool.setSlug("crash-" + UUID.randomUUID());
         pool.setDisplayName("Crash recovery");
@@ -104,11 +104,11 @@ class LlmCallPermitCrashIntegrationTest extends BaseIntegrationTest {
                     assertThat(worker.isAlive()).as(Files.readString(output)).isTrue();
                     assertThat(renewedAt(poolId)).isAfter(firstRenewal);
                 });
-                Instant lastRenewal = renewedAt(poolId);
                 assertThat(rows.countActive(poolId)).isEqualTo(1);
-                // SIGKILL on Linux: neither finally nor a shutdown hook can release the permit.
+                // Forced termination runs neither finally nor shutdown hooks.
                 worker.destroyForcibly();
                 assertThat(worker.waitFor(5, TimeUnit.SECONDS)).isTrue();
+                Instant lastRenewal = renewedAt(poolId);
                 upstream.getInputStream().readAllBytes();
                 assertThat(rows.countActive(poolId)).isEqualTo(1);
                 survivor.start();
@@ -119,6 +119,7 @@ class LlmCallPermitCrashIntegrationTest extends BaseIntegrationTest {
                         () -> false,
                         lastRenewal.plus(PROPERTIES.permitLease()).plusSeconds(3)))) {
                     Duration age = Duration.between(lastRenewal, Instant.now());
+                    assertThat(age).isGreaterThanOrEqualTo(PROPERTIES.permitLease());
                     assertThat(age).isLessThan(PROPERTIES.permitLease().plusSeconds(3));
                     assertThat(rows.countActive(poolId)).isEqualTo(1);
                     assertThat(rows.rates(poolId).getRequests()).isEqualTo(2);
