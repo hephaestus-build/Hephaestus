@@ -201,9 +201,8 @@ public class FeedbackSendTransactions {
                 .anyMatch(c -> c.getState() == FeedbackCopyState.WRITE_STARTED
                         || (active.getAction() == FeedbackSendAction.RETRACT
                                 && c.getReadback() == FeedbackCopyReadback.TRANSIENT));
-        // A finished post leaves no copy planned: nothing sends it later, and a retry needs it failed.
-        if (active.getAction() == FeedbackSendAction.POST
-                && !unresolved
+        // A finished send leaves no copy planned: nothing sends it later, and a retry needs it failed.
+        if (!unresolved
                 && !visibility.withdrawn(workspaceId, feedbackId)
                 && copies.failUnstarted(workspaceId, feedbackId) > 0)
             children = copies.lockByFeedbackId(workspaceId, feedbackId);
