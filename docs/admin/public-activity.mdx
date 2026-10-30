@@ -60,17 +60,18 @@ Off, the page sets `<meta name="robots" content="noindex">`, and the API respons
 The webapp sets the meta tag with JavaScript, so a crawler that does not run JavaScript does not see it.
 This is a request to search engines, not access control.
 
-**Hidden people** shows how many people the page leaves out and does not count.
+**People left out of the page** shows how many people the page leaves out and does not count.
 It includes people who hid themselves and people an administrator hid.
-It never shows who.
+It never shows who hid themselves.
 
 To leave out a person who has no membership, and so no setting of their own, open the person on **Workspace activity** and select **Hide from activity**.
 The action is not offered for a member.
 Hide a member under **Members**.
 The person then leaves the public page and Workspace activity.
 Right after the action, the message **Undo** restores the person.
-Later, **Workspace settings** lists the people without a membership whom an administrator hid, under **Hidden by an admin**.
+Later, **Workspace settings** lists the people without a membership whom an administrator hid, under **Hidden people**.
 Select **Show again** beside a person to restore them.
+Show a member again under **Members**, and a team or repository under **Team setup**.
 
 ### Members
 
@@ -122,9 +123,9 @@ The choice applies to all linked provider identities in every workspace.
 A minimal provider-id and subject marker retains an objection after unlinking or account deletion.
 Showing activity again clears markers for identities currently linked to the account, not identities it no longer owns.
 This marker affects publication only; it does not suppress internal processing.
-Hidden people do not contribute to public totals.
+People who hid themselves, and people an administrator hid, do not contribute to public totals.
 An administrator can read only the count through `GET /workspaces/{slug}/activity/public-hidden-count`.
-This endpoint does not identify the hidden people.
+This endpoint does not identify them.
 
 A workspace administrator can list the people without a membership whom an administrator hid with
 `GET /workspaces/{slug}/activity/hidden-contributors`.

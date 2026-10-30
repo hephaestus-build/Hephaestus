@@ -1,11 +1,7 @@
 import { InfoIcon } from "lucide-react";
 import { useId, useRef, useState } from "react";
 
-import type { UserInfo } from "@/api/types.gen";
-import { MemberAvatar } from "@/components/activity/MemberAvatar";
-import type { PanelState } from "@/components/common/panel-state";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
-import { Section } from "@/components/layout/Section";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
 	AlertDialog,
@@ -17,7 +13,6 @@ import {
 	AlertDialogHeader,
 	AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Button } from "@/components/ui/button";
 import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "@/components/ui/item";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
@@ -39,14 +34,6 @@ export type WorkspacePublicActivityState =
 			live: boolean;
 			/** How many people the page leaves out, never who; undefined where the count did not load. */
 			hiddenPeople: number | undefined;
-			/** Who an admin hid without a membership: no other screen can show them again. */
-			hiddenContributors: PanelState<{
-				people: readonly Pick<UserInfo, "id" | "login" | "name" | "avatarUrl">[];
-				/** Set when the latest read failed, so `people` are the last known ones. */
-				refreshFailure?: RefreshFailure;
-			}>;
-			/** The person being shown again, if any. */
-			restoring: number | undefined;
 			/** The change in flight, if any. */
 			pending: "enabled" | "search-engines" | undefined;
 	  };
@@ -61,7 +48,6 @@ export interface WorkspacePublicActivitySettingsProps {
 	state: WorkspacePublicActivityState;
 	onEnabledChange: (enabled: boolean) => void;
 	onSearchEnginesChange: (allow: boolean) => void;
-	onShowAgain: (userId: number) => void;
 }
 
 /**
@@ -75,7 +61,6 @@ export function WorkspacePublicActivitySettings({
 	state,
 	onEnabledChange,
 	onSearchEnginesChange,
-	onShowAgain,
 }: WorkspacePublicActivitySettingsProps) {
 	const headingId = useId();
 	return (
@@ -102,7 +87,6 @@ export function WorkspacePublicActivitySettings({
 					state={state}
 					onEnabledChange={onEnabledChange}
 					onSearchEnginesChange={onSearchEnginesChange}
-					onShowAgain={onShowAgain}
 				/>
 			)}
 		</section>
@@ -120,7 +104,6 @@ function ReadySettingsBody({
 	state,
 	onEnabledChange,
 	onSearchEnginesChange,
-	onShowAgain,
 }: Omit<WorkspacePublicActivitySettingsProps, "state"> & { state: ReadySettings }) {
 	const [confirming, setConfirming] = useState(false);
 	return (
@@ -159,10 +142,10 @@ function ReadySettingsBody({
 					{state.enabled && state.hiddenPeople !== undefined && (
 						<Item render={<li />} variant="row">
 							<ItemContent>
-								<ItemTitle>Hidden people</ItemTitle>
+								<ItemTitle>People left out of the page</ItemTitle>
 								<ItemDescription className="line-clamp-none">
 									The page leaves out and does not count people who hid themselves, and people an
-									admin hid. You see how many, never who.
+									admin hid. People who hid themselves are counted here, never named.
 								</ItemDescription>
 							</ItemContent>
 							<ItemActions>
@@ -188,67 +171,6 @@ function ReadySettingsBody({
 						it in a private window.
 					</p>
 				)}
-				{state.hiddenContributors.status === "loading" && (
-					<ul className="rounded-xl border bg-card" aria-busy="true" aria-hidden="true">
-						<Item render={<li />} variant="row">
-							<Skeleton className="size-8 rounded-full" />
-							<ItemContent>
-								<Skeleton className="h-4 w-32" />
-								<Skeleton className="h-3 w-20" />
-							</ItemContent>
-							<ItemActions>
-								<Skeleton className="h-8 w-24" />
-							</ItemActions>
-						</Item>
-					</ul>
-				)}
-				{state.hiddenContributors.status === "error" && (
-					<QueryErrorAlert
-						error={state.hiddenContributors.error}
-						title="We could not load hidden contributors"
-						onRetry={state.hiddenContributors.onRetry}
-					/>
-				)}
-				{state.hiddenContributors.status === "ready" &&
-					state.hiddenContributors.refreshFailure !== undefined && (
-						<QueryErrorAlert
-							title="Hidden contributors may be out of date"
-							{...state.hiddenContributors.refreshFailure}
-						/>
-					)}
-				{state.hiddenContributors.status === "ready" &&
-					state.hiddenContributors.people.length > 0 && (
-						<Section
-							level={3}
-							size="sm"
-							title="Hidden by an admin"
-							description="These people have no membership, and an admin hid them from activity. A member is shown again under Members."
-						>
-							<ul className="rounded-xl border bg-card">
-								{state.hiddenContributors.people.map((person) => (
-									<Item key={person.id} render={<li />} variant="row">
-										<MemberAvatar user={person} />
-										<ItemContent>
-											<ItemTitle>{person.name}</ItemTitle>
-											<ItemDescription>{person.login}</ItemDescription>
-										</ItemContent>
-										<ItemActions>
-											<Button
-												variant="outline"
-												size="sm"
-												disabled={state.restoring !== undefined}
-												focusableWhenDisabled
-												onClick={() => onShowAgain(person.id)}
-											>
-												{state.restoring === person.id && <Spinner />}
-												Show again
-											</Button>
-										</ItemActions>
-									</Item>
-								))}
-							</ul>
-						</Section>
-					)}
 			</div>
 			<PublishDialog
 				open={confirming}

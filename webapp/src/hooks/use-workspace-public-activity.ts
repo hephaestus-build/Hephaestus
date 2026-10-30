@@ -14,6 +14,7 @@ import {
 	updatePublicActivityObjectionMutation,
 } from "@/api/@tanstack/react-query.gen";
 import type { UpdateWorkspacePublicActivityRequest, Workspace } from "@/api/types.gen";
+import type { WorkspaceHiddenPeopleState } from "@/components/admin/settings/WorkspaceHiddenPeopleSettings";
 import type { WorkspacePublicActivityState } from "@/components/admin/settings/WorkspacePublicActivitySettings";
 import { panelState } from "@/components/common/panel-state";
 import { queryErrorIsRetryable } from "@/components/common/QueryErrorAlert";
@@ -23,8 +24,9 @@ import { useQueryReadRefusal } from "@/runtime/tanstack-query/use-query-read-ref
 
 /**
  * A workspace's public activity page as its admin settings show it: whether it is on, whether search
- * engines may list it, how many people it leaves out, and the two changes. `live` is the
- * server-computed publication status from the workspace list.
+ * engines may list it, how many people it leaves out, and the two changes. Beside it, the hidden
+ * people an admin can show again, since showing one again is a public activity objection taken back.
+ * `live` is the server-computed publication status from the workspace list.
  * An instance administrator outside that list reads the existing instance policy instead.
  */
 export function useWorkspacePublicActivity({
@@ -123,7 +125,7 @@ export function useWorkspacePublicActivity({
 
 	// A failed background read keeps the last restoration controls only while it can be retried.
 	const contributors = lastRead(hiddenContributors);
-	const hiddenContributorsState =
+	const hiddenPeopleState: WorkspaceHiddenPeopleState =
 		contributors.data === undefined
 			? panelState(hiddenContributors, (people) => ({ status: "ready" as const, people }))
 			: {
@@ -152,8 +154,6 @@ export function useWorkspacePublicActivity({
 			live: publication,
 			// A count that did not load is left out rather than shown from an earlier read.
 			hiddenPeople: hidden.isError ? undefined : hidden.data?.hiddenPeople,
-			hiddenContributors: hiddenContributorsState,
-			restoring: showAgain.isPending ? showAgain.variables.path.userId : undefined,
 			pending: pendingBody && pendingChange(pendingBody, current.data.enabled),
 		};
 	} else if (settings.isError || (live === undefined && policyQuery.isError)) {
@@ -172,8 +172,12 @@ export function useWorkspacePublicActivity({
 		state,
 		onEnabledChange: (publicActivityEnabled: boolean) => change({ publicActivityEnabled }),
 		onSearchEnginesChange: (allowSearchEngines: boolean) => change({ allowSearchEngines }),
-		onShowAgain: (userId: number) =>
-			showAgain.mutate({ path: { ...path, userId }, query: { hidden: false } }),
+		hiddenPeople: {
+			state: hiddenPeopleState,
+			restoring: showAgain.isPending ? showAgain.variables.path.userId : undefined,
+			onShowAgain: (userId: number) =>
+				showAgain.mutate({ path: { ...path, userId }, query: { hidden: false } }),
+		},
 	};
 }
 

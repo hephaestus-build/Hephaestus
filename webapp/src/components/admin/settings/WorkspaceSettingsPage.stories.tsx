@@ -23,14 +23,20 @@ const publicActivity = {
 		allowSearchEngines: false,
 		live: false,
 		hiddenPeople: undefined,
-		hiddenContributors: { status: "ready", people: [] },
-		restoring: undefined,
 		pending: undefined,
 	},
 	onEnabledChange: fn(),
 	onSearchEnginesChange: fn(),
-	onShowAgain: fn(),
 } satisfies WorkspaceSettingsPageProps["publicActivity"];
+
+const hiddenPeople = {
+	state: {
+		status: "ready",
+		people: [{ id: 11, login: "ada", name: "Ada Lovelace", avatarUrl: "" }],
+	},
+	restoring: undefined,
+	onShowAgain: fn(),
+} satisfies WorkspaceSettingsPageProps["hiddenPeople"];
 
 const meta = {
 	component: WorkspaceSettingsPage,
@@ -47,6 +53,7 @@ const meta = {
 		workspaceSlug: "ase",
 		practicesEnabled: true,
 		publicActivity,
+		hiddenPeople,
 	},
 } satisfies Meta<typeof WorkspaceSettingsPage>;
 
@@ -64,6 +71,23 @@ export const Default: Story = {
 			"/w/ase/admin/models",
 		);
 		await canvas.findByRole("button", { name: /^delete workspace$/iu });
+	},
+};
+
+/**
+ * The hide dialog sends an admin to Hidden people here, and the Activity capability links to it, so
+ * the way back from hiding someone has one place and one name on this page.
+ */
+export const HiddenPeople: Story = {
+	play: async ({ canvas }) => {
+		const capabilities = within(canvas.getByRole("region", { name: "Capabilities" }));
+		await expect(capabilities.getByRole("link", { name: "Hidden people" })).toHaveAttribute(
+			"href",
+			"/w/ase/admin/settings#hidden-people-heading",
+		);
+		const hidden = within(canvas.getByRole("region", { name: "Hidden people" }));
+		await expect(hidden.getByText("Ada Lovelace")).toBeVisible();
+		await expect(hidden.getByRole("button", { name: "Show again" })).toBeEnabled();
 	},
 };
 
