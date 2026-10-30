@@ -4802,7 +4802,7 @@ void test("unchanged quality legs are skipped before runner allocation", async (
 			["false", "false", "false"],
 			["true", "true", "false"],
 			["true", "false", "true"],
-		]) {
+		] as const) {
 			assert.equal(
 				expandExpressions(`\${{ ${condition} }}`, {
 					github: { event_name: "pull_request" },

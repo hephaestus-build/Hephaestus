@@ -23,7 +23,10 @@ const patterns = asArray(windowsFilter.toJSON(), "Windows paths").map((pattern) 
 );
 
 function evaluate(expression: unknown, context: unknown): string {
-	const source = asString(expression, "selection expression").replace(/^\$\{\{\s*|\s*\}\}$/gu, "");
+	const source = asString(expression, "selection expression").replaceAll(
+		/^\$\{\{\s*|\s*\}\}$/gu,
+		"",
+	);
 	const parsed = new Parser(
 		new Lexer(source).lex().tokens,
 		["github", "needs", "inputs", "steps"],
