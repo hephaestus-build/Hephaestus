@@ -4,6 +4,7 @@ import { tanstackRouter } from "@tanstack/router-plugin/vite";
 import Terminal from "vite-plugin-terminal";
 import { configDefaults, defineConfig } from "vite-plus";
 
+import { entryChunkBudget } from "./tools/entry-chunk/entry-chunk-budget.ts";
 import { loadLintConfig } from "./tools/oxlint/load-config.ts";
 import { appSourcePlugins } from "./vite.shared.ts";
 
@@ -15,6 +16,7 @@ const viteConfig = defineConfig({
 	plugins: [
 		tanstackRouter({ autoCodeSplitting: true }),
 		...appSourcePlugins(),
+		entryChunkBudget(),
 		...Terminal({ output: ["terminal", "console"] }).map((plugin) =>
 			plugin === false ? false : { ...plugin, apply: "serve" as const },
 		),

@@ -52,7 +52,7 @@ These guidelines keep every service aligned. Keep changes focused. Mention any d
 - Run `vp run check:webapp` and `vp run build:webapp` before opening a pull request.
 - Execute Vitest suites with `vp run test:webapp`. Add unit tests beside the feature you touched.
 - Keep Storybook stories in sync with design. Launch `vp run --filter webapp storybook:dev` when pairing with design reviews.
-- Validate bundle impact by checking the Vite build stats when you add large libraries.
+- Keep route-only libraries out of the entry chunk. `webapp/AGENTS.md` § Routing explains the rule, and `build:webapp` enforces it.
 
 ## Spring Boot application server (`/server`)
 

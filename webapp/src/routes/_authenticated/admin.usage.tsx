@@ -13,15 +13,13 @@ import {
 	getLlmUsageReportQueryKey,
 } from "@/api/@tanstack/react-query.gen";
 import type { AdminWorkspaceLlmUsage } from "@/api/types.gen";
-import {
-	type AdminInstanceUsageView,
-	AdminInstanceLlmUsageTable,
-	INSTANCE_USAGE_SEARCH_MAX_LENGTH,
-	INSTANCE_USAGE_SORTS,
-} from "@/components/admin/usage/AdminInstanceLlmUsageTable";
+import { AdminInstanceLlmUsageTable } from "@/components/admin/usage/AdminInstanceLlmUsageTable";
 import { MonthNavigator } from "@/components/admin/usage/MonthNavigator";
 import { SetBudgetDialog } from "@/components/admin/usage/SetBudgetDialog";
 import {
+	type AdminInstanceUsageView,
+	INSTANCE_USAGE_SEARCH_MAX_LENGTH,
+	INSTANCE_USAGE_SORTS,
 	monthOf,
 	USAGE_SEARCH_PARAMS,
 	usageSearchSchema,

@@ -21,10 +21,8 @@ import {
 	publicCategoryKinds,
 	type PublicPersonActivityState,
 } from "@/components/activity/public-person-activity";
-import {
-	PublicActivityPage,
-	PublicActivityPageSkeleton,
-} from "@/components/activity/PublicActivityPage";
+import { PublicActivityPage } from "@/components/activity/PublicActivityPage";
+import { PublicActivityPageSkeleton } from "@/components/activity/PublicActivityPageSkeleton";
 import { queryErrorIsRetryable } from "@/components/common/QueryErrorAlert";
 import { useDetailStack } from "@/components/layout/detail-drawer/use-detail-stack";
 import { PublicActivityOnboardingDialog } from "@/components/onboarding/PublicActivityOnboardingDialog";
