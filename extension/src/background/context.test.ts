@@ -39,7 +39,7 @@ function listItem(
 		publishesPublicActivity: false,
 		status: "ACTIVE",
 		workspaceSlug: slug,
-		workspaceAddress: `https://heph.example.test/w/${slug}`,
+		workspaceAddress: `https://hephaestus.example.test/w/${slug}`,
 	};
 }
 
@@ -61,7 +61,7 @@ function workspace(slug: string, serverUrl: string | undefined): Workspace {
 		status: "ACTIVE",
 		updatedAt: "2026-01-01T00:00:00Z",
 		workspaceSlug: slug,
-		workspaceAddress: `https://heph.example.test/w/${slug}`,
+		workspaceAddress: `https://hephaestus.example.test/w/${slug}`,
 	};
 }
 
@@ -143,9 +143,9 @@ function environment(setup: Setup) {
 	};
 	const env: ContextEnvironment = {
 		instance: {
-			origin: "https://heph.example.test",
-			apiBase: "https://heph.example.test/api",
-			webAppOrigin: "https://heph.example.test",
+			origin: "https://hephaestus.example.test",
+			apiBase: "https://hephaestus.example.test/api",
+			webAppOrigin: "https://hephaestus.example.test",
 		},
 		api,
 		tabUrl: async () => url,
@@ -200,7 +200,7 @@ describe("resolveContext", () => {
 		});
 		await expect(resolveContext(env, 1)).resolves.toStrictEqual({
 			status: "not-found",
-			instanceHost: "heph.example.test",
+			instanceHost: "hephaestus.example.test",
 			workLabel: "team/app #4",
 		});
 		expect(trace).not.toHaveBeenCalled();
@@ -210,7 +210,7 @@ describe("resolveContext", () => {
 		const { env } = environment({ url: ISSUE, resolved: {} });
 		await expect(resolveContext(env, 1)).resolves.toStrictEqual({
 			status: "not-found",
-			instanceHost: "heph.example.test",
+			instanceHost: "hephaestus.example.test",
 			workLabel: "team/app #4",
 		});
 	});
@@ -260,7 +260,7 @@ describe("resolveContext", () => {
 		const context = await resolveContext(env, 1);
 		expect(context).toHaveProperty("canInspectReviewDetails", false);
 		expect(context).toHaveProperty("links", {
-			trace: "https://heph.example.test/w/team/feedback/4009",
+			trace: "https://hephaestus.example.test/w/team/feedback/4009",
 		});
 	});
 
@@ -272,9 +272,9 @@ describe("resolveContext", () => {
 		await expect(resolveContext(env, 1)).resolves.toMatchObject({
 			canInspectReviewDetails: true,
 			links: {
-				trace: "https://heph.example.test/w/team/feedback/4009",
+				trace: "https://hephaestus.example.test/w/team/feedback/4009",
 				reviewDetails:
-					"https://heph.example.test/w/team/admin/practices/reviews/?itemId=4009&detail=item%3A4009",
+					"https://hephaestus.example.test/w/team/admin/practices/reviews/?itemId=4009&detail=item%3A4009",
 			},
 		});
 	});
@@ -392,9 +392,9 @@ function detailsEnvironment() {
 	} satisfies DetailsApi;
 	const env: ContextEnvironment<typeof api> = {
 		instance: {
-			origin: "https://heph.example.test",
-			apiBase: "https://heph.example.test/api",
-			webAppOrigin: "https://heph.example.test",
+			origin: "https://hephaestus.example.test",
+			apiBase: "https://hephaestus.example.test/api",
+			webAppOrigin: "https://hephaestus.example.test",
 		},
 		api,
 		tabUrl: async () => url,

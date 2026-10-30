@@ -23,7 +23,7 @@ export function useActiveWorkspaceSlug() {
 	const urlSlug = useParams({ strict: false, select: (params) => params.workspaceSlug });
 	// The only address of an unlisted workspace that renders is its public activity page, which the
 	// account reads as a visitor. A workspace it has no part in is no active workspace: its
-	// members-only reads, the Heph chat and the feedback menu would all be refused.
+	// members-only reads, the Hephaestus chat and the feedback menu would all be refused.
 	const visiting =
 		urlSlug !== undefined &&
 		query.isSuccess &&

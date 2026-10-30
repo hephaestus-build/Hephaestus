@@ -9,7 +9,7 @@ import {
 	LandingCluster,
 	LandingFeedbackCard,
 	LandingGlow,
-	LandingHephFigure,
+	LandingSpeechFigure,
 	landingEase,
 	LandingMeta,
 	LandingMetaRow,
@@ -162,9 +162,9 @@ export function LandingFeaturesSection() {
 					whileInView={{ opacity: 1, scale: 1 }}
 					viewport={{ once: true, amount: 0.5 }}
 					transition={{ duration: 0.5, ease: landingEase, delay: 0.1 }}
-					className={cn(styles.featureHeph, "mt-10 lg:col-start-1 lg:row-start-2")}
+					className={cn(styles.featureSpeech, "mt-10 lg:col-start-1 lg:row-start-2")}
 				>
-					<LandingHephFigure
+					<LandingSpeechFigure
 						lead="Not sure which one to fix first?"
 						body="Tell me where the work is stuck and we can work out the next move together."
 					/>

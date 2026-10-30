@@ -428,7 +428,8 @@ export function PracticeFeedbackCard({
 				"group/card relative isolate flex flex-col overflow-hidden",
 				CARD_EDGE,
 				onLearnMore && ["cursor-pointer", ABOVE_CARD_LINK, CARD_LINK_STATE],
-				state === "new" && "border-mentor/35 bg-linear-160 from-mentor/5 to-background to-55%",
+				state === "new" &&
+					"border-highlight/35 bg-linear-160 from-highlight/5 to-background to-55%",
 				resolved && "border-success/35 bg-linear-160 from-success/5 to-background to-55%",
 				className,
 			)}
@@ -466,7 +467,7 @@ export function PracticeFeedbackCard({
 						className={cn(
 							"group/card-link inline-flex items-center gap-1 self-end text-sm font-medium text-muted-foreground",
 							"after:absolute after:inset-0 after:content-['']",
-							"group-hover/card:text-mentor group-hover/card:underline focus-visible:text-mentor [@media(hover:none)]:text-mentor",
+							"group-hover/card:text-highlight group-hover/card:underline focus-visible:text-highlight [@media(hover:none)]:text-highlight",
 						)}
 					>
 						Learn more about this practice
@@ -650,7 +651,7 @@ export function PracticeFeedbackCard({
 }
 
 /**
- * What to do. On open feedback it is the card's call to action: a calm mentor wash with a 2 px
+ * What to do. On open feedback it is the card's call to action: a calm highlight wash with a 2 px
  * accent on its left edge, drawn as its own strip and not as a border, so it meets the rules above
  * and below square instead of in a mitred corner, and the band stays unpositioned under the card's
  * link. Once the work resolved the feedback, the band wears the success wash and leads with the
@@ -673,13 +674,13 @@ function NextStepBand({ tone, nextStep }: { tone: NextStepTone; nextStep: string
 			className={cn(
 				"flex border-y",
 				INNER_RULE,
-				tone === "open" && "bg-mentor/5 dark:bg-mentor/10",
+				tone === "open" && "bg-highlight/5 dark:bg-highlight/10",
 				tone === "resolved" && "bg-success/10 dark:bg-success/15",
 				tone === "closed" && "bg-sidebar",
 			)}
 		>
 			{tone === "open" && (
-				<span aria-hidden data-next-step-edge="" className="w-0.5 shrink-0 bg-mentor" />
+				<span aria-hidden data-next-step-edge="" className="w-0.5 shrink-0 bg-highlight" />
 			)}
 			<div
 				className={cn(
@@ -695,7 +696,7 @@ function NextStepBand({ tone, nextStep }: { tone: NextStepTone; nextStep: string
 					) : (
 						// Footprints: the steps to take next, not the card's state, which its badge says.
 						<FootprintsIcon
-							className={cn("size-4", tone === "open" ? "text-mentor" : "text-muted-foreground")}
+							className={cn("size-4", tone === "open" ? "text-highlight" : "text-muted-foreground")}
 						/>
 					)}
 				</span>

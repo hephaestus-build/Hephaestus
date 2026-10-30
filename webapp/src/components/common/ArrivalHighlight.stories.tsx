@@ -19,7 +19,7 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 /**
- * The sheen crosses once: a band of the mentor wash, skewed, sweeps from left to right, then the
+ * The sheen crosses once: a band of the highlight wash, skewed, sweeps from left to right, then the
  * highlight is gone and the caller hears it ended. No pulse, no repeat.
  */
 export const SweepsOnce: Story = {
@@ -33,7 +33,7 @@ export const SweepsOnce: Story = {
 		} else {
 			await expect(highlight()).toHaveAttribute("data-arrival-highlight", "sheen");
 			const band = canvasElement.querySelector<HTMLElement>("[data-arrival-sheen]");
-			await expect(band?.className).toContain("via-mentor/15");
+			await expect(band?.className).toContain("via-highlight/15");
 			await expect(band?.getAnimations()).toHaveLength(1);
 			await expect(band?.getAnimations()[0]?.effect?.getComputedTiming().iterations).toBe(1);
 		}

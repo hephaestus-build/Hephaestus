@@ -18,7 +18,7 @@ export function AboutMissionSection() {
 						href="https://doi.org/10.1145/3540250.3549167"
 						target="_blank"
 						rel="noopener noreferrer"
-						className="underline underline-offset-4 hover:text-mentor"
+						className="underline underline-offset-4 hover:text-highlight"
 					>
 						2022 study
 						<span className="sr-only"> (opens in a new tab)</span>

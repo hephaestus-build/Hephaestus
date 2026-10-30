@@ -109,7 +109,7 @@ function RangeBar({ yours, middle }: { yours: number; middle?: WorkspaceRange })
 			)}
 			<span
 				aria-hidden
-				className="absolute top-0 left-(--at) h-4 w-1 -translate-x-1/2 rounded-full bg-mentor ring-2 ring-card"
+				className="absolute top-0 left-(--at) h-4 w-1 -translate-x-1/2 rounded-full bg-highlight ring-2 ring-card"
 				style={{ "--at": at(yours) }}
 			/>
 			{/* The scale's two ends, so the band and the pin read against numbers. */}

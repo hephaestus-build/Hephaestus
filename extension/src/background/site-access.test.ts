@@ -253,11 +253,11 @@ describe("desiredMatches", () => {
 			desiredMatches(
 				[
 					"https://gitlab.example.test/*",
-					"https://heph.example.test/*",
+					"https://hephaestus.example.test/*",
 					"https://github.com/*",
 					"https://github.com/*",
 				],
-				"https://heph.example.test",
+				"https://hephaestus.example.test",
 			),
 		).toStrictEqual(["https://github.com/*", "https://gitlab.example.test/*"]);
 	});
@@ -267,7 +267,7 @@ describe("desiredMatches", () => {
 	});
 
 	it("is empty once the last grant is gone", () => {
-		expect(desiredMatches([], "https://heph.example.test")).toStrictEqual([]);
+		expect(desiredMatches([], "https://hephaestus.example.test")).toStrictEqual([]);
 	});
 });
 

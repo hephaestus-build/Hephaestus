@@ -500,7 +500,7 @@ export const OptionUncovered: Story = {
 	},
 };
 
-export const HephNotCovered: Story = {
+export const ConversationNotCovered: Story = {
 	args: {
 		state: {
 			...ready,

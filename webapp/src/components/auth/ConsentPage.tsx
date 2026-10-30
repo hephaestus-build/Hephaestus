@@ -16,9 +16,9 @@ import { LegalLinks } from "@/components/auth/LegalLinks";
 import { StepMarker } from "@/components/auth/StepMarker";
 import { HephaestusLogo } from "@/components/brand/HephaestusLogo";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
+import { HephaestusSays } from "@/components/conversation/HephaestusSays";
 import { PageLayout } from "@/components/layout/PageLayout";
 import { Section } from "@/components/layout/Section";
-import { HephSays } from "@/components/mentor/HephSays";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -61,7 +61,7 @@ export interface ConsentPageProps {
 type Answer = "yes" | "no";
 
 /**
- * Heph carries the page, so `--mentor` is its accent throughout: the bubble it speaks from, and the
+ * Heph carries the page, so `--highlight` is its accent throughout: the bubble it speaks from, and the
  * marker on each step. `PageHeader` and its lucide icon belong to the app chrome, which is not up yet.
  *
  * The steps are not numbered. A member is handed workspace setup after this and a changed notice
@@ -156,7 +156,7 @@ export function ConsentPage({ state, onSignOut, onReload }: ConsentPageProps) {
 
 					<header className="space-y-4">
 						<h1 className="text-2xl font-semibold tracking-tight break-words">Get set up</h1>
-						<HephSays
+						<HephaestusSays
 							intro="I am Heph, the mentor in Hephaestus. I read the work you’re already doing, give you feedback on the practices your workspace adopts, and talk it through whenever you ask."
 							narration={narration}
 						/>

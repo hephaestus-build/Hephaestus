@@ -78,7 +78,7 @@ export function PracticeProfilePageHeader({
 			</div>
 			<PracticeProfileGuide open={guideOpen} onOpenChange={setGuideOpen} />
 			{/* One link names the destination and covers the card with a pseudo-element, so the whole
-			    card is the pointer path while the words stay the keyboard path. The words turn mentor
+			    card is the pointer path while the words stay the keyboard path. The words turn highlight
 			    blue while the card is hovered, as every inline link on the practice surfaces does on
 			    its own hover. */}
 			<StandingSummaryBox
@@ -92,7 +92,7 @@ export function PracticeProfilePageHeader({
 			>
 				<InlineLink
 					render={<DetailStackLink entry={ALL_PRACTICE_GROUPS_LEVEL} />}
-					className="inline-flex w-full items-center gap-1.5 text-sm font-medium whitespace-nowrap group-hover/panel:text-mentor group-hover/panel:underline after:absolute after:inset-0 sm:w-auto sm:shrink-0 sm:self-center"
+					className="inline-flex w-full items-center gap-1.5 text-sm font-medium whitespace-nowrap group-hover/panel:text-highlight group-hover/panel:underline after:absolute after:inset-0 sm:w-auto sm:shrink-0 sm:self-center"
 				>
 					See all practice groups
 					<ArrowRightIcon

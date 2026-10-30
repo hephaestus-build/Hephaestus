@@ -27,7 +27,7 @@ const meta = {
 	args: {
 		isAdmin: false,
 		isAppAdmin: false,
-		showMentor: true,
+		showConversation: true,
 		integrationKinds: ["GITHUB", "SLACK", "OUTLINE"],
 		context: "main",
 		workspaces: [mockWorkspace],
@@ -233,10 +233,10 @@ export const LoadingWorkspaces: Story = {
 	},
 };
 
-/** A non-member, or a workspace with no Heph model ready yet: the other entries stay. */
-export const HephHidden: Story = {
+/** A non-member, or a workspace with no conversation model ready yet: the other entries stay. */
+export const ConversationHidden: Story = {
 	args: {
-		showMentor: false,
+		showConversation: false,
 	},
 	play: async ({ canvas }) => {
 		await expect(canvas.queryByRole("link", { name: /Ask Hephaestus/u })).not.toBeInTheDocument();
@@ -248,7 +248,7 @@ export const InstanceWorkspaceAdministration: Story = {
 	args: {
 		isAppAdmin: true,
 		isAdmin: true,
-		showMentor: false,
+		showConversation: false,
 		activeWorkspace: undefined,
 		administrationWorkspaceSlug: "tutors",
 		administrationWorkspace: {
@@ -276,7 +276,7 @@ export const InstanceWorkspaceAdministration: Story = {
 export const InstanceAdministrationLoading: Story = {
 	args: {
 		isAppAdmin: true,
-		showMentor: false,
+		showConversation: false,
 		activeWorkspace: undefined,
 		administrationWorkspaceSlug: "tutors",
 		workspacesLoading: true,
@@ -293,7 +293,7 @@ export const InstanceAdministrationLoading: Story = {
 export const InstanceAdministrationUnavailable: Story = {
 	args: {
 		isAppAdmin: true,
-		showMentor: false,
+		showConversation: false,
 		activeWorkspace: undefined,
 		administrationWorkspaceSlug: "tutors",
 		administrationWorkspaceError: { error: { status: 503 }, onRetry: fn() },

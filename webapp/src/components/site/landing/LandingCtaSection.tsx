@@ -1,7 +1,7 @@
 import { ArrowRight, BookOpen } from "lucide-react";
 import { LandingSignInCta } from "@/components/auth/LandingSignInCta";
 import { buttonVariants } from "@/components/ui/button";
-import { LandingGlow, LandingHephFigure, LandingSpark } from "./LandingVisuals";
+import { LandingGlow, LandingSpeechFigure, LandingSpark } from "./LandingVisuals";
 import styles from "./LandingVisuals.module.css";
 
 interface LandingCtaSectionProps {
@@ -13,13 +13,13 @@ export function LandingCtaSection({ onSignIn }: LandingCtaSectionProps) {
 		<section
 			aria-labelledby="landing-cta-heading"
 			// oxlint-disable-next-line shadcn/no-arbitrary-values -- The wash is a fixed band, not a share of a section whose height the copy decides.
-			className="w-full border-t border-border bg-linear-to-b from-mentor/9 from-0% to-transparent to-38% bg-size-[100%_24rem] bg-no-repeat py-12 md:py-20"
+			className="w-full border-t border-border bg-linear-to-b from-highlight/9 from-0% to-transparent to-38% bg-size-[100%_24rem] bg-no-repeat py-12 md:py-20"
 		>
 			<div className="mx-auto grid w-full max-w-6xl items-center gap-8 px-4 md:px-6 lg:grid-cols-[0.85fr_1.15fr] lg:gap-12">
 				<div className="mx-auto lg:mx-0">
 					<div className={styles.ctaScene}>
 						<LandingGlow className={styles.ctaGlow} />
-						<LandingHephFigure
+						<LandingSpeechFigure
 							lead="Ask me about the feedback on your last change."
 							body="I can say why it matters, or hear the context I missed when I wrote it."
 						/>

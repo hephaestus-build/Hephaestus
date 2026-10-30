@@ -3,7 +3,7 @@ import { CircleDot, GitMerge, GitPullRequest, type LucideIcon, Sparkle } from "l
 import { motion } from "motion/react";
 import type { CSSProperties, ReactNode } from "react";
 import { useMediaQuery } from "usehooks-ts";
-import { HephIcon } from "@/components/brand/HephIcon";
+import { HephaestusMark } from "@/components/brand/HephaestusMark";
 import { getGroupVisual } from "@/components/practice-vocabulary/group-visuals";
 import { OUTCOME_DEFS } from "@/components/practice-vocabulary/outcome-defs";
 import { Badge } from "@/components/ui/badge";
@@ -208,24 +208,24 @@ export function LandingFeedbackCard({
 				</p>
 				{children}
 			</div>
-			<span className="absolute right-2 bottom-1.5 text-mentor opacity-35" aria-hidden="true">
-				<HephIcon size={13} pad={3} animated={false} />
+			<span className="absolute right-2 bottom-1.5 text-highlight opacity-35" aria-hidden="true">
+				<HephaestusMark size={13} pad={3} animated={false} />
 			</span>
 		</div>
 	);
 }
 
-interface LandingHephFigureProps {
+interface LandingSpeechFigureProps {
 	className?: string;
 	lead: string;
 	body: string;
 }
 
-export function LandingHephFigure({ className, lead, body }: LandingHephFigureProps) {
+export function LandingSpeechFigure({ className, lead, body }: LandingSpeechFigureProps) {
 	return (
-		<div className={cn(styles.hephFigure, className)}>
-			<span className={styles.hephAvatar} aria-hidden="true">
-				<HephIcon pad={2} animated />
+		<div className={cn(styles.speechFigure, className)}>
+			<span className={styles.speechAvatar} aria-hidden="true">
+				<HephaestusMark pad={2} animated />
 			</span>
 			<div className={cn(styles.speechBubble, "text-left text-sm")}>
 				<p className="sr-only">Hephaestus says:</p>

@@ -220,7 +220,7 @@ async function exportExtensionAssets(page: Page): Promise<void> {
 		[128, 112],
 	] as const) {
 		// Chrome's store guidance gives circular artwork a 112px diameter on a 128px canvas.
-		// Toolbar icons need the tighter existing application crop to preserve Heph's face.
+		// Toolbar icons need the tighter existing application crop to preserve Hephaestus's face.
 		const svg = size <= 32 ? applicationMarkSvg : markSvg;
 		await page.setViewportSize({ width: size, height: size });
 		await page.setContent(

@@ -253,55 +253,59 @@ it("connects to a self-hosted address typed into the disclosure instead", async 
 	await act(async () => {
 		required(container.querySelector("details"), "the self-hosted disclosure").open = true;
 	});
-	await fill("Hephaestus address", "heph.example.test");
+	await fill("Hephaestus address", "hephaestus.example.test");
 	await click(button("Connect instance"));
 
-	expect(platform.request).toHaveBeenCalledWith({ origins: ["https://heph.example.test/*"] });
+	expect(platform.request).toHaveBeenCalledWith({ origins: ["https://hephaestus.example.test/*"] });
 	await until(() =>
 		expect(requests("configure-instance")).toStrictEqual([
-			{ type: "configure-instance", origin: "https://heph.example.test", webAppOrigin: undefined },
+			{
+				type: "configure-instance",
+				origin: "https://hephaestus.example.test",
+				webAppOrigin: undefined,
+			},
 		]),
 	);
 });
 
 it.each([
-	{ alreadyGranted: false, removed: [[{ origins: ["https://acme.heph.example.test/*"] }]] },
+	{ alreadyGranted: false, removed: [[{ origins: ["https://acme.hephaestus.example.test/*"] }]] },
 	{ alreadyGranted: true, removed: [] },
 ])(
 	"asks for the apex on a fresh click and preserves existing access: $alreadyGranted",
 	async ({ alreadyGranted, removed }) => {
 		platform.contains.mockResolvedValue(alreadyGranted);
-		answer(() => ({ ...SIGNED_OUT, developmentBuild: true }), "https://heph.example.test");
+		answer(() => ({ ...SIGNED_OUT, developmentBuild: true }), "https://hephaestus.example.test");
 		platform.request.mockResolvedValue(true);
 		await render();
 		await until(() => expect(container.textContent).toContain("Use a self-hosted instance"));
 		await act(async () => {
 			required(container.querySelector("details"), "the self-hosted disclosure").open = true;
 		});
-		await fill("Hephaestus address", "https://acme.heph.example.test");
+		await fill("Hephaestus address", "https://acme.hephaestus.example.test");
 		await fill("Web app address", "http://localhost:14280");
 		await click(button("Connect instance"));
 		await until(() =>
-			expect(container.textContent).toContain("This workspace uses heph.example.test"),
+			expect(container.textContent).toContain("This workspace uses hephaestus.example.test"),
 		);
 		expect(requests("configure-instance")).toStrictEqual([]);
 		expect(platform.remove.mock.calls).toStrictEqual(removed);
 		expect(platform.request.mock.calls).toStrictEqual([
-			[{ origins: ["https://acme.heph.example.test/*"] }],
+			[{ origins: ["https://acme.hephaestus.example.test/*"] }],
 		]);
-		await click(button("Connect to heph.example.test"));
+		await click(button("Connect to hephaestus.example.test"));
 		await until(() =>
 			expect(requests("configure-instance")).toStrictEqual([
 				{
 					type: "configure-instance",
-					origin: "https://heph.example.test",
+					origin: "https://hephaestus.example.test",
 					webAppOrigin: "http://localhost:14280",
 				},
 			]),
 		);
 		expect(platform.request.mock.calls).toStrictEqual([
-			[{ origins: ["https://acme.heph.example.test/*"] }],
-			[{ origins: ["https://heph.example.test/*"] }],
+			[{ origins: ["https://acme.hephaestus.example.test/*"] }],
+			[{ origins: ["https://hephaestus.example.test/*"] }],
 		]);
 	},
 );

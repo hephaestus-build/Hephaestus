@@ -14,7 +14,7 @@ export interface NoticeProps {
 
 const TONE_CLASSES: Record<NonNullable<NoticeProps["tone"]>, { box: string; icon: string }> = {
 	neutral: { box: "border-border bg-card", icon: "text-muted-foreground" },
-	info: { box: "border-mentor/30 bg-mentor/5", icon: "text-mentor" },
+	info: { box: "border-highlight/30 bg-highlight/5", icon: "text-highlight" },
 	warning: { box: "border-warning/30 bg-warning/5", icon: "text-warning" },
 	destructive: { box: "border-destructive/30 bg-destructive/5", icon: "text-destructive" },
 };

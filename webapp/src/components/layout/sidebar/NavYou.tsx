@@ -1,7 +1,7 @@
 import { Link, useMatchRoute } from "@tanstack/react-router";
 import { Activity, Compass } from "lucide-react";
 
-import { HEPH_LABEL, HephIcon } from "@/components/brand/HephIcon";
+import { ASK_HEPHAESTUS_LABEL, HephaestusMark } from "@/components/brand/HephaestusMark";
 import {
 	SidebarGroup,
 	SidebarGroupLabel,
@@ -13,16 +13,16 @@ import {
 export function NavYou({
 	workspaceSlug,
 	practicesEnabled,
-	showMentor,
+	showConversation,
 	readOnly = false,
 }: {
 	workspaceSlug: string;
 	practicesEnabled: boolean;
-	showMentor: boolean;
+	showConversation: boolean;
 	readOnly?: boolean;
 }) {
 	const matchRoute = useMatchRoute();
-	const conversationLabel = readOnly ? "Conversation" : HEPH_LABEL;
+	const conversationLabel = readOnly ? "Conversation" : ASK_HEPHAESTUS_LABEL;
 	return (
 		<SidebarGroup>
 			<SidebarGroupLabel>You</SidebarGroupLabel>
@@ -51,14 +51,14 @@ export function NavYou({
 						<span>Activity</span>
 					</SidebarMenuButton>
 				</SidebarMenuItem>
-				{showMentor && (
+				{showConversation && (
 					<SidebarMenuItem>
 						<SidebarMenuButton
 							tooltip={conversationLabel}
 							isActive={Boolean(matchRoute({ to: "/w/$workspaceSlug/conversation", fuzzy: true }))}
 							render={<Link to="/w/$workspaceSlug/conversation" params={{ workspaceSlug }} />}
 						>
-							<HephIcon size={16} animated={false} />
+							<HephaestusMark size={16} animated={false} />
 							<span>{conversationLabel}</span>
 						</SidebarMenuButton>
 					</SidebarMenuItem>

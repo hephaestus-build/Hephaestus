@@ -22,14 +22,14 @@ export function workspaceCoverage(
 	}
 	const option = data.aiOptions.find((entry) => entry.choice === choice);
 	const practiceReviews = option?.practiceReviewsReady === true;
-	const mentor = option?.mentorReady === true;
-	if (!practiceReviews && !mentor) {
+	const conversations = option?.mentorReady === true;
+	if (!practiceReviews && !conversations) {
 		return {
 			level: "none",
 			sentence: `${data.workspaceName} has nothing set up for this choice yet. You get no AI here until a workspace owner adds a model that fits. Your choice still counts.`,
 		};
 	}
-	if (!mentor) {
+	if (!conversations) {
 		return {
 			level: "partial",
 			sentence: `Practice reviews run in ${data.workspaceName} for this choice. Ask Hephaestus is not set up here yet.`,

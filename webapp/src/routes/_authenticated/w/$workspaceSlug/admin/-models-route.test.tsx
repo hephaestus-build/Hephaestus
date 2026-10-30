@@ -24,8 +24,8 @@ import type { Wire } from "@/lib/dates";
 import { workspaceOnboarding } from "@/mocks/fixtures/onboarding";
 import { ownMembership } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
+import { ConversationFake } from "@/test/conversation-server";
 import { levelsOpenedBy } from "@/test/detail-stack";
-import { MentorFake } from "@/test/mentor-server";
 import { ROUTE_RENDER_WAIT, renderRouteAt, renderRouteAtWithRouter } from "@/test/router-harness";
 
 // Mounting the real route pulls in the whole admin layout and its lazy modules; the timeout is a
@@ -195,15 +195,17 @@ describe("workspace AI models route", () => {
 	it("offers a concurrency limit only for queued practice reviews, not conversation turns", async () => {
 		await renderModelsRoute(() => [binding("PRACTICE_REVIEW", 20), binding("MENTOR", 20)]);
 		const reviews = row("Practice reviews");
-		const mentor = row("Conversations");
+		const conversations = row("Conversations");
 		fireEvent.click(advancedButton(reviews));
-		fireEvent.click(advancedButton(mentor));
+		fireEvent.click(advancedButton(conversations));
 		expect(
 			within(reviews).getByRole<HTMLInputElement>("spinbutton", { name: /^Max concurrent runs/u })
 				.value,
 		).toBe("3");
-		expect(within(mentor).queryByRole("spinbutton", { name: /^Max concurrent runs/u })).toBeNull();
-		expect(timeoutInput(mentor).value).toBe("600");
+		expect(
+			within(conversations).queryByRole("spinbutton", { name: /^Max concurrent runs/u }),
+		).toBeNull();
+		expect(timeoutInput(conversations).value).toBe("600");
 	});
 
 	it("keeps each purpose's row pending independently when two saves run at once", async () => {
@@ -754,7 +756,7 @@ it.each([
 				onboarding = unavailable;
 				return new HttpResponse(null, { status: 204 });
 			}),
-			...new MentorFake().handlers(),
+			...new ConversationFake().handlers(),
 		);
 		const { router, queryClient } = renderRouteAtWithRouter("/w/acme/admin/models");
 		await screen.findByRole("button", { name: "Conversations" }, ROUTE_RENDER_WAIT);

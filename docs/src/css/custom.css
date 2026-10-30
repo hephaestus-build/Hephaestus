@@ -26,7 +26,7 @@
 	--docusaurus-highlighted-code-line-bg: oklch(0.623 0.214 259.815 / 0.08);
 }
 
-/* Match the web app's neutral surfaces and blue mentor accent. */
+/* Match the web app's neutral surfaces and blue highlight accent. */
 [data-theme="dark"] {
 	--ifm-color-primary: oklch(0.707 0.165 254.624);
 	--ifm-color-primary-dark: oklch(0.67 0.17 260);
@@ -90,7 +90,7 @@
 }
 
 [data-theme="dark"] .theme-admonition.alert {
-	--heph-admonition-accent: var(--ifm-alert-border-color);
+	--admonition-accent: var(--ifm-alert-border-color);
 }
 
 /* Infima's footer is a fixed navy slab that matches neither mode. */
@@ -216,7 +216,7 @@ article:has(> .theme-doc-markdown) ~ .pagination-nav {
  * Infima's light-mode type colours are too pale for a bar or an icon (3:1, WCAG 1.4.11).
  */
 .theme-admonition.alert {
-	--heph-admonition-accent: color-mix(in oklab, var(--ifm-alert-border-color) 60%, black);
+	--admonition-accent: color-mix(in oklab, var(--ifm-alert-border-color) 60%, black);
 	--ifm-alert-background-color: color-mix(
 		in oklab,
 		var(--ifm-alert-border-color) 7%,
@@ -225,8 +225,8 @@ article:has(> .theme-doc-markdown) ~ .pagination-nav {
 	--ifm-alert-foreground-color: var(--ifm-font-color-base);
 	--ifm-alert-padding-vertical: 0.9rem;
 	--ifm-alert-padding-horizontal: 1.1rem;
-	border: 1px solid color-mix(in oklab, var(--heph-admonition-accent) 35%, transparent);
-	border-left: var(--ifm-alert-border-left-width) solid var(--heph-admonition-accent);
+	border: 1px solid color-mix(in oklab, var(--admonition-accent) 35%, transparent);
+	border-left: var(--ifm-alert-border-left-width) solid var(--admonition-accent);
 	font-size: 0.95rem;
 }
 
@@ -236,7 +236,7 @@ article:has(> .theme-doc-markdown) ~ .pagination-nav {
 }
 
 .theme-admonition > :first-child svg {
-	fill: var(--heph-admonition-accent);
+	fill: var(--admonition-accent);
 }
 
 .theme-code-block {

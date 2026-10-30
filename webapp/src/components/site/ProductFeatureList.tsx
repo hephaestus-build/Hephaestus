@@ -11,7 +11,7 @@ export function ProductFeatureList({ features }: ProductFeatureListProps) {
 				<li key={name} className="border-t border-border pt-5">
 					<div className="flex items-center gap-3">
 						<span
-							className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-mentor/10 text-mentor"
+							className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-highlight/10 text-highlight"
 							aria-hidden="true"
 						>
 							<Icon className="size-4.5" />

@@ -25,7 +25,7 @@ const meta = {
 				},
 			],
 		},
-		webAppOrigin: "https://heph.example.test",
+		webAppOrigin: "https://hephaestus.example.test",
 		onGrant: fn(),
 		onRevoke: fn(),
 	},
@@ -53,7 +53,7 @@ export const Empty: Story = {
 		).toBeVisible();
 		await expect(canvas.getByRole("link", { name: /Open Hephaestus/u })).toHaveAttribute(
 			"href",
-			"https://heph.example.test",
+			"https://hephaestus.example.test",
 		);
 	},
 };

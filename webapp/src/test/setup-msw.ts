@@ -77,7 +77,7 @@ if (typeof Element.prototype.getAnimations !== "function") {
 	Element.prototype.getAnimations = () => [];
 }
 
-// jsdom has no EventSource; the Heph conversation opens one wherever it shows. A test that drives
+// jsdom has no EventSource; the conversation opens one wherever it shows. A test that drives
 // the stream reads `FakeEventSource.latest()`.
 if (typeof globalThis.EventSource !== "function") {
 	vi.stubGlobal("EventSource", FakeEventSource);

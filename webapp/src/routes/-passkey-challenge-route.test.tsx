@@ -19,8 +19,8 @@ import { renderRouteAtWithRouter, ROUTE_RENDER_WAIT } from "@/test/router-harnes
 // Mounting the real route pulls in the whole layout and its lazy modules.
 vi.setConfig({ testTimeout: 30_000 });
 
-/** The member chose no AI, so the Heph panel stays away and the page makes no Heph reads. */
-const NO_HEPH: WorkspaceOnboarding = {
+/** The member chose no AI, so the Hephaestus panel stays away and the page makes no Hephaestus reads. */
+const NO_CONVERSATION: WorkspaceOnboarding = {
 	...workspaceOnboarding(),
 	aiChoice: "NO_AI",
 	mentorRefusal: "NO_AI",
@@ -58,7 +58,7 @@ function serveUnverifiedAdministrator(held?: { workspaceSlug: string; until: Pro
 		http.get("*/workspaces/:workspaceSlug/members/me", () =>
 			HttpResponse.json(ownMembership("ADMIN")),
 		),
-		http.get("*/workspaces/:workspaceSlug/onboarding/me", () => HttpResponse.json(NO_HEPH)),
+		http.get("*/workspaces/:workspaceSlug/onboarding/me", () => HttpResponse.json(NO_CONVERSATION)),
 		http.get("*/workspaces/:workspaceSlug/connections/catalog", refuse("catalog")),
 		http.get("*/workspaces/:workspaceSlug/practices/reviews/feedback", refuse("feedback")),
 	);

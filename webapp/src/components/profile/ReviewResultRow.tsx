@@ -250,7 +250,7 @@ export function ReviewResultRow({
 		<span
 			aria-hidden
 			data-selected-rail
-			className="absolute inset-y-0 left-0 z-10 w-0.5 bg-mentor"
+			className="absolute inset-y-0 left-0 z-10 w-0.5 bg-highlight"
 		/>
 	);
 

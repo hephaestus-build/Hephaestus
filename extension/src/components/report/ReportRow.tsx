@@ -2,7 +2,7 @@ import { ChevronDownIcon, CircleAlertIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { cn } from "cn";
-import { HephMark } from "@/components/brand/HephaestusLogo";
+import { HephaestusLogoMark } from "@/components/brand/HephaestusLogo";
 import { Spinner } from "@/components/ui/spinner";
 import type { ReportSummary } from "~/components/report/report-summary";
 import { REPORT_ROW_HEIGHT } from "~/shared/frame-messages";
@@ -45,7 +45,7 @@ function Status({ tone }: { tone: ReportSummary["tone"] }) {
 				circle,
 			)}
 		>
-			<HephMark className="size-4" />
+			<HephaestusLogoMark className="size-4" />
 			{badge === null ? null : (
 				<span className="absolute -right-1 -bottom-1 flex size-4 items-center justify-center rounded-full bg-card">
 					{badge}

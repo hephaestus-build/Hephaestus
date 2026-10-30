@@ -13,7 +13,7 @@ import { cn } from "cn";
  * 4. The `shape` axis.
  * 5. `aria-pressed` is styled wherever `aria-expanded` is, in the dark theme too: a pressed toggle
  *    rendered as a Button has to look pressed, and upstream styles only the expanded case.
- * 6. `mentor`, the accent a practice surface carries at most one of — `webapp/DESIGN.md`
+ * 6. `highlight`, the accent a practice surface carries at most one of — `webapp/DESIGN.md`
  *    § Practice surfaces palette owns when a surface may wear it.
  */
 const buttonVariants = cva(
@@ -39,7 +39,7 @@ const buttonVariants = cva(
 				"warning-outline":
 					"border-warning/30 bg-background text-warning hover:bg-warning/10 hover:text-warning focus-visible:ring-warning/20 dark:bg-input/30 dark:hover:bg-warning/20 dark:focus-visible:ring-warning/40",
 				link: "text-primary underline-offset-4 hover:underline",
-				mentor: "bg-mentor text-mentor-foreground hover:bg-mentor/90",
+				highlight: "bg-highlight text-highlight-foreground hover:bg-highlight/90",
 			},
 			size: {
 				default:

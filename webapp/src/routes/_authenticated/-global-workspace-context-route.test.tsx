@@ -48,7 +48,7 @@ function Chrome() {
 			<AppSidebar
 				isAdmin={false}
 				isAppAdmin
-				showMentor
+				showConversation
 				integrationKinds={[]}
 				context={pathname.startsWith("/admin") ? "admin" : "main"}
 				workspaces={active.workspaces}

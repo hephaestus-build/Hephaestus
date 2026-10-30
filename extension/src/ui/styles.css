@@ -8,19 +8,19 @@
 @source "../../../webapp/src/components/common/status-def.ts";
 @source "../../../webapp/src/components/brand/HephaestusLogo.tsx";
 
-/* The focus ring takes the mentor blue rather than the web app's neutral ring, so a focused control
+/* The focus ring takes the highlight blue rather than the web app's neutral ring, so a focused control
    inside a provider's page keeps at least 3:1 against its surface. The frame's
    `color-scheme` must stay the one its iframe element declares for the same palette
    (`content/report.css` § `.frame`), or the browser paints the frame opaque. */
 :root {
-	--ring: var(--mentor);
-	--link: var(--mentor);
+	--ring: var(--highlight);
+	--link: var(--highlight);
 	color-scheme: light;
 }
 
 .dark {
-	--ring: var(--mentor);
-	--link: var(--mentor);
+	--ring: var(--highlight);
+	--link: var(--highlight);
 	color-scheme: dark;
 }
 

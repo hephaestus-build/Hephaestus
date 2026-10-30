@@ -26,7 +26,7 @@ function renderNavigation(initialEntry: string, practicesEnabled = true) {
 	const root = createRootRoute({
 		component: () => (
 			<SidebarProvider>
-				<NavYou workspaceSlug="acme" practicesEnabled={practicesEnabled} showMentor />
+				<NavYou workspaceSlug="acme" practicesEnabled={practicesEnabled} showConversation />
 				<NavWorkspace workspaceSlug="acme" practicesEnabled={practicesEnabled} />
 			</SidebarProvider>
 		),

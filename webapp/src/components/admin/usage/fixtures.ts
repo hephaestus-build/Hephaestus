@@ -127,7 +127,7 @@ const OWN_PROVIDER_COST_BY_JOB_TYPE: Partial<Record<LlmUsageByJobType["jobType"]
 };
 const OWN_PROVIDER_COST_BY_DAY_INDEX: Partial<Record<number, number>> = { 1: 0.48, 3: 1.92 };
 
-/** The same workspace with a $10 cap on a provider of its own, which Heph and issue reviews ran on. */
+/** The same workspace with a $10 cap on a provider of its own, which Hephaestus and issue reviews ran on. */
 export function withOwnProvider(report: WorkspaceLlmUsageReport): WorkspaceLlmUsageReport {
 	return {
 		...report,

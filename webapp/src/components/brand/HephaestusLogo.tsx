@@ -2,7 +2,7 @@ import { cn } from "cn";
 
 import markUrl from "@/brand/hephaestus-mark.svg";
 
-export function HephMark({ className }: { className?: string }) {
+export function HephaestusLogoMark({ className }: { className?: string }) {
 	return (
 		<span className={cn("inline-flex size-8 shrink-0", className)} aria-hidden="true">
 			<img className="size-full" src={markUrl} alt="" />
@@ -32,7 +32,7 @@ export function HephaestusLogo({
 }: HephaestusLogoProps) {
 	return (
 		<span className={cn("inline-flex items-center gap-2", className)}>
-			<HephMark className={markClassName} />
+			<HephaestusLogoMark className={markClassName} />
 			<HephaestusWordmark className={cn("font-semibold tracking-tight", wordmarkClassName)} />
 		</span>
 	);

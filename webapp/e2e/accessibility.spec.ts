@@ -44,7 +44,7 @@ const SIGNED_IN: Surface[] = [
 	{ name: "Activity", path: "/w/e2e/activity" },
 	{ name: "Workspace activity", path: "/w/e2e/workspace-activity" },
 	{ name: "Teams", path: "/w/e2e/teams" },
-	{ name: "Mentor", path: "/w/e2e/conversation" },
+	{ name: "Ask Hephaestus", path: "/w/e2e/conversation" },
 	{ name: "Onboarding", path: "/w/e2e/onboarding" },
 	{ name: "Members", path: "/w/e2e/admin/members" },
 	{ name: "Teams admin", path: "/w/e2e/admin/teams" },

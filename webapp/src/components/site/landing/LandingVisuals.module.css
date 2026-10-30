@@ -35,19 +35,19 @@
 
 .slip {
 	padding-bottom: 0.35rem;
-	border-color: color-mix(in oklab, var(--mentor) 34%, var(--border));
+	border-color: color-mix(in oklab, var(--highlight) 34%, var(--border));
 	background: linear-gradient(
 		152deg,
-		color-mix(in oklab, var(--mentor) 9%, var(--background)) 0%,
+		color-mix(in oklab, var(--highlight) 9%, var(--background)) 0%,
 		var(--background) 76%
 	);
 }
 
 :global(.dark) .slip {
-	border-color: color-mix(in oklab, var(--mentor) 42%, var(--border));
+	border-color: color-mix(in oklab, var(--highlight) 42%, var(--border));
 	background: linear-gradient(
 		152deg,
-		color-mix(in oklab, var(--mentor) 20%, var(--background)) 0%,
+		color-mix(in oklab, var(--highlight) 20%, var(--background)) 0%,
 		var(--background) 78%
 	);
 }
@@ -55,7 +55,7 @@
 .accent {
 	position: absolute;
 	height: auto;
-	color: var(--mentor);
+	color: var(--highlight);
 	opacity: 0.45;
 	transform: rotate(var(--rot, 0deg));
 	pointer-events: none;
@@ -66,7 +66,7 @@
 	border-radius: 50%;
 	background: radial-gradient(
 		closest-side,
-		color-mix(in oklab, var(--mentor) 18%, transparent),
+		color-mix(in oklab, var(--highlight) 18%, transparent),
 		transparent
 	);
 	filter: blur(28px);
@@ -76,14 +76,14 @@
 :global(.dark) .glow {
 	background: radial-gradient(
 		closest-side,
-		color-mix(in oklab, var(--mentor) 16%, transparent),
+		color-mix(in oklab, var(--highlight) 16%, transparent),
 		transparent
 	);
 	filter: blur(48px);
 }
 
-/* Heph and the bubble are one element so they move together by construction. */
-.hephFigure {
+/* Hephaestus and the bubble are one element so they move together by construction. */
+.speechFigure {
 	display: flex;
 	align-items: flex-start;
 	width: min(100%, 32rem);
@@ -91,8 +91,8 @@
 
 @media (prefers-reduced-motion: no-preference) {
 	/* Once, within five seconds: the bubble holds text, so a loop would need a pause control (SC 2.2.2). */
-	.hephFigure {
-		animation: landing-heph-float 4s ease-in-out;
+	.speechFigure {
+		animation: landing-speech-float 4s ease-in-out;
 	}
 
 	.atom {
@@ -109,14 +109,14 @@
 /* Whatever the pointer is on comes out of the pile, motion preference or not. */
 .atom:hover {
 	z-index: 3;
-	border-color: color-mix(in oklab, var(--mentor) 45%, var(--border));
+	border-color: color-mix(in oklab, var(--highlight) 45%, var(--border));
 	box-shadow:
 		0 1px 2px color-mix(in oklab, var(--foreground) 8%, transparent),
 		0 1rem 1.6rem -0.8rem color-mix(in oklab, var(--foreground) 22%, transparent),
 		0 2.5rem 4rem -1.8rem color-mix(in oklab, var(--foreground) 34%, transparent);
 }
 
-@keyframes landing-heph-float {
+@keyframes landing-speech-float {
 	0%,
 	100% {
 		transform: translate3d(0, 0, 0);
@@ -126,7 +126,7 @@
 	}
 }
 
-.hephAvatar {
+.speechAvatar {
 	display: block;
 	flex: none;
 	width: 7.5rem;
@@ -134,14 +134,14 @@
 	filter: drop-shadow(0 1.4rem 1.1rem color-mix(in oklab, var(--foreground) 20%, transparent));
 }
 
-.hephAvatar svg {
+.speechAvatar svg {
 	display: block;
 	width: 100%;
 	height: auto;
 }
 
-:global(.dark) .hephAvatar {
-	filter: drop-shadow(0 0.5rem 1.25rem color-mix(in oklab, var(--mentor) 26%, transparent));
+:global(.dark) .speechAvatar {
+	filter: drop-shadow(0 0.5rem 1.25rem color-mix(in oklab, var(--highlight) 26%, transparent));
 }
 
 .speechBubble {
@@ -153,11 +153,11 @@
 	border-radius: 1.4rem 1.4rem 1.4rem 0.4rem;
 	background: linear-gradient(
 		145deg,
-		color-mix(in oklab, var(--mentor) 11%, var(--background)) 0%,
+		color-mix(in oklab, var(--highlight) 11%, var(--background)) 0%,
 		var(--background) 62%
 	);
 	box-shadow:
-		0.45rem 0.5rem 0 color-mix(in oklab, var(--mentor) 70%, transparent),
+		0.45rem 0.5rem 0 color-mix(in oklab, var(--highlight) 70%, transparent),
 		0 1.75rem 2.5rem -1.5rem color-mix(in oklab, var(--foreground) 45%, transparent);
 }
 
@@ -171,7 +171,7 @@
 	transform: rotate(45deg);
 	border-bottom: 3px solid var(--foreground);
 	border-left: 3px solid var(--foreground);
-	background: color-mix(in oklab, var(--mentor) 10%, var(--background));
+	background: color-mix(in oklab, var(--highlight) 10%, var(--background));
 }
 
 /* The pointer a review comment has in GitHub's conversation view. */
@@ -276,7 +276,7 @@
 .headlineMark {
 	height: 0.75rem;
 	border-radius: 55%;
-	background: color-mix(in oklab, var(--mentor) 20%, transparent);
+	background: color-mix(in oklab, var(--highlight) 20%, transparent);
 	transform: rotate(-1deg);
 	clip-path: polygon(
 		0 38%,
@@ -351,12 +351,12 @@
 		margin-top: var(--offset);
 	}
 
-	.heroHeph {
+	.heroSpeech {
 		width: min(100%, 34rem);
 		margin: 0 auto;
 	}
 
-	.heroHeph .hephAvatar {
+	.heroSpeech .speechAvatar {
 		width: 9rem;
 	}
 
@@ -411,7 +411,7 @@
 		margin-top: var(--offset);
 	}
 
-	.featureHeph .hephAvatar {
+	.featureSpeech .speechAvatar {
 		width: 9rem;
 	}
 
@@ -437,7 +437,7 @@
 	width: min(100%, 28rem);
 }
 
-.ctaScene .hephAvatar {
+.ctaScene .speechAvatar {
 	width: 11rem;
 }
 
@@ -467,7 +467,7 @@
 		width: 100%;
 	}
 
-	.ctaScene .hephAvatar {
+	.ctaScene .speechAvatar {
 		width: 12.5rem;
 	}
 }
@@ -475,8 +475,8 @@
 /* Last, so it outranks the per-scene avatar widths above: they are compound selectors and a
    media query adds no specificity of its own. */
 @media (width < 26rem) {
-	.hephAvatar,
-	.ctaScene .hephAvatar {
+	.speechAvatar,
+	.ctaScene .speechAvatar {
 		width: 6rem;
 	}
 

@@ -119,9 +119,11 @@ describe("WorkspaceLlmUsagePage", () => {
 
 		const byJobType = screen.getByRole("table", { name: "AI spend by run type" });
 		expect(within(byJobType).getAllByRole("columnheader", { name: "Avg per run" })).toHaveLength(2);
-		const mentorTurns = within(byJobType).getByRole("row", { name: /^Conversation answer/u });
+		const conversationAnswers = within(byJobType).getByRole("row", {
+			name: /^Conversation answer/u,
+		});
 		expect(
-			within(mentorTurns)
+			within(conversationAnswers)
 				.getAllByRole("cell")
 				.slice(1, 5)
 				.map((cell) => cell.textContent),

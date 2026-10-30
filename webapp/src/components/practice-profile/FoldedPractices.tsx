@@ -81,7 +81,7 @@ export function FoldedPractices({
 								onClick={toggle}
 								className={cn(
 									"flex min-h-10 flex-1 cursor-pointer items-center gap-2 rounded-sm px-2 text-left text-sm font-medium",
-									"outline-none focus-visible:ring-2 focus-visible:ring-mentor focus-visible:ring-inset",
+									"outline-none focus-visible:ring-2 focus-visible:ring-highlight focus-visible:ring-inset",
 									"@max-[38rem]:min-h-8 @max-[38rem]:px-0",
 								)}
 							>

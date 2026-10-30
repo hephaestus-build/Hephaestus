@@ -55,7 +55,7 @@ type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {
 	play: async ({ canvas }) => {
-		// Activity and Heph have no switch here: this card only says where each is decided.
+		// Activity and Hephaestus have no switch here: this card only says where each is decided.
 		const capabilities = within(canvas.getByRole("region", { name: "Capabilities" }));
 		await expect(capabilities.queryByRole("switch")).not.toBeInTheDocument();
 		await expect(canvas.getByRole("switch", { name: "Publish the page" })).not.toBeChecked();

@@ -107,7 +107,7 @@ export const FIGURES_PLAIN: readonly InfoGroup[] = [
 				text: "the typical range here, the middle half of the developers with a standing.",
 				swatchClass: NEUTRAL_GREY,
 			},
-			{ term: "Blue marker:", text: "your own value.", swatchClass: "text-mentor" },
+			{ term: "Blue marker:", text: "your own value.", swatchClass: "text-highlight" },
 		],
 	},
 	{

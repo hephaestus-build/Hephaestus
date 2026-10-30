@@ -1,7 +1,7 @@
 import { CircleAlertIcon, CircleCheckIcon, CircleSlashIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
-import { HephMark } from "@/components/brand/HephaestusLogo";
+import { HephaestusLogoMark } from "@/components/brand/HephaestusLogo";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 import { itemKindNoun } from "@/lib/item-kinds";
@@ -70,7 +70,7 @@ function Frame({ title, children }: { title: string; children: ReactNode }) {
 	return (
 		<main className="mx-auto flex min-h-dvh max-w-md flex-col gap-5 p-6">
 			<header className="flex items-center gap-2 text-sm font-semibold">
-				<HephMark className="size-5" />
+				<HephaestusLogoMark className="size-5" />
 				Hephaestus
 			</header>
 			<h1 className="text-xl font-semibold tracking-tight">{title}</h1>
@@ -182,7 +182,7 @@ export function ActionConfirmation({ state, onConfirm, onClose }: ActionConfirma
 						<Button variant="ghost" disabled={state.status === "sending"} onClick={onClose}>
 							Cancel
 						</Button>
-						<Button variant="mentor" disabled={state.status === "sending"} onClick={onConfirm}>
+						<Button variant="highlight" disabled={state.status === "sending"} onClick={onConfirm}>
 							{state.status === "sending" ? <Spinner /> : null}
 							{state.status === "sending" ? "Requesting review…" : "Request review"}
 						</Button>

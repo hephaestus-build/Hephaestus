@@ -2,7 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { Activity, ChevronRight, Compass } from "lucide-react";
 import type { ReactElement, ReactNode } from "react";
 
-import { HephIcon } from "@/components/brand/HephIcon";
+import { HephaestusMark } from "@/components/brand/HephaestusMark";
 import { InlineLink } from "@/components/common/InlineLink";
 import {
 	Item,
@@ -60,7 +60,7 @@ export function WorkspaceCapabilitiesSettings({
 					}
 				/>
 				<Capability
-					icon={<HephIcon />}
+					icon={<HephaestusMark />}
 					title="Ask Hephaestus"
 					description="Every member can ask Hephaestus once you set up a conversation model. Each member’s AI choice still applies."
 					action={

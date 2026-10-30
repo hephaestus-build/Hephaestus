@@ -102,7 +102,7 @@ export const ChooseUtc: Story = {
 	},
 };
 
-/** Heph answers in none of the developer's workspaces: a digest that is on can still be turned off. */
+/** Hephaestus answers in none of the developer's workspaces: a digest that is on can still be turned off. */
 export const UnavailableButOn: Story = {
 	args: { state: { ...ready, enabled: true, available: false } },
 	play: async ({ canvas }) => {
@@ -113,7 +113,7 @@ export const UnavailableButOn: Story = {
 	},
 };
 
-/** Turned off where Heph answers nowhere: the switch cannot turn on a digest that would never be written. */
+/** Turned off where Hephaestus answers nowhere: the switch cannot turn on a digest that would never be written. */
 export const TurnedOffWhereUnavailable: Story = {
 	args: { state: { ...ready, available: false } },
 	play: async ({ canvas }) => {

@@ -8,7 +8,7 @@ const meta = {
 	component: NavYou,
 	parameters: { layout: "centered" },
 	tags: ["autodocs"],
-	args: { workspaceSlug: "aet", practicesEnabled: true, showMentor: true },
+	args: { workspaceSlug: "aet", practicesEnabled: true, showConversation: true },
 	decorators: [withSidebarFrame],
 } satisfies Meta<typeof NavYou>;
 export default meta;
@@ -39,7 +39,7 @@ export const PracticesOff: Story = {
 	},
 };
 export const ConversationHidden: Story = {
-	args: { showMentor: false },
+	args: { showConversation: false },
 	play: async ({ canvas }) => {
 		await expect(canvas.queryByRole("link", { name: "Ask Hephaestus" })).not.toBeInTheDocument();
 		await expect(canvas.getByRole("link", { name: "Practice profile" })).toBeVisible();

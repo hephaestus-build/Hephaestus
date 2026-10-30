@@ -5,17 +5,17 @@ import { useResizeObserver } from "usehooks-ts";
 import { conversationSearchSchema } from "@/lib/conversation-search";
 
 import { getMemberOnboardingOptions } from "@/api/@tanstack/react-query.gen";
-import type { ThreadFocus } from "@/components/mentor/HephTimeline";
-import { pixelsPerRem, ThreadPanel } from "@/components/mentor/ThreadPanel";
-import { WorkspaceMentorPreferenceNotice } from "@/components/onboarding/WorkspaceMentorPreferenceNotice";
-import { useHephLive } from "@/hooks/use-heph-live";
-import { type MentorNotice, mentorNotice } from "@/lib/mentor-preference";
+import type { ThreadFocus } from "@/components/conversation/ConversationTimeline";
+import { pixelsPerRem, ThreadPanel } from "@/components/conversation/ThreadPanel";
+import { WorkspaceConversationNotice } from "@/components/onboarding/WorkspaceConversationNotice";
+import { useConversationLive } from "@/hooks/use-conversation-live";
+import { type ConversationNotice, conversationNotice } from "@/lib/conversation-availability";
 import { pageHead } from "@/lib/page-title";
 import { useSearchState } from "@/lib/search-params";
 import { useAuth } from "@/runtime/auth/AuthContext";
 import { getUserViewSession } from "@/runtime/user-view/session";
 
-import { MainConversation, ThreadConversation } from "@/routes/-HephConversationView";
+import { MainConversation, ThreadConversation } from "@/routes/-ConversationView";
 
 /**
  * `thread` opens the thread on that message beside the conversation, and `entry` brings a message
@@ -40,25 +40,25 @@ export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/conversat
 					retry: false,
 				})
 			: undefined,
-	component: MentorRoute,
+	component: ConversationRoute,
 });
 
-function MentorRoute() {
+function ConversationRoute() {
 	const { workspaceSlug } = Route.useParams();
 	const { userView } = useAuth();
 	return userView ? (
-		<MentorPage workspaceSlug={workspaceSlug} readOnly />
+		<ConversationPage workspaceSlug={workspaceSlug} readOnly />
 	) : (
-		<MemberMentorPage workspaceSlug={workspaceSlug} />
+		<MemberConversationPage workspaceSlug={workspaceSlug} />
 	);
 }
 
-function MemberMentorPage({ workspaceSlug }: { workspaceSlug: string }) {
+function MemberConversationPage({ workspaceSlug }: { workspaceSlug: string }) {
 	// The loader settled this; a refetch that fails later keeps the last answer on screen rather
 	// than hiding a readable conversation behind an alert.
 	const preference = useSuspenseQuery(getMemberOnboardingOptions({ path: { workspaceSlug } }));
-	const notice = mentorNotice(preference.data);
-	return <MentorPage workspaceSlug={workspaceSlug} readOnly={false} notice={notice} />;
+	const notice = conversationNotice(preference.data);
+	return <ConversationPage workspaceSlug={workspaceSlug} readOnly={false} notice={notice} />;
 }
 
 /**
@@ -66,14 +66,14 @@ function MemberMentorPage({ workspaceSlug }: { workspaceSlug: string }) {
  * opens beside it from `?thread=`. A user view reads the viewed member's conversation without a
  * live stream; a member whose AI choice keeps Hephaestus from answering reads theirs without a composer.
  */
-function MentorPage({
+function ConversationPage({
 	workspaceSlug,
 	readOnly,
 	notice,
 }: {
 	workspaceSlug: string;
 	readOnly: boolean;
-	notice?: MentorNotice;
+	notice?: ConversationNotice;
 }) {
 	const { thread, entry } = Route.useSearch();
 	const returnTo = useLocation().href;
@@ -90,14 +90,14 @@ function MentorPage({
 	});
 	// Read with each new measurement, so it follows the reader's text size as it stands then.
 	const availableRem = availableWidth === undefined ? undefined : availableWidth / pixelsPerRem();
-	const livePaused = useHephLive(workspaceSlug, !readOnly);
+	const livePaused = useConversationLive(workspaceSlug, !readOnly);
 	const canAsk = notice === undefined && !readOnly;
 
 	return (
 		<div ref={host} className="flex min-h-0 flex-1">
 			<div className="flex min-h-0 min-w-0 flex-1 flex-col">
 				{notice ? (
-					<WorkspaceMentorPreferenceNotice
+					<WorkspaceConversationNotice
 						workspaceSlug={workspaceSlug}
 						returnTo={returnTo}
 						notice={notice}

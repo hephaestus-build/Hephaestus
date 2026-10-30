@@ -1,0 +1,28 @@
+import type { ReactNode } from "react";
+
+import { HephaestusMark } from "@/components/brand/HephaestusMark";
+import { Bubble, BubbleContent } from "@/components/ui/bubble";
+import { Message, MessageContent } from "@/components/ui/message";
+
+/**
+ * Hephaestus speaking from a bubble. `intro` is fixed for the page; `narration` is the page's narration
+ * line, announced as it changes, so every other line that follows the reader's answers is plain text.
+ */
+export function HephaestusSays({ intro, narration }: { intro: ReactNode; narration: string }) {
+	return (
+		<Message className="items-start gap-3">
+			<HephaestusMark className="shrink-0" size={64} pad={2} />
+			<MessageContent>
+				<Bubble variant="outline" className="w-full max-w-full">
+					<BubbleContent className="w-full">
+						<p className="sr-only">Hephaestus says:</p>
+						<p>{intro}</p>
+						<p aria-live="polite" className="mt-2 font-medium">
+							{narration}
+						</p>
+					</BubbleContent>
+				</Bubble>
+			</MessageContent>
+		</Message>
+	);
+}

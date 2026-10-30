@@ -51,7 +51,7 @@ export function InlineLink({
 		className: cn(
 			"text-foreground",
 			interactive && [
-				"cursor-pointer rounded-sm text-left decoration-1 underline-offset-3 hover:text-mentor hover:underline focus-visible:text-mentor focus-visible:underline",
+				"cursor-pointer rounded-sm text-left decoration-1 underline-offset-3 hover:text-highlight hover:underline focus-visible:text-highlight focus-visible:underline",
 				FOCUS_RING,
 			],
 			tone === "count" && [

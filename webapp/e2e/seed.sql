@@ -26,7 +26,7 @@ INSERT INTO workspace_agent_binding (id, workspace_id, purpose, instance_model_i
 VALUES (2, 1, 'MENTOR', 2, true, 300, 1, now(), now())
 ON CONFLICT (id) DO NOTHING;
 
--- The Heph page offers Heph once a model is ready under some AI choice, and a developer who has not chosen is
+-- The Hephaestus page offers Hephaestus once a model is ready under some AI choice, and a developer who has not chosen is
 -- answered from the undeclared slot, which holds only a model with undeclared data handling. Model 3 declares
 -- that it runs in house and fills the in-house slot.
 INSERT INTO llm_model (id, connection_id, slug, display_name, upstream_model_id, context_window, max_output_tokens, visibility, enabled, operated_by, created_at)
@@ -36,7 +36,7 @@ INSERT INTO workspace_agent_binding (id, workspace_id, purpose, data_handling_ti
 VALUES (3, 1, 'MENTOR', 'IN_HOUSE', 3, true, 300, 1, now(), now())
 ON CONFLICT (id) DO NOTHING;
 
--- A model with no price never starts a turn, and Heph reads as not set up without one.
+-- A model with no price never starts a turn, and Hephaestus reads as not set up without one.
 INSERT INTO llm_model_price (model_id, pricing_mode, note, effective_from, created_at)
 SELECT id, 'NO_CHARGE', 'E2E fixture model', now() - interval '1 day', now()
 FROM llm_model m
@@ -58,7 +58,7 @@ INSERT INTO membership (workspace_id, account_id, role)
 SELECT 1, id, 'ADMIN' FROM account WHERE primary_email = 'e2e@dev.invalid'
 ON CONFLICT DO NOTHING;
 
--- One answered exchange in the e2e developer's Heph conversation: `heph.spec.ts` votes on the answer. The
+-- One answered exchange in the e2e developer's conversation: `conversation.spec.ts` votes on the answer. The
 -- question is older than anything a test asks, so every test's own messages are the newest.
 INSERT INTO mentor_conversation (id, workspace_id, account_id, created_at, last_activity_at)
 SELECT 'e2e0c0a0-0000-4000-8000-000000000001', 1, id, now() - interval '1 day', now() - interval '1 day'

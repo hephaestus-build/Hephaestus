@@ -696,7 +696,7 @@ function PurposeRow({
 
 	return (
 		<AccordionItem value={purpose} ref={rowRef} className="relative scroll-mt-24">
-			{linked && <span aria-hidden className="absolute inset-y-0 left-0 w-0.5 bg-mentor" />}
+			{linked && <span aria-hidden className="absolute inset-y-0 left-0 w-0.5 bg-highlight" />}
 			<AccordionTrigger
 				headingLevel={3}
 				aria-label={title}

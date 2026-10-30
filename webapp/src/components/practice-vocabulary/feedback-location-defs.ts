@@ -1,5 +1,5 @@
 import type { ReviewFeedback, ItemRef } from "@/api/types.gen";
-import { HephMarkIcon } from "@/components/brand/HephIcon";
+import { HephaestusMarkIcon } from "@/components/brand/HephaestusMark";
 import type { StatusDefs } from "@/components/common/status-def";
 import { GitHubIcon, GitLabIcon, SlackIcon } from "@/components/icons/brand";
 import { itemName } from "@/lib/item-kinds";
@@ -31,7 +31,7 @@ export const FEEDBACK_LOCATION_DEFS: StatusDefs<FeedbackLocation> = {
 	},
 	HEPH: {
 		label: "In conversation in the app",
-		icon: HephMarkIcon,
+		icon: HephaestusMarkIcon,
 		badgeVariant: "outline",
 		description: "Raised in a turn of the developer’s conversation in the app.",
 	},

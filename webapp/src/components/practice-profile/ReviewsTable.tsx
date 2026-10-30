@@ -389,19 +389,19 @@ const PROVIDER_NAMES: Partial<Record<NonNullable<ItemRef["provider"]>, string>> 
 export const LATEST_REVIEW = "Latest review";
 
 /**
- * The latest review's row (`data-latest`), framed: the accent outline and the calm mentor wash of a
+ * The latest review's row (`data-latest`), framed: the accent outline and the calm highlight wash of a
  * card's next step, with room at the top of each cell for the words in its corner. Below the frame's
  * `@2xl` the row is a grid and takes the room itself. Drawn by the table, as a row owns no color.
  */
 const LATEST_ROW = [
-	"[&_tr[data-latest]]:bg-mentor/5 dark:[&_tr[data-latest]]:bg-mentor/10",
-	"[&_tr[data-latest]]:outline-1 [&_tr[data-latest]]:-outline-offset-1 [&_tr[data-latest]]:outline-mentor",
+	"[&_tr[data-latest]]:bg-highlight/5 dark:[&_tr[data-latest]]:bg-highlight/10",
+	"[&_tr[data-latest]]:outline-1 [&_tr[data-latest]]:-outline-offset-1 [&_tr[data-latest]]:outline-highlight",
 	"@2xl:[&_tr[data-latest]>td]:pt-7 @max-2xl:[&_tr[data-latest]]:pt-7",
 ].join(" ");
 
 /** "Latest review", small in the row's top left corner, over the time cell's own content. */
 const LATEST_LABEL =
-	"absolute top-1.5 left-2 text-xs leading-none font-medium text-mentor @max-2xl:-top-5.5";
+	"absolute top-1.5 left-2 text-xs leading-none font-medium text-highlight @max-2xl:-top-5.5";
 
 /**
  * A pressed Track keeps the primary fill a press shows. The outline button's own

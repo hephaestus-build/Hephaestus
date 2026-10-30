@@ -41,7 +41,7 @@ export interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
 	isOwner?: boolean;
 	isAppAdmin: boolean;
 	/** Lists Ask Hephaestus in the main navigation of the active workspace; the container decides from membership and setup. */
-	showMentor: boolean;
+	showConversation: boolean;
 	readOnly?: boolean;
 	integrationKinds: readonly IntegrationCatalogEntry["kind"][];
 	/** Feedback awaiting approval in the active workspace, for an admin; undefined while unknown. */
@@ -64,7 +64,7 @@ export function AppSidebar({
 	isAdmin,
 	isOwner = false,
 	isAppAdmin,
-	showMentor,
+	showConversation,
 	readOnly = false,
 	integrationKinds,
 	awaitingApproval,
@@ -153,7 +153,7 @@ export function AppSidebar({
 				<NavYou
 					workspaceSlug={activeWorkspace.workspaceSlug}
 					practicesEnabled={activeWorkspace.practicesEnabled}
-					showMentor={showMentor}
+					showConversation={showConversation}
 					readOnly={readOnly}
 				/>
 				<SidebarSeparator className="hidden group-data-[collapsible=icon]:block" />

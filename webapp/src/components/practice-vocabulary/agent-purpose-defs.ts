@@ -2,7 +2,7 @@ import { ArrowDownWideNarrowIcon, ChartScatterIcon, ListChecksIcon, SplitIcon } 
 import { type ComponentType, createElement } from "react";
 
 import type { AgentBinding } from "@/api/types.gen";
-import { HephIcon } from "@/components/brand/HephIcon";
+import { HephaestusMark } from "@/components/brand/HephaestusMark";
 import { statusValues } from "@/components/common/status-def";
 
 export type AgentPurpose = AgentBinding["purpose"];
@@ -10,8 +10,8 @@ export type AgentPurpose = AgentBinding["purpose"];
 /** A kind's glyph. `size` in pixels, because Hephaestus's mark sizes itself from it, not from a class. */
 type ModelKindIcon = ComponentType<{ size: number; className?: string }>;
 
-function HephKindIcon({ size, className }: { size: number; className?: string }) {
-	return createElement(HephIcon, { size, className, animated: false });
+function ConversationKindIcon({ size, className }: { size: number; className?: string }) {
+	return createElement(HephaestusMark, { size, className, animated: false });
 }
 
 interface AgentPurposeDef {
@@ -30,7 +30,7 @@ interface AgentPurposeDef {
 	icon: ModelKindIcon;
 	/**
 	 * The glyph's colour, as complete class strings. A hue tells the three model kinds for practice scripts apart;
-	 * each stays at least 30° (OKLCH) from success, warning, destructive and mentor, so a kind never
+	 * each stays at least 30° (OKLCH) from success, warning, destructive and highlight, so a kind never
 	 * reads as a status or the accent. Review and Hephaestus stay neutral.
 	 */
 	tone: string;
@@ -56,7 +56,7 @@ export const AGENT_PURPOSE_DEFS = {
 		description:
 			"Answers members in their conversations. Every member can ask once a conversation model is ready.",
 		practiceScript: false,
-		icon: HephKindIcon,
+		icon: ConversationKindIcon,
 		tone: "text-foreground",
 	},
 	PRACTICE_DECISION: {

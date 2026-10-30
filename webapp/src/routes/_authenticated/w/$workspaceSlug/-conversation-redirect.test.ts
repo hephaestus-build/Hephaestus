@@ -8,7 +8,7 @@ import { ownMembership, workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
 import { routeTree } from "@/routeTree.gen";
 import { workspaceRewrite } from "@/runtime/workspace-address";
-import { MentorFake } from "@/test/mentor-server";
+import { ConversationFake } from "@/test/conversation-server";
 
 vi.setConfig({ testTimeout: 30_000 });
 
@@ -22,7 +22,7 @@ it.each([
 	server.use(
 		http.get("*/workspaces", () => HttpResponse.json([workspaceListItem("acme")])),
 		http.get("*/workspaces/acme/members/me", () => HttpResponse.json(ownMembership("MEMBER"))),
-		...new MentorFake().handlers(),
+		...new ConversationFake().handlers(),
 	);
 	const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 	const history = createMemoryHistory({

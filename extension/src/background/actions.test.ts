@@ -94,9 +94,9 @@ function harness() {
 	]);
 	const env: ContextEnvironment<ActionApi> = {
 		instance: {
-			origin: "https://heph.test",
-			apiBase: "https://heph.test/api",
-			webAppOrigin: "https://heph.test",
+			origin: "https://hephaestus.test",
+			apiBase: "https://hephaestus.test/api",
+			webAppOrigin: "https://hephaestus.test",
 		},
 		api,
 		tabUrl: async () => url,

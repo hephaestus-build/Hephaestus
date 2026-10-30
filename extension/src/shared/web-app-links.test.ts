@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { workLinks } from "~/shared/web-app-links";
 
-const APP = "https://heph.example.test";
+const APP = "https://hephaestus.example.test";
 
 describe("web app links", () => {
 	it("leads every reader to their feedback on this item in the workspace that answered", () => {

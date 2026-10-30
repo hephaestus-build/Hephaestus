@@ -55,14 +55,14 @@ Thus, they add no specificity.
 `dark:data-checked:bg-primary`, `hover:not-data-checked:bg-muted/50`.
 
 **A `*.module.css` is only for what a utility cannot express.**
-The tree has two: `HephIcon` and the landing scene.
+The tree has two: `HephaestusMark` and the landing scene.
 Each holds one or more of these:
 
 - `@keyframes`.
 - A generated `::before`.
 - A `clip-path`.
 - A grid whose descendants override their `grid-row` or `grid-column` at a breakpoint.
-- `HephIcon`'s size, which a container's `[&_svg]:size-4` would outrank as a utility.
+- `HephaestusMark`'s size, which a container's `[&_svg]:size-4` would outrank as a utility.
 
 Anything that a utility can express stays a utility.
 A module rule for one `letter-spacing` or `margin` is a utility in the wrong file.
@@ -83,8 +83,9 @@ Nothing else paints a ground.
 
 **30, structure**: `border` and `text-muted-foreground` carry lines, pills, rails, and secondary text.
 
-**10, the accent**: `mentor` marks only what should attract attention.
-Use at most one `variant="mentor"` button per surface.
+**10, the accent**: `highlight` marks only what should attract attention.
+The token is not named `accent`, because shadcn already uses that name for hover surfaces.
+Use at most one `variant="highlight"` button per surface.
 The accent marks new content, the current selection or sort, and links on hover or focus.
 On Practices across the workspace, it also marks the reader: the **You** bracket over a bar and the pin on a tile.
 

@@ -131,7 +131,7 @@ export function WorkspaceSplitBar({ split, yourStanding }: WorkspaceSplitBarProp
 							style={{ "--count": count }}
 						>
 							{/* `pb-0.5` keeps the bracket's corners off the part it spans. */}
-							<span className="flex h-5.5 w-full flex-col items-center justify-end gap-0.5 pb-0.5 text-mentor">
+							<span className="flex h-5.5 w-full flex-col items-center justify-end gap-0.5 pb-0.5 text-highlight">
 								{isYours && <YouBracket />}
 							</span>
 							<span className={cn("h-2 w-full rounded-sm bg-current", def.colorClass)} />
@@ -258,7 +258,7 @@ function SplitLegendItems() {
 					</li>
 				);
 			})}
-			<li className="inline-flex items-center gap-1.5 text-mentor">
+			<li className="inline-flex items-center gap-1.5 text-highlight">
 				<span aria-hidden className={cn("mt-1 w-4", YOU_BRACKET)} />
 				<span className="font-semibold">You</span>
 				<span className="text-muted-foreground">spans your part</span>

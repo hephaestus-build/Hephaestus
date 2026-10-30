@@ -41,10 +41,13 @@ export const Default: Story = {
 export const SelfHosted: Story = {
 	play: async ({ canvas, userEvent, args }) => {
 		await userEvent.click(canvas.getByText("Use a self-hosted instance"));
-		await userEvent.type(canvas.getByLabelText("Hephaestus address"), "https://heph.example.test");
+		await userEvent.type(
+			canvas.getByLabelText("Hephaestus address"),
+			"https://hephaestus.example.test",
+		);
 		await userEvent.click(canvas.getByRole("button", { name: "Connect instance" }));
 		await expect(args.onConnectCustom).toHaveBeenCalledWith({
-			origin: "https://heph.example.test",
+			origin: "https://hephaestus.example.test",
 			webAppOrigin: undefined,
 		});
 		await expect(args.onConnectHosted).not.toHaveBeenCalled();
@@ -116,13 +119,13 @@ export const Dark: Story = {
 };
 
 export const WorkspaceAddress: Story = {
-	args: { state: { status: "confirm-apex", origin: "https://heph.example.test" } },
+	args: { state: { status: "confirm-apex", origin: "https://hephaestus.example.test" } },
 	play: async ({ canvas }) => {
 		await expect(canvas.getByRole("status")).toHaveTextContent(
-			"This workspace uses heph.example.test for sign-in and the API.",
+			"This workspace uses hephaestus.example.test for sign-in and the API.",
 		);
 		await expect(
-			canvas.getByRole("button", { name: "Connect to heph.example.test" }),
+			canvas.getByRole("button", { name: "Connect to hephaestus.example.test" }),
 		).toBeVisible();
 	},
 };

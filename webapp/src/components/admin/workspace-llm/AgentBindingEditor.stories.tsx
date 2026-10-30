@@ -54,7 +54,7 @@ export const Error: Story = {
 };
 
 /** A Hephaestus answer stops after five minutes, so its timeout cannot be set longer. */
-export const HephAnswerCeiling: Story = {
+export const AnswerCeiling: Story = {
 	args: {
 		target: { purpose: "MENTOR", tier: "IN_HOUSE" },
 		binding: {

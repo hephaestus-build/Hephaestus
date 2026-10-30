@@ -99,7 +99,7 @@ function serveGitLab({
 				}
 				return HttpResponse.json({
 					valid: true,
-					username: "heph",
+					username: "hephaestus",
 				} satisfies GitLabPreflightResponse);
 			},
 		),

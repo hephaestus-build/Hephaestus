@@ -88,7 +88,7 @@ function SiteRow({
 						</Button>
 					) : (
 						<Button
-							variant="mentor"
+							variant="highlight"
 							size="sm"
 							disabled={pending}
 							aria-label={`Allow on ${entry.origin}`}

@@ -797,7 +797,7 @@ function ObservationHistory({
 
 /**
  * The card a link from an observation asked for: scrolled into view on each arrival, and crossed
- * once by the new card's mentor sheen (`ArrivalHighlight`), then it reads as a card like the others.
+ * once by the new card's highlight sheen (`ArrivalHighlight`), then it reads as a card like the others.
  */
 function MarkedFeedbackCard({
 	children,

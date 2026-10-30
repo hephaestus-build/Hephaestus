@@ -10,7 +10,7 @@ import {
 	LandingCluster,
 	LandingFeedbackCard,
 	LandingGlow,
-	LandingHephFigure,
+	LandingSpeechFigure,
 	landingEase,
 	LandingMeta,
 	LandingMetaRow,
@@ -185,8 +185,8 @@ export function HeroScene() {
 				</LandingCluster>
 
 				<LandingCluster placement={{ column: "full", row: 3 }} delay={0.32}>
-					<LandingHephFigure
-						className={styles.heroHeph}
+					<LandingSpeechFigure
+						className={styles.heroSpeech}
 						lead="Start with #412, not the pull request."
 						body="Write the acceptance criteria down and the scope stops moving. The review gets short."
 					/>
@@ -215,7 +215,7 @@ export function LandingHeroSection({ onSignIn }: LandingHeroSectionProps) {
 				<motion.div className={cn(styles.heroCopy, "flex flex-col items-center")}>
 					<Badge
 						render={<motion.p variants={itemVariants} />}
-						variant="mentor"
+						variant="highlight"
 						size="lg"
 						className="relative z-10"
 					>

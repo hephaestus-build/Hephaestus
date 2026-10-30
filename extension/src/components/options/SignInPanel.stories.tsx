@@ -17,7 +17,7 @@ const meta = {
 	component: SignInPanel,
 	tags: ["autodocs"],
 	args: {
-		instanceHost: "heph.example.test",
+		instanceHost: "hephaestus.example.test",
 		options: { status: "ready", options: OPTIONS },
 		attempt: { status: "idle" },
 		onSignIn: fn(),

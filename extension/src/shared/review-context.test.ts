@@ -26,7 +26,7 @@ const ITEM = {
 function ready(status: ReviewRef["status"] | undefined): ReadyContext {
 	return {
 		status: "ready",
-		instanceHost: "heph.example.test",
+		instanceHost: "hephaestus.example.test",
 		workspace: { slug: "team", displayName: "Team" },
 		alternatives: [],
 		item: ITEM,
@@ -50,7 +50,7 @@ function ready(status: ReviewRef["status"] | undefined): ReadyContext {
 						events: [],
 						results: [],
 					},
-		links: { trace: "https://heph.example.test/w/team/feedback/1" },
+		links: { trace: "https://hephaestus.example.test/w/team/feedback/1" },
 		pageUrl: "https://gitlab.example.test/team/app/-/merge_requests/1",
 		view: "overview",
 		fetchedAt: "2026-09-26T12:00:00Z",

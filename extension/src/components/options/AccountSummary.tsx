@@ -31,7 +31,7 @@ function Avatar({ account, className }: { account: Account; className?: string }
 		<span
 			aria-hidden
 			className={cn(
-				"flex shrink-0 items-center justify-center rounded-full bg-mentor font-semibold text-mentor-foreground",
+				"flex shrink-0 items-center justify-center rounded-full bg-highlight font-semibold text-highlight-foreground",
 				className,
 			)}
 		>

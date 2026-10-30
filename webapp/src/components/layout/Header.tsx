@@ -25,7 +25,7 @@ import { type EnvironmentTone, resolveHeaderBadge } from "./version";
 
 const ENV_DOT: Record<EnvironmentTone, string> = {
 	staging: "bg-warning",
-	preview: "bg-mentor",
+	preview: "bg-highlight",
 	local: "bg-muted-foreground/50",
 };
 
