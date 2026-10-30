@@ -31,6 +31,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.jspecify.annotations.Nullable;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestReporter;
@@ -65,8 +66,16 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
         workerB = worker("b-" + UUID.randomUUID());
     }
 
+    @AfterEach
+    void stopWorkers() {
+        workerA.stop();
+        workerB.stop();
+    }
+
     @Test
     void shouldHoldTheReferenceBudgetAndEightTurnReserveAcrossTwoWorkers(TestReporter reporter) throws Exception {
+        workerA.start();
+        workerB.start();
         long pool = pool(32, 8);
         List<LlmCallPermits.Permit> reviews = new ArrayList<>();
         for (int i = 0; i < 24; i++) reviews.add(admit(i % 2 == 0 ? workerA : workerB, pool, LlmCallClass.REQUEST, 1));
