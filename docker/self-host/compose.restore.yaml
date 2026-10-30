@@ -38,7 +38,12 @@ services:
     environment:
       <<: *pgbackrest-restore-env
     volumes:
-      - ./pgbackrest.conf:/etc/pgbackrest/pgbackrest.conf:ro
+      - type: bind
+        source: ../../deploy/postgresql/pgbackrest.conf
+        target: /etc/pgbackrest/pgbackrest.conf
+        read_only: true
+        bind:
+          create_host_path: false
 
   pgbackrest-restore:
     profiles: [restore]
@@ -49,6 +54,11 @@ services:
     environment:
       <<: *pgbackrest-restore-env
     volumes:
-      - ./pgbackrest.conf:/etc/pgbackrest/pgbackrest.conf:ro
+      - type: bind
+        source: ../../deploy/postgresql/pgbackrest.conf
+        target: /etc/pgbackrest/pgbackrest.conf
+        read_only: true
+        bind:
+          create_host_path: false
       - postgresql-data:/var/lib/postgresql
     networks: [shared-network]

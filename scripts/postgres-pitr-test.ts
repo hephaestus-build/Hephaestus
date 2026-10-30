@@ -17,7 +17,7 @@ const objectStore = `${id}-s3`;
 const network = `${id}-network`;
 const volumes = [`${id}-data`, `${id}-socket`, `${id}-objects`] as const;
 const [data, socket, objects] = volumes;
-const config = path.join(import.meta.dirname, "..", "docker", "self-host", "pgbackrest.conf");
+const config = path.join(import.meta.dirname, "..", "deploy", "postgresql", "pgbackrest.conf");
 const certificates = mkdtempSync(path.join(tmpdir(), `${id}-certs-`));
 const minioImage =
 	"cgr.dev/chainguard/minio@sha256:bd014394a80898e68c149f2311fdf8d5a2c2f3bb2c33b9327ae6d02b4b065ae1";

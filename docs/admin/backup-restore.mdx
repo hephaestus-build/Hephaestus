@@ -53,7 +53,8 @@ openssl rand -base64 48
 Store it outside the host with the release lock and application encryption keys.
 Keep `.env` mode `0600`.
 Never print `docker compose config` into shared logs: it contains the repository key and passphrase.
-Do not place credentials in `pgbackrest.conf` or the systemd units.
+Set custom pgBackRest options in `deploy/postgresql/pgbackrest.conf`.
+Do not place credentials in that file or the systemd units.
 
 A failed archive command keeps WAL on the database host until it fills the disk.
 Alert on archive failures and free space, not only the next scheduled backup.
