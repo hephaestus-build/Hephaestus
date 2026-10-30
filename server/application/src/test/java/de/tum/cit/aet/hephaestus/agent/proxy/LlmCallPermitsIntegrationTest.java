@@ -31,6 +31,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.jspecify.annotations.Nullable;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestReporter;
@@ -65,8 +66,16 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
         workerB = worker("b-" + UUID.randomUUID());
     }
 
+    @AfterEach
+    void stopWorkers() {
+        workerA.stop();
+        workerB.stop();
+    }
+
     @Test
     void shouldHoldTheReferenceBudgetAndEightTurnReserveAcrossTwoWorkers(TestReporter reporter) throws Exception {
+        workerA.start();
+        workerB.start();
         long pool = pool(32, 8);
         List<LlmCallPermits.Permit> reviews = new ArrayList<>();
         for (int i = 0; i < 24; i++) reviews.add(admit(i % 2 == 0 ? workerA : workerB, pool, LlmCallClass.REQUEST, 1));
@@ -159,7 +168,6 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
     void shouldRetainARevokedPermitUntilItsCallCloses() {
         long pool = pool(1, 0);
         var call = admit(workerA, pool, LlmCallClass.EVENT, 1);
-        jdbc.update("UPDATE llm_call_permit SET renewed_at=clock_timestamp()-interval '1 hour' WHERE pool_id=?", pool);
         workerA.fence(System.nanoTime() + PROPERTIES.selfFenceAfter().toNanos() + 1);
         assertThat(call.isRevoked()).isTrue();
         assertThat(rows.countActive(pool)).isEqualTo(1);
@@ -181,6 +189,48 @@ class LlmCallPermitsIntegrationTest extends BaseIntegrationTest {
         call.close();
         assertThat(rows.countActive(pool)).isEqualTo(1);
         replacement.close();
+    }
+
+    @Test
+    void shouldRetainRateDebitsAndFenceTheExpiredOwnerAfterReclaimingCapacity() {
+        long pool = pool(1, 0);
+        var expired = admit(workerA, pool, LlmCallClass.EVENT, 1);
+        jdbc.update(
+                "UPDATE llm_call_permit SET tokens=17,renewed_at=clock_timestamp()-interval '21 seconds' WHERE pool_id=?",
+                pool);
+        workerA.renew();
+        assertThat(expired.isRevoked()).isTrue();
+        try (var replacement = admit(workerB, pool, LlmCallClass.EVENT, 2)) {
+            var rates = rows.rates(pool);
+            assertThat(rates.getRequests()).isEqualTo(2);
+            assertThat(rates.getTokens()).isEqualTo(17);
+            assertThat(workerA.beforeRetry(expired, () -> false, Instant.now().plusSeconds(1)))
+                    .isFalse();
+            expired.close();
+            assertThat(rows.countActive(pool)).isEqualTo(1);
+            assertThat(replacement.isRevoked()).isFalse();
+        }
+    }
+
+    @Test
+    void shouldRejectExpiredRenewalAndRetryBeforeAnotherWorkerPrunes() {
+        long pool = pool(1, 0);
+        var call = admit(workerA, pool, LlmCallClass.EVENT, 1);
+        var row = jdbc.queryForMap("SELECT id,worker_id FROM llm_call_permit WHERE pool_id=? AND state='ACTIVE'", pool);
+        jdbc.update(
+                "UPDATE llm_call_permit SET renewed_at=clock_timestamp()-interval '21 seconds' WHERE pool_id=?", pool);
+        transactions.executeWithoutResult(status -> {
+            String owner = Objects.requireNonNull((String) row.get("worker_id"));
+            UUID id = Objects.requireNonNull((UUID) row.get("id"));
+            assertThat(rows.renew(owner, List.of(id), PROPERTIES.permitLease().toSeconds()))
+                    .isZero();
+            assertThat(rows.findHeld(
+                            owner, List.of(id), PROPERTIES.permitLease().toSeconds()))
+                    .isEmpty();
+            assertThat(rows.debitRetry(id, owner, 0, PROPERTIES.permitLease().toSeconds()))
+                    .isZero();
+        });
+        call.close();
     }
 
     @Test
