@@ -1,4 +1,10 @@
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+	noop,
+	useInfiniteQuery,
+	useMutation,
+	useQuery,
+	useQueryClient,
+} from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import {
@@ -28,7 +34,10 @@ import type {
 	ReviewSchedule,
 	UpdatePracticeReviewSettingsRequest,
 } from "@/api/types.gen";
-import { PracticeFeedbackModePage } from "@/components/admin/practices/practice-feedback-mode/PracticeFeedbackModePage";
+import {
+	type FeedbackModeTreeState,
+	PracticeFeedbackModePage,
+} from "@/components/admin/practices/practice-feedback-mode/PracticeFeedbackModePage";
 import { PracticeReviewBatch } from "@/components/admin/practices/PracticeReviewBatch";
 import { PracticeReviewSchedule } from "@/components/admin/practices/PracticeReviewSchedule";
 import type {
@@ -41,7 +50,7 @@ import {
 	type PracticeReviewWorkspaceUpdate,
 } from "@/components/admin/practices/PracticeReviewSettings";
 import {
-	PracticeTreeSkeleton,
+	FeedbackModeSkeleton,
 	ReviewSettingsSkeleton,
 } from "@/components/admin/practices/PracticeSkeletons";
 import {
@@ -67,6 +76,25 @@ import { useQueryReadRefusal } from "@/runtime/tanstack-query/use-query-read-ref
 export const Route = createFileRoute("/_authenticated/w/$workspaceSlug/admin/practices/review")({
 	head: workspaceAdminHead("Review settings"),
 	validateSearch: reviewSearchSchema,
+	loaderDeps: ({ search }) => ({ section: search.section ?? DEFAULT_REVIEW_SECTION }),
+	// The router scrolls to a link's heading once, on the first render, so the data that draws the
+	// heading is in the cache by then. A failed read is left to the section's own error state.
+	loader: async ({ context, params: { workspaceSlug }, deps: { section } }) => {
+		if (section === "past-work") {
+			return;
+		}
+		const read = { staleTime: "static", retry: false } as const;
+		await Promise.all([
+			context.queryClient
+				.query({ ...getPracticeReviewSettingsOptions({ path: { workspaceSlug } }), ...read })
+				.catch(noop),
+			section === "automated-review"
+				? context.queryClient
+						.query({ ...getWorkspaceOptions({ path: { workspaceSlug } }), ...read })
+						.catch(noop)
+				: undefined,
+		]);
+	},
 	component: ReviewRoute,
 });
 
@@ -134,39 +162,49 @@ function FeedbackModeSection({
 		error: "We could not update review settings",
 	});
 
-	const queries = [settingsQuery, rollupQuery, groupsQuery, practicesQuery];
-	if (queries.some((query) => query.isPending)) {
-		return <PracticeTreeSkeleton groups={3} practicesPerGroup={3} />;
-	}
-
-	const error = queries.find((query) => query.error)?.error;
-	if (
-		error ||
-		!settingsQuery.data ||
-		!rollupQuery.data ||
-		!groupsQuery.data ||
-		!practicesQuery.data
-	) {
-		return (
+	// Data first: a failed background refetch keeps the controls the reader already has.
+	if (settingsQuery.data === undefined) {
+		return settingsQuery.isError ? (
 			<QueryErrorAlert
-				error={error}
-				title="We could not load the feedback modes"
+				error={settingsQuery.error}
+				title="We could not load the review settings"
 				onRetry={() => {
-					for (const query of queries) {
-						void query.refetch();
-					}
+					void settingsQuery.refetch();
 				}}
 			/>
+		) : (
+			<FeedbackModeSkeleton />
 		);
+	}
+
+	const treeQueries = [rollupQuery, groupsQuery, practicesQuery];
+	let tree: FeedbackModeTreeState;
+	if (rollupQuery.data && groupsQuery.data && practicesQuery.data) {
+		tree = {
+			status: "ready",
+			rollup: rollupQuery.data,
+			groups: groupsQuery.data,
+			practices: practicesQuery.data,
+		};
+	} else if (treeQueries.some((query) => query.isError)) {
+		tree = {
+			status: "error",
+			error: treeQueries.find((query) => query.isError)?.error,
+			onRetry: () => {
+				for (const query of treeQueries) {
+					void query.refetch();
+				}
+			},
+		};
+	} else {
+		tree = { status: "loading" };
 	}
 
 	return (
 		<PracticeFeedbackModePage
 			workspaceSlug={workspaceSlug}
 			settings={settingsQuery.data}
-			rollup={rollupQuery.data}
-			groups={groupsQuery.data}
-			practices={practicesQuery.data}
+			tree={tree}
 			pending={{
 				workspace: updateSettings.isPending,
 				groupSlugs: feedbackModes.pendingGroupSlugs,

@@ -3,7 +3,7 @@ import { expect, fn, waitFor, within } from "storybook/test";
 
 import type { AgentBinding } from "@/api/types.gen";
 import {
-	PracticeTreeSkeleton,
+	FeedbackModeSkeleton,
 	ReviewSettingsSkeleton,
 } from "@/components/admin/practices/PracticeSkeletons";
 import { QueryErrorAlert } from "@/components/common/QueryErrorAlert";
@@ -97,36 +97,32 @@ export const PastWork: Story = {
 
 /** The bodies below are the ones the route renders while a tab's data loads or fails. */
 export const FeedbackModeLoading: Story = {
-	args: {
-		sections: {
-			...sections,
-			"feedback-mode": <PracticeTreeSkeleton groups={3} practicesPerGroup={3} />,
-		},
-	},
+	args: { sections: { ...sections, "feedback-mode": <FeedbackModeSkeleton /> } },
 	play: async ({ canvas }) => {
-		// No sending switch claims a state before the settings arrive.
-		await expect(canvas.getByRole("tabpanel")).toBeVisible();
-		await expect(canvas.queryByRole("switch")).not.toBeInTheDocument();
+		await expect(canvas.getByRole("tabpanel")).toHaveTextContent("Loading feedback settings…");
 	},
 };
 
-export const FeedbackModeLoadFailed: Story = {
+/**
+ * Only a failed settings read replaces the whole tab: without it no control can show the workspace
+ * default or whether sending is paused. A failed practice list keeps both.
+ */
+export const FeedbackModeSettingsLoadFailed: Story = {
 	args: {
 		sections: {
 			...sections,
 			"feedback-mode": (
 				<QueryErrorAlert
 					error={{ status: 503 }}
-					title="We could not load the feedback modes"
+					title="We could not load the review settings"
 					onRetry={fn()}
 				/>
 			),
 		},
 	},
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText("We could not load the feedback modes")).toBeVisible();
+		await expect(canvas.getByText("We could not load the review settings")).toBeVisible();
 		await expect(canvas.getByRole("button", { name: "Retry" })).toBeVisible();
-		await expect(canvas.queryByRole("switch")).not.toBeInTheDocument();
 	},
 };
 

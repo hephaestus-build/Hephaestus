@@ -9,9 +9,7 @@ import { PracticeFeedbackModePage } from "./PracticeFeedbackModePage";
 
 const from = ({ settings, rollup, groups, practices }: FeedbackModeFixture) => ({
 	settings,
-	rollup,
-	groups,
-	practices,
+	tree: { status: "ready" as const, rollup, groups, practices },
 });
 
 const small = buildFeedbackModeFixture({
@@ -153,10 +151,7 @@ const meta = {
 	},
 	args: {
 		workspaceSlug: "demo",
-		settings: small.settings,
-		rollup: small.rollup,
-		groups: small.groups,
-		practices: small.practices,
+		...from(small),
 		pending: idle,
 		overridesOnly: false,
 		onOverridesOnlyChange: fn(),
@@ -571,6 +566,31 @@ export const NotReviewedByHephaestus: Story = {
 		await expect(
 			canvas.getByRole("radiogroup", { name: "Feedback mode for Alerts a human on failure" }),
 		).toBeVisible();
+	},
+};
+
+export const PracticesLoading: Story = {
+	args: { tree: { status: "loading" } },
+	play: async ({ canvas }) => {
+		await expect(canvas.getByRole("radiogroup", { name: "Workspace feedback mode" })).toBeVisible();
+		await expect(canvas.getByRole("switch", { name: "Send feedback" })).toBeVisible();
+		await expect(
+			canvas.queryByRole("toolbar", { name: "Filter practices" }),
+		).not.toBeInTheDocument();
+	},
+};
+
+const retryPractices = fn();
+
+/** A failed practice list keeps the workspace settings: pause and resume never wait on it. */
+export const PracticesLoadFailed: Story = {
+	args: { tree: { status: "error", error: { status: 503 }, onRetry: retryPractices } },
+	play: async ({ args, canvas, userEvent }) => {
+		await expect(canvas.getByText("We could not load the practices")).toBeVisible();
+		await userEvent.click(canvas.getByRole("switch", { name: "Send feedback" }));
+		await expect(args.onSetSending).toHaveBeenCalledWith({ deliveryStatus: "PAUSED" });
+		await userEvent.click(canvas.getByRole("button", { name: "Retry" }));
+		await expect(retryPractices).toHaveBeenCalled();
 	},
 };
 
