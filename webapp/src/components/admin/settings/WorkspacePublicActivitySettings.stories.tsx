@@ -90,7 +90,7 @@ export const On: Story = {
 		await expect(
 			canvas.getByText("On. Anyone can see it at https://hephaestus.build/w/hephaestus."),
 		).toBeVisible();
-		const hidden = canvas.getByText("Hidden people").closest("li");
+		const hidden = canvas.getByText("People left out of the page").closest("li");
 		await expect(hidden).toHaveTextContent("3");
 		await expect(canvas.getByRole("switch", { name: "Allow search engines" })).not.toBeChecked();
 		await userEvent.click(canvas.getByRole("switch", { name: "Allow search engines" }));
@@ -195,14 +195,16 @@ export const Refused: Story = {
 export const HiddenCountUnavailable: Story = {
 	args: { state: { ...live, hiddenPeople: undefined } },
 	play: async ({ canvas }) => {
-		await expect(canvas.queryByText("Hidden people")).toBeNull();
+		await expect(canvas.queryByText("People left out of the page")).toBeNull();
 	},
 };
 
 export const NobodyHidden: Story = {
 	args: { state: { ...live, hiddenPeople: 0 } },
 	play: async ({ canvas }) => {
-		await expect(canvas.getByText("Hidden people").closest("li")).toHaveTextContent("0");
+		await expect(canvas.getByText("People left out of the page").closest("li")).toHaveTextContent(
+			"0",
+		);
 	},
 };
 

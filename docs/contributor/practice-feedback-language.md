@@ -257,6 +257,7 @@ Removing a usefulness answer does not remove the developer's disagreement.
 | **Typical range** | The middle half of the developers' values in a selected window. | percentile, quartile range, average, norm |
 | **Activity** | The developer's page of work that needs them and work they did. | profile, stats |
 | **Workspace activity** | Counts and lists of work for workspace developers or one team. | leaderboard, ranking, standings |
+| **Hidden people** | The Workspace settings list of people without a membership whom an admin hid from workspace activity, where an admin shows them again. Members are shown again under Members, and teams under Team setup. | hidden contributors, blocked people |
 | **Contributions** | Requests opened, other people's requests reviewed, and issues opened in a period. Each reviewed request counts once. | score, points, GitHub-style contributions, activity score |
 | **Position** | A developer's place when Workspace activity sorts a count. Equal counts share a place. | rank, placing, standing |
 | **Automation** | Provider bots and machine users that a workspace admin excludes from people counts. | bots (for machine users), service account |

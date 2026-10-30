@@ -482,17 +482,17 @@ describe("the public activity page setting", () => {
 		const page = within(
 			await screen.findByRole("region", { name: "Public activity page" }, ROUTE_RENDER_WAIT),
 		);
-		await page.findByText("Hidden people");
+		await page.findByText("People left out of the page");
 
 		count.answer = { status: 403 };
 		await reread(queryClient, getPublicActivityHiddenCountQueryKey(ACME));
 		expect(count.count).toBe(2);
-		await waitFor(() => expect(page.queryByText("Hidden people")).toBeNull());
+		await waitFor(() => expect(page.queryByText("People left out of the page")).toBeNull());
 
 		count.answer = { status: 503 };
 		await reread(queryClient, getPublicActivityHiddenCountQueryKey(ACME));
 		expect(count.count).toBe(3);
-		expect(page.queryByText("Hidden people")).toBeNull();
+		expect(page.queryByText("People left out of the page")).toBeNull();
 
 		count.answer = { status: 200, body: { hiddenPeople: 5 } };
 		await reread(queryClient, getPublicActivityHiddenCountQueryKey(ACME));

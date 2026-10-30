@@ -41,20 +41,28 @@ export function WorkspaceCapabilitiesSettings({
 					title="Activity"
 					description={
 						<>
-							Always on. Every member sees their own activity and the workspace’s. To hide someone
-							or show them again, use{" "}
+							Always on. Every member sees their own activity and the workspace’s. Hide a member,
+							and show them again, under{" "}
 							<InlineLink
 								render={<Link to="/w/$workspaceSlug/admin/members" params={{ workspaceSlug }} />}
 							>
 								Members
-							</InlineLink>{" "}
-							for members,{" "}
+							</InlineLink>
+							, and a team or repository under{" "}
 							<InlineLink
 								render={<Link to="/w/$workspaceSlug/admin/teams" params={{ workspaceSlug }} />}
 							>
 								Team setup
-							</InlineLink>{" "}
-							for teams and repositories, and{" "}
+							</InlineLink>
+							. Hide anyone else from their row in{" "}
+							<InlineLink
+								render={
+									<Link to="/w/$workspaceSlug/workspace-activity" params={{ workspaceSlug }} />
+								}
+							>
+								Workspace activity
+							</InlineLink>
+							, and show them again under{" "}
 							<InlineLink
 								render={
 									<Link
@@ -65,8 +73,8 @@ export function WorkspaceCapabilitiesSettings({
 								}
 							>
 								Hidden people
-							</InlineLink>{" "}
-							for people without a membership.
+							</InlineLink>
+							.
 						</>
 					}
 				/>

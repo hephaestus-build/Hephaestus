@@ -142,7 +142,7 @@ function ReadySettingsBody({
 					{state.enabled && state.hiddenPeople !== undefined && (
 						<Item render={<li />} variant="row">
 							<ItemContent>
-								<ItemTitle>Hidden people</ItemTitle>
+								<ItemTitle>People left out of the page</ItemTitle>
 								<ItemDescription className="line-clamp-none">
 									The page leaves out and does not count people who hid themselves, and people an
 									admin hid. People who hid themselves are counted here, never named.

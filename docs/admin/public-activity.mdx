@@ -60,7 +60,7 @@ Off, the page sets `<meta name="robots" content="noindex">`, and the API respons
 The webapp sets the meta tag with JavaScript, so a crawler that does not run JavaScript does not see it.
 This is a request to search engines, not access control.
 
-**Hidden people** shows how many people the page leaves out and does not count.
+**People left out of the page** shows how many people the page leaves out and does not count.
 It includes people who hid themselves and people an administrator hid.
 It never shows who hid themselves.
 
@@ -123,9 +123,9 @@ The choice applies to all linked provider identities in every workspace.
 A minimal provider-id and subject marker retains an objection after unlinking or account deletion.
 Showing activity again clears markers for identities currently linked to the account, not identities it no longer owns.
 This marker affects publication only; it does not suppress internal processing.
-Hidden people do not contribute to public totals.
+People who hid themselves, and people an administrator hid, do not contribute to public totals.
 An administrator can read only the count through `GET /workspaces/{slug}/activity/public-hidden-count`.
-This endpoint does not identify the hidden people.
+This endpoint does not identify them.
 
 A workspace administrator can list the people without a membership whom an administrator hid with
 `GET /workspaces/{slug}/activity/hidden-contributors`.
