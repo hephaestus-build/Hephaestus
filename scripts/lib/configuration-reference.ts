@@ -23,7 +23,6 @@ const DEVELOPER_PROFILES = new Set(["local", "e2e", "playwright", "test"]);
 export interface Placeholder {
 	readonly name: string;
 	readonly fallback?: string;
-	readonly required: boolean;
 }
 export function placeholders(text: string): Placeholder[] {
 	const found: Placeholder[] = [];
@@ -69,9 +68,9 @@ function readPlaceholder(body: string): Placeholder | undefined {
 	}
 	const rest = body.slice(name.length);
 	if (rest === "") {
-		return { name, required: false };
+		return { name };
 	}
-	return rest.startsWith(":") ? { name, fallback: rest.slice(1), required: false } : undefined;
+	return rest.startsWith(":") ? { name, fallback: rest.slice(1) } : undefined;
 }
 
 /** A fallback as an operator reads it: a nested placeholder names its variable, not its own fallback. */
@@ -342,6 +341,23 @@ export interface ChartRow {
 }
 
 /** Follow schema properties even when the source defaults leave a required map empty. */
+function schemaType(node: Record<string, unknown>): string {
+	if (typeof node.type === "string") {
+		return node.type;
+	}
+	if (Array.isArray(node.oneOf)) {
+		return unique(
+			node.oneOf.map((option: unknown) => (isRecord(option) ? schemaType(option) : "value")),
+		).join(" or ");
+	}
+	if (node.const !== undefined) {
+		return typeof node.const;
+	}
+	if (Array.isArray(node.enum)) {
+		return typeof node.enum[0];
+	}
+	return "value";
+}
 export function chartRows(schema: unknown, defaults: unknown): ChartRow[] {
 	if (!isRecord(schema) || !isRecord(schema.properties) || !isRecord(defaults)) {
 		throw new Error("Malformed chart configuration sources");
@@ -373,12 +389,21 @@ export function chartRows(schema: unknown, defaults: unknown): ChartRow[] {
 			const key = prefix ? `${prefix}.${name}` : name;
 			const value = values[name];
 			if (isRecord(node.properties)) {
+				if (node.if !== undefined) {
+					rows.push({
+						key,
+						defaultValue: value,
+						type: "object",
+						required: Array.isArray(required) && required.includes(name),
+						constraint: typeof node.description === "string" ? node.description : "Conditional requirements apply. See the chart schema.",
+					});
+				}
 				walk(node.properties, isRecord(value) ? value : {}, key, node.required);
 			} else {
 				rows.push({
 					key,
 					defaultValue: value,
-					type: typeof node.type === "string" ? node.type : "value",
+					type: schemaType(node),
 					required: Array.isArray(required) && required.includes(name),
 					constraint:
 						typeof node.description === "string"
@@ -393,6 +418,10 @@ export function chartRows(schema: unknown, defaults: unknown): ChartRow[] {
 											"minItems",
 											"maxItems",
 											"additionalProperties",
+											"oneOf",
+											"if",
+											"then",
+											"else",
 										].includes(field),
 									)
 									.map(([field, constraint]) => `${field}: ${JSON.stringify(constraint)}`)
@@ -421,7 +450,7 @@ export interface Row {
 export function join(sources: Sources, metadata: Metadata): { rows: Row[]; unbound: string[] } {
 	const rows: Row[] = [];
 	const unbound: string[] = [];
-	const variables = unique(sources.bindings.map((binding) => binding.variable));
+	const variables: string[] = [];
 	const containers = sources.containers.filter((container) => container.image === applicationImage);
 	for (const container of containers) {
 		for (const variable of container.environment.keys()) {
@@ -433,7 +462,10 @@ export function join(sources: Sources, metadata: Metadata): { rows: Row[]; unbou
 				continue;
 			}
 			if (!variables.includes(variable)) {
-				if (metadata.relaxedProperty(variable)) {
+				if (
+					sources.bindings.some((binding) => binding.variable === variable) ||
+					metadata.relaxedProperty(variable)
+				) {
 					variables.push(variable);
 				} else {
 					unbound.push(`${container.name}: ${variable}`);
@@ -459,7 +491,7 @@ export function join(sources: Sources, metadata: Metadata): { rows: Row[]; unbou
 			).join("; "),
 			services: containers
 				.filter((container) => container.environment.has(variable))
-				.map((container) => container.name),
+				.map((container) => container.name.split(":").at(-1) ?? container.name),
 			description: unique(
 				settings
 					.map((setting) => sentence(metadata.property(setting)?.description ?? ""))
@@ -487,7 +519,6 @@ export async function readSources(root = REPO_ROOT): Promise<Sources> {
 }
 export function requiredVariables(sources: Sources): Set<string> {
 	return new Set([
-		...sources.bindings.map((binding) => binding.variable),
 		...sources.containers
 			.filter((container) => container.image === applicationImage)
 			.flatMap((container) =>
@@ -515,6 +546,8 @@ export function renderPage(rows: readonly Row[], values: readonly ChartRow[]): s
 		"Set chart values in your Helm values file.",
 		"The Required column reports the schema at each object. Conditional requirements also apply.",
 		"See [Kubernetes deployment](./kubernetes) for those requirements, Secret keys, profiles, and operator procedures.",
+		"The chart [values](https://github.com/hephaestus-build/Hephaestus/blob/main/deploy/chart/hephaestus/values.yaml) describe each group.",
+		"Helm validates the complete schema, including conditions on parent objects.",
 		"",
 		"## Helm values",
 		"",
@@ -523,7 +556,7 @@ export function renderPage(rows: readonly Row[], values: readonly ChartRow[]): s
 	];
 	for (const row of values) {
 		lines.push(
-			`| ${code(row.key)} | ${row.type} | ${code(row.defaultValue === undefined ? "supplied by release or operator" : JSON.stringify(row.defaultValue))} | ${row.required ? "yes" : ""} | ${/^(?:enum|minimum|maximum|pattern|minItems|maxItems|additionalProperties):/u.test(row.constraint) ? code(row.constraint) : escapeText(row.constraint || "—")} |`,
+			`| ${code(row.key)} | ${row.type} | ${code(row.defaultValue === undefined ? "supplied by release or operator" : JSON.stringify(row.defaultValue))} | ${row.required ? "yes" : ""} | ${/^(?:enum|minimum|maximum|pattern|minItems|maxItems|additionalProperties|oneOf|if|then|else):/u.test(row.constraint) ? code(row.constraint) : row.constraint.startsWith("{") ? code(row.constraint) : escapeText(row.constraint || "—")} |`,
 		);
 	}
 	lines.push(
@@ -531,11 +564,12 @@ export function renderPage(rows: readonly Row[], values: readonly ChartRow[]): s
 		"## Application environment",
 		"",
 		"The chart sets these variables on the listed workload containers.",
-		"Change the corresponding Helm value or Secret key.",
+		"Use Helm values and Secret keys for configurable inputs.",
+ "The chart fixes role flags, profiles, and runtime connections internally.",
 		"A host `.env` file does not configure a Pod.",
 		"",
-		"Variables without a listed container keep the application default.",
-		"Defaults below come from the application YAML. The chart can replace them.",
+
+		"Defaults below come from the application YAML. They are not the deployed values.",
 		"[Configuration readiness](./configuration-readiness) reports incomplete instance configuration.",
 		"",
 		"| Variable | Setting | Application default | Containers | Description |",
