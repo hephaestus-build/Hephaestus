@@ -51,16 +51,6 @@ public interface IssuedJwtRepository extends JpaRepository<IssuedJwt, UUID> {
     @Query(value = "SELECT jti FROM issued_jwt WHERE jti = :jti FOR UPDATE", nativeQuery = true)
     Optional<UUID> lockForRotation(@Param("jti") UUID jti);
 
-    @Modifying
-    @Query("""
-        UPDATE IssuedJwt j
-           SET j.revokedAt = :now,
-               j.revokedReason = :reason
-         WHERE j.jti = :jti
-           AND j.revokedAt IS NULL
-        """)
-    int revoke(@Param("jti") UUID jti, @Param("now") Instant now, @Param("reason") IssuedJwt.RevokedReason reason);
-
     /**
      * Marks a successor as used. The update re-checks that the token is still active under its row lock,
      * so a concurrent revocation wins or loses as a whole: 1 when

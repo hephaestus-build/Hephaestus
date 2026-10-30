@@ -99,7 +99,7 @@ describe("useSessionKeepAlive", () => {
 			http.post("*/auth/refresh", () => new HttpResponse(null, { status: 503 }), { once: true }),
 		);
 		await advance(1000);
-		// Advancing timers does not drain IndexedDB events; finish the failed attempt before later activity.
+		// Advancing timers does not drain the failed request; finish it before later activity.
 		await act(async () => settled.promise);
 		await advance(5000);
 		expect(session.userCalls()).toBe(0);
@@ -188,6 +188,39 @@ describe("useSessionKeepAlive", () => {
 			document.dispatchEvent(new Event("visibilitychange"));
 		});
 		await act(async () => vi.waitFor(() => expect(session.refreshCalls()).toBe(1)));
+	});
+
+	it.each([
+		["stays signed in when another address already renewed the cookie", 200, 0],
+		["signs out when the identity is refused as well", 401, 1],
+	])("after a refused renewal, %s", async (_name, identity, signOuts) => {
+		const assign = vi.fn();
+		const realLocation = window.location;
+		Object.defineProperty(window, "location", {
+			configurable: true,
+			value: { assign, pathname: "/w/acme/overview", search: "", origin: "http://localhost" },
+		});
+		try {
+			mountSession();
+			let refused = 0;
+			server.use(
+				http.post("*/auth/refresh", () => {
+					refused += 1;
+					return new HttpResponse(null, { status: 401 });
+				}),
+				http.get("*/user", () =>
+					identity === 200
+						? HttpResponse.json(userPayload(3600))
+						: new HttpResponse(null, { status: 401 }),
+				),
+			);
+			await advance(1000);
+			await act(async () => vi.waitFor(() => expect(refused).toBe(1)));
+			await advance(1000);
+			expect(assign).toHaveBeenCalledTimes(signOuts);
+		} finally {
+			Object.defineProperty(window, "location", { configurable: true, value: realLocation });
+		}
 	});
 
 	it("removes the timer and activity listeners when unmounted", async () => {

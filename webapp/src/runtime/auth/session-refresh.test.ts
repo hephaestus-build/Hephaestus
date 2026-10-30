@@ -45,6 +45,14 @@ describe("refreshAccessToken", () => {
 		expect(window.localStorage.getItem("hephaestus:session-refreshed")).not.toBeNull();
 	});
 
+	it("does not count a renewal stamped in the future after the clock was set back", async () => {
+		refreshMock.mockResolvedValueOnce(rotated);
+		await refreshAccessToken();
+		vi.setSystemTime(NOW - 60 * 60_000);
+
+		expect(sessionRefreshedRecently()).toBe(false);
+	});
+
 	it("collapses callers that overlap a rotation onto one POST /auth/refresh", async () => {
 		const rotation = deferred<typeof rotated>();
 		refreshMock.mockReturnValue(rotation.promise);

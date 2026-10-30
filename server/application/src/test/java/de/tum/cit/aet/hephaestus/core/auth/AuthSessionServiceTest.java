@@ -170,7 +170,6 @@ class AuthSessionServiceTest extends BaseUnitTest {
         service.logout(ACCOUNT_ID, jti, sid, response);
 
         verify(clientSessionService).endSession(ACCOUNT_ID, sid, IssuedJwt.RevokedReason.LOGOUT);
-        verify(issuedJwtRepository, never()).revoke(any(), any(), any());
         assertThat(response.getCookies()).isEmpty();
     }
 
@@ -295,7 +294,6 @@ class AuthSessionServiceTest extends BaseUnitTest {
         var cookie = response.getCookie("__Host-HEPHAESTUS_AT");
         assertThat(cookie).isNotNull();
         assertThat(cookie.getValue()).isEqualTo("fresh-token");
-        verify(issuedJwtRepository, never()).revoke(any(), any(), any());
         AuthEventData event = capturedEvent();
         assertThat(event.type()).isEqualTo(AuthEvent.EventType.TOKEN_REFRESH);
         assertThat(event.accountId()).isEqualTo(ACCOUNT_ID);

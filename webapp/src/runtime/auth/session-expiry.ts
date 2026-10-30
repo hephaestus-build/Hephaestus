@@ -69,6 +69,15 @@ async function readSession(
 	}
 }
 
+/**
+ * A refused renewal can be late: another tab, or another workspace address that shares the cookie
+ * but not the lock, renewed first, and its successor is already in use. Only a refused identity
+ * ends the session.
+ */
+export async function sessionRefused(queryClient: QueryClient): Promise<boolean> {
+	return (await readSession(queryClient)) === "refused";
+}
+
 // Every renewal rotates the cookie, so recovery renews only when the current cookie is refused.
 async function doRecoverOrLogout(queryClient: QueryClient, currentPath: string): Promise<void> {
 	// Identity probes are throttled within this tab; they never suppress a keep-alive renewal.
@@ -86,8 +95,10 @@ async function doRecoverOrLogout(queryClient: QueryClient, currentPath: string):
 			return;
 		}
 		if (result === "expired") {
-			redirectToLogin(currentPath);
-			return;
+			if (await sessionRefused(queryClient)) {
+				redirectToLogin(currentPath);
+				return;
+			}
 		}
 	} else {
 		// oxlint-disable-next-line no-restricted-properties -- Recovery throttling uses wall-clock time.

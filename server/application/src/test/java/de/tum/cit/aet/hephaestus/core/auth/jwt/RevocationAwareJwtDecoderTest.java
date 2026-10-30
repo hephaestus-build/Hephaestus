@@ -438,7 +438,6 @@ class RevocationAwareJwtDecoderTest extends BaseUnitTest {
 
         assertThatThrownBy(() -> decoder(repo, cacheManager()).decode(validToken(successor)))
                 .isInstanceOf(BadJwtException.class);
-        verify(repo, never()).revoke(any(), any(), any());
     }
 
     @Test

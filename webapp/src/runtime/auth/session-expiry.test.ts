@@ -202,6 +202,30 @@ describe("handlePossibleSessionExpiry", () => {
 		expect(url.searchParams.get("returnTo")).toBe("/w/acme/overview?tab=prs");
 	});
 
+	it("keeps the session when its renewal is refused because another address renewed first", async () => {
+		// The second identity read sees the successor cookie that another tab or workspace address set.
+		let userCalls = 0;
+		server.use(
+			http.get("*/user", () => {
+				userCalls += 1;
+				return userCalls === 1
+					? new HttpResponse(null, { status: 401 })
+					: HttpResponse.json(currentUser);
+			}),
+			http.post("*/auth/refresh", () => new HttpResponse(null, { status: 401 })),
+		);
+		const { assigned } = stubLocation("/w/acme/overview");
+		const qc = makeQueryClient();
+		const invalidate = vi.spyOn(qc, "invalidateQueries");
+
+		handlePossibleSessionExpiry(res(401, PRACTICES), qc);
+		await settled();
+
+		expect(userCalls).toBe(2);
+		expect(assigned).toHaveLength(0);
+		expect(invalidate).toHaveBeenCalledOnce();
+	});
+
 	it("preserves the page and cache when the server cannot answer", async () => {
 		const calls = serveSession({ user: 503 });
 		const { assigned } = stubLocation("/w/acme/overview");

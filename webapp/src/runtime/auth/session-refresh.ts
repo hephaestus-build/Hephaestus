@@ -35,8 +35,13 @@ function recordRefresh(): void {
 
 export function sessionRefreshedRecently(): boolean {
 	const stamp = lastRefresh();
+	if (stamp === undefined) {
+		return false;
+	}
 	// oxlint-disable-next-line no-restricted-properties -- Tabs compare a renewal in wall-clock time.
-	return stamp !== undefined && Date.now() - stamp.completedAt < SESSION_COOLDOWN_MS;
+	const elapsed = Date.now() - stamp.completedAt;
+	// A stamp from the future, after the clock was set back, is not a recent renewal.
+	return elapsed >= 0 && elapsed < SESSION_COOLDOWN_MS;
 }
 
 let inFlight: Promise<SessionRefreshResult> | null = null;

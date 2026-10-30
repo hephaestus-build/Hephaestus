@@ -5,7 +5,7 @@ import { useEffect, useRef } from "react";
 import { getCurrentUserQueryKey } from "@/api/@tanstack/react-query.gen";
 
 import { currentUserQueryOptions } from "./guard";
-import { redirectToLogin } from "./session-expiry";
+import { redirectToLogin, sessionRefused } from "./session-expiry";
 import { refreshAccessToken } from "./session-refresh";
 
 const REFRESH_SKEW_MS = 60_000;
@@ -54,7 +54,9 @@ export function useSessionKeepAlive() {
 				return;
 			}
 			if (result === "expired") {
-				redirectToLogin();
+				if (await sessionRefused(queryClient)) {
+					redirectToLogin();
+				}
 				return;
 			}
 			// Rotation can succeed without extending exp at the absolute session ceiling.

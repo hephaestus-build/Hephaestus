@@ -142,13 +142,14 @@ sequenceDiagram
 Renewal and logout use the browser's
 [Web Locks API](https://developer.mozilla.org/en-US/docs/Web/API/Web_Locks_API) to serialize requests
 and responses that replace the shared session cookie. Generated SDK operations own HTTP requests;
-TanStack Query mutation options retain their lifecycle and error handling. Without Web Locks, an
-IndexedDB record grants a five-second lease. Waiting tabs retry every 100 ms for at most five seconds;
-they hold no database transaction across the network request. Lease expiry lets another tab continue
-when a tab closes or its request stalls. A holder releases only its own lease. If storage fails or the
-wait expires, the request runs without a lock. A browser with neither API still renews.
-Client coordination reduces duplicate requests. The rotation contract below defines when responses
-from different origins can share a successor. These origins cannot share a browser lock.
+TanStack Query mutation options retain their lifecycle and error handling. A tab waits at most five
+seconds for the lock, so a closed or stalled tab cannot block another tab's renewal. If the wait
+expires, or the browser has no Web Locks (outside a secure context), the request runs without a lock.
+The rotation contract below makes two renewals at once safe, so the lock only reduces duplicate
+requests. It also defines when responses from different origins, which cannot share a browser lock,
+can share a successor.
+A renewal that the server refuses can be late: another tab or workspace address renewed first. The
+client signs the reader out only when a fresh identity read (`GET /user`) is refused as well.
 
 ### Rotation contract
 
