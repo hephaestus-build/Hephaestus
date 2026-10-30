@@ -868,6 +868,11 @@ for (const where of ["app", "Slack"] as const) {
 				ENDED,
 			);
 			assertNoSelfReference(reply.text);
+			assert.match(reply.text, /404/u, `does not give what the review found: ${reply.text}`);
+			assert.ok(
+				reply.linked.some(([tool]) => tool === "link_result"),
+				`does not link the observation it discusses: ${reply.text}`,
+			);
 			assertNoInternalTerm(TERMS, reply.text);
 		},
 	);
