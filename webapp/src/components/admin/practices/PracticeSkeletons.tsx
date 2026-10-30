@@ -120,3 +120,17 @@ export function ReviewSettingsSkeleton() {
 		</div>
 	);
 }
+
+/** Mirrors the Feedback mode tab: the workspace default and sending cards over the practice list. */
+export function FeedbackModeSkeleton() {
+	return (
+		<div aria-busy="true">
+			<span className="sr-only">Loading feedback settings…</span>
+			<div className="space-y-6" aria-hidden>
+				<Skeleton className="h-64 w-full rounded-xl" />
+				<Skeleton className="h-56 w-full rounded-xl" />
+				<PracticeTreeSkeleton groups={3} practicesPerGroup={3} />
+			</div>
+		</div>
+	);
+}

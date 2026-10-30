@@ -1,7 +1,7 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http, type PathParams } from "msw";
-import { assert, describe, expect, it, vi } from "vitest";
+import { assert, describe, expect, it, onTestFinished, vi } from "vitest";
 
 import { listWorkspacesQueryKey } from "@/api/@tanstack/react-query.gen";
 import type {
@@ -24,6 +24,7 @@ import {
 import { currentUser } from "@/mocks/fixtures/auth";
 import { workspaceListItem } from "@/mocks/fixtures/workspaces";
 import { server } from "@/mocks/server";
+import { deferred } from "@/test/async";
 import { ROUTE_RENDER_WAIT, renderRouteAt, renderRouteAtWithRouter } from "@/test/router-harness";
 
 vi.setConfig({ testTimeout: 20_000 });
@@ -154,6 +155,7 @@ function stubSettings(initial: PracticeReviewSettings) {
 					...settings,
 					etag: `"${patches.length}"`,
 					reviewScope: body.reviewScope ?? settings.reviewScope,
+					deliveryStatus: body.deliveryStatus ?? settings.deliveryStatus,
 					generatedPaths: { ...settings.generatedPaths, ...body.generatedPaths },
 				};
 				return HttpResponse.json(settings);
@@ -310,6 +312,59 @@ describe("review route", () => {
 				{ reset: ["DELIVER_TO_MERGED"] },
 			]),
 		);
+	});
+
+	it.each([
+		["fails", () => HttpResponse.json({ status: 500 }, { status: 500 })],
+		["is still loading", async () => deferred<Response>().promise],
+	])("pauses and resumes sending while the practice list %s", async (_, rollup) => {
+		const settings = stubSettings(reviewSettings());
+		stubWorkspace([
+			...settings.handlers(false),
+			http.get("*/workspaces/:workspaceSlug/practices/feedback-modes", rollup),
+		]);
+
+		renderRouteAt("/w/acme/admin/practices/review");
+
+		const send = await screen.findByRole("switch", { name: "Send feedback" }, ROUTE_RENDER_WAIT);
+		await userEvent.click(send);
+		await waitFor(() => expect(send.getAttribute("aria-checked")).toBe("false"));
+		await waitFor(() => expect(send.getAttribute("aria-disabled")).not.toBe("true"));
+		await userEvent.click(send);
+		await waitFor(() =>
+			expect(settings.patches.map((patch) => patch.body)).toStrictEqual([
+				{ deliveryStatus: "PAUSED" },
+				{ deliveryStatus: "ACTIVE" },
+			]),
+		);
+		expect(screen.queryByRole("radiogroup", { name: "Feedback mode for Hygiene" })).toBeNull();
+	});
+
+	// The router scrolls to the hash once, on the first render, and never again.
+	it("scrolls a cold link to the review scope heading after its settings arrive", async () => {
+		const settingsArrive = deferred();
+		let asked = false;
+		const scrolledTo: string[] = [];
+		const scroll = vi.spyOn(Element.prototype, "scrollIntoView").mockImplementation(function (
+			this: Element,
+		) {
+			scrolledTo.push(this.id);
+		});
+		onTestFinished(() => scroll.mockRestore());
+		stubWorkspace([
+			http.get("*/workspaces/:workspaceSlug/practices/review-settings", async () => {
+				asked = true;
+				await settingsArrive.promise;
+				return HttpResponse.json(reviewSettings());
+			}),
+		]);
+
+		renderRouteAt("/w/acme/admin/practices/review?section=automated-review#review-scope-heading");
+		await waitFor(() => expect(asked).toBe(true), ROUTE_RENDER_WAIT);
+		settingsArrive.resolve();
+
+		await screen.findByRole("heading", { name: "Review scope" }, ROUTE_RENDER_WAIT);
+		await waitFor(() => expect(scrolledTo).toContain("review-scope-heading"), ROUTE_RENDER_WAIT);
 	});
 
 	it("keeps sending feedback out of the Automated review section", async () => {
