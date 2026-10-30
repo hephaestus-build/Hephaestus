@@ -256,6 +256,9 @@ A commit chart has no release version.
 To switch it to a release channel, pause reconciliation and apply the verified target through Database maintenance first.
 Then resume the timer.
 The next tick reads the target chart's release version.
+
+Prepare the verified target source tree first, as [Database maintenance](./kubernetes#database-maintenance) describes.
+Keep writers stopped until the target migration and server succeed.
 Use the target source commit from its verified signed lock as `<commit>`:
 
 ```bash
@@ -271,9 +274,6 @@ helm upgrade --install <release> /var/lib/hephaestus/chart/hephaestus-<version>.
   --set server.replicas=1 --set worker.replicas=0 \
   --wait=watcher --wait-for-jobs --timeout <timeout>s
 ```
-
-Prepare the verified target source tree first, as [Database maintenance](./kubernetes#database-maintenance) describes.
-Keep writers stopped until the target migration and server succeed.
 
 Install the 0.95.1 reconciler before promoting 1.0.
 The reconciler units now live in `deploy/reconcile/`, independent of the Compose files.
@@ -439,7 +439,6 @@ If a stopped cutover fails or remains pending:
 
 A signed rollback request does not permit an automatic major release downgrade.
 Before a commit rollback across a schema boundary, restore the database through the same manual procedure.
-Restore the database first, then use the manual Helm rollback above.
 If the completed target already has an applied record, restore `applied-before-cutover.json` to `applied.json` after both restores succeed.
 Then promote the source release and resume the timer.
 A commit channel must descend from the recorded release source, unless its signed request permits rollback.

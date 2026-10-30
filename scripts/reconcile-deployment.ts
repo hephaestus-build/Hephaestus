@@ -206,6 +206,7 @@ function parseImages(value: unknown): Readonly<Record<string, string>> {
 }
 
 const releaseParts = (release: string): string[] => release.slice(1).split(".");
+const releaseMajor = (release: string) => BigInt(releaseParts(release)[0] ?? "0");
 
 function compareReleases(left: string, right: string): number {
 	const leftParts = releaseParts(left);
@@ -1444,19 +1445,16 @@ export function isMajorCutover(target: string, applied?: string, installed?: str
 			"A commit chart has no release version. Pause reconciliation, apply the verified target release through Database maintenance, then resume the timer. The next tick reads that chart's release version.",
 		);
 	}
-	if (
-		[installedRelease, appliedRelease].some(
-			(version) =>
-				version !== undefined && (releaseParts(version)[0] ?? 0) > (releaseParts(target)[0] ?? 0),
-		)
-	) {
+	const targetMajor = releaseMajor(target);
+	const previousMajors = [installedRelease, appliedRelease].flatMap((version) =>
+		version === undefined ? [] : [releaseMajor(version)],
+	);
+	if (previousMajors.some((major) => major > targetMajor)) {
 		throw new OperatorActionRequiredError(
 			"A major downgrade requires a database restore. Pause reconciliation, follow https://docs.hephaestus.build/admin/pull-based-deployment#recover-a-stopped-cutover, restore the previous database, then manually helm rollback to its stopped revision before restoring writers.",
 		);
 	}
-	return [installedRelease, appliedRelease].some(
-		(version) => version !== undefined && releaseParts(version)[0] !== releaseParts(target)[0],
-	);
+	return previousMajors.some((major) => major !== targetMajor);
 }
 
 function matchesChartValues(

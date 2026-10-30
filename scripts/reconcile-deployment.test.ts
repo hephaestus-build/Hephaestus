@@ -681,6 +681,15 @@ await test("release cutovers distinguish major changes, first installs and an un
 	assert.equal(isMajorCutover("v1.0.0", "c".repeat(40), "1.0.0"), false);
 });
 
+await test("major cutovers order 9 and 10 numerically", () => {
+	assert.equal(isMajorCutover("v10.0.0", "v9.2.1", "9.2.1"), true);
+	assert.equal(isMajorCutover("v10.1.0", "v10.0.0", "10.0.0"), false);
+	assert.throws(
+		() => isMajorCutover("v9.2.1", "v10.0.0", "10.0.0"),
+		/major downgrade requires a database restore/u,
+	);
+});
+
 await test("the tooling link moves to the applied tree in one step", async () => {
 	const directory = await mkdtemp(path.join(tmpdir(), "reconcile-tooling-"));
 	try {
