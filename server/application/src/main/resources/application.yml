@@ -715,8 +715,8 @@ hephaestus:
         # instance cannot convert to is a deploy-time typo, not something to start up and warn about.
         display-currency: ${HEPHAESTUS_LLM_DISPLAY_CURRENCY:}
         call-pools:
-            # Renewal window for unused reservations and cancellation on a live worker. ACTIVE crash leftovers
-            # remain counted until transport closure is confirmed; this setting never expires an active call.
+            # Permit renewal window. Live workers cancel before expiry; admission and administration
+            # reclaim expired grants, keeping the provider rate debit for a minute after expiry.
             permit-lease: ${HEPHAESTUS_LLM_CALL_POOLS_PERMIT_LEASE:PT1M}
             # The longest pause of a call pool after a rate limit answer, whatever its Retry-After asks for.
             max-cooldown: ${HEPHAESTUS_LLM_CALL_POOLS_MAX_COOLDOWN:PT5M}

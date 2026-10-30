@@ -367,6 +367,25 @@ class LlmCallPoolAdminControllerIntegrationTest extends AbstractWorkspaceIntegra
                 .expectBody(Void.class);
     }
 
+    @Test
+    @WithAdminUser
+    void shouldAllowEditingAndDeletingAfterACrashedOwnersLeaseAndRateWindowExpire() {
+        var pool = create(slug("crashed-owner"), 4, 1);
+        jdbc.update(
+                "INSERT INTO llm_call_permit (id,pool_id,worker_id,call_class,workspace_id,source_id,attempt,state,acquired_at,renewed_at,granted_at,requests,tokens) VALUES (?,?,?, 'EVENT',1,?,0,'ACTIVE',clock_timestamp()-interval '1 hour',clock_timestamp()-interval '1 hour',clock_timestamp()-interval '1 hour',1,17)",
+                UUID.randomUUID(), pool.id(), "crashed-worker", UUID.randomUUID());
+        webTestClient.put()
+                .uri("/admin/llm/call-pools/{id}", pool.id())
+                .headers(h -> h.setBearerAuth(ADMIN_TOKEN))
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(new SaveLlmCallPoolRequestDTO(pool.slug(), "Recovered endpoint", 3, 1, null, null, null))
+                .exchange().expectStatus().isOk().expectBody().jsonPath("$.displayName").isEqualTo("Recovered endpoint");
+        webTestClient.delete()
+                .uri("/admin/llm/call-pools/{id}", pool.id())
+                .headers(h -> h.setBearerAuth(ADMIN_TOKEN))
+                .exchange().expectStatus().isNoContent().expectBody(Void.class);
+    }
+
     private static String slug(String name) {
         return name + "-" + System.nanoTime();
     }

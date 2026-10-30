@@ -46,12 +46,15 @@ public interface LlmCallPermitRepository extends JpaRepository<LlmCallPermit, UU
                     """, nativeQuery = true)
     void enqueue(@Param("request") Request request);
 
-    /** Unused reservations can expire across workers. ACTIVE rows require transport-closure proof. */
+    /** Reclaim expired owners without refunding calls that already reached the provider. */
     @Modifying
     @Query(value = """
             WITH expired AS (
-              UPDATE llm_call_permit SET state='CLOSED',closed_at=clock_timestamp(),requests=0,tokens=0
-              WHERE pool_id=:poolId AND state='RESERVED'
+              UPDATE llm_call_permit SET
+                requests=CASE WHEN state='RESERVED' THEN 0 ELSE requests END,
+                tokens=CASE WHEN state='RESERVED' THEN 0 ELSE tokens END,
+                state='CLOSED',closed_at=renewed_at+make_interval(secs => :staleSeconds)
+              WHERE pool_id=:poolId AND state IN ('RESERVED','ACTIVE')
                 AND renewed_at < clock_timestamp()-make_interval(secs => :staleSeconds)
               RETURNING id
             )
@@ -140,15 +143,21 @@ public interface LlmCallPermitRepository extends JpaRepository<LlmCallPermit, UU
     @Modifying
     @Query(
             value =
-                    "UPDATE llm_call_permit SET renewed_at=clock_timestamp() WHERE worker_id=:workerId AND id IN (:ids) AND state IN ('WAITING','RESERVED','ACTIVE')",
+                    "UPDATE llm_call_permit SET renewed_at=clock_timestamp() WHERE worker_id=:workerId AND id IN (:ids) AND state IN ('WAITING','RESERVED','ACTIVE') AND (state='WAITING' OR renewed_at >= clock_timestamp()-make_interval(secs => :staleSeconds))",
             nativeQuery = true)
-    int renew(@Param("workerId") String workerId, @Param("ids") Collection<UUID> ids);
+    int renew(
+            @Param("workerId") String workerId,
+            @Param("ids") Collection<UUID> ids,
+            @Param("staleSeconds") long staleSeconds);
 
     @Query(
             value =
-                    "SELECT id FROM llm_call_permit WHERE worker_id=:workerId AND id IN (:ids) AND state IN ('RESERVED','ACTIVE')",
+                    "SELECT id FROM llm_call_permit WHERE worker_id=:workerId AND id IN (:ids) AND state IN ('RESERVED','ACTIVE') AND renewed_at >= clock_timestamp()-make_interval(secs => :staleSeconds)",
             nativeQuery = true)
-    List<UUID> findHeld(@Param("workerId") String workerId, @Param("ids") Collection<UUID> ids);
+    List<UUID> findHeld(
+            @Param("workerId") String workerId,
+            @Param("ids") Collection<UUID> ids,
+            @Param("staleSeconds") long staleSeconds);
 
     /** The UUID is the fence. A release can affect only this request, never a later attempt or grant. */
     @Modifying
@@ -200,9 +209,13 @@ public interface LlmCallPermitRepository extends JpaRepository<LlmCallPermit, UU
     @Modifying
     @Query(
             value =
-                    "UPDATE llm_call_permit SET requests=requests+1,tokens=tokens+:tokens WHERE id=:id AND state='ACTIVE' AND worker_id=:workerId",
+                    "UPDATE llm_call_permit SET requests=requests+1,tokens=tokens+:tokens WHERE id=:id AND state='ACTIVE' AND worker_id=:workerId AND renewed_at >= clock_timestamp()-make_interval(secs => :staleSeconds)",
             nativeQuery = true)
-    int debitRetry(@Param("id") UUID id, @Param("workerId") String workerId, @Param("tokens") long tokens);
+    int debitRetry(
+            @Param("id") UUID id,
+            @Param("workerId") String workerId,
+            @Param("tokens") long tokens,
+            @Param("staleSeconds") long staleSeconds);
 
     @Query(
             value = "SELECT count(*) FROM llm_call_permit WHERE pool_id=:poolId AND state <> 'CLOSED'",

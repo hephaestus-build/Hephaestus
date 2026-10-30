@@ -296,7 +296,7 @@ public class LlmCallPermits {
         try {
             Permit granted = transactions.execute(status -> {
                 var pool = pools.lockAdmission(poolId).orElseThrow();
-                if (rows.renew(workerId, Set.of(id)) != 1)
+                if (rows.renew(workerId, Set.of(id), properties.permitLease().toSeconds()) != 1)
                     throw new IllegalStateException("Queued model request expired before its grant");
                 rows.prune(poolId, properties.permitLease().toSeconds());
                 if (!room(poolId, pool, callClass)
@@ -357,7 +357,7 @@ public class LlmCallPermits {
             Boolean allowed = transactions.execute(status -> {
                 var pool = pools.lockAdmission(permit.poolId).orElseThrow();
                 if (pool.getCooldownMillis() > 0 || !rateRoom(permit.poolId, pool, permit.callClass)) return false;
-                return rows.debitRetry(permit.id, workerId, tokenBound(pool)) == 1;
+                return rows.debitRetry(permit.id, workerId, tokenBound(pool), properties.permitLease().toSeconds()) == 1;
             });
             if (Boolean.TRUE.equals(allowed)) return true;
             if (!pause()) return false;
@@ -388,7 +388,7 @@ public class LlmCallPermits {
     void renew() {
         try {
             Set<UUID> queued = Set.copyOf(waiting);
-            if (!queued.isEmpty()) transactions.executeWithoutResult(status -> rows.renew(workerId, queued));
+            if (!queued.isEmpty()) transactions.executeWithoutResult(status -> rows.renew(workerId, queued, properties.permitLease().toSeconds()));
             var abandoned = transactions.execute(status -> rows.abandonedReservations(workerId));
             if (abandoned != null) {
                 for (UUID id : abandoned) {
@@ -410,8 +410,8 @@ public class LlmCallPermits {
             if (ids.isEmpty()) return;
             long attempted = System.nanoTime();
             Set<UUID> kept = transactions.execute(status -> {
-                rows.renew(workerId, ids);
-                return new HashSet<>(rows.findHeld(workerId, ids));
+                rows.renew(workerId, ids, properties.permitLease().toSeconds());
+                return new HashSet<>(rows.findHeld(workerId, ids, properties.permitLease().toSeconds()));
             });
             for (UUID id : ids) {
                 Permit permit = held.get(id);
@@ -419,7 +419,10 @@ public class LlmCallPermits {
                 if (kept != null && kept.contains(id)) permit.confirmedAt = attempted;
                 else if (rows.findById(id)
                         .map(row -> row.getState().equals("CLOSED"))
-                        .orElse(false)) permit.forgetClosed();
+                        .orElse(false)) {
+                    permit.revoke("lease_lost");
+                    permit.forgetClosed();
+                }
                 else permit.revoke("lease_lost");
             }
         } catch (RuntimeException failed) {

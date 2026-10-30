@@ -8,10 +8,10 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
 import org.springframework.validation.annotation.Validated;
 
 /**
- * Renewal and cancellation bounds. An expired active permit remains counted until its transport closes.
+ * Renewal and cancellation bounds. Admission reclaims permits whose owner has not renewed within the lease.
  *
- * @param permitLease Unused reservation renewal window. A live worker cancels calls after three quarters of this window
- *                    without renewal. Active grants remain counted until transport closure is confirmed.
+ * @param permitLease Permit renewal window. A live worker cancels calls after three quarters of this window
+ *                    without renewal. Admission and administration reclaim expired grants without refunding rate debits.
  * @param maxCooldown Longest shared provider pause accepted from an instance-funded HTTP 429 response.
  */
 @Validated

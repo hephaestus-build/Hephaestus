@@ -547,18 +547,18 @@ The reservation remains conservative when usage is absent or the call is cancell
 Closed calls retain their debit for a full minute after closure.
 The rate account also leaves an interactive share when the pool has an interactive reserve.
 
-An expired lease cancels the call but never frees an active grant.
+A live worker cancels a call after three quarters of the permit lease without renewal.
 The proxy releases capacity only after the response completes or the cancelled transport closes.
 Cancellation also closes a JSON response body after its headers arrive.
 The request UUID fences renewal and release.
 A late release cannot affect another call.
 An ended attempt cannot start a provider call after a capacity wait.
 
-A worker crash can leave capacity held when transport closure cannot be confirmed.
-This state fails closed. Time alone does not prove that the provider stopped serving the call.
-Before an operator removes such a record, they must verify closure of the old worker's transports at the provider.
-Do not reset a pool merely because its worker heartbeat expired.
-Pool edits, deletion, and membership changes wait for open requests to close.
+Admission and administration reclaim grants that the worker has not renewed within `hephaestus.llm.call-pools.permit-lease` (one minute by default).
+A terminated worker's sockets close with its process.
+The expired grant cannot renew or debit a retry.
+Its provider rate debit remains for one minute after lease expiry.
+Pool edits, deletion, and membership changes wait for open requests, retained rate debits, and cooldowns to end.
 
 An instance-controlled connection can impose a shared cooldown after HTTP 429.
 A workspace-controlled connection cannot impose that cooldown on other tenants.
