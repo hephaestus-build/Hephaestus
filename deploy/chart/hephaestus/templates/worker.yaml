@@ -250,20 +250,6 @@ metadata:
   labels:
     {{- include "hephaestus.labels" (dict "root" . "component" "worker") | nindent 4 }}
 ---
-# A node drain evicts one worker at a time; the others keep claiming. A rollout starts the new
-# workers first (maxSurge), so it needs no budget.
-apiVersion: policy/v1
-kind: PodDisruptionBudget
-metadata:
-  name: {{ $name }}
-  labels:
-    {{- include "hephaestus.labels" (dict "root" . "component" "worker") | nindent 4 }}
-spec:
-  maxUnavailable: 1
-  selector:
-    matchLabels:
-      {{- include "hephaestus.selectorLabels" (dict "root" . "component" "worker") | nindent 6 }}
----
 apiVersion: apps/v1
 kind: Deployment
 metadata:

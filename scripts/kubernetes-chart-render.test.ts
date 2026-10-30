@@ -1093,8 +1093,8 @@ await test("an enabled worker receives its runtime settings, its sandbox namespa
 		type: "Recreate",
 	});
 	const spec = podSpec(worker);
-	assert.equal(envValue(worker, "HEPHAESTUS_WORKER_DRAIN_TIMEOUT"), "3600s");
-	assert.equal(get(spec, "terminationGracePeriodSeconds"), 3600 + 120);
+	assert.equal(envValue(worker, "HEPHAESTUS_WORKER_DRAIN_TIMEOUT"), "1800s");
+	assert.equal(get(spec, "terminationGracePeriodSeconds"), 1800 + 120);
 	assert.equal(get(spec, "topologySpreadConstraints", 0, "whenUnsatisfiable"), "ScheduleAnyway");
 	assert.deepEqual(
 		list(get(spec, "tolerations")).map((toleration) => [
@@ -1105,16 +1105,6 @@ await test("an enabled worker receives its runtime settings, its sandbox namespa
 			["node.kubernetes.io/not-ready", 60],
 			["node.kubernetes.io/unreachable", 60],
 		],
-	);
-	const budgets = resources.filter((resource) => kindOf(resource) === "PodDisruptionBudget");
-	assert.equal(budgets.length, 1);
-	assert.equal(get(budgets[0], "spec", "maxUnavailable"), 1);
-	assert.ok(
-		selects(
-			get(budgets[0], "spec", "selector", "matchLabels"),
-			get(worker, "spec", "template", "metadata", "labels"),
-		),
-		"the budget selects the workers",
 	);
 	assert.deepEqual(
 		list(get(spec, "volumes")).find((volume) => get(volume, "name") === "git-cache"),
@@ -3068,4 +3058,54 @@ await test("every resident small-profile PostgreSQL container reserves its full 
 			String(get(resident, "name")),
 		);
 	}
+});
+
+await test("disruption budgets protect singleton roles and select only their own Pods", () => {
+	for (const replicas of [1, 2]) {
+		const resources = rendered([
+			prepared,
+			operator,
+			workerLayer,
+			{ worker: { replicas }, webhook: { replicas: 2 } },
+		]);
+		const budgets = resources.filter((resource) => kindOf(resource) === "PodDisruptionBudget");
+		assert.equal(budgets.length, 5);
+		for (const component of ["postgresql", "nats", "server", "worker", "webhook"]) {
+			const budget = budgets.find((resource) => componentOf(resource) === component);
+			assert.ok(budget, component);
+			const spec = get(budget, "spec");
+			assert.equal(
+				get(spec, "minAvailable"),
+				component === "worker" && replicas > 1 ? undefined : 1,
+				component,
+			);
+			assert.equal(
+				get(spec, "maxUnavailable"),
+				component === "worker" && replicas > 1 ? 1 : undefined,
+				component,
+			);
+			const selector = get(spec, "selector", "matchLabels");
+			assert.deepEqual(
+				selector,
+				get(workload(resources, component), "spec", "selector", "matchLabels"),
+			);
+			for (const resource of resources.filter((item) =>
+				["Deployment", "StatefulSet", "Job"].includes(String(kindOf(item))),
+			)) {
+				assert.equal(
+					selects(selector, get(resource, "spec", "template", "metadata", "labels")),
+					componentOf(resource) === component,
+					`${component} budget / ${nameOf(resource)}`,
+				);
+			}
+		}
+	}
+});
+
+await test("external services and disabled workers have no disruption budget", () => {
+	const resources = rendered([prepared, operator, external]);
+	assert.deepEqual(
+		resources.filter((resource) => kindOf(resource) === "PodDisruptionBudget").map(componentOf),
+		["server"],
+	);
 });
